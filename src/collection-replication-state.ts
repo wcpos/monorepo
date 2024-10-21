@@ -51,8 +51,6 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	private lastFetchRemoteUpdates: number | null = null;
 	private pollingInterval = 1000 * 60 * 5; // 5 minutes
 	private fullFetchInterval = 1000 * 60 * 60; // 1 hour
-	private isPaused = new BehaviorSubject<boolean>(true);
-	private isActive = new BehaviorSubject<boolean>(false);
 	private firstSyncResolver: (() => void) | null = null;
 	public readonly firstSync: Promise<void>;
 
@@ -96,9 +94,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	}
 
 	private setupSubscriptions() {
-		const polling$ = this.isPaused.pipe(
+		const polling$ = this.paused$.pipe(
 			switchMap((paused) => (paused ? [] : interval(this.pollingInterval).pipe(startWith(0)))),
-			filter(() => !this.isPaused.getValue())
+			filter(() => !this.subjects.paused.getValue())
 		);
 
 		this.subs.push(
@@ -138,7 +136,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			this.resetFetchTimes();
 		}
 
-		if (this.isPaused.getValue() && force) {
+		if (this.subjects.paused.getValue() && force) {
 			this.start();
 		}
 
@@ -167,7 +165,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	private async fetchAndAuditRemoteState() {
 		this.lastFetchRemoteState = Date.now();
 		this.lastFetchRemoteUpdates = this.lastFetchRemoteState;
-		this.isActive.next(true);
+		this.subjects.active.next(true);
 
 		try {
 			const response = await this.dataFetcher.fetchAllRemoteIds();
@@ -178,13 +176,13 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 			await this.logger.logFetchStatus(this.dataFetcher.endpoint, response.headers, 'all');
 			await this.handleSyncState(response.data, 'all');
-			this.isActive.next(false); // Network request is done, allow updates request
+			this.subjects.active.next(false); // Network request is done, allow updates request
 			await this.remove();
 			await this.update();
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {
-			this.isActive.next(false);
+			this.subjects.active.next(false);
 
 			if (this.firstSyncResolver) {
 				this.firstSyncResolver();
@@ -197,7 +195,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		if (this.lastFetchRemoteUpdates) {
 			const modifiedAfter = new Date(this.lastFetchRemoteUpdates).toISOString().slice(0, 19);
 			this.lastFetchRemoteUpdates = Date.now();
-			this.isActive.next(true);
+			this.subjects.active.next(true);
 
 			try {
 				const response = await this.dataFetcher.fetchRecentRemoteUpdates(modifiedAfter);
@@ -213,7 +211,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			} catch (error) {
 				this.errorSubject.next(error);
 			} finally {
-				this.isActive.next(false);
+				this.subjects.active.next(false);
 			}
 		} else {
 			this.lastFetchRemoteUpdates = Date.now();
@@ -369,7 +367,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	}
 
 	async sync({ include, force }: { include?: number[]; force?: boolean } = {}) {
-		if (!force && (this.isPaused.getValue() || this.isActive.getValue())) {
+		if (!force && (this.subjects.paused.getValue() || this.subjects.active.getValue())) {
 			return;
 		}
 
@@ -388,7 +386,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			exclude = await this.syncStateManager.getSyncedRemoteIDs();
 		}
 
-		this.isActive.next(true);
+		this.subjects.active.next(true);
 
 		try {
 			let response;
@@ -401,7 +399,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {
-			this.isActive.next(false);
+			this.subjects.active.next(false);
 		}
 	}
 
@@ -440,10 +438,55 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	}
 
 	start() {
-		this.isPaused.next(false);
+		this.subjects.paused.next(false);
 	}
 
 	pause() {
-		this.isPaused.next(true);
+		this.subjects.paused.next(true);
 	}
+
+	/**
+	 * ------------------------------
+	 * Remote Mutations
+	 * @TODO - these should be done with flags in the sync collection
+	 * ------------------------------
+	 */
+	remotePatch = async (doc, data) => {
+		try {
+			if (!doc.id) {
+				throw new Error('document does not have an id');
+			}
+
+			// @TODO - I should use the link property to get the endpoint
+			const response = await this.dataFetcher.remotePatch(doc, data);
+
+			if (!response?.data) {
+				throw new Error('Invalid response data for remote patch');
+			}
+
+			const parsedData = this.collection.parseRestResponse(response.data);
+			// await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+			await doc.incrementalPatch(parsedData);
+			return doc;
+		} catch (error) {
+			this.errorSubject.next(error);
+		}
+	};
+
+	remoteCreate = async (data) => {
+		try {
+			const response = await this.dataFetcher.remoteCreate(data);
+
+			if (!response?.data) {
+				throw new Error('Invalid response data for remote create');
+			}
+
+			const parsedData = this.collection.parseRestResponse(response.data);
+			// await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+			const doc = await this.collection.upsert(parsedData);
+			return doc;
+		} catch (error) {
+			this.errorSubject.next(error);
+		}
+	};
 }

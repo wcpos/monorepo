@@ -13,13 +13,13 @@ describe('CollectionReplicationState', () => {
 	beforeEach(async () => {
 		storeDatabase = await createStoreDatabase();
 		syncDatabase = await createSyncDatabase();
-		httpClientMock.__resetMockResponses();
 		jest.clearAllMocks();
 	});
 
 	afterEach(() => {
 		storeDatabase.remove();
 		syncDatabase.remove();
+		httpClientMock.__resetMockResponses();
 	});
 
 	it('fetches and stores remote IDs in syncCollection', async () => {
@@ -187,4 +187,147 @@ describe('CollectionReplicationState', () => {
 		expect(records).toHaveLength(data.length);
 		expect(sync.map((doc) => doc.status)).toEqual(['SYNCED', 'SYNCED', 'SYNCED']);
 	});
+
+	it('marks items as PULL_UPDATE', async () => {
+		// populate the sync collection with some synced data
+		syncDatabase.collections.products.bulkInsert([
+			{
+				id: 1,
+				status: 'SYNCED',
+				endpoint: 'products',
+				date_modified_gmt: '2024-10-17T17:54:59',
+			},
+			{
+				id: 2,
+				status: 'SYNCED',
+				endpoint: 'products',
+				date_modified_gmt: '2024-10-17T17:54:59',
+			},
+			{
+				id: 3,
+				status: 'SYNCED',
+				endpoint: 'products',
+				date_modified_gmt: '2024-10-17T17:54:59',
+			},
+		]);
+
+		// populate the store collection with some data
+		storeDatabase.collections.products.bulkInsert([
+			{
+				id: 1,
+				date_modified_gmt: '2024-10-17T17:54:59',
+			},
+			{
+				id: 2,
+				date_modified_gmt: '2024-10-17T17:54:59',
+			},
+			{
+				id: 3,
+				date_modified_gmt: '2024-10-17T17:54:59',
+			},
+		]);
+
+		// set audit response data, 2 & 3 updated, 4 is new
+		const data = [
+			{ id: 1, date_modified_gmt: '2024-10-17T17:54:59' },
+			{ id: 2, date_modified_gmt: '2024-10-18T17:54:59' },
+			{ id: 3, date_modified_gmt: '2024-10-18T17:54:59' },
+			{ id: 4, date_modified_gmt: '2024-10-17T17:54:59' },
+		];
+		httpClientMock.__setMockResponse('get', 'products', data, {
+			params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
+		});
+
+		const replicationState = new CollectionReplicationState({
+			collection: storeDatabase.collections.products,
+			syncCollection: syncDatabase.collections.products,
+			httpClient: httpClientMock,
+			endpoint: 'products',
+			errorSubject: new Subject<Error>(),
+		});
+
+		replicationState.start();
+		await replicationState.firstSync;
+
+		const sync = await syncDatabase.collections.products.find().exec();
+
+		expect(sync).toHaveLength(4);
+		// 1 is synced, 2 & 3 are updated, 4 is new
+		expect(sync.map((doc) => doc.status)).toEqual([
+			'SYNCED',
+			'PULL_UPDATE',
+			'PULL_UPDATE',
+			'PULL_NEW',
+		]);
+	});
+
+	it('marks items as PULL_DELETE', async () => {
+		// populate the sync collection with some synced data
+		syncDatabase.collections.products.bulkInsert([
+			{
+				id: 1,
+				status: 'SYNCED',
+				endpoint: 'products',
+			},
+			{
+				id: 2,
+				status: 'SYNCED',
+				endpoint: 'products',
+			},
+			{
+				id: 3,
+				status: 'SYNCED',
+				endpoint: 'products',
+			},
+		]);
+
+		// populate the store collection with some data
+		storeDatabase.collections.products.bulkInsert([
+			{
+				id: 1,
+			},
+			{
+				id: 2,
+			},
+			{
+				id: 3,
+			},
+		]);
+
+		// ids on server are missing 2 & 3, 4 is new
+		const data = [{ id: 1 }, { id: 4 }];
+		httpClientMock.__setMockResponse('get', 'products', data, {
+			params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
+		});
+
+		const replicationState = new CollectionReplicationState({
+			collection: storeDatabase.collections.products,
+			syncCollection: syncDatabase.collections.products,
+			httpClient: httpClientMock,
+			endpoint: 'products',
+			errorSubject: new Subject<Error>(),
+		});
+
+		replicationState.start();
+		await replicationState.firstSync;
+
+		const sync = await syncDatabase.collections.products.find().exec();
+
+		/**
+		 * NOTE: the delete process runs, then the update process runs (and fails)
+		 */
+		expect(sync).toHaveLength(2);
+		expect(sync.map((doc) => doc.status)).toEqual(['SYNCED', 'PULL_NEW']);
+
+		const records = await storeDatabase.collections.products.find().exec();
+		expect(records).toHaveLength(1);
+		expect(records.map((doc) => doc.id)).toEqual([1]);
+	});
+
+	/**
+	 * Variations are a bit more complex because there is a ReplicationState for:
+	 * - full endpoint (products/variations) for searching
+	 * - single endpoint (products/:id/variations) for fetching a single variable product's variations
+	 */
+	describe('variations', () => {});
 });

@@ -55,6 +55,7 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 								id: doc.uuid,
 								document: doc,
 								childrenSearchCount: countsByParent[doc.id] || 0,
+								parentSearchTerm: modifiedParams.search,
 							})),
 						};
 					})
