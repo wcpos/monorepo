@@ -33,7 +33,7 @@ const Label = React.forwardRef<
 	React.ComponentPropsWithoutRef<typeof LabelPrimitive.Text>
 >(({ className, onPress, onLongPress, onPressIn, onPressOut, ...props }, ref) => (
 	<Root
-		className="web:cursor-default"
+		className="web:cursor-default flex-1"
 		onPress={onPress}
 		onLongPress={onLongPress}
 		onPressIn={onPressIn}

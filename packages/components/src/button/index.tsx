@@ -182,7 +182,7 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 				>
 					{(pressableState) =>
 						leftIcon || rightIcon || loading ? (
-							<HStack>
+							<HStack className="max-w-full">
 								{loading ? (
 									<Loader variant={variant} size={size} />
 								) : (

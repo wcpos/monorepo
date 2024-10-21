@@ -91,13 +91,13 @@ const DataTable = <TData, TValue>({
 		data,
 		columns,
 		getCoreRowModel: getCoreRowModel(),
-		getRowId: (row: TData) => row.uuid,
+		getRowId: (row: TData) => row.id,
 		getExpandedRowModel: getExpandedRowModel(),
 		onExpandedChange: (updater) => {
 			const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
 			expandedRef.current = value;
 		},
-		getRowCanExpand: (row) => row.original.type === 'variable',
+		getRowCanExpand: (row) => row.original.document.type === 'variable',
 		// debugTable: true,
 		// manualExpanding: true,
 		meta: {
@@ -126,9 +126,9 @@ const DataTable = <TData, TValue>({
 	 */
 	const defaultRenderRow = React.useCallback(
 		({ item: row, index }: { item: Row<TData>; index: number }) => (
-			<DataTableRow row={row} index={index} columns={columns} />
+			<DataTableRow row={row} index={index} />
 		),
-		[columns]
+		[]
 	);
 
 	/**
@@ -138,6 +138,8 @@ const DataTable = <TData, TValue>({
 
 	/**
 	 * FlashList wants to know the size of it's container, so we need to calculate it.
+	 *
+	 * NOTE! we also need to allow size to change when column or page  is resized.
 	 */
 	const width = useSharedValue(0);
 	const height = useSharedValue(0);
@@ -216,7 +218,7 @@ const DataTable = <TData, TValue>({
 							renderItem={renderItem || defaultRenderRow}
 							onEndReached={onEndReached}
 							onEndReachedThreshold={onEndReachedThreshold}
-							keyExtractor={(row) => row.original.uuid}
+							keyExtractor={(row) => row.id}
 							{...props}
 						/>
 					</Animated.View>

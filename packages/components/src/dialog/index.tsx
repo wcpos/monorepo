@@ -88,6 +88,7 @@ const dialogContentVariants = cva(
 				default: 'w-96',
 				xs: 'w-64',
 				sm: 'w-80',
+				md: 'w-96',
 				lg: 'w-128',
 				xl: 'w-160',
 				full: 'w-full',

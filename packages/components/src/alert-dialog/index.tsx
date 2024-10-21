@@ -10,8 +10,14 @@ import { Button } from '../button';
 import { cn } from '../lib/utils';
 import { TextClassContext, Text } from '../text';
 
-import type { ButtonProps } from '../button';
-import type { PressableRef, TextRef, SlottableTextProps } from '@rn-primitives/types';
+import type {
+	ActionRef,
+	ActionProps,
+	CancelRef,
+	CancelProps,
+	TitleRef,
+	TitleProps,
+} from '@rn-primitives/alert-dialog';
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -111,7 +117,7 @@ const AlertDialogFooter = ({
 );
 AlertDialogFooter.displayName = 'AlertDialogFooter';
 
-const AlertDialogTitle = React.forwardRef<TextRef, SlottableTextProps>(
+const AlertDialogTitle = React.forwardRef<TitleRef, TitleProps>(
 	({ className, asChild, ...props }, ref) => {
 		const Component = asChild ? Slot.Text : Text;
 
@@ -142,7 +148,7 @@ const AlertDialogDescription = React.forwardRef<
 });
 AlertDialogDescription.displayName = AlertDialogPrimitive.Description.displayName;
 
-const AlertDialogAction = React.forwardRef<PressableRef, ButtonProps>(
+const AlertDialogAction = React.forwardRef<ActionRef, ActionProps>(
 	({ asChild, disabled, ...props }, ref) => {
 		return asChild ? (
 			<Slot.Pressable
@@ -160,7 +166,7 @@ const AlertDialogAction = React.forwardRef<PressableRef, ButtonProps>(
 
 AlertDialogAction.displayName = 'AlertDialogAction';
 
-const AlertDialogCancel = React.forwardRef<PressableRef, ButtonProps>(
+const AlertDialogCancel = React.forwardRef<CancelRef, CancelProps>(
 	({ asChild, disabled, ...props }, ref) => {
 		const { onOpenChange } = AlertDialogPrimitive.useRootContext();
 
