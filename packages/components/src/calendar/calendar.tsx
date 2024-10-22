@@ -52,7 +52,7 @@ function Calendar({
 				width: 248.8 * (columnsDisplayed ?? 1) + 'px',
 			}}
 			classNames={{
-				months: 'flex flex-col relative sm:flex-row gap-y-4 sm:gap-y-0',
+				months: 'flex flex-col relative gap-y-4 sm:gap-y-0',
 				month_caption: 'flex justify-center h-7 mx-10 relative items-center',
 				weekdays: 'flex flex-row',
 				weekday: 'text-muted-foreground w-8 font-normal text-[0.8rem]',
@@ -158,9 +158,10 @@ function Calendar({
 					}, [goToMonth, nextMonth]);
 
 					return (
-						<nav className={cn('flex items-center', className)} {...props}>
+						<nav className={cn('flex items-center', className)}>
 							<IconButton
-								className="absolute left-0"
+								size="sm"
+								className="absolute left-1 top-1"
 								tabIndex={isPreviousDisabled ? undefined : -1}
 								disabled={isPreviousDisabled}
 								aria-label={
@@ -173,7 +174,8 @@ function Calendar({
 							/>
 
 							<IconButton
-								className="absolute right-0"
+								size="sm"
+								className="absolute right-1 top-1"
 								tabIndex={isNextDisabled ? undefined : -1}
 								disabled={isNextDisabled}
 								aria-label={

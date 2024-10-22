@@ -25,9 +25,10 @@ interface RootProps {
 	children: React.ReactNode;
 	className?: string;
 	editable?: boolean;
+	disabled?: boolean;
 }
 
-const Root = ({ children, className, editable = true }: RootProps) => {
+const Root = ({ children, className, editable = true, disabled = false }: RootProps) => {
 	const [isFocused, setIsFocused] = React.useState(false);
 
 	return (
@@ -38,7 +39,7 @@ const Root = ({ children, className, editable = true }: RootProps) => {
 					'h-10 native:h-12 rounded-md border border-input bg-background',
 					'web:ring-offset-background',
 					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
-					!editable && 'opacity-50 web:cursor-not-allowed',
+					(!editable || disabled) && 'opacity-50 web:cursor-not-allowed',
 					className
 				)}
 			>
@@ -182,6 +183,7 @@ const Input = React.forwardRef<RNTextInput, InputProps>(
 			className,
 			inputClassName,
 			editable = true,
+			disabled = false,
 			type,
 			clearable = false,
 			value: valueProp,
@@ -198,14 +200,17 @@ const Input = React.forwardRef<RNTextInput, InputProps>(
 		});
 
 		return (
-			<Root className={className} editable={editable}>
+			<Root className={className} editable={editable} disabled={disabled}>
 				<InputField
 					ref={ref}
 					type={type}
 					editable={editable}
 					value={value}
 					onChangeText={setValue}
-					className={inputClassName}
+					className={cn(
+						(!editable || disabled) && 'opacity-50 web:cursor-not-allowed',
+						inputClassName
+					)}
 					{...props}
 				/>
 				{clearable && value !== undefined && value.length > 0 && (

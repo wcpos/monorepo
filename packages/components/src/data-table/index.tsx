@@ -82,6 +82,7 @@ const DataTable = <TData, TValue>({
 	enableRowSelection,
 	onRowSelectionChange,
 	onSortingChange,
+	extraData,
 	...props
 }: DataTableProps<TData, TValue>) => {
 	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
@@ -124,17 +125,33 @@ const DataTable = <TData, TValue>({
 	/**
 	 *
 	 */
-	const defaultRenderRow = React.useCallback(
-		({ item: row, index }: { item: Row<TData>; index: number }) => (
-			<DataTableRow row={row} index={index} />
-		),
-		[]
+	const handleRenderRow = React.useCallback(
+		({ item: row, index }: { item: Row<TData>; index: number }) =>
+			renderItem ? renderItem({ item: row, index }) : <DataTableRow row={row} index={index} />,
+		[renderItem]
 	);
 
 	/**
 	 *
 	 */
 	const context = React.useMemo(() => ({ table, ...extraContext }), [table, extraContext]);
+
+	/**
+	 * @FIXME - This is a hack!!
+	 * If the columns change, FlashList will not re-render the list.
+	 * We can force a re-render by changing the extraData.
+	 *
+	 * @TODO - look at context and extraData and see if we can make this more efficient.
+	 * It would be better to get react-table to trigger the re-render in the row component.
+	 */
+	const extraDataWithTimestamp = React.useMemo(
+		() => ({ ...(extraData || {}), timestamp: Date.now() }),
+		[
+			extraData,
+			// force re-render if columns change
+			columns,
+		]
+	);
 
 	/**
 	 * FlashList wants to know the size of it's container, so we need to calculate it.
@@ -215,10 +232,11 @@ const DataTable = <TData, TValue>({
 									style={{ opacity: 0 }}
 								/>
 							}
-							renderItem={renderItem || defaultRenderRow}
+							renderItem={handleRenderRow}
 							onEndReached={onEndReached}
 							onEndReachedThreshold={onEndReachedThreshold}
 							keyExtractor={(row) => row.id}
+							extraData={extraDataWithTimestamp}
 							{...props}
 						/>
 					</Animated.View>

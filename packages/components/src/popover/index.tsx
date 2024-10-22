@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
-import { Arrow } from '@radix-ui/react-popover';
+// import { Arrow } from '@radix-ui/react-popover';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
