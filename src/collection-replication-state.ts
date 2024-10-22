@@ -272,11 +272,19 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			for (const localDoc of localData) {
 				const remoteDoc = remoteDataMap.get(localDoc.id);
 				if (!remoteDoc) {
-					updates.push({
-						id: localDoc.id,
-						endpoint: this.endpoint,
-						status: 'PULL_DELETE',
-					});
+					/**
+					 * @FIXME - this is a hack for the products variations endpoint
+					 * I need to be able to liit localData to the parent.variations array
+					 */
+					if (!/^products\/\d+\/variations$/.test(this.endpoint)) {
+						updates.push({
+							id: localDoc.id,
+							endpoint: this.endpoint,
+							status: 'PULL_DELETE',
+						});
+					} else {
+						// debugger;
+					}
 				} else if (remoteDoc.date_modified_gmt > localDoc.date_modified_gmt) {
 					updates.push({
 						id: localDoc.id,
