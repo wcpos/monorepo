@@ -560,6 +560,11 @@ export const storesLiteral = {
 				'zul',
 			],
 		},
+		barcode_scanning_avg_time_input_threshold: {
+			title: 'Barcode scanning average time input threshold',
+			type: 'integer',
+			default: 24,
+		},
 		barcode_scanning_buffer: {
 			title: 'Barcode scanning buffer',
 			type: 'integer',

@@ -15,7 +15,11 @@ export const searchPlugin: RxPlugin = {
 			 * @returns {Promise<any>} - The FlexSearch instance for the specified locale.
 			 */
 			proto.initSearch = async function (locale = 'en') {
-				// take first 2 chars of locale
+				if (!Array.isArray(this.options.searchFields)) {
+					return null; // Return null if searchFields is not defined
+				}
+
+				// Take the first 2 chars of the locale
 				locale = locale.slice(0, 2);
 
 				// Initialize the _searchInstances map if it doesn't exist
@@ -23,31 +27,54 @@ export const searchPlugin: RxPlugin = {
 					this._searchInstances = new Map();
 				}
 
+				// Initialize the _searchPromises map if it doesn't exist (to cache pending promises)
+				if (!this._searchPromises) {
+					this._searchPromises = new Map();
+				}
+
 				// If a search instance for the locale already exists, return it
 				if (this._searchInstances.has(locale)) {
 					return this._searchInstances.get(locale);
 				}
 
-				// Initialize a new FlexSearch instance for the locale
-				const searchInstance = await addFulltextSearch({
-					identifier: `${this.name}-search-${locale}`,
-					collection: this,
-					docToString: (doc) => {
-						return this.options.searchFields.map((field) => doc[field] || '').join(' ');
-					},
-					indexOptions: {
-						tokenize: 'full',
-						language: locale,
-					},
-				});
+				// If a search instance promise is pending for the locale, await it and return the result
+				if (this._searchPromises.has(locale)) {
+					return this._searchPromises.get(locale);
+				}
 
-				// Store the search instance in the map
-				this._searchInstances.set(locale, searchInstance);
+				// Create the promise and store it in _searchPromises
+				const searchPromise = (async () => {
+					try {
+						const searchInstance = await addFulltextSearch({
+							identifier: `${this.name}-search-${locale}`,
+							collection: this,
+							docToString: (doc) => {
+								return this.options.searchFields.map((field) => doc[field] || '').join(' ');
+							},
+							indexOptions: {
+								tokenize: 'full',
+								language: locale,
+							},
+						});
 
-				// Optionally, set the active locale
-				this._activeLocale = locale;
+						// Store the search instance in the map once created
+						this._searchInstances.set(locale, searchInstance);
 
-				return searchInstance;
+						// Remove the promise from the _searchPromises map
+						this._searchPromises.delete(locale);
+
+						return searchInstance;
+					} catch (error) {
+						console.error('Error initializing FlexSearch instance:', error);
+						this._searchPromises.delete(locale);
+						throw error;
+					}
+				})();
+
+				// Store the promise in the _searchPromises map
+				this._searchPromises.set(locale, searchPromise);
+
+				return searchPromise;
 			};
 
 			/**
@@ -83,20 +110,5 @@ export const searchPlugin: RxPlugin = {
 		},
 	},
 	overwritable: {},
-	hooks: {
-		createRxCollection: {
-			after: async ({ collection }) => {
-				if (!Array.isArray(collection.options.searchFields)) {
-					return;
-				}
-
-				// Initialize the _searchInstances map
-				collection._searchInstances = new Map();
-
-				// Optionally, set a default locale or leave it to be set later
-				// Example: Initialize with default locale 'en'
-				// await collection.setLocale('en');
-			},
-		},
-	},
+	hooks: {},
 };

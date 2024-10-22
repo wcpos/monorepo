@@ -58,6 +58,7 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 	schema: storeSchema,
 	migrationStrategies: {
 		1(oldDoc: StoreDocumentType) {
+			oldDoc.barcode_scanning_avg_time_input_threshold = 24;
 			oldDoc.thousands_group_style = 'thousand';
 			const [country, state] = (oldDoc.default_country || '').split(':');
 			oldDoc.store_country = country;
