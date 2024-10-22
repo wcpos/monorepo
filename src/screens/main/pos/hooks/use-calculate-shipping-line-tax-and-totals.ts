@@ -37,7 +37,10 @@ export const useCalculateShippingLineTaxAndTotals = () => {
 				...shippingLine,
 				total: String(round(total, 6)),
 				total_tax: String(round(tax.total, 6)),
-				taxes: tax.taxes,
+				taxes: tax.taxes.map((tax) => ({
+					...tax,
+					total: String(round(tax.total, 6)),
+				})),
 			};
 		},
 		[calculateTaxesFromValue, getShippingLineData]

@@ -14,10 +14,15 @@ import {
 	SelectValue,
 } from '@wcpos/components/src/select';
 import { Text } from '@wcpos/components/src/text';
+import type { OrderDocument } from '@wcpos/database';
 
-import { useT } from '../../../contexts/translations';
+import { ZReport } from './template';
+import { useT } from '../../../../contexts/translations';
 
-export const Report = () => {
+/**
+ *
+ */
+export const Report = ({ orders }: { orders: OrderDocument[] }) => {
 	const t = useT();
 	const contentRef = React.useRef();
 	const handlePrint = useReactToPrint({ contentRef });
@@ -51,7 +56,7 @@ export const Report = () => {
 					</HStack>
 				</CardHeader>
 				<CardContent ref={contentRef} className="flex-1 p-0">
-					<Text>Test</Text>
+					<ZReport orders={orders} />
 				</CardContent>
 				<CardFooter className="p-2 border-border border-t bg-muted justify-end">
 					<Button onPress={handlePrint}>

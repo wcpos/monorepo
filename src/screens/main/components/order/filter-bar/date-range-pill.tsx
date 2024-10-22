@@ -1,49 +1,64 @@
 import * as React from 'react';
 
-import { Button, ButtonText, ButtonGroupSeparator } from '@wcpos/components/src/button';
-import { HStack } from '@wcpos/components/src/hstack';
+import { utc } from '@date-fns/utc';
+import { format } from 'date-fns';
+
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
-import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
+import type { OrderCollection } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
 import { DateRangeCalendar } from './calendar';
 import { useT } from '../../../../../contexts/translations';
 
-export const DateRangePill = () => {
+interface Props {
+	query: Query<OrderCollection>;
+}
+
+export const DateRangePill = ({ query }: Props) => {
 	const t = useT();
+	const isActive = false;
+	const triggerRef = React.useRef(null);
+
+	/**
+	 *
+	 */
+	const label = React.useMemo(() => {
+		return 'hi';
+	}, []);
+
+	/**
+	 *
+	 */
+	const handleDateSelect = React.useCallback(({ from, to }) => {
+		console.log('from', from);
+		console.log('to', to);
+		console.log('from', format(from, "yyyy-MM-dd'T'HH:mm:ss", { in: utc }));
+		console.log('to', format(to, "yyyy-MM-dd'T'HH:mm:ss", { in: utc }));
+
+		if (triggerRef.current) {
+			triggerRef.current?.close();
+		}
+	}, []);
 
 	return (
-		<HStack className="gap-0">
-			<Select>
-				<SelectPrimitive.Trigger asChild>
-					<Button size="xs" className="rounded-full pr-2 rounded-r-none" leftIcon="calendarDays">
-						<ButtonText>{t('Date Range', { _tags: 'core' })}</ButtonText>
-					</Button>
-				</SelectPrimitive.Trigger>
-				<SelectContent>
-					<SelectItem label={t('Date Created', { _tags: 'core' })} value="date_created_gmt">
-						{t('Date Created', { _tags: 'core' })}
-					</SelectItem>
-					<SelectItem label={t('Date Completed', { _tags: 'core' })} value="date_completed_gmt">
-						{t('Date Completed', { _tags: 'core' })}
-					</SelectItem>
-					<SelectItem label={t('Date Paid', { _tags: 'core' })} value="date_paid_gmt">
-						{t('Date Paid', { _tags: 'core' })}
-					</SelectItem>
-				</SelectContent>
-			</Select>
-			<ButtonGroupSeparator />
-			<Popover>
-				<PopoverTrigger asChild>
-					<Button size="xs" className="px-2 rounded-none">
-						<ButtonText>{t('Today', { _tags: 'core' })}</ButtonText>
-					</Button>
-				</PopoverTrigger>
-				<PopoverContent side="bottom" className="w-auto">
-					<DateRangeCalendar />
-				</PopoverContent>
-			</Popover>
-			<ButtonGroupSeparator />
-			<Button className="rounded-full pl-2 rounded-l-none" size="xs" leftIcon="xmark" />
-		</HStack>
+		<Popover>
+			<PopoverTrigger ref={triggerRef} asChild>
+				<ButtonPill
+					size="xs"
+					leftIcon="calendarDays"
+					variant={isActive ? 'default' : 'muted'}
+					removable={isActive}
+					onRemove={() => {
+						// remove range query
+					}}
+				>
+					<ButtonText>{isActive ? label : t('Date Range', { _tags: 'core' })}</ButtonText>
+				</ButtonPill>
+			</PopoverTrigger>
+			<PopoverContent className="w-auto p-2">
+				<DateRangeCalendar onSelect={handleDateSelect} />
+			</PopoverContent>
+		</Popover>
 	);
 };

@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
+
 import {
 	Combobox,
 	ComboboxContent,
@@ -19,7 +21,7 @@ import { useT } from '../../../../contexts/translations';
  *
  */
 const _CountryCombobox = React.forwardRef<React.ElementRef<typeof Combobox>, any>(
-	({ value, onValueChange, ...props }, ref) => {
+	({ value, onValueChange, disabled, ...props }, ref) => {
 		const allCountries = useCountries();
 		const t = useT();
 
@@ -29,7 +31,7 @@ const _CountryCombobox = React.forwardRef<React.ElementRef<typeof Combobox>, any
 		const options = React.useMemo(
 			() =>
 				allCountries.map((country) => ({
-					label: country.name,
+					label: decode(country.name),
 					value: country.code,
 				})),
 			[allCountries]
@@ -47,8 +49,8 @@ const _CountryCombobox = React.forwardRef<React.ElementRef<typeof Combobox>, any
 		 *
 		 */
 		return (
-			<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
-				<ComboboxTrigger>
+			<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange} {...props}>
+				<ComboboxTrigger disabled={disabled}>
 					<ComboboxValue placeholder={t('Select Country', { _tags: 'core' })} />
 				</ComboboxTrigger>
 				<ComboboxContent>

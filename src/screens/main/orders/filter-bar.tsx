@@ -1,12 +1,7 @@
 import * as React from 'react';
 
-import { useFocusEffect } from '@react-navigation/native';
-import {
-	useObservableState,
-	ObservableResource,
-	useObservable,
-	useSubscription,
-} from 'observable-hooks';
+import toNumber from 'lodash/toNumber';
+import { useObservableState, ObservableResource, useObservable } from 'observable-hooks';
 import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
@@ -17,7 +12,6 @@ import { useQuery } from '@wcpos/query';
 import { useAppState } from '../../../contexts/app-state';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import CustomerPill from '../components/order/filter-bar/customer-pill';
-import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
@@ -109,7 +103,7 @@ const FilterBar = ({ query }) => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(([id]) => {
-					if (id === 0) {
+					if (toNumber(id) === 0) {
 						return of(guestCustomer);
 					}
 					if (!id) {
@@ -122,7 +116,7 @@ const FilterBar = ({ query }) => {
 					);
 				})
 			),
-		[parseInt(cashierID, 10)]
+		[cashierID]
 	);
 
 	/**
@@ -154,7 +148,6 @@ const FilterBar = ({ query }) => {
 				<CashierPill resource={cashierResource} query={query} />
 			</Suspense>
 			<StorePill resource={storesResource} query={query} />
-			<DateRangePill query={query} />
 		</HStack>
 	);
 };

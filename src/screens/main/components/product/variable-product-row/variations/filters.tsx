@@ -35,7 +35,7 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 	return (
 		<HStack className="p-2 bg-input">
 			<HStack className="flex-1">
-				{params?.search && (
+				{!!params?.search && (
 					<ButtonPill
 						leftIcon="magnifyingGlass"
 						size="xs"

@@ -8,85 +8,129 @@ import {
 	subDays,
 	subWeeks,
 	subMonths,
+	endOfDay,
+	startOfDay,
 } from 'date-fns';
 import * as Locales from 'date-fns/locale';
 
-import { Box } from '@wcpos/components/src/box';
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Button, ButtonText, ButtonPill } from '@wcpos/components/src/button';
 import { Calendar } from '@wcpos/components/src/calendar';
 import type { DateRange } from '@wcpos/components/src/calendar';
 import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../contexts/translations';
+import { useLocale } from '../../../../../hooks/use-locale';
 
-export const DateRangeCalendar = () => {
+interface Props {
+	onSelect: (date: DateRange) => void;
+}
+
+/**
+ * Utility function to compare two date ranges
+ */
+const isDateRangeEqual = (range1: DateRange | undefined, range2: DateRange) => {
+	return (
+		range1?.from.getTime() === range2.from.getTime() && range1?.to.getTime() === range2.to.getTime()
+	);
+};
+
+/**
+ * DateRangeCalendar Component
+ */
+export const DateRangeCalendar = ({ onSelect }: Props) => {
 	const t = useT();
-	const today = new Date();
-	const [date, setDate] = React.useState<DateRange | undefined>({
-		from: today,
-		to: today,
-	});
+	const { locale } = useLocale();
+	const today = React.useMemo(() => new Date(), []);
 
-	// Utility functions to calculate date ranges
-	const setToday = () => {
-		setDate({ from: today, to: today });
-	};
+	/**
+	 * Check if locale is available
+	 */
+	const calendarLocale = Locales[locale.slice(0, 2)] ? Locales[locale.slice(0, 2)] : undefined;
 
-	const setYesterday = () => {
-		const yesterday = subDays(today, 1);
-		setDate({ from: yesterday, to: yesterday });
-	};
+	// Array of date range options for buttons
+	const dateRanges = React.useMemo(() => {
+		return [
+			{
+				label: t('Today', { _tags: 'core' }),
+				range: { from: startOfDay(today), to: endOfDay(today) },
+				action: () => setDate({ from: startOfDay(today), to: endOfDay(today) }),
+			},
+			{
+				label: t('Yesterday', { _tags: 'core' }),
+				range: { from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) },
+				action: () =>
+					setDate({ from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) }),
+			},
+			{
+				label: t('This Week', { _tags: 'core' }),
+				range: {
+					from: startOfWeek(today, { weekStartsOn: 1 }),
+					to: endOfWeek(today, { weekStartsOn: 1 }),
+				},
+				action: () =>
+					setDate({
+						from: startOfWeek(today, { weekStartsOn: 1 }),
+						to: endOfWeek(today, { weekStartsOn: 1 }),
+					}),
+			},
+			{
+				label: t('Last Week', { _tags: 'core' }),
+				range: {
+					from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
+					to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
+				},
+				action: () =>
+					setDate({
+						from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
+						to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
+					}),
+			},
+			{
+				label: t('This Month', { _tags: 'core' }),
+				range: {
+					from: startOfMonth(today),
+					to: endOfMonth(today),
+				},
+				action: () => setDate({ from: startOfMonth(today), to: endOfMonth(today) }),
+			},
+			{
+				label: t('Last Month', { _tags: 'core' }),
+				range: {
+					from: startOfMonth(subMonths(today, 1)),
+					to: endOfMonth(subMonths(today, 1)),
+				},
+				action: () =>
+					setDate({
+						from: startOfMonth(subMonths(today, 1)),
+						to: endOfMonth(subMonths(today, 1)),
+					}),
+			},
+		];
+	}, [t, today]);
 
-	const setThisWeek = () => {
-		const start = startOfWeek(today, { weekStartsOn: 1 }); // Assuming week starts on Monday
-		const end = endOfWeek(today, { weekStartsOn: 1 });
-		setDate({ from: start, to: end });
-	};
-
-	const setLastWeek = () => {
-		const start = startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
-		const end = endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 });
-		setDate({ from: start, to: end });
-	};
-
-	const setThisMonth = () => {
-		const start = startOfMonth(today);
-		const end = endOfMonth(today);
-		setDate({ from: start, to: end });
-	};
-
-	const setLastMonth = () => {
-		const start = startOfMonth(subMonths(today, 1));
-		const end = endOfMonth(subMonths(today, 1));
-		setDate({ from: start, to: end });
-	};
+	/**
+	 *
+	 */
+	const [date, setDate] = React.useState<DateRange | undefined>(dateRanges[0].range);
 
 	return (
 		<VStack>
 			<HStack className="items-start">
 				<VStack>
-					<Button onPress={setToday} size="sm">
-						<ButtonText>{t('Today', { _tags: 'core' })}</ButtonText>
-					</Button>
-					<Button onPress={setYesterday} size="sm">
-						<ButtonText>{t('Yesterday', { _tags: 'core' })}</ButtonText>
-					</Button>
-					<Button onPress={setThisWeek} size="sm">
-						<ButtonText>{t('This Week', { _tags: 'core' })}</ButtonText>
-					</Button>
-					<Button onPress={setLastWeek} size="sm">
-						<ButtonText>{t('Last Week', { _tags: 'core' })}</ButtonText>
-					</Button>
-					<Button onPress={setThisMonth} size="sm">
-						<ButtonText>{t('This Month', { _tags: 'core' })}</ButtonText>
-					</Button>
-					<Button onPress={setLastMonth} size="sm">
-						<ButtonText>{t('Last Month', { _tags: 'core' })}</ButtonText>
-					</Button>
+					{dateRanges.map(({ label, range, action }) => (
+						<ButtonPill
+							key={label}
+							onPress={action}
+							size="xs"
+							variant={isDateRangeEqual(date, range) ? undefined : 'ghost-primary'}
+						>
+							<ButtonText>{label}</ButtonText>
+						</ButtonPill>
+					))}
 				</VStack>
 				<Calendar
-					locale={Locales.es}
+					locale={calendarLocale}
 					mode="range"
 					defaultMonth={date?.from}
 					endMonth={today}
@@ -95,11 +139,11 @@ export const DateRangeCalendar = () => {
 					selected={date}
 				/>
 			</HStack>
-			<Box className="p-0 justify-end">
-				<Button>
-					<ButtonText>Done</ButtonText>
+			<HStack className="justify-end">
+				<Button onPress={() => onSelect(date)}>
+					<ButtonText>{t('Done', { _tags: 'core' })}</ButtonText>
 				</Button>
-			</Box>
+			</HStack>
 		</VStack>
 	);
 };

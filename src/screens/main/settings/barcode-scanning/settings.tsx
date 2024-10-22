@@ -15,7 +15,8 @@ import { FormErrors } from '../../components/form-errors';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 const formSchema = z.object({
-	barcode_scanning_buffer: z.number().default(500),
+	barcode_scanning_avg_time_input_threshold: z.number().default(24),
+	// barcode_scanning_buffer: z.number().default(500),
 	barcode_scanning_min_chars: z.number().default(8),
 	barcode_scanning_prefix: z.string().optional(),
 	barcode_scanning_suffix: z.string().optional(),
@@ -37,13 +38,13 @@ export const BarcodeSettings = () => {
 		() => {
 			const latest = store.getLatest();
 			return {
-				barcode_scanning_buffer: latest.barcode_scanning_buffer,
+				barcode_scanning_avg_time_input_threshold: latest.barcode_scanning_avg_time_input_threshold,
 				barcode_scanning_min_chars: latest.barcode_scanning_min_chars,
 				barcode_scanning_prefix: latest.barcode_scanning_prefix,
 				barcode_scanning_suffix: latest.barcode_scanning_suffix,
 			};
 		},
-		'barcode_scanning_buffer',
+		'barcode_scanning_avg_time_input_threshold',
 		'barcode_scanning_min_chars',
 		'barcode_scanning_prefix',
 		'barcode_scanning_suffix'
@@ -91,10 +92,10 @@ export const BarcodeSettings = () => {
 				<View className="grid grid-cols-2 gap-4">
 					<FormField
 						control={form.control}
-						name="barcode_scanning_buffer"
+						name="barcode_scanning_avg_time_input_threshold"
 						render={({ field }) => (
 							<FormInput
-								label={t('Barcode Scanning Buffer (ms)', { _tags: 'core' })}
+								label={t('Barcode Average Time Input Threshold (ms)', { _tags: 'core' })}
 								type="numeric"
 								{...field}
 							/>

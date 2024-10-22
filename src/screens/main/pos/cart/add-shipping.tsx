@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import isEmpty from 'lodash/isEmpty';
+import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -22,6 +23,7 @@ import {
 } from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
+import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
@@ -46,6 +48,8 @@ export const AddShipping = () => {
 	const t = useT();
 	const { addShipping } = useAddShipping();
 	const { onOpenChange } = useRootContext();
+	const { store } = useAppState();
+	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);
 
 	/**
 	 *
@@ -58,7 +62,7 @@ export const AddShipping = () => {
 			amount: '0',
 			prices_include_tax: true,
 			tax_status: 'taxable',
-			tax_class: 'standard',
+			tax_class: shippingTaxClass,
 		},
 	});
 

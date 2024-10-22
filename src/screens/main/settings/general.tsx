@@ -202,14 +202,14 @@ export const GeneralSettings = () => {
 						control={form.control}
 						name="store_city"
 						render={({ field }) => (
-							<FormInput label={t('Store Base City', { _tags: 'core' })} {...field} />
+							<FormInput label={t('Store Base City', { _tags: 'core' })} {...field} disabled />
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="store_postcode"
 						render={({ field }) => (
-							<FormInput label={t('Store Base Postcode', { _tags: 'core' })} {...field} />
+							<FormInput label={t('Store Base Postcode', { _tags: 'core' })} {...field} disabled />
 						)}
 					/>
 					<FormField
@@ -220,6 +220,7 @@ export const GeneralSettings = () => {
 								label={t('Store Base State', { _tags: 'core' })}
 								{...field}
 								countryCode={countryCode}
+								disabled
 							/>
 						)}
 					/>
@@ -230,6 +231,7 @@ export const GeneralSettings = () => {
 								customComponent={CountryCombobox}
 								label={t('Store Base Country', { _tags: 'core' })}
 								{...field}
+								disabled
 							/>
 						)}
 					/>

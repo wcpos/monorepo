@@ -38,6 +38,13 @@ export const CustomerSearch = ({ withGuest = false }: { withGuest?: boolean }) =
 	);
 
 	/**
+	 * Clear the search when unmounting
+	 */
+	React.useEffect(() => {
+		return () => query.search('');
+	}, [query]);
+
+	/**
 	 *
 	 */
 	return (

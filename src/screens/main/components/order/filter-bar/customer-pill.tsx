@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
@@ -34,7 +35,7 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 	return (
 		<Combobox
 			onValueChange={({ value }) => {
-				query.where('customer_id', parseInt(value, 10));
+				query.where('customer_id', toNumber(value));
 			}}
 		>
 			<ComboboxTriggerPrimitive asChild>

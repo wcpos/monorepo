@@ -25,6 +25,9 @@ export const useBarcodeDetection = (
 	const minLength = useObservableEagerState(store.barcode_scanning_min_chars$);
 	const prefix = useObservableEagerState(store.barcode_scanning_prefix$);
 	const suffix = useObservableEagerState(store.barcode_scanning_suffix$);
+	const avgTimeInputThreshold = useObservableEagerState(
+		store.barcode_scanning_avg_time_input_threshold$
+	);
 
 	// Refs to keep track of mutable state without causing re-renders
 	const inputStackRef = React.useRef<string[]>([]);
@@ -32,7 +35,6 @@ export const useBarcodeDetection = (
 	const avgInputTimeRef = React.useRef<number>(0);
 	const detectingScanningRef = React.useRef<boolean>(false);
 	const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-	const avgTimeInputThreshold = 24; // Threshold in milliseconds
 
 	// Subject to emit detected barcodes
 	const [barcodeRef, barcode$] = useObservableRef<string>();

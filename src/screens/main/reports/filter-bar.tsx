@@ -1,18 +1,20 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
+import toNumber from 'lodash/toNumber';
 import { useObservableState, ObservableResource, useObservable } from 'observable-hooks';
 import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import { useQuery } from '@wcpos/query';
-import { Box } from '@wcpos/components/src/box';
 import { Card } from '@wcpos/components/src/card';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Suspense } from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import CustomerPill from '../components/order/filter-bar/customer-pill';
+import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
@@ -62,7 +64,7 @@ export const FilterBar = ({ query }) => {
 	 */
 	React.useEffect(() => {
 		if (cashierID) {
-			cashierQuery.where('id', parseInt(cashierID, 10));
+			cashierQuery.where('id', toNumber(cashierID));
 		}
 	}, [cashierID, cashierQuery]);
 
@@ -140,9 +142,9 @@ export const FilterBar = ({ query }) => {
 	 *
 	 */
 	return (
-		<Box>
+		<View className="p-2 pb-0">
 			<Card className="p-2 w-full bg-input">
-				<HStack>
+				<HStack className="w-full flex-wrap">
 					<StatusPill query={query} />
 					<Suspense>
 						<CustomerPill resource={customerResource} query={query} />
@@ -151,9 +153,10 @@ export const FilterBar = ({ query }) => {
 						<CashierPill resource={cashierResource} query={query} />
 					</Suspense>
 					<StorePill resource={storesResource} query={query} />
+					<DateRangePill query={query} />
 				</HStack>
 			</Card>
-		</Box>
+		</View>
 	);
 };
 

@@ -14,13 +14,13 @@ import {
 	SelectLabel,
 	SelectSeparator,
 } from '@wcpos/components/src/select';
-import type { ProductCollection, StoreDocument } from '@wcpos/database';
+import type { OrderCollection, StoreDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 
 interface Props {
-	query: Query<ProductCollection>;
+	query: Query<OrderCollection>;
 	resource: ObservableResource<StoreDocument>;
 }
 

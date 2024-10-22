@@ -38,6 +38,13 @@ export const TagSearch = () => {
 	);
 
 	/**
+	 * Clear the search when unmounting
+	 */
+	React.useEffect(() => {
+		return () => query.search('');
+	}, [query]);
+
+	/**
 	 *
 	 */
 	return (

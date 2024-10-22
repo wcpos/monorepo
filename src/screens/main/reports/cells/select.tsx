@@ -21,12 +21,11 @@ export const TableRowSelect = ({ row }: CellContext<OrderDocument, boolean>) => 
 					<Checkbox
 						checked={row.getIsSelected()}
 						disabled={!row.getCanSelect()}
-						indeterminate={row.getIsSomeSelected()}
 						onCheckedChange={row.toggleSelected}
 					/>
 				</View>
 			</TooltipTrigger>
-			<TooltipContent>
+			<TooltipContent side="right">
 				<Text>
 					{row.getIsSelected() ? t('Exclude', { _tags: 'core' }) : t('Include', { _tags: 'core' })}
 				</Text>

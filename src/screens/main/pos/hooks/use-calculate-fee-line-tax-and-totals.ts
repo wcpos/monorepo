@@ -76,7 +76,10 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 				...feeLine,
 				total: String(round(total, 6)),
 				total_tax: String(round(tax.total, 6)),
-				taxes: tax.taxes,
+				taxes: tax.taxes.map((tax) => ({
+					...tax,
+					total: String(round(tax.total, 6)),
+				})),
 			};
 		},
 		[calculatePercentAmount, calculateTaxesFromValue, getFeeLineData]

@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
@@ -90,7 +91,7 @@ export const CashierPill = ({ query, resource }: CashierPillProps) => {
 		<Combobox
 			onValueChange={({ value }) => {
 				query.where('meta_data', {
-					$elemMatch: { key: '_pos_user', value },
+					$elemMatch: { key: '_pos_user', value: String(value) },
 				});
 			}}
 		>

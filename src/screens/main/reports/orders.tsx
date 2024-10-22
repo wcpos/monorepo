@@ -7,12 +7,10 @@ import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Suspense } from '@wcpos/components/src/suspense';
-import { useQuery } from '@wcpos/query';
 
 import { TableRowSelect } from './cells/select';
 import { TableHeaderSelect } from './headers/select';
 import { UISettingsForm } from './ui-settings-form';
-import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import { Date } from '../components/date';
@@ -54,6 +52,7 @@ const renderHeader = (props) => get(headers, props.column.id);
 export const Orders = ({ query }) => {
 	const t = useT();
 	const [rowSelection, setRowSelection] = React.useState({});
+	console.log(rowSelection);
 
 	/**
 	 *
@@ -81,6 +80,7 @@ export const Orders = ({ query }) => {
 								enableRowSelection
 								tableState={{ rowSelection }}
 								onRowSelectionChange={setRowSelection}
+								extraData={rowSelection}
 							/>
 						</Suspense>
 					</ErrorBoundary>
