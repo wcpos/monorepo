@@ -41,7 +41,7 @@ export const Reports = ({ query }) => {
 							<Panel>
 								<PanelGroup direction="horizontal">
 									<Panel>
-										<Orders query={query} />
+										<Orders query={query} orders={orders} />
 									</Panel>
 									<PanelResizeHandle />
 									<Panel>
@@ -53,7 +53,7 @@ export const Reports = ({ query }) => {
 					) : (
 						<VStack className="h-full gap-0">
 							<View className="flex-1 pr-2">
-								<Orders query={query} />
+								<Orders query={query} orders={orders} />
 							</View>
 							<View className="flex-1 pl-2">
 								<Report orders={orders} />
