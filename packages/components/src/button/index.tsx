@@ -17,7 +17,7 @@ ButtonText.displayName = 'ButtonText';
 
 const buttonVariants = cva(
 	[
-		'group flex items-center justify-center rounded-md max-w-full web:transition-colors',
+		'group flex flex-shrink items-center justify-center rounded-md max-w-full web:transition-colors',
 		'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
 	],
 	{

@@ -150,7 +150,10 @@ DialogHeader.displayName = 'DialogHeader';
 
 const DialogFooter = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
 	<View
-		className={cn('flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-4', className)}
+		className={cn(
+			'flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-4 max-w-full',
+			className
+		)}
 		{...props}
 	/>
 );
