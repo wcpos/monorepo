@@ -127,10 +127,10 @@ describe('Chart Utils', () => {
 	describe('aggregateData', () => {
 		it('should aggregate orders over months', () => {
 			const orders = [
-				{ date_completed_gmt: '2023-01-15T00:00:00', total: '100', total_tax: '10' },
-				{ date_completed_gmt: '2023-01-20T00:00:00', total: '200', total_tax: '20' },
-				{ date_completed_gmt: '2023-02-10T00:00:00', total: '150', total_tax: '15' },
-				{ date_completed_gmt: '2023-03-05T00:00:00', total: '120', total_tax: '12' },
+				{ date_created_gmt: '2023-01-15T00:00:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-01-20T00:00:00', total: '200', total_tax: '20' },
+				{ date_created_gmt: '2023-02-10T00:00:00', total: '150', total_tax: '15' },
+				{ date_created_gmt: '2023-03-05T00:00:00', total: '120', total_tax: '12' },
 			] as OrderDocument[];
 
 			const result = aggregateData(orders);
@@ -153,8 +153,8 @@ describe('Chart Utils', () => {
 
 		it('should fill in missing months with zeros', () => {
 			const orders = [
-				{ date_completed_gmt: '2023-01-15T00:00:00', total: '100', total_tax: '10' },
-				{ date_completed_gmt: '2023-03-05T00:00:00', total: '120', total_tax: '12' },
+				{ date_created_gmt: '2023-01-15T00:00:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-03-05T00:00:00', total: '120', total_tax: '12' },
 			] as OrderDocument[];
 
 			const result = aggregateData(orders);
@@ -177,10 +177,10 @@ describe('Chart Utils', () => {
 
 		it('should aggregate orders over weeks', () => {
 			const orders = [
-				{ date_completed_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
-				{ date_completed_gmt: '2023-01-03T00:00:00', total: '200', total_tax: '20' },
-				{ date_completed_gmt: '2023-01-08T00:00:00', total: '150', total_tax: '15' },
-				{ date_completed_gmt: '2023-01-15T00:00:00', total: '120', total_tax: '12' },
+				{ date_created_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-01-03T00:00:00', total: '200', total_tax: '20' },
+				{ date_created_gmt: '2023-01-08T00:00:00', total: '150', total_tax: '15' },
+				{ date_created_gmt: '2023-01-15T00:00:00', total: '120', total_tax: '12' },
 			] as OrderDocument[];
 
 			const result = aggregateData(orders);
@@ -203,8 +203,8 @@ describe('Chart Utils', () => {
 
 		it('should fill in missing weeks with zeros', () => {
 			const orders = [
-				{ date_completed_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
-				{ date_completed_gmt: '2023-01-15T00:00:00', total: '120', total_tax: '12' },
+				{ date_created_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-01-15T00:00:00', total: '120', total_tax: '12' },
 			] as OrderDocument[];
 
 			const result = aggregateData(orders);
@@ -227,10 +227,10 @@ describe('Chart Utils', () => {
 
 		it('should aggregate orders over days', () => {
 			const orders = [
-				{ date_completed_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
-				{ date_completed_gmt: '2023-01-01T12:00:00', total: '200', total_tax: '20' },
-				{ date_completed_gmt: '2023-01-02T00:00:00', total: '150', total_tax: '15' },
-				{ date_completed_gmt: '2023-01-03T00:00:00', total: '120', total_tax: '12' },
+				{ date_created_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-01-01T12:00:00', total: '200', total_tax: '20' },
+				{ date_created_gmt: '2023-01-02T00:00:00', total: '150', total_tax: '15' },
+				{ date_created_gmt: '2023-01-03T00:00:00', total: '120', total_tax: '12' },
 			] as OrderDocument[];
 
 			const result = aggregateData(orders);
@@ -253,8 +253,8 @@ describe('Chart Utils', () => {
 
 		it('should fill in missing days with zeros', () => {
 			const orders = [
-				{ date_completed_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
-				{ date_completed_gmt: '2023-01-03T00:00:00', total: '120', total_tax: '12' },
+				{ date_created_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-01-03T00:00:00', total: '120', total_tax: '12' },
 			] as OrderDocument[];
 
 			const result = aggregateData(orders);
@@ -277,10 +277,10 @@ describe('Chart Utils', () => {
 
 		it('should aggregate orders over 6-hour intervals', () => {
 			const orders = [
-				{ date_completed_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
-				{ date_completed_gmt: '2023-01-01T03:00:00', total: '200', total_tax: '20' },
-				{ date_completed_gmt: '2023-01-01T07:00:00', total: '150', total_tax: '15' },
-				{ date_completed_gmt: '2023-01-01T13:00:00', total: '120', total_tax: '12' },
+				{ date_created_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-01-01T03:00:00', total: '200', total_tax: '20' },
+				{ date_created_gmt: '2023-01-01T07:00:00', total: '150', total_tax: '15' },
+				{ date_created_gmt: '2023-01-01T13:00:00', total: '120', total_tax: '12' },
 			] as OrderDocument[];
 
 			const result = aggregateData(orders);
@@ -304,8 +304,8 @@ describe('Chart Utils', () => {
 
 		it('should fill in missing 6-hour intervals with zeros', () => {
 			const orders = [
-				{ date_completed_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
-				{ date_completed_gmt: '2023-01-01T13:00:00', total: '120', total_tax: '12' },
+				{ date_created_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-01-01T13:00:00', total: '120', total_tax: '12' },
 			] as OrderDocument[];
 
 			const result = aggregateData(orders);
@@ -329,10 +329,10 @@ describe('Chart Utils', () => {
 
 		it('should aggregate orders over hours', () => {
 			const orders = [
-				{ date_completed_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
-				{ date_completed_gmt: '2023-01-01T00:30:00', total: '200', total_tax: '20' },
-				{ date_completed_gmt: '2023-01-01T01:15:00', total: '150', total_tax: '15' },
-				{ date_completed_gmt: '2023-01-01T02:45:00', total: '120', total_tax: '12' },
+				{ date_created_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-01-01T00:30:00', total: '200', total_tax: '20' },
+				{ date_created_gmt: '2023-01-01T01:15:00', total: '150', total_tax: '15' },
+				{ date_created_gmt: '2023-01-01T02:45:00', total: '120', total_tax: '12' },
 			] as OrderDocument[];
 
 			const result = aggregateData(orders);
@@ -355,8 +355,8 @@ describe('Chart Utils', () => {
 
 		it('should fill in missing hours with zeros', () => {
 			const orders = [
-				{ date_completed_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
-				{ date_completed_gmt: '2023-01-01T02:00:00', total: '120', total_tax: '12' },
+				{ date_created_gmt: '2023-01-01T00:00:00', total: '100', total_tax: '10' },
+				{ date_created_gmt: '2023-01-01T02:00:00', total: '120', total_tax: '12' },
 			] as OrderDocument[];
 
 			const result = aggregateData(orders);

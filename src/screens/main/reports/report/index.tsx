@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ScrollView } from 'react-native';
 
 import { useReactToPrint } from 'react-to-print';
 
@@ -56,7 +57,9 @@ export const Report = ({ orders }: { orders: OrderDocument[] }) => {
 					</HStack>
 				</CardHeader>
 				<CardContent ref={contentRef} className="flex-1 p-0">
-					<ZReport orders={orders} />
+					<ScrollView horizontal={false} className={'w-full p-2'}>
+						<ZReport orders={orders} />
+					</ScrollView>
 				</CardContent>
 				<CardFooter className="p-2 border-border border-t bg-muted justify-end">
 					<Button onPress={handlePrint}>

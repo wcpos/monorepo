@@ -8,7 +8,9 @@ import {
 	differenceInHours,
 	isToday,
 	isValid,
+	formatDistance,
 } from 'date-fns';
+import * as Locales from 'date-fns/locale';
 import { useObservableState } from 'observable-hooks';
 import { switchMap, map, filter } from 'rxjs/operators';
 
@@ -16,6 +18,7 @@ import { useHeartbeatObservable } from '@wcpos/hooks/src/use-heartbeat';
 import { usePageVisibility } from '@wcpos/hooks/src/use-page-visibility';
 
 import { useT } from '../../../contexts/translations';
+import { useLocale } from '../../../hooks/use-locale';
 
 /**
  *
@@ -24,6 +27,9 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 	const t = useT();
 	const heartbeat$ = useHeartbeatObservable(60000); // every minute
 	const { visibile$ } = usePageVisibility();
+	const { locale } = useLocale();
+	const dateLocale = Locales[locale.slice(0, 2)] ? Locales[locale.slice(0, 2)] : undefined;
+
 	let gmtDateObject;
 
 	// Determine if gmtDate is an ISO string or a Unix timestamp
@@ -42,28 +48,16 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 		if (!isValid(gmtDateObject)) {
 			return null;
 		}
-		if (fromNow) {
-			const now = new UTCDate();
-			const diffInMinutes = differenceInMinutes(now, gmtDateObject);
-			const diffInHours = differenceInHours(now, gmtDateObject);
 
-			if (diffInMinutes < 1) {
-				return t('just now', { _tags: 'core' });
-			} else if (diffInMinutes < 2) {
-				return t('a minute ago', { _tags: 'core' });
-			} else if (diffInMinutes < 60) {
-				return t('{x} mins ago', { _tags: 'core', x: diffInMinutes });
-			} else if (diffInHours < 2) {
-				return t('an hour ago', { _tags: 'core' });
-			} else if (diffInHours < 24) {
-				return t('{x} hours ago', { _tags: 'core', x: diffInHours });
-			} else {
-				return format(gmtDateObject, formatPattern, { in: utc });
-			}
+		const now = new UTCDate();
+		const diffInHours = differenceInHours(now, gmtDateObject);
+
+		if (fromNow && diffInHours < 24) {
+			return formatDistance(gmtDateObject, now, { addSuffix: true, locale: dateLocale });
 		} else {
-			return format(gmtDateObject, formatPattern, { in: utc });
+			return format(gmtDateObject, formatPattern, { in: utc, locale: dateLocale });
 		}
-	}, [gmtDateObject, fromNow, t, formatPattern]);
+	}, [gmtDateObject, fromNow, formatPattern, dateLocale]);
 
 	/**
 	 *

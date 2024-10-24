@@ -51,15 +51,15 @@ const renderHeader = (props) => get(headers, props.column.id);
 interface Props {
 	query: Query<OrderCollection>;
 	orders: OrderDocument[];
+	unselectedRowIds: RowSelectionState;
+	setUnselectedRowIds: React.Dispatch<React.SetStateAction<RowSelectionState>>;
 }
 
 /**
  *
  */
-export const Orders = ({ query, orders }: Props) => {
+export const Orders = ({ query, orders, unselectedRowIds, setUnselectedRowIds }: Props) => {
 	const t = useT();
-	const [unselectedRowIds, setUnselectedRowIds] = React.useState<RowSelectionState>({});
-	console.log('unselectedRowIds', unselectedRowIds);
 
 	/**
 	 * Derive the selection state by inverting unselectedRowIds
@@ -92,7 +92,7 @@ export const Orders = ({ query, orders }: Props) => {
 				return newUnselectedRowIds;
 			});
 		},
-		[orders, selectionState]
+		[orders, selectionState, setUnselectedRowIds]
 	);
 
 	/**
@@ -112,7 +112,7 @@ export const Orders = ({ query, orders }: Props) => {
 			// Some rows are unselected, so we want to select all rows
 			setUnselectedRowIds({});
 		}
-	}, [orders, unselectedRowIds]);
+	}, [orders, setUnselectedRowIds, unselectedRowIds]);
 
 	/**
 	 *

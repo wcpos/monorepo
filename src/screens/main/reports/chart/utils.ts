@@ -84,7 +84,7 @@ export const aggregateData = (orders: OrderDocument[]) => {
 
 	// Ensure we filter out orders without a valid date
 	const dates = orders
-		.map((order) => order.date_completed_gmt)
+		.map((order) => order.date_created_gmt)
 		.filter((date): date is string => date !== undefined)
 		.map((date) => convertUTCStringToLocalDate(date));
 
@@ -99,12 +99,12 @@ export const aggregateData = (orders: OrderDocument[]) => {
 	const allDates = generateAllDates(minDate, maxDate, interval);
 
 	orders.forEach((order) => {
-		const { date_completed_gmt, total, total_tax } = order; // Extract properties
+		const { date_created_gmt, total, total_tax } = order; // Extract properties
 
 		// Skip orders without a valid date?
-		if (!date_completed_gmt) return;
+		if (!date_created_gmt) return;
 
-		const date = convertUTCStringToLocalDate(date_completed_gmt);
+		const date = convertUTCStringToLocalDate(date_created_gmt);
 		const key = format(date, dateFormat);
 
 		if (!dataMap[key]) {

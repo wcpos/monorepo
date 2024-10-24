@@ -6,13 +6,14 @@ import { useObservableSuspense } from 'observable-hooks';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/src/panels';
 import { VStack } from '@wcpos/components/src/vstack';
+import type { OrderDocument } from '@wcpos/database';
 
 import { Chart } from './chart';
 import { FilterBar } from './filter-bar';
 import { Orders } from './orders';
 import { Report } from './report';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
+import type { RowSelectionState } from '@tanstack/react-table';
 
 /**
  *
@@ -20,7 +21,26 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 export const Reports = ({ query }) => {
 	const dimensions = useWindowDimensions();
 	const result = useObservableSuspense(query.resource);
-	const orders = result.hits.map((hit) => hit.document as OrderDocument);
+	const [unselectedRowIds, setUnselectedRowIds] = React.useState<RowSelectionState>({});
+
+	/**
+	 *
+	 */
+	const allOrders = React.useMemo(
+		() => result.hits.map((hit) => hit.document as OrderDocument),
+		[result.hits]
+	);
+
+	/**
+	 * Remove unselectedRowIds from orders
+	 */
+	const orders = React.useMemo(() => {
+		if (Object.keys(unselectedRowIds).length === 0) {
+			return allOrders;
+		}
+
+		return allOrders.filter((order) => !unselectedRowIds[order.uuid]);
+	}, [allOrders, unselectedRowIds]);
 
 	/**
 	 *
@@ -41,7 +61,12 @@ export const Reports = ({ query }) => {
 							<Panel>
 								<PanelGroup direction="horizontal">
 									<Panel>
-										<Orders query={query} orders={orders} />
+										<Orders
+											query={query}
+											orders={allOrders}
+											unselectedRowIds={unselectedRowIds}
+											setUnselectedRowIds={setUnselectedRowIds}
+										/>
 									</Panel>
 									<PanelResizeHandle />
 									<Panel>
@@ -53,7 +78,12 @@ export const Reports = ({ query }) => {
 					) : (
 						<VStack className="h-full gap-0">
 							<View className="flex-1 pr-2">
-								<Orders query={query} orders={orders} />
+								<Orders
+									query={query}
+									orders={allOrders}
+									unselectedRowIds={unselectedRowIds}
+									setUnselectedRowIds={setUnselectedRowIds}
+								/>
 							</View>
 							<View className="flex-1 pl-2">
 								<Report orders={orders} />

@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	Dialog,
 	DialogContent,
