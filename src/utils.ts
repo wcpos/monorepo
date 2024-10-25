@@ -115,7 +115,7 @@ export function getParamValueFromEndpoint(endpoint: string, param: string) {
 }
 
 /**
- * 
+ *
  */
 type WhereClause = { field: string; value: any };
 export function normalizeWhereClauses(clauses: WhereClause[]): WhereClause[] {
@@ -140,7 +140,7 @@ export function normalizeWhereClauses(clauses: WhereClause[]): WhereClause[] {
 	}
 
 	// Ensure fields marked for removal are not in the final output
-	fieldsToRemove.forEach(field => {
+	fieldsToRemove.forEach((field) => {
 		for (const key of fieldMap.keys()) {
 			if (key.startsWith(field)) {
 				fieldMap.delete(key);
@@ -150,5 +150,3 @@ export function normalizeWhereClauses(clauses: WhereClause[]): WhereClause[] {
 
 	return Array.from(fieldMap.values());
 }
-
-

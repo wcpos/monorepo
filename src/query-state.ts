@@ -1,27 +1,14 @@
 import cloneDeep from 'lodash/cloneDeep';
 import debounce from 'lodash/debounce';
-import find from 'lodash/find';
-import forEach from 'lodash/forEach';
-import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
 import { orderBy } from 'natural-orderby';
 import { ObservableResource } from 'observable-hooks';
-import {
-	BehaviorSubject,
-	Observable,
-	Subscription,
-	Subject,
-	ReplaySubject,
-	combineLatest,
-	catchError,
-	from,
-} from 'rxjs';
-import { map, switchMap, distinctUntilChanged, debounceTime, tap, startWith } from 'rxjs/operators';
+import { BehaviorSubject, Observable, Subscription, Subject, ReplaySubject, from } from 'rxjs';
+import { map, switchMap, distinctUntilChanged, startWith } from 'rxjs/operators';
 
 // import { Search } from './search-state';
 import { SubscribableBase } from './subscribable-base';
-import { normalizeWhereClauses } from './utils';
 
 import type { RxCollection, RxDocument } from 'rxdb';
 
@@ -75,13 +62,22 @@ export interface QueryResult<T> {
 	}[];
 }
 
+const SUBKEY_FIELDS: Record<
+	string,
+	{ subkey: string; allowMultiple: boolean; valueField?: string }
+> = {
+	meta_data: { subkey: 'key', allowMultiple: true, valueField: 'value' },
+	attributes: { subkey: 'name', allowMultiple: true, valueField: 'option' },
+	categories: { subkey: 'id', allowMultiple: false },
+	tags: { subkey: 'id', allowMultiple: false },
+};
+
 /**
  * A wrapper class for RxDB queries
  */
 export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly id: string;
 	public readonly collection: T;
-	public readonly whereClauses: WhereClause[] = [];
 	public readonly hooks: QueryConfig<T>['hooks'];
 	// public readonly searchService: Search;
 	public readonly endpoint: string;
@@ -90,6 +86,25 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly greedy: boolean;
 	public readonly searchInstancePromise: Promise<any>;
 	public readonly locale: string;
+
+	/**
+	 * Store whereClauses as an object.
+	 * For simple fields: field name -> value
+	 * For complex fields: field name -> Map<subkeyValue, clause>
+	 */
+	private whereClauses: Record<string, any> = {};
+
+	/**
+	 * Cache for selector object
+	 */
+	private selectorCache: any = null;
+	private fieldCache: Record<string, any> = {};
+	private static EMPTY_ARRAY: any[] = [];
+
+	/**
+	 * Current params
+	 */
+	private currentParams: QueryParams;
 
 	/**
 	 *
@@ -103,9 +118,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	/**
 	 *
 	 */
-	public readonly params$ = this.subjects.params
-		.asObservable()
-		.pipe(distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)));
+	public readonly params$ = this.subjects.params.asObservable();
 	public readonly result$ = this.subjects.result.asObservable();
 
 	public readonly resource = new ObservableResource(this.result$);
@@ -143,20 +156,20 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		// this.searchService = new Search({ collection, locale });
 
 		/**
-		 * Set initial params
+		 * Initialize whereClauses from initialParams.selector
 		 */
-		if (initialParams.selector?.$and) {
-			forEach(initialParams.selector.$and, (condition) => {
-				forEach(condition, (value, key) => {
-					this.whereClauses.push({ field: key, value });
-				});
-			});
-		} else {
-			forEach(initialParams.selector, (value, key) => {
-				this.whereClauses.push({ field: key, value });
-			});
+		if (initialParams.selector) {
+			this.initializeWhereClauses(initialParams.selector);
 		}
-		this.subjects.params.next(initialParams);
+
+		// Initialize currentParams
+		this.currentParams = {
+			...initialParams,
+			selector: this.generateSelector(),
+		};
+
+		// Emit the initial params
+		this.subjects.params.next(this.currentParams);
 
 		/**
 		 * Keep track of what we are subscribed to
@@ -203,6 +216,54 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 					this.subjects.result.next(result);
 				})
 		);
+	}
+
+	/**
+	 * Initialize whereClauses from selector
+	 */
+	private initializeWhereClauses(selector: any) {
+		if (selector.$and) {
+			for (const condition of selector.$and) {
+				for (const [field, value] of Object.entries(condition)) {
+					this.where(field, value);
+				}
+			}
+		} else {
+			for (const [field, value] of Object.entries(selector)) {
+				this.where(field, value);
+			}
+		}
+	}
+
+	/**
+	 * Generate selector from whereClauses.
+	 */
+	private generateSelector(): any {
+		if (this.selectorCache !== null) {
+			return this.selectorCache;
+		}
+
+		const conditions: any[] = [];
+
+		for (const [field, value] of Object.entries(this.whereClauses)) {
+			const subkeyInfo = SUBKEY_FIELDS[field];
+			const subkey = subkeyInfo?.subkey;
+
+			if (subkey && value instanceof Map) {
+				for (const clause of value.values()) {
+					conditions.push({ [field]: clause });
+				}
+			} else {
+				conditions.push({ [field]: value });
+			}
+		}
+
+		const selector = conditions.length > 0 ? { $and: conditions } : {};
+
+		// Cache the selector
+		this.selectorCache = selector;
+
+		return selector;
 	}
 
 	/**
@@ -319,32 +380,128 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	/**
 	 * Selector helpers
 	 */
+
+	/**
+	 * Add or update a where clause.
+	 */
 	where(field: string, value: any): this {
-		this.whereClauses.push({ field, value });
-		this.whereClauses = normalizeWhereClauses(this.whereClauses);
-		this.updateParams();
+		const subkeyInfo = SUBKEY_FIELDS[field];
+		const subkey = subkeyInfo?.subkey;
+		const valueField = subkeyInfo?.valueField;
+
+		let changed = false;
+
+		if (value === null || value === undefined) {
+			// Remove entire field
+			if (this.whereClauses[field] !== undefined) {
+				delete this.whereClauses[field];
+				changed = true;
+			}
+		} else if (subkey) {
+			const elemMatch = value?.$elemMatch;
+			if (!elemMatch) {
+				console.warn(`Invalid value for field '${field}', expected $elemMatch`, value);
+				return this;
+			}
+
+			const subkeyValue = elemMatch[subkey];
+
+			if (subkeyValue === undefined) {
+				console.warn(`Cannot extract subkey '${subkey}' from value`, value);
+				return this;
+			}
+
+			let removeClause = false;
+
+			if (valueField) {
+				const valueFieldValue = elemMatch[valueField];
+				if (valueFieldValue === null || valueFieldValue === undefined) {
+					removeClause = true;
+				}
+			} else {
+				if (subkeyValue === null || subkeyValue === undefined) {
+					removeClause = true;
+				}
+			}
+
+			if (removeClause) {
+				if (this.whereClauses[field] && this.whereClauses[field] instanceof Map) {
+					if (this.whereClauses[field].has(subkeyValue)) {
+						this.whereClauses[field].delete(subkeyValue);
+						if (this.whereClauses[field].size === 0) {
+							delete this.whereClauses[field];
+						}
+						changed = true;
+					}
+				}
+			} else {
+				// Add or update the clause
+				let needUpdate = true;
+
+				if (this.whereClauses[field] && this.whereClauses[field] instanceof Map) {
+					const existingValue = this.whereClauses[field].get(subkeyValue);
+					if (existingValue && isEqual(existingValue, value)) {
+						needUpdate = false;
+					}
+				}
+
+				if (needUpdate) {
+					if (!subkeyInfo.allowMultiple) {
+						// Overwrite the entire field
+						this.whereClauses[field] = new Map();
+					} else if (!this.whereClauses[field]) {
+						this.whereClauses[field] = new Map();
+					}
+					this.whereClauses[field].set(subkeyValue, value);
+					changed = true;
+				}
+			}
+		} else {
+			// Simple field
+			if (!isEqual(this.whereClauses[field], value)) {
+				this.whereClauses[field] = value;
+				changed = true;
+			}
+		}
+
+		if (changed) {
+			// Reset caches
+			this.selectorCache = null;
+			this.fieldCache = {};
+			this.updateParams();
+		}
+
 		return this;
 	}
 
+	/**
+	 *
+	 */
 	sort(sortBy: string, sortDirection: SortDirection): this;
 	sort(sortObj: Record<string, SortDirection>): this;
 	sort(sortByOrObj: any, sortDirection?: SortDirection): this {
+		let newSortBy: string;
+		let newSortDirection: SortDirection;
+
 		if (typeof sortByOrObj === 'string') {
-			// Single field-direction pair
-			this.updateParams({
-				sortBy: sortByOrObj,
-				sortDirection: sortDirection!,
-			});
+			newSortBy = sortByOrObj;
+			newSortDirection = sortDirection!;
 		} else {
-			// Object with multiple field-direction pairs
-			// Assuming we want to keep the last one if there are multiple fields
 			const [lastField, lastDirection] = Object.entries(sortByOrObj).pop() as [
 				string,
 				SortDirection,
 			];
+			newSortBy = lastField;
+			newSortDirection = lastDirection;
+		}
+
+		if (
+			this.currentParams.sortBy !== newSortBy ||
+			this.currentParams.sortDirection !== newSortDirection
+		) {
 			this.updateParams({
-				sortBy: lastField,
-				sortDirection: lastDirection,
+				sortBy: newSortBy,
+				sortDirection: newSortDirection,
 			});
 		}
 
@@ -352,45 +509,34 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	}
 
 	search(query: string | Record<string, any> = '') {
-		this.updateParams({ search: query });
+		if (!isEqual(this.currentParams.search, query)) {
+			this.updateParams({ search: query });
+		}
 	}
-
 	debouncedSearch = debounce(this.search, 250);
 
 	/**
 	 *
 	 */
 	private updateParams(additionalParams: Partial<QueryParams> = {}): void {
-		let selector;
-
-		// Construct the $and selector from where clauses
-		const andClauses = this.whereClauses.map((clause) => ({
-			[clause.field]: clause.value,
-		}));
-
-		if (andClauses.length > 0) {
-			selector = { $and: andClauses };
-		} else {
-			selector = {};
-		}
-
-		// Get current params and merge them with additionalParams
-		const currentParams = this.getParams() || {};
+		const newSelector = this.generateSelector();
 		const newParams: QueryParams = {
-			...currentParams,
+			...this.currentParams,
 			...additionalParams,
-			selector,
+			selector: newSelector,
 		};
 
-		// Update the BehaviorSubject
-		this.subjects.params.next(newParams);
+		if (!isEqual(this.currentParams, newParams)) {
+			this.currentParams = newParams;
+			this.subjects.params.next(this.currentParams);
+		}
 	}
 
 	/**
 	 * Public getters
 	 */
 	getParams(): QueryParams | undefined {
-		return this.subjects.params.getValue();
+		return this.currentParams;
 	}
 
 	get count$() {
@@ -401,118 +547,215 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	}
 
 	/**
-	 * Helper methods to see if $elemMatch is active
+	 * Helper methods
+	 */
+	/**
+	 * Finds the selector(s) for a given field.
 	 */
 	findSelector(field: string): any {
-		const matchingClauses = this.whereClauses
-			.filter((clause) => clause.field === field)
-			.map((clause) => clause.value);
-
-		if (matchingClauses.length === 0) {
-			return undefined;
+		if (this.fieldCache[`selector_${field}`] !== undefined) {
+			return this.fieldCache[`selector_${field}`];
 		}
 
-		// If any matching clause is an object, return all as an array
-		if (matchingClauses.some((value) => typeof value === 'object')) {
-			return matchingClauses;
+		const subkeyInfo = SUBKEY_FIELDS[field];
+		const subkey = subkeyInfo?.subkey;
+
+		let result;
+		if (subkey && this.whereClauses[field] instanceof Map) {
+			const clauses = Array.from(this.whereClauses[field].values());
+			result = clauses;
+		} else {
+			result = this.whereClauses[field];
 		}
 
-		// If there is only one matching clause and it's not an object, return it directly
-		if (matchingClauses.length === 1) {
-			return matchingClauses[0];
-		}
+		this.fieldCache[`selector_${field}`] = result !== undefined ? result : null;
 
-		// Otherwise, return all matching clauses as an array
-		return matchingClauses;
+		return result;
 	}
 
+	/**
+	 * Checks if the selector for a field matches a given value.
+	 */
 	hasSelector(field: string, value: any): boolean {
-		const clause = find(this.whereClauses, { field, value });
-		return !!clause;
+		const cacheKey = `has_selector_${field}_${JSON.stringify(value)}`;
+		if (this.fieldCache[cacheKey] !== undefined) {
+			return this.fieldCache[cacheKey];
+		}
+
+		const selector = this.findSelector(field);
+		const result = isEqual(selector, value);
+
+		this.fieldCache[cacheKey] = result;
+
+		return result;
 	}
 
+	/**
+	 * Finds the ID(s) in the selector for a given field (e.g., 'categories').
+	 */
 	findElementSelectorID(field: string): any {
-		for (const clause of this.whereClauses) {
-			if (clause.field === field && clause.value?.$elemMatch) {
-				const match = clause.value.$elemMatch.id;
-				if (match !== undefined) return match;
-			}
+		const cacheKey = `elementSelectorID_${field}`;
+		if (this.fieldCache[cacheKey] !== undefined) {
+			return this.fieldCache[cacheKey];
 		}
-		return undefined;
+
+		const fieldClauses = this.whereClauses[field];
+		let result;
+		if (fieldClauses && fieldClauses instanceof Map) {
+			result = Array.from(fieldClauses.keys());
+		} else if (fieldClauses?.$elemMatch?.id !== undefined) {
+			result = fieldClauses.$elemMatch.id;
+		} else {
+			result = undefined;
+		}
+
+		this.fieldCache[cacheKey] = result !== undefined ? result : null;
+
+		return result;
 	}
 
+	/**
+	 * Checks if a selector with a specific ID exists for a given field.
+	 */
 	hasElementSelectorID(field: string, id: any): boolean {
-		for (const clause of this.whereClauses) {
-			if (clause.field === field && clause.value?.$elemMatch) {
-				const match = clause.value.$elemMatch.id;
-				if (match === id) return true;
-			}
+		const cacheKey = `has_elementSelectorID_${field}_${id}`;
+		if (this.fieldCache[cacheKey] !== undefined) {
+			return this.fieldCache[cacheKey];
 		}
-		return false;
+
+		const fieldClauses = this.whereClauses[field];
+		let result = false;
+		if (fieldClauses && fieldClauses instanceof Map) {
+			result = fieldClauses.has(id);
+		} else if (fieldClauses?.$elemMatch?.id !== undefined) {
+			result = fieldClauses.$elemMatch.id === id;
+		}
+
+		this.fieldCache[cacheKey] = result;
+
+		return result;
 	}
 
+	/**
+	 * Finds the value of a meta_data selector by key.
+	 */
 	findMetaDataSelector(key: string): any {
-		for (const clause of this.whereClauses) {
-			if (clause.field === 'meta_data' && clause.value?.$elemMatch) {
-				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], { key });
-				if (match) return match.value;
-			}
+		const cacheKey = `meta_data_${key}`;
+		if (this.fieldCache[cacheKey] !== undefined) {
+			return this.fieldCache[cacheKey];
 		}
-		return undefined;
+
+		const metaDataClauses = this.whereClauses['meta_data'];
+		let result;
+		if (metaDataClauses && metaDataClauses instanceof Map) {
+			const clause = metaDataClauses.get(key);
+			if (clause && clause.$elemMatch) {
+				result = clause.$elemMatch.value;
+			} else {
+				result = undefined;
+			}
+		} else {
+			result = undefined;
+		}
+
+		this.fieldCache[cacheKey] = result !== undefined ? result : null;
+
+		return result;
 	}
 
+	/**
+	 * Checks if a meta_data selector with a specific key and value exists.
+	 */
 	hasMetaDataSelector(key: string, value: any): boolean {
-		for (const clause of this.whereClauses) {
-			if (clause.field === 'meta_data' && clause.value?.$elemMatch) {
-				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], {
-					key,
-					value,
-				});
-				if (match) return true;
+		const cacheKey = `has_meta_data_${key}_${JSON.stringify(value)}`;
+		if (this.fieldCache[cacheKey] !== undefined) {
+			return this.fieldCache[cacheKey];
+		}
+
+		const metaDataClauses = this.whereClauses['meta_data'];
+		let result = false;
+		if (metaDataClauses && metaDataClauses instanceof Map) {
+			const clause = metaDataClauses.get(key);
+			if (clause && clause.$elemMatch) {
+				result = clause.$elemMatch.value === value;
 			}
 		}
-		return false;
+
+		this.fieldCache[cacheKey] = result;
+
+		return result;
 	}
 
+	/**
+	 * Retrieves all attribute selectors.
+	 */
 	getAllAttributesSelectors() {
-		const attributeSelectors = this.findSelector('attributes');
-		if (Array.isArray(attributeSelectors)) {
-			return attributeSelectors
-				.map((selector) => selector?.$elemMatch)
-				.filter((attribute) => !!attribute.option);
+		if (this.fieldCache['attributesSelectors'] !== undefined) {
+			return this.fieldCache['attributesSelectors'];
 		}
-		return [];
+
+		const attributeClauses = this.findSelector('attributes');
+		let result;
+		if (attributeClauses) {
+			result = attributeClauses
+				.map((clause) => clause?.$elemMatch)
+				.filter((attribute) => !!attribute?.option);
+		} else {
+			result = Query.EMPTY_ARRAY;
+		}
+
+		this.fieldCache['attributesSelectors'] = result;
+
+		return result;
 	}
 
-	findAttributesSelector({ id, name }: { id: number; name: string }) {
-		for (const clause of this.whereClauses) {
-			if (clause.field === 'attributes' && clause.value?.$elemMatch) {
-				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], { id, name });
-				if (match) return match.option as string;
-			}
+	/**
+	 * Finds the option of an attribute selector by name.
+	 */
+	findAttributesSelector({ name }: { name: string }) {
+		const cacheKey = `attributes_${name}`;
+		if (this.fieldCache[cacheKey] !== undefined) {
+			return this.fieldCache[cacheKey];
 		}
-		return undefined;
+
+		const attributeClauses = this.whereClauses['attributes'];
+		let result;
+		if (attributeClauses && attributeClauses instanceof Map) {
+			const clause = attributeClauses.get(name);
+			if (clause && clause.$elemMatch) {
+				result = clause.$elemMatch.option;
+			} else {
+				result = undefined;
+			}
+		} else {
+			result = undefined;
+		}
+
+		this.fieldCache[cacheKey] = result !== undefined ? result : null;
+
+		return result;
 	}
 
-	hasAttributesSelector({
-		id,
-		name,
-		option,
-	}: {
-		id: number;
-		name: string;
-		option: string;
-	}): boolean {
-		for (const clause of this.whereClauses) {
-			if (clause.field === 'attributes' && clause.value?.$elemMatch) {
-				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], {
-					id,
-					name,
-					option,
-				});
-				if (match) return true;
+	/**
+	 * Checks if an attribute selector with a specific name and option exists.
+	 */
+	hasAttributesSelector({ name, option }: { name: string; option: string }): boolean {
+		const cacheKey = `has_attributes_${name}_${option}`;
+		if (this.fieldCache[cacheKey] !== undefined) {
+			return this.fieldCache[cacheKey];
+		}
+
+		const attributeClauses = this.whereClauses['attributes'];
+		let result = false;
+		if (attributeClauses && attributeClauses instanceof Map) {
+			const clause = attributeClauses.get(name);
+			if (clause && clause.$elemMatch) {
+				result = clause.$elemMatch.option === option;
 			}
 		}
-		return false;
+
+		this.fieldCache[cacheKey] = result;
+
+		return result;
 	}
 }

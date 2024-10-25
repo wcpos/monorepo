@@ -1,10 +1,10 @@
-import { of, BehaviorSubject } from 'rxjs';
-import { skip } from 'rxjs/operators';
+import { Subject } from 'rxjs';
+import { map } from 'rxjs/operators';
 
-import { createStoreDatabase, createSyncDatabase } from './helpers/db';
+import { createStoreDatabase } from './helpers/db';
 import { Query, QueryParams } from '../src/query-state'; // Adjust the import based on your file structure
 
-import type { RxCollection, RxQuery, MangoQuery, RxDatabase } from 'rxdb';
+import type { RxDatabase } from 'rxdb';
 
 // Mock the logger module
 jest.mock('@wcpos/utils/src/logger');
@@ -37,7 +37,11 @@ describe('Query', () => {
 		};
 		const query = new Query({ collection: storeDatabase.collections.products, initialParams });
 
-		expect(query.getParams()).toEqual(initialParams);
+		// selector is added to initialParams by default
+		expect(query.getParams()).toEqual({
+			...initialParams,
+			selector: {},
+		});
 	});
 
 	/**
@@ -1061,5 +1065,112 @@ describe('Query', () => {
 				});
 			});
 		});
+	});
+
+	/**
+	 * Test that params$ emits stable references when whereClauses haven't changed
+	 */
+	it('params$ emits stable references when whereClauses have not changed', () => {
+		const initialParams = {
+			selector: {
+				stock_status: 'instock',
+			},
+			sortBy: 'name',
+			sortDirection: 'asc',
+		};
+
+		const query = new Query({
+			id: 'test',
+			collection: storeDatabase.collections.products,
+			initialParams,
+			errorSubject: new Subject<Error>(),
+		});
+
+		const firstParams = query.getParams();
+		let emittedParams;
+		query.params$.subscribe((params) => {
+			emittedParams = params;
+		});
+
+		expect(firstParams).toBe(emittedParams);
+
+		// Call where with the same value
+		query.where('stock_status', 'instock');
+
+		const secondParams = query.getParams();
+
+		expect(firstParams).toBe(secondParams);
+		expect(emittedParams).toBe(secondParams);
+
+		// Now change the where clause
+		query.where('stock_status', 'outofstock');
+
+		const thirdParams = query.getParams();
+
+		expect(firstParams).not.toBe(thirdParams);
+		expect(emittedParams).toBe(thirdParams);
+	});
+
+	/**
+	 * Test that findSelector returns consistent references
+	 */
+	it('findSelector returns stable references when whereClauses have not changed', () => {
+		const query = new Query({
+			id: 'test',
+			collection: storeDatabase.collections.products,
+			errorSubject: new Subject<Error>(),
+		});
+
+		query.where('meta_data', { $elemMatch: { key: '_pos_store', value: '64' } });
+		const firstSelector = query.findSelector('meta_data');
+
+		let emittedSelector;
+		query.params$.pipe(map(() => query.findSelector('meta_data'))).subscribe((selector) => {
+			emittedSelector = selector;
+		});
+
+		expect(firstSelector).toBe(emittedSelector);
+
+		// Call where with the same value
+		query.where('meta_data', { $elemMatch: { key: '_pos_store', value: '64' } });
+
+		const secondSelector = query.findSelector('meta_data');
+
+		expect(firstSelector).toBe(secondSelector);
+		expect(emittedSelector).toBe(secondSelector);
+
+		// Now change the where clause
+		query.where('meta_data', { $elemMatch: { key: '_pos_store', value: '65' } });
+
+		const thirdSelector = query.findSelector('meta_data');
+
+		expect(firstSelector).not.toBe(thirdSelector);
+		expect(emittedSelector).toBe(thirdSelector);
+	});
+
+	/**
+	 * Test that params$ and getParams() are equal
+	 */
+	it('params$ and getParams() return equal values', () => {
+		const query = new Query({
+			id: 'test',
+			collection: storeDatabase.collections.products,
+			errorSubject: new Subject<Error>(),
+		});
+
+		let emittedParams;
+		query.params$.subscribe((params) => {
+			emittedParams = params;
+		});
+
+		expect(query.getParams()).toBe(emittedParams);
+
+		query.where('stock_status', 'instock');
+
+		expect(query.getParams()).toBe(emittedParams);
+
+		query.where('stock_status', 'outofstock');
+
+		expect(query.getParams()).toBe(emittedParams);
 	});
 });

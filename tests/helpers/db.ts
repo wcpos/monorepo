@@ -15,12 +15,14 @@ import { logsLiteral } from './schemas/logs';
 import { productsLiteral } from './schemas/products';
 import { syncLiteral } from './schemas/sync';
 import { variationsLiteral } from './schemas/variations';
+import { searchPlugin } from './search';
 
 import type { RxCollectionCreator, RxCollection, RxDocument } from 'rxdb';
 
 // addRxPlugin(RxDBDevModePlugin);
 addRxPlugin(RxDBGenerateIdPlugin);
 addRxPlugin(parseRestResponsePlugin);
+addRxPlugin(searchPlugin);
 
 /**
  * Products
