@@ -1,10 +1,11 @@
 export const productsLiteral = {
 	title: 'WooCommerce Product schema',
-	version: 0,
+	version: 1,
 	description: 'WooCommerce Product schema',
 	type: 'object',
 	primaryKey: 'uuid',
 	attachments: {},
+	indexes: ['id', 'barcode', 'stock_status', 'parent_id'],
 	properties: {
 		uuid: {
 			description: 'Unique identifier for the resource.',
@@ -13,6 +14,9 @@ export const productsLiteral = {
 		},
 		id: {
 			type: 'integer',
+			multipleOf: 1,
+			minimum: 0,
+			maximum: 2147483647,
 		},
 		name: {
 			type: 'string',
@@ -63,6 +67,7 @@ export const productsLiteral = {
 		},
 		barcode: {
 			type: 'string',
+			maxLength: 255,
 		},
 		price: {
 			type: 'string',
@@ -155,6 +160,7 @@ export const productsLiteral = {
 			default: 'instock',
 			enum: ['instock', 'outofstock', 'onbackorder', 'lowstock'],
 			type: 'string',
+			maxLength: 255,
 		},
 		backorders: {
 			default: 'no',
@@ -231,6 +237,9 @@ export const productsLiteral = {
 		},
 		parent_id: {
 			type: 'integer',
+			multipleOf: 1,
+			minimum: 0,
+			maximum: 2147483647,
 		},
 		purchase_note: {
 			type: 'string',

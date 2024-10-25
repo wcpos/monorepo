@@ -104,6 +104,11 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 	options: {
 		searchFields: ['name', 'sku', 'barcode'],
 	},
+	migrationStrategies: {
+		1(oldDoc) {
+			return oldDoc;
+		},
+	},
 };
 
 /**
@@ -126,6 +131,9 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 			oldDoc.type = 'variation';
 			return oldDoc;
 		},
+		2(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
@@ -142,6 +150,11 @@ const categories: RxCollectionCreator<ProductCategoryDocumentType> = {
 	options: {
 		searchFields: ['name'],
 	},
+	migrationStrategies: {
+		1(oldDoc) {
+			return oldDoc;
+		},
+	},
 };
 
 /**
@@ -157,6 +170,11 @@ const tags: RxCollectionCreator<ProductTagDocumentType> = {
 	options: {
 		searchFields: ['name'],
 	},
+	migrationStrategies: {
+		1(oldDoc) {
+			return oldDoc;
+		},
+	},
 };
 
 /**
@@ -171,6 +189,11 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 	schema: orderSchema,
 	options: {
 		searchFields: ['number', 'billing.first_name', 'billing.last_name', 'billing.email'],
+	},
+	migrationStrategies: {
+		1(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
@@ -196,6 +219,11 @@ const customers: RxCollectionCreator<CustomerDocumentType> = {
 			'billing.company',
 			'billing.phone',
 		],
+	},
+	migrationStrategies: {
+		1(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 

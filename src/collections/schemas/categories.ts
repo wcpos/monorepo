@@ -1,9 +1,10 @@
 export const categoriesLiteral = {
 	title: 'WooCommerce Product Category schema',
-	version: 0,
+	version: 1,
 	description: 'WooCommerce Product Category schema',
 	type: 'object',
 	primaryKey: 'uuid',
+	indexes: ['id', 'parent'],
 	properties: {
 		uuid: {
 			description: 'Unique identifier for the resource.',
@@ -13,6 +14,9 @@ export const categoriesLiteral = {
 		id: {
 			type: 'integer',
 			description: 'Unique remote identifier for the resource.',
+			multipleOf: 1,
+			minimum: 0,
+			maximum: 2147483647,
 		},
 		name: {
 			type: 'string',
@@ -25,6 +29,9 @@ export const categoriesLiteral = {
 		parent: {
 			type: 'integer',
 			description: 'The ID for the parent of the resource.',
+			multipleOf: 1,
+			minimum: 0,
+			maximum: 2147483647,
 		},
 		description: {
 			type: 'string',

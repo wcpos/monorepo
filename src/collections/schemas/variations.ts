@@ -1,10 +1,11 @@
 export const variationsLiteral = {
 	title: 'WooCommerce Product Variation schema',
-	version: 1,
+	version: 2,
 	description: 'WooCommerce Product Variation schema',
 	type: 'object',
 	primaryKey: 'uuid',
 	attachments: {},
+	indexes: ['id', 'barcode', 'parent_id'],
 	properties: {
 		uuid: {
 			description: 'Unique identifier for the resource.',
@@ -13,6 +14,9 @@ export const variationsLiteral = {
 		},
 		id: {
 			type: 'integer',
+			multipleOf: 1,
+			minimum: 0,
+			maximum: 2147483647,
 		},
 		date_created: {
 			type: 'string',
@@ -38,6 +42,7 @@ export const variationsLiteral = {
 		},
 		barcode: {
 			type: 'string',
+			maxLength: 255,
 		},
 		price: {
 			type: 'string',
@@ -253,6 +258,9 @@ export const variationsLiteral = {
 		},
 		parent_id: {
 			type: 'integer',
+			multipleOf: 1,
+			minimum: 0,
+			maximum: 2147483647,
 		},
 		name: {
 			type: 'string',

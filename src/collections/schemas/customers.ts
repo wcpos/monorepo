@@ -1,10 +1,11 @@
 export const customersLiteral = {
 	title: 'WooCommerce Customer schema',
-	version: 0,
+	version: 1,
 	description: 'WooCommerce Customer schema',
 	type: 'object',
 	primaryKey: 'uuid',
 	attachments: {},
+	indexes: ['id', 'role'],
 	properties: {
 		uuid: {
 			description: 'Unique identifier for the resource.',
@@ -14,6 +15,9 @@ export const customersLiteral = {
 		id: {
 			description: 'Unique remote identifier for the resource.',
 			type: 'integer',
+			multipleOf: 1,
+			minimum: 0,
+			maximum: 2147483647,
 		},
 		date_created: {
 			type: 'string',
@@ -41,6 +45,7 @@ export const customersLiteral = {
 		},
 		role: {
 			type: 'string',
+			maxLength: 255,
 		},
 		username: {
 			description: 'Customer login name.',
