@@ -1,6 +1,8 @@
 import * as React from 'react';
 
+import { utc } from '@date-fns/utc';
 import { createStackNavigator } from '@react-navigation/stack';
+import { endOfDay, startOfDay, format } from 'date-fns';
 
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { Suspense } from '@wcpos/components/src/suspense';
@@ -24,6 +26,7 @@ const Stack = createStackNavigator<CustomersStackParamList>();
 const ReportsWithProviders = () => {
 	const { uiSettings } = useUISettings('orders');
 	const { wpCredentials, store } = useAppState();
+	const today = React.useMemo(() => new Date(), []);
 
 	/**
 	 *
@@ -39,6 +42,12 @@ const ReportsWithProviders = () => {
 					{ status: 'completed' },
 					{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } },
 					{ meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } } },
+					{
+						date_created_gmt: {
+							$gte: format(startOfDay(today), "yyyy-MM-dd'T'HH:mm:ss", { in: utc }),
+							$lte: format(endOfDay(today), "yyyy-MM-dd'T'HH:mm:ss", { in: utc }),
+						},
+					},
 				],
 			},
 		},

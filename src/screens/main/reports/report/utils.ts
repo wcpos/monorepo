@@ -1,8 +1,14 @@
+import round from 'lodash/round';
 import toNumber from 'lodash/toNumber';
 
 import type { OrderDocument } from '@wcpos/database';
 
-export const calculateTotals = (orders: OrderDocument[]) => {
+interface CalculateTotalsProps {
+	orders: OrderDocument[];
+	num_decimals?: number;
+}
+
+export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsProps) => {
 	const paymentMethodTotals: Record<string, { total: number; title: string }> = {};
 	const taxTotals: Record<number, { label: string; total: number }> = {};
 	const shippingTotals: Record<string, { total: number; total_tax: number }> = {};
@@ -12,6 +18,7 @@ export const calculateTotals = (orders: OrderDocument[]) => {
 	let discountTotal = 0;
 	let totalTax = 0;
 	let totalItemsSold = 0;
+	let averageOrderValue = 0;
 
 	orders.forEach((order) => {
 		// Total
@@ -45,10 +52,16 @@ export const calculateTotals = (orders: OrderDocument[]) => {
 			};
 		}
 
-		paymentMethodTotals[paymentMethodKey].total +=
-			toNumber(order.total || '0') + toNumber(order.total_tax || 0);
+		paymentMethodTotals[paymentMethodKey].total += toNumber(order.total || '0');
 
-		// Tax totals
+		/**
+		 * NOTE: The tax_lines are to 6 decimal places, but the actual tax collected will be
+		 * rounded to whatever the store has set in the settings (usually 2 decimal places).
+		 * So we need to round to the store settings when summing the itemized tax totals.
+		 *
+		 * Also, tax_total and shipping_tax_total are separated in the tax_lines, so we need to
+		 * add them together.
+		 */
 		(order.tax_lines || []).forEach((tax) => {
 			if (tax.rate_id) {
 				if (!taxTotals[tax.rate_id]) {
@@ -57,7 +70,10 @@ export const calculateTotals = (orders: OrderDocument[]) => {
 						total: 0,
 					};
 				}
-				taxTotals[tax.rate_id].total += toNumber(tax.tax_total || 0);
+				taxTotals[tax.rate_id].total += round(
+					toNumber(tax.tax_total || 0) + toNumber(tax.shipping_tax_total || 0),
+					6
+				);
 				// Set the label if not already set and it's non-empty
 				if (!taxTotals[tax.rate_id].label && tax.label) {
 					taxTotals[tax.rate_id].label = tax.label;
@@ -74,7 +90,11 @@ export const calculateTotals = (orders: OrderDocument[]) => {
 						total_tax: 0,
 					};
 				}
-				shippingTotals[shipping.method_id].total += toNumber(shipping.total || 0);
+				shippingTotals[shipping.method_id].total += round(
+					toNumber(shipping.total || 0) + toNumber(shipping.total_tax || 0),
+					6
+				);
+				// We're not using itemized shipping tax at the moment
 				shippingTotals[shipping.method_id].total_tax += toNumber(shipping.total_tax || 0);
 			}
 		});
@@ -127,6 +147,10 @@ export const calculateTotals = (orders: OrderDocument[]) => {
 		};
 	});
 
+	if (orders.length > 0) {
+		averageOrderValue = total / orders.length;
+	}
+
 	return {
 		total,
 		paymentMethodsArray,
@@ -136,5 +160,6 @@ export const calculateTotals = (orders: OrderDocument[]) => {
 		userStoreArray,
 		totalItemsSold,
 		shippingTotalsArray,
+		averageOrderValue,
 	};
 };

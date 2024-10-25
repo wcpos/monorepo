@@ -55,7 +55,7 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 				)}
 			</ComboboxTriggerPrimitive>
 			<ComboboxContent>
-				<CustomerSearch />
+				<CustomerSearch withGuest />
 			</ComboboxContent>
 		</Combobox>
 	);

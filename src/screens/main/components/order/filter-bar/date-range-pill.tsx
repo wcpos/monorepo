@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { utc } from '@date-fns/utc';
 import { format } from 'date-fns';
+import { useObservableEagerState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
@@ -19,6 +21,9 @@ export const DateRangePill = ({ query }: Props) => {
 	const t = useT();
 	const isActive = false;
 	const triggerRef = React.useRef(null);
+	const selectedDateRange = useObservableEagerState(
+		query.params$.pipe(map(() => query.findSelector('date_created_gmt')))
+	);
 
 	/**
 	 *
@@ -30,16 +35,19 @@ export const DateRangePill = ({ query }: Props) => {
 	/**
 	 *
 	 */
-	const handleDateSelect = React.useCallback(({ from, to }) => {
-		console.log('from', from);
-		console.log('to', to);
-		console.log('from', format(from, "yyyy-MM-dd'T'HH:mm:ss", { in: utc }));
-		console.log('to', format(to, "yyyy-MM-dd'T'HH:mm:ss", { in: utc }));
+	const handleDateSelect = React.useCallback(
+		({ from, to }) => {
+			query.where('date_created_gmt', {
+				$gte: format(from, "yyyy-MM-dd'T'HH:mm:ss", { in: utc }),
+				$lte: format(to, "yyyy-MM-dd'T'HH:mm:ss", { in: utc }),
+			});
 
-		if (triggerRef.current) {
-			triggerRef.current?.close();
-		}
-	}, []);
+			if (triggerRef.current) {
+				triggerRef.current?.close();
+			}
+		},
+		[query]
+	);
 
 	return (
 		<Popover>

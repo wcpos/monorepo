@@ -18,6 +18,10 @@ import { useNumberFormat } from '../../hooks/use-number-format';
  *
  */
 export const ZReport = ({ orders }: { orders: OrderDocument[] }) => {
+	const t = useT();
+	const { store, wpCredentials } = useAppState();
+	const storeName = useObservableEagerState(store.name$);
+	const num_decimals = useObservableEagerState(store.price_num_decimals$);
 	const {
 		total,
 		paymentMethodsArray,
@@ -27,11 +31,9 @@ export const ZReport = ({ orders }: { orders: OrderDocument[] }) => {
 		userStoreArray,
 		totalItemsSold,
 		shippingTotalsArray,
-	} = calculateTotals(orders);
+		averageOrderValue,
+	} = calculateTotals({ orders, num_decimals });
 	const { format: formatCurrency } = useCurrencyFormat();
-	const t = useT();
-	const { store, wpCredentials } = useAppState();
-	const storeName = useObservableEagerState(store.name$);
 	const { format: formatName } = useCustomerNameFormat();
 	const { format: formatNumber } = useNumberFormat();
 
@@ -50,7 +52,7 @@ export const ZReport = ({ orders }: { orders: OrderDocument[] }) => {
 			<Line />
 			<Row>
 				<Text>Total Net Sales:</Text>
-				<Text align="right">{formatCurrency(total)}</Text>
+				<Text align="right">{formatCurrency(total - totalTax)}</Text>
 			</Row>
 			<Row>
 				<Text>Total Tax Collected:</Text>
@@ -59,7 +61,7 @@ export const ZReport = ({ orders }: { orders: OrderDocument[] }) => {
 			<Row>
 				<Text bold>Total Sales:</Text>
 				<Text bold align="right">
-					{formatCurrency(total + totalTax)}
+					{formatCurrency(total)}
 				</Text>
 			</Row>
 			<Row>
@@ -152,7 +154,7 @@ export const ZReport = ({ orders }: { orders: OrderDocument[] }) => {
 			</Row>
 			<Row>
 				<Text>Average Order Value:</Text>
-				<Text align="right">{formatCurrency(total / orders?.length)}</Text>
+				<Text align="right">{formatCurrency(averageOrderValue)}</Text>
 			</Row>
 			<Br />
 		</View>

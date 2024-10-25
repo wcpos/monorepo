@@ -19,7 +19,7 @@ import { useT } from '../../../../contexts/translations';
  *
  */
 const _StateCombobox = React.forwardRef<React.ElementRef<typeof Combobox>, any>(
-	({ value, onValueChange, ...props }, ref) => {
+	({ value, onValueChange, disabled, ...props }, ref) => {
 		const t = useT();
 		const states = useStates();
 		const options = React.useMemo(
@@ -49,8 +49,9 @@ const _StateCombobox = React.forwardRef<React.ElementRef<typeof Combobox>, any>(
 				ref={ref}
 				value={{ ...value, label: options.find((option) => option.value === value?.value)?.label }}
 				onValueChange={onValueChange}
+				{...props}
 			>
-				<ComboboxTrigger>
+				<ComboboxTrigger disabled={disabled}>
 					<ComboboxValue placeholder={t('Select State', { _tags: 'core' })} />
 				</ComboboxTrigger>
 				<ComboboxContent>

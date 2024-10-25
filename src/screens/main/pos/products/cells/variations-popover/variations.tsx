@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
+import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
 import { map, skip } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
@@ -45,12 +45,8 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
  */
 const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	const result = useObservableSuspense(query.resource);
-	const selectedAttributes = useObservableState(
-		query.params$.pipe(
-			skip(1), // @FIXME: there's an infinite loop if I don't skip the first one
-			map(() => query.getAllAttributesSelectors())
-		),
-		query.getAllAttributesSelectors()
+	const selectedAttributes = useObservableEagerState(
+		query.params$.pipe(map(() => query.getAllAttributesSelectors()))
 	);
 	const selectedVariation = result.count === 1 && result.hits[0].document;
 	const { format } = useCurrencyFormat();
