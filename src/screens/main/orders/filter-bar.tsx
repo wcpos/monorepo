@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
-import { useObservableState, ObservableResource, useObservable } from 'observable-hooks';
+import { useObservableEagerState, ObservableResource, useObservable } from 'observable-hooks';
 import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
@@ -12,6 +12,7 @@ import { useQuery } from '@wcpos/query';
 import { useAppState } from '../../../contexts/app-state';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import CustomerPill from '../components/order/filter-bar/customer-pill';
+import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
@@ -21,13 +22,11 @@ import { useGuestCustomer } from '../hooks/use-guest-customer';
  */
 const FilterBar = ({ query }) => {
 	const guestCustomer = useGuestCustomer();
-	const customerID = useObservableState(
-		query.params$.pipe(map(() => query.findSelector('customer_id'))),
-		query.findSelector('customer_id')
+	const customerID = useObservableEagerState(
+		query.params$.pipe(map(() => query.findSelector('customer_id')))
 	);
-	const cashierID = useObservableState(
-		query.params$.pipe(map(() => query.findMetaDataSelector('_pos_user'))),
-		query.findMetaDataSelector('_pos_user')
+	const cashierID = useObservableEagerState(
+		query.params$.pipe(map(() => query.findMetaDataSelector('_pos_user')))
 	);
 	const { wpCredentials } = useAppState();
 
@@ -148,6 +147,7 @@ const FilterBar = ({ query }) => {
 				<CashierPill resource={cashierResource} query={query} />
 			</Suspense>
 			<StorePill resource={storesResource} query={query} />
+			<DateRangePill query={query} />
 		</HStack>
 	);
 };

@@ -70,7 +70,7 @@ export const Reports = ({ query }) => {
 									</Panel>
 									<PanelResizeHandle />
 									<Panel>
-										<Report orders={orders} />
+										<Report orders={orders} query={query} />
 									</Panel>
 								</PanelGroup>
 							</Panel>
@@ -86,7 +86,7 @@ export const Reports = ({ query }) => {
 								/>
 							</View>
 							<View className="flex-1 pl-2">
-								<Report orders={orders} />
+								<Report orders={orders} query={query} />
 							</View>
 						</VStack>
 					)}

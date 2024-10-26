@@ -1,7 +1,11 @@
 import * as React from 'react';
 
 import isString from 'lodash/isString';
-import { useObservableSuspense, ObservableResource, useObservableState } from 'observable-hooks';
+import {
+	useObservableSuspense,
+	ObservableResource,
+	useObservableEagerState,
+} from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
@@ -29,16 +33,14 @@ interface Props {
  */
 export const StorePill = ({ resource, query }: Props) => {
 	const stores = useObservableSuspense(resource);
-	const selectedCreatedVia = useObservableState(
-		query.params$.pipe(map(() => query.findSelector('created_via'))),
-		query.findSelector('created_via')
-	) as string | undefined;
+	const selectedCreatedVia = useObservableEagerState(
+		query.params$.pipe(map(() => query.findSelector('created_via')))
+	);
 	/**
 	 * Selected store ID as a string
 	 */
-	const selectedStoreID = useObservableState(
-		query.params$.pipe(map(() => query.findMetaDataSelector('_pos_store'))),
-		query.findMetaDataSelector('_pos_store')
+	const selectedStoreID = useObservableEagerState(
+		query.params$.pipe(map(() => query.findMetaDataSelector('_pos_store')))
 	);
 	const t = useT();
 	const isActive = !!(selectedCreatedVia || selectedStoreID);

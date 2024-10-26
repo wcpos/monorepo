@@ -4,34 +4,9 @@ import { format } from 'date-fns';
 
 import type { OrderDocument } from '@wcpos/database';
 
-import {
-	convertUTCStringToLocalDate,
-	determineInterval,
-	generateAllDates,
-	aggregateData,
-} from './utils';
+import { determineInterval, generateAllDates, aggregateData } from './utils';
 
 describe('Chart Utils', () => {
-	describe('convertUTCStringToLocalDate', () => {
-		it('should parse a UTC date string ending with Z correctly', () => {
-			const dateString = '2023-01-01T00:00:00Z';
-			const date = convertUTCStringToLocalDate(dateString);
-			expect(date.toISOString()).toBe('2023-01-01T00:00:00.000Z');
-		});
-
-		it('should parse a UTC date string without Z correctly', () => {
-			const dateString = '2023-01-01T00:00:00';
-			const date = convertUTCStringToLocalDate(dateString);
-			expect(date.toISOString()).toBe('2023-01-01T00:00:00.000Z');
-		});
-
-		it('should return Invalid Date for invalid date string', () => {
-			const dateString = 'invalid-date';
-			const date = convertUTCStringToLocalDate(dateString);
-			expect(date.toString()).toBe('Invalid Date');
-		});
-	});
-
 	describe('determineInterval', () => {
 		it('should return months interval when difference in days > 30', () => {
 			const minDate = new Date('2023-01-01');

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { ButtonPill } from '@wcpos/components/src/button';
 import { HStack } from '@wcpos/components/src/hstack';
@@ -25,9 +25,8 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 
 	/**
 	 * We need to trigger a re-render when the selected attributes change.
-	 * - @TODO - filter for only changes to attributes to reduce re-renders?
 	 */
-	const params = useObservableState(query.params$, query.getParams());
+	const params = useObservableEagerState(query.params$);
 
 	/**
 	 *

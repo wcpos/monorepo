@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import { getCurrentGMTDate } from './utils';
+import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { useCollection } from '../../hooks/use-collection';
 import { useCurrentOrder } from '../contexts/current-order';
 
@@ -25,7 +25,7 @@ export const useAddItemToOrder = () => {
 
 			const orderJSON = {
 				...order.toJSON(),
-				date_created_gmt: getCurrentGMTDate(),
+				date_created_gmt: convertLocalDateToUTCString(new Date()),
 				[type]: [data],
 			};
 

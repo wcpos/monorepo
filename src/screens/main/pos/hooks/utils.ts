@@ -1,6 +1,3 @@
-import { UTCDate } from '@date-fns/utc';
-import { format as formatDate } from 'date-fns';
-import isEmpty from 'lodash/isEmpty';
 import toNumber from 'lodash/toNumber';
 
 import log from '@wcpos/utils/src/logger';
@@ -22,14 +19,6 @@ export const priceToNumber = (price?: string) => {
  *
  */
 export const sanitizePrice = (price?: string) => (price && price !== '' ? String(price) : '0');
-
-/**
- * @returns {string} - Current GMT date
- */
-export const getCurrentGMTDate = () => {
-	// Get the current date and time in UTC
-	return formatDate(new UTCDate(), "yyyy-MM-dd'T'HH:mm:ss");
-};
 
 /**
  * Retrieves the UUID from a line item's meta data.

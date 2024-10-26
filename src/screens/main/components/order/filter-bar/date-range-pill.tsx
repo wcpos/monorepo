@@ -1,45 +1,83 @@
 import * as React from 'react';
 
-import { utc } from '@date-fns/utc';
-import { format } from 'date-fns';
+import { isToday, isYesterday, isSameDay } from 'date-fns';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import type { DateRange } from '@wcpos/components/src/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
 import type { OrderCollection } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 
 import { DateRangeCalendar } from './calendar';
 import { useT } from '../../../../../contexts/translations';
+import {
+	useLocalDate,
+	convertUTCStringToLocalDate,
+	convertLocalDateToUTCString,
+} from '../../../../../hooks/use-local-date';
 
 interface Props {
 	query: Query<OrderCollection>;
+	onRemove?: () => void;
 }
 
-export const DateRangePill = ({ query }: Props) => {
+/**
+ *
+ */
+export const DateRangePill = ({ query, onRemove }: Props) => {
 	const t = useT();
-	const isActive = false;
 	const triggerRef = React.useRef(null);
 	const selectedDateRange = useObservableEagerState(
 		query.params$.pipe(map(() => query.findSelector('date_created_gmt')))
 	);
+	const isActive = !!(selectedDateRange && selectedDateRange?.$gte && selectedDateRange?.$lte);
+	const { formatDate } = useLocalDate();
 
 	/**
-	 *
+	 * Convert the date range to a label
 	 */
 	const label = React.useMemo(() => {
-		return 'hi';
-	}, []);
+		if (!isActive) {
+			return t('Date Range', { _tags: 'core' });
+		}
+
+		// date_created_gmt in WC REST API is in UTC, but without the 'Z',
+		// we need to convert it to a local date
+		const from = convertUTCStringToLocalDate(selectedDateRange.$gte);
+		const to = convertUTCStringToLocalDate(selectedDateRange.$lte);
+
+		// check if to and from are the same day
+		if (isSameDay(from, to)) {
+			if (isToday(from)) {
+				return t('Today', { _tags: 'core' });
+			}
+			if (isYesterday(from)) {
+				return t('Yesterday', { _tags: 'core' });
+			}
+		}
+
+		const fromStr = formatDate(from, 'd MMM');
+		const toStr = formatDate(to, 'd MMM');
+
+		return `${fromStr} - ${toStr}`;
+	}, [isActive, selectedDateRange?.$gte, selectedDateRange?.$lte, formatDate, t]);
 
 	/**
 	 *
 	 */
 	const handleDateSelect = React.useCallback(
-		({ from, to }) => {
+		(range: DateRange) => {
+			if (!range?.from || !range?.to) {
+				return; // what to do if 'done' pressed without a date?
+			}
+
+			const { from, to } = range;
+
 			query.where('date_created_gmt', {
-				$gte: format(from, "yyyy-MM-dd'T'HH:mm:ss", { in: utc }),
-				$lte: format(to, "yyyy-MM-dd'T'HH:mm:ss", { in: utc }),
+				$gte: convertLocalDateToUTCString(from),
+				$lte: convertLocalDateToUTCString(to),
 			});
 
 			if (triggerRef.current) {
@@ -58,10 +96,14 @@ export const DateRangePill = ({ query }: Props) => {
 					variant={isActive ? 'default' : 'muted'}
 					removable={isActive}
 					onRemove={() => {
-						// remove range query
+						if (onRemove) {
+							onRemove();
+						} else {
+							query.where('date_created_gmt', null);
+						}
 					}}
 				>
-					<ButtonText>{isActive ? label : t('Date Range', { _tags: 'core' })}</ButtonText>
+					<ButtonText>{label}</ButtonText>
 				</ButtonPill>
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-2">

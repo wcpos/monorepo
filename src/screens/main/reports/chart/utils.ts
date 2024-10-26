@@ -19,15 +19,9 @@ import {
 
 import type { OrderDocument } from '@wcpos/database';
 
-type Interval = 'months' | 'weeks' | 'days' | '6hours' | 'hours';
+import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 
-/**
- * we need to explicity add the Z to tell parseISO that the date is in UTC
- */
-export const convertUTCStringToLocalDate = (dateString: string) => {
-	const normalizedDateString = dateString.endsWith('Z') ? dateString : `${dateString}Z`;
-	return parseISO(normalizedDateString);
-};
+type Interval = 'months' | 'weeks' | 'days' | '6hours' | 'hours';
 
 export const determineInterval = (
 	minDate: Date,

@@ -15,15 +15,21 @@ import {
 	SelectValue,
 } from '@wcpos/components/src/select';
 import { Text } from '@wcpos/components/src/text';
-import type { OrderDocument } from '@wcpos/database';
+import type { OrderDocument, OrderCollection } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
 import { ZReport } from './template';
 import { useT } from '../../../../contexts/translations';
 
+interface Props {
+	orders: OrderDocument[];
+	query: Query<OrderCollection>;
+}
+
 /**
  *
  */
-export const Report = ({ orders }: { orders: OrderDocument[] }) => {
+export const Report = ({ orders, query }: Props) => {
 	const t = useT();
 	const contentRef = React.useRef();
 	const handlePrint = useReactToPrint({ contentRef });
@@ -58,7 +64,7 @@ export const Report = ({ orders }: { orders: OrderDocument[] }) => {
 				</CardHeader>
 				<CardContent ref={contentRef} className="flex-1 p-0">
 					<ScrollView horizontal={false} className={'w-full p-2'}>
-						<ZReport orders={orders} />
+						<ZReport orders={orders} query={query} />
 					</ScrollView>
 				</CardContent>
 				<CardFooter className="p-2 border-border border-t bg-muted justify-end">

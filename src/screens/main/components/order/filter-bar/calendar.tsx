@@ -11,7 +11,6 @@ import {
 	endOfDay,
 	startOfDay,
 } from 'date-fns';
-import * as Locales from 'date-fns/locale';
 
 import { Button, ButtonText, ButtonPill } from '@wcpos/components/src/button';
 import { Calendar } from '@wcpos/components/src/calendar';
@@ -20,7 +19,7 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../contexts/translations';
-import { useLocale } from '../../../../../hooks/use-locale';
+import { useLocalDate } from '../../../../../hooks/use-local-date';
 
 interface Props {
 	onSelect: (date: DateRange) => void;
@@ -40,13 +39,8 @@ const isDateRangeEqual = (range1: DateRange | undefined, range2: DateRange) => {
  */
 export const DateRangeCalendar = ({ onSelect }: Props) => {
 	const t = useT();
-	const { locale } = useLocale();
 	const today = React.useMemo(() => new Date(), []);
-
-	/**
-	 * Check if locale is available
-	 */
-	const calendarLocale = Locales[locale.slice(0, 2)] ? Locales[locale.slice(0, 2)] : undefined;
+	const { dateFnsLocale } = useLocalDate();
 
 	// Array of date range options for buttons
 	const dateRanges = React.useMemo(() => {
@@ -114,6 +108,16 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 	 */
 	const [date, setDate] = React.useState<DateRange | undefined>(dateRanges[0].range);
 
+	/**
+	 * When the date range is selected, make sure the to date is set to the end of the day
+	 */
+	const handleCalendarSelect = (range: DateRange) => {
+		setDate({
+			from: range.from,
+			to: endOfDay(range.to),
+		});
+	};
+
 	return (
 		<VStack>
 			<HStack className="items-start">
@@ -130,12 +134,12 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 					))}
 				</VStack>
 				<Calendar
-					locale={calendarLocale}
+					locale={dateFnsLocale}
 					mode="range"
 					defaultMonth={date?.from}
 					endMonth={today}
 					hidden={[{ after: today }]}
-					onSelect={setDate}
+					onSelect={handleCalendarSelect}
 					selected={date}
 				/>
 			</HStack>

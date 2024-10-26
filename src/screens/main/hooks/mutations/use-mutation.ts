@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { UTCDate } from '@date-fns/utc';
-import { format as formatDate } from 'date-fns';
 import get from 'lodash/get';
 import { isRxDocument, RxDocument, RxCollection } from 'rxdb';
 
@@ -17,6 +15,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { useLocalMutation } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';
+import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { useCollection, CollectionKey } from '../use-collection';
 
 type Document = OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument;
@@ -150,7 +149,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				const hasModifiedDate = get(collection, 'schema.jsonSchema.properties.date_modified_gmt');
 
 				if (hasCreatedDate) {
-					emptyJSON.date_created_gmt = formatDate(new UTCDate(), "yyyy-MM-dd'T'HH:mm:ss");
+					emptyJSON.date_created_gmt = convertLocalDateToUTCString(new Date());
 					if (hasModifiedDate) {
 						emptyJSON.date_modified_gmt = emptyJSON.date_created_gmt;
 					}

@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { utc } from '@date-fns/utc';
 import { createStackNavigator } from '@react-navigation/stack';
-import { endOfDay, startOfDay, format } from 'date-fns';
+import { endOfDay, startOfDay } from 'date-fns';
 
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { Suspense } from '@wcpos/components/src/suspense';
@@ -10,6 +9,7 @@ import { useQuery } from '@wcpos/query';
 
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
+import { convertLocalDateToUTCString } from '../../../hooks/use-local-date';
 import { useUISettings } from '../contexts/ui-settings';
 
 export type CustomersStackParamList = {
@@ -44,8 +44,8 @@ const ReportsWithProviders = () => {
 					{ meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } } },
 					{
 						date_created_gmt: {
-							$gte: format(startOfDay(today), "yyyy-MM-dd'T'HH:mm:ss", { in: utc }),
-							$lte: format(endOfDay(today), "yyyy-MM-dd'T'HH:mm:ss", { in: utc }),
+							$gte: convertLocalDateToUTCString(startOfDay(today)),
+							$lte: convertLocalDateToUTCString(endOfDay(today)),
 						},
 					},
 				],

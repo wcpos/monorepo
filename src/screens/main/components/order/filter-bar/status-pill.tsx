@@ -1,12 +1,12 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import type { OrderCollection } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
+import type { OrderCollection } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useOrderStatusLabel } from '../../../hooks/use-order-status-label';
@@ -19,10 +19,9 @@ interface Props {
  *
  */
 export const StatusPill = ({ query }: Props) => {
-	const selected = useObservableState(
-		query.params$.pipe(map(() => query.findSelector('status'))),
-		query.findSelector('status')
-	) as string | undefined;
+	const selected = useObservableEagerState(
+		query.params$.pipe(map(() => query.findSelector('status')))
+	);
 	const t = useT();
 	const isActive = !!selected;
 	const [open, setOpen] = React.useState(false);

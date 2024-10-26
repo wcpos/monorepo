@@ -182,9 +182,7 @@ export const CartTable = () => {
 						if (Cell) {
 							return (
 								<ErrorBoundary>
-									<Suspense>
-										<Cell {...props} />
-									</Suspense>
+									<Cell {...props} />
 								</ErrorBoundary>
 							);
 						}

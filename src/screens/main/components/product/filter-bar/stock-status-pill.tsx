@@ -1,11 +1,11 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
+import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
@@ -20,10 +20,9 @@ interface Props {
  *
  */
 export const StockStatusPill = ({ query }: Props) => {
-	const selected = useObservableState(
-		query.params$.pipe(map(() => query.findSelector('stock_status'))),
-		query.findSelector('stock_status')
-	) as string | undefined;
+	const selected = useObservableEagerState(
+		query.params$.pipe(map(() => query.findSelector('stock_status')))
+	);
 	const t = useT();
 	const isActive = !!selected;
 	const { items } = useStockStatusLabel();

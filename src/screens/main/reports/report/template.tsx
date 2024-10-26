@@ -1,23 +1,30 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { format as formatDate } from 'date-fns';
+import { useFocusEffect } from '@react-navigation/native';
 import { useObservableEagerState } from 'observable-hooks';
+import { map } from 'rxjs';
 
 import { Text, Row, Line, Br } from '@wcpos/components/src/print';
-import type { OrderDocument } from '@wcpos/database';
+import type { OrderDocument, OrderCollection } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
 import { calculateTotals } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { useLocalDate, convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
+interface Props {
+	orders: OrderDocument[];
+	query: Query<OrderCollection>;
+}
 
 /**
  *
  */
-export const ZReport = ({ orders }: { orders: OrderDocument[] }) => {
+export const ZReport = ({ orders, query }: Props) => {
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
 	const storeName = useObservableEagerState(store.name$);
@@ -33,15 +40,47 @@ export const ZReport = ({ orders }: { orders: OrderDocument[] }) => {
 		shippingTotalsArray,
 		averageOrderValue,
 	} = calculateTotals({ orders, num_decimals });
+
+	const selectedDateRange = useObservableEagerState(
+		query.params$.pipe(map(() => query.findSelector('date_created_gmt')))
+	);
+
 	const { format: formatCurrency } = useCurrencyFormat();
 	const { format: formatName } = useCustomerNameFormat();
 	const { format: formatNumber } = useNumberFormat();
+	const { formatDate } = useLocalDate();
+
+	/**
+	 *
+	 */
+	const [reportGenerated, setReportGenerated] = React.useState(
+		formatDate(new Date(), 'yyyy-M-dd HH:mm:ss')
+	);
+	useFocusEffect(
+		React.useCallback(() => {
+			setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
+		}, [formatDate])
+	);
+
+	/**
+	 *
+	 */
+	const reportPeriod = React.useMemo(() => {
+		const from = convertUTCStringToLocalDate(selectedDateRange.$gte);
+		const to = convertUTCStringToLocalDate(selectedDateRange.$lte);
+
+		return {
+			from: formatDate(from, 'yyyy-M-dd HH:mm:ss'),
+			to: formatDate(to, 'yyyy-M-dd HH:mm:ss'),
+		};
+	}, [formatDate, selectedDateRange.$gte, selectedDateRange.$lte]);
 
 	return (
 		<View>
 			<Text bold>{storeName}</Text>
-			<Text>{`${t('Report Generated', { _tags: 'core' })}: ${formatDate(new Date(), 'yyyy-M-dd HH:mm:ss')}`}</Text>
-			<Text>{`${t('Report Period', { _tags: 'core' })}: 2024-10-24`}</Text>
+			<Text>{`${t('Report Generated', { _tags: 'core' })}: ${reportGenerated}`}</Text>
+			<Text>{`${t('Report Period Start', { _tags: 'core' })}: ${reportPeriod.from}`}</Text>
+			<Text>{`${t('Report Period End', { _tags: 'core' })}: ${reportPeriod.to}`}</Text>
 			<Text>{`${t('Cashier', { _tags: 'core' })}: ${formatName(wpCredentials)} (ID: ${wpCredentials.id})`}</Text>
 			<Br />
 

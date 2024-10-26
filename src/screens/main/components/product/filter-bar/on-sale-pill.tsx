@@ -1,10 +1,10 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import type { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 
@@ -18,9 +18,8 @@ interface Props {
  *
  */
 const OnSalePill = ({ query }: Props) => {
-	const isActive = useObservableState(
-		query.params$.pipe(map(() => query.findSelector('on_sale'))),
-		query.findSelector('on_sale')
+	const isActive = useObservableEagerState(
+		query.params$.pipe(map(() => query.findSelector('on_sale')))
 	);
 	const t = useT();
 

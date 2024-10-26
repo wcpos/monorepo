@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { UTCDate } from '@date-fns/utc';
-import { format as formatDate } from 'date-fns';
 import cloneDeep from 'lodash/cloneDeep';
 import get from 'lodash/get';
 import set from 'lodash/set';
@@ -16,6 +14,7 @@ import type {
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../contexts/translations';
+import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 type Document = OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument;
 
@@ -41,7 +40,7 @@ export const useLocalMutation = () => {
 				const hasDate = get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
 
 				if (hasDate) {
-					data.date_modified_gmt = formatDate(new UTCDate(), "yyyy-MM-dd'T'HH:mm:ss");
+					data.date_modified_gmt = convertLocalDateToUTCString(new Date());
 				}
 
 				const latest = document.getLatest(); // This seems to be required, else rxdb gives conflict error.

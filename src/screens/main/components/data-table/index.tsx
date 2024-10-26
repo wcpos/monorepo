@@ -76,9 +76,7 @@ const DataTable = <TDocument extends DocumentType>({
 						if (Header) {
 							return (
 								<ErrorBoundary>
-									<Suspense>
-										<Header {...props} />
-									</Suspense>
+									<Header {...props} />
 								</ErrorBoundary>
 							);
 						}
@@ -92,9 +90,7 @@ const DataTable = <TDocument extends DocumentType>({
 						if (Cell) {
 							return (
 								<ErrorBoundary>
-									<Suspense>
-										<Cell {...props} />
-									</Suspense>
+									<Cell {...props} />
 								</ErrorBoundary>
 							);
 						}
