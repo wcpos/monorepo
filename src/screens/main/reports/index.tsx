@@ -7,6 +7,7 @@ import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { Suspense } from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
 
+import { ReportsProvider } from './context';
 import { Reports } from './reports';
 import { useAppState } from '../../../contexts/app-state';
 import { convertLocalDateToUTCString } from '../../../hooks/use-local-date';
@@ -56,7 +57,9 @@ const ReportsWithProviders = () => {
 	return (
 		<ErrorBoundary>
 			<Suspense>
-				<Reports query={query} />
+				<ReportsProvider query={query}>
+					<Reports />
+				</ReportsProvider>
 			</Suspense>
 		</ErrorBoundary>
 	);

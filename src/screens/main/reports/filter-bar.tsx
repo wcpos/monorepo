@@ -12,6 +12,7 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { Suspense } from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
 
+import { useReports } from './context';
 import { useAppState } from '../../../contexts/app-state';
 import { convertLocalDateToUTCString } from '../../../hooks/use-local-date';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
@@ -24,7 +25,8 @@ import { useGuestCustomer } from '../hooks/use-guest-customer';
 /**
  *
  */
-export const FilterBar = ({ query }) => {
+export const FilterBar = () => {
+	const { query } = useReports();
 	const guestCustomer = useGuestCustomer();
 	const customerID = useObservableEagerState(
 		query.params$.pipe(map(() => query.findSelector('customer_id')))

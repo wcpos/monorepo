@@ -12,27 +12,25 @@ import {
 	ResponsiveContainer,
 } from 'recharts';
 
-import type { OrderDocument } from '@wcpos/database';
-
 import { Tooltip } from './tooltip';
 import { aggregateData } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-
-interface Props {
-	orders: OrderDocument[];
-}
+import { useNumberFormat } from '../../hooks/use-number-format';
+import { useReports } from '../context';
 
 /**
  *
  */
-export const Chart = ({ orders }: Props) => {
+export const Chart = () => {
 	const t = useT();
 	const { store } = useAppState();
 	const currency = useObservableEagerState(store.currency$);
+	const { format: formatNumber } = useNumberFormat();
+	const { selectedOrders } = useReports();
 
-	const data = React.useMemo(() => aggregateData(orders), [orders]);
-	console.log('data', data);
+	const data = React.useMemo(() => aggregateData(selectedOrders), [selectedOrders]);
+	const maxOrderCount = Math.max(...data.map((item) => item.order_count));
 
 	return (
 		<ResponsiveContainer width="100%" height="100%">
@@ -72,6 +70,7 @@ export const Chart = ({ orders }: Props) => {
 					fontSize={12}
 					stroke="#243B53"
 					tick={{ fill: '#243B53' }}
+					tickFormatter={(value) => formatNumber(value)}
 				/>
 				<YAxis
 					yAxisId="orders"
@@ -88,8 +87,10 @@ export const Chart = ({ orders }: Props) => {
 					fontSize={12}
 					stroke="#243B53"
 					tick={{ fill: '#243B53' }}
+					tickFormatter={(value) => formatNumber(value)}
+					tickCount={maxOrderCount + 1}
 				/>
-				<RechartsTooltip content={<Tooltip />} />
+				<RechartsTooltip content={(props) => <Tooltip {...props} />} />
 				<Bar yAxisId="total" dataKey="total" stackId="a" fill="#127FBF" />
 				<Bar yAxisId="total" dataKey="total_tax" stackId="a" fill="#627D98" />
 				<Line yAxisId="orders" type="monotone" dataKey="order_count" stroke="#829AB1" />

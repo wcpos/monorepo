@@ -102,9 +102,6 @@ const FilterBar = ({ query }) => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(([id]) => {
-					if (toNumber(id) === 0) {
-						return of(guestCustomer);
-					}
 					if (!id) {
 						return of(null);
 					}

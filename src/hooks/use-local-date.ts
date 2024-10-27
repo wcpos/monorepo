@@ -31,7 +31,7 @@ export const useLocalDate = () => {
 	 * Passing the Locale instance to date-fns functions converts date strings to the local date format
 	 * eg: Locale.es converts January 1 to 1 de enero
 	 */
-	const locale = Locales[shortCode] ? Locales[shortCode] : undefined;
+	const locale = shortCode in Locales ? Locales[shortCode as keyof typeof Locales] : undefined;
 
 	/**
 	 * Wrapper for date-fns format function

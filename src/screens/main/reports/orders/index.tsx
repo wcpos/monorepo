@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Suspense } from '@wcpos/components/src/suspense';
-import type { OrderDocument, OrderCollection } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
+import type { OrderDocument } from '@wcpos/database';
 
 import { TableHeaderSelect } from './header-select';
 import { TableRowSelect } from './row-select';
@@ -22,6 +21,7 @@ import { PaymentMethod } from '../../components/order/payment-method';
 import { Status } from '../../components/order/status';
 import { Total } from '../../components/order/total';
 import { UISettingsDialog } from '../../components/ui-settings';
+import { useReports } from '../context';
 import { UISettingsForm } from '../ui-settings-form';
 
 import type { RowSelectionState } from '@tanstack/react-table';
@@ -48,31 +48,25 @@ const headers = {
 
 const renderHeader = (props) => get(headers, props.column.id);
 
-interface Props {
-	query: Query<OrderCollection>;
-	orders: OrderDocument[];
-	unselectedRowIds: RowSelectionState;
-	setUnselectedRowIds: React.Dispatch<React.SetStateAction<RowSelectionState>>;
-}
-
 /**
  *
  */
-export const Orders = ({ query, orders, unselectedRowIds, setUnselectedRowIds }: Props) => {
+export const Orders = () => {
 	const t = useT();
+	const { query, allOrders, unselectedRowIds, setUnselectedRowIds } = useReports();
 
 	/**
 	 * Derive the selection state by inverting unselectedRowIds
 	 */
 	const selectionState = React.useMemo<RowSelectionState>(() => {
 		const state: RowSelectionState = {};
-		orders.forEach((order) => {
+		allOrders.forEach((order) => {
 			if (!unselectedRowIds[order.uuid]) {
 				state[order.uuid] = true;
 			}
 		});
 		return state;
-	}, [orders, unselectedRowIds]);
+	}, [allOrders, unselectedRowIds]);
 
 	/**
 	 * Update unselectedRowIds when row selection changes
@@ -84,7 +78,7 @@ export const Orders = ({ query, orders, unselectedRowIds, setUnselectedRowIds }:
 
 				// Compute the new unselectedRowIds
 				const newUnselectedRowIds: Record<string, true> = {};
-				orders.forEach((order) => {
+				allOrders.forEach((order) => {
 					if (!newSelectionState[order.uuid]) {
 						newUnselectedRowIds[order.uuid] = true;
 					}
@@ -92,7 +86,7 @@ export const Orders = ({ query, orders, unselectedRowIds, setUnselectedRowIds }:
 				return newUnselectedRowIds;
 			});
 		},
-		[orders, selectionState, setUnselectedRowIds]
+		[allOrders, selectionState, setUnselectedRowIds]
 	);
 
 	/**
@@ -103,7 +97,7 @@ export const Orders = ({ query, orders, unselectedRowIds, setUnselectedRowIds }:
 			// All rows are selected, so we want to unselect all rows
 			setUnselectedRowIds((prev) => {
 				const newUnselectedRowIds: Record<string, true> = {};
-				orders.forEach((order) => {
+				allOrders.forEach((order) => {
 					newUnselectedRowIds[order.uuid] = true;
 				});
 				return newUnselectedRowIds;
@@ -112,7 +106,7 @@ export const Orders = ({ query, orders, unselectedRowIds, setUnselectedRowIds }:
 			// Some rows are unselected, so we want to select all rows
 			setUnselectedRowIds({});
 		}
-	}, [orders, setUnselectedRowIds, unselectedRowIds]);
+	}, [allOrders, setUnselectedRowIds, unselectedRowIds]);
 
 	/**
 	 *
@@ -142,7 +136,7 @@ export const Orders = ({ query, orders, unselectedRowIds, setUnselectedRowIds }:
 								onRowSelectionChange={handleRowSelectionChange}
 								extraData={unselectedRowIds}
 								tableMeta={{
-									totalOrders: orders.length,
+									totalOrders: allOrders.length,
 									toggleAllRowsSelected: handleToggleAllRowsSelected,
 								}}
 							/>

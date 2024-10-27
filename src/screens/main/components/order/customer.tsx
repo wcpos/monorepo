@@ -1,13 +1,11 @@
 import * as React from 'react';
 
-import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill } from '@wcpos/components/src/button';
 import { useDataTable } from '@wcpos/components/src/data-table';
 import { FormatAddress } from '@wcpos/components/src/format';
 import { VStack } from '@wcpos/components/src/vstack';
-import { useQueryManager } from '@wcpos/query';
 
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 

@@ -72,7 +72,7 @@ const Orders = () => {
 			selector: {
 				$and: [
 					{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } },
-					// { meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } } },
+					{ meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } } },
 				],
 			},
 		},

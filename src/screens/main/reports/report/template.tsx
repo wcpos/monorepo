@@ -6,8 +6,6 @@ import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs';
 
 import { Text, Row, Line, Br } from '@wcpos/components/src/print';
-import type { OrderDocument, OrderCollection } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
 
 import { calculateTotals } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
@@ -16,19 +14,17 @@ import { useLocalDate, convertUTCStringToLocalDate } from '../../../../hooks/use
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
-interface Props {
-	orders: OrderDocument[];
-	query: Query<OrderCollection>;
-}
+import { useReports } from '../context';
 
 /**
  *
  */
-export const ZReport = ({ orders, query }: Props) => {
+export const ZReport = () => {
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
 	const storeName = useObservableEagerState(store.name$);
 	const num_decimals = useObservableEagerState(store.price_num_decimals$);
+	const { selectedOrders, query } = useReports();
 	const {
 		total,
 		paymentMethodsArray,
@@ -39,7 +35,7 @@ export const ZReport = ({ orders, query }: Props) => {
 		totalItemsSold,
 		shippingTotalsArray,
 		averageOrderValue,
-	} = calculateTotals({ orders, num_decimals });
+	} = calculateTotals({ orders: selectedOrders, num_decimals });
 
 	const selectedDateRange = useObservableEagerState(
 		query.params$.pipe(map(() => query.findSelector('date_created_gmt')))
@@ -49,18 +45,6 @@ export const ZReport = ({ orders, query }: Props) => {
 	const { format: formatName } = useCustomerNameFormat();
 	const { format: formatNumber } = useNumberFormat();
 	const { formatDate } = useLocalDate();
-
-	/**
-	 *
-	 */
-	const [reportGenerated, setReportGenerated] = React.useState(
-		formatDate(new Date(), 'yyyy-M-dd HH:mm:ss')
-	);
-	useFocusEffect(
-		React.useCallback(() => {
-			setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
-		}, [formatDate])
-	);
 
 	/**
 	 *
@@ -75,9 +59,31 @@ export const ZReport = ({ orders, query }: Props) => {
 		};
 	}, [formatDate, selectedDateRange.$gte, selectedDateRange.$lte]);
 
+	/**
+	 * Create a report generated date string when:
+	 * - the screen is focused
+	 * - the selected orders change
+	 */
+	const [reportGenerated, setReportGenerated] = React.useState(
+		formatDate(new Date(), 'yyyy-M-dd HH:mm:ss')
+	);
+	useFocusEffect(
+		React.useCallback(() => {
+			setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
+		}, [formatDate])
+	);
+	React.useEffect(() => {
+		setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
+	}, [
+		// update the report generated date when the selected orders change
+		selectedOrders,
+	]);
+
 	return (
 		<View>
-			<Text bold>{storeName}</Text>
+			<Text bold>
+				{storeName} (ID: {store.id})
+			</Text>
 			<Text>{`${t('Report Generated', { _tags: 'core' })}: ${reportGenerated}`}</Text>
 			<Text>{`${t('Report Period Start', { _tags: 'core' })}: ${reportPeriod.from}`}</Text>
 			<Text>{`${t('Report Period End', { _tags: 'core' })}: ${reportPeriod.to}`}</Text>
@@ -89,6 +95,10 @@ export const ZReport = ({ orders, query }: Props) => {
 				{t('Sales Summary', { _tags: 'core' })}
 			</Text>
 			<Line />
+			<Row>
+				<Text>Total Orders:</Text>
+				<Text align="right">{selectedOrders?.length || 0}</Text>
+			</Row>
 			<Row>
 				<Text>Total Net Sales:</Text>
 				<Text align="right">{formatCurrency(total - totalTax)}</Text>
@@ -160,7 +170,7 @@ export const ZReport = ({ orders, query }: Props) => {
 				</>
 			)}
 
-			{userStoreArray.length > 0 && (
+			{userStoreArray.length > 1 && (
 				<>
 					<Line />
 					<Text uppercase align="center">
@@ -169,7 +179,7 @@ export const ZReport = ({ orders, query }: Props) => {
 					<Line />
 					{userStoreArray.map(({ cashierId, storeId, totalOrders, totalAmount }) => (
 						<Row key={`${cashierId}-${storeId}`}>
-							<Text>{`${cashierId} - ${storeId}`}</Text>
+							<Text className="flex-1">{`${t('Cashier ID', { _tags: 'core' })}: ${cashierId} - ${t('Store ID', { _tags: 'core' })}: ${storeId}`}</Text>
 							<Text align="right">{totalOrders}</Text>
 							<Text align="right">{formatCurrency(totalAmount)}</Text>
 						</Row>
@@ -183,10 +193,6 @@ export const ZReport = ({ orders, query }: Props) => {
 				{t('Additional Info', { _tags: 'core' })}
 			</Text>
 			<Line />
-			<Row>
-				<Text>Total Orders:</Text>
-				<Text align="right">{orders?.length || 0}</Text>
-			</Row>
 			<Row>
 				<Text>Items Sold:</Text>
 				<Text align="right">{formatNumber(totalItemsSold)}</Text>
