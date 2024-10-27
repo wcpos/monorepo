@@ -154,7 +154,7 @@ const SwitchWithLabel = React.forwardRef<
 	return (
 		<HStack>
 			<Switch ref={ref} {...props} checked={checked} onCheckedChange={handleToggle} size={size} />
-			<Label nativeID={props.nativeID} onPress={handleToggle}>
+			<Label nativeID={props.nativeID} onPress={handleToggle} className="flex-1">
 				{label}
 			</Label>
 		</HStack>

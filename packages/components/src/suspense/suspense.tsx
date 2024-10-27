@@ -33,6 +33,8 @@ export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 		if (isFallback) {
 			console.info('Suspense is in fallback state. Children:', childNames);
 			// console.trace('Suspense fallback stack trace:');
+		} else {
+			console.info('Suspense has resolved. Children:', childNames);
 		}
 	}, [isFallback, childNames]);
 

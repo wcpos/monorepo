@@ -42,7 +42,11 @@ const FormSwitch = React.forwardRef<
 					{...props}
 				/>
 				{!!label && (
-					<FormLabel className="pb-0" nativeID={formItemNativeID} onPress={handleOnLabelPress}>
+					<FormLabel
+						className="pb-0 flex-1"
+						nativeID={formItemNativeID}
+						onPress={handleOnLabelPress}
+					>
 						{label}
 					</FormLabel>
 				)}
