@@ -1,9 +1,5 @@
 import * as React from 'react';
 
-import omit from 'lodash/omit';
-import pick from 'lodash/pick';
-import set from 'lodash/set';
-
 import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
 import { useShippingLineData } from './use-shipping-line-data';
 import { updatePosDataMeta } from './utils';
@@ -16,11 +12,8 @@ type ShippingLine = NonNullable<OrderDocument['shipping_lines']>[number];
 /**
  * Account for string or number changes just in case
  */
-interface Changes {
-	method_title?: string;
-	method_id?: string;
-	instance_id?: string;
-	amount?: string;
+interface Changes extends Partial<ShippingLine> {
+	amount?: number;
 	prices_include_tax?: boolean;
 	tax_status?: string;
 	tax_class?: string;
@@ -36,43 +29,6 @@ export const useUpdateShippingLine = () => {
 	const { getShippingLineData } = useShippingLineData();
 
 	/**
-	 * Applies updates to a line item based on provided changes.
-	 */
-	const applyChangesToLineItem = React.useCallback(
-		(lineItem: ShippingLine, changes: Changes): ShippingLine => {
-			const { amount, prices_include_tax, tax_class, tax_status } = getShippingLineData(lineItem);
-
-			const newData = {
-				...{ amount, prices_include_tax, tax_class, tax_status },
-				...pick(changes, ['amount', 'prices_include_tax', 'tax_class', 'tax_status']),
-			};
-
-			let updatedItem = { ...lineItem };
-			updatedItem = updatePosDataMeta(updatedItem, newData);
-
-			const remainingChanges = omit(changes, [
-				'amount',
-				'prices_include_tax',
-				'tax_class',
-				'tax_status',
-			]);
-
-			for (const key of Object.keys(remainingChanges)) {
-				// Special case for nested changes, only meta_data at the moment
-				const nestedKey = key.split('.');
-				if (nestedKey.length === 1) {
-					(updatedItem as any)[key] = remainingChanges[key];
-				} else {
-					set(updatedItem, nestedKey, remainingChanges[key]);
-				}
-			}
-
-			return calculateShippingLineTaxesAndTotals(updatedItem);
-		},
-		[calculateShippingLineTaxesAndTotals, getShippingLineData]
-	);
-
-	/**
 	 * Update shipping line
 	 *
 	 * @TODO - what if more than one property is changed at once?
@@ -83,6 +39,7 @@ export const useUpdateShippingLine = () => {
 			const json = order.toMutableJSON();
 			let updated = false;
 
+			// get matching shipping line
 			const updatedShippingLines = json.shipping_lines?.map((shippingLine) => {
 				if (
 					updated ||
@@ -93,7 +50,25 @@ export const useUpdateShippingLine = () => {
 					return shippingLine;
 				}
 
-				const updatedItem = applyChangesToLineItem(shippingLine, changes);
+				// get previous line data from meta_data
+				const prevData = getShippingLineData(shippingLine);
+
+				// extract the meta_data from the changes
+				const { amount, prices_include_tax, tax_class, tax_status, ...rest } = changes;
+
+				// merge the previous line data with the rest of the changes
+				let updatedItem = { ...shippingLine, ...rest };
+
+				// apply the changes to the shipping line
+				updatedItem = updatePosDataMeta(updatedItem, {
+					amount: amount ?? prevData.amount,
+					prices_include_tax: prices_include_tax ?? prevData.prices_include_tax,
+					tax_class: tax_class ?? prevData.tax_class,
+					tax_status: tax_status ?? prevData.tax_status,
+				});
+
+				// calculate the taxes and totals
+				updatedItem = calculateShippingLineTaxesAndTotals(updatedItem);
 				updated = true;
 				return updatedItem;
 			});
@@ -106,7 +81,7 @@ export const useUpdateShippingLine = () => {
 				});
 			}
 		},
-		[applyChangesToLineItem, currentOrder, localPatch]
+		[calculateShippingLineTaxesAndTotals, currentOrder, getShippingLineData, localPatch]
 	);
 
 	return { updateShippingLine };

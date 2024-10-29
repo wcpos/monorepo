@@ -6,13 +6,15 @@ type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items'
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 type CartLine = LineItem | FeeLine | ShippingLine;
+type TaxStatus = 'taxable' | 'none';
 
 /**
- *
+ * Helper to coerce values to booleans.
  */
-export const priceToNumber = (price?: string) => {
-	const number = toNumber(price);
-	return isNaN(number) ? 0 : number;
+const toBoolean = (value: any): boolean => {
+	// Interpret "true", "1" as true; "false", "0" as false
+	if (typeof value === 'string') return value === 'true' || value === '1';
+	return Boolean(value);
 };
 
 /**
@@ -68,20 +70,13 @@ export const getUuidFromLineItem = (item: CartLine) => {
 /**
  *
  */
-export function findByMetaDataUUID(items: CartLine[], uuid: string) {
-	for (const item of items) {
-		if (!Array.isArray(item.meta_data)) {
-			log.error('metaData is not an array');
-			return;
-		}
-		const uuidMetaData = item.meta_data.find(
-			(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
-		);
-		if (uuidMetaData) {
-			return item;
-		}
-	}
-	return null;
+export function findByMetaDataUUID(items: CartLine[], uuid: string): CartLine | null {
+	const item = items.find(
+		(item) =>
+			Array.isArray(item.meta_data) &&
+			item.meta_data.some((meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid)
+	);
+	return item || null;
 }
 
 /**
@@ -280,7 +275,101 @@ export const parsePosData = (item: CartLine) => {
 			return JSON.parse(posData);
 		}
 	} catch (error) {
-		console.error('Error parsing posData:', error);
+		log.error('Error parsing posData:', error);
 	}
 	return null;
+};
+
+/**
+ * Calculate price and regular price based on tax inclusion and quantity.
+ */
+export const extractLineItemPrices = (item: LineItem, pricesIncludeTax: boolean) => {
+	const quantity = item.quantity ?? 0;
+	const total = toNumber(item.total ?? 0);
+	const subtotal = toNumber(item.subtotal ?? 0);
+	const totalTax = toNumber(item.total_tax ?? 0);
+	const subtotalTax = toNumber(item.subtotal_tax ?? 0);
+
+	const price = pricesIncludeTax ? (total + totalTax) / quantity : total / quantity;
+	const regularPrice = pricesIncludeTax ? (subtotal + subtotalTax) / quantity : subtotal / quantity;
+
+	return { price, regularPrice };
+};
+
+/**
+ * Extracts line item data, considering metadata overrides.
+ */
+export const extractLineItemData = (item: LineItem, pricesIncludeTax: boolean) => {
+	const { price: defaultPrice, regularPrice: defaultRegularPrice } = extractLineItemPrices(
+		item,
+		pricesIncludeTax
+	);
+
+	const {
+		price = defaultPrice,
+		regular_price = defaultRegularPrice,
+		tax_status = 'taxable',
+	} = parsePosData(item) || {};
+
+	return { price: toNumber(price), regular_price: toNumber(regular_price), tax_status };
+};
+
+/**
+ * Calculate default fee amount based on tax inclusion.
+ */
+export const calculateDefaultAmount = (
+	item: FeeLine | ShippingLine,
+	pricesIncludeTax: boolean
+): number => {
+	const total = toNumber(item.total ?? 0);
+	const totalTax = toNumber(item.total_tax ?? 0);
+	return pricesIncludeTax ? total + totalTax : total;
+};
+
+/**
+ * Extracts fee line data with fallbacks for default values.
+ */
+export const extractFeeLineData = (item: FeeLine, pricesIncludeTax: boolean) => {
+	const defaultAmount = calculateDefaultAmount(item, pricesIncludeTax);
+
+	const {
+		amount = defaultAmount,
+		percent = false,
+		prices_include_tax = pricesIncludeTax,
+		percent_of_cart_total_with_tax = pricesIncludeTax,
+	} = parsePosData(item) || {};
+
+	return {
+		amount: toNumber(amount),
+		percent: toBoolean(percent),
+		prices_include_tax: toBoolean(prices_include_tax),
+		percent_of_cart_total_with_tax: toBoolean(percent_of_cart_total_with_tax),
+	};
+};
+
+/**
+ * Extracts shipping line data with fallbacks for default values.
+ */
+export const extractShippingLineData = (
+	item: ShippingLine,
+	pricesIncludeTax: boolean,
+	shippingTaxClass: string
+) => {
+	const defaultAmount = calculateDefaultAmount(item, pricesIncludeTax);
+	const defaultTaxClass = shippingTaxClass === 'inherit' ? '' : shippingTaxClass;
+	const defaultTaxStatus: TaxStatus = 'taxable';
+
+	const {
+		amount = defaultAmount,
+		tax_status = defaultTaxStatus,
+		tax_class = defaultTaxClass,
+		prices_include_tax = pricesIncludeTax,
+	} = parsePosData(item) || {};
+
+	return {
+		amount: toNumber(amount),
+		tax_status,
+		tax_class,
+		prices_include_tax: toBoolean(prices_include_tax),
+	};
 };

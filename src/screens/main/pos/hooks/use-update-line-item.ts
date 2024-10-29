@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import omit from 'lodash/omit';
-import pick from 'lodash/pick';
-import set from 'lodash/set';
 import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,6 +11,11 @@ import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 
+interface Changes extends Partial<LineItem> {
+	regular_price?: number;
+	tax_status?: string;
+}
+
 /**
  *
  */
@@ -24,44 +26,12 @@ export const useUpdateLineItem = () => {
 	const { getLineItemData } = useLineItemData();
 
 	/**
-	 * Applies updates to a line item based on provided changes.
-	 */
-	const applyChangesToLineItem = React.useCallback(
-		(lineItem: LineItem, changes: Partial<LineItem>): LineItem => {
-			const { price, regular_price, tax_status } = getLineItemData(lineItem);
-
-			const newData = {
-				...{ price, regular_price, tax_status },
-				...pick(changes, ['price', 'regular_price', 'tax_status']),
-			};
-
-			let updatedItem = { ...lineItem };
-			updatedItem = updatePosDataMeta(updatedItem, newData);
-
-			const remainingChanges = omit(changes, ['price', 'regular_price', 'tax_status']);
-
-			for (const key of Object.keys(remainingChanges)) {
-				// Special case for nested changes, only meta_data at the moment
-				const nestedKey = key.split('.');
-				if (nestedKey.length === 1) {
-					(updatedItem as any)[key] = remainingChanges[key];
-				} else {
-					set(updatedItem, nestedKey, remainingChanges[key]);
-				}
-			}
-
-			return calculateLineItemTaxesAndTotals(updatedItem);
-		},
-		[calculateLineItemTaxesAndTotals, getLineItemData]
-	);
-
-	/**
 	 * Update line item
 	 *
 	 * @TODO - what if more than one property is changed at once?
 	 */
 	const updateLineItem = React.useCallback(
-		async (uuid: string, changes: Partial<LineItem>) => {
+		async (uuid: string, changes: Changes) => {
 			const order = currentOrder.getLatest();
 			const json = order.toMutableJSON();
 			let updated = false;
@@ -74,7 +44,23 @@ export const useUpdateLineItem = () => {
 					return lineItem;
 				}
 
-				const updatedItem = applyChangesToLineItem(lineItem, changes);
+				// get previous line data from meta_data
+				const prevData = getLineItemData(lineItem);
+
+				// extract the meta_data from the changes
+				const { price, regular_price, tax_status, ...rest } = changes;
+
+				// merge the previous line data with the rest of the changes
+				let updatedItem = { ...lineItem, ...rest };
+
+				// apply the changes to the shipping line
+				updatedItem = updatePosDataMeta(updatedItem, {
+					price: price ?? prevData.price,
+					regular_price: regular_price ?? prevData.regular_price,
+					tax_status: tax_status ?? prevData.tax_status,
+				});
+
+				updatedItem = calculateLineItemTaxesAndTotals(updatedItem);
 				updated = true;
 				return updatedItem;
 			});
@@ -84,7 +70,7 @@ export const useUpdateLineItem = () => {
 				return localPatch({ document: order, data: { line_items: updatedLineItems } });
 			}
 		},
-		[applyChangesToLineItem, currentOrder, localPatch]
+		[calculateLineItemTaxesAndTotals, currentOrder, getLineItemData, localPatch]
 	);
 
 	/**

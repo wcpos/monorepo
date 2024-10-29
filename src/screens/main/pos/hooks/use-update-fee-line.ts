@@ -1,9 +1,5 @@
 import * as React from 'react';
 
-import omit from 'lodash/omit';
-import pick from 'lodash/pick';
-import set from 'lodash/set';
-
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
 import { useFeeLineData } from './use-fee-line-data';
 import { updatePosDataMeta } from './utils';
@@ -16,12 +12,11 @@ type FeeLine = NonNullable<OrderDocument['fee_lines']>[number];
 /**
  * Account for string or number changes just in case
  */
-interface Changes {
-	name?: string;
-	total?: string | number;
+interface Changes extends Partial<FeeLine> {
 	amount?: string;
 	percent?: boolean;
 	prices_include_tax?: boolean;
+	percent_of_cart_total_with_tax?: boolean;
 }
 
 /**
@@ -34,52 +29,7 @@ export const useUpdateFeeLine = () => {
 	const { getFeeLineData } = useFeeLineData();
 
 	/**
-	 * Applies updates to a line item based on provided changes.
-	 */
-	const applyChangesToLineItem = React.useCallback(
-		(lineItem: FeeLine, changes: Changes): FeeLine => {
-			const { amount, percent, prices_include_tax, percent_of_cart_total_with_tax } =
-				getFeeLineData(lineItem);
-
-			const newData = {
-				...{ amount, percent, prices_include_tax, percent_of_cart_total_with_tax },
-				...pick(changes, [
-					'amount',
-					'percent',
-					'prices_include_tax',
-					'percent_of_cart_total_with_tax',
-				]),
-			};
-
-			let updatedItem = { ...lineItem };
-			updatedItem = updatePosDataMeta(updatedItem, newData);
-
-			const remainingChanges = omit(changes, [
-				'amount',
-				'percent',
-				'prices_include_tax',
-				'percent_of_cart_total_with_tax',
-			]);
-
-			for (const key of Object.keys(remainingChanges)) {
-				// Special case for nested changes, only meta_data at the moment
-				const nestedKey = key.split('.');
-				if (nestedKey.length === 1) {
-					(updatedItem as any)[key] = remainingChanges[key];
-				} else {
-					set(updatedItem, nestedKey, remainingChanges[key]);
-				}
-			}
-
-			return calculateFeeLineTaxesAndTotals(updatedItem);
-		},
-		[calculateFeeLineTaxesAndTotals, getFeeLineData]
-	);
-
-	/**
 	 * Update fee line
-	 *
-	 * @TODO - what if more than one property is changed at once?
 	 */
 	const updateFeeLine = React.useCallback(
 		async (uuid: string, changes: Changes) => {
@@ -95,7 +45,26 @@ export const useUpdateFeeLine = () => {
 					return feeLine;
 				}
 
-				const updatedItem = applyChangesToLineItem(feeLine, changes);
+				// get previous line data from meta_data
+				const prevData = getFeeLineData(feeLine);
+
+				// extract the meta_data from the changes
+				const { amount, percent, prices_include_tax, percent_of_cart_total_with_tax, ...rest } =
+					changes;
+
+				// merge the previous line data with the rest of the changes
+				let updatedItem = { ...feeLine, ...rest };
+
+				// apply the changes to the shipping line
+				updatedItem = updatePosDataMeta(updatedItem, {
+					amount: amount ?? prevData.amount,
+					percent: percent ?? prevData.percent,
+					prices_include_tax: prices_include_tax ?? prevData.prices_include_tax,
+					percent_of_cart_total_with_tax:
+						percent_of_cart_total_with_tax ?? prevData.percent_of_cart_total_with_tax,
+				});
+
+				updatedItem = calculateFeeLineTaxesAndTotals(updatedItem);
 				updated = true;
 				return updatedItem;
 			});
@@ -104,7 +73,7 @@ export const useUpdateFeeLine = () => {
 				return localPatch({ document: order, data: { fee_lines: updatedLineItems } });
 			}
 		},
-		[applyChangesToLineItem, currentOrder, localPatch]
+		[calculateFeeLineTaxesAndTotals, currentOrder, getFeeLineData, localPatch]
 	);
 
 	return { updateFeeLine };

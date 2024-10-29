@@ -20,16 +20,16 @@ describe('Calculate Taxes', () => {
 		const inclusiveTaxes = calculateTaxes({
 			amount: 9.99,
 			rates: [taxRate],
-			amountIncludeTax: true,
+			amountIncludesTax: true,
 		});
-		expect(inclusiveTaxes).toEqual([{ id: 72, total: 1.665 }]);
+		expect(inclusiveTaxes).toEqual({ taxes: [{ id: 72, total: 1.665 }], total: 1.665 });
 
 		const exclusiveTaxes = calculateTaxes({
 			amount: 9.99,
 			rates: [taxRate],
-			amountIncludeTax: false,
+			amountIncludesTax: false,
 		});
-		expect(exclusiveTaxes).toEqual([{ id: 72, total: 1.998 }]);
+		expect(exclusiveTaxes).toEqual({ taxes: [{ id: 72, total: 1.998 }], total: 1.998 });
 	});
 
 	it('should calculate the compound tax', () => {
@@ -63,15 +63,22 @@ describe('Calculate Taxes', () => {
 		const exclusiveTaxes = calculateTaxes({
 			amount: 100,
 			rates: taxRates,
-			amountIncludeTax: false,
+			amountIncludesTax: false,
 		});
-		expect(exclusiveTaxes).toEqual([
-			{ id: 72, total: 5 },
-			{ id: 17, total: 8.925 },
-		]);
+		expect(exclusiveTaxes).toEqual({
+			taxes: [
+				{ id: 72, total: 5 },
+				{ id: 17, total: 8.925 },
+			],
+			total: 13.925,
+		});
 
 		// prices inclusive of tax.
-		const inclusiveTaxes = calculateTaxes({ amount: 100, rates: taxRates, amountIncludeTax: true });
+		const inclusiveTaxes = calculateTaxes({
+			amount: 100,
+			rates: taxRates,
+			amountIncludesTax: true,
+		});
 		/**
 		 * 100 is inclusive of all taxes.
 		 *
@@ -79,9 +86,39 @@ describe('Calculate Taxes', () => {
 		 * Next tax would be calced on 100 - 7.8341 = 92.1659.
 		 * 92.1659 - ( 92.1659 / 1.05 ) = 4.38885.
 		 */
-		expect(inclusiveTaxes).toEqual([
-			{ id: 17, total: 7.834101 },
-			{ id: 72, total: 4.388852 },
-		]);
+		expect(inclusiveTaxes).toEqual({
+			taxes: [
+				{ id: 17, total: 7.834101 },
+				{ id: 72, total: 4.388852 },
+			],
+			total: 12.222953,
+		});
+	});
+
+	it('BUG: fix shipping calculation', () => {
+		const taxRates = [
+			{
+				id: 72,
+				country: 'GB',
+				rate: '5.0000',
+				name: 'VAT',
+				priority: 1,
+				compound: true,
+				shipping: true,
+				order: 1,
+				class: 'reduced-rate',
+			},
+		];
+
+		const exclusiveTaxes = calculateTaxes({
+			amount: 100,
+			rates: taxRates,
+			amountIncludesTax: false,
+		});
+
+		expect(exclusiveTaxes).toEqual({
+			taxes: [{ id: 72, total: 5 }],
+			total: 5,
+		});
 	});
 });

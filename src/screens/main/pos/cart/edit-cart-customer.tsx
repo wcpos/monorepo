@@ -143,7 +143,7 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
-				<Collapsible open>
+				<Collapsible defaultOpen={true}>
 					<CollapsibleTrigger>
 						<Text>{t('Billing Address', { _tags: 'core' })}</Text>
 					</CollapsibleTrigger>

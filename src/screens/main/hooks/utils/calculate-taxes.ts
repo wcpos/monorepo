@@ -124,9 +124,11 @@ export function calculateTaxes({
 
 	/**
 	 * Should we sum the roundedItemizedTaxes, or sum the original calculation?
-	 * -  at 6dp the rounding errors are minimal.
+	 * - at 6dp the rounding errors are minimal.
+	 * - seeing as though we round the itemized taxes, I guess we should sum the rounded taxes.
+	 * otherwise the itemized taxes may not sum to the total.
 	 */
-	const total = sumTaxes({ taxes });
+	const total = sumTaxes({ taxes: roundedItemizedTaxes });
 
 	return {
 		total: round(total, 6),

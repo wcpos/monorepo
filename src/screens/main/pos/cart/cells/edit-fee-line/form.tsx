@@ -132,6 +132,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 										? t('Percent', { _tags: 'core' })
 										: t('Amount', { _tags: 'core' })
 								}
+								type="numeric"
 								{...field}
 							/>
 						)}

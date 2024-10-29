@@ -38,9 +38,9 @@ export interface NumberInputProps {
 }
 
 /**
- *
+ * The ref is forwarded to the button.
  */
-export const NumberInput = React.forwardRef<React.ElementRef<typeof Numpad>, NumberInputProps>(
+export const NumberInput = React.forwardRef<React.ElementRef<typeof Button>, NumberInputProps>(
 	(
 		{
 			onChangeText,
@@ -101,6 +101,7 @@ export const NumberInput = React.forwardRef<React.ElementRef<typeof Numpad>, Num
 			<Popover>
 				<PopoverTrigger ref={triggerRef} asChild>
 					<Button
+						ref={ref}
 						variant="outline"
 						disabled={disabled}
 						className={cn('items-start min-w-10', className)}
