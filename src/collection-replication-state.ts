@@ -117,13 +117,15 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		const newLocalCount$ = this.collection
 			.count({
 				selector: {
-					id: { $eq: null },
+					id: { $exists: false },
 				},
 			})
 			.$.pipe(distinctUntilChanged());
 
 		const totalCount$ = combineLatest([remoteCount$, newLocalCount$]).pipe(
-			map(([remoteCount, newLocalCount]) => remoteCount + newLocalCount),
+			map(([remoteCount, newLocalCount]) => {
+				return remoteCount + newLocalCount;
+			}),
 			startWith(0)
 		);
 

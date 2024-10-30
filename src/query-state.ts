@@ -1,52 +1,36 @@
-import cloneDeep from 'lodash/cloneDeep';
 import debounce from 'lodash/debounce';
-import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
-import { orderBy } from 'natural-orderby';
 import { ObservableResource } from 'observable-hooks';
-import { BehaviorSubject, Observable, Subscription, Subject, ReplaySubject, from } from 'rxjs';
-import { map, switchMap, distinctUntilChanged, startWith } from 'rxjs/operators';
+import { Subject, Subscription, BehaviorSubject, ReplaySubject } from 'rxjs';
+import { tap, map, switchMap, distinctUntilChanged } from 'rxjs/operators';
 
-// import { Search } from './search-state';
 import { SubscribableBase } from './subscribable-base';
 
-import type { RxCollection, RxDocument } from 'rxdb';
+import type {
+	RxCollection,
+	RxDocument,
+	MangoQuery,
+	RxQuery,
+	MangoQuerySortDirection,
+	MangoQuerySortPart,
+	MangoQuerySelector,
+} from 'rxdb';
 
-// This type utility extracts the document type from a collection
 type DocumentType<C> = C extends RxCollection<infer D> ? RxDocument<D, object> : never;
 
-type SortDirection = 'asc' | 'desc';
-
-export interface QueryParams {
-	search?: string | Record<string, any>;
-	sortBy?: string;
-	sortDirection?: SortDirection;
-	selector?: import('rxdb').MangoQuery['selector'];
-	// limit?: number; // we're doing our own pagination
-	// skip?: number;
-}
-
-export interface QueryHooks {
-	preQueryParams?: (params: QueryParams) => QueryParams;
-	postQueryResult?: (
-		docs: RxDocument[],
-		modifiedParams: QueryParams,
-		originalParams: QueryParams
-	) => RxDocument[];
-}
+export type QueryParams = MangoQuery & { search?: string };
 
 export interface QueryConfig<T> {
 	id: string;
 	collection: T;
 	initialParams?: QueryParams;
-	hooks?: QueryHooks;
+	// hooks?: QueryHooks;
 	endpoint?: string;
 	errorSubject: Subject<Error>;
 	greedy?: boolean;
 	locale?: string;
+	autoExec?: boolean;
 }
-
-type WhereClause = { field: string; value: any };
 
 export interface QueryResult<T> {
 	elapsed: number;
@@ -62,55 +46,61 @@ export interface QueryResult<T> {
 	}[];
 }
 
-const SUBKEY_FIELDS: Record<
-	string,
-	{ subkey: string; allowMultiple: boolean; valueField?: string }
-> = {
-	meta_data: { subkey: 'key', allowMultiple: true, valueField: 'value' },
-	attributes: { subkey: 'name', allowMultiple: true, valueField: 'option' },
-	categories: { subkey: 'id', allowMultiple: false },
-	tags: { subkey: 'id', allowMultiple: false },
-};
+/**
+ * Interface for query methods
+ */
+interface QueryMethods<DocType> {
+	where(fieldOrSelector: string | MangoQuerySelector<DocType>, value?: any): this;
+	equals(value: any): this;
+	eq(value: any): this;
+	gt(value: any): this;
+	gte(value: any): this;
+	lt(value: any): this;
+	lte(value: any): this;
+	ne(value: any): this;
+	in(values: any[]): this;
+	nin(values: any[]): this;
+	all(value: any): this;
+	regex(value: string | { $regex: string; $options?: string }): this;
+	size(value: number): this;
+	mod(value: any): this;
+	exists(value: boolean): this;
+	elemMatch(value: any): this;
+	or(array: any[]): this;
+	nor(array: any[]): this;
+	and(array: any[]): this;
+	sort(sortBy: keyof DocType | MangoQuerySortPart<DocType>): this;
+	skip(skipValue: number): this;
+	limit(limitValue: number): this;
+	search(searchTerm: string, fields: (keyof DocType)[]): this;
+}
 
 /**
- * A wrapper class for RxDB queries
+ * A wrapper class for RxQuery
+ *
+ * - RxQuery is immutable, which means it has to be re-subscribed to if query changes
+ * - This wrapper class provides a single instance and handles re-subscription
+ * - It provides the query results as an ObservableResource, which fits better with React Suspense
+ * - It also has some helper methods for complicated queries, such variation selectors
+ * - Supports auto-execution of initial query via `autoExec` option (default: true)
  */
-export class Query<T extends RxCollection> extends SubscribableBase {
+export class Query<T extends RxCollection>
+	extends SubscribableBase
+	implements QueryMethods<DocumentType<T>>
+{
 	public readonly id: string;
 	public readonly collection: T;
-	public readonly hooks: QueryConfig<T>['hooks'];
-	// public readonly searchService: Search;
-	public readonly endpoint: string;
-	public readonly errorSubject: Subject<Error>;
 	public readonly primaryKey: string;
-	public readonly greedy: boolean;
-	public readonly searchInstancePromise: Promise<any>;
+	public readonly errorSubject: Subject<Error>;
+	public readonly searchInstancePromise: Promise<void>;
 	public readonly locale: string;
-
-	/**
-	 * Store whereClauses as an object.
-	 * For simple fields: field name -> value
-	 * For complex fields: field name -> Map<subkeyValue, clause>
-	 */
-	private whereClauses: Record<string, any> = {};
-
-	/**
-	 * Cache for selector object
-	 */
-	private selectorCache: any = null;
-	private fieldCache: Record<string, any> = {};
-	private static EMPTY_ARRAY: any[] = [];
-
-	/**
-	 * Current params
-	 */
-	private currentParams: QueryParams;
 
 	/**
 	 *
 	 */
 	public readonly subs: Subscription[] = [];
 	public readonly subjects = {
+		rxQuery: new BehaviorSubject<RxQuery | undefined>(undefined),
 		params: new BehaviorSubject<QueryParams | undefined>(undefined),
 		result: new ReplaySubject<QueryResult<T>>(1),
 	};
@@ -118,9 +108,12 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	/**
 	 *
 	 */
-	public readonly params$ = this.subjects.params.asObservable();
+	public readonly rxQuery$ = this.subjects.rxQuery.asObservable();
+	public readonly params$ = this.rxQuery$.pipe(map((rxQuery) => rxQuery?.mangoQuery));
 	public readonly result$ = this.subjects.result.asObservable();
 
+	public currentRxQuery: RxQuery;
+	public findSubscriptionStarted = false;
 	public readonly resource = new ObservableResource(this.result$);
 
 	/**
@@ -130,69 +123,49 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		id,
 		collection,
 		initialParams = {},
-		hooks,
 		endpoint,
 		errorSubject,
 		greedy = false,
 		locale = 'en',
+		autoExec = true,
 	}: QueryConfig<T>) {
 		super();
 		this.id = id;
 		this.collection = collection;
-		this.hooks = hooks || {};
-		this.endpoint = endpoint; // @TODO - do we need this?
-		this.errorSubject = errorSubject;
 		this.primaryKey = collection.schema.primaryPath;
-		this.greedy = greedy;
+		this.errorSubject = errorSubject;
 		this.searchInstancePromise = collection.initSearch(locale);
 		this.locale = locale;
 
-		/**
-		 * Search service
-		 *
-		 * @TODO - we only need a full text search service for some collections and fields
-		 * @TODO - we have full text search, but we need partial string search as well
-		 */
-		// this.searchService = new Search({ collection, locale });
-
-		/**
-		 * Initialize whereClauses from initialParams.selector
-		 */
-		if (initialParams.selector) {
-			this.initializeWhereClauses(initialParams.selector);
+		this.currentRxQuery = collection.find(initialParams);
+		if (autoExec) {
+			this.exec();
 		}
+	}
 
-		// Initialize currentParams
-		this.currentParams = {
-			...initialParams,
-			selector: this.generateSelector(),
-		};
+	/**
+	 *
+	 */
+	exec() {
+		this.subjects.rxQuery.next(this.currentRxQuery);
+		this.startFindSubscription();
+	}
 
-		// Emit the initial params
-		this.subjects.params.next(this.currentParams);
+	/**
+	 * Starts the subscription to the query result stream
+	 */
+	private startFindSubscription(): void {
+		if (this.findSubscriptionStarted) return;
+		this.findSubscriptionStarted = true;
 
-		/**
-		 * Keep track of what we are subscribed to
-		 */
 		this.subs.push(
-			/**
-			 * Subscribe to query changes and emit the results
-			 */
-			this.find$
+			this._find$
 				.pipe(
 					distinctUntilChanged((prev, next) => {
-						// Check if search is active and searchTerm has changed
-						if (prev.searchActive !== next.searchActive || prev.searchTerm !== next.searchTerm) {
-							return false;
-						}
-
-						// Check if the number of hits or their order has changed
 						const idsAreEqual = isEqual(
 							prev.hits.map((hit) => hit.id),
 							next.hits.map((hit) => hit.id)
 						);
-
-						// if search is active, check if the childrenSearchCount has changed
 						let childrenAreEqual = true;
 						if (idsAreEqual && next.searchActive) {
 							childrenAreEqual = prev.hits.every((hit, index) => {
@@ -204,132 +177,37 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 								);
 							});
 						}
-
 						return idsAreEqual && childrenAreEqual;
 					})
-					// catchError((error) => {
-					// 	this.errorSubject.next(error);
-					// })
 				)
 				.subscribe((result) => {
-					// console.log('Query result', result);
 					this.subjects.result.next(result);
 				})
 		);
 	}
 
 	/**
-	 * Initialize whereClauses from selector
+	 * Re-subscribe to the new RxQuery
 	 */
-	private initializeWhereClauses(selector: any) {
-		if (selector.$and) {
-			for (const condition of selector.$and) {
-				for (const [field, value] of Object.entries(condition)) {
-					this.where(field, value);
-				}
-			}
-		} else {
-			for (const [field, value] of Object.entries(selector)) {
-				this.where(field, value);
-			}
-		}
-	}
+	get _find$() {
+		return this.rxQuery$.pipe(
+			tap((rxQuery) => {
+				// When to emit the updated params?
+				this.subjects.params.next(rxQuery?.mangoQuery);
+			}),
+			switchMap((rxQuery) => {
+				const startTime = performance.now();
 
-	/**
-	 * Generate selector from whereClauses.
-	 */
-	private generateSelector(): any {
-		if (this.selectorCache !== null) {
-			return this.selectorCache;
-		}
-
-		const conditions: any[] = [];
-
-		for (const [field, value] of Object.entries(this.whereClauses)) {
-			const subkeyInfo = SUBKEY_FIELDS[field];
-			const subkey = subkeyInfo?.subkey;
-
-			if (subkey && value instanceof Map) {
-				for (const clause of value.values()) {
-					conditions.push({ [field]: clause });
-				}
-			} else {
-				conditions.push({ [field]: value });
-			}
-		}
-
-		const selector = conditions.length > 0 ? { $and: conditions } : {};
-
-		// Cache the selector
-		this.selectorCache = selector;
-
-		return selector;
-	}
-
-	/**
-	 * A wrapper for the RxDB collection.find().$ observable
-	 */
-	get find$() {
-		return this.params$.pipe(
-			switchMap((params) => {
-				const startTime = performance.now(); // Start time measurement
-				let modifiedParams = cloneDeep(params || {}); // clone params, note nested objects need to be cloned too!
-
-				// Apply the preQueryParams hook if provided
-				if (this.hooks?.preQueryParams) {
-					modifiedParams = this.hooks.preQueryParams(modifiedParams);
-				}
-
-				const searchActive =
-					typeof modifiedParams.search === 'string' && !isEmpty(modifiedParams.search);
-
-				let rxdbQuery$: Observable<QueryResult<T>>;
-				if (searchActive) {
-					rxdbQuery$ = this.handleSearchActive(modifiedParams);
-				} else {
-					rxdbQuery$ = this.handleSearchInactive(modifiedParams, params);
-				}
-
-				return rxdbQuery$.pipe(
+				return rxQuery!.$.pipe(
 					map((result) => {
-						const endTime = performance.now(); // End time measurement
+						const endTime = performance.now();
 						const elapsed = endTime - startTime;
-						return { elapsed, ...result };
-					})
-				);
-			})
-		);
-	}
-
-	/**
-	 * For search we get the matched IDs, then apply the other params
-	 * We also don't sort the results here, as they are already sorted by relevance
-	 */
-	handleSearchActive(modifiedParams: QueryParams) {
-		return from(this.searchInstancePromise).pipe(
-			switchMap((searchInstance) =>
-				searchInstance.collection.$.pipe(
-					startWith(null),
-					switchMap(() => searchInstance.find(modifiedParams.search))
-				)
-			),
-			switchMap((searchResults: RxDocument[]) => {
-				const uuids = (searchResults || []).map((doc) => doc.uuid);
-				const selector = modifiedParams?.selector || {};
-				selector.uuid = { $in: uuids };
-				return this.collection.find({ selector }).$.pipe(
-					map((docs) => {
-						// Sort the results by the order of the search results
-						const sortedDocs = uuids
-							.map((uuid) => docs.find((doc) => doc.uuid === uuid))
-							.filter((doc) => doc !== undefined);
-
 						return {
-							searchActive: true,
-							searchTerm: modifiedParams.search,
-							count: sortedDocs.length,
-							hits: sortedDocs.map((doc) => ({
-								id: doc.uuid,
+							elapsed,
+							searchActive: false,
+							count: result.length,
+							hits: result.map((doc) => ({
+								id: doc[this.primaryKey],
 								document: doc,
 							})),
 						};
@@ -339,423 +217,214 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		);
 	}
 
-	handleSearchInactive(modifiedParams: QueryParams, originalParams: QueryParams) {
-		return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
-			map((docs: DocumentType<T>[]) => {
-				/**
-				 * Sorting wasn't working for string numbers, so I'm handling sorting here
-				 */
-				const { sortBy, sortDirection } = modifiedParams;
-				let filteredAndSortedDocs = docs;
-
-				if (sortBy && sortDirection) {
-					// @TODO - ordering by multiple fields?
-					filteredAndSortedDocs = orderBy(
-						filteredAndSortedDocs,
-						[(v) => v[sortBy]],
-						[sortDirection]
-					);
-				}
-
-				if (this.hooks?.postQueryResult) {
-					filteredAndSortedDocs = this.hooks.postQueryResult(
-						filteredAndSortedDocs,
-						modifiedParams,
-						originalParams
-					);
-				}
-
-				return {
-					searchActive: false,
-					count: filteredAndSortedDocs.length,
-					hits: filteredAndSortedDocs.map((doc) => ({
-						id: doc[this.primaryKey],
-						document: doc,
-					})),
-				};
-			})
-		);
-	}
-
-	/**
-	 * Selector helpers
-	 */
-
-	/**
-	 * Add or update a where clause.
-	 */
-	where(field: string, value: any): this {
-		const subkeyInfo = SUBKEY_FIELDS[field];
-		const subkey = subkeyInfo?.subkey;
-		const valueField = subkeyInfo?.valueField;
-
-		let changed = false;
-
-		if (value === null || value === undefined) {
-			// Remove entire field
-			if (this.whereClauses[field] !== undefined) {
-				delete this.whereClauses[field];
-				changed = true;
-			}
-		} else if (subkey) {
-			const elemMatch = value?.$elemMatch;
-			if (!elemMatch) {
-				console.warn(`Invalid value for field '${field}', expected $elemMatch`, value);
-				return this;
-			}
-
-			const subkeyValue = elemMatch[subkey];
-
-			if (subkeyValue === undefined) {
-				console.warn(`Cannot extract subkey '${subkey}' from value`, value);
-				return this;
-			}
-
-			let removeClause = false;
-
-			if (valueField) {
-				const valueFieldValue = elemMatch[valueField];
-				if (valueFieldValue === null || valueFieldValue === undefined) {
-					removeClause = true;
-				}
-			} else {
-				if (subkeyValue === null || subkeyValue === undefined) {
-					removeClause = true;
-				}
-			}
-
-			if (removeClause) {
-				if (this.whereClauses[field] && this.whereClauses[field] instanceof Map) {
-					if (this.whereClauses[field].has(subkeyValue)) {
-						this.whereClauses[field].delete(subkeyValue);
-						if (this.whereClauses[field].size === 0) {
-							delete this.whereClauses[field];
-						}
-						changed = true;
-					}
-				}
-			} else {
-				// Add or update the clause
-				let needUpdate = true;
-
-				if (this.whereClauses[field] && this.whereClauses[field] instanceof Map) {
-					const existingValue = this.whereClauses[field].get(subkeyValue);
-					if (existingValue && isEqual(existingValue, value)) {
-						needUpdate = false;
-					}
-				}
-
-				if (needUpdate) {
-					if (!subkeyInfo.allowMultiple) {
-						// Overwrite the entire field
-						this.whereClauses[field] = new Map();
-					} else if (!this.whereClauses[field]) {
-						this.whereClauses[field] = new Map();
-					}
-					this.whereClauses[field].set(subkeyValue, value);
-					changed = true;
-				}
-			}
-		} else {
-			// Simple field
-			if (!isEqual(this.whereClauses[field], value)) {
-				this.whereClauses[field] = value;
-				changed = true;
-			}
-		}
-
-		if (changed) {
-			// Reset caches
-			this.selectorCache = null;
-			this.fieldCache = {};
-			this.updateParams();
-		}
-
-		return this;
-	}
-
-	/**
-	 *
-	 */
-	sort(sortBy: string, sortDirection: SortDirection): this;
-	sort(sortObj: Record<string, SortDirection>): this;
-	sort(sortByOrObj: any, sortDirection?: SortDirection): this {
-		let newSortBy: string;
-		let newSortDirection: SortDirection;
-
-		if (typeof sortByOrObj === 'string') {
-			newSortBy = sortByOrObj;
-			newSortDirection = sortDirection!;
-		} else {
-			const [lastField, lastDirection] = Object.entries(sortByOrObj).pop() as [
-				string,
-				SortDirection,
-			];
-			newSortBy = lastField;
-			newSortDirection = lastDirection;
-		}
-
-		if (
-			this.currentParams.sortBy !== newSortBy ||
-			this.currentParams.sortDirection !== newSortDirection
-		) {
-			this.updateParams({
-				sortBy: newSortBy,
-				sortDirection: newSortDirection,
-			});
-		}
-
-		return this;
-	}
-
-	search(query: string | Record<string, any> = '') {
-		if (!isEqual(this.currentParams.search, query)) {
-			this.updateParams({ search: query });
-		}
-	}
-	debouncedSearch = debounce(this.search, 250);
-
-	/**
-	 *
-	 */
-	private updateParams(additionalParams: Partial<QueryParams> = {}): void {
-		const newSelector = this.generateSelector();
-		const newParams: QueryParams = {
-			...this.currentParams,
-			...additionalParams,
-			selector: newSelector,
-		};
-
-		if (!isEqual(this.currentParams, newParams)) {
-			this.currentParams = newParams;
-			this.subjects.params.next(this.currentParams);
-		}
-	}
-
 	/**
 	 * Public getters
 	 */
 	getParams(): QueryParams | undefined {
-		return this.currentParams;
+		return this.subjects.params.getValue();
 	}
 
-	get count$() {
-		return this.result$.pipe(
-			map((result) => result.count),
-			distinctUntilChanged()
+	/**
+	 * Query Helpers
+	 */
+	public where(fieldOrSelector: string | MangoQuerySelector<DocumentType<T>>, value?: any): this {
+		if (typeof fieldOrSelector === 'string') {
+			this.currentRxQuery = this.currentRxQuery.where(fieldOrSelector, value);
+		} else {
+			this.currentRxQuery = this.currentRxQuery.where(fieldOrSelector);
+		}
+		return this;
+	}
+
+	public equals(value: any): this {
+		this.currentRxQuery = this.currentRxQuery.equals(value);
+		return this;
+	}
+
+	public eq(value: any): this {
+		return this.equals(value);
+	}
+
+	public gt(value: any): this {
+		this.currentRxQuery = this.currentRxQuery.gt(value);
+		return this;
+	}
+
+	public gte(value: any): this {
+		this.currentRxQuery = this.currentRxQuery.gte(value);
+		return this;
+	}
+
+	public lt(value: any): this {
+		this.currentRxQuery = this.currentRxQuery.lt(value);
+		return this;
+	}
+
+	public lte(value: any): this {
+		this.currentRxQuery = this.currentRxQuery.lte(value);
+		return this;
+	}
+
+	public ne(value: any): this {
+		this.currentRxQuery = this.currentRxQuery.ne(value);
+		return this;
+	}
+
+	public in(values: any[]): this {
+		this.currentRxQuery = this.currentRxQuery.in(values);
+		return this;
+	}
+
+	public nin(values: any[]): this {
+		this.currentRxQuery = this.currentRxQuery.nin(values);
+		return this;
+	}
+
+	public all(value: any): this {
+		this.currentRxQuery = this.currentRxQuery.all(value);
+		return this;
+	}
+
+	public regex(value: string | { $regex: string; $options?: string }): this {
+		this.currentRxQuery = this.currentRxQuery.regex(value);
+		return this;
+	}
+
+	public size(value: number): this {
+		this.currentRxQuery = this.currentRxQuery.size(value);
+		return this;
+	}
+
+	public mod(value: any): this {
+		this.currentRxQuery = this.currentRxQuery.mod(value);
+		return this;
+	}
+
+	public exists(value: boolean): this {
+		this.currentRxQuery = this.currentRxQuery.exists(value);
+		return this;
+	}
+
+	public elemMatch(value: any): this {
+		this.currentRxQuery = this.currentRxQuery.elemMatch(value);
+		return this;
+	}
+
+	public or(array: any[]): this {
+		this.currentRxQuery = this.currentRxQuery.or(array);
+		return this;
+	}
+
+	public nor(array: any[]): this {
+		this.currentRxQuery = this.currentRxQuery.nor(array);
+		return this;
+	}
+
+	public and(array: any[]): this {
+		this.currentRxQuery = this.currentRxQuery.and(array);
+		return this;
+	}
+
+	public sort(sortBy: keyof DocumentType<T> | MangoQuerySortPart<DocumentType<T>>): this {
+		this.currentRxQuery = this.currentRxQuery.sort(sortBy);
+		return this;
+	}
+
+	public skip(skipValue: number): this {
+		this.currentRxQuery = this.currentRxQuery.skip(skipValue);
+		return this;
+	}
+
+	public limit(limitValue: number): this {
+		this.currentRxQuery = this.currentRxQuery.limit(limitValue);
+		return this;
+	}
+
+	/**
+	 * Subscribes to the search instance and updates the query params
+	 */
+	public search(searchTerm: string) {
+		// from(this.searchInstancePromise).pipe(
+		// 	switchMap((searchInstance) =>
+		// 		searchInstance.collection.$.pipe(
+		// 			startWith(null),
+		// 			switchMap(() => searchInstance.find(modifiedParams.search))
+		// 		)
+		// 	),
+		// this.currentRxQuery = this.currentRxQuery.where(selector);
+	}
+	debouncedSearch = debounce(this.search, 250);
+
+	/**
+	 * Additional Query Helpers to manipulate the query params
+	 */
+	public removeWhere(field: string): this {
+		const currentMangoQuery = this.currentRxQuery.mangoQuery;
+		const newSelector = { ...currentMangoQuery.selector };
+		delete newSelector[field];
+		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
+
+		this.currentRxQuery = this.collection.find(newMangoQuery);
+		return this;
+	}
+
+	public removeElemMatch(field: string, matchCriteria: Partial<any>): this {
+		const currentMangoQuery = this.currentRxQuery.mangoQuery;
+		let newSelector = { ...currentMangoQuery.selector };
+
+		// Function to check if a condition matches the elemMatch to remove
+		const matchesCondition = (condition: any): boolean =>
+			condition[field]?.$elemMatch &&
+			Object.keys(matchCriteria).every(
+				(key) => condition[field].$elemMatch[key] === matchCriteria[key]
+			);
+
+		if (Array.isArray(newSelector.$and)) {
+			newSelector.$and = newSelector.$and.filter((cond) => !matchesCondition(cond));
+			if (newSelector.$and.length === 1) {
+				const [singleCondition] = newSelector.$and;
+				newSelector = { ...newSelector, ...singleCondition };
+				delete newSelector.$and;
+			} else if (newSelector.$and.length === 0) {
+				delete newSelector.$and;
+			}
+		} else if (matchesCondition(newSelector)) {
+			delete newSelector[field];
+		}
+
+		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
+		this.currentRxQuery = this.collection.find(newMangoQuery);
+		return this;
+	}
+
+	public multipleElemMatch(criteria: any): this {
+		const path = this.currentRxQuery.other.queryBuilderPath;
+
+		const currentMangoQuery = this.currentRxQuery.mangoQuery;
+		const currentSelector = currentMangoQuery.selector || {};
+		const newSelector = { ...currentSelector };
+
+		// Ensure `$and` array exists within the selector
+		if (!newSelector.$and) {
+			newSelector.$and = [];
+		}
+
+		// Create an `$elemMatch` entry for the path
+		const elemMatchCondition = { [path]: { $elemMatch: criteria } };
+
+		// Check if `$elemMatch` condition already exists in `$and`
+		const existingCondition = newSelector.$and.find((cond) =>
+			isEqual(cond[path]?.['$elemMatch'], criteria)
 		);
-	}
 
-	/**
-	 * Helper methods
-	 */
-	/**
-	 * Finds the selector(s) for a given field.
-	 */
-	findSelector(field: string): any {
-		if (this.fieldCache[`selector_${field}`] !== undefined) {
-			return this.fieldCache[`selector_${field}`];
+		if (!existingCondition) {
+			// Add new `$elemMatch` condition to `$and` array
+			newSelector.$and.push(elemMatchCondition);
 		}
 
-		const subkeyInfo = SUBKEY_FIELDS[field];
-		const subkey = subkeyInfo?.subkey;
+		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
+		this.currentRxQuery = this.collection.find(newMangoQuery);
 
-		let result;
-		if (subkey && this.whereClauses[field] instanceof Map) {
-			const clauses = Array.from(this.whereClauses[field].values());
-			result = clauses;
-		} else {
-			result = this.whereClauses[field];
-		}
-
-		this.fieldCache[`selector_${field}`] = result !== undefined ? result : null;
-
-		return result;
-	}
-
-	/**
-	 * Checks if the selector for a field matches a given value.
-	 */
-	hasSelector(field: string, value: any): boolean {
-		const cacheKey = `has_selector_${field}_${JSON.stringify(value)}`;
-		if (this.fieldCache[cacheKey] !== undefined) {
-			return this.fieldCache[cacheKey];
-		}
-
-		const selector = this.findSelector(field);
-		const result = isEqual(selector, value);
-
-		this.fieldCache[cacheKey] = result;
-
-		return result;
-	}
-
-	/**
-	 * Finds the ID(s) in the selector for a given field (e.g., 'categories').
-	 */
-	findElementSelectorID(field: string): any {
-		const cacheKey = `elementSelectorID_${field}`;
-		if (this.fieldCache[cacheKey] !== undefined) {
-			return this.fieldCache[cacheKey];
-		}
-
-		const fieldClauses = this.whereClauses[field];
-		let result;
-		if (fieldClauses && fieldClauses instanceof Map) {
-			result = Array.from(fieldClauses.keys());
-		} else if (fieldClauses?.$elemMatch?.id !== undefined) {
-			result = fieldClauses.$elemMatch.id;
-		} else {
-			result = undefined;
-		}
-
-		this.fieldCache[cacheKey] = result !== undefined ? result : null;
-
-		return result;
-	}
-
-	/**
-	 * Checks if a selector with a specific ID exists for a given field.
-	 */
-	hasElementSelectorID(field: string, id: any): boolean {
-		const cacheKey = `has_elementSelectorID_${field}_${id}`;
-		if (this.fieldCache[cacheKey] !== undefined) {
-			return this.fieldCache[cacheKey];
-		}
-
-		const fieldClauses = this.whereClauses[field];
-		let result = false;
-		if (fieldClauses && fieldClauses instanceof Map) {
-			result = fieldClauses.has(id);
-		} else if (fieldClauses?.$elemMatch?.id !== undefined) {
-			result = fieldClauses.$elemMatch.id === id;
-		}
-
-		this.fieldCache[cacheKey] = result;
-
-		return result;
-	}
-
-	/**
-	 * Finds the value of a meta_data selector by key.
-	 */
-	findMetaDataSelector(key: string): any {
-		const cacheKey = `meta_data_${key}`;
-		if (this.fieldCache[cacheKey] !== undefined) {
-			return this.fieldCache[cacheKey];
-		}
-
-		const metaDataClauses = this.whereClauses['meta_data'];
-		let result;
-		if (metaDataClauses && metaDataClauses instanceof Map) {
-			const clause = metaDataClauses.get(key);
-			if (clause && clause.$elemMatch) {
-				result = clause.$elemMatch.value;
-			} else {
-				result = undefined;
-			}
-		} else {
-			result = undefined;
-		}
-
-		this.fieldCache[cacheKey] = result !== undefined ? result : null;
-
-		return result;
-	}
-
-	/**
-	 * Checks if a meta_data selector with a specific key and value exists.
-	 */
-	hasMetaDataSelector(key: string, value: any): boolean {
-		const cacheKey = `has_meta_data_${key}_${JSON.stringify(value)}`;
-		if (this.fieldCache[cacheKey] !== undefined) {
-			return this.fieldCache[cacheKey];
-		}
-
-		const metaDataClauses = this.whereClauses['meta_data'];
-		let result = false;
-		if (metaDataClauses && metaDataClauses instanceof Map) {
-			const clause = metaDataClauses.get(key);
-			if (clause && clause.$elemMatch) {
-				result = clause.$elemMatch.value === value;
-			}
-		}
-
-		this.fieldCache[cacheKey] = result;
-
-		return result;
-	}
-
-	/**
-	 * Retrieves all attribute selectors.
-	 */
-	getAllAttributesSelectors() {
-		if (this.fieldCache['attributesSelectors'] !== undefined) {
-			return this.fieldCache['attributesSelectors'];
-		}
-
-		const attributeClauses = this.findSelector('attributes');
-		let result;
-		if (attributeClauses) {
-			result = attributeClauses
-				.map((clause) => clause?.$elemMatch)
-				.filter((attribute) => !!attribute?.option);
-		} else {
-			result = Query.EMPTY_ARRAY;
-		}
-
-		this.fieldCache['attributesSelectors'] = result;
-
-		return result;
-	}
-
-	/**
-	 * Finds the option of an attribute selector by name.
-	 */
-	findAttributesSelector({ name }: { name: string }) {
-		const cacheKey = `attributes_${name}`;
-		if (this.fieldCache[cacheKey] !== undefined) {
-			return this.fieldCache[cacheKey];
-		}
-
-		const attributeClauses = this.whereClauses['attributes'];
-		let result;
-		if (attributeClauses && attributeClauses instanceof Map) {
-			const clause = attributeClauses.get(name);
-			if (clause && clause.$elemMatch) {
-				result = clause.$elemMatch.option;
-			} else {
-				result = undefined;
-			}
-		} else {
-			result = undefined;
-		}
-
-		this.fieldCache[cacheKey] = result !== undefined ? result : null;
-
-		return result;
-	}
-
-	/**
-	 * Checks if an attribute selector with a specific name and option exists.
-	 */
-	hasAttributesSelector({ name, option }: { name: string; option: string }): boolean {
-		const cacheKey = `has_attributes_${name}_${option}`;
-		if (this.fieldCache[cacheKey] !== undefined) {
-			return this.fieldCache[cacheKey];
-		}
-
-		const attributeClauses = this.whereClauses['attributes'];
-		let result = false;
-		if (attributeClauses && attributeClauses instanceof Map) {
-			const clause = attributeClauses.get(name);
-			if (clause && clause.$elemMatch) {
-				result = clause.$elemMatch.option === option;
-			}
-		}
-
-		this.fieldCache[cacheKey] = result;
-
-		return result;
+		return this;
 	}
 }
