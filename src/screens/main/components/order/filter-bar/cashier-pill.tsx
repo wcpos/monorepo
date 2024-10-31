@@ -39,8 +39,7 @@ const CashierSearch = () => {
 		queryKeys: ['customers', 'cashier-select'],
 		collectionName: 'customers',
 		initialParams: {
-			sortBy: 'last_name',
-			sortDirection: 'asc',
+			sort: [{ last_name: 'asc' }],
 			selector: {
 				role: { $in: ['administrator', 'shop_manager', 'cashier'] },
 			},
@@ -86,13 +85,17 @@ export const CashierPill = ({ query, resource }: CashierPillProps) => {
 
 	/**
 	 * value is always a string when dealing with comboboxes
+	 *
+	 * @NOTE - meta_data is used for _pos_user and _pos_store, so we need multipleElemMatch
 	 */
 	return (
 		<Combobox
 			onValueChange={({ value }) => {
-				query.where('meta_data', {
-					$elemMatch: { key: '_pos_user', value: String(value) },
-				});
+				query
+					.removeElemMatch('meta_data', { key: '_pos_user' }) // clear any previous value
+					.where('meta_data')
+					.multipleElemMatch({ key: '_pos_user', value: String(value) })
+					.exec();
 			}}
 		>
 			<ComboboxTriggerPrimitive asChild>
@@ -101,9 +104,7 @@ export const CashierPill = ({ query, resource }: CashierPillProps) => {
 						size="xs"
 						leftIcon="userCrown"
 						removable={true}
-						onRemove={() =>
-							query.where('meta_data', { $elemMatch: { key: '_pos_user', value: null } })
-						}
+						onRemove={() => query.removeElemMatch('meta_data', { key: '_pos_user' }).exec()}
 					>
 						<ButtonText>{format(cashier)}</ButtonText>
 					</ButtonPill>

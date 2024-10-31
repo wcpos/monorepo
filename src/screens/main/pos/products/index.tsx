@@ -123,16 +123,14 @@ const POSProducts = ({ isColumn = false }) => {
 			queryKeys: ['products', { target: 'pos', type: 'relational' }],
 			collectionName: 'products',
 			initialParams: {
-				sortBy: uiSettings.sortBy,
-				sortDirection: uiSettings.sortDirection,
+				sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
 			},
 		},
 		{
 			queryKeys: ['variations', { target: 'pos', type: 'relational' }],
 			collectionName: 'variations',
 			initialParams: {
-				sortBy: 'id',
-				sortDirection: uiSettings.sortDirection,
+				sort: [{ id: uiSettings.sortDirection }],
 			},
 			endpoint: 'products/variations',
 			greedy: true,
@@ -148,7 +146,11 @@ const POSProducts = ({ isColumn = false }) => {
 	 *
 	 */
 	React.useEffect(() => {
-		query.where('stock_status', showOutOfStock ? undefined : 'instock');
+		if (showOutOfStock) {
+			query.removeWhere('stock_status').exec();
+		} else {
+			query.where('stock_status').equals('instock').exec();
+		}
 	}, [query, showOutOfStock]);
 
 	/**

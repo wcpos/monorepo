@@ -19,7 +19,7 @@ interface Props {
  */
 const OnSalePill = ({ query }: Props) => {
 	const isActive = useObservableEagerState(
-		query.params$.pipe(map(() => query.findSelector('on_sale')))
+		query.params$.pipe(map(() => query.getSelector('on_sale')))
 	);
 	const t = useT();
 
@@ -28,9 +28,9 @@ const OnSalePill = ({ query }: Props) => {
 			leftIcon="badgeDollar"
 			size="xs"
 			variant={isActive ? 'default' : 'muted'}
-			onPress={() => query.where('on_sale', isActive ? null : true)}
+			onPress={() => query.where('on_sale').equals(true).exec()}
 			removable={isActive}
-			onRemove={() => query.where('on_sale', null)}
+			onRemove={() => query.removeWhere('on_sale').exec()}
 		>
 			<ButtonText>{t('On Sale', { _tags: 'core' })}</ButtonText>
 		</ButtonPill>

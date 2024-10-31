@@ -21,8 +21,7 @@ export const TagSearch = () => {
 		queryKeys: ['products/tags'],
 		collectionName: 'products/tags',
 		initialParams: {
-			sortBy: 'name',
-			sortDirection: 'asc',
+			sort: [{ name: 'asc' }],
 		},
 	});
 

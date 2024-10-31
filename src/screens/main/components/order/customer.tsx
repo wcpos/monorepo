@@ -33,7 +33,7 @@ export const Customer = ({
 			<ButtonPill
 				variant="ghost-primary"
 				size="xs"
-				onPress={() => query.where('customer_id', customerID)}
+				onPress={() => query.where('customer_id').equals(customerID).exec()}
 			>
 				{format({ billing, shipping, id: customerID })}
 			</ButtonPill>

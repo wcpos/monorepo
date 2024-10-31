@@ -41,7 +41,7 @@ export const StockStatus = ({
 		<ButtonPill
 			size="xs"
 			variant={variant}
-			onPress={() => query.where('stock_status', stockStatus)}
+			onPress={() => query.where('stock_status').equals(stockStatus).exec()}
 		>
 			{getLabel(stockStatus)}
 		</ButtonPill>

@@ -34,7 +34,7 @@ export const ProductCategories = ({
 					variant="ghost-primary"
 					size="xs"
 					key={cat.id}
-					onPress={() => query.where('categories', { $elemMatch: { id: cat.id } })}
+					onPress={() => query.where('categories').elemMatch({ id: cat.id }).exec()}
 				>
 					{cat.name}
 				</ButtonPill>

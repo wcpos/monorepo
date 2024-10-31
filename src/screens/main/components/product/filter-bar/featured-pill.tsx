@@ -19,7 +19,7 @@ interface Props {
  */
 const FeaturedPill = ({ query }: Props) => {
 	const isActive = useObservableEagerState(
-		query.params$.pipe(map(() => query.findSelector('featured')))
+		query.params$.pipe(map(() => query.getSelector('featured')))
 	);
 	const t = useT();
 
@@ -28,9 +28,9 @@ const FeaturedPill = ({ query }: Props) => {
 			leftIcon="star"
 			size="xs"
 			variant={isActive ? 'default' : 'muted'}
-			onPress={() => query.where('featured', isActive ? null : true)}
+			onPress={() => query.where('featured').equals(true).exec()}
 			removable={isActive}
-			onRemove={() => query.where('featured', null)}
+			onRemove={() => query.removeWhere('featured').exec()}
 		>
 			<ButtonText>{t('Featured', { _tags: 'core' })}</ButtonText>
 		</ButtonPill>

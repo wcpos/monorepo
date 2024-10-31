@@ -35,7 +35,7 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 	return (
 		<Combobox
 			onValueChange={({ value }) => {
-				query.where('customer_id', toNumber(value));
+				query.where('customer_id').equals(toNumber(value)).exec();
 			}}
 		>
 			<ComboboxTriggerPrimitive asChild>
@@ -44,7 +44,7 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 						size="xs"
 						leftIcon="user"
 						removable={true}
-						onRemove={() => query.where('customer_id', null)}
+						onRemove={() => query.removeWhere('customer_id').exec()}
 					>
 						<ButtonText>{format(customer)}</ButtonText>
 					</ButtonPill>

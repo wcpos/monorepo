@@ -149,16 +149,14 @@ const Products = () => {
 			queryKeys: ['products', { target: 'page', type: 'relational' }],
 			collectionName: 'products',
 			initialParams: {
-				sortBy: uiSettings.sortBy,
-				sortDirection: uiSettings.sortDirection,
+				sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
 			},
 		},
 		{
 			queryKeys: ['variations', { target: 'page', type: 'relational' }],
 			collectionName: 'variations',
 			initialParams: {
-				sortBy: 'id',
-				sortDirection: uiSettings.sortDirection,
+				sort: [{ id: 'asc' }],
 			},
 			endpoint: 'products/variations',
 			greedy: true,

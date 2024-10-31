@@ -52,9 +52,10 @@ export const Cashier = ({ row }: CellContext<{ document: OrderDocument }, 'cashi
 			variant="ghost-secondary"
 			size="xs"
 			onPress={() =>
-				query.where('meta_data', {
-					$elemMatch: { key: '_pos_user', value: String(cashierID) },
-				})
+				query
+					.where('meta_data')
+					.multipleElemMatch({ key: '_pos_user', value: String(cashierID) })
+					.exec()
 			}
 		>
 			{cashierName}

@@ -29,10 +29,10 @@ export const FilterBar = () => {
 	const { query } = useReports();
 	const guestCustomer = useGuestCustomer();
 	const customerID = useObservableEagerState(
-		query.params$.pipe(map(() => query.findSelector('customer_id')))
+		query.params$.pipe(map(() => query.getSelector('customer_id')))
 	);
 	const cashierID = useObservableEagerState(
-		query.params$.pipe(map(() => query.findMetaDataSelector('_pos_user')))
+		query.params$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
 	);
 	const { wpCredentials } = useAppState();
 
@@ -49,7 +49,7 @@ export const FilterBar = () => {
 	 */
 	React.useEffect(() => {
 		if (customerID) {
-			customerQuery.where('id', customerID);
+			customerQuery.where('id').equals(toNumber(customerID)).exec();
 		}
 	}, [customerID, customerQuery]);
 
@@ -66,7 +66,7 @@ export const FilterBar = () => {
 	 */
 	React.useEffect(() => {
 		if (cashierID) {
-			cashierQuery.where('id', toNumber(cashierID));
+			cashierQuery.where('id').equals(toNumber(cashierID)).exec();
 		}
 	}, [cashierID, cashierQuery]);
 
@@ -108,9 +108,6 @@ export const FilterBar = () => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(([id]) => {
-					if (id === 0) {
-						return of(guestCustomer);
-					}
 					if (!id) {
 						return of(null);
 					}
@@ -121,7 +118,7 @@ export const FilterBar = () => {
 					);
 				})
 			),
-		[parseInt(cashierID, 10)]
+		[cashierID]
 	);
 
 	/**
@@ -147,10 +144,11 @@ export const FilterBar = () => {
 	 */
 	const today = React.useMemo(() => new Date(), []);
 	const removeDateRangeFilter = React.useCallback(() => {
-		query.where('date_created_gmt', {
-			$gte: convertLocalDateToUTCString(startOfDay(today)),
-			$lte: convertLocalDateToUTCString(endOfDay(today)),
-		});
+		query
+			.where('date_created_gmt')
+			.gte(convertLocalDateToUTCString(startOfDay(today)))
+			.lte(convertLocalDateToUTCString(endOfDay(today)))
+			.exec();
 	}, [query, today]);
 
 	/**

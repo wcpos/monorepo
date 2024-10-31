@@ -54,8 +54,7 @@ const Customers = () => {
 		queryKeys: ['customers'],
 		collectionName: 'customers',
 		initialParams: {
-			sortBy: uiSettings.sortBy,
-			sortDirection: uiSettings.sortDirection,
+			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
 		},
 	});
 

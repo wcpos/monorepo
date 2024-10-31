@@ -21,7 +21,7 @@ interface Props {
  */
 export const StockStatusPill = ({ query }: Props) => {
 	const selected = useObservableEagerState(
-		query.params$.pipe(map(() => query.findSelector('stock_status')))
+		query.params$.pipe(map(() => query.getSelector('stock_status')))
 	);
 	const t = useT();
 	const isActive = !!selected;
@@ -40,14 +40,17 @@ export const StockStatusPill = ({ query }: Props) => {
 	 *
 	 */
 	return (
-		<Select value={value} onValueChange={({ value }) => query.where('stock_status', value)}>
+		<Select
+			value={value}
+			onValueChange={({ value }) => query.where('stock_status').equals(value).exec()}
+		>
 			<SelectPrimitive.Trigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="warehouseFull"
 					variant={isActive ? 'default' : 'muted'}
 					removable={isActive}
-					onRemove={() => query.where('stock_status', null)}
+					onRemove={() => query.removeWhere('stock_status').exec()}
 				>
 					<ButtonText>{value?.label || t('Stock Status', { _tags: 'core' })}</ButtonText>
 				</ButtonPill>

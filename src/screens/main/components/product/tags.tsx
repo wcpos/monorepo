@@ -33,7 +33,7 @@ export const ProductTags = ({ row }: CellContext<{ document: ProductDocument }, 
 						key={tag.id}
 						size="xs"
 						variant="ghost-secondary"
-						onPress={() => query.where('tags', { $elemMatch: { id: tag.id } })}
+						onPress={() => query.where('tags').elemMatch({ id: tag.id }).exec()}
 					>
 						{tag.name}
 					</ButtonPill>

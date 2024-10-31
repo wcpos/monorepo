@@ -21,8 +21,7 @@ export const CustomerSearch = ({ withGuest = false }: { withGuest?: boolean }) =
 		queryKeys: ['customers', 'customer-select'],
 		collectionName: 'customers',
 		initialParams: {
-			sortBy: 'last_name',
-			sortDirection: 'asc',
+			sort: [{ last_name: 'asc' }],
 		},
 	});
 

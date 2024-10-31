@@ -34,13 +34,13 @@ interface Props {
 export const StorePill = ({ resource, query }: Props) => {
 	const stores = useObservableSuspense(resource);
 	const selectedCreatedVia = useObservableEagerState(
-		query.params$.pipe(map(() => query.findSelector('created_via')))
+		query.params$.pipe(map(() => query.getSelector('created_via')))
 	);
 	/**
 	 * Selected store ID as a string
 	 */
 	const selectedStoreID = useObservableEagerState(
-		query.params$.pipe(map(() => query.findMetaDataSelector('_pos_store')))
+		query.params$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_store')))
 	);
 	const t = useT();
 	const isActive = !!(selectedCreatedVia || selectedStoreID);
@@ -71,18 +71,23 @@ export const StorePill = ({ resource, query }: Props) => {
 	}, [selected, stores, t]);
 
 	/**
-	 *
+	 * @NOTE - meta_data is used for _pos_user and _pos_store, so we need multipleElemMatch
 	 */
 	const handleSelect = React.useCallback(
 		({ value, label }) => {
 			if (isString(value)) {
-				query.where('meta_data', { $elemMatch: { key: '_pos_store', value: null } });
-				query.where('created_via', value);
+				query
+					.removeElemMatch('meta_data', { key: '_pos_store' })
+					.where('created_via')
+					.equals(value)
+					.exec();
 			} else {
-				query.where('created_via', null);
-				query.where('meta_data', {
-					$elemMatch: { key: '_pos_store', value: String(value) },
-				});
+				query
+					.removeWhere('created_via')
+					.removeElemMatch('meta_data', { key: '_pos_store' }) // clear any previous value
+					.where('meta_data')
+					.multipleElemMatch({ key: '_pos_store', value: String(value) })
+					.exec();
 			}
 		},
 		[query]
@@ -92,8 +97,7 @@ export const StorePill = ({ resource, query }: Props) => {
 	 *
 	 */
 	const handleRemove = React.useCallback(() => {
-		query.where('created_via', null);
-		query.where('meta_data', { $elemMatch: { key: '_pos_store', value: null } });
+		query.removeWhere('created_via').removeElemMatch('meta_data', { key: '_pos_store' }).exec();
 	}, [query]);
 
 	/**

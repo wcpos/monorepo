@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import toNumber from 'lodash/toNumber';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
@@ -29,11 +30,14 @@ export const CategoryPill = ({ query, resource }: Props) => {
 	const isActive = !!category;
 
 	/**
-	 *
+	 * @NOTE - we need to convert the value to a number because the value is a string
 	 */
 	const handleSelect = React.useCallback(
 		({ value }) => {
-			query.where('categories', { $elemMatch: { id: parseInt(value, 10) } });
+			query
+				.where('categories')
+				.elemMatch({ id: toNumber(value) })
+				.exec();
 		},
 		[query]
 	);
@@ -49,7 +53,9 @@ export const CategoryPill = ({ query, resource }: Props) => {
 					leftIcon="folder"
 					variant={isActive ? 'default' : 'muted'}
 					removable={isActive}
-					onRemove={() => query.where('categories', null)}
+					onRemove={() =>
+						query.where('categories').removeElemMatch('categories', { id: category?.id }).exec()
+					}
 				>
 					<ButtonText>{category ? category.name : t('Category', { _tags: 'core' })}</ButtonText>
 				</ButtonPill>

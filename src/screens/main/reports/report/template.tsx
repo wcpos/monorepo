@@ -38,7 +38,7 @@ export const ZReport = () => {
 	} = calculateTotals({ orders: selectedOrders, num_decimals });
 
 	const selectedDateRange = useObservableEagerState(
-		query.params$.pipe(map(() => query.findSelector('date_created_gmt')))
+		query.params$.pipe(map(() => query.getSelector('date_created_gmt')))
 	);
 
 	const { format: formatCurrency } = useCurrencyFormat();

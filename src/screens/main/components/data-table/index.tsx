@@ -125,7 +125,7 @@ const DataTable = <TDocument extends DocumentType>({
 	const handleSortingChange = React.useCallback(
 		({ sortBy, sortDirection }) => {
 			sorting.current = { sortBy, sortDirection };
-			query.sort(sortBy, sortDirection);
+			query.sort([{ [sortBy]: sortDirection }]).exec();
 		},
 		[query]
 	);

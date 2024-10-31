@@ -36,19 +36,16 @@ const ReportsWithProviders = () => {
 		queryKeys: ['orders', 'reports'],
 		collectionName: 'orders',
 		initialParams: {
-			sortBy: uiSettings.sortBy,
-			sortDirection: uiSettings.sortDirection,
+			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
 			selector: {
+				status: 'completed',
+				date_created_gmt: {
+					$gte: convertLocalDateToUTCString(startOfDay(today)),
+					$lte: convertLocalDateToUTCString(endOfDay(today)),
+				},
 				$and: [
-					{ status: 'completed' },
 					{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } },
 					{ meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } } },
-					{
-						date_created_gmt: {
-							$gte: convertLocalDateToUTCString(startOfDay(today)),
-							$lte: convertLocalDateToUTCString(endOfDay(today)),
-						},
-					},
 				],
 			},
 		},

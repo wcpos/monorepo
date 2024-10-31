@@ -73,7 +73,7 @@ export const Status = ({ row }: CellContext<{ document: OrderDocument }, 'status
 				<IconButton
 					name={iconName}
 					variant={iconType}
-					onPress={() => query.where('status', status)}
+					onPress={() => query.where('status').equals(status).exec()}
 				/>
 			</TooltipTrigger>
 			<TooltipContent side="right">

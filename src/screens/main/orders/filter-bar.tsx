@@ -23,10 +23,10 @@ import { useGuestCustomer } from '../hooks/use-guest-customer';
 const FilterBar = ({ query }) => {
 	const guestCustomer = useGuestCustomer();
 	const customerID = useObservableEagerState(
-		query.params$.pipe(map(() => query.findSelector('customer_id')))
+		query.params$.pipe(map(() => query.getSelector('customer_id')))
 	);
 	const cashierID = useObservableEagerState(
-		query.params$.pipe(map(() => query.findMetaDataSelector('_pos_user')))
+		query.params$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
 	);
 	const { wpCredentials } = useAppState();
 
@@ -39,11 +39,11 @@ const FilterBar = ({ query }) => {
 	});
 
 	/**
-	 *
+	 * NOTE: customerID can be 0 which is a valid customer ID
 	 */
 	React.useEffect(() => {
-		if (customerID) {
-			customerQuery.where('id', customerID);
+		if (customerID !== null || customerID !== undefined) {
+			customerQuery.where('id').equals(customerID).exec();
 		}
 	}, [customerID, customerQuery]);
 
@@ -60,7 +60,7 @@ const FilterBar = ({ query }) => {
 	 */
 	React.useEffect(() => {
 		if (cashierID) {
-			cashierQuery.where('id', parseInt(cashierID, 10));
+			cashierQuery.where('id').equals(toNumber(cashierID)).exec();
 		}
 	}, [cashierID, cashierQuery]);
 

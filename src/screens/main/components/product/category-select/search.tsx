@@ -21,8 +21,7 @@ export const CategorySearch = () => {
 		queryKeys: ['products/categories'],
 		collectionName: 'products/categories',
 		initialParams: {
-			sortBy: 'name',
-			sortDirection: 'asc',
+			sort: [{ name: 'asc' }],
 		},
 	});
 

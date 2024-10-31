@@ -45,6 +45,71 @@ export const Variations = ({ row, onLayout }: Props) => {
 	});
 
 	/**
+	 *
+	 */
+	React.useEffect(() => {
+		query.collection
+			.find({
+				selector: {
+					$and: [
+						{ id: { $in: parent.variations } },
+						{
+							$or: [
+								{
+									attributes: {
+										$not: {
+											$elemMatch: {
+												id: 1,
+												name: 'Color',
+											},
+										},
+									},
+								},
+								{
+									attributes: {
+										$elemMatch: {
+											id: 1,
+											name: 'Color',
+											option: 'Green',
+										},
+									},
+								},
+							],
+						},
+						{
+							$or: [
+								{
+									attributes: {
+										$not: {
+											$elemMatch: {
+												id: 2,
+												name: 'Size',
+											},
+										},
+									},
+								},
+								{
+									attributes: {
+										$elemMatch: {
+											id: 2,
+											name: 'Size',
+											option: 'Large',
+										},
+									},
+								},
+							],
+						},
+					],
+				},
+			})
+			.exec()
+			.then((result) => {
+				debugger;
+				console.log('result', result);
+			});
+	}, [parent.variations, query]);
+
+	/**
 	 * Clear the query when the table unmounts
 	 */
 	React.useEffect(() => {

@@ -67,8 +67,7 @@ const Orders = () => {
 		queryKeys: ['orders'],
 		collectionName: 'orders',
 		initialParams: {
-			sortBy: uiSettings.sortBy,
-			sortDirection: uiSettings.sortDirection,
+			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
 			selector: {
 				$and: [
 					{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } },

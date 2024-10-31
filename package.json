@@ -14,7 +14,7 @@
     "clear-jest": "jest --clearCache"
   },
   "dependencies": {
-    "@date-fns/tz": "^1.1.2",
+    "@date-fns/tz": "^1.2.0",
     "@date-fns/utc": "^2.1.0",
     "@hookform/error-message": "^2.0.1",
     "@hookform/resolvers": "^3.9.1",
@@ -68,7 +68,7 @@
     "react-test-renderer": "18.3.1",
     "react-thermal-printer": "^0.18.1",
     "react-to-print": "^3.0.2",
-    "recharts": "^2.13.0",
+    "recharts": "^2.13.2",
     "rxjs": "7.8.1",
     "semver": "^7.6.3",
     "use-deep-compare-effect": "^1.8.1",

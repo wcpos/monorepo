@@ -36,9 +36,9 @@ const FilterBar = ({ query }: Props) => {
 	 */
 	const selectedCategoryResource = React.useMemo(() => {
 		const selectedCategory$ = query.params$.pipe(
-			startWith(query.findElementSelectorID('categories')),
+			startWith(query.getElemMatchId('categories')),
 			switchMap(() => {
-				const categoryFilterID = query.findElementSelectorID('categories');
+				const categoryFilterID = query.getElemMatchId('categories');
 				if (categoryFilterID) {
 					return categoryCollection.findOne({ selector: { id: categoryFilterID } }).$.pipe(
 						tap((doc) => {
@@ -60,9 +60,9 @@ const FilterBar = ({ query }: Props) => {
 	 */
 	const selectedTagResource = React.useMemo(() => {
 		const selectedTag$ = query.params$.pipe(
-			startWith(query.findElementSelectorID('tags')),
+			startWith(query.getElemMatchId('tags')),
 			switchMap(() => {
-				const tagFilterID = query.findElementSelectorID('tags');
+				const tagFilterID = query.getElemMatchId('tags');
 				if (tagFilterID) {
 					return tagCollection.findOne({ selector: { id: tagFilterID } }).$.pipe(
 						tap((doc) => {

@@ -47,8 +47,7 @@ export const Logs = () => {
 		queryKeys: ['logs'],
 		collectionName: 'logs',
 		initialParams: {
-			sortBy: uiSettings.sortBy,
-			sortDirection: uiSettings.sortDirection,
+			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
 		},
 	});
 

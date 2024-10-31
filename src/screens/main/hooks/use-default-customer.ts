@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservable } from 'observable-hooks';
-import { map, shareReplay, startWith } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 
 import { useQuery } from '@wcpos/query';
 
@@ -27,7 +27,7 @@ export const useDefaultCustomer = () => {
 	 *
 	 */
 	React.useEffect(() => {
-		query.where('id', defaultCustomerID);
+		query.where('id').equals(defaultCustomerID).exec();
 	}, [defaultCustomerID, query]);
 
 	/**

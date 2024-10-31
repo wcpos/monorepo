@@ -30,7 +30,7 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 	const t = useT();
 	const triggerRef = React.useRef(null);
 	const selectedDateRange = useObservableEagerState(
-		query.params$.pipe(map(() => query.findSelector('date_created_gmt')))
+		query.params$.pipe(map(() => query.getSelector('date_created_gmt')))
 	);
 	const isActive = !!(selectedDateRange && selectedDateRange?.$gte && selectedDateRange?.$lte);
 	const { formatDate } = useLocalDate();
@@ -75,10 +75,11 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 
 			const { from, to } = range;
 
-			query.where('date_created_gmt', {
-				$gte: convertLocalDateToUTCString(from),
-				$lte: convertLocalDateToUTCString(to),
-			});
+			query
+				.where('date_created_gmt')
+				.gte(convertLocalDateToUTCString(from))
+				.lte(convertLocalDateToUTCString(to))
+				.exec();
 
 			if (triggerRef.current) {
 				triggerRef.current?.close();
@@ -99,7 +100,7 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 						if (onRemove) {
 							onRemove();
 						} else {
-							query.where('date_created_gmt', null);
+							query.removeWhere('date_created_gmt').exec();
 						}
 					}}
 				>

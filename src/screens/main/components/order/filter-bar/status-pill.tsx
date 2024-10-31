@@ -20,7 +20,7 @@ interface Props {
  */
 export const StatusPill = ({ query }: Props) => {
 	const selected = useObservableEagerState(
-		query.params$.pipe(map(() => query.findSelector('status')))
+		query.params$.pipe(map(() => query.getSelector('status')))
 	);
 	const t = useT();
 	const isActive = !!selected;
@@ -35,7 +35,7 @@ export const StatusPill = ({ query }: Props) => {
 		<Select
 			value={value}
 			onOpenChange={setOpen}
-			onValueChange={({ value }) => query.where('status', value)}
+			onValueChange={({ value }) => query.where('status').equals(value).exec()}
 		>
 			<SelectPrimitive.Trigger asChild>
 				<ButtonPill
@@ -44,7 +44,7 @@ export const StatusPill = ({ query }: Props) => {
 					variant={isActive ? 'default' : 'muted'}
 					onPress={() => setOpen(!open)}
 					removable={isActive}
-					onRemove={() => query.where('status', null)}
+					onRemove={() => query.removeWhere('status').exec()}
 				>
 					<ButtonText>{value?.label || t('Status', { _tags: 'core' })}</ButtonText>
 				</ButtonPill>
