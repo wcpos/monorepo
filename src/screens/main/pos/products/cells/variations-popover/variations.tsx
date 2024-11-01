@@ -61,11 +61,15 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	);
 
 	/**
-	 *
+	 * @NOTE - buttons can toggle the variation match off (removeVariationMatch) when the option is null
 	 */
 	const handleSelect = React.useCallback(
 		(attribute) => {
-			query.variationMatch(attribute).exec();
+			if (attribute.option) {
+				query.variationMatch(attribute).exec();
+			} else {
+				query.removeVariationMatch({ id: attribute.id, name: attribute.name }).exec();
+			}
 		},
 		[query]
 	);

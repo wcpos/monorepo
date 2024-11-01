@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Suspense } from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
 
 import Variations from './variations';
@@ -35,7 +37,13 @@ const VariationsPopover = ({ parent, addToCart }) => {
 		]
 	);
 
-	return <Variations query={query} parent={parent} addToCart={addToCart} />;
+	return (
+		<ErrorBoundary>
+			<Suspense>
+				<Variations query={query} parent={parent} addToCart={addToCart} />
+			</Suspense>
+		</ErrorBoundary>
+	);
 };
 
 export default VariationsPopover;
