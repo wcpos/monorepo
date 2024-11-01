@@ -1,5 +1,9 @@
+import cloneDeep from 'lodash/cloneDeep';
 import debounce from 'lodash/debounce';
+import get from 'lodash/get';
 import isEqual from 'lodash/isEqual';
+import pick from 'lodash/pick';
+import set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
 import { Subject, Subscription, BehaviorSubject, ReplaySubject } from 'rxjs';
 import { tap, map, switchMap, distinctUntilChanged } from 'rxjs/operators';
@@ -11,7 +15,6 @@ import type {
 	RxDocument,
 	MangoQuery,
 	RxQuery,
-	MangoQuerySortDirection,
 	MangoQuerySortPart,
 	MangoQuerySelector,
 } from 'rxdb';
@@ -69,7 +72,7 @@ interface QueryMethods<DocType> {
 	or(array: any[]): this;
 	nor(array: any[]): this;
 	and(array: any[]): this;
-	sort(sortBy: keyof DocType | MangoQuerySortPart<DocType>): this;
+	sort(sortBy: MangoQuerySortPart<DocType>): this;
 	skip(skipValue: number): this;
 	limit(limitValue: number): this;
 	search(searchTerm: string, fields: (keyof DocType)[]): this;
@@ -94,6 +97,11 @@ export class Query<T extends RxCollection>
 	public readonly errorSubject: Subject<Error>;
 	public readonly searchInstancePromise: Promise<void>;
 	public readonly locale: string;
+	public readonly endpoint; // @FIXME - this is used in the replication state but not in this class
+	private _variationMatchesCache = new WeakMap<
+		RxQuery,
+		{ id: number; name: string; option: string }[]
+	>();
 
 	/**
 	 *
@@ -136,6 +144,7 @@ export class Query<T extends RxCollection>
 		this.errorSubject = errorSubject;
 		this.searchInstancePromise = collection.initSearch(locale);
 		this.locale = locale;
+		this.endpoint = endpoint; // @FIXME - this is used in the replication state but not in this class
 
 		this.currentRxQuery = collection.find(initialParams);
 		if (autoExec) {
@@ -148,6 +157,7 @@ export class Query<T extends RxCollection>
 	 */
 	exec() {
 		this.subjects.rxQuery.next(this.currentRxQuery);
+		this.subjects.params.next(this.currentRxQuery.mangoQuery);
 		this.startFindSubscription();
 	}
 
@@ -191,10 +201,10 @@ export class Query<T extends RxCollection>
 	 */
 	get _find$() {
 		return this.rxQuery$.pipe(
-			tap((rxQuery) => {
-				// When to emit the updated params?
-				this.subjects.params.next(rxQuery?.mangoQuery);
-			}),
+			// tap((rxQuery) => {
+			// 	console.log('rxQuery', rxQuery?.mangoQuery);
+			// 	// When to emit the updated params?
+			// }),
 			switchMap((rxQuery) => {
 				const startTime = performance.now();
 
@@ -206,7 +216,7 @@ export class Query<T extends RxCollection>
 							elapsed,
 							searchActive: false,
 							count: result.length,
-							hits: result.map((doc) => ({
+							hits: result.map((doc: DocumentType<T>) => ({
 								id: doc[this.primaryKey],
 								document: doc,
 							})),
@@ -325,8 +335,10 @@ export class Query<T extends RxCollection>
 		return this;
 	}
 
-	public sort(sortBy: keyof DocumentType<T> | MangoQuerySortPart<DocumentType<T>>): this {
-		this.currentRxQuery = this.currentRxQuery.sort(sortBy);
+	public sort(sortBy: MangoQuerySortPart<DocumentType<T>>): this {
+		const currentMangoQuery = this.currentRxQuery.mangoQuery;
+		const newMangoQuery = { ...currentMangoQuery, sort: sortBy };
+		this.currentRxQuery = this.collection.find(newMangoQuery);
 		return this;
 	}
 
@@ -360,35 +372,86 @@ export class Query<T extends RxCollection>
 	 */
 	public removeWhere(field: string): this {
 		const currentMangoQuery = this.currentRxQuery.mangoQuery;
-		const newSelector = { ...currentMangoQuery.selector };
-		delete newSelector[field];
-		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
+		const currentSelector = get(currentMangoQuery, ['selector']);
 
+		if (!currentSelector) {
+			return this;
+		}
+
+		const newSelector = cloneDeep(currentSelector);
+
+		// Handle simple field deletion
+		delete newSelector[field];
+
+		// Handle $and array if it exists
+		if (Array.isArray(newSelector.$and)) {
+			newSelector.$and = newSelector.$and.filter((condition) => {
+				if (condition[field]) return false;
+
+				if (condition.$elemMatch && condition.$elemMatch[field]) return false;
+
+				if (Array.isArray(condition.$or)) {
+					const hasField = condition.$or.some(
+						(orClause) =>
+							orClause[field] ||
+							get(orClause, [field, '$elemMatch']) ||
+							get(orClause, [field, '$not', '$elemMatch'])
+					);
+					return !hasField;
+				}
+
+				return true;
+			});
+
+			// Remove empty $and array
+			if (newSelector.$and.length === 0) {
+				delete newSelector.$and;
+			}
+		}
+
+		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
 		this.currentRxQuery = this.collection.find(newMangoQuery);
 		return this;
 	}
 
 	public removeElemMatch(field: string, matchCriteria: Partial<any>): this {
 		const currentMangoQuery = this.currentRxQuery.mangoQuery;
-		let newSelector = { ...currentMangoQuery.selector };
+		const currentSelector = get(currentMangoQuery, ['selector']);
+
+		if (!currentSelector) {
+			return this;
+		}
+
+		let newSelector = cloneDeep(currentSelector);
 
 		// Function to check if a condition matches the elemMatch to remove
-		const matchesCondition = (condition: any): boolean =>
-			condition[field]?.$elemMatch &&
-			Object.keys(matchCriteria).every(
-				(key) => condition[field].$elemMatch[key] === matchCriteria[key]
+		const matchesCondition = (condition: any): boolean => {
+			const elemMatch = get(condition, [field, '$elemMatch']);
+			return (
+				elemMatch &&
+				Object.keys(matchCriteria).every((key) => get(elemMatch, key) === matchCriteria[key])
 			);
+		};
 
-		if (Array.isArray(newSelector.$and)) {
-			newSelector.$and = newSelector.$and.filter((cond) => !matchesCondition(cond));
-			if (newSelector.$and.length === 1) {
-				const [singleCondition] = newSelector.$and;
+		const andConditions = get(newSelector, '$and', []);
+		if (andConditions.length > 0) {
+			// Filter out matching conditions from $and array
+			const filteredConditions = andConditions.filter((cond) => !matchesCondition(cond));
+
+			if (filteredConditions.length === 0) {
+				// If no conditions left, remove $and
+				delete newSelector.$and;
+			} else if (filteredConditions.length === 1) {
+				// If only one condition left, flatten it
+				const [singleCondition] = filteredConditions;
 				newSelector = { ...newSelector, ...singleCondition };
 				delete newSelector.$and;
-			} else if (newSelector.$and.length === 0) {
-				delete newSelector.$and;
+			} else {
+				// Multiple conditions remain
+				newSelector.$and = filteredConditions;
 			}
 		} else if (matchesCondition(newSelector)) {
+			// Check direct selector match
 			delete newSelector[field];
 		}
 
@@ -398,33 +461,224 @@ export class Query<T extends RxCollection>
 	}
 
 	public multipleElemMatch(criteria: any): this {
-		const path = this.currentRxQuery.other.queryBuilderPath;
-
+		const path = get(this.currentRxQuery, ['other', 'queryBuilderPath']);
 		const currentMangoQuery = this.currentRxQuery.mangoQuery;
-		const currentSelector = currentMangoQuery.selector || {};
-		const newSelector = { ...currentSelector };
+		const currentSelector = get(currentMangoQuery, 'selector', {});
+		const newSelector = cloneDeep(currentSelector);
+
+		if (!path) {
+			throw new Error('No path provided for multipleElemMatch');
+		}
 
 		// Ensure `$and` array exists within the selector
-		if (!newSelector.$and) {
-			newSelector.$and = [];
+		if (!Array.isArray(get(newSelector, '$and'))) {
+			set(newSelector, '$and', []);
 		}
 
 		// Create an `$elemMatch` entry for the path
 		const elemMatchCondition = { [path]: { $elemMatch: criteria } };
+		const andConditions = get(newSelector, '$and', []);
 
 		// Check if `$elemMatch` condition already exists in `$and`
-		const existingCondition = newSelector.$and.find((cond) =>
-			isEqual(cond[path]?.['$elemMatch'], criteria)
+		const existingCondition = andConditions.find((cond) =>
+			isEqual(get(cond, [path, '$elemMatch']), criteria)
 		);
 
 		if (!existingCondition) {
-			// Add new `$elemMatch` condition to `$and` array
-			newSelector.$and.push(elemMatchCondition);
+			(andConditions as any[]).push(elemMatchCondition);
+			set(newSelector, '$and', andConditions);
 		}
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
 		this.currentRxQuery = this.collection.find(newMangoQuery);
 
 		return this;
+	}
+
+	/**
+	 * Special case for WooCommerce variations where we want to match products that either:
+	 * 1. Have the specified attribute with the specified value, OR
+	 * 2. Don't have the attribute at all (WooCommerce "any" attribute)
+	 */
+	public variationMatch(match: { id: number; name: string; option: string }): this {
+		// Remove any existing variation match for this attribute
+		this.removeVariationMatch({ id: match.id, name: match.name });
+
+		const currentMangoQuery = this.currentRxQuery.mangoQuery;
+		const currentSelector = get(currentMangoQuery, 'selector', {});
+		const newSelector = cloneDeep(currentSelector);
+
+		// Ensure `$and` array exists within the selector
+		if (!Array.isArray(get(newSelector, '$and'))) {
+			set(newSelector, '$and', []);
+		}
+
+		// Create the $or condition for this attribute
+		const orCondition = {
+			$or: [
+				{
+					attributes: {
+						$not: {
+							$elemMatch: {
+								id: match.id,
+								name: match.name,
+							},
+						},
+					},
+				},
+				{
+					attributes: {
+						$elemMatch: match,
+					},
+				},
+			],
+		};
+
+		newSelector.$and.push(orCondition);
+
+		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
+		this.currentRxQuery = this.collection.find(newMangoQuery);
+
+		return this;
+	}
+
+	public removeVariationMatch(match: { id: number; name: string }): this {
+		const currentMangoQuery = this.currentRxQuery.mangoQuery;
+		const currentSelector = get(currentMangoQuery, 'selector', {});
+		const newSelector = cloneDeep(currentSelector);
+		const andConditions = get(newSelector, '$and', []);
+
+		// If there's no $and array, nothing to remove
+		if (!Array.isArray(andConditions)) {
+			return this;
+		}
+
+		// Filter out the matching $or condition
+		set(
+			newSelector,
+			'$and',
+			andConditions.filter((condition) => {
+				if (!get(condition, '$or')) return true; // Use get for optional chaining
+
+				const matchesAttribute = (condition.$or as any[]).some((orClause) => {
+					const elemMatch =
+						get(orClause, ['attributes', '$elemMatch']) ||
+						get(orClause, ['attributes', '$not', '$elemMatch']);
+					return elemMatch && isEqual(pick(elemMatch, ['id', 'name']), match);
+				});
+				return !matchesAttribute;
+			})
+		);
+
+		// If $and array is empty, create a new selector without it
+		if (newSelector.$and.length === 0) {
+			const { $and, ...remainingSelector } = newSelector;
+			const newMangoQuery = { ...currentMangoQuery, selector: remainingSelector };
+			this.currentRxQuery = this.collection.find(newMangoQuery);
+			return this;
+		}
+
+		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
+		// this.collection._queryCache._map = new Map();
+		this.currentRxQuery = this.collection.find(newMangoQuery);
+
+		return this;
+	}
+
+	/**
+	 * Helper method to retrieve a specific selector from the current query.
+	 * @param path - The field path, e.g., "stock_status"
+	 * @returns The selector value, or `undefined` if not found.
+	 */
+	public getSelector(path: string): MangoQuerySelector<any> | undefined {
+		return get(this.currentRxQuery, ['mangoQuery', 'selector', path]);
+	}
+
+	/**
+	 * Helper method to retrieve the `id` from a specific `$elemMatch` condition.
+	 * @param path - The field path, e.g., "categories"
+	 * @returns The `id` value from the `$elemMatch` condition, or `undefined` if not found.
+	 */
+	public getElemMatchId(path: string): number | undefined {
+		return get(this.currentRxQuery, ['mangoQuery', 'selector', path, '$elemMatch', 'id']);
+	}
+
+	/**
+	 * Helper method to retrieve the `value` from an `$elemMatch` with a specific `key` in `meta_data`.
+	 * @param key - The `key` to find within the `meta_data` field, e.g., "_pos_user"
+	 * @returns The `value` associated with the `key` in `meta_data`, or `undefined` if not found.
+	 */
+	public getMetaDataElemMatchValue(key: string): string | undefined {
+		// Check direct meta_data.$elemMatch
+		const directMatch = get(this.currentRxQuery, [
+			'mangoQuery',
+			'selector',
+			'meta_data',
+			'$elemMatch',
+		]);
+		if (directMatch?.key === key) {
+			return directMatch.value;
+		}
+
+		// Check in $and array
+		const andConditions = get(this.currentRxQuery, ['mangoQuery', 'selector', '$and'], []);
+		for (const condition of andConditions) {
+			const elemMatch = get(condition, ['meta_data', '$elemMatch']);
+			if (elemMatch?.key === key) {
+				return elemMatch.value;
+			}
+		}
+
+		return undefined;
+	}
+
+	/**
+	 * Get all variation matches from the current selector
+	 */
+	getVariationMatches() {
+		if (this._variationMatchesCache.has(this.currentRxQuery)) {
+			return this._variationMatchesCache.get(this.currentRxQuery)!;
+		}
+
+		const andConditions = get(this.currentRxQuery, ['mangoQuery', 'selector', '$and']);
+		if (!andConditions) {
+			const matches = [];
+			this._variationMatchesCache.set(this.currentRxQuery, matches);
+			return matches;
+		}
+
+		const matches = andConditions.reduce(
+			(matches: { id: number; name: string; option: string }[], condition) => {
+				if (condition?.$or && condition.$or.length === 2) {
+					const elemMatch = get(condition, ['$or', 1, 'attributes', '$elemMatch']);
+					if (elemMatch) {
+						matches.push(elemMatch);
+					}
+				}
+				return matches;
+			},
+			[]
+		);
+
+		this._variationMatchesCache.set(this.currentRxQuery, matches);
+
+		return matches;
+	}
+
+	/**
+	 * Get the option value for a specific variation match
+	 */
+	getVariationMatchOption({ id, name }: { id: number; name: string }) {
+		const andConditions = get(this.currentRxQuery, ['mangoQuery', 'selector', '$and']);
+		if (!andConditions) {
+			return null;
+		}
+
+		const matchingCondition = andConditions.find((condition) => {
+			const elemMatch = get(condition, ['$or', 1, 'attributes', '$elemMatch']);
+			return elemMatch && elemMatch.id === id && elemMatch.name === name;
+		});
+
+		return get(matchingCondition, ['$or', 1, 'attributes', '$elemMatch', 'option']);
 	}
 }

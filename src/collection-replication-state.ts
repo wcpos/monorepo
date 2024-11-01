@@ -74,6 +74,11 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 	constructor(config: CollectionReplicationConfig<T>) {
 		super();
+
+		if (!config.collection) {
+			throw new Error('collection is required');
+		}
+
 		this.errorSubject = config.errorSubject;
 		this.collection = config.collection;
 		this.endpoint = config.endpoint;

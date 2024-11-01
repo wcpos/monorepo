@@ -1,10 +1,9 @@
+import { isRxQuery, type RxDatabase } from 'rxdb';
 import { Subject } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import { createStoreDatabase } from './helpers/db';
 import { Query, QueryParams } from '../src/query-state'; // Adjust the import based on your file structure
-
-import type { RxDatabase } from 'rxdb';
 
 // Mock the logger module
 jest.mock('@wcpos/utils/src/logger');
@@ -27,30 +26,26 @@ describe('Query', () => {
 		jest.clearAllMocks();
 	});
 
-	/**
-	 *
-	 */
-	it('query.getParams() should return the initialParams', async () => {
+	it('query instance should emit the initial RxQuery and params', async () => {
 		const initialParams = {
-			sortBy: 'name',
-			sortDirection: 'asc',
+			sort: [{ name: 'asc' }],
 		};
 		const query = new Query({ collection: storeDatabase.collections.products, initialParams });
 
-		// selector is added to initialParams by default
-		expect(query.getParams()).toEqual({
-			...initialParams,
-			selector: {},
+		query.rxQuery$.subscribe((rxQuery) => {
+			expect(rxQuery).toBeDefined();
+			expect(isRxQuery(rxQuery)).toBe(true);
 		});
+		query.params$.subscribe((params) => {
+			expect(params).toEqual(initialParams);
+		});
+
+		expect(query.getParams()).toEqual(initialParams);
 	});
 
-	/**
-	 *
-	 */
-	it('query.result$ should init with empty result if no records', (done) => {
+	it('query.result$ should init with empty result if no records', () => {
 		const initialParams = {
-			sortBy: 'name',
-			sortDirection: 'asc',
+			sort: [{ name: 'asc' }],
 		};
 
 		const query = new Query({ collection: storeDatabase.collections.products, initialParams });
@@ -58,18 +53,15 @@ describe('Query', () => {
 		query.result$.subscribe((result) => {
 			expect(result).toEqual(
 				expect.objectContaining({
+					elapsed: expect.any(Number),
 					searchActive: false,
 					hits: [],
 					count: 0,
 				})
 			);
-			done();
 		});
 	});
 
-	/**
-	 *
-	 */
 	it('query.result$ should return all the results for initialParams: {}', async () => {
 		const data = [
 			{ uuid: '1', name: 'Item 1', price: '1.23' },
@@ -83,19 +75,20 @@ describe('Query', () => {
 
 		const query = new Query({ collection: storeDatabase.collections.products, initialParams: {} });
 
-		return new Promise((resolve) => {
+		return new Promise<void>((resolve) => {
 			query.result$.subscribe((result) => {
+				console.log('Query result', result);
 				expect(result).toEqual(
 					expect.objectContaining({
 						elapsed: expect.any(Number),
 						searchActive: false,
 						count: 5,
 						hits: expect.arrayContaining([
-							expect.objectContaining({ id: '1', document: expect.any(Object) }),
-							expect.objectContaining({ id: '2', document: expect.any(Object) }),
-							expect.objectContaining({ id: '3', document: expect.any(Object) }),
-							expect.objectContaining({ id: '4', document: expect.any(Object) }),
-							expect.objectContaining({ id: '5', document: expect.any(Object) }),
+							expect.objectContaining({ id: '1', document: success[0] }),
+							expect.objectContaining({ id: '2', document: success[1] }),
+							expect.objectContaining({ id: '3', document: success[2] }),
+							expect.objectContaining({ id: '4', document: success[3] }),
+							expect.objectContaining({ id: '5', document: success[4] }),
 						]),
 					})
 				);
@@ -116,21 +109,26 @@ describe('Query', () => {
 				collection: storeDatabase.collections.products,
 				initialParams: {},
 			});
-			query.sort('name', 'asc');
-			expect(query.getParams()).toEqual({ selector: {}, sortBy: 'name', sortDirection: 'asc' });
+			query.sort([{ name: 'asc' }]).exec();
+
+			expect(query.getParams()).toEqual({ sort: [{ name: 'asc' }] });
+
+			const spy = jest.fn();
+			query.params$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith({ sort: [{ name: 'asc' }] });
 		});
 
 		/**
 		 *
 		 */
 		it('emits sorted results', async () => {
-			const initialParams: QueryParams = { sortBy: 'price', sortDirection: 'asc' };
+			const initialParams: QueryParams = { sort: [{ price: 'asc' }] };
 			const data = [
-				{ uuid: '1', name: 'Item 1', price: '1.23' },
-				{ uuid: '2', name: 'Item 2', price: '0.12' },
-				{ uuid: '3', name: 'Item 3', price: '100.01' },
-				{ uuid: '4', name: 'Item 4', price: '-9.50' },
-				{ uuid: '5', name: 'Item 5', price: '4.00' },
+				{ uuid: '1', name: 'Item 1', price: 1.23 },
+				{ uuid: '2', name: 'Item 2', price: 0.12 },
+				{ uuid: '3', name: 'Item 3', price: 100.01 },
+				{ uuid: '4', name: 'Item 4', price: -9.5 },
+				{ uuid: '5', name: 'Item 5', price: 4.0 },
 			];
 			const { success } = await storeDatabase.collections.products.bulkInsert(data);
 			expect(success.length).toBe(5);
@@ -140,7 +138,7 @@ describe('Query', () => {
 			let count = 0;
 
 			// next sort
-			const promise = new Promise((resolve) => {
+			const promise = new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					if (count === 0) {
 						count++;
@@ -150,17 +148,17 @@ describe('Query', () => {
 								searchActive: false,
 								count: 5,
 								hits: expect.arrayContaining([
-									expect.objectContaining({ id: '4', document: expect.any(Object) }),
-									expect.objectContaining({ id: '2', document: expect.any(Object) }),
-									expect.objectContaining({ id: '1', document: expect.any(Object) }),
-									expect.objectContaining({ id: '5', document: expect.any(Object) }),
-									expect.objectContaining({ id: '3', document: expect.any(Object) }),
+									expect.objectContaining({ id: '4', document: success[3] }),
+									expect.objectContaining({ id: '2', document: success[1] }),
+									expect.objectContaining({ id: '1', document: success[0] }),
+									expect.objectContaining({ id: '5', document: success[4] }),
+									expect.objectContaining({ id: '3', document: success[2] }),
 								]),
 							})
 						);
 
 						// trigger next sort
-						query.sort('price', 'desc');
+						query.sort([{ price: 'desc' }]).exec();
 					} else {
 						expect(result).toEqual(
 							expect.objectContaining({
@@ -168,11 +166,11 @@ describe('Query', () => {
 								searchActive: false,
 								count: 5,
 								hits: expect.arrayContaining([
-									expect.objectContaining({ id: '3', document: expect.any(Object) }),
-									expect.objectContaining({ id: '5', document: expect.any(Object) }),
-									expect.objectContaining({ id: '1', document: expect.any(Object) }),
-									expect.objectContaining({ id: '2', document: expect.any(Object) }),
-									expect.objectContaining({ id: '4', document: expect.any(Object) }),
+									expect.objectContaining({ id: '3', document: success[2] }),
+									expect.objectContaining({ id: '5', document: success[4] }),
+									expect.objectContaining({ id: '1', document: success[0] }),
+									expect.objectContaining({ id: '2', document: success[1] }),
+									expect.objectContaining({ id: '4', document: success[3] }),
 								]),
 							})
 						);
@@ -207,19 +205,17 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 				},
 			});
 
-			query.where('stock_status', 'instock');
+			query.where('stock_status').equals('instock').exec();
 			expect(query.getParams()).toEqual({
-				selector: { $and: [{ stock_status: 'instock' }] },
-				sortBy: 'name',
-				sortDirection: 'asc',
+				selector: { stock_status: 'instock' },
+				sort: [{ name: 'asc' }],
 			});
 
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					expect(result).toEqual(
 						expect.objectContaining({
@@ -227,8 +223,8 @@ describe('Query', () => {
 							searchActive: false,
 							count: 2,
 							hits: expect.arrayContaining([
-								expect.objectContaining({ id: '2', document: expect.any(Object) }),
-								expect.objectContaining({ id: '4', document: expect.any(Object) }),
+								expect.objectContaining({ id: '2', document: success[1] }),
+								expect.objectContaining({ id: '4', document: success[3] }),
 							]),
 						})
 					);
@@ -236,6 +232,17 @@ describe('Query', () => {
 					resolve();
 				});
 			});
+		});
+
+		it('has access to the current path', () => {
+			const query = new Query({
+				collection: storeDatabase.collections.products,
+				initialParams: {},
+			});
+
+			query.where('stock_status');
+
+			expect(query.currentRxQuery.other.queryBuilderPath).toBe('stock_status');
 		});
 
 		/**
@@ -256,22 +263,20 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 					selector: {
 						stock_status: 'instock',
 					},
 				},
 			});
 
-			query.where('stock_status', 'outofstock');
+			query.where('stock_status').equals('outofstock').exec();
 			expect(query.getParams()).toEqual({
-				selector: { $and: [{ stock_status: 'outofstock' }] },
-				sortBy: 'name',
-				sortDirection: 'asc',
+				selector: { stock_status: 'outofstock' },
+				sort: [{ name: 'asc' }],
 			});
 
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					expect(result).toEqual(
 						expect.objectContaining({
@@ -279,7 +284,7 @@ describe('Query', () => {
 							searchActive: false,
 							count: 1,
 							hits: expect.arrayContaining([
-								expect.objectContaining({ id: '1', document: expect.any(Object) }),
+								expect.objectContaining({ id: '1', document: success[0] }),
 							]),
 						})
 					);
@@ -292,7 +297,7 @@ describe('Query', () => {
 		/**
 		 *
 		 */
-		it('removes a where clause when value is null', async () => {
+		it('removes a where clause', async () => {
 			const data = [
 				{ uuid: '1', name: 'Item 1', stock_status: 'outofstock' },
 				{ uuid: '2', name: 'Item 2', stock_status: 'instock' },
@@ -307,8 +312,7 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 					selector: {
 						stock_status: 'instock',
 					},
@@ -318,7 +322,7 @@ describe('Query', () => {
 			let count = 0;
 
 			// next sort
-			const promise = new Promise((resolve) => {
+			const promise = new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					if (count === 0) {
 						count++;
@@ -328,14 +332,14 @@ describe('Query', () => {
 								searchActive: false,
 								count: 2,
 								hits: expect.arrayContaining([
-									expect.objectContaining({ id: '2', document: expect.any(Object) }),
-									expect.objectContaining({ id: '4', document: expect.any(Object) }),
+									expect.objectContaining({ id: '2', document: success[1] }),
+									expect.objectContaining({ id: '4', document: success[3] }),
 								]),
 							})
 						);
 
 						// remove selector
-						query.where('stock_status', null);
+						query.removeWhere('stock_status').exec();
 					} else {
 						expect(result).toEqual(
 							expect.objectContaining({
@@ -343,11 +347,11 @@ describe('Query', () => {
 								searchActive: false,
 								count: 5,
 								hits: expect.arrayContaining([
-									expect.objectContaining({ id: '1', document: expect.any(Object) }),
-									expect.objectContaining({ id: '2', document: expect.any(Object) }),
-									expect.objectContaining({ id: '3', document: expect.any(Object) }),
-									expect.objectContaining({ id: '4', document: expect.any(Object) }),
-									expect.objectContaining({ id: '5', document: expect.any(Object) }),
+									expect.objectContaining({ id: '1', document: success[0] }),
+									expect.objectContaining({ id: '2', document: success[1] }),
+									expect.objectContaining({ id: '3', document: success[2] }),
+									expect.objectContaining({ id: '4', document: success[3] }),
+									expect.objectContaining({ id: '5', document: success[4] }),
 								]),
 							})
 						);
@@ -357,6 +361,16 @@ describe('Query', () => {
 			});
 
 			return promise;
+		});
+
+		it('fails gracefully when removing a non-existent where clause', async () => {
+			const query = new Query({
+				collection: storeDatabase.collections.products,
+				initialParams: {},
+			});
+
+			query.removeWhere('stock_status').exec();
+			expect(query.getParams()).toEqual({});
 		});
 
 		/**
@@ -398,19 +412,17 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 				},
 			});
 
-			query.where('meta_data', { $elemMatch: { key: '_pos_store', value: '64' } });
+			query.where('meta_data').elemMatch({ key: '_pos_store', value: '64' }).exec();
 			expect(query.getParams()).toEqual({
-				selector: { $and: [{ meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } }] },
-				sortBy: 'name',
-				sortDirection: 'asc',
+				selector: { meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } },
+				sort: [{ name: 'asc' }],
 			});
 
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					expect(result).toEqual(
 						expect.objectContaining({
@@ -418,8 +430,8 @@ describe('Query', () => {
 							searchActive: false,
 							count: 2,
 							hits: expect.arrayContaining([
-								expect.objectContaining({ id: '1', document: expect.any(Object) }),
-								expect.objectContaining({ id: '5', document: expect.any(Object) }),
+								expect.objectContaining({ id: '1', document: success[0] }),
+								expect.objectContaining({ id: '5', document: success[4] }),
 							]),
 						})
 					);
@@ -478,15 +490,14 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 					selector: {
-						meta_data: { $elemMatch: { key: '_pos_user', value: '3' } },
+						$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: '3' } } }],
 					},
 				},
 			});
 
-			query.where('meta_data', { $elemMatch: { key: '_pos_store', value: '64' } });
+			query.where('meta_data').multipleElemMatch({ key: '_pos_store', value: '64' }).exec();
 			expect(query.getParams()).toEqual({
 				selector: {
 					$and: [
@@ -494,11 +505,10 @@ describe('Query', () => {
 						{ meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } },
 					],
 				},
-				sortBy: 'name',
-				sortDirection: 'asc',
+				sort: [{ name: 'asc' }],
 			});
 
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					expect(result).toEqual(
 						expect.objectContaining({
@@ -506,7 +516,7 @@ describe('Query', () => {
 							searchActive: false,
 							count: 1,
 							hits: expect.arrayContaining([
-								expect.objectContaining({ id: '5', document: expect.any(Object) }),
+								expect.objectContaining({ id: '5', document: success[4] }),
 							]),
 						})
 					);
@@ -565,24 +575,22 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 					selector: {
 						meta_data: { $elemMatch: { key: '_pos_user', value: '3' } },
 					},
 				},
 			});
 
-			query.where('meta_data', { $elemMatch: { key: '_pos_user', value: '5' } });
+			query.where('meta_data').elemMatch({ key: '_pos_user', value: '5' }).exec();
 			expect(query.getParams()).toEqual({
 				selector: {
-					$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: '5' } } }],
+					meta_data: { $elemMatch: { key: '_pos_user', value: '5' } },
 				},
-				sortBy: 'name',
-				sortDirection: 'asc',
+				sort: [{ name: 'asc' }],
 			});
 
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					expect(result).toEqual(
 						expect.objectContaining({
@@ -590,7 +598,7 @@ describe('Query', () => {
 							searchActive: false,
 							count: 1,
 							hits: expect.arrayContaining([
-								expect.objectContaining({ id: '1', document: expect.any(Object) }),
+								expect.objectContaining({ id: '1', document: success[0] }),
 							]),
 						})
 					);
@@ -649,25 +657,25 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 					selector: {
-						meta_data: { $elemMatch: { key: '_pos_user', value: '3' } },
-						meta_data: { $elemMatch: { key: '_pos_store', value: '64' } },
+						$and: [
+							{ meta_data: { $elemMatch: { key: '_pos_user', value: '3' } } },
+							{ meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } },
+						],
 					},
 				},
 			});
 
-			query.where('meta_data', { $elemMatch: { key: '_pos_user', value: null } });
+			query.where('meta_data').removeElemMatch('meta_data', { key: '_pos_user' }).exec();
 			expect(query.getParams()).toEqual({
 				selector: {
-					$and: [{ meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } }],
+					meta_data: { $elemMatch: { key: '_pos_store', value: '64' } },
 				},
-				sortBy: 'name',
-				sortDirection: 'asc',
+				sort: [{ name: 'asc' }],
 			});
 
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					expect(result).toEqual(
 						expect.objectContaining({
@@ -675,8 +683,8 @@ describe('Query', () => {
 							searchActive: false,
 							count: 2,
 							hits: expect.arrayContaining([
-								expect.objectContaining({ id: '1', document: expect.any(Object) }),
-								expect.objectContaining({ id: '5', document: expect.any(Object) }),
+								expect.objectContaining({ id: '1', document: success[0] }),
+								expect.objectContaining({ id: '5', document: success[4] }),
 							]),
 						})
 					);
@@ -735,23 +743,23 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 					selector: {
-						meta_data: { $elemMatch: { key: '_pos_user', value: '3' } },
-						meta_data: { $elemMatch: { key: '_pos_store', value: '64' } },
+						$and: [
+							{ meta_data: { $elemMatch: { key: '_pos_user', value: '3' } } },
+							{ meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } },
+						],
 					},
 				},
 			});
 
-			query.where('meta_data', null);
+			query.where('meta_data').removeWhere('meta_data').exec();
 			expect(query.getParams()).toEqual({
 				selector: {},
-				sortBy: 'name',
-				sortDirection: 'asc',
+				sort: [{ name: 'asc' }],
 			});
 
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					expect(result).toEqual(
 						expect.objectContaining({
@@ -759,11 +767,11 @@ describe('Query', () => {
 							searchActive: false,
 							count: 5,
 							hits: expect.arrayContaining([
-								expect.objectContaining({ id: '1', document: expect.any(Object) }),
-								expect.objectContaining({ id: '2', document: expect.any(Object) }),
-								expect.objectContaining({ id: '3', document: expect.any(Object) }),
-								expect.objectContaining({ id: '4', document: expect.any(Object) }),
-								expect.objectContaining({ id: '5', document: expect.any(Object) }),
+								expect.objectContaining({ id: '1', document: success[0] }),
+								expect.objectContaining({ id: '2', document: success[1] }),
+								expect.objectContaining({ id: '3', document: success[2] }),
+								expect.objectContaining({ id: '4', document: success[3] }),
+								expect.objectContaining({ id: '5', document: success[4] }),
 							]),
 						})
 					);
@@ -812,19 +820,19 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.variations,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 				},
 			});
 
-			query.where('attributes', { $elemMatch: { name: 'Color', option: 'Blue' } });
+			query.where('attributes').elemMatch({ name: 'Color', option: 'Blue' }).exec();
 			expect(query.getParams()).toEqual({
-				selector: { $and: [{ attributes: { $elemMatch: { name: 'Color', option: 'Blue' } } }] },
-				sortBy: 'name',
-				sortDirection: 'asc',
+				selector: {
+					attributes: { $elemMatch: { name: 'Color', option: 'Blue' } },
+				},
+				sort: [{ name: 'asc' }],
 			});
 
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					expect(result).toEqual(
 						expect.objectContaining({
@@ -832,8 +840,8 @@ describe('Query', () => {
 							searchActive: false,
 							count: 2,
 							hits: expect.arrayContaining([
-								expect.objectContaining({ id: '1', document: expect.any(Object) }),
-								expect.objectContaining({ id: '5', document: expect.any(Object) }),
+								expect.objectContaining({ id: '1', document: success[0] }),
+								expect.objectContaining({ id: '5', document: success[4] }),
 							]),
 						})
 					);
@@ -921,19 +929,19 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 				},
 			});
 
-			query.where('categories', { $elemMatch: { id: 17 } });
+			query.where('categories').elemMatch({ id: 17 }).exec();
 			expect(query.getParams()).toEqual({
-				selector: { $and: [{ categories: { $elemMatch: { id: 17 } } }] },
-				sortBy: 'name',
-				sortDirection: 'asc',
+				selector: {
+					categories: { $elemMatch: { id: 17 } },
+				},
+				sort: [{ name: 'asc' }],
 			});
 
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					expect(result).toEqual(
 						expect.objectContaining({
@@ -941,9 +949,9 @@ describe('Query', () => {
 							searchActive: false,
 							count: 3,
 							hits: expect.arrayContaining([
-								expect.objectContaining({ id: '2', document: expect.any(Object) }),
-								expect.objectContaining({ id: '3', document: expect.any(Object) }),
-								expect.objectContaining({ id: '5', document: expect.any(Object) }),
+								expect.objectContaining({ id: '2', document: success[1] }),
+								expect.objectContaining({ id: '3', document: success[2] }),
+								expect.objectContaining({ id: '5', document: success[4] }),
 							]),
 						})
 					);
@@ -1031,22 +1039,22 @@ describe('Query', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {
-					sortBy: 'name',
-					sortDirection: 'asc',
+					sort: [{ name: 'asc' }],
 					selector: {
 						categories: { $elemMatch: { id: 21 } },
 					},
 				},
 			});
 
-			query.where('categories', { $elemMatch: { id: 17 } });
+			query.where('categories').elemMatch({ id: 17 }).exec();
 			expect(query.getParams()).toEqual({
-				selector: { $and: [{ categories: { $elemMatch: { id: 17 } } }] },
-				sortBy: 'name',
-				sortDirection: 'asc',
+				selector: {
+					categories: { $elemMatch: { id: 17 } },
+				},
+				sort: [{ name: 'asc' }],
 			});
 
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
 					expect(result).toEqual(
 						expect.objectContaining({
@@ -1054,9 +1062,9 @@ describe('Query', () => {
 							searchActive: false,
 							count: 3,
 							hits: expect.arrayContaining([
-								expect.objectContaining({ id: '2', document: expect.any(Object) }),
-								expect.objectContaining({ id: '3', document: expect.any(Object) }),
-								expect.objectContaining({ id: '5', document: expect.any(Object) }),
+								expect.objectContaining({ id: '2', document: success[1] }),
+								expect.objectContaining({ id: '3', document: success[2] }),
+								expect.objectContaining({ id: '5', document: success[4] }),
 							]),
 						})
 					);
@@ -1068,109 +1076,540 @@ describe('Query', () => {
 	});
 
 	/**
-	 * Test that params$ emits stable references when whereClauses haven't changed
+	 *
 	 */
-	it('params$ emits stable references when whereClauses have not changed', () => {
-		const initialParams = {
-			selector: {
-				stock_status: 'instock',
+	it('finds an attributes element', async () => {
+		const data = [
+			{
+				uuid: '1',
+				name: 'Item 1',
+				attributes: [
+					{ name: 'name', option: 'option' },
+					{ name: 'Color', option: 'Blue' },
+				],
 			},
-			sortBy: 'name',
-			sortDirection: 'asc',
-		};
+			{ uuid: '2', name: 'Item 2', attributes: [{ name: 'name', option: 'option' }] },
+			{
+				uuid: '3',
+				name: 'Item 3',
+				attributes: [
+					{ name: 'name', option: 'option' },
+					{ name: 'Color', option: 'Red' },
+				],
+			},
+			{ uuid: '4', name: 'Item 4', attributes: [{ name: 'name', option: 'option' }] },
+			{
+				uuid: '5',
+				name: 'Item 5',
+				attributes: [
+					{ name: 'name', option: 'option' },
+					{ name: 'Color', option: 'Blue' },
+				],
+			},
+		];
+
+		const { success } = await storeDatabase.collections.variations.bulkInsert(data);
+		expect(success.length).toBe(5);
 
 		const query = new Query({
-			id: 'test',
-			collection: storeDatabase.collections.products,
-			initialParams,
-			errorSubject: new Subject<Error>(),
+			collection: storeDatabase.collections.variations,
+			initialParams: {
+				sort: [{ name: 'asc' }],
+			},
 		});
 
-		const firstParams = query.getParams();
-		let emittedParams;
-		query.params$.subscribe((params) => {
-			emittedParams = params;
+		query.where('attributes').elemMatch({ name: 'Color', option: 'Blue' }).exec();
+		expect(query.getParams()).toEqual({
+			selector: {
+				attributes: { $elemMatch: { name: 'Color', option: 'Blue' } },
+			},
+			sort: [{ name: 'asc' }],
 		});
 
-		expect(firstParams).toBe(emittedParams);
+		return new Promise<void>((resolve) => {
+			query.result$.subscribe((result) => {
+				expect(result).toEqual(
+					expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 2,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '1', document: success[0] }),
+							expect.objectContaining({ id: '5', document: success[4] }),
+						]),
+					})
+				);
 
-		// Call where with the same value
-		query.where('stock_status', 'instock');
-
-		const secondParams = query.getParams();
-
-		expect(firstParams).toBe(secondParams);
-		expect(emittedParams).toBe(secondParams);
-
-		// Now change the where clause
-		query.where('stock_status', 'outofstock');
-
-		const thirdParams = query.getParams();
-
-		expect(firstParams).not.toBe(thirdParams);
-		expect(emittedParams).toBe(thirdParams);
+				resolve();
+			});
+		});
 	});
 
 	/**
-	 * Test that findSelector returns consistent references
+	 *
 	 */
-	it('findSelector returns stable references when whereClauses have not changed', () => {
-		const query = new Query({
-			id: 'test',
-			collection: storeDatabase.collections.products,
-			errorSubject: new Subject<Error>(),
+	describe('special case for variations', () => {
+		it('variationMatch adds an $or clause to find variations without the attribute (WooCommerce any attribute)', async () => {
+			const query = new Query({
+				collection: storeDatabase.collections.variations,
+				initialParams: {
+					selector: {
+						id: { $in: ['1', '2', '3', '4', '5'] },
+					},
+					sort: [{ name: 'asc' }],
+				},
+			});
+
+			query.variationMatch({ id: 1, name: 'Color', option: 'Green' }).exec();
+
+			expect(query.getParams()).toEqual({
+				sort: [{ name: 'asc' }],
+				selector: {
+					id: { $in: ['1', '2', '3', '4', '5'] },
+					$and: [
+						{
+							$or: [
+								{
+									attributes: {
+										$not: {
+											$elemMatch: {
+												id: 1,
+												name: 'Color',
+											},
+										},
+									},
+								},
+								{
+									attributes: {
+										$elemMatch: {
+											id: 1,
+											name: 'Color',
+											option: 'Green',
+										},
+									},
+								},
+							],
+						},
+					],
+				},
+			});
+
+			query.variationMatch({ id: 2, name: 'Size', option: 'Large' }).exec();
+			query.variationMatch({ id: 2, name: 'Size', option: 'Medium' }).exec();
+
+			expect(query.getParams()).toEqual({
+				sort: [{ name: 'asc' }],
+				selector: {
+					id: { $in: ['1', '2', '3', '4', '5'] },
+					$and: [
+						{
+							$or: [
+								{
+									attributes: {
+										$not: {
+											$elemMatch: {
+												id: 1,
+												name: 'Color',
+											},
+										},
+									},
+								},
+								{
+									attributes: {
+										$elemMatch: {
+											id: 1,
+											name: 'Color',
+											option: 'Green',
+										},
+									},
+								},
+							],
+						},
+						{
+							$or: [
+								{
+									attributes: {
+										$not: {
+											$elemMatch: {
+												id: 2,
+												name: 'Size',
+											},
+										},
+									},
+								},
+								{
+									attributes: {
+										$elemMatch: {
+											id: 2,
+											name: 'Size',
+											option: 'Medium',
+										},
+									},
+								},
+							],
+						},
+					],
+				},
+			});
 		});
 
-		query.where('meta_data', { $elemMatch: { key: '_pos_store', value: '64' } });
-		const firstSelector = query.findSelector('meta_data');
+		/**
+		 *
+		 */
+		it('removeVariationMatch removes the $or clause', async () => {
+			const query = new Query({
+				collection: storeDatabase.collections.variations,
+				initialParams: {
+					sort: [{ name: 'asc' }],
+					selector: {
+						id: { $in: ['1', '2', '3', '4', '5'] },
+						$and: [
+							{
+								$or: [
+									{
+										attributes: {
+											$not: {
+												$elemMatch: {
+													id: 1,
+													name: 'Color',
+												},
+											},
+										},
+									},
+									{
+										attributes: {
+											$elemMatch: {
+												id: 1,
+												name: 'Color',
+												option: 'Green',
+											},
+										},
+									},
+								],
+							},
+							{
+								$or: [
+									{
+										attributes: {
+											$not: {
+												$elemMatch: {
+													id: 0,
+													name: 'Size',
+												},
+											},
+										},
+									},
+									{
+										attributes: {
+											$elemMatch: {
+												id: 0,
+												name: 'Size',
+												option: 'Large',
+											},
+										},
+									},
+								],
+							},
+						],
+					},
+				},
+			});
 
-		let emittedSelector;
-		query.params$.pipe(map(() => query.findSelector('meta_data'))).subscribe((selector) => {
-			emittedSelector = selector;
+			query.removeVariationMatch({ id: 0, name: 'Size' }).exec();
+
+			expect(query.getParams()).toEqual({
+				sort: [{ name: 'asc' }],
+				selector: {
+					id: { $in: ['1', '2', '3', '4', '5'] },
+					$and: [
+						{
+							$or: [
+								{
+									attributes: {
+										$not: {
+											$elemMatch: {
+												id: 1,
+												name: 'Color',
+											},
+										},
+									},
+								},
+								{
+									attributes: {
+										$elemMatch: {
+											id: 1,
+											name: 'Color',
+											option: 'Green',
+										},
+									},
+								},
+							],
+						},
+					],
+				},
+			});
+
+			query.variationMatch({ id: 0, name: 'Size', option: 'Medium' }).exec();
+			query.removeVariationMatch({ id: 0, name: 'Size' }).exec();
+
+			expect(query.getParams()).toEqual({
+				sort: [{ name: 'asc' }],
+				selector: {
+					id: { $in: ['1', '2', '3', '4', '5'] },
+					$and: [
+						{
+							$or: [
+								{
+									attributes: {
+										$not: {
+											$elemMatch: {
+												id: 1,
+												name: 'Color',
+											},
+										},
+									},
+								},
+								{
+									attributes: {
+										$elemMatch: {
+											id: 1,
+											name: 'Color',
+											option: 'Green',
+										},
+									},
+								},
+							],
+						},
+					],
+				},
+			});
+
+			query.removeVariationMatch({ id: 1, name: 'Color' }).exec();
+
+			expect(query.getParams()).toEqual({
+				sort: [{ name: 'asc' }],
+				selector: {
+					id: { $in: ['1', '2', '3', '4', '5'] },
+				},
+			});
 		});
 
-		expect(firstSelector).toBe(emittedSelector);
+		/**
+		 *
+		 */
+		it('removeWhere removes all the attributes clause', async () => {
+			const query = new Query({
+				collection: storeDatabase.collections.variations,
+				initialParams: {
+					sort: [{ name: 'asc' }],
+					selector: {
+						id: { $in: ['1', '2', '3', '4', '5'] },
+						$and: [
+							{
+								$or: [
+									{
+										attributes: {
+											$not: {
+												$elemMatch: {
+													id: 1,
+													name: 'Color',
+												},
+											},
+										},
+									},
+									{
+										attributes: {
+											$elemMatch: {
+												id: 1,
+												name: 'Color',
+												option: 'Green',
+											},
+										},
+									},
+								],
+							},
+							{
+								$or: [
+									{
+										attributes: {
+											$not: {
+												$elemMatch: {
+													id: 2,
+													name: 'Size',
+												},
+											},
+										},
+									},
+									{
+										attributes: {
+											$elemMatch: {
+												id: 2,
+												name: 'Size',
+												option: 'Large',
+											},
+										},
+									},
+								],
+							},
+						],
+					},
+				},
+			});
 
-		// Call where with the same value
-		query.where('meta_data', { $elemMatch: { key: '_pos_store', value: '64' } });
+			query.removeWhere('attributes').exec();
 
-		const secondSelector = query.findSelector('meta_data');
-
-		expect(firstSelector).toBe(secondSelector);
-		expect(emittedSelector).toBe(secondSelector);
-
-		// Now change the where clause
-		query.where('meta_data', { $elemMatch: { key: '_pos_store', value: '65' } });
-
-		const thirdSelector = query.findSelector('meta_data');
-
-		expect(firstSelector).not.toBe(thirdSelector);
-		expect(emittedSelector).toBe(thirdSelector);
-	});
-
-	/**
-	 * Test that params$ and getParams() are equal
-	 */
-	it('params$ and getParams() return equal values', () => {
-		const query = new Query({
-			id: 'test',
-			collection: storeDatabase.collections.products,
-			errorSubject: new Subject<Error>(),
+			expect(query.getParams()).toEqual({
+				sort: [{ name: 'asc' }],
+				selector: {
+					id: { $in: ['1', '2', '3', '4', '5'] },
+				},
+			});
 		});
 
-		let emittedParams;
-		query.params$.subscribe((params) => {
-			emittedParams = params;
+		it('getVariationMatches returns the correct variations', async () => {
+			const query = new Query({
+				collection: storeDatabase.collections.variations,
+				initialParams: {
+					sort: [{ name: 'asc' }],
+					selector: {
+						id: { $in: ['1', '2', '3', '4', '5'] },
+						$and: [
+							{
+								$or: [
+									{
+										attributes: {
+											$not: {
+												$elemMatch: {
+													id: 1,
+													name: 'Color',
+												},
+											},
+										},
+									},
+									{
+										attributes: {
+											$elemMatch: {
+												id: 1,
+												name: 'Color',
+												option: 'Green',
+											},
+										},
+									},
+								],
+							},
+							{
+								$or: [
+									{
+										attributes: {
+											$not: {
+												$elemMatch: {
+													id: 2,
+													name: 'Size',
+												},
+											},
+										},
+									},
+									{
+										attributes: {
+											$elemMatch: {
+												id: 2,
+												name: 'Size',
+												option: 'Large',
+											},
+										},
+									},
+								],
+							},
+						],
+					},
+				},
+			});
+
+			expect(query.getVariationMatches()).toEqual([
+				{ id: 1, name: 'Color', option: 'Green' },
+				{ id: 2, name: 'Size', option: 'Large' },
+			]);
 		});
 
-		expect(query.getParams()).toBe(emittedParams);
+		it('getVariationMatchOption returns the correct variation', async () => {
+			const query = new Query({
+				collection: storeDatabase.collections.variations,
+				initialParams: {
+					sort: [{ name: 'asc' }],
+					selector: {
+						id: { $in: ['1', '2', '3', '4', '5'] },
+						$and: [
+							{
+								$or: [
+									{
+										attributes: {
+											$not: {
+												$elemMatch: {
+													id: 1,
+													name: 'Color',
+												},
+											},
+										},
+									},
+									{
+										attributes: {
+											$elemMatch: {
+												id: 1,
+												name: 'Color',
+												option: 'Green',
+											},
+										},
+									},
+								],
+							},
+							{
+								$or: [
+									{
+										attributes: {
+											$not: {
+												$elemMatch: {
+													id: 2,
+													name: 'Size',
+												},
+											},
+										},
+									},
+									{
+										attributes: {
+											$elemMatch: {
+												id: 2,
+												name: 'Size',
+												option: 'Large',
+											},
+										},
+									},
+								],
+							},
+						],
+					},
+				},
+			});
 
-		query.where('stock_status', 'instock');
+			expect(query.getVariationMatchOption({ id: 1, name: 'Color' })).toEqual('Green');
+			expect(query.getVariationMatchOption({ id: 2, name: 'Size' })).toEqual('Large');
+		});
 
-		expect(query.getParams()).toBe(emittedParams);
+		it('getVariationMatches returns stable references', () => {
+			const query = new Query({
+				id: 'test',
+				collection: storeDatabase.collections.products,
+				errorSubject: new Subject<Error>(),
+			});
 
-		query.where('stock_status', 'outofstock');
+			query.variationMatch({ id: 1, name: 'Color', option: 'Green' });
+			const firstSelector = query.getVariationMatches();
 
-		expect(query.getParams()).toBe(emittedParams);
+			let emittedSelector;
+			query.params$.pipe(map(() => query.getVariationMatches())).subscribe((selector) => {
+				emittedSelector = selector;
+			});
+
+			expect(firstSelector).toBe(emittedSelector);
+		});
 	});
 });

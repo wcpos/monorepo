@@ -51,6 +51,11 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	 */
 	constructor(config: QueryReplicationConfig<T>) {
 		super();
+
+		if (!config.collection) {
+			throw new Error('collection is required');
+		}
+
 		this.collection = config.collection;
 		this.endpoint = config.endpoint;
 		this.collectionReplication = config.collectionReplication;
@@ -88,7 +93,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 			this.start();
 		}
 
-		// await this.collectionReplication.firstSync;
+		await this.collectionReplication.firstSync;
 		const saved = await this.sync();
 
 		if (this.greedy && saved && saved.length > 0) {
