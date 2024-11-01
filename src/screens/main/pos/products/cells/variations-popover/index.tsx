@@ -24,11 +24,16 @@ const VariationsPopover = ({ parent, addToCart }) => {
 	/**
 	 * Clear the query when the popover closes
 	 */
-	React.useEffect(() => {
-		return () => {
-			query.where('attributes', null);
-		};
-	}, [query]);
+	React.useEffect(
+		() => {
+			return () => {
+				query.removeWhere('attributes').exec();
+			};
+		},
+		[
+			// only run when the component unmounts
+		]
+	);
 
 	return <Variations query={query} parent={parent} addToCart={addToCart} />;
 };

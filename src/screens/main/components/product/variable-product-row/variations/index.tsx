@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import type { Row } from '@wcpos/components/src/data-table';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { Suspense } from '@wcpos/components/src/suspense';
 import { VStack } from '@wcpos/components/src/vstack';
@@ -10,6 +9,8 @@ import { useQuery } from '@wcpos/query';
 import { VariationsFilterBar } from './filters';
 import { VariationsTable } from './table';
 import { useVariationRow } from '../context';
+
+import type { Row } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -23,7 +24,7 @@ interface Props {
  */
 export const Variations = ({ row, onLayout }: Props) => {
 	const parent = row.original.document;
-	const { queryParams } = useVariationRow();
+	const { queryParams, updateQueryParams } = useVariationRow();
 
 	/**
 	 *
@@ -34,10 +35,7 @@ export const Variations = ({ row, onLayout }: Props) => {
 		initialParams: {
 			// search: row.original?.parentSearchTerm ? row.original.parentSearchTerm : null,
 			selector: {
-				$and: [
-					{ id: { $in: parent.variations } },
-					{ attributes: queryParams?.attributes ? queryParams?.attributes : null },
-				],
+				id: { $in: parent.variations },
 			},
 		},
 		endpoint: `products/${parent.id}/variations`,
@@ -45,78 +43,28 @@ export const Variations = ({ row, onLayout }: Props) => {
 	});
 
 	/**
-	 *
+	 * Apply the variation match filter from the Variable Product Row context
 	 */
 	React.useEffect(() => {
-		query.collection
-			.find({
-				selector: {
-					$and: [
-						{ id: { $in: parent.variations } },
-						{
-							$or: [
-								{
-									attributes: {
-										$not: {
-											$elemMatch: {
-												id: 1,
-												name: 'Color',
-											},
-										},
-									},
-								},
-								{
-									attributes: {
-										$elemMatch: {
-											id: 1,
-											name: 'Color',
-											option: 'Green',
-										},
-									},
-								},
-							],
-						},
-						{
-							$or: [
-								{
-									attributes: {
-										$not: {
-											$elemMatch: {
-												id: 2,
-												name: 'Size',
-											},
-										},
-									},
-								},
-								{
-									attributes: {
-										$elemMatch: {
-											id: 2,
-											name: 'Size',
-											option: 'Large',
-										},
-									},
-								},
-							],
-						},
-					],
-				},
-			})
-			.exec()
-			.then((result) => {
-				debugger;
-				console.log('result', result);
-			});
-	}, [parent.variations, query]);
+		if (queryParams?.attribute) {
+			query.variationMatch(queryParams.attribute).exec();
+		}
+	}, [query, queryParams]);
 
 	/**
 	 * Clear the query when the table unmounts
 	 */
-	React.useEffect(() => {
-		return () => {
-			query.where('attributes', null);
-		};
-	}, [query]);
+	React.useEffect(
+		() => {
+			return () => {
+				query.removeWhere('attributes').exec();
+				updateQueryParams('attribute', null);
+			};
+		},
+		[
+			// only run when the component unmounts
+		]
+	);
 
 	/**
 	 * Update the search query when the parent search term changes

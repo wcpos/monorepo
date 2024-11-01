@@ -66,42 +66,19 @@ export const ProductAttributes = ({ row, table }) => {
 
 			if (manager.hasQuery(['variations', { parentID: product.id }])) {
 				const query = manager.getQuery(['variations', { parentID: product.id }]);
-				// query.where('attributes', {
-				// 	$elemMatch: {
-				// 		id: attribute.id,
-				// 		name: attribute.name,
-				// 		option,
-				// 	},
-				// });
-				query.where('$or', [
-					{
-						attributes: {
-							$elemMatch: {
-								id: attribute.id,
-								name: attribute.name,
-								option,
-							},
-						},
-					},
-					{
-						attributes: {
-							$not: {
-								$elemMatch: {
-									id: attribute.id,
-									name: attribute.name,
-								},
-							},
-						},
-					},
-				]);
-			} else {
-				// we need to pass the attribute/option down so it can be used in the table
-				updateQueryParams('attributes', {
-					$elemMatch: {
+				query
+					.variationMatch({
 						id: attribute.id,
 						name: attribute.name,
 						option,
-					},
+					})
+					.exec();
+			} else {
+				// we need to pass the attribute/option down so it can be used in the table
+				updateQueryParams('attribute', {
+					id: attribute.id,
+					name: attribute.name,
+					option,
 				});
 			}
 		},

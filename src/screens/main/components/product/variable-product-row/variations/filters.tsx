@@ -52,13 +52,14 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 							<VariationSelect
 								key={`${index}-${attribute.name}`}
 								attribute={attribute}
-								onSelect={(attribute) => query.where('attributes', { $elemMatch: attribute })}
-								selected={query.findAttributesSelector({ id: attribute.id, name: attribute.name })}
-								onRemove={() =>
-									query.where('attributes', {
-										$elemMatch: { id: attribute.id, name: attribute.name, option: null },
-									})
-								}
+								onSelect={(attribute) => {
+									console.log('onSelect', attribute);
+									query.variationMatch(attribute).exec();
+								}}
+								selected={query.getVariationMatchOption({ id: attribute.id, name: attribute.name })}
+								onRemove={() => {
+									query.removeVariationMatch({ id: attribute.id, name: attribute.name }).exec();
+								}}
 							/>
 						);
 					})}

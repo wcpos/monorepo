@@ -46,7 +46,7 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
 const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	const result = useObservableSuspense(query.resource);
 	const selectedAttributes = useObservableEagerState(
-		query.params$.pipe(map(() => query.getAllAttributesSelectors()))
+		query.params$.pipe(map(() => query.getVariationMatches()))
 	);
 	const selectedVariation = result.count === 1 && result.hits[0].document;
 	const { format } = useCurrencyFormat();
@@ -65,7 +65,7 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	 */
 	const handleSelect = React.useCallback(
 		(attribute) => {
-			query.where('attributes', { $elemMatch: attribute });
+			query.variationMatch(attribute).exec();
 		},
 		[query]
 	);
