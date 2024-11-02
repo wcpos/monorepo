@@ -7,9 +7,16 @@ import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/src/toggle-group
 /**
  *
  */
-const VariationButtons = ({ attribute, onSelect, selected = '' }) => {
+const VariationButtons = ({ attribute, onSelect, selected = '', optionCounts }) => {
 	const [value, setValue] = React.useState<string>(selected);
 	const options = attribute?.options || [];
+
+	/**
+	 * Keep the value in sync with the selected prop
+	 */
+	React.useEffect(() => {
+		setValue(selected);
+	}, [selected]);
 
 	/**
 	 *
@@ -23,7 +30,7 @@ const VariationButtons = ({ attribute, onSelect, selected = '' }) => {
 		<View className="flex-row">
 			<ToggleGroup value={value} onValueChange={handleSelect} type="single">
 				{options.map((option) => (
-					<ToggleGroupItem key={option} value={option}>
+					<ToggleGroupItem key={option} value={option} disabled={optionCounts[option] === 0}>
 						<Text>{option}</Text>
 					</ToggleGroupItem>
 				))}

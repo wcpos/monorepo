@@ -68,7 +68,7 @@
     "react-test-renderer": "18.3.1",
     "react-thermal-printer": "^0.18.1",
     "react-to-print": "^3.0.2",
-    "recharts": "^2.13.2",
+    "recharts": "^2.13.3",
     "rxjs": "7.8.1",
     "semver": "^7.6.3",
     "use-deep-compare-effect": "^1.8.1",

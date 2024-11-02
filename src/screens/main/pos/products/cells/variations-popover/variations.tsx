@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
-import { map, skip } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
 import { Text } from '@wcpos/components/src/text';
@@ -10,6 +9,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 
 import VariationButtons from './buttons';
 import VariationSelect from './select';
+import { parseAttributes } from './utils';
 import { useT } from '../../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
 
@@ -30,19 +30,6 @@ interface VariationPopoverProps {
 /**
  *
  */
-export const getAttributesWithCharacterCount = (attributes: ProductDocument['attributes']) => {
-	return (attributes || [])
-		.filter((attribute) => attribute.variation)
-		.sort((a, b) => (a.position || 0) - (b.position || 0))
-		.map((attribute) => {
-			const characterCount = (attribute.options || []).join('').length;
-			return { ...attribute, characterCount };
-		});
-};
-
-/**
- *
- */
 const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	const result = useObservableSuspense(query.resource);
 	const selectedAttributes = useObservableEagerState(
@@ -55,9 +42,9 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	/**
 	 *
 	 */
-	const attributes = React.useMemo(
-		() => getAttributesWithCharacterCount(parent.attributes),
-		[parent.attributes]
+	const attributeOptions = React.useMemo(
+		() => parseAttributes(parent.attributes, selectedAttributes, result.hits),
+		[parent.attributes, selectedAttributes, result.hits]
 	);
 
 	/**
@@ -79,43 +66,44 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	 */
 	const handleAddToCart = React.useCallback(() => {
 		if (selectedVariation) {
-			const selectedAttributesMetaData = (selectedAttributes || []).map((a) => ({
-				attr_id: a.id,
-				display_key: a.name,
-				display_value: a.option,
-			}));
+			const selectedAttributesMetaData = (attributeOptions || [])
+				.filter((a) => a.selected)
+				.map((a) => {
+					const metaData = {
+						attr_id: a.selected.id,
+						display_key: a.selected.name,
+						display_value: a.selected.option,
+					};
+					return metaData;
+				});
 			addToCart(selectedVariation, selectedAttributesMetaData);
 		}
-	}, [addToCart, selectedAttributes, selectedVariation]);
+	}, [addToCart, attributeOptions, selectedVariation]);
 
 	/**
 	 *
 	 */
 	return (
 		<VStack className="min-w-52">
-			{attributes.map((attribute) => {
-				// find selected option
-				const selected = selectedAttributes?.find((a) => a.name === attribute.name);
-
-				return (
-					<VStack key={attribute.name} space="xs">
-						<Text>{attribute.name}</Text>
-						{attribute.characterCount < 15 ? (
-							<VariationButtons
-								attribute={attribute}
-								onSelect={handleSelect}
-								selected={selected?.option}
-							/>
-						) : (
-							<VariationSelect
-								attribute={attribute}
-								onSelect={handleSelect}
-								selected={selected?.option}
-							/>
-						)}
-					</VStack>
-				);
-			})}
+			{attributeOptions.map(({ attribute, optionCounts, selected }) => (
+				<VStack key={attribute.name} space="xs">
+					<Text>{attribute.name}</Text>
+					{attribute.characterCount < 15 ? (
+						<VariationButtons
+							attribute={attribute}
+							onSelect={handleSelect}
+							selected={selected?.option}
+							optionCounts={optionCounts}
+						/>
+					) : (
+						<VariationSelect
+							attribute={attribute}
+							onSelect={handleSelect}
+							selected={selected?.option}
+						/>
+					)}
+				</VStack>
+			))}
 			{selectedVariation && (
 				<Button onPress={handleAddToCart}>
 					<ButtonText>{t('Add to Cart') + ': ' + format(selectedVariation.price)}</ButtonText>
