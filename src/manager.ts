@@ -275,7 +275,8 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		 * Add internal subscriptions to the query state
 		 * @TODO - should this be part of the events system?
 		 */
-		queryState.subs.push(
+		queryState.addSub(
+			'query-replication',
 			/**
 			 * Subscribe to query params and register a new replication state for the query
 			 */

@@ -1,3 +1,5 @@
+import type { Logger } from './logger';
+
 /**
  * Handles data insertion, updates, and deletions in the local collection.
  */
@@ -13,7 +15,10 @@ export class DataProcessor {
 	async insertNewDocuments(documents: any[]) {
 		const result = await this.collection.bulkInsert(documents);
 		if (result.success.length > 0) {
-			await this.logger.logAddedDocuments(result.success.map((doc: any) => doc.id));
+			await this.logger.logAddedDocuments(
+				result.success.map((doc: any) => doc.id),
+				this.collection.name
+			);
 		}
 		return result;
 	}
@@ -27,7 +32,10 @@ export class DataProcessor {
 		if (updatedDocs.length > 0) {
 			const result = await this.collection.bulkUpsert(updatedDocs);
 			if (result.success.length > 0) {
-				await this.logger.logUpdatedDocuments(result.success.map((doc: any) => doc.id));
+				await this.logger.logUpdatedDocuments(
+					result.success.map((doc: any) => doc.id),
+					this.collection.name
+				);
 			}
 			return result;
 		}
@@ -39,6 +47,6 @@ export class DataProcessor {
 				selector: { id: { $in: ids } },
 			})
 			.remove();
-		await this.logger.logRemovedDocuments(ids);
+		await this.logger.logRemovedDocuments(ids, this.collection.name);
 	}
 }

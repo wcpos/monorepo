@@ -32,26 +32,26 @@ export class Logger {
 		});
 	}
 
-	async logAddedDocuments(ids: number[]) {
+	async logAddedDocuments(ids: number[], collectionName: string) {
 		return this.storeDB.collections.logs.insert({
 			timestamp: Date.now(),
-			message: 'Synced new documents',
+			message: `Synced new ${collectionName}`,
 			context: { ids },
 		});
 	}
 
-	async logUpdatedDocuments(ids: number[]) {
+	async logUpdatedDocuments(ids: number[], collectionName: string) {
 		return this.storeDB.collections.logs.insert({
 			timestamp: Date.now(),
-			message: 'Synced updated documents',
+			message: `Synced updated ${collectionName}`,
 			context: { ids },
 		});
 	}
 
-	async logRemovedDocuments(ids: number[]) {
+	async logRemovedDocuments(ids: number[], collectionName: string) {
 		return this.storeDB.collections.logs.insert({
 			timestamp: Date.now(),
-			message: 'Removed documents',
+			message: `Removed ${collectionName}`,
 			context: { ids },
 		});
 	}

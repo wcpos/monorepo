@@ -34,7 +34,6 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	/**
 	 *
 	 */
-	public readonly subs: Subscription[] = [];
 	public readonly subjects = {
 		paused: new BehaviorSubject<boolean>(true), // true when the replication is paused, start true
 		active: new BehaviorSubject<boolean>(false), // true when something is running, false when not
@@ -78,7 +77,8 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 			filter(() => !this.subjects.paused.getValue())
 		);
 
-		this.subs.push(
+		this.addSub(
+			'polling',
 			polling$.subscribe(() => {
 				this.run();
 			})

@@ -1,12 +1,13 @@
 import cloneDeep from 'lodash/cloneDeep';
 import debounce from 'lodash/debounce';
 import get from 'lodash/get';
+import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
 import pick from 'lodash/pick';
 import set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
-import { Subject, Subscription, BehaviorSubject, ReplaySubject } from 'rxjs';
-import { tap, map, switchMap, distinctUntilChanged } from 'rxjs/operators';
+import { Subject, BehaviorSubject, ReplaySubject, from } from 'rxjs';
+import { map, switchMap, distinctUntilChanged, startWith } from 'rxjs/operators';
 
 import { SubscribableBase } from './subscribable-base';
 
@@ -75,7 +76,7 @@ interface QueryMethods<DocType> {
 	sort(sortBy: MangoQuerySortPart<DocType>): this;
 	skip(skipValue: number): this;
 	limit(limitValue: number): this;
-	search(searchTerm: string, fields: (keyof DocType)[]): this;
+	search(searchTerm: string): void;
 }
 
 /**
@@ -106,7 +107,6 @@ export class Query<T extends RxCollection>
 	/**
 	 *
 	 */
-	public readonly subs: Subscription[] = [];
 	public readonly subjects = {
 		rxQuery: new BehaviorSubject<RxQuery | undefined>(undefined),
 		params: new BehaviorSubject<QueryParams | undefined>(undefined),
@@ -168,7 +168,8 @@ export class Query<T extends RxCollection>
 		if (this.findSubscriptionStarted) return;
 		this.findSubscriptionStarted = true;
 
-		this.subs.push(
+		this.addSub(
+			'result',
 			this._find$
 				.pipe(
 					distinctUntilChanged((prev, next) => {
@@ -201,10 +202,6 @@ export class Query<T extends RxCollection>
 	 */
 	get _find$() {
 		return this.rxQuery$.pipe(
-			// tap((rxQuery) => {
-			// 	console.log('rxQuery', rxQuery?.mangoQuery);
-			// 	// When to emit the updated params?
-			// }),
 			switchMap((rxQuery) => {
 				const startTime = performance.now();
 
@@ -212,6 +209,38 @@ export class Query<T extends RxCollection>
 					map((result) => {
 						const endTime = performance.now();
 						const elapsed = endTime - startTime;
+
+						const search = get(rxQuery, ['other', 'search']);
+						const relationalSearch = get(rxQuery, ['other', 'relationalSearch']);
+
+						if (relationalSearch) {
+							return {
+								elapsed,
+								searchActive: true,
+								searchTerm: relationalSearch?.searchTerm,
+								count: result.length,
+								hits: result.map((doc: DocumentType<T>) => ({
+									id: doc[this.primaryKey],
+									document: doc,
+									childrenSearchCount: relationalSearch?.countsByParent?.[doc?.id] || 0,
+									parentSearchTerm: relationalSearch?.searchTerm,
+								})),
+							};
+						}
+
+						if (search) {
+							return {
+								elapsed,
+								searchActive: true,
+								searchTerm: search.searchTerm,
+								count: result.length,
+								hits: result.map((doc: DocumentType<T>) => ({
+									id: doc[this.primaryKey],
+									document: doc,
+								})),
+							};
+						}
+
 						return {
 							elapsed,
 							searchActive: false,
@@ -356,14 +385,37 @@ export class Query<T extends RxCollection>
 	 * Subscribes to the search instance and updates the query params
 	 */
 	public search(searchTerm: string) {
-		// from(this.searchInstancePromise).pipe(
-		// 	switchMap((searchInstance) =>
-		// 		searchInstance.collection.$.pipe(
-		// 			startWith(null),
-		// 			switchMap(() => searchInstance.find(modifiedParams.search))
-		// 		)
-		// 	),
-		// this.currentRxQuery = this.currentRxQuery.where(selector);
+		// If the search term is empty, remove the uuid filter and unsubscribe from the search
+		if (isEmpty(searchTerm)) {
+			this.cancelSub('search');
+			this.removeWhere(this.primaryKey);
+			this.currentRxQuery.other.search = null;
+			this.exec();
+			return;
+		}
+
+		this.addSub(
+			'search',
+			from(this.searchInstancePromise)
+				.pipe(
+					switchMap((searchInstance) =>
+						// Note, I want to update search results when the search collection changes
+						// I don't know if this is the best way
+						searchInstance.collection.$.pipe(
+							startWith(null),
+							switchMap(() => searchInstance.find(searchTerm))
+						)
+					)
+				)
+				.subscribe((results: DocumentType<T>[]) => {
+					const uuids = results.map((result) => result[this.primaryKey]);
+					this.where(this.primaryKey).in(uuids);
+					this.currentRxQuery.other.search = {
+						searchTerm,
+					};
+					this.exec();
+				})
+		);
 	}
 	debouncedSearch = debounce(this.search, 250);
 

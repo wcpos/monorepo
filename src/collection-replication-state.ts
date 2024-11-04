@@ -54,8 +54,6 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	private firstSyncResolver: (() => void) | null = null;
 	public readonly firstSync: Promise<void>;
 
-	public readonly subs: Subscription[] = [];
-
 	/**
 	 * All public observables should be exposed as subjects so they can be completed on cancel
 	 */
@@ -104,7 +102,8 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			filter(() => !this.subjects.paused.getValue())
 		);
 
-		this.subs.push(
+		this.addSub(
+			'polling',
 			polling$.subscribe(() => {
 				this.run();
 			})
@@ -135,7 +134,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		);
 
 		// Subscribe to the total count and update the subject
-		this.subs.push(totalCount$.subscribe((count) => this.subjects.total.next(count)));
+		this.addSub(
+			'total',
+			totalCount$.subscribe((count) => this.subjects.total.next(count))
+		);
 	}
 
 	async run({ force = false }: { force?: boolean } = {}) {
