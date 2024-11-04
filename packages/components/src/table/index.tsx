@@ -85,7 +85,7 @@ const TableRow = React.forwardRef<ViewRef, SlottableViewProps & { index?: number
 				ref={ref}
 				className={cn(
 					'flex-row web:transition-colors web:data-[state=selected]:bg-muted',
-					index % 2 && 'bg-muted/40 dark:bg-zinc-900/50',
+					index % 2 ? 'bg-[#F9FBFD] dark:bg-zinc-900/50' : 'bg-card',
 					className
 				)}
 				{...props}

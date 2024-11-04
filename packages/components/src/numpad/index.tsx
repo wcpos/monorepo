@@ -28,78 +28,53 @@ const iconMap: Record<string, IconName> = {
 	'÷': 'divide',
 };
 
-const Display = React.forwardRef<
-	RNTextInput,
-	InputProps & {
-		selection: { start: number; end: number };
-		onSelectionChange: (sel: { start: number; end: number }) => void;
-	}
->(({ selection, onSelectionChange, ...props }, ref) => {
-	const inputRef = React.useRef<RNTextInput>(null);
-	const mergedRef = useMergedRef(ref, inputRef);
-
-	/**
-	 *
-	 */
-	const handleBackspacePress = React.useCallback(() => {
-		if (props.onKeyPress) {
-			props.onKeyPress({ nativeEvent: { key: 'Backspace' } as TextInputKeyPressEventData });
-		}
-		if (inputRef?.current) {
-			inputRef?.current.focus();
-		}
-	}, [props, inputRef]);
-
-	/**
-	 * Focus and select all text on mount
-	 *
-	 * HACK: the focus doesn't seem to work, perhaps it's not on the screen yet?
-	 * - so we use a timer to focus after a short delay
-	 */
-	React.useEffect(
-		() => {
-			const timer = setTimeout(() => {
-				if (inputRef.current && props.value) {
-					inputRef.current.focus();
-					onSelectionChange({ start: 0, end: props.value.length });
-				}
-			}, 100);
-			return () => clearTimeout(timer);
-		},
-		[
-			// run once on mount
-		]
-	);
-
-	/**
-	 * Focus and move cursor to the end of the text when value changes (e.g. after button press)
-	 */
-	React.useEffect(() => {
-		if (props.value) {
-			if (inputRef.current && props.value) {
-				inputRef.current.focus();
-				onSelectionChange({ start: props.value.length, end: props.value.length });
+const Display = React.forwardRef<RNTextInput, InputProps>(
+	({ selection, onSelectionChange, ...props }, ref) => {
+		const inputRef = React.useRef<RNTextInput>(null);
+		const mergedRef = useMergedRef(ref, inputRef);
+		/**
+		 *
+		 */
+		const handleBackspacePress = React.useCallback(() => {
+			if (props.onKeyPress) {
+				props.onKeyPress({ nativeEvent: { key: 'Backspace' } as TextInputKeyPressEventData });
 			}
-		}
-	}, [onSelectionChange, props.value]);
+			if (inputRef?.current) {
+				inputRef?.current.focus();
+			}
+		}, [props, inputRef]);
 
-	return (
-		<Input.Root {...props}>
-			<Input.InputField
-				ref={mergedRef}
-				{...props}
-				autoFocus
-				selection={selection}
-				onSelectionChange={(event) => {
-					onSelectionChange(event.nativeEvent.selection);
-				}}
-			/>
-			<Input.Right className="pr-1">
-				<IconButton name="deleteLeft" onPress={handleBackspacePress} />
-			</Input.Right>
-		</Input.Root>
-	);
-});
+		/**
+		 * Focus and select all text on mount
+		 *
+		 * @FIXME - the autofocus doesn't seem to work, perhaps it's not on the screen yet?
+		 * - so we use a timer to focus after a short delay
+		 */
+		React.useEffect(
+			() => {
+				const timer = setTimeout(() => {
+					if (inputRef.current) {
+						inputRef.current?.focus();
+						inputRef.current?.setSelectionRange(0, props.value?.length || 100);
+					}
+				}, 50);
+				return () => clearTimeout(timer);
+			},
+			[
+				// run once on mount
+			]
+		);
+
+		return (
+			<Input.Root {...props}>
+				<Input.InputField ref={mergedRef} {...props} autoFocus />
+				<Input.Right className="pr-1">
+					<IconButton name="deleteLeft" onPress={handleBackspacePress} />
+				</Input.Right>
+			</Input.Root>
+		);
+	}
+);
 
 Display.displayName = 'NumpadDisplay';
 
@@ -158,19 +133,25 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 		const hasDiscounts = discounts && discounts.length > 0;
 
 		/**
-		 * Selection state
+		 * Allow external components to get the current value
 		 */
-		const [selection, setSelection] = React.useState<{ start: number; end: number }>({
-			start: 0,
-			end: 0,
+		const augmentedRef = useAugmentedRef({
+			ref,
+			methods: {
+				getValue: () => currentValue,
+			},
+			deps: [currentValue],
 		});
-		const shouldReplace = selection.start === 0 && selection.end === (currentOperand?.length || 0);
 
 		/**
 		 *
 		 */
 		const handleKeyPress = React.useCallback(
 			(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+				let shouldReplace = false;
+				if (augmentedRef && augmentedRef.current) {
+					shouldReplace = augmentedRef.current?.selectionStart === 0;
+				}
 				const key = e.nativeEvent.key;
 				switch (key) {
 					case 'Backspace':
@@ -185,19 +166,36 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 						}
 				}
 			},
-			[deleteDigit, decimalSeparator, addDigit, shouldReplace]
+			[augmentedRef, deleteDigit, decimalSeparator, addDigit]
 		);
 
 		/**
-		 * Allow external components to get the current value
+		 *
 		 */
-		const augmentedRef = useAugmentedRef({
-			ref,
-			methods: {
-				getValue: () => currentValue,
+		const handleButtonPress = React.useCallback(
+			(key: string) => {
+				let shouldReplace = false;
+				if (augmentedRef && augmentedRef.current) {
+					shouldReplace = augmentedRef.current?.selectionStart === 0;
+				}
+				switch (key) {
+					case '+/-':
+						switchSign();
+						break;
+					case decimalSeparator:
+						addDigit('.', shouldReplace);
+						break;
+					default:
+						addDigit(key, shouldReplace);
+				}
+				// after a button press, we want to focus the input
+				if (augmentedRef && augmentedRef.current) {
+					augmentedRef.current?.focus();
+					augmentedRef.current?.setSelectionRange(100, 100);
+				}
 			},
-			deps: [currentValue],
-		});
+			[addDigit, augmentedRef, decimalSeparator, switchSign]
+		);
 
 		/**
 		 *
@@ -209,8 +207,8 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 					value={formatDisplay(currentValue)}
 					onSubmitEditing={() => onChangeText?.(currentValue)}
 					onKeyPress={handleKeyPress}
-					selection={selection}
-					onSelectionChange={setSelection}
+					// selection={selection}
+					// onSelectionChange={setSelection}
 				/>
 				<HStack className="gap-1">
 					<View className="grid grid-cols-3 gap-1" style={{ width: '146px' }}>
@@ -225,13 +223,7 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 									key={`${rowIndex}-${colIndex}`}
 									label={value === '+/-' ? undefined : value}
 									icon={value === '+/-' ? 'plusMinus' : undefined}
-									onPress={() =>
-										value === '+/-'
-											? switchSign()
-											: value === decimalSeparator
-												? addDigit('.', shouldReplace)
-												: addDigit(value, shouldReplace)
-									}
+									onPress={() => handleButtonPress(value)}
 								/>
 							))
 						)}

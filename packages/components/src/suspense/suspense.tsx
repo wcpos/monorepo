@@ -6,6 +6,7 @@ import { Text } from '../text';
 export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 	const renderCount = React.useRef(0);
 	const [isFallback, setIsFallback] = React.useState(false);
+	const fallbackStartTime = React.useRef<number | null>(null);
 
 	// Extract display names of child components
 	const childNames = React.useMemo(() => {
@@ -31,10 +32,15 @@ export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 
 	React.useEffect(() => {
 		if (isFallback) {
+			fallbackStartTime.current = performance.now();
 			console.info('Suspense is in fallback state. Children:', childNames);
 			// console.trace('Suspense fallback stack trace:');
 		} else {
-			console.info('Suspense has resolved. Children:', childNames);
+			if (fallbackStartTime.current) {
+				const duration = Math.round(performance.now() - fallbackStartTime.current);
+				console.info(`Suspense resolved after ${duration} ms. Children:`, childNames);
+			}
+			fallbackStartTime.current = null;
 		}
 	}, [isFallback, childNames]);
 

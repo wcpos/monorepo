@@ -24,11 +24,10 @@ function useInputContext() {
 interface RootProps {
 	children: React.ReactNode;
 	className?: string;
-	editable?: boolean;
 	disabled?: boolean;
 }
 
-const Root = ({ children, className, editable = true, disabled = false }: RootProps) => {
+const Root = ({ children, className, disabled = false }: RootProps) => {
 	const [isFocused, setIsFocused] = React.useState(false);
 
 	return (
@@ -39,7 +38,7 @@ const Root = ({ children, className, editable = true, disabled = false }: RootPr
 					'h-10 native:h-12 rounded-md border border-input bg-background',
 					'web:ring-offset-background',
 					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
-					(!editable || disabled) && 'opacity-50 web:cursor-not-allowed',
+					disabled && 'opacity-50 web:cursor-not-allowed',
 					className
 				)}
 			>
@@ -134,6 +133,7 @@ const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
 					'flex-1 w-full py-2 px-3 bg-transparent',
 					'text-base lg:text-sm native:text-lg native:leading-[1.25] text-foreground placeholder:text-muted-foreground',
 					'outline-none web:focus-visible:outline-none',
+					!editable && 'opacity-50 web:cursor-not-allowed',
 					className
 				)}
 				// placeholderTextColor={placeholderTextColor || 'text-muted-foreground'}
@@ -198,19 +198,17 @@ const Input = React.forwardRef<RNTextInput, InputProps>(
 			defaultProp: defaultValue,
 			onChange: onChangeText,
 		});
+		const isDisabled = disabled || !editable;
 
 		return (
-			<Root className={className} editable={editable} disabled={disabled}>
+			<Root className={className} disabled={isDisabled}>
 				<InputField
 					ref={ref}
 					type={type}
-					editable={editable}
+					editable={!isDisabled}
 					value={value}
 					onChangeText={setValue}
-					className={cn(
-						(!editable || disabled) && 'opacity-50 web:cursor-not-allowed',
-						inputClassName
-					)}
+					className={inputClassName}
 					{...props}
 				/>
 				{clearable && value !== undefined && value.length > 0 && (
