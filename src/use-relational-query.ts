@@ -23,6 +23,7 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 				id: { $in: [] },
 			},
 		},
+		infiniteScroll: false,
 	});
 
 	/**

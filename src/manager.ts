@@ -138,6 +138,8 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		collectionName,
 		initialParams,
 		greedy,
+		infiniteScroll,
+		pageSize,
 		...args
 	}: RegisterQueryConfig) {
 		const key = this.stringify(queryKeys);
@@ -156,6 +158,8 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					errorSubject: this.subjects.error,
 					greedy,
 					locale: this.locale,
+					infiniteScroll,
+					pageSize,
 				});
 
 				this.queryStates.set(key, queryState);
@@ -167,7 +171,15 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	}
 
 	registerRelationalQuery(
-		{ queryKeys, collectionName, initialParams, greedy, ...args }: RegisterQueryConfig,
+		{
+			queryKeys,
+			collectionName,
+			initialParams,
+			greedy,
+			infiniteScroll,
+			pageSize,
+			...args
+		}: RegisterQueryConfig,
 		childQuery: Query<any>,
 		parentLookupQuery: Query<any>
 	) {
@@ -188,6 +200,8 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 						errorSubject: this.subjects.error,
 						greedy,
 						locale: this.locale,
+						infiniteScroll,
+						pageSize,
 					},
 					childQuery,
 					parentLookupQuery

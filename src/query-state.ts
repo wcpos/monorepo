@@ -34,6 +34,8 @@ export interface QueryConfig<T> {
 	greedy?: boolean;
 	locale?: string;
 	autoExec?: boolean;
+	infiniteScroll?: boolean;
+	pageSize?: number;
 }
 
 export interface QueryResult<T> {
@@ -125,6 +127,13 @@ export class Query<T extends RxCollection>
 	public readonly resource = new ObservableResource(this.result$);
 
 	/**
+	 * Infinite Scroll
+	 */
+	public infiniteScroll: boolean;
+	public pageSize: number;
+	public currentPage: number;
+
+	/**
 	 *
 	 */
 	constructor({
@@ -136,6 +145,8 @@ export class Query<T extends RxCollection>
 		greedy = false,
 		locale = 'en',
 		autoExec = true,
+		infiniteScroll = false,
+		pageSize = 10,
 	}: QueryConfig<T>) {
 		super();
 		this.id = id;
@@ -145,6 +156,9 @@ export class Query<T extends RxCollection>
 		this.searchInstancePromise = collection.initSearch(locale);
 		this.locale = locale;
 		this.endpoint = endpoint; // @FIXME - this is used in the replication state but not in this class
+		this.infiniteScroll = infiniteScroll;
+		this.pageSize = pageSize;
+		this.currentPage = 0;
 
 		this.currentRxQuery = collection.find(initialParams);
 		if (autoExec) {
@@ -156,9 +170,29 @@ export class Query<T extends RxCollection>
 	 *
 	 */
 	exec() {
+		if (this.infiniteScroll) {
+			const limitValue = (this.currentPage + 1) * this.pageSize;
+			this.currentRxQuery = this.currentRxQuery.limit(limitValue);
+		}
 		this.subjects.rxQuery.next(this.currentRxQuery);
 		this.subjects.params.next(this.currentRxQuery.mangoQuery);
 		this.startFindSubscription();
+	}
+
+	/**
+	 *
+	 */
+	loadMore() {
+		if (!this.infiniteScroll) {
+			this.errorSubject.next(new Error('loadMore() called but infiniteScroll is not enabled'));
+			return;
+		}
+		this.currentPage++;
+		this.exec();
+	}
+
+	private resetPagination(): void {
+		this.currentPage = 0;
 	}
 
 	/**
@@ -266,17 +300,25 @@ export class Query<T extends RxCollection>
 	/**
 	 * Query Helpers
 	 */
+	private updateQuery(newRxQuery: RxQuery): void {
+		this.currentRxQuery = newRxQuery;
+		this.resetPagination();
+	}
+
 	public where(fieldOrSelector: string | MangoQuerySelector<DocumentType<T>>, value?: any): this {
+		let newRxQuery;
 		if (typeof fieldOrSelector === 'string') {
-			this.currentRxQuery = this.currentRxQuery.where(fieldOrSelector, value);
+			newRxQuery = this.currentRxQuery.where(fieldOrSelector, value);
 		} else {
-			this.currentRxQuery = this.currentRxQuery.where(fieldOrSelector);
+			newRxQuery = this.currentRxQuery.where(fieldOrSelector);
 		}
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public equals(value: any): this {
-		this.currentRxQuery = this.currentRxQuery.equals(value);
+		const newRxQuery = this.currentRxQuery.equals(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
@@ -285,99 +327,118 @@ export class Query<T extends RxCollection>
 	}
 
 	public gt(value: any): this {
-		this.currentRxQuery = this.currentRxQuery.gt(value);
+		const newRxQuery = this.currentRxQuery.gt(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public gte(value: any): this {
-		this.currentRxQuery = this.currentRxQuery.gte(value);
+		const newRxQuery = this.currentRxQuery.gte(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public lt(value: any): this {
-		this.currentRxQuery = this.currentRxQuery.lt(value);
+		const newRxQuery = this.currentRxQuery.lt(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public lte(value: any): this {
-		this.currentRxQuery = this.currentRxQuery.lte(value);
+		const newRxQuery = this.currentRxQuery.lte(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public ne(value: any): this {
-		this.currentRxQuery = this.currentRxQuery.ne(value);
+		const newRxQuery = this.currentRxQuery.ne(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public in(values: any[]): this {
-		this.currentRxQuery = this.currentRxQuery.in(values);
+		const newRxQuery = this.currentRxQuery.in(values);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public nin(values: any[]): this {
-		this.currentRxQuery = this.currentRxQuery.nin(values);
+		const newRxQuery = this.currentRxQuery.nin(values);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public all(value: any): this {
-		this.currentRxQuery = this.currentRxQuery.all(value);
+		const newRxQuery = this.currentRxQuery.all(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public regex(value: string | { $regex: string; $options?: string }): this {
-		this.currentRxQuery = this.currentRxQuery.regex(value);
+		const newRxQuery = this.currentRxQuery.regex(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public size(value: number): this {
-		this.currentRxQuery = this.currentRxQuery.size(value);
+		const newRxQuery = this.currentRxQuery.size(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public mod(value: any): this {
-		this.currentRxQuery = this.currentRxQuery.mod(value);
+		const newRxQuery = this.currentRxQuery.mod(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public exists(value: boolean): this {
-		this.currentRxQuery = this.currentRxQuery.exists(value);
+		const newRxQuery = this.currentRxQuery.exists(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public elemMatch(value: any): this {
-		this.currentRxQuery = this.currentRxQuery.elemMatch(value);
+		const newRxQuery = this.currentRxQuery.elemMatch(value);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public or(array: any[]): this {
-		this.currentRxQuery = this.currentRxQuery.or(array);
+		const newRxQuery = this.currentRxQuery.or(array);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public nor(array: any[]): this {
-		this.currentRxQuery = this.currentRxQuery.nor(array);
+		const newRxQuery = this.currentRxQuery.nor(array);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public and(array: any[]): this {
-		this.currentRxQuery = this.currentRxQuery.and(array);
+		const newRxQuery = this.currentRxQuery.and(array);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public sort(sortBy: MangoQuerySortPart<DocumentType<T>>): this {
 		const currentMangoQuery = this.currentRxQuery.mangoQuery;
 		const newMangoQuery = { ...currentMangoQuery, sort: sortBy };
-		this.currentRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = this.collection.find(newMangoQuery);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public skip(skipValue: number): this {
-		this.currentRxQuery = this.currentRxQuery.skip(skipValue);
+		const newRxQuery = this.currentRxQuery.skip(skipValue);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public limit(limitValue: number): this {
-		this.currentRxQuery = this.currentRxQuery.limit(limitValue);
+		const newRxQuery = this.currentRxQuery.limit(limitValue);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
@@ -462,7 +523,8 @@ export class Query<T extends RxCollection>
 		}
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
-		this.currentRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = this.collection.find(newMangoQuery);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
@@ -508,7 +570,8 @@ export class Query<T extends RxCollection>
 		}
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
-		this.currentRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = this.collection.find(newMangoQuery);
+		this.updateQuery(newRxQuery);
 		return this;
 	}
 
@@ -542,7 +605,8 @@ export class Query<T extends RxCollection>
 		}
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
-		this.currentRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = this.collection.find(newMangoQuery);
+		this.updateQuery(newRxQuery);
 
 		return this;
 	}
@@ -589,7 +653,8 @@ export class Query<T extends RxCollection>
 		newSelector.$and.push(orCondition);
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
-		this.currentRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = this.collection.find(newMangoQuery);
+		this.updateQuery(newRxQuery);
 
 		return this;
 	}
@@ -626,13 +691,15 @@ export class Query<T extends RxCollection>
 		if (newSelector.$and.length === 0) {
 			const { $and, ...remainingSelector } = newSelector;
 			const newMangoQuery = { ...currentMangoQuery, selector: remainingSelector };
-			this.currentRxQuery = this.collection.find(newMangoQuery);
+			const newRxQuery = this.collection.find(newMangoQuery);
+			this.updateQuery(newRxQuery);
 			return this;
 		}
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
 		// this.collection._queryCache._map = new Map();
-		this.currentRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = this.collection.find(newMangoQuery);
+		this.updateQuery(newRxQuery);
 
 		return this;
 	}
