@@ -67,7 +67,7 @@ const Display = React.forwardRef<RNTextInput, InputProps>(
 
 		return (
 			<Input.Root {...props}>
-				<Input.InputField ref={mergedRef} {...props} autoFocus />
+				<Input.InputField ref={mergedRef} type="numeric" {...props} autoFocus />
 				<Input.Right className="pr-1">
 					<IconButton name="deleteLeft" onPress={handleBackspacePress} />
 				</Input.Right>

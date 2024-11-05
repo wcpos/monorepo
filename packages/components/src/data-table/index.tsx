@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ActivityIndicator, RefreshControl, LayoutChangeEvent } from 'react-native';
 
+import { useFocusEffect } from '@react-navigation/native';
 import { FlashList, type FlashListProps } from '@shopify/flash-list';
 import {
 	ColumnDef,
@@ -29,12 +30,8 @@ interface DataTableProps<TData, TValue> {
 	data: TData[];
 	onRowPress?: (row: Row<TData>) => void;
 	estimatedItemSize?: number;
-	ListEmptyComponent?: FlashListProps<TData>['ListEmptyComponent'];
-	ListFooterComponent?: FlashListProps<TData>['ListFooterComponent'];
 	isRefreshing?: boolean;
 	onRefresh?: () => void;
-	onEndReached?: FlashListProps<TData>['onEndReached'];
-	onEndReachedThreshold?: FlashListProps<TData>['onEndReachedThreshold'];
 	renderItem?: FlashListProps<TData>['renderItem'];
 	/**
 	 * Made available to any children via the DataTableContext
@@ -68,12 +65,8 @@ const DataTable = <TData, TValue>({
 	data,
 	onRowPress,
 	estimatedItemSize = 45,
-	ListEmptyComponent,
-	ListFooterComponent,
 	isRefreshing = false,
 	onRefresh,
-	onEndReached,
-	onEndReachedThreshold,
 	renderItem,
 	extraContext,
 	tableMeta,
@@ -167,12 +160,28 @@ const DataTable = <TData, TValue>({
 		};
 	});
 
+	/**
+	 *
+	 */
 	const onLayout = React.useCallback(
 		({ nativeEvent }: LayoutChangeEvent) => {
-			width.value = nativeEvent.layout.width;
-			height.value = nativeEvent.layout.height;
+			if (nativeEvent.layout.width !== 0 && nativeEvent.layout.height !== 0) {
+				width.value = nativeEvent.layout.width;
+				height.value = nativeEvent.layout.height;
+			}
 		},
 		[height, width]
+	);
+
+	/**
+	 * https://github.com/Shopify/flash-list/issues/609
+	 */
+	const [isFocused, setIsFocused] = React.useState(false);
+	useFocusEffect(
+		React.useCallback(() => {
+			setIsFocused(true);
+			return () => setIsFocused(false);
+		}, [])
 	);
 
 	/**
@@ -215,30 +224,28 @@ const DataTable = <TData, TValue>({
 					))}
 				</TableHeader>
 				<TableBody onLayout={onLayout}>
-					<Animated.View style={[animatedStyle]}>
-						<FlashList
-							data={table.getRowModel().rows}
-							estimatedItemSize={estimatedItemSize}
-							ListEmptyComponent={ListEmptyComponent}
-							ListFooterComponent={ListFooterComponent}
-							showsVerticalScrollIndicator={false}
-							contentContainerStyle={{
-								paddingBottom: insets.bottom,
-							}}
-							refreshControl={
-								<RefreshControl
-									refreshing={isRefreshing}
-									onRefresh={onRefresh}
-									style={{ opacity: 0 }}
-								/>
-							}
-							renderItem={handleRenderRow}
-							onEndReached={onEndReached}
-							onEndReachedThreshold={onEndReachedThreshold}
-							keyExtractor={(row) => row.id}
-							extraData={extraDataWithTimestamp}
-							{...props}
-						/>
+					<Animated.View style={[animatedStyle, { flex: 1 }]}>
+						{isFocused && (
+							<FlashList
+								data={table.getRowModel().rows}
+								estimatedItemSize={estimatedItemSize}
+								showsVerticalScrollIndicator={false}
+								contentContainerStyle={{
+									paddingBottom: insets.bottom,
+								}}
+								refreshControl={
+									<RefreshControl
+										refreshing={isRefreshing}
+										onRefresh={onRefresh}
+										style={{ opacity: 0 }}
+									/>
+								}
+								renderItem={handleRenderRow}
+								keyExtractor={(row) => row.id}
+								extraData={extraDataWithTimestamp}
+								{...props}
+							/>
+						)}
 					</Animated.View>
 				</TableBody>
 			</Table>
