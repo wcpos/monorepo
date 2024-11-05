@@ -28,7 +28,10 @@ ComboboxList.displayName = 'ListWebCombobox';
 /**
  * We'll follow the same API as the `Select.Item` component from `@rn-primitives/select`.
  */
-const ComboboxItem = (props: React.ComponentProps<typeof CommandItem> & { label: string }) => {
+const ComboboxItem = React.forwardRef<
+	HTMLDivElement,
+	React.ComponentProps<typeof CommandItem> & { label: string }
+>((props, ref) => {
 	const { value = '', label = '', children } = props;
 	const { onValueChange, onOpenChange } = useRootContext();
 
@@ -50,11 +53,11 @@ const ComboboxItem = (props: React.ComponentProps<typeof CommandItem> & { label:
 	 * Note: we need to pass the `label` and `value` as keywords to the `CommandItem` component for filtering
 	 */
 	return (
-		<CommandItem {...props} onSelect={handleSelect} keywords={[label, value]}>
+		<CommandItem ref={ref} {...props} onSelect={handleSelect} keywords={[label, value]}>
 			{children ?? label}
 		</CommandItem>
 	);
-};
+});
 ComboboxItem.displayName = 'ItemWebCombobox';
 
 const ComboboxEmpty = CommandEmpty;

@@ -5,6 +5,7 @@ import { type DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive, useCommandState } from 'cmdk';
 
 import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
+import useMergedRef from '@wcpos/hooks/src/use-merged-ref';
 
 import { Dialog, DialogContent } from '../dialog';
 import { Icon } from '../icon';
@@ -71,18 +72,44 @@ CommandInput.displayName = CommandPrimitive.Input.displayName;
 
 const CommandList = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive.List>,
-	React.ComponentPropsWithoutRef<typeof CommandPrimitive.List>
->(({ className, ...props }, ref) => (
-	<CommandPrimitive.List
-		ref={ref}
-		className={cn(
-			'max-h-[300px] overflow-y-auto overflow-x-hidden group',
-			'[&>*:first-child]:gap-2 [&>*:first-child]:pt-2',
-			className
-		)}
-		{...props}
-	/>
-));
+	React.ComponentPropsWithoutRef<typeof CommandPrimitive.List> & { onEndReached?: () => void }
+>(({ className, onEndReached, ...props }, ref) => {
+	const localRef = React.useRef<HTMLDivElement>(null);
+	const mergedRef = useMergedRef(ref, localRef);
+
+	/**
+	 * Handle the scroll event to detect when the user is near the bottom of the list
+	 */
+	const handleScroll = React.useCallback(() => {
+		if (localRef && localRef?.current) {
+			const { scrollTop, scrollHeight, clientHeight } = localRef.current;
+			const isNearBottom = scrollHeight - scrollTop - clientHeight < 20;
+			if (isNearBottom && onEndReached) {
+				onEndReached();
+			}
+		}
+	}, [localRef, onEndReached]);
+
+	React.useEffect(() => {
+		const scrollContainer = localRef.current;
+		if (scrollContainer) {
+			scrollContainer.addEventListener('scroll', handleScroll);
+			return () => scrollContainer.removeEventListener('scroll', handleScroll);
+		}
+	}, [handleScroll]);
+
+	return (
+		<CommandPrimitive.List
+			ref={mergedRef}
+			className={cn(
+				'max-h-[300px] overflow-y-auto overflow-x-hidden group',
+				'[&>*:first-child]:gap-2 [&>*:first-child]:pt-2',
+				className
+			)}
+			{...props}
+		/>
+	);
+});
 
 CommandList.displayName = CommandPrimitive.List.displayName;
 
