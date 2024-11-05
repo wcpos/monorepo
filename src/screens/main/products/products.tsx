@@ -151,6 +151,7 @@ const Products = () => {
 			initialParams: {
 				sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
 			},
+			infiniteScroll: true,
 		},
 		{
 			queryKeys: ['variations', { target: 'page', type: 'relational' }],

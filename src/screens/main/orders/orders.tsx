@@ -75,6 +75,7 @@ const Orders = () => {
 				],
 			},
 		},
+		infiniteScroll: true,
 	});
 
 	/**

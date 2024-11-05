@@ -19,13 +19,14 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 
 export interface PaymentWebviewProps {
 	order: OrderDocument;
+	setLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 /**
  *
  */
 export const PaymentWebview = React.forwardRef<HTMLIFrameElement, PaymentWebviewProps>(
-	({ order }: PaymentWebviewProps, ref) => {
+	({ order, setLoading }: PaymentWebviewProps, ref) => {
 		const navigation = useNavigation();
 		const paymentURL = useObservableState(
 			order.links$.pipe(map((links) => get(links, ['payment', 0, 'href']))),
@@ -81,11 +82,11 @@ export const PaymentWebview = React.forwardRef<HTMLIFrameElement, PaymentWebview
 						log.error(err);
 						Toast.show({ text1: err?.message, type: 'error' });
 					} finally {
-						//
+						setLoading(false);
 					}
 				}
 			},
-			[navigation, order, stockAdjustment, uiSettings.autoShowReceipt]
+			[navigation, order, stockAdjustment, uiSettings.autoShowReceipt, setLoading]
 		);
 
 		/**

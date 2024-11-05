@@ -125,6 +125,7 @@ const POSProducts = ({ isColumn = false }) => {
 			initialParams: {
 				sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
 			},
+			infiniteScroll: true,
 		},
 		{
 			queryKeys: ['variations', { target: 'pos', type: 'relational' }],

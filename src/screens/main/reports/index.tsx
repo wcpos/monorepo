@@ -49,6 +49,7 @@ const ReportsWithProviders = () => {
 				],
 			},
 		},
+		greedy: true,
 	});
 
 	return (

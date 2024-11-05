@@ -1,11 +1,10 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import { useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 
 import { DataTable as Table, DataTableProps } from '@wcpos/components/src/data-table';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
 import type {
 	ProductDocument,
 	OrderDocument,
@@ -13,7 +12,7 @@ import type {
 	TaxRateDocument,
 	LogDocument,
 } from '@wcpos/database';
-import { useInfiniteScroll, Query } from '@wcpos/query';
+import { Query } from '@wcpos/query';
 
 import { ListEmptyComponent } from './empty';
 import { DataTableFooter } from './footer';
@@ -55,7 +54,7 @@ const DataTable = <TDocument extends DocumentType>({
 }: Props<TDocument>) => {
 	const { uiSettings, getUILabel } = useUISettings(id);
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
-	const result = useInfiniteScroll(query);
+	const result = useObservableSuspense(query.resource);
 	const sorting = React.useRef({
 		sortBy: uiSettings.sortBy,
 		sortDirection: uiSettings.sortDirection,
@@ -138,7 +137,11 @@ const DataTable = <TDocument extends DocumentType>({
 			// data={result.hits.map(({ document }) => document)}
 			data={result.hits}
 			columns={columns}
-			onEndReached={result.nextPage}
+			onEndReached={() => {
+				if (query.infiniteScroll) {
+					query.loadMore();
+				}
+			}}
 			onEndReachedThreshold={0.5}
 			ListEmptyComponent={<ListEmptyComponent message={noDataMessage} />}
 			TableFooterComponent={TableFooterComponent}

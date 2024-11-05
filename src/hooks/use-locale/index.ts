@@ -53,7 +53,7 @@ const systemLanguage: Language = (locales as LocalesType)[languageTag.toLowerCas
  */
 export const useLocale = () => {
 	const { store } = useAppState();
-	const locale$ = store.locale$;
+	const locale$ = store?.locale$;
 
 	/**
 	 * Store may or may not be available

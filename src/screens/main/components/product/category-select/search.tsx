@@ -23,6 +23,7 @@ export const CategorySearch = () => {
 		initialParams: {
 			sort: [{ name: 'asc' }],
 		},
+		greedy: true,
 	});
 
 	/**

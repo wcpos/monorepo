@@ -23,6 +23,7 @@ export const TagSearch = () => {
 		initialParams: {
 			sort: [{ name: 'asc' }],
 		},
+		greedy: true,
 	});
 
 	/**

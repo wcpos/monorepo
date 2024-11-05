@@ -21,6 +21,7 @@ export const useDefaultCustomer = () => {
 		initialParams: {
 			selector: { id: defaultCustomerID },
 		},
+		infiniteScroll: true,
 	});
 
 	/**

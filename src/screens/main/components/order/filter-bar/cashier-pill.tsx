@@ -44,6 +44,7 @@ const CashierSearch = () => {
 				role: { $in: ['administrator', 'shop_manager', 'cashier'] },
 			},
 		},
+		greedy: true,
 	});
 
 	/**

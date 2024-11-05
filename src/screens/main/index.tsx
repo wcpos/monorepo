@@ -84,6 +84,7 @@ const DrawerNavigator = ({ navigation }) => {
 					// borderRightWidth: 0,
 				},
 				sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
+				// unmountOnBlur: true,
 			}}
 			drawerContent={(props) => <DrawerContent {...props} largeScreen={largeScreen} />}
 		>

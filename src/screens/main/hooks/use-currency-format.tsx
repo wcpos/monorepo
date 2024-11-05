@@ -8,7 +8,7 @@ import { useNumberFormat, NumberFormatOptions } from './use-number-format';
 import { useAppState } from '../../../contexts/app-state';
 import allCurrencies from '../../../contexts/currencies/currencies.json';
 
-interface CurrencyFormatOptions extends NumberFormatOptions {
+export interface CurrencyFormatOptions extends NumberFormatOptions {
 	currency?: string;
 	currencySymbol?: string;
 	currencyPosition?: string;

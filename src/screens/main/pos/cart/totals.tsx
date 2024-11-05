@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import toNumber from 'lodash/toNumber';
+
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
@@ -34,26 +36,38 @@ export const Totals = () => {
 	} = useOrderTotals();
 
 	/**
+	 * Convert to numbers
+	 */
+	const subtotalNumber = toNumber(subtotal);
+	const subtotalTaxNumber = toNumber(subtotal_tax);
+	const discountTotalNumber = toNumber(discount_total);
+	const discountTaxNumber = toNumber(discount_tax);
+	const feeTotalNumber = toNumber(fee_total);
+	const shippingTotalNumber = toNumber(shipping_total);
+	const totalTaxNumber = toNumber(total_tax);
+	const feeTaxNumber = toNumber(fee_tax);
+	const shippingTaxNumber = toNumber(shipping_tax);
+
+	/**
 	 * Helpers
 	 */
-	const hasSubtotal = parseFloat(subtotal) !== 0;
-	const hasDiscount = parseFloat(discount_total) !== 0;
-	const hasShipping = parseFloat(shipping_total) !== 0;
-	const hasFee = parseFloat(fee_total) !== 0;
-	const hasTax = parseFloat(total_tax) !== 0;
+	const hasSubtotal = subtotalNumber !== 0;
+	const hasDiscount = discountTotalNumber !== 0;
+	const hasShipping = shippingTotalNumber !== 0;
+	const hasFee = feeTotalNumber !== 0;
+	const hasTax = totalTaxNumber !== 0;
 	const hasTotals = hasSubtotal || hasDiscount || hasShipping || hasFee || hasTax;
 
 	/**
 	 *
 	 */
 	const displaySubtotal =
-		inclOrExcl === 'incl' ? parseFloat(subtotal) + parseFloat(subtotal_tax) : subtotal;
+		inclOrExcl === 'incl' ? subtotalNumber + subtotalTaxNumber : subtotalNumber;
 	const displayDiscountTotal =
-		inclOrExcl === 'incl' ? parseFloat(discount_total) + parseFloat(discount_tax) : discount_total;
-	const displayFeeTotal =
-		inclOrExcl === 'incl' ? parseFloat(fee_total) + parseFloat(fee_tax) : fee_total;
+		inclOrExcl === 'incl' ? discountTotalNumber + discountTaxNumber : discountTotalNumber;
+	const displayFeeTotal = inclOrExcl === 'incl' ? feeTotalNumber + feeTaxNumber : feeTotalNumber;
 	const displayShippingTotal =
-		inclOrExcl === 'incl' ? parseFloat(shipping_total) + parseFloat(shipping_tax) : shipping_total;
+		inclOrExcl === 'incl' ? shippingTotalNumber + shippingTaxNumber : shippingTotalNumber;
 
 	return (
 		<>
@@ -68,7 +82,7 @@ export const Totals = () => {
 						hasDiscount && (
 							<HStack>
 								<Text className="grow">{t('Discount', { _tags: 'core' })}:</Text>
-								<Text>{format(`-${displayDiscountTotal}`)}</Text>
+								<Text>{format(-1 * displayDiscountTotal)}</Text>
 							</HStack>
 						)
 					}

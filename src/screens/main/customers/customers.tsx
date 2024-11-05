@@ -56,6 +56,7 @@ const Customers = () => {
 		initialParams: {
 			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
 		},
+		infiniteScroll: true,
 	});
 
 	/**

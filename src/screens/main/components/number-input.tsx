@@ -39,6 +39,8 @@ export interface NumberInputProps {
 
 /**
  * The ref is forwarded to the button.
+ *
+ * @FIXME - when the settings change, the button display does not change
  */
 export const NumberInput = React.forwardRef<React.ElementRef<typeof Button>, NumberInputProps>(
 	(

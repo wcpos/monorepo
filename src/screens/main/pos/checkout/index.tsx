@@ -1,6 +1,10 @@
 import * as React from 'react';
 
-import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import {
+	useObservableSuspense,
+	ObservableResource,
+	useObservableEagerState,
+} from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import {
@@ -30,14 +34,17 @@ interface Props {
  */
 const Checkout = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
+	const orderNumber = useObservableEagerState(order.number$);
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
+	const [loading, setLoading] = React.useState(false);
 	useModalRefreshFix();
 
 	/**
 	 *
 	 */
 	const handleProcessPayment = React.useCallback(() => {
+		setLoading(true);
 		if (iframeRef.current && iframeRef.current.contentWindow) {
 			iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
 		}
@@ -68,18 +75,22 @@ const Checkout = ({ resource }: Props) => {
 			<ModalContent size="xl" className="h-full">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('Checkout', { _tags: 'core' })}</Text>
+						<Text>
+							{orderNumber
+								? t('Chechout Order #{orderNumber}', { orderNumber, _tags: 'core' })
+								: t('Checkout', { _tags: 'core' })}
+						</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
-						<PaymentWebview order={order} ref={iframeRef} />
+						<PaymentWebview order={order} ref={iframeRef} setLoading={setLoading} />
 					</VStack>
 				</ModalBody>
 				<ModalFooter>
 					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
-					<ModalAction onPress={handleProcessPayment}>
+					<ModalAction onPress={handleProcessPayment} loading={loading}>
 						{t('Process Payment', { _tags: 'core' })}
 					</ModalAction>
 				</ModalFooter>

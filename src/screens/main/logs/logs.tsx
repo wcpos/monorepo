@@ -49,6 +49,7 @@ export const Logs = () => {
 		initialParams: {
 			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
 		},
+		infiniteScroll: true,
 	});
 
 	/**

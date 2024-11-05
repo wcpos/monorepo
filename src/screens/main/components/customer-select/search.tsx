@@ -23,6 +23,7 @@ export const CustomerSearch = ({ withGuest = false }: { withGuest?: boolean }) =
 		initialParams: {
 			sort: [{ last_name: 'asc' }],
 		},
+		infiniteScroll: true,
 	});
 
 	/**
