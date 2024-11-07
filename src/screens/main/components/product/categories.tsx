@@ -25,15 +25,15 @@ export const ProductCategories = ({
 	}
 
 	/**
-	 *
+	 * @NOTE - Don't use a unique key here, index is sufficient
 	 */
 	return (
 		<HStack className="flex-wrap gap-1 w-full">
-			{(categories || []).map((cat) => (
+			{(categories || []).map((cat, index) => (
 				<ButtonPill
 					variant="ghost-primary"
 					size="xs"
-					key={cat.id}
+					key={index}
 					onPress={() => query.where('categories').elemMatch({ id: cat.id }).exec()}
 				>
 					{cat.name}

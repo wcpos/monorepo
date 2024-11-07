@@ -135,7 +135,7 @@ const FilterBar = ({ query }) => {
 	 *
 	 */
 	return (
-		<HStack>
+		<HStack className="w-full flex-wrap">
 			<StatusPill query={query} />
 			<Suspense>
 				<CustomerPill resource={customerResource} query={query} />

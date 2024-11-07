@@ -22,17 +22,18 @@ export const PlainAttributes = ({ row }: CellContext<{ document: ProductDocument
 	const attributes = useObservableEagerState(product.attributes$);
 
 	/**
-	 *
+	 * @NOTE - Don't use a unique key here, index is sufficient
+	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
 	 */
 	return (
 		<VStack space="xs">
 			{attributes
 				.filter((attr: any) => !attr.variation)
-				.map((attr: any) => (
-					<HStack key={`${attr.name}-${attr.id}`} className="flex-wrap gap-0">
+				.map((attr: any, index: number) => (
+					<HStack key={index} className="flex-wrap gap-0">
 						<Text className="text-xs text-muted-foreground">{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
-							<Text className="text-xs" key={option}>
+							<Text className="text-xs" key={index}>
 								{option}
 								{index < attr.options.length - 1 && ', '}
 							</Text>
@@ -113,17 +114,18 @@ export const ProductAttributes = ({ row, table }) => {
 	}, [isExpanded, row.original.childrenSearchCount, row.original.parentSearchTerm, t]);
 
 	/**
-	 *
+	 * @NOTE - Don't use a unique key here, index is sufficient
+	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
 	 */
 	return (
 		<VStack space="xs">
 			{(attributes || [])
 				.filter((attr: any) => attr.variation)
-				.map((attr: any) => (
-					<HStack key={`${attr.name}-${attr.id}`} className="flex-wrap gap-0">
+				.map((attr: any, index: number) => (
+					<HStack key={index} className="flex-wrap gap-0">
 						<Text className="text-xs text-muted-foreground">{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
-							<React.Fragment key={option}>
+							<React.Fragment key={index}>
 								<Text
 									className="text-xs text-primary"
 									variant="link"

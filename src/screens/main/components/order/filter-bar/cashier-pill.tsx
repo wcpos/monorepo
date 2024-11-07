@@ -100,20 +100,17 @@ export const CashierPill = ({ query, resource }: CashierPillProps) => {
 			}}
 		>
 			<ComboboxTriggerPrimitive asChild>
-				{cashier ? (
-					<ButtonPill
-						size="xs"
-						leftIcon="userCrown"
-						removable={true}
-						onRemove={() => query.removeElemMatch('meta_data', { key: '_pos_user' }).exec()}
-					>
-						<ButtonText>{format(cashier)}</ButtonText>
-					</ButtonPill>
-				) : (
-					<ButtonPill size="xs" leftIcon="userCrown" variant="muted">
-						<ButtonText>{t('Select Cashier', { _tags: 'core' })}</ButtonText>
-					</ButtonPill>
-				)}
+				<ButtonPill
+					size="xs"
+					leftIcon="userCrown"
+					variant={cashier ? 'default' : 'muted'}
+					removable={!!cashier}
+					onRemove={() => query.removeElemMatch('meta_data', { key: '_pos_user' }).exec()}
+				>
+					<ButtonText>
+						{cashier ? format(cashier) : t('Select Cashier', { _tags: 'core' })}
+					</ButtonText>
+				</ButtonPill>
 			</ComboboxTriggerPrimitive>
 			<ComboboxContent>
 				<CashierSearch />

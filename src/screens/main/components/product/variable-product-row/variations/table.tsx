@@ -42,12 +42,16 @@ const cellRenderer = (props) => {
 export const VariationsTable = ({ query, row }: Props) => {
 	const result = useObservableSuspense(query.resource);
 
+	/**
+	 * @NOTE - Don't use a unique key here, index is sufficient
+	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
+	 */
 	return (
 		<VStack className="gap-0">
 			{result.hits.map((hit, index) => {
 				return (
-					<TableRow key={hit.id} index={index}>
-						{row.getVisibleCells().map((cell) => {
+					<TableRow key={index} index={index}>
+						{row.getVisibleCells().map((cell, index) => {
 							const meta = cell.column.columnDef.meta;
 
 							/**
@@ -66,7 +70,7 @@ export const VariationsTable = ({ query, row }: Props) => {
 
 							return (
 								<TableCell
-									key={cell.id}
+									key={index}
 									className={cn(cell.column.id === 'image' && 'relative')}
 									style={{
 										flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,

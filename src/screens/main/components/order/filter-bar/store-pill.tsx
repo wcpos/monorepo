@@ -13,7 +13,7 @@ import {
 	Select,
 	SelectContent,
 	SelectItem,
-	SelectPrimitive,
+	SelectPrimitiveTrigger,
 	SelectGroup,
 	SelectLabel,
 	SelectSeparator,
@@ -105,7 +105,7 @@ export const StorePill = ({ resource, query }: Props) => {
 	 */
 	return (
 		<Select value={value} onOpenChange={setOpen} onValueChange={handleSelect}>
-			<SelectPrimitive.Trigger asChild>
+			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="shop"
@@ -116,7 +116,7 @@ export const StorePill = ({ resource, query }: Props) => {
 				>
 					<ButtonText>{value?.label || t('Created via', { _tags: 'core' })}</ButtonText>
 				</ButtonPill>
-			</SelectPrimitive.Trigger>
+			</SelectPrimitiveTrigger>
 			<SelectContent>
 				<SelectGroup>
 					<SelectLabel>{t('Created via', { _tags: 'core' })}</SelectLabel>

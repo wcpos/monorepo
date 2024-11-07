@@ -30,7 +30,13 @@ export const CustomerList = ({ query, withGuest }: Props) => {
 	);
 
 	return (
-		<ComboboxList>
+		<ComboboxList
+			onEndReached={() => {
+				if (query?.infiniteScroll) {
+					query.loadMore();
+				}
+			}}
+		>
 			{hits.map(({ id, document }) => {
 				return (
 					<ComboboxItem

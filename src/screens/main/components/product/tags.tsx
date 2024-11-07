@@ -23,14 +23,15 @@ export const ProductTags = ({ row }: CellContext<{ document: ProductDocument }, 
 	}
 
 	/**
-	 *
+	 * @NOTE - Don't use a unique key here, index is sufficient
+	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
 	 */
 	return (
 		<HStack className="flex-wrap gap-1 w-full">
-			{tags.map((tag: any) => {
+			{tags.map((tag: any, index: number) => {
 				return (
 					<ButtonPill
-						key={tag.id}
+						key={index}
 						size="xs"
 						variant="ghost-secondary"
 						onPress={() => query.where('tags').elemMatch({ id: tag.id }).exec()}

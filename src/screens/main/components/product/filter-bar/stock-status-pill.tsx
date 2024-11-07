@@ -4,7 +4,12 @@ import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
-import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectPrimitiveTrigger,
+} from '@wcpos/components/src/select';
 import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
@@ -44,7 +49,7 @@ export const StockStatusPill = ({ query }: Props) => {
 			value={value}
 			onValueChange={({ value }) => query.where('stock_status').equals(value).exec()}
 		>
-			<SelectPrimitive.Trigger asChild>
+			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="warehouseFull"
@@ -54,7 +59,7 @@ export const StockStatusPill = ({ query }: Props) => {
 				>
 					<ButtonText>{value?.label || t('Stock Status', { _tags: 'core' })}</ButtonText>
 				</ButtonPill>
-			</SelectPrimitive.Trigger>
+			</SelectPrimitiveTrigger>
 			<SelectContent>
 				{items.map((item) => (
 					<SelectItem key={item.label} label={item.label} value={item.value} />

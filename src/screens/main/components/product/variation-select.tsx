@@ -9,7 +9,12 @@ import {
 	ComboboxList,
 	ComboboxSearch,
 } from '@wcpos/components/src/combobox';
-import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectPrimitiveTrigger,
+} from '@wcpos/components/src/select';
 import type { ProductDocument } from '@wcpos/database';
 
 import { useT } from '../../../../contexts/translations';
@@ -39,7 +44,7 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 				onSelect({ id: attribute.id, name: attribute.name, option: value })
 			}
 		>
-			<SelectPrimitive.Trigger asChild>
+			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="check"
@@ -49,16 +54,16 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 				>
 					<ButtonText>{isActive ? `${attribute.name}: ${selected}` : attribute.name}</ButtonText>
 				</ButtonPill>
-			</SelectPrimitive.Trigger>
+			</SelectPrimitiveTrigger>
 			{options.length > 10 ? (
 				<ComboboxContent>
 					<ComboboxSearch>
 						<ComboboxInput placeholder={t('Search Variations', { _tags: 'core' })} />
 						<ComboboxEmpty>{t('No variation found', { _tags: 'core' })}</ComboboxEmpty>
 						<ComboboxList>
-							{options.map((option) => {
+							{options.map((option, index) => {
 								return (
-									<ComboboxItem key={option} value={option} label={option}>
+									<ComboboxItem key={index} value={option} label={option}>
 										{option}
 									</ComboboxItem>
 								);
@@ -68,8 +73,8 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 				</ComboboxContent>
 			) : (
 				<SelectContent>
-					{options.map((option) => (
-						<SelectItem key={option} label={option} value={option} />
+					{options.map((option, index) => (
+						<SelectItem key={index} label={option} value={option} />
 					))}
 				</SelectContent>
 			)}

@@ -1,21 +1,7 @@
 {
-  "compilerOptions": {
-    "target": "es5",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "strict": false,
-    "forceConsistentCasingInFileNames": true,
-    "module": "esnext",
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx",
-    "noImplicitAny": false,
-  },
+  "extends": "@wcpos/tsconfig/base.json",
   "include": ["src"],
-  "exclude": [""]
+  "compilerOptions": {
+    "jsx": "react-native"
+  },
 }

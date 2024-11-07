@@ -29,7 +29,8 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 	const params = useObservableEagerState(query.params$);
 
 	/**
-	 *
+	 * @NOTE - Don't use a unique key here, index is sufficient
+	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
 	 */
 	return (
 		<HStack className="p-2 bg-input">
@@ -50,7 +51,7 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 					.map((attribute, index) => {
 						return (
 							<VariationSelect
-								key={`${index}-${attribute.name}`}
+								key={index}
 								attribute={attribute}
 								onSelect={(attribute) => {
 									console.log('onSelect', attribute);

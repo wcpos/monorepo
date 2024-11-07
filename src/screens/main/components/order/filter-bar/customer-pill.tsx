@@ -39,20 +39,17 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 			}}
 		>
 			<ComboboxTriggerPrimitive asChild>
-				{customer ? (
-					<ButtonPill
-						size="xs"
-						leftIcon="user"
-						removable={true}
-						onRemove={() => query.removeWhere('customer_id').exec()}
-					>
-						<ButtonText>{format(customer)}</ButtonText>
-					</ButtonPill>
-				) : (
-					<ButtonPill size="xs" leftIcon="user" variant="muted">
-						<ButtonText>{t('Select Customer', { _tags: 'core' })}</ButtonText>
-					</ButtonPill>
-				)}
+				<ButtonPill
+					size="xs"
+					leftIcon="user"
+					variant={customer ? 'default' : 'muted'}
+					removable={!!customer}
+					onRemove={() => query.removeWhere('customer_id').exec()}
+				>
+					<ButtonText>
+						{customer ? format(customer) : t('Select Customer', { _tags: 'core' })}
+					</ButtonText>
+				</ButtonPill>
 			</ComboboxTriggerPrimitive>
 			<ComboboxContent>
 				<CustomerSearch withGuest />

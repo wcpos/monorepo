@@ -17,6 +17,7 @@ import { Query } from '@wcpos/query';
 import { ListEmptyComponent } from './empty';
 import { DataTableFooter } from './footer';
 import { DataTableHeader } from './header';
+import { ListFooterComponent } from './list-footer';
 import { useUISettings, UISettingID } from '../../contexts/ui-settings';
 import { TextCell } from '../text-cell';
 
@@ -142,13 +143,15 @@ const DataTable = <TDocument extends DocumentType>({
 					query.loadMore();
 				}
 			}}
-			onEndReachedThreshold={0.5}
+			onEndReachedThreshold={0.1}
 			ListEmptyComponent={<ListEmptyComponent message={noDataMessage} />}
+			ListFooterComponent={ListFooterComponent}
 			TableFooterComponent={TableFooterComponent}
 			renderItem={renderItem ? (props) => renderItem(props) : undefined}
 			extraContext={context}
 			onSortingChange={handleSortingChange}
 			tableState={{ sorting }}
+			debug={true}
 			{...props}
 		/>
 	);
