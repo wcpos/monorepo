@@ -13,7 +13,6 @@ import { Text, TextClassContext } from '../text';
 import type { VariantProps } from 'class-variance-authority';
 
 const ButtonText = Text;
-ButtonText.displayName = 'ButtonText';
 
 const buttonVariants = cva(
 	[

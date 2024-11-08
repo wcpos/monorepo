@@ -1,8 +1,13 @@
 import * as React from 'react';
-import { ActivityIndicator, RefreshControl, LayoutChangeEvent } from 'react-native';
+import {
+	RefreshControl,
+	LayoutChangeEvent,
+	ScrollView,
+	View,
+	NativeSyntheticEvent,
+	NativeScrollEvent,
+} from 'react-native';
 
-import { useFocusEffect } from '@react-navigation/native';
-import { FlashList, type FlashListProps } from '@shopify/flash-list';
 import {
 	ColumnDef,
 	flexRender,
@@ -12,13 +17,8 @@ import {
 	getExpandedRowModel,
 	ExpandedState,
 } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useObservableRef } from 'observable-hooks';
-import Animated, {
-	useSharedValue,
-	useAnimatedStyle,
-	FadeInUp,
-	FadeOutUp,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DataTableRow } from './row';
@@ -32,16 +32,17 @@ interface DataTableProps<TData, TValue> {
 	estimatedItemSize?: number;
 	isRefreshing?: boolean;
 	onRefresh?: () => void;
-	renderItem?: FlashListProps<TData>['renderItem'];
-	/**
-	 * Made available to any children via the DataTableContext
-	 */
+	renderItem?: ({ item, index }: { item: Row<TData>; index: number }) => React.ReactNode;
 	extraContext?: Record<string, any>;
-	/**
-	 * Made available to the table instance
-	 */
 	tableMeta?: Record<string, any>;
 	TableFooterComponent?: React.ComponentType<any>;
+	tableState?: any;
+	enableRowSelection?: boolean;
+	onRowSelectionChange?: (newRowSelection: any) => void;
+	onSortingChange?: (updaterOrValue: any) => void;
+	extraData?: any;
+	onEndReached?: () => void;
+	[key: string]: any;
 }
 
 const DataTableContext = React.createContext<any | undefined>(undefined);
@@ -54,12 +55,6 @@ const useDataTable = () => {
 	return context;
 };
 
-/**
- * Tables are expensive to render, so memoize all props.
- *
- * @docs https://tanstack.com/table
- * @docs https://shopify.github.io/flash-list/
- */
 const DataTable = <TData, TValue>({
 	columns,
 	data,
@@ -93,8 +88,6 @@ const DataTable = <TData, TValue>({
 			expandedRef.current = value;
 		},
 		getRowCanExpand: (row) => row.original.document.type === 'variable',
-		// debugTable: true,
-		// manualExpanding: true,
 		meta: {
 			expanded$,
 			expandedRef,
@@ -114,91 +107,84 @@ const DataTable = <TData, TValue>({
 		onRowSelectionChange: onRowSelectionChange ? onRowSelectionChange : undefined,
 		manualSorting: true,
 		onSortingChange,
+		// debugTable: true,
 	});
 
-	/**
-	 *
-	 */
 	const handleRenderRow = React.useCallback(
 		({ item: row, index }: { item: Row<TData>; index: number }) =>
 			renderItem ? renderItem({ item: row, index }) : <DataTableRow row={row} index={index} />,
 		[renderItem]
 	);
 
-	/**
-	 *
-	 */
 	const context = React.useMemo(() => ({ table, ...extraContext }), [table, extraContext]);
 
-	/**
-	 * @FIXME - This is a hack!!
-	 * If the columns change, FlashList will not re-render the list.
-	 * We can force a re-render by changing the extraData.
-	 *
-	 * @TODO - look at context and extraData and see if we can make this more efficient.
-	 * It would be better to get react-table to trigger the re-render in the row component.
-	 */
 	const extraDataWithTimestamp = React.useMemo(
 		() => ({ ...(extraData || {}), timestamp: Date.now() }),
-		[
-			extraData,
-			// force re-render if columns change
-			columns,
-		]
+		[extraData, columns]
 	);
 
-	/**
-	 * FlashList wants to know the size of it's container, so we need to calculate it.
-	 *
-	 * NOTE! we also need to allow size to change when column or page  is resized.
-	 */
-	const width = useSharedValue(0);
-	const height = useSharedValue(0);
-	const animatedStyle = useAnimatedStyle(() => {
-		return {
-			width: width.value !== 0 ? width.value : undefined,
-			height: height.value !== 0 ? height.value : undefined,
-		};
+	const scrollRef = React.useRef<ScrollView>(null);
+	const scrollPositionRef = React.useRef(0);
+
+	const virtualizer = useVirtualizer({
+		count: table.getRowModel().rows.length,
+		getScrollElement: () => scrollRef.current,
+		estimateSize: () => estimatedItemSize,
+		measureElement:
+			typeof window !== 'undefined' && navigator.userAgent.indexOf('Firefox') === -1
+				? (element) => element?.getBoundingClientRect().height
+				: undefined,
+		overscan: 5,
 	});
 
 	/**
-	 *
+	 * Handler to detect when the scroll is near the bottom
 	 */
-	const onLayout = React.useCallback(
-		({ nativeEvent }: LayoutChangeEvent) => {
-			if (nativeEvent.layout.width !== 0 && nativeEvent.layout.height !== 0) {
-				width.value = nativeEvent.layout.width;
-				height.value = nativeEvent.layout.height;
+	const handleScroll = React.useCallback(
+		({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+			scrollPositionRef.current = nativeEvent.contentOffset.y; // Save the current scroll position
+
+			const offsetY = nativeEvent.contentOffset.y;
+			const contentHeight = nativeEvent.contentSize.height;
+			const layoutHeight = nativeEvent.layoutMeasurement.height;
+
+			if (offsetY + layoutHeight >= contentHeight - 500) {
+				if (typeof onEndReached === 'function') {
+					onEndReached();
+				}
 			}
 		},
-		[height, width]
+		[onEndReached]
 	);
 
 	/**
-	 * https://github.com/Shopify/flash-list/issues/609
+	 * Load more data when the content size changes, if the content is less than the scroll view's height
 	 */
-	const [isFocused, setIsFocused] = React.useState(false);
-	useFocusEffect(
-		React.useCallback(() => {
-			setIsFocused(true);
-			return () => setIsFocused(false);
-		}, [])
+	const handleContentSizeChange = React.useCallback(
+		(width: number, height: number) => {
+			if (scrollRef && scrollRef.current) {
+				if (height < scrollRef.current?.clientHeight && typeof onEndReached === 'function') {
+					onEndReached();
+				}
+			}
+		},
+		[onEndReached]
 	);
+
+	/**
+	 * Restore scroll position after data updates
+	 */
+	React.useEffect(() => {
+		if (scrollRef.current && scrollPositionRef.current !== 0) {
+			scrollRef.current.scrollTo({ y: scrollPositionRef.current, animated: false });
+		}
+	}, [data]);
 
 	/**
 	 *
 	 */
 	return (
 		<DataTableContext.Provider value={context}>
-			{/* {isRefreshing && (
-				<Animated.View
-					entering={FadeInUp}
-					exiting={FadeOutUp}
-					className="h-14 top-16 absolute items-center justify-center w-screen"
-				>
-					<ActivityIndicator size="small" className="text-foreground" />
-				</Animated.View>
-			)} */}
 			<Table className="flex-1">
 				<TableHeader>
 					{table.getHeaderGroups().map((headerGroup) => (
@@ -224,35 +210,41 @@ const DataTable = <TData, TValue>({
 						</TableRow>
 					))}
 				</TableHeader>
-				<TableBody onLayout={onLayout}>
-					<Animated.View style={[animatedStyle, { flex: 1 }]}>
-						{isFocused && (
-							<FlashList
-								data={table.getRowModel().rows}
-								estimatedItemSize={estimatedItemSize}
-								showsVerticalScrollIndicator={false}
-								contentContainerStyle={{
-									paddingBottom: insets.bottom,
-								}}
-								refreshControl={
-									<RefreshControl
-										refreshing={isRefreshing}
-										onRefresh={onRefresh}
-										style={{ opacity: 0 }}
-									/>
-								}
-								renderItem={handleRenderRow}
-								keyExtractor={(row) => row.id}
-								extraData={extraDataWithTimestamp}
-								onEndReached={() => {
-									if (isFocused && typeof onEndReached === 'function') {
-										onEndReached();
-									}
-								}}
-								{...props}
-							/>
-						)}
-					</Animated.View>
+				<TableBody>
+					<ScrollView
+						ref={scrollRef}
+						scrollEventThrottle={100}
+						onScroll={handleScroll}
+						refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+						contentContainerStyle={{
+							paddingBottom: insets.bottom,
+							position: 'relative',
+							height: virtualizer.getTotalSize(),
+						}}
+						onContentSizeChange={handleContentSizeChange}
+						{...props}
+					>
+						{virtualizer.getVirtualItems().map((virtualItem) => {
+							const row = table.getRowModel().rows[virtualItem.index];
+							return (
+								<View
+									dataSet={{ index: virtualItem.index }}
+									ref={(node) => virtualizer.measureElement(node)}
+									key={row.id}
+									style={{
+										position: 'absolute',
+										transform: `translateY(${virtualItem.start}px)`,
+										width: '100%',
+									}}
+								>
+									{handleRenderRow({
+										item: row,
+										index: virtualItem.index,
+									})}
+								</View>
+							);
+						})}
+					</ScrollView>
 				</TableBody>
 			</Table>
 			{TableFooterComponent && <TableFooterComponent />}

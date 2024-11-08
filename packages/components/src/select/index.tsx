@@ -5,6 +5,7 @@ import * as SelectPrimitive from '@rn-primitives/select';
 import * as Slot from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { Trigger as SelectPrimitiveTrigger } from './trigger';
 import { Button, type ButtonProps } from '../button';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
@@ -19,6 +20,10 @@ const Select = SelectPrimitive.Root;
 const useRootContext = SelectPrimitive.useRootContext;
 
 const SelectGroup = SelectPrimitive.Group;
+
+/**
+ *
+ */
 
 /**
  * I was having problems with the Select.Value component from Radix, so I created this SelectValue component.
@@ -50,24 +55,26 @@ SelectValue.displayName = 'ValueNativeSelect';
 const SelectTrigger = React.forwardRef<
 	React.ElementRef<typeof SelectPrimitive.Trigger>,
 	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
-	<SelectPrimitive.Trigger
-		ref={ref}
-		className={cn(
-			'flex flex-row h-10 native:h-12 items-center justify-between px-3 py-2 gap-2',
-			'text-sm text-muted-foreground',
-			'rounded-md border border-input bg-background',
-			'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
-			'[&>span]:line-clamp-1',
-			props.disabled && 'web:cursor-not-allowed opacity-50',
-			className
-		)}
-		{...props}
-	>
-		<>{children}</>
-		<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
-	</SelectPrimitive.Trigger>
-));
+>(({ className, children, ...props }, ref) => {
+	return (
+		<SelectPrimitiveTrigger
+			ref={ref}
+			className={cn(
+				'flex flex-row h-10 native:h-12 items-center justify-between px-3 py-2 gap-2',
+				'text-sm text-muted-foreground',
+				'rounded-md border border-input bg-background',
+				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
+				'[&>span]:line-clamp-1',
+				props.disabled && 'web:cursor-not-allowed opacity-50',
+				className
+			)}
+			{...props}
+		>
+			<>{children}</>
+			<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
+		</SelectPrimitiveTrigger>
+	);
+});
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
 /**
@@ -248,7 +255,7 @@ export {
 	SelectTrigger,
 	SelectValue,
 	type Option,
-	SelectPrimitive,
 	SelectButton,
 	useRootContext,
+	SelectPrimitiveTrigger,
 };

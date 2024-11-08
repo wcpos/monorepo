@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import { type DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive, useCommandState } from 'cmdk';
 
-import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
 import useMergedRef from '@wcpos/hooks/src/use-merged-ref';
 
 import { Dialog, DialogContent } from '../dialog';
@@ -14,7 +13,6 @@ import { cn } from '../lib/utils';
 import { SelectButton } from '../select';
 
 const CommandButton = SelectButton;
-CommandButton.displayName = 'CommandButton';
 
 const Command = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive>,
@@ -44,26 +42,17 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
 		</Dialog>
 	);
 };
+CommandDialog.displayName = 'CommandDialog';
 
 const CommandInput = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive.Input>,
 	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => {
-	const focusTrapRef = useFocusTrap();
-
 	return (
 		<View className="flex items-center p-1" cmdk-input-wrapper="">
-			{/* <Icon name="magnifyingGlass" className="mr-2 h-4 w-4 shrink-0 opacity-50" /> */}
-			<CommandPrimitive.Input
-				ref={focusTrapRef}
-				className={cn(
-					'web:flex h-10 native:h-12 web:w-full rounded-md border border-input bg-background px-3 web:py-2 text-base lg:text-sm native:text-lg native:leading-[1.25] text-foreground placeholder:text-muted-foreground file:border-0 file:bg-transparent file:font-medium',
-					'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
-					className
-				)}
-				autoFocus
-				{...props}
-			/>
+			<CommandPrimitive.Input ref={ref} {...props} asChild>
+				<Input clearable />
+			</CommandPrimitive.Input>
 		</View>
 	);
 });

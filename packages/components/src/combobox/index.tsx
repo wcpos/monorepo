@@ -1,29 +1,113 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
-import * as SelectPrimitive from '@rn-primitives/select';
+import { useControllableState } from '@rn-primitives/hooks';
+import * as Slot from '@rn-primitives/slot';
 
 import { Command, CommandEmpty, CommandInput, CommandList, CommandItem } from '../command';
-import { Select, SelectContent, SelectTrigger, SelectValue } from '../select';
+import { Icon } from '../icon';
+import { cn } from '../lib/utils';
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+	useRootContext as usePopoverContext,
+} from '../popover';
+import { Text, TextClassContext } from '../text';
+
+import type { Option } from '../select';
+import type { TriggerRef, TriggerProps } from '@rn-primitives/popover';
+import type { RootRef, RootProps, ValueRef, ValueProps } from '@rn-primitives/select';
 
 /**
  * We'll follow the same API as the `Select` component from `@rn-primitives/select`.
+ *
+ * Why not just use Select?
+ * - on Android browser it doesn't work as expected, the dropdown opens but it closes immediately
+ * when the phone keyboard is shown
+ * - it seems to work fine on other platforms, but select has it's own keypress handling and
+ * it might conflict with the command keypress handling
+ *
+ * Instead, we use the Popover primitive and just extend the conrext to allow value, defaultValue and
+ * onValueChange to provide an API consistent with the Select component
  */
-const Combobox = Select;
-Combobox.displayName = 'RootWebCombobox';
 
-const useRootContext = SelectPrimitive.useRootContext;
+interface IComboboxContext {
+	value: Option;
+	onValueChange: (option: Option) => void;
+	disabled?: boolean;
+}
 
-const ComboboxContent = SelectContent;
-ComboboxContent.displayName = 'ContentWebCombobox';
+const ComboboxContext = React.createContext<IComboboxContext | null>(null);
 
-const ComboboxSearch = Command;
-ComboboxSearch.displayName = 'SearchWebCombobox';
+const Combobox = React.forwardRef<RootRef, RootProps>(
+	(
+		{
+			asChild,
+			value: valueProp,
+			defaultValue,
+			onValueChange: onValueChangeProp,
+			disabled,
+			...viewProps
+		},
+		ref
+	) => {
+		const [value, onValueChange] = useControllableState({
+			prop: valueProp,
+			defaultProp: defaultValue,
+			onChange: onValueChangeProp,
+		});
 
-const ComboboxInput = CommandInput;
-ComboboxInput.displayName = 'InputWebCombobox';
+		const Component = asChild ? Slot.View : View;
+		return (
+			<Popover>
+				<ComboboxContext.Provider
+					value={{
+						value,
+						onValueChange,
+						disabled,
+					}}
+				>
+					<Component ref={ref} {...viewProps} />
+				</ComboboxContext.Provider>
+			</Popover>
+		);
+	}
+);
+Combobox.displayName = 'Combobox';
+
+function useComboboxContext() {
+	const context = React.useContext(ComboboxContext);
+	if (!context) {
+		throw new Error(
+			'Combobox compound components cannot be rendered outside the Combobox component'
+		);
+	}
+	return context;
+}
+
+const ComboboxContent = PopoverContent;
+
+/**
+ *
+ */
+const ComboboxInput = React.forwardRef<
+	React.ElementRef<typeof CommandInput>,
+	React.ComponentPropsWithoutRef<typeof CommandInput>
+>(({ className, ...props }, ref) => {
+	return <CommandInput ref={ref} autoFocus {...props} />;
+});
+ComboboxInput.displayName = 'ComboboxInput';
 
 const ComboboxList = CommandList;
-ComboboxList.displayName = 'ListWebCombobox';
+
+const ComboboxSearch = React.forwardRef<
+	React.ElementRef<typeof Command>,
+	React.ComponentPropsWithoutRef<typeof Command>
+>(({ className, ...props }, ref) => (
+	<Command ref={ref} className={cn('h-auto', className)} {...props} />
+));
+ComboboxSearch.displayName = 'Combobox';
 
 /**
  * We'll follow the same API as the `Select.Item` component from `@rn-primitives/select`.
@@ -33,7 +117,8 @@ const ComboboxItem = React.forwardRef<
 	React.ComponentProps<typeof CommandItem> & { label: string }
 >((props, ref) => {
 	const { value = '', label = '', children } = props;
-	const { onValueChange, onOpenChange } = useRootContext();
+	const { onOpenChange } = usePopoverContext();
+	const { onValueChange } = useComboboxContext();
 
 	/**
 	 * Handle the `onSelect` event from the `CommandItem` component.
@@ -61,18 +146,54 @@ const ComboboxItem = React.forwardRef<
 ComboboxItem.displayName = 'ItemWebCombobox';
 
 const ComboboxEmpty = CommandEmpty;
-ComboboxEmpty.displayName = 'EmptyWebCombobox';
 
-const ComboboxTriggerPrimitive = SelectPrimitive.Trigger;
+const ComboboxTriggerPrimitive = PopoverTrigger;
 
-const ComboboxTrigger = SelectTrigger;
-ComboboxTrigger.displayName = 'TriggerWebCombobox';
+const ComboboxTrigger = React.forwardRef<TriggerRef, TriggerProps>(
+	({ className, children, ...props }, ref) => {
+		return (
+			<PopoverTrigger
+				ref={ref}
+				className={cn(
+					'flex flex-row h-10 native:h-12 items-center justify-between px-3 py-2 gap-2',
+					'text-sm text-muted-foreground',
+					'rounded-md border border-input bg-background',
+					'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
+					'[&>span]:line-clamp-1',
+					props.disabled && 'web:cursor-not-allowed opacity-50',
+					className
+				)}
+				{...props}
+			>
+				<>{children}</>
+				<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
+			</PopoverTrigger>
+		);
+	}
+);
+ComboboxTrigger.displayName = 'ComboboxTrigger';
 
-// const ComboboxValue = (props: React.ComponentProps<typeof SelectValue>) => {
-// 	return <SelectValue {...props} />;
-// };
-const ComboboxValue = SelectValue;
-ComboboxValue.displayName = 'ValueWebCombobox';
+const ComboboxValue = React.forwardRef<ValueRef, ValueProps>(
+	({ asChild, placeholder, className, ...props }, ref) => {
+		const { value } = useComboboxContext();
+		const Component = asChild ? Slot.Text : Text;
+
+		return (
+			<TextClassContext.Provider
+				value={cn(
+					'text-sm native:text-lg',
+					value?.value ? 'text-foreground' : 'text-muted-foreground',
+					className
+				)}
+			>
+				<Component ref={ref} {...props}>
+					{value?.label ?? placeholder}
+				</Component>
+			</TextClassContext.Provider>
+		);
+	}
+);
+ComboboxValue.displayName = 'ComboboxValue';
 
 export {
 	Combobox,
@@ -83,7 +204,8 @@ export {
 	ComboboxEmpty,
 	ComboboxTriggerPrimitive,
 	ComboboxItem,
-	useRootContext,
+	usePopoverContext,
+	useComboboxContext,
 	ComboboxValue,
 	ComboboxTrigger,
 };

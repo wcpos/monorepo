@@ -3,6 +3,8 @@ import { TextInput as RNTextInput, TextInputProps as RNTextInputProps, View } fr
 
 import { useControllableState } from '@rn-primitives/hooks';
 
+import useMergedRef from '@wcpos/hooks/src/use-merged-ref';
+
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 
@@ -75,6 +77,8 @@ interface InputFieldProps extends RNTextInputProps {
 const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
 	({ className, placeholderTextColor, type = 'text', editable = true, ...props }, ref) => {
 		const { setIsFocused } = useInputContext();
+		const inputRef = React.useRef<RNTextInput>(null);
+		const mergedRef = useMergedRef(ref, inputRef);
 
 		let keyboardType: RNTextInputProps['keyboardType'] = 'default';
 		let inputMode: RNTextInputProps['inputMode'] = 'text';
@@ -125,9 +129,28 @@ const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
 				inputMode = 'text';
 		}
 
+		/**
+		 * @FIXME - for some reason, I can never get autoFocus to work on the RNTextInput
+		 * It's possible that other components are stealing the focus, eg: popover for combobox and number input
+		 * For now, we'll just do a delay
+		 */
+		React.useEffect(
+			() => {
+				const timer = setTimeout(() => {
+					if (props.autoFocus && inputRef.current) {
+						inputRef.current?.focus();
+					}
+				}, 50);
+				return () => clearTimeout(timer);
+			},
+			[
+				// run once on mount
+			]
+		);
+
 		return (
 			<RNTextInput
-				ref={ref}
+				ref={mergedRef}
 				editable={editable}
 				className={cn(
 					'flex-1 w-full py-2 px-3 bg-transparent',
@@ -199,11 +222,27 @@ const Input = React.forwardRef<RNTextInput, InputProps>(
 			onChange: onChangeText,
 		});
 		const isDisabled = disabled || !editable;
+		const inputRef = React.useRef<RNTextInput>(null);
+		const mergedRef = useMergedRef(ref, inputRef);
+
+		/**
+		 * NOTE - we need to trigger the onChange callback if it exists
+		 * otherwise the parent component won't know the value has changed
+		 */
+		const handleClear = () => {
+			setValue('');
+			if (typeof props?.onChange === 'function') {
+				props.onChange({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>);
+			}
+			if (inputRef.current) {
+				inputRef.current.focus();
+			}
+		};
 
 		return (
 			<Root className={className} disabled={isDisabled}>
 				<InputField
-					ref={ref}
+					ref={mergedRef}
 					type={type}
 					editable={!isDisabled}
 					value={value}
@@ -216,7 +255,7 @@ const Input = React.forwardRef<RNTextInput, InputProps>(
 						<IconButton
 							name="xmark"
 							size="sm"
-							onPress={() => setValue('')}
+							onPress={handleClear}
 							accessibilityLabel="Clear text"
 						/>
 					</Right>
