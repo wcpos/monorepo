@@ -23,6 +23,7 @@
     "@rn-primitives/label": "^1.1.0",
     "@rn-primitives/popover": "^1.1.0",
     "@rn-primitives/portal": "^1.1.0",
+    "@rn-primitives/progress": "^1.1.0",
     "@rn-primitives/radio-group": "^1.1.0",
     "@rn-primitives/select": "^1.1.0",
     "@rn-primitives/slot": "^1.1.0",

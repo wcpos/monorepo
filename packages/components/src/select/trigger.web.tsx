@@ -42,12 +42,7 @@ const Trigger = React.forwardRef<TriggerRef, TriggerProps>(
 			if (props?.onPress) {
 				props.onPress(event);
 			}
-			if (
-				event.nativeEvent?.pointerType === 'touch' ||
-				event.nativeEvent?.type?.startsWith('touch')
-			) {
-				onOpenChange(true);
-			}
+			onOpenChange(true);
 		};
 
 		const Component = asChild ? Slot.Pressable : Pressable;

@@ -1,3 +1,6 @@
+/**
+ * @TODO - update to https://github.com/nandorojo/burnt
+ */
 import Toast, { ToastConfig } from 'react-native-toast-message';
 
 import { BaseToast } from './toast';
