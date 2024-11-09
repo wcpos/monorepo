@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { ComboboxList, ComboboxItem, useRootContext } from '@wcpos/components/src/combobox';
+import { ComboboxList, ComboboxItem, useComboboxContext } from '@wcpos/components/src/combobox';
 
 import { CustomerSelectItem } from './item';
 
@@ -16,7 +16,7 @@ interface Props {
  */
 export const CustomerList = ({ query, withGuest }: Props) => {
 	const result = useObservableSuspense(query.resource);
-	const { onValueChange } = useRootContext();
+	const { onValueChange } = useComboboxContext();
 
 	/**
 	 *

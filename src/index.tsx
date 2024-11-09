@@ -52,7 +52,7 @@ const App = () => {
 					 * First suspense to load the initial app state
 					 * - we now have site, user, store, etc if the user is logged in
 					 */
-					fallback={<Splash />}
+					fallback={<Splash progress={33} />}
 				>
 					<AppStateProvider initialProps={initialProps}>
 						<React.Suspense
@@ -61,7 +61,7 @@ const App = () => {
 							 * - translations, theme, etc
 							 * - in the future it might be nice to have a loading screen that shows progress for initial load
 							 */
-							fallback={<Splash />}
+							fallback={<Splash progress={66} />}
 						>
 							<ErrorBoundary>
 								<TranslationProvider>

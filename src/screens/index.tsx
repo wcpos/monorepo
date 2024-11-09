@@ -7,13 +7,16 @@ import get from 'lodash/get';
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { of } from 'rxjs';
 
-import AuthNavigator from './auth';
-import MainNavigator from './main';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Suspense } from '@wcpos/components/src/suspense';
+
+import Splash from './splash';
 import { useAppState } from '../contexts/app-state';
 import { useT } from '../contexts/translations';
 import { URL } from '../lib/url';
 
-// const MainNavigator = React.lazy(() => import('./main'));
+const MainNavigator = React.lazy(() => import('./main'));
+const AuthNavigator = React.lazy(() => import('./auth'));
 
 export type RootStackParamList = {
 	AuthStack: undefined;
@@ -163,13 +166,25 @@ const RootNavigator = () => {
 				screenOptions={{ headerShown: false }}
 			>
 				{storeDB && fastStoreDB ? (
-					<Stack.Screen name="MainStack" component={MainNavigator} />
+					<Stack.Screen name="MainStack">
+						{(props) => (
+							<ErrorBoundary>
+								<Suspense fallback={<Splash progress={100} />}>
+									<MainNavigator {...props} />
+								</Suspense>
+							</ErrorBoundary>
+						)}
+					</Stack.Screen>
 				) : (
-					<Stack.Screen
-						name="AuthStack"
-						component={AuthNavigator}
-						options={{ title: 'WooCommerce POS' }}
-					/>
+					<Stack.Screen name="AuthStack" options={{ title: 'WooCommerce POS' }}>
+						{(props) => (
+							<ErrorBoundary>
+								<Suspense fallback={<Splash progress={100} />}>
+									<AuthNavigator {...props} />
+								</Suspense>
+							</ErrorBoundary>
+						)}
+					</Stack.Screen>
 				)}
 			</Stack.Navigator>
 		</NavigationContainer>

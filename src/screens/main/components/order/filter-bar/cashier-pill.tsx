@@ -35,7 +35,7 @@ const CashierSearch = () => {
 	/**
 	 * Query for cashiers
 	 */
-	const query = useQuery({
+	const query = useQuery<CustomerCollection>({
 		queryKeys: ['customers', 'cashier-select'],
 		collectionName: 'customers',
 		initialParams: {

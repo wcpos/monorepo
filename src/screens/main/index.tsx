@@ -21,11 +21,12 @@ import { Errors } from './errors';
 import useKeyboardShortcuts from './hooks/use-keyboard-shortcuts';
 import { useRestHttpClient } from './hooks/use-rest-http-client';
 import { Login } from './login';
-import { LogsWithProviders } from './logs';
+import LogsWithProviders from './logs';
 import OrdersNavigator from './orders';
 import POSNavigator from './pos';
 import ProductsNavigator from './products';
-import ReportsNavigator from './reports';
+// import ReportsNavigator from './reports';
+import { ReportsUpgrade } from './reports-upgrade';
 import { SettingsTabs } from './settings';
 import Support from './support';
 import { TaxRates } from './tax-rates';
@@ -34,6 +35,8 @@ import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';
 import { useLocale } from '../../hooks/use-locale';
 import { useVersionCheck } from '../../hooks/use-version-check';
+
+const ReportsNavigator = React.lazy(() => import('./reports'));
 
 export type MainStackParamList = {
 	MainDrawer: undefined;
@@ -90,7 +93,6 @@ const DrawerNavigator = ({ navigation }) => {
 		>
 			<Drawer.Screen
 				name="POSStack"
-				component={POSNavigator}
 				options={{
 					title: t('POS', { _tags: 'core' }),
 					drawerLabel: t('POS', { _tags: 'core' }),
@@ -98,10 +100,17 @@ const DrawerNavigator = ({ navigation }) => {
 						<Icon size="xl" name="cashRegister" className={focused && 'text-primary'} />
 					),
 				}}
-			/>
+			>
+				{(props) => (
+					<ErrorBoundary>
+						<Suspense>
+							<POSNavigator {...props} />
+						</Suspense>
+					</ErrorBoundary>
+				)}
+			</Drawer.Screen>
 			<Drawer.Screen
 				name="ProductsStack"
-				component={ProductsNavigator}
 				options={{
 					title: t('Products', { _tags: 'core' }),
 					drawerLabel: t('Products', { _tags: 'core' }),
@@ -109,10 +118,17 @@ const DrawerNavigator = ({ navigation }) => {
 						<Icon size="xl" name="gifts" className={focused && 'text-primary'} />
 					),
 				}}
-			/>
+			>
+				{(props) => (
+					<ErrorBoundary>
+						<Suspense>
+							<ProductsNavigator {...props} />
+						</Suspense>
+					</ErrorBoundary>
+				)}
+			</Drawer.Screen>
 			<Drawer.Screen
 				name="OrdersStack"
-				component={OrdersNavigator}
 				options={{
 					title: t('Orders', { _tags: 'core' }),
 					drawerLabel: t('Orders', { _tags: 'core' }),
@@ -120,10 +136,17 @@ const DrawerNavigator = ({ navigation }) => {
 						<Icon size="xl" name="receipt" className={focused && 'text-primary'} />
 					),
 				}}
-			/>
+			>
+				{(props) => (
+					<ErrorBoundary>
+						<Suspense>
+							<OrdersNavigator {...props} />
+						</Suspense>
+					</ErrorBoundary>
+				)}
+			</Drawer.Screen>
 			<Drawer.Screen
 				name="CustomersStack"
-				component={CustomersNavigator}
 				options={{
 					title: t('Customers', { _tags: 'core' }),
 					drawerLabel: t('Customers', { _tags: 'core' }),
@@ -131,10 +154,17 @@ const DrawerNavigator = ({ navigation }) => {
 						<Icon size="xl" name="users" className={focused && 'text-primary'} />
 					),
 				}}
-			/>
+			>
+				{(props) => (
+					<ErrorBoundary>
+						<Suspense>
+							<CustomersNavigator {...props} />
+						</Suspense>
+					</ErrorBoundary>
+				)}
+			</Drawer.Screen>
 			<Drawer.Screen
 				name="ReportsStack"
-				component={ReportsNavigator}
 				options={{
 					title: t('Reports', { _tags: 'core' }),
 					drawerLabel: t('Reports', { _tags: 'core' }),
@@ -142,10 +172,21 @@ const DrawerNavigator = ({ navigation }) => {
 						<Icon size="xl" name="chartMixedUpCircleDollar" className={focused && 'text-primary'} />
 					),
 				}}
-			/>
+			>
+				{(props) =>
+					!showUpgrade ? (
+						<ReportsUpgrade />
+					) : (
+						<ErrorBoundary>
+							<Suspense>
+								<ReportsNavigator {...props} />
+							</Suspense>
+						</ErrorBoundary>
+					)
+				}
+			</Drawer.Screen>
 			<Drawer.Screen
 				name="LogsStack"
-				component={LogsWithProviders}
 				options={{
 					title: t('Logs', { _tags: 'core' }),
 					drawerLabel: t('Logs', { _tags: 'core' }),
@@ -154,10 +195,17 @@ const DrawerNavigator = ({ navigation }) => {
 					),
 					drawerItemStyle: { marginTop: 'auto' },
 				}}
-			/>
+			>
+				{(props) => (
+					<ErrorBoundary>
+						<Suspense>
+							<LogsWithProviders {...props} />
+						</Suspense>
+					</ErrorBoundary>
+				)}
+			</Drawer.Screen>
 			<Drawer.Screen
 				name="SupportStack"
-				component={Support}
 				options={{
 					title: t('Support', { _tags: 'core' }),
 					drawerLabel: t('Support', { _tags: 'core' }),
@@ -166,7 +214,15 @@ const DrawerNavigator = ({ navigation }) => {
 					),
 					// drawerItemStyle: { marginTop: 'auto' },
 				}}
-			/>
+			>
+				{(props) => (
+					<ErrorBoundary>
+						<Suspense>
+							<Support {...props} />
+						</Suspense>
+					</ErrorBoundary>
+				)}
+			</Drawer.Screen>
 		</Drawer.Navigator>
 	);
 };

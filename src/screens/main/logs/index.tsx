@@ -8,7 +8,7 @@ import { Logs } from './logs';
 /**
  *
  */
-export const LogsWithProviders = () => {
+const LogsWithProviders = () => {
 	return (
 		<ErrorBoundary>
 			<Suspense>
@@ -17,3 +17,5 @@ export const LogsWithProviders = () => {
 		</ErrorBoundary>
 	);
 };
+
+export default LogsWithProviders;

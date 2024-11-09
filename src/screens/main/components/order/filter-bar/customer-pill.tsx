@@ -13,8 +13,8 @@ import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-import { CustomerSearch } from '../../../components/customer-select';
 import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
+import { CustomerSearch } from '../../customer-select';
 
 interface CustomerPillProps {
 	query: Query<CustomerCollection>;
