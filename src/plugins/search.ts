@@ -51,8 +51,10 @@ export const searchPlugin: RxPlugin = {
 							docToString: (doc) => {
 								return this.options.searchFields.map((field) => doc[field] || '').join(' ');
 							},
+							initialization: 'lazy',
 							indexOptions: {
-								tokenize: 'full',
+								preset: 'performance',
+								tokenize: 'forward',
 								language: locale,
 							},
 						});
@@ -70,6 +72,32 @@ export const searchPlugin: RxPlugin = {
 						throw error;
 					}
 				})();
+
+				// Register the cleanup function with onDestroy
+				if (!this._cleanupRegistered) {
+					this._cleanupRegistered = true;
+
+					this.onRemove.push(async () => {
+						if (this._searchInstances) {
+							for (const [locale, searchInstance] of this._searchInstances.entries()) {
+								// Destroy the search instance's collection if it exists
+								if (
+									searchInstance.collection &&
+									typeof searchInstance.collection.destroy === 'function'
+								) {
+									await searchInstance.collection.destroy();
+								}
+								// Remove the search instance from the map
+								this._searchInstances.delete(locale);
+							}
+						}
+
+						// Clear any pending search promises
+						if (this._searchPromises) {
+							this._searchPromises.clear();
+						}
+					});
+				}
 
 				// Store the promise in the _searchPromises map
 				this._searchPromises.set(locale, searchPromise);
@@ -110,5 +138,4 @@ export const searchPlugin: RxPlugin = {
 		},
 	},
 	overwritable: {},
-	hooks: {},
 };

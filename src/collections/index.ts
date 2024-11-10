@@ -1,3 +1,6 @@
+import isNaN from 'lodash/isNaN';
+import round from 'lodash/round';
+import toNumber from 'lodash/toNumber';
 import { toTypedRxJsonSchema, ExtractDocumentTypeFromTypedRxJsonSchema, RxJsonSchema } from 'rxdb';
 
 import { categoriesLiteral } from './schemas/categories';
@@ -17,6 +20,12 @@ import { variationsLiteral } from './schemas/variations';
 import { wpCredentialsLiteral } from './schemas/wp-credientials';
 
 import type { RxCollectionCreator, RxCollection, RxDocument } from 'rxdb';
+
+const roundToSixDecimals = (value: any): number => {
+	const num = toNumber(value);
+	if (isNaN(num)) return 0;
+	return round(num, 6);
+};
 
 /**
  * Global Users
@@ -103,9 +112,26 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 	schema: productSchema,
 	options: {
 		searchFields: ['name', 'sku', 'barcode'],
+		middlewares: {
+			preInsert: {
+				handle: (doc) => {
+					doc.sortable_price = roundToSixDecimals(doc.price);
+					return doc;
+				},
+				parallel: false,
+			},
+			preSave: {
+				handle: (doc) => {
+					doc.sortable_price = roundToSixDecimals(doc.price);
+					return doc;
+				},
+				parallel: false,
+			},
+		},
 	},
 	migrationStrategies: {
 		1(oldDoc) {
+			oldDoc.sortable_price = roundToSixDecimals(oldDoc.price);
 			return oldDoc;
 		},
 	},
@@ -125,6 +151,22 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 	schema: productVariationSchema,
 	options: {
 		searchFields: ['sku', 'barcode'],
+		middlewares: {
+			preInsert: {
+				handle: (doc) => {
+					doc.sortable_price = roundToSixDecimals(doc.price);
+					return doc;
+				},
+				parallel: false,
+			},
+			preSave: {
+				handle: (doc) => {
+					doc.sortable_price = roundToSixDecimals(doc.price);
+					return doc;
+				},
+				parallel: false,
+			},
+		},
 	},
 	migrationStrategies: {
 		1(oldDoc) {
@@ -132,6 +174,7 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 			return oldDoc;
 		},
 		2(oldDoc) {
+			oldDoc.sortable_price = roundToSixDecimals(oldDoc.price);
 			return oldDoc;
 		},
 	},
@@ -189,9 +232,26 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 	schema: orderSchema,
 	options: {
 		searchFields: ['number', 'billing.first_name', 'billing.last_name', 'billing.email'],
+		middlewares: {
+			preInsert: {
+				handle: (doc) => {
+					doc.sortable_total = roundToSixDecimals(doc.total);
+					return doc;
+				},
+				parallel: false,
+			},
+			preSave: {
+				handle: (doc) => {
+					doc.sortable_total = roundToSixDecimals(doc.total);
+					return doc;
+				},
+				parallel: false,
+			},
+		},
 	},
 	migrationStrategies: {
 		1(oldDoc) {
+			oldDoc.sortable_total = roundToSixDecimals(oldDoc.total);
 			return oldDoc;
 		},
 	},

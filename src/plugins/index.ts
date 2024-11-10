@@ -5,16 +5,17 @@ import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
-// import { RxDBPipelinePlugin } from 'rxdb/plugins/pipeline';
+import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
 
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
+import middlewaresPlugin from './middlewares';
 import parseRestResponsePlugin from './parse-rest-response';
 import populatePlugin from './populate';
-import { resetCollectionPlugin } from './reset-collection';
+// import { resetCollectionPlugin } from './reset-collection';
 import { searchPlugin } from './search';
 
 if (process.env.NODE_ENV === 'development') {
@@ -25,7 +26,6 @@ if (process.env.NODE_ENV === 'development') {
 	// 	addRxPlugin(RxDBDevModePlugin);
 	// }
 	addRxPlugin(RxDBDevModePlugin);
-
 	// add debugging
 	// @ts-ignore
 	// import('pouchdb-debug').then((pouchdbDebug) => {
@@ -35,7 +35,7 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // default plugins
-// addRxPlugin(RxDBQueryBuilderPlugin);
+addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
 addRxPlugin(RxDBMigrationPlugin);
@@ -43,13 +43,14 @@ addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBAttachmentsPlugin);
 addRxPlugin(RxDBStatePlugin);
 addRxPlugin(RxDBCleanupPlugin);
-// addRxPlugin(RxDBPipelinePlugin);
 addRxPlugin(RxDBFlexSearchPlugin);
+// addRxPlugin(RxDBPipelinePlugin);
 
 // custom plugins
 addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestResponse
 addRxPlugin(populatePlugin);
 addRxPlugin(findOneFixPlugin);
 addRxPlugin(parseRestResponsePlugin);
-addRxPlugin(resetCollectionPlugin);
+// addRxPlugin(resetCollectionPlugin);
 addRxPlugin(searchPlugin);
+addRxPlugin(middlewaresPlugin);

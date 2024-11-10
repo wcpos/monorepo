@@ -4,7 +4,15 @@ export const ordersLiteral = {
 	description: 'WooCommerce Order schema',
 	type: 'object',
 	primaryKey: 'uuid',
-	indexes: ['date_created_gmt', 'status', 'id', 'parent_id', 'customer_id', 'created_via'],
+	indexes: [
+		'date_created_gmt',
+		'status',
+		'id',
+		'parent_id',
+		'customer_id',
+		'created_via',
+		'sortable_total',
+	],
 	properties: {
 		uuid: {
 			description: 'Unique identifier for the resource.',
@@ -78,6 +86,12 @@ export const ordersLiteral = {
 		},
 		total: {
 			type: 'string',
+		},
+		sortable_total: {
+			type: 'number',
+			minimum: -2147483647,
+			maximum: 2147483647,
+			multipleOf: 0.000001,
 		},
 		total_tax: {
 			type: 'string',

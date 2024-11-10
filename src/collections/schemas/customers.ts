@@ -5,7 +5,16 @@ export const customersLiteral = {
 	type: 'object',
 	primaryKey: 'uuid',
 	attachments: {},
-	indexes: ['id', 'role'],
+	indexes: [
+		'id',
+		'role',
+		'first_name',
+		'last_name',
+		'email',
+		'username',
+		'date_created_gmt',
+		'date_modified_gmt',
+	],
 	properties: {
 		uuid: {
 			description: 'Unique identifier for the resource.',
@@ -24,24 +33,31 @@ export const customersLiteral = {
 		},
 		date_created_gmt: {
 			type: 'string',
+			format: 'date-time',
+			maxLength: 24,
 		},
 		date_modified: {
 			type: 'string',
 		},
 		date_modified_gmt: {
 			type: 'string',
+			format: 'date-time',
+			maxLength: 24,
 		},
 		email: {
 			description: 'The email address for the customer.',
 			type: 'string',
+			maxLength: 255,
 		},
 		first_name: {
 			description: 'Customer first name.',
 			type: 'string',
+			maxLength: 255,
 		},
 		last_name: {
 			description: 'Customer last name.',
 			type: 'string',
+			maxLength: 255,
 		},
 		role: {
 			type: 'string',
@@ -50,6 +66,7 @@ export const customersLiteral = {
 		username: {
 			description: 'Customer login name.',
 			type: 'string',
+			maxLength: 255,
 		},
 		password: {
 			description: 'Customer password.',

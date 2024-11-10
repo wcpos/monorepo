@@ -5,7 +5,7 @@ export const productsLiteral = {
 	type: 'object',
 	primaryKey: 'uuid',
 	attachments: {},
-	indexes: ['id', 'barcode', 'stock_status', 'parent_id'],
+	indexes: ['id', 'barcode', 'stock_status', 'parent_id', 'sortable_price'],
 	properties: {
 		uuid: {
 			description: 'Unique identifier for the resource.',
@@ -71,6 +71,12 @@ export const productsLiteral = {
 		},
 		price: {
 			type: 'string',
+		},
+		sortable_price: {
+			type: 'number',
+			minimum: -2147483647,
+			maximum: 2147483647,
+			multipleOf: 0.000001,
 		},
 		regular_price: {
 			type: 'string',

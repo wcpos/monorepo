@@ -5,7 +5,7 @@ export const variationsLiteral = {
 	type: 'object',
 	primaryKey: 'uuid',
 	attachments: {},
-	indexes: ['id', 'barcode', 'parent_id'],
+	indexes: ['id', 'barcode', 'parent_id', 'sortable_price'],
 	properties: {
 		uuid: {
 			description: 'Unique identifier for the resource.',
@@ -46,6 +46,12 @@ export const variationsLiteral = {
 		},
 		price: {
 			type: 'string',
+		},
+		sortable_price: {
+			type: 'number',
+			minimum: -2147483647,
+			maximum: 2147483647,
+			multipleOf: 0.000001,
 		},
 		regular_price: {
 			type: 'string',
