@@ -25,7 +25,7 @@ const Stack = createStackNavigator<CustomersStackParamList>();
  *
  */
 const ReportsWithProviders = () => {
-	const { uiSettings } = useUISettings('orders');
+	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
 	const today = React.useMemo(() => new Date(), []);
 

@@ -17,7 +17,15 @@ interface Props extends HeaderContext<any, any> {
 export const DataTableHeader = ({ title, column, header, table }: Props) => {
 	const disableSort = column.columnDef.meta?.disableSort;
 	const { sortBy, sortDirection } = table.getState().sorting?.current || {};
-	const isSorted = sortBy === column.id;
+
+	/**
+	 * @NOTE - this is a bit of a hack, but we want the price and total columns to sort on
+	 * `sortable_price` and `sortable_total` instead of `price` and `total`
+	 */
+	const isSorted =
+		column.id === 'price' || column.id === 'total'
+			? sortBy === `sortable_${column.id}`
+			: sortBy === column.id;
 
 	if (disableSort) {
 		return (
@@ -32,7 +40,8 @@ export const DataTableHeader = ({ title, column, header, table }: Props) => {
 			className="max-w-full"
 			onPress={() =>
 				table.setSorting({
-					sortBy: column.id,
+					sortBy:
+						column.id === 'price' || column.id === 'total' ? `sortable_${column.id}` : column.id,
 					sortDirection: isSorted && sortDirection === 'asc' ? 'desc' : 'asc',
 				})
 			}

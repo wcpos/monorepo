@@ -1,15 +1,20 @@
 import * as React from 'react';
 
+import { useObservableSuspense } from 'observable-hooks';
+
 import { UISettingsContext } from './provider';
 import { UISettingID, UISettingState, UISettingSchema } from './utils';
 
+/**
+ *
+ */
 export const useUISettings = <T extends UISettingID>(id: T) => {
 	const context = React.useContext(UISettingsContext);
 	if (!context) {
 		throw new Error(`useUISettings must be called within UISettingsProvider`);
 	}
 
-	const { states, getLabel, reset, patch } = context;
+	const { resources, getLabel, reset, patch } = context;
 
 	/**
 	 * Get UI Label
@@ -19,7 +24,7 @@ export const useUISettings = <T extends UISettingID>(id: T) => {
 	/**
 	 * Get UI Settings for the specified ID
 	 */
-	const uiSettings = states[id] as UISettingState<T>;
+	const uiSettings = useObservableSuspense(resources[id]) as UISettingState<T>;
 
 	return {
 		uiSettings,

@@ -12,7 +12,8 @@ export type UISettingSchema<T extends UISettingID> = (typeof initialSettings)[T]
 export type UISettingState<T extends UISettingID> = import('rxdb').RxState<UISettingSchema<T>>;
 
 /**
- *
+ * @TODO - this handles the first depth of the schema, but not nested values
+ * If we change nested schema (eg: columns), we'll need to update this
  */
 export const mergeWithInitalValues = async (
 	id: UISettingID,

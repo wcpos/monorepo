@@ -1,10 +1,11 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { ObservableResource } from 'observable-hooks';
+import { from } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import { hydratedSettings } from './hydrate';
 import { useUILabel } from './use-ui-label';
 import {
 	UISettingSchema,
@@ -12,6 +13,7 @@ import {
 	resetToInitialValues,
 	UISettingID,
 	patchState,
+	mergeWithInitalValues,
 } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 
@@ -19,13 +21,16 @@ interface UISettingsProviderProps {
 	children: React.ReactNode;
 }
 
-interface SuspendedSettingsProps {
-	children: React.ReactNode;
-	resource: ObservableResource<Record<UISettingID, UISettingState<UISettingID>>>;
-}
-
 export interface UISettingsContextValue {
-	states: Record<UISettingID, UISettingState<UISettingID>>;
+	resources: {
+		'pos-products': ObservableResource<UISettingState<'pos-products'>>;
+		'pos-cart': ObservableResource<UISettingState<'pos-cart'>>;
+		products: ObservableResource<UISettingState<'products'>>;
+		orders: ObservableResource<UISettingState<'orders'>>;
+		customers: ObservableResource<UISettingState<'customers'>>;
+		logs: ObservableResource<UISettingState<'logs'>>;
+		'reports-orders': ObservableResource<UISettingState<'reports-orders'>>;
+	};
 	getLabel: (id: string, key: string) => string;
 	reset: (id: UISettingID) => Promise<void>;
 	patch: <T extends UISettingID>(
@@ -39,12 +44,9 @@ export const UISettingsContext = React.createContext<UISettingsContextValue>(nul
 /**
  *
  */
-const SuspendedSettings = ({ children, resource }: SuspendedSettingsProps) => {
+export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	const { storeDB } = useAppState();
 	const { getLabel } = useUILabel();
-
-	// Use useObservableSuspense to get the hydrated states
-	const states = useObservableSuspense(resource);
 
 	/**
 	 * Reset UI Settings
@@ -69,31 +71,49 @@ const SuspendedSettings = ({ children, resource }: SuspendedSettingsProps) => {
 	);
 
 	/**
-	 * Context value
+	 * Create a reusable function to generate ObservableResource instances
 	 */
-	const value = React.useMemo<UISettingsContextValue>(
+	const createUIResource = React.useCallback(
+		(id: UISettingID) => {
+			const observable$ = from(storeDB.addState(`${id}_v2`)).pipe(
+				switchMap(async (state) => {
+					await mergeWithInitalValues(id, state);
+					return state;
+				})
+			);
+			return new ObservableResource(observable$);
+		},
+		[storeDB]
+	);
+
+	/**
+	 * Create UI Resources
+	 */
+	const resources = React.useMemo(
 		() => ({
-			states,
+			'pos-products': createUIResource('pos-products'),
+			'pos-cart': createUIResource('pos-cart'),
+			products: createUIResource('products'),
+			orders: createUIResource('orders'),
+			customers: createUIResource('customers'),
+			logs: createUIResource('logs'),
+			'reports-orders': createUIResource('reports-orders'),
+		}),
+		[createUIResource]
+	);
+
+	/**
+	 * Provide the context value
+	 */
+	const value = React.useMemo(
+		() => ({
+			resources,
 			getLabel,
 			reset,
 			patch,
 		}),
-		[states, getLabel, reset, patch]
+		[resources, getLabel, reset, patch]
 	);
 
 	return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;
-};
-
-/**
- *
- */
-export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
-	const { storeDB } = useAppState();
-
-	const resource = React.useMemo(() => {
-		const settings$ = hydratedSettings(storeDB);
-		return new ObservableResource(settings$);
-	}, [storeDB]);
-
-	return <SuspendedSettings resource={resource}>{children}</SuspendedSettings>;
 };

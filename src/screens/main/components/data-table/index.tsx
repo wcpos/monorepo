@@ -1,7 +1,11 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import {
+	useObservableEagerState,
+	useObservableSuspense,
+	useObservableState,
+} from 'observable-hooks';
 
 import { DataTable as Table, DataTableProps } from '@wcpos/components/src/data-table';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
