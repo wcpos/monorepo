@@ -15,7 +15,12 @@ import {
 	AlertDialogFooter,
 } from '@wcpos/components/src/alert-dialog';
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
-import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectPrimitiveTrigger,
+} from '@wcpos/components/src/select';
 import { Text } from '@wcpos/components/src/text';
 import { Toast } from '@wcpos/components/src/toast';
 
@@ -76,11 +81,11 @@ const WpUser = ({ site, wpUser }: Props) => {
 		<View>
 			{stores.length > 1 ? (
 				<Select onValueChange={({ value }) => handleLogin(value)}>
-					<SelectPrimitive.Trigger asChild>
+					<SelectPrimitiveTrigger asChild>
 						<ButtonPill size="xs" removable onRemove={() => setDeleteDialogOpened(true)}>
 							<ButtonText>{wpUser.display_name ? wpUser.display_name : 'No name?'}</ButtonText>
 						</ButtonPill>
-					</SelectPrimitive.Trigger>
+					</SelectPrimitiveTrigger>
 					<SelectContent>
 						{stores.map((store) => (
 							<SelectItem key={store.localID} label={store.name} value={store.localID} />
@@ -116,12 +121,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
-						<AlertDialogAction
-							variant="destructive"
-							onPress={() => {
-								console.log('remove');
-							}}
-						>
+						<AlertDialogAction variant="destructive" onPress={handleRemoveWpUser}>
 							{t('Remove', { _tags: 'core' })}
 						</AlertDialogAction>
 					</AlertDialogFooter>

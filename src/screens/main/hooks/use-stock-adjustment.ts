@@ -46,8 +46,12 @@ export const useStockAdjustment = () => {
 				/**
 				 * @TODO - this needs to be greedy if array.length > 10
 				 */
-				productsReplicationState.sync({ include: productIds, force: true, greedy: true });
-				variationsReplicationState.sync({ include: variationIds, force: true, greedy: true });
+				try {
+					productsReplicationState.sync({ include: productIds, force: true, greedy: true });
+					variationsReplicationState.sync({ include: variationIds, force: true, greedy: true });
+				} catch (error) {
+					console.error(error);
+				}
 			}
 		},
 		[productsReplicationState, variationsReplicationState]

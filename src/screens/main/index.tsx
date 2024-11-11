@@ -174,7 +174,7 @@ const DrawerNavigator = ({ navigation }) => {
 				}}
 			>
 				{(props) =>
-					!showUpgrade ? (
+					showUpgrade ? (
 						<ReportsUpgrade />
 					) : (
 						<ErrorBoundary>

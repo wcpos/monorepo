@@ -96,7 +96,7 @@ export const UserMenu = () => {
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
 				<DropdownMenuItem onPress={() => navigation.navigate('Settings')}>
-					<Icon name="cog" />
+					<Icon name="gear" />
 					<Text>{t('Settings', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>
 				<DropdownMenuItem onPress={() => navigation.navigate('SupportStack')}>

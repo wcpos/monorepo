@@ -22,7 +22,11 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const Customer = ({ setShowCustomerSelect }) => {
+export const Customer = ({
+	setShowCustomerSelect,
+}: {
+	setShowCustomerSelect: React.Dispatch<React.SetStateAction<boolean>>;
+}) => {
 	const { currentOrder } = useCurrentOrder();
 	const billing = useObservableEagerState(currentOrder.billing$);
 	const shipping = useObservableEagerState(currentOrder.shipping$);

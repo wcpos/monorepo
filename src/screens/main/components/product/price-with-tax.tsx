@@ -74,5 +74,9 @@ export const PriceWithTax = ({
 	}
 
 	// default just show the displayPrice
-	return <Text>{format(displayValue)}</Text>;
+	return (
+		<Text className={cn(strikethrough && 'line-through text-muted-foreground', 'text-right')}>
+			{format(displayValue)}
+		</Text>
+	);
 };

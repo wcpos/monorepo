@@ -9,16 +9,25 @@ import { useReplicationState } from '@wcpos/query';
 import { useAppState } from '../../../../../../contexts/app-state';
 import { useT } from '../../../../../../contexts/translations';
 import SyncButton from '../../../../components/sync-button';
-import { useCollectionReset } from '../../../../hooks/use-collection-reset';
 
 /**
  *
  */
 export const VariationTableFooter = ({ query, parent, count }) => {
-	const { fastStoreDB } = useAppState();
+	const { fastStoreDB, storeDB } = useAppState();
 	const { sync, active$ } = useReplicationState(query);
-	const { clear } = useCollectionReset(query.collection.name);
 	const loading = useObservableState(active$, false);
+
+	/**
+	 *
+	 */
+	const handleClearVariations = React.useCallback(async () => {
+		await storeDB.collections.variations.find({ selector: { parent_id: parent.id } }).remove();
+		await fastStoreDB.collections.variations
+			.find({ selector: { endpoint: 'products/' + parent.id + '/variations' } })
+			.remove();
+		return sync();
+	}, [fastStoreDB, storeDB, parent.id, sync]);
 
 	/**
 	 * Get total from sync collection
@@ -36,7 +45,7 @@ export const VariationTableFooter = ({ query, parent, count }) => {
 			<Text className="text-xs">
 				{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
 			</Text>
-			<SyncButton sync={sync} clear={clear} active={loading} />
+			<SyncButton sync={sync} clear={handleClearVariations} active={loading} />
 		</HStack>
 	);
 };

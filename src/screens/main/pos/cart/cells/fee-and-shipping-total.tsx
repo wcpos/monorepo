@@ -43,9 +43,9 @@ export const FeeAndShippingTotal = ({ row, column }: CellContext<Props, 'total'>
 	 */
 	return (
 		<VStack space="xs" className="justify-end">
-			<Text>{format(displayTotal || 0)}</Text>
+			<Text className="text-right">{format(displayTotal || 0)}</Text>
 			{column.columnDef.meta.show('tax') && (
-				<Text className="text-sm text-muted">
+				<Text className="text-sm text-muted-foreground text-right">
 					{`${taxDisplayCart} ${format(item.total_tax) || 0} tax`}
 				</Text>
 			)}

@@ -65,21 +65,14 @@ function generateEmptyJSON(schema) {
 }
 
 /**
- *
+ * @FIXME - This sucks, we need a better to mutate local, then queue up a remote create/update
+ * And we need to handle the case where the remote create/update fails, and we need to retry
  */
 export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const manager = useQueryManager();
 	const t = useT();
 	const { collection, collectionLabel } = useCollection(collectionName);
 	const { localPatch } = useLocalMutation();
-
-	/**
-	 * If there is no replicationState we need to register one
-	 */
-	const replicationState = manager.registerCollectionReplication({
-		collection,
-		endpoint: endpoint ?? collectionName,
-	});
 
 	/**
 	 *
@@ -121,6 +114,15 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 			const { document: doc, changes } = await localPatch({ document, data });
 
 			try {
+				const replicationState = manager.registerCollectionReplication({
+					collection,
+					endpoint: endpoint ?? collectionName,
+				});
+
+				if (!replicationState) {
+					throw new Error('replicationState not found');
+				}
+
 				const updatedDoc = await replicationState.remotePatch(doc, changes);
 				if (isRxDocument(updatedDoc)) {
 					handleSuccess(updatedDoc);
@@ -134,7 +136,17 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				handleError(error);
 			}
 		},
-		[collectionLabel, handleError, handleSuccess, localPatch, replicationState, t]
+		[
+			collection,
+			collectionLabel,
+			collectionName,
+			endpoint,
+			handleError,
+			handleSuccess,
+			localPatch,
+			manager,
+			t,
+		]
 	);
 
 	/**
@@ -156,6 +168,15 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				}
 				const doc = await collection.insert({ ...emptyJSON, ...data });
 
+				const replicationState = manager.registerCollectionReplication({
+					collection,
+					endpoint: endpoint ?? collectionName,
+				});
+
+				if (!replicationState) {
+					throw new Error('replicationState not found');
+				}
+
 				// create remote document
 				const updatedDoc = await replicationState.remoteCreate(doc.toJSON());
 
@@ -172,7 +193,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				handleError(error);
 			}
 		},
-		[collection, collectionLabel, handleError, handleSuccess, replicationState, t]
+		[collection, collectionLabel, collectionName, endpoint, handleError, handleSuccess, manager, t]
 	);
 
 	return { patch, create };

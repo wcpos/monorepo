@@ -28,24 +28,24 @@ export const useCollection = <K extends CollectionKey>(
 ): { collection: StoreCollections[K]; collectionLabel: string } => {
 	const t = useT();
 	const { storeDB } = useAppState();
-	const collection = storeDB.collections[key];
+	// const collection = storeDB.collections[key];
 
 	/**
 	 * @FIXME - The way collections and queries are handled needs to be rethought,
 	 * it's not enough to just set the collection in state, we need to think about all the
 	 * subscriptions and queries that are using the collection.
 	 */
-	// const collection = useObservableState(
-	// 	storeDB.reset$.pipe(
-	// 		filter((collection) => collection.name === key)
-	// 		// /**
-	// 		//  * DebounceTime is a bit of a hack, we need to give useReplicationQuery
-	// 		//  * time to re-add both collections before we try to access them
-	// 		//  */
-	// 		// debounceTime(100)
-	// 	),
-	// 	storeDB.collections[key]
-	// );
+	const collection = useObservableState(
+		storeDB.reset$.pipe(
+			filter((collection) => collection.name === key)
+			// /**
+			//  * DebounceTime is a bit of a hack, we need to give useReplicationQuery
+			//  * time to re-add both collections before we try to access them
+			//  */
+			// debounceTime(100)
+		),
+		storeDB.collections[key]
+	);
 
 	/**
 	 *

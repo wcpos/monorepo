@@ -56,17 +56,19 @@ export const ProductTotal = ({ row, column }: CellContext<Props, 'total'>) => {
 		<VStack space="xs" className="justify-end">
 			{onSale && column.columnDef.meta.show('on_sale') && (
 				<>
-					<Text className="text-muted-foreground line-through">{format(displaySubtotal || 0)}</Text>
+					<Text className="text-muted-foreground line-through text-right">
+						{format(displaySubtotal || 0)}
+					</Text>
 					{column.columnDef.meta.show('tax') && (
-						<Text className="text-sm text-muted-foreground line-through">
+						<Text className="text-sm text-muted-foreground line-through text-right">
 							{`${taxDisplayCart} ${format(item.subtotal_tax || 0)} tax`}
 						</Text>
 					)}
 				</>
 			)}
-			<Text>{format(displayTotal || 0)}</Text>
+			<Text className="text-right">{format(displayTotal || 0)}</Text>
 			{column.columnDef.meta.show('tax') && (
-				<Text className="text-sm text-muted-foreground">
+				<Text className="text-sm text-muted-foreground text-right">
 					{`${taxDisplayCart} ${format(item.total_tax || 0)} tax`}
 				</Text>
 			)}
