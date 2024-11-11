@@ -1,9 +1,9 @@
 import { Subscription, Subject } from 'rxjs';
 
 export class SubscribableBase {
-	protected isCanceled = false;
+	public isCanceled = false;
 	private cancelSubject = new Subject<void>();
-	private cancel$ = this.cancelSubject.asObservable();
+	public cancel$ = this.cancelSubject.asObservable();
 
 	public readonly subs: Record<string, Subscription> = {};
 	protected subjects: Record<string, Subject<any>> = {};

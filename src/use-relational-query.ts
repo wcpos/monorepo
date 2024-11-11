@@ -1,49 +1,59 @@
 import * as React from 'react';
 
-import { useSubscription, useForceUpdate } from 'observable-hooks';
-import { merge } from 'rxjs';
+import { useObservableState } from 'observable-hooks';
+import { map, filter } from 'rxjs/operators';
 
 import { useQueryManager } from './provider';
 
 import type { QueryOptions } from './use-query';
 
 export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: QueryOptions) => {
-	// const forceUpdate = useForceUpdate();
-	const queryManager = useQueryManager();
+	const manager = useQueryManager();
 
 	/**
-	 *
+	 * Helper function to register all necessary queries.
 	 */
-	const childQuery = queryManager.registerQuery(childOptions);
-	const parentLookupQuery = queryManager.registerQuery({
-		...parentOptions,
-		queryKeys: [...parentOptions.queryKeys, 'parentLookup'],
-		initialParams: {
-			selector: {
-				id: { $in: [] },
+	const registerQueries = () => {
+		const childQuery = manager.registerQuery(childOptions);
+		const parentLookupQuery = manager.registerQuery({
+			...parentOptions,
+			queryKeys: [...parentOptions.queryKeys, 'parentLookup'],
+			initialParams: {
+				selector: {
+					id: { $in: [] },
+				},
 			},
-		},
-		infiniteScroll: false,
-	});
+			infiniteScroll: false,
+		});
+		const parentQuery = manager.registerRelationalQuery(
+			parentOptions,
+			childQuery,
+			parentLookupQuery
+		);
+		return { childQuery, parentLookupQuery, parentQuery };
+	};
 
 	/**
-	 *
+	 * Listen for changes in localDB.reset$ and update queries accordingly.
 	 */
-	const parentQuery = queryManager.registerRelationalQuery(
-		parentOptions,
-		childQuery,
-		parentLookupQuery
+	const { parentQuery, childQuery, parentLookupQuery } = useObservableState(
+		manager.localDB.reset$.pipe(
+			filter((collection) => collection.name === parentOptions.collectionName),
+			map(registerQueries)
+		),
+		() => registerQueries()
 	);
 
 	/**
-	 * This is a hack for when when collection is reset:
-	 * - re-render components that use this query
-	 * - on re-render the query is recreated
+	 *
 	 */
-	// useSubscription(
-	// 	merge(parentQuery.cancel$, childQuery.cancel$, parentLookupQuery.cancel$),
-	// 	forceUpdate
-	// );
+	React.useEffect(() => {
+		return () => {
+			manager.maybePauseQueryReplications(parentQuery);
+			manager.maybePauseQueryReplications(childQuery);
+			manager.maybePauseQueryReplications(parentLookupQuery);
+		};
+	}, [parentQuery, childQuery, parentLookupQuery, manager]);
 
-	return { parentQuery, childQuery, parentLookupQuery };
+	return { parentQuery };
 };

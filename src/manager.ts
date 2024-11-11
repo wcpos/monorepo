@@ -79,13 +79,12 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		this.activeCollectionReplications = new Registry();
 		this.activeQueryReplications = new Registry();
 
-		// this.subs
-		// 	.push
-		// 	/**
-		// 	 * Subscribe to localDB to detect if collection is reset
-		// 	 */
-		// 	// this.localDB.reset$.subscribe(this.onCollectionReset.bind(this))
-		// 	();
+		/**
+		 * Subscribe to localDB to detect if collection is reset
+		 * We need to fire the Query State clean up as early as possible, ie: collection.onDestroy,
+		 * we can't wait for reset because the collection emits as it's being removed
+		 */
+		//this.addSub('localDB', this.localDB.reset$.subscribe(this.onCollectionReset.bind(this)));
 
 		/**
 		 * Subscribe to localDB to detect if db is destroyed
@@ -216,19 +215,19 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	}
 
 	getCollection(collectionName: string) {
-		if (!this.localDB[collectionName]) {
+		if (!this.localDB.collections[collectionName]) {
 			this.subjects.error.next(new Error(`Collection with name: ${collectionName} not found.`));
 		}
-		return this.localDB[collectionName];
+		return this.localDB.collections[collectionName];
 	}
 
 	getSyncCollection(collectionName: string) {
-		if (!this.fastLocalDB[collectionName]) {
+		if (!this.fastLocalDB.collections[collectionName]) {
 			this.subjects.error.next(
 				new Error(`Sync collection with name: ${collectionName} not found.`)
 			);
 		}
-		return this.fastLocalDB[collectionName];
+		return this.fastLocalDB.collections[collectionName];
 	}
 
 	getQuery(queryKeys: (string | number | object)[]) {
@@ -249,7 +248,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			this.activeCollectionReplications.delete(key);
 			this.activeQueryReplications.delete(key);
 
-			// cancel last, this will trigger the useQuery components to re-init the query
 			query.cancel();
 		}
 	}
@@ -333,6 +331,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				errorSubject: this.subjects.error,
 			});
 
+			/**
+			 * onRemove seems to the right place to reset the query states
+			 * onDestroy is too early
+			 */
 			collection.onRemove.push(() => this.onCollectionReset(collection));
 
 			this.replicationStates.set(endpoint, collectionReplication);
@@ -368,8 +370,8 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	deregisterReplication(endpoint: string) {
 		const replicationState = this.replicationStates.get(endpoint);
 		if (replicationState) {
-			replicationState.cancel();
 			this.replicationStates.delete(endpoint);
+			replicationState.cancel();
 		}
 	}
 
@@ -407,7 +409,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 * - collection replications are not paused
 	 */
 	maybePauseQueryReplications(query: Query<RxCollection>) {
-		const activeQueryReplication = this.activeQueryReplications.get(query.id);
+		const activeQueryReplication = this.activeQueryReplications.get(query?.id);
+		if (!activeQueryReplication || !activeQueryReplication.endpoint) {
+			return;
+		}
 		const activeQueryReplications = this.getActiveQueryReplicationStatesByEndpoint(
 			activeQueryReplication.endpoint
 		);

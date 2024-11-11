@@ -55,30 +55,36 @@ export interface QueryResult<T> {
 /**
  * Interface for query methods
  */
-interface QueryMethods<DocType> {
-	where(fieldOrSelector: string | MangoQuerySelector<DocType>, value?: any): this;
-	equals(value: any): this;
-	eq(value: any): this;
-	gt(value: any): this;
-	gte(value: any): this;
-	lt(value: any): this;
-	lte(value: any): this;
-	ne(value: any): this;
-	in(values: any[]): this;
-	nin(values: any[]): this;
-	all(value: any): this;
-	regex(value: string | { $regex: string; $options?: string }): this;
-	size(value: number): this;
-	mod(value: any): this;
-	exists(value: boolean): this;
-	elemMatch(value: any): this;
-	or(array: any[]): this;
-	nor(array: any[]): this;
-	and(array: any[]): this;
-	sort(sortBy: MangoQuerySortPart<DocType>): this;
-	skip(skipValue: number): this;
-	limit(limitValue: number): this;
+interface QueryMethods<DocType, Q = Query<any>> {
+	where(fieldOrSelector: string | MangoQuerySelector<DocType>, value?: any): Q;
+	equals(value: any): Q;
+	eq(value: any): Q;
+	gt(value: any): Q;
+	gte(value: any): Q;
+	lt(value: any): Q;
+	lte(value: any): Q;
+	ne(value: any): Q;
+	in(values: any[]): Q;
+	nin(values: any[]): Q;
+	all(value: any): Q;
+	regex(value: string | { $regex: string; $options?: string }): Q;
+	size(value: number): Q;
+	mod(value: any): Q;
+	exists(value: boolean): Q;
+	elemMatch(value: any): Q;
+	or(array: any[]): Q;
+	nor(array: any[]): Q;
+	and(array: any[]): Q;
+	sort(sortBy: MangoQuerySortPart<DocType>): Q;
+	skip(skipValue: number): Q;
+	limit(limitValue: number): Q;
 	search(searchTerm: string): void;
+	debouncedSearch(searchTerm: string): void;
+	removeWhere(field: string): Q;
+	removeElemMatch(field: string, matchCriteria: Partial<any>): Q;
+	multipleElemMatch(criteria: any): Q;
+	exec(): void;
+	loadMore(): void;
 }
 
 /**
@@ -92,7 +98,7 @@ interface QueryMethods<DocType> {
  */
 export class Query<T extends RxCollection>
 	extends SubscribableBase
-	implements QueryMethods<DocumentType<T>>
+	implements QueryMethods<DocumentType<T>, Query<T>>
 {
 	public readonly id: string;
 	public readonly collection: T;
@@ -166,10 +172,23 @@ export class Query<T extends RxCollection>
 		}
 	}
 
+	cancel() {
+		this.subjects.result.next({
+			elapsed: 0,
+			searchActive: false,
+			count: 0,
+			hits: [],
+		});
+		this.resource.destroy();
+		super.cancel();
+	}
+
 	/**
-	 *
+	 * @NOTE - we don't want to execute the query if it's been canceled, eg: next page is triggered
+	 * when doing a clear and refresh, which will then restart the find subscription
 	 */
 	exec() {
+		if (this.isCanceled) return;
 		if (this.infiniteScroll) {
 			const limitValue = (this.currentPage + 1) * this.pageSize;
 			this.currentRxQuery = this.currentRxQuery.limit(limitValue);
@@ -201,6 +220,7 @@ export class Query<T extends RxCollection>
 	private startFindSubscription(): void {
 		if (this.findSubscriptionStarted) return;
 		this.findSubscriptionStarted = true;
+		const that = this;
 
 		this.addSub(
 			'result',

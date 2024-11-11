@@ -25,7 +25,7 @@ export class DataProcessor {
 
 	async updateExistingDocuments(documents: any[], localDocs: Map<string, any>) {
 		const updatedDocs = documents.filter((doc) => {
-			const localDoc = localDocs.get(doc.id);
+			const localDoc = localDocs.get(doc.uuid);
 			return localDoc && localDoc.date_modified_gmt < doc.date_modified_gmt;
 		});
 

@@ -96,6 +96,11 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.setupSubscriptions();
 	}
 
+	cancel() {
+		this.subjects.total.next(0);
+		super.cancel();
+	}
+
 	private setupSubscriptions() {
 		const polling$ = this.paused$.pipe(
 			switchMap((paused) => (paused ? [] : interval(this.pollingInterval).pipe(startWith(0)))),
@@ -136,7 +141,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		// Subscribe to the total count and update the subject
 		this.addSub(
 			'total',
-			totalCount$.subscribe((count) => this.subjects.total.next(count))
+			totalCount$.subscribe((count) => {
+				this.subjects.total.next(count);
+			})
 		);
 	}
 
@@ -383,7 +390,11 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		}
 	}
 
-	async sync({ include, force }: { include?: number[]; force?: boolean } = {}) {
+	async sync({
+		include,
+		force,
+		greedy,
+	}: { include?: number[]; force?: boolean; greedy?: boolean } = {}) {
 		if (!force && (this.subjects.paused.getValue() || this.subjects.active.getValue())) {
 			return;
 		}
@@ -433,8 +444,8 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 
 			const primaryPath = this.collection.schema.primaryPath;
-			const ids = documents.map((doc: any) => doc[primaryPath]);
-			const localDocs = await this.collection.findByIds(ids).exec();
+			const uuids = documents.map((doc: any) => doc[primaryPath]);
+			const localDocs = await this.collection.findByIds(uuids).exec();
 
 			if (localDocs.size === 0) {
 				await this.dataProcessor.insertNewDocuments(documents);

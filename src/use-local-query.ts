@@ -20,8 +20,9 @@ export const useLocalQuery = (queryOptions: QueryOptions) => {
 			id: 'logs',
 			collection: manager.localDB.collections.logs,
 			initialParams: queryOptions.initialParams,
+			infiniteScroll: queryOptions.infiniteScroll,
 		});
-	}, [manager.localDB.collections.logs, queryOptions.initialParams]);
+	}, [manager.localDB.collections.logs, queryOptions.initialParams, queryOptions.infiniteScroll]);
 
 	return query;
 };

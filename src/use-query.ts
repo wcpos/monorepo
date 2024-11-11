@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { useForceUpdate, useSubscription } from 'observable-hooks';
-import { debounceTime } from 'rxjs/operators';
+import { useObservableState } from 'observable-hooks';
+import { map, filter } from 'rxjs/operators';
 
 import { useQueryManager } from './provider';
 
@@ -17,9 +17,14 @@ export interface QueryOptions {
 }
 
 export const useQuery = (queryOptions: QueryOptions) => {
-	// const forceUpdate = useForceUpdate();
 	const manager = useQueryManager();
-	const query = manager.registerQuery(queryOptions);
+	const query = useObservableState(
+		manager.localDB.reset$.pipe(
+			filter((collection) => collection.name === queryOptions.collectionName),
+			map(() => manager.registerQuery(queryOptions))
+		),
+		manager.registerQuery(queryOptions)
+	);
 
 	/**
 	 *
@@ -29,14 +34,6 @@ export const useQuery = (queryOptions: QueryOptions) => {
 			manager.maybePauseQueryReplications(query);
 		};
 	}, [query, manager]);
-
-	/**
-	 * This is a hack for when when collection is reset:
-	 * - re-render components that use this query
-	 * - on re-render the query is recreated
-	 * - give the collection time to re-add before re-creating the query
-	 */
-	// useSubscription(query.cancel$.pipe(debounceTime(1000)), forceUpdate);
 
 	return query;
 };
