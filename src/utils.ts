@@ -1,4 +1,10 @@
 import snakeCase from 'lodash/snakeCase';
+import { stringify } from 'query-string';
+
+/**
+ * @NOTE - query-string is part of the `react-navigation` package, if I install a newer version of that package,
+ * it breaks `react-navigation` :(
+ */
 
 /**
  *
@@ -13,13 +19,8 @@ export function isArrayOfIntegers(value) {
  * eg: customers?orderby=last_name&order=asc&per_page=10&role=all
  */
 export function buildEndpointWithParams(endpoint: string, params: Record<string, any>) {
-	const url = new URL(endpoint, 'http://dummybase'); // Dummy base, actual base URL is in httpClient
-	Object.keys(params).forEach((key) => {
-		if (params[key] !== undefined && params[key] !== null) {
-			url.searchParams.append(key, params[key]);
-		}
-	});
-	return url.pathname.slice(1) + url.search;
+	const queryString = stringify(params, { arrayFormat: 'bracket', skipNull: true });
+	return endpoint + (queryString ? `?${queryString}` : '');
 }
 
 /**

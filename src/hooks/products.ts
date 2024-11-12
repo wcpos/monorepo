@@ -46,7 +46,7 @@ const filterApiQueryParams = (params) => {
 		orderby = 'title';
 	}
 
-	if (orderby === 'date_created') {
+	if (orderby === 'date_created' || orderby === 'date_created_gmt') {
 		orderby = 'date';
 	}
 
@@ -58,15 +58,6 @@ const filterApiQueryParams = (params) => {
 	if (params.tags) {
 		params.tag = get(params, ['tags', '$elemMatch', 'id']);
 		delete params.tags;
-	}
-
-	if (params.id) {
-		if (params.id.$in) {
-			params.include = params.id.$in.join(',');
-		} else if (typeof params.id === 'number' || typeof params.id === 'string') {
-			params.include = params.id;
-		}
-		delete params.id;
 	}
 
 	return {

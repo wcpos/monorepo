@@ -1,3 +1,4 @@
+import cloneDeep from 'lodash/cloneDeep';
 import forEach from 'lodash/forEach';
 import { Observable, Subject, Subscription } from 'rxjs';
 import { filter, map } from 'rxjs/operators';
@@ -292,7 +293,13 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			/**
 			 * Subscribe to query params and register a new replication state for the query
 			 */
-			queryState.params$.subscribe((params) => {
+			queryState.rxQuery$.subscribe((rxQuery) => {
+				const params = cloneDeep(rxQuery?.mangoQuery || {});
+				if (rxQuery?.other.search || rxQuery?.other.relationalSearch) {
+					params.search =
+						rxQuery.other.search?.searchTerm || rxQuery.other.relationalSearch?.searchTerm;
+				}
+				// @NOTE - this.getApiQueryParams converts { selector: { id: { $in: [1, 2, 3] } } } to { include: [1, 2, 3] }
 				let apiQueryParams = this.getApiQueryParams(params);
 				const hooks = allHooks[queryState.collection.name] || {};
 				if (hooks?.filterApiQueryParams) {
@@ -377,20 +384,32 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 	/**
 	 * Get the query params that are used for the API
-	 * - NOTE: the api query params have a different format than the query params
+	 * - @NOTE - the api query params have a different format than the query params
+	 * - eg: sort is `orderby` and `order`, and selectors are top level params
 	 * - allow hooks to modify the query params
 	 */
 	getApiQueryParams(queryParams: QueryParams = {}) {
+		const sort = queryParams?.sort?.[0];
 		const params = {
-			orderby: queryParams?.sortBy,
-			order: queryParams?.sortDirection,
+			orderby: sort ? Object.keys(sort)[0].replace(/^sortable_/, '') : undefined,
+			order: sort ? Object.values(sort)[0] : undefined,
 			per_page: 10,
 		};
 
-		if (queryParams?.search && typeof queryParams?.search === 'string') {
-			params.search = queryParams?.search;
+		// convert id to include
+		if (queryParams?.selector?.id) {
+			if (queryParams.selector.id.$in) {
+				params.include = queryParams.selector.id.$in;
+			} else if (
+				typeof queryParams.selector.id === 'number' ||
+				typeof queryParams.selector.id === 'string'
+			) {
+				params.include = queryParams.selector.id;
+			}
+			delete queryParams.selector.id;
 		}
 
+		// pass all other mango query params to the API, except uuid
 		if (queryParams?.selector) {
 			forEach(queryParams.selector, (value, key) => {
 				if (key !== 'uuid') {
@@ -398,6 +417,9 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				}
 			});
 		}
+
+		// dates are always GMT
+		params.dates_are_gmt = 'true';
 
 		return params;
 	}

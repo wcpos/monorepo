@@ -28,19 +28,29 @@ interface APIQueryParams {
 const filterApiQueryParams = (params) => {
 	let orderby = params.orderby;
 
-	if (orderby === 'date_created') {
+	if (orderby === 'date_created' || orderby === 'date_created_gmt') {
 		orderby = 'registered_date';
 	}
 
-	// HACK: get the deafult_customer, probably a better way to do this
-	// if (params.id) {
-	// 	params.include = params.id;
-	// 	params.id = undefined;
-	// }
+	// default to all roles
+	if (!params.role) {
+		params.role = 'all';
+	}
+
+	/**
+	 * Special case for cashiers, eg: multiple roles
+	 * Convert $in to an array of roles
+	 * {
+	 * 	role: { $in: ['administrator', 'shop_manager', 'cashier'] },
+	 * }
+	 */
+	if (params.role?.$in) {
+		params.roles = params.role.$in;
+		delete params.role;
+	}
 
 	return {
 		...params,
-		role: 'all',
 		orderby,
 	};
 };

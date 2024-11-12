@@ -220,7 +220,6 @@ export class Query<T extends RxCollection>
 	private startFindSubscription(): void {
 		if (this.findSubscriptionStarted) return;
 		this.findSubscriptionStarted = true;
-		const that = this;
 
 		this.addSub(
 			'result',
