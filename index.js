@@ -3,6 +3,9 @@ import { registerRootComponent } from 'expo';
 import * as Sentry from 'sentry-expo';
 // import * as React from 'react';
 
+// https://docs.expo.dev/versions/latest/config/metro/#bundle-splitting
+import '@expo/metro-runtime';
+
 import './global.css';
 
 import App from '@wcpos/core';
