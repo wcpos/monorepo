@@ -3,7 +3,7 @@ import * as React from 'react';
 import toNumber from 'lodash/toNumber';
 import { useObservableEagerState, ObservableResource, useObservable } from 'observable-hooks';
 import { of } from 'rxjs';
-import { map, switchMap } from 'rxjs/operators';
+import { map, startWith, switchMap, tap } from 'rxjs/operators';
 
 import { HStack } from '@wcpos/components/src/hstack';
 import { Suspense } from '@wcpos/components/src/suspense';
@@ -138,10 +138,10 @@ const FilterBar = ({ query }) => {
 		<HStack className="w-full flex-wrap">
 			<StatusPill query={query} />
 			<Suspense>
-				<CustomerPill resource={customerResource} query={query} />
+				<CustomerPill resource={customerResource} query={query} customerID={customerID} />
 			</Suspense>
 			<Suspense>
-				<CashierPill resource={cashierResource} query={query} />
+				<CashierPill resource={cashierResource} query={query} cashierID={cashierID} />
 			</Suspense>
 			<StorePill resource={storesResource} query={query} />
 			<DateRangePill query={query} />

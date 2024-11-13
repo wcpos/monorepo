@@ -19,15 +19,23 @@ import { CustomerSearch } from '../../customer-select';
 interface CustomerPillProps {
 	query: Query<CustomerCollection>;
 	resource: ObservableResource<CustomerDocument>;
+	customerID?: number;
 }
 
 /**
  *
  */
-const CustomerPill = ({ query, resource }: CustomerPillProps) => {
-	const customer = useObservableSuspense(resource);
+const CustomerPill = ({ query, resource, customerID }: CustomerPillProps) => {
+	let customer = useObservableSuspense(resource);
 	const { format } = useCustomerNameFormat();
 	const t = useT();
+
+	/**
+	 * @FIXME - if the customers are cleared, it's possible that the customer will be null
+	 */
+	if (!customer && customerID) {
+		customer = { id: customerID };
+	}
 
 	/**
 	 *

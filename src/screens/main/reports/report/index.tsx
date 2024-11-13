@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useReactToPrint } from 'react-to-print';
 
@@ -55,9 +55,11 @@ export const Report = () => {
 						</Select>
 					</HStack>
 				</CardHeader>
-				<CardContent ref={contentRef} className="flex-1 p-0">
-					<ScrollView horizontal={false} className={'w-full p-2'}>
-						<ZReport />
+				<CardContent className="flex-1 p-0">
+					<ScrollView horizontal={false} className="w-full">
+						<View ref={contentRef} style={{ width: '100%', height: '100%', padding: 10 }}>
+							<ZReport />
+						</View>
 					</ScrollView>
 				</CardContent>
 				<CardFooter className="p-2 border-border border-t bg-muted justify-end">

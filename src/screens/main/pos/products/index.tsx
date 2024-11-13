@@ -113,6 +113,7 @@ const POSProducts = ({ isColumn = false }) => {
 	const { uiSettings } = useUISettings('pos-products');
 	const { calcTaxes } = useTaxRates();
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
+	const querySearchInputRef = React.useRef<React.ElementRef<typeof QuerySearchInput>>(null);
 	const t = useT();
 
 	/**
@@ -141,7 +142,7 @@ const POSProducts = ({ isColumn = false }) => {
 	/**
 	 * Barcode
 	 */
-	useBarcode(query);
+	const { onKeyPress } = useBarcode(query, querySearchInputRef);
 
 	/**
 	 *
@@ -176,18 +177,11 @@ const POSProducts = ({ isColumn = false }) => {
 							<HStack>
 								<ErrorBoundary>
 									<QuerySearchInput
+										ref={querySearchInputRef}
 										query={query}
 										placeholder={t('Search Products', { _tags: 'core' })}
 										className="flex-1"
-										onKeyPress={() => {
-											/**
-											 * This seems weird, but just the presence of this function will
-											 * bubble up the keypress event for the barcode scanner.
-											 *
-											 * Specifically handling the keypress event in the barcode hook
-											 * will result in double events.
-											 */
-										}}
+										onKeyPress={onKeyPress}
 									/>
 								</ErrorBoundary>
 								<UISettingsDialog title={t('Product Settings', { _tags: 'core' })}>

@@ -140,6 +140,7 @@ const Products = () => {
 	const t = useT();
 	const { patch: productsPatch } = useMutation({ collectionName: 'products' });
 	const { patch: variationsPatch } = useMutation({ collectionName: 'variations' });
+	const querySearchInputRef = React.useRef<React.ElementRef<typeof QuerySearchInput>>(null);
 
 	/**
 	 *
@@ -167,7 +168,7 @@ const Products = () => {
 	/**
 	 * Barcode
 	 */
-	useBarcode(query);
+	useBarcode(query, querySearchInputRef);
 
 	/**
 	 * Table context
@@ -202,6 +203,7 @@ const Products = () => {
 						<HStack>
 							<ErrorBoundary>
 								<QuerySearchInput
+									ref={querySearchInputRef}
 									query={query}
 									placeholder={t('Search Products', { _tags: 'core' })}
 									className="flex-1"

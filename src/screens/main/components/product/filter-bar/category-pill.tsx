@@ -19,15 +19,16 @@ type ProductCollection = import('@wcpos/database').ProductCollection;
 interface Props {
 	query: Query<ProductCollection>;
 	resource: ObservableResource<import('@wcpos/database').ProductCategoryDocument>;
+	selectedID?: number;
 }
 
 /**
  *
  */
-export const CategoryPill = ({ query, resource }: Props) => {
+export const CategoryPill = ({ query, resource, selectedID }: Props) => {
 	const category = useObservableSuspense(resource);
 	const t = useT();
-	const isActive = !!category;
+	const isActive = !!selectedID;
 
 	/**
 	 * @NOTE - we need to convert the value to a number because the value is a string
@@ -57,7 +58,11 @@ export const CategoryPill = ({ query, resource }: Props) => {
 						query.where('categories').removeElemMatch('categories', { id: category?.id }).exec()
 					}
 				>
-					<ButtonText>{category ? category.name : t('Category', { _tags: 'core' })}</ButtonText>
+					<ButtonText>
+						{isActive
+							? category?.name || t('ID: {id}', { id: selectedID, _tags: 'core' })
+							: t('Category', { _tags: 'core' })}
+					</ButtonText>
 				</ButtonPill>
 			</ComboboxTriggerPrimitive>
 			<ComboboxContent>

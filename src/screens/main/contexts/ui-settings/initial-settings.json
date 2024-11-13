@@ -301,13 +301,12 @@
         "key": "status",
         "width": 45,
         "align": "center",
-        "hideLabel": true,
-        "show": true
+        "show": true,
+        "hideLabel": true
       },
       {
         "key": "number",
         "align": "center",
-        "hideLabel": true,
         "show": true
       },
       {
@@ -484,13 +483,12 @@
         "key": "status",
         "width": 46,
         "align": "center",
-        "hideLabel": true,
-        "show": true
+        "show": true,
+        "hideLabel": true
       },
       {
         "key": "number",
         "align": "center",
-        "hideLabel": true,
         "show": true
       },
       {

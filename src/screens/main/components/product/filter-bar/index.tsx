@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
+import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { of } from 'rxjs';
-import { startWith, switchMap, tap } from 'rxjs/operators';
+import { startWith, switchMap, tap, map } from 'rxjs/operators';
 
 import { HStack } from '@wcpos/components/src/hstack';
 import { Suspense } from '@wcpos/components/src/suspense';
@@ -30,54 +30,60 @@ const FilterBar = ({ query }: Props) => {
 	const { collection: categoryCollection } = useCollection('products/categories');
 	const { collection: tagCollection } = useCollection('products/tags');
 	const pullDocument = usePullDocument();
+	const selectedCategoryID = useObservableEagerState(
+		query.params$.pipe(map(() => query.getElemMatchId('categories')))
+	);
+	const selectedTagID = useObservableEagerState(
+		query.params$.pipe(map(() => query.getElemMatchId('tags')))
+	);
 
-	/**
-	 * TODO - this is a bit of a hack, but it works for now.
-	 */
-	const selectedCategoryResource = React.useMemo(() => {
-		const selectedCategory$ = query.params$.pipe(
-			startWith(query.getElemMatchId('categories')),
-			switchMap(() => {
-				const categoryFilterID = query.getElemMatchId('categories');
-				if (categoryFilterID) {
-					return categoryCollection.findOne({ selector: { id: categoryFilterID } }).$.pipe(
+	const selectedCategory$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(([id]) => {
+					if (!id) {
+						return of(undefined);
+					}
+					return categoryCollection.findOne({ selector: { id } }).$.pipe(
 						tap((doc) => {
 							if (!isRxDocument(doc)) {
-								pullDocument(categoryFilterID, categoryCollection);
+								pullDocument(id, categoryCollection);
 							}
 						})
 					);
-				}
-				return of(undefined);
-			})
-		);
+				})
+			),
+		[selectedCategoryID]
+	);
 
-		return new ObservableResource(selectedCategory$);
-	}, [categoryCollection, pullDocument, query]);
+	const selectedCategoryResource = React.useMemo(
+		() => new ObservableResource(selectedCategory$),
+		[selectedCategory$]
+	);
 
-	/**
-	 *
-	 */
-	const selectedTagResource = React.useMemo(() => {
-		const selectedTag$ = query.params$.pipe(
-			startWith(query.getElemMatchId('tags')),
-			switchMap(() => {
-				const tagFilterID = query.getElemMatchId('tags');
-				if (tagFilterID) {
-					return tagCollection.findOne({ selector: { id: tagFilterID } }).$.pipe(
+	const selectedTag$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(([id]) => {
+					if (!id) {
+						return of(undefined);
+					}
+					return tagCollection.findOne({ selector: { id } }).$.pipe(
 						tap((doc) => {
 							if (!isRxDocument(doc)) {
-								pullDocument(tagFilterID, tagCollection);
+								pullDocument(id, tagCollection);
 							}
 						})
 					);
-				}
-				return of(undefined);
-			})
-		);
+				})
+			),
+		[selectedTagID]
+	);
 
-		return new ObservableResource(selectedTag$);
-	}, [pullDocument, query, tagCollection]);
+	const selectedTagResource = React.useMemo(
+		() => new ObservableResource(selectedTag$),
+		[selectedTag$]
+	);
 
 	/**
 	 *
@@ -88,10 +94,14 @@ const FilterBar = ({ query }: Props) => {
 			<FeaturedPill query={query} />
 			<OnSalePill query={query} />
 			<Suspense>
-				<CategoryPill query={query} resource={selectedCategoryResource} />
+				<CategoryPill
+					query={query}
+					resource={selectedCategoryResource}
+					selectedID={selectedCategoryID}
+				/>
 			</Suspense>
 			<Suspense>
-				<TagPill query={query} resource={selectedTagResource} />
+				<TagPill query={query} resource={selectedTagResource} selectedID={selectedTagID} />
 			</Suspense>
 		</HStack>
 	);

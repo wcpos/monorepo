@@ -9,10 +9,15 @@ import { useCollection } from '../../hooks/use-collection';
 import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 
+import type { QuerySearchInput } from '../../components/query-search-input';
+
 type ProductCollection = import('@wcpos/database').ProductCollection;
 type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;
 
-export const useBarcode = (productQuery: Query) => {
+export const useBarcode = (
+	productQuery: Query,
+	querySearchInputRef: React.RefObject<typeof QuerySearchInput>
+) => {
 	const { barcode$, onKeyPress } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
@@ -36,6 +41,7 @@ export const useBarcode = (productQuery: Query) => {
 				type: 'error',
 			});
 			productQuery.search(barcode);
+			querySearchInputRef.current?.setSearch(barcode);
 			return;
 		}
 
@@ -61,12 +67,14 @@ export const useBarcode = (productQuery: Query) => {
 			const parent_id = product.parent_id;
 			if (!parent_id) {
 				productQuery.search(barcode);
+				querySearchInputRef.current?.setSearch(barcode);
 				return;
 			}
 
 			const parent = await productCollection.findOne({ selector: { id: parent_id } }).exec();
 			if (!parent) {
 				productQuery.search(barcode);
+				querySearchInputRef.current?.setSearch(barcode);
 				return;
 			}
 			addVariation(product, parent);
@@ -84,7 +92,7 @@ export const useBarcode = (productQuery: Query) => {
 		});
 
 		// clear search after successful scan?
-		productQuery.search('');
+		querySearchInputRef.current?.onSearch('');
 	});
 
 	return { onKeyPress };

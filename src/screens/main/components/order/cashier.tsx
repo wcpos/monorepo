@@ -47,6 +47,13 @@ export const Cashier = ({ row }: CellContext<{ document: OrderDocument }, 'cashi
 		}
 	}, [cashierID, collection, format]);
 
+	/**
+	 * It's possible the order doesn't have a cashier, eg: web or admin orders
+	 */
+	if (!cashierID) {
+		return null;
+	}
+
 	return (
 		<ButtonPill
 			variant="ghost-secondary"

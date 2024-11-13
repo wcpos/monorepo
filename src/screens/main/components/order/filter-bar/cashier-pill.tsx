@@ -23,6 +23,7 @@ import { CustomerList } from '../../customer-select';
 interface CashierPillProps {
 	query: Query<CustomerCollection>;
 	resource: ObservableResource<CustomerDocument>;
+	cashierID?: number;
 }
 
 /**
@@ -79,10 +80,17 @@ const CashierSearch = () => {
 /**
  *
  */
-export const CashierPill = ({ query, resource }: CashierPillProps) => {
-	const cashier = useObservableSuspense(resource);
+export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) => {
+	let cashier = useObservableSuspense(resource);
 	const { format } = useCustomerNameFormat();
 	const t = useT();
+
+	/**
+	 * @FIXME - if the customers are cleared, it's possible that the cashier will be null
+	 */
+	if (!cashier && cashierID) {
+		cashier = { id: cashierID };
+	}
 
 	/**
 	 * value is always a string when dealing with comboboxes

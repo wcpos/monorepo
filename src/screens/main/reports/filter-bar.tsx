@@ -5,7 +5,7 @@ import { endOfDay, startOfDay } from 'date-fns';
 import toNumber from 'lodash/toNumber';
 import { useObservableEagerState, ObservableResource, useObservable } from 'observable-hooks';
 import { of } from 'rxjs';
-import { map, switchMap } from 'rxjs/operators';
+import { map, startWith, switchMap } from 'rxjs/operators';
 
 import { Card } from '@wcpos/components/src/card';
 import { HStack } from '@wcpos/components/src/hstack';
@@ -86,7 +86,8 @@ export const FilterBar = () => {
 					return customerQuery.result$.pipe(
 						map((result) => {
 							if (result.count === 1) return result.hits[0].document;
-						})
+						}),
+						startWith({ id: customerID })
 					);
 				})
 			),
@@ -114,7 +115,8 @@ export const FilterBar = () => {
 					return cashierQuery.result$.pipe(
 						map((result) => {
 							if (result.count === 1) return result.hits[0].document;
-						})
+						}),
+						startWith({ id: cashierID })
 					);
 				})
 			),
@@ -160,10 +162,10 @@ export const FilterBar = () => {
 				<HStack className="w-full flex-wrap">
 					<StatusPill query={query} />
 					<Suspense>
-						<CustomerPill resource={customerResource} query={query} />
+						<CustomerPill resource={customerResource} query={query} customerID={customerID} />
 					</Suspense>
 					<Suspense>
-						<CashierPill resource={cashierResource} query={query} />
+						<CashierPill resource={cashierResource} query={query} cashierID={cashierID} />
 					</Suspense>
 					<StorePill resource={storesResource} query={query} />
 					<DateRangePill query={query} onRemove={removeDateRangeFilter} />

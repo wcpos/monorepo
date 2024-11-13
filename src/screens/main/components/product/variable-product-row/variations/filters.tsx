@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ButtonPill } from '@wcpos/components/src/button';
@@ -26,7 +27,8 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 	/**
 	 * We need to trigger a re-render when the selected attributes change.
 	 */
-	const params = useObservableEagerState(query.params$);
+	const rxQuery = useObservableEagerState(query.rxQuery$);
+	const searchTerm = get(rxQuery, ['other', 'search', 'searchTerm']);
 
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
@@ -35,14 +37,14 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 	return (
 		<HStack className="p-2 bg-input">
 			<HStack className="flex-1">
-				{!!params?.search && (
+				{!!searchTerm && (
 					<ButtonPill
 						leftIcon="magnifyingGlass"
 						size="xs"
 						removable
 						onRemove={() => query.search('')}
 					>
-						{params.search}
+						{searchTerm}
 					</ButtonPill>
 				)}
 				{(parent.attributes || [])

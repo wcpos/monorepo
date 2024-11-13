@@ -23,6 +23,7 @@ import { Date } from '../components/date';
 import { Cashier } from '../components/order/cashier';
 import { CreatedVia } from '../components/order/created-via';
 import { Customer } from '../components/order/customer';
+import { OrderNumber } from '../components/order/order-number';
 import { PaymentMethod } from '../components/order/payment-method';
 import { Status } from '../components/order/status';
 import { Total } from '../components/order/total';
@@ -48,6 +49,7 @@ const cells = {
 	created_via: CreatedVia,
 	cashier: Cashier,
 	receipt: Receipt,
+	number: OrderNumber,
 };
 
 const renderCell = (props) => get(cells, props.column.id);

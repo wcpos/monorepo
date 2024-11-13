@@ -2,7 +2,7 @@ import * as React from 'react';
 import { NativeSyntheticEvent, TextInputKeyPressEventData, Platform } from 'react-native';
 
 import { useFocusEffect } from '@react-navigation/native';
-import { useObservableEagerState, useObservableRef } from 'observable-hooks';
+import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
 import { filter } from 'rxjs/operators';
 
 import { Toast } from '@wcpos/components/src/toast';
@@ -37,7 +37,26 @@ export const useBarcodeDetection = (
 	const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
 	// Subject to emit detected barcodes
-	const [barcodeRef, barcode$] = useObservableRef<string>();
+	const [onBarcodeScan, barcode$] = useObservableCallback((event$) =>
+		event$.pipe(
+			filter((barcode) => {
+				if (typeof barcode === 'string') {
+					if (barcode.length >= minLength) {
+						return true;
+					}
+					Toast.show({
+						type: 'error',
+						text1: t('Barcode scanned: {barcode}', { barcode, _tags: 'core' }),
+						text2: t('Barcode must be at least {minLength} characters long', {
+							minLength,
+							_tags: 'core',
+						}),
+					});
+				}
+				return false;
+			})
+		)
+	);
 
 	/**
 	 * Shared logic for handling key input.
@@ -93,10 +112,10 @@ export const useBarcodeDetection = (
 						const barcode = inputStack.join('');
 
 						if (barcode.length >= minLength) {
-							barcodeRef.current = barcode;
 							if (callback) {
 								callback(barcode);
 							}
+							onBarcodeScan(barcode);
 						}
 
 						// Reset variables
@@ -113,7 +132,7 @@ export const useBarcodeDetection = (
 			// Update lastInputTimeRef
 			lastInputTimeRef.current = currentInputTime;
 		},
-		[prefix, suffix, barcodeRef, callback, minLength, avgTimeInputThreshold]
+		[avgTimeInputThreshold, prefix, suffix, minLength, callback, onBarcodeScan]
 	);
 
 	/**
@@ -121,7 +140,10 @@ export const useBarcodeDetection = (
 	 */
 	const onKeyUp = React.useCallback(
 		(e: KeyboardEvent) => {
-			handleKeyInput(e.key);
+			const ignoreInput = e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA';
+			if (!ignoreInput) {
+				handleKeyInput(e.key);
+			}
 		},
 		[handleKeyInput]
 	);
@@ -137,54 +159,29 @@ export const useBarcodeDetection = (
 	);
 
 	/**
-	 * Add event listeners for web.
+	 * Enable/Disable barcode detection when the screen is not focused.
 	 */
-	React.useEffect(() => {
-		if (Platform.OS === 'web') {
-			document.addEventListener('keyup', onKeyUp);
+	useFocusEffect(
+		React.useCallback(() => {
+			if (Platform.OS === 'web') {
+				document.addEventListener('keyup', onKeyUp);
 
-			return () => {
-				document.removeEventListener('keyup', onKeyUp);
-				if (timeoutRef.current) {
-					clearTimeout(timeoutRef.current);
-				}
-			};
-		}
-	}, [onKeyUp]);
-
-	/**
-	 * Disable barcode detection when the screen is not focused.
-	 */
-	useFocusEffect(() => {
-		return () => {
-			document.removeEventListener('keyup', onKeyUp);
-			if (timeoutRef.current) {
-				clearTimeout(timeoutRef.current);
+				return () => {
+					document.removeEventListener('keyup', onKeyUp);
+					if (timeoutRef.current) {
+						clearTimeout(timeoutRef.current);
+					}
+				};
 			}
-		};
-	});
+		}, [onKeyUp])
+	);
 
 	/**
-	 * Return an observable that emits detected barcodes and the onKeyPress handler for React Native.
+	 * Return an observable that emits detected barcodes, and
+	 * the onKeyPress handler for the POS products search input.
 	 */
 	return {
-		barcode$: barcode$.pipe(
-			filter((barcode) => {
-				if (typeof barcode === 'string') {
-					if (barcode.length >= minLength) {
-						return true;
-					}
-					Toast.show({
-						type: 'error',
-						text1: t('Barcode scanned: {barcode}', { barcode, _tags: 'core' }),
-						text2: t('Barcode must be at least {minLength} characters long', {
-							minLength,
-							_tags: 'core',
-						}),
-					});
-				}
-				return false;
-			})
-		),
+		barcode$,
+		onKeyPress,
 	};
 };

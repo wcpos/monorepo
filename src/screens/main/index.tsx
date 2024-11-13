@@ -174,14 +174,14 @@ const DrawerNavigator = ({ navigation }) => {
 				}}
 			>
 				{(props) =>
-					showUpgrade ? (
-						<ReportsUpgrade />
-					) : (
+					license?.key ? (
 						<ErrorBoundary>
 							<Suspense>
 								<ReportsNavigator {...props} />
 							</Suspense>
 						</ErrorBoundary>
+					) : (
+						<ReportsUpgrade />
 					)
 				}
 			</Drawer.Screen>

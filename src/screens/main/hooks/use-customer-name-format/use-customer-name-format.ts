@@ -27,8 +27,13 @@ export const useCustomerNameFormat = () => {
 				return t('Guest', { _tags: 'core' });
 			}
 
+			// fall back to ID
+			if (customerID) {
+				return t('ID: {id}', { id: customerID, _tags: 'core' });
+			}
+
 			// this should never happen
-			return '';
+			return t('unknown', { _tags: 'core' });
 		},
 		[t]
 	);
