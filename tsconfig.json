@@ -1,6 +1,6 @@
 {
   "extends": "@wcpos/tsconfig/base.json",
-  "include": ["src"],
+  "include": ["src/**/*"],
   "compilerOptions": {
     "jsx": "react-native"
   }
