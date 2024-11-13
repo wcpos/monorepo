@@ -74,14 +74,14 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	private setupSubscriptions() {
 		const polling$ = this.paused$.pipe(
 			switchMap((isPaused) => (isPaused ? [] : interval(this.pollingTime).pipe(startWith(0)))),
-			filter(() => !this.subjects.paused.getValue()),
+			filter(() => !this.subjects.paused.getValue())
 		);
 
 		this.addSub(
 			'polling',
 			polling$.subscribe(() => {
 				this.run();
-			}),
+			})
 		);
 	}
 

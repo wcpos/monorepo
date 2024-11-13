@@ -295,8 +295,11 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			 */
 			queryState.rxQuery$.subscribe((rxQuery) => {
 				const params = cloneDeep(rxQuery?.mangoQuery || {});
+				// we need to get the search term from the rxQuery, because it's not part of the mango query params
+				// we'll add it to the select object just in case the hook needs it
 				if (rxQuery?.other.search || rxQuery?.other.relationalSearch) {
-					params.search =
+					params.selector = params.selector || {};
+					params.selector.search =
 						rxQuery.other.search?.searchTerm || rxQuery.other.relationalSearch?.searchTerm;
 				}
 				// @NOTE - this.getApiQueryParams converts { selector: { id: { $in: [1, 2, 3] } } } to { include: [1, 2, 3] }
