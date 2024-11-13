@@ -77,7 +77,7 @@ export const searchPlugin: RxPlugin = {
 				if (!this._cleanupRegistered) {
 					this._cleanupRegistered = true;
 
-					this.onRemove.push(async () => {
+					this.onDestroy.push(async () => {
 						if (this._searchInstances) {
 							for (const [locale, searchInstance] of this._searchInstances.entries()) {
 								// Destroy the search instance's collection if it exists

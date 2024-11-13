@@ -15,7 +15,7 @@ import { RxDBGenerateIdPlugin } from './generate-id';
 import middlewaresPlugin from './middlewares';
 import parseRestResponsePlugin from './parse-rest-response';
 import populatePlugin from './populate';
-// import { resetCollectionPlugin } from './reset-collection';
+import { resetCollectionPlugin } from './reset-collection';
 import { searchPlugin } from './search';
 
 if (process.env.NODE_ENV === 'development') {
@@ -51,6 +51,6 @@ addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestRe
 addRxPlugin(populatePlugin);
 addRxPlugin(findOneFixPlugin);
 addRxPlugin(parseRestResponsePlugin);
-// addRxPlugin(resetCollectionPlugin);
+addRxPlugin(resetCollectionPlugin);
 addRxPlugin(searchPlugin);
 addRxPlugin(middlewaresPlugin);
