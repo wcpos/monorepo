@@ -1,6 +1,10 @@
 module.exports = {
-	extends: ['eslint-config-universe', 'plugin:react-hooks/recommended'],
-	plugins: ['@typescript-eslint', 'react-native', 'react-hooks'],
+	extends: [
+		'eslint-config-universe',
+		'plugin:react-hooks/recommended',
+		'plugin:prettier/recommended',
+	],
+	plugins: ['@typescript-eslint', 'react-native', 'react-hooks', 'prettier'],
 	rules: {
 		'prettier/prettier': [
 			'error',
@@ -9,6 +13,7 @@ module.exports = {
 				singleQuote: true,
 				trailingComma: 'es5',
 				printWidth: 100,
+				endOfLine: 'lf',
 			},
 		],
 		'import/order': [

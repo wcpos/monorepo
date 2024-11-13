@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/tsconfig",
-  "version": "1.3.0",
+  "version": "1.7.0",
   "description": "TS configuration for the WooCommerce POS React Native app",
   "author": "kilbot <paul@kilbot.com>",
   "license": "MIT",

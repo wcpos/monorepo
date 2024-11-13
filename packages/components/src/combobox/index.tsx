@@ -48,6 +48,7 @@ const Combobox = React.forwardRef<RootRef, RootProps>(
 			defaultValue,
 			onValueChange: onValueChangeProp,
 			disabled,
+			onOpenChange,
 			...viewProps
 		},
 		ref
@@ -60,7 +61,7 @@ const Combobox = React.forwardRef<RootRef, RootProps>(
 
 		const Component = asChild ? Slot.View : View;
 		return (
-			<Popover>
+			<Popover onOpenChange={onOpenChange}>
 				<ComboboxContext.Provider
 					value={{
 						value,
