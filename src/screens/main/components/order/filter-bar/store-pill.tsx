@@ -101,6 +101,14 @@ export const StorePill = ({ resource, query }: Props) => {
 	}, [query]);
 
 	/**
+	 * Hide store section if there is only the default store
+	 */
+	let showStores = true;
+	if (stores.length === 1 && stores[0].id === 0) {
+		showStores = false;
+	}
+
+	/**
 	 *
 	 */
 	return (
@@ -130,17 +138,21 @@ export const StorePill = ({ resource, query }: Props) => {
 						{t('WP Admin', { _tags: 'core' })}
 					</SelectItem>
 				</SelectGroup>
-				<SelectSeparator />
-				<SelectGroup>
-					<SelectLabel>{t('Store', { _tags: 'core' })}</SelectLabel>
-					{(stores || []).map((store) => {
-						return (
-							<SelectItem key={store.id} value={store.id} label={store.name}>
-								{store.name}
-							</SelectItem>
-						);
-					})}
-				</SelectGroup>
+				{showStores && (
+					<>
+						<SelectSeparator />
+						<SelectGroup>
+							<SelectLabel>{t('Store', { _tags: 'core' })}</SelectLabel>
+							{(stores || []).map((store) => {
+								return (
+									<SelectItem key={store.id} value={store.id} label={store.name}>
+										{store.name}
+									</SelectItem>
+								);
+							})}
+						</SelectGroup>
+					</>
+				)}
 			</SelectContent>
 		</Select>
 	);

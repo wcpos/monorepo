@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import {
+	Combobox,
+	ComboboxTriggerPrimitive,
 	ComboboxContent,
 	ComboboxEmpty,
 	ComboboxInput,
@@ -35,16 +37,47 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 	const options = attribute?.options || [];
 
 	/**
-	 *
+	 * Select for short list of options
+	 */
+	if (options.length <= 10) {
+		return (
+			<Select
+				value={{ value: selected, label: selected }}
+				onValueChange={({ value }) =>
+					onSelect({ id: attribute.id, name: attribute.name, option: value })
+				}
+			>
+				<SelectPrimitiveTrigger asChild>
+					<ButtonPill
+						size="xs"
+						leftIcon="check"
+						variant={isActive ? 'default' : 'muted'}
+						removable={isActive}
+						onRemove={onRemove}
+					>
+						<ButtonText>{isActive ? `${attribute.name}: ${selected}` : attribute.name}</ButtonText>
+					</ButtonPill>
+				</SelectPrimitiveTrigger>
+				<SelectContent>
+					{options.map((option, index) => (
+						<SelectItem key={index} label={option} value={option} />
+					))}
+				</SelectContent>
+			</Select>
+		);
+	}
+
+	/**
+	 * Combobox for longer list of options
 	 */
 	return (
-		<Select
+		<Combobox
 			value={{ value: selected, label: selected }}
 			onValueChange={({ value }) =>
 				onSelect({ id: attribute.id, name: attribute.name, option: value })
 			}
 		>
-			<SelectPrimitiveTrigger asChild>
+			<ComboboxTriggerPrimitive asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="check"
@@ -54,30 +87,22 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 				>
 					<ButtonText>{isActive ? `${attribute.name}: ${selected}` : attribute.name}</ButtonText>
 				</ButtonPill>
-			</SelectPrimitiveTrigger>
-			{options.length > 10 ? (
-				<ComboboxContent>
-					<ComboboxSearch>
-						<ComboboxInput placeholder={t('Search Variations', { _tags: 'core' })} />
-						<ComboboxEmpty>{t('No variation found', { _tags: 'core' })}</ComboboxEmpty>
-						<ComboboxList>
-							{options.map((option, index) => {
-								return (
-									<ComboboxItem key={index} value={option} label={option}>
-										{option}
-									</ComboboxItem>
-								);
-							})}
-						</ComboboxList>
-					</ComboboxSearch>
-				</ComboboxContent>
-			) : (
-				<SelectContent>
-					{options.map((option, index) => (
-						<SelectItem key={index} label={option} value={option} />
-					))}
-				</SelectContent>
-			)}
-		</Select>
+			</ComboboxTriggerPrimitive>
+			<ComboboxContent>
+				<ComboboxSearch>
+					<ComboboxInput placeholder={t('Search Variations', { _tags: 'core' })} />
+					<ComboboxEmpty>{t('No variation found', { _tags: 'core' })}</ComboboxEmpty>
+					<ComboboxList>
+						{options.map((option, index) => {
+							return (
+								<ComboboxItem key={index} value={option} label={option}>
+									{option}
+								</ComboboxItem>
+							);
+						})}
+					</ComboboxList>
+				</ComboboxSearch>
+			</ComboboxContent>
+		</Combobox>
 	);
 };

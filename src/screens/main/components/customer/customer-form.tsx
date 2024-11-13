@@ -55,6 +55,23 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 	const hasUsername = !!form.getValues().username;
 
 	/**
+	 * Intercept handleSubmit to populate billing fields if empty.
+	 */
+	const handleSubmit = async (data: z.infer<typeof customerFormSchema>) => {
+		// Create billing object if it doesn't exist
+		if (!data.billing) {
+			data.billing = {};
+		}
+
+		// Populate billing fields with top-level values if they are empty
+		data.billing.first_name = data.billing.first_name || data.first_name || '';
+		data.billing.last_name = data.billing.last_name || data.last_name || '';
+		data.billing.email = data.billing.email || data.email || '';
+
+		onSubmit(data);
+	};
+
+	/**
 	 *
 	 */
 	return (
@@ -142,7 +159,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 					<Button variant="outline" onPress={onClose}>
 						<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
 					</Button>
-					<Button loading={loading} onPress={form.handleSubmit(onSubmit)}>
+					<Button loading={loading} onPress={form.handleSubmit(handleSubmit)}>
 						<ButtonText>{t('Save')}</ButtonText>
 					</Button>
 				</HStack>

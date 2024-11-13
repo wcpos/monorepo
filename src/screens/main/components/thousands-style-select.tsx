@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+
 import {
 	Select,
 	SelectContent,
@@ -10,6 +12,7 @@ import {
 } from '@wcpos/components/src/select';
 import { Text } from '@wcpos/components/src/text';
 
+import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 
 /**
@@ -21,20 +24,25 @@ export const ThousandsStyleSelect = React.forwardRef<
 >(({ onValueChange, value, ...props }, ref) => {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
+	const { store } = useAppState();
+	const price_thousand_sep = useObservableEagerState(store.price_thousand_sep$);
 
 	/**
-	 *
+	 * Use price_thousand_sep from store for formatting examples
 	 */
 	const options = React.useMemo(
 		() => [
 			{
 				value: 'thousand',
-				label: t('123,456,789', { _tags: 'core' }),
+				label: `123${price_thousand_sep}456${price_thousand_sep}789`,
 			},
-			{ value: 'lakh', label: t('12,34,56,789', { _tags: 'core' }) },
-			{ value: 'wan', label: t('1,2345,6789', { _tags: 'core' }) },
+			{
+				value: 'lakh',
+				label: `12${price_thousand_sep}34${price_thousand_sep}56${price_thousand_sep}789`,
+			},
+			{ value: 'wan', label: `1${price_thousand_sep}2345${price_thousand_sep}6789` },
 		],
-		[t]
+		[price_thousand_sep]
 	);
 
 	/**

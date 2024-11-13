@@ -77,7 +77,7 @@ const Checkout = ({ resource }: Props) => {
 					<ModalTitle>
 						<Text>
 							{orderNumber
-								? t('Chechout Order #{orderNumber}', { orderNumber, _tags: 'core' })
+								? t('Checkout Order #{orderNumber}', { orderNumber, _tags: 'core' })
 								: t('Checkout', { _tags: 'core' })}
 						</Text>
 					</ModalTitle>

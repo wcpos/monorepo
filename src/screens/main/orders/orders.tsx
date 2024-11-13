@@ -62,6 +62,18 @@ const Orders = () => {
 	const t = useT();
 	const { wpCredentials, store } = useAppState();
 
+	const selector = {
+		$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } }],
+	};
+
+	if (store?.id) {
+		selector.$and.push({
+			meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } },
+		});
+	} else {
+		selector.created_via = 'woocommerce-pos';
+	}
+
 	/**
 	 *
 	 */
@@ -70,12 +82,7 @@ const Orders = () => {
 		collectionName: 'orders',
 		initialParams: {
 			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
-			selector: {
-				$and: [
-					{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } },
-					{ meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } } },
-				],
-			},
+			selector,
 		},
 		infiniteScroll: true,
 	});

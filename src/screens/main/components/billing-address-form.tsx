@@ -68,21 +68,21 @@ export const BillingAddressForm = () => {
 			<View className="col-span-2">
 				<FormField
 					control={control}
-					name="billing.address_1"
+					name="billing.company"
 					render={({ field }) => <FormInput label={t('Company', { _tags: 'core' })} {...field} />}
 				/>
 			</View>
 			<View className="col-span-2">
 				<FormField
 					control={control}
-					name="billing.company"
+					name="billing.address_1"
 					render={({ field }) => <FormInput label={t('Address 1', { _tags: 'core' })} {...field} />}
 				/>
 			</View>
 			<View className="col-span-2">
 				<FormField
 					control={control}
-					name="billing.address_1"
+					name="billing.address_2"
 					render={({ field }) => <FormInput label={t('Address 2', { _tags: 'core' })} {...field} />}
 				/>
 			</View>

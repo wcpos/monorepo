@@ -53,21 +53,21 @@ export const ShippingAddressForm = () => {
 			<View className="col-span-2">
 				<FormField
 					control={control}
-					name="shipping.address_1"
+					name="shipping.company"
 					render={({ field }) => <FormInput label={t('Company', { _tags: 'core' })} {...field} />}
 				/>
 			</View>
 			<View className="col-span-2">
 				<FormField
 					control={control}
-					name="shipping.company"
+					name="shipping.address_1"
 					render={({ field }) => <FormInput label={t('Address 1', { _tags: 'core' })} {...field} />}
 				/>
 			</View>
 			<View className="col-span-2">
 				<FormField
 					control={control}
-					name="shipping.address_1"
+					name="shipping.address_2"
 					render={({ field }) => <FormInput label={t('Address 2', { _tags: 'core' })} {...field} />}
 				/>
 			</View>

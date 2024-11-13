@@ -40,11 +40,11 @@ import { ShippingPrice } from './cells/shipping-price';
 import { ShippingTitle } from './cells/shipping-title';
 import { Subtotal } from './cells/subtotal';
 import EmptyTableRow from '../../components/empty-table-row';
-import { TextCell } from '../../components/text-cell';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
 import { getUuidFromLineItem } from '../hooks/utils';
+import { SKU } from './cells/sku';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
@@ -60,6 +60,7 @@ const cells = {
 		quantity: Quantity,
 		subtotal: Subtotal,
 		total: ProductTotal,
+		sku: SKU,
 	},
 	fee_lines: {
 		actions: Actions,
@@ -68,6 +69,7 @@ const cells = {
 		quantity: () => null,
 		subtotal: () => null,
 		total: FeeAndShippingTotal,
+		sku: () => null,
 	},
 	shipping_lines: {
 		actions: Actions,
@@ -76,6 +78,7 @@ const cells = {
 		quantity: () => null,
 		subtotal: () => null,
 		total: FeeAndShippingTotal,
+		sku: () => null,
 	},
 };
 
@@ -187,7 +190,7 @@ export const CartTable = () => {
 							);
 						}
 
-						return <TextCell {...props} />;
+						return null;
 					},
 					meta: {
 						...col,

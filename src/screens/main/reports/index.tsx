@@ -29,6 +29,23 @@ const ReportsWithProviders = () => {
 	const { wpCredentials, store } = useAppState();
 	const today = React.useMemo(() => new Date(), []);
 
+	const selector = {
+		status: 'completed',
+		date_created_gmt: {
+			$gte: convertLocalDateToUTCString(startOfDay(today)),
+			$lte: convertLocalDateToUTCString(endOfDay(today)),
+		},
+		$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } }],
+	};
+
+	if (store?.id) {
+		selector.$and.push({
+			meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } },
+		});
+	} else {
+		selector.created_via = 'woocommerce-pos';
+	}
+
 	/**
 	 *
 	 */
@@ -37,17 +54,7 @@ const ReportsWithProviders = () => {
 		collectionName: 'orders',
 		initialParams: {
 			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
-			selector: {
-				status: 'completed',
-				date_created_gmt: {
-					$gte: convertLocalDateToUTCString(startOfDay(today)),
-					$lte: convertLocalDateToUTCString(endOfDay(today)),
-				},
-				$and: [
-					{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } },
-					{ meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } } },
-				],
-			},
+			selector,
 		},
 		greedy: true,
 	});
