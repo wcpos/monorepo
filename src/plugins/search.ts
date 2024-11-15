@@ -1,3 +1,4 @@
+import get from 'lodash/get';
 import { RxPlugin } from 'rxdb';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
@@ -49,7 +50,10 @@ export const searchPlugin: RxPlugin = {
 							identifier: `${this.name}-search-${locale}`,
 							collection: this,
 							docToString: (doc) => {
-								return this.options.searchFields.map((field) => doc[field] || '').join(' ');
+								/**
+								 * @NOTE - fields can be nested, so we use lodash get to access them
+								 */
+								return this.options.searchFields.map((field) => get(doc, field) || '').join(' ');
 							},
 							initialization: 'lazy',
 							indexOptions: {
