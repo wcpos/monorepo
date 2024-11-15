@@ -37,6 +37,7 @@ export const Variations = ({ row, onLayout }: Props) => {
 			selector: {
 				id: { $in: parent.variations },
 			},
+			sort: [{ name: 'asc' }],
 		},
 		endpoint: `products/${parent.id}/variations`,
 		greedy: true,
@@ -65,17 +66,6 @@ export const Variations = ({ row, onLayout }: Props) => {
 			// only run when the component unmounts
 		]
 	);
-
-	/**
-	 * Update the search query when the parent search term changes
-	 */
-	React.useEffect(() => {
-		if (row.original?.parentSearchTerm) {
-			query.search(row.original.parentSearchTerm);
-		} else {
-			query.search('');
-		}
-	}, [query, row.original]);
 
 	/**
 	 *

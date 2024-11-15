@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
+import { decode } from 'html-entities';
 
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
@@ -20,12 +21,11 @@ export const ProductVariationName = ({
 	const { show } = column.columnDef.meta;
 
 	/**
-	 *
+	 * Sometimes the product name from WooCommerce is encoded in html entities
 	 */
-
 	return (
 		<VStack space="xs">
-			<Text className="font-bold">{variation.name}</Text>
+			<Text className="font-bold">{decode(variation.name)}</Text>
 			{show('sku') && <Text className="text-sm">{variation.sku}</Text>}
 			{show('barcode') && <Text className="text-sm">{variation.barcode}</Text>}
 			{show('stock_quantity') && <StockQuantity row={row} className="text-sm" withText />}

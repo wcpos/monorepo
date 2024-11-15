@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
+
 import { Button, ButtonText } from '@wcpos/components/src/button';
 import type { InputProps } from '@wcpos/components/src/input';
 import { Textarea } from '@wcpos/components/src/textarea';
@@ -49,12 +51,12 @@ export const EditableName = ({
 	}
 
 	/**
-	 *
+	 * Sometimes the product name from WooCommerce is encoded in html entities
 	 */
 	return (
 		<Button variant="outline" className="max-w-full items-start" onPress={() => setEditing(true)}>
 			<ButtonText className="font-bold" numberOfLines={1}>
-				{value}
+				{decode(value)}
 			</ButtonText>
 		</Button>
 	);

@@ -64,10 +64,36 @@ export const EditProductForm = ({ product }: Props) => {
 	}
 
 	/**
+	 *
+	 */
+	const form = useForm<z.infer<typeof schema>>({
+		resolver: zodResolver(schema),
+		defaultValues: {
+			name: product.name,
+			status: product.status,
+			featured: product.featured,
+			sku: product.sku,
+			regular_price: product.regular_price,
+			sale_price: product.sale_price,
+			stock_quantity: product.stock_quantity,
+			manage_stock: product.manage_stock,
+			barcode: product.barcode,
+			tax_status: product.tax_status,
+			tax_class: product.tax_class === '' ? 'standard' : product.tax_class,
+			meta_data: product.meta_data,
+		},
+	});
+
+	/**
 	 * Handle save button click
+	 *
+	 * @NOTE - the form needs a value for tax_class, but WC REST API uses an empty string for standard
 	 */
 	const handleSave = React.useCallback(
 		async (data) => {
+			if (data.tax_class === 'standard') {
+				data.tax_class = '';
+			}
 			setLoading(true);
 			try {
 				await localPatch({
@@ -93,27 +119,6 @@ export const EditProductForm = ({ product }: Props) => {
 		},
 		[localPatch, product, pushDocument, t]
 	);
-
-	/**
-	 *
-	 */
-	const form = useForm<z.infer<typeof schema>>({
-		resolver: zodResolver(schema),
-		defaultValues: {
-			name: product.name,
-			status: product.status,
-			featured: product.featured,
-			sku: product.sku,
-			regular_price: product.regular_price,
-			sale_price: product.sale_price,
-			stock_quantity: product.stock_quantity,
-			manage_stock: product.manage_stock,
-			barcode: product.barcode,
-			tax_status: product.tax_status,
-			tax_class: product.tax_class,
-			meta_data: product.meta_data,
-		},
-	});
 
 	/**
 	 *

@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { decode } from 'html-entities';
+
 import { Box } from '@wcpos/components/src/box';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
@@ -63,8 +65,8 @@ export const ProductName = ({ row, column }: CellContext<Props, 'name'>) => {
 				<VStack space="xs">
 					{metaData.map((meta: any) => (
 						<HStack key={meta.id || meta.key || meta.display_key} className="flex-wrap gap-0">
-							<Text className="text-xs text-muted-foreground">{`${meta.display_key || meta.key}: `}</Text>
-							<Text className="text-xs">{meta.display_value || meta.value}</Text>
+							<Text className="text-xs text-muted-foreground">{`${decode(meta.display_key || meta.key)}: `}</Text>
+							<Text className="text-xs">{decode(meta.display_value || meta.value)}</Text>
 						</HStack>
 					))}
 				</VStack>

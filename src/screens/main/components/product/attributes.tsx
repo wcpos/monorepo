@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
+import { decode } from 'html-entities';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -31,10 +32,10 @@ export const PlainAttributes = ({ row }: CellContext<{ document: ProductDocument
 				.filter((attr: any) => !attr.variation)
 				.map((attr: any, index: number) => (
 					<HStack key={index} className="flex-wrap gap-0">
-						<Text className="text-xs text-muted-foreground">{`${attr.name}: `}</Text>
+						<Text className="text-xs text-muted-foreground">{`${decode(attr.name)}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
 							<Text className="text-xs" key={index}>
-								{option}
+								{decode(option)}
 								{index < attr.options.length - 1 && ', '}
 							</Text>
 						))}
@@ -123,7 +124,7 @@ export const ProductAttributes = ({ row, table }) => {
 				.filter((attr: any) => attr.variation)
 				.map((attr: any, index: number) => (
 					<HStack key={index} className="flex-wrap gap-0">
-						<Text className="text-xs text-muted-foreground">{`${attr.name}: `}</Text>
+						<Text className="text-xs text-muted-foreground">{`${decode(attr.name)}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
 							<React.Fragment key={index}>
 								<Text
@@ -131,7 +132,7 @@ export const ProductAttributes = ({ row, table }) => {
 									variant="link"
 									onPress={() => handleSelect(attr, option)}
 								>
-									{option}
+									{decode(option)}
 								</Text>
 								<Text className="text-xs">{index < attr.options.length - 1 && ', '}</Text>
 							</React.Fragment>

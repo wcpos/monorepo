@@ -60,10 +60,34 @@ export const EditVariationForm = ({ variation }: Props) => {
 	}
 
 	/**
+	 *
+	 */
+	const form = useForm<z.infer<typeof schema>>({
+		resolver: zodResolver(schema),
+		defaultValues: {
+			status: variation.status,
+			sku: variation.sku,
+			regular_price: variation.regular_price,
+			sale_price: variation.sale_price,
+			stock_quantity: variation.stock_quantity,
+			manage_stock: variation.manage_stock,
+			barcode: variation.barcode,
+			tax_status: variation.tax_status,
+			tax_class: variation.tax_class === '' ? 'standard' : variation.tax_class,
+			meta_data: variation.meta_data,
+		},
+	});
+
+	/**
 	 * Handle save button click
+	 *
+	 * @NOTE - the form needs a value for tax_class, but WC REST API uses an empty string for standard
 	 */
 	const handleSave = React.useCallback(
 		async (data) => {
+			if (data.tax_class === 'standard') {
+				data.tax_class = '';
+			}
 			setLoading(true);
 			try {
 				await localPatch({
@@ -89,25 +113,6 @@ export const EditVariationForm = ({ variation }: Props) => {
 		},
 		[localPatch, variation, pushDocument, t]
 	);
-
-	/**
-	 *
-	 */
-	const form = useForm<z.infer<typeof schema>>({
-		resolver: zodResolver(schema),
-		defaultValues: {
-			status: variation.status,
-			sku: variation.sku,
-			regular_price: variation.regular_price,
-			sale_price: variation.sale_price,
-			stock_quantity: variation.stock_quantity,
-			manage_stock: variation.manage_stock,
-			barcode: variation.barcode,
-			tax_status: variation.tax_status,
-			tax_class: variation.tax_class,
-			meta_data: variation.meta_data,
-		},
-	});
 
 	/**
 	 *

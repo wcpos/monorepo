@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/src/text';
@@ -25,12 +26,11 @@ export const Name = (props: CellContext<{ document: ProductDocument }, 'name'>) 
 	const name = useObservableEagerState(product.name$);
 
 	/**
-	 *
+	 * Sometimes the product name from WooCommerce is encoded in html entities
 	 */
-
 	return (
 		<VStack space="xs" className="w-full">
-			<Text className="font-bold">{name}</Text>
+			<Text className="font-bold">{decode(name)}</Text>
 			{show('sku') && <Text className="text-sm">{product.sku}</Text>}
 			{show('barcode') && <Text className="text-sm">{product.barcode}</Text>}
 			{show('stock_quantity') && <StockQuantity {...props} className="text-sm" withText />}

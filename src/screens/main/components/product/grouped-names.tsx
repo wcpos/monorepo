@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
+import { decode } from 'html-entities';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/src/hstack';
@@ -19,10 +20,13 @@ const GroupedNames = ({ query }) => {
 	const names = result.hits.map(({ document }) => document.name);
 	const t = useT();
 
+	/**
+	 * Sometimes the product name from WooCommerce is encoded in html entities
+	 */
 	return (
 		<HStack className="flex-wrap gap-0">
 			<Text className="text-xs text-muted-foreground">{`${t('Grouped', { _tags: 'core' })}: `}</Text>
-			<Text className="text-xs">{names.join(', ')}</Text>
+			<Text className="text-xs">{names.map(decode).join(', ')}</Text>
 		</HStack>
 	);
 };

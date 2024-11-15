@@ -1,35 +1,38 @@
 import * as React from 'react';
-import { Image } from 'react-native';
+
+import { useObservable, useObservableState } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
+import { map, switchMap, filter, tap } from 'rxjs/operators';
 
 type RxDocument = import('rxdb').RxDocument;
 
 async function fetchAndStoreImage(document: RxDocument, imageUrl: string) {
-	// Check if attachment already exists
-	const attachment = await document.getAttachment(imageUrl);
+	const response = await fetch(imageUrl);
 
-	if (attachment) {
-		// If attachment exists, return the blob URL
-		const blob = await attachment.getData();
-		return URL.createObjectURL(blob);
+	// Check if the response is okay
+	if (!response.ok) {
+		throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
 	}
 
-	// If attachment does not exist, fetch the image, convert to blob and store as attachment
-	const response = await fetch(imageUrl);
+	// Check if the content-type is an image
+	const contentType = response.headers.get('Content-Type') || '';
+	if (!contentType.startsWith('image/')) {
+		throw new Error(`Invalid content type: ${contentType}`);
+	}
+
 	const blob = await response.blob();
 
+	// Optional: Check if the blob size is greater than 0
+	if (blob.size === 0) {
+		throw new Error('Fetched blob is empty');
+	}
+
+	// Save the blob as an attachment
 	await document.putAttachment({
 		id: imageUrl,
 		data: blob,
 		type: blob.type,
 	});
-
-	return URL.createObjectURL(blob);
-}
-
-interface ImageAttachment {
-	uri: string;
-	width: number;
-	height: number;
 }
 
 /**
@@ -39,17 +42,44 @@ interface ImageAttachment {
  * - imageUrl is used as the attachment id
  */
 export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
-	const [image, setImage] = React.useState<ImageAttachment | null>(null);
+	const blob$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				filter(([document, imageUrl]) => isRxDocument(document) && !!imageUrl),
+				switchMap(([document, imageUrl]) =>
+					document.allAttachments$.pipe(
+						map((attachments: any[]) =>
+							attachments.find((attachment) => attachment.id === imageUrl)
+						),
+						filter((attachment) => {
+							if (attachment) {
+								return true;
+							}
+							fetchAndStoreImage(document, imageUrl);
+							return false;
+						}),
+						switchMap((attachment) => attachment?.getData()),
+						map((blob) => URL.createObjectURL(blob))
+					)
+				)
+			),
+		[document, imageUrl]
+	);
 
+	const imageBlobUrl = useObservableState(blob$, undefined);
+
+	/**
+	 * We should revoke the object url when the component unmounts
+	 *
+	 * https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL_static#usage_notes
+	 */
 	React.useEffect(() => {
-		fetchAndStoreImage(document, imageUrl).then((blob) => {
-			if (blob) {
-				Image.getSize(blob, (width, height) => {
-					setImage({ uri: blob, width, height });
-				});
+		return () => {
+			if (imageBlobUrl) {
+				URL.revokeObjectURL(imageBlobUrl);
 			}
-		});
-	}, [document, imageUrl]);
+		};
+	}, [imageBlobUrl]);
 
-	return image;
+	return { uri: imageBlobUrl };
 };
