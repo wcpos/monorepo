@@ -126,8 +126,12 @@ const DataTable = <TData, TValue>({
 	const scrollRef = React.useRef<ScrollView>(null);
 	const scrollPositionRef = React.useRef(0);
 
+	/**
+	 * Virtualizer for the table
+	 */
 	const virtualizer = useVirtualizer({
 		count: table.getRowModel().rows.length,
+		getItemKey: (index) => table.getRowModel().rows[index].id,
 		getScrollElement: () => scrollRef.current,
 		estimateSize: () => estimatedItemSize,
 		measureElement:
@@ -135,7 +139,16 @@ const DataTable = <TData, TValue>({
 				? (element) => element?.getBoundingClientRect().height
 				: undefined,
 		overscan: 5,
+		// debug: true,
 	});
+
+	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, context) => {
+		const scrollOffset = context.getScrollOffset();
+		const viewportEnd = scrollOffset + context.options.size;
+
+		// Only adjust if the item's size change affects the viewport
+		return item.start < viewportEnd && item.end > scrollOffset;
+	};
 
 	/**
 	 * Handler to detect when the scroll is near the bottom
