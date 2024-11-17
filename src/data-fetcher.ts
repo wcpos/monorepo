@@ -26,10 +26,10 @@ export class DataFetcher {
 		});
 	}
 
-	async fetchRemoteByIDs(data: { include?: number[]; exclude?: number[] }) {
+	async fetchRemoteByIDs(data: { include?: number[]; exclude?: number[] }, params: any = {}) {
 		return this.httpClient.post(this.endpoint, data, {
 			headers: { 'X-HTTP-Method-Override': 'GET' },
-			params: { _method: 'GET' },
+			params: { _method: 'GET', ...params },
 		});
 	}
 

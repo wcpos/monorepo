@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/query",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Query and Replication for WooCommerce POS",
   "author": "kilbot <paul@kilbot.com>",
   "license": "MIT",
@@ -21,7 +21,7 @@
     "lodash": "^4.17.21",
     "natural-orderby": "^4.0.0",
     "observable-hooks": "^4.2.4",
-    "rxdb": "15.38.0",
+    "rxdb": "15.38.2",
     "rxjs": "^7.8.1",
     "uuid": "10.0.0"
   },

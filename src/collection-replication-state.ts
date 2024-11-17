@@ -3,7 +3,6 @@ import { BehaviorSubject, Subject, Observable, Subscription, interval, combineLa
 import { switchMap, filter, distinctUntilChanged, map, startWith } from 'rxjs/operators';
 
 import { DataFetcher } from './data-fetcher';
-import { DataProcessor } from './data-processor';
 import { Logger } from './logger';
 import { SubscribableBase } from './subscribable-base';
 import { SyncStateManager } from './sync-state';
@@ -40,7 +39,6 @@ interface CollectionReplicationConfig<Collection> {
 export class CollectionReplicationState<T extends Collection> extends SubscribableBase {
 	private dataFetcher: DataFetcher;
 	public syncStateManager: SyncStateManager; // used by query replication state
-	private dataProcessor: DataProcessor;
 	private logger: Logger;
 	private errorSubject: Subject<Error>;
 	private collection: T;
@@ -82,10 +80,14 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.endpoint = config.endpoint;
 
 		// Initialize components
-		this.logger = new Logger(config.collection.database);
+		this.logger = new Logger({ storeDB: config.collection.database });
 		this.dataFetcher = new DataFetcher(config.httpClient, config.endpoint);
-		this.syncStateManager = new SyncStateManager(config.syncCollection, config.endpoint);
-		this.dataProcessor = new DataProcessor(config.collection, this.logger);
+		this.syncStateManager = new SyncStateManager({
+			syncCollection: config.syncCollection,
+			endpoint: config.endpoint,
+			logger: this.logger,
+			collection: this.collection,
+		});
 
 		// Initialize firstSync promise
 		this.firstSync = new Promise<void>((resolve) => {
@@ -191,9 +193,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 
 			await this.logger.logFetchStatus(this.dataFetcher.endpoint, response.headers, 'all');
-			await this.handleSyncState(response.data, 'all');
-			this.subjects.active.next(false); // Network request is done, allow updates request
-			await this.remove();
+			await this.syncStateManager.processFullAudit(response.data);
+			this.subjects.active.next(false);
+			await this.syncStateManager.removeStaleRecords();
 			await this.update();
 		} catch (error) {
 			this.errorSubject.next(error);
@@ -222,8 +224,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 				await this.logger.logFetchStatus(this.dataFetcher.endpoint, response.headers, 'updates');
 				if (!isEmpty(response.data)) {
-					await this.handleSyncState(response.data, 'updates');
+					await this.syncStateManager.processModifiedAfter(response.data);
 				}
+				this.subjects.active.next(false);
+				await this.update();
 			} catch (error) {
 				this.errorSubject.next(error);
 			} finally {
@@ -234,154 +238,8 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		}
 	}
 
-	private async handleSyncState(data: any[], type: string) {
-		const remoteDataMap = new Map(data.map((doc) => [doc.id, doc]));
-		const syncDataMap = await this.syncStateManager.getMappedSyncedStateRecords();
-		const newRecords = [];
-
-		for (const [id, remoteDoc] of remoteDataMap.entries()) {
-			if (!syncDataMap.has(id)) {
-				newRecords.push({
-					...remoteDoc,
-					endpoint: this.dataFetcher.endpoint,
-					status: 'PULL_NEW',
-				});
-				remoteDataMap.delete(id);
-			}
-		}
-
-		if (newRecords.length > 0) {
-			await this.syncStateManager.insertNewSyncRecords(newRecords);
-		}
-
-		if (remoteDataMap.size > 0) {
-			if (type === 'updates') {
-				await this.processUpdates(remoteDataMap);
-			} else {
-				await this.processFullSync(remoteDataMap);
-			}
-		}
-	}
-
-	private async processFullSync(remoteDataMap: Map<string, any>) {
-		const batchSize = 1000;
-		let skip = 0;
-		let hasMore = true;
-
-		while (hasMore) {
-			const localData = await this.collection
-				.find({
-					selector: { id: { $exists: true } },
-					skip,
-					limit: batchSize,
-					sort: [{ id: 'asc' }],
-				})
-				.exec();
-
-			if (localData.length === 0) {
-				hasMore = false;
-				continue;
-			}
-
-			const updates: any[] = [];
-
-			for (const localDoc of localData) {
-				const remoteDoc = remoteDataMap.get(localDoc.id);
-				if (!remoteDoc) {
-					/**
-					 * @FIXME - this is a hack for the products variations endpoint
-					 * I need to be able to liit localData to the parent.variations array
-					 */
-					if (!/^products\/\d+\/variations$/.test(this.endpoint)) {
-						updates.push({
-							id: localDoc.id,
-							endpoint: this.endpoint,
-							status: 'PULL_DELETE',
-						});
-					} else {
-						// debugger;
-					}
-				} else if (remoteDoc.date_modified_gmt > localDoc.date_modified_gmt) {
-					updates.push({
-						id: localDoc.id,
-						endpoint: this.endpoint,
-						status: 'PULL_UPDATE',
-					});
-				} else if (remoteDoc.date_modified_gmt < localDoc.date_modified_gmt) {
-					updates.push({
-						id: localDoc.id,
-						endpoint: this.endpoint,
-						status: 'PUSH_UPDATE_DEFERRED',
-					});
-				} else {
-					updates.push({
-						id: localDoc.id,
-						endpoint: this.endpoint,
-						status: 'SYNCED',
-					});
-				}
-			}
-
-			await this.syncStateManager.updateSyncState(updates);
-			skip += batchSize;
-		}
-	}
-
-	private async processUpdates(remoteDataMap: Map<string, any>) {
-		const localIDs = Array.from(remoteDataMap.keys());
-		const localDocs = await this.collection.findByIds(localIDs).exec();
-
-		const updates: any[] = [];
-
-		for (const id of localIDs) {
-			const localDoc = localDocs.get(id);
-			const remoteDoc = remoteDataMap.get(id);
-
-			if (!localDoc) {
-				// Document does not exist locally
-				updates.push({
-					id,
-					endpoint: this.endpoint,
-					status: 'PULL_NEW',
-				});
-			} else if (remoteDoc.date_modified_gmt > localDoc.date_modified_gmt) {
-				updates.push({
-					id,
-					endpoint: this.endpoint,
-					status: 'PULL_UPDATE',
-				});
-			} else if (remoteDoc.date_modified_gmt < localDoc.date_modified_gmt) {
-				updates.push({
-					id,
-					endpoint: this.endpoint,
-					status: 'PUSH_UPDATE_DEFERRED',
-				});
-			} else {
-				updates.push({
-					id,
-					endpoint: this.endpoint,
-					status: 'SYNCED',
-				});
-			}
-		}
-
-		await this.syncStateManager.updateSyncState(updates);
-	}
-
-	async remove() {
-		const docsToRemove = await this.syncStateManager.getRecordsForRemoval();
-
-		if (docsToRemove.length > 0) {
-			const ids = docsToRemove.map((doc: any) => doc.id);
-			await this.dataProcessor.removeDocumentsByIds(ids);
-			await this.syncStateManager.syncCollection.bulkRemove(
-				docsToRemove.map((doc: any) => doc.syncId)
-			);
-		}
-	}
-
 	async update() {
-		const ids = await this.syncStateManager.getStaleIDs();
+		const ids = await this.syncStateManager.getUpdatedRemoteIDs();
 
 		if (ids.length > 0) {
 			await this.sync({ include: ids, force: true });
@@ -415,13 +273,24 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		}
 
 		this.subjects.active.next(true);
+		const params = {};
+
+		/**
+		 * @FIXME - this is a hack for the products endpoint, the general fetchRemoteByIDs should
+		 * only be for status = 'published'.
+		 *
+		 * I also should have defauly sort params for each collection
+		 */
+		if (this.endpoint === 'products' || this.endpoint === 'products/variations') {
+			params.status = 'publish';
+		}
 
 		try {
 			let response;
 			if (exclude && exclude.length < include.length) {
-				response = await this.dataFetcher.fetchRemoteByIDs({ exclude });
+				response = await this.dataFetcher.fetchRemoteByIDs({ exclude }, params);
 			} else {
-				response = await this.dataFetcher.fetchRemoteByIDs({ include });
+				response = await this.dataFetcher.fetchRemoteByIDs({ include }, params);
 			}
 			await this.bulkUpsertResponse(response);
 		} catch (error) {
@@ -431,7 +300,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		}
 	}
 
-	private async bulkUpsertResponse(response: any) {
+	/**
+	 * This is used by the Query Replication State also
+	 */
+	public async bulkUpsertResponse(response: any) {
 		try {
 			if (!Array.isArray(response?.data)) {
 				await this.logger.logInvalidResponse('Invalid response from server');
@@ -443,23 +315,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				return;
 			}
 
-			const primaryPath = this.collection.schema.primaryPath;
-			const uuids = documents.map((doc: any) => doc[primaryPath]);
-			const localDocs = await this.collection.findByIds(uuids).exec();
-
-			if (localDocs.size === 0) {
-				await this.dataProcessor.insertNewDocuments(documents);
-			} else {
-				await this.dataProcessor.updateExistingDocuments(documents, localDocs);
-			}
-
-			// Update sync state to 'SYNCED'
-			const updates = documents.map((doc: any) => ({
-				id: doc.id,
-				endpoint: this.endpoint,
-				status: 'SYNCED',
-			}));
-			await this.syncStateManager.updateSyncState(updates);
+			await this.syncStateManager.processServerResponse(documents);
 		} catch (error) {
 			this.errorSubject.next(error);
 		}
@@ -493,9 +349,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 
 			const parsedData = this.collection.parseRestResponse(response.data);
-			// await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
-			await doc.incrementalPatch(parsedData);
-			return doc;
+			const result = await this.syncStateManager.processServerResponse([parsedData]);
+			if (result?.success.length === 1) {
+				return result.success[0];
+			}
 		} catch (error) {
 			this.errorSubject.next(error);
 		}
@@ -510,9 +367,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 
 			const parsedData = this.collection.parseRestResponse(response.data);
-			// await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
-			const doc = await this.collection.upsert(parsedData);
-			return doc;
+			const result = await this.syncStateManager.processServerResponse([parsedData]);
+			if (result?.success.length === 1) {
+				return result.success[0];
+			}
 		} catch (error) {
 			this.errorSubject.next(error);
 		}

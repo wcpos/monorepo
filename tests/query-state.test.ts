@@ -28,6 +28,9 @@ describe('Query', () => {
 
 	it('query instance should emit the initial RxQuery and params', async () => {
 		const initialParams = {
+			selector: {
+				stock_status: 'instock',
+			},
 			sort: [{ name: 'asc' }],
 		};
 		const query = new Query({ collection: storeDatabase.collections.products, initialParams });
@@ -35,12 +38,8 @@ describe('Query', () => {
 		query.rxQuery$.subscribe((rxQuery) => {
 			expect(rxQuery).toBeDefined();
 			expect(isRxQuery(rxQuery)).toBe(true);
+			expect(rxQuery?.mangoQuery).toEqual(initialParams);
 		});
-		query.params$.subscribe((params) => {
-			expect(params).toEqual(initialParams);
-		});
-
-		expect(query.getParams()).toEqual(initialParams);
 	});
 
 	it('query.result$ should init with empty result if no records', () => {
@@ -77,7 +76,6 @@ describe('Query', () => {
 
 		return new Promise<void>((resolve) => {
 			query.result$.subscribe((result) => {
-				console.log('Query result', result);
 				expect(result).toEqual(
 					expect.objectContaining({
 						elapsed: expect.any(Number),
@@ -104,18 +102,18 @@ describe('Query', () => {
 		/**
 		 *
 		 */
-		it('updates the query params correctly when sort is called', () => {
+		it('updates the query correctly when sort is called', () => {
 			const query = new Query({
 				collection: storeDatabase.collections.products,
 				initialParams: {},
 			});
 			query.sort([{ name: 'asc' }]).exec();
 
-			expect(query.getParams()).toEqual({ sort: [{ name: 'asc' }] });
-
 			const spy = jest.fn();
-			query.params$.subscribe(spy);
-			expect(spy).toHaveBeenCalledWith({ sort: [{ name: 'asc' }] });
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({ mangoQuery: { sort: [{ name: 'asc' }] } })
+			);
 		});
 
 		/**
@@ -210,10 +208,14 @@ describe('Query', () => {
 			});
 
 			query.where('stock_status').equals('instock').exec();
-			expect(query.getParams()).toEqual({
-				selector: { stock_status: 'instock' },
-				sort: [{ name: 'asc' }],
-			});
+
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: { selector: { stock_status: 'instock' }, sort: [{ name: 'asc' }] },
+				})
+			);
 
 			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
@@ -271,10 +273,13 @@ describe('Query', () => {
 			});
 
 			query.where('stock_status').equals('outofstock').exec();
-			expect(query.getParams()).toEqual({
-				selector: { stock_status: 'outofstock' },
-				sort: [{ name: 'asc' }],
-			});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: { selector: { stock_status: 'outofstock' }, sort: [{ name: 'asc' }] },
+				})
+			);
 
 			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
@@ -370,7 +375,13 @@ describe('Query', () => {
 			});
 
 			query.removeWhere('stock_status').exec();
-			expect(query.getParams()).toEqual({});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {},
+				})
+			);
 		});
 
 		/**
@@ -417,10 +428,16 @@ describe('Query', () => {
 			});
 
 			query.where('meta_data').elemMatch({ key: '_pos_store', value: '64' }).exec();
-			expect(query.getParams()).toEqual({
-				selector: { meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } },
-				sort: [{ name: 'asc' }],
-			});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: { meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } },
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
@@ -498,15 +515,21 @@ describe('Query', () => {
 			});
 
 			query.where('meta_data').multipleElemMatch({ key: '_pos_store', value: '64' }).exec();
-			expect(query.getParams()).toEqual({
-				selector: {
-					$and: [
-						{ meta_data: { $elemMatch: { key: '_pos_user', value: '3' } } },
-						{ meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } },
-					],
-				},
-				sort: [{ name: 'asc' }],
-			});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							$and: [
+								{ meta_data: { $elemMatch: { key: '_pos_user', value: '3' } } },
+								{ meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } },
+							],
+						},
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
@@ -583,12 +606,18 @@ describe('Query', () => {
 			});
 
 			query.where('meta_data').elemMatch({ key: '_pos_user', value: '5' }).exec();
-			expect(query.getParams()).toEqual({
-				selector: {
-					meta_data: { $elemMatch: { key: '_pos_user', value: '5' } },
-				},
-				sort: [{ name: 'asc' }],
-			});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							meta_data: { $elemMatch: { key: '_pos_user', value: '5' } },
+						},
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
@@ -668,12 +697,18 @@ describe('Query', () => {
 			});
 
 			query.where('meta_data').removeElemMatch('meta_data', { key: '_pos_user' }).exec();
-			expect(query.getParams()).toEqual({
-				selector: {
-					meta_data: { $elemMatch: { key: '_pos_store', value: '64' } },
-				},
-				sort: [{ name: 'asc' }],
-			});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							meta_data: { $elemMatch: { key: '_pos_store', value: '64' } },
+						},
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
@@ -754,10 +789,16 @@ describe('Query', () => {
 			});
 
 			query.where('meta_data').removeWhere('meta_data').exec();
-			expect(query.getParams()).toEqual({
-				selector: {},
-				sort: [{ name: 'asc' }],
-			});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {},
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
@@ -825,12 +866,18 @@ describe('Query', () => {
 			});
 
 			query.where('attributes').elemMatch({ name: 'Color', option: 'Blue' }).exec();
-			expect(query.getParams()).toEqual({
-				selector: {
-					attributes: { $elemMatch: { name: 'Color', option: 'Blue' } },
-				},
-				sort: [{ name: 'asc' }],
-			});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							attributes: { $elemMatch: { name: 'Color', option: 'Blue' } },
+						},
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
@@ -934,12 +981,18 @@ describe('Query', () => {
 			});
 
 			query.where('categories').elemMatch({ id: 17 }).exec();
-			expect(query.getParams()).toEqual({
-				selector: {
-					categories: { $elemMatch: { id: 17 } },
-				},
-				sort: [{ name: 'asc' }],
-			});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							categories: { $elemMatch: { id: 17 } },
+						},
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
@@ -1047,12 +1100,18 @@ describe('Query', () => {
 			});
 
 			query.where('categories').elemMatch({ id: 17 }).exec();
-			expect(query.getParams()).toEqual({
-				selector: {
-					categories: { $elemMatch: { id: 17 } },
-				},
-				sort: [{ name: 'asc' }],
-			});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							categories: { $elemMatch: { id: 17 } },
+						},
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			return new Promise<void>((resolve) => {
 				query.result$.subscribe((result) => {
@@ -1119,12 +1178,18 @@ describe('Query', () => {
 		});
 
 		query.where('attributes').elemMatch({ name: 'Color', option: 'Blue' }).exec();
-		expect(query.getParams()).toEqual({
-			selector: {
-				attributes: { $elemMatch: { name: 'Color', option: 'Blue' } },
-			},
-			sort: [{ name: 'asc' }],
-		});
+		const spy = jest.fn();
+		query.rxQuery$.subscribe(spy);
+		expect(spy).toHaveBeenCalledWith(
+			expect.objectContaining({
+				mangoQuery: {
+					selector: {
+						attributes: { $elemMatch: { name: 'Color', option: 'Blue' } },
+					},
+					sort: [{ name: 'asc' }],
+				},
+			})
+		);
 
 		return new Promise<void>((resolve) => {
 			query.result$.subscribe((result) => {
@@ -1161,96 +1226,107 @@ describe('Query', () => {
 			});
 
 			query.variationMatch({ id: 1, name: 'Color', option: 'Green' }).exec();
-
-			expect(query.getParams()).toEqual({
-				sort: [{ name: 'asc' }],
-				selector: {
-					id: { $in: ['1', '2', '3', '4', '5'] },
-					$and: [
-						{
-							$or: [
+			const spy1 = jest.fn();
+			query.rxQuery$.subscribe(spy1);
+			expect(spy1).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							id: { $in: ['1', '2', '3', '4', '5'] },
+							$and: [
 								{
-									attributes: {
-										$not: {
-											$elemMatch: {
-												id: 1,
-												name: 'Color',
+									$or: [
+										{
+											attributes: {
+												$not: {
+													$elemMatch: {
+														id: 1,
+														name: 'Color',
+													},
+												},
 											},
 										},
-									},
-								},
-								{
-									attributes: {
-										$elemMatch: {
-											id: 1,
-											name: 'Color',
-											option: 'Green',
+										{
+											attributes: {
+												$elemMatch: {
+													id: 1,
+													name: 'Color',
+													option: 'Green',
+												},
+											},
 										},
-									},
+									],
 								},
 							],
 						},
-					],
-				},
-			});
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			query.variationMatch({ id: 2, name: 'Size', option: 'Large' }).exec();
 			query.variationMatch({ id: 2, name: 'Size', option: 'Medium' }).exec();
 
-			expect(query.getParams()).toEqual({
-				sort: [{ name: 'asc' }],
-				selector: {
-					id: { $in: ['1', '2', '3', '4', '5'] },
-					$and: [
-						{
-							$or: [
+			const spy2 = jest.fn();
+			query.rxQuery$.subscribe(spy2);
+			expect(spy2).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							id: { $in: ['1', '2', '3', '4', '5'] },
+							$and: [
 								{
-									attributes: {
-										$not: {
-											$elemMatch: {
-												id: 1,
-												name: 'Color',
+									$or: [
+										{
+											attributes: {
+												$not: {
+													$elemMatch: {
+														id: 1,
+														name: 'Color',
+													},
+												},
 											},
 										},
-									},
+										{
+											attributes: {
+												$elemMatch: {
+													id: 1,
+													name: 'Color',
+													option: 'Green',
+												},
+											},
+										},
+									],
 								},
 								{
-									attributes: {
-										$elemMatch: {
-											id: 1,
-											name: 'Color',
-											option: 'Green',
+									$or: [
+										{
+											attributes: {
+												$not: {
+													$elemMatch: {
+														id: 2,
+														name: 'Size',
+													},
+												},
+											},
 										},
-									},
+										{
+											attributes: {
+												$elemMatch: {
+													id: 2,
+													name: 'Size',
+													option: 'Medium',
+												},
+											},
+										},
+									],
 								},
 							],
 						},
-						{
-							$or: [
-								{
-									attributes: {
-										$not: {
-											$elemMatch: {
-												id: 2,
-												name: 'Size',
-											},
-										},
-									},
-								},
-								{
-									attributes: {
-										$elemMatch: {
-											id: 2,
-											name: 'Size',
-											option: 'Medium',
-										},
-									},
-								},
-							],
-						},
-					],
-				},
-			});
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 		});
 
 		/**
@@ -1317,81 +1393,99 @@ describe('Query', () => {
 
 			query.removeVariationMatch({ id: 0, name: 'Size' }).exec();
 
-			expect(query.getParams()).toEqual({
-				sort: [{ name: 'asc' }],
-				selector: {
-					id: { $in: ['1', '2', '3', '4', '5'] },
-					$and: [
-						{
-							$or: [
+			const spy1 = jest.fn();
+			query.rxQuery$.subscribe(spy1);
+			expect(spy1).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							id: { $in: ['1', '2', '3', '4', '5'] },
+							$and: [
 								{
-									attributes: {
-										$not: {
-											$elemMatch: {
-												id: 1,
-												name: 'Color',
+									$or: [
+										{
+											attributes: {
+												$not: {
+													$elemMatch: {
+														id: 1,
+														name: 'Color',
+													},
+												},
 											},
 										},
-									},
-								},
-								{
-									attributes: {
-										$elemMatch: {
-											id: 1,
-											name: 'Color',
-											option: 'Green',
+										{
+											attributes: {
+												$elemMatch: {
+													id: 1,
+													name: 'Color',
+													option: 'Green',
+												},
+											},
 										},
-									},
+									],
 								},
 							],
 						},
-					],
-				},
-			});
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			query.variationMatch({ id: 0, name: 'Size', option: 'Medium' }).exec();
 			query.removeVariationMatch({ id: 0, name: 'Size' }).exec();
 
-			expect(query.getParams()).toEqual({
-				sort: [{ name: 'asc' }],
-				selector: {
-					id: { $in: ['1', '2', '3', '4', '5'] },
-					$and: [
-						{
-							$or: [
+			const spy2 = jest.fn();
+			query.rxQuery$.subscribe(spy2);
+			expect(spy2).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							id: { $in: ['1', '2', '3', '4', '5'] },
+							$and: [
 								{
-									attributes: {
-										$not: {
-											$elemMatch: {
-												id: 1,
-												name: 'Color',
+									$or: [
+										{
+											attributes: {
+												$not: {
+													$elemMatch: {
+														id: 1,
+														name: 'Color',
+													},
+												},
 											},
 										},
-									},
-								},
-								{
-									attributes: {
-										$elemMatch: {
-											id: 1,
-											name: 'Color',
-											option: 'Green',
+										{
+											attributes: {
+												$elemMatch: {
+													id: 1,
+													name: 'Color',
+													option: 'Green',
+												},
+											},
 										},
-									},
+									],
 								},
 							],
 						},
-					],
-				},
-			});
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 
 			query.removeVariationMatch({ id: 1, name: 'Color' }).exec();
 
-			expect(query.getParams()).toEqual({
-				sort: [{ name: 'asc' }],
-				selector: {
-					id: { $in: ['1', '2', '3', '4', '5'] },
-				},
-			});
+			const spy3 = jest.fn();
+			query.rxQuery$.subscribe(spy3);
+			expect(spy3).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							id: { $in: ['1', '2', '3', '4', '5'] },
+						},
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 		});
 
 		/**
@@ -1458,12 +1552,18 @@ describe('Query', () => {
 
 			query.removeWhere('attributes').exec();
 
-			expect(query.getParams()).toEqual({
-				sort: [{ name: 'asc' }],
-				selector: {
-					id: { $in: ['1', '2', '3', '4', '5'] },
-				},
-			});
+			const spy = jest.fn();
+			query.rxQuery$.subscribe(spy);
+			expect(spy).toHaveBeenCalledWith(
+				expect.objectContaining({
+					mangoQuery: {
+						selector: {
+							id: { $in: ['1', '2', '3', '4', '5'] },
+						},
+						sort: [{ name: 'asc' }],
+					},
+				})
+			);
 		});
 
 		it('getVariationMatches returns the correct variations', async () => {
@@ -1605,7 +1705,7 @@ describe('Query', () => {
 			const firstSelector = query.getVariationMatches();
 
 			let emittedSelector;
-			query.params$.pipe(map(() => query.getVariationMatches())).subscribe((selector) => {
+			query.rxQuery$.pipe(map(() => query.getVariationMatches())).subscribe((selector) => {
 				emittedSelector = selector;
 			});
 

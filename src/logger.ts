@@ -6,7 +6,7 @@ import type { StoreDatabase } from '@wcpos/database';
 export class Logger {
 	private storeDB: StoreDatabase;
 
-	constructor(storeDB: StoreDatabase) {
+	constructor({ storeDB }: { storeDB: StoreDatabase }) {
 		this.storeDB = storeDB;
 	}
 

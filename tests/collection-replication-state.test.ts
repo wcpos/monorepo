@@ -324,6 +324,36 @@ describe('CollectionReplicationState', () => {
 		expect(records.map((doc) => doc.id)).toEqual([1]);
 	});
 
+	describe('BUG: if a record already exists in database', () => {
+		it('the sync state should show that it is already synced', async () => {
+			const doc = await storeDatabase.collections.products.insert({
+				uuid: '1',
+				id: 1,
+			});
+			expect(doc.id).toEqual(1);
+
+			const auditData = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
+			httpClientMock.__setMockResponse('get', 'products', auditData, {
+				params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
+			});
+
+			const replicationState = new CollectionReplicationState({
+				collection: storeDatabase.collections.products,
+				syncCollection: syncDatabase.collections.products,
+				httpClient: httpClientMock,
+				endpoint: 'products',
+				errorSubject: new Subject<Error>(),
+			});
+
+			replicationState.start();
+			await replicationState.firstSync;
+
+			const sync = await syncDatabase.collections.products.find().exec();
+			expect(sync).toHaveLength(4);
+			expect(sync.map((doc) => doc.status)).toEqual(['SYNCED', 'PULL_NEW', 'PULL_NEW', 'PULL_NEW']);
+		});
+	});
+
 	/**
 	 * Variations are a bit more complex because there is a ReplicationState for:
 	 * - full endpoint (products/variations) for searching

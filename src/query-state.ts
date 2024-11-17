@@ -117,7 +117,6 @@ export class Query<T extends RxCollection>
 	 */
 	public readonly subjects = {
 		rxQuery: new BehaviorSubject<RxQuery | undefined>(undefined),
-		params: new BehaviorSubject<QueryParams | undefined>(undefined),
 		result: new ReplaySubject<QueryResult<T>>(1),
 	};
 
@@ -125,7 +124,6 @@ export class Query<T extends RxCollection>
 	 *
 	 */
 	public readonly rxQuery$ = this.subjects.rxQuery.asObservable();
-	public readonly params$ = this.rxQuery$.pipe(map((rxQuery) => rxQuery?.mangoQuery));
 	public readonly result$ = this.subjects.result.asObservable();
 
 	public currentRxQuery: RxQuery;
@@ -194,7 +192,6 @@ export class Query<T extends RxCollection>
 			this.currentRxQuery = this.currentRxQuery.limit(limitValue);
 		}
 		this.subjects.rxQuery.next(this.currentRxQuery);
-		this.subjects.params.next(this.currentRxQuery.mangoQuery);
 		this.startFindSubscription();
 	}
 
@@ -307,13 +304,6 @@ export class Query<T extends RxCollection>
 				);
 			})
 		);
-	}
-
-	/**
-	 * Public getters
-	 */
-	getParams(): QueryParams | undefined {
-		return this.subjects.params.getValue();
 	}
 
 	/**
@@ -772,6 +762,9 @@ export class Query<T extends RxCollection>
 
 	/**
 	 * Get all variation matches from the current selector
+	 *
+	 * NOTE: we need to cache the variation matches beacuse we need query.getVariationMatches()
+	 * to return a stable reference to the matches, otherwise useObservableState() will endless loop
 	 */
 	getVariationMatches() {
 		if (this._variationMatchesCache.has(this.currentRxQuery)) {
