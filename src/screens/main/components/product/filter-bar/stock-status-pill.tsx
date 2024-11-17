@@ -26,7 +26,7 @@ interface Props {
  */
 export const StockStatusPill = ({ query }: Props) => {
 	const selected = useObservableEagerState(
-		query.params$.pipe(map(() => query.getSelector('stock_status')))
+		query.rxQuery$.pipe(map(() => query.getSelector('stock_status')))
 	);
 	const t = useT();
 	const isActive = !!selected;

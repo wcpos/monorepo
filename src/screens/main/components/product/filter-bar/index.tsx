@@ -31,10 +31,10 @@ const FilterBar = ({ query }: Props) => {
 	const { collection: tagCollection } = useCollection('products/tags');
 	const pullDocument = usePullDocument();
 	const selectedCategoryID = useObservableEagerState(
-		query.params$.pipe(map(() => query.getElemMatchId('categories')))
+		query.rxQuery$.pipe(map(() => query.getElemMatchId('categories')))
 	);
 	const selectedTagID = useObservableEagerState(
-		query.params$.pipe(map(() => query.getElemMatchId('tags')))
+		query.rxQuery$.pipe(map(() => query.getElemMatchId('tags')))
 	);
 
 	const selectedCategory$ = useObservable(

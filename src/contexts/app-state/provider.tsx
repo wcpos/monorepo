@@ -12,7 +12,7 @@ import type {
 	WPCredentialsDocument,
 	StoreDocument,
 	StoreDatabase,
-	FastStoreDatabase,
+	SyncDatabase,
 } from '@wcpos/database';
 
 import { hydrateInitialProps, isWebApp } from './hydrate';
@@ -25,7 +25,7 @@ export interface HydratedData {
 	wpCredentials: WPCredentialsDocument;
 	store: StoreDocument;
 	storeDB: StoreDatabase;
-	fastStoreDB: FastStoreDatabase;
+	fastStoreDB: SyncDatabase;
 	extraData: any;
 }
 

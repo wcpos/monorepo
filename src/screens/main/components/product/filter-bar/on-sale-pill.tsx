@@ -19,7 +19,7 @@ interface Props {
  */
 const OnSalePill = ({ query }: Props) => {
 	const isActive = useObservableEagerState(
-		query.params$.pipe(map(() => query.getSelector('on_sale')))
+		query.rxQuery$.pipe(map(() => query.getSelector('on_sale')))
 	);
 	const t = useT();
 

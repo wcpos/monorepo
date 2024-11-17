@@ -34,13 +34,13 @@ interface Props {
 export const StorePill = ({ resource, query }: Props) => {
 	const stores = useObservableSuspense(resource);
 	const selectedCreatedVia = useObservableEagerState(
-		query.params$.pipe(map(() => query.getSelector('created_via')))
+		query.rxQuery$.pipe(map(() => query.getSelector('created_via')))
 	);
 	/**
 	 * Selected store ID as a string
 	 */
 	const selectedStoreID = useObservableEagerState(
-		query.params$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_store')))
+		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_store')))
 	);
 	const t = useT();
 	const isActive = !!(selectedCreatedVia || selectedStoreID);

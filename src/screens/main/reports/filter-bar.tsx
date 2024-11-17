@@ -29,10 +29,10 @@ export const FilterBar = () => {
 	const { query } = useReports();
 	const guestCustomer = useGuestCustomer();
 	const customerID = useObservableEagerState(
-		query.params$.pipe(map(() => query.getSelector('customer_id')))
+		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
 	);
 	const cashierID = useObservableEagerState(
-		query.params$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
+		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
 	);
 	const { wpCredentials } = useAppState();
 

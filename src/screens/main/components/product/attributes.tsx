@@ -68,6 +68,8 @@ export const ProductAttributes = ({ row, table }) => {
 
 			if (manager.hasQuery(['variations', { parentID: product.id }])) {
 				const query = manager.getQuery(['variations', { parentID: product.id }]);
+				// remove any search term previously set
+				query.search('');
 				query
 					.variationMatch({
 						id: attribute.id,
@@ -76,6 +78,8 @@ export const ProductAttributes = ({ row, table }) => {
 					})
 					.exec();
 			} else {
+				// remove any search term previously set
+				updateQueryParams('search', null);
 				// we need to pass the attribute/option down so it can be used in the table
 				updateQueryParams('attribute', {
 					id: attribute.id,
@@ -86,6 +90,29 @@ export const ProductAttributes = ({ row, table }) => {
 		},
 		[manager, product.id, row, updateQueryParams]
 	);
+
+	/**
+	 * Expand the row
+	 * Also, special case for when search has found variations, set the useQueryParams
+	 * so we can pick up the search term in the variations table
+	 */
+	const handleExpand = React.useCallback(() => {
+		if (isExpanded) {
+			row.toggleExpanded(false);
+			return;
+		}
+		if (row.original.childrenSearchCount > 0) {
+			if (manager.hasQuery(['variations', { parentID: product.id }])) {
+				const query = manager.getQuery(['variations', { parentID: product.id }]);
+				query.search(row.original.parentSearchTerm);
+				query.removeWhere('attributes').exec();
+			} else {
+				updateQueryParams('search', row.original.parentSearchTerm);
+				updateQueryParams('attribute', null);
+			}
+		}
+		row.toggleExpanded();
+	}, [manager, product.id, row, updateQueryParams, isExpanded]);
 
 	/**
 	 * Expand text string
@@ -139,7 +166,7 @@ export const ProductAttributes = ({ row, table }) => {
 						))}
 					</HStack>
 				))}
-			<Text className="text-xs text-primary" variant="link" onPress={() => row.toggleExpanded()}>
+			<Text className="text-xs text-primary" variant="link" onPress={handleExpand}>
 				{expandText}
 			</Text>
 		</VStack>

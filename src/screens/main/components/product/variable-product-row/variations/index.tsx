@@ -50,6 +50,9 @@ export const Variations = ({ row, onLayout }: Props) => {
 		if (queryParams?.attribute) {
 			query.variationMatch(queryParams.attribute).exec();
 		}
+		if (queryParams?.search) {
+			query.search(queryParams.search);
+		}
 	}, [query, queryParams]);
 
 	/**
@@ -58,6 +61,8 @@ export const Variations = ({ row, onLayout }: Props) => {
 	React.useEffect(
 		() => {
 			return () => {
+				query.search('');
+				updateQueryParams('search', null);
 				query.removeWhere('attributes').exec();
 				updateQueryParams('attribute', null);
 			};

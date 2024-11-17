@@ -33,7 +33,7 @@ interface VariationPopoverProps {
 const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	const result = useObservableSuspense(query.resource);
 	const selectedAttributes = useObservableEagerState(
-		query.params$.pipe(map(() => query.getVariationMatches()))
+		query.rxQuery$.pipe(map(() => query.getVariationMatches()))
 	);
 	const selectedVariation = result.count === 1 && result.hits[0].document;
 	const { format } = useCurrencyFormat();

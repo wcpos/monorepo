@@ -30,7 +30,7 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 	const t = useT();
 	const triggerRef = React.useRef(null);
 	const selectedDateRange = useObservableEagerState(
-		query.params$.pipe(map(() => query.getSelector('date_created_gmt')))
+		query.rxQuery$.pipe(map(() => query.getSelector('date_created_gmt')))
 	);
 	const isActive = !!(selectedDateRange && selectedDateRange?.$gte && selectedDateRange?.$lte);
 	const { formatDate } = useLocalDate();
