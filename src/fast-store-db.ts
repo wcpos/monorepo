@@ -5,7 +5,7 @@ import { createMemorySyncedDB } from './create-db';
 
 import type { RxDatabase } from 'rxdb';
 
-export type FastStoreDatabase = RxDatabase<SyncCollections>;
+export type SyncDatabase = RxDatabase<SyncCollections>;
 
 /**
  * Database name needs to start with a letter, id is a short uuid

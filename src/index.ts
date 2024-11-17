@@ -7,7 +7,7 @@ export { clearAllDB } from './clear-all-db';
 
 export type { StoreDatabase } from './stores-db';
 export type { UserDatabase } from './users-db';
-export type { FastStoreDatabase } from './fast-store-db';
+export type { SyncDatabase } from './fast-store-db';
 
 /**
  * Re-export some rxdb helpers
