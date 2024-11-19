@@ -56,7 +56,6 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 								key={index}
 								attribute={attribute}
 								onSelect={(attribute) => {
-									console.log('onSelect', attribute);
 									query.variationMatch(attribute).exec();
 								}}
 								selected={query.getVariationMatchOption({ id: attribute.id, name: attribute.name })}

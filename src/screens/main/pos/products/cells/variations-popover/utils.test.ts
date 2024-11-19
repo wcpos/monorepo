@@ -199,6 +199,55 @@ describe('parseAttributes', () => {
 		]);
 	});
 
+	it('should not calculate option counts if all attributes are already selected', () => {
+		const selectedAttributes = [
+			{ id: 1, name: 'Color', option: 'Red' },
+			{ id: 2, name: 'Size', option: 'Small' },
+		];
+
+		const hits: { document: ProductVariationDocument }[] = [
+			{
+				document: {
+					attributes: [
+						{ id: 1, name: 'Color', option: 'Red' },
+						{ id: 2, name: 'Size', option: 'Small' },
+					],
+				} as ProductVariationDocument,
+			},
+		];
+
+		const result = parseAttributes(attributes, selectedAttributes, hits);
+
+		expect(result).toEqual([
+			{
+				attribute: {
+					id: 1,
+					name: 'Color',
+					position: 0,
+					visible: true,
+					variation: true,
+					options: ['Red', 'Blue'],
+					characterCount: 7,
+				},
+				optionCounts: {}, // No counts calculated for pre-selected attribute
+				selected: { id: 1, name: 'Color', option: 'Red' },
+			},
+			{
+				attribute: {
+					id: 2,
+					name: 'Size',
+					position: 1,
+					visible: true,
+					variation: true,
+					options: ['Small', 'Large'],
+					characterCount: 10,
+				},
+				optionCounts: {},
+				selected: { id: 2, name: 'Size', option: 'Small' },
+			},
+		]);
+	});
+
 	it('should handle empty attributes array', () => {
 		const result = parseAttributes([], undefined, hits);
 		expect(result).toEqual([]);
@@ -376,5 +425,245 @@ describe('parseAttributes', () => {
 				selected: { id: 0, name: 'Logo', option: 'No' },
 			},
 		]);
+	});
+
+	it('BUG: should fix this issue where "any" option is selected and the other variants are returning counts of 0', () => {
+		const attributes = [
+			{
+				id: 1,
+				name: 'Color',
+				options: ['Blue', 'Green', 'Red'],
+				position: 0,
+				variation: true,
+				visible: true,
+			},
+			{
+				id: 2,
+				name: 'Size',
+				options: ['Large', 'Medium', 'Small'],
+				position: 1,
+				variation: true,
+				visible: true,
+			},
+		];
+		const selectedAttributes = [
+			{
+				id: 2,
+				name: 'Size',
+				option: 'Large',
+			},
+		];
+		const hits = [
+			{
+				document: {
+					attributes: [
+						{
+							id: 1,
+							name: 'Color',
+							option: 'Green',
+						},
+					],
+					id: 30,
+					name: 'Green',
+					parent_id: 15,
+				},
+			},
+			{
+				document: {
+					attributes: [
+						{
+							id: 1,
+							name: 'Color',
+							option: 'Red',
+						},
+					],
+					id: 29,
+					name: 'Red',
+					parent_id: 15,
+				},
+			},
+			{
+				document: {
+					attributes: [
+						{
+							id: 1,
+							name: 'Color',
+							option: 'Blue',
+						},
+					],
+					id: 31,
+					name: 'Blue',
+					parent_id: 15,
+				},
+			},
+		] as { document: ProductVariationDocument }[];
+		const result = parseAttributes(attributes, selectedAttributes, hits);
+		expect(result).toEqual([
+			{
+				attribute: {
+					id: 1,
+					name: 'Color',
+					position: 0,
+					visible: true,
+					variation: true,
+					options: ['Blue', 'Green', 'Red'],
+					characterCount: 12,
+				},
+				optionCounts: { Blue: 1, Green: 1, Red: 1 },
+				selected: undefined,
+			},
+			{
+				attribute: {
+					id: 2,
+					name: 'Size',
+					position: 1,
+					visible: true,
+					variation: true,
+					options: ['Large', 'Medium', 'Small'],
+					characterCount: 16,
+				},
+				optionCounts: {},
+				selected: { id: 2, name: 'Size', option: 'Large' },
+			},
+		]);
+	});
+
+	describe('tests for "any" variations', () => {
+		it('should calculate option counts and character counts correctly', () => {
+			const selectedAttributes = undefined;
+
+			const anyHits: { document: ProductVariationDocument }[] = [
+				{
+					document: {
+						attributes: [{ id: 1, name: 'Color', option: 'Red' }],
+					} as ProductVariationDocument,
+				},
+				{
+					document: {
+						attributes: [{ id: 1, name: 'Color', option: 'Blue' }],
+					} as ProductVariationDocument,
+				},
+			];
+
+			const result = parseAttributes(attributes, selectedAttributes, anyHits);
+
+			expect(result).toEqual([
+				{
+					attribute: {
+						id: 1,
+						name: 'Color',
+						position: 0,
+						visible: true,
+						variation: true,
+						options: ['Red', 'Blue'],
+						characterCount: 7, // 'Red'.length + 'Blue'.length = 7
+					},
+					optionCounts: { Red: 2, Blue: 2 },
+					selected: undefined,
+				},
+				{
+					attribute: {
+						id: 2,
+						name: 'Size',
+						position: 1,
+						visible: true,
+						variation: true,
+						options: ['Small', 'Large'],
+						characterCount: 10, // 'Small'.length + 'Large'.length = 10
+					},
+					optionCounts: { Small: 2, Large: 2 },
+					selected: undefined,
+				},
+			]);
+		});
+
+		it('should NOT auto-select when "any" variations are present', () => {
+			// Only one hit, meaning only one viable option for each attribute
+			const singleHit = [
+				{
+					document: {
+						attributes: [{ id: 1, name: 'Color', option: 'Red' }],
+					} as ProductVariationDocument,
+				},
+			];
+			const selectedAttributes = [{ id: 1, name: 'Color', option: 'Red' }];
+			const result = parseAttributes(attributes, selectedAttributes, singleHit);
+
+			expect(result).toEqual([
+				{
+					attribute: {
+						id: 1,
+						name: 'Color',
+						position: 0,
+						visible: true,
+						variation: true,
+						options: ['Red', 'Blue'],
+						characterCount: 7,
+					},
+					optionCounts: {}, // No counts calculated for pre-selected attribute
+					selected: {
+						id: 1,
+						name: 'Color',
+						option: 'Red',
+					},
+				},
+				{
+					attribute: {
+						id: 2,
+						name: 'Size',
+						position: 1,
+						visible: true,
+						variation: true,
+						options: ['Small', 'Large'],
+						characterCount: 10,
+					},
+					optionCounts: { Small: 1, Large: 1 },
+					selected: undefined,
+				},
+			]);
+		});
+
+		it('should not calculate option counts if attribute is already selected', () => {
+			const selectedAttributes = [{ id: 1, name: 'Color', option: 'Red' }];
+
+			const anyhits: { document: ProductVariationDocument }[] = [
+				{
+					document: {
+						attributes: [{ id: 1, name: 'Color', option: 'Red' }],
+					} as ProductVariationDocument,
+				},
+			];
+
+			const result = parseAttributes(attributes, selectedAttributes, anyhits);
+
+			expect(result).toEqual([
+				{
+					attribute: {
+						id: 1,
+						name: 'Color',
+						position: 0,
+						visible: true,
+						variation: true,
+						options: ['Red', 'Blue'],
+						characterCount: 7,
+					},
+					optionCounts: {}, // No counts calculated for pre-selected attribute
+					selected: { id: 1, name: 'Color', option: 'Red' },
+				},
+				{
+					attribute: {
+						id: 2,
+						name: 'Size',
+						position: 1,
+						visible: true,
+						variation: true,
+						options: ['Small', 'Large'],
+						characterCount: 10,
+					},
+					optionCounts: { Small: 1, Large: 1 },
+					selected: undefined,
+				},
+			]);
+		});
 	});
 });

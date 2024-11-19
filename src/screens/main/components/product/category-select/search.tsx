@@ -24,6 +24,7 @@ export const CategorySearch = () => {
 			sort: [{ name: 'asc' }],
 		},
 		greedy: true,
+		infiniteScroll: true,
 	});
 
 	/**

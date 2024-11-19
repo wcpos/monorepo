@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import toNumber from 'lodash/toNumber';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { ComboboxList, ComboboxItem, useComboboxContext } from '@wcpos/components/src/combobox';
@@ -45,7 +46,7 @@ export const CustomerList = ({ query, withGuest }: Props) => {
 						 * value has to be a string, which we then transform back to an int, which is stupid
 						 */
 						value={String(document.id)}
-						onSelect={(value) => onValueChange({ value: parseInt(value, 10), item: document })}
+						onSelect={(value) => onValueChange({ value: toNumber(value), item: document })}
 					>
 						<CustomerSelectItem customer={document} />
 					</ComboboxItem>

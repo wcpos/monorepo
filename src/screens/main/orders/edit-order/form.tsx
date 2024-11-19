@@ -12,7 +12,14 @@ import {
 	CollapsibleTrigger,
 	CollapsibleContent,
 } from '@wcpos/components/src/collapsible';
-import { Form, FormField, FormInput, FormSelect, FormTextarea } from '@wcpos/components/src/form';
+import {
+	Form,
+	FormCombobox,
+	FormField,
+	FormInput,
+	FormSelect,
+	FormTextarea,
+} from '@wcpos/components/src/form';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/src/modal';
 import { Text } from '@wcpos/components/src/text';
 import { Toast } from '@wcpos/components/src/toast';
@@ -29,6 +36,9 @@ import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
 import usePushDocument from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useCollection } from '../../hooks/use-collection';
+import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useGuestCustomer } from '../../hooks/use-guest-customer';
 
 interface Props {
 	order: import('@wcpos/database').OrderDocument;
@@ -56,6 +66,10 @@ export const EditOrderForm = ({ order }: Props) => {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
+	const { format } = useCustomerNameFormat();
+	const previousCustomerId = React.useRef<number | undefined>(order?.getLatest().customer_id);
+	const { collection } = useCollection('customers');
+	const guestCustomer = useGuestCustomer();
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));
@@ -142,6 +156,83 @@ export const EditOrderForm = ({ order }: Props) => {
 	}, [formData, form]);
 
 	/**
+	 * Fetch customer record and update form fields.
+	 */
+	const handleCustomerChange = React.useCallback(
+		async (customerId: number) => {
+			// customerId can be 0
+			if (customerId === undefined || customerId === null) return;
+
+			try {
+				let customer;
+				if (customerId === 0) {
+					customer = guestCustomer;
+				} else {
+					customer = await collection.findOne({ selector: { id: customerId } }).exec();
+					// this is not needed, because the customer must be local to be selected, right?
+					// if (!customer) {
+					// 	customer = await pullDocument(customerId, collection);
+					// }
+				}
+
+				if (!customer) {
+					throw new Error(t('Customer not found', { _tags: 'core' }));
+				}
+
+				/**
+				 * @FIXME - this is similar to the transformCustomerJSONToOrderJSON function
+				 * Should we set the store country if there is no country in the billing object?
+				 */
+				const billing = {
+					...customer.billing,
+					first_name: customer.billing.first_name || customer.first_name,
+					last_name: customer.billing.last_name || customer.last_name,
+					email: customer.billing.email || customer.email,
+				};
+
+				form.setValue('billing', billing, { shouldValidate: true });
+				form.setValue('shipping', customer.shipping, { shouldValidate: true });
+
+				form.setValue('customer_id', customerId);
+			} catch (error) {
+				log.error('Error fetching customer:', error);
+			}
+		},
+		[form, collection, guestCustomer, t]
+	);
+
+	/**
+	 * Watch for changes in `customer_id` and call handleCustomerChange only if it changes.
+	 */
+	React.useEffect(() => {
+		const subscription = form.watch((values) => {
+			if (
+				values.customer_id !== undefined &&
+				values.customer_id !== null &&
+				previousCustomerId.current !== values.customer_id
+			) {
+				previousCustomerId.current = values.customer_id;
+				handleCustomerChange(values.customer_id);
+			}
+		});
+		return () => subscription.unsubscribe();
+	}, [form, handleCustomerChange]);
+
+	/**
+	 * Watch the customer fields to compute the customer label
+	 */
+	const customer_id = form.watch('customer_id');
+	const billing = form.watch('billing');
+	const shipping = form.watch('shipping');
+
+	/**
+	 * Compute the customer label
+	 */
+	const customerLabel = React.useMemo(() => {
+		return format({ id: customer_id, billing, shipping });
+	}, [customer_id, billing, shipping, format]);
+
+	/**
 	 *
 	 */
 	return (
@@ -171,10 +262,16 @@ export const EditOrderForm = ({ order }: Props) => {
 						control={form.control}
 						name="customer_id"
 						render={({ field }) => (
-							<FormSelect
+							<FormCombobox
 								customComponent={CustomerSelect}
 								label={t('Customer', { _tags: 'core' })}
+								withGuest
 								{...field}
+								// override value with defaultCustomer
+								value={{
+									value: field.value,
+									label: customerLabel,
+								}}
 							/>
 						)}
 					/>

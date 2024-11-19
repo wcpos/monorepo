@@ -39,7 +39,7 @@ export const VariableActions = ({ row }: CellContext<{ document: ProductDocument
 			<PopoverTrigger ref={triggerRef} asChild>
 				<IconButton name="circleChevronRight" variant="success" size="4xl" />
 			</PopoverTrigger>
-			<PopoverContent side="right" className="w-auto p-2">
+			<PopoverContent side="right" className="w-auto max-w-80 p-2">
 				<VariationsPopover parent={parent} addToCart={addToCart} />
 			</PopoverContent>
 		</Popover>

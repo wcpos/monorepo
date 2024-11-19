@@ -11,7 +11,13 @@ export const CategoryList = ({ query }) => {
 	const result = useObservableSuspense(query.resource);
 
 	return (
-		<ComboboxList>
+		<ComboboxList
+			onEndReached={() => {
+				if (query?.infiniteScroll) {
+					query.loadMore();
+				}
+			}}
+		>
 			{result.hits.map(({ id, document }) => {
 				return (
 					<ComboboxItem

@@ -160,14 +160,21 @@ export const useBarcodeDetection = (
 
 	/**
 	 * Enable/Disable barcode detection when the screen is not focused.
+	 *
+	 * A user was experiencing an issue where keyup events were only giving the lowercase, even
+	 * though the barcode was uppercase. They recommend to not use keydown events, but it should
+	 * still work on almost all browsers.
+	 *
+	 * @TODO - use the serial API to connect to barcode scanners.
 	 */
 	useFocusEffect(
 		React.useCallback(() => {
 			if (Platform.OS === 'web') {
-				document.addEventListener('keyup', onKeyUp);
+				// reverted to keydown, because keyup was only giving lowercase
+				document.addEventListener('keydown', onKeyUp);
 
 				return () => {
-					document.removeEventListener('keyup', onKeyUp);
+					document.removeEventListener('keydown', onKeyUp);
 					if (timeoutRef.current) {
 						clearTimeout(timeoutRef.current);
 					}
