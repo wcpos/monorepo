@@ -16,17 +16,15 @@ import DrawerContent from './components/drawer-content';
 import Header from './components/header';
 import { ExtraDataProvider } from './contexts/extra-data';
 import { UISettingsProvider } from './contexts/ui-settings';
-import CustomersNavigator from './customers';
 import { Errors } from './errors';
 import useKeyboardShortcuts from './hooks/use-keyboard-shortcuts';
+import { useLicense } from './hooks/use-license';
 import { useRestHttpClient } from './hooks/use-rest-http-client';
 import { Login } from './login';
 import LogsWithProviders from './logs';
-import OrdersNavigator from './orders';
+import { PageUpgrade } from './page-upgrade';
 import POSNavigator from './pos';
-import ProductsNavigator from './products';
 // import ReportsNavigator from './reports';
-import { ReportsUpgrade } from './reports-upgrade';
 import { SettingsTabs } from './settings';
 import Support from './support';
 import { TaxRates } from './tax-rates';
@@ -36,6 +34,9 @@ import { useT } from '../../contexts/translations';
 import { useLocale } from '../../hooks/use-locale';
 import { useVersionCheck } from '../../hooks/use-version-check';
 
+const CustomersNavigator = React.lazy(() => import('./customers'));
+const OrdersNavigator = React.lazy(() => import('./orders'));
+const ProductsNavigator = React.lazy(() => import('./products'));
 const ReportsNavigator = React.lazy(() => import('./reports'));
 
 export type MainStackParamList = {
@@ -66,9 +67,8 @@ const DrawerNavigator = ({ navigation }) => {
 	const dimensions = useWindowDimensions();
 	useKeyboardShortcuts(); // allows navigation by hotkeys
 	const t = useT();
-	const { site } = useAppState();
-	const license = useObservableEagerState(site.license$);
-	const [showUpgrade, setShowUpgrade] = React.useState(!license?.key);
+	const { isPro } = useLicense();
+	const [showUpgrade, setShowUpgrade] = React.useState(!isPro);
 
 	const largeScreen = dimensions.width >= 1024;
 
@@ -119,13 +119,17 @@ const DrawerNavigator = ({ navigation }) => {
 					),
 				}}
 			>
-				{(props) => (
-					<ErrorBoundary>
-						<Suspense>
-							<ProductsNavigator {...props} />
-						</Suspense>
-					</ErrorBoundary>
-				)}
+				{(props) =>
+					isPro ? (
+						<ErrorBoundary>
+							<Suspense>
+								<ProductsNavigator {...props} />
+							</Suspense>
+						</ErrorBoundary>
+					) : (
+						<PageUpgrade page="products" />
+					)
+				}
 			</Drawer.Screen>
 			<Drawer.Screen
 				name="OrdersStack"
@@ -137,13 +141,17 @@ const DrawerNavigator = ({ navigation }) => {
 					),
 				}}
 			>
-				{(props) => (
-					<ErrorBoundary>
-						<Suspense>
-							<OrdersNavigator {...props} />
-						</Suspense>
-					</ErrorBoundary>
-				)}
+				{(props) =>
+					isPro ? (
+						<ErrorBoundary>
+							<Suspense>
+								<OrdersNavigator {...props} />
+							</Suspense>
+						</ErrorBoundary>
+					) : (
+						<PageUpgrade page="orders" />
+					)
+				}
 			</Drawer.Screen>
 			<Drawer.Screen
 				name="CustomersStack"
@@ -155,13 +163,17 @@ const DrawerNavigator = ({ navigation }) => {
 					),
 				}}
 			>
-				{(props) => (
-					<ErrorBoundary>
-						<Suspense>
-							<CustomersNavigator {...props} />
-						</Suspense>
-					</ErrorBoundary>
-				)}
+				{(props) =>
+					isPro ? (
+						<ErrorBoundary>
+							<Suspense>
+								<CustomersNavigator {...props} />
+							</Suspense>
+						</ErrorBoundary>
+					) : (
+						<PageUpgrade page="customers" />
+					)
+				}
 			</Drawer.Screen>
 			<Drawer.Screen
 				name="ReportsStack"
@@ -174,14 +186,14 @@ const DrawerNavigator = ({ navigation }) => {
 				}}
 			>
 				{(props) =>
-					license?.key ? (
+					isPro ? (
 						<ErrorBoundary>
 							<Suspense>
 								<ReportsNavigator {...props} />
 							</Suspense>
 						</ErrorBoundary>
 					) : (
-						<ReportsUpgrade />
+						<PageUpgrade page="reports" />
 					)
 				}
 			</Drawer.Screen>
