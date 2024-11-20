@@ -1,0 +1,2773 @@
+[
+  {
+    "code": "AED",
+    "name": "United Arab Emirates dirham",
+    "symbol": "&#x62f;.&#x625;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/AED"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "AFN",
+    "name": "Afghan afghani",
+    "symbol": "&#x60b;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/AFN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "ALL",
+    "name": "Albanian lek",
+    "symbol": "L",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/ALL"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "AMD",
+    "name": "Armenian dram",
+    "symbol": "AMD",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/AMD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "ANG",
+    "name": "Netherlands Antillean guilder",
+    "symbol": "&fnof;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/ANG"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "AOA",
+    "name": "Angolan kwanza",
+    "symbol": "Kz",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/AOA"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "ARS",
+    "name": "Argentine peso",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/ARS"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "AUD",
+    "name": "Australian dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/AUD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "AWG",
+    "name": "Aruban florin",
+    "symbol": "Afl.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/AWG"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "AZN",
+    "name": "Azerbaijani manat",
+    "symbol": "&#8380;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/AZN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BAM",
+    "name": "Bosnia and Herzegovina convertible mark",
+    "symbol": "KM",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BAM"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BBD",
+    "name": "Barbadian dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BBD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BDT",
+    "name": "Bangladeshi taka",
+    "symbol": "&#2547;&nbsp;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BDT"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BGN",
+    "name": "Bulgarian lev",
+    "symbol": "&#1083;&#1074;.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BGN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BHD",
+    "name": "Bahraini dinar",
+    "symbol": ".&#x62f;.&#x628;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BHD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BIF",
+    "name": "Burundian franc",
+    "symbol": "Fr",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BIF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BMD",
+    "name": "Bermudian dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BMD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BND",
+    "name": "Brunei dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BND"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BOB",
+    "name": "Bolivian boliviano",
+    "symbol": "Bs.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BOB"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BRL",
+    "name": "Brazilian real",
+    "symbol": "&#82;&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BRL"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BSD",
+    "name": "Bahamian dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BSD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BTC",
+    "name": "Bitcoin",
+    "symbol": "&#3647;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BTC"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BTN",
+    "name": "Bhutanese ngultrum",
+    "symbol": "Nu.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BTN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BWP",
+    "name": "Botswana pula",
+    "symbol": "P",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BWP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BYR",
+    "name": "Belarusian ruble (old)",
+    "symbol": "Br",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BYR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BYN",
+    "name": "Belarusian ruble",
+    "symbol": "Br",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BYN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "BZD",
+    "name": "Belize dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/BZD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "CAD",
+    "name": "Canadian dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/CAD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "CDF",
+    "name": "Congolese franc",
+    "symbol": "Fr",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/CDF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "CHF",
+    "name": "Swiss franc",
+    "symbol": "&#67;&#72;&#70;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/CHF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "CLP",
+    "name": "Chilean peso",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/CLP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "CNY",
+    "name": "Chinese yuan",
+    "symbol": "&yen;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/CNY"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "COP",
+    "name": "Colombian peso",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/COP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "CRC",
+    "name": "Costa Rican col&oacute;n",
+    "symbol": "&#x20a1;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/CRC"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "CUC",
+    "name": "Cuban convertible peso",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/CUC"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "CUP",
+    "name": "Cuban peso",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/CUP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "CVE",
+    "name": "Cape Verdean escudo",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/CVE"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "CZK",
+    "name": "Czech koruna",
+    "symbol": "&#75;&#269;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/CZK"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "DJF",
+    "name": "Djiboutian franc",
+    "symbol": "Fr",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/DJF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "DKK",
+    "name": "Danish krone",
+    "symbol": "kr.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/DKK"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "DOP",
+    "name": "Dominican peso",
+    "symbol": "RD&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/DOP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "DZD",
+    "name": "Algerian dinar",
+    "symbol": "&#x62f;.&#x62c;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/DZD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "EGP",
+    "name": "Egyptian pound",
+    "symbol": "EGP",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/EGP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "ERN",
+    "name": "Eritrean nakfa",
+    "symbol": "Nfk",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/ERN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "ETB",
+    "name": "Ethiopian birr",
+    "symbol": "Br",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/ETB"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "EUR",
+    "name": "Euro",
+    "symbol": "&euro;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/EUR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "FJD",
+    "name": "Fijian dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/FJD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "FKP",
+    "name": "Falkland Islands pound",
+    "symbol": "&pound;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/FKP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "GBP",
+    "name": "Pound sterling",
+    "symbol": "&pound;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/GBP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "GEL",
+    "name": "Georgian lari",
+    "symbol": "&#x20be;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/GEL"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "GGP",
+    "name": "Guernsey pound",
+    "symbol": "&pound;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/GGP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "GHS",
+    "name": "Ghana cedi",
+    "symbol": "&#x20b5;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/GHS"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "GIP",
+    "name": "Gibraltar pound",
+    "symbol": "&pound;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/GIP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "GMD",
+    "name": "Gambian dalasi",
+    "symbol": "D",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/GMD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "GNF",
+    "name": "Guinean franc",
+    "symbol": "Fr",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/GNF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "GTQ",
+    "name": "Guatemalan quetzal",
+    "symbol": "Q",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/GTQ"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "GYD",
+    "name": "Guyanese dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/GYD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "HKD",
+    "name": "Hong Kong dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/HKD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "HNL",
+    "name": "Honduran lempira",
+    "symbol": "L",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/HNL"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "HRK",
+    "name": "Croatian kuna",
+    "symbol": "kn",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/HRK"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "HTG",
+    "name": "Haitian gourde",
+    "symbol": "G",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/HTG"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "HUF",
+    "name": "Hungarian forint",
+    "symbol": "&#70;&#116;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/HUF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "IDR",
+    "name": "Indonesian rupiah",
+    "symbol": "Rp",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/IDR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "ILS",
+    "name": "Israeli new shekel",
+    "symbol": "&#8362;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/ILS"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "IMP",
+    "name": "Manx pound",
+    "symbol": "&pound;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/IMP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "INR",
+    "name": "Indian rupee",
+    "symbol": "&#8377;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/INR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "IQD",
+    "name": "Iraqi dinar",
+    "symbol": "&#x62f;.&#x639;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/IQD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "IRR",
+    "name": "Iranian rial",
+    "symbol": "&#xfdfc;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/IRR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "IRT",
+    "name": "Iranian toman",
+    "symbol": "&#x062A;&#x0648;&#x0645;&#x0627;&#x0646;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/IRT"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "ISK",
+    "name": "Icelandic kr&oacute;na",
+    "symbol": "kr.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/ISK"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "JEP",
+    "name": "Jersey pound",
+    "symbol": "&pound;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/JEP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "JMD",
+    "name": "Jamaican dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/JMD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "JOD",
+    "name": "Jordanian dinar",
+    "symbol": "&#x62f;.&#x627;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/JOD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "JPY",
+    "name": "Japanese yen",
+    "symbol": "&yen;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/JPY"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "KES",
+    "name": "Kenyan shilling",
+    "symbol": "KSh",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/KES"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "KGS",
+    "name": "Kyrgyzstani som",
+    "symbol": "&#x441;&#x43e;&#x43c;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/KGS"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "KHR",
+    "name": "Cambodian riel",
+    "symbol": "&#x17db;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/KHR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "KMF",
+    "name": "Comorian franc",
+    "symbol": "Fr",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/KMF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "KPW",
+    "name": "North Korean won",
+    "symbol": "&#x20a9;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/KPW"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "KRW",
+    "name": "South Korean won",
+    "symbol": "&#8361;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/KRW"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "KWD",
+    "name": "Kuwaiti dinar",
+    "symbol": "&#x62f;.&#x643;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/KWD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "KYD",
+    "name": "Cayman Islands dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/KYD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "KZT",
+    "name": "Kazakhstani tenge",
+    "symbol": "&#8376;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/KZT"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "LAK",
+    "name": "Lao kip",
+    "symbol": "&#8365;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/LAK"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "LBP",
+    "name": "Lebanese pound",
+    "symbol": "&#x644;.&#x644;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/LBP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "LKR",
+    "name": "Sri Lankan rupee",
+    "symbol": "&#xdbb;&#xdd4;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/LKR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "LRD",
+    "name": "Liberian dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/LRD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "LSL",
+    "name": "Lesotho loti",
+    "symbol": "L",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/LSL"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "LYD",
+    "name": "Libyan dinar",
+    "symbol": "&#x62f;.&#x644;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/LYD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MAD",
+    "name": "Moroccan dirham",
+    "symbol": "&#x62f;.&#x645;.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MAD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MDL",
+    "name": "Moldovan leu",
+    "symbol": "MDL",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MDL"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MGA",
+    "name": "Malagasy ariary",
+    "symbol": "Ar",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MGA"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MKD",
+    "name": "Macedonian denar",
+    "symbol": "&#x434;&#x435;&#x43d;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MKD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MMK",
+    "name": "Burmese kyat",
+    "symbol": "Ks",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MMK"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MNT",
+    "name": "Mongolian t&ouml;gr&ouml;g",
+    "symbol": "&#x20ae;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MNT"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MOP",
+    "name": "Macanese pataca",
+    "symbol": "P",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MOP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MRU",
+    "name": "Mauritanian ouguiya",
+    "symbol": "UM",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MRU"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MUR",
+    "name": "Mauritian rupee",
+    "symbol": "&#x20a8;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MUR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MVR",
+    "name": "Maldivian rufiyaa",
+    "symbol": ".&#x783;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MVR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MWK",
+    "name": "Malawian kwacha",
+    "symbol": "MK",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MWK"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MXN",
+    "name": "Mexican peso",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MXN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MYR",
+    "name": "Malaysian ringgit",
+    "symbol": "&#82;&#77;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MYR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "MZN",
+    "name": "Mozambican metical",
+    "symbol": "MT",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/MZN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "NAD",
+    "name": "Namibian dollar",
+    "symbol": "N&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/NAD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "NGN",
+    "name": "Nigerian naira",
+    "symbol": "&#8358;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/NGN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "NIO",
+    "name": "Nicaraguan c&oacute;rdoba",
+    "symbol": "C&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/NIO"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "NOK",
+    "name": "Norwegian krone",
+    "symbol": "&#107;&#114;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/NOK"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "NPR",
+    "name": "Nepalese rupee",
+    "symbol": "&#8360;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/NPR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "NZD",
+    "name": "New Zealand dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/NZD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "OMR",
+    "name": "Omani rial",
+    "symbol": "&#x631;.&#x639;.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/OMR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "PAB",
+    "name": "Panamanian balboa",
+    "symbol": "B/.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/PAB"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "PEN",
+    "name": "Sol",
+    "symbol": "S/",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/PEN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "PGK",
+    "name": "Papua New Guinean kina",
+    "symbol": "K",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/PGK"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "PHP",
+    "name": "Philippine peso",
+    "symbol": "&#8369;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/PHP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "PKR",
+    "name": "Pakistani rupee",
+    "symbol": "&#8360;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/PKR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "PLN",
+    "name": "Polish z&#x142;oty",
+    "symbol": "&#122;&#322;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/PLN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "PRB",
+    "name": "Transnistrian ruble",
+    "symbol": "&#x440;.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/PRB"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "PYG",
+    "name": "Paraguayan guaran&iacute;",
+    "symbol": "&#8370;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/PYG"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "QAR",
+    "name": "Qatari riyal",
+    "symbol": "&#x631;.&#x642;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/QAR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "RON",
+    "name": "Romanian leu",
+    "symbol": "lei",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/RON"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "RSD",
+    "name": "Serbian dinar",
+    "symbol": "&#1088;&#1089;&#1076;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/RSD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "RUB",
+    "name": "Russian ruble",
+    "symbol": "&#8381;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/RUB"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "RWF",
+    "name": "Rwandan franc",
+    "symbol": "Fr",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/RWF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SAR",
+    "name": "Saudi riyal",
+    "symbol": "&#x631;.&#x633;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SAR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SBD",
+    "name": "Solomon Islands dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SBD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SCR",
+    "name": "Seychellois rupee",
+    "symbol": "&#x20a8;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SCR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SDG",
+    "name": "Sudanese pound",
+    "symbol": "&#x62c;.&#x633;.",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SDG"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SEK",
+    "name": "Swedish krona",
+    "symbol": "&#107;&#114;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SEK"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SGD",
+    "name": "Singapore dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SGD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SHP",
+    "name": "Saint Helena pound",
+    "symbol": "&pound;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SHP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SLL",
+    "name": "Sierra Leonean leone",
+    "symbol": "Le",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SLL"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SOS",
+    "name": "Somali shilling",
+    "symbol": "Sh",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SOS"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SRD",
+    "name": "Surinamese dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SRD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SSP",
+    "name": "South Sudanese pound",
+    "symbol": "&pound;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SSP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "STN",
+    "name": "S&atilde;o Tom&eacute; and Pr&iacute;ncipe dobra",
+    "symbol": "Db",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/STN"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SYP",
+    "name": "Syrian pound",
+    "symbol": "&#x644;.&#x633;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SYP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "SZL",
+    "name": "Swazi lilangeni",
+    "symbol": "E",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/SZL"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "THB",
+    "name": "Thai baht",
+    "symbol": "&#3647;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/THB"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "TJS",
+    "name": "Tajikistani somoni",
+    "symbol": "&#x405;&#x41c;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/TJS"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "TMT",
+    "name": "Turkmenistan manat",
+    "symbol": "m",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/TMT"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "TND",
+    "name": "Tunisian dinar",
+    "symbol": "&#x62f;.&#x62a;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/TND"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "TOP",
+    "name": "Tongan pa&#x2bb;anga",
+    "symbol": "T&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/TOP"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "TRY",
+    "name": "Turkish lira",
+    "symbol": "&#8378;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/TRY"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "TTD",
+    "name": "Trinidad and Tobago dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/TTD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "TWD",
+    "name": "New Taiwan dollar",
+    "symbol": "&#78;&#84;&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/TWD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "TZS",
+    "name": "Tanzanian shilling",
+    "symbol": "Sh",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/TZS"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "UAH",
+    "name": "Ukrainian hryvnia",
+    "symbol": "&#8372;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/UAH"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "UGX",
+    "name": "Ugandan shilling",
+    "symbol": "UGX",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/UGX"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "USD",
+    "name": "United States (US) dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/USD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "UYU",
+    "name": "Uruguayan peso",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/UYU"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "UZS",
+    "name": "Uzbekistani som",
+    "symbol": "UZS",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/UZS"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "VEF",
+    "name": "Venezuelan bol&iacute;var",
+    "symbol": "Bs F",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/VEF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "VES",
+    "name": "Bol&iacute;var soberano",
+    "symbol": "Bs.S",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/VES"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "VND",
+    "name": "Vietnamese &#x111;&#x1ed3;ng",
+    "symbol": "&#8363;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/VND"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "VUV",
+    "name": "Vanuatu vatu",
+    "symbol": "Vt",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/VUV"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "WST",
+    "name": "Samoan t&#x101;l&#x101;",
+    "symbol": "T",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/WST"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "XAF",
+    "name": "Central African CFA franc",
+    "symbol": "CFA",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/XAF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "XCD",
+    "name": "East Caribbean dollar",
+    "symbol": "&#36;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/XCD"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "XOF",
+    "name": "West African CFA franc",
+    "symbol": "CFA",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/XOF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "XPF",
+    "name": "CFP franc",
+    "symbol": "Fr",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/XPF"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "YER",
+    "name": "Yemeni rial",
+    "symbol": "&#xfdfc;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/YER"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "ZAR",
+    "name": "South African rand",
+    "symbol": "&#82;",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/ZAR"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  },
+  {
+    "code": "ZMW",
+    "name": "Zambian kwacha",
+    "symbol": "ZK",
+    "_links": {
+      "self": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies/ZMW"
+        }
+      ],
+      "collection": [
+        {
+          "href": "https://demo.wcpos.com/wp-json/wc/v3/data/currencies"
+        }
+      ]
+    }
+  }
+]

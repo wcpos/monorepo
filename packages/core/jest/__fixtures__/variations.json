@@ -1,0 +1,294 @@
+[
+	{
+		"id": 5019,
+		"date_created": "2020-07-17T11:52:38",
+		"date_created_gmt": "2020-07-17T11:52:38",
+		"date_modified": "2020-07-17T11:52:38",
+		"date_modified_gmt": "2020-07-17T11:52:38",
+		"description": "",
+		"permalink": "https://dev.local/wp/latest/product/handmade-orange-shirt?attribute_size=Immense&attribute_color=Red",
+		"sku": "",
+		"price": "288.74",
+		"regular_price": "288.74",
+		"sale_price": "",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": "1979-01-06T06:33:15",
+		"date_on_sale_to_gmt": "1979-01-06T06:33:15",
+		"on_sale": false,
+		"status": "publish",
+		"purchasable": true,
+		"virtual": false,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": -1,
+		"download_expiry": -1,
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": true,
+		"stock_quantity": 48,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"weight": "36",
+		"dimensions": {
+			"length": "121",
+			"width": "152",
+			"height": "4"
+		},
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"image": null,
+		"attributes": [
+			{
+				"id": 0,
+				"name": "Size",
+				"option": "Immense"
+			},
+			{
+				"id": 0,
+				"name": "Color",
+				"option": "Red"
+			}
+		],
+		"menu_order": 4,
+		"meta_data": [],
+		"_links": {
+			"self": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015/variations/5019"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015/variations"
+				}
+			],
+			"up": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015"
+				}
+			]
+		}
+	},
+	{
+		"id": 5018,
+		"date_created": "2020-07-17T11:52:37",
+		"date_created_gmt": "2020-07-17T11:52:37",
+		"date_modified": "2020-07-17T11:52:37",
+		"date_modified_gmt": "2020-07-17T11:52:37",
+		"description": "",
+		"permalink": "https://dev.local/wp/latest/product/handmade-orange-shirt?attribute_size=Immense&attribute_color=Silver",
+		"sku": "",
+		"price": "644.8",
+		"regular_price": "644.8",
+		"sale_price": "",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": "2019-05-04T11:32:49",
+		"date_on_sale_to_gmt": "2019-05-04T11:32:49",
+		"on_sale": false,
+		"status": "publish",
+		"purchasable": true,
+		"virtual": false,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": -1,
+		"download_expiry": -1,
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": true,
+		"stock_quantity": -35,
+		"stock_status": "outofstock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"weight": "194",
+		"dimensions": {
+			"length": "33",
+			"width": "49",
+			"height": "103"
+		},
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"image": null,
+		"attributes": [
+			{
+				"id": 0,
+				"name": "Size",
+				"option": "Immense"
+			},
+			{
+				"id": 0,
+				"name": "Color",
+				"option": "Silver"
+			}
+		],
+		"menu_order": 3,
+		"meta_data": [],
+		"_links": {
+			"self": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015/variations/5018"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015/variations"
+				}
+			],
+			"up": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015"
+				}
+			]
+		}
+	},
+	{
+		"id": 5017,
+		"date_created": "2020-07-17T11:52:37",
+		"date_created_gmt": "2020-07-17T11:52:37",
+		"date_modified": "2020-07-17T11:52:37",
+		"date_modified_gmt": "2020-07-17T11:52:37",
+		"description": "",
+		"permalink": "https://dev.local/wp/latest/product/handmade-orange-shirt?attribute_size=Miniature&attribute_color=Red",
+		"sku": "",
+		"price": "714.27",
+		"regular_price": "714.27",
+		"sale_price": "4.34",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": "2017-11-25T11:51:04",
+		"date_on_sale_to_gmt": "2017-11-25T11:51:04",
+		"on_sale": false,
+		"status": "publish",
+		"purchasable": true,
+		"virtual": true,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": -1,
+		"download_expiry": -1,
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": true,
+		"stock_quantity": -74,
+		"stock_status": "outofstock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"image": null,
+		"attributes": [
+			{
+				"id": 0,
+				"name": "Size",
+				"option": "Miniature"
+			},
+			{
+				"id": 0,
+				"name": "Color",
+				"option": "Red"
+			}
+		],
+		"menu_order": 2,
+		"meta_data": [],
+		"_links": {
+			"self": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015/variations/5017"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015/variations"
+				}
+			],
+			"up": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015"
+				}
+			]
+		}
+	},
+	{
+		"id": 5016,
+		"date_created": "2020-07-17T11:52:36",
+		"date_created_gmt": "2020-07-17T11:52:36",
+		"date_modified": "2020-07-17T11:52:36",
+		"date_modified_gmt": "2020-07-17T11:52:36",
+		"description": "",
+		"permalink": "https://dev.local/wp/latest/product/handmade-orange-shirt?attribute_size=Miniature&attribute_color=Silver",
+		"sku": "",
+		"price": "276.35",
+		"regular_price": "276.35",
+		"sale_price": "",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": "1986-12-15T06:00:29",
+		"date_on_sale_to_gmt": "1986-12-15T06:00:29",
+		"on_sale": false,
+		"status": "publish",
+		"purchasable": true,
+		"virtual": true,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": -1,
+		"download_expiry": -1,
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": true,
+		"stock_quantity": 45,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"image": null,
+		"attributes": [
+			{
+				"id": 0,
+				"name": "Size",
+				"option": "Miniature"
+			},
+			{
+				"id": 0,
+				"name": "Color",
+				"option": "Silver"
+			}
+		],
+		"menu_order": 1,
+		"meta_data": [],
+		"_links": {
+			"self": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015/variations/5016"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015/variations"
+				}
+			],
+			"up": [
+				{
+					"href": "https://dev.local/wp/latest/wp-json/wc/v3/products/5015"
+				}
+			]
+		}
+	}
+]
