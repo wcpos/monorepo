@@ -10,6 +10,8 @@ import type { FormItemProps } from './common';
  * NOTE: combobox is a bit different from the other form components
  * - the value will come in as a string and go out as a string, but
  * - the combobox component expects an object with value and label
+ *
+ * @FIXME - what about customer select? This need to go out as a number?
  */
 const FormCombobox = React.forwardRef<
 	React.ElementRef<typeof Command>,
@@ -38,7 +40,7 @@ const FormCombobox = React.forwardRef<
 					open={open}
 					onOpenChange={setOpen}
 					value={typeof value === 'string' ? { value, label: value } : value}
-					onValueChange={(val: any) => onChange?.(val?.value || '')}
+					onValueChange={(val: any) => onChange?.(val?.value)}
 					{...props}
 				/>
 				{!!description && <FormDescription>{description}</FormDescription>}

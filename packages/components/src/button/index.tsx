@@ -30,6 +30,11 @@ const buttonVariants = cva(
 				secondary: 'bg-secondary web:hover:opacity-80 active:opacity-80',
 				muted: 'bg-muted web:hover:opacity-80 active:opacity-80',
 				success: 'bg-success web:hover:opacity-90 active:opacity-90',
+				info: 'bg-info web:hover:opacity-90 active:opacity-90',
+				attention: 'bg-attention web:hover:opacity-90 active:opacity-90',
+				warning: 'bg-warning web:hover:opacity-90 active:opacity-90',
+				error: 'bg-error web:hover:opacity-90 active:opacity-90',
+
 				/**
 				 * Outline buttons
 				 */
@@ -45,6 +50,15 @@ const buttonVariants = cva(
 					'border border-success bg-background web:hover:bg-success/90 web:hover:text-success-foreground active:bg-success',
 				'outline-destructive':
 					'border border-destructive bg-background web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive',
+				'outline-info':
+					'border border-info bg-background web:hover:bg-info/90 web:hover:text-info-foreground active:bg-info',
+				'outline-attention':
+					'border border-attention bg-background web:hover:bg-attention/90 web:hover:text-attention-foreground active:bg-attention',
+				'outline-warning':
+					'border border-warning bg-background web:hover:bg-warning/90 web:hover:text-warning-foreground active:bg-warning',
+				'outline-error':
+					'border border-error bg-background web:hover:bg-error/90 web:hover:text-error-foreground active:bg-error',
+
 				/**
 				 * Ghost buttons
 				 */
@@ -58,6 +72,12 @@ const buttonVariants = cva(
 					'bg-success/15 web:hover:bg-success active:bg-success text-success-foreground',
 				'ghost-destructive':
 					'bg-destructive/15 web:hover:bg-destructive active:bg-destructive text-destructive-foreground',
+				'ghost-info': 'bg-info/15 web:hover:bg-info active:bg-info text-info-foreground',
+				'ghost-attention':
+					'bg-attention/15 web:hover:bg-attention active:bg-attention text-attention-foreground',
+				'ghost-warning':
+					'bg-warning/15 web:hover:bg-warning active:bg-warning text-warning-foreground',
+				'ghost-error': 'bg-error/15 web:hover:bg-error active:bg-error text-error-foreground',
 			},
 			size: {
 				default: 'h-10 px-4 py-2 native:h-12 native:px-5 native:py-3',
@@ -88,6 +108,11 @@ const buttonTextVariants = cva(
 				secondary: 'text-secondary-foreground group-active:text-secondary-foreground',
 				muted: 'text-muted-foreground group-active:text-muted-foreground',
 				success: 'text-success-foreground',
+				info: 'text-info-foreground',
+				attention: 'text-attention-foreground',
+				warning: 'text-warning-foreground',
+				error: 'text-error-foreground',
+
 				/**
 				 * Outline buttons
 				 */
@@ -97,6 +122,11 @@ const buttonTextVariants = cva(
 				'outline-muted': 'group-active:text-muted-foreground',
 				'outline-success': 'group-active:text-success-foreground',
 				'outline-destructive': 'group-active:text-destructive-foreground',
+				'outline-info': 'group-active:text-info-foreground',
+				'outline-attention': 'group-active:text-attention-foreground',
+				'outline-warning': 'group-active:text-warning-foreground',
+				'outline-error': 'group-active:text-error-foreground',
+
 				/**
 				 * Ghost buttons
 				 */
@@ -106,6 +136,10 @@ const buttonTextVariants = cva(
 				'ghost-muted': 'text-muted group-hover:text-muted-foreground',
 				'ghost-success': 'text-success group-hover:text-success-foreground',
 				'ghost-destructive': 'text-destructive group-hover:text-destructive-foreground',
+				'ghost-info': 'text-info group-hover:text-info-foreground',
+				'ghost-attention': 'text-attention group-hover:text-attention-foreground',
+				'ghost-warning': 'text-warning group-hover:text-warning-foreground',
+				'ghost-error': 'text-error group-hover:text-error-foreground',
 			},
 			size: {
 				default: '',
