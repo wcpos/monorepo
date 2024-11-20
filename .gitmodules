@@ -1,21 +1,3 @@
 [submodule "apps/electron"]
 	path = apps/electron
 	url = https://github.com/wcpos/electron
-[submodule "packages/database"]
-	path = packages/database
-	url = https://github.com/wcpos/database
-[submodule "packages/hooks"]
-	path = packages/hooks
-	url = https://github.com/wcpos/hooks
-[submodule "packages/core"]
-	path = packages/core
-	url = https://github.com/wcpos/core
-[submodule "packages/utils"]
-	path = packages/utils
-	url = https://github.com/wcpos/utils
-[submodule "apps/managed"]
-	path = apps/managed
-	url = https://github.com/wcpos/managed-expo
-[submodule "packages/query"]
-	path = packages/query
-	url = https://github.com/wcpos/query.git
