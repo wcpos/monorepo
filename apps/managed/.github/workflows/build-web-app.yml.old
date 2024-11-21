@@ -1,0 +1,90 @@
+name: Web
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tag-new-versions:
+    name: Tag
+    runs-on: ubuntu-latest
+    outputs:
+      id: ${{ steps.maybe-release.outputs.id }}
+      tag: ${{ steps.maybe-tag.outputs.tag }}
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      - name: Detect and Tag New Version
+        id: maybe-tag
+        uses: salsify/action-detect-and-tag-new-version@v2
+      - name: Create Release
+        id: maybe-release
+        if: ${{ success() && steps.maybe-tag.outputs.tag }}
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ steps.maybe-tag.outputs.tag }}
+          tag_name: ${{ steps.maybe-tag.outputs.tag }}
+          draft: true
+          files: |
+            LICENSE
+
+  build:
+    name: Build
+    needs: tag-new-versions
+    if: ${{ success() && needs.tag-new-versions.outputs.id }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3.5.1
+        with:
+          node-version: 16.x
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v7
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install NPM packages
+        run: YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install
+
+      - name: Build project
+        run: PUBLIC_URL="https://wcpos.github.io/managed-expo/" yarn export:web
+
+      # - name: Run tests
+      #   run: npm run test
+
+      - name: Upload production-ready build files
+        uses: actions/upload-artifact@v3
+        with:
+          name: production-files
+          path: ./dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: production-files
+          path: ./build
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: web-build
+          publish_dir: ./build

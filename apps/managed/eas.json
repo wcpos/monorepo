@@ -1,0 +1,23 @@
+{
+	"build": {
+		"base": {
+			"node": "16.18.1",
+			"env": {}
+		},
+		"development": {
+			"extends": "base",
+			"developmentClient": true,
+			"distribution": "internal"
+		},
+		"preview": {
+			"extends": "base",
+			"distribution": "internal"
+		},
+		"production": {
+			"extends": "base"
+		}
+	},
+	"submit": {
+		"production": {}
+	}
+}
