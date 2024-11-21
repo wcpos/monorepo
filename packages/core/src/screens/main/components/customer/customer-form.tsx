@@ -51,8 +51,9 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 
 	/**
 	 * The username is editable on create, but not on edit.
+	 * We can check whether the customer has an ID to determine if we are on an edit.
 	 */
-	const hasUsername = !!form.getValues().username;
+	const hasUsername = !!form.getValues().id;
 
 	/**
 	 * Intercept handleSubmit to populate billing fields if empty.
