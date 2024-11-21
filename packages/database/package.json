@@ -23,7 +23,7 @@
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.4",
     "react": "18.2.0",
-    "rxdb": "15.38.3",
+    "rxdb": "15.39.0",
     "rxdb-premium": "15.38.3",
     "rxjs": "7.8.1",
     "uuid": "10.0.0"
