@@ -44,13 +44,10 @@ const RootNavigator = () => {
 	/**
 	 * Pathname eg: 'pos' for default web app
 	 */
-	let pathname = '';
+	let pathname = '/';
 	if (homepage) {
 		const parsedUrl = new URL(homepage);
 		pathname = parsedUrl.pathname;
-	}
-	if (typeof window !== 'undefined' && window.electron?.basePath) {
-		pathname = window.electron.basePath;
 	}
 	const baseURL = Linking.createURL(pathname);
 
