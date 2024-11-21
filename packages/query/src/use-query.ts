@@ -1,0 +1,39 @@
+import * as React from 'react';
+
+import { useObservableState } from 'observable-hooks';
+import { map, filter } from 'rxjs/operators';
+
+import { useQueryManager } from './provider';
+
+import type { QueryParams, QueryHooks } from './query-state';
+
+export interface QueryOptions {
+	queryKeys: (string | number | object)[];
+	collectionName: string;
+	initialParams?: QueryParams;
+	hooks?: QueryHooks;
+	locale?: string;
+	endpoint?: string;
+}
+
+export const useQuery = (queryOptions: QueryOptions) => {
+	const manager = useQueryManager();
+	const query = useObservableState(
+		manager.localDB.reset$.pipe(
+			filter((collection) => collection.name === queryOptions.collectionName),
+			map(() => manager.registerQuery(queryOptions))
+		),
+		manager.registerQuery(queryOptions)
+	);
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		return () => {
+			manager.maybePauseQueryReplications(query);
+		};
+	}, [query, manager]);
+
+	return query;
+};
