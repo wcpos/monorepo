@@ -8,8 +8,6 @@ import NetInfo, {
 
 import { Toast } from '@wcpos/components/src/toast';
 
-import useHttpClient from '../use-http-client';
-
 const initialState: NetInfoState = {
 	type: NetInfoStateType.unknown,
 	isConnected: null,
@@ -26,7 +24,6 @@ interface Props {
 
 const OnlineStatusProvider = ({ children, wpAPIURL }: Props) => {
 	const [status, setStatus] = React.useState<NetInfoState>(initialState);
-	const httpClient = useHttpClient();
 
 	/**
 	 * Listen to internet connection
@@ -35,16 +32,7 @@ const OnlineStatusProvider = ({ children, wpAPIURL }: Props) => {
 	React.useEffect(() => {
 		NetInfo.configure({
 			reachabilityUrl: wpAPIURL,
-			reachabilityTest: async () => {
-				try {
-					// Perform a HEAD request to minimize response size
-					const response = await httpClient.head(wpAPIURL, { timeout: 60000 }); // Match the timeout with reachabilityRequestTimeout
-					return response.status === 200;
-				} catch (error) {
-					console.error('Custom reachability test failed', error);
-					return false;
-				}
-			},
+			reachabilityTest: async (response) => response.status === 200,
 			// reachabilityLongTimeout: 60 * 1000, // 60s
 			// reachabilityShortTimeout: 5 * 1000, // 5s
 			// increase timeout for slow servers
