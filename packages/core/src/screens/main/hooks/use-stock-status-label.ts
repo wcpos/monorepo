@@ -25,10 +25,11 @@ export const useStockStatusLabel = () => {
 				label: t('On Backorder', { _tags: 'core' }),
 				value: 'onbackorder',
 			},
-			{
-				label: t('Low Stock', { _tags: 'core' }),
-				value: 'lowstock',
-			},
+			// There is no low stock status in WC
+			// {
+			// 	label: t('Low Stock', { _tags: 'core' }),
+			// 	value: 'lowstock',
+			// },
 		],
 		[t]
 	);
