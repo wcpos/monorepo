@@ -77,7 +77,16 @@ export const useBarcode = (
 				querySearchInputRef.current?.setSearch(barcode);
 				return;
 			}
-			addVariation(product, parent);
+
+			const metaData = product.attributes.map((attribute) => {
+				return {
+					attr_id: attribute.id,
+					display_key: attribute.name,
+					display_value: attribute.option,
+				};
+			});
+
+			addVariation(product, parent, metaData);
 		} else {
 			addProduct(product);
 		}
