@@ -91,7 +91,7 @@ const CommandList = React.forwardRef<
 		<CommandPrimitive.List
 			ref={mergedRef}
 			className={cn(
-				'max-h-[300px] overflow-y-auto overflow-x-hidden group',
+				'group max-h-[300px] overflow-y-auto overflow-x-hidden',
 				'[&>*:first-child]:gap-2 [&>*:first-child]:pt-2',
 				className
 			)}
@@ -149,7 +149,7 @@ const CommandItem = React.forwardRef<
 			ref={ref}
 			className={cn(
 				'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none',
-				'web:outline-none web:focus:bg-accent active:bg-accent web:hover:bg-accent group',
+				'web:outline-none web:focus:bg-accent web:hover:bg-accent group active:bg-accent',
 				'aria-selected:bg-accent aria-selected:text-accent-foreground',
 				props.disabled && 'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
 				className

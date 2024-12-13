@@ -16,7 +16,8 @@ const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root
 			<CheckboxPrimitive.Root
 				ref={ref}
 				className={cn(
-					'web:peer h-4 w-4 native:h-[20] native:w-[20] shrink-0 rounded-sm native:rounded border border-border',
+					'web:peer native:h-[20] native:w-[20] native:rounded',
+					'h-4 w-4 shrink-0 rounded-sm border border-border',
 					'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
 					'disabled:cursor-not-allowed disabled:opacity-50',
 					props.checked && 'bg-primary',
@@ -26,12 +27,12 @@ const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root
 				{...props}
 			>
 				{indeterminate ? (
-					<View className={cn('items-center justify-center h-full w-full')}>
-						<Icon name="minus" className="w-3 h-3 text-primary-foreground" />
+					<View className={cn('h-full w-full items-center justify-center')}>
+						<Icon name="minus" className="h-3 w-3 text-primary-foreground" />
 					</View>
 				) : (
-					<CheckboxPrimitive.Indicator className={cn('items-center justify-center h-full w-full')}>
-						<Icon name="check" className="w-3 h-3 text-primary-foreground" />
+					<CheckboxPrimitive.Indicator className={cn('h-full w-full items-center justify-center')}>
+						<Icon name="check" className="h-3 w-3 text-primary-foreground" />
 					</CheckboxPrimitive.Indicator>
 				)}
 			</CheckboxPrimitive.Root>

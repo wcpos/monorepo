@@ -47,7 +47,7 @@ export const BaseToast = ({ variant, text1, text2, props, ...rest }: ToastProps)
 	}, [props.action, rest]);
 
 	return (
-		<View className="border border-border shadow-md rounded-lg max-w-screen-sm">
+		<View className="max-w-screen-sm rounded-lg border border-border shadow-md">
 			<View className={toastVariants({ variant })} role="alert">
 				<HStack>
 					<VStack className="flex-1">

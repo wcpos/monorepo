@@ -92,9 +92,9 @@ const ModalOverlayWeb = React.forwardRef<
 	return (
 		<View
 			className={cn(
-				'z-50 bg-black/70 flex justify-center items-center p-2 absolute top-0 right-0 bottom-0 left-0',
+				'absolute bottom-0 left-0 right-0 top-0 z-50 flex items-center justify-center bg-black/70 p-2',
 				'web:animate-in web:fade-in-0',
-				'[&>*:first-child]:max-w-full [&>*:first-child]:max-h-full',
+				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				className
 			)}
 			{...props}
@@ -113,8 +113,8 @@ const ModalOverlayNative = React.forwardRef<
 		<View
 			style={StyleSheet.absoluteFill}
 			className={cn(
-				'z-50 flex bg-black/70 justify-center items-center p-2',
-				'[&>*:first-child]:max-w-full [&>*:first-child]:max-h-full',
+				'z-50 flex items-center justify-center bg-black/70 p-2',
+				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				className
 			)}
 			{...props}
@@ -163,7 +163,7 @@ const ModalContent = React.forwardRef<
 				ref={ref}
 				className={cn(
 					modalContentVariants({ size }),
-					'z-50 max-w-full max-h-full gap-4 border border-border web:cursor-default bg-background shadow-lg web:duration-200 rounded-lg',
+					'web:cursor-default web:duration-200 z-50 max-h-full max-w-full gap-4 rounded-lg border border-border bg-background shadow-lg',
 					'web:animate-in web:fade-in-0 web:zoom-in-95',
 					className
 				)}
@@ -171,7 +171,7 @@ const ModalContent = React.forwardRef<
 			>
 				{children}
 				<View className="absolute right-2 top-2">
-					<ModalClose className="opacity-70 web:transition-opacity web:hover:opacity-100" asChild>
+					<ModalClose className="web:transition-opacity web:hover:opacity-100 opacity-70" asChild>
 						<IconButton name="xmark" />
 					</ModalClose>
 				</View>
@@ -186,7 +186,7 @@ ModalContent.displayName = 'ModalContent';
  */
 const ModalHeader = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
 	<View
-		className={cn('flex flex-col pl-4 pr-8 gap-1.5 text-center sm:text-left', className)}
+		className={cn('flex flex-col gap-1.5 pl-4 pr-8 text-center sm:text-left', className)}
 		{...props}
 	/>
 );
@@ -203,7 +203,7 @@ ModalBody.displayName = 'ModalBody';
 
 const ModalFooter = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
 	<View
-		className={cn('flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-4', className)}
+		className={cn('flex flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end', className)}
 		{...props}
 	/>
 );

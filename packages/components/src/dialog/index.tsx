@@ -31,9 +31,9 @@ const DialogOverlayWeb = React.forwardRef<
 	return (
 		<DialogPrimitive.Overlay
 			className={cn(
-				'bg-black/70 flex justify-center items-center p-2 absolute top-0 right-0 bottom-0 left-0',
+				'absolute bottom-0 left-0 right-0 top-0 flex items-center justify-center bg-black/70 p-2',
 				open ? 'web:animate-in web:fade-in-0' : 'web:animate-out web:fade-out-0',
-				'[&>*:first-child]:max-w-full [&>*:first-child]:max-h-full',
+				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				className
 			)}
 			{...props}
@@ -52,8 +52,8 @@ const DialogOverlayNative = React.forwardRef<
 		<DialogPrimitive.Overlay
 			style={StyleSheet.absoluteFill}
 			className={cn(
-				'flex bg-black/70 justify-center items-center p-2',
-				'[&>*:first-child]:max-w-full [&>*:first-child]:max-h-full',
+				'flex items-center justify-center bg-black/70 p-2',
+				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				className
 			)}
 			{...props}
@@ -124,7 +124,7 @@ const DialogContent = React.forwardRef<
 					{children}
 					<View className="absolute right-2 top-2">
 						<DialogClose
-							className="opacity-70 web:transition-opacity web:hover:opacity-100"
+							className="web:transition-opacity web:hover:opacity-100 opacity-70"
 							asChild
 						>
 							<IconButton name="xmark" />
@@ -142,7 +142,7 @@ DialogContent.displayName = DialogPrimitive.Content.displayName;
  */
 const DialogHeader = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
 	<View
-		className={cn('flex flex-col pl-4 pr-8 gap-1.5 text-center sm:text-left', className)}
+		className={cn('flex flex-col gap-1.5 pl-4 pr-8 text-center sm:text-left', className)}
 		{...props}
 	/>
 );
@@ -151,7 +151,7 @@ DialogHeader.displayName = 'DialogHeader';
 const DialogFooter = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
 	<View
 		className={cn(
-			'flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-4 max-w-full',
+			'flex max-w-full flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end',
 			className
 		)}
 		{...props}
@@ -180,7 +180,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<DialogPrimitive.Description
 		ref={ref}
-		className={cn('text-sm native:text-base text-muted-foreground', className)}
+		className={cn('native:text-base text-sm text-muted-foreground', className)}
 		{...props}
 	/>
 ));

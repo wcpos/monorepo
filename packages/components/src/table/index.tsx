@@ -67,7 +67,7 @@ const PressableTableRow = React.forwardRef<
 		role="row"
 		ref={ref}
 		className={cn(
-			'flex-row web:transition-colors web:data-[state=selected]:bg-muted',
+			'web:transition-colors web:data-[state=selected]:bg-muted flex-row',
 			index % 2 && 'bg-muted/40 dark:bg-zinc-900/50',
 			className
 		)}
@@ -84,7 +84,7 @@ const TableRow = React.forwardRef<ViewRef, SlottableViewProps & { index?: number
 				role="row"
 				ref={ref}
 				className={cn(
-					'flex-row web:transition-colors web:data-[state=selected]:bg-muted',
+					'web:transition-colors web:data-[state=selected]:bg-muted flex-row',
 					index % 2 ? 'bg-[#F9FBFD] dark:bg-zinc-900/50' : 'bg-card',
 					className
 				)}
@@ -103,7 +103,7 @@ const TableHead = React.forwardRef<
 		<TablePrimitive.Head
 			ref={ref}
 			className={cn(
-				'flex-col flex-1 h-8 px-2 bg-muted justify-center [&:has([role=checkbox])]:pr-0',
+				'h-8 flex-1 flex-col justify-center bg-muted px-2 [&:has([role=checkbox])]:pr-0',
 				className
 			)}
 			{...props}
@@ -121,7 +121,7 @@ const TableCell = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
 	<TablePrimitive.Cell
 		ref={ref}
-		className={cn('flex-col flex-1 p-2 justify-center [&:has([role=checkbox])]:pr-0', className)}
+		className={cn('flex-1 flex-col justify-center p-2 [&:has([role=checkbox])]:pr-0', className)}
 		{...props}
 	>
 		{children}

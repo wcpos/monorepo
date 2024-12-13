@@ -4,6 +4,7 @@ import { Text as RNText } from 'react-native';
 import * as Slot from '@rn-primitives/slot';
 import { SlottableTextProps, TextRef } from '@rn-primitives/types';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { decode } from 'html-entities';
 
 import { cn } from '../lib/utils';
 
@@ -21,18 +22,24 @@ const textVariants = cva('text-base text-foreground web:select-text', {
 	},
 });
 
-type TextProps = SlottableTextProps & VariantProps<typeof textVariants>;
+type TextProps = SlottableTextProps & VariantProps<typeof textVariants> & { decodeHtml?: boolean };
 
 const Text = React.forwardRef<TextRef, TextProps>(
-	({ className, variant, asChild = false, ...props }, ref) => {
+	({ className, variant, asChild = false, children, decodeHtml, ...props }, ref) => {
 		const textClass = React.useContext(TextClassContext);
 		const Component = asChild ? Slot.Text : RNText;
+
+		const processedChildren =
+			decodeHtml && typeof children === 'string' ? decode(children) : children;
+
 		return (
 			<Component
 				className={cn(textVariants({ variant }), textClass, className)}
 				ref={ref}
 				{...props}
-			/>
+			>
+				{processedChildren}
+			</Component>
 		);
 	}
 );

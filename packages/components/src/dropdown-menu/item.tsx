@@ -54,7 +54,7 @@ export const DropdownMenuItem = React.forwardRef<
 				ref={ref}
 				className={cn(
 					inset && 'pl-8',
-					props.disabled && 'opacity-50 web:pointer-events-none',
+					props.disabled && 'web:pointer-events-none opacity-50',
 					itemVariants({ variant, className })
 				)}
 				{...props}

@@ -27,7 +27,7 @@ const FormSwitch = React.forwardRef<
 
 	return (
 		<FormItem className="px-1">
-			<View className="flex-row gap-3 items-center">
+			<View className="flex-row items-center gap-3">
 				<Switch
 					ref={switchRef}
 					aria-labelledby={formItemNativeID}
@@ -43,7 +43,7 @@ const FormSwitch = React.forwardRef<
 				/>
 				{!!label && (
 					<FormLabel
-						className="pb-0 flex-1"
+						className="flex-1 pb-0"
 						nativeID={formItemNativeID}
 						onPress={handleOnLabelPress}
 					>

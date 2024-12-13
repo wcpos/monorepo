@@ -72,13 +72,20 @@ const AccordionTrigger = React.forwardRef<
 				<AccordionPrimitive.Trigger ref={ref} {...props} asChild>
 					<Trigger
 						className={cn(
-							'flex flex-row web:flex-1 items-center justify-between py-4 web:transition-all group web:focus-visible:outline-none web:focus-visible:ring-1 web:focus-visible:ring-muted-foreground',
+							// Web-specific styles
+							'web:flex-1 web:transition-all web:focus-visible:outline-none web:focus-visible:ring-1 web:focus-visible:ring-muted-foreground',
+							// Interactive
+							'group',
+							// Layout
+							'flex flex-row items-center justify-between',
+							// Spacing
+							'py-4',
 							className
 						)}
 					>
 						<>{children}</>
 						<Animated.View style={chevronStyle}>
-							<Icon name="chevronDown" className={'text-foreground shrink-0'} />
+							<Icon name="chevronDown" className={'shrink-0 text-foreground'} />
 						</Animated.View>
 					</Trigger>
 				</AccordionPrimitive.Trigger>
@@ -97,7 +104,7 @@ const AccordionContent = React.forwardRef<
 		<TextClassContext.Provider value="native:text-lg">
 			<AccordionPrimitive.Content
 				className={cn(
-					'overflow-hidden text-sm web:transition-all',
+					'web:transition-all overflow-hidden text-sm',
 					isExpanded ? 'web:animate-accordion-down' : 'web:animate-accordion-up'
 				)}
 				ref={ref}

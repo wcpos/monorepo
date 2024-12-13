@@ -71,7 +71,7 @@ const _WebView = React.forwardRef<HTMLIFrameElement, WebViewProps>(
 					onLoad={handleLoaded}
 					frameBorder="0"
 					sandbox="allow-scripts allow-forms allow-popups allow-same-origin allow-modals"
-					className="w-full h-full"
+					className="h-full w-full"
 					{...props}
 				/>
 				{loading && (

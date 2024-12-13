@@ -100,25 +100,25 @@ const PanelResizeHandle = () => {
 			<View
 				className={cn(
 					direction === 'horizontal'
-						? 'flex-row w-2 cursor-ew-resize'
-						: 'flex-col h-2 cursor-ns-resize',
-					'group relative items-center justify-center z-20'
+						? 'w-2 cursor-ew-resize flex-row'
+						: 'h-2 cursor-ns-resize flex-col',
+					'group relative z-20 items-center justify-center'
 				)}
 			>
 				<View
 					className={cn(
 						direction === 'horizontal'
-							? 'absolute top-0 bottom-0 w-px bg-gray-200'
+							? 'absolute bottom-0 top-0 w-px bg-gray-200'
 							: 'absolute left-0 right-0 h-px bg-gray-200',
 						'opacity-0 group-hover:opacity-100'
 					)}
 				/>
 				<View
 					className={cn(
-						'absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2',
-						'group-hover:bg-popover group-hover:border group-hover:border-border group-hover:rounded-md group-hover:shadow-md group-hover:shadow-foreground/5 opacity-20 group-hover:opacity-100 p-1 z-20',
+						'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transform',
+						'z-20 p-1 opacity-20 group-hover:rounded-md group-hover:border group-hover:border-border group-hover:bg-popover group-hover:opacity-100 group-hover:shadow-md group-hover:shadow-foreground/5',
 						'transition-opacity duration-200 ease-out',
-						'group-hover:scale-95 group-hover:animate-fadeIn'
+						'group-hover:animate-fadeIn group-hover:scale-95'
 					)}
 				>
 					<Icon

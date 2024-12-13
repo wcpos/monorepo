@@ -36,11 +36,11 @@ const Root = ({ children, className, disabled = false }: RootProps) => {
 		<InputContext.Provider value={{ isFocused, setIsFocused }}>
 			<View
 				className={cn(
-					'flex-row w-full items-center',
-					'h-10 native:h-12 rounded-md border border-input bg-background',
+					'w-full flex-row items-center',
+					'native:h-12 h-10 rounded-md border border-input bg-background',
 					'web:ring-offset-background',
 					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
-					disabled && 'opacity-50 web:cursor-not-allowed',
+					disabled && 'web:cursor-not-allowed opacity-50',
 					className
 				)}
 			>
@@ -153,10 +153,10 @@ const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
 				ref={mergedRef}
 				editable={editable}
 				className={cn(
-					'flex-1 w-full py-2 px-3 bg-transparent',
-					'text-base lg:text-sm native:text-lg native:leading-[1.25] text-foreground placeholder:text-muted-foreground',
-					'outline-none web:focus-visible:outline-none',
-					!editable && 'opacity-50 web:cursor-not-allowed',
+					'w-full flex-1 bg-transparent px-3 py-2',
+					'native:text-lg native:leading-[1.25] text-base text-foreground placeholder:text-muted-foreground lg:text-sm',
+					'web:focus-visible:outline-none outline-none',
+					!editable && 'web:cursor-not-allowed opacity-50',
 					className
 				)}
 				// placeholderTextColor={placeholderTextColor || 'text-muted-foreground'}

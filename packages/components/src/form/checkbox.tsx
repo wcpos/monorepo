@@ -19,7 +19,7 @@ const FormCheckbox = React.forwardRef<
 
 	return (
 		<FormItem className="px-1">
-			<View className="flex-row gap-3 items-center">
+			<View className="flex-row items-center gap-3">
 				<Checkbox
 					ref={ref}
 					aria-labelledby={formItemNativeID}

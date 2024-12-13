@@ -51,7 +51,7 @@ const IconButton = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonPr
 		return (
 			<Pressable
 				className={cn(
-					props.disabled && 'opacity-50 web:pointer-events-none',
+					props.disabled && 'web:pointer-events-none opacity-50',
 					buttonVariants({ variant, size, className })
 				)}
 				ref={ref}
