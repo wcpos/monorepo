@@ -14,6 +14,7 @@ module.exports = {
 				trailingComma: 'es5',
 				printWidth: 100,
 				endOfLine: 'lf',
+				plugins: ['prettier-plugin-tailwindcss'],
 			},
 		],
 		'import/order': [

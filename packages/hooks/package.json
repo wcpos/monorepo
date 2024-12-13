@@ -19,7 +19,7 @@
   "dependencies": {
     "@react-native-community/netinfo": "11.3.2",
     "@react-navigation/native": "6.1.18",
-    "axios": "1.7.7",
+    "axios": "1.7.9",
     "bottleneck": "^2.19.5",
     "js-base64": "^3.7.7",
     "lodash": "4.17.21",
@@ -36,7 +36,7 @@
   "devDependencies": {
     "@babel/core": "^7.24.6",
     "@testing-library/jest-dom": "6.6.3",
-    "@testing-library/react": "^16.0.1",
+    "@testing-library/react": "^16.1.0",
     "@testing-library/react-hooks": "8.0.1",
     "@types/jest": "^29.5.13",
     "@types/lodash": "4.17.13",
