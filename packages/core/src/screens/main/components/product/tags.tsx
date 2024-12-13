@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ButtonPill } from '@wcpos/components/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import { useDataTable } from '@wcpos/components/src/data-table';
 import { HStack } from '@wcpos/components/src/hstack';
 
@@ -36,7 +36,9 @@ export const ProductTags = ({ row }: CellContext<{ document: ProductDocument }, 
 						variant="ghost-secondary"
 						onPress={() => query.where('tags').elemMatch({ id: tag.id }).exec()}
 					>
-						{tag.name}
+						<ButtonText numberOfLines={1} decodeHtml>
+							{tag.name}
+						</ButtonText>
 					</ButtonPill>
 				);
 			})}

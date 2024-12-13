@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { decode } from 'html-entities';
-
 import { Button, ButtonText } from '@wcpos/components/src/button';
 import type { InputProps } from '@wcpos/components/src/input';
 import { Textarea } from '@wcpos/components/src/textarea';
@@ -55,8 +53,8 @@ export const EditableName = ({
 	 */
 	return (
 		<Button variant="outline" className="max-w-full items-start" onPress={() => setEditing(true)}>
-			<ButtonText className="font-bold" numberOfLines={1}>
-				{decode(value)}
+			<ButtonText className="font-bold" numberOfLines={1} decodeHtml>
+				{value}
 			</ButtonText>
 		</Button>
 	);

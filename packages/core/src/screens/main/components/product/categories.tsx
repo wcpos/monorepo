@@ -36,7 +36,9 @@ export const ProductCategories = ({
 					key={index}
 					onPress={() => query.where('categories').elemMatch({ id: cat.id }).exec()}
 				>
-					{cat.name}
+					<ButtonText numberOfLines={1} decodeHtml>
+						{cat.name}
+					</ButtonText>
 				</ButtonPill>
 			))}
 		</HStack>

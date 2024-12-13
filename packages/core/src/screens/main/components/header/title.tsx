@@ -12,7 +12,7 @@ const HeaderTitle = ({ children }: HeaderTitleProps) => {
 	// useWindowDimensions();
 
 	return (
-		<Text className="text-primary-foreground text-xl" numberOfLines={1}>
+		<Text className="text-primary-foreground text-xl" numberOfLines={1} decodeHtml>
 			{children}
 		</Text>
 	);

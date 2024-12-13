@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { decode } from 'html-entities';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/src/text';
@@ -30,7 +29,9 @@ export const Name = (props: CellContext<{ document: ProductDocument }, 'name'>) 
 	 */
 	return (
 		<VStack space="xs" className="w-full">
-			<Text className="font-bold">{decode(name)}</Text>
+			<Text className="font-bold" decodeHtml>
+				{name}
+			</Text>
 			{show('sku') && <Text className="text-sm">{product.sku}</Text>}
 			{show('barcode') && <Text className="text-sm">{product.barcode}</Text>}
 			{show('stock_quantity') && <StockQuantity {...props} className="text-sm" withText />}

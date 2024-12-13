@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
-import { decode } from 'html-entities';
 
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
@@ -25,7 +24,9 @@ export const ProductVariationName = ({
 	 */
 	return (
 		<VStack space="xs">
-			<Text className="font-bold">{decode(variation.name)}</Text>
+			<Text className="font-bold" decodeHtml>
+				{variation.name}
+			</Text>
 			{show('sku') && <Text className="text-sm">{variation.sku}</Text>}
 			{show('barcode') && <Text className="text-sm">{variation.barcode}</Text>}
 			{show('stock_quantity') && <StockQuantity row={row} className="text-sm" withText />}

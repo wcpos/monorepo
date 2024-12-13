@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { ComboboxList, ComboboxItem } from '@wcpos/components/src/combobox';
+import { Text } from '@wcpos/components/src/text';
 
 /**
  *
@@ -27,7 +28,7 @@ export const CategoryList = ({ query }) => {
 						 */
 						value={String(document.id)}
 					>
-						{document.name}
+						<Text decodeHtml>{document.name}</Text>
 					</ComboboxItem>
 				);
 			})}
