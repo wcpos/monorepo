@@ -42,6 +42,7 @@ export const Price = ({ row, column }: CellContext<Props, 'price'>) => {
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price } = getLineItemData(item);
 	const { format } = useCurrencyFormat();
+	const isOnSale = price !== regular_price;
 
 	/**
 	 * Discounts
@@ -54,7 +55,7 @@ export const Price = ({ row, column }: CellContext<Props, 'price'>) => {
 	 */
 	return (
 		<VStack space="xs">
-			{column.columnDef.meta?.show('on_sale') && (
+			{isOnSale && column.columnDef.meta?.show('on_sale') && (
 				<Text className="text-muted-foreground text-right line-through">
 					{format(regular_price || 0)}
 				</Text>
