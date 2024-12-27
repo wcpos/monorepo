@@ -34,20 +34,26 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 			return;
 		}
 
+		this.resetPagination();
+
 		this.addSub(
 			'relational-search',
 			combineLatest([this.parentSearch(searchTerm), this.relationalSearch(searchTerm)]).subscribe(
 				([parentSearchUUIDs, childSearchData]) => {
 					const { parentUUIDs: childSearchResults, countsByParent } = childSearchData;
 					const uuids = union(parentSearchUUIDs, childSearchResults);
-					this.where(this.primaryKey).in(uuids);
+
+					/**
+					 * @NOTE - don't reset the pagination when we're getting search updates
+					 */
+					this.where(this.primaryKey).in(uuids, false);
 					this.currentRxQuery.other.relationalSearch = {
 						searchTerm,
 						countsByParent,
 					};
 					this.exec();
-				}
-			)
+				},
+			),
 		);
 	}
 
@@ -63,10 +69,10 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 					// Note, I want to update search results when the search collection changes
 					// I don't know if this is the best way
 					startWith(null),
-					switchMap(() => searchInstance.find(searchTerm))
-				)
+					switchMap(() => searchInstance.find(searchTerm)),
+				),
 			),
-			map((documents: DocumentType<T>[]) => documents.map(({ uuid }) => uuid))
+			map((documents: DocumentType<T>[]) => documents.map(({ uuid }) => uuid)),
 		);
 	}
 
@@ -81,9 +87,9 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 					map((uuids) => ({
 						parentUUIDs: uuids,
 						countsByParent,
-					}))
+					})),
 				);
-			})
+			}),
 		);
 	}
 
@@ -100,7 +106,7 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 					}
 					return acc;
 				}, {});
-			})
+			}),
 		);
 		this.childQuery.search(searchTerm);
 		return obs$;
@@ -111,7 +117,7 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 	 */
 	parentLookup(parentIds: number[]) {
 		const obs$ = this.parentLookupQuery.result$.pipe(
-			map((results) => results.hits.map(({ id }) => id))
+			map((results) => results.hits.map(({ id }) => id)),
 		);
 		this.parentLookupQuery.where('id').in(parentIds).exec();
 		return obs$;

@@ -225,7 +225,7 @@ export class Query<T extends RxCollection>
 					distinctUntilChanged((prev, next) => {
 						const idsAreEqual = isEqual(
 							prev.hits.map((hit) => hit.id),
-							next.hits.map((hit) => hit.id)
+							next.hits.map((hit) => hit.id),
 						);
 						let childrenAreEqual = true;
 						if (idsAreEqual && next.searchActive) {
@@ -239,11 +239,11 @@ export class Query<T extends RxCollection>
 							});
 						}
 						return idsAreEqual && childrenAreEqual;
-					})
+					}),
 				)
 				.subscribe((result) => {
 					this.subjects.result.next(result);
-				})
+				}),
 		);
 	}
 
@@ -300,28 +300,38 @@ export class Query<T extends RxCollection>
 								document: doc,
 							})),
 						};
-					})
+					}),
 				);
-			})
+			}),
 		);
 	}
 
 	/**
 	 * Query Helpers
 	 */
-	private updateQuery(newRxQuery: RxQuery): void {
+	private updateQuery(newRxQuery: RxQuery, resetPagination = true): void {
 		this.currentRxQuery = newRxQuery;
-		this.resetPagination();
+		if (resetPagination) {
+			this.resetPagination();
+		}
 	}
 
-	public where(fieldOrSelector: string | MangoQuerySelector<DocumentType<T>>, value?: any): this {
+	/**
+	 * @NOTE - don't reset the pagination if we're just setting the path
+	 *
+	 * @param path
+	 * @param value
+	 * @returns
+	 */
+	public where(path: string, value?: MangoQuerySelector<DocumentType<T>>): this {
 		let newRxQuery;
-		if (typeof fieldOrSelector === 'string') {
-			newRxQuery = this.currentRxQuery.where(fieldOrSelector, value);
+		if (value) {
+			newRxQuery = this.currentRxQuery.where(path, value);
+			this.updateQuery(newRxQuery);
 		} else {
-			newRxQuery = this.currentRxQuery.where(fieldOrSelector);
+			newRxQuery = this.currentRxQuery.where(path);
+			this.updateQuery(newRxQuery, false);
 		}
-		this.updateQuery(newRxQuery);
 		return this;
 	}
 
@@ -365,9 +375,9 @@ export class Query<T extends RxCollection>
 		return this;
 	}
 
-	public in(values: any[]): this {
+	public in(values: any[], resetPagination = true): this {
 		const newRxQuery = this.currentRxQuery.in(values);
-		this.updateQuery(newRxQuery);
+		this.updateQuery(newRxQuery, resetPagination);
 		return this;
 	}
 
@@ -464,6 +474,8 @@ export class Query<T extends RxCollection>
 			return;
 		}
 
+		this.resetPagination();
+
 		this.addSub(
 			'search',
 			from(this.searchInstancePromise)
@@ -473,18 +485,21 @@ export class Query<T extends RxCollection>
 						// I don't know if this is the best way
 						searchInstance.collection.$.pipe(
 							startWith(null),
-							switchMap(() => searchInstance.find(searchTerm))
-						)
-					)
+							switchMap(() => searchInstance.find(searchTerm)),
+						),
+					),
 				)
 				.subscribe((results: DocumentType<T>[]) => {
 					const uuids = results.map((result) => result[this.primaryKey]);
-					this.where(this.primaryKey).in(uuids);
+					/**
+					 * @NOTE - don't reset the pagination when we're getting search updates
+					 */
+					this.where(this.primaryKey).in(uuids, false);
 					this.currentRxQuery.other.search = {
 						searchTerm,
 					};
 					this.exec();
-				})
+				}),
 		);
 	}
 	debouncedSearch = debounce(this.search, 250);
@@ -517,7 +532,7 @@ export class Query<T extends RxCollection>
 						(orClause) =>
 							orClause[field] ||
 							get(orClause, [field, '$elemMatch']) ||
-							get(orClause, [field, '$not', '$elemMatch'])
+							get(orClause, [field, '$not', '$elemMatch']),
 					);
 					return !hasField;
 				}
@@ -605,7 +620,7 @@ export class Query<T extends RxCollection>
 
 		// Check if `$elemMatch` condition already exists in `$and`
 		const existingCondition = andConditions.find((cond) =>
-			isEqual(get(cond, [path, '$elemMatch']), criteria)
+			isEqual(get(cond, [path, '$elemMatch']), criteria),
 		);
 
 		if (!existingCondition) {
@@ -693,7 +708,7 @@ export class Query<T extends RxCollection>
 					return elemMatch && isEqual(pick(elemMatch, ['id', 'name']), match);
 				});
 				return !matchesAttribute;
-			})
+			}),
 		);
 
 		// If $and array is empty, create a new selector without it
@@ -788,7 +803,7 @@ export class Query<T extends RxCollection>
 				}
 				return matches;
 			},
-			[]
+			[],
 		);
 
 		this._variationMatchesCache.set(this.currentRxQuery, matches);
