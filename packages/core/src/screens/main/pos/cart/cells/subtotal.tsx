@@ -42,9 +42,9 @@ export const Subtotal = ({ row, column }: CellContext<Props, 'subtotal'>) => {
 	 */
 	return (
 		<VStack space="xs" className="justify-end">
-			<Text>{format(displaySubtotal || 0)}</Text>
+			<Text className="text-right">{format(displaySubtotal || 0)}</Text>
 			{column.columnDef.meta?.show('tax') && (
-				<Text className="text-sm text-muted-foreground">
+				<Text className="text-muted-foreground text-right text-sm">
 					{`${taxDisplayCart} ${format(item.subtotal_tax) || 0} tax`}
 				</Text>
 			)}

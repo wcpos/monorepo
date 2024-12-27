@@ -51,8 +51,18 @@ export const BaseToast = ({ variant, text1, text2, props, ...rest }: ToastProps)
 			<View className={toastVariants({ variant })} role="alert">
 				<HStack>
 					<VStack className="flex-1">
-						{text1 && <Text className="font-bold">{text1}</Text>}
-						{text2 && <Text>{text2}</Text>}
+						{
+							/**
+							 * Some messages, like Product names can have html entities. So we to decode them.
+							 * @TODO - The Toast should take Text component as a prop.
+							 */
+							text1 && (
+								<Text className="font-bold" decodeHtml>
+									{text1}
+								</Text>
+							)
+						}
+						{text2 && <Text decodeHtml>{text2}</Text>}
 					</VStack>
 					{props?.action && (
 						<Button onPress={handleAction}>
