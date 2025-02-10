@@ -1,18 +1,15 @@
-# EditorConfig helps developers define and maintain consistent
-# coding styles between different editors and IDEs
-# editorconfig.org
-
 root = true
 
 [*]
 
-# Change these settings to your own preference
+# Tabs, not spaces
 indent_style = tab
-indent_size = 2
+
+# Quote style & max length
 quote_type = single
 max_line_length = 100
 
-# We recommend you to keep these unchanged
+# Ensure consistency
 end_of_line = lf
 charset = utf-8
 trim_trailing_whitespace = true
