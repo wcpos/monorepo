@@ -57,7 +57,7 @@ export const StockStatusPill = ({ query }: Props) => {
 					removable={isActive}
 					onRemove={() => query.removeWhere('stock_status').exec()}
 				>
-					<ButtonText>{value?.label || t('Stock Status', { _tags: 'core' })}</ButtonText>
+					<ButtonText decodeHtml>{value?.label || t('Stock Status', { _tags: 'core' })}</ButtonText>
 				</ButtonPill>
 			</SelectPrimitiveTrigger>
 			<SelectContent>

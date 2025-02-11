@@ -56,7 +56,7 @@ export const TagPill = ({ query, resource, selectedID }: Props) => {
 					removable={isActive}
 					onRemove={() => query.where('tags').removeElemMatch('tags', { id: tag?.id }).exec()}
 				>
-					<ButtonText>
+					<ButtonText decodeHtml>
 						{isActive
 							? tag?.name || t('ID: {id}', { id: selectedID, _tags: 'core' })
 							: t('Tag', { _tags: 'core' })}

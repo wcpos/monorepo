@@ -58,7 +58,7 @@ export const CategoryPill = ({ query, resource, selectedID }: Props) => {
 						query.where('categories').removeElemMatch('categories', { id: category?.id }).exec()
 					}
 				>
-					<ButtonText>
+					<ButtonText decodeHtml>
 						{isActive
 							? category?.name || t('ID: {id}', { id: selectedID, _tags: 'core' })
 							: t('Category', { _tags: 'core' })}
