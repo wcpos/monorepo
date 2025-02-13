@@ -5,6 +5,13 @@ on:
     branches:
       - v2
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_USE_FAST_RESOLVER: true # Use the faster Metro resolver in SDK 51
+
 jobs:
   build-preview:
     runs-on: ubuntu-latest
@@ -13,43 +20,19 @@ jobs:
       pull-requests: write
 
     steps:
-      # Checkout the code
-      - name: Checkout repository
+      - name: 🏗 Setup repository
         uses: actions/checkout@v4
 
-      # Setup Node.js environment
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
         with:
-          node-version: 20
+          expo-token: ${{ secrets.EXPO_TOKEN }}
 
-      # Install pnpm globally
-      - name: Install pnpm
-        run: npm install -g pnpm
+      - name: 👷 Build packages
+        run: pnpm run -w build:example
 
-      # Add RXDB license
-      - name: Install jq
-        run: sudo apt-get install -y jq
-
-      - name: Add RXDB_LICENSE_KEY to package.json
-        env:
-          RXDB_LICENSE_KEY: ${{ secrets.RXDB_LICENSE_KEY }}
-        run: |
-          jq --arg license "$RXDB_LICENSE_KEY" '.accessTokens["rxdb-premium"] = $license' package.json > tmp.json && mv tmp.json package.json
-
-      # Install dependencies from your monorepo
-      - name: Install dependencies
-        run: pnpm install
-
-      # Login to Expo
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      # Trigger an Expo preview build for both platforms
-      - name: Create preview
+      - name: 🚀 Create preview
         uses: expo/expo-github-action/preview@v8
         with:
-          command: npx eas update --auto
+          working-directory: apps/example
+          command: eas update --auto --branch=pr-${{ github.event.number }}

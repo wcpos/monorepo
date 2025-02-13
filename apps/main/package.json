@@ -7,7 +7,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "jest --watchAll"
+    "test": "jest --watchAll",
+    "build": "expo export --output-dir ./build --platform all",
+    "eas-build-post-install": "pnpm run -w build:main"
   },
   "jest": {
     "preset": "jest-expo"

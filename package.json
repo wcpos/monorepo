@@ -5,7 +5,8 @@
     "clean": "node scripts/clean-node-modules",
     "main": "pnpm --filter @wcpos/main",
     "main:expo": "pnpm --filter @wcpos/main exec expo",
-    "components": "pnpm --filter @wcpos/components"
+    "components": "pnpm --filter @wcpos/components",
+    "build:main": "turbo build --filter=\"...{./apps/main}\""
   },
   "workspaces": {
     "packages": [
@@ -13,9 +14,12 @@
       "packages/*"
     ]
   },
-  "devDependencies": {},
   "packageManager": "pnpm@9.14.2",
   "resolutions": {
     "flexsearch@0.7.43": "git+https://github.com/wcpos/flexsearch.git#76e53ededf2045867cfe9548f5043e3842acb9ad"
+  },
+  "dependencies": {
+    "turbo": "^2.4.2",
+    "typescript": "5.3.3"
   }
 }
