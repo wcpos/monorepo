@@ -34,15 +34,19 @@ jobs:
         run: |
           jq --arg license "$RXDB_LICENSE_KEY" '.accessTokens["rxdb-premium"] = $license' package.json > tmp.json && mv tmp.json package.json
 
-
       # Install dependencies from your monorepo
       - name: Install dependencies
         run: pnpm install
 
-      # Login to Expo using your secret token
-      - name: Expo Login
-        run: eas login --non-interactive --token ${{ secrets.EXPO_TOKEN }}
+      # Login to Expo
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
 
       # Trigger an Expo preview build for both platforms
-      - name: Trigger Preview Build
-        run: eas build --profile preview --platform all --non-interactive
+      - name: Create preview
+        uses: expo/expo-github-action/preview@v8
+        with:
+          command: eas update --auto
