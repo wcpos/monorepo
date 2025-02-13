@@ -1,3 +1,0 @@
-[submodule "apps/electron"]
-	path = apps/electron
-	url = https://github.com/wcpos/electron

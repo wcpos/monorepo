@@ -1,0 +1,37 @@
+name: Expo Preview Build
+
+on:
+  push:
+    branches:
+      - v2
+
+jobs:
+  build-preview:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Setup Node.js environment
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+
+      # Install pnpm globally
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      # Install dependencies from your monorepo
+      - name: Install dependencies
+        run: pnpm install
+
+      # Login to Expo using your secret token
+      - name: Expo Login
+        run: eas login --non-interactive --token ${{ secrets.EXPO_TOKEN }}
+
+      # Trigger an Expo preview build for both platforms
+      - name: Trigger Preview Build
+        run: eas build --profile preview --platform all --non-interactive

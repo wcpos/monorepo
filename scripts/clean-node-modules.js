@@ -19,7 +19,7 @@ const clean = (dir) => {
 	rm(`${dir}/build`);
 	rm(`${dir}/dist`);
 	rm(`${dir}/.expo`);
-	rm(`${dir}/yarn.lock`);
+	rm(`${dir}/pnpm-lock.yaml`);
 };
 
 const cleanRoot = () => clean(cwd);
