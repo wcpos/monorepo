@@ -8,6 +8,9 @@ on:
 jobs:
   build-preview:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       # Checkout the code
@@ -49,4 +52,4 @@ jobs:
       - name: Create preview
         uses: expo/expo-github-action/preview@v8
         with:
-          command: eas update --auto
+          command: npx eas update --auto
