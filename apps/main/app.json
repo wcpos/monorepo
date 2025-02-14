@@ -2,6 +2,7 @@
   "expo": {
     "name": "WooCommerce POS",
     "slug": "wcpos",
+    "owner": "wcpos",
     "version": "2.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
@@ -44,7 +45,7 @@
         "origin": false
       },
       "eas": {
-        "projectId": "05556eec-b15d-4511-a2ef-0d9ee958a2b6"
+        "projectId": "eb1b6e66-92d7-47f5-b93f-95bf51287f60"
       }
     }
   }

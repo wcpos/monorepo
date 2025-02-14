@@ -18,6 +18,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      issues: write
 
     steps:
       - name: 🏗 Setup repository
@@ -35,5 +36,6 @@ jobs:
       - name: 🚀 Create preview
         uses: expo/expo-github-action/preview@v8
         with:
+          command: eas update --auto --non-interactive
           working-directory: apps/main
-          command: eas update --auto --branch=pr-${{ github.event.number }}
+          comment: true
