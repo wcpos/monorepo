@@ -20,7 +20,7 @@ export async function createDB<DBCollections>(name: string) {
 			allowSlowCount: true,
 			password: 'posInstanceId',
 			ignoreDuplicate: true, // I think Expo enables HMR, so we need to ignore duplicate
-			// multiInstance: false,
+			multiInstance: false,
 		});
 
 		return db;
@@ -42,7 +42,7 @@ export async function createMemorySyncedDB<DBCollections>(name: string) {
 			allowSlowCount: true,
 			password: 'posInstanceId',
 			ignoreDuplicate: true, // I think Expo enables HMR, so we need to ignore duplicate
-			// multiInstance: false,
+			multiInstance: false,
 		});
 
 		return db;
