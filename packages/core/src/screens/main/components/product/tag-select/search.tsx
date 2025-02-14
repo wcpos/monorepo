@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { ComboboxSearch, ComboboxInput, ComboboxEmpty } from '@wcpos/components/src/combobox';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { ComboboxSearch, ComboboxInput, ComboboxEmpty } from '@wcpos/components/combobox';
+import { Suspense } from '@wcpos/components/suspense';
 import { useQuery } from '@wcpos/query';
 
 import { TagList } from './list';

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { HStack } from '@wcpos/components/src/hstack';
+import { HStack } from '@wcpos/components/hstack';
 
 import { EditCartItemButton } from './edit-cart-item-button';
 import { EditShippingLine } from './edit-shipping-line';

@@ -5,7 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
 import { filter } from 'rxjs/operators';
 
-import { Toast } from '@wcpos/components/src/toast';
+import { Toast } from '@wcpos/components/toast';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';

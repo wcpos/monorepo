@@ -3,8 +3,8 @@ import { useWindowDimensions } from 'react-native';
 
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { Icon } from '@wcpos/components/src/icon';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { Icon } from '@wcpos/components/icon';
 
 import { useT } from '../../../../contexts/translations';
 

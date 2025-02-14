@@ -6,16 +6,16 @@ import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import {
 	ModalContent,
 	ModalTitle,
 	Modal,
 	ModalBody,
 	ModalHeader,
-} from '@wcpos/components/src/modal';
-import { Text } from '@wcpos/components/src/text';
-import { Toast } from '@wcpos/components/src/toast';
+} from '@wcpos/components/modal';
+import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 
 import { useT } from '../../../contexts/translations';
 import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';

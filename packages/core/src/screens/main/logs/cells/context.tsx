@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
 
-import { Tree } from '@wcpos/components/src/tree';
+import { Tree } from '@wcpos/components/tree';
 
 type LogDocument = import('@wcpos/database').LogDocument;
 

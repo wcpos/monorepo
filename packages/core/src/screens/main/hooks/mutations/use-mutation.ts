@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { isRxDocument, RxDocument, RxCollection } from 'rxdb';
 
-import { Toast } from '@wcpos/components/src/toast';
+import { Toast } from '@wcpos/components/toast';
 import type {
 	OrderDocument,
 	ProductDocument,
@@ -11,7 +11,7 @@ import type {
 	ProductVariationDocument,
 } from '@wcpos/database';
 import { useQueryManager } from '@wcpos/query';
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import { useLocalMutation } from './use-local-mutation';
 import { useT } from '../../../../contexts/translations';

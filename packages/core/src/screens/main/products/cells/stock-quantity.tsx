@@ -3,8 +3,8 @@ import { View } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { SwitchWithLabel } from '@wcpos/components/src/switch';
-import { VStack } from '@wcpos/components/src/vstack';
+import { SwitchWithLabel } from '@wcpos/components/switch';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { NumberInput } from '../../components/number-input';

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Dialog,
 	DialogBody,
@@ -10,7 +10,7 @@ import {
 	DialogTitle,
 	DialogTrigger,
 	DialogHeader,
-} from '@wcpos/components/src/dialog';
+} from '@wcpos/components/dialog';
 
 import { EditCartCustomerForm } from './edit-cart-customer';
 import { useT } from '../../../../contexts/translations';

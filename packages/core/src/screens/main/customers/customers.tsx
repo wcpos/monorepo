@@ -3,14 +3,14 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 
-import { Box } from '@wcpos/components/src/box';
-import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { HStack } from '@wcpos/components/src/hstack';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Suspense } from '@wcpos/components/src/suspense';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
+import { Box } from '@wcpos/components/box';
+import { Card, CardContent, CardHeader } from '@wcpos/components/card';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Suspense } from '@wcpos/components/suspense';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { useQuery } from '@wcpos/query';
 
 import { Actions } from './cells/actions';

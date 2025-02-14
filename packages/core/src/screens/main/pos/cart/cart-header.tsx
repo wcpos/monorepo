@@ -1,17 +1,17 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Combobox,
 	ComboboxContent,
 	ComboboxTriggerPrimitive,
-} from '@wcpos/components/src/combobox';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { HStack } from '@wcpos/components/src/hstack';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
+} from '@wcpos/components/combobox';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { AddNewCustomer } from './add-customer';
 import { Customer } from './customer';

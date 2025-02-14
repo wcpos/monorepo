@@ -5,8 +5,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
 import { useQuery } from '@wcpos/query';
 
 import { AddProduct } from './add-product';

@@ -1,5 +1,11 @@
+import * as SQLite from 'expo-sqlite';
+import {
+	getRxStorageSQLite,
+	getSQLiteBasicsExpoSQLiteAsync,
+} from 'rxdb-premium/plugins/storage-sqlite';
+
 export const fastConfig = {
-	storage: null,
-	multiInstance: false,
-	ignoreDuplicate: true,
+	storage: getRxStorageSQLite({
+		sqliteBasics: getSQLiteBasicsExpoSQLiteAsync(SQLite.openDatabaseAsync),
+	}),
 };

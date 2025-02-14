@@ -1,7 +1,7 @@
 import { wrappedValidateStorageFactory } from 'rxdb';
 import ZSchema from 'z-schema';
 
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import type { RxJsonSchema } from 'rxdb';
 

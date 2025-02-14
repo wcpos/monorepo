@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Form,
 	FormField,
@@ -14,11 +14,11 @@ import {
 	FormSelect,
 	FormSwitch,
 	FormRadioGroup,
-} from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/src/modal';
-import { Toast } from '@wcpos/components/src/toast';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
+import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { Toast } from '@wcpos/components/toast';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';

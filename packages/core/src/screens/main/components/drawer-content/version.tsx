@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { Box } from '@wcpos/components/src/box';
-import { cn } from '@wcpos/components/src/lib/utils';
-import { Text } from '@wcpos/components/src/text';
+import { Box } from '@wcpos/components/box';
+import { cn } from '@wcpos/components/lib/utils';
+import { Text } from '@wcpos/components/text';
 
 /**
  *

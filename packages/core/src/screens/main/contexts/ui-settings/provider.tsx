@@ -4,7 +4,7 @@ import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import { useUILabel } from './use-ui-label';
 import {

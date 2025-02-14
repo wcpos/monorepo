@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { ModalFooter, ModalClose } from '@wcpos/components/src/modal';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { ModalFooter, ModalClose } from '@wcpos/components/modal';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { BarcodeDisplay } from './display';
 import { BarcodeSettings } from './settings';

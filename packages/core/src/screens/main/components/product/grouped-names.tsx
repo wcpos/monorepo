@@ -3,8 +3,8 @@ import * as React from 'react';
 import { CellContext } from '@tanstack/react-table';
 import { useObservableSuspense } from 'observable-hooks';
 
-import { HStack } from '@wcpos/components/src/hstack';
-import { Text } from '@wcpos/components/src/text';
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
 import { useQuery } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';

@@ -1,8 +1,8 @@
 import React from 'react';
 
-import { cn } from '@wcpos/components/src/lib/utils';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { cn } from '@wcpos/components/lib/utils';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';

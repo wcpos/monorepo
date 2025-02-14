@@ -5,7 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs';
 
-import { Text, Row, Line, Br } from '@wcpos/components/src/print';
+import { Text, Row, Line, Br } from '@wcpos/components/print';
 
 import { calculateTotals } from './utils';
 import { useAppState } from '../../../../contexts/app-state';

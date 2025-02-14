@@ -3,9 +3,9 @@ import { Text, View, StyleSheet, Button } from 'react-native';
 
 import { BarCodeScanner } from 'expo-barcode-scanner';
 
-import Icon from '@wcpos/components/src/icon';
-import Popover from '@wcpos/components/src/popover';
-import useSnackbar from '@wcpos/components/src/snackbar';
+import Icon from '@wcpos/components/icon';
+import Popover from '@wcpos/components/popover';
+import useSnackbar from '@wcpos/components/snackbar';
 
 const Scanner = () => {
 	const [hasPermission, setHasPermission] = React.useState(null);

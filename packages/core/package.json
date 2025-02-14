@@ -15,7 +15,7 @@
 	},
 	"peerDependencies": {
 		"expo-crypto": "^13.0.2",
-		"expo-localization": "^15.0.3",
+		"expo-localization": "^16.0.1",
 		"expo-status-bar": "~1.12.1",
 		"react-native": "0.76.7",
 		"react-native-device-info": "^10.14.0",

@@ -85,3 +85,12 @@ export const TranslationProvider = ({ children }) => {
 		</TranslationContext.Provider>
 	);
 };
+
+export const useT = () => {
+	const context = React.useContext(TranslationContext);
+	if (!context) {
+		throw new Error(`useT must be called within TranslationContext`);
+	}
+
+	return context;
+};

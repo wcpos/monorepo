@@ -6,10 +6,10 @@ import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Toast } from '@wcpos/components/src/toast';
-import { WebView } from '@wcpos/components/src/webview';
-import log from '@wcpos/utils/src/logger';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Toast } from '@wcpos/components/toast';
+import { WebView } from '@wcpos/components/webview';
+import log from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useUISettings } from '../../../contexts/ui-settings';

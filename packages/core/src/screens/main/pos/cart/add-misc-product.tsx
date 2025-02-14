@@ -11,9 +11,9 @@ import {
 	DialogClose,
 	DialogFooter,
 	useRootContext,
-} from '@wcpos/components/src/dialog';
-import { Form, FormField, FormInput, FormSelect, FormRadioGroup } from '@wcpos/components/src/form';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/dialog';
+import { Form, FormField, FormInput, FormSelect, FormRadioGroup } from '@wcpos/components/form';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';

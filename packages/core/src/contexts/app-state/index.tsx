@@ -16,7 +16,7 @@ import type {
 } from '@wcpos/database';
 
 import { hydrateInitialProps, isWebApp } from './hydrate';
-import { useUserDB } from './use-user-db';
+import { useUserDB } from '../../hooks/use-user-db';
 
 export interface HydratedData {
 	userDB: UserDatabase;
@@ -179,4 +179,13 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 			{children}
 		</AppStateContext.Provider>
 	);
+};
+
+export const useAppState = () => {
+	const context = React.useContext(AppStateContext);
+	if (!context) {
+		throw new Error(`useAppState must be called within AppStateContext`);
+	}
+
+	return context;
 };

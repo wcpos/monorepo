@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { Icon } from '@wcpos/components/src/icon';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
-import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
+import { Icon } from '@wcpos/components/icon';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import useOnlineStatus from '@wcpos/hooks/use-online-status';
 
 import { useT } from '../../../../contexts/translations';
 

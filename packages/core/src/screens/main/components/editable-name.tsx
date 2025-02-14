@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import type { InputProps } from '@wcpos/components/src/input';
-import { Textarea } from '@wcpos/components/src/textarea';
+import { Button, ButtonText } from '@wcpos/components/button';
+import type { InputProps } from '@wcpos/components/input';
+import { Textarea } from '@wcpos/components/textarea';
 
 /**
  *

@@ -1,4 +1,4 @@
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 // helper function that starts performace - time measurement
 export const timeStart = () => {

@@ -16,9 +16,9 @@ import {
 	ModalBody,
 	ModalClose,
 	ModalAction,
-} from '@wcpos/components/src/modal';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/modal';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { PaymentWebview } from './components/payment-webview';
 import CheckoutTitle from './components/title';

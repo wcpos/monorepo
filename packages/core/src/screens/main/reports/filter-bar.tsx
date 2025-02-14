@@ -7,9 +7,9 @@ import { useObservableEagerState, ObservableResource, useObservable } from 'obse
 import { of } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
 
-import { Card } from '@wcpos/components/src/card';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { Card } from '@wcpos/components/card';
+import { HStack } from '@wcpos/components/hstack';
+import { Suspense } from '@wcpos/components/suspense';
 import { useQuery } from '@wcpos/query';
 
 import { useReports } from './context';

@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { Linking } from 'react-native';
 
-import { Box } from '@wcpos/components/src/box';
-import { HStack } from '@wcpos/components/src/hstack';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Text } from '@wcpos/components/src/text';
+import { Box } from '@wcpos/components/box';
+import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
 

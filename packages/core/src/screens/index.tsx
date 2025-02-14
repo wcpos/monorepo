@@ -7,8 +7,8 @@ import get from 'lodash/get';
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { of } from 'rxjs';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
 
 import Splash from './splash';
 import { useAppState } from '../contexts/app-state';

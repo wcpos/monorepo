@@ -5,10 +5,10 @@ import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/src/dialog';
-import { Form, FormInput, FormField, FormSwitch } from '@wcpos/components/src/form';
-import { Toast } from '@wcpos/components/src/toast';
-import { VStack } from '@wcpos/components/src/vstack';
+import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/dialog';
+import { Form, FormInput, FormField, FormSwitch } from '@wcpos/components/form';
+import { Toast } from '@wcpos/components/toast';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../contexts/translations';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';

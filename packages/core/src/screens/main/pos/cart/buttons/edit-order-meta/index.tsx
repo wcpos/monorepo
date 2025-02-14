@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useObservablePickState } from 'observable-hooks';
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/components/src/tabs';
-import { Text } from '@wcpos/components/src/text';
-import { Tree } from '@wcpos/components/src/tree';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/components/tabs';
+import { Text } from '@wcpos/components/text';
+import { Tree } from '@wcpos/components/tree';
 
 import { EditOrderMetaForm } from './form';
 import { useT } from '../../../../../../contexts/translations';

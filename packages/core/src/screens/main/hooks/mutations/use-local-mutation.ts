@@ -4,14 +4,14 @@ import cloneDeep from 'lodash/cloneDeep';
 import get from 'lodash/get';
 import set from 'lodash/set';
 
-import { Toast } from '@wcpos/components/src/toast';
+import { Toast } from '@wcpos/components/toast';
 import type {
 	OrderDocument,
 	ProductDocument,
 	CustomerDocument,
 	ProductVariationDocument,
 } from '@wcpos/database';
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';

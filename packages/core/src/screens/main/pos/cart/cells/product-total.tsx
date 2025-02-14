@@ -3,8 +3,8 @@ import * as React from 'react';
 import toNumber from 'lodash/toNumber';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';

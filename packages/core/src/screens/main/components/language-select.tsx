@@ -12,7 +12,7 @@ import {
 	ComboboxSearch,
 	ComboboxTrigger,
 	ComboboxValue,
-} from '@wcpos/components/src/combobox';
+} from '@wcpos/components/combobox';
 
 import { useT } from '../../../contexts/translations';
 import { useLocale } from '../../../hooks/use-locale';

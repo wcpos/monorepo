@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useDataTable } from '@wcpos/components/src/data-table';
-import { VStack } from '@wcpos/components/src/vstack';
+import { useDataTable } from '@wcpos/components/data-table';
+import { VStack } from '@wcpos/components/vstack';
 
 import { PriceWithTax } from '../../../components/product/price-with-tax';
 

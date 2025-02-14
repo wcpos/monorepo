@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ScrollView } from 'react-native';
 
 import { clearAllDB } from '@wcpos/database';
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import type { FallbackProps } from 'react-error-boundary';
 

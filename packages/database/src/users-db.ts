@@ -1,4 +1,4 @@
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import { userCollections, UserCollections } from './collections';
 import { createDB } from './create-db';

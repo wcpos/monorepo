@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { useFormContext } from 'react-hook-form';
 
-import { Text } from '@wcpos/components/src/text';
+import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 

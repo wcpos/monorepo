@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
 
 import { Logs } from './logs';
 

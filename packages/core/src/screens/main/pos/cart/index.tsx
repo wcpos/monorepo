@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Button, ButtonGroupSeparator, ButtonGroup } from '@wcpos/components/src/button';
-import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
-import { Suspense } from '@wcpos/components/src/suspense';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Button, ButtonGroupSeparator, ButtonGroup } from '@wcpos/components/button';
+import { Card, CardContent, CardHeader } from '@wcpos/components/card';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { Suspense } from '@wcpos/components/suspense';
+import { VStack } from '@wcpos/components/vstack';
 
 import { AddCartItemButtons } from './add-cart-item-buttons';
 import { AddNoteButton } from './buttons/add-note';

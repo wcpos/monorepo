@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { type DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive, useCommandState } from 'cmdk';
 
-import useMergedRef from '@wcpos/hooks/src/use-merged-ref';
+import useMergedRef from '@wcpos/hooks/use-merged-ref';
 
 import { Dialog, DialogContent } from '../dialog';
 import { Icon } from '../icon';

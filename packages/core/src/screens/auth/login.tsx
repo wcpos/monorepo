@@ -10,9 +10,9 @@ import {
 	ModalHeader,
 	ModalTitle,
 	ModalBody,
-} from '@wcpos/components/src/modal';
-import { WebView } from '@wcpos/components/src/webview';
-import log from '@wcpos/utils/src/logger';
+} from '@wcpos/components/modal';
+import { WebView } from '@wcpos/components/webview';
+import log from '@wcpos/utils/logger';
 
 import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';

@@ -3,13 +3,13 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectPrimitiveTrigger,
-} from '@wcpos/components/src/select';
+} from '@wcpos/components/select';
 import type { OrderCollection } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 

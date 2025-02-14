@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@wcpos/components/src/hover-card';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
-import { Text } from '@wcpos/components/src/text';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@wcpos/components/hover-card';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { Text } from '@wcpos/components/text';
 
 import { DisplayCurrentTaxRates } from './display-current-tax-rates';
 import { useT } from '../../../../../contexts/translations';

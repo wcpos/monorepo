@@ -4,9 +4,9 @@ import { isToday, isYesterday, isSameDay } from 'date-fns';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
-import type { DateRange } from '@wcpos/components/src/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import type { DateRange } from '@wcpos/components/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import type { OrderCollection } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 

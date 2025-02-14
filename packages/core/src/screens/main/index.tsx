@@ -6,10 +6,10 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { useObservableEagerState } from 'observable-hooks';
 import { isRxDatabase } from 'rxdb';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Icon } from '@wcpos/components/src/icon';
-import { Suspense } from '@wcpos/components/src/suspense';
-import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Icon } from '@wcpos/components/icon';
+import { Suspense } from '@wcpos/components/suspense';
+import { OnlineStatusProvider } from '@wcpos/hooks/use-online-status';
 import { QueryProvider, useQuery } from '@wcpos/query';
 
 import DrawerContent from './components/drawer-content';

@@ -11,18 +11,18 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 	AlertDialogAction,
-} from '@wcpos/components/src/alert-dialog';
-import { Avatar } from '@wcpos/components/src/avatar';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { cn } from '@wcpos/components/src/lib/utils';
-import { Suspense } from '@wcpos/components/src/suspense';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/tooltip';
-import { VStack } from '@wcpos/components/src/vstack';
-import useHttpClient from '@wcpos/hooks/src/use-http-client';
+} from '@wcpos/components/alert-dialog';
+import { Avatar } from '@wcpos/components/avatar';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
+import { cn } from '@wcpos/components/lib/utils';
+import { Suspense } from '@wcpos/components/suspense';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/tooltip';
+import { VStack } from '@wcpos/components/vstack';
+import useHttpClient from '@wcpos/hooks/use-http-client';
 
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';

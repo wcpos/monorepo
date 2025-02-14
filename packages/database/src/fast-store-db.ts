@@ -1,4 +1,4 @@
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import { syncCollections, SyncCollections } from './collections';
 import { createMemorySyncedDB } from './create-db';

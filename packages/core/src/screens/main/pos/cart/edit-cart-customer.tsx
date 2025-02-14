@@ -6,23 +6,23 @@ import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
-} from '@wcpos/components/src/collapsible';
+} from '@wcpos/components/collapsible';
 import {
 	DialogAction,
 	DialogClose,
 	DialogFooter,
 	useRootContext,
-} from '@wcpos/components/src/dialog';
-import { Form } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Text } from '@wcpos/components/src/text';
-import { Toast } from '@wcpos/components/src/toast';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/dialog';
+import { Form } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';

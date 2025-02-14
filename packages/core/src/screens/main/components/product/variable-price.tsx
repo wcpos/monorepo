@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { useDataTable } from '@wcpos/components/src/data-table';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Text } from '@wcpos/components/src/text';
-import log from '@wcpos/utils/src/logger';
+import { useDataTable } from '@wcpos/components/data-table';
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
+import log from '@wcpos/utils/logger';
 
 import { PriceWithTax } from './price-with-tax';
 

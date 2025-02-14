@@ -1,7 +1,7 @@
 // import forEach from 'lodash/forEach';
 // import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import { storeCollections, StoreCollections } from './collections';
 import { createDB } from './create-db';

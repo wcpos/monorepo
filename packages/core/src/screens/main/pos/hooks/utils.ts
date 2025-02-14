@@ -1,6 +1,6 @@
 import toNumber from 'lodash/toNumber';
 
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];

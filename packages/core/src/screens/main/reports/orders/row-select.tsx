@@ -3,9 +3,9 @@ import { View } from 'react-native';
 
 import { CellContext } from '@tanstack/react-table';
 
-import { Checkbox } from '@wcpos/components/src/checkbox';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/tooltip';
+import { Checkbox } from '@wcpos/components/checkbox';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../../contexts/translations';
 

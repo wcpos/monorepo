@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { CustomerNote } from './totals/customer-note';
 import { Taxes } from './totals/taxes';

@@ -1,7 +1,6 @@
 import * as React from 'react';
 import type { SuspenseProps } from 'react';
-
-import { Text } from '../text';
+import { Text } from 'react-native';
 
 export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 	const renderCount = React.useRef(0);

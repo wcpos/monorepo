@@ -4,8 +4,8 @@ import { differenceInHours, isToday, isValid, formatDistance } from 'date-fns';
 import { useObservableState } from 'observable-hooks';
 import { switchMap, map, filter } from 'rxjs/operators';
 
-import { useHeartbeatObservable } from '@wcpos/hooks/src/use-heartbeat';
-import { usePageVisibility } from '@wcpos/hooks/src/use-page-visibility';
+import { useHeartbeatObservable } from '@wcpos/hooks/use-heartbeat';
+import { usePageVisibility } from '@wcpos/hooks/use-page-visibility';
 
 import { useLocalDate, convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 

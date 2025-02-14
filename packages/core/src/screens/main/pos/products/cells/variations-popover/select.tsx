@@ -10,14 +10,14 @@ import {
 	ComboboxItem,
 	ComboboxList,
 	ComboboxSearch,
-} from '@wcpos/components/src/combobox';
+} from '@wcpos/components/combobox';
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from '@wcpos/components/src/select';
+} from '@wcpos/components/select';
 
 import { useT } from '../../../../../../contexts/translations';
 /**

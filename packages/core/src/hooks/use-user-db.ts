@@ -3,7 +3,7 @@ import { isRxDocument } from 'rxdb';
 import { from, shareReplay } from 'rxjs';
 import { distinctUntilChanged, tap, filter, switchMap } from 'rxjs/operators';
 
-import { createUserDB, createStoreDB, createFastStoreDB } from '@wcpos/database/src';
+import { createUserDB, createStoreDB, createFastStoreDB } from '@wcpos/database';
 
 /**
  * NOTE: The userDB promise will be called before the app is rendered
@@ -11,6 +11,9 @@ import { createUserDB, createStoreDB, createFastStoreDB } from '@wcpos/database/
  * - translations state for language translations
  */
 const userDBPromise = createUserDB().then(async (userDB) => {
+	if (!userDB) {
+		throw new Error('Error creating userDB');
+	}
 	const appState = await userDB.addState('v2');
 	const translationsState = await userDB.addState('translations_v2');
 	return { userDB, appState, translationsState };

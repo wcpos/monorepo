@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { Box } from '@wcpos/components/src/box';
-import { Text } from '@wcpos/components/src/text';
+import { Box } from '@wcpos/components/box';
+import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 

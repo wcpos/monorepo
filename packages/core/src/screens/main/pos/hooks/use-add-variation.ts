@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Toast } from '@wcpos/components/src/toast';
-import log from '@wcpos/utils/src/logger';
+import { Toast } from '@wcpos/components/toast';
+import log from '@wcpos/utils/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';

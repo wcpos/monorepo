@@ -11,7 +11,7 @@ import {
 	Collapsible,
 	CollapsibleTrigger,
 	CollapsibleContent,
-} from '@wcpos/components/src/collapsible';
+} from '@wcpos/components/collapsible';
 import {
 	Form,
 	FormCombobox,
@@ -19,12 +19,12 @@ import {
 	FormInput,
 	FormSelect,
 	FormTextarea,
-} from '@wcpos/components/src/form';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/src/modal';
-import { Text } from '@wcpos/components/src/text';
-import { Toast } from '@wcpos/components/src/toast';
-import { VStack } from '@wcpos/components/src/vstack';
-import log from '@wcpos/utils/src/logger';
+} from '@wcpos/components/form';
+import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
+import { VStack } from '@wcpos/components/vstack';
+import log from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';

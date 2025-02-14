@@ -1,16 +1,16 @@
 import * as React from 'react';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import {
 	Modal,
 	ModalContent,
 	ModalHeader,
 	ModalTitle,
 	ModalBody,
-} from '@wcpos/components/src/modal';
-import { Suspense } from '@wcpos/components/src/suspense';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/tabs';
-import { Text } from '@wcpos/components/src/text';
+} from '@wcpos/components/modal';
+import { Suspense } from '@wcpos/components/suspense';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
+import { Text } from '@wcpos/components/text';
 
 import { BarcodeScanning } from './barcode-scanning';
 import { GeneralSettings } from './general';

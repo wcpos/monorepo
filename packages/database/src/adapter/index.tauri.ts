@@ -1,7 +1,7 @@
 import { resourceDir } from '@tauri-apps/api/path';
 import Database from 'tauri-plugin-sql-api';
 
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 

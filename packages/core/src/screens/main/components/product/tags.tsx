@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
-import { useDataTable } from '@wcpos/components/src/data-table';
-import { HStack } from '@wcpos/components/src/hstack';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { useDataTable } from '@wcpos/components/data-table';
+import { HStack } from '@wcpos/components/hstack';
 
 import type { CellContext } from '@tanstack/react-table';
 

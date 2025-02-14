@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
 
-import { cn } from '@wcpos/components/src/lib/utils';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
-import { VStack } from '@wcpos/components/src/vstack';
+import { cn } from '@wcpos/components/lib/utils';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';

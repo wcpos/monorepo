@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { TableRow } from '@wcpos/components/src/table';
-import { Text } from '@wcpos/components/src/text';
+import { TableRow } from '@wcpos/components/table';
+import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
 

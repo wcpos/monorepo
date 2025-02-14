@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Input } from '@wcpos/components/src/input';
+import { Input } from '@wcpos/components/input';
 
 import { StateCombobox } from './state-combobox';
 import { StateSelect } from './state-select';

@@ -12,17 +12,17 @@ import {
 	AlertDialogAction,
 	AlertDialogFooter,
 	AlertDialogDescription,
-} from '@wcpos/components/src/alert-dialog';
+} from '@wcpos/components/alert-dialog';
 import {
 	DropdownMenu,
 	DropdownMenuTrigger,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
-} from '@wcpos/components/src/dropdown-menu';
-import { Icon } from '@wcpos/components/src/icon';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Text } from '@wcpos/components/src/text';
+} from '@wcpos/components/dropdown-menu';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Text } from '@wcpos/components/text';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';

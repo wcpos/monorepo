@@ -11,12 +11,12 @@ import {
 	DialogTitle,
 	DialogBody,
 	DialogHeader,
-} from '@wcpos/components/src/dialog';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Text } from '@wcpos/components/src/text';
-import { Toast } from '@wcpos/components/src/toast';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/tooltip';
+} from '@wcpos/components/dialog';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';

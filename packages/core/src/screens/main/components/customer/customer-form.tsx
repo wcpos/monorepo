@@ -3,16 +3,16 @@ import { View } from 'react-native';
 
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
-} from '@wcpos/components/src/collapsible';
-import { Form, FormField, FormInput } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/collapsible';
+import { Form, FormField, FormInput } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../billing-address-form';

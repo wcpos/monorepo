@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
 
-import { Text } from '@wcpos/components/src/text';
+import { Text } from '@wcpos/components/text';
 
 import { useDateFormat } from '../../hooks/use-date-format';
 

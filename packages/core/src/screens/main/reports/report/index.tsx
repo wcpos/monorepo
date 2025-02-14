@@ -3,18 +3,18 @@ import { ScrollView, View } from 'react-native';
 
 import { useReactToPrint } from 'react-to-print';
 
-import { Box } from '@wcpos/components/src/box';
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { Card, CardContent, CardHeader, CardFooter } from '@wcpos/components/src/card';
-import { HStack } from '@wcpos/components/src/hstack';
+import { Box } from '@wcpos/components/box';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { Card, CardContent, CardHeader, CardFooter } from '@wcpos/components/card';
+import { HStack } from '@wcpos/components/hstack';
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from '@wcpos/components/src/select';
-import { Text } from '@wcpos/components/src/text';
+} from '@wcpos/components/select';
+import { Text } from '@wcpos/components/text';
 
 import { ZReport } from './template';
 import { useT } from '../../../../contexts/translations';

@@ -3,9 +3,9 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../../contexts/translations';
 

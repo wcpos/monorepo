@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { HStack } from '@wcpos/components/src/hstack';
+import { HStack } from '@wcpos/components/hstack';
 
 import Online from './online';
 import { UserMenu } from './user-menu';

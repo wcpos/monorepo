@@ -6,11 +6,11 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogBody,
-} from '@wcpos/components/src/dialog';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/tooltip';
+} from '@wcpos/components/dialog';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/tooltip';
 
 interface Props {
 	title: string;

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import useSnackbar from '@wcpos/components/src/snackbar';
+import useSnackbar from '@wcpos/components/snackbar';
 import useAuth from '../use-auth';
 
 type NetInfoState = import('@react-native-community/netinfo').NetInfoState;

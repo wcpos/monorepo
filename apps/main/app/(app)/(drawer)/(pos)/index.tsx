@@ -2,10 +2,11 @@ import { Text, View } from 'react-native';
 
 import { Link } from 'expo-router';
 
-import { useSession } from '../../../../context/session-provider';
+import { useAppState } from '@wcpos/core/contexts/app-state';
 
 export default function Index() {
-	const { signOut } = useSession();
+	const { logout } = useAppState();
+
 	return (
 		<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
 			<Text>Home Screen</Text>
@@ -14,7 +15,7 @@ export default function Index() {
 			<Text
 				onPress={() => {
 					// The `app/(app)/_layout.tsx` will redirect to the sign-in screen.
-					signOut();
+					logout();
 				}}
 			>
 				Sign Out

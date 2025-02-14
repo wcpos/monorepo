@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { ComboboxList, ComboboxItem } from '@wcpos/components/src/combobox';
-import { Text } from '@wcpos/components/src/text';
+import { ComboboxList, ComboboxItem } from '@wcpos/components/combobox';
+import { Text } from '@wcpos/components/text';
 
 /**
  *

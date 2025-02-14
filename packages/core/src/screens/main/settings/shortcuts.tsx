@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ModalClose, ModalFooter } from '@wcpos/components/src/modal';
+import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import {
 	Table,
 	TableHeader,
@@ -8,8 +8,8 @@ import {
 	TableRow,
 	TableCell,
 	TableBody,
-} from '@wcpos/components/src/table';
-import { Text } from '@wcpos/components/src/text';
+} from '@wcpos/components/table';
+import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 

@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
-import Table, { CellRenderer, TableProps } from '@wcpos/components/src/table';
-import { Text } from '@wcpos/components/src/text';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
+import Table, { CellRenderer, TableProps } from '@wcpos/components/table';
+import { Text } from '@wcpos/components/text';
 
 import { Actions } from '../cells/actions';
 import { FeeAndShippingTotal } from '../cells/fee-and-shipping-total';

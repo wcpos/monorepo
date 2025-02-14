@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { Toast } from '@wcpos/components/src/toast';
+import { Toast } from '@wcpos/components/toast';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';

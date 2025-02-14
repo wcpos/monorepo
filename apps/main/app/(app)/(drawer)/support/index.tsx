@@ -1,15 +1,16 @@
 import { Text, View } from 'react-native';
 
-import { useSession } from '../../../../context/session-provider';
+import { useAppState } from '@wcpos/core/contexts/app-state';
 
 export default function Index() {
-	const { signOut } = useSession();
+	const { logout } = useAppState();
+
 	return (
 		<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
 			<Text
 				onPress={() => {
 					// The `app/(app)/_layout.tsx` will redirect to the sign-in screen.
-					signOut();
+					logout();
 				}}
 			>
 				Sign Out

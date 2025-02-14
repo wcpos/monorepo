@@ -1,7 +1,7 @@
 import { createRxDatabase, removeRxDatabase } from 'rxdb';
 import { disableVersionCheck } from 'rxdb-premium/plugins/shared';
 
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import config from './adapter';
 import { fastConfig } from './fast-adapter';

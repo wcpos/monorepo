@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
-import { VStack } from '@wcpos/components/src/vstack';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
+import { VStack } from '@wcpos/components/vstack';
 import { useQuery } from '@wcpos/query';
 
 import { VariationsFilterBar } from './filters';

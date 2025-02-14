@@ -3,7 +3,7 @@ import * as React from 'react';
 import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Combobox,
 	ComboboxTriggerPrimitive,
@@ -11,8 +11,8 @@ import {
 	ComboboxInput,
 	ComboboxEmpty,
 	ComboboxContent,
-} from '@wcpos/components/src/combobox';
-import { Suspense } from '@wcpos/components/src/suspense';
+} from '@wcpos/components/combobox';
+import { Suspense } from '@wcpos/components/suspense';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { useQuery, Query } from '@wcpos/query';
 

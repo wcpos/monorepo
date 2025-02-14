@@ -7,8 +7,8 @@ import {
 	useObservableState,
 } from 'observable-hooks';
 
-import { DataTable as Table, DataTableProps } from '@wcpos/components/src/data-table';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { DataTable as Table, DataTableProps } from '@wcpos/components/data-table';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import type {
 	ProductDocument,
 	OrderDocument,

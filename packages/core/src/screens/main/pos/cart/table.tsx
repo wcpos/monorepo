@@ -13,9 +13,9 @@ import get from 'lodash/get';
 import isEqual from 'lodash/isEqual';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { cn, getFlexAlign } from '@wcpos/components/src/lib/utils';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { cn, getFlexAlign } from '@wcpos/components/lib/utils';
+import { Suspense } from '@wcpos/components/suspense';
 import {
 	Table,
 	TableHeader,
@@ -24,8 +24,8 @@ import {
 	TableBody,
 	TableCell,
 	PulseTableRow,
-} from '@wcpos/components/src/table';
-import { Text } from '@wcpos/components/src/text';
+} from '@wcpos/components/table';
+import { Text } from '@wcpos/components/text';
 
 import { Actions } from './cells/actions';
 import { FeeAndShippingTotal } from './cells/fee-and-shipping-total';

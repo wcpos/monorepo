@@ -3,11 +3,11 @@ import * as React from 'react';
 import { flexRender } from '@tanstack/react-table';
 import { useObservableSuspense } from 'observable-hooks';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { cn, getFlexAlign } from '@wcpos/components/src/lib/utils';
-import { Suspense } from '@wcpos/components/src/suspense';
-import { TableRow, TableCell } from '@wcpos/components/src/table';
-import { VStack } from '@wcpos/components/src/vstack';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { cn, getFlexAlign } from '@wcpos/components/lib/utils';
+import { Suspense } from '@wcpos/components/suspense';
+import { TableRow, TableCell } from '@wcpos/components/table';
+import { VStack } from '@wcpos/components/vstack';
 import type { ProductDocument } from '@wcpos/database';
 
 import { VariationTableFooter } from './footer';

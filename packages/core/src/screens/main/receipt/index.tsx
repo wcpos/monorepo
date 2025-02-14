@@ -13,8 +13,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from '@wcpos/components/src/dialog';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+} from '@wcpos/components/dialog';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import {
 	Modal,
 	ModalContent,
@@ -24,9 +24,9 @@ import {
 	ModalClose,
 	ModalHeader,
 	ModalAction,
-} from '@wcpos/components/src/modal';
-import { Text } from '@wcpos/components/src/text';
-import { WebView } from '@wcpos/components/src/webview';
+} from '@wcpos/components/modal';
+import { Text } from '@wcpos/components/text';
+import { WebView } from '@wcpos/components/webview';
 
 import { EmailForm } from './email';
 import { useT } from '../../../contexts/translations';

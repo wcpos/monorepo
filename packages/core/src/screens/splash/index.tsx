@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { View, StyleSheet } from 'react-native';
 
-import { Logo } from '@wcpos/components/src/logo';
-import { Progress } from '@wcpos/components/src/progress';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Logo } from '@wcpos/components/logo';
+import { Progress } from '@wcpos/components/progress';
+import { VStack } from '@wcpos/components/vstack';
 
 /**
  * NOTE: the ThemeProvider is not loaded yet, so we can't use any theme related components here

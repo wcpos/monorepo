@@ -1,16 +1,10 @@
 {
-  "extends": "expo/tsconfig.base",
-  "compilerOptions": {
-    "strict": true,
-    "paths": {
-      "@wcpos/components/*": ["../../packages/components/src/*"]
-    }
-  },
+  "extends": "../../tsconfig.json",
   "include": [
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "nativewind-env.d.ts"
-  ]
+, "../../packages/core/src/hooks/use-user-db.ts"  ]
 }

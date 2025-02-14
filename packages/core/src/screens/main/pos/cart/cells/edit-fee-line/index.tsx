@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/components/src/tabs';
-import { Text } from '@wcpos/components/src/text';
-import { Tree } from '@wcpos/components/src/tree';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/components/tabs';
+import { Text } from '@wcpos/components/text';
+import { Tree } from '@wcpos/components/tree';
 
 import { EditFeeLineForm } from './form';
 import { useT } from '../../../../../../contexts/translations';

@@ -1,7 +1,6 @@
 import { Redirect, Stack } from 'expo-router';
 
-import { Splash } from '../../components/splash-screen';
-import { useSession } from '../../context/session-provider';
+import { useAppState } from '@wcpos/core/contexts/app-state';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -9,13 +8,9 @@ export const unstable_settings = {
 };
 
 export default function AppLayout() {
-	const { session, isLoading } = useSession();
+	const { site, storeDB, fastStoreDB } = useAppState();
 
-	if (isLoading) {
-		return <Splash />;
-	}
-
-	if (!session) {
+	if (!storeDB) {
 		return <Redirect href="/(auth)/connect" />;
 	}
 

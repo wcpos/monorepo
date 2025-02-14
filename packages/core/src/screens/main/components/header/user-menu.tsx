@@ -9,8 +9,8 @@ import {
 } from 'observable-hooks';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { Avatar } from '@wcpos/components/src/avatar';
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Avatar } from '@wcpos/components/avatar';
+import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -20,10 +20,10 @@ import {
 	DropdownMenuSubContent,
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
-} from '@wcpos/components/src/dropdown-menu';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
-import { Text } from '@wcpos/components/src/text';
+} from '@wcpos/components/dropdown-menu';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { Text } from '@wcpos/components/text';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';

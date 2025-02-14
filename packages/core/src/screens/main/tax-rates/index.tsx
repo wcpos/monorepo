@@ -12,9 +12,9 @@ import {
 	ModalBody,
 	ModalFooter,
 	ModalClose,
-} from '@wcpos/components/src/modal';
-import { Tabs, TabsContent, ScrollableTabsList, TabsTrigger } from '@wcpos/components/src/tabs';
-import { Text } from '@wcpos/components/src/text';
+} from '@wcpos/components/modal';
+import { Tabs, TabsContent, ScrollableTabsList, TabsTrigger } from '@wcpos/components/tabs';
+import { Text } from '@wcpos/components/text';
 
 import { TaxRatesFooter } from './footer';
 import { TaxRateTable } from './rate-table';
