@@ -26,7 +26,7 @@ on:
         required: false
 
 jobs:
-  example:
+  main:
     runs-on: ubuntu-latest
     steps:
       - name: 🏗 Setup repository
@@ -36,16 +36,17 @@ jobs:
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 
-      - name: 👷 Build packages for example
-        run: pnpm run -w build:example
+      - name: 👷 Build packages for main
+        run: pnpm run -w build:main
 
-      - name: 🚀 Build example
+      - name: 🚀 Build main
         if: ${{ github.event.inputs.submit == 'false' || github.event.inputs.profile != 'production' }}
-        working-directory: apps/example
+        working-directory: apps/main
         run: eas build --non-interactive --wait --platform=${{ github.event.inputs.platform }} --profile=${{ github.event.inputs.profile }}
 
-      - name: 🚀 Build & submit example
+      - name: 🚀 Build & submit main
         if: ${{ github.event.inputs.submit == 'true' && github.event.inputs.profile != 'production' }}
-        working-directory: apps/example
+        working-directory: apps/main
         run: eas build --non-interactive --wait --auto-submit --platform=${{ github.event.inputs.platform }} --profile=${{ github.event.inputs.profile }}
