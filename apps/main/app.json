@@ -19,14 +19,16 @@
       "bundleIdentifier": "com.wcpos.main",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "jsEngine": "hermes"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.wcpos.main"
+      "package": "com.wcpos.main",
+      "jsEngine": "hermes"
     },
     "web": {
       "bundler": "metro",
