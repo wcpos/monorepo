@@ -1,9 +1,8 @@
-name: Expo Preview Build
+name: preview
 
 on:
-  push:
-    branches:
-      - v2
+  pull_request:
+    types: [opened, synchronize]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -36,6 +35,6 @@ jobs:
       - name: 🚀 Create preview
         uses: expo/expo-github-action/preview@v8
         with:
-          command: eas update --auto --non-interactive
+          command: eas update --auto --branch=pr-${{ github.event.number }}
           working-directory: apps/main
           comment: true

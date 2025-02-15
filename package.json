@@ -6,7 +6,8 @@
     "main": "pnpm --filter @wcpos/main",
     "main:expo": "pnpm --filter @wcpos/main exec expo",
     "components": "pnpm --filter @wcpos/components",
-    "build:main": "turbo build --filter=\"...{./apps/main}\""
+    "build:main": "turbo build --filter=\"...{./apps/main}\"",
+    "preinstall": "pnpm ignored-builds || true"
   },
   "workspaces": {
     "packages": [
@@ -14,7 +15,22 @@
       "packages/*"
     ]
   },
-  "packageManager": "pnpm@9.14.2",
+  "packageManager": "pnpm@10.4.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "fs-xattr",
+      "macos-alias",
+      "esbuild",
+      "keccak",
+      "secp256k1",
+      "protobufjs",
+      "electron",
+      "eccrypto",
+      "rxdb",
+      "rxdb-premium"
+    ]
+  },
   "resolutions": {
     "flexsearch@0.7.43": "git+https://github.com/wcpos/flexsearch.git#76e53ededf2045867cfe9548f5043e3842acb9ad"
   },
