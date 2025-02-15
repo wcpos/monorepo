@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import { useFormContext } from 'react-hook-form';
 
-import type { FormItemProps } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Label } from '@wcpos/components/src/label';
-import { RadioGroup, RadioGroupItem } from '@wcpos/components/src/radio-group';
+import type { FormItemProps } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
+import { Label } from '@wcpos/components/label';
+import { RadioGroup, RadioGroupItem } from '@wcpos/components/radio-group';
 
 import { useT } from '../../../contexts/translations';
 

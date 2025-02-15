@@ -1,9 +1,4 @@
-import { getRxStorageIndexedDB } from 'rxdb-premium/plugins/storage-indexeddb';
 import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
-
-// const config = {
-// 	storage: getRxStorageIndexedDB(),
-// };
 
 const config = {
 	storage: getRxStorageWorker({
@@ -14,7 +9,7 @@ const config = {
 		 *
 		 * @link https://developer.mozilla.org/en-US/docs/Web/API/Worker/Worker
 		 */
-		workerInput: window.idbWorker,
+		workerInput: globalThis.idbWorker,
 		/**
 		 * (Optional) options
 		 * for the worker.

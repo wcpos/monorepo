@@ -4,12 +4,12 @@ import { View } from 'react-native';
 import isEmpty from 'lodash/isEmpty';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
-import { Pressable } from '@wcpos/components/src/pressable';
-import { Text } from '@wcpos/components/src/text';
-import { Textarea } from '@wcpos/components/src/textarea';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/tooltip';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { Pressable } from '@wcpos/components/pressable';
+import { Text } from '@wcpos/components/text';
+import { Textarea } from '@wcpos/components/textarea';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../../../contexts/translations';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';

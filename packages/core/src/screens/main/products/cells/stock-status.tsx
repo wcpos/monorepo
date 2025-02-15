@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ButtonPill } from '@wcpos/components/src/button';
-import { useDataTable } from '@wcpos/components/src/data-table';
+import { ButtonPill } from '@wcpos/components/button';
+import { useDataTable } from '@wcpos/components/data-table';
 
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 

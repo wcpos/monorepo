@@ -5,7 +5,7 @@ import {
 	ComboboxTrigger,
 	ComboboxContent,
 	ComboboxValue,
-} from '@wcpos/components/src/combobox';
+} from '@wcpos/components/combobox';
 
 import { TagSearch } from './search';
 import { useT } from '../../../../../contexts/translations';

@@ -3,12 +3,12 @@ import * as React from 'react';
 import toNumber from 'lodash/toNumber';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { HStack } from '@wcpos/components/src/hstack';
-import { cn } from '@wcpos/components/src/lib/utils';
-import { Numpad } from '@wcpos/components/src/numpad';
-import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
+import { cn } from '@wcpos/components/lib/utils';
+import { Numpad } from '@wcpos/components/numpad';
+import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';

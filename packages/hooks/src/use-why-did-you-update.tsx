@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 function useWhyDidYouUpdate(name: string, props: any) {
 	// Get a mutable ref object where we can store props ...

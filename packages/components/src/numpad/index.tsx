@@ -9,7 +9,7 @@ import {
 import { useAugmentedRef } from '@rn-primitives/hooks';
 import toNumber from 'lodash/toNumber';
 
-import useMergedRef from '@wcpos/hooks/src/use-merged-ref';
+import useMergedRef from '@wcpos/hooks/use-merged-ref';
 
 import { useCalculator } from './use-calculator';
 import { Button, ButtonText } from '../button';

@@ -36,17 +36,23 @@ interface LocalesType {
  * Convert system locales to our Transifex locales
  */
 const systemLocales = getLocales();
-const {
-	languageCode, // language code without the region, eg: 'en'
-	languageTag, // language code with the region, eg: 'en-US'
-} = systemLocales[0];
-const systemLanguage: Language = (locales as LocalesType)[languageTag.toLowerCase()] ||
-	(languageCode && (locales as LocalesType)[languageCode]) || {
-		locale: 'en',
-		code: 'en',
-		name: 'English',
-		nativeName: 'English',
-	};
+const defaultLanguage: Language = {
+	locale: 'en',
+	code: 'en',
+	name: 'English',
+	nativeName: 'English',
+};
+
+const systemLanguage: Language = systemLocales?.[0]
+	? (() => {
+			const { languageCode, languageTag } = systemLocales[0];
+			return (
+				(locales as LocalesType)[languageTag.toLowerCase()] ||
+				(languageCode && (locales as LocalesType)[languageCode]) ||
+				defaultLanguage
+			);
+		})()
+	: defaultLanguage;
 
 /**
  *

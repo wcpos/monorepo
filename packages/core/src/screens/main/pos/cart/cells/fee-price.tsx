@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 
 import { CurrencyInput } from '../../../components/currency-input';
 import { NumberInput } from '../../../components/number-input';

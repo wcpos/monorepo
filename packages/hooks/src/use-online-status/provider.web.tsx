@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Toast } from '@wcpos/components/src/toast';
+import { Toast } from '@wcpos/components/toast';
 
 import useHttpClient from '../use-http-client';
 

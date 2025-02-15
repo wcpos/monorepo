@@ -11,21 +11,21 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from '@wcpos/components/src/alert-dialog';
-import { Checkbox } from '@wcpos/components/src/checkbox';
+} from '@wcpos/components/alert-dialog';
+import { Checkbox } from '@wcpos/components/checkbox';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from '@wcpos/components/src/dropdown-menu';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Label } from '@wcpos/components/src/label';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/dropdown-menu';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Label } from '@wcpos/components/label';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';

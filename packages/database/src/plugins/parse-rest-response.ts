@@ -3,7 +3,7 @@ import difference from 'lodash/difference';
 import isPlainObject from 'lodash/isPlainObject';
 import unset from 'lodash/unset';
 
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import type { RxCollection, RxJsonSchema, RxPlugin } from 'rxdb';
 

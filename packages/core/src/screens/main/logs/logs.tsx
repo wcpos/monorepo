@@ -2,11 +2,11 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import { Box } from '@wcpos/components/src/box';
-import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { Box } from '@wcpos/components/box';
+import { Card, CardContent, CardHeader } from '@wcpos/components/card';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { HStack } from '@wcpos/components/hstack';
+import { Suspense } from '@wcpos/components/suspense';
 import { useLocalQuery } from '@wcpos/query';
 
 import { Context } from './cells/context';

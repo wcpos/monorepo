@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
 
-import { IconButton } from '@wcpos/components/src/icon-button';
+import { IconButton } from '@wcpos/components/icon-button';
 
 import { useAddProduct } from '../../hooks/use-add-product';
 

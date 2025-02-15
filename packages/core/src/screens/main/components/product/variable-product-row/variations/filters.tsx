@@ -3,9 +3,9 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ButtonPill } from '@wcpos/components/src/button';
-import { HStack } from '@wcpos/components/src/hstack';
-import { IconButton } from '@wcpos/components/src/icon-button';
+import { ButtonPill } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
 import type { ProductDocument, ProductVariationCollection } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 

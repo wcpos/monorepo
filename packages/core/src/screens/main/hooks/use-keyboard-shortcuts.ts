@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 
-import { useHotkeys } from '@wcpos/hooks/src/use-hotkeys';
+import { useHotkeys } from '@wcpos/hooks/use-hotkeys';
 
 import { useAppState } from '../../../contexts/app-state';
 

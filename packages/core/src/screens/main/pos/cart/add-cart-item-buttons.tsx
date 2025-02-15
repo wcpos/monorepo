@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { HStack } from '@wcpos/components/src/hstack';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { AddCartItemButton } from './add-cart-item-button';
 import { AddFee } from './add-fee';

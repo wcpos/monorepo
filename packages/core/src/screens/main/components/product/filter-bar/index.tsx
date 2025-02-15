@@ -5,8 +5,8 @@ import { isRxDocument } from 'rxdb';
 import { of } from 'rxjs';
 import { startWith, switchMap, tap, map } from 'rxjs/operators';
 
-import { HStack } from '@wcpos/components/src/hstack';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { HStack } from '@wcpos/components/hstack';
+import { Suspense } from '@wcpos/components/suspense';
 import type { Query } from '@wcpos/query';
 
 import { CategoryPill } from './category-pill';

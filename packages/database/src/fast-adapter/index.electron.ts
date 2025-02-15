@@ -1,7 +1,7 @@
 import { getMemoryMappedRxStorage } from 'rxdb-premium/plugins/storage-memory-mapped';
 import { getRxStorageSQLite, SQLiteQueryWithParams } from 'rxdb-premium/plugins/storage-sqlite';
 
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 const parentStorage = getRxStorageSQLite({
 	// storeAttachmentsAsBase64String: true,

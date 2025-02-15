@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useSubscription } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
-import { Toast } from '@wcpos/components/src/toast';
-import log from '@wcpos/utils/src/logger';
+import { Toast } from '@wcpos/components/toast';
+import log from '@wcpos/utils/logger';
 
 /**
  * TODO - we need a app-wide event bus to channel errors to the snackbar

@@ -1,0 +1,52 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build for (all/android/ios)
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - android
+          - ios
+      profile:
+        description: EAS build profile (development/production)
+        type: choice
+        required: true
+        default: development
+        options:
+          - development
+          - production
+      submit:
+        description: Auto submit to the store? (production only)
+        type: boolean
+        required: false
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@v4
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: 👷 Build packages for main
+        run: pnpm run -w build:main
+
+      - name: 🚀 Build main
+        if: ${{ github.event.inputs.submit == 'false' || github.event.inputs.profile != 'production' }}
+        working-directory: apps/main
+        run: eas build --non-interactive --wait --platform=${{ github.event.inputs.platform }} --profile=${{ github.event.inputs.profile }}
+
+      - name: 🚀 Build & submit main
+        if: ${{ github.event.inputs.submit == 'true' && github.event.inputs.profile != 'production' }}
+        working-directory: apps/main
+        run: eas build --non-interactive --wait --auto-submit --platform=${{ github.event.inputs.platform }} --profile=${{ github.event.inputs.profile }}

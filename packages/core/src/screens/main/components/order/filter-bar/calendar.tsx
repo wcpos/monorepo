@@ -12,11 +12,11 @@ import {
 	startOfDay,
 } from 'date-fns';
 
-import { Button, ButtonText, ButtonPill } from '@wcpos/components/src/button';
-import { Calendar } from '@wcpos/components/src/calendar';
-import type { DateRange } from '@wcpos/components/src/calendar';
-import { HStack } from '@wcpos/components/src/hstack';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Button, ButtonText, ButtonPill } from '@wcpos/components/button';
+import { Calendar } from '@wcpos/components/calendar';
+import type { DateRange } from '@wcpos/components/calendar';
+import { HStack } from '@wcpos/components/hstack';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../contexts/translations';
 import { useLocalDate } from '../../../../../hooks/use-local-date';

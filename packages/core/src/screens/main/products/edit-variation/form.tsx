@@ -13,10 +13,10 @@ import {
 	FormSelect,
 	FormSwitch,
 	FormRadioGroup,
-} from '@wcpos/components/src/form';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/src/modal';
-import { Toast } from '@wcpos/components/src/toast';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/form';
+import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { Toast } from '@wcpos/components/toast';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';

@@ -4,7 +4,7 @@ import { Pressable } from 'react-native';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Image } from '@wcpos/components/src/image';
+import { Image } from '@wcpos/components/image';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 

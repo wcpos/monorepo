@@ -6,8 +6,8 @@ import get from 'lodash/get';
 import { ObservableResource, useObservableEagerState } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
 // import { useQuery } from '@wcpos/query';
 
 import Checkout from './checkout';

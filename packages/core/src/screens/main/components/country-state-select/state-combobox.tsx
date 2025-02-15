@@ -10,7 +10,7 @@ import {
 	ComboboxSearch,
 	ComboboxTrigger,
 	ComboboxValue,
-} from '@wcpos/components/src/combobox';
+} from '@wcpos/components/combobox';
 
 import { StatesProvider, useStates } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';

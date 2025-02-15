@@ -4,9 +4,9 @@ import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import isEmpty from 'lodash/isEmpty';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import {
 	Table,
 	TableHeader,
@@ -14,9 +14,9 @@ import {
 	TableRow,
 	TableCell,
 	TableBody,
-} from '@wcpos/components/src/table';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/table';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 import { TaxRateDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';

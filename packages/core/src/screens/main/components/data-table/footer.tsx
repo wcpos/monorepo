@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { useDataTable } from '@wcpos/components/src/data-table';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Text } from '@wcpos/components/src/text';
+import { useDataTable } from '@wcpos/components/data-table';
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
 import { useReplicationState } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';

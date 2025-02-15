@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { ButtonPill } from '@wcpos/components/src/button';
-import { useDataTable } from '@wcpos/components/src/data-table';
+import { ButtonPill } from '@wcpos/components/button';
+import { useDataTable } from '@wcpos/components/data-table';
 
 import { useCollection } from '../../hooks/use-collection';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';

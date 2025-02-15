@@ -11,8 +11,8 @@ import {
 	FormSwitch,
 	FormInput,
 	useFormChangeHandler,
-} from '@wcpos/components/src/form';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/form';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import {

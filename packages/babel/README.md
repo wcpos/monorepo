@@ -1,1 +1,0 @@
-# Shared Babel configuration for [WooCommerce POS](https://wcpos.com) React Native app

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { FormatAddress } from '@wcpos/components/src/format';
+import { FormatAddress } from '@wcpos/components/format';
 
 import type { CellContext } from '@tanstack/react-table';
 

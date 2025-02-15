@@ -7,9 +7,9 @@ import { useObservableEagerState } from 'observable-hooks';
 import { BehaviorSubject } from 'rxjs';
 import semver from 'semver';
 
-import useHttpClient, { RequestConfig } from '@wcpos/hooks/src/use-http-client';
-import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
-import log from '@wcpos/utils/src/logger';
+import useHttpClient, { RequestConfig } from '@wcpos/hooks/use-http-client';
+import useOnlineStatus from '@wcpos/hooks/use-online-status';
+import log from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../contexts/app-state';
 

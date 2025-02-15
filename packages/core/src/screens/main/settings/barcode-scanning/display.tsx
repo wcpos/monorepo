@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { useHotkeys, RNKeyboardEvent, getKeyFromEvent } from '@wcpos/hooks/src/use-hotkeys';
-import { Input } from '@wcpos/components/src/input';
-import { Label } from '@wcpos/components/src/label';
-import { VStack } from '@wcpos/components/src/vstack';
+import { useHotkeys, RNKeyboardEvent, getKeyFromEvent } from '@wcpos/hooks/use-hotkeys';
+import { Input } from '@wcpos/components/input';
+import { Label } from '@wcpos/components/label';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection } from '../../hooks/barcodes';

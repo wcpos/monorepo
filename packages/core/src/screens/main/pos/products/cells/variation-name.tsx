@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
 
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { StockQuantity } from './stock-quantity';
 

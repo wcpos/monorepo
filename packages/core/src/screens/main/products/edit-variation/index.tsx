@@ -9,10 +9,10 @@ import {
 	ModalBody,
 	Modal,
 	ModalHeader,
-} from '@wcpos/components/src/modal';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/tabs';
-import { Text } from '@wcpos/components/src/text';
-import { Tree } from '@wcpos/components/src/tree';
+} from '@wcpos/components/modal';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
+import { Text } from '@wcpos/components/text';
+import { Tree } from '@wcpos/components/tree';
 
 import { EditVariationForm } from './form';
 import { useT } from '../../../../contexts/translations';

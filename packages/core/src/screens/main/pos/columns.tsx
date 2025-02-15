@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { PanelGroup, Panel, PanelResizeHandle } from '@wcpos/components/src/panels';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { PanelGroup, Panel, PanelResizeHandle } from '@wcpos/components/panels';
+import { Suspense } from '@wcpos/components/suspense';
 
 import OpenOrders from './cart';
 import Products from './products';

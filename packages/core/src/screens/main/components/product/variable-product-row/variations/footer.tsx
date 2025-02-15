@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { HStack } from '@wcpos/components/src/hstack';
-import { Text } from '@wcpos/components/src/text';
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
 import { useReplicationState } from '@wcpos/query';
 
 import { useAppState } from '../../../../../../contexts/app-state';

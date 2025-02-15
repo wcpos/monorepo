@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Pressable } from 'react-native';
 
-import { HStack } from '@wcpos/components/src/hstack';
-import { SortIcon } from '@wcpos/components/src/sort-icon';
-import { Text } from '@wcpos/components/src/text';
+import { HStack } from '@wcpos/components/hstack';
+import { SortIcon } from '@wcpos/components/sort-icon';
+import { Text } from '@wcpos/components/text';
 
 import type { HeaderContext } from '@tanstack/react-table';
 

@@ -12,7 +12,7 @@ import {
 	DialogClose,
 	DialogFooter,
 	useRootContext,
-} from '@wcpos/components/src/dialog';
+} from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
@@ -20,8 +20,8 @@ import {
 	FormSwitch,
 	FormRadioGroup,
 	FormSelect,
-} from '@wcpos/components/src/form';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/form';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';

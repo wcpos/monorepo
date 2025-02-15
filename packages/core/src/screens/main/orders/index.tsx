@@ -4,8 +4,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
 
 import { EditOrder } from './edit-order';
 import Orders from './orders';

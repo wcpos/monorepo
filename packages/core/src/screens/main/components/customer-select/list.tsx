@@ -3,7 +3,7 @@ import * as React from 'react';
 import toNumber from 'lodash/toNumber';
 import { useObservableSuspense } from 'observable-hooks';
 
-import { ComboboxList, ComboboxItem, useComboboxContext } from '@wcpos/components/src/combobox';
+import { ComboboxList, ComboboxItem, useComboboxContext } from '@wcpos/components/combobox';
 
 import { CustomerSelectItem } from './item';
 

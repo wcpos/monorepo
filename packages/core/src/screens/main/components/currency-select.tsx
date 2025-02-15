@@ -12,7 +12,7 @@ import {
 	ComboboxList,
 	ComboboxInput,
 	ComboboxItem,
-} from '@wcpos/components/src/combobox';
+} from '@wcpos/components/combobox';
 
 import useCurrencies, { CurrenciesProvider } from '../../../contexts/currencies';
 import { useT } from '../../../contexts/translations';

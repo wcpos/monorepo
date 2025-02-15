@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Button } from '@wcpos/components/src/button';
+import { Button } from '@wcpos/components/button';
 import {
 	Dialog,
 	DialogTrigger,
@@ -13,8 +13,8 @@ import {
 	DialogFooter,
 	DialogClose,
 	DialogAction,
-} from '@wcpos/components/src/dialog';
-import { Textarea } from '@wcpos/components/src/textarea';
+} from '@wcpos/components/dialog';
+import { Textarea } from '@wcpos/components/textarea';
 
 import { useT } from '../../../../../contexts/translations';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';

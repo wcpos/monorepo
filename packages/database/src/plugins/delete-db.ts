@@ -1,4 +1,4 @@
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 

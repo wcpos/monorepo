@@ -1,3 +1,17 @@
 {
-  "extends": "@wcpos/tsconfig/base.json",
+	"extends": "expo/tsconfig.base",
+	"compilerOptions": {
+		"baseUrl": ".",
+		"paths": {
+			"@wcpos/components/*": ["packages/components/src/*"],
+			"@wcpos/core/*": ["packages/core/src/*"],
+			"@wcpos/database": ["packages/database/src/index"],
+			"@wcpos/database/*": ["packages/database/src/*"],
+			"@wcpos/hooks/*": ["packages/hooks/src/*"],
+			"@wcpos/query": ["packages/query/src/index"],
+			"@wcpos/query/*": ["packages/query/src/*"],
+			"@wcpos/utils/*": ["packages/utils/src/*"]
+		}
+	},
+	"include": ["**/*.ts", "**/*.tsx"]
 }

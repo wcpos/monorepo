@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { View, StyleSheet } from 'react-native';
 
-import { Box } from '@wcpos/components/src/box';
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Box } from '@wcpos/components/box';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';

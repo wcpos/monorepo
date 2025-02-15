@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 
-import { Button } from '@wcpos/components/src/button';
-import { Toast } from '@wcpos/components/src/toast';
-import log from '@wcpos/utils/src/logger';
+import { Button } from '@wcpos/components/button';
+import { Toast } from '@wcpos/components/toast';
+import log from '@wcpos/utils/logger';
 
 import { useT } from '../../../../../contexts/translations';
 import useDeleteDocument from '../../../contexts/use-delete-document';

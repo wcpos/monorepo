@@ -3,13 +3,13 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { useObservableSuspense } from 'observable-hooks';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { HStack } from '@wcpos/components/src/hstack';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Suspense } from '@wcpos/components/src/suspense';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
-import { VStack } from '@wcpos/components/src/vstack';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Suspense } from '@wcpos/components/suspense';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { VStack } from '@wcpos/components/vstack';
 
 import WPUser from './wp-user';
 import { useT } from '../../../contexts/translations';

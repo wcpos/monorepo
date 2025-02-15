@@ -3,12 +3,12 @@ import * as React from 'react';
 import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Combobox,
 	ComboboxTriggerPrimitive,
 	ComboboxContent,
-} from '@wcpos/components/src/combobox';
+} from '@wcpos/components/combobox';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query } from '@wcpos/query';
 

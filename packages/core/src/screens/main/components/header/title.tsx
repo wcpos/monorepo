@@ -3,7 +3,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { HeaderTitleProps } from '@react-navigation/elements';
 
-import { Text } from '@wcpos/components/src/text';
+import { Text } from '@wcpos/components/text';
 
 /**
  * TODO - text trucation doesn't trigger when screen size changes

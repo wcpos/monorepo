@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Text } from '@wcpos/components/src/text';
-import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/src/toggle-group';
+import { Text } from '@wcpos/components/text';
+import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
 
 /**
  *

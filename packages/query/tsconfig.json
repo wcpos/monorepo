@@ -1,7 +1,0 @@
-{
-  "extends": "@wcpos/tsconfig/base.json",
-  "compilerOptions": {
-    "jsx": "react",
-  },
-  "include": ["src/**/*", "tests/data-fetcher.test.ts"]
-}

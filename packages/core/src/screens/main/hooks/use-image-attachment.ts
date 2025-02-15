@@ -4,7 +4,7 @@ import { useObservable, useObservableState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { map, switchMap, filter } from 'rxjs/operators';
 
-import useHttpClient from '@wcpos/hooks/src/use-http-client';
+import useHttpClient from '@wcpos/hooks/use-http-client';
 
 type RxDocument = import('rxdb').RxDocument;
 

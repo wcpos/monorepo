@@ -13,16 +13,16 @@ import {
 	AlertDialogDescription,
 	AlertDialogTitle,
 	AlertDialogFooter,
-} from '@wcpos/components/src/alert-dialog';
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+} from '@wcpos/components/alert-dialog';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectPrimitiveTrigger,
-} from '@wcpos/components/src/select';
-import { Text } from '@wcpos/components/src/text';
-import { Toast } from '@wcpos/components/src/toast';
+} from '@wcpos/components/select';
+import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';

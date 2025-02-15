@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Input } from '@wcpos/components/src/input';
-import { Label } from '@wcpos/components/src/label';
-import { Toast } from '@wcpos/components/src/toast';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
+import { Input } from '@wcpos/components/input';
+import { Label } from '@wcpos/components/label';
+import { Toast } from '@wcpos/components/toast';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../contexts/translations';
 import useSiteConnect from '../hooks/use-site-connect';

@@ -1,11 +1,10 @@
 import * as React from 'react';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
-import { Loader } from '@wcpos/components/src/loader';
-import useHttpClient from '@wcpos/hooks/src/use-http-client';
-import log from '@wcpos/utils/src/logger';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { Icon } from '@wcpos/components/icon';
+import { Loader } from '@wcpos/components/loader';
+import useHttpClient from '@wcpos/hooks/use-http-client';
+import log from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
 import useSiteConnect from '../hooks/use-site-connect';

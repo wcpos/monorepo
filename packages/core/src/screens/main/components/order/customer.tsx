@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ButtonPill } from '@wcpos/components/src/button';
-import { useDataTable } from '@wcpos/components/src/data-table';
-import { FormatAddress } from '@wcpos/components/src/format';
-import { VStack } from '@wcpos/components/src/vstack';
+import { ButtonPill } from '@wcpos/components/button';
+import { useDataTable } from '@wcpos/components/data-table';
+import { FormatAddress } from '@wcpos/components/format';
+import { VStack } from '@wcpos/components/vstack';
 
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 

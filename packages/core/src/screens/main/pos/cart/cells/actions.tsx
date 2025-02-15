@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { IconButton } from '@wcpos/components/src/icon-button';
+import { IconButton } from '@wcpos/components/icon-button';
 
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
 

@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useAugmentedRef } from '@rn-primitives/hooks';
 import { useSubscription } from 'observable-hooks';
 
-import { Input } from '@wcpos/components/src/input';
-import type { InputProps } from '@wcpos/components/src/input';
+import { Input } from '@wcpos/components/input';
+import type { InputProps } from '@wcpos/components/input';
 import type { Query } from '@wcpos/query';
 
 interface Props extends InputProps {

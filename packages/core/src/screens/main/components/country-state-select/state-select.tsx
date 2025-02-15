@@ -6,7 +6,7 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from '@wcpos/components/src/select';
+} from '@wcpos/components/select';
 
 import { StatesProvider, useStates } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';

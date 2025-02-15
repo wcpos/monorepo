@@ -1,20 +1,20 @@
 import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet } from 'react-native';
 
-import { Box } from '@wcpos/components/src/box';
-import { Card } from '@wcpos/components/src/card';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Logo } from '@wcpos/components/src/logo';
-import { Suspense } from '@wcpos/components/src/suspense';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Box } from '@wcpos/components/box';
+import { Card } from '@wcpos/components/card';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Logo } from '@wcpos/components/logo';
+import { Suspense } from '@wcpos/components/suspense';
+import { VStack } from '@wcpos/components/vstack';
 
 import DemoButton from './components/demo-button';
 import { Sites } from './components/sites';
 import UrlInput from './components/url-input';
 import { useAppState } from '../../contexts/app-state';
-import Platform from '../../utils/platform';
+import Platform from '../../lib/platform';
 
-const Connect = () => {
+export const Connect = () => {
 	const { user } = useAppState();
 
 	return (
@@ -40,5 +40,3 @@ const Connect = () => {
 		</KeyboardAvoidingView>
 	);
 };
-
-export default Connect;

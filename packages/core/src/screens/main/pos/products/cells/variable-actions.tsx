@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 
 import VariationsPopover from './variations-popover';
 import { useAddVariation } from '../../hooks/use-add-variation';

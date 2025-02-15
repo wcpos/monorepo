@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Icon } from '@wcpos/components/src/icon';
+import { Icon } from '@wcpos/components/icon';
 import {
 	Table,
 	TableHeader,
@@ -8,8 +8,8 @@ import {
 	TableBody,
 	TableRow,
 	TableCell,
-} from '@wcpos/components/src/table';
-import { Text } from '@wcpos/components/src/text';
+} from '@wcpos/components/table';
+import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 

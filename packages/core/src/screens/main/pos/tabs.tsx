@@ -1,14 +1,14 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Button } from '@wcpos/components/src/button';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
-import { cn } from '@wcpos/components/src/lib/utils';
-import { Suspense } from '@wcpos/components/src/suspense';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Button } from '@wcpos/components/button';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { cn } from '@wcpos/components/lib/utils';
+import { Suspense } from '@wcpos/components/suspense';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import Cart from './cart';
 import Products from './products';

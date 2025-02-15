@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { View, useWindowDimensions } from 'react-native';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/src/panels';
-import { VStack } from '@wcpos/components/src/vstack';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
+import { VStack } from '@wcpos/components/vstack';
 
 import { Chart } from './chart';
 import { FilterBar } from './filter-bar';

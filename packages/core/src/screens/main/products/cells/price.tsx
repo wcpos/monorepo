@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useDataTable } from '@wcpos/components/src/data-table';
+import { useDataTable } from '@wcpos/components/data-table';
 
 import { PriceWithTax } from '../../components/product/price-with-tax';
 

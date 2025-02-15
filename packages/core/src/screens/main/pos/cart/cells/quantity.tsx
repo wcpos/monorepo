@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../contexts/translations';
 import { NumberInput } from '../../../components/number-input';

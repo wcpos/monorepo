@@ -6,8 +6,8 @@ import { useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput, useFormChangeHandler } from '@wcpos/components/src/form';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Form, FormField, FormInput, useFormChangeHandler } from '@wcpos/components/form';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';

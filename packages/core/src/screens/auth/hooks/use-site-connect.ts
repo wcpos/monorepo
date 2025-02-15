@@ -3,14 +3,14 @@ import * as React from 'react';
 import find from 'lodash/find';
 import get from 'lodash/get';
 
-import useHttpClient from '@wcpos/hooks/src/use-http-client';
-import log from '@wcpos/utils/src/logger';
+import useHttpClient from '@wcpos/hooks/use-http-client';
+import log from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { parseLinkHeader } from '../../../lib/url';
 
-type SiteDocument = import('@wcpos/database/src').SiteDocument;
+type SiteDocument = import('@wcpos/database').SiteDocument;
 
 interface WpJsonResponse {
 	uuid: string;

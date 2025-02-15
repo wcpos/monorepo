@@ -1,6 +1,9 @@
 import { Platform as RNPlatform } from 'react-native';
 
-type PlatformType = typeof RNPlatform & { isElectron: boolean; isStandalone: boolean };
+type PlatformType = typeof RNPlatform & {
+	isElectron: boolean;
+	isStandalone: boolean;
+};
 
 function isElectron() {
 	// https://github.com/cheton/is-electron
@@ -10,7 +13,7 @@ function isElectron() {
 const Platform: PlatformType = {
 	...RNPlatform,
 	isElectron: isElectron(),
-	isStandalone: (window.navigator as any).standalone,
+	isStandalone: (globalThis.navigator as any).standalone,
 };
 
 export default Platform;

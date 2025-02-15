@@ -3,19 +3,19 @@ import * as React from 'react';
 import { useFormContext, useFieldArray } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Collapsible, CollapsibleContent } from '@wcpos/components/src/collapsible';
+import { Collapsible, CollapsibleContent } from '@wcpos/components/collapsible';
 import {
 	DndProvider,
 	Draggable,
 	DraggableStack,
 	DndProviderProps,
 	DraggableStackProps,
-} from '@wcpos/components/src/dnd';
-import { FormField, FormSwitch } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/dnd';
+import { FormField, FormSwitch } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 

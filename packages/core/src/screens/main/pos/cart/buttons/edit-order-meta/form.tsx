@@ -11,10 +11,10 @@ import {
 	DialogClose,
 	DialogFooter,
 	useRootContext,
-} from '@wcpos/components/src/dialog';
-import { Form, FormCombobox, FormField, FormInput } from '@wcpos/components/src/form';
-// import { Toast } from '@wcpos/components/src/toast';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/dialog';
+import { Form, FormCombobox, FormField, FormInput } from '@wcpos/components/form';
+// import { Toast } from '@wcpos/components/toast';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
 import { CurrencySelect } from '../../../../components/currency-select';

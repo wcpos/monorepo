@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { useWindowDimensions } from 'react-native';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
 import { useQuery } from '@wcpos/query';
 
 import POSColumns from './columns';

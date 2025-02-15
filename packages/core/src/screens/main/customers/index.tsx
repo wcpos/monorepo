@@ -5,8 +5,8 @@ import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
 import { filter } from 'rxjs/operators';
 
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
 
 import { AddCustomer } from './add-customer';
 import Customers from './customers';

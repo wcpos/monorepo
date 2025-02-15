@@ -5,19 +5,19 @@ import {
 	ContextMenuContent,
 	ContextMenuItem,
 	ContextMenuTrigger,
-} from '@wcpos/components/src/context-menu';
+} from '@wcpos/components/context-menu';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from '@wcpos/components/src/dropdown-menu';
-import { Icon } from '@wcpos/components/src/icon';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Loader } from '@wcpos/components/src/loader';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
+} from '@wcpos/components/dropdown-menu';
+import { Icon } from '@wcpos/components/icon';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Loader } from '@wcpos/components/loader';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../contexts/translations';
 

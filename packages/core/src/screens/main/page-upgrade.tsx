@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { View, Linking } from 'react-native';
 
-import { Button } from '@wcpos/components/src/button';
-import { HStack } from '@wcpos/components/src/hstack';
-import { Image } from '@wcpos/components/src/image';
-import { cn } from '@wcpos/components/src/lib/utils';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Button } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
+import { Image } from '@wcpos/components/image';
+import { cn } from '@wcpos/components/lib/utils';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../contexts/translations';
 

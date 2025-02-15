@@ -3,9 +3,9 @@ import * as React from 'react';
 import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
 import VariationButtons from './buttons';
 import VariationSelect from './select';

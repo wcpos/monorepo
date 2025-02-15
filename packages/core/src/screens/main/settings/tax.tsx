@@ -7,7 +7,7 @@ import { useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Form,
 	FormField,
@@ -15,9 +15,9 @@ import {
 	FormSelect,
 	FormRadioGroup,
 	useFormChangeHandler,
-} from '@wcpos/components/src/form';
-import { ModalClose, ModalFooter } from '@wcpos/components/src/modal';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/form';
+import { ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';

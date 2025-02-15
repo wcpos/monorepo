@@ -9,8 +9,8 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from '@wcpos/components/src/select';
-import { Text } from '@wcpos/components/src/text';
+} from '@wcpos/components/select';
+import { Text } from '@wcpos/components/text';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';

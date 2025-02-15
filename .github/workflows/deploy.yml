@@ -1,0 +1,54 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deploy as preview or production
+        type: choice
+        required: true
+        default: preview
+        options:
+          - preview
+          - production
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_USE_FAST_RESOLVER: true # Use the faster Metro resolver in SDK 51
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@v4
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: ✅ Build apps/main
+        run: pnpm run -w build:main
+
+      - name: 🌐 Export apps/main for web
+        working-directory: apps/main
+        run: pnpm expo export --platform web --output-dir ./build
+
+      - name: 🚀 Deploy apps/main preview
+        if: ${{ github.event_name == 'pull_request' || github.event.inputs.target == 'preview' }}
+        working-directory: apps/main
+        run: eas deploy --export-dir ./build
+
+      - name: 🚀 Deploy apps/main production
+        if: ${{ (github.event_name == 'push' && github.ref_name == 'main') || github.event.inputs.target == 'production' }}
+        working-directory: apps/main
+        run: eas deploy --export-dir ./build --production

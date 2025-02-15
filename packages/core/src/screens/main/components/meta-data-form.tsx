@@ -4,18 +4,18 @@ import { View } from 'react-native';
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import { ButtonText, Button } from '@wcpos/components/src/button';
+import { ButtonText, Button } from '@wcpos/components/button';
 import {
 	Collapsible,
 	CollapsibleTrigger,
 	CollapsibleContent,
-} from '@wcpos/components/src/collapsible';
-import { FormField, FormInput } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
-import { VStack } from '@wcpos/components/src/vstack';
+} from '@wcpos/components/collapsible';
+import { FormField, FormInput } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../contexts/translations';
 

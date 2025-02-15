@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { Toast } from '@wcpos/components/src/toast';
-import log from '@wcpos/utils/src/logger';
+import { Toast } from '@wcpos/components/toast';
+import log from '@wcpos/utils/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';

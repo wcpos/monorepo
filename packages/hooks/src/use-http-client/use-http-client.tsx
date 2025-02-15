@@ -4,7 +4,7 @@ import Bottleneck from 'bottleneck';
 import merge from 'lodash/merge';
 import set from 'lodash/set';
 
-import log from '@wcpos/utils/src/logger';
+import log from '@wcpos/utils/logger';
 
 import http from './http';
 import useHttpErrorHandler from './use-http-error-handler';

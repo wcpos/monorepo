@@ -8,7 +8,7 @@ import {
 } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
 	SelectContent,
@@ -17,7 +17,7 @@ import {
 	SelectGroup,
 	SelectLabel,
 	SelectSeparator,
-} from '@wcpos/components/src/select';
+} from '@wcpos/components/select';
 import type { OrderCollection, StoreDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 

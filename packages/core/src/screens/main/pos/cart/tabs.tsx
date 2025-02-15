@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { Icon } from '@wcpos/components/src/icon';
-import { Tabs, ScrollableTabsList, TabsTrigger } from '@wcpos/components/src/tabs';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/tooltip';
+import { Icon } from '@wcpos/components/icon';
+import { Tabs, ScrollableTabsList, TabsTrigger } from '@wcpos/components/tabs';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/tooltip';
 
 import { CartTabTitle } from './tab-title';
 import { useT } from '../../../../contexts/translations';

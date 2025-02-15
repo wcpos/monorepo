@@ -5,8 +5,8 @@ import { useObservableEagerState, ObservableResource, useObservable } from 'obse
 import { of } from 'rxjs';
 import { map, startWith, switchMap, tap } from 'rxjs/operators';
 
-import { HStack } from '@wcpos/components/src/hstack';
-import { Suspense } from '@wcpos/components/src/suspense';
+import { HStack } from '@wcpos/components/hstack';
+import { Suspense } from '@wcpos/components/suspense';
 import { useQuery } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';

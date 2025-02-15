@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Combobox,
 	ComboboxTriggerPrimitive,
@@ -10,13 +10,13 @@ import {
 	ComboboxItem,
 	ComboboxList,
 	ComboboxSearch,
-} from '@wcpos/components/src/combobox';
+} from '@wcpos/components/combobox';
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectPrimitiveTrigger,
-} from '@wcpos/components/src/select';
+} from '@wcpos/components/select';
 import type { ProductDocument } from '@wcpos/database';
 
 import { useT } from '../../../../contexts/translations';

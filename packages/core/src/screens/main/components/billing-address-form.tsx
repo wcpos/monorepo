@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
-import { FormCombobox, FormField, FormInput } from '@wcpos/components/src/form';
+import { FormCombobox, FormField, FormInput } from '@wcpos/components/form';
 
 import { CountryCombobox } from './country-state-select/country-combobox';
 import { StateFormInput } from './country-state-select/state-forminput';

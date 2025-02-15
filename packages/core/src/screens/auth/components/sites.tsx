@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { Card } from '@wcpos/components/src/card';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Card } from '@wcpos/components/card';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
 
 import { Site } from './site';
 

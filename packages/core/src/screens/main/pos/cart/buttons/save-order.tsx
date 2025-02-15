@@ -3,8 +3,8 @@ import { View } from 'react-native';
 
 import { isRxDocument } from 'rxdb';
 
-import { Button } from '@wcpos/components/src/button';
-import { Toast } from '@wcpos/components/src/toast';
+import { Button } from '@wcpos/components/button';
+import { Toast } from '@wcpos/components/toast';
 
 import { useT } from '../../../../../contexts/translations';
 import usePushDocument from '../../../contexts/use-push-document';
