@@ -39,7 +39,7 @@ export const resetCollectionPlugin: RxPlugin = {
 				}
 			},
 		},
-		postDestroyRxCollection: {
+		postCloseRxCollection: {
 			/**
 			 * Automatically re-add the collection after it's destroyed
 			 */

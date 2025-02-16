@@ -70,7 +70,7 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 		fastStoreDB,
 		extraData,
 	} = useUserDB();
-	const [isReadyRef, isReady$] = useObservableRef(false);
+	// const [isReadyRef, isReady$] = useObservableRef(false);
 
 	/**
 	 *
@@ -120,11 +120,11 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 		]
 	);
 
-	if (isWebApp) {
-		isReadyRef.current = isRxDatabase(storeDB);
-	} else {
-		isReadyRef.current = true;
-	}
+	// if (isWebApp) {
+	// 	isReadyRef.current = isRxDatabase(storeDB);
+	// } else {
+		// isReadyRef.current = true;
+	// }
 
 	/**
 	 *
@@ -145,12 +145,12 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 			login,
 			logout,
 			switchStore,
-			isReadyResource: new ObservableResource(
-				isReady$.pipe(
-					filter((v) => v),
-					distinctUntilChanged()
-				)
-			),
+			// isReadyResource: new ObservableResource(
+			// 	isReady$.pipe(
+			// 		filter((v) => v),
+			// 		distinctUntilChanged()
+			// 	)
+			// ),
 			hydrationResource,
 		};
 	}, [
@@ -167,7 +167,7 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 		login,
 		logout,
 		switchStore,
-		isReady$,
+		// isReady$,
 		hydrationResource,
 	]);
 

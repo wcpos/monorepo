@@ -23,15 +23,15 @@
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.4",
-    "rxdb": "15.39.0",
-    "rxdb-premium": "15.39.0",
+    "rxdb": "16.6.1",
+    "rxdb-premium": "16.6.1",
     "rxjs": "7.8.1",
-    "uuid": "10.0.0"
+    "uuid": "11.0.5"
   },
   "devDependencies": {
-    "@faker-js/faker": "^8.4.1",
+    "@faker-js/faker": "9.5.0",
     "@types/jest": "^29.5.13",
-    "@types/lodash": "4.17.13",
+    "@types/lodash": "4.17.15",
     "@types/uuid": "10.0.0",
     "expo-sqlite": "15.1.2",
     "jest": "^29.7.0",

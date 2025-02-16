@@ -31,9 +31,6 @@
       "rxdb-premium"
     ]
   },
-  "resolutions": {
-    "flexsearch@0.7.43": "git+https://github.com/wcpos/flexsearch.git#76e53ededf2045867cfe9548f5043e3842acb9ad"
-  },
   "dependencies": {
     "turbo": "^2.4.2",
     "typescript": "5.3.3"

@@ -9,9 +9,7 @@
       "cache": {
         "key": "turbo",
         "paths": [
-          "../../.turbo/cache",
-          "../../node_modules/.cache/turbo"
-        ]
+          "../../../.turbo/cache"        ]
       },
       "env": {
         "EXPO_USE_FAST_RESOLVER": "true"
