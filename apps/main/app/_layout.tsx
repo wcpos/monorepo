@@ -13,6 +13,7 @@ import RootError from '../components/root-error';
 import { Splash } from '../components/splash-screen';
 
 import '../global.css';
+import '../polyfills';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
