@@ -1,13 +1,16 @@
 import { createRxDatabase, removeRxDatabase } from 'rxdb';
 import { disableVersionCheck } from 'rxdb-premium/plugins/shared';
+import { setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import log from '@wcpos/utils/logger';
 
 import config from './adapter';
 import { fastConfig } from './fast-adapter';
 
-import './plugins';
 disableVersionCheck();
+setPremiumFlag();
+
+import './plugins';
 
 /**
  * creates the generic database
@@ -19,6 +22,7 @@ export async function createDB<DBCollections>(name: string) {
 			...config,
 			allowSlowCount: true,
 			// password: 'posInstanceId',
+			ignoreDuplicate: !!__DEV__,
 			multiInstance: false,
 		});
 
@@ -40,6 +44,7 @@ export async function createMemorySyncedDB<DBCollections>(name: string) {
 			...fastConfig,
 			allowSlowCount: true,
 			// password: 'posInstanceId',
+			ignoreDuplicate: !!__DEV__,
 			multiInstance: false,
 		});
 
