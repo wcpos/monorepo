@@ -1,6 +1,7 @@
 import React, { forwardRef, PropsWithChildren, useImperativeHandle, useMemo, useRef } from 'react';
 import { LayoutRectangle, StyleProp, View, ViewStyle } from 'react-native';
 
+import * as Haptics from 'expo-haptics';
 import {
 	Gesture,
 	GestureDetector,
@@ -10,7 +11,6 @@ import {
 	PanGestureHandlerEventPayload,
 	State,
 } from 'react-native-gesture-handler';
-import ReactNativeHapticFeedback, { HapticFeedbackTypes } from 'react-native-haptic-feedback';
 import {
 	cancelAnimation,
 	runOnJS,
@@ -43,6 +43,15 @@ import {
 
 import type { UniqueIdentifier } from './types';
 
+export type HapticFeedbackType =
+	| 'impactLight'
+	| 'impactMedium'
+	| 'impactHeavy'
+	| 'notificationSuccess'
+	| 'notificationWarning'
+	| 'notificationError'
+	| 'selection';
+
 export type DndProviderProps = {
 	springConfig?: WithSpringConfig;
 	activationDelay?: number;
@@ -61,7 +70,8 @@ export type DndProviderProps = {
 		event: GestureStateChangeEvent<PanGestureHandlerEventPayload>,
 		meta: { activeId: UniqueIdentifier; activeLayout: LayoutRectangle }
 	) => void;
-	hapticFeedback?: HapticFeedbackTypes;
+	// Updated to use Expo Haptics type
+	hapticFeedback?: HapticFeedbackType;
 	style?: StyleProp<ViewStyle>;
 	debug?: boolean;
 };
@@ -105,11 +115,40 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 		const draggableContentOffset = useSharedPoint(0, 0);
 		const panGestureState = useSharedValue<GestureEventPayload['state']>(0);
 
-		const runFeedback = () => {
-			if (hapticFeedback) {
-				ReactNativeHapticFeedback.trigger(hapticFeedback);
+		// Helper to trigger haptic feedback using expo-haptics
+		const triggerHapticFeedback = (type: HapticFeedbackType) => {
+			switch (type) {
+				case 'impactLight':
+					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+					break;
+				case 'impactMedium':
+					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+					break;
+				case 'impactHeavy':
+					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+					break;
+				case 'notificationSuccess':
+					Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+					break;
+				case 'notificationWarning':
+					Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+					break;
+				case 'notificationError':
+					Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+					break;
+				case 'selection':
+				default:
+					Haptics.selectionAsync();
+					break;
 			}
 		};
+
+		const runFeedback = () => {
+			if (hapticFeedback) {
+				triggerHapticFeedback(hapticFeedback);
+			}
+		};
+
 		useAnimatedReaction(
 			() => draggableActiveId.value,
 			(next, prev) => {
@@ -141,19 +180,14 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 			draggableContentOffset,
 		});
 
-		useImperativeHandle(
-			ref,
-			() => {
-				return {
-					draggableLayouts,
-					draggableOffsets,
-					draggableRestingOffsets,
-					draggableActiveId,
-				};
-			},
-			// eslint-disable-next-line react-hooks/exhaustive-deps
-			[]
-		);
+		useImperativeHandle(ref, () => {
+			return {
+				draggableLayouts,
+				draggableOffsets,
+				draggableRestingOffsets,
+				draggableActiveId,
+			};
+		}, []);
 
 		const panGesture = useMemo(() => {
 			const findActiveLayoutId = (point: Point): UniqueIdentifier | null => {
@@ -163,7 +197,6 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 				const { value: offsets } = draggableOffsets;
 				const { value: options } = draggableOptions;
 				for (const [id, layout] of Object.entries(layouts)) {
-					// console.log({ [id]: floorLayout(layout.value) });
 					const offset = offsets[id];
 					const isDisabled = options[id].disabled;
 					if (
@@ -184,7 +217,6 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 				const { value: layouts } = droppableLayouts;
 				const { value: options } = droppableOptions;
 				for (const [id, layout] of Object.entries(layouts)) {
-					// console.log({ [id]: floorLayout(layout.value) });
 					const isDisabled = options[id].disabled;
 					if (!isDisabled && overlapsRectangle(activeLayout, layout.value)) {
 						return id;
@@ -193,7 +225,6 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 				return null;
 			};
 
-			// Helpers for delayed activation (eg. long press)
 			let timeout: ReturnType<typeof setTimeout> | null = null;
 			const clearActiveIdTimeout = () => {
 				if (timeout) {
@@ -215,51 +246,35 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 				.onBegin((event) => {
 					const { state, x, y } = event;
 					debug && console.log('begin', { state, x, y });
-					// Gesture is globally disabled
 					if (disabled) {
 						return;
 					}
-					// console.log("begin", { state, x, y });
-					// Track current state for cancellation purposes
 					panGestureState.value = state;
 					const { value: layouts } = draggableLayouts;
 					const { value: offsets } = draggableOffsets;
 					const { value: restingOffsets } = draggableRestingOffsets;
 					const { value: options } = draggableOptions;
 					const { value: states } = draggableStates;
-					// for (const [id, offset] of Object.entries(offsets)) {
-					//   console.log({ [id]: [offset.x.value, offset.y.value] });
-					// }
-					// Find the active layout key under {x, y}
 					const activeId = findActiveLayoutId({ x, y });
-					// Check if an item was actually selected
 					if (activeId !== null) {
-						// Record any ongoing current offset as our initial offset for the gesture
 						const activeLayout = layouts[activeId].value;
 						const activeOffset = offsets[activeId];
 						const restingOffset = restingOffsets[activeId];
 						const { value: activeState } = states[activeId];
 						draggableInitialOffset.x.value = activeOffset.x.value;
 						draggableInitialOffset.y.value = activeOffset.y.value;
-						// Cancel the ongoing animation if we just reactivated an acting/dragging item
 						if (['dragging', 'acting'].includes(activeState)) {
 							cancelAnimation(activeOffset.x);
 							cancelAnimation(activeOffset.y);
-							// If not we should reset the resting offset to the current offset value
-							// But only if the item is not currently still animating
 						} else {
-							// active or pending
-							// Record current offset as our natural resting offset for the gesture
 							restingOffset.x.value = activeOffset.x.value;
 							restingOffset.y.value = activeOffset.y.value;
 						}
-						// Update activeId directly or with an optional delay
 						const { activationDelay } = options[activeId];
 						if (activationDelay > 0) {
 							draggablePendingId.value = activeId;
 							draggableStates.value[activeId].value = 'pending';
 							runOnJS(setActiveId)(activeId, activationDelay);
-							// @TODO activeLayout
 						} else {
 							draggableActiveId.value = activeId;
 							draggableActiveLayout.value = applyOffset(activeLayout, {
@@ -274,36 +289,28 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 					}
 				})
 				.onUpdate((event) => {
-					// console.log(draggableStates.value);
 					const { state, translationX, translationY } = event;
 					debug && console.log('update', { state, translationX, translationY });
-					// Track current state for cancellation purposes
 					panGestureState.value = state;
 					const { value: activeId } = draggableActiveId;
 					const { value: pendingId } = draggablePendingId;
 					const { value: options } = draggableOptions;
 					const { value: layouts } = draggableLayouts;
 					const { value: offsets } = draggableOffsets;
-					// const { value: states } = draggableStates;
 					if (activeId === null) {
-						// Check if we are currently waiting for activation delay
 						if (pendingId !== null) {
 							const { activationTolerance } = options[pendingId];
-							// Check if we've moved beyond the activation tolerance
 							const distance = getDistance(translationX, translationY);
 							if (distance > activationTolerance) {
 								runOnJS(clearActiveIdTimeout)();
 								draggablePendingId.value = null;
 							}
 						}
-						// Ignore item-free interactions
 						return;
 					}
-					// Update our active offset to pan the active item
 					const activeOffset = offsets[activeId];
 					activeOffset.x.value = draggableInitialOffset.x.value + translationX;
 					activeOffset.y.value = draggableInitialOffset.y.value + translationY;
-					// Check potential droppable candidates
 					const activeLayout = layouts[activeId].value;
 					draggableActiveLayout.value = applyOffset(activeLayout, {
 						x: activeOffset.x.value,
@@ -317,24 +324,20 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 				.onFinalize((event) => {
 					const { state, velocityX, velocityY } = event;
 					debug && console.log('finalize', { state, velocityX, velocityY });
-					// Track current state for cancellation purposes
-					panGestureState.value = state; // can be `FAILED` or `ENDED`
+					panGestureState.value = state;
 					const { value: activeId } = draggableActiveId;
 					const { value: pendingId } = draggablePendingId;
 					const { value: layouts } = draggableLayouts;
 					const { value: offsets } = draggableOffsets;
 					const { value: restingOffsets } = draggableRestingOffsets;
 					const { value: states } = draggableStates;
-					// Ignore item-free interactions
 					if (activeId === null) {
-						// Check if we were currently waiting for activation delay
 						if (pendingId !== null) {
 							runOnJS(clearActiveIdTimeout)();
 							draggablePendingId.value = null;
 						}
 						return;
 					}
-					// Reset interaction-related shared state for styling purposes
 					draggableActiveId.value = null;
 					if (onFinalize) {
 						const activeLayout = layouts[activeId].value;
@@ -345,7 +348,6 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 						});
 						onFinalize(event, { activeId, activeLayout: updatedLayout });
 					}
-					// Callback
 					if (state !== State.FAILED && onDragEnd) {
 						const { value: dropActiveId } = droppableActiveId;
 						onDragEnd({
@@ -353,9 +355,7 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 							over: dropActiveId !== null ? droppableOptions.value[dropActiveId] : null,
 						});
 					}
-					// Reset droppable
 					droppableActiveId.value = null;
-					// Move back to initial position
 					const activeOffset = offsets[activeId];
 					const restingOffset = restingOffsets[activeId];
 					states[activeId].value = 'acting';
@@ -368,7 +368,6 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 							{ ...springConfig, velocity: velocityY },
 						],
 						([finishedX, finishedY]) => {
-							// Cancel if we are interacting again with this item
 							if (
 								panGestureState.value !== State.END &&
 								panGestureState.value !== State.FAILED &&
@@ -379,30 +378,20 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 							if (states[activeId]) {
 								states[activeId].value = 'resting';
 							}
-							if (!finishedX || !finishedY) {
-								// console.log(`${activeId} did not finish to reach ${targetX.toFixed(2)} ${currentX}`);
-							}
-							// for (const [id, offset] of Object.entries(offsets)) {
-							//   console.log({ [id]: [offset.x.value.toFixed(2), offset.y.value.toFixed(2)] });
-							// }
 						}
 					);
 				})
 				.withTestId('DndProvider.pan');
 
-			// Duration in milliseconds of the LongPress gesture before Pan is allowed to activate.
-			// If the finger is moved during that period, the gesture will fail.
 			if (activationDelay > 0) {
 				panGesture.activateAfterLongPress(activationDelay);
 			}
 
-			// Minimum distance the finger (or multiple finger) need to travel before the gesture activates. Expressed in points.
 			if (minDistance > 0) {
 				panGesture.minDistance(minDistance);
 			}
 
 			return panGesture;
-			// eslint-disable-next-line react-hooks/exhaustive-deps
 		}, [disabled]);
 
 		return (

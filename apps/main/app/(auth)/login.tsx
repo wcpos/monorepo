@@ -1,11 +1,1 @@
-import { View } from 'react-native';
-
-import { Text } from '@wcpos/components/text';
-
-export default function Login() {
-	return (
-		<View>
-			<Text>Login</Text>
-		</View>
-	);
-}
+export { Login as default } from '@wcpos/core/screens/auth/login';

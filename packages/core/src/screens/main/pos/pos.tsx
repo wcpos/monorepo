@@ -13,7 +13,7 @@ import { TaxRatesProvider } from '../contexts/tax-rates';
 /**
  *
  */
-const POS = () => {
+export const POS = () => {
 	const dimensions = useWindowDimensions();
 	const { currentOrder } = useCurrentOrder();
 
@@ -35,5 +35,3 @@ const POS = () => {
 		</>
 	);
 };
-
-export default POS;

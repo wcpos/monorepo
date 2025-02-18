@@ -17,12 +17,12 @@
     "test": "eslint --ext ts,tsx ./src"
   },
   "peerDependencies": {
+    "@react-native-community/netinfo": "11.4.1",
     "react-native": "0.76.7",
     "react-native-gesture-handler": "2.20.2",
     "react-native-reanimated": "3.16.1"
   },
   "dependencies": {
-    "@react-native-community/netinfo": "11.4.1",
     "axios": "1.7.9",
     "bottleneck": "^2.19.5",
     "js-base64": "^3.7.7",

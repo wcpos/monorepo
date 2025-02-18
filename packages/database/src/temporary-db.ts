@@ -1,5 +1,6 @@
 import { createRxDatabase } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
 import log from '@wcpos/utils/logger';
 
@@ -11,6 +12,12 @@ const collections = { orders: storeCollections.orders };
 
 export type TemporaryDatabase = RxDatabase<typeof collections>;
 
+const storage = getRxStorageMemory();
+
+const devStorage = wrappedValidateZSchemaStorage({
+	storage,
+});
+
 /**
  *
  */
@@ -18,7 +25,7 @@ export async function createTemporaryDB() {
 	try {
 		const db = await createRxDatabase<TemporaryDatabase>({
 			name: 'temporary',
-			storage: getRxStorageMemory(),
+			storage: __DEV__ ? devStorage : storage,
 			ignoreDuplicate: true,
 		});
 

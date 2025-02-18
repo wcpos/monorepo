@@ -1,16 +1,10 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useLocalSearchParams, router } from 'expo-router';
 import get from 'lodash/get';
 import { useObservableSuspense } from 'observable-hooks';
 
-import {
-	Modal,
-	ModalContent,
-	ModalHeader,
-	ModalTitle,
-	ModalBody,
-} from '@wcpos/components/modal';
+import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody } from '@wcpos/components/modal';
 import { WebView } from '@wcpos/components/webview';
 import log from '@wcpos/utils/logger';
 
@@ -20,11 +14,10 @@ import { useT } from '../../contexts/translations';
 /**
  *
  */
-const Login = ({ route }) => {
-	const { siteID } = route.params;
+export const Login = () => {
+	const { siteID } = useLocalSearchParams<{ siteID?: string }>();
 	const { user, userDB } = useAppState();
 	const sites = useObservableSuspense(user.populateResource('sites'));
-	const navigation = useNavigation();
 	const site = sites.find((s) => s.uuid === siteID);
 	const t = useT();
 
@@ -39,6 +32,7 @@ const Login = ({ route }) => {
 		async (payload) => {
 			const uuid = get(payload, 'uuid');
 			const jwt = get(payload, 'jwt');
+			debugger;
 
 			try {
 				const wpCredentials = await userDB.wp_credentials.findOneFix(uuid).exec();
@@ -62,10 +56,10 @@ const Login = ({ route }) => {
 				log.error(err);
 			} finally {
 				// navigate back
-				navigation.goBack();
+				router.back();
 			}
 		},
-		[navigation, site, userDB.wp_credentials]
+		[site, userDB.wp_credentials]
 	);
 
 	return (
@@ -112,5 +106,3 @@ const Login = ({ route }) => {
 // 		</ModalLayout>
 // 	);
 // };
-
-export default Login;

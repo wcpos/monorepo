@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { router } from 'expo-router';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -23,7 +23,6 @@ interface WpUserProps {
  */
 export const WPUsers = ({ site }: WpUserProps) => {
 	const wpCreds = useObservableSuspense(site.populateResource('wp_credentials'));
-	const navigation = useNavigation();
 	const t = useT();
 
 	return (
@@ -42,7 +41,7 @@ export const WPUsers = ({ site }: WpUserProps) => {
 						<IconButton
 							name="circlePlus"
 							size="lg"
-							onPress={() => navigation.navigate('Login', { siteID: site.uuid })}
+							onPress={() => router.push({ pathname: '/login', params: { siteID: site.uuid } })}
 						/>
 					</TooltipTrigger>
 					<TooltipContent>

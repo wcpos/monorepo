@@ -23,10 +23,10 @@ export const Connect = () => {
 			style={[{ flex: 1 }, StyleSheet.absoluteFill]}
 		>
 			{/* <View nativeID="titlebar" style={{ height: 30 }} /> */}
-			<Box className="min-h-screen w-full justify-center items-center">
+			<Box className="min-h-screen w-full items-center justify-center">
 				<VStack space="lg" className="w-full max-w-[460px] items-center">
 					<Logo width={120} height={120} />
-					<Card className="p-4 w-full">
+					<Card className="w-full p-4">
 						<UrlInput />
 					</Card>
 					<ErrorBoundary>

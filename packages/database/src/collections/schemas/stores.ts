@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 1,
+	version: 2,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -44,6 +44,37 @@ export const storesLiteral = {
 		store_postcode: {
 			title: 'Postcode / ZIP',
 			description: 'The postal code, if any, in which your business is located.',
+			type: 'string',
+		},
+		url: {
+			title: 'Store URL',
+			description: 'The URL of the store.',
+			type: 'string',
+		},
+		phone: {
+			title: 'Store Phone',
+			description: 'The phone number of the store.',
+			type: 'string',
+		},
+		email: {
+			title: 'Store Email',
+			description: 'The email address of the store.',
+			type: 'string',
+		},
+		opening_hours: {
+			title: 'Opening hours',
+			type: 'string',
+		},
+		personal_notes: {
+			title: 'Personal notes',
+			type: 'string',
+		},
+		policies_and_conditions: {
+			title: 'Policies and conditions',
+			type: 'string',
+		},
+		footer_imprint: {
+			title: 'Footer imprint',
 			type: 'string',
 		},
 		default_customer: {
@@ -145,6 +176,24 @@ export const storesLiteral = {
 			type: 'string',
 			enum: ['shipping', 'billing', 'base'],
 			enumNames: ['Customer shipping address', 'Customer billing address', 'Shop base address'],
+		},
+		tax_address: {
+			title: 'Tax address',
+			type: 'object',
+			properties: {
+				country: {
+					type: 'string',
+				},
+				state: {
+					type: 'string',
+				},
+				postcode: {
+					type: 'string',
+				},
+				city: {
+					type: 'string',
+				},
+			},
 		},
 		shipping_tax_class: {
 			title: 'Shipping tax class',
@@ -423,6 +472,27 @@ export const storesLiteral = {
 		},
 		date_modified_gmt: {
 			type: 'string',
+		},
+		meta_data: {
+			description: 'Meta data.',
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					id: {
+						description: 'Meta ID.',
+						type: 'integer',
+					},
+					key: {
+						description: 'Meta key.',
+						type: 'string',
+					},
+					value: {
+						description: 'Meta value.',
+						type: 'string',
+					},
+				},
+			},
 		},
 	},
 } as const;

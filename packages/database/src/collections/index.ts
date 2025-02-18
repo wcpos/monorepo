@@ -74,6 +74,14 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.store_state = state;
 			return oldDoc;
 		},
+		2(oldDoc: StoreDocumentType) {
+			oldDoc.tax_address = {
+				country: oldDoc.store_country,
+				state: oldDoc.store_state,
+				postcode: oldDoc.store_postcode,
+				city: oldDoc.store_city,
+			};
+		},
 	},
 };
 

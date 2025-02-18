@@ -90,7 +90,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		/**
 		 * Subscribe to localDB to detect if db is destroyed
 		 */
-		this.localDB.onDestroy.push(() => this.cancel());
+		this.localDB.onClose.push(() => this.cancel());
 	}
 
 	public static getInstance<TDatabase extends RxDatabase>(

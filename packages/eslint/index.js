@@ -6,6 +6,13 @@ export default [
 	...expoConfig,
 	{
 		files: ['**/*.{js,jsx,ts,tsx}'],
+		settings: {
+			'import/resolver': {
+				typescript: {
+					project: ['../../tsconfig.json', './packages/*/tsconfig.json'],
+				},
+			},
+		},
 		rules: {
 			'prettier/prettier': [
 				'error',

@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Platform, StyleSheet, View, ScrollView, type GestureResponderEvent } from 'react-native';
 
-import { useNavigation, StackActions } from '@react-navigation/native';
 import * as Slot from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { router } from 'expo-router';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Button } from '../button';
@@ -29,11 +29,8 @@ const useRootContext = () => {
 };
 
 const Modal = ({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) => {
-	const navigation = useNavigation();
 	return (
-		<Context.Provider
-			value={{ onClose: onClose ? onClose : () => navigation.dispatch(StackActions.pop(1)) }}
-		>
+		<Context.Provider value={{ onClose: onClose ? onClose : () => router.back() }}>
 			{children}
 		</Context.Provider>
 	);

@@ -31,7 +31,6 @@
 		"@date-fns/utc": "^2.1.0",
 		"@hookform/error-message": "^2.0.1",
 		"@hookform/resolvers": "4.1.0",
-		"@shelf/fast-natural-order-by": "^2.0.0",
 		"@tanstack/react-table": "^8.20.6",
 		"@transifex/native": "^7.1.3",
 		"@transifex/react": "^7.1.3",

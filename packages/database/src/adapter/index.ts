@@ -1,9 +1,9 @@
 import * as SQLite from 'expo-sqlite';
+import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 import {
 	getRxStorageSQLite,
 	getSQLiteBasicsExpoSQLiteAsync,
 } from 'rxdb-premium/plugins/storage-sqlite';
-import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
 const storage = getRxStorageSQLite({
 	sqliteBasics: getSQLiteBasicsExpoSQLiteAsync(SQLite.openDatabaseAsync),
