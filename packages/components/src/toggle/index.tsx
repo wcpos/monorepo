@@ -9,18 +9,18 @@ import { TextClassContext } from '../text';
 // import type { LucideIcon } from 'lucide-react-native';
 
 const toggleVariants = cva(
-	'web:group web:inline-flex items-center justify-center rounded-md web:ring-offset-background web:transition-colors web:hover:bg-muted active:bg-muted web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
+	'web:group web:inline-flex web:ring-offset-background web:transition-colors web:hover:bg-muted active:bg-muted web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2 items-center justify-center rounded-md',
 	{
 		variants: {
 			variant: {
 				default: 'bg-transparent',
 				outline:
-					'border border-input bg-transparent web:hover:bg-accent active:bg-accent active:bg-accent',
+					'border-input web:hover:bg-accent active:bg-accent active:bg-accent border bg-transparent',
 			},
 			size: {
-				default: 'h-10 px-3 native:h-12 native:px-[12]',
-				sm: 'h-9 px-2.5 native:h-10 native:px-[9]',
-				lg: 'h-11 px-5 native:h-14 native:px-6',
+				default: 'native:h-12 native:px-[12] h-10 px-3',
+				sm: 'native:h-10 native:px-[9] h-9 px-2.5',
+				lg: 'native:h-14 native:px-6 h-11 px-5',
 			},
 		},
 		defaultVariants: {
@@ -30,7 +30,7 @@ const toggleVariants = cva(
 	}
 );
 
-const toggleTextVariants = cva('text-sm native:text-base text-foreground font-medium', {
+const toggleTextVariants = cva('native:text-base text-foreground text-sm font-medium', {
 	variants: {
 		variant: {
 			default: '',

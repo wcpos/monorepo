@@ -37,7 +37,7 @@ const Root = ({ children, className, disabled = false }: RootProps) => {
 			<View
 				className={cn(
 					'w-full flex-row items-center',
-					'native:h-12 h-10 rounded-md border border-input bg-background',
+					'native:h-12 border-input bg-background h-10 rounded-md border',
 					'web:ring-offset-background',
 					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
 					disabled && 'web:cursor-not-allowed opacity-50',
@@ -154,7 +154,7 @@ const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
 				editable={editable}
 				className={cn(
 					'w-full flex-1 bg-transparent px-3 py-2',
-					'native:text-lg native:leading-[1.25] text-base text-foreground placeholder:text-muted-foreground lg:text-sm',
+					'native:text-lg native:leading-[1.25] text-foreground placeholder:text-muted-foreground text-base lg:text-sm',
 					'web:focus-visible:outline-none outline-none',
 					!editable && 'web:cursor-not-allowed opacity-50',
 					className

@@ -83,7 +83,7 @@ const FormDescription = React.forwardRef<
 		<Text
 			ref={ref}
 			nativeID={formDescriptionNativeID}
-			className={cn('pt-1 text-sm text-muted-foreground', className)}
+			className={cn('text-muted-foreground pt-1 text-sm', className)}
 			{...props}
 		/>
 	);
@@ -107,7 +107,7 @@ const FormMessage = React.forwardRef<
 			exiting={FadeOut.duration(275)}
 			ref={ref}
 			nativeID={formMessageNativeID}
-			className={cn('text-sm font-medium text-destructive', className)}
+			className={cn('text-destructive text-sm font-medium', className)}
 			{...props}
 		>
 			{body}

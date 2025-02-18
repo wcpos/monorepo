@@ -16,7 +16,7 @@ const ButtonText = Text;
 
 const buttonVariants = cva(
 	[
-		'group flex flex-shrink items-center justify-center rounded-md max-w-full web:transition-colors',
+		'web:transition-colors group flex max-w-full flex-shrink items-center justify-center rounded-md',
 		'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
 	],
 	{
@@ -39,25 +39,25 @@ const buttonVariants = cva(
 				 * Outline buttons
 				 */
 				outline:
-					'border border-input bg-background web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent',
+					'border-input bg-background web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent border',
 				'outline-primary':
-					'border border-primary bg-background web:hover:bg-primary/90 web:hover:text-primary-foreground active:bg-primary',
+					'border-primary bg-background web:hover:bg-primary/90 web:hover:text-primary-foreground active:bg-primary border',
 				'outline-secondary':
-					'border border-secondary bg-background web:hover:bg-secondary/90 web:hover:text-secondary-foreground active:bg-secondary',
+					'border-secondary bg-background web:hover:bg-secondary/90 web:hover:text-secondary-foreground active:bg-secondary border',
 				'outline-muted':
-					'border border-muted bg-background web:hover:bg-muted/90 web:hover:text-muted-foreground active:bg-muted',
+					'border-muted bg-background web:hover:bg-muted/90 web:hover:text-muted-foreground active:bg-muted border',
 				'outline-success':
-					'border border-success bg-background web:hover:bg-success/90 web:hover:text-success-foreground active:bg-success',
+					'border-success bg-background web:hover:bg-success/90 web:hover:text-success-foreground active:bg-success border',
 				'outline-destructive':
-					'border border-destructive bg-background web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive',
+					'border-destructive bg-background web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive border',
 				'outline-info':
-					'border border-info bg-background web:hover:bg-info/90 web:hover:text-info-foreground active:bg-info',
+					'border-info bg-background web:hover:bg-info/90 web:hover:text-info-foreground active:bg-info border',
 				'outline-attention':
-					'border border-attention bg-background web:hover:bg-attention/90 web:hover:text-attention-foreground active:bg-attention',
+					'border-attention bg-background web:hover:bg-attention/90 web:hover:text-attention-foreground active:bg-attention border',
 				'outline-warning':
-					'border border-warning bg-background web:hover:bg-warning/90 web:hover:text-warning-foreground active:bg-warning',
+					'border-warning bg-background web:hover:bg-warning/90 web:hover:text-warning-foreground active:bg-warning border',
 				'outline-error':
-					'border border-error bg-background web:hover:bg-error/90 web:hover:text-error-foreground active:bg-error',
+					'border-error bg-background web:hover:bg-error/90 web:hover:text-error-foreground active:bg-error border',
 
 				/**
 				 * Ghost buttons
@@ -80,10 +80,10 @@ const buttonVariants = cva(
 				'ghost-error': 'bg-error/15 web:hover:bg-error active:bg-error text-error-foreground',
 			},
 			size: {
-				default: 'h-10 px-4 py-2 native:h-12 native:px-5 native:py-3',
+				default: 'native:h-12 native:px-5 native:py-3 h-10 px-4 py-2',
 				xs: 'h-6 rounded-md px-2',
 				sm: 'h-9 rounded-md px-3',
-				lg: 'h-11 rounded-md px-8 native:h-14',
+				lg: 'native:h-14 h-11 rounded-md px-8',
 				xl: 'h-14 rounded-md px-10',
 			},
 		},
@@ -96,7 +96,7 @@ const buttonVariants = cva(
 );
 
 const buttonTextVariants = cva(
-	'web:whitespace-nowrap truncate text-base native:text-base text-foreground web:transition-colors',
+	'web:whitespace-nowrap native:text-base text-foreground web:transition-colors truncate text-base',
 	{
 		variants: {
 			variant: {
@@ -278,13 +278,13 @@ const ButtonGroup: React.FC<ButtonGroupProps> = ({ children }) => {
 
 				if (index === 0) {
 					// first
-					classNames = cn(classNames, 'pr-2 rounded-r-none');
+					classNames = cn(classNames, 'rounded-r-none pr-2');
 				} else if (index === buttons.length - 1) {
 					// last
-					classNames = cn(classNames, 'pl-2 rounded-l-none');
+					classNames = cn(classNames, 'rounded-l-none pl-2');
 				} else {
 					// middle
-					classNames = cn(classNames, 'px-2 rounded-none');
+					classNames = cn(classNames, 'rounded-none px-2');
 				}
 
 				return (

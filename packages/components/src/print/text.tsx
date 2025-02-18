@@ -8,7 +8,7 @@ import { cn } from '../lib/utils';
 
 type TextUnderline = '1dot-thick' | '2dot-thick' | 'none';
 
-const textVariants = cva('font-mono text-black web:select-text', {
+const textVariants = cva('web:select-text font-mono text-black', {
 	variants: {
 		size: {
 			sm: 'text-xs',

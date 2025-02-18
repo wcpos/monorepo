@@ -38,7 +38,7 @@ const SelectValue = React.forwardRef<TextRef, SlottableTextProps & { placeholder
 		return (
 			<TextClassContext.Provider
 				value={cn(
-					'text-sm native:text-lg',
+					'native:text-lg text-sm',
 					value?.value ? 'text-foreground' : 'text-muted-foreground',
 					className
 				)}
@@ -61,8 +61,8 @@ const SelectTrigger = React.forwardRef<
 			ref={ref}
 			className={cn(
 				'native:h-12 flex h-10 flex-row items-center justify-between gap-2 px-3 py-2',
-				'text-sm text-muted-foreground',
-				'rounded-md border border-input bg-background',
+				'text-muted-foreground text-sm',
+				'border-input bg-background rounded-md border',
 				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
 				'[&>span]:line-clamp-1',
 				props.disabled && 'web:cursor-not-allowed opacity-50',
@@ -140,7 +140,7 @@ const SelectContent = React.forwardRef<
 					<SelectPrimitive.Content
 						ref={ref}
 						className={cn(
-							'relative z-50 max-h-96 min-w-[8rem] rounded-md border border-border bg-popover px-1 py-2 shadow-md shadow-foreground/10 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+							'border-border bg-popover shadow-foreground/10 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-96 min-w-[8rem] rounded-md border px-1 py-2 shadow-md',
 							position === 'popper' &&
 								'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
 							open
@@ -177,7 +177,7 @@ const SelectLabel = React.forwardRef<
 	<SelectPrimitive.Label
 		ref={ref}
 		className={cn(
-			'native:pb-2 native:pl-10 native:text-base py-1.5 pl-8 pr-2 text-sm font-semibold text-popover-foreground',
+			'native:pb-2 native:pl-10 native:text-base text-popover-foreground py-1.5 pl-8 pr-2 text-sm font-semibold',
 			className
 		)}
 		{...props}
@@ -192,7 +192,7 @@ const SelectItem = React.forwardRef<
 	<SelectPrimitive.Item
 		ref={ref}
 		className={cn(
-			'web:group web:cursor-default web:select-none native:py-2 native:pl-10 web:hover:bg-accent/50 web:outline-none web:focus:bg-accent relative flex w-full flex-row items-center rounded-sm py-1.5 pl-8 pr-2 active:bg-accent',
+			'web:group web:cursor-default web:select-none native:py-2 native:pl-10 web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent relative flex w-full flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
 			props.disabled && 'web:pointer-events-none opacity-50',
 			className
 		)}
@@ -203,7 +203,7 @@ const SelectItem = React.forwardRef<
 				<Icon name="check" className="text-popover-foreground" />
 			</SelectPrimitive.ItemIndicator>
 		</View>
-		<SelectPrimitive.ItemText className="native:text-lg native:text-base web:group-focus:text-accent-foreground text-sm text-popover-foreground" />
+		<SelectPrimitive.ItemText className="native:text-lg native:text-base web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
 	</SelectPrimitive.Item>
 ));
 SelectItem.displayName = SelectPrimitive.Item.displayName;
@@ -214,7 +214,7 @@ const SelectSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<SelectPrimitive.Separator
 		ref={ref}
-		className={cn('-mx-1 my-1 h-px bg-muted', className)}
+		className={cn('bg-muted -mx-1 my-1 h-px', className)}
 		{...props}
 	/>
 ));
@@ -228,7 +228,7 @@ const SelectButton = React.forwardRef<React.ElementRef<typeof Button>, ButtonPro
 		<Button
 			ref={ref}
 			className={cn(
-				'native:h-12 web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 flex h-10 flex-row items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground [&>span]:line-clamp-1',
+				'native:h-12 web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 border-input bg-background text-muted-foreground flex h-10 flex-row items-center justify-between rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
 				props.disabled && 'web:cursor-not-allowed opacity-50',
 				className
 			)}

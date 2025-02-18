@@ -81,7 +81,7 @@ const DialogOverlay = Platform.select({
 });
 
 const dialogContentVariants = cva(
-	'z-50 max-w-full max-h-full gap-4 py-4 border border-border web:cursor-default bg-background rounded-lg',
+	'border-border web:cursor-default bg-background z-50 max-h-full max-w-full gap-4 rounded-lg border py-4',
 	{
 		variants: {
 			size: {
@@ -180,7 +180,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<DialogPrimitive.Description
 		ref={ref}
-		className={cn('native:text-base text-sm text-muted-foreground', className)}
+		className={cn('native:text-base text-muted-foreground text-sm', className)}
 		{...props}
 	/>
 ));

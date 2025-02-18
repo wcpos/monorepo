@@ -10,7 +10,7 @@ import { cn } from '../lib/utils';
 
 const TextClassContext = React.createContext<string | undefined>(undefined);
 
-const textVariants = cva('text-base text-foreground web:select-text', {
+const textVariants = cva('text-foreground web:select-text text-base', {
 	variants: {
 		variant: {
 			default: '',

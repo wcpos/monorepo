@@ -24,14 +24,14 @@ const ContextMenuSubTrigger = React.forwardRef<
 	return (
 		<TextClassContext.Provider
 			value={cn(
-				'select-none text-sm native:text-lg text-primary',
+				'native:text-lg text-primary select-none text-sm',
 				open && 'native:text-accent-foreground'
 			)}
 		>
 			<ContextMenuPrimitive.SubTrigger
 				ref={ref}
 				className={cn(
-					'web:cursor-default web:select-none web:focus:bg-accent web:hover:bg-accent native:py-2 web:outline-none flex flex-row items-center gap-2 rounded-sm px-2 py-1.5 active:bg-accent',
+					'web:cursor-default web:select-none web:focus:bg-accent web:hover:bg-accent native:py-2 web:outline-none active:bg-accent flex flex-row items-center gap-2 rounded-sm px-2 py-1.5',
 					open && 'bg-accent',
 					inset && 'pl-8',
 					className
@@ -56,7 +56,7 @@ const ContextMenuSubContent = React.forwardRef<
 		<ContextMenuPrimitive.SubContent
 			ref={ref}
 			className={cn(
-				'z-50 mt-1 min-w-[8rem] overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md shadow-foreground/5 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+				'border-border bg-popover shadow-foreground/5 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 mt-1 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-md',
 				open
 					? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 					: 'web:animate-out web:fade-out-0 web:zoom-out',
@@ -95,7 +95,7 @@ const ContextMenuContent = React.forwardRef<
 				<ContextMenuPrimitive.Content
 					ref={ref}
 					className={cn(
-						'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md shadow-foreground/5',
+						'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 border-border bg-popover shadow-foreground/5 z-50 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-md',
 						open
 							? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 							: 'web:animate-out web:fade-out-0 web:zoom-out-95',
@@ -119,7 +119,7 @@ const ContextMenuItem = React.forwardRef<
 		<ContextMenuPrimitive.Item
 			ref={ref}
 			className={cn(
-				'web:cursor-default native:py-2 web:outline-none web:focus:bg-accent web:hover:bg-accent group relative flex flex-row items-center gap-2 rounded-sm px-2 py-1.5 active:bg-accent',
+				'web:cursor-default native:py-2 web:outline-none web:focus:bg-accent web:hover:bg-accent active:bg-accent group relative flex flex-row items-center gap-2 rounded-sm px-2 py-1.5',
 				inset && 'pl-8',
 				props.disabled && 'web:pointer-events-none opacity-50',
 				className
@@ -137,7 +137,7 @@ const ContextMenuCheckboxItem = React.forwardRef<
 	<ContextMenuPrimitive.CheckboxItem
 		ref={ref}
 		className={cn(
-			'web:cursor-default web:group native:py-2 web:outline-none web:focus:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pl-8 pr-2 active:bg-accent',
+			'web:cursor-default web:group native:py-2 web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
 			props.disabled && 'web:pointer-events-none opacity-50',
 			className
 		)}
@@ -161,7 +161,7 @@ const ContextMenuRadioItem = React.forwardRef<
 	<ContextMenuPrimitive.RadioItem
 		ref={ref}
 		className={cn(
-			'web:cursor-default web:group native:py-2 web:outline-none web:focus:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pl-8 pr-2 active:bg-accent',
+			'web:cursor-default web:group native:py-2 web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
 			props.disabled && 'web:pointer-events-none opacity-50',
 			className
 		)}
@@ -169,7 +169,7 @@ const ContextMenuRadioItem = React.forwardRef<
 	>
 		<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
 			<ContextMenuPrimitive.ItemIndicator>
-				<View className="h-2 w-2 rounded-full bg-foreground" />
+				<View className="bg-foreground h-2 w-2 rounded-full" />
 			</ContextMenuPrimitive.ItemIndicator>
 		</View>
 		<>{children}</>
@@ -186,7 +186,7 @@ const ContextMenuLabel = React.forwardRef<
 	<ContextMenuPrimitive.Label
 		ref={ref}
 		className={cn(
-			'native:text-base web:cursor-default px-2 py-1.5 text-sm font-semibold text-foreground',
+			'native:text-base web:cursor-default text-foreground px-2 py-1.5 text-sm font-semibold',
 			inset && 'pl-8',
 			className
 		)}
@@ -201,7 +201,7 @@ const ContextMenuSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<ContextMenuPrimitive.Separator
 		ref={ref}
-		className={cn('-mx-1 my-1 h-px bg-border', className)}
+		className={cn('bg-border -mx-1 my-1 h-px', className)}
 		{...props}
 	/>
 ));
@@ -214,7 +214,7 @@ const ContextMenuShortcut = ({
 	return (
 		<Text
 			className={cn(
-				'native:text-sm ml-auto text-xs tracking-widest text-muted-foreground',
+				'native:text-sm text-muted-foreground ml-auto text-xs tracking-widest',
 				className
 			)}
 			{...props}

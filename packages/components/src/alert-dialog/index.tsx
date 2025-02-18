@@ -95,8 +95,8 @@ const AlertDialogContent = React.forwardRef<
 				<AlertDialogPrimitive.Content
 					ref={ref}
 					className={cn(
-						'z-50 max-w-lg gap-4 rounded-lg border border-border bg-background py-4',
-						'web:duration-200 shadow-lg shadow-foreground/10',
+						'border-border bg-background z-50 max-w-lg gap-4 rounded-lg border py-4',
+						'web:duration-200 shadow-foreground/10 shadow-lg',
 						open
 							? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 							: 'web:animate-out web:fade-out-0 web:zoom-out-95',

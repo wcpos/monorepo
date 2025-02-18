@@ -116,7 +116,7 @@ const PanelResizeHandle = () => {
 				<View
 					className={cn(
 						'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transform',
-						'z-20 p-1 opacity-20 group-hover:rounded-md group-hover:border group-hover:border-border group-hover:bg-popover group-hover:opacity-100 group-hover:shadow-md group-hover:shadow-foreground/5',
+						'group-hover:border-border group-hover:bg-popover group-hover:shadow-foreground/5 z-20 p-1 opacity-20 group-hover:rounded-md group-hover:border group-hover:opacity-100 group-hover:shadow-md',
 						'transition-opacity duration-200 ease-out',
 						'group-hover:animate-fadeIn group-hover:scale-95'
 					)}

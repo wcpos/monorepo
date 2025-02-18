@@ -3,9 +3,16 @@
   "name": "@wcpos/monorepo",
   "scripts": {
     "clean": "node scripts/clean-node-modules",
+    "electron": "pnpm --filter @wcpos/app-electron",
     "main": "pnpm --filter @wcpos/main",
-    "main:expo": "pnpm --filter @wcpos/main exec expo",
     "components": "pnpm --filter @wcpos/components",
+    "core": "pnpm --filter @wcpos/core",
+    "database": "pnpm --filter @wcpos/database",
+    "eslint": "pnpm --filter @wcpos/eslint-config",
+    "hooks": "pnpm --filter @wcpos/hooks",
+    "query": "pnpm --filter @wcpos/query",
+    "utils": "pnpm --filter @wcpos/utils",
+    "main:expo": "pnpm --filter @wcpos/main exec expo",
     "build:main": "turbo build --filter=\"...{./apps/main}\"",
     "preinstall": "pnpm ignored-builds || true"
   },

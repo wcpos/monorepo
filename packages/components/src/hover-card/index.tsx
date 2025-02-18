@@ -28,7 +28,7 @@ const HoverCardContent = React.forwardRef<
 							align={align}
 							sideOffset={sideOffset}
 							className={cn(
-								'web:outline-none web:cursor-auto z-50 w-64 max-w-full rounded-md border border-border bg-popover p-2 shadow-md shadow-foreground/5',
+								'web:outline-none web:cursor-auto border-border bg-popover shadow-foreground/5 z-50 w-64 max-w-full rounded-md border p-2 shadow-md',
 								'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
 								open
 									? 'web:animate-in web:fade-in-0 web:zoom-in-95'

@@ -11,7 +11,7 @@ import { VStack } from '../vstack';
 import type { ToastConfigParams } from 'react-native-toast-message';
 
 const toastVariants = cva(
-	'min-w-64 rounded-md border-l-4 bg-popover p-4 web:outline-none web:cursor-auto',
+	'bg-popover web:outline-none web:cursor-auto min-w-64 rounded-md border-l-4 p-4',
 	{
 		variants: {
 			variant: {
@@ -47,7 +47,7 @@ export const BaseToast = ({ variant, text1, text2, props, ...rest }: ToastProps)
 	}, [props.action, rest]);
 
 	return (
-		<View className="max-w-screen-sm rounded-lg border border-border shadow-md">
+		<View className="border-border max-w-screen-sm rounded-lg border shadow-md">
 			<View className={toastVariants({ variant })} role="alert">
 				<HStack>
 					<VStack className="flex-1">

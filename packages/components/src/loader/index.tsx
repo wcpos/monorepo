@@ -17,7 +17,7 @@ import { TextClassContext } from '../text';
 /**
  * Should match text and icon variants
  */
-const loaderVariants = cva('inset-0 items-center content-center', {
+const loaderVariants = cva('inset-0 content-center items-center', {
 	variants: {
 		variant: {
 			default: '',

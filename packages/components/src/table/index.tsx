@@ -40,7 +40,7 @@ const TableBody = React.forwardRef<
 >(({ className, style, ...props }, ref) => (
 	<TablePrimitive.Body
 		ref={ref}
-		className={cn('flex-1 border-border [&_tr:last-child]:border-0', className)}
+		className={cn('border-border flex-1 [&_tr:last-child]:border-0', className)}
 		style={[{ minHeight: 2 }, style]}
 		{...props}
 	/>
@@ -103,7 +103,7 @@ const TableHead = React.forwardRef<
 		<TablePrimitive.Head
 			ref={ref}
 			className={cn(
-				'h-8 flex-1 flex-col justify-center bg-muted px-2 [&:has([role=checkbox])]:pr-0',
+				'bg-muted h-8 flex-1 flex-col justify-center px-2 [&:has([role=checkbox])]:pr-0',
 				className
 			)}
 			{...props}

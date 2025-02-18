@@ -21,7 +21,7 @@ const ToggleGroup = React.forwardRef<
 			ref={ref}
 			className={cn(
 				'flex flex-row items-center gap-0',
-				'rounded-md border border-border',
+				'border-border rounded-md border',
 				className
 			)}
 			{...props}
@@ -82,7 +82,7 @@ const ToggleGroupItem = React.forwardRef<
 					props.disabled && 'web:pointer-events-none opacity-50',
 					ToggleGroupPrimitive.utils.getIsSelected(value, props.value) && 'bg-accent',
 					isFirstItem && 'rounded-r-none',
-					!isLastItem && 'rounded-none border-r border-border',
+					!isLastItem && 'border-border rounded-none border-r',
 					isLastItem && 'rounded-l-none',
 					className
 				)}

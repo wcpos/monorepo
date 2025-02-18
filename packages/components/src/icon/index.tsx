@@ -4,16 +4,16 @@ import { View } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 import get from 'lodash/get';
 
-import * as Svgs from './components/fontawesome/solid';
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
 import { TextClassContext } from '../text';
+import * as Svgs from './components/fontawesome/solid';
 
 import type { SvgProps } from 'react-native-svg';
 
 export type IconName = Extract<keyof typeof Svgs, string>;
 
-const iconVariants = cva('inset-0 items-center content-center', {
+const iconVariants = cva('inset-0 content-center items-center', {
 	variants: {
 		variant: {
 			default: '',
