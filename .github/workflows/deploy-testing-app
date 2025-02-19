@@ -1,0 +1,45 @@
+name: deploy-testing-app
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build for'
+        required: true
+        type: choice
+        options:
+          - ios
+      profile:
+        description: 'EAS build profile'
+        required: true
+        type: choice
+        default: production
+        options:
+          - production
+      submit:
+        description: 'Auto-submit build to TestFlight'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  build-testing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+
+      - name: Build Packages
+        run: pnpm run -w build:main
+
+      - name: Build and Submit to TestFlight
+        working-directory: apps/main
+        run: |
+          eas build --non-interactive --wait --auto-submit --platform=${{ github.event.inputs.platform }} --profile=${{ github.event.inputs.profile }}
