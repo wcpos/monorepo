@@ -27,13 +27,17 @@
     "production": {
       "extends": "monorepo",
       "distribution": "store",
-      "submit": {
-        "ios": {
-          "ascAppId": "6742204061"
-        }
-      },
       "android": {
         "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "paul@kilbot.com.au",
+        "ascAppId": "6742204061",
+        "appleTeamId": "G7L8G4KJ7A"
       }
     }
   }
