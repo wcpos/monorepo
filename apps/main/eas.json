@@ -9,7 +9,8 @@
       "cache": {
         "key": "turbo",
         "paths": [
-          "../../../.turbo/cache"        ]
+          "../../../.turbo/cache"
+        ]
       },
       "env": {
         "EXPO_USE_FAST_RESOLVER": "true"
@@ -26,6 +27,11 @@
     "production": {
       "extends": "monorepo",
       "distribution": "store",
+      "submit": {
+        "ios": {
+          "ascAppId": "6742204061"
+        }
+      },
       "android": {
         "buildType": "app-bundle"
       }
