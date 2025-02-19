@@ -15,7 +15,7 @@ export const unstable_settings = {
 	initialRouteName: '(drawer)',
 };
 
-export default function AppLayout() {
+const App = () => {
 	const { site, storeDB, fastStoreDB } = useAppState();
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$);
 	const { locale } = useLocale();
@@ -54,5 +54,22 @@ export default function AppLayout() {
 				<Errors /> {/* TODO - we need a app-wide event bus to channel errors to the snackbar */}
 			</QueryProvider>
 		</ExtraDataProvider>
+	);
+};
+
+const RedirectWrapper = ({ children }: { children: React.ReactNode }) => {
+	const { storeDB } = useAppState();
+	if (!storeDB) {
+		// Redirect to the authentication route if storeDB is not set.
+		return <Redirect href="/(auth)/connect" />;
+	}
+	return <>{children}</>;
+};
+
+export default function AppLayout() {
+	return (
+		<RedirectWrapper>
+			<App />
+		</RedirectWrapper>
 	);
 }

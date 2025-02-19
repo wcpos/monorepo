@@ -32,7 +32,6 @@ export const Login = () => {
 		async (payload) => {
 			const uuid = get(payload, 'uuid');
 			const jwt = get(payload, 'jwt');
-			debugger;
 
 			try {
 				const wpCredentials = await userDB.wp_credentials.findOneFix(uuid).exec();
