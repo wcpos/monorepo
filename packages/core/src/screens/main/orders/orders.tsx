@@ -57,7 +57,7 @@ const renderCell = (props) => get(cells, props.column.id);
 /**
  *
  */
-const Orders = () => {
+export const Orders = () => {
 	const { uiSettings } = useUISettings('orders');
 	const t = useT();
 	const { wpCredentials, store } = useAppState();
@@ -91,9 +91,9 @@ const Orders = () => {
 	 *
 	 */
 	return (
-		<Box className="p-2 h-full">
+		<Box className="h-full p-2">
 			<Card className="flex-1">
-				<CardHeader className="p-2 bg-input">
+				<CardHeader className="bg-input p-2">
 					<VStack>
 						<HStack>
 							<QuerySearchInput
@@ -127,5 +127,3 @@ const Orders = () => {
 		</Box>
 	);
 };
-
-export default Orders;

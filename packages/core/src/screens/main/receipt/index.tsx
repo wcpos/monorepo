@@ -30,7 +30,6 @@ import { WebView } from '@wcpos/components/webview';
 
 import { EmailForm } from './email';
 import { useT } from '../../../contexts/translations';
-import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';
 import { useUISettings } from '../contexts/ui-settings';
 import { usePrintExternalURL } from '../hooks/use-print';
 
@@ -41,10 +40,9 @@ interface Props {
 /**
  *
  */
-export const ReceiptModal = ({ resource }: Props) => {
+export const Receipt = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
 	const t = useT();
-	useModalRefreshFix();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
 	const receiptURL = useObservableState(
 		order.links$.pipe(map((links) => get(links, ['receipt', 0, 'href']))),

@@ -3,20 +3,13 @@ import * as React from 'react';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
-import {
-	ModalContent,
-	ModalTitle,
-	Modal,
-	ModalBody,
-	ModalHeader,
-} from '@wcpos/components/modal';
+import { ModalContent, ModalTitle, Modal, ModalBody, ModalHeader } from '@wcpos/components/modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
 
 import { EditOrderForm } from './form';
 import { useT } from '../../../../contexts/translations';
-import useModalRefreshFix from '../../../../hooks/use-modal-refresh-fix';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
@@ -26,7 +19,6 @@ export const EditOrder = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
-	useModalRefreshFix();
 
 	if (!isRxDocument(order)) {
 		return (
@@ -56,7 +48,7 @@ export const EditOrder = ({ resource }: Props) => {
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>
-						<TabsList className="flex-row w-full">
+						<TabsList className="w-full flex-row">
 							<TabsTrigger value="form" className="flex-1">
 								<Text>{t('Form', { _tags: 'core' })}</Text>
 							</TabsTrigger>
