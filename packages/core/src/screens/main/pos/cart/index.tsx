@@ -36,11 +36,11 @@ const OpenOrders = ({ isColumn = false }) => {
 	 *
 	 */
 	return (
-		<VStack className={`gap-1 p-2 h-full ${isColumn && 'pl-0'}`}>
+		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
 			<ErrorBoundary>
 				{currentOrder.isNew ? (
 					<Card className="flex-1">
-						<CardHeader className="p-2 bg-input">
+						<CardHeader className="bg-input p-2">
 							<ErrorBoundary>
 								<CartHeader />
 							</ErrorBoundary>
@@ -51,7 +51,7 @@ const OpenOrders = ({ isColumn = false }) => {
 					</Card>
 				) : (
 					<Card className="flex-1">
-						<CardHeader className="p-2 bg-input">
+						<CardHeader className="bg-input p-2">
 							<ErrorBoundary>
 								<CartHeader />
 							</ErrorBoundary>
@@ -66,14 +66,14 @@ const OpenOrders = ({ isColumn = false }) => {
 							<ErrorBoundary>
 								<Totals />
 							</ErrorBoundary>
-							<HStack className="p-2 bg-muted [&>*]:flex-1">
+							<HStack className="bg-muted p-2 [&>*]:flex-1">
 								<ErrorBoundary>
 									<AddNoteButton />
 									<OrderMetaButton />
 									<SaveButton />
 								</ErrorBoundary>
 							</HStack>
-							<HStack className="gap-0 w-full">
+							<HStack className="w-full gap-0">
 								<ErrorBoundary>
 									<VoidButton />
 									<ButtonGroupSeparator className="bg-input" />

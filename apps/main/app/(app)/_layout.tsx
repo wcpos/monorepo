@@ -51,7 +51,8 @@ const App = () => {
 						</Stack>
 					</OnlineStatusProvider>
 				</UISettingsProvider>
-				<Errors /> {/* TODO - we need a app-wide event bus to channel errors to the snackbar */}
+				<Errors />
+				{/* TODO - we need a app-wide event bus to channel errors to the snackbar */}
 			</QueryProvider>
 		</ExtraDataProvider>
 	);

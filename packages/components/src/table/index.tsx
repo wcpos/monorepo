@@ -68,7 +68,7 @@ const PressableTableRow = React.forwardRef<
 		ref={ref}
 		className={cn(
 			'web:transition-colors web:data-[state=selected]:bg-muted flex-row',
-			index % 2 && 'bg-muted/40 dark:bg-zinc-900/50',
+			index % 2 && 'bg-muted/40',
 			className
 		)}
 		{...props}
@@ -85,7 +85,7 @@ const TableRow = React.forwardRef<ViewRef, SlottableViewProps & { index?: number
 				ref={ref}
 				className={cn(
 					'web:transition-colors web:data-[state=selected]:bg-muted flex-row',
-					index % 2 ? 'bg-[#F9FBFD] dark:bg-zinc-900/50' : 'bg-card',
+					index % 2 ? 'bg-[#F9FBFD]' : 'bg-card',
 					className
 				)}
 				{...props}

@@ -37,6 +37,7 @@ const ScrollableTabsList = React.forwardRef<
 	React.ElementRef<typeof TabsPrimitive.List>,
 	React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
 >(({ className, children, ...props }, ref) => {
+	const [activeIndex, setActiveIndex] = React.useState(-1);
 	const scrollRef = useAnimatedRef<ScrollView>();
 	const totalWidth = useSharedValue(0);
 	const containerWidth = useSharedValue(0);
@@ -47,44 +48,37 @@ const ScrollableTabsList = React.forwardRef<
 	// Convert children to an array to safely access them
 	const childrenArray = React.Children.toArray(children);
 
-	const debouncedScrollTo = React.useMemo(
-		() =>
-			debounce((x: number, currentContainerWidth: number, width: number) => {
-				const targetScrollX = x - (currentContainerWidth / 2 - width / 2);
-				scrollTo(scrollRef, targetScrollX, 0, true);
-			}, 100),
-		[scrollRef]
+	React.useEffect(() => {
+		// Compute active index on the JS thread.
+		const index = childrenArray.findIndex(
+			(child) => React.isValidElement(child) && child.props.value === value
+		);
+		setActiveIndex(index);
+	}, [value, childrenArray]);
+
+	const handleMeasureAndScroll = React.useCallback(
+		debounce((currentContainerWidth: number) => {
+			if (activeIndex !== -1 && triggersRef.current[activeIndex]) {
+				const activeTrigger = triggersRef.current[activeIndex]?.current;
+				if (activeTrigger) {
+					activeTrigger.measure(
+						(x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+							const targetScrollX = x - (currentContainerWidth / 2 - width / 2);
+							scrollTo(scrollRef, targetScrollX, 0, true);
+						}
+					);
+				}
+			}
+		}, 100),
+		[activeIndex, scrollRef]
 	);
 
 	useAnimatedReaction(
 		() => containerWidth.value,
 		(currentContainerWidth) => {
-			if (value && triggersRef.current) {
-				const activeIndex = childrenArray.findIndex(
-					(child) => React.isValidElement(child) && child.props.value === value
-				);
-
-				if (activeIndex !== -1 && triggersRef.current[activeIndex]) {
-					const activeTrigger = triggersRef.current[activeIndex]?.current;
-
-					if (activeTrigger) {
-						runOnJS(activeTrigger.measure)(
-							(
-								x: number,
-								y: number,
-								width: number,
-								height: number,
-								pageX: number,
-								pageY: number
-							) => {
-								runOnJS(debouncedScrollTo)(x, currentContainerWidth, width);
-							}
-						);
-					}
-				}
-			}
+			runOnJS(handleMeasureAndScroll)(currentContainerWidth);
 		},
-		[value, childrenArray]
+		[containerWidth]
 	);
 
 	useAnimatedReaction(

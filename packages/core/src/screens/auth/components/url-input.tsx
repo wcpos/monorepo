@@ -51,6 +51,7 @@ export default function UrlInput() {
 					// }}
 					clearable
 					className="flex-1"
+					autoCorrect={false}
 				/>
 				<Button onPress={() => onConnect(url)} disabled={isEmpty(url)} loading={loading}>
 					<ButtonText>{t('Connect', { _tags: 'core' })}</ButtonText>

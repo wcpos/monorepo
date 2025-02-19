@@ -66,7 +66,7 @@ export const Icon = ({ name, variant, size, loading, className, ...props }: Icon
 	 */
 	return (
 		<View className={cn(textClass, iconVariants({ variant, size }), className)} {...props}>
-			<Svg width="100%" height="100%" fill="currentColor" />
+			<Svg width="100%" height="100%" fill="currentColor" color="currentColor" />
 		</View>
 	);
 };

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { StyleProp, ViewStyle, TextStyle } from 'react-native';
+import type { StyleProp, ViewStyle, TextStyle } from 'react-native';
 
 import { DrawerProps } from '@react-navigation/drawer/src/types';
 
@@ -81,7 +81,7 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, style, ...rest }:
 				<Button
 					size="xl"
 					className={cn(
-						'rounded-none bg-transparent px-3 border-x-4 border-transparent h-10',
+						'h-10 rounded-none border-x-4 border-transparent bg-transparent px-3',
 						focused && 'border-l-primary text-primary',
 						!focused && 'hover:bg-white/10'
 					)}
@@ -98,7 +98,7 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, style, ...rest }:
 			onPress={onPress}
 			size="xl"
 			className={cn(
-				'rounded-none bg-transparent px-3 border-x-4 border-transparent items-start h-10',
+				'h-10 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
 				focused && 'border-l-primary text-primary',
 				!focused && 'hover:bg-white/10'
 			)}

@@ -22,7 +22,7 @@ type Props = {
  * Component that renders the navigation list in the drawer.
  */
 export default function DrawerItemList({ state, navigation, descriptors }: Props) {
-	const buildLink = useLinkBuilder();
+	// const buildLink = useLinkBuilder();
 
 	const focusedRoute = state.routes[state.index];
 	const focusedDescriptor = descriptors[focusedRoute.key];
@@ -52,7 +52,7 @@ export default function DrawerItemList({ state, navigation, descriptors }: Props
 				inactiveBackgroundColor={drawerInactiveBackgroundColor}
 				labelStyle={drawerLabelStyle}
 				style={drawerItemStyle}
-				to={buildLink(route.name, route.params)}
+				// to={buildLink(route.name, route.params)}
 				onPress={() => {
 					navigation.dispatch({
 						...(focused

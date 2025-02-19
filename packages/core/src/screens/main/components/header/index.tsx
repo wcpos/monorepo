@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View, Linking } from 'react-native';
 
-import { DrawerHeaderProps } from '@react-navigation/drawer';
 import { Header as ReactNavigationHeader } from '@react-navigation/elements';
 import { StatusBar } from 'expo-status-bar';
 import { useObservableState } from 'observable-hooks';
@@ -15,6 +14,8 @@ import HeaderTitle from './title';
 import { UpgradeNotice } from './upgrade-notice';
 import { useAppState } from '../../../../contexts/app-state';
 
+import type { DrawerHeaderProps } from '@react-navigation/drawer';
+
 interface Props {
 	options: DrawerHeaderProps['options'];
 	showUpgrade: boolean;
@@ -24,7 +25,7 @@ interface Props {
 /**
  *
  */
-const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
+export const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
 	const insets = useSafeAreaInsets();
 	const { store } = useAppState();
 	const storeName = useObservableState(store.name$, store.name);
@@ -57,5 +58,3 @@ const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
 		</ErrorBoundary>
 	);
 };
-
-export default Header;

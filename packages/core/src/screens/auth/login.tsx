@@ -70,7 +70,7 @@ export const Login = () => {
 				<ModalBody>
 					<WebView
 						src={`${site.home}/wcpos-login`}
-						style={{ height: '500px' }}
+						style={{ height: 500 }}
 						onMessage={(event) => {
 							const action = get(event, 'data.action');
 							const payload = get(event, 'data.payload');
