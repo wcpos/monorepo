@@ -1,24 +1,12 @@
 const path = require('path');
 
 const { getDefaultConfig } = require('expo/metro-config');
+const { FileStore } = require('metro-cache');
 const { withNativeWind } = require('nativewind/metro');
 
-// Find the project and workspace directories
-const projectRoot = __dirname;
-// This can be replaced with `find-yarn-workspace-root`
-const workspaceRoot = path.resolve(projectRoot, '../..');
+const config = getDefaultConfig(__dirname);
 
-const config = getDefaultConfig(projectRoot);
-
-// 1. Watch all files within the monorepo
-config.watchFolders = [workspaceRoot];
-// 2. Let Metro know where to resolve packages and in what order
-config.resolver.nodeModulesPaths = [
-	path.resolve(projectRoot, 'node_modules'),
-	path.resolve(workspaceRoot, 'node_modules'),
-];
-
-//
+// Add electron support
 if (process.env.ELECTRON === 'true') {
 	config.resolver.sourceExts = config.resolver.sourceExts || [];
 	config.resolver.sourceExts.unshift(
@@ -31,5 +19,11 @@ if (process.env.ELECTRON === 'true') {
 		'electron.mjs'
 	);
 }
+
+// Use turborepo to restore the cache when possible, using the community standard `node_modules/.cache` folder
+// Moving this folder within the project allows for simple cache management in CI, and is easy to reset
+config.cacheStores = [
+	new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
+];
 
 module.exports = withNativeWind(config, { input: './global.css' });

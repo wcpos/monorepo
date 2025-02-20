@@ -17,6 +17,8 @@
 		"expo-crypto": "^13.0.2",
 		"expo-localization": "^16.0.1",
 		"expo-status-bar": "~1.12.1",
+		"react": "18.3.1",
+		"react-dom": "18.3.1",
 		"react-native": "0.76.7",
 		"react-native-device-info": "^10.14.0",
 		"react-native-gesture-handler": "2.20.2",
