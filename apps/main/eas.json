@@ -9,7 +9,7 @@
       "cache": {
         "key": "turbo",
         "paths": [
-          "../../../.turbo/cache"
+          "../../.turbo/cache"
         ]
       },
       "env": {

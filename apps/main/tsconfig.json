@@ -6,5 +6,5 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "nativewind-env.d.ts"
-, "../../packages/core/src/hooks/use-user-db.ts"  ]
+  ]
 }
