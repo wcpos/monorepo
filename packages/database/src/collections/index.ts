@@ -19,7 +19,7 @@ import { usersLiteral } from './schemas/users';
 import { variationsLiteral } from './schemas/variations';
 import { wpCredentialsLiteral } from './schemas/wp-credientials';
 
-import type { RxCollectionCreator, RxCollection, RxDocument } from 'rxdb';
+import type { RxCollectionCreator, RxCollection, RxDocument, RxDatabase } from 'rxdb';
 
 const roundToSixDecimals = (value: any): number => {
 	const num = toNumber(value);
@@ -30,9 +30,8 @@ const roundToSixDecimals = (value: any): number => {
 /**
  * Global Users
  */
-const usersTyped = toTypedRxJsonSchema(usersLiteral);
+type UserDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof usersLiteral>;
 const userSchema: RxJsonSchema<UserDocumentType> = usersLiteral;
-type UserDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof usersTyped>;
 export type UserDocument = RxDocument<UserDocumentType>;
 export type UserCollection = RxCollection<UserDocumentType>;
 const users: RxCollectionCreator<UserDocumentType> = { schema: userSchema };
@@ -40,9 +39,8 @@ const users: RxCollectionCreator<UserDocumentType> = { schema: userSchema };
 /**
  * Sites
  */
-const sitesTyped = toTypedRxJsonSchema(sitesLiteral);
 const siteSchema: RxJsonSchema<SiteDocumentType> = sitesLiteral;
-type SiteDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof sitesTyped>;
+type SiteDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof sitesLiteral>;
 export type SiteDocument = RxDocument<SiteDocumentType>;
 export type SiteCollection = RxCollection<SiteDocumentType>;
 const sites: RxCollectionCreator<SiteDocumentType> = {
@@ -58,9 +56,8 @@ const sites: RxCollectionCreator<SiteDocumentType> = {
 /**
  * Stores
  */
-const storesTyped = toTypedRxJsonSchema(storesLiteral);
 const storeSchema: RxJsonSchema<StoreDocumentType> = storesLiteral;
-type StoreDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof storesTyped>;
+type StoreDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof storesLiteral>;
 export type StoreDocument = RxDocument<StoreDocumentType>;
 export type StoreCollection = RxCollection<StoreDocumentType>;
 const stores: RxCollectionCreator<StoreDocumentType> = {
@@ -86,12 +83,11 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 };
 
 /**
- * WordPress Credientials
+ * WordPress Credentials
  */
-const wpCredentialsTyped = toTypedRxJsonSchema(wpCredentialsLiteral);
 const wpCredentialsSchema: RxJsonSchema<WPCredentialsDocumentType> = wpCredentialsLiteral;
 type WPCredentialsDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
-	typeof wpCredentialsTyped
+	typeof wpCredentialsLiteral
 >;
 export type WPCredentialsDocument = RxDocument<WPCredentialsDocumentType>;
 export type WPCredentialsCollection = RxCollection<WPCredentialsDocumentType>;
@@ -111,9 +107,8 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 /**
  * Products
  */
-const productsTyped = toTypedRxJsonSchema(productsLiteral);
 const productSchema: RxJsonSchema<ProductDocumentType> = productsLiteral;
-type ProductDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof productsTyped>;
+type ProductDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof productsLiteral>;
 export type ProductDocument = RxDocument<ProductDocumentType>;
 export type ProductCollection = RxCollection<ProductDocumentType>;
 const products: RxCollectionCreator<ProductDocumentType> = {
@@ -148,10 +143,9 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 /**
  * Product Variations
  */
-const variationsTyped = toTypedRxJsonSchema(variationsLiteral);
 const productVariationSchema: RxJsonSchema<ProductVariationDocumentType> = variationsLiteral;
 type ProductVariationDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
-	typeof variationsTyped
+	typeof variationsLiteral
 >;
 export type ProductVariationDocument = RxDocument<ProductVariationDocumentType>;
 export type ProductVariationCollection = RxCollection<ProductVariationDocumentType>;
@@ -191,9 +185,10 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 /**
  * Product Categories
  */
-const categoriesTyped = toTypedRxJsonSchema(categoriesLiteral);
 const productCategorySchema: RxJsonSchema<ProductCategoryDocumentType> = categoriesLiteral;
-type ProductCategoryDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof categoriesTyped>;
+type ProductCategoryDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof categoriesLiteral
+>;
 export type ProductCategoryDocument = RxDocument<ProductCategoryDocumentType>;
 export type ProductCategoryCollection = RxCollection<ProductCategoryDocumentType>;
 const categories: RxCollectionCreator<ProductCategoryDocumentType> = {
@@ -211,9 +206,8 @@ const categories: RxCollectionCreator<ProductCategoryDocumentType> = {
 /**
  * Product Tags
  */
-const tagsTyped = toTypedRxJsonSchema(tagsLiteral);
 const productTagSchema: RxJsonSchema<ProductTagDocumentType> = tagsLiteral;
-type ProductTagDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof tagsTyped>;
+type ProductTagDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof tagsLiteral>;
 export type ProductTagDocument = RxDocument<ProductTagDocumentType>;
 export type ProductTagCollection = RxCollection<ProductTagDocumentType>;
 const tags: RxCollectionCreator<ProductTagDocumentType> = {
@@ -231,9 +225,8 @@ const tags: RxCollectionCreator<ProductTagDocumentType> = {
 /**
  * Orders
  */
-const ordersTyped = toTypedRxJsonSchema(ordersLiteral);
 const orderSchema: RxJsonSchema<OrderDocumentType> = ordersLiteral;
-type OrderDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof ordersTyped>;
+type OrderDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof ordersLiteral>;
 export type OrderDocument = RxDocument<OrderDocumentType>;
 export type OrderCollection = RxCollection<OrderDocumentType>;
 const orders: RxCollectionCreator<OrderDocumentType> = {
@@ -268,9 +261,8 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 /**
  * Customers
  */
-const customersTyped = toTypedRxJsonSchema(customersLiteral);
 const customerSchema: RxJsonSchema<CustomerDocumentType> = customersLiteral;
-export type CustomerDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof customersTyped>;
+type CustomerDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof customersLiteral>;
 export type CustomerDocument = RxDocument<CustomerDocumentType>;
 export type CustomerCollection = RxCollection<CustomerDocumentType>;
 const customers: RxCollectionCreator<CustomerDocumentType> = {
@@ -298,9 +290,8 @@ const customers: RxCollectionCreator<CustomerDocumentType> = {
 /**
  * Taxes
  */
-const taxSchemaTyped = toTypedRxJsonSchema(taxRatesLiteral);
 const taxRateSchema: RxJsonSchema<TaxRateDocumentType> = taxRatesLiteral;
-type TaxRateDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof taxSchemaTyped>;
+type TaxRateDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof taxRatesLiteral>;
 export type TaxRateDocument = RxDocument<TaxRateDocumentType>;
 export type TaxRateCollection = RxCollection<TaxRateDocumentType>;
 const taxes: RxCollectionCreator<TaxRateDocumentType> = { schema: taxRateSchema };
@@ -317,9 +308,8 @@ const taxes: RxCollectionCreator<TaxRateDocumentType> = { schema: taxRateSchema 
 /**
  * Sync
  */
-const syncTyped = toTypedRxJsonSchema(syncLiteral);
 const syncSchema: RxJsonSchema<SyncDocumentType> = syncLiteral;
-type SyncDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof syncTyped>;
+type SyncDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof syncLiteral>;
 export type SyncDocument = RxDocument<SyncDocumentType>;
 export type SyncCollection = RxCollection<SyncDocumentType>;
 const sync: RxCollectionCreator<SyncDocumentType> = { schema: syncSchema };
@@ -327,9 +317,8 @@ const sync: RxCollectionCreator<SyncDocumentType> = { schema: syncSchema };
 /**
  * Logs
  */
-const logsTyped = toTypedRxJsonSchema(logsLiteral);
 const logSchema: RxJsonSchema<LogDocumentType> = logsLiteral;
-type LogDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof logsTyped>;
+type LogDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof logsLiteral>;
 export type LogDocument = RxDocument<LogDocumentType>;
 export type LogCollection = RxCollection<LogDocumentType>;
 const logs: RxCollectionCreator<LogDocumentType> = { schema: logSchema };
@@ -365,6 +354,15 @@ export type SyncCollections = {
 	'products/tags': SyncCollection;
 };
 
+export type TemporaryCollections = {
+	orders: OrderCollection;
+};
+
+export type UserDatabase = RxDatabase<UserCollections>;
+export type StoreDatabase = RxDatabase<StoreCollections>;
+export type SyncDatabase = RxDatabase<SyncCollections>;
+export type TemporaryDatabase = RxDatabase<TemporaryCollections>;
+
 export const userCollections = {
 	//logs,
 	users,
@@ -395,4 +393,8 @@ export const syncCollections = {
 	// payment_gateways: sync,
 	'products/categories': sync,
 	'products/tags': sync,
+};
+
+export const temporaryCollections = {
+	orders,
 };

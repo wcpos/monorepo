@@ -1,14 +1,19 @@
-import { getMemoryMappedRxStorage } from 'rxdb-premium/plugins/storage-memory-mapped';
-import { getRxStorageSQLite, SQLiteQueryWithParams } from 'rxdb-premium/plugins/storage-sqlite';
+import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
+import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 
 import log from '@wcpos/utils/logger';
 
-const parentStorage = getRxStorageSQLite({
+import type { SQLiteQueryWithParams } from 'rxdb-premium/plugins/storage-sqlite';
+
+/**
+ *
+ */
+export const storage = getRxStorageSQLite({
 	// storeAttachmentsAsBase64String: true,
 	sqliteBasics: {
 		open: async (name: string) => {
 			try {
-				const result = await window.ipcRenderer.invoke('sqlite', { type: 'open', name });
+				const result = await globalThis.ipcRenderer.invoke('sqlite', { type: 'open', name });
 				return result;
 			} catch (error) {
 				log.error(error);
@@ -16,7 +21,7 @@ const parentStorage = getRxStorageSQLite({
 		},
 		all: async (db, queryWithParams: SQLiteQueryWithParams) => {
 			try {
-				const result = await window.ipcRenderer.invoke('sqlite', {
+				const result = await globalThis.ipcRenderer.invoke('sqlite', {
 					type: 'all',
 					name: db.name,
 					sql: queryWithParams,
@@ -28,7 +33,7 @@ const parentStorage = getRxStorageSQLite({
 		},
 		run: async (db, queryWithParams: SQLiteQueryWithParams) => {
 			try {
-				await window.ipcRenderer.invoke('sqlite', {
+				await globalThis.ipcRenderer.invoke('sqlite', {
 					type: 'run',
 					name: db.name,
 					sql: queryWithParams,
@@ -40,7 +45,7 @@ const parentStorage = getRxStorageSQLite({
 		},
 		setPragma: async (db, r, a) => {
 			try {
-				await window.ipcRenderer.invoke('sqlite', {
+				await globalThis.ipcRenderer.invoke('sqlite', {
 					type: 'run',
 					name: db.name,
 					sql: { query: 'PRAGMA ' + r + ' = ' + a, params: [] },
@@ -61,7 +66,7 @@ const parentStorage = getRxStorageSQLite({
 		},
 		close: async (db) => {
 			try {
-				window.ipcRenderer.invoke('sqlite', {
+				globalThis.ipcRenderer.invoke('sqlite', {
 					type: 'close',
 					name: db.name,
 				});
@@ -73,11 +78,8 @@ const parentStorage = getRxStorageSQLite({
 	},
 });
 
-// wrap the persistent storage with the memory-mapped storage.
-const storage = getMemoryMappedRxStorage({
-	storage: parentStorage,
+const devStorage = wrappedValidateZSchemaStorage({
+	storage,
 });
 
-export const fastConfig = {
-	storage,
-};
+export const defaultStorage = __DEV__ ? devStorage : storage;

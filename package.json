@@ -2,6 +2,12 @@
   "private": true,
   "name": "@wcpos/monorepo",
   "scripts": {
+    "dev": "turbo dev",
+    "dev:main": "turbo dev --filter=\"{./apps/main}...\"",
+    "dev:electron": "turbo dev --filter=\"{./apps/electron}...\"",
+    "build": "turbo build",
+    "build:main": "turbo build --filter=\"...{./apps/main}\"",
+    "main:expo": "pnpm --filter @wcpos/main exec expo",
     "clean": "node scripts/clean-node-modules",
     "electron": "pnpm --filter @wcpos/app-electron",
     "main": "pnpm --filter @wcpos/main",
@@ -12,8 +18,6 @@
     "hooks": "pnpm --filter @wcpos/hooks",
     "query": "pnpm --filter @wcpos/query",
     "utils": "pnpm --filter @wcpos/utils",
-    "main:expo": "pnpm --filter @wcpos/main exec expo",
-    "build:main": "turbo build --filter=\"...{./apps/main}\"",
     "preinstall": "pnpm ignored-builds || true"
   },
   "workspaces": {
@@ -22,7 +26,7 @@
       "packages/*"
     ]
   },
-  "packageManager": "pnpm@10.4.0",
+  "packageManager": "pnpm@10.4.1",
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3",

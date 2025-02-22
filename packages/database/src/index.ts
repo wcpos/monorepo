@@ -1,13 +1,8 @@
-export { createUserDB } from './users-db';
-export { createStoreDB } from './stores-db';
-export { createTemporaryDB } from './temporary-db';
-export { createFastStoreDB } from './fast-store-db';
+import './plugins';
+
+export { createUserDB, createStoreDB, createTemporaryDB, createFastStoreDB } from './create-db';
 export { userCollections, storeCollections, syncCollections } from './collections';
 export { clearAllDB } from './clear-all-db';
-
-export type { StoreDatabase } from './stores-db';
-export type { UserDatabase } from './users-db';
-export type { SyncDatabase } from './fast-store-db';
 
 /**
  * Re-export some rxdb helpers
@@ -18,6 +13,10 @@ export { isRxDocument, isRxQuery, isRxCollection, isRxDatabase } from 'rxdb';
  * Re-export types
  */
 export type {
+	UserDatabase,
+	StoreDatabase,
+	SyncDatabase,
+	TemporaryDatabase,
 	UserDocument,
 	UserCollection,
 	SiteDocument,
@@ -37,7 +36,6 @@ export type {
 	ProductVariationCollection,
 	OrderDocument,
 	OrderCollection,
-	CustomerDocumentType,
 	CustomerDocument,
 	CustomerCollection,
 	TaxRateDocument,

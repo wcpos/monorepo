@@ -1,0 +1,29 @@
+import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
+
+function createRemoteStorageProxy(prefix = '') {
+  if (typeof globalThis.ipcRenderer === 'undefined') {
+    throw new Error(
+      "Remote storage proxy can only be created in the renderer with ipcRenderer exposed"
+    );
+  }
+  return new Proxy(() => {}, {
+    get(target, prop) {
+      const newPrefix = prefix ? `${prefix}.${String(prop)}` : String(prop);
+      return createRemoteStorageProxy(newPrefix);
+    },
+    async apply(target, thisArg, args) {
+      return await globalThis.ipcRenderer.invoke('rxStorage', {
+        methodPath: prefix,
+        args,
+      });
+    },
+  });
+}
+
+export const storage = createRemoteStorageProxy();
+
+const devStorage = wrappedValidateZSchemaStorage({
+	storage,
+});
+
+export const defaultStorage = __DEV__ ? devStorage : storage;

@@ -8,21 +8,20 @@
 	"type": "module",
 	"scripts": {
 		"lint": "eslint .",
-		"build": "echo 'Nothing to build'",
 		"test": "echo 'Nothing to test'"
 	},
 	"peerDependencies": {
 		"eslint": ">=9",
 		"eslint-config-expo": "8.1.0-canary-20250210-d85d829",
 		"eslint-plugin-prettier": "5.2.3",
-		"prettier": "3.5.1",
+		"prettier": "3.5.2",
 		"prettier-plugin-tailwindcss": "0.6.11"
 	},
 	"devDependencies": {
-		"eslint": "9.20.1",
+		"eslint": "9.21.0",
 		"eslint-config-expo": "8.1.0-canary-20250210-d85d829",
 		"eslint-plugin-prettier": "5.2.3",
-		"prettier": "3.5.1",
+		"prettier": "3.5.2",
 		"prettier-plugin-tailwindcss": "0.6.11"
 	}
 }

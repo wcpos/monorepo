@@ -1,0 +1,1 @@
+Ephemeral storage is not persistent, it's used for storing temporary data, such as an empty order so it's ready to go as soon as the user navigates to the POS screen. It is kept entirely in memory.

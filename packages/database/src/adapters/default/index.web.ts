@@ -1,7 +1,7 @@
-import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
+import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
 
-const storage = getRxStorageWorker({
+export const storage = getRxStorageWorker({
 	/**
 	 * Contains any value that can be used as parameter
 	 * to the Worker constructor of thread.js
@@ -24,4 +24,4 @@ const devStorage = wrappedValidateZSchemaStorage({
 	storage,
 });
 
-export const fastConfig = { storage: __DEV__ ? devStorage : storage };
+export const defaultStorage = __DEV__ ? devStorage : storage;

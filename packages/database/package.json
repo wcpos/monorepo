@@ -25,8 +25,8 @@
     "observable-hooks": "4.2.4",
     "rxdb": "16.6.1",
     "rxdb-premium": "16.6.1",
-    "rxjs": "7.8.1",
-    "uuid": "11.0.5"
+    "rxjs": "7.8.2",
+    "uuid": "11.1.0"
   },
   "devDependencies": {
     "@faker-js/faker": "9.5.0",

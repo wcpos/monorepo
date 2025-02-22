@@ -9,6 +9,7 @@ import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
+import { setPremiumFlag, disableVersionCheck } from 'rxdb-premium/plugins/shared';
 
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
@@ -18,7 +19,7 @@ import populatePlugin from './populate';
 import { resetCollectionPlugin } from './reset-collection';
 import { searchPlugin } from './search';
 
-if (process.env.NODE_ENV === 'development') {
+if (__DEV__) {
 	// in dev-mode we add the dev-mode plugin
 	// which does many checks and adds full error messages
 	// also, only add on first render, seems to be conflict with HMR
@@ -33,6 +34,9 @@ if (process.env.NODE_ENV === 'development') {
 	// 	PouchDB.debug.enable('*');
 	// });
 }
+
+disableVersionCheck();
+setPremiumFlag();
 
 // default plugins
 addRxPlugin(RxDBQueryBuilderPlugin);
