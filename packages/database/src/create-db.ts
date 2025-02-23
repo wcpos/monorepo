@@ -2,9 +2,9 @@ import { createRxDatabase, removeRxDatabase } from 'rxdb';
 
 import log from '@wcpos/utils/logger';
 
-import { defaultStorage } from './adapters/default';
-import { ephemeralStorageAdapter } from './adapters/ephemeral';
-import { fastStorageAdapter } from './adapters/fast';
+import { defaultConfig } from './adapters/default';
+import { ephemeralStorageConfig } from './adapters/ephemeral';
+import { fastStorageConfig } from './adapters/fast';
 import {
 	storeCollections,
 	StoreCollections,
@@ -20,11 +20,12 @@ import {
  * Creates the User database
  */
 export const createUserDB = async () => {
+	debugger;
 	const name = 'wcposusers_v2';
 	try {
 		const db = await createRxDatabase<UserCollections>({
 			name,
-			storage: defaultStorage,
+			...defaultConfig,
 		});
 		const collections = await db?.addCollections(userCollections);
 		return db;
@@ -42,8 +43,8 @@ export const createStoreDB = async (id: string) => {
 	try {
 		const db = await createRxDatabase<StoreCollections>({
 			name,
-			storage: defaultStorage,
 			allowSlowCount: true,
+			...defaultConfig,
 		});
 		const collections = await db?.addCollections(storeCollections);
 		return db;
@@ -60,8 +61,8 @@ export const createFastStoreDB = async (id: string) => {
 	try {
 		const db = await createRxDatabase<SyncCollections>({
 			name,
-			storage: fastStorageAdapter,
 			allowSlowCount: true,
+			...fastStorageConfig,
 		});
 		const collections = await db?.addCollections(syncCollections);
 		return db;
@@ -77,7 +78,7 @@ export const createTemporaryDB = async () => {
 	try {
 		const db = await createRxDatabase<TemporaryCollections>({
 			name: 'temporary',
-			storage: ephemeralStorageAdapter,
+			...ephemeralStorageConfig,
 		});
 
 		const cols = await db?.addCollections(temporaryCollections);

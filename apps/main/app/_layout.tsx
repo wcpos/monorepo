@@ -30,6 +30,7 @@ if (globalThis.initialProps) {
 }
 
 export default function RootLayout() {
+	debugger;
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<GestureHandlerRootView style={{ flex: 1 }}>

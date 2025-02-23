@@ -1,1 +1,1 @@
-export { defaultStorage as fastStorageAdapter } from '../default';
+export { defaultConfig as fastStorageConfig } from '../default';
