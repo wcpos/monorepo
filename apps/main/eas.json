@@ -33,8 +33,7 @@
     },
     "adhoc": {
       "extends": "monorepo",
-      "distribution": "internal",
-      "buildConfiguration": "Release"
+      "distribution": "internal"
     }
   },
   "submit": {
