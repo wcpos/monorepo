@@ -30,6 +30,11 @@
       "android": {
         "buildType": "app-bundle"
       }
+    },
+    "adhoc": {
+      "extends": "monorepo",
+      "distribution": "internal",
+      "buildConfiguration": "Release"
     }
   },
   "submit": {

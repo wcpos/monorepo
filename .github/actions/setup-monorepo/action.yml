@@ -53,6 +53,11 @@ runs:
       run: pnpm install
       shell: bash
 
+    - name: 🛠 Ensure turbo cache directories exist
+      run: |
+        mkdir -p node_modules/.cache/turbo
+      shell: bash
+
     - name: ♻️ Restore cache
       uses: actions/cache@v4
       with:

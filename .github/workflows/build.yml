@@ -20,6 +20,7 @@ on:
         options:
           - development
           - production
+          - adhoc
       submit:
         description: Auto submit to the store? (production only)
         type: boolean
