@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useWindowDimensions } from 'react-native';
 
-import { useNavigation, DrawerActions } from '@react-navigation/native';
+import { useNavigation } from 'expo-router';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
@@ -17,13 +17,13 @@ const HeaderLeft = () => {
 	 *
 	 */
 	const handleOpenDrawer = React.useCallback(() => {
-		navigation.dispatch(DrawerActions.openDrawer());
+		navigation.openDrawer();
 	}, [navigation]);
 
 	/**
 	 * Large screen
 	 */
-	if (width > 1024) {
+	if (width >= 1024) {
 		return null;
 	}
 
@@ -34,7 +34,7 @@ const HeaderLeft = () => {
 		return (
 			<Button
 				onPress={handleOpenDrawer}
-				className="px-3 rounded-none bg-transparent hover:bg-white/10"
+				className="rounded-none bg-transparent px-3 hover:bg-white/10"
 			>
 				<Icon name="bars" />
 			</Button>
@@ -47,7 +47,7 @@ const HeaderLeft = () => {
 	return (
 		<Button
 			onPress={handleOpenDrawer}
-			className="px-3 rounded-none bg-transparent hover:bg-white/10"
+			className="rounded-none bg-transparent px-3 hover:bg-white/10"
 			leftIcon="bars"
 		>
 			<ButtonText>{t('Menu', { _tags: 'core' })}</ButtonText>

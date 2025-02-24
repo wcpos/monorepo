@@ -6,7 +6,6 @@ import {
 	DrawerActions,
 	DrawerNavigationState,
 	ParamListBase,
-	useLinkBuilder,
 } from '@react-navigation/native';
 
 // import type { DrawerDescriptorMap, DrawerNavigationHelpers } from '../types';
@@ -22,8 +21,6 @@ type Props = {
  * Component that renders the navigation list in the drawer.
  */
 export default function DrawerItemList({ state, navigation, descriptors }: Props) {
-	// const buildLink = useLinkBuilder();
-
 	const focusedRoute = state.routes[state.index];
 	const focusedDescriptor = descriptors[focusedRoute.key];
 	const focusedOptions = focusedDescriptor.options;
@@ -52,7 +49,6 @@ export default function DrawerItemList({ state, navigation, descriptors }: Props
 				inactiveBackgroundColor={drawerInactiveBackgroundColor}
 				labelStyle={drawerLabelStyle}
 				style={drawerItemStyle}
-				// to={buildLink(route.name, route.params)}
 				onPress={() => {
 					navigation.dispatch({
 						...(focused

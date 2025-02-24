@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useRouter, usePathname } from 'expo-router';
 
 import {
 	AlertDialog,
@@ -32,9 +32,10 @@ import type { CellContext } from '@tanstack/react-table';
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
 export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'actions'>) => {
+	const router = useRouter();
+	const pathname = usePathname();
 	const product = row.original.document;
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
-	const navigation = useNavigation();
 	const pullDocument = usePullDocument();
 	const t = useT();
 	const deleteDocument = useDeleteDocument();
@@ -64,7 +65,12 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem
-						onPress={() => navigation.navigate('EditProduct', { productID: product.uuid })}
+						onPress={() => {
+							router.push({
+								pathname: `${pathname}/edit`,
+								params: { productId: product.uuid },
+							});
+						}}
 					>
 						<Icon name="penToSquare" />
 						<Text>{t('Edit', { _tags: 'core' })}</Text>

@@ -1,20 +1,27 @@
-import { Text, View } from 'react-native';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
+import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
+import { Products } from '@wcpos/core/screens/main/products/products';
+import { useQuery } from '@wcpos/query';
 
-import { useAppState } from '@wcpos/core/contexts/app-state';
-
-export default function Index() {
-	const { logout } = useAppState();
+export default function ProductsIndex() {
+	/**
+	 *
+	 */
+	const taxQuery = useQuery({
+		queryKeys: ['tax-rates'],
+		collectionName: 'taxes',
+	});
 
 	return (
-		<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-			<Text
-				onPress={() => {
-					// The `app/(app)/_layout.tsx` will redirect to the sign-in screen.
-					logout();
-				}}
-			>
-				Sign Out
-			</Text>
-		</View>
+		<ErrorBoundary>
+			<Suspense>
+				<TaxRatesProvider taxQuery={taxQuery}>
+					<Suspense>
+						<Products />
+					</Suspense>
+				</TaxRatesProvider>
+			</Suspense>
+		</ErrorBoundary>
 	);
 }

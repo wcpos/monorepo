@@ -1,5 +1,3 @@
-import * as Crypto from 'expo-crypto';
-
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 
@@ -11,7 +9,5 @@ export const devStorage = wrappedValidateZSchemaStorage({
 
 export const ephemeralStorageConfig = {
 	storage: __DEV__ ? devStorage : storage,
-	hashFunction: async (i: string) => {
-		return await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, i);
-	},
+	ignoreDuplicate: !!__DEV__,
 };

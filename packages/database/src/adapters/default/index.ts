@@ -1,4 +1,3 @@
-import * as Crypto from 'expo-crypto';
 import * as SQLite from 'expo-sqlite';
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 import {
@@ -16,7 +15,5 @@ const devStorage = wrappedValidateZSchemaStorage({
 
 export const defaultConfig = {
 	storage: __DEV__ ? devStorage : storage,
-	hashFunction: async (i: string) => {
-		return await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, i);
-	},
+	ignoreDuplicate: !!__DEV__,
 };

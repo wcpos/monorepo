@@ -134,7 +134,7 @@ const TableFooter = () => {
 /**
  * Tables are expensive to render, so memoize all props.
  */
-const Products = () => {
+export const Products = () => {
 	const { uiSettings } = useUISettings('products');
 	const { calcTaxes } = useTaxRates();
 	const t = useT();
@@ -196,9 +196,9 @@ const Products = () => {
 	 *
 	 */
 	return (
-		<Box className="p-2 h-full">
+		<Box className="h-full p-2">
 			<Card className="flex-1">
-				<CardHeader className="p-2 bg-input">
+				<CardHeader className="bg-input p-2">
 					<VStack>
 						<HStack>
 							<ErrorBoundary>
@@ -245,5 +245,3 @@ const Products = () => {
 		</Box>
 	);
 };
-
-export default Products;

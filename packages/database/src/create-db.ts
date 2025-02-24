@@ -20,7 +20,6 @@ import {
  * Creates the User database
  */
 export const createUserDB = async () => {
-	debugger;
 	const name = 'wcposusers_v2';
 	try {
 		const db = await createRxDatabase<UserCollections>({
