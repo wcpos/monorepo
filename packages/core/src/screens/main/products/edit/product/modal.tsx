@@ -3,30 +3,22 @@ import * as React from 'react';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
-import {
-	Modal,
-	ModalContent,
-	ModalTitle,
-	ModalHeader,
-	ModalBody,
-} from '@wcpos/components/modal';
+import { Modal, ModalContent, ModalTitle, ModalHeader, ModalBody } from '@wcpos/components/modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
 
 import { EditProductForm } from './form';
-import { useT } from '../../../../contexts/translations';
-import useModalRefreshFix from '../../../../hooks/use-modal-refresh-fix';
+import { useT } from '../../../../../contexts/translations';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').ProductDocument>;
 }
 
-export const EditProduct = ({ resource }: Props) => {
+export const EditProductModal = ({ resource }: Props) => {
 	const product = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
-	useModalRefreshFix();
 
 	if (!isRxDocument(product)) {
 		return (
@@ -48,7 +40,7 @@ export const EditProduct = ({ resource }: Props) => {
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>
-						<TabsList className="flex-row w-full">
+						<TabsList className="w-full flex-row">
 							<TabsTrigger value="form" className="flex-1">
 								<Text>{t('Form', { _tags: 'core' })}</Text>
 							</TabsTrigger>

@@ -1,6 +1,26 @@
-import { Slot } from 'expo-router';
+import { Stack } from 'expo-router';
 
-export default function ProductsLayout() {
-	// Set up the auth context and render our layout inside of it.
-	return <Slot />;
+export const unstable_settings = {
+	// Ensure that reloading on `/modal` keeps a back button present.
+	initialRouteName: 'index',
+};
+
+export default function CustomersLayout() {
+	return (
+		<Stack screenOptions={{ headerShown: false }}>
+			<Stack.Screen name="index" />
+			<Stack.Screen
+				name="edit/[customerId]"
+				options={{
+					presentation: 'modal',
+				}}
+			/>
+			<Stack.Screen
+				name="add"
+				options={{
+					presentation: 'modal',
+				}}
+			/>
+		</Stack>
+	);
 }

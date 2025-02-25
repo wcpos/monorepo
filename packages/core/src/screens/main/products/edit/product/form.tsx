@@ -6,7 +6,6 @@ import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	Form,
 	FormField,
@@ -15,21 +14,20 @@ import {
 	FormSwitch,
 	FormRadioGroup,
 } from '@wcpos/components/form';
-import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 
-import { useT } from '../../../../contexts/translations';
-import { CurrencyInput } from '../../components/currency-input';
-import { FormErrors } from '../../components/form-errors';
-import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
-import { NumberInput } from '../../components/number-input';
-import { ProductStatusSelect } from '../../components/product/status-select';
-import { TaxClassSelect } from '../../components/tax-class-select';
-import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
-import usePushDocument from '../../contexts/use-push-document';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useT } from '../../../../../contexts/translations';
+import { CurrencyInput } from '../../../components/currency-input';
+import { FormErrors } from '../../../components/form-errors';
+import { MetaDataForm, metaDataSchema } from '../../../components/meta-data-form';
+import { NumberInput } from '../../../components/number-input';
+import { ProductStatusSelect } from '../../../components/product/status-select';
+import { TaxClassSelect } from '../../../components/tax-class-select';
+import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
+import usePushDocument from '../../../contexts/use-push-document';
+import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 
 const schema = z.object({
 	name: z.string(),

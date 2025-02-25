@@ -1,89 +1,107 @@
 import * as React from 'react';
 
-import { createStackNavigator } from '@react-navigation/stack';
+import { useRouter } from 'expo-router';
 import get from 'lodash/get';
-import { ObservableResource } from 'observable-hooks';
-import { filter } from 'rxjs/operators';
 
+import { Box } from '@wcpos/components/box';
+import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { HStack } from '@wcpos/components/hstack';
+import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
+import { Text } from '@wcpos/components/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { useQuery } from '@wcpos/query';
 
-import { AddCustomer } from './add-customer';
-import Customers from './customers';
-import { EditCustomer } from './edit-customer';
-import { useCollection } from '../hooks/use-collection';
+import { Actions } from './cells/actions';
+import { Address } from './cells/address';
+import { Avatar } from './cells/avatar';
+import { CustomerEmail } from './cells/email';
+import { UISettingsForm } from './ui-settings-form';
+import { useT } from '../../../contexts/translations';
+import { DataTable } from '../components/data-table';
+import { Date } from '../components/date';
+import { QuerySearchInput } from '../components/query-search-input';
+import { UISettingsDialog } from '../components/ui-settings';
+import { useUISettings } from '../contexts/ui-settings';
 
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
-export type CustomersStackParamList = {
-	Customers: undefined;
-	AddCustomer: undefined;
-	EditCustomer: { customerID: string };
+const cells = {
+	avatar_url: Avatar,
+	billing: Address,
+	shipping: Address,
+	actions: Actions,
+	email: CustomerEmail,
+	date_created_gmt: Date,
+	date_modified_gmt: Date,
 };
 
-const Stack = createStackNavigator<CustomersStackParamList>();
+const renderCell = (props) => get(cells, props.column.id);
 
 /**
  *
  */
-const CustomersWithProviders = () => {
+export const CustomersScreen = () => {
+	const { uiSettings } = useUISettings('customers');
+	const t = useT();
+	const router = useRouter();
+
+	/**
+	 *
+	 */
+	const query = useQuery({
+		queryKeys: ['customers'],
+		collectionName: 'customers',
+		initialParams: {
+			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
+		},
+		infiniteScroll: true,
+	});
+
+	/**
+	 *
+	 */
 	return (
-		<ErrorBoundary>
-			<Suspense>
-				<Customers />
-			</Suspense>
-		</ErrorBoundary>
+		<Box className="h-full p-2">
+			<Card className="flex-1">
+				<CardHeader className="bg-input p-0">
+					<HStack className="p-2">
+						<QuerySearchInput
+							query={query}
+							placeholder={t('Search Customers', { _tags: 'core' })}
+							className="flex-1"
+						/>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<IconButton
+									name="userPlus"
+									onPress={() => router.push({ pathname: '/customers/add' })}
+								/>
+							</TooltipTrigger>
+							<TooltipContent>
+								<Text>{t('Add new customer', { _tags: 'core' })}</Text>
+							</TooltipContent>
+						</Tooltip>
+						<UISettingsDialog title={t('Customer Settings', { _tags: 'core' })}>
+							<UISettingsForm />
+						</UISettingsDialog>
+					</HStack>
+				</CardHeader>
+				<CardContent className="flex-1 p-0">
+					<ErrorBoundary>
+						<Suspense>
+							<DataTable<CustomerDocument>
+								id="customers"
+								query={query}
+								renderCell={renderCell}
+								noDataMessage={t('No customers found', { _tags: 'core' })}
+								estimatedItemSize={100}
+							/>
+						</Suspense>
+					</ErrorBoundary>
+				</CardContent>
+			</Card>
+		</Box>
 	);
 };
-
-/**
- *
- */
-const AddCustomerWithProviders = ({
-	navigation,
-}: NativeStackScreenProps<CustomersStackParamList, 'AddCustomer'>) => {
-	return (
-		<ErrorBoundary>
-			<AddCustomer />
-		</ErrorBoundary>
-	);
-};
-
-/**
- *
- */
-const EditCustomerWithProviders = ({
-	route,
-	navigation,
-}: NativeStackScreenProps<CustomersStackParamList, 'EditCustomer'>) => {
-	const customerID = get(route, ['params', 'customerID']);
-	const { collection } = useCollection('customers');
-	const query = collection.findOneFix(customerID);
-
-	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
-
-	return (
-		<ErrorBoundary>
-			<Suspense>
-				<EditCustomer resource={resource} />
-			</Suspense>
-		</ErrorBoundary>
-	);
-};
-
-/**
- *
- */
-const CustomersNavigator = () => {
-	return (
-		<Stack.Navigator screenOptions={{ headerShown: false }}>
-			<Stack.Screen name="Customers" component={CustomersWithProviders} />
-			<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-				<Stack.Screen name="AddCustomer" component={AddCustomerWithProviders} />
-				<Stack.Screen name="EditCustomer" component={EditCustomerWithProviders} />
-			</Stack.Group>
-		</Stack.Navigator>
-	);
-};
-
-export default CustomersNavigator;

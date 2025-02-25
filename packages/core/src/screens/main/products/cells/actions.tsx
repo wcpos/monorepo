@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useRouter, usePathname } from 'expo-router';
+import { useRouter, Link } from 'expo-router';
 
 import {
 	AlertDialog,
@@ -33,7 +33,6 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 
 export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'actions'>) => {
 	const router = useRouter();
-	const pathname = usePathname();
 	const product = row.original.document;
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const pullDocument = usePullDocument();
@@ -67,8 +66,7 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 					<DropdownMenuItem
 						onPress={() => {
 							router.push({
-								pathname: `${pathname}/edit`,
-								params: { productId: product.uuid },
+								pathname: `/products/edit/product/${product.uuid}`,
 							});
 						}}
 					>

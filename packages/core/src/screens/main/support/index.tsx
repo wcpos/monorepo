@@ -4,7 +4,7 @@ import WidgetBot from '@widgetbot/react-embed';
 
 import { Box } from '@wcpos/components/box';
 
-const Support = () => {
+export const Support = () => {
 	return (
 		<Box className="h-full">
 			<WidgetBot
@@ -16,5 +16,3 @@ const Support = () => {
 		</Box>
 	);
 };
-
-export default Support;

@@ -5,12 +5,18 @@ export const unstable_settings = {
 	initialRouteName: 'index',
 };
 
-export default function OrdersLayout() {
+export default function ProductsLayout() {
 	return (
 		<Stack screenOptions={{ headerShown: false }}>
 			<Stack.Screen name="index" />
 			<Stack.Screen
-				name="edit/[productId]"
+				name="edit/product/[productId]"
+				options={{
+					presentation: 'modal',
+				}}
+			/>
+			<Stack.Screen
+				name="edit/variation/[variationId]"
 				options={{
 					presentation: 'modal',
 				}}

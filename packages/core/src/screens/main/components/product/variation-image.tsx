@@ -25,14 +25,14 @@ export const ProductVariationImage = ({
 
 	return (
 		<>
-			<View className="absolute w-5 h-full top-0 left-0">
+			<View className="absolute left-0 top-0 h-full w-5">
 				<Svg width="100%">
 					<Line x1="50%" y1="0" x2="50%" y2="100%" stroke="#E2E8F0" strokeWidth="1" />
 					<Line x1="50%" y1="50%" x2="100%" y2="50%" stroke="#E2E8F0" strokeWidth="1" />
 				</Svg>
 			</View>
-			<View className="pl-3 w-full">
-				<Image source={source} recyclingKey={variation.uuid} className="w-full h-20" />
+			<View className="w-full pl-3">
+				<Image source={source} recyclingKey={variation.uuid} className="h-20 w-full" />
 			</View>
 		</>
 	);

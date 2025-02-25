@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 
 import {
 	AlertDialog,
@@ -39,7 +39,7 @@ export const VariationActions = ({
 	const variation = row.original.document;
 	const parent = row.getParentRow().document;
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
-	const navigation = useNavigation();
+	const router = useRouter();
 	const pullDocument = usePullDocument();
 	const t = useT();
 	const deleteDocument = useDeleteDocument();
@@ -69,12 +69,7 @@ export const VariationActions = ({
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem
-						onPress={() =>
-							navigation.navigate('EditVariation', {
-								parentID: parent.id,
-								variationID: variation.uuid,
-							})
-						}
+						onPress={() => router.push({ pathname: `/products/edit/variation/${variation.uuid}` })}
 					>
 						<Icon name="penToSquare" />
 						<Text>{t('Edit', { _tags: 'core' })}</Text>

@@ -1,24 +1,17 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useNavigation, StackActions } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import {
-	ModalContent,
-	ModalTitle,
-	Modal,
-	ModalBody,
-	ModalHeader,
-} from '@wcpos/components/modal';
+import { ModalContent, ModalTitle, Modal, ModalBody, ModalHeader } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 
 import { useT } from '../../../contexts/translations';
-import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';
 import { CustomerForm, customerFormSchema } from '../components/customer/customer-form';
 import { useMutation } from '../hooks/mutations/use-mutation';
 import useCustomerNameFormat from '../hooks/use-customer-name-format';
@@ -26,13 +19,12 @@ import useCustomerNameFormat from '../hooks/use-customer-name-format';
 /**
  *
  */
-export const AddCustomer = () => {
+export const AddCustomerScreen = () => {
 	const { create } = useMutation({ collectionName: 'customers' });
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
-	const navigation = useNavigation();
+	const router = useRouter();
 	const { format } = useCustomerNameFormat();
-	useModalRefreshFix();
 
 	/**
 	 *
@@ -84,7 +76,7 @@ export const AddCustomer = () => {
 						<CustomerForm
 							form={form}
 							onSubmit={handleSave}
-							onClose={() => navigation.dispatch(StackActions.pop(1))}
+							onClose={() => router.back()}
 							loading={loading}
 						/>
 					</ErrorBoundary>

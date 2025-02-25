@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { createStackNavigator } from '@react-navigation/stack';
 import { endOfDay, startOfDay } from 'date-fns';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -19,12 +18,10 @@ export type CustomersStackParamList = {
 	EditCustomer: { customerID: string };
 };
 
-const Stack = createStackNavigator<CustomersStackParamList>();
-
 /**
  *
  */
-const ReportsWithProviders = () => {
+export const ReportsScreen = () => {
 	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
 	const today = React.useMemo(() => new Date(), []);
@@ -69,17 +66,3 @@ const ReportsWithProviders = () => {
 		</ErrorBoundary>
 	);
 };
-
-/**
- *
- */
-const ReportsNavigator = () => {
-	return (
-		<Stack.Navigator screenOptions={{ headerShown: false }}>
-			<Stack.Screen name="Reports" component={ReportsWithProviders} />
-			{/* <Stack.Group screenOptions={{ presentation: 'transparentModal' }}></Stack.Group> */}
-		</Stack.Navigator>
-	);
-};
-
-export default ReportsNavigator;
