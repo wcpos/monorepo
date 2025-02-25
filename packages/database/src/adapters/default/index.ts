@@ -15,5 +15,5 @@ const devStorage = wrappedValidateZSchemaStorage({
 
 export const defaultConfig = {
 	storage: __DEV__ ? devStorage : storage,
-	ignoreDuplicate: !!__DEV__,
+	multiInstance: false, // must be false for react native
 };

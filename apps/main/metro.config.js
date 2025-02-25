@@ -23,7 +23,7 @@ if (process.env.ELECTRON === 'true') {
 // Use turborepo to restore the cache when possible, using the community standard `node_modules/.cache` folder
 // Moving this folder within the project allows for simple cache management in CI, and is easy to reset
 config.cacheStores = [
-	new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
+	new FileStore({ root: path.join(__dirname, '../../node_modules', '.cache', 'metro') }),
 ];
 
 module.exports = withNativeWind(config, { input: './global.css' });

@@ -122,4 +122,5 @@ const devStorage = wrappedValidateZSchemaStorage({
 
 export const defaultConfig = {
 	storage: __DEV__ ? devStorage : storage,
+	multiInstance: false, // False for single page electron app
 };
