@@ -9,7 +9,7 @@
       "cache": {
         "key": "turbo",
         "paths": [
-          "../../node_modules/.cache/turbo"
+          "../../.turbo/cache"
         ]
       },
       "env": {
