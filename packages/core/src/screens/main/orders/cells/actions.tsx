@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRouter } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
 
 import {
@@ -51,7 +51,7 @@ const upsertMetaData = (metaDataArray, key, value) => {
  */
 export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actions'>) => {
 	const order = row.original.document;
-	const navigation = useNavigation();
+	const router = useRouter();
 	// const status = useObservableState(order.status$, order.status);
 	const pullDocument = usePullDocument();
 	const { localPatch } = useLocalMutation();
@@ -76,8 +76,8 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 		}
 
 		await localPatch({ document: order, data: { status: 'pos-open', meta_data } });
-		navigation.navigate('POSStack', { screen: 'POS', params: { orderID: order.uuid } });
-	}, [localPatch, navigation, order, store.id, wpCredentials.id]);
+		router.push({ pathname: '/main/pos', params: { orderID: order.uuid } });
+	}, [localPatch, router, order, store.id, wpCredentials.id]);
 
 	/**
 	 * Handle delete button click
@@ -106,7 +106,11 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem
-						onPress={() => navigation.navigate('EditOrder', { orderID: order.uuid })}
+						onPress={() =>
+							router.push({
+								pathname: `/orders/edit/${order.uuid}`,
+							})
+						}
 					>
 						<Icon name="penToSquare" />
 						<Text>{t('Edit', { _tags: 'core' })}</Text>
@@ -118,7 +122,11 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 					{orderHasID && (
 						<>
 							<DropdownMenuItem
-								onPress={() => navigation.navigate('Receipt', { orderID: order.uuid })}
+								onPress={() =>
+									router.push({
+										pathname: `/(app)/receipt/${order.uuid}`,
+									})
+								}
 							>
 								<Icon name="receipt" />
 								<Text>{t('Receipt', { _tags: 'core' })}</Text>

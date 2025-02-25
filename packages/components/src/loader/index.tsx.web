@@ -11,7 +11,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
-import { getResolvedColor } from '../lib/icon-colors';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
@@ -53,7 +52,6 @@ type LoaderProps = ViewProps & VariantProps<typeof loaderVariants>;
 export const Loader = ({ className, variant, size, ...props }: LoaderProps) => {
 	const textClass = React.useContext(TextClassContext);
 	const rotation = useSharedValue(0);
-	const resolvedColor = getResolvedColor(variant, cn(textClass, className));
 
 	React.useEffect(() => {
 		rotation.value = withRepeat(
@@ -80,7 +78,7 @@ export const Loader = ({ className, variant, size, ...props }: LoaderProps) => {
 						fill="none"
 						r="14"
 						strokeWidth="4"
-						stroke={resolvedColor}
+						stroke="currentColor"
 						opacity="0.2"
 					/>
 					<Circle
@@ -91,7 +89,7 @@ export const Loader = ({ className, variant, size, ...props }: LoaderProps) => {
 						strokeWidth="4"
 						strokeDasharray="80"
 						strokeDashoffset="60"
-						stroke={resolvedColor}
+						stroke="currentColor"
 					/>
 				</Svg>
 			</Animated.View>

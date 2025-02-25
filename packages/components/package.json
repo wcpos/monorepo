@@ -47,6 +47,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
+    "color": "^5.0.0",
     "date-fns": "^4.1.0",
     "html-entities": "^2.5.2",
     "react-day-picker": "^9.4.4",

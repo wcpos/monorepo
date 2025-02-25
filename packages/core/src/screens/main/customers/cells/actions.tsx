@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 
 import {
 	AlertDialog,
@@ -41,7 +41,7 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
  */
 export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'actions'>) => {
 	const customer = row.original.document;
-	const navigation = useNavigation();
+	const router = useRouter();
 	const pullDocument = usePullDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
@@ -75,7 +75,11 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem
-						onPress={() => navigation.navigate('EditCustomer', { customerID: customer.uuid })}
+						onPress={() =>
+							router.push({
+								pathname: `/customers/edit/${customer.uuid}`,
+							})
+						}
 					>
 						<Icon name="penToSquare" />
 						<Text>{t('Edit', { _tags: 'core' })}</Text>

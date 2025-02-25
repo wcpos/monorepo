@@ -53,12 +53,10 @@ export const brandsLiteral = {
 				},
 				date_created: {
 					type: 'string',
-					format: 'date-time',
 					description: "The date the image was created, in the site's timezone.",
 				},
 				date_modified: {
 					type: 'string',
-					format: 'date-time',
 					description: "The date the image was last modified, in the site's timezone.",
 				},
 				src: {

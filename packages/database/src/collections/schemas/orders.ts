@@ -1,6 +1,6 @@
 export const ordersLiteral = {
 	title: 'WooCommerce Order schema',
-	version: 1,
+	version: 2,
 	description: 'WooCommerce Order schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -60,7 +60,6 @@ export const ordersLiteral = {
 		},
 		date_created_gmt: {
 			type: 'string',
-			format: 'date-time',
 			maxLength: 24,
 		},
 		date_modified: {

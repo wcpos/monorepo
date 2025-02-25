@@ -48,6 +48,12 @@ const App = () => {
 									presentation: 'modal',
 								}}
 							/>
+							<Stack.Screen
+								name="receipt"
+								options={{
+									presentation: 'modal',
+								}}
+							/>
 						</Stack>
 					</OnlineStatusProvider>
 				</UISettingsProvider>

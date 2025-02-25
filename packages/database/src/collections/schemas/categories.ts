@@ -1,6 +1,6 @@
 export const categoriesLiteral = {
 	title: 'WooCommerce Product Category schema',
-	version: 1,
+	version: 2,
 	description: 'WooCommerce Product Category schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -53,12 +53,10 @@ export const categoriesLiteral = {
 				},
 				date_created: {
 					type: 'string',
-					format: 'date-time',
 					description: "The date the image was created, in the site's timezone.",
 				},
 				date_modified: {
 					type: 'string',
-					format: 'date-time',
 					description: "The date the image was last modified, in the site's timezone.",
 				},
 				src: {

@@ -1,6 +1,6 @@
 export const customersLiteral = {
 	title: 'WooCommerce Customer schema',
-	version: 1,
+	version: 2,
 	description: 'WooCommerce Customer schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -33,7 +33,6 @@ export const customersLiteral = {
 		},
 		date_created_gmt: {
 			type: 'string',
-			format: 'date-time',
 			maxLength: 24,
 		},
 		date_modified: {
@@ -41,7 +40,6 @@ export const customersLiteral = {
 		},
 		date_modified_gmt: {
 			type: 'string',
-			format: 'date-time',
 			maxLength: 24,
 		},
 		email: {

@@ -207,6 +207,9 @@ const categories: RxCollectionCreator<ProductCategoryDocumentType> = {
 		1(oldDoc) {
 			return oldDoc;
 		},
+		2(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
@@ -276,6 +279,9 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 			oldDoc.sortable_total = roundToSixDecimals(oldDoc.total);
 			return oldDoc;
 		},
+		2(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
@@ -303,6 +309,9 @@ const customers: RxCollectionCreator<CustomerDocumentType> = {
 	},
 	migrationStrategies: {
 		1(oldDoc) {
+			return oldDoc;
+		},
+		2(oldDoc) {
 			return oldDoc;
 		},
 	},

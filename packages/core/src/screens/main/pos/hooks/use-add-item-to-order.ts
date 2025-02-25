@@ -22,10 +22,12 @@ export const useAddItemToOrder = () => {
 	const saveNewOrder = React.useCallback(
 		async (type: CartLineType, data: CartLine) => {
 			const order = currentOrder.getLatest();
+			const date_created_gmt = convertLocalDateToUTCString(new Date());
+			debugger;
 
 			const orderJSON = {
 				...order.toJSON(),
-				date_created_gmt: convertLocalDateToUTCString(new Date()),
+				date_created_gmt,
 				[type]: [data],
 			};
 
