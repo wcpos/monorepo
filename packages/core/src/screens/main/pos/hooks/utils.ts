@@ -101,7 +101,7 @@ export const findByProductVariationID = (
 /**
  *
  */
-type CustomerJSON = import('@wcpos/database').CustomerDocumentType;
+type CustomerJSON = import('@wcpos/database').CustomerDocument;
 export const transformCustomerJSONToOrderJSON = (
 	customer: CustomerJSON,
 	defaultCountry: string
@@ -110,9 +110,9 @@ export const transformCustomerJSONToOrderJSON = (
 		customer_id: customer.id,
 		billing: {
 			...(customer.billing || {}),
-			email: customer?.billing?.email || customer?.email,
-			first_name: customer?.billing?.first_name || customer.first_name || customer?.username,
-			last_name: customer?.billing?.last_name || customer?.last_name,
+			email: customer?.billing?.email || customer?.email || '',
+			first_name: customer?.billing?.first_name || customer.first_name || customer?.username || '',
+			last_name: customer?.billing?.last_name || customer?.last_name || '',
 			country: customer?.billing?.country || defaultCountry,
 		},
 		shipping: customer.shipping || {},

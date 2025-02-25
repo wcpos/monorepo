@@ -1,8 +1,9 @@
 import isNaN from 'lodash/isNaN';
 import round from 'lodash/round';
 import toNumber from 'lodash/toNumber';
-import { toTypedRxJsonSchema, ExtractDocumentTypeFromTypedRxJsonSchema, RxJsonSchema } from 'rxdb';
+import { ExtractDocumentTypeFromTypedRxJsonSchema, RxJsonSchema } from 'rxdb';
 
+import { brandsLiteral } from './schemas/brands';
 import { categoriesLiteral } from './schemas/categories';
 import { customersLiteral } from './schemas/customers';
 // import { gatewaysLiteral } from './schemas/gateways';
@@ -137,6 +138,9 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 			oldDoc.sortable_price = roundToSixDecimals(oldDoc.price);
 			return oldDoc;
 		},
+		2(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
@@ -179,6 +183,9 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 			oldDoc.sortable_price = roundToSixDecimals(oldDoc.price);
 			return oldDoc;
 		},
+		3(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
@@ -219,6 +226,20 @@ const tags: RxCollectionCreator<ProductTagDocumentType> = {
 		1(oldDoc) {
 			return oldDoc;
 		},
+	},
+};
+
+/**
+ * Product Brands
+ */
+const productBrandSchema: RxJsonSchema<ProductBrandDocumentType> = brandsLiteral;
+type ProductBrandDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof brandsLiteral>;
+export type ProductBrandDocument = RxDocument<ProductBrandDocumentType>;
+export type ProductBrandCollection = RxCollection<ProductBrandDocumentType>;
+const brands: RxCollectionCreator<ProductBrandDocumentType> = {
+	schema: productBrandSchema,
+	options: {
+		searchFields: ['name'],
 	},
 };
 
@@ -340,6 +361,7 @@ export type StoreCollections = {
 	// payment_gateways: GatewayCollection;
 	'products/categories': ProductCategoryCollection;
 	'products/tags': ProductTagCollection;
+	'products/brands': ProductBrandCollection;
 	logs: LogCollection;
 };
 
@@ -352,6 +374,7 @@ export type SyncCollections = {
 	// payment_gateways: GatewayCollection;
 	'products/categories': SyncCollection;
 	'products/tags': SyncCollection;
+	'products/brands': SyncCollection;
 };
 
 export type TemporaryCollections = {
@@ -380,6 +403,7 @@ export const storeCollections = {
 	// payment_gateways,
 	'products/categories': categories, // NOTE: WC REST API uses 'products/categories' endpoint
 	'products/tags': tags, // NOTE: WC REST API uses 'products/tags' endpoint
+	'products/brands': brands, // NOTE: WC REST API uses 'products/brands' endpoint
 	logs,
 };
 
@@ -393,6 +417,7 @@ export const syncCollections = {
 	// payment_gateways: sync,
 	'products/categories': sync,
 	'products/tags': sync,
+	'products/brands': sync,
 };
 
 export const temporaryCollections = {

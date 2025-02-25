@@ -1,6 +1,6 @@
 export const productsLiteral = {
 	title: 'WooCommerce Product schema',
-	version: 1,
+	version: 2,
 	description: 'WooCommerce Product schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -63,6 +63,9 @@ export const productsLiteral = {
 			type: 'string',
 		},
 		sku: {
+			type: 'string',
+		},
+		global_unique_id: {
 			type: 'string',
 		},
 		barcode: {
@@ -268,6 +271,23 @@ export const productsLiteral = {
 			},
 		},
 		tags: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					id: {
+						type: 'integer',
+					},
+					name: {
+						type: 'string',
+					},
+					slug: {
+						type: 'string',
+					},
+				},
+			},
+		},
+		brands: {
 			type: 'array',
 			items: {
 				type: 'object',

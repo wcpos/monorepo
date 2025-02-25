@@ -1,6 +1,6 @@
 export const variationsLiteral = {
 	title: 'WooCommerce Product Variation schema',
-	version: 2,
+	version: 3,
 	description: 'WooCommerce Product Variation schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -38,6 +38,9 @@ export const variationsLiteral = {
 			format: 'uri',
 		},
 		sku: {
+			type: 'string',
+		},
+		global_unique_id: {
 			type: 'string',
 		},
 		barcode: {
