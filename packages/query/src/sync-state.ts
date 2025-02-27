@@ -1,6 +1,7 @@
 import type { SyncCollection, StoreCollection } from '@wcpos/database';
 
 import type { Logger } from './logger';
+import type { RxDocument } from 'rxdb';
 
 interface ServerRecord {
 	id: number;
@@ -44,7 +45,7 @@ export class SyncStateManager {
 		const processedIds = new Set<number>();
 
 		while (hasMore) {
-			const result = await this.collection
+			let result = await this.collection
 				.find({
 					selector: { id: { $exists: true } },
 					skip,
@@ -56,6 +57,41 @@ export class SyncStateManager {
 			if (result.length === 0) {
 				hasMore = false;
 				continue;
+			}
+
+			// Check for duplicate IDs in the result array
+			const idCounts = new Map<number, RxDocument[]>();
+			for (const doc of result) {
+				if (!idCounts.has(doc.id)) {
+					idCounts.set(doc.id, []);
+				}
+				idCounts.get(doc.id)!.push(doc);
+			}
+
+			// Find IDs with duplicates
+			const duplicateIds = new Set<number>();
+			for (const [id, docs] of idCounts.entries()) {
+				if (docs.length > 1) {
+					duplicateIds.add(id);
+				}
+			}
+
+			// Delete duplicate documents from the local database
+			if (duplicateIds.size > 0) {
+				for (const id of duplicateIds) {
+					// Get all documents with this ID
+					const docsToRemove = idCounts.get(id)!;
+
+					// Remove each document from the database
+					for (const doc of docsToRemove) {
+						await doc.remove();
+					}
+
+					console.warn(`Removed ${docsToRemove.length} duplicate documents with ID: ${id}`);
+				}
+
+				// Remove duplicates from the result array
+				result = result.filter((doc) => !duplicateIds.has(doc.id));
 			}
 
 			const updates: any[] = [];
