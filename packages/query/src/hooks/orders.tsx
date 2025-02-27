@@ -47,6 +47,15 @@ const filterApiQueryParams = (params) => {
 	}
 
 	/**
+	 * Customer filter is customer_id in POS, but customer in WC API
+	 * so we need to convert it
+	 */
+	if (params.customer_id) {
+		params.customer = params.customer_id;
+		delete params.customer_id;
+	}
+
+	/**
 	 * special case for meta_data search for cashier and store
 	 * ie: {
 	 * 	$and: [
