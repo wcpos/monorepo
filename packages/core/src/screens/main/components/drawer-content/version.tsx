@@ -13,7 +13,7 @@ const Version = ({ largeScreen }) => {
 			<Text
 				className={cn('text-3xs text-primary-foreground opacity-50', largeScreen && 'text-center')}
 			>
-				{largeScreen ? 'v 1.7.10' : 'Version 1.7.10'}
+				{largeScreen ? 'v 1.7.11' : 'Version 1.7.11'}
 			</Text>
 		</Box>
 	);
