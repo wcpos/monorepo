@@ -117,7 +117,7 @@ export const StorePill = ({ resource, query }: Props) => {
 				<ButtonPill
 					size="xs"
 					leftIcon="shop"
-					variant={isActive ? 'default' : 'muted'}
+					variant={isActive ? undefined : 'muted'}
 					onPress={() => setOpen(!open)}
 					removable={isActive}
 					onRemove={handleRemove}

@@ -53,7 +53,7 @@ export const StockStatusPill = ({ query }: Props) => {
 				<ButtonPill
 					size="xs"
 					leftIcon="warehouseFull"
-					variant={isActive ? 'default' : 'muted'}
+					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
 					onRemove={() => query.removeWhere('stock_status').exec()}
 				>

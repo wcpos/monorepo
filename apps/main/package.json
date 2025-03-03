@@ -18,9 +18,9 @@
   "dependencies": {
     "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/drawer": "^7.1.1",
-    "@react-navigation/native": "7.0.14",
     "@shopify/flash-list": "1.7.3",
     "expo": "52.0.37",
+    "expo-constants": "~17.0.7",
     "expo-crypto": "~14.0.2",
     "expo-dev-client": "~5.0.12",
     "expo-haptics": "~14.0.1",

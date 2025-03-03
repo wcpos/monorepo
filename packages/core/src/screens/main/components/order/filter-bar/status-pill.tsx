@@ -41,7 +41,7 @@ export const StatusPill = ({ query }: Props) => {
 				<ButtonPill
 					size="xs"
 					leftIcon="cartCircleCheck"
-					variant={isActive ? 'default' : 'muted'}
+					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
 					onRemove={() => query.removeWhere('status').exec()}
 				>

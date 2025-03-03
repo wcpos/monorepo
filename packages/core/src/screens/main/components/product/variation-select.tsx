@@ -51,7 +51,7 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 					<ButtonPill
 						size="xs"
 						leftIcon="check"
-						variant={isActive ? 'default' : 'muted'}
+						variant={isActive ? undefined : 'muted'}
 						removable={isActive}
 						onRemove={onRemove}
 					>
@@ -81,7 +81,7 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 				<ButtonPill
 					size="xs"
 					leftIcon="check"
-					variant={isActive ? 'default' : 'muted'}
+					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
 					onRemove={onRemove}
 				>

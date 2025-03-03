@@ -4,11 +4,7 @@ import toNumber from 'lodash/toNumber';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import {
-	Combobox,
-	ComboboxTriggerPrimitive,
-	ComboboxContent,
-} from '@wcpos/components/combobox';
+import { Combobox, ComboboxTriggerPrimitive, ComboboxContent } from '@wcpos/components/combobox';
 import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
@@ -52,7 +48,7 @@ export const CategoryPill = ({ query, resource, selectedID }: Props) => {
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
-					variant={isActive ? 'default' : 'muted'}
+					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
 					onRemove={() =>
 						query.where('categories').removeElemMatch('categories', { id: category?.id }).exec()

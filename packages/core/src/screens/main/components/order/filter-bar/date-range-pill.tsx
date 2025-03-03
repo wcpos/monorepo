@@ -94,7 +94,7 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 				<ButtonPill
 					size="xs"
 					leftIcon="calendarDays"
-					variant={isActive ? 'default' : 'muted'}
+					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
 					onRemove={() => {
 						if (onRemove) {

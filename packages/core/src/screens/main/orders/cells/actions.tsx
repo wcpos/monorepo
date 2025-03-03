@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
 
 import {
@@ -76,7 +76,7 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 		}
 
 		await localPatch({ document: order, data: { status: 'pos-open', meta_data } });
-		router.push({ pathname: '/main/pos', params: { orderID: order.uuid } });
+		router.push({ pathname: '/cart', params: { orderID: order.uuid } });
 	}, [localPatch, router, order, store.id, wpCredentials.id]);
 
 	/**
@@ -121,13 +121,7 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 					</DropdownMenuItem>
 					{orderHasID && (
 						<>
-							<DropdownMenuItem
-								onPress={() =>
-									router.push({
-										pathname: `/(app)/receipt/${order.uuid}`,
-									})
-								}
-							>
+							<DropdownMenuItem onPress={() => router.push({ pathname: `/receipt/${order.uuid}` })}>
 								<Icon name="receipt" />
 								<Text>{t('Receipt', { _tags: 'core' })}</Text>
 							</DropdownMenuItem>
