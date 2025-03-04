@@ -26,4 +26,5 @@ const devStorage = wrappedValidateZSchemaStorage({
 
 export const defaultConfig = {
 	storage: __DEV__ ? devStorage : storage,
+	ignoreDuplicate: !!__DEV__,
 };

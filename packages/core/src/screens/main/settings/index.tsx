@@ -1,13 +1,7 @@
 import * as React from 'react';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import {
-	Modal,
-	ModalContent,
-	ModalHeader,
-	ModalTitle,
-	ModalBody,
-} from '@wcpos/components/modal';
+import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody } from '@wcpos/components/modal';
 import { Suspense } from '@wcpos/components/suspense';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
@@ -17,15 +11,13 @@ import { GeneralSettings } from './general';
 import { KeyboardShortcuts } from './shortcuts';
 import { TaxSettings } from './tax';
 import { useT } from '../../../contexts/translations';
-import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';
 
 /**
  *
  */
-export const SettingsTabs = () => {
+export const SettingsScreen = () => {
 	const [value, setValue] = React.useState('general');
 	const t = useT();
-	useModalRefreshFix();
 
 	const tabs = [
 		{
@@ -54,7 +46,7 @@ export const SettingsTabs = () => {
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>
-						<TabsList className="flex-row w-full">
+						<TabsList className="w-full flex-row">
 							{tabs.map((tab) => (
 								<TabsTrigger key={tab.value} value={tab.value} className="flex-1">
 									<Text>{tab.label}</Text>

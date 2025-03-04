@@ -9,4 +9,5 @@ export const devStorage = wrappedValidateZSchemaStorage({
 
 export const ephemeralStorageConfig = {
 	storage: __DEV__ ? devStorage : storage,
+	ignoreDuplicate: !!__DEV__,
 };

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useWindowDimensions, Linking } from 'react-native';
 
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import {
 	ObservableResource,
 	useObservableEagerState,
@@ -63,7 +63,7 @@ const StoreSubMenu = ({ storesResource, switchStore, currentStoreID }: StoreSubM
  */
 export const UserMenu = () => {
 	const { wpCredentials, isWebApp, site, store, logout, switchStore } = useAppState();
-	const navigation = useNavigation();
+	const router = useRouter();
 	const dimensions = useWindowDimensions();
 	const avatarUrl = useObservableEagerState(wpCredentials?.avatar_url$);
 	const stores = useObservableEagerState(wpCredentials?.stores$);
@@ -81,7 +81,7 @@ export const UserMenu = () => {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button className="px-3 rounded-none bg-transparent hover:bg-white/10">
+				<Button className="rounded-none bg-transparent px-3 hover:bg-white/10">
 					<HStack>
 						<Avatar
 							source={avatarSource}
@@ -95,11 +95,11 @@ export const UserMenu = () => {
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
-				<DropdownMenuItem onPress={() => navigation.navigate('Settings')}>
+				<DropdownMenuItem onPress={() => router.push('/(modal)/settings')}>
 					<Icon name="gear" />
 					<Text>{t('Settings', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>
-				<DropdownMenuItem onPress={() => navigation.navigate('SupportStack')}>
+				<DropdownMenuItem onPress={() => router.push('/(modal)/support')}>
 					<Icon name="commentQuestion" />
 					<Text>{t('Support', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>

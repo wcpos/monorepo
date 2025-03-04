@@ -58,9 +58,6 @@ export default function RootLayout() {
 											</ErrorBoundary>
 										</Suspense>
 										<ErrorBoundary>
-											<PortalHost />
-										</ErrorBoundary>
-										<ErrorBoundary>
 											<Toast config={toastConfig} />
 										</ErrorBoundary>
 									</SafeAreaProvider>

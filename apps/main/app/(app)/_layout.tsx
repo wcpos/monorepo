@@ -1,6 +1,8 @@
 import { Redirect, Stack } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
 
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { PortalHost } from '@wcpos/components/portal';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
@@ -26,35 +28,23 @@ const App = () => {
 	 */
 	const http = useRestHttpClient();
 
-	if (!storeDB) {
-		return <Redirect href="/(auth)/connect" />;
-	}
-
 	return (
 		<ExtraDataProvider>
 			<QueryProvider localDB={storeDB} fastLocalDB={fastStoreDB} http={http} locale={locale}>
 				<UISettingsProvider>
 					<OnlineStatusProvider wpAPIURL={wpAPIURL}>
-						<Stack>
-							<Stack.Screen
-								name="(drawer)"
-								options={{
-									headerShown: false,
-								}}
-							/>
+						<Stack screenOptions={{ headerShown: false }}>
+							<Stack.Screen name="(drawer)" />
 							<Stack.Screen
 								name="(modal)/settings"
 								options={{
 									presentation: 'modal',
 								}}
 							/>
-							<Stack.Screen
-								name="receipt"
-								options={{
-									presentation: 'modal',
-								}}
-							/>
 						</Stack>
+						<ErrorBoundary>
+							<PortalHost />
+						</ErrorBoundary>
 					</OnlineStatusProvider>
 				</UISettingsProvider>
 				<Errors />

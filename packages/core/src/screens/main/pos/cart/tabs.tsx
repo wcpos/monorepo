@@ -22,11 +22,11 @@ export const OpenOrderTabs = () => {
 	 *
 	 */
 	const handleTabPress = React.useCallback(
-		(orderID: string) => {
-			if (orderID === 'new') {
+		(orderId: string) => {
+			if (orderId === 'new') {
 				setCurrentOrderID('');
 			} else {
-				setCurrentOrderID(orderID);
+				setCurrentOrderID(orderId);
 			}
 		},
 		[setCurrentOrderID]

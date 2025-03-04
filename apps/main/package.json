@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@react-native-community/netinfo": "11.4.1",
-    "@react-navigation/drawer": "^7.1.1",
+    "@react-navigation/drawer": "7.1.2",
     "@shopify/flash-list": "1.7.3",
     "expo": "52.0.37",
     "expo-constants": "~17.0.7",
@@ -51,7 +51,7 @@
     "@babel/core": "7.26.9",
     "@types/react": "18.3.12",
     "jest": "29.7.0",
-    "jest-expo": "52.0.4",
+    "jest-expo": "52.0.5",
     "react-test-renderer": "18.3.1"
   },
   "private": true

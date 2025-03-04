@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { useNewOrder } from './use-new-order';
@@ -35,16 +35,16 @@ export const CurrentOrderProvider = ({
 	if (!currentOrder) {
 		currentOrder = newOrder;
 	}
-	const navigation = useNavigation();
+	const router = useRouter();
 
 	/**
 	 *
 	 */
 	const setCurrentOrderID = React.useCallback(
-		(orderID: string) => {
-			navigation.setParams({ orderID });
+		(orderId: string) => {
+			router.setParams({ orderId });
 		},
-		[navigation]
+		[router]
 	);
 
 	/**

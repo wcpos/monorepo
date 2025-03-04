@@ -1,102 +1,17 @@
-import * as React from 'react';
+import React from 'react';
 
-import {
-	useObservableSuspense,
-	ObservableResource,
-	useObservableEagerState,
-} from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
+import { useLocalSearchParams } from 'expo-router';
+import { ObservableResource } from 'observable-hooks';
 
-import {
-	Modal,
-	ModalContent,
-	ModalHeader,
-	ModalTitle,
-	ModalFooter,
-	ModalBody,
-	ModalClose,
-	ModalAction,
-} from '@wcpos/components/modal';
-import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
+import { Checkout } from './checkout';
+import { useCollection } from '../../hooks/use-collection';
 
-import { PaymentWebview } from './components/payment-webview';
-import CheckoutTitle from './components/title';
-import { useT } from '../../../../contexts/translations';
-import useModalRefreshFix from '../../../../hooks/use-modal-refresh-fix';
+export const CheckoutScreen = () => {
+	const { orderId } = useLocalSearchParams<{ orderId: string }>();
+	const { collection } = useCollection('orders');
+	const query = collection.findOneFix(orderId);
 
-interface Props {
-	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
-}
+	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
 
-/**
- *
- */
-const Checkout = ({ resource }: Props) => {
-	const order = useObservableSuspense(resource);
-	const orderNumber = useObservableEagerState(order.number$);
-	const t = useT();
-	const iframeRef = React.useRef<HTMLIFrameElement>();
-	const [loading, setLoading] = React.useState(false);
-	useModalRefreshFix();
-
-	/**
-	 *
-	 */
-	const handleProcessPayment = React.useCallback(() => {
-		setLoading(true);
-		if (iframeRef.current && iframeRef.current.contentWindow) {
-			iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
-		}
-	}, []);
-
-	/**
-	 *
-	 */
-	if (!isRxDocument(order)) {
-		return (
-			<Modal>
-				<ModalContent size="lg">
-					<ModalHeader>
-						<ModalTitle>
-							<Text>{t('No order found', { _tags: 'core' })}</Text>
-						</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
-			</Modal>
-		);
-	}
-
-	/**
-	 *
-	 */
-	return (
-		<Modal>
-			<ModalContent size="xl" className="h-full">
-				<ModalHeader>
-					<ModalTitle>
-						<Text>
-							{orderNumber
-								? t('Checkout Order #{orderNumber}', { orderNumber, _tags: 'core' })
-								: t('Checkout', { _tags: 'core' })}
-						</Text>
-					</ModalTitle>
-				</ModalHeader>
-				<ModalBody contentContainerStyle={{ height: '100%' }}>
-					<VStack className="flex-1">
-						<CheckoutTitle order={order} />
-						<PaymentWebview order={order} ref={iframeRef} setLoading={setLoading} />
-					</VStack>
-				</ModalBody>
-				<ModalFooter>
-					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
-					<ModalAction onPress={handleProcessPayment} loading={loading}>
-						{t('Process Payment', { _tags: 'core' })}
-					</ModalAction>
-				</ModalFooter>
-			</ModalContent>
-		</Modal>
-	);
+	return <Checkout resource={resource} />;
 };
-
-export default Checkout;

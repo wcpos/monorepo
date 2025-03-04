@@ -18,8 +18,8 @@ const formSchema = z.object({
 	barcode_scanning_avg_time_input_threshold: z.number().default(24),
 	// barcode_scanning_buffer: z.number().default(500),
 	barcode_scanning_min_chars: z.number().default(8),
-	barcode_scanning_prefix: z.string().optional(),
-	barcode_scanning_suffix: z.string().optional(),
+	barcode_scanning_prefix: z.string().default(''),
+	barcode_scanning_suffix: z.string().default(''),
 });
 
 /**
@@ -40,8 +40,8 @@ export const BarcodeSettings = () => {
 			return {
 				barcode_scanning_avg_time_input_threshold: latest.barcode_scanning_avg_time_input_threshold,
 				barcode_scanning_min_chars: latest.barcode_scanning_min_chars,
-				barcode_scanning_prefix: latest.barcode_scanning_prefix,
-				barcode_scanning_suffix: latest.barcode_scanning_suffix,
+				barcode_scanning_prefix: latest.barcode_scanning_prefix || '',
+				barcode_scanning_suffix: latest.barcode_scanning_suffix || '',
 			};
 		},
 		'barcode_scanning_avg_time_input_threshold',
