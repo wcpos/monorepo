@@ -21,17 +21,17 @@ export const ExtraDataProvider = ({ children }) => {
 
 	React.useEffect(() => {
 		http.get('/taxes/classes').then((response) => {
-			if (response.status === 200) {
+			if (response?.status === 200) {
 				extraData.set('taxClasses', () => response.data);
 			}
 		});
 		http.get('/shipping_methods').then((response) => {
-			if (response.status === 200) {
+			if (response?.status === 200) {
 				extraData.set('shippingMethods', () => response.data);
 			}
 		});
 		http.get('/data/order_statuses').then((response) => {
-			if (response.status === 200) {
+			if (response?.status === 200) {
 				extraData.set('orderStatuses', () => response.data);
 			}
 		});

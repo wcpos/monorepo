@@ -3,13 +3,7 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 
-import {
-	Modal,
-	ModalContent,
-	ModalTitle,
-	ModalHeader,
-	ModalBody,
-} from '@wcpos/components/modal';
+import { Modal, ModalContent, ModalTitle, ModalHeader, ModalBody } from '@wcpos/components/modal';
 import { WebView } from '@wcpos/components/webview';
 import log from '@wcpos/utils/logger';
 
@@ -19,7 +13,7 @@ import { useT } from '../../contexts/translations';
 /**
  *
  */
-export const Login = () => {
+export const LoginModal = () => {
 	const { site, wpCredentials } = useAppState();
 	const navigation = useNavigation();
 	const t = useT();

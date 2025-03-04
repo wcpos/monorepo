@@ -1,5 +1,6 @@
 import React from 'react';
 
+import { useLocalSearchParams } from 'expo-router';
 import { useObservableEagerState, ObservableResource } from 'observable-hooks';
 import { map, distinctUntilChanged } from 'rxjs/operators';
 
@@ -16,6 +17,7 @@ export const POSScreen = () => {
 	const cashierID = useObservableEagerState(wpCredentials.id$);
 	const storeID = useObservableEagerState(store.id$);
 	const { collection: ordersCollection } = useCollection('orders');
+	const { orderId } = useLocalSearchParams<{ orderId: string }>();
 
 	/**
 	 * We then need to filter the open orders to limit by cashier and store
@@ -51,9 +53,7 @@ export const POSScreen = () => {
 
 	return (
 		<Suspense>
-			<CurrentOrderProvider
-				resource={resource} //</Suspense>currentOrderUUID={route.params?.orderID}
-			>
+			<CurrentOrderProvider resource={resource} currentOrderUUID={orderId}>
 				<Suspense>
 					<POS />
 				</Suspense>

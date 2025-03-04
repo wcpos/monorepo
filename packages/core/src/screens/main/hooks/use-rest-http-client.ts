@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import get from 'lodash/get';
 import merge from 'lodash/merge';
 import { useObservableEagerState } from 'observable-hooks';
@@ -53,7 +53,7 @@ export const useRestHttpClient = (endpoint = '') => {
 	// const wcAPIURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableEagerState(wpCredentials.jwt$);
 
-	const navigation = useNavigation();
+	const router = useRouter();
 
 	// React.useEffect(() => {
 	// 	console.log('isAuth', isAuth);
@@ -66,12 +66,12 @@ export const useRestHttpClient = (endpoint = '') => {
 		(error) => {
 			if (error.response && error.response.status === 401) {
 				errorSubject.next(error);
-				navigation.navigate('Login');
+				router.push('login');
 				return null; // prevent snackbars from showing
 			}
 			return error;
 		},
-		[navigation]
+		[router]
 	);
 
 	/**

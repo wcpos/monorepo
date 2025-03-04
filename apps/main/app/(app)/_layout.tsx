@@ -41,6 +41,13 @@ const App = () => {
 									presentation: 'modal',
 								}}
 							/>
+							<Stack.Screen
+								name="(modal)/login"
+								options={{
+									presentation: 'transparentModal',
+									animation: 'fade',
+								}}
+							/>
 						</Stack>
 						<ErrorBoundary>
 							<PortalHost />

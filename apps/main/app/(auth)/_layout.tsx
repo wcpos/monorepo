@@ -13,7 +13,7 @@ export default function AuthLayout() {
 	const { storeDB } = useAppState();
 
 	if (storeDB) {
-		return <Redirect href="/(app)/(drawer)/cart/[[orderId]]" />;
+		return <Redirect href="/(app)" />;
 	}
 
 	return (
@@ -25,7 +25,6 @@ export default function AuthLayout() {
 					options={{
 						presentation: 'transparentModal',
 						animation: 'fade',
-						headerShown: false,
 					}}
 				/>
 			</Stack>

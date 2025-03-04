@@ -10,13 +10,13 @@ export default function CartLayout() {
 		<Stack screenOptions={{ headerShown: false }}>
 			<Stack.Screen name="index" />
 			<Stack.Screen
-				name="cart/[orderID]/checkout"
+				name="cart/[orderId]/checkout"
 				options={{
 					presentation: 'modal',
 				}}
 			/>
 			<Stack.Screen
-				name="cart/receipt/[orderID]"
+				name="cart/receipt/[orderId]"
 				options={{
 					presentation: 'modal',
 				}}
