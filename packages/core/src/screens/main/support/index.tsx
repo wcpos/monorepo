@@ -1,18 +1,61 @@
-import * as React from 'react';
+import React from 'react';
+import { View, Dimensions } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 
-import WidgetBot from '@widgetbot/react-embed';
+import Discord from './discord';
 
-import { Box } from '@wcpos/components/box';
+// Helper to account for padding (p-2 = 8px on each side)
+const adjustForPadding = (width: number, height: number) => {
+	const paddingHorizontal = 16; // 8px on each side
+	const paddingVertical = 16; // 8px on each side
+	return {
+		width: Math.max(0, width - paddingHorizontal),
+		height: Math.max(0, height - paddingVertical),
+	};
+};
 
 export const Support = () => {
+	const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
+
+	const handleLayout = (event: LayoutChangeEvent) => {
+		const { width, height } = event.nativeEvent.layout;
+		setDimensions(adjustForPadding(width, height));
+	};
+
+	// Listen for dimension changes (like rotation)
+	React.useEffect(() => {
+		const updateDimensions = () => {
+			const { width, height } = Dimensions.get('window');
+			// View is full width/height with padding, so adjust
+			setDimensions(adjustForPadding(width, height));
+		};
+
+		// Update on mount
+		updateDimensions();
+
+		// Add event listener for dimension changes
+		const dimensionListener = Dimensions.addEventListener('change', updateDimensions);
+
+		// Cleanup
+		return () => {
+			dimensionListener.remove();
+		};
+	}, []);
+
 	return (
-		<Box className="h-full">
-			<WidgetBot
-				server="711884517081612298"
-				channel="1093100746372829254"
-				shard="https://emerald.widgetbot.io"
-				style={{ height: '100%', width: '100%', border: '0px' }}
+		<View className="h-full w-full p-2" onLayout={handleLayout}>
+			<Discord
+				dom={{
+					matchContents: true,
+					scrollEnabled: false,
+					containerStyle: {
+						width: dimensions.width,
+						height: dimensions.height,
+					},
+				}}
+				width={dimensions.width}
+				height={dimensions.height}
 			/>
-		</Box>
+		</View>
 	);
 };

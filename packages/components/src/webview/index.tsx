@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { StyleSheet } from 'react-native';
 
 import isString from 'lodash/isString';
 import noop from 'lodash/noop';
@@ -16,17 +17,26 @@ type WebViewProps = {
 	onLoad?: (ev: WebViewNavigation) => void;
 } & RNWebViewProps;
 
+const styles = StyleSheet.create({
+	webview: {
+		flex: 1,
+		width: '100%',
+		height: '100%',
+	},
+});
+
 /**
- *
+ * WebView component that automatically resizes to fill its parent container
  */
 const WebViewBase = (
-	{ src, title, onMessage = noop, onError = noop, onLoad = noop, ...props }: WebViewProps,
-	ref: RNWebView
+	{ src, title, onMessage = noop, onError = noop, onLoad = noop, style, ...props }: WebViewProps,
+	ref: React.ForwardedRef<RNWebView>
 ) => {
 	return (
 		<RNWebView
 			ref={ref}
 			source={{ uri: src }}
+			style={[styles.webview, style]}
 			onMessage={({ nativeEvent }) => {
 				/**
 				 * https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md#onmessage
@@ -49,4 +59,4 @@ const WebViewBase = (
 	);
 };
 
-export const WebView = React.forwardRef(WebViewBase);
+export const WebView = React.forwardRef<RNWebView, WebViewProps>(WebViewBase);

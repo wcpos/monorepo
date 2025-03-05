@@ -4,11 +4,7 @@ import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import {
-	Combobox,
-	ComboboxTriggerPrimitive,
-	ComboboxContent,
-} from '@wcpos/components/combobox';
+import { Combobox, ComboboxTriggerPrimitive, ComboboxContent } from '@wcpos/components/combobox';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query } from '@wcpos/query';
 
@@ -50,7 +46,7 @@ const CustomerPill = ({ query, resource, customerID }: CustomerPillProps) => {
 				<ButtonPill
 					size="xs"
 					leftIcon="user"
-					variant={customer ? 'default' : 'muted'}
+					variant={customer ? undefined : 'muted'}
 					removable={!!customer}
 					onRemove={() => query.removeWhere('customer_id').exec()}
 				>

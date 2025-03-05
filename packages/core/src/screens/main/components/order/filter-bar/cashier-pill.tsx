@@ -111,7 +111,7 @@ export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) =>
 				<ButtonPill
 					size="xs"
 					leftIcon="userCrown"
-					variant={cashier ? 'default' : 'muted'}
+					variant={cashier ? undefined : 'muted'}
 					removable={!!cashier}
 					onRemove={() => query.removeElemMatch('meta_data', { key: '_pos_user' }).exec()}
 				>
