@@ -19,6 +19,7 @@
     "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/drawer": "7.1.2",
     "@shopify/flash-list": "1.7.3",
+    "@shopify/react-native-skia": "1.5.0",
     "expo": "52.0.37",
     "expo-constants": "~17.0.7",
     "expo-crypto": "~14.0.2",
@@ -45,7 +46,8 @@
     "react-native-web": "0.19.13",
     "react-native-webview": "13.12.5",
     "tailwindcss": "3.4.17",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "victory-native": "^41.16.1"
   },
   "devDependencies": {
     "@babel/core": "7.26.9",
