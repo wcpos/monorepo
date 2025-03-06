@@ -20,6 +20,13 @@ export default function Root({ children }: { children: React.ReactNode }) {
 
 				{/* Using raw CSS styles as an escape-hatch to ensure the background color never flickers in dark-mode. */}
 				<style dangerouslySetInnerHTML={{ __html: responsiveBackground }} />
+
+				{/* Add Inter font from Google Fonts */}
+				<link
+					href="https://fonts.googleapis.com/css2?family=Inter:wght@500&display=swap"
+					rel="stylesheet"
+				/>
+
 				{/* Add any additional <head> elements that you want globally available on web... */}
 
 				<script

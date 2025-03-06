@@ -41,7 +41,7 @@
       [
         "expo-font",
         {
-          "fonts": ["node_modules/@expo-google-fonts/inter/Inter_500Medium.ttf"]
+          "fonts": ["../../node_modules/@expo-google-fonts/inter/Inter_500Medium.ttf"]
         }
       ]
     ],

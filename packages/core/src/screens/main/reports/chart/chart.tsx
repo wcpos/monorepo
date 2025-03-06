@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import { LinearGradient, useFont, vec } from '@shopify/react-native-skia';
 import { Bar, CartesianChart } from 'victory-native';
 
@@ -9,7 +11,7 @@ const data = Array.from({ length: 6 }, (_, index) => ({
 }));
 
 export default function SkiaChart() {
-	const font = useFont('Inter_500Medium', 12);
+	const font = useFont(Platform.OS === 'web' ? 'Inter' : 'Inter_500Medium', 12);
 
 	return (
 		<CartesianChart
