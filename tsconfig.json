@@ -2,6 +2,7 @@
 	"extends": "expo/tsconfig.base",
 	"compilerOptions": {
 		"baseUrl": ".",
+		"module": "esnext",
 		"paths": {
 			"@wcpos/components/*": ["packages/components/src/*"],
 			"@wcpos/core/*": ["packages/core/src/*"],
