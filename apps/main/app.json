@@ -37,13 +37,7 @@
     },
     "plugins": [
       "expo-router",
-      "expo-sqlite",
-      [
-        "expo-font",
-        {
-          "fonts": ["../../node_modules/@expo-google-fonts/inter/Inter_500Medium.ttf"]
-        }
-      ]
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
