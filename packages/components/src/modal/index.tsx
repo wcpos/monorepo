@@ -82,7 +82,7 @@ const ModalAction = React.forwardRef<PressableRef, ButtonProps>(
 
 ModalAction.displayName = 'ModalAction';
 
-const ModalOverlayWeb = React.forwardRef<
+const ModalOverlay = React.forwardRef<
 	React.ElementRef<typeof View>,
 	React.ComponentPropsWithoutRef<typeof View>
 >(({ className, ...props }, ref) => {
@@ -100,36 +100,7 @@ const ModalOverlayWeb = React.forwardRef<
 	);
 });
 
-ModalOverlayWeb.displayName = 'ModalOverlayWeb';
-
-const ModalOverlayNative = React.forwardRef<
-	React.ElementRef<typeof View>,
-	React.ComponentPropsWithoutRef<typeof View>
->(({ className, children, ...props }, ref) => {
-	return (
-		<View
-			style={StyleSheet.absoluteFill}
-			className={cn(
-				'z-50 flex items-center justify-center bg-black/70 p-2',
-				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
-				className
-			)}
-			{...props}
-			ref={ref}
-		>
-			<Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
-				<>{children}</>
-			</Animated.View>
-		</View>
-	);
-});
-
-ModalOverlayNative.displayName = 'ModalOverlayNative';
-
-const ModalOverlay = Platform.select({
-	web: ModalOverlayWeb,
-	default: ModalOverlayNative,
-});
+ModalOverlay.displayName = 'ModalOverlay';
 
 const modalContentVariants = cva(
 	'border-border web:cursor-default bg-background web:duration-200 z-50 max-h-full max-w-lg gap-4 rounded-lg border py-4 shadow-lg',

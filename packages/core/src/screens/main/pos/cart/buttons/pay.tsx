@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation, StackActions } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
@@ -19,7 +19,7 @@ export const PayButton = () => {
 	const { currentOrder } = useCurrentOrder();
 	const total = useObservableEagerState(currentOrder.total$);
 	const { format } = useCurrentOrderCurrencyFormat();
-	const navigation = useNavigation();
+	const router = useRouter();
 	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
 	const t = useT();
@@ -32,7 +32,9 @@ export const PayButton = () => {
 		try {
 			await pushDocument(currentOrder).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
-					navigation.dispatch(StackActions.push('Checkout', { orderID: currentOrder.uuid }));
+					router.push({
+						pathname: `cart/${currentOrder.uuid}/checkout`,
+					});
 				}
 			});
 		} catch (error) {
@@ -43,7 +45,7 @@ export const PayButton = () => {
 		} finally {
 			setLoading(false);
 		}
-	}, [pushDocument, currentOrder, navigation, t]);
+	}, [pushDocument, currentOrder, router, t]);
 
 	/**
 	 *
@@ -53,7 +55,7 @@ export const PayButton = () => {
 			size="lg"
 			onPress={handlePay}
 			variant="success"
-			className="rounded-t-none rounded-bl-none flex-[3]"
+			className="flex-[3] rounded-t-none rounded-bl-none"
 			loading={loading}
 		>
 			{t('Checkout {order_total}', {

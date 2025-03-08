@@ -1,58 +1,68 @@
 import * as React from 'react';
-import { StyleSheet } from 'react-native';
 
+import { useAugmentedRef } from '@rn-primitives/hooks';
 import isString from 'lodash/isString';
-import noop from 'lodash/noop';
 import { WebView as RNWebView, WebViewProps as RNWebViewProps } from 'react-native-webview';
 
-type WebViewMessage = import('react-native-webview/lib/WebViewTypes').WebViewMessage;
-type WebViewError = import('react-native-webview/lib/WebViewTypes').WebViewError;
-type WebViewNavigation = import('react-native-webview/lib/WebViewTypes').WebViewNavigation;
-
-type WebViewProps = {
+export type WebViewProps = {
 	src: string;
-	title?: string;
-	onMessage?: (ev: WebViewMessage) => void;
-	onError?: (ev: WebViewError) => void;
-	onLoad?: (ev: WebViewNavigation) => void;
+	onMessage: (event: { nativeEvent: { data: any } }) => void;
 } & RNWebViewProps;
-
-const styles = StyleSheet.create({
-	webview: {
-		flex: 1,
-		width: '100%',
-		height: '100%',
-	},
-});
 
 /**
  * WebView component that automatically resizes to fill its parent container
  */
 const WebViewBase = (
-	{ src, title, onMessage = noop, onError = noop, onLoad = noop, style, ...props }: WebViewProps,
+	{ src, onMessage, ...props }: WebViewProps,
 	ref: React.ForwardedRef<RNWebView>
 ) => {
+	/**
+	 * Add a postMessage function to the ref
+	 */
+	const augmentedRef = useAugmentedRef({
+		ref,
+		methods: {
+			postMessage(message) {
+				// Inject JavaScript that calls window.postMessage with the message
+				augmentedRef.current.injectJavaScript(`
+					(function() {
+						window.postMessage(${JSON.stringify(message)}, '*');
+						return true;
+					})();
+				`);
+			},
+		},
+	});
+
 	return (
 		<RNWebView
-			ref={ref}
+			ref={augmentedRef}
 			source={{ uri: src }}
-			style={[styles.webview, style]}
-			onMessage={({ nativeEvent }) => {
+			onMessage={(event) => {
 				/**
 				 * https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md#onmessage
 				 * data from the webview must be a string, we want to convert this to an object
 				 */
-				let data = nativeEvent.data;
-				if (data && isString(data)) {
-					data = JSON.parse(data);
+				const { nativeEvent } = event;
+				let parsedData = nativeEvent.data || '';
+				if (parsedData && isString(parsedData)) {
+					try {
+						parsedData = JSON.parse(parsedData);
+						// We can't modify nativeEvent directly, so we pass the parsed data separately
+						// The component using this WebView can access parsedData from its onMessage handler
+						onMessage?.({ ...nativeEvent, data: parsedData });
+					} catch (e) {
+						// If it's not valid JSON, just pass the original event
+						onMessage?.(event);
+					}
+				} else {
+					// Pass the original event if no parsing was needed
+					onMessage?.(event);
 				}
-				onMessage({ ...nativeEvent, data });
 			}}
-			onError={({ nativeEvent }) => {
-				onError(nativeEvent);
-			}}
-			onLoad={({ nativeEvent }) => {
-				onLoad(nativeEvent);
+			onError={(error) => {
+				console.error('WebView error:', error);
+				props.onError?.(error);
 			}}
 			{...props}
 		/>
@@ -60,3 +70,47 @@ const WebViewBase = (
 };
 
 export const WebView = React.forwardRef<RNWebView, WebViewProps>(WebViewBase);
+
+/**
+ * Example of how to use the WebView's postMessage method:
+ *
+ * ```tsx
+ * const MyComponent = () => {
+ *   const webViewRef = React.useRef<RNWebView>(null);
+ *
+ *   const handleSendMessage = () => {
+ *     // Using the augmented postMessage method
+ *     webViewRef.current?.postMessage({
+ *       type: 'ACTION',
+ *       payload: { id: 123, data: 'example' }
+ *     });
+ *   };
+ *
+ *   return (
+ *     <>
+ *       <WebView
+ *         ref={webViewRef}
+ *         src="https://example.com"
+ *         onMessage={(event) => {
+ *           console.log('Message from WebView:', event.nativeEvent.data);
+ *         }}
+ *       />
+ *       <Button title="Send Message" onPress={handleSendMessage} />
+ *     </>
+ *   );
+ * };
+ * ```
+ *
+ * Inside your web page (loaded in the WebView), you'll need to set up a listener:
+ *
+ * ```html
+ * <script>
+ *   window.addEventListener('message', function(event) {
+ *     // Handle message from React Native
+ *     console.log('Received message from React Native:', event.data);
+ *
+ *     // You can send a response back to React Native
+ *     window.postMessage(JSON.stringify({ type: 'RESPONSE', success: true }), '*');
+ *   });
+ * </script>
+ */

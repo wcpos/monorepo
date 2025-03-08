@@ -3,6 +3,8 @@ import React from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { ObservableResource } from 'observable-hooks';
 
+import { Suspense } from '@wcpos/components/suspense';
+
 import { EditCustomer } from './edit-customer';
 import { useCollection } from '../../hooks/use-collection';
 
@@ -13,5 +15,9 @@ export const EditCustomerScreen = () => {
 
 	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
 
-	return <EditCustomer resource={resource} />;
+	return (
+		<Suspense>
+			<EditCustomer resource={resource} />
+		</Suspense>
+	);
 };

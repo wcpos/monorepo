@@ -19,6 +19,7 @@ import {
 } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import type { WebViewProps } from '@wcpos/components/webview';
 
 import { PaymentWebview } from './components/payment-webview';
 import CheckoutTitle from './components/title';
@@ -35,7 +36,7 @@ export const Checkout = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
 	const orderNumber = useObservableEagerState(order.number$);
 	const t = useT();
-	const iframeRef = React.useRef<HTMLIFrameElement>();
+	const webViewRef = React.useRef<WebViewProps>();
 	const [loading, setLoading] = React.useState(false);
 
 	/**
@@ -43,8 +44,8 @@ export const Checkout = ({ resource }: Props) => {
 	 */
 	const handleProcessPayment = React.useCallback(() => {
 		setLoading(true);
-		if (iframeRef.current && iframeRef.current.contentWindow) {
-			iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
+		if (webViewRef.current && webViewRef.current.postMessage) {
+			webViewRef.current.postMessage({ action: 'wcpos-process-payment' });
 		}
 	}, []);
 
@@ -83,7 +84,7 @@ export const Checkout = ({ resource }: Props) => {
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
-						<PaymentWebview order={order} ref={iframeRef} setLoading={setLoading} />
+						<PaymentWebview order={order} ref={webViewRef} setLoading={setLoading} />
 					</VStack>
 				</ModalBody>
 				<ModalFooter>
