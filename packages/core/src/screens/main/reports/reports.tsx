@@ -29,7 +29,9 @@ export const Reports = () => {
 					{dimensions.width >= 640 ? (
 						<PanelGroup direction="vertical">
 							<Panel defaultSize={40}>
-								<Chart />
+								<View className="h-full w-full px-2">
+									<Chart />
+								</View>
 							</Panel>
 							<PanelResizeHandle />
 							<Panel>

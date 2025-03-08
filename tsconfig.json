@@ -4,6 +4,8 @@
 		"baseUrl": ".",
 		"module": "esnext",
 		"paths": {
+			"@wcpos/main/*": ["apps/main/*"],
+			"@wcpos/electron/*": ["apps/electron/*"],
 			"@wcpos/components/*": ["packages/components/src/*"],
 			"@wcpos/core/*": ["packages/core/src/*"],
 			"@wcpos/database": ["packages/database/src/index"],
