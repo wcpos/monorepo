@@ -1,3 +1,5 @@
+import { useWindowDimensions } from 'react-native';
+
 import { Stack } from 'expo-router';
 
 export const unstable_settings = {
@@ -6,9 +8,12 @@ export const unstable_settings = {
 };
 
 export default function CartLayout() {
+	const dimensions = useWindowDimensions();
+	const largeScreen = dimensions.width >= 1024;
+
 	return (
 		<Stack screenOptions={{ headerShown: false }}>
-			<Stack.Screen name="index" />
+			<Stack.Screen name={largeScreen ? 'index' : '(tabs)'} />
 			<Stack.Screen
 				name="cart/[orderId]/checkout"
 				options={{

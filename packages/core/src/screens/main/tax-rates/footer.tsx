@@ -21,7 +21,7 @@ export const TaxRatesFooter = ({ count, query }) => {
 	const t = useT();
 
 	return (
-		<HStack className="p-2 gap-0 border-border border-t bg-muted justify-end">
+		<HStack className="border-border bg-muted justify-end gap-0 border-t p-2">
 			<Text className="text-xs">
 				{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
 			</Text>

@@ -40,7 +40,7 @@ export const TaxRatesTabs = ({ query }) => {
 	return (
 		<>
 			<Tabs value={value} onValueChange={setValue}>
-				<TabsList className="flex-row w-full">
+				<TabsList className="w-full flex-row">
 					{grouped.map((group) => (
 						<TabsTrigger key={group.slug} value={group.slug}>
 							<Text>{group.name}</Text>

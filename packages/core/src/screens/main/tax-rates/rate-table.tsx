@@ -91,7 +91,9 @@ export const TaxRateTable = ({ rates }: TaxRateTableProps) => {
 						<TableCell>
 							<Text>{rate.name}</Text>
 						</TableCell>
-						<TableCell className="w-12">{rate.priority}</TableCell>
+						<TableCell className="w-12">
+							<Text>{rate.priority}</Text>
+						</TableCell>
 						<TableCell className="w-12">
 							<Icon name={rate.compound ? 'check' : 'xmark'} />
 						</TableCell>

@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useSubscription } from 'observable-hooks';
 
-import { useQueryManager } from '@wcpos/query';
 import { Toast } from '@wcpos/components/toast';
+import { useQueryManager } from '@wcpos/query';
 import log from '@wcpos/utils/logger';
 
 /**

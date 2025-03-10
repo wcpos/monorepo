@@ -382,7 +382,7 @@ importers:
         version: 2.1.0
       '@hookform/error-message':
         specifier: ^2.0.1
-        version: 2.0.1(react-dom@18.3.1(react@18.3.1))(react-hook-form@7.54.2(react@18.3.1))(react@18.3.1)
+        version: 2.0.1(react-hook-form@7.54.2(react@18.3.1))(react@18.3.1)
       '@hookform/resolvers':
         specifier: 4.1.3
         version: 4.1.3(react-hook-form@7.54.2(react@18.3.1))
@@ -398,6 +398,9 @@ importers:
       '@widgetbot/react-embed':
         specifier: ^1.9.0
         version: 1.9.0(react@18.3.1)
+      blob-polyfill:
+        specifier: ^9.0.20240710
+        version: 9.0.20240710
       date-fns:
         specifier: 4.1.0
         version: 4.1.0
@@ -451,10 +454,10 @@ importers:
         version: 2.0.0(react-native@0.76.7(@babel/core@7.26.9)(@babel/preset-env@7.26.9(@babel/core@7.26.9))(@types/react@18.3.12)(encoding@0.1.13)(react@18.3.1))
       react-number-format:
         specifier: ^5.4.3
-        version: 5.4.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 5.4.3(react@18.3.1)
       react-thermal-printer:
         specifier: 0.19.3
-        version: 0.19.3(jiti@1.21.7)(postcss@8.5.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.3.3)(yaml@2.7.0)
+        version: 0.19.3(jiti@1.21.7)(postcss@8.5.3)(react@18.3.1)(typescript@5.3.3)(yaml@2.7.0)
       react-to-print:
         specifier: ^3.0.4
         version: 3.0.5(react@18.3.1)
@@ -1967,6 +1970,7 @@ packages:
   '@faker-js/faker@9.5.1':
     resolution: {integrity: sha512-0fzMEDxkExR2cn731kpDaCCnBGBUOIXEi2S1N5l8Hltp6aPf4soTMJ+g4k8r2sI5oB+rpwIW8Uy/6jkwGpnWPg==}
     engines: {node: '>=18.0.0', npm: '>=9.0.0'}
+    deprecated: Please update to a newer version
 
   '@firebase/analytics-compat@0.2.18':
     resolution: {integrity: sha512-Hw9mzsSMZaQu6wrTbi3kYYwGw9nBqOHr47pVLxfr5v8CalsdrG5gfs9XUlPOZjHRVISp3oQrh1j7d3E+ulHPjQ==}
@@ -4883,6 +4887,9 @@ packages:
 
   blakejs@1.2.1:
     resolution: {integrity: sha512-QXUSXI3QVc/gJME0dBpXrag1kbzOqCjCX8/b54ntNyW6sjtoqxqRk3LTmXzaJoh71zMsDCjM+47jS7XiwN/+fQ==}
+
+  blob-polyfill@9.0.20240710:
+    resolution: {integrity: sha512-DPUO/EjNANCgSVg0geTy1vmUpu5hhp9tV2F7xUSTUd1jwe4XpwupGB+lt5PhVUqpqAk+zK1etqp6Pl/HVf71Ug==}
 
   bluebird@3.7.2:
     resolution: {integrity: sha512-XpNj6GDQzdfW+r2Wnn7xiSAd7TM3jzkxGXBGTtWKuSXv1xUV+azxAm8jdWZN06QTQk+2N2XB9jRDkvbmQmcRtg==}
@@ -13427,10 +13434,9 @@ snapshots:
       protobufjs: 7.4.0
       yargs: 17.7.2
 
-  '@hookform/error-message@2.0.1(react-dom@18.3.1(react@18.3.1))(react-hook-form@7.54.2(react@18.3.1))(react@18.3.1)':
+  '@hookform/error-message@2.0.1(react-hook-form@7.54.2(react@18.3.1))(react@18.3.1)':
     dependencies:
       react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
       react-hook-form: 7.54.2(react@18.3.1)
 
   '@hookform/resolvers@4.1.3(react-hook-form@7.54.2(react@18.3.1))':
@@ -16632,6 +16638,8 @@ snapshots:
       readable-stream: 3.6.2
 
   blakejs@1.2.1: {}
+
+  blob-polyfill@9.0.20240710: {}
 
   bluebird@3.7.2: {}
 
@@ -21841,10 +21849,9 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  react-number-format@5.4.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  react-number-format@5.4.3(react@18.3.1):
     dependencies:
       react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
 
   react-reconciler@0.27.0(react@18.3.1):
     dependencies:
@@ -21910,14 +21917,13 @@ snapshots:
       react-shallow-renderer: 16.15.0(react@18.3.1)
       scheduler: 0.23.2
 
-  react-thermal-printer@0.19.3(jiti@1.21.7)(postcss@8.5.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.3.3)(yaml@2.7.0):
+  react-thermal-printer@0.19.3(jiti@1.21.7)(postcss@8.5.3)(react@18.3.1)(typescript@5.3.3)(yaml@2.7.0):
     dependencies:
       '@react-thermal-printer/image': 0.12.0
       '@react-thermal-printer/printer': 0.16.1(jiti@1.21.7)(postcss@8.5.3)(typescript@5.3.3)(yaml@2.7.0)
       classnames: 2.5.1
       es-toolkit: 1.32.0
       react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
     transitivePeerDependencies:
       - '@microsoft/api-extractor'
       - '@swc/core'

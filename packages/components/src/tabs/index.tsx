@@ -24,10 +24,7 @@ const TabsList = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<TabsPrimitive.List
 		ref={ref}
-		className={cn(
-			'web:inline-flex native:px-1.5 bg-muted items-center justify-center rounded-md p-1',
-			className
-		)}
+		className={cn('bg-muted inline-flex items-center justify-center rounded-md p-1', className)}
 		{...props}
 	/>
 ));
@@ -131,7 +128,7 @@ const ScrollableTabsList = React.forwardRef<
 				<TabsPrimitive.List
 					ref={ref}
 					className={cn(
-						'web:inline-flex bg-muted w-full flex-row items-center justify-center rounded-md p-2',
+						'bg-muted inline-flex w-full flex-row items-center justify-center rounded-md p-2',
 						className
 					)}
 					{...props}
@@ -168,14 +165,14 @@ const TabsTrigger = React.forwardRef<
 	return (
 		<TextClassContext.Provider
 			value={cn(
-				'native:text-base text-muted-foreground web:transition-all text-center text-sm',
+				'text-muted-foreground web:transition-all text-center text-sm',
 				value === props.value && 'text-primary-foreground'
 			)}
 		>
 			<TabsPrimitive.Trigger
 				ref={ref}
 				className={cn(
-					'web:whitespace-nowrap inline-flex h-full items-center justify-center rounded-sm px-3 py-1.5 shadow-none',
+					'web:whitespace-nowrap inline-flex items-center justify-center rounded-sm px-3 py-1.5 shadow-none',
 					'web:ring-offset-background web:transition-all web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
 					props.disabled && 'web:pointer-events-none opacity-50',
 					props.value === value && 'bg-primary shadow-foreground/10 shadow-lg',

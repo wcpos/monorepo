@@ -42,6 +42,12 @@ const App = () => {
 								}}
 							/>
 							<Stack.Screen
+								name="(modal)/tax-rates"
+								options={{
+									presentation: 'transparentModal',
+								}}
+							/>
+							<Stack.Screen
 								name="(modal)/login"
 								options={{
 									presentation: 'transparentModal',

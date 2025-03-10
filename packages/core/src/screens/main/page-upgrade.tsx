@@ -79,17 +79,17 @@ export const PageUpgrade = ({
 
 	return (
 		<View className="flex-1 items-center justify-center p-4">
-			<View className="w-full flex-col sm:flex-row max-w-xl sm:max-w-2xl lg:max-w-4xl">
+			<View className="w-full max-w-xl flex-col sm:max-w-2xl sm:flex-row lg:max-w-4xl">
 				<View className="w-full sm:w-1/2">
 					<View className={cn('relative w-full', page !== 'reports' && 'drop-shadow-md')}>
-						<View className="pb-[100%] w-full" />
-						<Image source={imageURL} className="absolute top-0 left-0 w-full h-full" />
+						<View className="w-full pb-[100%]" />
+						<Image source={imageURL} className="absolute left-0 top-0 h-full w-full" />
 					</View>
 				</View>
-				<VStack className="w-full sm:w-1/2 p-4 space-y-4">
-					<Text className="text-2xl font-bold text-center sm:text-left">{title}</Text>
+				<VStack className="w-full space-y-4 p-4 sm:w-1/2">
+					<Text className="text-center text-2xl font-bold sm:text-left">{title}</Text>
 					<Text className="text-center sm:text-left">{description}</Text>
-					<HStack className="space-x-2 justify-center sm:justify-start">
+					<HStack className="justify-center space-x-2 sm:justify-start">
 						<Button variant="secondary" onPress={() => Linking.openURL(demoURL)}>
 							{t('View Demo', { _tags: 'core' })}
 						</Button>

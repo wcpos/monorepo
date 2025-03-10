@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useNavigation } from '@react-navigation/native';
-import isEmpty from 'lodash/isEmpty';
+import { useRouter } from 'expo-router';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
@@ -39,7 +38,7 @@ export const DisplayCurrentTaxRates = ({
 	city,
 	postcode,
 }: DisplayCurrentTaxRatesProps) => {
-	const navigation = useNavigation();
+	const router = useRouter();
 	const t = useT();
 
 	/**
@@ -120,7 +119,7 @@ export const DisplayCurrentTaxRates = ({
 				) : (
 					<HStack space="xs">
 						<Icon variant="error" name="triangleExclamation" />
-						<Text className="text-sm text-error">{t('No rates matched', { _tags: 'core' })}</Text>
+						<Text className="text-error text-sm">{t('No rates matched', { _tags: 'core' })}</Text>
 					</HStack>
 				)}
 			</VStack>
@@ -128,7 +127,7 @@ export const DisplayCurrentTaxRates = ({
 				<Button
 					variant="muted"
 					onPress={() => {
-						navigation.navigate('TaxRates');
+						router.push('tax-rates');
 					}}
 				>
 					<ButtonText>{t('View all tax rates', { _tags: 'core' })}</ButtonText>

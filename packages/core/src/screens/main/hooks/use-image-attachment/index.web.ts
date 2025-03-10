@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 
 import { useObservable, useObservableState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
@@ -14,33 +15,38 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 
 	// Inline function to fetch and store the image using the main process HTTP client.
 	const fetchAndStoreImage = async (doc: RxDocument, url: string) => {
-		// Request the image as binary data.
-		const response = await get(url, { responseType: 'arraybuffer' });
+		try {
+			// Request the image as binary data.
+			const response = await get(url, { responseType: 'arraybuffer' });
 
-		if (response && response.status !== 200) {
-			throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+			if (response && response.status !== 200) {
+				throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+			}
+
+			// Validate that the response has an appropriate content type.
+			const contentType = response?.headers['content-type'] || '';
+			if (!contentType.startsWith('image/')) {
+				throw new Error(`Invalid content type: ${contentType}`);
+			}
+
+			// Create a Blob from the binary data.
+			const blob = new Blob([response?.data || new Uint8Array()], { type: contentType });
+
+			// Optional: Ensure the blob isn't empty.
+			if (blob.size === 0) {
+				throw new Error('Fetched blob is empty');
+			}
+
+			// Save the blob as an attachment on the document.
+			await doc.putAttachment({
+				id: url,
+				data: blob,
+				type: contentType,
+			});
+		} catch (error) {
+			console.error('Error fetching and storing image:', error);
+			throw error;
 		}
-
-		// Validate that the response has an appropriate content type.
-		const contentType = response?.headers['content-type'] || '';
-		if (!contentType.startsWith('image/')) {
-			throw new Error(`Invalid content type: ${contentType}`);
-		}
-
-		// Create a Blob from the binary data.
-		const blob = new Blob([response?.data || new Uint8Array()], { type: contentType });
-
-		// Optional: Ensure the blob isn't empty.
-		if (blob.size === 0) {
-			throw new Error('Fetched blob is empty');
-		}
-
-		// Save the blob as an attachment on the document.
-		await doc.putAttachment({
-			id: url,
-			data: blob,
-			type: blob.type,
-		});
 	};
 
 	// Build an observable pipeline that:
