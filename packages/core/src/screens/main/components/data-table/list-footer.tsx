@@ -15,7 +15,7 @@ export const ListFooterComponent = () => {
 	if (!loading) return null;
 
 	return (
-		<View className="items-center justify-center p-2 bg-card">
+		<View className="bg-card items-center justify-center p-2">
 			<Loader />
 		</View>
 	);

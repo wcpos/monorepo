@@ -56,16 +56,16 @@ const UISettingsDialog = ({ title, children }: Props) => {
 
 	return (
 		<ErrorBoundary>
-			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
-				<Tooltip>
-					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
-						<IconButton name="sliders" />
-					</TooltipTrigger>
-					<TooltipContent>
-						<Text>{title}</Text>
-					</TooltipContent>
-				</Tooltip>
-				<DialogContext.Provider value={{ buttonPressHandlerRef }}>
+			<DialogContext.Provider value={{ buttonPressHandlerRef }}>
+				<Dialog open={openDialog} onOpenChange={setOpenDialog}>
+					<Tooltip>
+						<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
+							<IconButton name="sliders" />
+						</TooltipTrigger>
+						<TooltipContent>
+							<Text>{title}</Text>
+						</TooltipContent>
+					</Tooltip>
 					<DialogContent size="md">
 						<DialogHeader>
 							<DialogTitle>{title}</DialogTitle>
@@ -78,8 +78,8 @@ const UISettingsDialog = ({ title, children }: Props) => {
 							</DialogAction>
 						</DialogFooter>
 					</DialogContent>
-				</DialogContext.Provider>
-			</Dialog>
+				</Dialog>
+			</DialogContext.Provider>
 		</ErrorBoundary>
 	);
 };

@@ -1,11 +1,11 @@
 import * as React from 'react';
 
+import { useFocusEffect } from '@react-navigation/native';
 import { differenceInHours, isToday, isValid, formatDistance } from 'date-fns';
-import { useObservableState } from 'observable-hooks';
+import { useObservableRef, useObservableState } from 'observable-hooks';
 import { switchMap, map, filter } from 'rxjs/operators';
 
 import { useHeartbeatObservable } from '@wcpos/hooks/use-heartbeat';
-import { usePageVisibility } from '@wcpos/hooks/use-page-visibility';
 
 import { useLocalDate, convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
 
@@ -14,8 +14,8 @@ import { useLocalDate, convertUTCStringToLocalDate } from '../../../hooks/use-lo
  */
 export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', fromNow = true) => {
 	const heartbeat$ = useHeartbeatObservable(60000); // every minute
-	const { visibile$ } = usePageVisibility();
 	const { dateFnsLocale, formatDate } = useLocalDate();
+	const [visibleRef, visible$] = useObservableRef(false);
 
 	let date: Date;
 
@@ -47,11 +47,23 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 	}, [date, fromNow, dateFnsLocale, formatDate, formatPattern]);
 
 	/**
+	 * We will turn off the heartbeat if the screen is not visible
+	 */
+	useFocusEffect(
+		React.useCallback(() => {
+			visibleRef.current = true;
+			return () => {
+				visibleRef.current = false;
+			};
+		}, [])
+	);
+
+	/**
 	 *
 	 */
 	return useObservableState(
-		visibile$.pipe(
-			filter(() => isToday(date)),
+		visible$.pipe(
+			filter((visible) => visible && isToday(date)),
 			switchMap(() => heartbeat$),
 			map(getDisplayDate)
 		),

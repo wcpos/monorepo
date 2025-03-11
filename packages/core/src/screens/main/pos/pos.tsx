@@ -26,12 +26,10 @@ export const POS = () => {
 	});
 
 	return (
-		<>
-			<ErrorBoundary>
-				<TaxRatesProvider taxQuery={taxQuery} order={currentOrder}>
-					<Suspense>{dimensions.width >= 640 ? <POSColumns /> : <POSTabs />}</Suspense>
-				</TaxRatesProvider>
-			</ErrorBoundary>
-		</>
+		<ErrorBoundary>
+			<TaxRatesProvider taxQuery={taxQuery} order={currentOrder}>
+				<Suspense>{dimensions.width >= 640 ? <POSColumns /> : <POSTabs />}</Suspense>
+			</TaxRatesProvider>
+		</ErrorBoundary>
 	);
 };

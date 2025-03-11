@@ -169,9 +169,9 @@ const POSProducts = ({ isColumn = false }) => {
 	 *
 	 */
 	return (
-		<Box className={`p-2 h-full ${isColumn && 'pr-0'}`}>
+		<Box className={`h-full p-2 ${isColumn && 'pr-0'}`}>
 			<Card className="flex-1">
-				<CardHeader className="p-2 bg-input">
+				<CardHeader className="bg-input p-2">
 					<ErrorBoundary>
 						<VStack>
 							<HStack>

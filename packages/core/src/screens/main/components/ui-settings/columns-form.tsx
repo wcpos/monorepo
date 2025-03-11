@@ -105,13 +105,13 @@ export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
 											<Text
 												onPress={() => toggleColumn(column.key)}
 												variant="link"
-												className="text-sm text-muted-foreground leading-none"
+												className="text-muted-foreground text-sm leading-none"
 											>
 												{t('Display Options', { _tags: 'core' })}
 												<Icon
 													name={openColumns[column.key] ? 'chevronUp' : 'chevronDown'}
 													size="xs"
-													className="ml-2 fill-muted-foreground"
+													className="fill-muted-foreground ml-2"
 												/>
 											</Text>
 										)}

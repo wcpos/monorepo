@@ -9,7 +9,7 @@ export const unstable_settings = {
 
 export default function TabLayout() {
 	return (
-		<Tabs screenOptions={{ tabBarActiveTintColor: 'blue' }}>
+		<Tabs screenOptions={{ headerShown: false }}>
 			<Tabs.Screen
 				name="products"
 				options={{

@@ -9,7 +9,7 @@ export const unstable_settings = {
 
 export default function CartLayout() {
 	const dimensions = useWindowDimensions();
-	const largeScreen = dimensions.width >= 1024;
+	const largeScreen = dimensions.width >= 640;
 
 	return (
 		<Stack screenOptions={{ headerShown: false }}>
