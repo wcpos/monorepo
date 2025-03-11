@@ -1,15 +1,18 @@
 import * as React from 'react';
 
-import NetInfo, {
-	// useNetInfo,
-	NetInfoState,
-	NetInfoStateType,
-} from '@react-native-community/netinfo';
+import { useNetInfoInstance } from '@react-native-community/netinfo';
 
 import { Toast } from '@wcpos/components/toast';
 
+interface NetInfoState {
+	type: string;
+	isConnected: boolean | null;
+	isInternetReachable: boolean | null;
+	details: any;
+}
+
 const initialState: NetInfoState = {
-	type: NetInfoStateType.unknown,
+	type: 'unknown',
 	isConnected: null,
 	isInternetReachable: null,
 	details: null,
@@ -23,52 +26,52 @@ interface Props {
 }
 
 const OnlineStatusProvider = ({ children, wpAPIURL }: Props) => {
+	const config = React.useMemo(
+		() => ({
+			reachabilityUrl: wpAPIURL,
+			reachabilityTest: async (response: Response) => response.status === 200,
+			reachabilityRequestTimeout: 60 * 1000, // 60s
+		}),
+		[wpAPIURL]
+	);
+
+	const { netInfo } = useNetInfoInstance(false, config);
+
 	const [status, setStatus] = React.useState<NetInfoState>(initialState);
 
-	/**
-	 * Listen to internet connection
-	 * note: there is no removeEventListener, it returns the unsubscribe function
-	 */
 	React.useEffect(() => {
-		NetInfo.configure({
-			reachabilityUrl: wpAPIURL,
-			reachabilityTest: async (response) => response.status === 200,
-			// reachabilityLongTimeout: 60 * 1000, // 60s
-			// reachabilityShortTimeout: 5 * 1000, // 5s
-			// increase timeout for slow servers
-			reachabilityRequestTimeout: 60 * 1000, // 60s
-			// reachabilityShouldRun: () => true,
-			// shouldFetchWiFiSSID: true,
-		});
+		if (
+			netInfo.type !== status.type ||
+			netInfo.isConnected !== status.isConnected ||
+			netInfo.isInternetReachable !== status.isInternetReachable ||
+			netInfo.details !== status.details
+		) {
+			setStatus(netInfo);
+		}
+	}, [netInfo, status]);
 
-		// Subscribe
-		const unsubscribe = NetInfo.addEventListener((netInfo) => {
-			setStatus((prev) => {
-				if (prev.isInternetReachable === true && netInfo.isInternetReachable === false) {
-					if (netInfo.isConnected === false) {
-						Toast.show({ type: 'error', text1: 'No internet connection' });
-					} else {
-						Toast.show({ type: 'error', text1: 'Your website is down' });
-					}
-				}
-				if (prev.isInternetReachable === false && netInfo.isInternetReachable === true) {
-					if (prev.isConnected === false && netInfo.isConnected === true) {
-						Toast.show({ type: 'success', text1: 'Internet reconnected' });
-					} else {
-						Toast.show({ type: 'success', text1: 'Your website is up' });
-					}
-				}
-				return netInfo;
+	// Keep a ref of the previous status for comparison
+	const prevStatusRef = React.useRef<NetInfoState>(status);
+
+	React.useEffect(() => {
+		const prevStatus = prevStatusRef.current;
+
+		if (prevStatus.isInternetReachable === true && status.isInternetReachable === false) {
+			Toast.show({
+				type: 'error',
+				text1: status.isConnected === false ? 'No internet connection' : 'Your website is down',
 			});
-		});
+		} else if (prevStatus.isInternetReachable === false && status.isInternetReachable === true) {
+			if (prevStatus.isConnected === false && status.isConnected === true) {
+				Toast.show({ type: 'success', text1: 'Internet reconnected' });
+			} else {
+				Toast.show({ type: 'success', text1: 'Your website is up' });
+			}
+		}
 
-		/**
-		 * FIXME: Even though this unsubscribes, the fetch request is still running on logout
-		 */
-		return () => {
-			unsubscribe();
-		};
-	}, [wpAPIURL]);
+		// Update the ref so we can compare next time
+		prevStatusRef.current = status;
+	}, [status]);
 
 	return <OnlineStatusContext.Provider value={status}>{children}</OnlineStatusContext.Provider>;
 };
