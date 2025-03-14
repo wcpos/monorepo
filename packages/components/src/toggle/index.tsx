@@ -30,7 +30,7 @@ const toggleVariants = cva(
 	}
 );
 
-const toggleTextVariants = cva('native:text-base text-foreground text-sm font-medium', {
+const toggleTextVariants = cva('text-foreground text-sm font-medium', {
 	variants: {
 		variant: {
 			default: '',

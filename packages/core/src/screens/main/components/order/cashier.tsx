@@ -5,6 +5,7 @@ import { map } from 'rxjs/operators';
 
 import { ButtonPill } from '@wcpos/components/button';
 import { useDataTable } from '@wcpos/components/data-table';
+import { useT } from '@wcpos/core/contexts/translations';
 
 import { useCollection } from '../../hooks/use-collection';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
@@ -28,6 +29,7 @@ export const Cashier = ({ row }: CellContext<{ document: OrderDocument }, 'cashi
 	const [cashierName, setCashierName] = React.useState('');
 	const { format } = useCustomerNameFormat();
 	const { query } = useDataTable();
+	const t = useT();
 
 	/**
 	 * @TODO - it would be good to have a replication query which gets the cashier roles
@@ -35,6 +37,10 @@ export const Cashier = ({ row }: CellContext<{ document: OrderDocument }, 'cashi
 	 */
 	React.useEffect(() => {
 		async function fetchUser(id) {
+			if (!id) {
+				setCashierName(t('Unknown', { _tags: 'core' }));
+				return;
+			}
 			const user = await collection.findOne({ selector: { id } }).exec();
 			if (user) {
 				setCashierName(format(user));
@@ -45,7 +51,7 @@ export const Cashier = ({ row }: CellContext<{ document: OrderDocument }, 'cashi
 		if (cashierID) {
 			fetchUser(parseInt(cashierID, 10));
 		}
-	}, [cashierID, collection, format]);
+	}, [cashierID, collection, format, t]);
 
 	/**
 	 * It's possible the order doesn't have a cashier, eg: web or admin orders

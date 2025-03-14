@@ -27,7 +27,7 @@ export const OrderStatusSelect = React.forwardRef<
 		<Select ref={ref} value={{ ...value, label }} {...props}>
 			<SelectTrigger>
 				<SelectValue
-					className="text-foreground text-sm native:text-lg"
+					className="text-foreground text-sm"
 					placeholder={t('Select Status', { _tags: 'core' })}
 				/>
 			</SelectTrigger>

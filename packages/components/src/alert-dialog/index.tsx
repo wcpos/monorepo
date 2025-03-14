@@ -134,7 +134,7 @@ const AlertDialogTitle = React.forwardRef<TitleRef, TitleProps>(
 		const Component = asChild ? Slot.Text : Text;
 
 		return (
-			<TextClassContext.Provider value="text-lg native:text-xl text-foreground font-semibold leading-none">
+			<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
 				<AlertDialogPrimitive.Title asChild>
 					<Component {...props} ref={ref} />
 				</AlertDialogPrimitive.Title>

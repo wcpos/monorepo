@@ -1,5 +1,9 @@
-/** @type {import('tailwindcss').Config} */
 const { hairlineWidth } = require('nativewind/theme');
+
+/**
+ * https://github.com/nativewind/nativewind/pull/1346
+ */
+const isWeb = process.env.NATIVEWIND_OS === 'web';
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -26,21 +30,51 @@ module.exports = {
 				160: '40rem',
 			},
 			fontSize: {
-				'3xs': ['0.625rem', { lineHeight: '0.75rem' }], // 10px / 12px
-				'2xs': ['0.6875rem', { lineHeight: '0.8125rem' }], // 11px / 13px
-				xs: ['0.75rem', { lineHeight: '0.875rem' }], // 12px / 14px
-				sm: ['0.8125rem', { lineHeight: '0.9375rem' }], // 13px / 15px
-				base: ['0.875rem', { lineHeight: '1rem' }], // 14px / 16px
-				lg: ['1rem', { lineHeight: '1.25rem' }], // 16px / 20px
-				xl: ['1.125rem', { lineHeight: '1.5rem' }], // 18px / 24px
-				'2xl': ['1.25rem', { lineHeight: '1.75rem' }], // 20px / 28px
-				'3xl': ['1.5rem', { lineHeight: '2rem' }], // 24px / 32px
-				'4xl': ['1.875rem', { lineHeight: '2.25rem' }], // 30px / 36px
-				'5xl': ['2.25rem', { lineHeight: '2.5rem' }], // 36px / 40px
-				'6xl': ['3rem', { lineHeight: '1' }], // 48px
-				'7xl': ['3.75rem', { lineHeight: '1' }], // 60px
-				'8xl': ['4.5rem', { lineHeight: '1' }], // 72px
-				'9xl': ['6rem', { lineHeight: '1' }], // 96px
+				'3xs': isWeb
+					? ['0.625rem', { lineHeight: '0.75rem' }] // 10px / 12px
+					: [11, 0.929], // 11px / 13px
+				'2xs': isWeb
+					? ['0.6875rem', { lineHeight: '0.8125rem' }] // 11px / 13px
+					: [12, 1], // 12px / 14px
+				xs: isWeb
+					? ['0.75rem', { lineHeight: '0.875rem' }] // 12px / 14px
+					: [13, 1.071], // 13px / 15px
+				sm: isWeb
+					? ['0.8125rem', { lineHeight: '0.9375rem' }] // 13px / 15px
+					: [14, 1.143], // 14px / 16px
+				base: isWeb
+					? ['0.875rem', '1rem'] // 14px / 16px
+					: [16, 1.429], // 16px / 20px
+				lg: isWeb
+					? ['1rem', { lineHeight: '1.25rem' }] // 16px / 20px
+					: [18, 1.714], // 18px / 24px
+				xl: isWeb
+					? ['1.125rem', { lineHeight: '1.5rem' }] // 18px / 24px
+					: [20, 2], // 20px / 28px
+				'2xl': isWeb
+					? ['1.25rem', { lineHeight: '1.75rem' }] // 20px / 28px
+					: [24, 2], // 20px / 28px
+				'3xl': isWeb
+					? ['1.5rem', { lineHeight: '2rem' }] // 24px / 32px
+					: [30, 1],
+				'4xl': isWeb
+					? ['1.875rem', { lineHeight: '2.25rem' }] // 30px / 36px
+					: [36, 1],
+				'5xl': isWeb
+					? ['2.25rem', { lineHeight: '2.5rem' }] // 36px / 40px
+					: [48, 1],
+				'6xl': isWeb
+					? ['3rem', { lineHeight: '1' }] // 48px
+					: [60, 1],
+				'7xl': isWeb
+					? ['3.75rem', { lineHeight: '1' }] // 60px
+					: [72, 1],
+				'8xl': isWeb
+					? ['4.5rem', { lineHeight: '1' }] // 72px
+					: [96, 1],
+				'9xl': isWeb
+					? ['6rem', { lineHeight: '1' }] // 96px
+					: [120, 1],
 			},
 			colors: {
 				border: 'hsl(var(--border))',

@@ -48,7 +48,7 @@ export const FilterBar = () => {
 	 *
 	 */
 	React.useEffect(() => {
-		if (customerID) {
+		if (customerID !== null && customerID !== undefined) {
 			customerQuery.where('id').equals(toNumber(customerID)).exec();
 		}
 	}, [customerID, customerQuery]);

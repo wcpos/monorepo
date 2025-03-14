@@ -4,18 +4,22 @@ import { Icon } from '@wcpos/components/icon';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: 'products',
+	initialRouteName: 'index',
 };
 
 export default function TabLayout() {
 	return (
 		<Tabs screenOptions={{ headerShown: false }}>
 			<Tabs.Screen
-				name="products"
+				name="index"
 				options={{
 					title: 'Products',
 					tabBarIcon: ({ focused }) => (
-						<Icon name="gifts" className={focused ? 'text-primary' : 'text-muted-foreground'} />
+						<Icon
+							name="gifts"
+							size="2xl"
+							className={focused ? 'text-primary' : 'text-muted-foreground'}
+						/>
 					),
 				}}
 			/>
@@ -26,6 +30,7 @@ export default function TabLayout() {
 					tabBarIcon: ({ focused }) => (
 						<Icon
 							name="cartShopping"
+							size="2xl"
 							className={focused ? 'text-primary' : 'text-muted-foreground'}
 						/>
 					),

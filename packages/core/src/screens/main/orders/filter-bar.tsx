@@ -42,7 +42,7 @@ const FilterBar = ({ query }) => {
 	 * NOTE: customerID can be 0 which is a valid customer ID
 	 */
 	React.useEffect(() => {
-		if (customerID !== null || customerID !== undefined) {
+		if (customerID !== null && customerID !== undefined) {
 			customerQuery.where('id').equals(customerID).exec();
 		}
 	}, [customerID, customerQuery]);

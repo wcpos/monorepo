@@ -23,10 +23,7 @@ const ContextMenuSubTrigger = React.forwardRef<
 	// const Icon = Platform.OS === 'web' ? ChevronRight : open ? ChevronUp : ChevronDown;
 	return (
 		<TextClassContext.Provider
-			value={cn(
-				'native:text-lg text-primary select-none text-sm',
-				open && 'native:text-accent-foreground'
-			)}
+			value={cn('text-primary select-none text-sm', open && 'native:text-accent-foreground')}
 		>
 			<ContextMenuPrimitive.SubTrigger
 				ref={ref}
@@ -115,7 +112,7 @@ const ContextMenuItem = React.forwardRef<
 		inset?: boolean;
 	}
 >(({ className, inset, ...props }, ref) => (
-	<TextClassContext.Provider value="select-none text-sm native:text-lg text-popover-foreground web:group-focus:text-accent-foreground">
+	<TextClassContext.Provider value="select-none text-sm text-popover-foreground web:group-focus:text-accent-foreground">
 		<ContextMenuPrimitive.Item
 			ref={ref}
 			className={cn(
@@ -186,7 +183,7 @@ const ContextMenuLabel = React.forwardRef<
 	<ContextMenuPrimitive.Label
 		ref={ref}
 		className={cn(
-			'native:text-base web:cursor-default text-foreground px-2 py-1.5 text-sm font-semibold',
+			'web:cursor-default text-foreground px-2 py-1.5 text-sm font-semibold',
 			inset && 'pl-8',
 			className
 		)}
@@ -213,10 +210,7 @@ const ContextMenuShortcut = ({
 }: React.ComponentPropsWithoutRef<typeof Text>) => {
 	return (
 		<Text
-			className={cn(
-				'native:text-sm text-muted-foreground ml-auto text-xs tracking-widest',
-				className
-			)}
+			className={cn('text-muted-foreground ml-auto text-xs tracking-widest', className)}
 			{...props}
 		/>
 	);

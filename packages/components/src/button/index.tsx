@@ -16,8 +16,8 @@ const ButtonText = Text;
 
 const buttonVariants = cva(
 	[
-		'web:transition-colors group flex max-w-full flex-shrink items-center justify-center rounded-md',
-		'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
+		'group flex max-w-full flex-shrink items-center justify-center rounded-md',
+		'web:transition-colors web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
 	],
 	{
 		variants: {
@@ -81,10 +81,10 @@ const buttonVariants = cva(
 			},
 			size: {
 				default: 'native:h-12 native:px-5 native:py-3 h-10 px-4 py-2',
-				xs: 'h-6 rounded-md px-2',
-				sm: 'h-9 rounded-md px-3',
-				lg: 'native:h-14 h-11 rounded-md px-8',
-				xl: 'h-14 rounded-md px-10',
+				xs: 'native:h-8 native:px-3 h-6 rounded-md px-2',
+				sm: 'native:h-10 native:px-4 h-9 rounded-md px-3',
+				lg: 'native:h-14 native:px-10 h-11 rounded-md px-8',
+				xl: 'native:h-16 native:px-12 h-14 rounded-md px-10',
 			},
 		},
 		defaultVariants: {
@@ -96,7 +96,7 @@ const buttonVariants = cva(
 );
 
 const buttonTextVariants = cva(
-	'web:whitespace-nowrap native:text-base text-foreground web:transition-colors truncate text-base',
+	'web:whitespace-nowrap text-foreground web:transition-colors truncate text-base',
 	{
 		variants: {
 			variant: {

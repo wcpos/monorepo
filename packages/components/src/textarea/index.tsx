@@ -80,7 +80,7 @@ const Textarea = React.forwardRef<React.ElementRef<typeof TextInput>, TextareaPr
 			<AnimatedTextInput
 				ref={ref}
 				className={cn(
-					'web:flex native:text-lg native:leading-[1.25] web:ring-offset-background border-input bg-background text-foreground w-full rounded-md border px-3 py-2 text-base lg:text-sm',
+					'web:flex web:ring-offset-background border-input bg-background text-foreground w-full rounded-md border px-3 py-2 text-base',
 					'web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
 					props.editable === false && 'web:cursor-not-allowed opacity-50',
 					className

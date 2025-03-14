@@ -3,7 +3,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { Toast, toastConfig } from '@wcpos/components/toast';
 import { AppStateProvider } from '@wcpos/core/contexts/app-state';

@@ -167,7 +167,7 @@ const DialogTitle = React.forwardRef<TextRef, SlottableTextProps>(
 		const Component = asChild ? Slot.Text : Text;
 
 		return (
-			<TextClassContext.Provider value="text-lg native:text-xl text-foreground font-semibold leading-none">
+			<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
 				<DialogPrimitive.Title asChild>
 					<Component {...props} ref={ref} />
 				</DialogPrimitive.Title>
@@ -183,7 +183,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<DialogPrimitive.Description
 		ref={ref}
-		className={cn('native:text-base text-muted-foreground text-sm', className)}
+		className={cn('text-muted-foreground text-sm', className)}
 		{...props}
 	/>
 ));

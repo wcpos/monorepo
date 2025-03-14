@@ -156,7 +156,7 @@ const ComboboxTrigger = React.forwardRef<TriggerRef, TriggerProps>(
 			<PopoverTrigger
 				ref={ref}
 				className={cn(
-					'native:h-12 flex h-10 flex-row items-center justify-between gap-2 px-3 py-2',
+					'flex h-10 flex-row items-center justify-between gap-2 px-3 py-2',
 					'text-muted-foreground text-sm',
 					'border-input bg-background rounded-md border',
 					'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
@@ -181,11 +181,7 @@ const ComboboxValue = React.forwardRef<ValueRef, ValueProps>(
 
 		return (
 			<TextClassContext.Provider
-				value={cn(
-					'native:text-lg text-sm',
-					value?.value ? 'text-foreground' : 'text-muted-foreground',
-					className
-				)}
+				value={cn('text-sm', value?.value ? 'text-foreground' : 'text-muted-foreground', className)}
 			>
 				<Component ref={ref} {...props}>
 					{value?.label ?? placeholder}

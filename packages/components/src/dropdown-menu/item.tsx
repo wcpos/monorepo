@@ -25,7 +25,7 @@ const itemVariants = cva(
 );
 
 const itemTextVariants = cva(
-	'native:text-lg text-popover-foreground web:group-focus:text-accent-foreground select-none text-base',
+	'text-popover-foreground web:group-focus:text-accent-foreground select-none text-base',
 	{
 		variants: {
 			variant: {

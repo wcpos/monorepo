@@ -67,7 +67,7 @@ const AccordionTrigger = React.forwardRef<
 	}));
 
 	return (
-		<TextClassContext.Provider value="native:text-lg font-medium web:group-hover:underline">
+		<TextClassContext.Provider value="font-medium web:group-hover:underline">
 			<AccordionPrimitive.Header className="flex">
 				<AccordionPrimitive.Trigger ref={ref} {...props} asChild>
 					<Trigger
@@ -101,7 +101,7 @@ const AccordionContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => {
 	const { isExpanded } = AccordionPrimitive.useItemContext();
 	return (
-		<TextClassContext.Provider value="native:text-lg">
+		<TextClassContext.Provider value="text-base">
 			<AccordionPrimitive.Content
 				className={cn(
 					'web:transition-all overflow-hidden text-sm',

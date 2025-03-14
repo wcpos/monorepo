@@ -182,7 +182,7 @@ const ModalTitle = React.forwardRef<TextRef, SlottableTextProps>(
 		const Component = asChild ? Slot.Text : Text;
 
 		return (
-			<TextClassContext.Provider value="text-lg native:text-xl text-foreground font-semibold leading-none">
+			<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
 				<Component {...props} ref={ref} />
 			</TextClassContext.Provider>
 		);

@@ -37,11 +37,7 @@ const SelectValue = React.forwardRef<TextRef, SlottableTextProps & { placeholder
 
 		return (
 			<TextClassContext.Provider
-				value={cn(
-					'native:text-lg text-sm',
-					value?.value ? 'text-foreground' : 'text-muted-foreground',
-					className
-				)}
+				value={cn('text-sm', value?.value ? 'text-foreground' : 'text-muted-foreground', className)}
 			>
 				<Component ref={ref} {...props}>
 					{value?.label ?? placeholder}
@@ -176,10 +172,7 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<SelectPrimitive.Label
 		ref={ref}
-		className={cn(
-			'native:pb-2 native:pl-10 native:text-base text-popover-foreground py-1.5 pl-8 pr-2 text-sm font-semibold',
-			className
-		)}
+		className={cn('text-popover-foreground py-1.5 pl-8 pr-2 text-sm font-semibold', className)}
 		{...props}
 	/>
 ));
@@ -203,7 +196,7 @@ const SelectItem = React.forwardRef<
 				<Icon name="check" className="text-popover-foreground" />
 			</SelectPrimitive.ItemIndicator>
 		</View>
-		<SelectPrimitive.ItemText className="native:text-lg native:text-base web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
+		<SelectPrimitive.ItemText className="web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
 	</SelectPrimitive.Item>
 ));
 SelectItem.displayName = SelectPrimitive.Item.displayName;

@@ -31,9 +31,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
 	const { open } = DropdownMenuPrimitive.useSubContext();
 	// const Icon = Platform.OS === 'web' ? ChevronRight : open ? ChevronUp : ChevronDown;
 	return (
-		<TextClassContext.Provider
-			value={cn('native:text-lg select-none', open && 'native:text-accent-foreground')}
-		>
+		<TextClassContext.Provider value={cn('select-none', open && 'native:text-accent-foreground')}>
 			<DropdownMenuPrimitive.SubTrigger
 				ref={ref}
 				className={cn(
@@ -172,7 +170,7 @@ const DropdownMenuLabel = React.forwardRef<
 	<DropdownMenuPrimitive.Label
 		ref={ref}
 		className={cn(
-			'native:text-base text-foreground web:cursor-default px-2 py-1.5 text-base font-semibold',
+			'text-foreground web:cursor-default px-2 py-1.5 text-base font-semibold',
 			inset && 'pl-8',
 			className
 		)}
@@ -199,10 +197,7 @@ const DropdownMenuShortcut = ({
 }: React.ComponentPropsWithoutRef<typeof Text>) => {
 	return (
 		<Text
-			className={cn(
-				'native:text-sm text-muted-foreground ml-auto text-xs tracking-widest',
-				className
-			)}
+			className={cn('text-muted-foreground ml-auto text-xs tracking-widest', className)}
 			{...props}
 		/>
 	);

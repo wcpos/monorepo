@@ -154,7 +154,7 @@ const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
 				editable={editable}
 				className={cn(
 					'w-full flex-1 bg-transparent px-3 py-2',
-					'native:text-lg native:leading-[1.25] text-foreground placeholder:text-muted-foreground text-base lg:text-sm',
+					'text-foreground placeholder:text-muted-foreground text-base',
 					'web:focus-visible:outline-none outline-none',
 					!editable && 'web:cursor-not-allowed opacity-50',
 					className
