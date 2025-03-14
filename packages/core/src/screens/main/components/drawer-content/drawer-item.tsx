@@ -81,7 +81,7 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, style, ...rest }:
 				<Button
 					size="xl"
 					className={cn(
-						'h-10 rounded-none border-x-4 border-transparent bg-transparent px-3',
+						'native:h-12 native:px-4 native:py-2 h-10 rounded-none border-x-4 border-transparent bg-transparent px-3',
 						focused && 'border-l-primary text-primary',
 						!focused && 'hover:bg-white/10'
 					)}
@@ -98,7 +98,7 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, style, ...rest }:
 			onPress={onPress}
 			size="xl"
 			className={cn(
-				'h-10 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
+				'native:h-12 native:px-4 native:py-2 h-10 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
 				focused && 'border-l-primary text-primary',
 				!focused && 'hover:bg-white/10'
 			)}

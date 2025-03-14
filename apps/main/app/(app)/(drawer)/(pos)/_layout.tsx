@@ -12,7 +12,7 @@ export default function CartLayout() {
 	const largeScreen = dimensions.width >= 640;
 
 	return (
-		<Stack screenOptions={{ headerShown: false }}>
+		<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
 			<Stack.Screen name={largeScreen ? 'index' : '(tabs)'} />
 			<Stack.Screen
 				name="cart/[orderId]/checkout"

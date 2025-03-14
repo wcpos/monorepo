@@ -94,7 +94,7 @@ export const UserMenu = () => {
 					</HStack>
 				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent>
+			<DropdownMenuContent align="end" side="bottom">
 				<DropdownMenuItem onPress={() => router.push('/(modal)/settings')}>
 					<Icon name="gear" />
 					<Text>{t('Settings', { _tags: 'core' })}</Text>

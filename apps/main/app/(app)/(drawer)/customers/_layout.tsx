@@ -7,7 +7,7 @@ export const unstable_settings = {
 
 export default function CustomersLayout() {
 	return (
-		<Stack screenOptions={{ headerShown: false }}>
+		<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
 			<Stack.Screen name="index" />
 			<Stack.Screen
 				name="edit/[customerId]"

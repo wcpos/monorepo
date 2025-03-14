@@ -15,8 +15,11 @@ import { Label } from '../label';
 import { useColorScheme } from '../lib/useColorScheme';
 import { cn } from '../lib/utils';
 
-const switchVariants = cva(
-	'focus-visible:ring-ring focus-visible:ring-offset-background peer shrink-0 cursor-pointer flex-row items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed',
+const webSwitchVariants = cva(
+	[
+		'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed',
+		'peer shrink-0 cursor-pointer flex-row items-center rounded-full border-2 border-transparent transition-colors',
+	],
 	{
 		variants: {
 			size: {
@@ -25,14 +28,19 @@ const switchVariants = cva(
 				lg: 'h-6 w-11',
 				default: 'h-5 w-9',
 			},
+			checked: {
+				true: 'bg-primary',
+				false: 'bg-input',
+			},
 		},
 		defaultVariants: {
 			size: 'default',
+			checked: false,
 		},
 	}
 );
 
-const thumbVariants = cva(
+const webThumbVariants = cva(
 	'bg-background shadow-foreground/5 pointer-events-none block rounded-full shadow-md ring-0 transition-transform',
 	{
 		variants: {
@@ -49,28 +57,26 @@ const thumbVariants = cva(
 		},
 		defaultVariants: {
 			size: 'default',
-			checked: 'false',
+			checked: false,
 		},
 	}
 );
 
 const SwitchWeb = React.forwardRef<
 	React.ElementRef<typeof SwitchPrimitives.Root>,
-	React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root> & VariantProps<typeof switchVariants>
+	React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root> &
+		VariantProps<typeof webSwitchVariants>
 >(({ className, size, ...props }, ref) => (
 	<SwitchPrimitives.Root
 		className={cn(
-			switchVariants({ size }),
-			props.checked ? 'bg-primary' : 'bg-input',
+			webSwitchVariants({ size, checked: !!props.checked }),
 			props.disabled && 'opacity-50',
 			className
 		)}
 		{...props}
 		ref={ref}
 	>
-		<SwitchPrimitives.Thumb
-			className={cn(thumbVariants({ size, checked: props.checked ? 'true' : 'false' }))}
-		/>
+		<SwitchPrimitives.Thumb className={cn(webThumbVariants({ size, checked: !!props.checked }))} />
 	</SwitchPrimitives.Root>
 ));
 
@@ -87,43 +93,65 @@ const RGB_COLORS = {
 	},
 } as const;
 
-const SwitchNative = React.forwardRef<
-	React.ElementRef<typeof SwitchPrimitives.Root>,
-	React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root> & VariantProps<typeof switchVariants>
->(({ className, size, ...props }, ref) => {
-	const { colorScheme } = useColorScheme();
-	const translateX = useDerivedValue(() => (props.checked ? 18 : 0));
-	const animatedRootStyle = useAnimatedStyle(() => {
-		return {
-			backgroundColor: interpolateColor(
-				translateX.value,
-				[0, 18],
-				[RGB_COLORS[colorScheme].input, RGB_COLORS[colorScheme].primary]
-			),
-		};
-	});
-	const animatedThumbStyle = useAnimatedStyle(() => ({
-		transform: [{ translateX: withTiming(translateX.value, { duration: 200 }) }],
-	}));
-	return (
-		<Animated.View
-			style={animatedRootStyle}
-			className={cn(switchVariants({ size }), props.disabled && 'opacity-50')}
-		>
-			<SwitchPrimitives.Root
-				className={cn('flex-row items-center rounded-full border-2 border-transparent', className)}
-				{...props}
-				ref={ref}
+const nativeSwitchVariants = cva(
+	'shrink-0 flex-row items-center rounded-full border-2 border-transparent',
+	{
+		variants: {
+			size: {
+				default: 'h-8 w-[46px]',
+			},
+			checked: {
+				true: 'bg-primary',
+				false: 'bg-input',
+			},
+		},
+		defaultVariants: {
+			size: 'default',
+			checked: false,
+		},
+	}
+);
+
+const SwitchNative = React.forwardRef<SwitchPrimitives.RootRef, SwitchPrimitives.RootProps>(
+	({ className, ...props }, ref) => {
+		const { colorScheme } = useColorScheme();
+		const translateX = useDerivedValue(() => (props.checked ? 18 : 0));
+		const animatedRootStyle = useAnimatedStyle(() => {
+			return {
+				backgroundColor: interpolateColor(
+					translateX.value,
+					[0, 18],
+					[RGB_COLORS[colorScheme].input, RGB_COLORS[colorScheme].primary]
+				),
+			};
+		});
+		const animatedThumbStyle = useAnimatedStyle(() => ({
+			transform: [{ translateX: withTiming(translateX.value, { duration: 200 }) }],
+		}));
+		return (
+			<Animated.View
+				style={animatedRootStyle}
+				className={cn('h-8 w-[46px] rounded-full', props.disabled && 'opacity-50')}
 			>
-				<Animated.View style={animatedThumbStyle}>
-					<SwitchPrimitives.Thumb
-						className={cn(thumbVariants({ size, checked: props.checked ? 'true' : 'false' }))}
-					/>
-				</Animated.View>
-			</SwitchPrimitives.Root>
-		</Animated.View>
-	);
-});
+				<SwitchPrimitives.Root
+					className={cn(
+						'h-8 w-[46px] shrink-0 flex-row items-center rounded-full border-2 border-transparent',
+						props.checked ? 'bg-primary' : 'bg-input',
+						className
+					)}
+					{...props}
+					ref={ref}
+				>
+					<Animated.View style={animatedThumbStyle}>
+						<SwitchPrimitives.Thumb
+							className={'bg-background shadow-foreground/25 h-7 w-7 rounded-full shadow-md ring-0'}
+						/>
+					</Animated.View>
+				</SwitchPrimitives.Root>
+			</Animated.View>
+		);
+	}
+);
 SwitchNative.displayName = 'SwitchNative';
 
 const Switch = Platform.select({
@@ -161,4 +189,5 @@ const SwitchWithLabel = React.forwardRef<
 	);
 });
 
+SwitchWithLabel.displayName = 'SwitchWithLabel';
 export { Switch, SwitchWithLabel };

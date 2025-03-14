@@ -33,7 +33,9 @@ const App = () => {
 			<QueryProvider localDB={storeDB} fastLocalDB={fastStoreDB} http={http} locale={locale}>
 				<UISettingsProvider>
 					<OnlineStatusProvider wpAPIURL={wpAPIURL}>
-						<Stack screenOptions={{ headerShown: false }}>
+						<Stack
+							screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}
+						>
 							<Stack.Screen name="(drawer)" />
 							<Stack.Screen
 								name="(modal)/settings"

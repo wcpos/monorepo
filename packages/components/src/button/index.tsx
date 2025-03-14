@@ -81,10 +81,10 @@ const buttonVariants = cva(
 			},
 			size: {
 				default: 'native:h-12 native:px-5 native:py-3 h-10 px-4 py-2',
-				xs: 'native:h-8 native:px-3 h-6 rounded-md px-2',
-				sm: 'native:h-10 native:px-4 h-9 rounded-md px-3',
-				lg: 'native:h-14 native:px-10 h-11 rounded-md px-8',
-				xl: 'native:h-16 native:px-12 h-14 rounded-md px-10',
+				xs: 'native:h-8 native:px-3 h-6 px-2',
+				sm: 'native:h-10 native:px-4 h-9 px-3',
+				lg: 'native:h-14 native:px-10 h-11 px-8',
+				xl: 'native:h-16 native:px-8 h-14 px-10',
 			},
 		},
 		defaultVariants: {
@@ -142,11 +142,11 @@ const buttonTextVariants = cva(
 				'ghost-error': 'text-error group-hover:text-error-foreground',
 			},
 			size: {
-				default: '',
-				xs: 'text-xs',
-				sm: 'text-sm',
-				lg: 'text-lg',
-				xl: 'text-xl',
+				default: 'native:leading-6',
+				xs: 'native:leading-5 text-xs',
+				sm: 'native:leading-6 text-sm',
+				lg: 'native:leading-7 text-lg',
+				xl: 'native:leading-8 text-xl',
 			},
 		},
 		defaultVariants: {
