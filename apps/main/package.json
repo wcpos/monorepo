@@ -20,7 +20,7 @@
     "@react-navigation/drawer": "7.1.2",
     "@shopify/flash-list": "1.7.3",
     "@shopify/react-native-skia": "1.5.0",
-    "expo": "52.0.38",
+    "expo": "52.0.39",
     "expo-constants": "17.0.8",
     "expo-crypto": "~14.0.2",
     "expo-dev-client": "5.0.14",

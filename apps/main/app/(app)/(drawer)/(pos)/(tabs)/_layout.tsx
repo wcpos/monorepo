@@ -7,7 +7,7 @@ export const unstable_settings = {
 	initialRouteName: 'index',
 };
 
-export default function TabLayout() {
+export default function TabsLayout() {
 	return (
 		<Tabs screenOptions={{ headerShown: false }}>
 			<Tabs.Screen
@@ -15,11 +15,7 @@ export default function TabLayout() {
 				options={{
 					title: 'Products',
 					tabBarIcon: ({ focused }) => (
-						<Icon
-							name="gifts"
-							size="2xl"
-							className={focused ? 'text-primary' : 'text-muted-foreground'}
-						/>
+						<Icon name="gifts" className={focused ? 'text-primary' : 'text-muted-foreground'} />
 					),
 				}}
 			/>
@@ -30,7 +26,6 @@ export default function TabLayout() {
 					tabBarIcon: ({ focused }) => (
 						<Icon
 							name="cartShopping"
-							size="2xl"
 							className={focused ? 'text-primary' : 'text-muted-foreground'}
 						/>
 					),

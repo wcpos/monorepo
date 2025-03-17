@@ -19,6 +19,12 @@ import populatePlugin from './populate';
 import { resetCollectionPlugin } from './reset-collection';
 import { searchPlugin } from './search';
 
+/**
+ * Important: setPremiumFlag must be before addRxPlugin is called
+ */
+disableVersionCheck();
+setPremiumFlag();
+
 if (__DEV__) {
 	// in dev-mode we add the dev-mode plugin
 	// which does many checks and adds full error messages
@@ -34,9 +40,6 @@ if (__DEV__) {
 	// 	PouchDB.debug.enable('*');
 	// });
 }
-
-disableVersionCheck();
-setPremiumFlag();
 
 // default plugins
 addRxPlugin(RxDBQueryBuilderPlugin);

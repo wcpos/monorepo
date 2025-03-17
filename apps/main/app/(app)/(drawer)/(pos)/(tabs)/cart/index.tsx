@@ -1,12 +1,12 @@
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import { POSProducts } from '@wcpos/core/screens/main/pos/products';
+import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 
-export default function POSProductsTab() {
+export default function POSCartTab() {
 	return (
 		<ErrorBoundary>
 			<Suspense>
-				<POSProducts />
+				<OpenOrders />
 			</Suspense>
 		</ErrorBoundary>
 	);

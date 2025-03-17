@@ -109,7 +109,7 @@ const TableFooter = () => {
 /**
  *
  */
-const POSProducts = ({ isColumn = false }) => {
+export const POSProducts = ({ isColumn = false }) => {
 	const { uiSettings } = useUISettings('pos-products');
 	const { calcTaxes } = useTaxRates();
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
@@ -216,5 +216,3 @@ const POSProducts = ({ isColumn = false }) => {
 		</Box>
 	);
 };
-
-export default POSProducts;

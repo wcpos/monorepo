@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
 
 import { useObservable, useObservableState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
@@ -45,7 +44,6 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 			});
 		} catch (error) {
 			console.error('Error fetching and storing image:', error);
-			throw error;
 		}
 	};
 

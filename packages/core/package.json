@@ -46,7 +46,7 @@
 		"react-error-boundary": "5.0.0",
 		"react-native-url-polyfill": "^2.0.0",
 		"react-number-format": "^5.4.3",
-		"react-thermal-printer": "0.19.3",
+		"react-thermal-printer": "0.20.0",
 		"react-to-print": "^3.0.4",
 		"rxjs": "7.8.2",
 		"semver": "^7.6.3",

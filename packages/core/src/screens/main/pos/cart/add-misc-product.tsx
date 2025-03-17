@@ -6,12 +6,7 @@ import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogClose,
-	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSelect, FormRadioGroup } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
 
