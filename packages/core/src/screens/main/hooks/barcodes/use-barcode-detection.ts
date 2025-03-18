@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { NativeSyntheticEvent, TextInputKeyPressEventData, Platform } from 'react-native';
 
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
 import { filter } from 'rxjs/operators';
 

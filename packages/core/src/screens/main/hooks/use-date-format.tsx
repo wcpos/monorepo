@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { useFocusEffect } from '@react-navigation/native';
 import { differenceInHours, isToday, isValid, formatDistance } from 'date-fns';
+import { useFocusEffect } from 'expo-router';
 import { useObservableRef, useObservableState } from 'observable-hooks';
 import { switchMap, map, filter } from 'rxjs/operators';
 

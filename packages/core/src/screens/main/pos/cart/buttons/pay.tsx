@@ -33,7 +33,7 @@ export const PayButton = () => {
 			await pushDocument(currentOrder).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
 					router.push({
-						pathname: `cart/${currentOrder.uuid}/checkout`,
+						pathname: `(modals)/cart/${currentOrder.uuid}/checkout`,
 					});
 				}
 			});

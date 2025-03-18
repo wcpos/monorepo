@@ -68,7 +68,7 @@ export const PaymentWebviewBase = ({ order, setLoading }: PaymentWebviewProps, r
 					if (success) {
 						if (uiSettings.autoShowReceipt) {
 							router.replace({
-								pathname: `cart/receipt/${order.uuid}`,
+								pathname: `/(modals)/cart/receipt/${order.uuid}`,
 							});
 						} else {
 							router.replace({

@@ -1,9 +1,1 @@
-import { Text } from 'react-native';
-
-import { useLocalSearchParams } from 'expo-router';
-
-export default function CheckoutScreen() {
-	const { orderId } = useLocalSearchParams<{ orderId: string }>();
-
-	return <Text>Checkout {orderId}</Text>;
-}
+export { CheckoutScreen as default } from '@wcpos/core/screens/main/pos/checkout';

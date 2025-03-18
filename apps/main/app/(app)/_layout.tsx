@@ -1,8 +1,9 @@
 import { Redirect, Stack } from 'expo-router';
-import { useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
+import { Suspense } from '@wcpos/components/suspense';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
@@ -71,6 +72,7 @@ const App = () => {
 
 const RedirectWrapper = ({ children }: { children: React.ReactNode }) => {
 	const { storeDB } = useAppState();
+
 	if (!storeDB) {
 		// Redirect to the authentication route if storeDB is not set.
 		return <Redirect href="/(auth)/connect" />;

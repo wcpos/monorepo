@@ -47,16 +47,16 @@ function Indicator({ value, className }: { value: number | undefined | null; cla
 		};
 	});
 
-	// if (Platform.OS === 'web') {
-	// 	return (
-	// 		<View
-	// 			className={cn('h-full w-full flex-1 bg-primary web:transition-all', className)}
-	// 			style={{ transform: `translateX(-${100 - (value ?? 0)}%)` }}
-	// 		>
-	// 			<ProgressPrimitive.Indicator className={cn('h-full w-full ', className)} />
-	// 		</View>
-	// 	);
-	// }
+	if (Platform.OS === 'web') {
+		return (
+			<View
+				className={cn('bg-primary web:transition-all h-full w-full flex-1', className)}
+				style={{ transform: `translateX(-${100 - (value ?? 0)}%)` }}
+			>
+				<ProgressPrimitive.Indicator className={cn('h-full w-full', className)} />
+			</View>
+		);
+	}
 
 	return (
 		<ProgressPrimitive.Indicator asChild>

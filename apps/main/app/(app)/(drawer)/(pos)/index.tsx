@@ -1,11 +1,13 @@
 import React from 'react';
 import { useWindowDimensions, Dimensions } from 'react-native';
 
-import { Redirect, useSegments, Slot } from 'expo-router';
+import { Redirect, useSegments, Slot, useRouter } from 'expo-router';
 
 export default function IndexScreen() {
 	const dimensions = useWindowDimensions();
 	const segments = useSegments();
+	const router = useRouter();
+	console.log('dimensions', dimensions);
 	console.log('segments', segments);
 
 	/**
@@ -28,6 +30,16 @@ export default function IndexScreen() {
 		return () => subscription.remove();
 	}, []);
 
+	console.log('before redirect');
+
+	if (dimensions.width <= 640 && segments.includes('(columns)')) {
+		debugger;
+		const newPath = segments
+			.map((segment) => (segment === '(columns)' ? '(tabs)' : segment))
+			.join('/');
+		return router.replace(newPath);
+	}
+
 	if (dimensions.width <= 640) {
 		return <Redirect href="(tabs)" />;
 	}
@@ -36,6 +48,6 @@ export default function IndexScreen() {
 		return <Redirect href="(columns)" />;
 	}
 
-	console.log('hi there');
+	console.log('after redirect');
 	return <Slot />;
 }

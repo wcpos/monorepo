@@ -23,7 +23,6 @@ export const useAddItemToOrder = () => {
 		async (type: CartLineType, data: CartLine) => {
 			const order = currentOrder.getLatest();
 			const date_created_gmt = convertLocalDateToUTCString(new Date());
-			debugger;
 
 			const orderJSON = {
 				...order.toJSON(),

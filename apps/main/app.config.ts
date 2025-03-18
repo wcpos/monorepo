@@ -14,7 +14,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 	splash: {
 		image: './assets/images/splash-icon.png',
 		resizeMode: 'contain',
-		backgroundColor: '#ffffff',
+		backgroundColor: '#F0F4F8',
 	},
 	ios: {
 		supportsTablet: true,
@@ -37,9 +37,25 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 		output: 'single',
 		favicon: './assets/images/favicon.png',
 	},
-	plugins: ['expo-router', 'expo-sqlite'],
+	plugins: [
+		'expo-router',
+		'expo-sqlite',
+		[
+			'expo-splash-screen',
+			{
+				backgroundColor: '#F0F4F8',
+				image: './assets/images/splash-icon.png',
+				// dark: {
+				// 	image: './assets/splash-icon-dark.png',
+				// 	backgroundColor: '#000000',
+				// },
+				imageWidth: 120,
+			},
+		],
+	],
 	experiments: {
 		typedRoutes: true,
+		baseUrl: '/pos',
 	},
 	extra: {
 		router: {

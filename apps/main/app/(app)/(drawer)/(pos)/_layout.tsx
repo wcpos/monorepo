@@ -67,7 +67,7 @@ export default function POSLayout() {
 	const storeID = useObservableEagerState(store.id$);
 	const { collection: ordersCollection } = useCollection('orders');
 	const { orderId } = useGlobalSearchParams<{ orderId: string }>();
-	console.log('orderId', orderId);
+	console.log('global params orderId', orderId);
 
 	/**
 	 * We then need to filter the open orders to limit by cashier and store

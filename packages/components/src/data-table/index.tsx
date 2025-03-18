@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { ActivityIndicator, RefreshControl, LayoutChangeEvent } from 'react-native';
 
-import { useFocusEffect } from '@react-navigation/native';
 import { FlashList, type FlashListProps } from '@shopify/flash-list';
 import {
 	ColumnDef,
@@ -12,6 +11,7 @@ import {
 	getExpandedRowModel,
 	ExpandedState,
 } from '@tanstack/react-table';
+import { useFocusEffect } from 'expo-router';
 import { useObservableRef } from 'observable-hooks';
 import Animated, {
 	useSharedValue,

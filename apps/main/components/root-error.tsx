@@ -47,7 +47,7 @@ const styles: any = StyleSheet.create({
 /**
  *
  */
-const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
+export const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 	const handleReset = async () => {
 		// clear userDB to ensure clean start
 		await clearAllDB()
@@ -83,5 +83,3 @@ const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 		</SafeAreaView>
 	);
 };
-
-export default RootError;

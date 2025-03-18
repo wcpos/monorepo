@@ -40,9 +40,9 @@ export const OpenOrderTabs = () => {
 			value={currentOrder.isNew ? 'new' : currentOrder.uuid}
 			onValueChange={handleTabPress}
 			orientation="horizontal"
-			className="native:h-10 h-7"
+			className="native:h-12 h-7"
 		>
-			<ScrollableTabsList className="p-0">
+			<ScrollableTabsList className="native:h-12 p-0">
 				{openOrders.map(({ id, document }) => (
 					<TabsTrigger
 						key={id}

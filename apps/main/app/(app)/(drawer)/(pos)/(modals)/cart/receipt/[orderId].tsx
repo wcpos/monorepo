@@ -1,5 +1,1 @@
-import { Text } from 'react-native';
-
-export default function ReceiptScreen() {
-	return <Text>Receipt [orderId]</Text>;
-}
+export { ReceiptScreen as default } from '@wcpos/core/screens/main/receipt';
