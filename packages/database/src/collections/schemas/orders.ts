@@ -252,7 +252,7 @@ export const ordersLiteral = {
 					},
 					product_id: {
 						description: 'Product ID.',
-						type: 'integer',
+						type: ['integer', 'null'],
 					},
 					variation_id: {
 						description: 'Variation ID, if applicable.',
@@ -428,7 +428,7 @@ export const ordersLiteral = {
 					},
 					method_id: {
 						description: 'Shipping method ID.',
-						type: 'string',
+						type: ['string', 'null'],
 					},
 					instance_id: {
 						description: 'Shipping instance ID.',
@@ -494,7 +494,7 @@ export const ordersLiteral = {
 					},
 					name: {
 						description: 'Fee name.',
-						type: 'string',
+						type: ['string', 'null'],
 					},
 					amount: {
 						description: 'Fee amount.',
