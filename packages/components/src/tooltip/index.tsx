@@ -7,8 +7,29 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
-const Tooltip = TooltipPrimitive.Root;
-const TooltipTrigger = TooltipPrimitive.Trigger;
+interface TooltipProps extends React.ComponentProps<typeof TooltipPrimitive.Root> {
+	showNativeTooltip?: boolean;
+	children: React.ReactNode;
+}
+
+// Modified Tooltip component with showNativeTooltip prop
+const Tooltip = React.forwardRef<React.ElementRef<typeof TooltipPrimitive.Root>, TooltipProps>(
+	({ showNativeTooltip = false, children, ...props }, ref) => {
+		return (
+			<TooltipPrimitive.Root ref={ref} {...props}>
+				{!showNativeTooltip
+					? React.Children.map(children, (child) => {
+							if (React.isValidElement(child) && child.type === TooltipTrigger) {
+								return child;
+							}
+							return null;
+						})
+					: children}
+			</TooltipPrimitive.Root>
+		);
+	}
+);
+Tooltip.displayName = TooltipPrimitive.Root.displayName;
 
 const TooltipContent = React.forwardRef<
 	React.ElementRef<typeof TooltipPrimitive.Content>,
@@ -36,5 +57,7 @@ const TooltipContent = React.forwardRef<
 	</TooltipPrimitive.Portal>
 ));
 TooltipContent.displayName = TooltipPrimitive.Content.displayName;
+
+const TooltipTrigger = TooltipPrimitive.Trigger;
 
 export { Tooltip, TooltipContent, TooltipTrigger };

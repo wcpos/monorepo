@@ -8,6 +8,7 @@ import Animated, {
 	withTiming,
 	withSequence,
 	cancelAnimation,
+	runOnJS,
 } from 'react-native-reanimated';
 
 import { cn } from '../lib/utils';
@@ -54,18 +55,27 @@ export const PulseTableRow = React.forwardRef<PulseTableRowRef, PulseTableRowPro
 						withTiming(
 							index % 2 === 0 ? 'transparent' : 'hsla(210, 40%, 96%, 0.4)',
 							{ duration: 500 },
-							() => {
-								if (callback) callback();
-							}
+							callback
+								? () => {
+										'worklet';
+										runOnJS(callback)();
+									}
+								: undefined
 						)
 					);
 				},
 				pulseRemove(callback?: () => void) {
 					cancelAnimation(backgroundColor);
-					backgroundColor.value = withTiming('hsl(356, 75%, 53%)', { duration: 500 }, () => {
-						backgroundColor.value = index % 2 === 0 ? 'transparent' : 'hsla(210, 40%, 96%, 0.4)';
-						if (callback) callback();
-					});
+					backgroundColor.value = withTiming(
+						'hsl(356, 75%, 53%)',
+						{ duration: 500 },
+						callback
+							? () => {
+									'worklet';
+									runOnJS(callback)();
+								}
+							: undefined
+					);
 				},
 			},
 		});

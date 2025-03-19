@@ -3,6 +3,7 @@ import { Pressable, View, ViewProps } from 'react-native';
 import type { PressableStateCallbackType } from 'react-native';
 
 import { cva } from 'class-variance-authority';
+import * as Haptics from 'expo-haptics';
 
 import { HStack } from '../hstack';
 import { Icon, IconName } from '../icon';
@@ -164,10 +165,25 @@ type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 		leftIcon?: IconName | React.ReactNode;
 		rightIcon?: IconName | React.ReactNode;
 		loading?: boolean;
+		disableHaptics?: boolean;
 	};
 
 const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>(
-	({ className, variant, size, leftIcon, rightIcon, loading, children, ...props }, ref) => {
+	(
+		{
+			className,
+			variant,
+			size,
+			leftIcon,
+			rightIcon,
+			loading,
+			children,
+			disableHaptics = false,
+			onPress,
+			...props
+		},
+		ref
+	) => {
 		const disabled = props.disabled || loading;
 
 		/**
@@ -198,6 +214,17 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 			return children;
 		};
 
+		// Create a wrapped onPress handler that includes haptics
+		const handlePress = React.useCallback(
+			(e: any) => {
+				if (!disabled && !disableHaptics) {
+					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				}
+				onPress?.(e);
+			},
+			[disabled, disableHaptics, onPress]
+		);
+
 		return (
 			<TextClassContext.Provider
 				value={buttonTextVariants({ variant, size, className: 'web:pointer-events-none' })}
@@ -210,6 +237,7 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 					ref={ref}
 					role="button"
 					{...props}
+					onPress={handlePress}
 					aria-disabled={disabled ?? undefined}
 					disabled={disabled ?? undefined}
 				>

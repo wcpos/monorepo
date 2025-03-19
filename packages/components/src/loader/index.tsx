@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ViewProps } from 'react-native';
+import { Platform, View, ViewProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import Animated, {
@@ -29,14 +29,14 @@ const loaderVariants = cva('inset-0 content-center items-center', {
 			success: 'text-success',
 		},
 		size: {
-			default: 'size-3.5', // 14px
-			xs: 'size-3', // 12px
-			sm: 'size-[0.8125rem]', // 13px
-			lg: 'size-4', // 16px
-			xl: 'size-[1.125rem]', // 18px
-			'2xl': 'size-5', // 20px
-			'3xl': 'size-6', // 24px
-			'4xl': 'size-7', // 28px
+			default: Platform.OS === 'web' ? 'size-4' : 'size-5',
+			xs: Platform.OS === 'web' ? 'size-3' : 'size-4',
+			sm: Platform.OS === 'web' ? 'size-[0.8125rem]' : 'size-[1.125rem]',
+			lg: Platform.OS === 'web' ? 'size-4' : 'size-5',
+			xl: Platform.OS === 'web' ? 'size-[1.125rem]' : 'size-6',
+			'2xl': Platform.OS === 'web' ? 'size-5' : 'size-7',
+			'3xl': Platform.OS === 'web' ? 'size-6' : 'size-8',
+			'4xl': Platform.OS === 'web' ? 'size-7' : 'size-9',
 		},
 	},
 	defaultVariants: {

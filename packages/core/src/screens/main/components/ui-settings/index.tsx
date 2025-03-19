@@ -66,7 +66,7 @@ const UISettingsDialog = ({ title, children }: Props) => {
 							<Text>{title}</Text>
 						</TooltipContent>
 					</Tooltip>
-					<DialogContent size="md">
+					<DialogContent size="lg">
 						<DialogHeader>
 							<DialogTitle>{title}</DialogTitle>
 						</DialogHeader>

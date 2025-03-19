@@ -93,65 +93,92 @@ const RGB_COLORS = {
 	},
 } as const;
 
-const nativeSwitchVariants = cva(
-	'shrink-0 flex-row items-center rounded-full border-2 border-transparent',
-	{
-		variants: {
-			size: {
-				default: 'h-8 w-[46px]',
-			},
-			checked: {
-				true: 'bg-primary',
-				false: 'bg-input',
-			},
+const nativeSwitchVariants = cva('shrink-0 flex-row items-center rounded-full', {
+	variants: {
+		size: {
+			xs: 'h-3 w-5',
+			sm: 'h-4 w-7',
+			lg: 'h-6 w-11',
+			default: 'h-5 w-9',
 		},
-		defaultVariants: {
-			size: 'default',
-			checked: false,
-		},
-	}
-);
+	},
+	defaultVariants: {
+		size: 'default',
+	},
+});
 
-const SwitchNative = React.forwardRef<SwitchPrimitives.RootRef, SwitchPrimitives.RootProps>(
-	({ className, ...props }, ref) => {
-		const { colorScheme } = useColorScheme();
-		const translateX = useDerivedValue(() => (props.checked ? 18 : 0));
-		const animatedRootStyle = useAnimatedStyle(() => {
-			return {
-				backgroundColor: interpolateColor(
-					translateX.value,
-					[0, 18],
-					[RGB_COLORS[colorScheme].input, RGB_COLORS[colorScheme].primary]
-				),
-			};
-		});
-		const animatedThumbStyle = useAnimatedStyle(() => ({
-			transform: [{ translateX: withTiming(translateX.value, { duration: 200 }) }],
-		}));
-		return (
-			<Animated.View
-				style={animatedRootStyle}
-				className={cn('h-8 w-[46px] rounded-full', props.disabled && 'opacity-50')}
+const nativeThumbVariants = cva('bg-background rounded-full shadow-md', {
+	variants: {
+		size: {
+			xs: 'h-2.5 w-2.5',
+			sm: 'h-3.5 w-3.5',
+			lg: 'h-5.5 w-5.5',
+			default: 'h-4 w-4',
+		},
+	},
+	defaultVariants: {
+		size: 'default',
+	},
+});
+
+const SwitchNative = React.forwardRef<
+	SwitchPrimitives.RootRef,
+	SwitchPrimitives.RootProps & VariantProps<typeof nativeSwitchVariants>
+>(({ className, size = 'default', ...props }, ref) => {
+	const { colorScheme } = useColorScheme();
+
+	const getTranslateX = (size: string) => {
+		'worklet';
+		switch (size) {
+			case 'xs':
+				return 8;
+			case 'sm':
+				return 10;
+			case 'lg':
+				return 12;
+			default:
+				return 14;
+		}
+	};
+
+	const translateX = useDerivedValue(() => (props.checked ? getTranslateX(size) : 0));
+	const animatedRootStyle = useAnimatedStyle(() => {
+		return {
+			backgroundColor: interpolateColor(
+				translateX.value,
+				[0, getTranslateX(size)],
+				[RGB_COLORS[colorScheme].input, RGB_COLORS[colorScheme].primary]
+			),
+		};
+	});
+	const animatedThumbStyle = useAnimatedStyle(() => ({
+		transform: [{ translateX: withTiming(translateX.value, { duration: 200 }) }],
+	}));
+	return (
+		<Animated.View
+			style={animatedRootStyle}
+			className={cn(nativeSwitchVariants({ size }), props.disabled && 'opacity-50')}
+		>
+			<SwitchPrimitives.Root
+				className={cn(
+					nativeSwitchVariants({ size }),
+					props.checked ? 'bg-primary' : 'bg-input',
+					className
+				)}
+				{...props}
+				ref={ref}
 			>
-				<SwitchPrimitives.Root
-					className={cn(
-						'h-8 w-[46px] shrink-0 flex-row items-center rounded-full border-2 border-transparent',
-						props.checked ? 'bg-primary' : 'bg-input',
-						className
-					)}
-					{...props}
-					ref={ref}
+				<Animated.View
+					style={animatedThumbStyle}
+					className={cn('px-0.5', size === 'sm' || size === 'xs' ? 'px-[1px]' : 'px-0.5')}
 				>
-					<Animated.View style={animatedThumbStyle}>
-						<SwitchPrimitives.Thumb
-							className={'bg-background shadow-foreground/25 h-7 w-7 rounded-full shadow-md ring-0'}
-						/>
-					</Animated.View>
-				</SwitchPrimitives.Root>
-			</Animated.View>
-		);
-	}
-);
+					<SwitchPrimitives.Thumb className={cn(nativeThumbVariants({ size }))} />
+				</Animated.View>
+			</SwitchPrimitives.Root>
+		</Animated.View>
+	);
+});
+
 SwitchNative.displayName = 'SwitchNative';
 
 const Switch = Platform.select({
@@ -180,9 +207,9 @@ const SwitchWithLabel = React.forwardRef<
 	};
 
 	return (
-		<HStack>
+		<HStack className="w-full">
 			<Switch ref={ref} {...props} checked={checked} onCheckedChange={handleToggle} size={size} />
-			<Label nativeID={props.nativeID} onPress={handleToggle} className="flex-1">
+			<Label nativeID={props.nativeID} onPress={handleToggle} className="flex-1 shrink-0">
 				{label}
 			</Label>
 		</HStack>
