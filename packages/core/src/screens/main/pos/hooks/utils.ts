@@ -99,7 +99,8 @@ export const findByProductVariationID = (
 };
 
 /**
- *
+ * @NOTE - we have to be careful here because if a property is undefined or null, it will be ingnored when
+ * we send the data to the server.
  */
 type CustomerJSON = import('@wcpos/database').CustomerDocumentType;
 export const transformCustomerJSONToOrderJSON = (
@@ -109,13 +110,28 @@ export const transformCustomerJSONToOrderJSON = (
 	return {
 		customer_id: customer.id,
 		billing: {
-			...(customer.billing || {}),
-			email: customer?.billing?.email || customer?.email,
-			first_name: customer?.billing?.first_name || customer.first_name || customer?.username,
-			last_name: customer?.billing?.last_name || customer?.last_name,
+			first_name: customer?.billing?.first_name || customer.first_name || customer?.username || '',
+			last_name: customer?.billing?.last_name || customer?.last_name || '',
+			company: customer?.billing?.company || '',
+			address_1: customer?.billing?.address_1 || '',
+			address_2: customer?.billing?.address_2 || '',
+			city: customer?.billing?.city || '',
+			state: customer?.billing?.state || '',
+			postcode: customer?.billing?.postcode || '',
 			country: customer?.billing?.country || defaultCountry,
+			email: customer?.billing?.email || customer?.email || '',
+			phone: customer?.billing?.phone || '',
 		},
-		shipping: customer.shipping || {},
+		shipping: {
+			first_name: customer?.shipping?.first_name || '',
+			last_name: customer?.shipping?.last_name || '',
+			company: customer?.shipping?.company || '',
+			address_1: customer?.shipping?.address_1 || '',
+			address_2: customer?.shipping?.address_2 || '',
+			city: customer?.shipping?.city || '',
+			state: customer?.shipping?.state || '',
+			country: customer?.shipping?.country || '',
+		},
 	};
 };
 
