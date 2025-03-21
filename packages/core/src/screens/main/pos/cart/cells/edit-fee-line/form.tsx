@@ -98,6 +98,11 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 	);
 
 	/**
+	 * Form submission handlers that include validation
+	 */
+	const onSave = form.handleSubmit(handleSave);
+
+	/**
 	 * Watch for changes to `percent`
 	 */
 	const togglePercentage = form.watch('percent');
@@ -179,9 +184,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 				<MetaDataForm />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
-					<DialogAction onPress={form.handleSubmit(handleSave)}>
-						{t('Save', { _tags: 'core' })}
-					</DialogAction>
+					<DialogAction onPress={onSave}>{t('Save', { _tags: 'core' })}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

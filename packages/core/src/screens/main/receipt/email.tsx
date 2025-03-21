@@ -11,6 +11,7 @@ import { Toast } from '@wcpos/components/src/toast';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../contexts/translations';
+import { FormErrors } from '../components/form-errors';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const formSchema = z.object({
@@ -70,11 +71,17 @@ export const EmailForm = ({ order }: Props) => {
 	});
 
 	/**
+	 * Form submission handlers that include validation
+	 */
+	const sendEmail = form.handleSubmit(handleSendEmail);
+
+	/**
 	 *
 	 */
 	return (
 		<VStack className="gap-4">
 			<Form {...form}>
+				<FormErrors />
 				<VStack>
 					<FormField
 						control={form.control}
@@ -97,7 +104,7 @@ export const EmailForm = ({ order }: Props) => {
 			</Form>
 			<DialogFooter className="px-0">
 				<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
-				<DialogAction onPress={form.handleSubmit(handleSendEmail)} loading={loading}>
+				<DialogAction onPress={sendEmail} loading={loading}>
 					{t('Send', { _tags: 'core' })}
 				</DialogAction>
 			</DialogFooter>

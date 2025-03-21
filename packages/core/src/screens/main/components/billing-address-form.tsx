@@ -18,7 +18,7 @@ export const billingAddressSchema = z.object({
 		.object({
 			first_name: z.string().optional(),
 			last_name: z.string().optional(),
-			email: z.preprocess((val) => (val === '' ? undefined : val), z.string().email().optional()),
+			email: z.string().email().optional().or(z.literal('')),
 			phone: z.string().optional(),
 			company: z.string().optional(),
 			address_1: z.string().optional(),

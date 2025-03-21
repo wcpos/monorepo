@@ -92,6 +92,11 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 	);
 
 	/**
+	 * Form submission handlers that include validation
+	 */
+	const onSave = form.handleSubmit(handleSave);
+
+	/**
 	 *
 	 */
 	return (
@@ -171,9 +176,7 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 				<MetaDataForm withDisplayValues />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
-					<DialogAction onPress={form.handleSubmit(handleSave)}>
-						{t('Save', { _tags: 'core' })}
-					</DialogAction>
+					<DialogAction onPress={onSave}>{t('Save', { _tags: 'core' })}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

@@ -76,6 +76,11 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 	);
 
 	/**
+	 * Form submission handlers that include validation
+	 */
+	const onSave = form.handleSubmit(handleSave);
+
+	/**
 	 * Save to server
 	 *
 	 * NOTE: There's an issue if we just patch the form changes, other changes such as customer or if the
@@ -159,9 +164,7 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 				</VStack>
 				<DialogFooter className="px-0">
 					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
-					<DialogAction onPress={form.handleSubmit(handleSave)}>
-						{t('Save', { _tags: 'core' })}
-					</DialogAction>
+					<DialogAction onPress={onSave}>{t('Save', { _tags: 'core' })}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

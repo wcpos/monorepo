@@ -73,6 +73,11 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 	};
 
 	/**
+	 * Form submission handlers that include validation
+	 */
+	const onSave = form.handleSubmit(handleSubmit);
+
+	/**
 	 *
 	 */
 	return (
@@ -160,7 +165,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 					<Button variant="outline" onPress={onClose}>
 						<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
 					</Button>
-					<Button loading={loading} onPress={form.handleSubmit(handleSubmit)}>
+					<Button loading={loading} onPress={onSave}>
 						<ButtonText>{t('Save')}</ButtonText>
 					</Button>
 				</HStack>
