@@ -89,6 +89,7 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 				shipping: data.shipping,
 			},
 		});
+		onOpenChange(false);
 	};
 
 	/**
@@ -118,6 +119,7 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 					text1: t('{name} saved', { _tags: 'core', name: format(savedDoc) }),
 				});
 			}
+			onOpenChange(false);
 		} catch (error) {
 			Toast.show({
 				type: 'error',
@@ -135,6 +137,12 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 		const billingAddress = form.getValues().billing;
 		form.setValue('shipping', billingAddress);
 	}, [form]);
+
+	/**
+	 * Form submission handlers that include validation
+	 */
+	const onSaveToOrder = form.handleSubmit(handleSaveToOrder);
+	const onSaveToOrderAndCustomer = form.handleSubmit(handleSaveToOrderAndToCustomer);
 
 	/**
 	 * Form doesn't have a ref? What else should I use?
@@ -171,22 +179,11 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 				<DialogFooter className="px-0">
 					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
 					{customerID !== 0 && (
-						<DialogAction
-							onPress={async () => {
-								await form.handleSubmit(handleSaveToOrderAndToCustomer)();
-								onOpenChange(false);
-							}}
-							loading={loading}
-						>
+						<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
 							{t('Save to Order & Customer', { _tags: 'core' })}
 						</DialogAction>
 					)}
-					<DialogAction
-						onPress={async () => {
-							await form.handleSubmit(handleSaveToOrder)();
-							onOpenChange(false);
-						}}
-					>
+					<DialogAction onPress={onSaveToOrder} loading={loading}>
 						{t('Save to Order', { _tags: 'core' })}
 					</DialogAction>
 				</DialogFooter>

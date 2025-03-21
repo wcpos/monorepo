@@ -110,6 +110,14 @@ export const EditOrderForm = ({ order }: Props) => {
 	);
 
 	/**
+	 *
+	 */
+	const form = useForm<z.infer<typeof formSchema>>({
+		resolver: zodResolver(formSchema),
+		defaultValues: { ...formData },
+	});
+
+	/**
 	 * Handle save button click
 	 */
 	const handleSaveToServer = React.useCallback(
@@ -141,12 +149,9 @@ export const EditOrderForm = ({ order }: Props) => {
 	);
 
 	/**
-	 *
+	 * Form submission handlers that include validation
 	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
-		defaultValues: { ...formData },
-	});
+	const onSave = form.handleSubmit(handleSaveToServer);
 
 	/**
 	 * Track formData changes and reset form
@@ -340,7 +345,7 @@ export const EditOrderForm = ({ order }: Props) => {
 				</View>
 				<ModalFooter className="px-0">
 					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
-					<ModalAction loading={loading} onPress={form.handleSubmit(handleSaveToServer)}>
+					<ModalAction loading={loading} onPress={onSave}>
 						{t('Save', { _tags: 'core' })}
 					</ModalAction>
 				</ModalFooter>

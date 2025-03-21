@@ -115,6 +115,11 @@ export const EditVariationForm = ({ variation }: Props) => {
 	);
 
 	/**
+	 * Form submission handlers that include validation
+	 */
+	const onSave = form.handleSubmit(handleSave);
+
+	/**
 	 *
 	 */
 	return (
@@ -214,7 +219,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 				</View>
 				<ModalFooter className="px-0">
 					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
-					<ModalAction loading={loading} onPress={form.handleSubmit(handleSave)}>
+					<ModalAction loading={loading} onPress={onSave}>
 						{t('Save')}
 					</ModalAction>
 				</ModalFooter>

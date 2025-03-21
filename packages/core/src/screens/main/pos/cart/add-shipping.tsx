@@ -87,6 +87,11 @@ export const AddShipping = () => {
 	);
 
 	/**
+	 * Form submission handlers that include validation
+	 */
+	const onAdd = form.handleSubmit(handleAdd);
+
+	/**
 	 *
 	 */
 	return (
@@ -163,9 +168,7 @@ export const AddShipping = () => {
 				</VStack>
 				<DialogFooter className="px-0">
 					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
-					<DialogAction onPress={form.handleSubmit(handleAdd)}>
-						{t('Add to Cart', { _tags: 'core' })}
-					</DialogAction>
+					<DialogAction onPress={onAdd}>{t('Add to Cart', { _tags: 'core' })}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>
