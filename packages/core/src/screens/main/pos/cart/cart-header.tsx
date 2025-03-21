@@ -72,7 +72,7 @@ export const CartHeader = () => {
 	 */
 	return (
 		<HStack>
-			<HStack className="flex-wrap flex-1">
+			<HStack className="flex-1 flex-wrap">
 				<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
 				<ErrorBoundary>
 					{showCustomerSelect ? (

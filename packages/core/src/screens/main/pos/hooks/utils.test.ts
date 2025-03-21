@@ -115,8 +115,29 @@ describe('Utilities', () => {
 			const transformed = transformCustomerJSONToOrderJSON(customer, 'CA');
 			expect(transformed).toEqual({
 				customer_id: 1,
-				billing: { country: 'US', email: 'test@example.com', first_name: 'John', last_name: 'Doe' },
-				shipping: {},
+				billing: {
+					first_name: 'John',
+					last_name: 'Doe',
+					company: '',
+					address_1: '',
+					address_2: '',
+					city: '',
+					state: '',
+					postcode: '',
+					country: 'US',
+					email: 'test@example.com',
+					phone: '',
+				},
+				shipping: {
+					first_name: '',
+					last_name: '',
+					company: '',
+					address_1: '',
+					address_2: '',
+					city: '',
+					state: '',
+					country: '',
+				},
 			});
 		});
 	});
