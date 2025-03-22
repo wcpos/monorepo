@@ -1,5 +1,5 @@
-import * as React from 'react';
-import { Pressable, View, ViewProps } from 'react-native';
+import React from 'react';
+import { Pressable, View, ViewProps, Platform } from 'react-native';
 import type { PressableStateCallbackType } from 'react-native';
 
 import { cva } from 'class-variance-authority';
@@ -217,7 +217,7 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 		// Create a wrapped onPress handler that includes haptics
 		const handlePress = React.useCallback(
 			(e: any) => {
-				if (!disabled && !disableHaptics) {
+				if (Platform.OS !== 'web' && !disabled && !disableHaptics) {
 					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 				}
 				onPress?.(e);

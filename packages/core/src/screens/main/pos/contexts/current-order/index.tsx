@@ -62,3 +62,14 @@ export const CurrentOrderProvider = ({
 		</CurrentOrderContext.Provider>
 	);
 };
+
+/**
+ *
+ */
+export const useCurrentOrder = () => {
+	const context = React.useContext(CurrentOrderContext);
+	if (!context) {
+		throw new Error(`useCurrentOrder must be called within CurrentOrderProvider`);
+	}
+	return context;
+};

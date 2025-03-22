@@ -8,6 +8,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useUISettings } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 import { POSProducts } from '@wcpos/core/screens/main/pos/products';
+
 /**
  *
  */

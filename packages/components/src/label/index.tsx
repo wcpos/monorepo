@@ -26,7 +26,7 @@ const Root = React.forwardRef<
 	return <Component ref={ref} {...props} />;
 });
 
-Root.displayName = 'RootWebLabel';
+Root.displayName = 'RootLabel';
 
 const Label = React.forwardRef<
 	React.ElementRef<typeof LabelPrimitive.Text>,
@@ -43,7 +43,8 @@ const Label = React.forwardRef<
 			<LabelPrimitive.Text
 				ref={ref}
 				className={cn(
-					'web:peer-disabled:cursor-not-allowed web:peer-disabled:opacity-70 text-foreground text-sm font-medium leading-none'
+					'web:peer-disabled:cursor-not-allowed web:peer-disabled:opacity-7',
+					'text-foreground text-sm font-medium leading-none'
 				)}
 				{...props}
 			/>

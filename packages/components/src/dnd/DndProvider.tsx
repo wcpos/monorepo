@@ -346,7 +346,7 @@ export const DndProvider = forwardRef<DndProviderHandle, PropsWithChildren<DndPr
 							x: activeOffset.x.value,
 							y: activeOffset.y.value,
 						});
-						onFinalize(event, { activeId, activeLayout: updatedLayout });
+						runOnJS(onFinalize)(event, { activeId, activeLayout: updatedLayout });
 					}
 					if (state !== State.FAILED && onDragEnd) {
 						const { value: dropActiveId } = droppableActiveId;

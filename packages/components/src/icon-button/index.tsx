@@ -1,7 +1,8 @@
-import * as React from 'react';
-import { Pressable } from 'react-native';
+import React from 'react';
+import { Pressable, Platform } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
+import * as Haptics from 'expo-haptics';
 
 import { Icon, IconName } from '../icon';
 import { cn } from '../lib/utils';
@@ -44,24 +45,47 @@ type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 		name: IconName;
 		loading?: boolean;
 		iconClassName?: string;
+		disableHaptics?: boolean;
 	};
 
-const IconButton = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>(
-	({ className, name, variant, size, loading, ...props }, ref) => {
-		return (
-			<Pressable
-				className={cn(
-					props.disabled && 'web:pointer-events-none opacity-50',
-					buttonVariants({ variant, size, className })
-				)}
-				ref={ref}
-				role="button"
-				{...props}
-			>
-				<Icon name={name} variant={variant} size={size} loading={loading} className={className} />
-			</Pressable>
-		);
-	}
-);
+const IconButtonBase = (
+	{
+		className,
+		name,
+		variant,
+		size,
+		loading,
+		disableHaptics = false,
+		onPress,
+		...props
+	}: ButtonProps,
+	ref: React.ElementRef<typeof Pressable>
+) => {
+	// Create a wrapped onPress handler that includes haptics
+	const handlePress = React.useCallback(
+		(e: any) => {
+			if (Platform.OS !== 'web' && !props.disabled && !disableHaptics) {
+				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			}
+			onPress?.(e);
+		},
+		[props.disabled, disableHaptics, onPress]
+	);
 
-export { IconButton };
+	return (
+		<Pressable
+			className={cn(
+				props.disabled && 'web:pointer-events-none opacity-50',
+				buttonVariants({ variant, size, className })
+			)}
+			ref={ref}
+			role="button"
+			onPress={handlePress}
+			{...props}
+		>
+			<Icon name={name} variant={variant} size={size} loading={loading} className={className} />
+		</Pressable>
+	);
+};
+
+export const IconButton = React.forwardRef(IconButtonBase);

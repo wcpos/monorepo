@@ -13,5 +13,6 @@ const devStorage = wrappedValidateZSchemaStorage({
 
 export const fastStorageConfig = {
 	storage: __DEV__ ? devStorage : fastStorage,
+	multiInstance: false,
 	ignoreDuplicate: !!__DEV__,
 };
