@@ -58,9 +58,6 @@ const POSStack = () => {
 					}}
 				/>
 			</Stack>
-			<ErrorBoundary>
-				<PortalHost />
-			</ErrorBoundary>
 		</TaxRatesProvider>
 	);
 };

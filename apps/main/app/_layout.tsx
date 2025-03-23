@@ -1,5 +1,6 @@
 import { Slot } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardController } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -19,14 +20,16 @@ export default function RootLayout() {
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<GestureHandlerRootView style={{ flex: 1 }}>
-				<SafeAreaProvider style={{ overflow: 'hidden' }}>
-					<HydrationProviders>
-						<Slot />
-						<ErrorBoundary>
-							<Toast config={toastConfig} />
-						</ErrorBoundary>
-					</HydrationProviders>
-				</SafeAreaProvider>
+				<KeyboardController>
+					<SafeAreaProvider style={{ overflow: 'hidden' }}>
+						<HydrationProviders>
+							<Slot />
+							<ErrorBoundary>
+								<Toast config={toastConfig} />
+							</ErrorBoundary>
+						</HydrationProviders>
+					</SafeAreaProvider>
+				</KeyboardController>
 			</GestureHandlerRootView>
 		</ErrorBoundary>
 	);
