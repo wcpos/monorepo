@@ -1,8 +1,8 @@
-import * as React from 'react';
+import React from 'react';
+import { View } from 'react-native';
 
 import get from 'lodash/get';
 
-import { Box } from '@wcpos/components/box';
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { DataTableRow } from '@wcpos/components/data-table';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -196,7 +196,7 @@ export const Products = () => {
 	 *
 	 */
 	return (
-		<Box className="h-full p-2">
+		<View className="h-full p-2">
 			<Card className="flex-1">
 				<CardHeader className="bg-input p-2">
 					<VStack>
@@ -242,6 +242,6 @@ export const Products = () => {
 					</ErrorBoundary>
 				</CardContent>
 			</Card>
-		</Box>
+		</View>
 	);
 };

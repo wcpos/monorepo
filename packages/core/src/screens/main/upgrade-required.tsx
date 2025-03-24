@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View, StyleSheet } from 'react-native';
 
-import { Box } from '@wcpos/components/box';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
@@ -24,11 +23,11 @@ export const UpgradeRequired = () => {
 					<Icon name="triangleExclamation" variant="destructive" />
 					<Text className="text-destructive">{t('Please update your WooCommerce POS plugin')}</Text>
 				</HStack>
-				<Box className="justify-center">
+				<View className="justify-center p-2">
 					<Button onPress={logout}>
 						<ButtonText>{t('Logout')}</ButtonText>
 					</Button>
-				</Box>
+				</View>
 			</VStack>
 		</View>
 	);

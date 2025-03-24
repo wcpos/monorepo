@@ -1,9 +1,9 @@
-import * as React from 'react';
+import React from 'react';
+import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import get from 'lodash/get';
 
-import { Box } from '@wcpos/components/box';
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
@@ -63,7 +63,7 @@ export const CustomersScreen = () => {
 	 *
 	 */
 	return (
-		<Box className="h-full p-2">
+		<View className="h-full p-2">
 			<Card className="flex-1">
 				<CardHeader className="bg-input p-0">
 					<HStack className="p-2">
@@ -102,6 +102,6 @@ export const CustomersScreen = () => {
 					</ErrorBoundary>
 				</CardContent>
 			</Card>
-		</Box>
+		</View>
 	);
 };

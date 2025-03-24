@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Box } from '@wcpos/components/box';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -58,7 +57,7 @@ export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
 			</HStack>
 
 			{metaData.length > 0 && (
-				<Box className="grid gap-1 grid-cols-2">
+				<View className="grid grid-cols-2 gap-1 p-2">
 					{metaData.map((meta) => {
 						return (
 							<React.Fragment key={meta.id || meta.display_key || meta.key}>
@@ -67,7 +66,7 @@ export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
 							</React.Fragment>
 						);
 					})}
-				</Box>
+				</View>
 			)}
 		</VStack>
 	);

@@ -1,9 +1,9 @@
-import * as React from 'react';
+import React from 'react';
+import { View } from 'react-native';
 
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Box } from '@wcpos/components/box';
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { DataTableRow } from '@wcpos/components/data-table';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -169,7 +169,7 @@ export const POSProducts = ({ isColumn = false }) => {
 	 *
 	 */
 	return (
-		<Box className={`h-full p-2 ${isColumn && 'pr-0'}`}>
+		<View className={`h-full p-2 ${isColumn && 'pr-0'}`}>
 			<Card className="flex-1">
 				<CardHeader className="bg-input p-2">
 					<ErrorBoundary>
@@ -213,6 +213,6 @@ export const POSProducts = ({ isColumn = false }) => {
 					</ErrorBoundary>
 				</CardContent>
 			</Card>
-		</Box>
+		</View>
 	);
 };

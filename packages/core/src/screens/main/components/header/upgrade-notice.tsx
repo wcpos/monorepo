@@ -1,7 +1,6 @@
-import * as React from 'react';
-import { Linking } from 'react-native';
+import React from 'react';
+import { Linking, View } from 'react-native';
 
-import { Box } from '@wcpos/components/box';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
@@ -28,15 +27,15 @@ export const UpgradeNotice = ({ setShowUpgrade }) => {
 
 	return (
 		<HStack className="bg-attention">
-			<Box className="grow justify-center p-0 pl-7">
+			<View className="grow justify-center p-0 pl-7">
 				<Text
-					className="text-sm mx-auto"
+					className="mx-auto text-sm"
 					variant="link"
 					onPress={() => Linking.openURL('https://wcpos.com/pro')}
 				>
 					{upgradeToProText}
 				</Text>
-			</Box>
+			</View>
 			<IconButton name="xmark" size="sm" onPress={() => setShowUpgrade(false)} />
 		</HStack>
 	);

@@ -1,6 +1,6 @@
-import * as React from 'react';
+import React from 'react';
+import { View } from 'react-native';
 
-import { Box } from '@wcpos/components/box';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
@@ -13,9 +13,9 @@ const EmptyTableRow = ({ message }: EmptyTableRowProps) => {
 	const t = useT();
 
 	return (
-		<Box>
+		<View className="p-2">
 			<Text>{message || t('No results found', { _tags: 'core' })}</Text>
-		</Box>
+		</View>
 	);
 };
 
