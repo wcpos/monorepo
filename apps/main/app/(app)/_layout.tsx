@@ -35,26 +35,34 @@ const App = () => {
 				<UISettingsProvider>
 					<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 						<Stack
-							screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}
+							screenOptions={{
+								headerShown: false,
+								contentStyle: { backgroundColor: '#F0F4F8' },
+							}}
 						>
 							<Stack.Screen name="(drawer)" />
 							<Stack.Screen
-								name="(modal)/settings"
-								options={{
-									presentation: 'modal',
-								}}
-							/>
-							<Stack.Screen
-								name="(modal)/tax-rates"
-								options={{
-									presentation: 'transparentModal',
-								}}
-							/>
-							<Stack.Screen
-								name="(modal)/login"
+								name="(modals)/settings"
 								options={{
 									presentation: 'transparentModal',
 									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+							<Stack.Screen
+								name="(modals)/tax-rates"
+								options={{
+									presentation: 'transparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
+								}}
+							/>
+							<Stack.Screen
+								name="(modals)/login"
+								options={{
+									presentation: 'transparentModal',
+									animation: 'fade',
+									contentStyle: { backgroundColor: 'transparent' },
 								}}
 							/>
 						</Stack>

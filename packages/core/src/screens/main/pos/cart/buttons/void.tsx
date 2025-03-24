@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 
 import { Button } from '@wcpos/components/button';
 import { Toast } from '@wcpos/components/toast';
@@ -15,7 +15,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
  */
 export const VoidButton = () => {
 	const { currentOrder } = useCurrentOrder();
-	const navigation = useNavigation();
+	const router = useRouter();
 	const deleteDocument = useDeleteDocument();
 	const t = useT();
 
@@ -26,12 +26,12 @@ export const VoidButton = () => {
 		async (orderJson) => {
 			try {
 				await currentOrder.collection.insert(orderJson);
-				navigation.setParams({ orderID: orderJson.uuid });
+				router.setParams({ orderID: orderJson.uuid });
 			} catch (err) {
 				log.error(err);
 			}
 		},
-		[navigation, currentOrder.collection]
+		[router, currentOrder.collection]
 	);
 
 	/**
@@ -62,7 +62,7 @@ export const VoidButton = () => {
 			size="lg"
 			onPress={handleRemove}
 			variant="destructive"
-			className="rounded-t-none rounded-br-none flex-1"
+			className="flex-1 rounded-t-none rounded-br-none"
 		>
 			{t('Void', { _tags: 'core' })}
 		</Button>

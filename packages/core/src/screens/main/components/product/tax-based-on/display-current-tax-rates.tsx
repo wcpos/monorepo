@@ -127,7 +127,7 @@ export const DisplayCurrentTaxRates = ({
 				<Button
 					variant="muted"
 					onPress={() => {
-						router.push('tax-rates');
+						router.push('/(app)/(modals)/tax-rates');
 					}}
 				>
 					<ButtonText>{t('View all tax rates', { _tags: 'core' })}</ButtonText>

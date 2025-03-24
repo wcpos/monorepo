@@ -1,6 +1,8 @@
+import { Keyboard, TouchableWithoutFeedback, View } from 'react-native';
+
 import { Slot } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { KeyboardController } from 'react-native-keyboard-controller';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -19,18 +21,20 @@ export const unstable_settings = {
 export default function RootLayout() {
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
-			<GestureHandlerRootView style={{ flex: 1 }}>
-				<KeyboardController>
-					<SafeAreaProvider style={{ overflow: 'hidden' }}>
-						<HydrationProviders>
-							<Slot />
-							<ErrorBoundary>
-								<Toast config={toastConfig} />
-							</ErrorBoundary>
-						</HydrationProviders>
-					</SafeAreaProvider>
-				</KeyboardController>
-			</GestureHandlerRootView>
+			<TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+				<SafeAreaProvider style={{ overflow: 'hidden' }}>
+					<GestureHandlerRootView style={{ flex: 1 }}>
+						<KeyboardProvider>
+							<HydrationProviders>
+								<Slot />
+								<ErrorBoundary>
+									<Toast config={toastConfig} />
+								</ErrorBoundary>
+							</HydrationProviders>
+						</KeyboardProvider>
+					</GestureHandlerRootView>
+				</SafeAreaProvider>
+			</TouchableWithoutFeedback>
 		</ErrorBoundary>
 	);
 }

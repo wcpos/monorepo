@@ -10,15 +10,19 @@ export default function OrdersLayout() {
 		<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
 			<Stack.Screen name="index" />
 			<Stack.Screen
-				name="edit/[orderId]"
+				name="(modals)/edit/[orderId]"
 				options={{
-					presentation: 'modal',
+					presentation: 'transparentModal',
+					animation: 'fade',
+					contentStyle: { backgroundColor: 'transparent' },
 				}}
 			/>
 			<Stack.Screen
-				name="receipt/[orderId]"
+				name="(modals)/receipt/[orderId]"
 				options={{
-					presentation: 'modal',
+					presentation: 'transparentModal',
+					animation: 'fade',
+					contentStyle: { backgroundColor: 'transparent' },
 				}}
 			/>
 		</Stack>

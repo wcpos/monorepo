@@ -1,16 +1,16 @@
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 
 import { useHotkeys } from '@wcpos/hooks/use-hotkeys';
 
 import { useAppState } from '../../../contexts/app-state';
 
 const useKeyboardShortcuts = () => {
-	const navigation = useNavigation();
+	const router = useRouter();
 	const { logout } = useAppState();
 
 	/** Settings Modal */
 	useHotkeys('ctrl+shift+s', (event, handler) => {
-		navigation.navigate('Settings');
+		router.push('/(app)/(modals)/settings');
 	});
 
 	/** Settings Modal */
@@ -20,27 +20,27 @@ const useKeyboardShortcuts = () => {
 
 	/** Main POS page */
 	useHotkeys('ctrl+shift+a', (event, handler) => {
-		navigation.navigate('POSStack');
+		router.push('/(app)/(drawer)/pos');
 	});
 
 	/** Products */
 	useHotkeys('ctrl+shift+p', (event, handler) => {
-		navigation.navigate('ProductsStack');
+		router.push('/(app)/(drawer)/products');
 	});
 
 	/** Orders */
 	useHotkeys('ctrl+shift+o', (event, handler) => {
-		navigation.navigate('OrdersStack');
+		router.push('/(app)/(drawer)/orders');
 	});
 
 	/** Customers */
 	useHotkeys('ctrl+shift+c', (event, handler) => {
-		navigation.navigate('CustomersStack');
+		router.push('/(app)/(drawer)/customers');
 	});
 
 	/** Support */
 	useHotkeys('ctrl+shift+?', (event, handler) => {
-		navigation.navigate('SupportStack');
+		router.push('/(app)/(drawer)/support');
 	});
 };
 

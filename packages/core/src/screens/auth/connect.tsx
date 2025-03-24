@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { KeyboardAvoidingView, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 
-import { Box } from '@wcpos/components/box';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+
 import { Card } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Logo } from '@wcpos/components/logo';
@@ -12,18 +13,13 @@ import DemoButton from './components/demo-button';
 import { Sites } from './components/sites';
 import UrlInput from './components/url-input';
 import { useAppState } from '../../contexts/app-state';
-import Platform from '../../lib/platform';
 
 export const Connect = () => {
 	const { user } = useAppState();
 
 	return (
-		<KeyboardAvoidingView
-			behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-			style={[{ flex: 1 }, StyleSheet.absoluteFill]}
-		>
-			{/* <View nativeID="titlebar" style={{ height: 30 }} /> */}
-			<Box className="min-h-screen w-full items-center justify-center">
+		<KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+			<View className="h-full w-full items-center justify-center p-2">
 				<VStack space="lg" className="w-full max-w-[460px] items-center">
 					<Logo width={120} height={120} />
 					<Card className="w-full p-4">
@@ -36,7 +32,7 @@ export const Connect = () => {
 					</ErrorBoundary>
 					<DemoButton />
 				</VStack>
-			</Box>
+			</View>
 		</KeyboardAvoidingView>
 	);
 };

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import get from 'lodash/get';
 
 import { Modal, ModalContent, ModalTitle, ModalHeader, ModalBody } from '@wcpos/components/modal';
@@ -15,7 +15,7 @@ import { useT } from '../../contexts/translations';
  */
 export const LoginModal = () => {
 	const { site, wpCredentials } = useAppState();
-	const navigation = useNavigation();
+	const router = useRouter();
 	const t = useT();
 
 	/**
@@ -35,10 +35,10 @@ export const LoginModal = () => {
 			} catch (err) {
 				log.error(err);
 			} finally {
-				navigation.goBack();
+				router.back();
 			}
 		},
-		[navigation, wpCredentials]
+		[router, wpCredentials]
 	);
 
 	return (

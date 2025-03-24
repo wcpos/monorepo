@@ -10,15 +10,19 @@ export default function CustomersLayout() {
 		<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
 			<Stack.Screen name="index" />
 			<Stack.Screen
-				name="edit/[customerId]"
+				name="(modals)/edit/[customerId]"
 				options={{
-					presentation: 'modal',
+					presentation: 'transparentModal',
+					animation: 'fade',
+					contentStyle: { backgroundColor: 'transparent' },
 				}}
 			/>
 			<Stack.Screen
-				name="add"
+				name="(modals)/add"
 				options={{
-					presentation: 'modal',
+					presentation: 'transparentModal',
+					animation: 'fade',
+					contentStyle: { backgroundColor: 'transparent' },
 				}}
 			/>
 		</Stack>

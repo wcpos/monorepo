@@ -21,10 +21,11 @@ export default function AuthLayout() {
 			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
 				<Stack.Screen name="connect" />
 				<Stack.Screen
-					name="login"
+					name="(modals)/login"
 					options={{
 						presentation: 'transparentModal',
 						animation: 'fade',
+						contentStyle: { backgroundColor: 'transparent' },
 					}}
 				/>
 			</Stack>

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -48,7 +48,7 @@ const formSchema = z.object({
 export const TaxSettings = () => {
 	const { store } = useAppState();
 	const t = useT();
-	const navigation = useNavigation();
+	const router = useRouter();
 	const { localPatch } = useLocalMutation();
 	const http = useRestHttpClient();
 	const [loading, setLoading] = React.useState(false);
@@ -150,7 +150,7 @@ export const TaxSettings = () => {
 	return (
 		<VStack>
 			<View className="flex-row">
-				<Button variant="muted" onPress={() => navigation.navigate('TaxRates')}>
+				<Button variant="muted" onPress={() => router.push('/(app)/(modals)/tax-rates')}>
 					<ButtonText>{t('View all tax rates', { _tags: 'core' })}</ButtonText>
 				</Button>
 			</View>

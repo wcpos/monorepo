@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { Platform, StyleSheet, View, ScrollView } from 'react-native';
-import type { GestureResponderEvent } from 'react-native';
 
 import * as DialogPrimitive from '@rn-primitives/dialog';
 import * as Slot from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
@@ -51,9 +52,11 @@ const DialogOverlayNative = React.forwardRef<
 	React.ElementRef<typeof DialogPrimitive.Overlay>,
 	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
 >(({ className, children, ...props }, ref) => {
+	const insets = useSafeAreaInsets();
+
 	return (
 		<DialogPrimitive.Overlay
-			style={StyleSheet.absoluteFill}
+			style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
 			className={cn(
 				'flex items-center justify-center bg-black/70 p-2',
 				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
@@ -62,9 +65,11 @@ const DialogOverlayNative = React.forwardRef<
 			{...props}
 			ref={ref}
 		>
-			<Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
-				<>{children}</>
-			</Animated.View>
+			<KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={insets.bottom}>
+				<Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
+					<>{children}</>
+				</Animated.View>
+			</KeyboardAvoidingView>
 		</DialogPrimitive.Overlay>
 	);
 });

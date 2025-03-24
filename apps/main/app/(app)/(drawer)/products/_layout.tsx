@@ -10,15 +10,19 @@ export default function ProductsLayout() {
 		<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
 			<Stack.Screen name="index" />
 			<Stack.Screen
-				name="edit/product/[productId]"
+				name="(modals)/edit/product/[productId]"
 				options={{
-					presentation: 'modal',
+					presentation: 'transparentModal',
+					animation: 'fade',
+					contentStyle: { backgroundColor: 'transparent' },
 				}}
 			/>
 			<Stack.Screen
-				name="edit/variation/[variationId]"
+				name="(modals)/edit/variation/[variationId]"
 				options={{
-					presentation: 'modal',
+					presentation: 'transparentModal',
+					animation: 'fade',
+					contentStyle: { backgroundColor: 'transparent' },
 				}}
 			/>
 		</Stack>

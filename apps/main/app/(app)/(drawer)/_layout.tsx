@@ -38,7 +38,7 @@ export default function DrawerLayout() {
 					paddingRight: 0,
 					paddingLeft: 0,
 				},
-				// sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
+				sceneStyle: { backgroundColor: '#F0F4F8' },
 			}}
 			drawerContent={(props) => {
 				return <DrawerContent {...props} largeScreen={largeScreen} />;

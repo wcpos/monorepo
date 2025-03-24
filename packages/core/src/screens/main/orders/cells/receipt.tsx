@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { IconButton } from '@wcpos/components/icon-button';
@@ -20,7 +20,7 @@ export const Receipt = ({ row }: CellContext<{ document: OrderDocument }, any>) 
 	const order = row.original.document;
 	const orderHasID = !!useObservableEagerState(order.id$);
 	const t = useT();
-	const navigation = useNavigation();
+	const router = useRouter();
 
 	if (!orderHasID) {
 		return null;
@@ -31,7 +31,7 @@ export const Receipt = ({ row }: CellContext<{ document: OrderDocument }, any>) 
 			<TooltipTrigger asChild>
 				<IconButton
 					name="receipt"
-					onPress={() => navigation.navigate('Receipt', { orderID: order.uuid })}
+					onPress={() => router.push(`(app)/(drawer)/orders/(modals)/receipt/${order.uuid}`)}
 				/>
 			</TooltipTrigger>
 			<TooltipContent>

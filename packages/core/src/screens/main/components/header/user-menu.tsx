@@ -95,11 +95,11 @@ export const UserMenu = () => {
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" side="bottom">
-				<DropdownMenuItem onPress={() => router.push('/(modal)/settings')}>
+				<DropdownMenuItem onPress={() => router.push('/(modals)/settings')}>
 					<Icon name="gear" />
 					<Text>{t('Settings', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>
-				<DropdownMenuItem onPress={() => router.push('/(modal)/support')}>
+				<DropdownMenuItem onPress={() => router.push('/support')}>
 					<Icon name="commentQuestion" />
 					<Text>{t('Support', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>

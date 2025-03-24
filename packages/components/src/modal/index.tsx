@@ -4,7 +4,9 @@ import { Platform, StyleSheet, View, ScrollView, type GestureResponderEvent } fr
 import * as Slot from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { router } from 'expo-router';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
@@ -82,7 +84,7 @@ const ModalAction = React.forwardRef<PressableRef, ButtonProps>(
 
 ModalAction.displayName = 'ModalAction';
 
-const ModalOverlay = React.forwardRef<
+const ModalOverlayWeb = React.forwardRef<
 	React.ElementRef<typeof View>,
 	React.ComponentPropsWithoutRef<typeof View>
 >(({ className, ...props }, ref) => {
@@ -100,7 +102,40 @@ const ModalOverlay = React.forwardRef<
 	);
 });
 
-ModalOverlay.displayName = 'ModalOverlay';
+ModalOverlayWeb.displayName = 'ModalOverlayWeb';
+
+const ModalOverlayNative = React.forwardRef<
+	React.ElementRef<typeof View>,
+	React.ComponentPropsWithoutRef<typeof View>
+>(({ className, children, ...props }, ref) => {
+	const insets = useSafeAreaInsets();
+
+	return (
+		<View
+			style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+			className={cn(
+				'flex items-center justify-center bg-black/70 p-2',
+				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
+				className
+			)}
+			{...props}
+			ref={ref}
+		>
+			<KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={insets.bottom}>
+				<Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
+					<>{children}</>
+				</Animated.View>
+			</KeyboardAvoidingView>
+		</View>
+	);
+});
+
+ModalOverlayNative.displayName = 'ModalOverlayNative';
+
+const ModalOverlay = Platform.select({
+	web: ModalOverlayWeb,
+	default: ModalOverlayNative,
+});
 
 const modalContentVariants = cva(
 	'border-border web:cursor-default bg-background web:duration-200 z-50 max-h-full max-w-lg gap-4 rounded-lg border py-4 shadow-lg',
