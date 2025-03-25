@@ -1,5 +1,8 @@
 import * as React from 'react';
 
+import { useRouter } from 'expo-router';
+
+import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -15,12 +18,15 @@ import { useT } from '../../../../contexts/translations';
  */
 export const AddCartItemButtons = () => {
 	const t = useT();
-
+	const router = useRouter();
 	/**
 	 *
 	 */
 	return (
-		<VStack className="p-2 gap-1">
+		<VStack className="gap-1 p-2">
+			{/* <Button variant="outline" onPress={() => router.push('(modals)/cart/add-misc-product')}>
+				<Text>{t('Add Miscellaneous Product', { _tags: 'core' })}</Text>
+			</Button> */}
 			<HStack>
 				<Text className="flex-1">{t('Add Miscellaneous Product', { _tags: 'core' })}</Text>
 				<AddCartItemButton title={t('Add Miscellaneous Product', { _tags: 'core' })}>

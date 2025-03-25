@@ -69,7 +69,11 @@ export const VariationActions = ({
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem
-						onPress={() => router.push({ pathname: `/products/edit/variation/${variation.uuid}` })}
+						onPress={() =>
+							router.push({
+								pathname: `/(app)/(drawer)/products/(modals)/edit/variation/${variation.uuid}`,
+							})
+						}
 					>
 						<Icon name="penToSquare" />
 						<Text>{t('Edit', { _tags: 'core' })}</Text>

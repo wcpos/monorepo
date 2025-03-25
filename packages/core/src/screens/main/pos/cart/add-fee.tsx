@@ -6,12 +6,7 @@ import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogClose,
-	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
@@ -20,6 +15,7 @@ import {
 	FormSelect,
 	FormRadioGroup,
 } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
@@ -110,23 +106,23 @@ export const AddFee = () => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
-				<VStack>
+				<FormField
+					control={form.control}
+					name="name"
+					render={({ field }) => (
+						<FormInput
+							label={t('Fee Name', { _tags: 'core' })}
+							placeholder={t('Fee', { _tags: 'core' })}
+							{...field}
+						/>
+					)}
+				/>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
-						name="name"
+						name="amount"
 						render={({ field }) => (
-							<FormInput
-								label={t('Fee Name', { _tags: 'core' })}
-								placeholder={t('Fee', { _tags: 'core' })}
-								{...field}
-							/>
-						)}
-					/>
-					<View className="grid grid-cols-2 gap-4">
-						<FormField
-							control={form.control}
-							name="amount"
-							render={({ field }) => (
+							<View className="flex-1">
 								<FormInput
 									customComponent={togglePercentage ? NumberInput : CurrencyInput}
 									label={
@@ -136,48 +132,54 @@ export const AddFee = () => {
 									}
 									{...field}
 								/>
-							)}
-						/>
-						<VStack className="justify-center">
-							<FormField
-								control={form.control}
-								name="percent"
-								render={({ field }) => (
-									<FormSwitch label={t('Percentage of Cart Total', { _tags: 'core' })} {...field} />
-								)}
-							/>
-							<FormField
-								control={form.control}
-								name="prices_include_tax"
-								render={({ field }) => (
-									<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
-								)}
-							/>
-						</VStack>
+							</View>
+						)}
+					/>
+					<VStack className="flex-1 justify-center">
 						<FormField
 							control={form.control}
-							name="tax_class"
+							name="percent"
 							render={({ field }) => (
+								<FormSwitch label={t('Percentage of Cart Total', { _tags: 'core' })} {...field} />
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="prices_include_tax"
+							render={({ field }) => (
+								<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
+							)}
+						/>
+					</VStack>
+				</HStack>
+				<HStack className="gap-4">
+					<FormField
+						control={form.control}
+						name="tax_class"
+						render={({ field }) => (
+							<View className="flex-1">
 								<FormSelect
 									customComponent={TaxClassSelect}
 									label={t('Tax Class', { _tags: 'core' })}
 									{...field}
 								/>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="tax_status"
-							render={({ field }) => (
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="tax_status"
+						render={({ field }) => (
+							<View className="flex-1">
 								<FormRadioGroup
 									label={t('Tax Status', { _tags: 'core' })}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
-							)}
-						/>
-					</View>
-				</VStack>
+							</View>
+						)}
+					/>
+				</HStack>
 				<DialogFooter className="px-0">
 					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
 					<DialogAction onPress={onAdd}>{t('Add to Cart', { _tags: 'core' })}</DialogAction>

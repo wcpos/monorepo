@@ -6,13 +6,9 @@ import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogClose,
-	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormRadioGroup, FormSelect } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -108,71 +104,89 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 					name="name"
 					render={({ field }) => <FormInput label={t('Name', { _tags: 'core' })} {...field} />}
 				/>
-				<View className="grid grid-cols-2 gap-4">
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="sku"
-						render={({ field }) => <FormInput label={t('SKU', { _tags: 'core' })} {...field} />}
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormInput label={t('SKU', { _tags: 'core' })} {...field} />
+							</View>
+						)}
 					/>
 					<FormField
 						control={form.control}
 						name="quantity"
 						render={({ field }) => (
-							<FormInput
-								customComponent={NumberInput}
-								label={t('Quantity', { _tags: 'core' })}
-								type="numeric"
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormInput
+									customComponent={NumberInput}
+									label={t('Quantity', { _tags: 'core' })}
+									type="numeric"
+									{...field}
+								/>
+							</View>
 						)}
 					/>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="price"
 						render={({ field }) => (
-							<FormInput
-								customComponent={CurrencyInput}
-								label={t('Price', { _tags: 'core' })}
-								type="numeric"
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('Price', { _tags: 'core' })}
+									type="numeric"
+									{...field}
+								/>
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="regular_price"
 						render={({ field }) => (
-							<FormInput
-								customComponent={CurrencyInput}
-								label={t('Regular Price', { _tags: 'core' })}
-								type="numeric"
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('Regular Price', { _tags: 'core' })}
+									type="numeric"
+									{...field}
+								/>
+							</View>
 						)}
 					/>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="tax_class"
 						render={({ field }) => (
-							<FormSelect
-								label={t('Tax Class', { _tags: 'core' })}
-								customComponent={TaxClassSelect}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormSelect
+									label={t('Tax Class', { _tags: 'core' })}
+									customComponent={TaxClassSelect}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="tax_status"
 						render={({ field }) => (
-							<FormRadioGroup
-								label={t('Tax Status', { _tags: 'core' })}
-								customComponent={TaxStatusRadioGroup}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormRadioGroup
+									label={t('Tax Status', { _tags: 'core' })}
+									customComponent={TaxStatusRadioGroup}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
-				</View>
+				</HStack>
 				<MetaDataForm withDisplayValues />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>

@@ -7,11 +7,7 @@ import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import {
-	Collapsible,
-	CollapsibleTrigger,
-	CollapsibleContent,
-} from '@wcpos/components/collapsible';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@wcpos/components/collapsible';
 import {
 	Form,
 	FormCombobox,
@@ -20,6 +16,7 @@ import {
 	FormSelect,
 	FormTextarea,
 } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
@@ -244,105 +241,123 @@ export const EditOrderForm = ({ order }: Props) => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
-				<View className="grid grid-cols-2 gap-4">
-					<FormField
-						control={form.control}
-						name="status"
-						render={({ field }) => (
-							<FormSelect
-								label={t('Status', { _tags: 'core' })}
-								customComponent={OrderStatusSelect}
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="parent_id"
-						render={({ field }) => (
-							<FormInput label={t('Parent ID', { _tags: 'core' })} {...field} />
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="customer_id"
-						render={({ field }) => (
-							<FormCombobox
-								customComponent={CustomerSelect}
-								label={t('Customer', { _tags: 'core' })}
-								withGuest
-								{...field}
-								// override value with defaultCustomer
-								value={{
-									value: field.value,
-									label: customerLabel,
-								}}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="customer_note"
-						render={({ field }) => (
-							<FormTextarea label={t('Customer Note', { _tags: 'core' })} {...field} />
-						)}
-					/>
-					<View className="col-span-2">
-						<Collapsible>
-							<CollapsibleTrigger>
-								<Text>{t('Billing Address', { _tags: 'core' })}</Text>
-							</CollapsibleTrigger>
-							<CollapsibleContent>
-								<BillingAddressForm />
-							</CollapsibleContent>
-						</Collapsible>
-					</View>
-					<View className="col-span-2">
-						<Collapsible>
-							<CollapsibleTrigger>
-								<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
-							</CollapsibleTrigger>
-							<CollapsibleContent>
-								<ShippingAddressForm />
-							</CollapsibleContent>
-						</Collapsible>
-					</View>
-					<FormField
-						control={form.control}
-						name="payment_method"
-						render={({ field }) => (
-							<FormInput label={t('Payment Method ID', { _tags: 'core' })} {...field} />
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="payment_method_title"
-						render={({ field }) => (
-							<FormInput label={t('Payment Method Title', { _tags: 'core' })} {...field} />
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="currency"
-						render={({ field }) => (
-							<FormSelect
-								customComponent={CurrencySelect}
-								label={t('Currency', { _tags: 'core' })}
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="transaction_id"
-						render={({ field }) => (
-							<FormInput label={t('Transaction ID', { _tags: 'core' })} {...field} />
-						)}
-					/>
-					<View className="col-span-2">
-						<MetaDataForm name="meta_data" />
-					</View>
-				</View>
+				<VStack className="gap-4">
+					<HStack className="gap-4">
+						<FormField
+							control={form.control}
+							name="status"
+							render={({ field }) => (
+								<View className="flex-1">
+									<FormSelect
+										label={t('Status', { _tags: 'core' })}
+										customComponent={OrderStatusSelect}
+										{...field}
+									/>
+								</View>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="parent_id"
+							render={({ field }) => (
+								<View className="flex-1">
+									<FormInput label={t('Parent ID', { _tags: 'core' })} {...field} />
+								</View>
+							)}
+						/>
+					</HStack>
+					<HStack className="gap-4">
+						<FormField
+							control={form.control}
+							name="customer_id"
+							render={({ field }) => (
+								<View className="flex-1">
+									<FormCombobox
+										customComponent={CustomerSelect}
+										label={t('Customer', { _tags: 'core' })}
+										withGuest
+										{...field}
+										// override value with defaultCustomer
+										value={{
+											value: field.value,
+											label: customerLabel,
+										}}
+									/>
+								</View>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="customer_note"
+							render={({ field }) => (
+								<View className="flex-1">
+									<FormTextarea label={t('Customer Note', { _tags: 'core' })} {...field} />
+								</View>
+							)}
+						/>
+					</HStack>
+					<Collapsible>
+						<CollapsibleTrigger>
+							<Text>{t('Billing Address', { _tags: 'core' })}</Text>
+						</CollapsibleTrigger>
+						<CollapsibleContent>
+							<BillingAddressForm />
+						</CollapsibleContent>
+					</Collapsible>
+					<Collapsible>
+						<CollapsibleTrigger>
+							<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
+						</CollapsibleTrigger>
+						<CollapsibleContent>
+							<ShippingAddressForm />
+						</CollapsibleContent>
+					</Collapsible>
+					<HStack className="gap-4">
+						<FormField
+							control={form.control}
+							name="payment_method"
+							render={({ field }) => (
+								<View className="flex-1">
+									<FormInput label={t('Payment Method ID', { _tags: 'core' })} {...field} />
+								</View>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="payment_method_title"
+							render={({ field }) => (
+								<View className="flex-1">
+									<FormInput label={t('Payment Method Title', { _tags: 'core' })} {...field} />
+								</View>
+							)}
+						/>
+					</HStack>
+					<HStack className="gap-4">
+						<FormField
+							control={form.control}
+							name="currency"
+							render={({ field }) => (
+								<View className="flex-1">
+									<FormSelect
+										customComponent={CurrencySelect}
+										label={t('Currency', { _tags: 'core' })}
+										{...field}
+									/>
+								</View>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="transaction_id"
+							render={({ field }) => (
+								<View className="flex-1">
+									<FormInput label={t('Transaction ID', { _tags: 'core' })} {...field} />
+								</View>
+							)}
+						/>
+					</HStack>
+					<MetaDataForm name="meta_data" />
+				</VStack>
 				<ModalFooter className="px-0">
 					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
 					<ModalAction loading={loading} onPress={onSave}>

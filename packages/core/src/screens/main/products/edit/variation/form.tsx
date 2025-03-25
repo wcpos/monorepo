@@ -14,6 +14,7 @@ import {
 	FormSwitch,
 	FormRadioGroup,
 } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
@@ -126,51 +127,69 @@ export const EditVariationForm = ({ variation }: Props) => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
-				<View className="grid grid-cols-2 gap-4">
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="sku"
-						render={({ field }) => <FormInput label={t('SKU', { _tags: 'core' })} {...field} />}
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormInput label={t('SKU', { _tags: 'core' })} {...field} />
+							</View>
+						)}
 					/>
 					<FormField
 						control={form.control}
 						name="barcode"
-						render={({ field }) => <FormInput label={t('Barcode', { _tags: 'core' })} {...field} />}
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormInput label={t('Barcode', { _tags: 'core' })} {...field} />
+							</View>
+						)}
 					/>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="regular_price"
 						render={({ field }) => (
-							<FormInput
-								customComponent={CurrencyInput}
-								label={t('Regular Price', { _tags: 'core' })}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('Regular Price', { _tags: 'core' })}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="sale_price"
 						render={({ field }) => (
-							<FormInput
-								customComponent={CurrencyInput}
-								label={t('Sale Price', { _tags: 'core' })}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('Sale Price', { _tags: 'core' })}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="status"
 						render={({ field }) => (
-							<FormSelect
-								label={t('Status', { _tags: 'core' })}
-								customComponent={ProductStatusSelect}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormSelect
+									label={t('Status', { _tags: 'core' })}
+									customComponent={ProductStatusSelect}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
-					<VStack>
+					<VStack className="flex-1">
 						<FormField
 							control={form.control}
 							name="stock_quantity"
@@ -191,32 +210,36 @@ export const EditVariationForm = ({ variation }: Props) => {
 							)}
 						/>
 					</VStack>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="tax_class"
 						render={({ field }) => (
-							<FormSelect
-								label={t('Tax Class', { _tags: 'core' })}
-								customComponent={TaxClassSelect}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormSelect
+									label={t('Tax Class', { _tags: 'core' })}
+									customComponent={TaxClassSelect}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="tax_status"
 						render={({ field }) => (
-							<FormRadioGroup
-								label={t('Tax Status', { _tags: 'core' })}
-								customComponent={TaxStatusRadioGroup}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormRadioGroup
+									label={t('Tax Status', { _tags: 'core' })}
+									customComponent={TaxStatusRadioGroup}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
-					<View className="col-span-2">
-						<MetaDataForm />
-					</View>
-				</View>
+				</HStack>
+				<MetaDataForm />
 				<ModalFooter className="px-0">
 					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
 					<ModalAction loading={loading} onPress={onSave}>

@@ -5,11 +5,7 @@ import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import { ButtonText, Button } from '@wcpos/components/button';
-import {
-	Collapsible,
-	CollapsibleTrigger,
-	CollapsibleContent,
-} from '@wcpos/components/collapsible';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@wcpos/components/collapsible';
 import { FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -68,7 +64,7 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 							return null;
 						}
 						return (
-							<HStack key={field.id} className="web:hover:bg-accent gap-0 items-start">
+							<HStack key={field.id} className="web:hover:bg-accent items-start gap-0">
 								<View className="w-20 p-2">
 									<FormField
 										control={control}

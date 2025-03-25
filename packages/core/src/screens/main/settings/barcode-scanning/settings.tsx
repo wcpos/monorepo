@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Form, FormField, FormInput, useFormChangeHandler } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../../contexts/app-state';
@@ -89,44 +90,54 @@ export const BarcodeSettings = () => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
-				<View className="grid grid-cols-2 gap-4">
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="barcode_scanning_avg_time_input_threshold"
 						render={({ field }) => (
-							<FormInput
-								label={t('Barcode Average Time Input Threshold (ms)', { _tags: 'core' })}
-								type="numeric"
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormInput
+									label={t('Barcode Average Time Input Threshold (ms)', { _tags: 'core' })}
+									type="numeric"
+									{...field}
+								/>
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="barcode_scanning_min_chars"
 						render={({ field }) => (
-							<FormInput
-								label={t('Barcode Minimum Length', { _tags: 'core' })}
-								type="numeric"
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormInput
+									label={t('Barcode Minimum Length', { _tags: 'core' })}
+									type="numeric"
+									{...field}
+								/>
+							</View>
 						)}
 					/>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="barcode_scanning_prefix"
 						render={({ field }) => (
-							<FormInput label={t('Barcode Scanner Prefix', { _tags: 'core' })} {...field} />
+							<View className="flex-1">
+								<FormInput label={t('Barcode Scanner Prefix', { _tags: 'core' })} {...field} />
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="barcode_scanning_suffix"
 						render={({ field }) => (
-							<FormInput label={t('Barcode Scanner Suffix', { _tags: 'core' })} {...field} />
+							<View className="flex-1">
+								<FormInput label={t('Barcode Scanner Suffix', { _tags: 'core' })} {...field} />
+							</View>
 						)}
 					/>
-				</View>
+				</HStack>
 			</VStack>
 		</Form>
 	);

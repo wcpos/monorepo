@@ -6,14 +6,10 @@ import { useForm } from 'react-hook-form';
 // import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogClose,
-	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
 import { Form, FormCombobox, FormField, FormInput } from '@wcpos/components/form';
 // import { Toast } from '@wcpos/components/toast';
+import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -121,47 +117,31 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
-				<VStack>
-					<View className="grid grid-cols-2 gap-4">
-						{/* <FormField
-							control={form.control}
-							name="number"
-							render={({ field }) => (
-								<FormInput label={t('Order Number', { _tags: 'core' })} {...field} />
-							)}
-						/> */}
-						<FormField
-							control={form.control}
-							name="currency"
-							render={({ field }) => (
+				<HStack className="gap-4">
+					<FormField
+						control={form.control}
+						name="currency"
+						render={({ field }) => (
+							<View className="flex-1">
 								<FormCombobox
 									customComponent={CurrencySelect}
 									label={t('Currency', { _tags: 'core' })}
 									{...field}
 								/>
-							)}
-						/>
-						{/* <FormField
-							control={form.control}
-							name="currency_symbol"
-							render={({ field }) => (
-								<FormInput
-									label={t('Currency Symbol', { _tags: 'core' })}
-									placeholder="0"
-									{...field}
-								/>
-							)}
-						/> */}
-						<FormField
-							control={form.control}
-							name="transaction_id"
-							render={({ field }) => (
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="transaction_id"
+						render={({ field }) => (
+							<View className="flex-1">
 								<FormInput label={t('Transaction ID', { _tags: 'core' })} {...field} />
-							)}
-						/>
-					</View>
-					<MetaDataForm />
-				</VStack>
+							</View>
+						)}
+					/>
+				</HStack>
+				<MetaDataForm />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
 					<DialogAction onPress={onSave}>{t('Save', { _tags: 'core' })}</DialogAction>

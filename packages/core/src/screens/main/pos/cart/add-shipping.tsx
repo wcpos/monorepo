@@ -7,12 +7,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogClose,
-	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
@@ -21,6 +16,7 @@ import {
 	FormRadioGroup,
 	FormSelect,
 } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../../contexts/app-state';
@@ -98,74 +94,86 @@ export const AddShipping = () => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
-				<VStack>
-					<View className="grid grid-cols-2 gap-4">
-						<FormField
-							control={form.control}
-							name="method_title"
-							render={({ field }) => (
+				<HStack className="gap-4">
+					<FormField
+						control={form.control}
+						name="method_title"
+						render={({ field }) => (
+							<View className="flex-1">
 								<FormInput
 									label={t('Shipping Method Title', { _tags: 'core' })}
 									placeholder={t('Shipping', { _tags: 'core' })}
 									{...field}
 								/>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="method_id"
-							render={({ field }) => (
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="method_id"
+						render={({ field }) => (
+							<View className="flex-1">
 								<FormSelect
 									customComponent={ShippingMethodSelect}
 									label={t('Shipping Method', { _tags: 'core' })}
 									{...field}
 								/>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="amount"
-							render={({ field }) => (
+							</View>
+						)}
+					/>
+				</HStack>
+				<HStack className="gap-4">
+					<FormField
+						control={form.control}
+						name="amount"
+						render={({ field }) => (
+							<View className="flex-1">
 								<FormInput
 									customComponent={CurrencyInput}
 									label={t('Amount', { _tags: 'core' })}
 									{...field}
 								/>
-							)}
-						/>
-						<View className="justify-center">
-							<FormField
-								control={form.control}
-								name="prices_include_tax"
-								render={({ field }) => (
-									<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
-								)}
-							/>
-						</View>
+							</View>
+						)}
+					/>
+					<View className="flex-1 justify-center">
 						<FormField
 							control={form.control}
-							name="tax_class"
+							name="prices_include_tax"
 							render={({ field }) => (
+								<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
+							)}
+						/>
+					</View>
+				</HStack>
+				<HStack className="gap-4">
+					<FormField
+						control={form.control}
+						name="tax_class"
+						render={({ field }) => (
+							<View className="flex-1">
 								<FormSelect
 									label={t('Tax Class', { _tags: 'core' })}
 									customComponent={TaxClassSelect}
 									{...field}
 								/>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name="tax_status"
-							render={({ field }) => (
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="tax_status"
+						render={({ field }) => (
+							<View className="flex-1">
 								<FormRadioGroup
 									label={t('Tax Status', { _tags: 'core' })}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
-							)}
-						/>
-					</View>
-				</VStack>
+							</View>
+						)}
+					/>
+				</HStack>
 				<DialogFooter className="px-0">
 					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
 					<DialogAction onPress={onAdd}>{t('Add to Cart', { _tags: 'core' })}</DialogAction>

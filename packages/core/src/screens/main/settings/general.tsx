@@ -16,6 +16,7 @@ import {
 	FormCombobox,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
 import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -188,65 +189,81 @@ export const GeneralSettings = () => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
-				<View className="grid grid-cols-2 gap-4">
-					<View className="col-span-2">
-						<FormField
-							control={form.control}
-							name="name"
-							render={({ field }) => (
-								<FormInput label={t('Store Name', { _tags: 'core' })} {...field} />
-							)}
-						/>
-					</View>
+				<FormField
+					control={form.control}
+					name="name"
+					render={({ field }) => (
+						<FormInput label={t('Store Name', { _tags: 'core' })} {...field} />
+					)}
+				/>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="store_city"
 						render={({ field }) => (
-							<FormInput label={t('Store Base City', { _tags: 'core' })} {...field} disabled />
+							<View className="flex-1">
+								<FormInput label={t('Store Base City', { _tags: 'core' })} {...field} disabled />
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="store_postcode"
 						render={({ field }) => (
-							<FormInput label={t('Store Base Postcode', { _tags: 'core' })} {...field} disabled />
+							<View className="flex-1">
+								<FormInput
+									label={t('Store Base Postcode', { _tags: 'core' })}
+									{...field}
+									disabled
+								/>
+							</View>
 						)}
 					/>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						name="store_state"
 						render={({ field }) => (
-							<FormInput
-								customComponent={StateFormInput}
-								label={t('Store Base State', { _tags: 'core' })}
-								{...field}
-								countryCode={countryCode}
-								disabled
-							/>
+							<View className="flex-1">
+								<FormInput
+									customComponent={StateFormInput}
+									label={t('Store Base State', { _tags: 'core' })}
+									{...field}
+									countryCode={countryCode}
+									disabled
+								/>
+							</View>
 						)}
 					/>
 					<FormField
 						name="store_country"
 						render={({ field }) => (
-							<FormCombobox
-								customComponent={CountryCombobox}
-								label={t('Store Base Country', { _tags: 'core' })}
-								{...field}
-								disabled
-							/>
+							<View className="flex-1">
+								<FormCombobox
+									customComponent={CountryCombobox}
+									label={t('Store Base Country', { _tags: 'core' })}
+									{...field}
+									disabled
+								/>
+							</View>
 						)}
 					/>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="locale"
 						render={({ field }) => (
-							<FormSelect
-								customComponent={LanguageSelect}
-								label={t('Language', { _tags: 'core' })}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormSelect
+									customComponent={LanguageSelect}
+									label={t('Language', { _tags: 'core' })}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
-					<VStack>
+					<VStack className="flex-1">
 						<FormField
 							control={form.control}
 							name="default_customer"
@@ -273,65 +290,83 @@ export const GeneralSettings = () => {
 							)}
 						/>
 					</VStack>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="currency"
 						render={({ field }) => (
-							<FormCombobox
-								customComponent={CurrencySelect}
-								label={t('Currency', { _tags: 'core' })}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormCombobox
+									customComponent={CurrencySelect}
+									label={t('Currency', { _tags: 'core' })}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="currency_pos"
 						render={({ field }) => (
-							<FormSelect
-								customComponent={CurrencyPositionSelect}
-								label={t('Currency Position', { _tags: 'core' })}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormSelect
+									customComponent={CurrencyPositionSelect}
+									label={t('Currency Position', { _tags: 'core' })}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="price_decimal_sep"
 						render={({ field }) => (
-							<FormInput label={t('Decimal Separator', { _tags: 'core' })} {...field} />
+							<View className="flex-1">
+								<FormInput label={t('Decimal Separator', { _tags: 'core' })} {...field} />
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="price_num_decimals"
 						render={({ field }) => (
-							<FormInput
-								label={t('Number of Decimals', { _tags: 'core' })}
-								type="numeric"
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormInput
+									label={t('Number of Decimals', { _tags: 'core' })}
+									type="numeric"
+									{...field}
+								/>
+							</View>
 						)}
 					/>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="price_thousand_sep"
 						render={({ field }) => (
-							<FormInput label={t('Thousand Separator', { _tags: 'core' })} {...field} />
+							<View className="flex-1">
+								<FormInput label={t('Thousand Separator', { _tags: 'core' })} {...field} />
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="thousands_group_style"
 						render={({ field }) => (
-							<FormSelect
-								label={t('Thousands Group Style', { _tags: 'core' })}
-								customComponent={ThousandsStyleSelect}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormSelect
+									label={t('Thousands Group Style', { _tags: 'core' })}
+									customComponent={ThousandsStyleSelect}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
-				</View>
+				</HStack>
 				<ModalFooter className="px-0">
 					<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
 						{t('Restore server settings', { _tags: 'core' })}

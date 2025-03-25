@@ -16,6 +16,7 @@ import {
 	FormRadioGroup,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
 import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -157,103 +158,130 @@ export const TaxSettings = () => {
 			<Form {...form}>
 				<VStack className="gap-4">
 					<FormErrors />
-					<View className="grid grid-cols-2 gap-4">
+					<HStack className="gap-4">
 						<FormField
 							control={form.control}
 							name="calc_taxes"
 							render={({ field }) => (
-								<FormRadioGroup
-									customComponent={YesNoRadioGroup}
-									label={t('Enable taxes', { _tags: 'core' })}
-									{...field}
-								/>
+								<View className="flex-1">
+									<FormRadioGroup
+										customComponent={YesNoRadioGroup}
+										label={t('Enable taxes', { _tags: 'core' })}
+										{...field}
+									/>
+								</View>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
 							render={({ field }) => (
-								<FormRadioGroup
-									customComponent={YesNoRadioGroup}
-									label={t('Prices entered with tax', { _tags: 'core' })}
-									{...field}
-								/>
+								<View className="flex-1">
+									<FormRadioGroup
+										customComponent={YesNoRadioGroup}
+										label={t('Prices entered with tax', { _tags: 'core' })}
+										{...field}
+									/>
+								</View>
 							)}
 						/>
+					</HStack>
+					<HStack className="gap-4">
 						<FormField
 							control={form.control}
 							name="tax_based_on"
 							render={({ field }) => (
-								<FormSelect
-									customComponent={TaxBasedOnSelect}
-									label={t('Calculate tax based on', { _tags: 'core' })}
-									{...field}
-								/>
+								<View className="flex-1">
+									<FormSelect
+										customComponent={TaxBasedOnSelect}
+										label={t('Calculate tax based on', { _tags: 'core' })}
+										{...field}
+									/>
+								</View>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="shipping_tax_class"
 							render={({ field }) => (
-								<FormSelect
-									customComponent={TaxClassSelect}
-									label={t('Shipping tax class', { _tags: 'core' })}
-									{...field}
-								/>
+								<View className="flex-1">
+									<FormSelect
+										customComponent={TaxClassSelect}
+										label={t('Shipping tax class', { _tags: 'core' })}
+										{...field}
+									/>
+								</View>
 							)}
 						/>
+					</HStack>
+					<HStack className="gap-4">
 						<FormField
 							control={form.control}
 							name="tax_total_display"
 							render={({ field }) => (
-								<FormRadioGroup
-									customComponent={TaxDisplayRadioGroup}
-									label={t('Display tax totals', { _tags: 'core' })}
-									{...field}
-								/>
+								<View className="flex-1">
+									<FormRadioGroup
+										customComponent={TaxDisplayRadioGroup}
+										label={t('Display tax totals', { _tags: 'core' })}
+										{...field}
+									/>
+								</View>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="tax_round_at_subtotal"
 							render={({ field }) => (
-								<FormRadioGroup
-									customComponent={YesNoRadioGroup}
-									label={t('Round tax at subtotal level', { _tags: 'core' })}
-									{...field}
-								/>
+								<View className="flex-1">
+									<FormRadioGroup
+										customComponent={YesNoRadioGroup}
+										label={t('Round tax at subtotal level', { _tags: 'core' })}
+										{...field}
+									/>
+								</View>
 							)}
 						/>
+					</HStack>
+					<HStack className="gap-4">
 						<FormField
 							control={form.control}
 							name="tax_display_shop"
 							render={({ field }) => (
-								<FormRadioGroup
-									customComponent={InclExclRadioGroup}
-									label={t('Display prices in the shop', { _tags: 'core' })}
-									{...field}
-								/>
+								<View className="flex-1">
+									<FormRadioGroup
+										customComponent={InclExclRadioGroup}
+										label={t('Display prices in the shop', { _tags: 'core' })}
+										{...field}
+									/>
+								</View>
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="tax_display_cart"
 							render={({ field }) => (
-								<FormRadioGroup
-									customComponent={InclExclRadioGroup}
-									label={t('Display prices during cart and checkout', { _tags: 'core' })}
-									{...field}
-								/>
+								<View className="flex-1">
+									<FormRadioGroup
+										customComponent={InclExclRadioGroup}
+										label={t('Display prices during cart and checkout', { _tags: 'core' })}
+										{...field}
+									/>
+								</View>
 							)}
 						/>
+					</HStack>
+					<HStack className="gap-4">
 						<FormField
 							control={form.control}
 							name="price_display_suffix"
 							render={({ field }) => (
-								<FormInput label={t('Price display suffix', { _tags: 'core' })} {...field} />
+								<View className="flex-1">
+									<FormInput label={t('Price display suffix', { _tags: 'core' })} {...field} />
+								</View>
 							)}
 						/>
-					</View>
+						<View className="flex-1"></View>
+					</HStack>
 					<ModalFooter className="px-0">
 						<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
 							{t('Restore server settings', { _tags: 'core' })}

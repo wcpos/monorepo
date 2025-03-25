@@ -66,7 +66,7 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 					<DropdownMenuItem
 						onPress={() => {
 							router.push({
-								pathname: `/products/edit/product/${product.uuid}`,
+								pathname: `/(app)/(drawer)/products/(modals)/edit/product/${product.uuid}`,
 							});
 						}}
 					>

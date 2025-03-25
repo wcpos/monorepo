@@ -8,7 +8,7 @@ import { useCollection } from '../../../hooks/use-collection';
 
 export const EditVariationScreen = () => {
 	const { variationId } = useLocalSearchParams<{ variationId: string }>();
-	const { collection } = useCollection('products');
+	const { collection } = useCollection('variations');
 	const query = collection.findOneFix(variationId);
 
 	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);

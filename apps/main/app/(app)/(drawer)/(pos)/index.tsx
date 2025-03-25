@@ -32,13 +32,13 @@ export default function IndexScreen() {
 
 	console.log('before redirect');
 
-	if (dimensions.width <= 640 && segments.includes('(columns)')) {
-		debugger;
-		const newPath = segments
-			.map((segment) => (segment === '(columns)' ? '(tabs)' : segment))
-			.join('/');
-		return router.replace(newPath);
-	}
+	// if (dimensions.width <= 640 && segments.includes('(columns)')) {
+	// 	debugger;
+	// 	const newPath = segments
+	// 		.map((segment) => (segment === '(columns)' ? '(tabs)' : segment))
+	// 		.join('/');
+	// 	return router.replace(newPath);
+	// }
 
 	if (dimensions.width <= 640) {
 		return <Redirect href="(tabs)" />;

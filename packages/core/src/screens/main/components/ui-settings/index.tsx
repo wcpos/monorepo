@@ -56,30 +56,32 @@ const UISettingsDialog = ({ title, children }: Props) => {
 
 	return (
 		<ErrorBoundary>
-			<DialogContext.Provider value={{ buttonPressHandlerRef }}>
-				<Dialog open={openDialog} onOpenChange={setOpenDialog}>
-					<Tooltip>
-						<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
-							<IconButton name="sliders" />
-						</TooltipTrigger>
-						<TooltipContent>
-							<Text>{title}</Text>
-						</TooltipContent>
-					</Tooltip>
-					<DialogContent size="lg">
-						<DialogHeader>
-							<DialogTitle>{title}</DialogTitle>
-						</DialogHeader>
-						<DialogBody>{children}</DialogBody>
-						<DialogFooter>
-							<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
-							<DialogAction variant="destructive" onPress={handleButtonPress}>
-								{t('Restore Default Settings', { _tags: 'core' })}
-							</DialogAction>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
-			</DialogContext.Provider>
+			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
+				<Tooltip>
+					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
+						<IconButton name="sliders" />
+					</TooltipTrigger>
+					<TooltipContent>
+						<Text>{title}</Text>
+					</TooltipContent>
+				</Tooltip>
+				<DialogContent size="lg">
+					<DialogHeader>
+						<DialogTitle>{title}</DialogTitle>
+					</DialogHeader>
+					<DialogBody>
+						<DialogContext.Provider value={{ buttonPressHandlerRef }}>
+							{children}
+						</DialogContext.Provider>
+					</DialogBody>
+					<DialogFooter>
+						<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
+						<DialogAction variant="destructive" onPress={handleButtonPress}>
+							{t('Restore Default Settings', { _tags: 'core' })}
+						</DialogAction>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</ErrorBoundary>
 	);
 };

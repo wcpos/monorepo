@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ActivityIndicator, RefreshControl, LayoutChangeEvent } from 'react-native';
 
-import { FlashList, type FlashListProps } from '@shopify/flash-list';
+import { FlashList } from '@shopify/flash-list';
 import {
 	ColumnDef,
 	flexRender,
@@ -24,6 +24,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DataTableRow } from './row';
 import { getFlexAlign } from '../lib/utils';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table';
+
+import type { FlashListProps } from '@shopify/flash-list';
 
 interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];

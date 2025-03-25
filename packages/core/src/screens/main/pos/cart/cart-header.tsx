@@ -1,12 +1,7 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import {
-	Combobox,
-	ComboboxContent,
-	ComboboxTriggerPrimitive,
-} from '@wcpos/components/combobox';
+import { Combobox, ComboboxContent, ComboboxTriggerPrimitive } from '@wcpos/components/combobox';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';

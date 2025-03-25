@@ -4,11 +4,7 @@ import { View } from 'react-native';
 import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
-} from '@wcpos/components/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { Form, FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -84,56 +80,70 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
-				<View className="grid grid-cols-2 gap-4">
+				<HStack className="w-full gap-4">
 					<FormField
 						control={form.control}
 						name="first_name"
 						render={({ field }) => (
-							<FormInput label={t('First Name', { _tags: 'core' })} {...field} />
+							<View className="flex-1">
+								<FormInput label={t('First Name', { _tags: 'core' })} {...field} />
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="last_name"
 						render={({ field }) => (
-							<FormInput label={t('Last Name', { _tags: 'core' })} {...field} />
+							<View className="flex-1">
+								<FormInput label={t('Last Name', { _tags: 'core' })} {...field} />
+							</View>
 						)}
 					/>
+				</HStack>
+				<HStack className="w-full gap-4">
 					<FormField
 						control={form.control}
 						name="email"
-						render={({ field }) => <FormInput label={t('Email', { _tags: 'core' })} {...field} />}
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormInput label={t('Email', { _tags: 'core' })} {...field} />
+							</View>
+						)}
 					/>
 					<FormField
 						control={form.control}
 						name="role"
 						render={({ field }) => (
-							<FormInput
-								label={t('Role', { _tags: 'core' })}
-								{...field}
-								editable={false} // role is not editable via the REST API, but maybe I should allow in the future?
-							/>
+							<View className="flex-1">
+								<FormInput label={t('Role', { _tags: 'core' })} {...field} editable={false} />
+							</View>
 						)}
 					/>
+				</HStack>
+				<HStack className="w-full items-stretch gap-4">
 					<FormField
 						control={form.control}
 						name="username"
 						render={({ field }) => (
-							<FormInput
-								label={t('Username', { _tags: 'core' })}
-								{...field}
-								editable={!hasUsername}
-							/>
+							<View className="flex-1">
+								<FormInput
+									label={t('Username', { _tags: 'core' })}
+									{...field}
+									editable={!hasUsername}
+								/>
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="password"
 						render={({ field }) => (
-							<FormInput label={t('Password', { _tags: 'core' })} {...field} />
+							<View className="flex-1">
+								<FormInput label={t('Password', { _tags: 'core' })} {...field} />
+							</View>
 						)}
 					/>
-				</View>
+				</HStack>
 				<Collapsible>
 					<CollapsibleTrigger>
 						<Text>{t('Billing Address', { _tags: 'core' })}</Text>

@@ -6,12 +6,7 @@ import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	DialogAction,
-	DialogClose,
-	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
@@ -20,6 +15,7 @@ import {
 	FormSelect,
 	FormInput,
 } from '@wcpos/components/form';
+import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -125,24 +121,26 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 						/>
 					)}
 				/>
-				<View className="grid grid-cols-2 gap-4">
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="amount"
 						render={({ field }) => (
-							<FormInput
-								customComponent={togglePercentage ? NumberInput : CurrencyInput}
-								label={
-									togglePercentage
-										? t('Percent', { _tags: 'core' })
-										: t('Amount', { _tags: 'core' })
-								}
-								type="numeric"
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormInput
+									customComponent={togglePercentage ? NumberInput : CurrencyInput}
+									label={
+										togglePercentage
+											? t('Percent', { _tags: 'core' })
+											: t('Amount', { _tags: 'core' })
+									}
+									type="numeric"
+									{...field}
+								/>
+							</View>
 						)}
 					/>
-					<VStack className="justify-center">
+					<VStack className="flex-1 justify-center">
 						<FormField
 							control={form.control}
 							name="percent"
@@ -158,29 +156,35 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 							)}
 						/>
 					</VStack>
+				</HStack>
+				<HStack className="gap-4">
 					<FormField
 						control={form.control}
 						name="tax_class"
 						render={({ field }) => (
-							<FormSelect
-								label={t('Tax Class', { _tags: 'core' })}
-								customComponent={TaxClassSelect}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormSelect
+									label={t('Tax Class', { _tags: 'core' })}
+									customComponent={TaxClassSelect}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="tax_status"
 						render={({ field }) => (
-							<FormRadioGroup
-								label={t('Tax Status', { _tags: 'core' })}
-								customComponent={TaxStatusRadioGroup}
-								{...field}
-							/>
+							<View className="flex-1">
+								<FormRadioGroup
+									label={t('Tax Status', { _tags: 'core' })}
+									customComponent={TaxStatusRadioGroup}
+									{...field}
+								/>
+							</View>
 						)}
 					/>
-				</View>
+				</HStack>
 				<MetaDataForm />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
