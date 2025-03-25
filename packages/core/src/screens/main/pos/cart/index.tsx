@@ -66,12 +66,16 @@ export const OpenOrders = ({ isColumn = false }) => {
 							<ErrorBoundary>
 								<Totals />
 							</ErrorBoundary>
-							<HStack className="bg-muted p-2 [&>*]:flex-1">
-								<ErrorBoundary>
+							<HStack className="bg-muted p-2">
+								<View className="flex-1">
 									<AddNoteButton />
+								</View>
+								<View className="flex-1">
 									<OrderMetaButton />
+								</View>
+								<View className="flex-1">
 									<SaveButton />
-								</ErrorBoundary>
+								</View>
 							</HStack>
 							<HStack className="w-full gap-0">
 								<ErrorBoundary>

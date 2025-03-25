@@ -22,7 +22,7 @@ export const EditLineItem = ({ uuid, item, onClose }: Props) => {
 
 	return (
 		<Tabs value={value} onValueChange={setValue}>
-			<TabsList className="flex-row w-full">
+			<TabsList className="w-full flex-row">
 				<TabsTrigger value="form" className="flex-1">
 					<Text>{t('Form', { _tags: 'core' })}</Text>
 				</TabsTrigger>

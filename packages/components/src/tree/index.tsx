@@ -1,8 +1,8 @@
-import JsonView, { JsonViewProps } from '@uiw/react-json-view';
+import TreeDOM from './tree-dom';
 
 /**
  *
  */
 export const Tree = <T extends object>(props: JsonViewProps<T>) => {
-	return <JsonView displayDataTypes={false} collapsed={1} {...props} />;
+	return <TreeDOM dom={{ matchContents: true }} {...props} />;
 };
