@@ -6,11 +6,12 @@ import * as Slot from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Trigger as SelectPrimitiveTrigger } from './trigger';
-import { Button, type ButtonProps } from '../button';
+import { Button } from '../button';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
+import type { ButtonProps } from '../button';
 import type { SlottableTextProps, TextRef } from '@rn-primitives/types';
 
 type Option = SelectPrimitive.Option;
@@ -21,6 +22,8 @@ const useRootContext = SelectPrimitive.useRootContext;
 
 const SelectGroup = SelectPrimitive.Group;
 
+const SelectValue = SelectPrimitive.Value;
+
 /**
  *
  */
@@ -30,56 +33,55 @@ const SelectGroup = SelectPrimitive.Group;
  * I think it has something to do with the Presense not working as expected below in SelectContent.
  * Something is not quite right??
  */
-const SelectValue = React.forwardRef<TextRef, SlottableTextProps & { placeholder: string }>(
-	({ asChild, placeholder, className, ...props }, ref) => {
-		const { value } = useRootContext();
-		const Component = asChild ? Slot.Text : Text;
+// const SelectValue = React.forwardRef<TextRef, SlottableTextProps & { placeholder: string }>(
+// 	({ asChild, placeholder, className, ...props }, ref) => {
+// 		const { value } = useRootContext();
+// 		const Component = asChild ? Slot.Text : Text;
 
+// 		return (
+// 			<TextClassContext.Provider
+// 				value={cn('text-sm', value?.value ? 'text-foreground' : 'text-muted-foreground', className)}
+// 			>
+// 				<Component ref={ref} {...props}>
+// 					{value?.label ?? placeholder}
+// 				</Component>
+// 			</TextClassContext.Provider>
+// 		);
+// 	}
+// );
+// SelectValue.displayName = 'ValueNativeSelect';
+
+const SelectTrigger = React.forwardRef<SelectPrimitive.TriggerRef, SelectPrimitive.TriggerProps>(
+	({ className, children, ...props }, ref) => {
 		return (
-			<TextClassContext.Provider
-				value={cn('text-sm', value?.value ? 'text-foreground' : 'text-muted-foreground', className)}
+			<SelectPrimitiveTrigger
+				ref={ref}
+				className={cn(
+					'native:h-12 flex h-10 flex-row items-center justify-between gap-2 px-3 py-2',
+					'text-muted-foreground text-sm',
+					'border-input bg-background rounded-md border',
+					'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
+					'[&>span]:line-clamp-1',
+					props.disabled && 'web:cursor-not-allowed opacity-50',
+					className
+				)}
+				{...props}
+				onPress={() => {
+					console.log('pressed');
+				}}
 			>
-				<Component ref={ref} {...props}>
-					{value?.label ?? placeholder}
-				</Component>
-			</TextClassContext.Provider>
+				<>{children}</>
+				<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
+			</SelectPrimitiveTrigger>
 		);
 	}
 );
-SelectValue.displayName = 'ValueNativeSelect';
-
-const SelectTrigger = React.forwardRef<
-	React.ElementRef<typeof SelectPrimitive.Trigger>,
-	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => {
-	return (
-		<SelectPrimitiveTrigger
-			ref={ref}
-			className={cn(
-				'native:h-12 flex h-10 flex-row items-center justify-between gap-2 px-3 py-2',
-				'text-muted-foreground text-sm',
-				'border-input bg-background rounded-md border',
-				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
-				'[&>span]:line-clamp-1',
-				props.disabled && 'web:cursor-not-allowed opacity-50',
-				className
-			)}
-			{...props}
-		>
-			<>{children}</>
-			<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
-		</SelectPrimitiveTrigger>
-	);
-});
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
 /**
  * Platform: WEB ONLY
  */
-const SelectScrollUpButton = ({
-	className,
-	...props
-}: React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton>) => {
+const SelectScrollUpButton = ({ className, ...props }: SelectPrimitive.ScrollUpButtonProps) => {
 	if (Platform.OS !== 'web') {
 		return null;
 	}
@@ -96,10 +98,7 @@ const SelectScrollUpButton = ({
 /**
  * Platform: WEB ONLY
  */
-const SelectScrollDownButton = ({
-	className,
-	...props
-}: React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton>) => {
+const SelectScrollDownButton = ({ className, ...props }: SelectPrimitive.ScrollDownButtonProps) => {
 	if (Platform.OS !== 'web') {
 		return null;
 	}
@@ -114,8 +113,8 @@ const SelectScrollDownButton = ({
 };
 
 const SelectContent = React.forwardRef<
-	React.ElementRef<typeof SelectPrimitive.Content>,
-	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content> & { portalHost?: string }
+	SelectPrimitive.ContentRef,
+	SelectPrimitive.ContentProps & { portalHost?: string }
 >(({ className, children, position = 'popper', portalHost, ...props }, ref) => {
 	const { open } = SelectPrimitive.useRootContext();
 
@@ -166,44 +165,42 @@ const SelectContent = React.forwardRef<
 });
 SelectContent.displayName = SelectPrimitive.Content.displayName;
 
-const SelectLabel = React.forwardRef<
-	React.ElementRef<typeof SelectPrimitive.Label>,
-	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>
->(({ className, ...props }, ref) => (
-	<SelectPrimitive.Label
-		ref={ref}
-		className={cn('text-popover-foreground py-1.5 pl-8 pr-2 text-sm font-semibold', className)}
-		{...props}
-	/>
-));
+const SelectLabel = React.forwardRef<SelectPrimitive.LabelRef, SelectPrimitive.LabelProps>(
+	({ className, ...props }, ref) => (
+		<SelectPrimitive.Label
+			ref={ref}
+			className={cn('text-popover-foreground py-1.5 pl-8 pr-2 text-sm font-semibold', className)}
+			{...props}
+		/>
+	)
+);
 SelectLabel.displayName = SelectPrimitive.Label.displayName;
 
-const SelectItem = React.forwardRef<
-	React.ElementRef<typeof SelectPrimitive.Item>,
-	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
-	<SelectPrimitive.Item
-		ref={ref}
-		className={cn(
-			'web:group web:cursor-default web:select-none native:py-2 native:pl-10 web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent relative flex w-full flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
-			props.disabled && 'web:pointer-events-none opacity-50',
-			className
-		)}
-		{...props}
-	>
-		<View className="native:left-3.5 native:pt-px absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-			<SelectPrimitive.ItemIndicator>
-				<Icon name="check" className="text-popover-foreground" />
-			</SelectPrimitive.ItemIndicator>
-		</View>
-		<SelectPrimitive.ItemText className="web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
-	</SelectPrimitive.Item>
-));
+const SelectItem = React.forwardRef<SelectPrimitive.ItemRef, SelectPrimitive.ItemProps>(
+	({ className, children, ...props }, ref) => (
+		<SelectPrimitive.Item
+			ref={ref}
+			className={cn(
+				'web:group web:cursor-default web:select-none native:py-2 native:pl-10 web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent relative flex w-full flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
+				props.disabled && 'web:pointer-events-none opacity-50',
+				className
+			)}
+			{...props}
+		>
+			<View className="native:left-3.5 native:pt-px absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+				<SelectPrimitive.ItemIndicator>
+					<Icon name="check" className="text-popover-foreground" />
+				</SelectPrimitive.ItemIndicator>
+			</View>
+			<SelectPrimitive.ItemText className="web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
+		</SelectPrimitive.Item>
+	)
+);
 SelectItem.displayName = SelectPrimitive.Item.displayName;
 
 const SelectSeparator = React.forwardRef<
-	React.ElementRef<typeof SelectPrimitive.Separator>,
-	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
+	SelectPrimitive.SeparatorRef,
+	SelectPrimitive.SeparatorProps
 >(({ className, ...props }, ref) => (
 	<SelectPrimitive.Separator
 		ref={ref}

@@ -1,9 +1,8 @@
 import * as React from 'react';
 import { Pressable, GestureResponderEvent } from 'react-native';
 
-import * as Select from '@radix-ui/react-select';
 import { useIsomorphicLayoutEffect, useAugmentedRef } from '@rn-primitives/hooks';
-import { useRootContext } from '@rn-primitives/select';
+import * as SelectPrimitive from '@rn-primitives/select';
 import * as Slot from '@rn-primitives/slot';
 
 import type { TriggerRef, TriggerProps } from '@rn-primitives/select';
@@ -13,7 +12,7 @@ import type { TriggerRef, TriggerProps } from '@rn-primitives/select';
  */
 const Trigger = React.forwardRef<TriggerRef, TriggerProps>(
 	({ asChild, role: _role, disabled, ...props }, ref) => {
-		const { open, onOpenChange } = useRootContext();
+		const { open, onOpenChange } = SelectPrimitive.useRootContext();
 		const augmentedRef = useAugmentedRef({
 			ref,
 			methods: {
@@ -47,7 +46,7 @@ const Trigger = React.forwardRef<TriggerRef, TriggerProps>(
 
 		const Component = asChild ? Slot.Pressable : Pressable;
 		return (
-			<Select.Trigger disabled={disabled ?? undefined} asChild>
+			<SelectPrimitive.Trigger disabled={disabled ?? undefined} asChild>
 				<Component
 					ref={augmentedRef}
 					role="button"
@@ -55,7 +54,7 @@ const Trigger = React.forwardRef<TriggerRef, TriggerProps>(
 					{...props}
 					onPress={handlePress}
 				/>
-			</Select.Trigger>
+			</SelectPrimitive.Trigger>
 		);
 	}
 );

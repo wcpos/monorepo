@@ -1,196 +1,102 @@
-import * as React from 'react';
-import { View } from 'react-native';
+import React from 'react';
 
-import { useControllableState } from '@rn-primitives/hooks';
-import * as Slot from '@rn-primitives/slot';
+import { FlatList } from 'react-native-gesture-handler';
 
-import { Command, CommandEmpty, CommandInput, CommandList, CommandItem } from '../command';
-import { Icon } from '../icon';
-import { cn } from '../lib/utils';
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-	useRootContext as usePopoverContext,
-} from '../popover';
-import { Text, TextClassContext } from '../text';
+import { Input } from '../input';
+import { Text } from '../text';
 
-import type { Option } from '../select';
-import type { TriggerRef, TriggerProps } from '@rn-primitives/popover';
-import type { RootRef, RootProps, ValueRef, ValueProps } from '@rn-primitives/select';
+import type { TextProps } from '../text';
 
 /**
- * We'll follow the same API as the `Select` component from `@rn-primitives/select`.
+ * const options = [
+ *   { value: 'USD', label: 'United States Dollar' },
+ *   { value: 'EUR', label: 'Euro' },
+ *   { value: 'GBP', label: 'British Pound' },
+ *   { value: 'CAD', label: 'Canadian Dollar' },
+ *   { value: 'AUD', label: 'Australian Dollar' },
+ * ]
  *
- * Why not just use Select?
- * - on Android browser it doesn't work as expected, the dropdown opens but it closes immediately
- * when the phone keyboard is shown
- * - it seems to work fine on other platforms, but select has it's own keypress handling and
- * it might conflict with the command keypress handling
- *
- * Instead, we use the Popover primitive and just extend the conrext to allow value, defaultValue and
- * onValueChange to provide an API consistent with the Select component
+ * <Combobox ref={ref} value={{ value, label }} onValueChange={onValueChange}>
+ *       <ComboboxTrigger>
+ *           <ComboboxValue placeholder={t('Select Currency', { _tags: 'core' })} />
+ *       </ComboboxTrigger>
+ *       <ComboboxContent>
+ *           <ComboboxSearch>
+ *               <ComboboxInput placeholder={t('Search Currencies', { _tags: 'core' })} />
+ *               <ComboboxEmpty>{t('No currency found', { _tags: 'core' })}</ComboboxEmpty>
+ *               <ComboboxList data={options} />
+ *           </ComboboxSearch>
+ *       </ComboboxContent>
+ * </Combobox>
  */
 
-interface IComboboxContext {
-	value: Option;
-	onValueChange: (option: Option) => void;
-	disabled?: boolean;
-}
+const Combobox = () => {};
 
-const ComboboxContext = React.createContext<IComboboxContext | null>(null);
+const ComboboxItem = () => {};
+const ComboboxTrigger = () => {};
+const ComboboxTriggerPrimitive = () => {};
+const ComboboxContent = () => {};
+const ComboboxValue = () => {};
 
-const Combobox = React.forwardRef<RootRef, RootProps>(
-	(
-		{
-			asChild,
-			value: valueProp,
-			defaultValue,
-			onValueChange: onValueChangeProp,
-			disabled,
-			onOpenChange,
-			...viewProps
-		},
-		ref
-	) => {
-		const [value, onValueChange] = useControllableState({
-			prop: valueProp,
-			defaultProp: defaultValue,
-			onChange: onValueChangeProp,
-		});
-
-		const Component = asChild ? Slot.View : View;
-		return (
-			<Popover onOpenChange={onOpenChange}>
-				<ComboboxContext.Provider
-					value={{
-						value,
-						onValueChange,
-						disabled,
-					}}
-				>
-					<Component ref={ref} {...viewProps} />
-				</ComboboxContext.Provider>
-			</Popover>
-		);
+/**
+ * Remove this, just use ComboboxContent with search
+ */
+const ComboboxSearch = React.forwardRef<React.ElementRef<any>, React.ComponentPropsWithoutRef<any>>(
+	({ className, children, ...props }, ref) => {
+		return <>{children}</>;
 	}
 );
-Combobox.displayName = 'Combobox';
-
-function useComboboxContext() {
-	const context = React.useContext(ComboboxContext);
-	if (!context) {
-		throw new Error(
-			'Combobox compound components cannot be rendered outside the Combobox component'
-		);
-	}
-	return context;
-}
-
-const ComboboxContent = PopoverContent;
+ComboboxSearch.displayName = 'ComboboxSearch';
 
 /**
  *
  */
 const ComboboxInput = React.forwardRef<
-	React.ElementRef<typeof CommandInput>,
-	React.ComponentPropsWithoutRef<typeof CommandInput>
+	React.ElementRef<typeof Input>,
+	React.ComponentPropsWithoutRef<typeof Input>
 >(({ className, ...props }, ref) => {
-	return <CommandInput ref={ref} autoFocus {...props} />;
+	return <Input ref={ref} autoFocus {...props} />;
 });
 ComboboxInput.displayName = 'ComboboxInput';
 
-const ComboboxList = CommandList;
-
-const ComboboxSearch = React.forwardRef<
-	React.ElementRef<typeof Command>,
-	React.ComponentPropsWithoutRef<typeof Command>
->(({ className, ...props }, ref) => (
-	<Command ref={ref} className={cn('h-auto', className)} {...props} />
-));
-ComboboxSearch.displayName = 'Combobox';
-
 /**
- * We'll follow the same API as the `Select.Item` component from `@rn-primitives/select`.
+ *
  */
-const ComboboxItem = React.forwardRef<
-	HTMLDivElement,
-	React.ComponentProps<typeof CommandItem> & { label: string }
->((props, ref) => {
-	const { value = '', label = '', children } = props;
-	const { onOpenChange } = usePopoverContext();
-	const { onValueChange } = useComboboxContext();
+const ComboboxList = React.forwardRef<
+	React.ElementRef<typeof FlatList>,
+	React.ComponentPropsWithoutRef<typeof FlatList>
+>(({ className, data, renderItem: customRenderItem, ...props }, ref) => {
+	const defaultRenderItem = ({ item }) => (
+		<ComboboxItem value={item.value}>{item.label}</ComboboxItem>
+	);
 
-	/**
-	 * Handle the `onSelect` event from the `CommandItem` component.
-	 * If the `onSelect` prop is provided, we'll call it with the `value`.
-	 * Otherwise, we'll call the `onValueChange` with the `value` and `label`, like the `Select.Item` component.
-	 */
-	const handleSelect = React.useCallback(() => {
-		if (props.onSelect) {
-			props.onSelect(value);
-		} else {
-			onValueChange({ value, label });
-		}
-		onOpenChange(false);
-	}, [label, onOpenChange, onValueChange, props, value]);
-
-	/**
-	 * Note: we need to pass the `label` and `value` as keywords to the `CommandItem` component for filtering
-	 */
 	return (
-		<CommandItem ref={ref} {...props} onSelect={handleSelect} keywords={[label, value]}>
-			{children ?? label}
-		</CommandItem>
+		<FlatList
+			ref={ref}
+			data={data}
+			keyExtractor={(item, index) => {
+				if (item.value === undefined || item.value === '') {
+					return `item-${index}`;
+				}
+				return String(item.value);
+			}}
+			renderItem={customRenderItem || defaultRenderItem}
+			{...props}
+		/>
 	);
 });
-ComboboxItem.displayName = 'ItemWebCombobox';
+ComboboxList.displayName = 'ComboboxList';
 
-const ComboboxEmpty = CommandEmpty;
+/**
+ *
+ */
+const ComboboxEmpty = React.forwardRef<Text, TextProps>((props, ref) => (
+	<Text ref={ref} {...props} />
+));
+ComboboxEmpty.displayName = 'ComboboxEmpty';
 
-const ComboboxTriggerPrimitive = PopoverTrigger;
-
-const ComboboxTrigger = React.forwardRef<TriggerRef, TriggerProps>(
-	({ className, children, ...props }, ref) => {
-		return (
-			<PopoverTrigger
-				ref={ref}
-				className={cn(
-					'flex h-10 flex-row items-center justify-between gap-2 px-3 py-2',
-					'text-muted-foreground text-sm',
-					'border-input bg-background rounded-md border',
-					'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
-					'[&>span]:line-clamp-1',
-					props.disabled && 'web:cursor-not-allowed opacity-50',
-					className
-				)}
-				{...props}
-			>
-				<>{children}</>
-				<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
-			</PopoverTrigger>
-		);
-	}
-);
-ComboboxTrigger.displayName = 'ComboboxTrigger';
-
-const ComboboxValue = React.forwardRef<ValueRef, ValueProps>(
-	({ asChild, placeholder, className, ...props }, ref) => {
-		const { value } = useComboboxContext();
-		const Component = asChild ? Slot.Text : Text;
-
-		return (
-			<TextClassContext.Provider
-				value={cn('text-sm', value?.value ? 'text-foreground' : 'text-muted-foreground', className)}
-			>
-				<Component ref={ref} {...props}>
-					{value?.label ?? placeholder}
-				</Component>
-			</TextClassContext.Provider>
-		);
-	}
-);
-ComboboxValue.displayName = 'ComboboxValue';
+const useRootContext = () => {};
+const useComboboxContext = () => {};
 
 export {
 	Combobox,
@@ -201,7 +107,7 @@ export {
 	ComboboxEmpty,
 	ComboboxTriggerPrimitive,
 	ComboboxItem,
-	usePopoverContext,
+	useRootContext,
 	useComboboxContext,
 	ComboboxValue,
 	ComboboxTrigger,

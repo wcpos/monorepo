@@ -22,6 +22,47 @@ async function closeAllDatabases() {
 	dbCache.clear();
 }
 
+// Utility function to handle database operations with retries
+async function withDatabaseRetry<T>(
+	db: any,
+	operation: () => Promise<T>,
+	operationName: string
+): Promise<T> {
+	const maxRetries = 3;
+	let lastError;
+
+	for (let attempt = 0; attempt < maxRetries; attempt++) {
+		try {
+			return await operation();
+		} catch (error) {
+			lastError = error;
+			const errorMessage = error.message || '';
+			const isConnectionError =
+				errorMessage.includes('already released') || errorMessage.includes('database is locked');
+
+			if (isConnectionError && attempt < maxRetries - 1) {
+				console.warn(`Database ${operationName} error, attempt ${attempt + 1}/${maxRetries}`);
+				await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+
+				// Try to refresh the connection if it's in the cache
+				for (const [key, cachedDb] of dbCache.entries()) {
+					if (cachedDb === db) {
+						dbCache.delete(key);
+						db = await getSQLiteBasicsExpoSQLiteAsync().open(key);
+						break;
+					}
+				}
+				continue;
+			}
+
+			console.error(`Database ${operationName} error:`, error);
+			throw error;
+		}
+	}
+
+	throw lastError;
+}
+
 // For development environments, add a cleanup listener
 if (__DEV__) {
 	// In Expo/React Native, we can use the AppState API to detect app background/foreground
@@ -45,9 +86,19 @@ if (__DEV__) {
 function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<any> {
 	return {
 		open: async (databaseName) => {
-			// If we have a cached connection, use it
+			// If we have a cached connection, validate it first
 			if (dbCache.has(databaseName)) {
-				return dbCache.get(databaseName);
+				const cachedDb = dbCache.get(databaseName);
+				try {
+					// Test the connection with a simple query
+					await cachedDb.getAllAsync('SELECT 1');
+					return cachedDb;
+				} catch (error) {
+					// Connection is invalid, remove it from cache
+					console.warn(`Invalid cached connection for ${databaseName}, creating new one`);
+					dbCache.delete(databaseName);
+					// Continue to open new connection
+				}
 			}
 
 			try {
@@ -75,46 +126,23 @@ function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<any> {
 		},
 
 		all: async (db, queryObject) => {
-			try {
-				return await db.getAllAsync(queryObject.query, queryObject.params);
-			} catch (error) {
-				// Check if it's a database lock error
-				if (error.message && error.message.includes('database is locked')) {
-					console.warn('Database locked, retrying operation after delay...');
-					// Wait before retrying
-					await new Promise((resolve) => setTimeout(resolve, 1000));
-					return await db.getAllAsync(queryObject.query, queryObject.params);
-				}
-
-				console.error('Database query error (all):', error);
-				throw error;
-			}
+			return withDatabaseRetry(
+				db,
+				() => db.getAllAsync(queryObject.query, queryObject.params),
+				'all'
+			);
 		},
 
 		run: async (db, queryObject) => {
-			try {
-				return await db.runAsync(queryObject.query, queryObject.params);
-			} catch (error) {
-				// Check if it's a database lock error
-				if (error.message && error.message.includes('database is locked')) {
-					console.warn('Database locked, retrying operation after delay...');
-					// Wait before retrying
-					await new Promise((resolve) => setTimeout(resolve, 1000));
-					return await db.runAsync(queryObject.query, queryObject.params);
-				}
-
-				console.error('Database query error (run):', error);
-				throw error;
-			}
+			return withDatabaseRetry(db, () => db.runAsync(queryObject.query, queryObject.params), 'run');
 		},
 
-		async setPragma(db, pragmaKey, pragmaValue) {
-			try {
-				await db.execAsync(`PRAGMA ${pragmaKey} = ${pragmaValue}`);
-			} catch (error) {
-				console.error('Error setting pragma:', error);
-				throw error;
-			}
+		setPragma: async (db, pragmaKey, pragmaValue) => {
+			return withDatabaseRetry(
+				db,
+				() => db.execAsync(`PRAGMA ${pragmaKey} = ${pragmaValue}`),
+				'setPragma'
+			);
 		},
 
 		close: async (db) => {

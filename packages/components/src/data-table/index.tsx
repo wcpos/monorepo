@@ -228,32 +228,30 @@ const DataTable = <TData, TValue>({
 				</TableHeader>
 				<TableBody onLayout={onLayout}>
 					<Animated.View style={[animatedStyle, { flex: 1 }]}>
-						{isFocused && (
-							<FlashList
-								data={table.getRowModel().rows}
-								estimatedItemSize={estimatedItemSize}
-								showsVerticalScrollIndicator={false}
-								contentContainerStyle={{
-									paddingBottom: insets.bottom,
-								}}
-								refreshControl={
-									<RefreshControl
-										refreshing={isRefreshing}
-										onRefresh={onRefresh}
-										style={{ opacity: 0 }}
-									/>
+						<FlashList
+							data={table.getRowModel().rows}
+							estimatedItemSize={estimatedItemSize}
+							showsVerticalScrollIndicator={false}
+							contentContainerStyle={{
+								paddingBottom: insets.bottom,
+							}}
+							refreshControl={
+								<RefreshControl
+									refreshing={isRefreshing}
+									onRefresh={onRefresh}
+									style={{ opacity: 0 }}
+								/>
+							}
+							renderItem={handleRenderRow}
+							keyExtractor={(row) => row.id}
+							extraData={extraDataWithTimestamp}
+							onEndReached={() => {
+								if (isFocused && typeof onEndReached === 'function') {
+									onEndReached();
 								}
-								renderItem={handleRenderRow}
-								keyExtractor={(row) => row.id}
-								extraData={extraDataWithTimestamp}
-								onEndReached={() => {
-									if (isFocused && typeof onEndReached === 'function') {
-										onEndReached();
-									}
-								}}
-								{...props}
-							/>
-						)}
+							}}
+							{...props}
+						/>
 					</Animated.View>
 				</TableBody>
 			</Table>

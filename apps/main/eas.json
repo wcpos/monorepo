@@ -22,6 +22,9 @@
       "developmentClient": true,
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
       }
     },
     "production": {

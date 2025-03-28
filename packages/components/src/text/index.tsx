@@ -22,7 +22,8 @@ const textVariants = cva('text-foreground web:select-text text-base', {
 	},
 });
 
-type TextProps = SlottableTextProps & VariantProps<typeof textVariants> & { decodeHtml?: boolean };
+export type TextProps = SlottableTextProps &
+	VariantProps<typeof textVariants> & { decodeHtml?: boolean };
 
 const Text = React.forwardRef<TextRef, TextProps>(
 	({ className, variant, asChild = false, children, decodeHtml, ...props }, ref) => {

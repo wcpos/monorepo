@@ -1,175 +1,152 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 
 import { type DialogProps } from '@radix-ui/react-dialog';
-import { Command as CommandPrimitive, useCommandState } from 'cmdk';
-
-import useMergedRef from '@wcpos/hooks/use-merged-ref';
 
 import { Dialog, DialogContent } from '../dialog';
-import { Icon } from '../icon';
 import { Input } from '../input';
-import { cn } from '../lib/utils';
 import { SelectButton } from '../select';
 
 const CommandButton = SelectButton;
 
-const Command = React.forwardRef<
-	React.ElementRef<typeof CommandPrimitive>,
-	React.ComponentPropsWithoutRef<typeof CommandPrimitive>
->(({ className, ...props }, ref) => (
-	<CommandPrimitive
-		ref={ref}
-		className={cn(
-			'bg-popover text-popover-foreground flex h-full w-full flex-col overflow-hidden rounded-md',
-			className
-		)}
-		{...props}
-	/>
-));
-Command.displayName = CommandPrimitive.displayName;
+interface CommandProps extends React.ComponentPropsWithoutRef<typeof View> {
+	children?: React.ReactNode;
+}
 
-interface CommandDialogProps extends DialogProps {}
+const Command = React.forwardRef<View, CommandProps>(({ children, ...props }, ref) => (
+	<View ref={ref} {...props}>
+		{children}
+	</View>
+));
+Command.displayName = 'Command';
+
+interface CommandDialogProps extends DialogProps {
+	children?: React.ReactNode;
+}
 
 const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
 	return (
 		<Dialog {...props}>
-			<DialogContent className="overflow-hidden p-0 shadow-lg">
-				<Command className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
-					{children}
-				</Command>
+			<DialogContent>
+				<Command>{children}</Command>
 			</DialogContent>
 		</Dialog>
 	);
 };
 CommandDialog.displayName = 'CommandDialog';
 
-const CommandInput = React.forwardRef<
-	React.ElementRef<typeof CommandPrimitive.Input>,
-	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => {
-	return (
-		<View className="flex items-center p-1" cmdk-input-wrapper="">
-			<CommandPrimitive.Input ref={ref} {...props} asChild>
-				<Input clearable />
-			</CommandPrimitive.Input>
-		</View>
-	);
-});
+interface CommandInputProps extends React.ComponentPropsWithoutRef<typeof Input> {
+	value?: string;
+	onValueChange?: (value: string) => void;
+}
 
-CommandInput.displayName = CommandPrimitive.Input.displayName;
+const CommandInput = React.forwardRef<Input, CommandInputProps>(
+	({ value, onValueChange, ...props }, ref) => {
+		return (
+			<View>
+				<Input ref={ref} value={value} onChangeText={onValueChange} clearable {...props} />
+			</View>
+		);
+	}
+);
+CommandInput.displayName = 'CommandInput';
 
-const CommandList = React.forwardRef<
-	React.ElementRef<typeof CommandPrimitive.List>,
-	React.ComponentPropsWithoutRef<typeof CommandPrimitive.List> & { onEndReached?: () => void }
->(({ className, onEndReached, ...props }, ref) => {
-	const localRef = React.useRef<HTMLDivElement>(null);
-	const mergedRef = useMergedRef(ref, localRef);
+interface CommandListProps extends React.ComponentPropsWithoutRef<typeof ScrollView> {
+	onEndReached?: () => void;
+	children?: React.ReactNode;
+}
 
-	/**
-	 * Handle the scroll event to detect when the user is near the bottom of the list
-	 */
-	const handleScroll = React.useCallback(() => {
-		if (localRef && localRef?.current) {
-			const { scrollTop, scrollHeight, clientHeight } = localRef.current;
-			const isNearBottom = scrollHeight - scrollTop - clientHeight < 20;
-			if (isNearBottom && onEndReached) {
-				onEndReached();
-			}
-		}
-	}, [localRef, onEndReached]);
+const CommandList = React.forwardRef<ScrollView, CommandListProps>(
+	({ onEndReached, children, ...props }, ref) => {
+		const handleScroll = React.useCallback(
+			(event: any) => {
+				const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+				const paddingToBottom = 20;
+				const isCloseToBottom =
+					layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+				if (isCloseToBottom && onEndReached) {
+					onEndReached();
+				}
+			},
+			[onEndReached]
+		);
 
-	React.useEffect(() => {
-		const scrollContainer = localRef.current;
-		if (scrollContainer) {
-			scrollContainer.addEventListener('scroll', handleScroll);
-			return () => scrollContainer.removeEventListener('scroll', handleScroll);
-		}
-	}, [handleScroll]);
+		return (
+			<ScrollView ref={ref} onScroll={handleScroll} scrollEventThrottle={400} {...props}>
+				{children}
+			</ScrollView>
+		);
+	}
+);
+CommandList.displayName = 'CommandList';
 
-	return (
-		<CommandPrimitive.List
-			ref={mergedRef}
-			className={cn(
-				'group max-h-[300px] overflow-y-auto overflow-x-hidden',
-				'[&>*:first-child]:gap-2 [&>*:first-child]:pt-2',
-				className
-			)}
-			{...props}
-		/>
-	);
-});
+interface CommandEmptyProps extends React.ComponentPropsWithoutRef<typeof Text> {
+	children?: React.ReactNode;
+}
 
-CommandList.displayName = CommandPrimitive.List.displayName;
-
-const CommandEmpty = React.forwardRef<
-	React.ElementRef<typeof CommandPrimitive.Empty>,
-	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>
->((props, ref) => (
-	<CommandPrimitive.Empty ref={ref} className="py-6 text-center text-sm" {...props} />
+const CommandEmpty = React.forwardRef<Text, CommandEmptyProps>(({ children, ...props }, ref) => (
+	<Text ref={ref} {...props}>
+		{children}
+	</Text>
 ));
+CommandEmpty.displayName = 'CommandEmpty';
 
-CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
+interface CommandGroupProps extends React.ComponentPropsWithoutRef<typeof View> {
+	children?: React.ReactNode;
+}
 
-const CommandGroup = React.forwardRef<
-	React.ElementRef<typeof CommandPrimitive.Group>,
-	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group>
->(({ className, ...props }, ref) => (
-	<CommandPrimitive.Group
-		ref={ref}
-		className={cn(
-			'text-foreground overflow-hidden p-1',
-			'[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium',
-			className
-		)}
-		{...props}
-	/>
+const CommandGroup = React.forwardRef<View, CommandGroupProps>(({ children, ...props }, ref) => (
+	<View ref={ref} {...props}>
+		{children}
+	</View>
 ));
+CommandGroup.displayName = 'CommandGroup';
 
-CommandGroup.displayName = CommandPrimitive.Group.displayName;
+interface CommandSeparatorProps extends React.ComponentPropsWithoutRef<typeof View> {}
 
-const CommandSeparator = React.forwardRef<
-	React.ElementRef<typeof CommandPrimitive.Separator>,
-	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>
->(({ className, ...props }, ref) => (
-	<CommandPrimitive.Separator
-		ref={ref}
-		className={cn('bg-border -mx-1 h-px', className)}
-		{...props}
-	/>
+const CommandSeparator = React.forwardRef<View, CommandSeparatorProps>((props, ref) => (
+	<View ref={ref} style={[{ height: 1, backgroundColor: '#e5e7eb' }]} {...props} />
 ));
-CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
+CommandSeparator.displayName = 'CommandSeparator';
 
-const CommandItem = React.forwardRef<
-	React.ElementRef<typeof CommandPrimitive.Item>,
-	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>
->(({ className, ...props }, ref) => {
-	return (
-		<CommandPrimitive.Item
-			ref={ref}
-			className={cn(
-				'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none',
-				'web:outline-none web:focus:bg-accent web:hover:bg-accent active:bg-accent group',
-				'aria-selected:bg-accent aria-selected:text-accent-foreground',
-				props.disabled && 'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-				className
-			)}
-			{...props}
-		/>
-	);
-});
+interface CommandItemProps extends React.ComponentPropsWithoutRef<typeof Pressable> {
+	children?: React.ReactNode;
+	onSelect?: () => void;
+}
 
-CommandItem.displayName = CommandPrimitive.Item.displayName;
+const CommandItem = React.forwardRef<typeof Pressable, CommandItemProps>(
+	({ onSelect, children, ...props }, ref) => {
+		return (
+			<Pressable ref={ref} onPress={onSelect} {...props}>
+				{children}
+			</Pressable>
+		);
+	}
+);
+CommandItem.displayName = 'CommandItem';
 
-const CommandShortcut = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => {
-	return (
-		<span
-			className={cn('text-muted-foreground ml-auto text-xs tracking-widest', className)}
-			{...props}
-		/>
-	);
-};
+interface CommandShortcutProps extends React.ComponentPropsWithoutRef<typeof Text> {
+	children?: React.ReactNode;
+}
+
+const CommandShortcut = React.forwardRef<Text, CommandShortcutProps>(
+	({ children, ...props }, ref) => (
+		<Text ref={ref} {...props}>
+			{children}
+		</Text>
+	)
+);
 CommandShortcut.displayName = 'CommandShortcut';
+
+// Dummy implementation of useCommandState since we don't have cmdk
+const useCommandState = () => {
+	return {
+		value: '',
+		search: '',
+		selected: 0,
+		items: [],
+	};
+};
 
 export {
 	Command,
