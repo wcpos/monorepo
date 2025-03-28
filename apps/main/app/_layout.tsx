@@ -6,6 +6,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { PortalHost } from '@wcpos/components/portal';
 import { Toast, toastConfig } from '@wcpos/components/toast';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 
@@ -27,6 +28,9 @@ export default function RootLayout() {
 						<KeyboardProvider>
 							<HydrationProviders>
 								<Slot />
+								<ErrorBoundary>
+									<PortalHost />
+								</ErrorBoundary>
 								<ErrorBoundary>
 									<Toast config={toastConfig} />
 								</ErrorBoundary>

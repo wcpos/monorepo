@@ -13,7 +13,6 @@ import { useObservableEagerState, ObservableResource } from 'observable-hooks';
 import { map, distinctUntilChanged } from 'rxjs/operators';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';

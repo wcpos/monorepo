@@ -57,18 +57,15 @@ const SelectTrigger = React.forwardRef<SelectPrimitive.TriggerRef, SelectPrimiti
 			<SelectPrimitiveTrigger
 				ref={ref}
 				className={cn(
-					'native:h-12 flex h-10 flex-row items-center justify-between gap-2 px-3 py-2',
-					'text-muted-foreground text-sm',
-					'border-input bg-background rounded-md border',
+					'native:h-12',
 					'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
+					'text-muted-foreground flex h-10 flex-row items-center justify-between gap-2 px-3 py-2 text-sm',
+					'border-input bg-background rounded-md border',
 					'[&>span]:line-clamp-1',
 					props.disabled && 'web:cursor-not-allowed opacity-50',
 					className
 				)}
 				{...props}
-				onPress={() => {
-					console.log('pressed');
-				}}
 			>
 				<>{children}</>
 				<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
@@ -135,7 +132,8 @@ const SelectContent = React.forwardRef<
 					<SelectPrimitive.Content
 						ref={ref}
 						className={cn(
-							'border-border bg-popover shadow-foreground/10 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-96 min-w-[8rem] rounded-md border px-1 py-2 shadow-md',
+							'border-border bg-popover shadow-foreground/10 relative z-50 max-h-96 min-w-[8rem] rounded-md border px-1 py-2 shadow-md',
+							'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
 							position === 'popper' &&
 								'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
 							open
@@ -181,7 +179,9 @@ const SelectItem = React.forwardRef<SelectPrimitive.ItemRef, SelectPrimitive.Ite
 		<SelectPrimitive.Item
 			ref={ref}
 			className={cn(
-				'web:group web:cursor-default web:select-none native:py-2 native:pl-10 web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent relative flex w-full flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
+				'native:py-2 native:pl-10',
+				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent',
+				'relative flex w-full flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
 				props.disabled && 'web:pointer-events-none opacity-50',
 				className
 			)}
@@ -218,7 +218,8 @@ const SelectButton = React.forwardRef<React.ElementRef<typeof Button>, ButtonPro
 		<Button
 			ref={ref}
 			className={cn(
-				'native:h-12 web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 border-input bg-background text-muted-foreground flex h-10 flex-row items-center justify-between rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
+				'native:h-12 web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
+				'border-input bg-background text-muted-foreground flex h-10 flex-row items-center justify-between rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
 				props.disabled && 'web:cursor-not-allowed opacity-50',
 				className
 			)}

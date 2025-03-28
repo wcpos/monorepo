@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Pressable, GestureResponderEvent } from 'react-native';
 
+import * as Select from '@radix-ui/react-select';
 import { useIsomorphicLayoutEffect, useAugmentedRef } from '@rn-primitives/hooks';
 import * as SelectPrimitive from '@rn-primitives/select';
 import * as Slot from '@rn-primitives/slot';
@@ -8,11 +9,17 @@ import * as Slot from '@rn-primitives/slot';
 import type { TriggerRef, TriggerProps } from '@rn-primitives/select';
 
 /**
- *
+ * https://github.com/roninoss/rn-primitives/pull/65
  */
 const Trigger = React.forwardRef<TriggerRef, TriggerProps>(
-	({ asChild, role: _role, disabled, ...props }, ref) => {
+	({ asChild, onPress: onPressProp, role: _role, disabled, ...props }, ref) => {
 		const { open, onOpenChange } = SelectPrimitive.useRootContext();
+		function onPress(ev: GestureResponderEvent) {
+			if (disabled) return;
+			onOpenChange(!open);
+			onPressProp?.(ev);
+		}
+
 		const augmentedRef = useAugmentedRef({
 			ref,
 			methods: {
@@ -33,32 +40,21 @@ const Trigger = React.forwardRef<TriggerRef, TriggerProps>(
 			}
 		}, [open]);
 
-		/**
-		 * @FIXME - select is not triggering for 'touch' events
-		 * https://github.com/mrzachnugent/react-native-reusables/issues/274
-		 */
-		const handlePress = (event: GestureResponderEvent) => {
-			if (props?.onPress) {
-				props.onPress(event);
-			}
-			onOpenChange(true);
-		};
-
 		const Component = asChild ? Slot.Pressable : Pressable;
 		return (
-			<SelectPrimitive.Trigger disabled={disabled ?? undefined} asChild>
+			<Select.Trigger disabled={disabled ?? undefined} asChild>
 				<Component
+					onPress={onPress}
 					ref={augmentedRef}
 					role="button"
 					disabled={disabled}
 					{...props}
-					onPress={handlePress}
 				/>
-			</SelectPrimitive.Trigger>
+			</Select.Trigger>
 		);
 	}
 );
 
-Trigger.displayName = 'TriggerWebSelectFixForTouch';
+Trigger.displayName = 'TriggerWebSelect';
 
 export { Trigger };

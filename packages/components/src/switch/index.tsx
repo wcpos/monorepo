@@ -107,7 +107,7 @@ const nativeSwitchVariants = cva('shrink-0 flex-row items-center rounded-full', 
 	},
 });
 
-const nativeThumbVariants = cva('bg-background rounded-full shadow-md', {
+const nativeThumbVariants = cva('bg-background rounded-full shadow-sm', {
 	variants: {
 		size: {
 			xs: 'h-2.5 w-2.5',

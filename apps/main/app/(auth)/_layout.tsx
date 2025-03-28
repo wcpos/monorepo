@@ -1,7 +1,5 @@
 import { Stack, Redirect } from 'expo-router';
 
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { PortalHost } from '@wcpos/components/portal';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 
 export const unstable_settings = {
@@ -17,21 +15,16 @@ export default function AuthLayout() {
 	}
 
 	return (
-		<>
-			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
-				<Stack.Screen name="connect" />
-				<Stack.Screen
-					name="(modals)/login"
-					options={{
-						presentation: 'transparentModal',
-						animation: 'fade',
-						contentStyle: { backgroundColor: 'transparent' },
-					}}
-				/>
-			</Stack>
-			<ErrorBoundary>
-				<PortalHost />
-			</ErrorBoundary>
-		</>
+		<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
+			<Stack.Screen name="connect" />
+			<Stack.Screen
+				name="(modals)/login"
+				options={{
+					presentation: 'transparentModal',
+					animation: 'fade',
+					contentStyle: { backgroundColor: 'transparent' },
+				}}
+			/>
+		</Stack>
 	);
 }

@@ -1,8 +1,6 @@
 import { Redirect, Stack } from 'expo-router';
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { PortalHost } from '@wcpos/components/portal';
 import { Suspense } from '@wcpos/components/suspense';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
@@ -66,9 +64,6 @@ const App = () => {
 								}}
 							/>
 						</Stack>
-						<ErrorBoundary>
-							<PortalHost />
-						</ErrorBoundary>
 					</OnlineStatusProvider>
 				</UISettingsProvider>
 				<Errors />

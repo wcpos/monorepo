@@ -42,9 +42,7 @@ export const Report = () => {
 							}}
 						>
 							<SelectTrigger>
-								<SelectValue
-									placeholder={t('Select report template', { _tags: 'core' })}
-								></SelectValue>
+								<SelectValue placeholder={t('Select report template', { _tags: 'core' })} />
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem label={t('Default (Offline)', { _tags: 'core' })} value="default">
