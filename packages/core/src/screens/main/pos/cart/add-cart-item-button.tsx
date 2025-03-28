@@ -26,7 +26,7 @@ const AddCartItemButton = ({ title, children }: Props) => {
 				<DialogTrigger asChild>
 					<IconButton name="circlePlus" />
 				</DialogTrigger>
-				<DialogContent size="lg">
+				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>

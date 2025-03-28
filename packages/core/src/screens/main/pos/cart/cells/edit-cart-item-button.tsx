@@ -34,7 +34,7 @@ const EditCartItemButton = ({ title, children }: Props) => {
 						<Text>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent size="lg">
+				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>

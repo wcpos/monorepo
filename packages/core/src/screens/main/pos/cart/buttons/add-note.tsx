@@ -59,7 +59,7 @@ export const AddNoteButton = () => {
 			<DialogTrigger asChild>
 				<Button variant="outline">{t('Order Note', { _tags: 'core' })}</Button>
 			</DialogTrigger>
-			<DialogContent>
+			<DialogContent portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('Order Note', { _tags: 'core' })}</DialogTitle>
 				</DialogHeader>

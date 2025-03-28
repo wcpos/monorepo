@@ -26,7 +26,7 @@ export const OrderMetaButton = () => {
 			<DialogTrigger asChild>
 				<Button variant="outline">{t('Order Meta', { _tags: 'core' })}</Button>
 			</DialogTrigger>
-			<DialogContent size="lg">
+			<DialogContent size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('Order Meta', { _tags: 'core' })}</DialogTitle>
 				</DialogHeader>

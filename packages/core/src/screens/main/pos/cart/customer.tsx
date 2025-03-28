@@ -51,7 +51,7 @@ export const Customer = ({
 					<ButtonText>{name}</ButtonText>
 				</ButtonPill>
 			</DialogTrigger>
-			<DialogContent size="lg">
+			<DialogContent size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('Edit Customer Address', { _tags: 'core' })}</DialogTitle>
 				</DialogHeader>

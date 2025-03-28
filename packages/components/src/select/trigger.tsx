@@ -1,1 +1,1 @@
-export { Trigger } from '@rn-primitives/select';
+export { Trigger, Value } from '@rn-primitives/select';

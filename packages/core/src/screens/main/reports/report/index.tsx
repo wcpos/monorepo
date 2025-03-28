@@ -36,7 +36,7 @@ export const Report = () => {
 					<HStack>
 						<Text className="text-lg">{t('Report', { _tags: 'core' })}</Text>
 						<Select
-							defaultValue={{
+							value={{
 								value: 'default',
 								label: t('Default (Offline)', { _tags: 'core' }),
 							}}
@@ -45,9 +45,7 @@ export const Report = () => {
 								<SelectValue placeholder={t('Select report template', { _tags: 'core' })} />
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem label={t('Default (Offline)', { _tags: 'core' })} value="default">
-									{t('Default (Offline)', { _tags: 'core' })}
-								</SelectItem>
+								<SelectItem label={t('Default (Offline)', { _tags: 'core' })} value="default" />
 							</SelectContent>
 						</Select>
 					</HStack>

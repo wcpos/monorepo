@@ -103,7 +103,7 @@ export const AddNewCustomer = () => {
 						<Text>{t('Add new customer', { _tags: 'core' })}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent size="lg">
+				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('Add new customer', { _tags: 'core' })}</DialogTitle>
 					</DialogHeader>
