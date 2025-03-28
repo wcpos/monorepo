@@ -12,7 +12,7 @@ export default function CustomersLayout() {
 			<Stack.Screen
 				name="(modals)/edit/[customerId]"
 				options={{
-					presentation: 'transparentModal',
+					presentation: 'containedTransparentModal',
 					animation: 'fade',
 					contentStyle: { backgroundColor: 'transparent' },
 				}}
@@ -20,7 +20,7 @@ export default function CustomersLayout() {
 			<Stack.Screen
 				name="(modals)/add"
 				options={{
-					presentation: 'transparentModal',
+					presentation: 'containedTransparentModal',
 					animation: 'fade',
 					contentStyle: { backgroundColor: 'transparent' },
 				}}

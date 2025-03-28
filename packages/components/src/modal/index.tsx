@@ -138,7 +138,7 @@ const ModalOverlay = Platform.select({
 });
 
 const modalContentVariants = cva(
-	'border-border web:cursor-default bg-background web:duration-200 z-50 max-h-full max-w-lg gap-4 rounded-lg border py-4 shadow-lg',
+	'border-border web:cursor-default bg-background web:duration-200 max-h-full max-w-lg gap-4 rounded-lg border py-4 shadow-lg',
 	{
 		variants: {
 			size: {

@@ -89,7 +89,7 @@ const DialogOverlay = Platform.select({
 });
 
 const dialogContentVariants = cva(
-	'border-border web:cursor-default bg-background z-50 max-h-full max-w-full gap-4 rounded-lg border py-4',
+	'border-border web:cursor-default bg-background z-60 max-h-full max-w-full gap-4 rounded-lg border py-4',
 	{
 		variants: {
 			size: {

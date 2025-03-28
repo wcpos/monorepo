@@ -12,7 +12,7 @@ export default function ProductsLayout() {
 			<Stack.Screen
 				name="(modals)/edit/product/[productId]"
 				options={{
-					presentation: 'transparentModal',
+					presentation: 'containedTransparentModal',
 					animation: 'fade',
 					contentStyle: { backgroundColor: 'transparent' },
 				}}
@@ -20,7 +20,7 @@ export default function ProductsLayout() {
 			<Stack.Screen
 				name="(modals)/edit/variation/[variationId]"
 				options={{
-					presentation: 'transparentModal',
+					presentation: 'containedTransparentModal',
 					animation: 'fade',
 					contentStyle: { backgroundColor: 'transparent' },
 				}}

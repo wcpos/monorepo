@@ -12,7 +12,7 @@ export default function OrdersLayout() {
 			<Stack.Screen
 				name="(modals)/edit/[orderId]"
 				options={{
-					presentation: 'transparentModal',
+					presentation: 'containedTransparentModal',
 					animation: 'fade',
 					contentStyle: { backgroundColor: 'transparent' },
 				}}
@@ -20,7 +20,7 @@ export default function OrdersLayout() {
 			<Stack.Screen
 				name="(modals)/receipt/[orderId]"
 				options={{
-					presentation: 'transparentModal',
+					presentation: 'containedTransparentModal',
 					animation: 'fade',
 					contentStyle: { backgroundColor: 'transparent' },
 				}}

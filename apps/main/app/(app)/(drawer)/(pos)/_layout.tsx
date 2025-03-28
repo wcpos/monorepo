@@ -46,17 +46,9 @@ const POSStack = () => {
 			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
 				<Stack.Screen name="index" />
 				<Stack.Screen
-					name="(modals)/cart/add-misc-product"
-					options={{
-						presentation: 'transparentModal',
-						animation: 'fade',
-						contentStyle: { backgroundColor: 'transparent' },
-					}}
-				/>
-				<Stack.Screen
 					name="(modals)/cart/[orderId]/checkout"
 					options={{
-						presentation: 'transparentModal',
+						presentation: 'containedTransparentModal',
 						animation: 'fade',
 						contentStyle: { backgroundColor: 'transparent' },
 					}}
@@ -64,7 +56,7 @@ const POSStack = () => {
 				<Stack.Screen
 					name="(modals)/cart/receipt/[orderId]"
 					options={{
-						presentation: 'transparentModal',
+						presentation: 'containedTransparentModal',
 						animation: 'fade',
 						contentStyle: { backgroundColor: 'transparent' },
 					}}

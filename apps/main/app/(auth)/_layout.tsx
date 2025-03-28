@@ -23,7 +23,7 @@ export default function AuthLayout() {
 				<Stack.Screen
 					name="(modals)/login"
 					options={{
-						presentation: 'transparentModal',
+						presentation: 'containedTransparentModal',
 						animation: 'fade',
 						contentStyle: { backgroundColor: 'transparent' },
 					}}

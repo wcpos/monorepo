@@ -1,3 +1,5 @@
+import { View } from 'react-native';
+
 import { Redirect, Stack } from 'expo-router';
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 
@@ -44,7 +46,7 @@ const App = () => {
 							<Stack.Screen
 								name="(modals)/settings"
 								options={{
-									presentation: 'transparentModal',
+									presentation: 'containedTransparentModal',
 									animation: 'fade',
 									contentStyle: { backgroundColor: 'transparent' },
 								}}
@@ -52,7 +54,7 @@ const App = () => {
 							<Stack.Screen
 								name="(modals)/tax-rates"
 								options={{
-									presentation: 'transparentModal',
+									presentation: 'containedTransparentModal',
 									animation: 'fade',
 									contentStyle: { backgroundColor: 'transparent' },
 								}}
@@ -60,7 +62,7 @@ const App = () => {
 							<Stack.Screen
 								name="(modals)/login"
 								options={{
-									presentation: 'transparentModal',
+									presentation: 'containedTransparentModal',
 									animation: 'fade',
 									contentStyle: { backgroundColor: 'transparent' },
 								}}
