@@ -25,7 +25,7 @@
 		"react-native-gesture-handler": "2.22.1",
 		"react-native-reanimated": "3.16.7",
 		"react-native-safe-area-context": "5.1.0",
-		"react-native-screens": "4.10.0",
+		"react-native-screens": "4.8.0",
 		"react-native-svg": "15.11.1",
 		"victory-native": "^41.16.1"
 	},
@@ -40,7 +40,7 @@
 		"@widgetbot/react-embed": "^1.9.0",
 		"blob-polyfill": "^9.0.20240710",
 		"date-fns": "4.1.0",
-		"html-entities": "2.5.3",
+		"html-entities": "2.5.5",
 		"lodash": "4.17.21",
 		"observable-hooks": "4.2.4",
 		"react-error-boundary": "5.0.0",

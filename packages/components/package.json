@@ -11,7 +11,7 @@
     "expo-router": "4.0.19",
     "react-native-gesture-handler": "2.22.1",
     "react-native-svg": "15.8.0",
-    "react-native-webview": "13.13.4",
+    "react-native-webview": "13.13.5",
     "tailwindcss": "3.4.17"
   },
   "devDependencies": {
@@ -50,7 +50,7 @@
     "cmdk": "1.1.1",
     "color": "^5.0.0",
     "date-fns": "^4.1.0",
-    "html-entities": "2.5.3",
+    "html-entities": "2.5.5",
     "react-day-picker": "9.6.3",
     "react-hook-form": "^7.54.2",
     "react-native-calendars": "1.1310.0",

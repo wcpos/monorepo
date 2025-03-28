@@ -39,7 +39,7 @@ const Combobox = ComboboxPrimitive.Root;
 const ComboboxTrigger = ComboboxPrimitive.Trigger;
 const ComboboxTriggerPrimitive = ComboboxPrimitive.Trigger;
 const ComboboxValue = ComboboxPrimitive.Value;
-const ComboboxItem = () => {};
+const ComboboxItem = ComboboxPrimitive.Item;
 
 /**
  * Remove this, just use ComboboxContent with search

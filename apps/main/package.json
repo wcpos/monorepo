@@ -42,10 +42,10 @@
     "react-native-keyboard-controller": "^1.16.8",
     "react-native-reanimated": "3.16.7",
     "react-native-safe-area-context": "5.1.0",
-    "react-native-screens": "4.10.0",
+    "react-native-screens": "4.8.0",
     "react-native-svg": "15.8.0",
     "react-native-web": "0.19.13",
-    "react-native-webview": "13.13.4",
+    "react-native-webview": "13.13.5",
     "tailwindcss": "3.4.17",
     "tailwindcss-animate": "^1.0.7",
     "victory-native": "^41.16.1"

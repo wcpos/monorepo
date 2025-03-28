@@ -310,11 +310,87 @@ const Content = React.forwardRef<ContentRef, ContentProps>(
 
 Content.displayName = 'ContentNativeCombobox';
 
+const ItemContext = React.createContext<{
+	itemValue: string;
+	label: string;
+} | null>(null);
+
+const Item = React.forwardRef<ItemRef, ItemProps>(
+	(
+		{
+			asChild,
+			value: itemValue,
+			label,
+			onPress: onPressProp,
+			disabled = false,
+			closeOnPress = true,
+			...props
+		},
+		ref
+	) => {
+		const { onOpenChange, value, onValueChange, setTriggerPosition, setContentLayout } =
+			useRootContext();
+		function onPress(ev: GestureResponderEvent) {
+			if (closeOnPress) {
+				setTriggerPosition(null);
+				setContentLayout(null);
+				onOpenChange(false);
+			}
+
+			onValueChange({ value: itemValue, label });
+			onPressProp?.(ev);
+		}
+
+		const Component = asChild ? Slot.Pressable : Pressable;
+		return (
+			<ItemContext.Provider value={{ itemValue, label }}>
+				<Component
+					ref={ref}
+					role="option"
+					onPress={onPress}
+					disabled={disabled}
+					aria-checked={value?.value === itemValue}
+					aria-valuetext={label}
+					aria-disabled={!!disabled}
+					accessibilityState={{
+						disabled: !!disabled,
+						checked: value?.value === itemValue,
+					}}
+					{...props}
+				/>
+			</ItemContext.Provider>
+		);
+	}
+);
+
+Item.displayName = 'ItemNativeCombobox';
+
+function useItemContext() {
+	const context = React.useContext(ItemContext);
+	if (!context) {
+		throw new Error('Item compound components cannot be rendered outside of an Item component');
+	}
+	return context;
+}
+
+const ItemText = React.forwardRef<ItemTextRef, ItemTextProps>(({ asChild, ...props }, ref) => {
+	const { label } = useItemContext();
+
+	const Component = asChild ? Slot.Text : Text;
+	return (
+		<Component ref={ref} {...props}>
+			{label}
+		</Component>
+	);
+});
+
+ItemText.displayName = 'ItemTextNativeCombobox';
+
 const Viewport = ({ children }: ViewportProps) => {
 	return <>{children}</>;
 };
 
-export { Root, Trigger, Value, useRootContext, Overlay, Portal, Content, Viewport };
+export { Root, Trigger, Value, useRootContext, Overlay, Portal, Content, Viewport, Item, ItemText };
 
 function onStartShouldSetResponder() {
 	return true;
