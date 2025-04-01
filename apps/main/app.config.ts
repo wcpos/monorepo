@@ -32,6 +32,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 		package: 'com.wcpos.main',
 		jsEngine: 'hermes',
 	},
+	androidNavigationBar: {
+		visible: 'immersive',
+		backgroundColor: '#F0F4F8',
+	},
 	web: {
 		bundler: 'metro',
 		output: 'single',

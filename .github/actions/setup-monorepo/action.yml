@@ -7,7 +7,7 @@ inputs:
     default: "20.x"
   pnpm-version:
     description: Version of pnpm to use
-    default: "10.6.5"
+    default: "10.7.0"
   eas-version:
     description: Version of EAS CLI to use
     default: "latest"

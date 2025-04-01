@@ -1,3 +1,5 @@
+import { StatusBar } from 'react-native';
+
 import { Stack, Redirect } from 'expo-router';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -32,6 +34,7 @@ export default function AuthLayout() {
 			<ErrorBoundary>
 				<PortalHost />
 			</ErrorBoundary>
+			<StatusBar style="dark" backgroundColor="#F0F4F8" />
 		</>
 	);
 }
