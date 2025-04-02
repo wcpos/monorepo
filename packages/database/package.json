@@ -23,7 +23,7 @@
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.4",
-    "rxdb": "16.8.1",
+    "rxdb": "16.9.0",
     "rxdb-premium": "16.8.1",
     "rxjs": "7.8.2",
     "uuid": "11.1.0"
