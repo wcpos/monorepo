@@ -27,7 +27,7 @@ const DemoButton = () => {
 			const { data } = await http.get(
 				'https://demo.wcpos.com/wp-json/wcpos/v1/jwt/authorize?user=demo'
 			);
-			site.incrementalUpdate({ $push: { wp_credentials: data } });
+			site.getLatest().incrementalUpdate({ $push: { wp_credentials: data } });
 		} catch (err) {
 			log.error(err);
 		} finally {

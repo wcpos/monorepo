@@ -90,7 +90,7 @@ export const Site = ({ user, site, idx }: Props) => {
 			<HStack space="lg" className={cn('p-4', idx !== 0 && 'border-border border-t')}>
 				<Avatar
 					source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url)}`}
-					className="w-10 h-10"
+					className="h-10 w-10"
 				/>
 				<VStack className="flex-1">
 					<VStack space="xs">
@@ -114,7 +114,7 @@ export const Site = ({ user, site, idx }: Props) => {
 					<TooltipTrigger asChild>
 						<IconButton
 							name="circleXmark"
-							size="lg"
+							size="xl"
 							variant="destructive"
 							onPress={() => setDeleteDialogOpened(true)}
 						/>

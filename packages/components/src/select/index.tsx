@@ -8,6 +8,7 @@ import { Trigger as SelectPrimitiveTrigger, Value as SelectPrimitiveValue } from
 import { Button } from '../button';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
+import { Text } from '../text';
 
 import type { ButtonProps } from '../button';
 
@@ -162,7 +163,7 @@ const SelectItem = React.forwardRef<SelectPrimitive.ItemRef, SelectPrimitive.Ite
 					<Icon name="check" className="text-popover-foreground" />
 				</SelectPrimitive.ItemIndicator>
 			</View>
-			<SelectPrimitive.ItemText className="web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
+			<SelectPrimitive.ItemText className="native:text-base web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
 		</SelectPrimitive.Item>
 	)
 );

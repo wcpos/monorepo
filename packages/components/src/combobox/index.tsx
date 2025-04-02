@@ -1,14 +1,12 @@
 import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, FlatList, View } from 'react-native';
 
 import * as SelectPrimitive from '@rn-primitives/select';
-import { FlatList } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Input } from '../input';
-import { Text } from '../text';
-import * as ComboboxPrimitive from './primitives';
 import { cn } from '../lib/utils';
+import { Text } from '../text';
 
 import type { TextProps } from '../text';
 
@@ -35,11 +33,41 @@ import type { TextProps } from '../text';
  * </Combobox>
  */
 
-const Combobox = ComboboxPrimitive.Root;
-const ComboboxTrigger = ComboboxPrimitive.Trigger;
-const ComboboxTriggerPrimitive = ComboboxPrimitive.Trigger;
-const ComboboxValue = ComboboxPrimitive.Value;
-const ComboboxItem = ComboboxPrimitive.Item;
+const Combobox = SelectPrimitive.Root;
+Combobox.displayName = 'Combobox';
+
+const ComboboxTrigger = SelectPrimitive.Trigger;
+ComboboxTrigger.displayName = 'ComboboxTrigger';
+
+const ComboboxTriggerPrimitive = SelectPrimitive.Trigger;
+ComboboxTriggerPrimitive.displayName = 'ComboboxTriggerPrimitive';
+
+const ComboboxValue = SelectPrimitive.Value;
+ComboboxValue.displayName = 'ComboboxValue';
+
+const ComboboxItem = React.forwardRef<SelectPrimitive.ItemRef, SelectPrimitive.ItemProps>(
+	({ className, children, ...props }, ref) => (
+		<SelectPrimitive.Item
+			ref={ref}
+			className={cn(
+				'native:py-2',
+				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent',
+				'relative flex w-full flex-row items-center rounded-sm px-2 py-1.5',
+				props.disabled && 'web:pointer-events-none opacity-50',
+				className
+			)}
+			{...props}
+		>
+			<SelectPrimitive.ItemText className="native:text-base web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
+		</SelectPrimitive.Item>
+	)
+);
+ComboboxItem.displayName = 'ComboboxItem';
+
+const ComboboxItemText = SelectPrimitive.ItemText;
+ComboboxItemText.displayName = 'ComboboxItemText';
+
+const useRootContext = SelectPrimitive.useRootContext;
 
 /**
  * Remove this, just use ComboboxContent with search
@@ -55,19 +83,16 @@ const ComboboxContent = React.forwardRef<
 	SelectPrimitive.ContentRef,
 	SelectPrimitive.ContentProps & { portalHost?: string }
 >(({ className, children, position = 'popper', portalHost, ...props }, ref) => {
-	const { open } = ComboboxPrimitive.useRootContext();
+	const { open } = SelectPrimitive.useRootContext();
 
 	return (
-		<ComboboxPrimitive.Portal hostName={portalHost}>
-			<ComboboxPrimitive.Overlay
-				style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}
-			>
+		<SelectPrimitive.Portal hostName={portalHost}>
+			<SelectPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
 				<Animated.View className="z-50" entering={FadeIn} exiting={FadeOut}>
-					<ComboboxPrimitive.Content
+					<SelectPrimitive.Content
 						ref={ref}
 						className={cn(
-							'border-border bg-popover shadow-foreground/10 relative z-50 max-h-96 min-w-[8rem] rounded-md border px-1 py-2 shadow-md',
-							'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+							'border-border bg-popover shadow-foreground/10 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-96 min-w-[8rem] rounded-md border px-1 py-2 shadow-md',
 							position === 'popper' &&
 								'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
 							open
@@ -78,7 +103,7 @@ const ComboboxContent = React.forwardRef<
 						position={position}
 						{...props}
 					>
-						<ComboboxPrimitive.Viewport
+						<SelectPrimitive.Viewport
 							className={cn(
 								'p-1',
 								position === 'popper' &&
@@ -86,14 +111,14 @@ const ComboboxContent = React.forwardRef<
 							)}
 						>
 							{children}
-						</ComboboxPrimitive.Viewport>
-					</ComboboxPrimitive.Content>
+						</SelectPrimitive.Viewport>
+					</SelectPrimitive.Content>
 				</Animated.View>
-			</ComboboxPrimitive.Overlay>
-		</ComboboxPrimitive.Portal>
+			</SelectPrimitive.Overlay>
+		</SelectPrimitive.Portal>
 	);
 });
-ComboboxContent.displayName = ComboboxPrimitive.Content.displayName;
+ComboboxContent.displayName = 'ComboboxContent';
 
 /**
  *
@@ -113,9 +138,7 @@ const ComboboxList = React.forwardRef<
 	React.ElementRef<typeof FlatList>,
 	React.ComponentPropsWithoutRef<typeof FlatList>
 >(({ className, data, renderItem: customRenderItem, ...props }, ref) => {
-	const defaultRenderItem = ({ item }) => (
-		<ComboboxItem value={item.value}>{item.label}</ComboboxItem>
-	);
+	const defaultRenderItem = ({ item }) => <ComboboxItem value={item.value} label={item.label} />;
 
 	return (
 		<FlatList
@@ -128,6 +151,7 @@ const ComboboxList = React.forwardRef<
 				return String(item.value);
 			}}
 			renderItem={customRenderItem || defaultRenderItem}
+			style={{ maxHeight: 200 }}
 			{...props}
 		/>
 	);
@@ -138,11 +162,12 @@ ComboboxList.displayName = 'ComboboxList';
  *
  */
 const ComboboxEmpty = React.forwardRef<Text, TextProps>((props, ref) => (
-	<Text ref={ref} {...props} />
+	<View className="px-2 py-1.5">
+		<Text ref={ref} {...props} />
+	</View>
 ));
 ComboboxEmpty.displayName = 'ComboboxEmpty';
 
-const useRootContext = () => {};
 const useComboboxContext = () => {};
 
 export {

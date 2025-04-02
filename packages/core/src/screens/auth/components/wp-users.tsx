@@ -40,7 +40,7 @@ export const WPUsers = ({ site }: WpUserProps) => {
 					<TooltipTrigger asChild>
 						<IconButton
 							name="circlePlus"
-							size="lg"
+							size="xl"
 							onPress={() => router.push({ pathname: '/login', params: { siteID: site.uuid } })}
 						/>
 					</TooltipTrigger>
