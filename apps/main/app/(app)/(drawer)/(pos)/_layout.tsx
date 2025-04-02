@@ -1,14 +1,6 @@
 import React from 'react';
-import { useWindowDimensions } from 'react-native';
 
-import {
-	Redirect,
-	useSegments,
-	Slot,
-	Stack,
-	useLocalSearchParams,
-	useGlobalSearchParams,
-} from 'expo-router';
+import { Stack, useGlobalSearchParams } from 'expo-router';
 import { useObservableEagerState, ObservableResource } from 'observable-hooks';
 import { map, distinctUntilChanged } from 'rxjs/operators';
 

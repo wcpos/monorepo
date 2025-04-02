@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StackActions, useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
@@ -27,7 +27,7 @@ export const EditCustomerForm = ({ customer }: Props) => {
 	const { localPatch } = useLocalMutation();
 	const pushDocument = usePushDocument();
 	const { format } = useCustomerNameFormat();
-	const navigation = useNavigation();
+	const router = useRouter();
 
 	/**
 	 *
@@ -79,7 +79,7 @@ export const EditCustomerForm = ({ customer }: Props) => {
 	return (
 		<CustomerForm
 			form={form}
-			onClose={() => navigation.dispatch(StackActions.pop(1))}
+			onClose={() => router.back()}
 			onSubmit={handleSave}
 			loading={loading}
 		/>

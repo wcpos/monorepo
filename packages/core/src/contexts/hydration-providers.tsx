@@ -2,8 +2,10 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 
 import { AppStateProvider } from './app-state';
+import { ThemeProvider } from './theme';
 import { TranslationProvider } from './translations';
 import { Splash } from '../screens/splash';
+
 /**
  * Provider sandwich to ensure all providers are hydrated before rendering the app
  */
@@ -17,19 +19,21 @@ export const HydrationProviders = ({ children }) => {
 			fallback={<Splash progress={33} />}
 		>
 			<AppStateProvider>
-				<ErrorBoundary>
-					<Suspense
-						/**
-						 * Second suspense to allow anything else to load that depends on the app state
-						 * - translations, theme, etc
-						 */
-						fallback={<Splash progress={66} />}
-					>
-						<TranslationProvider>
-							<Suspense fallback={<Splash progress={100} />}>{children}</Suspense>
-						</TranslationProvider>
-					</Suspense>
-				</ErrorBoundary>
+				<ThemeProvider>
+					<ErrorBoundary>
+						<Suspense
+							/**
+							 * Second suspense to allow anything else to load that depends on the app state
+							 * - translations, theme, etc
+							 */
+							fallback={<Splash progress={66} />}
+						>
+							<TranslationProvider>
+								<Suspense fallback={<Splash progress={100} />}>{children}</Suspense>
+							</TranslationProvider>
+						</Suspense>
+					</ErrorBoundary>
+				</ThemeProvider>
 			</AppStateProvider>
 		</Suspense>
 	);

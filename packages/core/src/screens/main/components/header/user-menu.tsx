@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useWindowDimensions, Linking } from 'react-native';
+import { Linking } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import {
@@ -26,6 +26,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 
 import { useAppState } from '../../../../contexts/app-state';
+import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 
@@ -64,7 +65,7 @@ const StoreSubMenu = ({ storesResource, switchStore, currentStoreID }: StoreSubM
 export const UserMenu = () => {
 	const { wpCredentials, isWebApp, site, store, logout, switchStore } = useAppState();
 	const router = useRouter();
-	const dimensions = useWindowDimensions();
+	const { screenSize } = useTheme();
 	const avatarUrl = useObservableEagerState(wpCredentials?.avatar_url$);
 	const stores = useObservableEagerState(wpCredentials?.stores$);
 	const t = useT();
@@ -87,9 +88,7 @@ export const UserMenu = () => {
 							source={avatarSource}
 							// placeholder="PK"
 						/>
-						{dimensions.width >= 640 ? (
-							<ButtonText>{wpCredentials?.display_name}</ButtonText>
-						) : null}
+						{screenSize !== 'sm' ? <ButtonText>{wpCredentials?.display_name}</ButtonText> : null}
 						<Icon name="caretDown" />
 					</HStack>
 				</Button>

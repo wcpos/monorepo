@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Dimensions } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import Discord from './discord';
 
 // Helper to account for padding (p-2 = 8px on each side)
@@ -16,6 +18,7 @@ const adjustForPadding = (width: number, height: number) => {
 
 export const Support = () => {
 	const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
+	const { bottom } = useSafeAreaInsets();
 
 	const handleLayout = (event: LayoutChangeEvent) => {
 		const { width, height } = event.nativeEvent.layout;
@@ -43,7 +46,7 @@ export const Support = () => {
 	}, []);
 
 	return (
-		<View className="h-full w-full p-2" onLayout={handleLayout}>
+		<View className="h-full w-full p-2" onLayout={handleLayout} style={{ paddingBottom: bottom }}>
 			<Discord
 				dom={{
 					matchContents: true,

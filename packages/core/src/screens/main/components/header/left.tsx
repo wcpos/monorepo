@@ -1,15 +1,15 @@
 import * as React from 'react';
-import { useWindowDimensions } from 'react-native';
 
 import { useNavigation } from 'expo-router';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 
+import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 
 const HeaderLeft = () => {
-	const { width } = useWindowDimensions();
+	const { screenSize } = useTheme();
 	const navigation = useNavigation();
 	const t = useT();
 
@@ -23,14 +23,14 @@ const HeaderLeft = () => {
 	/**
 	 * Large screen
 	 */
-	if (width >= 1024) {
+	if (screenSize === 'lg') {
 		return null;
 	}
 
 	/**
 	 * Small screen
 	 */
-	if (width < 640) {
+	if (screenSize === 'sm') {
 		return (
 			<Button
 				onPress={handleOpenDrawer}

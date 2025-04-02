@@ -8,7 +8,7 @@ import Version from './version';
 
 import type { DrawerContentComponentProps } from '@react-navigation/drawer';
 
-export const DrawerContent = (props: DrawerContentComponentProps & { largeScreen: boolean }) => {
+export const DrawerContent = (props: DrawerContentComponentProps) => {
 	const insets = useSafeAreaInsets();
 
 	return (
@@ -26,7 +26,7 @@ export const DrawerContent = (props: DrawerContentComponentProps & { largeScreen
 			}}
 		>
 			<DrawerItemList {...props} />
-			<Version largeScreen={props.largeScreen} />
+			<Version />
 		</DrawerContentScrollView>
 	);
 };

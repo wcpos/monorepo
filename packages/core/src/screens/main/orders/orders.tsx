@@ -2,6 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 
 import get from 'lodash/get';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -61,6 +62,7 @@ export const Orders = () => {
 	const { uiSettings } = useUISettings('orders');
 	const t = useT();
 	const { wpCredentials, store } = useAppState();
+	const { bottom } = useSafeAreaInsets();
 
 	const selector = {
 		$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } }],
@@ -91,7 +93,7 @@ export const Orders = () => {
 	 *
 	 */
 	return (
-		<View className="h-full p-2">
+		<View className="h-full p-2" style={{ paddingBottom: bottom }}>
 			<Card className="flex-1">
 				<CardHeader className="bg-input p-2">
 					<VStack>

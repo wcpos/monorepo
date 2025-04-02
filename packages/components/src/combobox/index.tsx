@@ -85,10 +85,21 @@ const ComboboxContent = React.forwardRef<
 >(({ className, children, position = 'popper', portalHost, ...props }, ref) => {
 	const { open } = SelectPrimitive.useRootContext();
 
+	/**
+	 * FIXME: I thought the SelectPrimitive.Content already handled mounting and unmounting via Radix presence.
+	 * However, select contents are being rendered on page load, which is not what we want.
+	 */
+	if (!open) return null;
+
 	return (
 		<SelectPrimitive.Portal hostName={portalHost}>
 			<SelectPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				<Animated.View className="z-50" entering={FadeIn} exiting={FadeOut}>
+				<Animated.View
+					className="z-50"
+					// FIXME: There's a weird thing when the content is being unmounted, it flashes before it's removed.
+					// entering={FadeIn}
+					// exiting={FadeOut}
+				>
 					<SelectPrimitive.Content
 						ref={ref}
 						className={cn(
@@ -127,7 +138,7 @@ const ComboboxInput = React.forwardRef<
 	React.ElementRef<typeof Input>,
 	React.ComponentPropsWithoutRef<typeof Input>
 >(({ className, ...props }, ref) => {
-	return <Input ref={ref} autoFocus {...props} />;
+	return <Input ref={ref} autoFocus={Platform.OS === 'web'} {...props} />;
 });
 ComboboxInput.displayName = 'ComboboxInput';
 

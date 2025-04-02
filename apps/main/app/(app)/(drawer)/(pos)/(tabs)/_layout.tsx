@@ -1,6 +1,7 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 
 import { Icon } from '@wcpos/components/icon';
+import { useTheme } from '@wcpos/core/contexts/theme';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -8,6 +9,12 @@ export const unstable_settings = {
 };
 
 export default function TabsLayout() {
+	const { screenSize } = useTheme();
+
+	if (screenSize !== 'sm') {
+		return <Redirect href="(columns)" />;
+	}
+
 	return (
 		<Tabs screenOptions={{ headerShown: false }}>
 			<Tabs.Screen

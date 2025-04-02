@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import get from 'lodash/get';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -46,6 +47,7 @@ export const CustomersScreen = () => {
 	const { uiSettings } = useUISettings('customers');
 	const t = useT();
 	const router = useRouter();
+	const { bottom } = useSafeAreaInsets();
 
 	/**
 	 *
@@ -63,7 +65,7 @@ export const CustomersScreen = () => {
 	 *
 	 */
 	return (
-		<View className="h-full p-2">
+		<View className="h-full p-2" style={{ paddingBottom: bottom }}>
 			<Card className="flex-1">
 				<CardHeader className="bg-input p-0">
 					<HStack className="p-2">

@@ -1,8 +1,7 @@
-import { useWindowDimensions } from 'react-native';
-
 import { Drawer } from 'expo-router/drawer';
 
 import { Icon } from '@wcpos/components/icon';
+import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
 import { Header } from '@wcpos/core/screens/main/components/header';
@@ -13,8 +12,7 @@ export const unstable_settings = {
 };
 
 export default function DrawerLayout() {
-	const dimensions = useWindowDimensions();
-	const largeScreen = dimensions.width >= 1024;
+	const { screenSize } = useTheme();
 	const t = useT();
 
 	return (
@@ -23,10 +21,10 @@ export default function DrawerLayout() {
 				header: (props) => {
 					return <Header {...props} showUpgrade={false} setShowUpgrade={() => {}} />;
 				},
-				drawerType: largeScreen ? 'permanent' : 'front',
+				drawerType: screenSize === 'lg' ? 'permanent' : 'front',
 				drawerStyle: {
 					backgroundColor: '#243B53',
-					width: largeScreen ? 'auto' : undefined,
+					width: screenSize === 'lg' ? 'auto' : undefined,
 					maxWidth: 200,
 					borderRightColor: 'rgba(0, 0, 0, 0.2)',
 					borderTopRightRadius: 0,
@@ -40,9 +38,7 @@ export default function DrawerLayout() {
 				},
 				sceneStyle: { backgroundColor: '#F0F4F8' },
 			}}
-			drawerContent={(props) => {
-				return <DrawerContent {...props} largeScreen={largeScreen} />;
-			}}
+			drawerContent={DrawerContent}
 		>
 			<Drawer.Screen
 				name="(pos)"

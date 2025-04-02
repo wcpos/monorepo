@@ -33,8 +33,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 		jsEngine: 'hermes',
 	},
 	androidNavigationBar: {
-		visible: 'immersive',
-		backgroundColor: '#F0F4F8',
+		backgroundColor: '#00000000',
 	},
 	web: {
 		bundler: 'metro',
