@@ -46,7 +46,11 @@ export const Support = () => {
 	}, []);
 
 	return (
-		<View className="h-full w-full p-2" onLayout={handleLayout} style={{ paddingBottom: bottom }}>
+		<View
+			className="h-full w-full p-2"
+			onLayout={handleLayout}
+			style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}
+		>
 			<Discord
 				dom={{
 					matchContents: true,

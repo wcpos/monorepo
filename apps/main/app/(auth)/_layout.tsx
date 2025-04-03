@@ -1,6 +1,5 @@
-import { StatusBar } from 'react-native';
-
 import { Stack, Redirect } from 'expo-router';
+import * as StatusBar from 'expo-status-bar';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
@@ -13,6 +12,8 @@ export const unstable_settings = {
 
 export default function AuthLayout() {
 	const { storeDB } = useAppState();
+	StatusBar.setStatusBarStyle('dark', true);
+	StatusBar.setStatusBarTranslucent(true);
 
 	if (storeDB) {
 		return <Redirect href="/(app)" />;
@@ -34,7 +35,6 @@ export default function AuthLayout() {
 			<ErrorBoundary>
 				<PortalHost />
 			</ErrorBoundary>
-			<StatusBar style="dark" backgroundColor="#F0F4F8" />
 		</>
 	);
 }
