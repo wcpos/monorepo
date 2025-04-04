@@ -10,16 +10,16 @@ import {
 	subMonths,
 	endOfDay,
 	startOfDay,
+	format,
 } from 'date-fns';
 
 import { Button, ButtonText, ButtonPill } from '@wcpos/components/button';
-import { Calendar } from '@wcpos/components/calendar';
-import type { DateRange } from '@wcpos/components/calendar';
+import { Calendar, DateRange } from '@wcpos/components/calendar';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
+import { useLocale } from '@wcpos/core/hooks/use-locale';
 
 import { useT } from '../../../../../contexts/translations';
-import { useLocalDate } from '../../../../../hooks/use-local-date';
 
 interface Props {
 	onSelect: (date: DateRange) => void;
@@ -40,7 +40,7 @@ const isDateRangeEqual = (range1: DateRange | undefined, range2: DateRange) => {
 export const DateRangeCalendar = ({ onSelect }: Props) => {
 	const t = useT();
 	const today = React.useMemo(() => new Date(), []);
-	const { dateFnsLocale } = useLocalDate();
+	const { shortCode } = useLocale();
 
 	// Array of date range options for buttons
 	const dateRanges = React.useMemo(() => {
@@ -104,18 +104,15 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 	}, [t, today]);
 
 	/**
-	 *
+	 * State for the selected date range
 	 */
 	const [date, setDate] = React.useState<DateRange | undefined>(dateRanges[0].range);
 
 	/**
-	 * When the date range is selected, make sure the to date is set to the end of the day
+	 * Handle date range change from the Calendar component
 	 */
-	const handleCalendarSelect = (range: DateRange) => {
-		setDate({
-			from: range.from,
-			to: endOfDay(range.to),
-		});
+	const handleDateRangeChange = (range: DateRange) => {
+		setDate(range);
 	};
 
 	return (
@@ -134,13 +131,10 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 					))}
 				</VStack>
 				<Calendar
-					locale={dateFnsLocale}
-					mode="range"
-					defaultMonth={date?.from}
-					endMonth={today}
-					hidden={[{ after: today }]}
-					onSelect={handleCalendarSelect}
-					selected={date}
+					maxDate={format(today, 'yyyy-MM-dd')}
+					dateRange={date}
+					onDateRangeChange={handleDateRangeChange}
+					locale={shortCode}
 				/>
 			</HStack>
 			<HStack className="justify-end">
