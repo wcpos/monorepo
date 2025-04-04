@@ -18,8 +18,7 @@
   },
   "dependencies": {
     "lodash": "4.17.21",
-    "react-native-logs": "^5.2.2",
-    "react-native-web": "~0.19.13"
+    "react-native-logs": "^5.2.2"  
   },
   "devDependencies": {
     "@types/jest": "^29.5.13",
