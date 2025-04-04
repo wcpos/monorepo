@@ -1,10 +1,9 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
-
 import { Card } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 import { Logo } from '@wcpos/components/logo';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';

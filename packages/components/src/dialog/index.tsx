@@ -4,9 +4,10 @@ import { Platform, StyleSheet, View, ScrollView } from 'react-native';
 import * as DialogPrimitive from '@rn-primitives/dialog';
 import * as Slot from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
