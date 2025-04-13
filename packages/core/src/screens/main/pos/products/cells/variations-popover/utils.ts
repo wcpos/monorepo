@@ -9,50 +9,23 @@ export const parseAttributes = (
 	selectedAttributes: { id: number; name: string; option: string }[] | undefined,
 	hits: { document: ProductVariationDocument }[]
 ) => {
-	// Handle "any option" by generating permutations for missing attributes
-	const expandedHits = hits.flatMap((hit) => {
-		const missingAttributes = attributes?.filter(
-			(attribute) =>
-				attribute.variation &&
-				!(hit.document.attributes || []).some((attr) => attr.id === attribute.id)
-		);
-
-		if (missingAttributes && missingAttributes.length > 0) {
-			// Generate permutations for all options of missing attributes
-			return missingAttributes.reduce(
-				(permutedHits, attr) => {
-					return permutedHits.flatMap((currentHit) =>
-						(attr.options || []).map((option) => ({
-							document: {
-								...currentHit.document,
-								attributes: [
-									...(currentHit.document.attributes || []),
-									{ id: attr.id, name: attr.name, option },
-								],
-							},
-						}))
-					);
-				},
-				[hit]
-			);
-		}
-
-		// If no attributes are missing, keep the hit as is
-		return [hit];
-	});
-
 	// Filter hits based on selected attributes
-	let filteredHits = expandedHits;
+	let filteredHits = hits;
 
 	if (selectedAttributes && selectedAttributes.length > 0) {
-		filteredHits = expandedHits.filter((hit) =>
-			selectedAttributes.every((selAttr) =>
-				(hit.document.attributes || []).some(
-					(attr) =>
-						attr.id === selAttr.id && attr.name === selAttr.name && attr.option === selAttr.option
-				)
-			)
-		);
+		filteredHits = hits.filter((hit) => {
+			return selectedAttributes.every((selAttr) => {
+				const hitAttribute = (hit.document.attributes || []).find((attr) => attr.id === selAttr.id);
+
+				if (hitAttribute) {
+					// Hit has the attribute, options must match
+					return hitAttribute.option === selAttr.option;
+				} else {
+					// Hit does *not* have the attribute, it's compatible (represents "any")
+					return true;
+				}
+			});
+		});
 	}
 
 	// Parse and compute attribute data
@@ -66,12 +39,22 @@ export const parseAttributes = (
 
 			// Only calculate option counts if the attribute is not already selected
 			if (!selected) {
+				// For each option, count how many variations would be valid if this option was selected
 				(attribute.options || []).forEach((option) => {
-					const count = filteredHits.filter((variation) =>
-						(variation.document.attributes || []).some(
-							(a) => a.id === attribute.id && a.name === attribute.name && a.option === option
-						)
-					).length;
+					// Check if this option is compatible with all other selected attributes
+					const count = filteredHits.filter((hit) => {
+						// If the hit already has this attribute, check if it matches
+						const existingAttr = (hit.document.attributes || []).find(
+							(attr) => attr.id === attribute.id
+						);
+
+						if (existingAttr) {
+							return existingAttr.option === option;
+						}
+
+						// If the hit doesn't have this attribute, it's compatible with any option
+						return true;
+					}).length;
 
 					optionCounts[option] = count;
 				});

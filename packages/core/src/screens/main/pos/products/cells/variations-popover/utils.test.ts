@@ -558,7 +558,7 @@ describe('parseAttributes', () => {
 						options: ['Red', 'Blue'],
 						characterCount: 7, // 'Red'.length + 'Blue'.length = 7
 					},
-					optionCounts: { Red: 2, Blue: 2 },
+					optionCounts: { Red: 1, Blue: 1 },
 					selected: undefined,
 				},
 				{
@@ -665,5 +665,93 @@ describe('parseAttributes', () => {
 				},
 			]);
 		});
+	});
+});
+
+describe('Performance Tests', () => {
+	it('should handle large attribute sets efficiently', () => {
+		// Create a large set of attributes with many options
+		const largeAttributes: ProductDocument['attributes'] = [
+			{
+				id: 1,
+				name: 'Color',
+				position: 0,
+				visible: true,
+				variation: true,
+				options: Array.from({ length: 25 }, (_, i) => `Color${i}`),
+			},
+			{
+				id: 2,
+				name: 'Size',
+				position: 1,
+				visible: true,
+				variation: true,
+				options: Array.from({ length: 25 }, (_, i) => `Size${i}`),
+			},
+			{
+				id: 3,
+				name: 'Material',
+				position: 2,
+				visible: true,
+				variation: true,
+				options: Array.from({ length: 25 }, (_, i) => `Material${i}`),
+			},
+			{
+				id: 4,
+				name: 'Style',
+				position: 3,
+				visible: true,
+				variation: true,
+				options: Array.from({ length: 25 }, (_, i) => `Style${i}`),
+			},
+			{
+				id: 5,
+				name: 'Pattern',
+				position: 4,
+				visible: true,
+				variation: true,
+				options: Array.from({ length: 25 }, (_, i) => `Pattern${i}`),
+			},
+			{
+				id: 6,
+				name: 'Shape',
+				position: 5,
+				visible: true,
+				variation: true,
+				options: Array.from({ length: 25 }, (_, i) => `Shape${i}`),
+			},
+			{
+				id: 7,
+				name: 'Finish',
+				position: 6,
+				visible: true,
+				variation: true,
+				options: Array.from({ length: 25 }, (_, i) => `Finish${i}`),
+			},
+		];
+
+		// Create hits with only one attribute specified
+		const hits: { document: ProductVariationDocument }[] = Array.from({ length: 10 }, (_, i) => ({
+			document: {
+				attributes: [{ id: 1, name: 'Color', option: `Color${i}` }],
+			} as ProductVariationDocument,
+		}));
+
+		// Measure execution time
+		const startTime = performance.now();
+		const result = parseAttributes(largeAttributes, undefined, hits);
+		const endTime = performance.now();
+		const executionTime = endTime - startTime;
+
+		// Log the execution time
+		console.log(`Execution time for large attribute set: ${executionTime}ms`);
+
+		// Assert that the function completes within a reasonable time (e.g., 1000ms)
+		expect(executionTime).toBeLessThan(1000);
+
+		// Verify the result structure
+		expect(result.length).toBe(7);
+		expect(result[0].optionCounts).toBeDefined();
+		expect(Object.keys(result[0].optionCounts).length).toBe(25);
 	});
 });
