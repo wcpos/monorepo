@@ -27,7 +27,7 @@
 		"react-native-safe-area-context": "5.1.0",
 		"react-native-screens": "4.8.0",
 		"react-native-svg": "15.11.1",
-		"victory-native": "^41.16.1"
+		"victory-native": "41.16.2"
 	},
 	"dependencies": {
 		"@date-fns/tz": "^1.2.0",

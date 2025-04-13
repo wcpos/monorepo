@@ -108,7 +108,7 @@ export default function SkiaChart() {
 					<StackedBar
 						chartBounds={chartBounds}
 						points={[points.total, points.total_tax]}
-						colors={['orange', 'gold']}
+						colors={['#FADB5F', '#F7C948']}
 						animate={{ type: 'spring' }}
 						barOptions={({ isTop }) => {
 							return {
@@ -123,7 +123,7 @@ export default function SkiaChart() {
 					/>
 					<LineChart
 						points={points.order_count}
-						color="blue"
+						color="#127FBF"
 						strokeWidth={3}
 						curveType="natural"
 						connectMissingData
