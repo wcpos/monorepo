@@ -6,8 +6,11 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Input } from '../input';
 import { cn } from '../lib/utils';
+import * as Select from '../select';
 import { Text } from '../text';
+import { commandScore } from './fuzzy-search';
 
+import type { Option } from '../select';
 import type { TextProps } from '../text';
 
 /**
@@ -19,16 +22,16 @@ import type { TextProps } from '../text';
  *   { value: 'AUD', label: 'Australian Dollar' },
  * ]
  *
- * <Combobox ref={ref} value={{ value, label }} onValueChange={onValueChange}>
+ * <Combobox value={{ value, label }} onValueChange={onValueChange}>
  *       <ComboboxTrigger>
  *           <ComboboxValue placeholder={t('Select Currency', { _tags: 'core' })} />
  *       </ComboboxTrigger>
  *       <ComboboxContent>
- *           <ComboboxSearch>
- *               <ComboboxInput placeholder={t('Search Currencies', { _tags: 'core' })} />
- *               <ComboboxEmpty>{t('No currency found', { _tags: 'core' })}</ComboboxEmpty>
- *               <ComboboxList data={options} />
- *           </ComboboxSearch>
+ *           <ComboboxInput placeholder={t('Search Currencies', { _tags: 'core' })} />
+ *           <ComboboxList
+ *             data={options}
+ *             ListEmptyComponent={<ComboboxEmpty>{t('No currency found', { _tags: 'core' })}</ComboboxEmpty>}
+ *           />
  *       </ComboboxContent>
  * </Combobox>
  */
@@ -36,13 +39,13 @@ import type { TextProps } from '../text';
 const Combobox = SelectPrimitive.Root;
 Combobox.displayName = 'Combobox';
 
-const ComboboxTrigger = SelectPrimitive.Trigger;
+const ComboboxTrigger = Select.SelectTrigger;
 ComboboxTrigger.displayName = 'ComboboxTrigger';
 
 const ComboboxTriggerPrimitive = SelectPrimitive.Trigger;
 ComboboxTriggerPrimitive.displayName = 'ComboboxTriggerPrimitive';
 
-const ComboboxValue = SelectPrimitive.Value;
+const ComboboxValue = Select.SelectValue;
 ComboboxValue.displayName = 'ComboboxValue';
 
 const ComboboxItem = React.forwardRef<SelectPrimitive.ItemRef, SelectPrimitive.ItemProps>(
@@ -116,7 +119,7 @@ const ComboboxContent = React.forwardRef<
 					>
 						<SelectPrimitive.Viewport
 							className={cn(
-								'p-1',
+								'flex flex-col gap-2 p-1',
 								position === 'popper' &&
 									'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]'
 							)}
@@ -138,7 +141,7 @@ const ComboboxInput = React.forwardRef<
 	React.ElementRef<typeof Input>,
 	React.ComponentPropsWithoutRef<typeof Input>
 >(({ className, ...props }, ref) => {
-	return <Input ref={ref} autoFocus={Platform.OS === 'web'} {...props} />;
+	return <Input ref={ref} autoFocus={Platform.OS === 'web'} clearable {...props} />;
 });
 ComboboxInput.displayName = 'ComboboxInput';
 
@@ -181,6 +184,22 @@ ComboboxEmpty.displayName = 'ComboboxEmpty';
 
 const useComboboxContext = () => {};
 
+const comboboxFilter = (items: Option[], query: string, threshold = 0.1): Option[] => {
+	return (
+		items
+			.map((item) => ({
+				item,
+				// Use the label as the primary string and the value as an alias
+				score: commandScore(item.label, query, [item.value]),
+			}))
+			// Filter out items with scores below the threshold
+			.filter(({ score }) => score > threshold)
+			// Sort descending by score
+			.sort((a, b) => b.score - a.score)
+			.map(({ item }) => item)
+	);
+};
+
 export {
 	Combobox,
 	ComboboxContent,
@@ -194,4 +213,5 @@ export {
 	useComboboxContext,
 	ComboboxValue,
 	ComboboxTrigger,
+	comboboxFilter,
 };

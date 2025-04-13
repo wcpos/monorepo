@@ -52,7 +52,7 @@ export const CustomerSearch = ({ withGuest = false }: { withGuest?: boolean }) =
 			<ComboboxInput
 				placeholder={t('Search Customers', { _tags: 'core' })}
 				value={search}
-				onValueChange={onSearch}
+				onChangeText={onSearch}
 			/>
 			<ComboboxEmpty>{t('No customers found', { _tags: 'core' })}</ComboboxEmpty>
 			<Suspense>

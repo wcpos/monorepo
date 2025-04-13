@@ -6,10 +6,9 @@ import {
 	Combobox,
 	ComboboxContent,
 	ComboboxEmpty,
+	comboboxFilter,
 	ComboboxInput,
-	ComboboxItem,
 	ComboboxList,
-	ComboboxSearch,
 	ComboboxTrigger,
 	ComboboxValue,
 } from '@wcpos/components/combobox';
@@ -26,7 +25,7 @@ export const LanguageSelect = React.forwardRef<
 >(({ value, onValueChange, ...props }, ref) => {
 	const { locales } = useLocale();
 	const t = useT();
-
+	const [searchTerm, setSearchTerm] = React.useState('');
 	/**
 	 *
 	 */
@@ -56,22 +55,33 @@ export const LanguageSelect = React.forwardRef<
 	/**
 	 *
 	 */
+	const filteredOptions = React.useMemo(() => {
+		return comboboxFilter(options, searchTerm);
+	}, [options, searchTerm]);
+
+	/**
+	 *
+	 */
 	return (
 		<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
 			<ComboboxTrigger>
 				<ComboboxValue placeholder={t('Select Language', { _tags: 'core' })} />
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxSearch>
-					<ComboboxInput placeholder={t('Search Languages', { _tags: 'core' })} />
-					<ComboboxEmpty>{t('No language found', { _tags: 'core' })}</ComboboxEmpty>
-					<ComboboxList>
-						{options.map((option) => (
-							<ComboboxItem key={option.value} value={option.value} label={option.label} />
-						))}
-					</ComboboxList>
-				</ComboboxSearch>
+				<ComboboxInput
+					value={searchTerm}
+					onChangeText={setSearchTerm}
+					placeholder={t('Search Languages', { _tags: 'core' })}
+				/>
+				<ComboboxList
+					data={filteredOptions}
+					ListEmptyComponent={
+						<ComboboxEmpty>{t('No language found', { _tags: 'core' })}</ComboboxEmpty>
+					}
+				/>
 			</ComboboxContent>
 		</Combobox>
 	);
 });
+
+LanguageSelect.displayName = 'LanguageSelect';
