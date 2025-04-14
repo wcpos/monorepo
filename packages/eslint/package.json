@@ -12,17 +12,17 @@
 	},
 	"peerDependencies": {
 		"eslint": ">=9",
-		"eslint-config-expo": "8.1.0-canary-20250306-d9d3e02",
-		"eslint-config-prettier": "10.0.1",
-		"eslint-plugin-prettier": "5.2.3",
+		"eslint-config-expo": "9.0.2",
+		"eslint-config-prettier": "10.1.2",
+		"eslint-plugin-prettier": "5.2.6",
 		"prettier": "3.5.3",
 		"prettier-plugin-tailwindcss": "0.6.11"
 	},
 	"devDependencies": {
 		"eslint": "9.23.0",
-		"eslint-config-expo": "8.1.0-canary-20250306-d9d3e02",
-		"eslint-config-prettier": "10.1.1",
-		"eslint-plugin-prettier": "5.2.3",
+		"eslint-config-expo": "9.0.2",
+		"eslint-config-prettier": "10.1.2",
+		"eslint-plugin-prettier": "5.2.6",
 		"prettier": "3.5.3",
 		"prettier-plugin-tailwindcss": "0.6.11"
 	}

@@ -29,6 +29,7 @@
   "packageManager": "pnpm@10.7.0",
   "pnpm": {
     "overrides": {
+      "react-native-edge-to-edge": "1.6.0",
       "zustand": "5.0.3"
     },
     "onlyBuiltDependencies": [
@@ -47,6 +48,6 @@
   },
   "dependencies": {
     "turbo": "2.5.0",
-    "typescript": "5.3.3"
+    "typescript": "~5.8.3"
   }
 }
