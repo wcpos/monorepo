@@ -29,6 +29,7 @@
   "packageManager": "pnpm@10.7.0",
   "pnpm": {
     "overrides": {
+      "@expo/prebuild-config": "9.0.0",
       "react-native-edge-to-edge": "1.6.0",
       "zustand": "5.0.3"
     },
