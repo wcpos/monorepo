@@ -190,6 +190,9 @@ importers:
       react-native:
         specifier: 0.79.0
         version: 0.79.0(@babel/core@7.26.9)(@types/react@19.1.2)(react@19.1.0)
+      react-native-edge-to-edge:
+        specifier: 1.6.0
+        version: 1.6.0(react-native@0.79.0(@babel/core@7.26.9)(@types/react@19.1.2)(react@19.1.0))(react@19.1.0)
       react-native-gesture-handler:
         specifier: 2.24.0
         version: 2.24.0(react-native@0.79.0(@babel/core@7.26.9)(@types/react@19.1.2)(react@19.1.0))(react@19.1.0)

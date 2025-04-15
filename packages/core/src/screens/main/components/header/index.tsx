@@ -2,8 +2,8 @@ import * as React from 'react';
 import { View, Linking } from 'react-native';
 
 import { Header as ReactNavigationHeader } from '@react-navigation/elements';
-import { StatusBar } from 'expo-status-bar';
 import { useObservableState } from 'observable-hooks';
+import { SystemBars } from 'react-native-edge-to-edge';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -52,7 +52,7 @@ export const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
 					headerLeft={Left}
 					headerRight={Right}
 				/>
-				<StatusBar style="light" />
+				<SystemBars style="light" />
 				{showUpgrade && <UpgradeNotice setShowUpgrade={setShowUpgrade} />}
 			</View>
 		</ErrorBoundary>
