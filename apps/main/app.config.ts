@@ -56,6 +56,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 	experiments: {
 		typedRoutes: true,
 		baseUrl: '/pos',
+		reactCanary: true,
 	},
 	extra: {
 		router: {
