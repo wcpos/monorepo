@@ -13,7 +13,8 @@
 			"@wcpos/hooks/*": ["packages/hooks/src/*"],
 			"@wcpos/query": ["packages/query/src/index"],
 			"@wcpos/query/*": ["packages/query/src/*"],
-			"@wcpos/utils/*": ["packages/utils/src/*"]
+			"@wcpos/utils/*": ["packages/utils/src/*"],
+			"@rn-primitives/*": ["packages/rn-primitives/packages/*"]
 		}
 	},
 	"include": ["**/*.ts", "**/*.tsx"]

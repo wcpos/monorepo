@@ -18,20 +18,18 @@
     "hooks": "pnpm --filter @wcpos/hooks",
     "query": "pnpm --filter @wcpos/query",
     "utils": "pnpm --filter @wcpos/utils",
-    "preinstall": "pnpm ignored-builds || true"
-  },
-  "workspaces": {
-    "packages": [
-      "apps/*",
-      "packages/*"
-    ]
+    "preinstall": "pnpm ignored-builds || true",
+    "postinstall": "turbo run build --filter=\"./packages/rn-primitives/packages/**\""
   },
   "packageManager": "pnpm@10.7.0",
   "pnpm": {
     "overrides": {
       "@expo/prebuild-config": "9.0.0",
+      "react": "19.1.0",
+      "react-dom": "19.1.0",
+      "react-native": "0.79.0",
       "react-native-edge-to-edge": "1.6.0",
-      "zustand": "5.0.3"
+      "@types/react": "19.1.2"
     },
     "onlyBuiltDependencies": [
       "better-sqlite3",
