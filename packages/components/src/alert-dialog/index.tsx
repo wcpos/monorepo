@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
 import type { GestureResponderEvent } from 'react-native';
 
 import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
+import { Platform, View } from '@rn-primitives/core';
 import { FadeIn, FadeOut, ZoomIn, ZoomOut } from '@rn-primitives/core/dist/native/reanimated';
 import { mergeProps } from '@rn-primitives/utils';
 
