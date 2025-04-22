@@ -1,44 +1,48 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import * as CheckboxPrimitive from '@rn-primitives/checkbox';
+import { Platform, View } from '@rn-primitives/core';
+import { mergeProps } from '@rn-primitives/utils';
 
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 
-type CheckboxProps = React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root> & {
-	indeterminate?: boolean;
+const CHECKBOX_NATIVE_PROPS = {
+	hitSlop: 10,
 };
 
-const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root>, CheckboxProps>(
-	({ className, indeterminate, ...props }, ref) => {
-		return (
-			<CheckboxPrimitive.Root
-				ref={ref}
-				className={cn(
-					'web:peer native:h-[20] native:w-[20] native:rounded',
-					'border-border h-4 w-4 shrink-0 rounded-sm border',
-					'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
-					'disabled:cursor-not-allowed disabled:opacity-50',
-					props.checked && 'bg-primary',
-					indeterminate && 'bg-primary',
-					className
-				)}
-				{...props}
-			>
-				{indeterminate ? (
-					<View className={cn('h-full w-full items-center justify-center')}>
-						<Icon name="minus" className="text-primary-foreground h-3 w-3" />
-					</View>
-				) : (
-					<CheckboxPrimitive.Indicator className={cn('h-full w-full items-center justify-center')}>
-						<Icon name="check" className="text-primary-foreground h-3 w-3" />
-					</CheckboxPrimitive.Indicator>
-				)}
-			</CheckboxPrimitive.Root>
-		);
-	}
-);
-Checkbox.displayName = CheckboxPrimitive.Root.displayName;
+const Checkbox = ({
+	className,
+	indeterminate,
+	native,
+	...props
+}: CheckboxPrimitive.RootProps & { indeterminate?: boolean }) => {
+	return (
+		<CheckboxPrimitive.Root
+			className={cn(
+				'border-border shrink-0 rounded border disabled:opacity-50',
+				Platform.select({
+					web: 'ring-offset-background focus-visible:ring-ring size-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed',
+					native: 'size-6',
+				}),
+				className
+			)}
+			native={mergeProps(CHECKBOX_NATIVE_PROPS, native)}
+			{...props}
+		>
+			{indeterminate ? (
+				<View className={cn('bg-primary h-full w-full items-center justify-center rounded')}>
+					<Icon name="minus" className="native:size-4 text-primary-foreground size-3" />
+				</View>
+			) : (
+				<CheckboxPrimitive.Indicator
+					className={cn('bg-primary h-full w-full items-center justify-center rounded')}
+				>
+					<Icon name="check" className="native:size-4 text-primary-foreground size-3" />
+				</CheckboxPrimitive.Indicator>
+			)}
+		</CheckboxPrimitive.Root>
+	);
+};
 
 export { Checkbox };
