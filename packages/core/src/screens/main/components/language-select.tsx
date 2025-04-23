@@ -19,10 +19,7 @@ import { useLocale } from '../../../hooks/use-locale';
 /**
  *
  */
-export const LanguageSelect = React.forwardRef<
-	React.ElementRef<typeof Combobox>,
-	React.ComponentPropsWithoutRef<typeof Combobox>
->(({ value, onValueChange, ...props }, ref) => {
+export const LanguageSelect = ({ value, ...props }: React.ComponentProps<typeof Combobox>) => {
 	const { locales } = useLocale();
 	const t = useT();
 	const [searchTerm, setSearchTerm] = React.useState('');
@@ -63,7 +60,7 @@ export const LanguageSelect = React.forwardRef<
 	 *
 	 */
 	return (
-		<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
+		<Combobox value={{ ...value, label }} {...props}>
 			<ComboboxTrigger>
 				<ComboboxValue placeholder={t('Select Language', { _tags: 'core' })} />
 			</ComboboxTrigger>
@@ -82,6 +79,4 @@ export const LanguageSelect = React.forwardRef<
 			</ComboboxContent>
 		</Combobox>
 	);
-});
-
-LanguageSelect.displayName = 'LanguageSelect';
+};

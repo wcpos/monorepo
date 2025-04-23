@@ -11,10 +11,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const YesNoRadioGroup = React.forwardRef<
-	React.ElementRef<typeof RadioGroup>,
-	React.ComponentPropsWithoutRef<typeof RadioGroup>
->((props, ref) => {
+export const YesNoRadioGroup = (props: React.ComponentProps<typeof RadioGroup>) => {
 	const t = useT();
 	const { setValue } = useFormContext();
 
@@ -22,7 +19,7 @@ export const YesNoRadioGroup = React.forwardRef<
 	 *
 	 */
 	return (
-		<RadioGroup ref={ref} {...props}>
+		<RadioGroup {...props}>
 			{[
 				{ label: t('Yes', { _tags: 'core' }), value: 'yes' },
 				{ label: t('No', { _tags: 'core' }), value: 'no' },
@@ -41,4 +38,4 @@ export const YesNoRadioGroup = React.forwardRef<
 			})}
 		</RadioGroup>
 	);
-});
+};

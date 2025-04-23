@@ -11,10 +11,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const TaxStatusRadioGroup = React.forwardRef<
-	React.ElementRef<typeof RadioGroup>,
-	React.ComponentPropsWithoutRef<typeof RadioGroup>
->((props, ref) => {
+export const TaxStatusRadioGroup = (props: React.ComponentProps<typeof RadioGroup>) => {
 	const { setValue } = useFormContext();
 	const t = useT();
 
@@ -22,7 +19,7 @@ export const TaxStatusRadioGroup = React.forwardRef<
 	 *
 	 */
 	return (
-		<RadioGroup ref={ref} {...props}>
+		<RadioGroup {...props}>
 			{[
 				{ label: t('Taxable', { _tags: 'core' }), value: 'taxable' },
 				{ label: t('None', { _tags: 'core' }), value: 'none' },
@@ -41,4 +38,4 @@ export const TaxStatusRadioGroup = React.forwardRef<
 			})}
 		</RadioGroup>
 	);
-});
+};

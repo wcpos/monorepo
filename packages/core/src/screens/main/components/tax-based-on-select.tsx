@@ -15,10 +15,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const TaxBasedOnSelect = React.forwardRef<
-	React.ElementRef<typeof Select>,
-	React.ComponentPropsWithoutRef<typeof Select>
->(({ onValueChange, value, ...props }, ref) => {
+export const TaxBasedOnSelect = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 
@@ -46,7 +43,7 @@ export const TaxBasedOnSelect = React.forwardRef<
 	 *
 	 */
 	return (
-		<Select ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
+		<Select value={{ ...value, label }} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
@@ -65,4 +62,4 @@ export const TaxBasedOnSelect = React.forwardRef<
 			</SelectContent>
 		</Select>
 	);
-});
+};

@@ -20,10 +20,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-const _CurrencySelect = React.forwardRef<
-	React.ElementRef<typeof Combobox>,
-	React.ComponentPropsWithoutRef<typeof Combobox>
->(({ value, onValueChange, ...props }, ref) => {
+const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Combobox>) => {
 	const t = useT();
 	const allCurrencies = useCurrencies();
 
@@ -51,7 +48,7 @@ const _CurrencySelect = React.forwardRef<
 	 *
 	 */
 	return (
-		<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
+		<Combobox value={{ ...value, label }} {...props}>
 			<ComboboxTrigger>
 				<ComboboxValue placeholder={t('Select Currency', { _tags: 'core' })} />
 			</ComboboxTrigger>
@@ -68,17 +65,15 @@ const _CurrencySelect = React.forwardRef<
 			</ComboboxContent>
 		</Combobox>
 	);
-});
+};
 
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export const CurrencySelect = React.forwardRef<React.ElementRef<typeof _CurrencySelect>, any>(
-	(props, ref) => {
-		return (
-			<CurrenciesProvider>
-				<_CurrencySelect ref={ref} {...props} />
-			</CurrenciesProvider>
-		);
-	}
-);
+export const CurrencySelect = (props) => {
+	return (
+		<CurrenciesProvider>
+			<CurrencySelectBase {...props} />
+		</CurrenciesProvider>
+	);
+};

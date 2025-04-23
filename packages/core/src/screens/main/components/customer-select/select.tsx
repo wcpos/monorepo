@@ -10,24 +10,21 @@ import {
 import { CustomerSearch } from './search';
 import { useT } from '../../../../contexts/translations';
 
-interface CustomerSelectProps extends React.ComponentPropsWithoutRef<typeof Combobox> {
+interface CustomerSelectProps extends React.ComponentProps<typeof Combobox> {
 	withGuest?: boolean;
 }
 
 /**
  *
  */
-export const CustomerSelect = React.forwardRef<
-	React.ElementRef<typeof Combobox>,
-	CustomerSelectProps
->(({ value, onValueChange, withGuest, disabled, ...props }, ref) => {
+export const CustomerSelect = ({ withGuest, disabled, ...props }: CustomerSelectProps) => {
 	const t = useT();
 
 	/**
 	 *
 	 */
 	return (
-		<Combobox value={value} onValueChange={onValueChange} {...props}>
+		<Combobox {...props}>
 			<ComboboxTrigger disabled={disabled}>
 				<ComboboxValue placeholder={t('Select Customer', { _tags: 'core' })} />
 			</ComboboxTrigger>
@@ -36,4 +33,4 @@ export const CustomerSelect = React.forwardRef<
 			</ComboboxContent>
 		</Combobox>
 	);
-});
+};

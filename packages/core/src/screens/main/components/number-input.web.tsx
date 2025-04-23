@@ -38,22 +38,17 @@ export interface NumberInputProps {
 }
 
 /**
- * The ref is forwarded to the button.
- *
  * @FIXME - when the settings change, the button display does not change
  */
-const NumberInputBase = (
-	{
-		onChangeText,
-		disabled = false,
-		discounts,
-		placement = 'bottom',
-		className,
-		formatOptions,
-		...props
-	}: NumberInputProps,
-	ref: React.Ref<React.ElementRef<typeof Button>>
-) => {
+export const NumberInput = ({
+	onChangeText,
+	disabled = false,
+	discounts,
+	placement = 'bottom',
+	className,
+	formatOptions,
+	...props
+}: NumberInputProps) => {
 	const { store } = useAppState();
 	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$);
 	const t = useT();
@@ -102,7 +97,6 @@ const NumberInputBase = (
 		<Popover>
 			<PopoverTrigger ref={triggerRef} asChild>
 				<Button
-					ref={ref}
 					variant="outline"
 					disabled={disabled}
 					className={cn('min-w-10 items-start', className)}
@@ -128,5 +122,3 @@ const NumberInputBase = (
 		</Popover>
 	);
 };
-
-export const NumberInput = React.forwardRef(NumberInputBase);

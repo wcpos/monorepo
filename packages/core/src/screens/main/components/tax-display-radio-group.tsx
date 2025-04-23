@@ -12,10 +12,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const TaxDisplayRadioGroup = React.forwardRef<
-	React.ElementRef<typeof RadioGroup>,
-	Omit<FormItemProps<typeof RadioGroup, string>, 'type'>
->((props, ref) => {
+export const TaxDisplayRadioGroup = (props: React.ComponentProps<typeof RadioGroup>) => {
 	const t = useT();
 	const { setValue } = useFormContext();
 
@@ -23,7 +20,7 @@ export const TaxDisplayRadioGroup = React.forwardRef<
 	 *
 	 */
 	return (
-		<RadioGroup ref={ref} {...props}>
+		<RadioGroup {...props}>
 			{[
 				{ label: t('As a single total', { _tags: 'core' }), value: 'single' },
 				{ label: t('Itemized', { _tags: 'core' }), value: 'itemized' },
@@ -42,4 +39,4 @@ export const TaxDisplayRadioGroup = React.forwardRef<
 			})}
 		</RadioGroup>
 	);
-});
+};

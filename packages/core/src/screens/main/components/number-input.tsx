@@ -27,8 +27,6 @@ export interface NumberInputProps {
 	formatOptions?: NumberFormatOptions;
 }
 
-const NumberInputBase = ({ ...props }, ref) => {
-	return <Input ref={ref} {...props} type="decimal" />;
+export const NumberInput = ({ ...props }: React.ComponentProps<typeof Input>) => {
+	return <Input {...props} type="decimal" />;
 };
-
-export const NumberInput = React.forwardRef(NumberInputBase);
