@@ -27,12 +27,10 @@ jobs:
   main:
     runs-on: ubuntu-latest
     steps:
-      - name: 🏗 Setup repository
-        uses: actions/checkout@v4
-
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
 

@@ -21,6 +21,13 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: 🏗 Checkout repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: false
+        token: ${{ inputs.github-token }}
+
     - name: 🏗 Setup pnpm
       uses: pnpm/action-setup@v4
       with:
@@ -49,8 +56,10 @@ runs:
         jq --arg license "$RXDB_LICENSE_KEY" '.accessTokens["rxdb-premium"] = $license' package.json > tmp.json && mv tmp.json package.json
       shell: bash
 
-    - name: 🏗️ Init and update submodules
-      run: git submodule update --init --recursive
+    - name: 🏗️ Init and update rn-primitives submodule
+      run: |
+        git submodule init packages/rn-primitives
+        git submodule update packages/rn-primitives
       shell: bash
 
     - name: 📦 Install dependencies

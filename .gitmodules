@@ -3,4 +3,4 @@
 	url = https://github.com/wcpos/electron.git
 [submodule "packages/rn-primitives"]
 	path = packages/rn-primitives
-	url = git@github.com:wcpos/rn-primitives.git
+	url = https://github.com/wcpos/rn-primitives.git
