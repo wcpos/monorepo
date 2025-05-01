@@ -56,7 +56,7 @@ runs:
       shell: bash
 
     - name: 📦 Install dependencies
-      run: pnpm install
+      run: pnpm install --no-frozen-lockfile
       shell: bash
 
     - name: ♻️ Restore cache
