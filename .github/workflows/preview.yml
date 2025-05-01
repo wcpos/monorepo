@@ -20,10 +20,15 @@ jobs:
       issues: write
 
     steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
       - name: 🏗 Setup monorepo
         uses: ./.github/actions/setup-monorepo
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           
