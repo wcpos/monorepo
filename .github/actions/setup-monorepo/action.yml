@@ -7,7 +7,7 @@ inputs:
     default: "20.x"
   pnpm-version:
     description: Version of pnpm to use
-    default: "10.7.0"
+    default: "10.10.0"
   eas-version:
     description: Version of EAS CLI to use
     default: "latest"
@@ -47,6 +47,10 @@ runs:
         RXDB_LICENSE_KEY: ${{ inputs.rxdb-license-key }}
       run: |
         jq --arg license "$RXDB_LICENSE_KEY" '.accessTokens["rxdb-premium"] = $license' package.json > tmp.json && mv tmp.json package.json
+      shell: bash
+
+    - name: 🏗️ Init and update submodules
+      run: git submodule update --init --recursive
       shell: bash
 
     - name: 📦 Install dependencies

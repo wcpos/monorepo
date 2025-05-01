@@ -18,6 +18,10 @@ export default [
           tailwindFunctions: ["cn", "cva"],
         },
       ],
+      "react/jsx-max-props-per-line": [
+        "error",
+        { maximum: 1, when: "multiline" },
+      ],
     },
   },
 ];

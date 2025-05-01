@@ -5,6 +5,7 @@
     "dev": "turbo dev",
     "dev:main": "turbo dev --filter=\"{./apps/main}...\"",
     "dev:electron": "turbo dev --filter=\"{./apps/electron}...\"",
+    "dev:primitives": "turbo run dev --filter=\"./packages/rn-primitives/packages/**\" --concurrency 35",
     "build": "turbo build",
     "build:main": "turbo build --filter=\"...{./apps/main}\"",
     "main:expo": "pnpm --filter @wcpos/main exec expo",
@@ -21,13 +22,14 @@
     "preinstall": "pnpm ignored-builds || true",
     "postinstall": "turbo run build --filter=\"./packages/rn-primitives/packages/**\""
   },
-  "packageManager": "pnpm@10.7.0",
+  "packageManager": "pnpm@10.10.0",
   "pnpm": {
     "overrides": {
       "@expo/prebuild-config": "9.0.0",
+      "expo": "~53.0.4",
       "react": "19.1.0",
       "react-dom": "19.1.0",
-      "react-native": "0.79.0",
+      "react-native": "0.79.1",
       "react-native-edge-to-edge": "1.6.0",
       "@types/react": "19.1.2"
     },
@@ -46,7 +48,7 @@
     ]
   },
   "dependencies": {
-    "turbo": "2.5.0",
+    "turbo": "^2.5.0",
     "typescript": "~5.8.3"
   }
 }

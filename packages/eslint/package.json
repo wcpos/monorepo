@@ -12,18 +12,18 @@
 	},
 	"peerDependencies": {
 		"eslint": ">=9",
-		"eslint-config-expo": "9.0.2",
-		"eslint-config-prettier": "10.1.2",
-		"eslint-plugin-prettier": "5.2.6",
-		"prettier": "3.5.3",
-		"prettier-plugin-tailwindcss": "0.6.11"
+		"eslint-config-expo": "^9.2.0",
+		"eslint-config-prettier": "^10.1.2",
+		"eslint-plugin-prettier": "^5.2.6",
+		"prettier": "^3.5.3",
+		"prettier-plugin-tailwindcss": "^0.6.11"
 	},
 	"devDependencies": {
-		"eslint": "9.23.0",
-		"eslint-config-expo": "9.0.2",
-		"eslint-config-prettier": "10.1.2",
-		"eslint-plugin-prettier": "5.2.6",
-		"prettier": "3.5.3",
-		"prettier-plugin-tailwindcss": "0.6.11"
+		"eslint": "^9.23.0",
+		"eslint-config-expo": "^9.2.0",
+		"eslint-config-prettier": "^10.1.2",
+		"eslint-plugin-prettier": "^5.2.6",
+		"prettier": "^3.5.3",
+		"prettier-plugin-tailwindcss": "^0.6.11"
 	}
 }
