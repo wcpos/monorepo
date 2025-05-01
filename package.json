@@ -27,6 +27,7 @@
     "overrides": {
       "@expo/prebuild-config": "9.0.0",
       "expo": "~53.0.4",
+      "pnpm": "10.10.0",
       "react": "19.1.0",
       "react-dom": "19.1.0",
       "react-native": "0.79.1",
