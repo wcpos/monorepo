@@ -20,7 +20,7 @@
     "query": "pnpm --filter @wcpos/query",
     "utils": "pnpm --filter @wcpos/utils",
     "preinstall": "pnpm ignored-builds || true",
-    "postinstall": "turbo run build --filter=\"./packages/rn-primitives/packages/**\""
+    "postinstall": "turbo run build --filter=\"./packages/rn-primitives/packages/**\" --concurrency=1"
   },
   "packageManager": "pnpm@10.10.0",
   "pnpm": {
