@@ -9,7 +9,7 @@
     "expo-haptics": "~14.1.4",
     "expo-image": "~2.1.6",
     "expo-router": "~5.0.3",
-    "react-native-gesture-handler": "2.24.0",
+    "react-native-gesture-handler": "2.25.0",
     "react-native-svg": "15.11.2",
     "react-native-webview": "13.13.5",
     "tailwindcss": "3.4.17"
