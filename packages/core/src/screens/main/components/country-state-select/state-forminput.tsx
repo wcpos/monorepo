@@ -12,8 +12,9 @@ import { StatesProvider, useStates } from '../../../../contexts/countries';
 const StateFormInputBase = ({
 	value,
 	onChangeText,
+	countryCode,
 	...props
-}: React.ComponentProps<typeof Input>) => {
+}: React.ComponentProps<typeof Input> & { countryCode?: string }) => {
 	const states = useStates();
 	const hasStates = states && states.length > 0;
 	const hasManyStates = states && states.length > 10;
@@ -30,9 +31,11 @@ const StateFormInputBase = ({
 
 	if (hasStates) {
 		if (hasManyStates) {
-			return <StateCombobox value={{ value }} onValueChange={handleSelect} />;
+			return (
+				<StateCombobox value={{ value }} onValueChange={handleSelect} countryCode={countryCode} />
+			);
 		}
-		return <StateSelect value={{ value }} onValueChange={handleSelect} />;
+		return <StateSelect value={{ value }} onValueChange={handleSelect} countryCode={countryCode} />;
 	}
 
 	return <Input value={value} onChangeText={onChangeText} {...props} />;
@@ -53,7 +56,7 @@ export const StateFormInput = ({
 
 	return (
 		<StatesProvider countryCode={countryCode}>
-			<StateFormInputBase {...props} />
+			<StateFormInputBase {...props} countryCode={countryCode} />
 		</StatesProvider>
 	);
 };

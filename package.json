@@ -5,7 +5,6 @@
     "dev": "turbo dev",
     "dev:main": "turbo dev --filter=\"{./apps/main}...\"",
     "dev:electron": "turbo dev --filter=\"{./apps/electron}...\"",
-    "dev:primitives": "turbo run dev --filter=\"./packages/rn-primitives/packages/**\" --concurrency 35",
     "build": "turbo build",
     "build:main": "turbo build --filter=\"...{./apps/main}\"",
     "main:expo": "pnpm --filter @wcpos/main exec expo",
@@ -20,18 +19,18 @@
     "query": "pnpm --filter @wcpos/query",
     "utils": "pnpm --filter @wcpos/utils",
     "preinstall": "pnpm ignored-builds || true",
-    "postinstall": "turbo run build --filter=\"./packages/rn-primitives/packages/**\" --concurrency=1"
+    "expo:install": "pnpm --filter main exec expo install"
   },
-  "packageManager": "pnpm@10.10.0",
+  "packageManager": "pnpm@10.12.1",
   "pnpm": {
     "overrides": {
-      "expo": "53.0.7",
-      "pnpm": "10.10.0",
+      "expo": "53.0.11",
+      "pnpm": "10.12.1",
       "react": "19.1.0",
       "react-dom": "19.1.0",
       "react-native": "0.79.2",
-      "react-native-edge-to-edge": "1.6.0",
-      "react-native-gesture-handler": "2.25.0",
+      "react-native-edge-to-edge": "^1.6.1",
+      "react-native-gesture-handler": "2.24.0",
       "react-native-safe-area-context": "5.4.0",
       "@types/react": "19.1.2"
     },

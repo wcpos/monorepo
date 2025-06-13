@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { CanceledError } from 'axios';
 import { useRouter } from 'expo-router';
 import get from 'lodash/get';
 import merge from 'lodash/merge';
@@ -66,8 +67,8 @@ export const useRestHttpClient = (endpoint = '') => {
 		(error) => {
 			if (error.response && error.response.status === 401) {
 				errorSubject.next(error);
-				router.push('login');
-				return null; // prevent snackbars from showing
+				router.push('/(app)/(modals)/login');
+				return new CanceledError('401 - redirected to login');
 			}
 			return error;
 		},

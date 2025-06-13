@@ -168,100 +168,93 @@ type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 		disableHaptics?: boolean;
 	};
 
-const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>(
-	(
-		{
-			className,
-			variant,
-			size,
-			leftIcon,
-			rightIcon,
-			loading,
-			children,
-			disableHaptics = false,
-			onPress,
-			...props
+const Button = ({
+	className,
+	variant,
+	size,
+	leftIcon,
+	rightIcon,
+	loading,
+	children,
+	disableHaptics = false,
+	onPress,
+	...props
+}: ButtonProps) => {
+	const disabled = props.disabled || loading;
+
+	/**
+	 * Render icon component based on type
+	 */
+	const renderIcon = (icon: IconName | React.ReactNode, position: 'left' | 'right') => {
+		if (typeof icon === 'string') {
+			return <Icon name={icon} variant={variant} size={size} />;
+		}
+		return icon;
+	};
+
+	/**
+	 * Wrap plain string children in ButtonText component to apply text styles
+	 */
+	const renderChildren = (pressableState: PressableStateCallbackType) => {
+		if (typeof children === 'string') {
+			return <ButtonText numberOfLines={1}>{children}</ButtonText>;
+		}
+		if (typeof children === 'function') {
+			const rendered = children(pressableState);
+			return typeof rendered === 'string' ? (
+				<ButtonText numberOfLines={1}>{rendered}</ButtonText>
+			) : (
+				rendered
+			);
+		}
+		return children;
+	};
+
+	// Create a wrapped onPress handler that includes haptics
+	const handlePress = React.useCallback(
+		(e: any) => {
+			if (Platform.OS !== 'web' && !disabled && !disableHaptics) {
+				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			}
+			onPress?.(e);
 		},
-		ref
-	) => {
-		const disabled = props.disabled || loading;
+		[disabled, disableHaptics, onPress]
+	);
 
-		/**
-		 * Render icon component based on type
-		 */
-		const renderIcon = (icon: IconName | React.ReactNode, position: 'left' | 'right') => {
-			if (typeof icon === 'string') {
-				return <Icon name={icon} variant={variant} size={size} />;
-			}
-			return icon;
-		};
-
-		/**
-		 * Wrap plain string children in ButtonText component to apply text styles
-		 */
-		const renderChildren = (pressableState: PressableStateCallbackType) => {
-			if (typeof children === 'string') {
-				return <ButtonText numberOfLines={1}>{children}</ButtonText>;
-			}
-			if (typeof children === 'function') {
-				const rendered = children(pressableState);
-				return typeof rendered === 'string' ? (
-					<ButtonText numberOfLines={1}>{rendered}</ButtonText>
-				) : (
-					rendered
-				);
-			}
-			return children;
-		};
-
-		// Create a wrapped onPress handler that includes haptics
-		const handlePress = React.useCallback(
-			(e: any) => {
-				if (Platform.OS !== 'web' && !disabled && !disableHaptics) {
-					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-				}
-				onPress?.(e);
-			},
-			[disabled, disableHaptics, onPress]
-		);
-
-		return (
-			<TextClassContext.Provider
-				value={buttonTextVariants({ variant, size, className: 'web:pointer-events-none' })}
+	return (
+		<TextClassContext.Provider
+			value={buttonTextVariants({ variant, size, className: 'web:pointer-events-none' })}
+		>
+			<Pressable
+				className={cn(
+					disabled && 'web:pointer-events-none opacity-50',
+					buttonVariants({ variant, size, className })
+				)}
+				role="button"
+				{...props}
+				onPress={handlePress}
+				aria-disabled={disabled ?? undefined}
+				disabled={disabled ?? undefined}
 			>
-				<Pressable
-					className={cn(
-						disabled && 'web:pointer-events-none opacity-50',
-						buttonVariants({ variant, size, className })
-					)}
-					ref={ref}
-					role="button"
-					{...props}
-					onPress={handlePress}
-					aria-disabled={disabled ?? undefined}
-					disabled={disabled ?? undefined}
-				>
-					{(pressableState) =>
-						leftIcon || rightIcon || loading ? (
-							<HStack className="max-w-full">
-								{loading ? (
-									<Loader variant={variant} size={size} />
-								) : (
-									leftIcon && renderIcon(leftIcon, 'left')
-								)}
-								{renderChildren(pressableState)}
-								{rightIcon && renderIcon(rightIcon, 'right')}
-							</HStack>
-						) : (
-							renderChildren(pressableState)
-						)
-					}
-				</Pressable>
-			</TextClassContext.Provider>
-		);
-	}
-);
-Button.displayName = 'Button';
+				{(pressableState) =>
+					leftIcon || rightIcon || loading ? (
+						<HStack className="max-w-full">
+							{loading ? (
+								<Loader variant={variant} size={size} />
+							) : (
+								leftIcon && renderIcon(leftIcon, 'left')
+							)}
+							{renderChildren(pressableState)}
+							{rightIcon && renderIcon(rightIcon, 'right')}
+						</HStack>
+					) : (
+						renderChildren(pressableState)
+					)
+				}
+			</Pressable>
+		</TextClassContext.Provider>
+	);
+};
 
 /**
  *
@@ -285,7 +278,7 @@ const separatorVariants = cva('w-px self-stretch opacity-80', {
 
 type ButtonSeparatorProps = ViewProps & VariantProps<typeof separatorVariants>;
 
-const ButtonGroupSeparator: React.FC = ({ variant, className, ...props }: ButtonSeparatorProps) => {
+const ButtonGroupSeparator = ({ variant, className, ...props }: ButtonSeparatorProps) => {
 	return <View className={cn(separatorVariants({ variant }), className)} {...props} />;
 };
 
@@ -296,7 +289,7 @@ type ButtonGroupProps = {
 	children: React.ReactElement<ButtonProps>[];
 };
 
-const ButtonGroup: React.FC<ButtonGroupProps> = ({ children }) => {
+const ButtonGroup = ({ children }: ButtonGroupProps) => {
 	const buttons = React.Children.toArray(children);
 
 	return (
@@ -328,8 +321,6 @@ const ButtonGroup: React.FC<ButtonGroupProps> = ({ children }) => {
 	);
 };
 
-ButtonGroup.displayName = 'ButtonGroup';
-
 /**
  *
  */
@@ -341,25 +332,22 @@ type ButtonPillProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 		onRemove?: () => void;
 	};
 
-const ButtonPill = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonPillProps>(
-	({ className, removable, onRemove, ...props }, ref) => {
-		return removable ? (
-			<ButtonGroup>
-				<Button className={cn(className, 'rounded-full')} ref={ref} {...props} />
-				<Button
-					className={cn(className, 'rounded-full')}
-					variant={props.variant}
-					size={props.size}
-					leftIcon="xmark"
-					onPress={onRemove}
-				/>
-			</ButtonGroup>
-		) : (
-			<Button className={cn(className, 'rounded-full')} ref={ref} {...props} />
-		);
-	}
-);
-ButtonPill.displayName = 'ButtonPill';
+const ButtonPill = ({ className, removable, onRemove, ...props }: ButtonPillProps) => {
+	return removable ? (
+		<ButtonGroup>
+			<Button className={cn(className, 'rounded-full')} {...props} />
+			<Button
+				className={cn(className, 'rounded-full')}
+				variant={props.variant}
+				size={props.size}
+				leftIcon="xmark"
+				onPress={onRemove}
+			/>
+		</ButtonGroup>
+	) : (
+		<Button className={cn(className, 'rounded-full')} {...props} />
+	);
+};
 
 export {
 	Button,

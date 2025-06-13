@@ -25,7 +25,7 @@ const clean = (dir) => {
 const cleanRoot = () => clean(cwd);
 
 const cleanWorkSpaces = () => {
-	const workspaces = ['./apps', './packages', './packages/rn-primitives/packages'];
+	const workspaces = ['./apps', './packages'];
 
 	workspaces.forEach((workspace) => {
 		fs.readdir(workspace, (err, folders) => {

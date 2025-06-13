@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Text as RNText } from 'react-native';
 
 import * as Slot from '@rn-primitives/slot';
-import { SlottableTextProps, TextRef } from '@rn-primitives/types';
+import { SlottableTextProps } from '@rn-primitives/types';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { decode } from 'html-entities';
 
@@ -25,25 +25,18 @@ const textVariants = cva('text-foreground web:select-text text-base', {
 export type TextProps = SlottableTextProps &
 	VariantProps<typeof textVariants> & { decodeHtml?: boolean };
 
-const Text = React.forwardRef<TextRef, TextProps>(
-	({ className, variant, asChild = false, children, decodeHtml, ...props }, ref) => {
-		const textClass = React.useContext(TextClassContext);
-		const Component = asChild ? Slot.Text : RNText;
+function Text({ className, variant, asChild = false, children, decodeHtml, ...props }: TextProps) {
+	const textClass = React.useContext(TextClassContext);
+	const Component = asChild ? Slot.Text : RNText;
 
-		const processedChildren =
-			decodeHtml && typeof children === 'string' ? decode(children) : children;
+	const processedChildren =
+		decodeHtml && typeof children === 'string' ? decode(children) : children;
 
-		return (
-			<Component
-				className={cn(textVariants({ variant }), textClass, className)}
-				ref={ref}
-				{...props}
-			>
-				{processedChildren}
-			</Component>
-		);
-	}
-);
-Text.displayName = 'Text';
+	return (
+		<Component className={cn(textVariants({ variant }), textClass, className)} {...props}>
+			{processedChildren}
+		</Component>
+	);
+}
 
 export { Text, TextClassContext };
