@@ -5,7 +5,7 @@ import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { PanelGroup, Panel, PanelResizeHandle } from '@wcpos/components/panels';
+import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/panels';
 import { Suspense } from '@wcpos/components/suspense';
 import { useTheme } from '@wcpos/core/contexts/theme';
 import { useUISettings } from '@wcpos/core/screens/main/contexts/ui-settings';
@@ -29,8 +29,11 @@ export default function ResizablePOSColumns() {
 	 */
 	return (
 		<View style={{ flex: 1, paddingBottom: bottom }}>
-			<PanelGroup onResize={({ width }) => patchUI({ width })}>
-				<Panel defaultSize={uiSettings.width}>
+			<PanelGroup
+				onLayout={([productsWidth, cartWidth]) => patchUI({ width: productsWidth })}
+				direction="horizontal"
+			>
+				<Panel defaultSize={uiSettings.width} id="products">
 					<Suspense>
 						<ErrorBoundary>
 							<POSProducts isColumn />
@@ -38,7 +41,7 @@ export default function ResizablePOSColumns() {
 					</Suspense>
 				</Panel>
 				<PanelResizeHandle />
-				<Panel>
+				<Panel id="cart">
 					<Suspense>
 						<ErrorBoundary>
 							<OpenOrders isColumn />
