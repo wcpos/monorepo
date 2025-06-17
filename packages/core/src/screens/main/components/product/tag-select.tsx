@@ -20,7 +20,7 @@ import { useQuery } from '@wcpos/query';
 /**
  *
  */
-const CategoryList = ({ query }) => {
+const TagList = ({ query }) => {
 	const result = useObservableSuspense(query.resource);
 	const t = useT();
 
@@ -43,9 +43,7 @@ const CategoryList = ({ query }) => {
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
-			ListEmptyComponent={
-				<ComboboxEmpty>{t('No category found', { _tags: 'core' })}</ComboboxEmpty>
-			}
+			ListEmptyComponent={<ComboboxEmpty>{t('No tag found', { _tags: 'core' })}</ComboboxEmpty>}
 		/>
 	);
 };
@@ -53,16 +51,17 @@ const CategoryList = ({ query }) => {
 /**
  *
  */
-export const CategorySearch = () => {
+export const TagSearch = () => {
 	const t = useT();
 	const [search, setSearch] = React.useState('');
+	console.log('category search');
 
 	/**
 	 *
 	 */
 	const query = useQuery({
-		queryKeys: ['products/categories'],
-		collectionName: 'products/categories',
+		queryKeys: ['products/tags'],
+		collectionName: 'products/tags',
 		initialParams: {
 			sort: [{ name: 'asc' }],
 		},
@@ -94,12 +93,12 @@ export const CategorySearch = () => {
 	return (
 		<>
 			<ComboboxInput
-				placeholder={t('Search Categories', { _tags: 'core' })}
+				placeholder={t('Search Tags', { _tags: 'core' })}
 				value={search}
 				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CategoryList query={query} />
+				<TagList query={query} />
 			</Suspense>
 		</>
 	);
@@ -108,7 +107,7 @@ export const CategorySearch = () => {
 /**
  *
  */
-export const CategorySelect = ({ onValueChange }) => {
+export const TagSelect = ({ onValueChange }) => {
 	const t = useT();
 
 	/**
@@ -117,10 +116,10 @@ export const CategorySelect = ({ onValueChange }) => {
 	return (
 		<Combobox onValueChange={onValueChange}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('Select Category', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select Tag', { _tags: 'core' })} />
 			</ComboboxTrigger>
 			<ComboboxContent className="min-w-64">
-				<CategorySearch />
+				<TagSearch />
 			</ComboboxContent>
 		</Combobox>
 	);
