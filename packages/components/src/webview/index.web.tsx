@@ -8,6 +8,7 @@ import { cn } from '../lib/utils';
 import { Loader } from '../loader';
 
 export interface WebViewProps extends RNWebViewProps {
+	ref: React.RefObject<HTMLIFrameElement>;
 	src?: string;
 	srcDoc?: string;
 	onMessage: (event: { nativeEvent: { data: any } }) => void;
@@ -16,10 +17,16 @@ export interface WebViewProps extends RNWebViewProps {
 /**
  *
  */
-const WebViewBase = (
-	{ src, source, onMessage, onLoad, srcDoc, className, ...props }: WebViewProps,
-	ref: React.ForwardedRef<HTMLIFrameElement>
-) => {
+function WebView({
+	ref,
+	src,
+	source,
+	onMessage,
+	onLoad,
+	srcDoc,
+	className,
+	...props
+}: WebViewProps) {
 	const [loading, setLoading] = React.useState(true);
 
 	/**
@@ -98,6 +105,6 @@ const WebViewBase = (
 			)}
 		</View>
 	);
-};
+}
 
-export const WebView = React.forwardRef(WebViewBase);
+export { WebView };

@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { ViewRef } from '@rn-primitives/types';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
@@ -31,11 +30,8 @@ const hstackVariants = cva('flex-row items-center', {
 type HStackProps = React.ComponentPropsWithoutRef<typeof View> &
 	VariantProps<typeof hstackVariants>;
 
-const HStack = React.forwardRef<ViewRef, HStackProps>(
-	({ className, space, reversed, ...props }, ref) => (
-		<View ref={ref} className={cn(hstackVariants({ space, reversed, className }))} {...props} />
-	)
-);
-HStack.displayName = 'HStack';
+function HStack({ className, space, reversed, ...props }: HStackProps) {
+	return <View className={cn(hstackVariants({ space, reversed, className }))} {...props} />;
+}
 
 export { HStack };

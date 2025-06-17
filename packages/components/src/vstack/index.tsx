@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { ViewRef } from '@rn-primitives/types';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
@@ -31,11 +30,8 @@ const vstackVariants = cva('flex-col', {
 type VStackProps = React.ComponentPropsWithoutRef<typeof View> &
 	VariantProps<typeof vstackVariants>;
 
-const VStack = React.forwardRef<ViewRef, VStackProps>(
-	({ className, space, reversed, ...props }, ref) => (
-		<View ref={ref} className={cn(vstackVariants({ space, reversed, className }))} {...props} />
-	)
-);
-VStack.displayName = 'VStack';
+function VStack({ className, space, reversed, ...props }: VStackProps) {
+	return <View className={cn(vstackVariants({ space, reversed, className }))} {...props} />;
+}
 
 export { VStack };
