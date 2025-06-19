@@ -22,56 +22,12 @@ export const unstable_settings = {
 	initialRouteName: 'index',
 };
 
-const POSStack = () => {
-	const { currentOrder } = useCurrentOrder();
-
-	/**
-	 *
-	 */
-	const taxQuery = useQuery({
-		queryKeys: ['tax-rates'],
-		collectionName: 'taxes',
-	});
-
-	return (
-		<TaxRatesProvider taxQuery={taxQuery} order={currentOrder}>
-			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
-				<Stack.Screen name="index" />
-				<Stack.Screen
-					name="(modals)/cart/[orderId]/checkout"
-					options={{
-						presentation: 'containedTransparentModal',
-						animation: 'fade',
-						contentStyle: { backgroundColor: 'transparent' },
-					}}
-				/>
-				<Stack.Screen
-					name="(modals)/cart/receipt/[orderId]"
-					options={{
-						presentation: 'containedTransparentModal',
-						animation: 'fade',
-						contentStyle: { backgroundColor: 'transparent' },
-					}}
-				/>
-			</Stack>
-			{/**
-			 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
-			 * so that dialogs like add/edit product etc can access the context
-			 */}
-			<ErrorBoundary>
-				<PortalHost name="pos" />
-			</ErrorBoundary>
-		</TaxRatesProvider>
-	);
-};
-
 export default function POSLayout() {
 	const { wpCredentials, store } = useAppState();
 	const cashierID = useObservableEagerState(wpCredentials.id$);
 	const storeID = useObservableEagerState(store.id$);
 	const { collection: ordersCollection } = useCollection('orders');
 	const { orderId } = useGlobalSearchParams<{ orderId: string }>();
-	console.log('global params orderId', orderId);
 
 	/**
 	 * We then need to filter the open orders to limit by cashier and store
@@ -115,5 +71,48 @@ export default function POSLayout() {
 				</ErrorBoundary>
 			</CurrentOrderProvider>
 		</Suspense>
+	);
+}
+
+function POSStack() {
+	const { currentOrder } = useCurrentOrder();
+
+	/**
+	 *
+	 */
+	const taxQuery = useQuery({
+		queryKeys: ['tax-rates'],
+		collectionName: 'taxes',
+	});
+
+	return (
+		<TaxRatesProvider taxQuery={taxQuery} order={currentOrder}>
+			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
+				<Stack.Screen name="index" />
+				<Stack.Screen
+					name="(modals)/cart/[orderId]/checkout"
+					options={{
+						presentation: 'containedTransparentModal',
+						animation: 'fade',
+						contentStyle: { backgroundColor: 'transparent' },
+					}}
+				/>
+				<Stack.Screen
+					name="(modals)/cart/receipt/[orderId]"
+					options={{
+						presentation: 'containedTransparentModal',
+						animation: 'fade',
+						contentStyle: { backgroundColor: 'transparent' },
+					}}
+				/>
+			</Stack>
+			{/**
+			 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
+			 * so that dialogs like add/edit product etc can access the context
+			 */}
+			<ErrorBoundary>
+				<PortalHost name="pos" />
+			</ErrorBoundary>
+		</TaxRatesProvider>
 	);
 }

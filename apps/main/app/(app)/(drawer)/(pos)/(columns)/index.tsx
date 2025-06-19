@@ -33,7 +33,7 @@ export default function ResizablePOSColumns() {
 				onLayout={([productsWidth, cartWidth]) => patchUI({ width: productsWidth })}
 				direction="horizontal"
 			>
-				<Panel defaultSize={uiSettings.width} id="products">
+				<Panel defaultSize={uiSettings.width} minSize={25} id="products">
 					<Suspense>
 						<ErrorBoundary>
 							<POSProducts isColumn />
@@ -41,7 +41,7 @@ export default function ResizablePOSColumns() {
 					</Suspense>
 				</Panel>
 				<PanelResizeHandle />
-				<Panel id="cart">
+				<Panel minSize={25} id="cart">
 					<Suspense>
 						<ErrorBoundary>
 							<OpenOrders isColumn />
