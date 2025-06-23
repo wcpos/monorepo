@@ -14,15 +14,15 @@
 		"eslint": ">=9",
 		"eslint-config-expo": "^9.2.0",
 		"eslint-config-prettier": "^10.1.2",
-		"eslint-plugin-prettier": "^5.4.0",
+		"eslint-plugin-prettier": "^5.5.0",
 		"prettier": "^3.5.3",
 		"prettier-plugin-tailwindcss": "^0.6.11"
 	},
 	"devDependencies": {
-		"eslint": "^9.23.0",
+		"eslint": "^9.29.0",
 		"eslint-config-expo": "^9.2.0",
 		"eslint-config-prettier": "^10.1.2",
-		"eslint-plugin-prettier": "^5.2.6",
+		"eslint-plugin-prettier": "^5.5.0",
 		"prettier": "^3.5.3",
 		"prettier-plugin-tailwindcss": "^0.6.11"
 	}
