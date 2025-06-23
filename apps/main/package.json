@@ -21,6 +21,7 @@
     "@shopify/flash-list": "1.7.6",
     "@shopify/react-native-skia": "2.0.3",
     "expo": "~53.0.12",
+    "expo-auth-session": "~6.2.0",
     "expo-constants": "~17.1.4",
     "expo-crypto": "~14.1.4",
     "expo-dev-client": "~5.2.1",
