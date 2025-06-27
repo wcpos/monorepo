@@ -4,14 +4,15 @@ import { flexRender } from '@tanstack/react-table';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { cn, getFlexAlign } from '@wcpos/components/lib/utils';
+import { cn } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
-import { TableRow, TableCell } from '@wcpos/components/table';
+import { TableCell, TableRow } from '@wcpos/components/table';
 import { VStack } from '@wcpos/components/vstack';
 import type { ProductDocument } from '@wcpos/database';
 
 import { VariationTableFooter } from './footer';
 import { TextCell } from '../../../../components/text-cell';
+import { getColumnStyle } from '../../../data-table';
 
 import type { Row } from '@tanstack/react-table';
 
@@ -52,8 +53,6 @@ export const VariationsTable = ({ query, row }: Props) => {
 				return (
 					<TableRow key={index} index={index}>
 						{row.getVisibleCells().map((cell, index) => {
-							const meta = cell.column.columnDef.meta;
-
 							/**
 							 * Create a context for the subrow using the parent's cell definitions
 							 * - https://tanstack.com/table/latest/docs/guide/rows#sub-rows
@@ -72,11 +71,7 @@ export const VariationsTable = ({ query, row }: Props) => {
 								<TableCell
 									key={index}
 									className={cn(cell.column.id === 'image' && 'relative')}
-									style={{
-										flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
-										flexBasis: meta?.width ? meta.width : undefined,
-										alignItems: getFlexAlign(meta?.align || 'left'),
-									}}
+									style={getColumnStyle(cell.column.columnDef.meta)}
 								>
 									{flexRender(cellRenderer, subrowCellContext)}
 								</TableCell>

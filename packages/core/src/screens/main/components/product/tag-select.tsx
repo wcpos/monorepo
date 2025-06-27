@@ -54,7 +54,6 @@ const TagList = ({ query }) => {
 export const TagSearch = () => {
 	const t = useT();
 	const [search, setSearch] = React.useState('');
-	console.log('category search');
 
 	/**
 	 *

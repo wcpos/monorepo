@@ -7,7 +7,7 @@ import { ItemContext, RootContext, useItemContext, useRootContext } from './util
 
 import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } from './types';
 
-function Root(props: RootProps) {
+function Root({ style, ...props }: RootProps) {
 	const parentRef = React.useRef<HTMLDivElement>(null);
 	const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null);
 
@@ -19,7 +19,7 @@ function Root(props: RootProps) {
 
 	return (
 		<RootContext.Provider value={{ ref: parentRef, scrollElement }}>
-			<View {...props} ref={parentRef} style={{ overflow: 'auto', display: 'block' }} />
+			<View {...props} ref={parentRef} style={[{ overflow: 'auto', display: 'block' }, style]} />
 		</RootContext.Provider>
 	);
 }
@@ -65,17 +65,6 @@ function List<T>({
 		scrollToOffset: (offset: number, animated = true) =>
 			rowVirtualizer.scrollToOffset(offset, { behavior: animated ? 'smooth' : 'auto' }),
 	}));
-
-	// // optional end-reached
-	// React.useEffect(() => {
-	//   if (typeof onEndReached === 'function') {
-	//     const items = rowVirtualizer.getVirtualItems();
-	//     const last = items[items.length - 1];
-	//     if (last && last.index >= data.length - 1 * onEndReachedThreshold) {
-	//       onEndReached();
-	//     }
-	//   }
-	// }, [rowVirtualizer.getVirtualItems(), data.length, onEndReached, onEndReachedThreshold]);
 
 	// container style
 	const containerStyle: React.CSSProperties = {
@@ -131,7 +120,7 @@ function List<T>({
 	);
 }
 
-function Item<T>({ style, ...props }: ItemProps<T>) {
+function Item({ children, ...props }) {
 	const { index, rowVirtualizer, vItem, horizontal } = useItemContext() as BaseItemContext<T>;
 
 	return (
@@ -144,9 +133,10 @@ function Item<T>({ style, ...props }: ItemProps<T>) {
 				width: '100%',
 				transform: horizontal ? undefined : `translateY(${vItem.start}px)`,
 			}}
-			{...props}
 			ref={(node) => rowVirtualizer.measureElement(node)}
-		/>
+		>
+			{children}
+		</View>
 	);
 }
 

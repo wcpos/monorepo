@@ -25,7 +25,7 @@ export const Total = ({ row, column }: CellContext<{ document: OrderDocument }, 
 		<>
 			<Text>{format(parseFloat(total))}</Text>
 			{show('payment_method') && (
-				<Text className="text-sm text-right text-muted-foreground">{payment_method_title}</Text>
+				<Text className="text-muted-foreground text-right text-sm">{payment_method_title}</Text>
 			)}
 		</>
 	);

@@ -14,7 +14,7 @@ interface Props extends HeaderContext<any, any> {
 /**
  *
  */
-export const DataTableHeader = ({ title, column, header, table }: Props) => {
+export const DataTableHeader = ({ column, table }: Props) => {
 	const disableSort = column.columnDef.meta?.disableSort;
 	const { sortBy, sortDirection } = table.getState().sorting?.current || {};
 
@@ -29,8 +29,8 @@ export const DataTableHeader = ({ title, column, header, table }: Props) => {
 
 	if (disableSort) {
 		return (
-			<Text className={'font-medium text-muted-foreground'} numberOfLines={1}>
-				{title}
+			<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
+				{column.columnDef.header}
 			</Text>
 		);
 	}
@@ -50,8 +50,8 @@ export const DataTableHeader = ({ title, column, header, table }: Props) => {
 				const showIcon = hovered || isSorted;
 				return (
 					<HStack className="gap-1">
-						<Text className={'font-medium text-muted-foreground'} numberOfLines={1}>
-							{title}
+						<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
+							{column.columnDef.header}
 						</Text>
 						{showIcon && <SortIcon direction={isSorted && sortDirection} hovered={hovered} />}
 					</HStack>

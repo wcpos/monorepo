@@ -5,7 +5,7 @@ import { useQuery } from '@wcpos/query';
 import { Products } from './products';
 import { TaxRatesProvider } from '../contexts/tax-rates';
 
-export const ProductsScreen = () => {
+export function ProductsScreen() {
 	/**
 	 *
 	 */
@@ -25,4 +25,4 @@ export const ProductsScreen = () => {
 			</Suspense>
 		</ErrorBoundary>
 	);
-};
+}

@@ -1,7 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
 
-import get from 'lodash/get';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
@@ -18,6 +17,7 @@ import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
+import { TextCell } from '../components/text-cell';
 
 type LogDocument = import('@wcpos/database').LogDocument;
 
@@ -28,16 +28,23 @@ const cells = {
 	code: () => null,
 };
 
-const renderCell = (props) => get(cells, props.column.id);
+function renderCell(columnKey: string, info: any) {
+	const Renderer = cells[columnKey];
+	if (Renderer) {
+		return <Renderer {...info} />;
+	}
 
-const TableFooter = () => {
+	return <TextCell {...info} />;
+}
+
+function TableFooter() {
 	return null;
-};
+}
 
 /**
  *
  */
-export const LogsScreen = () => {
+export function LogsScreen() {
 	const { uiSettings } = useUISettings('logs');
 	const t = useT();
 	const { bottom } = useSafeAreaInsets();
@@ -76,8 +83,8 @@ export const LogsScreen = () => {
 								renderCell={renderCell}
 								noDataMessage={t('No logs found', { _tags: 'core' })}
 								estimatedItemSize={100}
-								TableFooterComponent={TableFooter}
 								keyExtractor={(row) => row.original.document.logId}
+								showFooter={false}
 							/>
 						</Suspense>
 					</ErrorBoundary>
@@ -85,4 +92,4 @@ export const LogsScreen = () => {
 			</Card>
 		</View>
 	);
-};
+}

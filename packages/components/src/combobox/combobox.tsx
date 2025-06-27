@@ -139,10 +139,10 @@ function ComboboxInput(props: ComboboxInputProps) {
 	return (
 		<Input
 			autoFocus
-			{...props}
 			value={inputValue}
 			onChangeText={handleChange}
 			aria-busy={isPending}
+			{...props}
 		/>
 	);
 }

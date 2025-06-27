@@ -80,13 +80,8 @@ function List<T>({
 	);
 }
 
-function Item<T>({ asChild, children }: ItemProps<T>) {
-	// style isn't used on native; item & index can be used by descendants
-	const { item, index } = useItemContext();
-
-	if (asChild) {
-		return <View>{children}</View>;
-	}
+function Item({ children }) {
+	// const { item, index } = useItemContext();
 
 	return <>{children}</>;
 }

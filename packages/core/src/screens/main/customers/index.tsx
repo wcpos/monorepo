@@ -2,7 +2,6 @@ import React from 'react';
 import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
-import get from 'lodash/get';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
@@ -21,12 +20,11 @@ import { CustomerEmail } from './cells/email';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
+import { TextCell } from '../components/text-cell';
 import { Date } from '../components/date';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
-
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 const cells = {
 	avatar_url: Avatar,
@@ -38,12 +36,19 @@ const cells = {
 	date_modified_gmt: Date,
 };
 
-const renderCell = (props) => get(cells, props.column.id);
+function renderCell(columnKey: string, info: any) {
+	const Renderer = cells[columnKey];
+	if (Renderer) {
+		return <Renderer {...info} />;
+	}
+
+	return <TextCell {...info} />;
+}
 
 /**
  *
  */
-export const CustomersScreen = () => {
+export function CustomersScreen() {
 	const { uiSettings } = useUISettings('customers');
 	const t = useT();
 	const router = useRouter();
@@ -93,7 +98,7 @@ export const CustomersScreen = () => {
 				<CardContent className="flex-1 p-0">
 					<ErrorBoundary>
 						<Suspense>
-							<DataTable<CustomerDocument>
+							<DataTable
 								id="customers"
 								query={query}
 								renderCell={renderCell}
@@ -106,4 +111,4 @@ export const CustomersScreen = () => {
 			</Card>
 		</View>
 	);
-};
+}

@@ -7,7 +7,7 @@ import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { ModalContent, ModalTitle, Modal, ModalBody, ModalHeader } from '@wcpos/components/modal';
+import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 

@@ -4,7 +4,7 @@ import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import { Combobox, ComboboxTriggerPrimitive, ComboboxContent } from '@wcpos/components/combobox';
+import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query } from '@wcpos/query';
 
@@ -42,7 +42,7 @@ const CustomerPill = ({ query, resource, customerID }: CustomerPillProps) => {
 				query.where('customer_id').equals(toNumber(value)).exec();
 			}}
 		>
-			<ComboboxTriggerPrimitive asChild>
+			<ComboboxTrigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="user"
@@ -54,7 +54,7 @@ const CustomerPill = ({ query, resource, customerID }: CustomerPillProps) => {
 						{customer ? format(customer) : t('Select Customer', { _tags: 'core' })}
 					</ButtonText>
 				</ButtonPill>
-			</ComboboxTriggerPrimitive>
+			</ComboboxTrigger>
 			<ComboboxContent>
 				<CustomerSearch withGuest />
 			</ComboboxContent>

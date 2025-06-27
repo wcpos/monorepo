@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ButtonPill } from '@wcpos/components/button';
-import { useDataTable } from '@wcpos/components/data-table';
 import { FormatAddress } from '@wcpos/components/format';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -17,11 +16,12 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  *
  */
 export const Customer = ({
+	table,
 	row,
 	column,
 }: CellContext<{ document: OrderDocument }, 'customer_id'>) => {
 	const order = row.original.document;
-	const { query } = useDataTable();
+	const { query } = table.options.meta;
 	const { format } = useCustomerNameFormat();
 	const customerID = useObservableEagerState(order.customer_id$);
 	const billing = useObservableEagerState(order.billing$);

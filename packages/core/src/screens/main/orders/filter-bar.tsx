@@ -1,9 +1,9 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
-import { useObservableEagerState, ObservableResource, useObservable } from 'observable-hooks';
+import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
-import { map, startWith, switchMap, tap } from 'rxjs/operators';
+import { map, switchMap } from 'rxjs/operators';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
@@ -20,7 +20,7 @@ import { useGuestCustomer } from '../hooks/use-guest-customer';
 /**
  *
  */
-const FilterBar = ({ query }) => {
+export function FilterBar({ query }) {
 	const guestCustomer = useGuestCustomer();
 	const customerID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
@@ -147,6 +147,4 @@ const FilterBar = ({ query }) => {
 			<DateRangePill query={query} />
 		</HStack>
 	);
-};
-
-export default FilterBar;
+}

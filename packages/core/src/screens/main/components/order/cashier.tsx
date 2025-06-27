@@ -4,7 +4,6 @@ import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { ButtonPill } from '@wcpos/components/button';
-import { useDataTable } from '@wcpos/components/data-table';
 import { useT } from '@wcpos/core/contexts/translations';
 
 import { useCollection } from '../../hooks/use-collection';
@@ -17,7 +16,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const Cashier = ({ row }: CellContext<{ document: OrderDocument }, 'cashier'>) => {
+export const Cashier = ({ table, row }: CellContext<{ document: OrderDocument }, 'cashier'>) => {
 	const order = row.original.document;
 	const { collection } = useCollection('customers');
 	const cashierID = useObservableEagerState(
@@ -28,7 +27,7 @@ export const Cashier = ({ row }: CellContext<{ document: OrderDocument }, 'cashi
 	);
 	const [cashierName, setCashierName] = React.useState('');
 	const { format } = useCustomerNameFormat();
-	const { query } = useDataTable();
+	const { query } = table.options.meta;
 	const t = useT();
 
 	/**
