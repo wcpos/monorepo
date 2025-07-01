@@ -18,10 +18,7 @@ import { useExtraData } from '../contexts/extra-data';
 /**
  *
  */
-export const TaxClassSelect = React.forwardRef<
-	React.ElementRef<typeof Select>,
-	React.ComponentPropsWithoutRef<typeof Select>
->(({ onValueChange, value, ...props }, ref) => {
+export const TaxClassSelect = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 	const { extraData } = useExtraData();
@@ -49,7 +46,7 @@ export const TaxClassSelect = React.forwardRef<
 	 *
 	 */
 	return (
-		<Select ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
+		<Select value={{ ...value, label }} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
@@ -68,4 +65,4 @@ export const TaxClassSelect = React.forwardRef<
 			</SelectContent>
 		</Select>
 	);
-});
+};

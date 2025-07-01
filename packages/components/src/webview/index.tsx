@@ -4,18 +4,16 @@ import { useAugmentedRef } from '@rn-primitives/hooks';
 import isString from 'lodash/isString';
 import { WebView as RNWebView, WebViewProps as RNWebViewProps } from 'react-native-webview';
 
-export type WebViewProps = {
+export interface WebViewProps extends RNWebViewProps {
+	ref: React.RefObject<RNWebView>;
 	src: string;
 	onMessage: (event: { nativeEvent: { data: any } }) => void;
-} & RNWebViewProps;
+}
 
 /**
  * WebView component that automatically resizes to fill its parent container
  */
-const WebViewBase = (
-	{ src, onMessage, ...props }: WebViewProps,
-	ref: React.ForwardedRef<RNWebView>
-) => {
+function WebView({ ref, src, onMessage, ...props }: WebViewProps) {
 	/**
 	 * Add a postMessage function to the ref
 	 */
@@ -67,9 +65,9 @@ const WebViewBase = (
 			{...props}
 		/>
 	);
-};
+}
 
-export const WebView = React.forwardRef<RNWebView, WebViewProps>(WebViewBase);
+export { WebView };
 
 /**
  * Example of how to use the WebView's postMessage method:

@@ -40,18 +40,14 @@ const itemTextVariants = cva(
 	}
 );
 
-type ItemProps = React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
+type ItemProps = DropdownMenuPrimitive.ItemProps & {
 	inset?: boolean;
 } & VariantProps<typeof itemVariants>;
 
-export const DropdownMenuItem = React.forwardRef<
-	React.ElementRef<typeof DropdownMenuPrimitive.Item>,
-	ItemProps
->(({ className, variant, inset, ...props }, ref) => {
+function DropdownMenuItem({ className, variant, inset, ...props }: ItemProps) {
 	return (
 		<TextClassContext.Provider value={itemTextVariants({ variant })}>
 			<DropdownMenuPrimitive.Item
-				ref={ref}
 				className={cn(
 					inset && 'pl-8',
 					props.disabled && 'web:pointer-events-none opacity-50',
@@ -61,5 +57,6 @@ export const DropdownMenuItem = React.forwardRef<
 			/>
 		</TextClassContext.Provider>
 	);
-});
-DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
+}
+
+export { DropdownMenuItem };

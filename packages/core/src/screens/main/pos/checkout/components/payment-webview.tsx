@@ -16,7 +16,7 @@ import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
-export interface PaymentWebviewProps {
+export interface PaymentWebviewProps extends React.ComponentProps<typeof WebView> {
 	order: OrderDocument;
 	setLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }
@@ -24,7 +24,7 @@ export interface PaymentWebviewProps {
 /**
  *
  */
-export const PaymentWebviewBase = ({ order, setLoading }: PaymentWebviewProps, ref) => {
+export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewProps) => {
 	const router = useRouter();
 	const paymentURL = useObservableState(
 		order.links$.pipe(map((links) => get(links, ['payment', 0, 'href']))),
@@ -101,7 +101,6 @@ export const PaymentWebviewBase = ({ order, setLoading }: PaymentWebviewProps, r
 		<ErrorBoundary>
 			{paymentURL ? (
 				<WebView
-					ref={ref}
 					src={paymentURLWithToken}
 					onLoad={onWebViewLoaded}
 					onMessage={(event) => {
@@ -112,10 +111,9 @@ export const PaymentWebviewBase = ({ order, setLoading }: PaymentWebviewProps, r
 						}
 					}}
 					className="h-full flex-1"
+					{...props}
 				/>
 			) : null}
 		</ErrorBoundary>
 	);
 };
-
-export const PaymentWebview = React.forwardRef(PaymentWebviewBase);

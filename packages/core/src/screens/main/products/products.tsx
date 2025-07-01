@@ -3,9 +3,10 @@ import { View } from 'react-native';
 
 import get from 'lodash/get';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useObservableRef } from 'observable-hooks';
+import { getExpandedRowModel } from '@tanstack/react-table';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
-import { DataTableRow } from '@wcpos/components/data-table';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
@@ -24,7 +25,7 @@ import { ProductVariationName } from './cells/variation-name';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
-import { DataTable, DataTableFooter } from '../components/data-table';
+import { DataTable, DataTableFooter, defaultRenderItem } from '../components/data-table';
 import { Date } from '../components/date';
 import { ProductCategories } from '../components/product/categories';
 import FilterBar from '../components/product/filter-bar';
@@ -40,6 +41,9 @@ import { UISettingsDialog } from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
 import { useUISettings } from '../contexts/ui-settings';
 import { useMutation } from '../hooks/mutations/use-mutation';
+import { TextCell } from '../components/text-cell';
+
+import type { ExpandedState } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -95,31 +99,35 @@ const variationCells = {
 /**
  *
  */
-const renderCell = ({ column, row }) => {
-	// just simple and variable for now
+function renderCell(columnKey: string, info: any) {
 	let type = 'simple';
-	if (row.original.document.type === 'variable') {
+	if (info.row.original.document.type === 'variable') {
 		type = 'variable';
 	}
-	return get(cells, [type, column.id]);
-};
-
-/**
- *
- */
-const variationRenderCell = ({ column, row }) => {
-	return get(variationCells, column.id);
-};
-
-/**
- *
- */
-const renderItem = ({ item: row, index }) => {
-	if (row.original.document.type === 'variable') {
-		return <VariableProductRow row={row} index={index} />;
+	const Renderer = get(cells, [type, columnKey]);
+	if (Renderer) {
+		return <Renderer {...info} />;
 	}
-	return <DataTableRow row={row} index={index} />;
-};
+
+	return <TextCell {...info} />;
+}
+
+/**
+ *
+ */
+function variationRenderCell({ column }) {
+	return get(variationCells, column.id);
+}
+
+/**
+ *
+ */
+function renderItem({ item, index, table }) {
+	if (item.original.document.type === 'variable') {
+		return <VariableProductRow item={item} index={index} table={table} />;
+	}
+	return defaultRenderItem({ item, index, table });
+}
 
 /**
  *
@@ -135,14 +143,15 @@ const TableFooter = () => {
 /**
  * Tables are expensive to render, so memoize all props.
  */
-export const Products = () => {
+export function Products() {
 	const { uiSettings } = useUISettings('products');
 	const { calcTaxes } = useTaxRates();
-	const t = useT();
 	const { patch: productsPatch } = useMutation({ collectionName: 'products' });
 	const { patch: variationsPatch } = useMutation({ collectionName: 'variations' });
 	const querySearchInputRef = React.useRef<React.ElementRef<typeof QuerySearchInput>>(null);
 	const { bottom } = useSafeAreaInsets();
+	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
+	const t = useT();
 
 	/**
 	 *
@@ -173,25 +182,30 @@ export const Products = () => {
 	useBarcode(query, querySearchInputRef);
 
 	/**
-	 * Table context
+	 * Table config
 	 */
-	const context = React.useMemo(() => ({ taxLocation: 'base' }), []);
-
-	/**
-	 * Table meta
-	 */
-	const tableMeta = React.useMemo(
+	const tableConfig = React.useMemo(
 		() => ({
-			onChange: ({ document, changes }) => {
-				if (document.type === 'variation') {
-					variationsPatch({ document, data: changes });
-				} else {
-					productsPatch({ document, data: changes });
-				}
+			getExpandedRowModel: getExpandedRowModel(),
+			onExpandedChange: (updater) => {
+				const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
+				expandedRef.current = value;
 			},
-			variationRenderCell,
+			getRowCanExpand: (row) => row.original.document.type === 'variable',
+			meta: {
+				expandedRef,
+				expanded$,
+				onChange: ({ document, changes }) => {
+					if (document.type === 'variation') {
+						variationsPatch({ document, data: changes });
+					} else {
+						productsPatch({ document, data: changes });
+					}
+				},
+				variationRenderCell,
+			},
 		}),
-		[productsPatch, variationsPatch]
+		[expandedRef, expanded$, productsPatch, variationsPatch]
 	);
 
 	/**
@@ -231,14 +245,13 @@ export const Products = () => {
 							<DataTable<ProductDocument>
 								id="products"
 								query={query}
-								renderCell={renderCell}
 								renderItem={renderItem}
+								renderCell={renderCell}
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
-								extraContext={context}
 								TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
 								getItemType={(row) => row.original.document.type}
-								tableMeta={tableMeta}
+								tableConfig={tableConfig}
 							/>
 						</Suspense>
 					</ErrorBoundary>
@@ -246,4 +259,4 @@ export const Products = () => {
 			</Card>
 		</View>
 	);
-};
+}

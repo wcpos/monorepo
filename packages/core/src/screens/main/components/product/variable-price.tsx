@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { useDataTable } from '@wcpos/components/data-table';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import log from '@wcpos/utils/logger';
@@ -42,13 +41,13 @@ function getVariablePrices(metaData) {
  *
  */
 export const VariableProductPrice = ({
+	table,
 	row,
 	column,
 }: CellContext<{ document: ProductDocument }, 'price' | 'regular_price' | 'sale_price'>) => {
 	const product = row.original.document;
 	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
 	const taxClass = useObservableState(product.tax_class$, product.tax_class);
-	const context = useDataTable();
 
 	const metaData = useObservableState(product.meta_data$, product.meta_data);
 	const variablePrices = getVariablePrices(metaData);
@@ -68,20 +67,18 @@ export const VariableProductPrice = ({
 				taxStatus={taxStatus}
 				taxClass={taxClass}
 				taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
-				taxLocation={context?.taxLocation}
 			/>
 		);
 	}
 
 	// default, min and max are different
 	return (
-		<HStack className="flex-wrap gap-1 justify-end">
+		<HStack className="flex-wrap justify-end gap-1">
 			<PriceWithTax
 				price={variablePrices[column.id].min}
 				taxStatus={taxStatus}
 				taxClass={taxClass}
 				taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
-				taxLocation={context?.taxLocation}
 			/>
 			<Text> - </Text>
 			<PriceWithTax
@@ -89,7 +86,6 @@ export const VariableProductPrice = ({
 				taxStatus={taxStatus}
 				taxClass={taxClass}
 				taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
-				taxLocation={context?.taxLocation}
 			/>
 		</HStack>
 	);

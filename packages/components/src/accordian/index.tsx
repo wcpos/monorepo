@@ -18,44 +18,31 @@ import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
-const Accordion = React.forwardRef<
-	React.ElementRef<typeof AccordionPrimitive.Root>,
-	React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Root>
->(({ children, ...props }, ref) => {
+function Accordion({ children, ...props }: AccordionPrimitive.RootProps) {
 	return (
 		<LayoutAnimationConfig skipEntering>
-			<AccordionPrimitive.Root ref={ref} {...props} asChild={Platform.OS !== 'web'}>
+			<AccordionPrimitive.Root {...props} asChild={Platform.OS !== 'web'}>
 				<Animated.View layout={LinearTransition.duration(200)}>{children}</Animated.View>
 			</AccordionPrimitive.Root>
 		</LayoutAnimationConfig>
 	);
-});
+}
 
-Accordion.displayName = AccordionPrimitive.Root.displayName;
-
-const AccordionItem = React.forwardRef<
-	React.ElementRef<typeof AccordionPrimitive.Item>,
-	React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Item>
->(({ className, value, ...props }, ref) => {
+function AccordionItem({ className, value, ...props }: AccordionPrimitive.ItemProps) {
 	return (
 		<Animated.View className={'overflow-hidden'} layout={LinearTransition.duration(200)}>
 			<AccordionPrimitive.Item
-				ref={ref}
 				className={cn('border-border border-b', className)}
 				value={value}
 				{...props}
 			/>
 		</Animated.View>
 	);
-});
-AccordionItem.displayName = AccordionPrimitive.Item.displayName;
+}
 
 const Trigger = Platform.OS === 'web' ? View : Pressable;
 
-const AccordionTrigger = React.forwardRef<
-	React.ElementRef<typeof Pressable>,
-	React.ComponentPropsWithoutRef<typeof Pressable>
->(({ className, children, ...props }, ref) => {
+function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.TriggerProps) {
 	const { isExpanded } = AccordionPrimitive.useItemContext();
 
 	const progress = useDerivedValue(() =>
@@ -69,7 +56,7 @@ const AccordionTrigger = React.forwardRef<
 	return (
 		<TextClassContext.Provider value="font-medium web:group-hover:underline">
 			<AccordionPrimitive.Header className="flex">
-				<AccordionPrimitive.Trigger ref={ref} {...props} asChild>
+				<AccordionPrimitive.Trigger {...props} asChild>
 					<Trigger
 						className={cn(
 							// Web-specific styles
@@ -92,13 +79,9 @@ const AccordionTrigger = React.forwardRef<
 			</AccordionPrimitive.Header>
 		</TextClassContext.Provider>
 	);
-});
-AccordionTrigger.displayName = AccordionPrimitive.Trigger.displayName;
+}
 
-const AccordionContent = React.forwardRef<
-	React.ElementRef<typeof AccordionPrimitive.Content>,
-	React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+function AccordionContent({ className, children, ...props }: AccordionPrimitive.ContentProps) {
 	const { isExpanded } = AccordionPrimitive.useItemContext();
 	return (
 		<TextClassContext.Provider value="text-base">
@@ -107,14 +90,13 @@ const AccordionContent = React.forwardRef<
 					'web:transition-all overflow-hidden text-sm',
 					isExpanded ? 'web:animate-accordion-down' : 'web:animate-accordion-up'
 				)}
-				ref={ref}
 				{...props}
 			>
 				<InnerContent className={cn('pb-4', className)}>{children}</InnerContent>
 			</AccordionPrimitive.Content>
 		</TextClassContext.Provider>
 	);
-});
+}
 
 function InnerContent({ children, className }: { children: React.ReactNode; className?: string }) {
 	if (Platform.OS === 'web') {
@@ -130,7 +112,5 @@ function InnerContent({ children, className }: { children: React.ReactNode; clas
 		</Animated.View>
 	);
 }
-
-AccordionContent.displayName = AccordionPrimitive.Content.displayName;
 
 export { Accordion, AccordionContent, AccordionItem, AccordionTrigger };

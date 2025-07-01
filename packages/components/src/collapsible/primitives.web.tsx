@@ -5,13 +5,13 @@ import * as Collapsible from '@radix-ui/react-collapsible';
 import { useAugmentedRef, useControllableState } from '@rn-primitives/hooks';
 import * as Slot from '@rn-primitives/slot';
 
-import type { CollapsibleContentProps, CollapsibleRootProps, RootContext } from './types';
 import type {
 	PressableRef,
 	SlottablePressableProps,
 	SlottableViewProps,
 	ViewRef,
 } from '@rn-primitives/types';
+import type { CollapsibleContentProps, CollapsibleRootProps, RootContext } from './types';
 
 const CollapsibleContext = React.createContext<RootContext | null>(null);
 

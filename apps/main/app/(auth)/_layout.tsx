@@ -1,5 +1,5 @@
 import { Stack, Redirect } from 'expo-router';
-import * as StatusBar from 'expo-status-bar';
+// import * as StatusBar from 'expo-status-bar';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
@@ -12,8 +12,8 @@ export const unstable_settings = {
 
 export default function AuthLayout() {
 	const { storeDB } = useAppState();
-	StatusBar.setStatusBarStyle('dark', true);
-	StatusBar.setStatusBarTranslucent(true);
+	// StatusBar.setStatusBarStyle('dark', true);
+	// StatusBar.setStatusBarTranslucent(true);
 
 	if (storeDB) {
 		return <Redirect href="/(app)" />;

@@ -52,10 +52,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 				imageWidth: 120,
 			},
 		],
+		[
+			'react-native-edge-to-edge',
+			{
+				android: {
+					parentTheme: 'Default',
+					enforceNavigationBarContrast: false,
+				},
+			},
+		],
 	],
 	experiments: {
 		typedRoutes: true,
 		baseUrl: '/pos',
+		reactCanary: true,
 	},
 	extra: {
 		router: {

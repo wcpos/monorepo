@@ -43,7 +43,7 @@ export const PriceWithTax = ({
 		return (
 			<Tooltip>
 				<TooltipTrigger>
-					<Text className={cn(strikethrough && 'line-through text-muted-foreground', 'text-right')}>
+					<Text className={cn(strikethrough && 'text-muted-foreground line-through', 'text-right')}>
 						{format(displayValue)}
 					</Text>
 				</TooltipTrigger>
@@ -60,13 +60,13 @@ export const PriceWithTax = ({
 	if (taxDisplay === 'text' && taxable) {
 		return (
 			<VStack className="items-end gap-1">
-				<Text className={cn(strikethrough && 'line-through text-muted-foreground', 'text-right')}>
+				<Text className={cn(strikethrough && 'text-muted-foreground line-through', 'text-right')}>
 					{format(displayValue)}
 				</Text>
 				<Text
 					className={cn(
 						strikethrough && 'line-through',
-						'text-sm text-right text-muted-foreground'
+						'text-muted-foreground text-right text-sm'
 					)}
 				>{`${inclOrExcl} ${format(taxTotal)} tax`}</Text>
 			</VStack>
@@ -75,7 +75,7 @@ export const PriceWithTax = ({
 
 	// default just show the displayPrice
 	return (
-		<Text className={cn(strikethrough && 'line-through text-muted-foreground', 'text-right')}>
+		<Text className={cn(strikethrough && 'text-muted-foreground line-through', 'text-right')}>
 			{format(displayValue)}
 		</Text>
 	);

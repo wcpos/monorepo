@@ -12,10 +12,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const InclExclRadioGroup = React.forwardRef<
-	React.ElementRef<typeof RadioGroup>,
-	Omit<FormItemProps<typeof RadioGroup, string>, 'type'>
->((props, ref) => {
+export const InclExclRadioGroup = (props: React.ComponentProps<typeof RadioGroup>) => {
 	const t = useT();
 	const { setValue } = useFormContext();
 
@@ -23,7 +20,7 @@ export const InclExclRadioGroup = React.forwardRef<
 	 *
 	 */
 	return (
-		<RadioGroup ref={ref} {...props}>
+		<RadioGroup {...props}>
 			{[
 				{ label: t('Including tax', { _tags: 'core' }), value: 'incl' },
 				{ label: t('Excluding tax', { _tags: 'core' }), value: 'excl' },
@@ -42,4 +39,4 @@ export const InclExclRadioGroup = React.forwardRef<
 			})}
 		</RadioGroup>
 	);
-});
+};

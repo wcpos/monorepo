@@ -4,7 +4,7 @@ import toNumber from 'lodash/toNumber';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import { Combobox, ComboboxContent, ComboboxTriggerPrimitive } from '@wcpos/components/combobox';
+import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
 import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
@@ -44,7 +44,7 @@ export const TagPill = ({ query, resource, selectedID }: Props) => {
 	 */
 	return (
 		<Combobox onValueChange={handleSelect}>
-			<ComboboxTriggerPrimitive asChild>
+			<ComboboxTrigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
@@ -58,7 +58,7 @@ export const TagPill = ({ query, resource, selectedID }: Props) => {
 							: t('Tag', { _tags: 'core' })}
 					</ButtonText>
 				</ButtonPill>
-			</ComboboxTriggerPrimitive>
+			</ComboboxTrigger>
 			<ComboboxContent>
 				<TagSearch />
 			</ComboboxContent>

@@ -7,7 +7,7 @@ inputs:
     default: "20.x"
   pnpm-version:
     description: Version of pnpm to use
-    default: "10.7.0"
+    default: "10.12.1"
   eas-version:
     description: Version of EAS CLI to use
     default: "latest"
@@ -49,8 +49,14 @@ runs:
         jq --arg license "$RXDB_LICENSE_KEY" '.accessTokens["rxdb-premium"] = $license' package.json > tmp.json && mv tmp.json package.json
       shell: bash
 
+    # - name: 🏗️ Init and update rn-primitives submodule
+    #   run: |
+    #     git submodule init packages/rn-primitives
+    #     git submodule update packages/rn-primitives
+    #   shell: bash
+
     - name: 📦 Install dependencies
-      run: pnpm install
+      run: pnpm install --no-frozen-lockfile
       shell: bash
 
     - name: ♻️ Restore cache

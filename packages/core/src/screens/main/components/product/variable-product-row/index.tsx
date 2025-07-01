@@ -2,16 +2,19 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 import Animated, {
+	runOnJS,
 	useAnimatedStyle,
 	useDerivedValue,
 	useSharedValue,
 	withTiming,
-	runOnJS,
 } from 'react-native-reanimated';
 import { map } from 'rxjs/operators';
+import { flexRender } from '@tanstack/react-table';
 
-import { DataTableRow, useDataTable } from '@wcpos/components/data-table';
+import * as VirtualizedList from '@wcpos/components/virtualized-list';
+import { TableCell, TableRow } from '@wcpos/components/table';
 
+import { getColumnStyle } from '../../data-table';
 import { VariationRowProvider } from './context';
 import { Variations } from './variations';
 
@@ -20,10 +23,9 @@ const duration = 500;
 /**
  *
  */
-export const VariableProductRow = ({ row, index }) => {
-	const { table } = useDataTable();
+export function VariableProductRow({ item, index, table }) {
 	const isExpanded = useObservableEagerState(
-		table.options.meta.expanded$.pipe(map((expanded) => !!expanded[row.id]))
+		table.options.meta.expanded$.pipe(map((expanded) => !!expanded[item.id]))
 	);
 
 	/**
@@ -62,18 +64,28 @@ export const VariableProductRow = ({ row, index }) => {
 	 * Render the row and the animated Variations component
 	 */
 	return (
-		<VariationRowProvider row={row}>
-			<DataTableRow row={row} index={index} />
-			{shouldRender && (
-				<Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
+		<VirtualizedList.Item>
+			<VariationRowProvider row={item}>
+				<TableRow index={index}>
+					{item.getVisibleCells().map((cell) => {
+						return (
+							<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
+								{flexRender(cell.column.columnDef.cell, cell.getContext())}
+							</TableCell>
+						);
+					})}
+				</TableRow>
+				{shouldRender && (
+					// <Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
 					<Variations
-						row={row}
+						row={item}
 						onLayout={(e) => {
 							height.value = e.nativeEvent.layout.height;
 						}}
 					/>
-				</Animated.View>
-			)}
-		</VariationRowProvider>
+					// </Animated.View>
+				)}
+			</VariationRowProvider>
+		</VirtualizedList.Item>
 	);
-};
+}

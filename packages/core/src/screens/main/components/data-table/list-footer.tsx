@@ -3,12 +3,10 @@ import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
-import { useDataTable } from '@wcpos/components/data-table';
 import { Loader } from '@wcpos/components/loader';
-import { useReplicationState } from '@wcpos/query';
+import { Query, useReplicationState } from '@wcpos/query';
 
-export const ListFooterComponent = () => {
-	const { query } = useDataTable();
+export function ListFooterComponent({ query }: { query: Query<any> }) {
 	const { active$ } = useReplicationState(query);
 	const loading = useObservableState(active$, false);
 
@@ -19,4 +17,4 @@ export const ListFooterComponent = () => {
 			<Loader />
 		</View>
 	);
-};
+}

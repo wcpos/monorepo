@@ -10,35 +10,31 @@ type CheckboxProps = React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Roo
 	indeterminate?: boolean;
 };
 
-const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root>, CheckboxProps>(
-	({ className, indeterminate, ...props }, ref) => {
-		return (
-			<CheckboxPrimitive.Root
-				ref={ref}
-				className={cn(
-					'web:peer native:h-[20] native:w-[20] native:rounded',
-					'border-border h-4 w-4 shrink-0 rounded-sm border',
-					'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
-					'disabled:cursor-not-allowed disabled:opacity-50',
-					props.checked && 'bg-primary',
-					indeterminate && 'bg-primary',
-					className
-				)}
-				{...props}
-			>
-				{indeterminate ? (
-					<View className={cn('h-full w-full items-center justify-center')}>
-						<Icon name="minus" className="text-primary-foreground h-3 w-3" />
-					</View>
-				) : (
-					<CheckboxPrimitive.Indicator className={cn('h-full w-full items-center justify-center')}>
-						<Icon name="check" className="text-primary-foreground h-3 w-3" />
-					</CheckboxPrimitive.Indicator>
-				)}
-			</CheckboxPrimitive.Root>
-		);
-	}
-);
-Checkbox.displayName = CheckboxPrimitive.Root.displayName;
+function Checkbox({ className, indeterminate, ...props }: CheckboxProps) {
+	return (
+		<CheckboxPrimitive.Root
+			className={cn(
+				'web:peer native:h-[20] native:w-[20] native:rounded',
+				'border-border h-4 w-4 shrink-0 rounded-sm border',
+				'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
+				'disabled:cursor-not-allowed disabled:opacity-50',
+				props.checked && 'bg-primary',
+				indeterminate && 'bg-primary',
+				className
+			)}
+			{...props}
+		>
+			{indeterminate ? (
+				<View className={cn('h-full w-full items-center justify-center')}>
+					<Icon name="minus" className="text-primary-foreground h-3 w-3" />
+				</View>
+			) : (
+				<CheckboxPrimitive.Indicator className={cn('h-full w-full items-center justify-center')}>
+					<Icon name="check" className="text-primary-foreground h-3 w-3" />
+				</CheckboxPrimitive.Indicator>
+			)}
+		</CheckboxPrimitive.Root>
+	);
+}
 
 export { Checkbox };

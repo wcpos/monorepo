@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import { useDataTable } from '@wcpos/components/data-table';
 import { HStack } from '@wcpos/components/hstack';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -13,10 +12,10 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const ProductTags = ({ row }: CellContext<{ document: ProductDocument }, 'tags'>) => {
+export const ProductTags = ({ table, row }: CellContext<{ document: ProductDocument }, 'tags'>) => {
 	const product = row.original.document;
 	const tags = useObservableEagerState(product.tags$) || [];
-	const { query } = useDataTable();
+	const { query } = table.options.meta;
 
 	if (tags.length === 0) {
 		return null;
@@ -27,7 +26,7 @@ export const ProductTags = ({ row }: CellContext<{ document: ProductDocument }, 
 	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
 	 */
 	return (
-		<HStack className="flex-wrap gap-1 w-full">
+		<HStack className="w-full flex-wrap gap-1">
 			{tags.map((tag: any, index: number) => {
 				return (
 					<ButtonPill

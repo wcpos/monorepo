@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { WithSkiaWeb } from '@shopify/react-native-skia/lib/module/web';
+import { version } from 'canvaskit-wasm/package.json';
 
 import { Text } from '@wcpos/components/text';
 
@@ -12,7 +13,14 @@ import { Text } from '@wcpos/components/text';
  */
 export const Chart = React.memo(() => {
 	return (
-		<WithSkiaWeb getComponent={() => import('./chart')} fallback={<Text>Loading Chart...</Text>} />
+		<WithSkiaWeb
+			opts={{
+				locateFile: (file) =>
+					`https://cdn.jsdelivr.net/npm/canvaskit-wasm@${version}/bin/full/${file}`,
+			}}
+			getComponent={() => import('./chart')}
+			fallback={<Text>Loading Chart...</Text>}
+		/>
 	);
 });
 

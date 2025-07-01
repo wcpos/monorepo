@@ -14,17 +14,14 @@ import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 /**
  *
  */
-export const OrderStatusSelect = React.forwardRef<
-	React.ElementRef<typeof Select>,
-	React.ComponentPropsWithoutRef<typeof Select>
->(({ value, ...props }, ref) => {
+export const OrderStatusSelect = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
 	const t = useT();
 	const { items } = useOrderStatusLabel();
 
 	const label = items.find((item) => item.value === value?.value)?.label;
 
 	return (
-		<Select ref={ref} value={{ ...value, label }} {...props}>
+		<Select value={{ ...value, label }} {...props}>
 			<SelectTrigger>
 				<SelectValue
 					className="text-foreground text-sm"
@@ -38,6 +35,4 @@ export const OrderStatusSelect = React.forwardRef<
 			</SelectContent>
 		</Select>
 	);
-});
-
-OrderStatusSelect.displayName = 'OrderStatusSelect';
+};

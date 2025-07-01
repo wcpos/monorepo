@@ -16,7 +16,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const ProductName = (props: CellContext<{ document: ProductDocument }, 'name'>) => {
+export function ProductName(props: CellContext<{ document: ProductDocument }, 'name'>) {
 	const product = props.row.original.document;
 	const show = props.column.columnDef.meta.show;
 	const name = useObservableEagerState(product.name$);
@@ -39,4 +39,4 @@ export const ProductName = (props: CellContext<{ document: ProductDocument }, 'n
 			{product.type === 'grouped' && <GroupedNames {...props} />}
 		</VStack>
 	);
-};
+}

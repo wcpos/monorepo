@@ -4,11 +4,11 @@ import { ScrollView } from 'react-native';
 import * as TabsPrimitive from '@rn-primitives/tabs';
 import debounce from 'lodash/debounce';
 import {
-	useSharedValue,
-	useAnimatedRef,
-	scrollTo,
 	runOnJS,
+	scrollTo,
 	useAnimatedReaction,
+	useAnimatedRef,
+	useSharedValue,
 } from 'react-native-reanimated';
 
 import { HStack } from '../hstack';
@@ -201,4 +201,4 @@ const TabsContent = React.forwardRef<
 ));
 TabsContent.displayName = TabsPrimitive.Content.displayName;
 
-export { Tabs, TabsContent, TabsList, TabsTrigger, ScrollableTabsList };
+export { ScrollableTabsList, Tabs, TabsContent, TabsList, TabsTrigger };

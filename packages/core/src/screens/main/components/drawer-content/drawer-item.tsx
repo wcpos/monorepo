@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { StyleProp, ViewStyle, TextStyle } from 'react-native';
+import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 
 import { DrawerProps } from '@react-navigation/drawer/src/types';
 

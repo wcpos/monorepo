@@ -1,126 +1,79 @@
 import * as React from 'react';
+import type { FlexAlignType, ViewStyle } from 'react-native';
 
-import find from 'lodash/find';
+import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
+import { find } from 'lodash';
+
 import {
-	useObservableEagerState,
-	useObservableSuspense,
-	useObservableState,
-} from 'observable-hooks';
+	Table,
+	TableBody,
+	TableCell,
+	TableFooter,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from '@wcpos/components/table';
+import { Text } from '@wcpos/components/text';
+import * as VirtualizedList from '@wcpos/components/virtualized-list';
+import type { Query } from '@wcpos/query';
 
-import { DataTable as Table, DataTableProps } from '@wcpos/components/data-table';
-import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import type {
-	ProductDocument,
-	OrderDocument,
-	CustomerDocument,
-	TaxRateDocument,
-	LogDocument,
-} from '@wcpos/database';
-import { Query } from '@wcpos/query';
-
-import { ListEmptyComponent } from './empty';
-import { DataTableFooter } from './footer';
+import { UISettingID, useUISettings } from '../../contexts/ui-settings';
+import { TextCell } from '../../components/text-cell';
+import { useT } from '../../../../contexts/translations';
 import { DataTableHeader } from './header';
+import { DataTableFooter } from './footer';
 import { ListFooterComponent } from './list-footer';
-import { useUISettings, UISettingID } from '../../contexts/ui-settings';
-import { TextCell } from '../text-cell';
 
-import type { CellContext, ColumnDef, HeaderContext } from '@tanstack/react-table';
+import type { ColumnDef, HeaderContext, SortingState } from '@tanstack/react-table';
 
-type DocumentType =
-	| ProductDocument
-	| OrderDocument
-	| CustomerDocument
-	| TaxRateDocument
-	| LogDocument;
-type CollectionFromDocument<T> = T extends { collection: infer C } ? C : never;
-
-interface Props<TDocument> extends DataTableProps<TDocument, any> {
+interface Props {
 	id: UISettingID;
-	query: Query<CollectionFromDocument<TDocument>>;
-	renderCell: (props: CellContext<TDocument, unknown>) => React.ComponentType<any>;
-	renderHeader: (props: HeaderContext<TDocument, unknown>) => React.ComponentType<any>;
+	query: Query<any>;
 	noDataMessage?: string;
+	estimatedItemSize?: number;
+	showFooter?: boolean;
+	renderItem?: (params: {
+		item: any;
+		index: number;
+		table: any;
+	}) => React.ReactElement<React.ComponentProps<typeof VirtualizedList.Item>>;
+	renderCell?: (columnKey: string, info: any) => React.ReactNode;
+	renderHeader?: (props: any) => React.ReactNode;
+	tableConfig?: any;
+	getItemType?: (row: any) => string;
 }
 
-/**
- * Tables are expensive to render, so memoize all props.
- */
-const DataTable = <TDocument extends DocumentType>({
+function DataTable<TData>({
 	id,
 	query,
-	renderHeader,
-	renderCell,
-	renderItem,
 	noDataMessage,
-	TableFooterComponent = DataTableFooter,
-	extraContext,
-	...props
-}: Props<TDocument>) => {
+	estimatedItemSize,
+	showFooter = true,
+	renderItem,
+	renderCell,
+	renderHeader,
+	tableConfig,
+	getItemType,
+}: Props) {
 	const { uiSettings, getUILabel } = useUISettings(id);
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
+	const t = useT();
 	const result = useObservableSuspense(query.resource);
-	const sorting = React.useRef({
-		sortBy: uiSettings.sortBy,
-		sortDirection: uiSettings.sortDirection,
-	});
 
-	/**
-	 *
-	 */
-	const columns: ColumnDef<TDocument>[] = React.useMemo(() => {
-		return uiColumns
-			.filter((column) => column.show)
-			.map((col) => {
-				return {
-					accessorKey: col.key,
-					header: (props) => {
-						const Header = renderHeader && renderHeader(props);
+	const columns = React.useMemo(
+		() => buildColumns(uiColumns, getUILabel, renderCell),
+		[uiColumns, getUILabel, renderCell]
+	);
 
-						if (Header) {
-							return (
-								<ErrorBoundary>
-									<Header {...props} />
-								</ErrorBoundary>
-							);
-						}
+	const columnVisibility = React.useMemo(
+		() => Object.fromEntries(uiColumns.map((c) => [c.key, c.show])),
+		[uiColumns]
+	);
 
-						return <DataTableHeader title={getUILabel(props.column.id)} {...props} />;
-					},
-					// size: column.size,
-					cell: (props) => {
-						const Cell = renderCell && renderCell(props);
-
-						if (Cell) {
-							return (
-								<ErrorBoundary>
-									<Cell {...props} />
-								</ErrorBoundary>
-							);
-						}
-
-						return <TextCell {...props} />;
-					},
-					meta: {
-						...col,
-						show: (key: string) => {
-							const d = find(col.display, { key });
-							return !!(d && d.show);
-						},
-					},
-				};
-			});
-	}, [uiColumns, renderHeader, getUILabel, renderCell]);
-
-	/**
-	 * Pass down
-	 * - query instance
-	 * - total count of results for the Table Footer
-	 * - and any other extraContext
-	 */
-	const context = React.useMemo(
-		() => ({ query, count: result.hits.length, ...extraContext }),
-		[extraContext, query, result.hits.length]
+	const sorting = React.useMemo(
+		() => [{ sortBy: uiSettings.sortBy, sortDirection: uiSettings.sortDirection }],
+		[uiSettings.sortBy, uiSettings.sortDirection]
 	);
 
 	/**
@@ -128,37 +81,152 @@ const DataTable = <TDocument extends DocumentType>({
 	 */
 	const handleSortingChange = React.useCallback(
 		({ sortBy, sortDirection }) => {
-			sorting.current = { sortBy, sortDirection };
+			console.log('sorting', sortBy, sortDirection);
+			// sorting.current = { sortBy, sortDirection };
 			query.sort([{ [sortBy]: sortDirection }]).exec();
 		},
 		[query]
 	);
 
-	/**
-	 *
-	 */
-	return (
-		<Table
-			// data={result.hits.map(({ document }) => document)}
-			data={result.hits}
-			columns={columns}
-			onEndReached={() => {
-				if (query.infiniteScroll) {
-					query.loadMore();
-				}
-			}}
-			onEndReachedThreshold={0.1}
-			ListEmptyComponent={<ListEmptyComponent message={noDataMessage} />}
-			ListFooterComponent={ListFooterComponent}
-			TableFooterComponent={TableFooterComponent}
-			renderItem={renderItem ? (props) => renderItem(props) : undefined}
-			extraContext={context}
-			onSortingChange={handleSortingChange}
-			tableState={{ sorting }}
-			debug={true}
-			{...props}
-		/>
-	);
-};
+	const table = useReactTable<TData>({
+		columns,
+		data: result.hits,
+		getRowId: (row: { id: string; document: TData }) => row.id,
+		getCoreRowModel: getCoreRowModel(),
+		onSortingChange: handleSortingChange,
+		manualSorting: true,
+		...tableConfig,
+		state: { columnVisibility, sorting, ...tableConfig?.state },
+		meta: {
+			query,
+			...tableConfig?.meta,
+		},
+	});
 
-export { DataTable, DataTableFooter, DataTableHeader };
+	return (
+		<Table className="flex h-full flex-col">
+			<TableHeader>
+				{table.getHeaderGroups().map((headerGroup) => (
+					<TableRow key={headerGroup.id}>
+						{headerGroup.headers.map((header) => (
+							<TableHead key={header.id} style={getColumnStyle(header.column.columnDef.meta)}>
+								{renderHeader ? (
+									renderHeader({
+										...header,
+										table,
+									})
+								) : (
+									<DataTableHeader {...header} table={table} />
+								)}
+							</TableHead>
+						))}
+					</TableRow>
+				))}
+			</TableHeader>
+			<VirtualizedList.Root style={{ flex: 1 }}>
+				<VirtualizedList.List
+					data={table.getRowModel().rows}
+					renderItem={({ item, index }) =>
+						renderItem
+							? renderItem({ item, index, table })
+							: defaultRenderItem({ item, index, table })
+					}
+					estimatedItemSize={estimatedItemSize}
+					parentComponent={TableBody}
+					getItemType={getItemType}
+					onEndReachedThreshold={0.1}
+					onEndReached={() => {
+						if (query.infiniteScroll) {
+							query.loadMore();
+						}
+					}}
+					ListEmptyComponent={() => (
+						<TableRow className="justify-center p-2">
+							<Text>
+								{noDataMessage ? noDataMessage : t('No results found', { _tags: 'core' })}
+							</Text>
+						</TableRow>
+					)}
+					ListFooterComponent={() => <ListFooterComponent query={query} />}
+				/>
+			</VirtualizedList.Root>
+			{showFooter && (
+				<TableFooter>
+					<DataTableFooter query={query} count={result.hits.length} />
+				</TableFooter>
+			)}
+		</Table>
+	);
+}
+
+function defaultRenderItem({ item, index, table }) {
+	return (
+		<VirtualizedList.Item>
+			<TableRow index={index}>
+				{item.getVisibleCells().map((cell) => {
+					return (
+						<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
+							{flexRender(cell.column.columnDef.cell, cell.getContext())}
+						</TableCell>
+					);
+				})}
+			</TableRow>
+		</VirtualizedList.Item>
+	);
+}
+
+function buildColumns(
+	columns: any,
+	getUILabel: (key: string) => string,
+	renderCell?: (columnKey: string, info: any) => React.ReactNode
+): ColumnDef<any, any>[] {
+	return columns.map((c) => {
+		return {
+			accessorKey: c.key,
+			enableSorting: !c.disableSort,
+			meta: {
+				flex: c.flex,
+				align: c.align,
+				width: c.width,
+				show: (key: string) => {
+					const d = find(c.display, { key });
+					return !!(d && d.show);
+				},
+			},
+			cell: (info) => (renderCell ? renderCell(c.key, info) : <TextCell {...info} />),
+			header: c.hideLabel ? '' : getUILabel(c.key),
+		};
+	});
+}
+
+function getFlexAlign(align: 'left' | 'right' | 'center'): FlexAlignType {
+	switch (align) {
+		case 'left':
+			return 'flex-start';
+		case 'right':
+			return 'flex-end';
+		case 'center':
+			return 'center';
+		default:
+			return 'flex-start';
+	}
+}
+
+function getColumnStyle(meta: any): ViewStyle {
+	if (meta?.width) {
+		return {
+			flexGrow: 0,
+			flexShrink: 0,
+			flexBasis: meta.width,
+			alignItems: getFlexAlign(meta.align || 'left'),
+		};
+	}
+	return {
+		flexGrow: meta?.flex ?? 1,
+		flexShrink: 0,
+		flexBasis: '0%',
+		alignItems: getFlexAlign(meta?.align || 'left'),
+	};
+}
+
+export { DataTable, DataTableHeader, DataTableFooter, defaultRenderItem, getColumnStyle };

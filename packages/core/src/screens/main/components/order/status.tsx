@@ -3,7 +3,6 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useDataTable } from '@wcpos/components/data-table';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
@@ -56,12 +55,12 @@ const iconMap = {
 /**
  *
  */
-export const Status = ({ row }: CellContext<{ document: OrderDocument }, 'status'>) => {
+export const Status = ({ table, row }: CellContext<{ document: OrderDocument }, 'status'>) => {
 	const order = row.original.document;
 	const status = useObservableEagerState(order.status$);
 	const iconName = get(iconMap, [status, 'name'], 'circleQuestion');
 	const iconType = get(iconMap, [status, 'type'], 'disabled');
-	const { query } = useDataTable();
+	const { query } = table.options.meta;
 	const { getLabel } = useOrderStatusLabel();
 
 	/**

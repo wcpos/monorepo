@@ -18,10 +18,7 @@ import { useExtraData } from '../contexts/extra-data';
 /**
  *
  */
-export const ShippingMethodSelect = React.forwardRef<
-	React.ElementRef<typeof Select>,
-	React.ComponentPropsWithoutRef<typeof Select>
->(({ onValueChange, value, ...props }, ref) => {
+export const ShippingMethodSelect = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
 	const { extraData } = useExtraData();
 	const shippingMethods = useObservableEagerState(extraData.shippingMethods$);
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
@@ -46,7 +43,7 @@ export const ShippingMethodSelect = React.forwardRef<
 	 *
 	 */
 	return (
-		<Select ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
+		<Select value={{ ...value, label }} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
@@ -65,4 +62,4 @@ export const ShippingMethodSelect = React.forwardRef<
 			</SelectContent>
 		</Select>
 	);
-});
+};

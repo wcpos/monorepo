@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import { Combobox, ComboboxContent, ComboboxTriggerPrimitive } from '@wcpos/components/combobox';
+import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -72,11 +72,11 @@ export const CartHeader = () => {
 				<ErrorBoundary>
 					{showCustomerSelect ? (
 						<Combobox onValueChange={handleSelectCustomer} onOpenChange={delayedCloseHandler}>
-							<ComboboxTriggerPrimitive ref={triggerRef} asChild>
+							<ComboboxTrigger ref={triggerRef} asChild>
 								<ButtonPill size="xs" leftIcon="user" variant="muted">
 									<ButtonText>{t('Select Customer', { _tags: 'core' })}</ButtonText>
 								</ButtonPill>
-							</ComboboxTriggerPrimitive>
+							</ComboboxTrigger>
 							<ComboboxContent>
 								<CustomerSearch withGuest />
 							</ComboboxContent>

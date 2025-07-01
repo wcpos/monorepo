@@ -2,10 +2,10 @@ import React from 'react';
 import { View } from 'react-native';
 
 import get from 'lodash/get';
-import { useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useObservableRef } from 'observable-hooks';
+import { getExpandedRowModel } from '@tanstack/react-table';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
-import { DataTableRow } from '@wcpos/components/data-table';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
@@ -23,7 +23,7 @@ import { ProductVariationName } from './cells/variation-name';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../../contexts/translations';
-import { DataTable, DataTableFooter } from '../../components/data-table';
+import { DataTable, DataTableFooter, defaultRenderItem } from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
 import { ProductImage } from '../../components/product/image';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
@@ -35,6 +35,7 @@ import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettingsDialog } from '../../components/ui-settings';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
+import { TextCell } from '../../components/text-cell';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -69,31 +70,35 @@ const variationCells = {
 /**
  *
  */
-const renderCell = ({ column, row }) => {
-	// just simple and variable for now
+function renderCell(columnKey: string, info: any) {
 	let type = 'simple';
-	if (row.original.document.type === 'variable') {
+	if (info.row.original.document.type === 'variable') {
 		type = 'variable';
 	}
-	return get(cells, [type, column.id]);
-};
-
-/**
- *
- */
-const variationRenderCell = ({ column, row }) => {
-	return get(variationCells, column.id);
-};
-
-/**
- *
- */
-const renderItem = ({ item: row, index }) => {
-	if (row.original.document.type === 'variable') {
-		return <VariableProductRow row={row} index={index} />;
+	const Renderer = get(cells, [type, columnKey]);
+	if (Renderer) {
+		return <Renderer {...info} />;
 	}
-	return <DataTableRow row={row} index={index} />;
-};
+
+	return <TextCell {...info} />;
+}
+
+/**
+ *
+ */
+function variationRenderCell({ column }) {
+	return get(variationCells, column.id);
+}
+
+/**
+ *
+ */
+function renderItem({ item, index, table }) {
+	if (item.original.document.type === 'variable') {
+		return <VariableProductRow item={item} index={index} table={table} />;
+	}
+	return defaultRenderItem({ item, index, table });
+}
 
 /**
  *
@@ -114,6 +119,7 @@ export const POSProducts = ({ isColumn = false }) => {
 	const { calcTaxes } = useTaxRates();
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 	const querySearchInputRef = React.useRef<React.ElementRef<typeof QuerySearchInput>>(null);
+	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
 	const t = useT();
 
 	/**
@@ -156,13 +162,23 @@ export const POSProducts = ({ isColumn = false }) => {
 	}, [query, showOutOfStock]);
 
 	/**
-	 * Table meta
+	 * Table config
 	 */
-	const tableMeta = React.useMemo(
+	const tableConfig = React.useMemo(
 		() => ({
-			variationRenderCell,
+			getExpandedRowModel: getExpandedRowModel(),
+			onExpandedChange: (updater) => {
+				const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
+				expandedRef.current = value;
+			},
+			getRowCanExpand: (row) => row.original.document.type === 'variable',
+			meta: {
+				expandedRef,
+				expanded$,
+				variationRenderCell,
+			},
 		}),
-		[]
+		[expandedRef, expanded$]
 	);
 
 	/**
@@ -200,14 +216,13 @@ export const POSProducts = ({ isColumn = false }) => {
 							<DataTable<ProductDocument>
 								id="pos-products"
 								query={query}
-								renderCell={renderCell}
 								renderItem={renderItem}
+								renderCell={renderCell}
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
-								extraContext={{ taxLocation: 'pos' }}
 								TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
 								getItemType={(row) => row.original.document.type}
-								tableMeta={tableMeta}
+								tableConfig={tableConfig}
 							/>
 						</Suspense>
 					</ErrorBoundary>

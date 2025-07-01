@@ -6,15 +6,14 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Combobox,
-	ComboboxTriggerPrimitive,
-	ComboboxSearch,
-	ComboboxInput,
-	ComboboxEmpty,
 	ComboboxContent,
+	ComboboxEmpty,
+	ComboboxInput,
+	ComboboxTrigger,
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
-import { useQuery, Query } from '@wcpos/query';
+import { Query, useQuery } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
@@ -63,17 +62,21 @@ const CashierSearch = () => {
 	 *
 	 */
 	return (
-		<ComboboxSearch shouldFilter={false} className="min-w-64">
+		<Combobox shouldFilter={false} className="min-w-64">
 			<ComboboxInput
 				placeholder={t('Search Cashiers', { _tags: 'core' })}
 				value={search}
 				onValueChange={onSearch}
 			/>
-			<ComboboxEmpty>{t('No cashiers found', { _tags: 'core' })}</ComboboxEmpty>
 			<Suspense>
-				<CustomerList query={query} />
+				<CustomerList
+					query={query}
+					ListEmptyComponent={
+						<ComboboxEmpty>{t('No cashiers found', { _tags: 'core' })}</ComboboxEmpty>
+					}
+				/>
 			</Suspense>
-		</ComboboxSearch>
+		</Combobox>
 	);
 };
 
@@ -107,7 +110,7 @@ export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) =>
 					.exec();
 			}}
 		>
-			<ComboboxTriggerPrimitive asChild>
+			<ComboboxTrigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="userCrown"
@@ -119,7 +122,7 @@ export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) =>
 						{cashier ? format(cashier) : t('Select Cashier', { _tags: 'core' })}
 					</ButtonText>
 				</ButtonPill>
-			</ComboboxTriggerPrimitive>
+			</ComboboxTrigger>
 			<ComboboxContent>
 				<CashierSearch />
 			</ComboboxContent>

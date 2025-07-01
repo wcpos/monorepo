@@ -18,16 +18,22 @@
     "hooks": "pnpm --filter @wcpos/hooks",
     "query": "pnpm --filter @wcpos/query",
     "utils": "pnpm --filter @wcpos/utils",
-    "preinstall": "pnpm ignored-builds || true"
+    "preinstall": "pnpm ignored-builds || true",
+    "expo:install": "pnpm --filter main exec expo install"
   },
-  "workspaces": {
-    "packages": [
-      "apps/*",
-      "packages/*"
-    ]
-  },
-  "packageManager": "pnpm@10.7.0",
+  "packageManager": "pnpm@10.12.1",
   "pnpm": {
+    "overrides": {
+      "expo": "53.0.15",
+      "pnpm": "10.12.1",
+      "react": "19.1.0",
+      "react-dom": "19.1.0",
+      "react-native": "0.79.2",
+      "react-native-edge-to-edge": "^1.6.2",
+      "react-native-gesture-handler": "2.24.0",
+      "react-native-safe-area-context": "5.4.0",
+      "@types/react": "19.1.2"
+    },
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "fs-xattr",
@@ -43,7 +49,7 @@
     ]
   },
   "dependencies": {
-    "turbo": "2.5.0",
-    "typescript": "5.3.3"
+    "turbo": "^2.5.0",
+    "typescript": "~5.8.3"
   }
 }

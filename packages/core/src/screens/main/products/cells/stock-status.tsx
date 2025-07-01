@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ButtonPill } from '@wcpos/components/button';
-import { useDataTable } from '@wcpos/components/data-table';
 
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
@@ -15,12 +14,13 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
  *
  */
 export const StockStatus = ({
+	table,
 	row,
 }: CellContext<{ document: ProductDocument }, 'stock_status'>) => {
 	const product = row.original.document;
 	const stockStatus = useObservableEagerState(product.stock_status$);
 	const { getLabel } = useStockStatusLabel();
-	const { query } = useDataTable();
+	const { query } = table.options.meta;
 
 	const variant = React.useMemo(() => {
 		switch (stockStatus) {

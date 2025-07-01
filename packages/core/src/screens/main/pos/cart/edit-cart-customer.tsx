@@ -7,17 +7,8 @@ import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
-} from '@wcpos/components/collapsible';
-import {
-	DialogAction,
-	DialogClose,
-	DialogFooter,
-	useRootContext,
-} from '@wcpos/components/dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
+import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
 import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -45,7 +36,7 @@ const formSchema = z.object({
 /**
  * RxDocument .billing$ and .shipping$ emit Proxy(Object) which can't be used in react-hook-form
  */
-export const EditCartCustomerForm = React.forwardRef((props, ref) => {
+export const EditCartCustomerForm = () => {
 	const t = useT();
 	const { currentOrder } = useCurrentOrder();
 	const customerID = useObservableEagerState(currentOrder.customer_id$);
@@ -190,4 +181,4 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 			</VStack>
 		</Form>
 	);
-});
+};

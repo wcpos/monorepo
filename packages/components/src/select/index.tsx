@@ -8,7 +8,6 @@ import { Trigger as SelectPrimitiveTrigger, Value as SelectPrimitiveValue } from
 import { Button } from '../button';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
-import { Text } from '../text';
 
 import type { ButtonProps } from '../button';
 
@@ -22,34 +21,30 @@ const SelectGroup = SelectPrimitive.Group;
 
 const SelectValue = SelectPrimitiveValue;
 
-const SelectTrigger = React.forwardRef<SelectPrimitive.TriggerRef, SelectPrimitive.TriggerProps>(
-	({ className, children, ...props }, ref) => {
-		return (
-			<SelectPrimitiveTrigger
-				ref={ref}
-				className={cn(
-					'native:h-12',
-					'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
-					'text-muted-foreground flex h-10 flex-row items-center justify-between gap-2 px-3 py-2 text-sm',
-					'border-input bg-background rounded-md border',
-					'[&>span]:line-clamp-1',
-					props.disabled && 'web:cursor-not-allowed opacity-50',
-					className
-				)}
-				{...props}
-			>
-				<>{children}</>
-				<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
-			</SelectPrimitiveTrigger>
-		);
-	}
-);
-SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
+function SelectTrigger({ className, children, ...props }: SelectPrimitive.TriggerProps) {
+	return (
+		<SelectPrimitiveTrigger
+			className={cn(
+				'native:h-12',
+				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
+				'text-muted-foreground flex h-10 flex-row items-center justify-between gap-2 px-3 py-2 text-sm',
+				'border-input bg-background rounded-md border',
+				'[&>span]:line-clamp-1',
+				props.disabled && 'web:cursor-not-allowed opacity-50',
+				className
+			)}
+			{...props}
+		>
+			<>{children}</>
+			<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
+		</SelectPrimitiveTrigger>
+	);
+}
 
 /**
  * Platform: WEB ONLY
  */
-const SelectScrollUpButton = ({ className, ...props }: SelectPrimitive.ScrollUpButtonProps) => {
+function SelectScrollUpButton({ className, ...props }: SelectPrimitive.ScrollUpButtonProps) {
 	if (Platform.OS !== 'web') {
 		return null;
 	}
@@ -61,12 +56,12 @@ const SelectScrollUpButton = ({ className, ...props }: SelectPrimitive.ScrollUpB
 			<Icon name="chevronUp" className="text-foreground" />
 		</SelectPrimitive.ScrollUpButton>
 	);
-};
+}
 
 /**
  * Platform: WEB ONLY
  */
-const SelectScrollDownButton = ({ className, ...props }: SelectPrimitive.ScrollDownButtonProps) => {
+function SelectScrollDownButton({ className, ...props }: SelectPrimitive.ScrollDownButtonProps) {
 	if (Platform.OS !== 'web') {
 		return null;
 	}
@@ -78,12 +73,15 @@ const SelectScrollDownButton = ({ className, ...props }: SelectPrimitive.ScrollD
 			<Icon name="chevronDown" className="text-foreground" />
 		</SelectPrimitive.ScrollDownButton>
 	);
-};
+}
 
-const SelectContent = React.forwardRef<
-	SelectPrimitive.ContentRef,
-	SelectPrimitive.ContentProps & { portalHost?: string }
->(({ className, children, position = 'popper', portalHost, ...props }, ref) => {
+function SelectContent({
+	className,
+	children,
+	position = 'popper',
+	portalHost,
+	...props
+}: SelectPrimitive.ContentProps & { portalHost?: string }) {
 	const { open } = SelectPrimitive.useRootContext();
 
 	/**
@@ -101,7 +99,6 @@ const SelectContent = React.forwardRef<
 				// exiting={FadeOut}
 				>
 					<SelectPrimitive.Content
-						ref={ref}
 						className={cn(
 							'border-border bg-popover shadow-foreground/10 relative z-50 max-h-96 min-w-[8rem] rounded-md border px-1 py-2 shadow-md',
 							'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
@@ -131,24 +128,20 @@ const SelectContent = React.forwardRef<
 			</SelectPrimitive.Overlay>
 		</SelectPrimitive.Portal>
 	);
-});
-SelectContent.displayName = SelectPrimitive.Content.displayName;
+}
 
-const SelectLabel = React.forwardRef<SelectPrimitive.LabelRef, SelectPrimitive.LabelProps>(
-	({ className, ...props }, ref) => (
+function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
+	return (
 		<SelectPrimitive.Label
-			ref={ref}
 			className={cn('text-popover-foreground py-1.5 pl-8 pr-2 text-sm font-semibold', className)}
 			{...props}
 		/>
-	)
-);
-SelectLabel.displayName = SelectPrimitive.Label.displayName;
+	);
+}
 
-const SelectItem = React.forwardRef<SelectPrimitive.ItemRef, SelectPrimitive.ItemProps>(
-	({ className, children, ...props }, ref) => (
+function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps) {
+	return (
 		<SelectPrimitive.Item
-			ref={ref}
 			className={cn(
 				'native:py-2 native:pl-10',
 				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent',
@@ -165,29 +158,21 @@ const SelectItem = React.forwardRef<SelectPrimitive.ItemRef, SelectPrimitive.Ite
 			</View>
 			<SelectPrimitive.ItemText className="native:text-base web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
 		</SelectPrimitive.Item>
-	)
-);
-SelectItem.displayName = SelectPrimitive.Item.displayName;
+	);
+}
 
-const SelectSeparator = React.forwardRef<
-	SelectPrimitive.SeparatorRef,
-	SelectPrimitive.SeparatorProps
->(({ className, ...props }, ref) => (
-	<SelectPrimitive.Separator
-		ref={ref}
-		className={cn('bg-muted -mx-1 my-1 h-px', className)}
-		{...props}
-	/>
-));
-SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
+function SelectSeparator({ className, ...props }: SelectPrimitive.SeparatorProps) {
+	return (
+		<SelectPrimitive.Separator className={cn('bg-muted -mx-1 my-1 h-px', className)} {...props} />
+	);
+}
 
 /**
  *
  */
-const SelectButton = React.forwardRef<React.ElementRef<typeof Button>, ButtonProps>(
-	({ className, children, ...props }, ref) => (
+function SelectButton({ className, children, ...props }: ButtonProps) {
+	return (
 		<Button
-			ref={ref}
 			className={cn(
 				'native:h-12 web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
 				'border-input bg-background text-muted-foreground flex h-10 flex-row items-center justify-between rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
@@ -200,10 +185,8 @@ const SelectButton = React.forwardRef<React.ElementRef<typeof Button>, ButtonPro
 			<>{children}</>
 			<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
 		</Button>
-	)
-);
-
-SelectButton.displayName = 'SelectButton';
+	);
+}
 
 export {
 	Select,

@@ -7,10 +7,11 @@ import {
 	ComboboxTrigger,
 	ComboboxContent,
 	ComboboxValue,
-	ComboboxSearch,
 	ComboboxInput,
 	ComboboxEmpty,
 	ComboboxList,
+	ComboboxItem,
+	ComboboxItemText,
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
@@ -36,6 +37,12 @@ const CategoryList = ({ query }) => {
 					query.loadMore();
 				}
 			}}
+			renderItem={({ item }) => (
+				<ComboboxItem value={item.value} label={item.label}>
+					<ComboboxItemText>{item.label}</ComboboxItemText>
+				</ComboboxItem>
+			)}
+			estimatedItemSize={44}
 			ListEmptyComponent={
 				<ComboboxEmpty>{t('No category found', { _tags: 'core' })}</ComboboxEmpty>
 			}
@@ -49,7 +56,6 @@ const CategoryList = ({ query }) => {
 export const CategorySearch = () => {
 	const t = useT();
 	const [search, setSearch] = React.useState('');
-	console.log('category search');
 
 	/**
 	 *

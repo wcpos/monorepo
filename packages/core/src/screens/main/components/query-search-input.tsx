@@ -9,15 +9,13 @@ import type { Query } from '@wcpos/query';
 
 interface Props extends InputProps {
 	query: Query<any>;
+	// ref?: React.RefObject<unknown>;
 }
 
 /**
  *
  */
-const QuerySearchInputBase = (
-	{ query, ...props }: Props,
-	ref: React.ForwardedRef<React.ElementRef<typeof Input>>
-) => {
+export const QuerySearchInput = ({ query, ref, ...props }: Props) => {
 	const [search, setSearch] = React.useState('');
 
 	/**
@@ -55,7 +53,3 @@ const QuerySearchInputBase = (
 	 */
 	return <Input ref={augmentedRef} value={search} onChangeText={onSearch} clearable {...props} />;
 };
-
-export const QuerySearchInput = React.forwardRef<React.ElementRef<typeof Input>, Props>(
-	QuerySearchInputBase
-);

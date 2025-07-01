@@ -15,10 +15,10 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const CurrencyPositionSelect = React.forwardRef<
-	React.ElementRef<typeof Select>,
-	React.ComponentPropsWithoutRef<typeof Select>
->(({ onValueChange, value, ...props }, ref) => {
+export const CurrencyPositionSelect = ({
+	value,
+	...props
+}: React.ComponentProps<typeof Select>) => {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 
@@ -43,7 +43,7 @@ export const CurrencyPositionSelect = React.forwardRef<
 	 *
 	 */
 	return (
-		<Select ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
+		<Select value={{ ...value, label }} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
@@ -62,4 +62,4 @@ export const CurrencyPositionSelect = React.forwardRef<
 			</SelectContent>
 		</Select>
 	);
-});
+};

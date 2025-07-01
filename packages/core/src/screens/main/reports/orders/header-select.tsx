@@ -5,7 +5,7 @@ import { HeaderContext } from '@tanstack/react-table';
 
 import { Checkbox } from '@wcpos/components/checkbox';
 import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../../contexts/translations';
 

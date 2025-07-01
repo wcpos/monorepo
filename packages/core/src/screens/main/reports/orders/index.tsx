@@ -12,7 +12,7 @@ import type { OrderDocument } from '@wcpos/database';
 import { TableHeaderSelect } from './header-select';
 import { TableRowSelect } from './row-select';
 import { useT } from '../../../../contexts/translations';
-import { DataTable } from '../../components/data-table';
+import { DataTable, DataTableHeader } from '../../components/data-table';
 import { Date } from '../../components/date';
 import { Cashier } from '../../components/order/cashier';
 import { CreatedVia } from '../../components/order/created-via';
@@ -24,6 +24,7 @@ import { Total } from '../../components/order/total';
 import { UISettingsDialog } from '../../components/ui-settings';
 import { useReports } from '../context';
 import { UISettingsForm } from '../ui-settings-form';
+import { TextCell } from '../../components/text-cell';
 
 import type { RowSelectionState } from '@tanstack/react-table';
 
@@ -42,13 +43,27 @@ const cells = {
 	number: OrderNumber,
 };
 
-const renderCell = (props) => get(cells, props.column.id);
+function renderCell(columnKey: string, info: any) {
+	const Renderer = cells[columnKey];
+	if (Renderer) {
+		return <Renderer {...info} />;
+	}
+
+	return <TextCell {...info} />;
+}
 
 const headers = {
 	select: TableHeaderSelect,
 };
 
-const renderHeader = (props) => get(headers, props.column.id);
+const renderHeader = (props) => {
+	const Renderer = headers[props.column.id];
+	if (Renderer) {
+		return <Renderer {...props} />;
+	}
+
+	return <DataTableHeader {...props} />;
+};
 
 /**
  *
@@ -111,6 +126,24 @@ export const Orders = () => {
 	}, [allOrders, setUnselectedRowIds, unselectedRowIds]);
 
 	/**
+	 * Table config
+	 */
+	const tableConfig = React.useMemo(
+		() => ({
+			enableRowSelection: true,
+			state: {
+				rowSelection: selectionState,
+			},
+			onRowSelectionChange: handleRowSelectionChange,
+			meta: {
+				totalOrders: allOrders.length,
+				toggleAllRowsSelected: handleToggleAllRowsSelected,
+			},
+		}),
+		[allOrders.length, handleToggleAllRowsSelected, handleRowSelectionChange, selectionState]
+	);
+
+	/**
 	 *
 	 */
 	return (
@@ -133,14 +166,8 @@ export const Orders = () => {
 								renderHeader={renderHeader}
 								noDataMessage={t('No orders found', { _tags: 'core' })}
 								estimatedItemSize={100}
-								enableRowSelection
 								tableState={{ rowSelection: selectionState }}
-								onRowSelectionChange={handleRowSelectionChange}
-								extraData={unselectedRowIds}
-								tableMeta={{
-									totalOrders: allOrders.length,
-									toggleAllRowsSelected: handleToggleAllRowsSelected,
-								}}
+								tableConfig={tableConfig}
 							/>
 						</Suspense>
 					</ErrorBoundary>
