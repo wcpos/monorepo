@@ -2,14 +2,14 @@ import * as React from 'react';
 
 import {
 	Combobox,
-	ComboboxTrigger,
-	ComboboxValue,
 	ComboboxContent,
 	ComboboxEmpty,
 	ComboboxInput,
 	ComboboxItem,
+	ComboboxItemText,
 	ComboboxList,
-	ComboboxSearch,
+	ComboboxTrigger,
+	ComboboxValue,
 } from '@wcpos/components/combobox';
 import {
 	Select,
@@ -51,6 +51,13 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 		);
 	}
 
+	const data = options.map((option) => {
+		return {
+			value: option,
+			label: option,
+		};
+	});
+
 	/**
 	 * Combobox for longer list of options
 	 */
@@ -65,19 +72,19 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 				<ComboboxValue placeholder={t('Select an option', { _tags: 'core' })} />
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxSearch>
-					<ComboboxInput placeholder={t('Search Variations', { _tags: 'core' })} />
-					<ComboboxEmpty>{t('No variation found', { _tags: 'core' })}</ComboboxEmpty>
-					<ComboboxList>
-						{options.map((option) => {
-							return (
-								<ComboboxItem key={option} value={option} label={option}>
-									{option}
-								</ComboboxItem>
-							);
-						})}
-					</ComboboxList>
-				</ComboboxSearch>
+				<ComboboxInput placeholder={t('Search Variations', { _tags: 'core' })} />
+				<ComboboxList
+					data={data}
+					renderItem={({ item }) => (
+						<ComboboxItem value={item.value} label={item.label}>
+							<ComboboxItemText>{item.label}</ComboboxItemText>
+						</ComboboxItem>
+					)}
+					estimatedItemSize={44}
+					ListEmptyComponent={
+						<ComboboxEmpty>{t('No variation found', { _tags: 'core' })}</ComboboxEmpty>
+					}
+				/>
 			</ComboboxContent>
 		</Combobox>
 	);

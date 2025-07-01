@@ -7,8 +7,8 @@
   "peerDependencies": {
     "@shopify/flash-list": "1.7.6",
     "expo-haptics": "~14.1.4",
-    "expo-image": "~2.3.0",
-    "expo-router": "~5.1.1",
+    "expo-image": "~2.3.1",
+    "expo-router": "~5.1.2",
     "react-native-gesture-handler": "2.24.0",
     "react-native-svg": "15.11.2",
     "react-native-webview": "13.13.5",
@@ -17,8 +17,8 @@
   "devDependencies": {
     "@svgr/cli": "^8.1.0",
     "expo-haptics": "~14.1.4",
-    "expo-image": "~2.3.0",
-    "expo-router": "~5.1.1",
+    "expo-image": "~2.3.1",
+    "expo-router": "~5.1.2",
     "react-native-svg": "15.11.2"
   },
   "dependencies": {
@@ -56,7 +56,7 @@
     "@rn-primitives/types": "^1.2.0",
     "@rn-primitives/utils": "^1.2.0",
     "@tanstack/react-table": "^8.20.6",
-    "@tanstack/react-virtual": "3.13.11",
+    "@tanstack/react-virtual": "3.13.12",
     "@uiw/react-json-view": "^2.0.0-alpha.31",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -64,10 +64,10 @@
     "color": "^5.0.0",
     "date-fns": "^4.1.0",
     "html-entities": "2.6.0",
-    "react-hook-form": "^7.58.1",
+    "react-hook-form": "^7.59.0",
     "react-native-calendars": "^1.1313.0",
     "react-native-resizable-panels": "^0.0.2",
-    "react-native-toast-message": "^2.3.1",
+    "react-native-toast-message": "^2.3.2",
     "recharts": "^2.15.0",
     "tailwind-merge": "3.2.0",
     "tailwindcss-animate": "^1.0.7"

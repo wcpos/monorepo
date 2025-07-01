@@ -1,27 +1,29 @@
 import React from 'react';
-import { Pressable, Text, Platform, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import * as Slot from '@rn-primitives/slot';
 
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 import { defaultFilter } from './utils/filter';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
+import { Icon } from '../icon';
 
 import type {
-	Option,
 	ComboboxEmptyProps,
 	ComboboxInputProps,
 	ComboboxItemProps,
 	ComboboxItemTextProps,
 	ComboboxListProps,
+	ComboboxRootContextType,
 	ComboboxRootProps,
 	ComboboxTriggerProps,
 	ComboboxValueProps,
-	ComboboxRootContextType,
+	Option,
 } from './types';
 
 const ComboboxRootContext = React.createContext<ComboboxRootContextType | null>(null);
@@ -75,7 +77,40 @@ function Combobox({
 	);
 }
 
-const ComboboxTrigger = PopoverPrimitive.Trigger;
+function ComboboxTrigger({ ...props }: PopoverPrimitive.TriggerProps) {
+	return <PopoverPrimitive.Trigger {...props} />;
+}
+
+function ComboboxValue({ asChild, placeholder, className, ...props }: ComboboxValueProps) {
+	const { value } = useComboboxRootContext();
+	const Component = asChild ? Slot.Text : Text;
+
+	return (
+		<View
+			className={cn(
+				'w-full flex-row items-center',
+				'native:h-12 border-input bg-background h-10 rounded-md border px-2',
+				'web:ring-offset-background',
+				// isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
+				// disabled && 'web:cursor-not-allowed opacity-50',
+				className
+			)}
+		>
+			<View className="flex-1">
+				<TextClassContext.Provider
+					value={cn(
+						'text-sm',
+						value?.value ? 'text-foreground' : 'text-muted-foreground',
+						className
+					)}
+				>
+					<Component {...props}>{value?.label ?? placeholder}</Component>
+				</TextClassContext.Provider>
+			</View>
+			<Icon name="chevronDown" />
+		</View>
+	);
+}
 
 function ComboboxContent({
 	className,
@@ -98,6 +133,7 @@ function ComboboxContent({
 							className={cn(
 								'web:cursor-auto web:outline-none web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 web:animate-in web:zoom-in-95 web:fade-in-0',
 								'border-border bg-popover shadow-foreground/5 z-50 w-72 rounded-md border p-2 shadow-md',
+								'max-h-[300px]',
 								className
 							)}
 							{...props}
@@ -112,10 +148,6 @@ function ComboboxContent({
 			</PopoverPrimitive.Overlay>
 		</PopoverPrimitive.Portal>
 	);
-}
-
-function ComboboxValue(props: ComboboxValueProps) {
-	return <div>Combobox</div>;
 }
 
 function ComboboxInput(props: ComboboxInputProps) {

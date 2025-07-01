@@ -8,8 +8,8 @@ import {
 	ComboboxEmpty,
 	ComboboxInput,
 	ComboboxItem,
+	ComboboxItemText,
 	ComboboxList,
-	ComboboxSearch,
 	ComboboxTrigger,
 	ComboboxValue,
 } from '@wcpos/components/combobox';
@@ -57,15 +57,19 @@ const CountryComboboxBase = ({
 				<ComboboxValue placeholder={t('Select Country', { _tags: 'core' })} />
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxSearch>
-					<ComboboxInput placeholder={t('Search Countries', { _tags: 'core' })} />
-					<ComboboxEmpty>{t('No country found', { _tags: 'core' })}</ComboboxEmpty>
-					<ComboboxList>
-						{options.map((option) => (
-							<ComboboxItem key={option.value} value={option.value} label={option.label} />
-						))}
-					</ComboboxList>
-				</ComboboxSearch>
+				<ComboboxInput placeholder={t('Search Countries', { _tags: 'core' })} />
+				<ComboboxList
+					data={options}
+					renderItem={({ item }) => (
+						<ComboboxItem value={item.value} label={item.label}>
+							<ComboboxItemText>{item.label}</ComboboxItemText>
+						</ComboboxItem>
+					)}
+					estimatedItemSize={44}
+					ListEmptyComponent={
+						<ComboboxEmpty>{t('No country found', { _tags: 'core' })}</ComboboxEmpty>
+					}
+				/>
 			</ComboboxContent>
 		</Combobox>
 	);

@@ -16,7 +16,6 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  */
 export const TableHeaderSelect = ({ table }: HeaderContext<OrderDocument, boolean>) => {
 	const t = useT();
-	console.log('table', table);
 
 	const totalSelected = Object.keys(table.getState().rowSelection ?? {}).length;
 	const indeterminate = totalSelected > 0 && totalSelected < table.options.meta.totalOrders;

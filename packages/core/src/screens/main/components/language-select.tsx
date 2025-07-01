@@ -6,8 +6,9 @@ import {
 	Combobox,
 	ComboboxContent,
 	ComboboxEmpty,
-	comboboxFilter,
 	ComboboxInput,
+	ComboboxItem,
+	ComboboxItemText,
 	ComboboxList,
 	ComboboxTrigger,
 	ComboboxValue,
@@ -22,7 +23,7 @@ import { useLocale } from '../../../hooks/use-locale';
 export const LanguageSelect = ({ value, ...props }: React.ComponentProps<typeof Combobox>) => {
 	const { locales } = useLocale();
 	const t = useT();
-	const [searchTerm, setSearchTerm] = React.useState('');
+
 	/**
 	 *
 	 */
@@ -52,26 +53,21 @@ export const LanguageSelect = ({ value, ...props }: React.ComponentProps<typeof 
 	/**
 	 *
 	 */
-	const filteredOptions = React.useMemo(() => {
-		return comboboxFilter(options, searchTerm);
-	}, [options, searchTerm]);
-
-	/**
-	 *
-	 */
 	return (
 		<Combobox value={{ ...value, label }} {...props}>
 			<ComboboxTrigger>
 				<ComboboxValue placeholder={t('Select Language', { _tags: 'core' })} />
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxInput
-					value={searchTerm}
-					onChangeText={setSearchTerm}
-					placeholder={t('Search Languages', { _tags: 'core' })}
-				/>
+				<ComboboxInput placeholder={t('Search Languages', { _tags: 'core' })} />
 				<ComboboxList
-					data={filteredOptions}
+					data={options}
+					renderItem={({ item }) => (
+						<ComboboxItem value={item.value} label={item.label}>
+							<ComboboxItemText>{item.label}</ComboboxItemText>
+						</ComboboxItem>
+					)}
+					estimatedItemSize={44}
 					ListEmptyComponent={
 						<ComboboxEmpty>{t('No language found', { _tags: 'core' })}</ComboboxEmpty>
 					}

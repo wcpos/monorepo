@@ -7,7 +7,7 @@ import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 import { toggleTextVariants, toggleVariants } from '../toggle';
 
-import type { RootProps, ItemProps } from '@rn-primitives/toggle-group';
+import type { ItemProps, RootProps } from '@rn-primitives/toggle-group';
 
 const ToggleGroupContext = React.createContext<VariantProps<typeof toggleVariants> | null>(null);
 
@@ -73,7 +73,7 @@ const ToggleGroupItem = ({
 		<TextClassContext.Provider
 			value={cn(
 				toggleTextVariants({ variant, size }),
-				ToggleGroupPrimitive.getIsSelected(value, props.value)
+				ToggleGroupPrimitive.utils.getIsSelected(value, props.value)
 					? 'text-accent-foreground'
 					: 'web:group-hover:text-muted-foreground'
 			)}
@@ -85,7 +85,7 @@ const ToggleGroupItem = ({
 						size: context.size || size,
 					}),
 					props.disabled && 'web:pointer-events-none opacity-50',
-					ToggleGroupPrimitive.getIsSelected(value, props.value) && 'bg-accent',
+					ToggleGroupPrimitive.utils.getIsSelected(value, props.value) && 'bg-accent',
 					isFirstItem && 'rounded-r-none',
 					!isLastItem && 'border-border rounded-none border-r',
 					isLastItem && 'rounded-l-none',

@@ -24,12 +24,12 @@
   "packageManager": "pnpm@10.12.1",
   "pnpm": {
     "overrides": {
-      "expo": "53.0.13",
+      "expo": "53.0.15",
       "pnpm": "10.12.1",
       "react": "19.1.0",
       "react-dom": "19.1.0",
       "react-native": "0.79.2",
-      "react-native-edge-to-edge": "^1.6.1",
+      "react-native-edge-to-edge": "^1.6.2",
       "react-native-gesture-handler": "2.24.0",
       "react-native-safe-area-context": "5.4.0",
       "@types/react": "19.1.2"

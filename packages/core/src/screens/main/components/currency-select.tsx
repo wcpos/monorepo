@@ -4,14 +4,14 @@ import { decode } from 'html-entities';
 
 import {
 	Combobox,
-	ComboboxTrigger,
-	ComboboxValue,
 	ComboboxContent,
-	ComboboxSearch,
 	ComboboxEmpty,
-	ComboboxList,
 	ComboboxInput,
 	ComboboxItem,
+	ComboboxItemText,
+	ComboboxList,
+	ComboboxTrigger,
+	ComboboxValue,
 } from '@wcpos/components/combobox';
 
 import useCurrencies, { CurrenciesProvider } from '../../../contexts/currencies';
@@ -53,15 +53,19 @@ const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Com
 				<ComboboxValue placeholder={t('Select Currency', { _tags: 'core' })} />
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxSearch>
-					<ComboboxInput placeholder={t('Search Currencies', { _tags: 'core' })} />
-					<ComboboxEmpty>{t('No currency found', { _tags: 'core' })}</ComboboxEmpty>
-					<ComboboxList>
-						{options.map((option) => (
-							<ComboboxItem key={option.value} value={option.value} label={option.label} />
-						))}
-					</ComboboxList>
-				</ComboboxSearch>
+				<ComboboxInput placeholder={t('Search Currencies', { _tags: 'core' })} />
+				<ComboboxList
+					data={options}
+					renderItem={({ item }) => (
+						<ComboboxItem value={item.value} label={item.label}>
+							<ComboboxItemText>{item.label}</ComboboxItemText>
+						</ComboboxItem>
+					)}
+					estimatedItemSize={44}
+					ListEmptyComponent={
+						<ComboboxEmpty>{t('No currency found', { _tags: 'core' })}</ComboboxEmpty>
+					}
+				/>
 			</ComboboxContent>
 		</Combobox>
 	);
