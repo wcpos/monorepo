@@ -8,7 +8,6 @@ import { Trigger as SelectPrimitiveTrigger, Value as SelectPrimitiveValue } from
 import { Button } from '../button';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
-import { Text } from '../text';
 
 import type { ButtonProps } from '../button';
 
@@ -141,10 +140,6 @@ function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
 }
 
 function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps) {
-	const { open } = SelectPrimitive.useRootContext();
-
-	console.log('open', open);
-
 	return (
 		<SelectPrimitive.Item
 			className={cn(

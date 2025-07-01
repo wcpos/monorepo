@@ -1,15 +1,11 @@
 import * as React from 'react';
-import { GestureResponderEvent, Pressable } from 'react-native';
 
-import * as Select from '@radix-ui/react-select';
-import { useAugmentedRef, useIsomorphicLayoutEffect } from '@rn-primitives/hooks';
 import * as SelectPrimitive from '@rn-primitives/select';
 import * as Slot from '@rn-primitives/slot';
 
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
-import type { TriggerProps } from '@rn-primitives/select';
 import type { SlottableTextProps } from '@rn-primitives/types';
 
 /**
@@ -38,53 +34,54 @@ function Value({
 /**
  * https://github.com/roninoss/rn-primitives/pull/65
  */
-function Trigger({
-	asChild,
-	onPress: onPressProp,
-	role: _role,
-	disabled,
-	ref,
-	...props
-}: TriggerProps & { ref?: React.RefObject<HTMLButtonElement> }) {
-	const { open, onOpenChange } = SelectPrimitive.useRootContext();
-	function onPress(ev: GestureResponderEvent) {
-		if (disabled) return;
-		onOpenChange(!open);
-		onPressProp?.(ev);
-	}
+// function Trigger({
+// 	asChild,
+// 	onPress: onPressProp,
+// 	role: _role,
+// 	disabled,
+// 	ref,
+// 	...props
+// }: TriggerProps & { ref?: React.RefObject<HTMLButtonElement> }) {
+// 	const { open, onOpenChange } = SelectPrimitive.useRootContext();
+// 	function onPress(ev: GestureResponderEvent) {
+// 		if (disabled) return;
+// 		onOpenChange(!open);
+// 		onPressProp?.(ev);
+// 	}
 
-	const augmentedRef = useAugmentedRef({
-		ref,
-		methods: {
-			open() {
-				onOpenChange(true);
-			},
-			close() {
-				onOpenChange(false);
-			},
-		},
-	});
+// 	const augmentedRef = useAugmentedRef({
+// 		ref,
+// 		methods: {
+// 			open() {
+// 				onOpenChange(true);
+// 			},
+// 			close() {
+// 				onOpenChange(false);
+// 			},
+// 		},
+// 	});
 
-	useIsomorphicLayoutEffect(() => {
-		if (augmentedRef.current) {
-			const augRef = augmentedRef.current as unknown as HTMLButtonElement;
-			augRef.dataset.state = open ? 'open' : 'closed';
-			augRef.type = 'button';
-		}
-	}, [open]);
+// 	useIsomorphicLayoutEffect(() => {
+// 		if (augmentedRef.current) {
+// 			const augRef = augmentedRef.current as unknown as HTMLButtonElement;
+// 			augRef.dataset.state = open ? 'open' : 'closed';
+// 			augRef.type = 'button';
+// 		}
+// 	}, [open]);
 
-	const Component = asChild ? Slot.Pressable : Pressable;
-	return (
-		<Select.Trigger disabled={disabled ?? undefined} asChild>
-			<Component
-				onPress={onPress}
-				ref={augmentedRef}
-				role="button"
-				disabled={disabled}
-				{...props}
-			/>
-		</Select.Trigger>
-	);
-}
+// 	const Component = asChild ? Slot.Pressable : Pressable;
+// 	return (
+// 		<Select.Trigger disabled={disabled ?? undefined} asChild>
+// 			<Component
+// 				onPress={onPress}
+// 				ref={augmentedRef}
+// 				role="button"
+// 				disabled={disabled}
+// 				{...props}
+// 			/>
+// 		</Select.Trigger>
+// 	);
+// }
+const Trigger = SelectPrimitive.Trigger;
 
 export { Trigger, Value };
