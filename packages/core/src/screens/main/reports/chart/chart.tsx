@@ -1,141 +1,190 @@
-import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 
-import { Circle, DashPathEffect, Line, useFont, vec } from '@shopify/react-native-skia';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS, useSharedValue } from 'react-native-reanimated';
+import { Circle, RoundedRect, Text, useFont } from '@shopify/react-native-skia';
 import * as Haptics from 'expo-haptics';
-import {
-	type SharedValue,
-	useAnimatedReaction,
-	useDerivedValue,
-	useSharedValue,
-	withTiming,
-} from 'react-native-reanimated';
-import { CartesianChart, Line as LineChart, StackedBar, useChartPressState } from 'victory-native';
+import { CartesianChart, StackedBar } from 'victory-native';
 
+import { findClosestPoint } from './findClosestPoint';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { useReports } from '../context';
 import { aggregateData } from './utils';
 
-const ToolTip = ({ x, y }: { x: SharedValue<number>; y: SharedValue<number> }) => {
-	return <Circle cx={x} cy={y} r={8} color="red" />;
+type DataPoint = {
+	date: string;
+	total: number;
+	total_tax: number;
 };
 
-const useTiming = (val: SharedValue<number>) => {
-	const value = useSharedValue(0);
-	useAnimatedReaction(
-		() => val.value,
-		(v) => {
-			value.value = withTiming(v, { duration: 300 });
-		}
-	);
-	return value;
+type TooltipState = {
+	visible: boolean;
+	x: number;
+	y: number;
+	point?: DataPoint;
 };
 
 export default function SkiaChart() {
 	const { selectedOrders } = useReports();
-
-	const data = React.useMemo(() => aggregateData(selectedOrders), [selectedOrders]);
-
-	// Calculate dynamic domains
-	const maxTotal = Math.max(...data.map((item) => item.total + item.total_tax), 0);
-	const maxOrderCount = Math.max(...data.map((item) => item.order_count), 0);
-
-	console.log('data', data);
-	console.log('maxOrderCount', maxOrderCount);
-	console.log('maxTotal', maxTotal);
-
+	const { format } = useCurrencyFormat();
 	const font = useFont(require('@wcpos/main/assets/fonts/Inter-Medium.ttf'), 12);
-	const [chartLeft, setChartLeft] = React.useState(0);
-	const [chartRight, setChartRight] = React.useState(0);
-	const { state, isActive } = useChartPressState({
-		x: '',
-		y: { total: 0, total_tax: 0, order_count: 0 },
-	});
-	const orderCount$ = useTiming(state.y.order_count.position);
-	const p1 = useDerivedValue(() => vec(chartLeft, orderCount$.value));
-	const p2 = useDerivedValue(() => vec(chartRight, orderCount$.value));
+
+	const data = useMemo<DataPoint[]>(() => aggregateData(selectedOrders), [selectedOrders]);
+	const maxTotal = Math.max(...data.map((d) => d.total + d.total_tax), 0);
+
+	// React state for tooltip
+	const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0 });
+
+	// SharedValues for gesture calculation
+	const ox = useSharedValue<number[]>([]);
+	const chartBounds = useSharedValue<{ top: number; bottom: number } | null>(null);
+
+	// JS callback to update React state
+	const showTooltip = useCallback((x: number, y: number, point: DataPoint) => {
+		setTooltip({ visible: true, x, y, point });
+	}, []);
+
+	const hideTooltip = useCallback(() => {
+		setTooltip((ts) => ({ ...ts, visible: false }));
+	}, []);
+
+	// Worklet: find index, compute pos and data, then call JS
+	const handleSelect = (eventX: number) => {
+		'worklet';
+		const idx = findClosestPoint(ox.value, eventX);
+		if (idx === null || !chartBounds.value) return;
+
+		const pt = data[idx];
+		const height = chartBounds.value.bottom - chartBounds.value.top;
+		const total = pt.total + pt.total_tax;
+		const yPos = chartBounds.value.bottom - (total / maxTotal) * height;
+		const xPos = ox.value[idx];
+
+		runOnJS(showTooltip)(xPos, yPos, pt);
+	};
 
 	React.useEffect(() => {
-		if (isActive && Platform.OS !== 'web') Haptics.selectionAsync();
-	}, [isActive]);
+		if (tooltip.visible && Platform.OS !== 'web') {
+			Haptics.selectionAsync();
+		}
+	}, [tooltip.visible]);
+
+	const tap = Gesture.Tap()
+		.onBegin((e) => {
+			handleSelect(e.x);
+		})
+		.onFinalize(() => {
+			runOnJS(hideTooltip)();
+		});
+
+	const hover = Gesture.Hover()
+		.onBegin((e) => handleSelect(e.x))
+		.onUpdate((e) => handleSelect(e.x))
+		.onEnd(() => runOnJS(hideTooltip)());
+
+	const combined = Gesture.Simultaneous(tap, hover);
 
 	return (
-		<CartesianChart
-			data={data}
-			xKey="date"
-			yKeys={['total', 'total_tax', 'order_count']}
-			domainPadding={{ left: 60, right: 60, top: 30 }}
-			chartPressState={state}
-			onChartBoundsChange={({ left, right }) => {
-				setChartLeft(left);
-				setChartRight(right);
-			}}
-			xAxis={{
-				font,
-				formatXLabel(value) {
-					// The value here is the date string from your data
-					// It could be "00:00", "02:00" for hours, or "2023-01-01" for days, etc.
-					return value;
-				},
-			}}
-			yAxis={[
-				{
-					yKeys: ['total', 'total_tax'],
+		<GestureDetector gesture={combined}>
+			<CartesianChart
+				data={data}
+				xKey="date"
+				yKeys={['total', 'total_tax']}
+				domainPadding={{ left: 100, right: 100, top: 20 }}
+				customGestures={combined}
+				xAxis={{
 					font,
-					domain: [0, Math.max(maxTotal * 1.1, 10)], // Add 10% padding, minimum 10
-					formatYLabel(value) {
-						return value.toLocaleString('default', {
-							style: 'currency',
-							currency: 'USD',
-						});
+					lineColor: '#E5E7EB',
+					labelColor: 'rgb(36, 59, 83)',
+					formatXLabel: (v) => (typeof v === 'string' ? v : ''),
+				}}
+				yAxis={[
+					{
+						yKeys: ['total', 'total_tax'],
+						font,
+						lineColor: '#E5E7EB',
+						labelColor: 'rgb(36, 59, 83)',
+						domain: [0, Math.max(maxTotal, 10)],
+						formatYLabel: format,
 					},
-				},
-				{
-					axisSide: 'right',
-					yKeys: ['order_count'],
-					font,
-					domain: [0, Math.max(maxOrderCount * 1.1, 5)], // Add 10% padding, minimum 5
-					formatYLabel(value) {
-						return Math.round(value).toString();
-					},
-				},
-			]}
-		>
-			{({ points, chartBounds }) => (
-				<>
-					{isActive && (
+				]}
+			>
+				{({ points, chartBounds: bounds, xTicks, xScale }) => {
+					// keep shared values up to date
+					ox.value = xTicks.map((t) => xScale(t)!);
+					chartBounds.value = { top: bounds.top, bottom: bounds.bottom };
+
+					return (
 						<>
-							<Line p1={p1} p2={p2} strokeWidth={StyleSheet.hairlineWidth}>
-								<DashPathEffect intervals={[8, 4]} />
-							</Line>
+							<StackedBar
+								chartBounds={bounds}
+								points={[points.total, points.total_tax]}
+								colors={['#FADB5F', '#F7C948']}
+								animate={{ type: 'spring' }}
+								barOptions={({ isTop }) => ({
+									roundedCorners: isTop ? { topLeft: 5, topRight: 5 } : undefined,
+								})}
+							/>
+							{tooltip.visible && tooltip.point && (
+								<ToolTip
+									x={tooltip.x}
+									y={tooltip.y}
+									point={tooltip.point}
+									format={format}
+									font={font}
+								/>
+							)}
 						</>
-					)}
-					<StackedBar
-						chartBounds={chartBounds}
-						points={[points.total, points.total_tax]}
-						colors={['#FADB5F', '#F7C948']}
-						animate={{ type: 'spring' }}
-						barOptions={({ isTop }) => {
-							return {
-								roundedCorners: isTop
-									? {
-											topLeft: 5,
-											topRight: 5,
-										}
-									: undefined,
-							};
-						}}
-					/>
-					<LineChart
-						points={points.order_count}
-						color="#127FBF"
-						strokeWidth={3}
-						curveType="natural"
-						connectMissingData
-						animate={{ type: 'timing', duration: 300 }}
-					/>
-					{isActive && <ToolTip x={state.x.position} y={state.y.order_count.position} />}
-				</>
-			)}
-		</CartesianChart>
+					);
+				}}
+			</CartesianChart>
+		</GestureDetector>
+	);
+}
+
+function ToolTip({
+	x,
+	y,
+	point,
+	format,
+	font,
+}: {
+	x: number;
+	y: number;
+	point: DataPoint;
+	format: (v: number) => string;
+	font: any;
+}) {
+	const W = 140,
+		H = 60,
+		P = 8;
+	return (
+		<>
+			<RoundedRect
+				x={x - W / 2}
+				y={y - H - 15}
+				width={W}
+				height={H}
+				r={8}
+				color="rgba(0,0,0,0.8)"
+			/>
+			<Text x={x - W / 2 + P} y={y - H - 15 + P + 12} text={point.date} font={font} color="white" />
+			<Text
+				x={x - W / 2 + P}
+				y={y - H - 15 + P + 28}
+				text={`Total: ${format(point.total)}`}
+				font={font}
+				color="white"
+			/>
+			<Text
+				x={x - W / 2 + P}
+				y={y - H - 15 + P + 44}
+				text={`Tax: ${format(point.total_tax)}`}
+				font={font}
+				color="white"
+			/>
+			<Circle cx={x} cy={y} r={4} color="rgba(0,0,0,0.8)" />
+		</>
 	);
 }
