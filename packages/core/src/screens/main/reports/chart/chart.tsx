@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React from 'react';
 import { Platform } from 'react-native';
 
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -30,24 +30,33 @@ export default function SkiaChart() {
 	const { format } = useCurrencyFormat();
 	const font = useFont(require('@wcpos/main/assets/fonts/Inter-Medium.ttf'), 12);
 
-	const data = useMemo<DataPoint[]>(() => aggregateData(selectedOrders), [selectedOrders]);
+	const data = React.useMemo<DataPoint[]>(() => aggregateData(selectedOrders), [selectedOrders]);
+	const dataSV = useSharedValue<DataPoint[]>(data);
 	const maxTotal = Math.max(...data.map((d) => d.total + d.total_tax), 0);
+	const maxTotalSV = useSharedValue<number>(maxTotal);
+
+	React.useEffect(() => {
+		dataSV.value = data;
+		maxTotalSV.value = Math.max(...data.map((d) => d.total + d.total_tax), 0);
+	}, [data, dataSV, maxTotalSV]);
 
 	// React state for tooltip
-	const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0 });
+	const [tooltip, setTooltip] = React.useState<TooltipState>({ visible: false, x: 0, y: 0 });
 
 	// SharedValues for gesture calculation
 	const ox = useSharedValue<number[]>([]);
 	const chartBounds = useSharedValue<{ top: number; bottom: number } | null>(null);
+	const previousIdx = useSharedValue<number | null>(null);
 
 	// JS callback to update React state
-	const showTooltip = useCallback((x: number, y: number, point: DataPoint) => {
+	const showTooltip = React.useCallback((x: number, y: number, point: DataPoint) => {
 		setTooltip({ visible: true, x, y, point });
 	}, []);
 
-	const hideTooltip = useCallback(() => {
+	const hideTooltip = React.useCallback(() => {
 		setTooltip((ts) => ({ ...ts, visible: false }));
-	}, []);
+		previousIdx.value = null;
+	}, [previousIdx]);
 
 	// Worklet: find index, compute pos and data, then call JS
 	const handleSelect = (eventX: number) => {
@@ -55,13 +64,18 @@ export default function SkiaChart() {
 		const idx = findClosestPoint(ox.value, eventX);
 		if (idx === null || !chartBounds.value) return;
 
-		const pt = data[idx];
-		const height = chartBounds.value.bottom - chartBounds.value.top;
-		const total = pt.total + pt.total_tax;
-		const yPos = chartBounds.value.bottom - (total / maxTotal) * height;
-		const xPos = ox.value[idx];
+		// Only call showTooltip if idx has changed
+		if (idx !== previousIdx.value) {
+			previousIdx.value = idx;
 
-		runOnJS(showTooltip)(xPos, yPos, pt);
+			const pt = dataSV.value[idx];
+			const height = chartBounds.value.bottom - chartBounds.value.top;
+			const total = pt.total + pt.total_tax;
+			const yPos = chartBounds.value.bottom - (total / maxTotalSV.value) * height;
+			const xPos = ox.value[idx];
+
+			runOnJS(showTooltip)(xPos, yPos, pt);
+		}
 	};
 
 	React.useEffect(() => {
