@@ -103,6 +103,16 @@ function DataTable<TData>({
 		},
 	});
 
+	/**
+	 * Extra data is needed to force a re-render of FlashList on certain state changes
+	 */
+	const extraData = React.useMemo(() => {
+		return {
+			columnVisibility,
+			tableConfig: tableConfig?.extraData,
+		};
+	}, [columnVisibility, tableConfig?.extraData]);
+
 	return (
 		<Table className="flex h-full flex-col">
 			<TableHeader>
@@ -148,6 +158,7 @@ function DataTable<TData>({
 						</TableRow>
 					)}
 					ListFooterComponent={() => <ListFooterComponent query={query} />}
+					extraData={extraData}
 				/>
 			</VirtualizedList.Root>
 			{showFooter && (

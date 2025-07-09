@@ -139,6 +139,12 @@ export const Orders = () => {
 				totalOrders: allOrders.length,
 				toggleAllRowsSelected: handleToggleAllRowsSelected,
 			},
+			/**
+			 * Extra data is needed to force a re-render of FlashList when the selection state changes
+			 */
+			extraData: {
+				selectionState,
+			},
 		}),
 		[allOrders.length, handleToggleAllRowsSelected, handleRowSelectionChange, selectionState]
 	);

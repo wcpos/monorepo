@@ -1,7 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Dimensions } from 'react-native';
-
-import { useSharedValue, useAnimatedReaction, runOnJS } from 'react-native-reanimated';
 
 // Define the possible breakpoints
 export type Breakpoint = 'sm' | 'md' | 'lg';
@@ -18,30 +16,26 @@ const getBreakpoint = (width: number): Breakpoint => {
 };
 
 export const useBreakpoint = (): Breakpoint => {
-	// Initialise state and shared value with the current breakpoint
-	const initialBreakpoint = getBreakpoint(Dimensions.get('window').width);
-	const [breakpoint, setBreakpoint] = useState<Breakpoint>(initialBreakpoint);
-	const breakpointShared = useSharedValue<Breakpoint>(initialBreakpoint);
+	// Initialize state with the current breakpoint
+	const [breakpoint, setBreakpoint] = useState<Breakpoint>(() =>
+		getBreakpoint(Dimensions.get('window').width)
+	);
 
 	useEffect(() => {
-		// Listen to dimension changes and update the shared value accordingly
+		// Listen to dimension changes and update the state directly
 		const subscription = Dimensions.addEventListener('change', ({ window }) => {
 			const newBreakpoint = getBreakpoint(window.width);
-			breakpointShared.value = newBreakpoint;
+			setBreakpoint((currentBreakpoint) => {
+				// Only update if the breakpoint actually changed
+				if (currentBreakpoint !== newBreakpoint) {
+					return newBreakpoint;
+				}
+				return currentBreakpoint;
+			});
 		});
-		return () => subscription?.remove();
-	}, [breakpointShared]);
 
-	// Use reanimated's worklet to only update the state when the breakpoint changes
-	useAnimatedReaction(
-		() => breakpointShared.value,
-		(current, previous) => {
-			if (current !== previous) {
-				// Run on the JS thread to update the state
-				runOnJS(setBreakpoint)(current);
-			}
-		}
-	);
+		return () => subscription?.remove();
+	}, []); // Empty dependency array since we only want to set up the listener once
 
 	return breakpoint;
 };
