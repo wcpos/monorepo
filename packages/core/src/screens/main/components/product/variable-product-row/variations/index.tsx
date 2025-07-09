@@ -16,13 +16,12 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 
 interface Props {
 	row: Row<{ document: ProductDocument }>;
-	onLayout: (event: any) => void;
 }
 
 /**
  *
  */
-export const Variations = ({ row, onLayout }: Props) => {
+export const Variations = ({ row }: Props) => {
 	const parent = row.original.document;
 	const { queryParams, updateQueryParams } = useVariationRow();
 
@@ -76,7 +75,7 @@ export const Variations = ({ row, onLayout }: Props) => {
 	 *
 	 */
 	return (
-		<VStack onLayout={onLayout} className="gap-0">
+		<VStack className="gap-0">
 			<ErrorBoundary>
 				<VariationsFilterBar row={row} query={query} />
 			</ErrorBoundary>

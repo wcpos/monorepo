@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ScrollView } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 import Animated, {
@@ -75,16 +76,26 @@ export function VariableProductRow({ item, index, table }) {
 						);
 					})}
 				</TableRow>
-				{shouldRender && (
-					// <Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
-					<Variations
-						row={item}
-						onLayout={(e) => {
-							height.value = e.nativeEvent.layout.height;
+				<Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
+					{/*
+					 * This is a workaround to get the height of the Variations component
+					 * when it is expanded.
+					 *
+					 * On native, the Variations will be rendered with height 0. So, we
+					 * render the Variations into a ScrollView to let it fill the space.
+					 *
+					 * Once we have the height, we can animate the show/hide.
+					 */}
+					<ScrollView
+						scrollEnabled={false}
+						showsVerticalScrollIndicator={false}
+						onContentSizeChange={(_w, h) => {
+							height.value = h;
 						}}
-					/>
-					// </Animated.View>
-				)}
+					>
+						{shouldRender && <Variations row={item} />}
+					</ScrollView>
+				</Animated.View>
 			</VariationRowProvider>
 		</VirtualizedList.Item>
 	);
