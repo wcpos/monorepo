@@ -32,5 +32,4 @@ type ItemContextReturnType = ReturnType<typeof useItemContext>;
 
 export { ItemContext, RootContext, useItemContext, useRootContext };
 
-  export type { ItemContextReturnType, RootContextReturnType };
-
+export type { ItemContextReturnType, RootContextReturnType };

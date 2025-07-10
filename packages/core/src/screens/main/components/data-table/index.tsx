@@ -60,6 +60,7 @@ function DataTable<TData>({
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const t = useT();
 	const result = useObservableSuspense(query.resource);
+	const deferredResult = React.useDeferredValue(result);
 
 	const columns = React.useMemo(
 		() => buildColumns(uiColumns, getUILabel, renderCell),
@@ -90,7 +91,7 @@ function DataTable<TData>({
 
 	const table = useReactTable<TData>({
 		columns,
-		data: result.hits,
+		data: deferredResult.hits,
 		getRowId: (row: { id: string; document: TData }) => row.id,
 		getCoreRowModel: getCoreRowModel(),
 		onSortingChange: handleSortingChange,

@@ -5,7 +5,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { ItemContext, RootContext, useItemContext, useRootContext } from './utils/contexts';
 
-import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } from './types';
+import type { BaseItemContext, ItemProps, ListProps, RootProps } from './types';
 
 function Root({ style, ...props }: RootProps) {
 	const parentRef = React.useRef<HTMLDivElement>(null);
@@ -29,10 +29,8 @@ function List<T>({
 	data,
 	renderItem,
 	ListEmptyComponent = null,
-	// customizable wrapper
 	parentComponent: Parent = View as any,
 	parentProps,
-	// virtualization settings
 	estimatedItemSize,
 	overscan = 4,
 	horizontal = false,
@@ -43,6 +41,7 @@ function List<T>({
 }: ListProps<T>) {
 	const { scrollElement } = useRootContext();
 
+	// set up virtualizer
 	const rowVirtualizer = useVirtualizer({
 		count: data.length,
 		getScrollElement: () => scrollElement,
@@ -52,35 +51,49 @@ function List<T>({
 		...rest,
 	});
 
-	React.useImperativeHandle(ref, () => ({
-		scrollToIndex: ({
-			index,
-			align = 'start',
-			animated = true,
-		}: {
-			index: number;
-			align?: 'start' | 'center' | 'end';
-			animated?: boolean;
-		}) => rowVirtualizer.scrollToIndex(index, { align, behavior: animated ? 'smooth' : 'auto' }),
-		scrollToOffset: (offset: number, animated = true) =>
-			rowVirtualizer.scrollToOffset(offset, { behavior: animated ? 'smooth' : 'auto' }),
-	}));
+	// expose imperative methods
+	React.useImperativeHandle(
+		ref,
+		() => ({
+			scrollToIndex: ({ index, align = 'start', animated = true }) =>
+				rowVirtualizer.scrollToIndex(index, { align, behavior: animated ? 'smooth' : 'auto' }),
+			scrollToOffset: (offset: number, animated = true) =>
+				rowVirtualizer.scrollToOffset(offset, { behavior: animated ? 'smooth' : 'auto' }),
+		}),
+		[rowVirtualizer]
+	);
 
-	// container style
-	const containerStyle: React.CSSProperties = {
-		position: 'relative',
-		height: horizontal ? '100%' : `${rowVirtualizer.getTotalSize()}px`,
-		width: horizontal ? `${rowVirtualizer.getTotalSize()}px` : '100%',
-		display: 'block',
-	};
+	// fire onEndReached when within threshold of end
+	const endReachedRef = React.useRef(false);
+	React.useEffect(() => {
+		if (!scrollElement || typeof onEndReached !== 'function') return;
 
-	// merge in any props (incl. style) for your wrapper
-	const wrapperProps = {
-		style: { ...containerStyle, ...((parentProps as any)?.style || {}) },
-		...parentProps,
-	} as React.ComponentProps<typeof Parent>;
+		const container = scrollElement;
+		const handleScroll = () => {
+			const offset = horizontal ? container.scrollLeft : container.scrollTop;
+			const viewSize = horizontal ? container.clientWidth : container.clientHeight;
+			const fullSize = horizontal ? container.scrollWidth : container.scrollHeight;
 
-	// empty case
+			const distanceFromEnd = fullSize - (offset + viewSize);
+
+			// when within threshold → fire once
+			if (distanceFromEnd <= viewSize * onEndReachedThreshold) {
+				if (!endReachedRef.current) {
+					onEndReached();
+					endReachedRef.current = true;
+				}
+			} else {
+				// reset when scrolled away
+				endReachedRef.current = false;
+			}
+		};
+
+		container.addEventListener('scroll', handleScroll);
+		handleScroll();
+		return () => container.removeEventListener('scroll', handleScroll);
+	}, [scrollElement, horizontal, onEndReached, onEndReachedThreshold]);
+
+	// empty state
 	if (data.length === 0) {
 		if (!ListEmptyComponent) {
 			return <Parent {...parentProps} />;
@@ -93,6 +106,19 @@ function List<T>({
 		);
 	}
 
+	// container style for virtualization
+	const containerStyle: React.CSSProperties = {
+		position: 'relative',
+		height: horizontal ? '100%' : `${rowVirtualizer.getTotalSize()}px`,
+		width: horizontal ? `${rowVirtualizer.getTotalSize()}px` : '100%',
+		display: 'block',
+	};
+
+	const wrapperProps = {
+		style: { ...containerStyle, ...((parentProps as any)?.style || {}) },
+		...parentProps,
+	} as React.ComponentProps<typeof Parent>;
+
 	return (
 		<Parent {...wrapperProps}>
 			{rowVirtualizer.getVirtualItems().map((vItem) => {
@@ -103,13 +129,7 @@ function List<T>({
 					<ItemContext.Provider
 						key={key}
 						value={
-							{
-								item,
-								index: vItem.index,
-								rowVirtualizer,
-								vItem,
-								horizontal,
-							} as BaseItemContext<T>
+							{ item, index: vItem.index, rowVirtualizer, vItem, horizontal } as BaseItemContext<T>
 						}
 					>
 						{renderItem({ item, index: vItem.index, target: 'Cell' })}
@@ -120,24 +140,24 @@ function List<T>({
 	);
 }
 
-function Item({ children, ...props }) {
-	const { index, rowVirtualizer, vItem, horizontal } = useItemContext() as BaseItemContext<T>;
+function Item({ children, ...props }: ItemProps<any>) {
+	const { index, rowVirtualizer, vItem, horizontal } = useItemContext() as BaseItemContext<any>;
 
 	return (
 		<View
 			dataSet={{ index: String(index) }}
 			style={{
-				position: 'absolute' as const,
+				position: 'absolute',
 				top: 0,
 				left: 0,
 				width: '100%',
 				transform: horizontal ? undefined : `translateY(${vItem.start}px)`,
 			}}
-			ref={(node) => rowVirtualizer.measureElement(node)}
+			ref={(node) => rowVirtualizer.measureElement(node!)}
 		>
 			{children}
 		</View>
 	);
 }
 
-export { Item, List, Root, useItemContext, useRootContext };
+export { Root, List, Item, useItemContext, useRootContext };
