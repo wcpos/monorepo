@@ -1,16 +1,19 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
+import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { useFormField } from './context';
 import { Checkbox } from '../checkbox';
 
 import type { FormItemProps } from './common';
 
-const FormCheckbox = React.forwardRef<
-	React.ElementRef<typeof Checkbox>,
-	Omit<FormItemProps<typeof Checkbox, boolean>, 'checked' | 'onCheckedChange'>
->(({ label, description, value, onChange, ...props }, ref) => {
+export function FormCheckbox({
+	label,
+	description,
+	value,
+	onChange,
+	...props
+}: FormItemProps<boolean> & React.ComponentProps<typeof Checkbox>) {
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
 	function handleOnLabelPress() {
@@ -21,7 +24,6 @@ const FormCheckbox = React.forwardRef<
 		<FormItem className="px-1">
 			<View className="flex-row items-center gap-3">
 				<Checkbox
-					ref={ref}
 					aria-labelledby={formItemNativeID}
 					aria-describedby={
 						!error
@@ -43,8 +45,4 @@ const FormCheckbox = React.forwardRef<
 			<FormMessage />
 		</FormItem>
 	);
-});
-
-FormCheckbox.displayName = 'FormCheckbox';
-
-export { FormCheckbox };
+}

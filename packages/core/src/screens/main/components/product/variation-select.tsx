@@ -3,13 +3,13 @@ import * as React from 'react';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Combobox,
-	ComboboxTriggerPrimitive,
 	ComboboxContent,
 	ComboboxEmpty,
 	ComboboxInput,
 	ComboboxItem,
 	ComboboxList,
 	ComboboxSearch,
+	ComboboxTriggerPrimitive,
 } from '@wcpos/components/combobox';
 import {
 	Select,

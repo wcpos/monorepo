@@ -1,15 +1,19 @@
 import * as React from 'react';
 
-import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
+import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { useFormField } from './context';
 import { Textarea } from '../textarea';
 
 import type { FormItemProps } from './common';
 
-const FormTextarea = React.forwardRef<
-	React.ElementRef<typeof Textarea>,
-	FormItemProps<typeof Textarea, string>
->(({ label, description, onChange, customComponent: Component = Textarea, ...props }, ref) => {
+export function FormTextarea({
+	label,
+	description,
+	onChange,
+	customComponent: Component = Textarea,
+	ref,
+	...props
+}: FormItemProps<string> & React.ComponentProps<typeof Textarea>) {
 	const textareaRef = React.useRef<React.ComponentRef<typeof Textarea>>(null);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
@@ -18,7 +22,7 @@ const FormTextarea = React.forwardRef<
 			return {} as React.ComponentRef<typeof Textarea>;
 		}
 		return textareaRef.current;
-	}, [textareaRef.current]);
+	}, []);
 
 	function handleOnLabelPress() {
 		if (!textareaRef.current) {
@@ -55,8 +59,4 @@ const FormTextarea = React.forwardRef<
 			<FormMessage />
 		</FormItem>
 	);
-});
-
-FormTextarea.displayName = 'FormTextarea';
-
-export { FormTextarea };
+}

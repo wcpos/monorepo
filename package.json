@@ -33,7 +33,7 @@
       "react-native-gesture-handler": "2.24.0",
       "react-native-safe-area-context": "5.4.0",
       "@types/react": "19.1.2",
-      "@react-navigation/drawer": "7.5.2"
+      "@react-navigation/drawer": "7.5.3"
     },
     "onlyBuiltDependencies": [
       "better-sqlite3",

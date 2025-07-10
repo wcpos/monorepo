@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
+import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { useFormField } from './context';
-import { Select, Option } from '../select';
+import { Option, Select } from '../select';
 
 import type { FormItemProps } from './common';
 
@@ -11,10 +11,14 @@ import type { FormItemProps } from './common';
  * - the value will come in as a string and go out as a string, but
  * - the select component expects an object with value and label
  */
-const FormSelect = React.forwardRef<
-	React.ElementRef<typeof Select>,
-	Omit<FormItemProps<typeof Select, string>, 'onValueChange'>
->(({ label, description, onChange, value, customComponent: Component = Select, ...props }, ref) => {
+export function FormSelect({
+	label,
+	description,
+	onChange,
+	value,
+	customComponent: Component = Select,
+	...props
+}: FormItemProps<string> & React.ComponentProps<typeof Select>) {
 	const [open, setOpen] = React.useState(false);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
@@ -22,7 +26,6 @@ const FormSelect = React.forwardRef<
 		<FormItem>
 			{!!label && <FormLabel nativeID={formItemNativeID}>{label}</FormLabel>}
 			<Component
-				ref={ref}
 				aria-labelledby={formItemNativeID}
 				aria-describedby={
 					!error
@@ -40,8 +43,4 @@ const FormSelect = React.forwardRef<
 			<FormMessage />
 		</FormItem>
 	);
-});
-
-FormSelect.displayName = 'FormSelect';
-
-export { FormSelect };
+}

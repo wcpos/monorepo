@@ -1,14 +1,14 @@
 import * as React from 'react';
 
-import { useFormContext, useFieldArray } from 'react-hook-form';
+import { useFieldArray, useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Collapsible, CollapsibleContent } from '@wcpos/components/collapsible';
 import {
 	DndProvider,
+	DndProviderProps,
 	Draggable,
 	DraggableStack,
-	DndProviderProps,
 	DraggableStackProps,
 } from '@wcpos/components/dnd';
 import { FormField, FormSwitch } from '@wcpos/components/form';

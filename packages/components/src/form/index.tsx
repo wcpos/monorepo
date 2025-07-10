@@ -4,7 +4,7 @@ import { Controller, ControllerProps, FieldPath, FieldValues, FormProvider } fro
 
 import { FormCheckbox } from './checkbox';
 import { FormCombobox } from './combobox';
-import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
+import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { FormFieldContext, useFormField } from './context';
 import { FormInput } from './input';
 import { FormRadioGroup } from './radio-group';

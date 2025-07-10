@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
+import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { useFormField } from './context';
-import { Command } from '../command';
+import { Combobox } from '../combobox';
 
 import type { FormItemProps } from './common';
 
@@ -10,46 +10,37 @@ import type { FormItemProps } from './common';
  * NOTE: combobox is a bit different from the other form components
  * - the value will come in as a string and go out as a string, but
  * - the combobox component expects an object with value and label
- *
- * @FIXME - what about customer select? This need to go out as a number?
  */
-const FormCombobox = React.forwardRef<
-	React.ElementRef<typeof Command>,
-	Omit<FormItemProps<typeof Command, string>, 'onValueChange'>
->(
-	(
-		{ label, description, value, onChange, customComponent: Component = Command, ...props },
-		ref
-	) => {
-		const [open, setOpen] = React.useState(false);
-		const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } =
-			useFormField();
+export function FormCombobox({
+	label,
+	description,
+	value,
+	onChange,
+	customComponent: Component = Combobox,
+	...props
+}: FormItemProps<string> & React.ComponentProps<typeof Combobox>) {
+	const [open, setOpen] = React.useState(false);
+	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
-		return (
-			<FormItem>
-				{!!label && <FormLabel nativeID={formItemNativeID}>{label}</FormLabel>}
-				<Component
-					ref={ref}
-					aria-labelledby={formItemNativeID}
-					aria-describedby={
-						!error
-							? `${formDescriptionNativeID}`
-							: `${formDescriptionNativeID} ${formMessageNativeID}`
-					}
-					aria-invalid={!!error}
-					open={open}
-					onOpenChange={setOpen}
-					value={typeof value === 'string' ? { value, label: value } : value}
-					onValueChange={(val: any) => onChange?.(val?.value)}
-					{...props}
-				/>
-				{!!description && <FormDescription>{description}</FormDescription>}
-				<FormMessage />
-			</FormItem>
-		);
-	}
-);
-
-FormCombobox.displayName = 'FormCombobox';
-
-export { FormCombobox };
+	return (
+		<FormItem>
+			{!!label && <FormLabel nativeID={formItemNativeID}>{label}</FormLabel>}
+			<Component
+				aria-labelledby={formItemNativeID}
+				aria-describedby={
+					!error
+						? `${formDescriptionNativeID}`
+						: `${formDescriptionNativeID} ${formMessageNativeID}`
+				}
+				aria-invalid={!!error}
+				open={open}
+				onOpenChange={setOpen}
+				value={typeof value === 'string' ? { value, label: value } : value}
+				onValueChange={(val: any) => onChange?.(val?.value)}
+				{...props}
+			/>
+			{!!description && <FormDescription>{description}</FormDescription>}
+			<FormMessage />
+		</FormItem>
+	);
+}

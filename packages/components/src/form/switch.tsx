@@ -1,16 +1,20 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
+import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { useFormField } from './context';
 import { Switch } from '../switch';
 
 import type { FormItemProps } from './common';
 
-const FormSwitch = React.forwardRef<
-	React.ElementRef<typeof Switch>,
-	Omit<FormItemProps<typeof Switch, boolean>, 'checked' | 'onCheckedChange'>
->(({ label, description, value, onChange, ...props }, ref) => {
+export function FormSwitch({
+	label,
+	description,
+	value,
+	onChange,
+	ref,
+	...props
+}: FormItemProps<boolean> & React.ComponentProps<typeof Switch>) {
 	const switchRef = React.useRef<React.ComponentRef<typeof Switch>>(null);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
@@ -19,7 +23,7 @@ const FormSwitch = React.forwardRef<
 			return {} as React.ComponentRef<typeof Switch>;
 		}
 		return switchRef.current;
-	}, [switchRef.current]);
+	}, []);
 
 	function handleOnLabelPress() {
 		onChange?.(!value);
@@ -42,7 +46,11 @@ const FormSwitch = React.forwardRef<
 					{...props}
 				/>
 				{!!label && (
-					<FormLabel className="grow pb-0" nativeID={formItemNativeID} onPress={handleOnLabelPress}>
+					<FormLabel
+						className="native:pb-0 grow"
+						nativeID={formItemNativeID}
+						onPress={handleOnLabelPress}
+					>
 						{label}
 					</FormLabel>
 				)}
@@ -51,8 +59,4 @@ const FormSwitch = React.forwardRef<
 			<FormMessage />
 		</FormItem>
 	);
-});
-
-FormSwitch.displayName = 'FormSwitch';
-
-export { FormSwitch };
+}

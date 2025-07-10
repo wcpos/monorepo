@@ -18,20 +18,22 @@ interface LabelRootProps {
  * @rn-primitives/label is not using Pressable, only a View so we don't get the onPress events
  * This makes it equivalent to a Native version from @rn-primitives/label'
  */
-const Root = React.forwardRef<
-	PressableRef,
-	Omit<SlottablePressableProps, 'children' | 'hitSlop' | 'style'> & LabelRootProps
->(({ asChild, ...props }, ref) => {
+function Root({
+	asChild,
+	...props
+}: Omit<SlottablePressableProps, 'children' | 'hitSlop' | 'style'> & LabelRootProps) {
 	const Component = asChild ? Slot.Pressable : Pressable;
-	return <Component ref={ref} {...props} />;
-});
+	return <Component {...props} />;
+}
 
-Root.displayName = 'RootLabel';
-
-const Label = React.forwardRef<
-	React.ElementRef<typeof LabelPrimitive.Text>,
-	React.ComponentPropsWithoutRef<typeof LabelPrimitive.Text>
->(({ className, onPress, onLongPress, onPressIn, onPressOut, ...props }, ref) => {
+function Label({
+	className,
+	onPress,
+	onLongPress,
+	onPressIn,
+	onPressOut,
+	...props
+}: LabelPrimitive.TextProps) {
 	return (
 		<Root
 			onPress={onPress}
@@ -41,7 +43,6 @@ const Label = React.forwardRef<
 			className={cn('web:cursor-default', className)}
 		>
 			<LabelPrimitive.Text
-				ref={ref}
 				className={cn(
 					'web:peer-disabled:cursor-not-allowed web:peer-disabled:opacity-7',
 					'text-foreground text-sm font-medium leading-none'
@@ -50,7 +51,6 @@ const Label = React.forwardRef<
 			/>
 		</Root>
 	);
-});
-Label.displayName = LabelPrimitive.Root.displayName;
+}
 
 export { Label };

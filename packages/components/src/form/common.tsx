@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
+import type { ViewProps } from 'react-native';
 
 import { Noop } from 'react-hook-form';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
@@ -9,6 +10,8 @@ import { Label } from '../label';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 
+import type { TextProps } from '../text';
+
 interface FormFieldFieldProps<T> {
 	name: string;
 	onBlur: Noop;
@@ -17,12 +20,7 @@ interface FormFieldFieldProps<T> {
 	disabled?: boolean;
 }
 
-type Override<T, U> = Omit<T, keyof U> & U;
-
-type FormItemProps<T extends React.ElementType<any>, U> = Override<
-	React.ComponentPropsWithoutRef<T>,
-	FormFieldFieldProps<U>
-> & {
+type FormItemProps<U> = FormFieldFieldProps<U> & {
 	label?: string;
 	description?: string;
 	customComponent?: React.ElementType<any>;
@@ -40,60 +38,49 @@ type FormItemProps<T extends React.ElementType<any>, U> = Override<
 		| 'web-search';
 };
 
-const FormItem = React.forwardRef<
-	React.ElementRef<typeof View>,
-	React.ComponentPropsWithoutRef<typeof View>
->(({ className, ...props }, ref) => {
+function FormItem({ className, ...props }: ViewProps) {
 	const nativeID = React.useId();
 
 	return (
 		<FormItemContext.Provider value={{ nativeID }}>
-			<View ref={ref} className={cn('space-y-1', className)} {...props} />
+			<View className={cn('space-y-1', className)} {...props} />
 		</FormItemContext.Provider>
 	);
-});
-FormItem.displayName = 'FormItem';
+}
 
-const FormLabel = React.forwardRef<
-	React.ElementRef<typeof Label>,
-	Omit<React.ComponentPropsWithoutRef<typeof Label>, 'children'> & {
-		children: string;
-	}
->(({ className, nativeID: _nativeID, ...props }, ref) => {
+function FormLabel({
+	className,
+	nativeID: _nativeID,
+	...props
+}: React.ComponentProps<typeof Label>) {
 	const { error, formItemNativeID } = useFormField();
 
 	return (
 		<Label
-			ref={ref}
 			className={cn('native:pb-2 px-px pb-1', error && 'text-destructive', className)}
 			nativeID={formItemNativeID}
 			{...props}
 		/>
 	);
-});
-FormLabel.displayName = 'FormLabel';
+}
 
-const FormDescription = React.forwardRef<
-	React.ElementRef<typeof Text>,
-	React.ComponentPropsWithoutRef<typeof Text>
->(({ className, ...props }, ref) => {
+function FormDescription({ className, ...props }: TextProps) {
 	const { formDescriptionNativeID } = useFormField();
 
 	return (
 		<Text
-			ref={ref}
 			nativeID={formDescriptionNativeID}
 			className={cn('text-muted-foreground pt-1 text-sm', className)}
 			{...props}
 		/>
 	);
-});
-FormDescription.displayName = 'FormDescription';
+}
 
-const FormMessage = React.forwardRef<
-	React.ElementRef<typeof Animated.Text>,
-	React.ComponentPropsWithoutRef<typeof Animated.Text>
->(({ className, children, ...props }, ref) => {
+function FormMessage({
+	className,
+	children,
+	...props
+}: React.ComponentProps<typeof Animated.Text>) {
 	const { error, formMessageNativeID } = useFormField();
 	const body = error ? String(error?.message) : children;
 
@@ -105,7 +92,6 @@ const FormMessage = React.forwardRef<
 		<Animated.Text
 			entering={FadeInDown}
 			exiting={FadeOut.duration(275)}
-			ref={ref}
 			nativeID={formMessageNativeID}
 			className={cn('text-destructive text-sm font-medium', className)}
 			{...props}
@@ -113,8 +99,7 @@ const FormMessage = React.forwardRef<
 			{body}
 		</Animated.Text>
 	);
-});
-FormMessage.displayName = 'FormMessage';
+}
 
-export { FormItem, FormLabel, FormDescription, FormMessage };
+export { FormDescription, FormItem, FormLabel, FormMessage };
 export type { FormItemProps };

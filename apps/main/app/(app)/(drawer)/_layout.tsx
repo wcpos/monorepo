@@ -24,8 +24,7 @@ export default function DrawerLayout() {
 				drawerType: screenSize === 'lg' ? 'permanent' : 'front',
 				drawerStyle: {
 					backgroundColor: '#243B53',
-					width: screenSize === 'lg' ? 'auto' : undefined,
-					// maxWidth: 200, // @FIXME: This breaks the drawer on web for some reason
+					width: screenSize === 'lg' ? 'auto' : 200,
 					borderRightColor: 'rgba(0, 0, 0, 0.2)',
 					borderTopRightRadius: 0,
 					borderBottomRightRadius: 0,
