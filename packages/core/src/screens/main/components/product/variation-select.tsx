@@ -7,9 +7,9 @@ import {
 	ComboboxEmpty,
 	ComboboxInput,
 	ComboboxItem,
+	ComboboxItemText,
 	ComboboxList,
-	ComboboxSearch,
-	ComboboxTriggerPrimitive,
+	ComboboxTrigger,
 } from '@wcpos/components/combobox';
 import {
 	Select,
@@ -67,6 +67,11 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 		);
 	}
 
+	const data = React.useMemo(
+		() => options.map((option) => ({ value: option, label: option })),
+		[options]
+	);
+
 	/**
 	 * Combobox for longer list of options
 	 */
@@ -77,7 +82,7 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 				onSelect({ id: attribute.id, name: attribute.name, option: value })
 			}
 		>
-			<ComboboxTriggerPrimitive asChild>
+			<ComboboxTrigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="check"
@@ -87,21 +92,21 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 				>
 					<ButtonText>{isActive ? `${attribute.name}: ${selected}` : attribute.name}</ButtonText>
 				</ButtonPill>
-			</ComboboxTriggerPrimitive>
+			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxSearch>
-					<ComboboxInput placeholder={t('Search Variations', { _tags: 'core' })} />
-					<ComboboxEmpty>{t('No variation found', { _tags: 'core' })}</ComboboxEmpty>
-					<ComboboxList>
-						{options.map((option, index) => {
-							return (
-								<ComboboxItem key={index} value={option} label={option}>
-									{option}
-								</ComboboxItem>
-							);
-						})}
-					</ComboboxList>
-				</ComboboxSearch>
+				<ComboboxInput placeholder={t('Search Variations', { _tags: 'core' })} />
+				<ComboboxList
+					data={data}
+					renderItem={({ item }) => (
+						<ComboboxItem value={item.value} label={item.label}>
+							<ComboboxItemText>{item.label}</ComboboxItemText>
+						</ComboboxItem>
+					)}
+					estimatedItemSize={20}
+					ListEmptyComponent={() => (
+						<ComboboxEmpty>{t('No variation found', { _tags: 'core' })}</ComboboxEmpty>
+					)}
+				></ComboboxList>
 			</ComboboxContent>
 		</Combobox>
 	);
