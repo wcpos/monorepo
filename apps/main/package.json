@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "test": "jest --watchAll",
     "build": "expo export --output-dir ./build --platform all",
+    "build:web": "expo export --output-dir ./web-build --platform=web",
     "build:electron": "ELECTRON=true expo export --output-dir ./electron-build --platform=web",
     "eas-build-post-install": "pnpm run -w build:main"
   },

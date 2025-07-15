@@ -1,10 +1,10 @@
 import * as React from 'react';
 
-import { TxNative, createNativeInstance } from '@transifex/native';
+import { createNativeInstance, TxNative } from '@transifex/native';
 import {
-	useObservableSuspense,
 	ObservableResource,
 	useObservableEagerState,
+	useObservableSuspense,
 } from 'observable-hooks';
 import { of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';

@@ -1,10 +1,10 @@
 import * as React from 'react';
 
-import { useLocalSearchParams, router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import get from 'lodash/get';
 import { useObservableSuspense } from 'observable-hooks';
 
-import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody } from '@wcpos/components/modal';
+import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { WebView } from '@wcpos/components/webview';
 import log from '@wcpos/utils/logger';
 

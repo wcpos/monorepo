@@ -3,9 +3,9 @@ import * as React from 'react';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { from, shareReplay } from 'rxjs';
-import { distinctUntilChanged, tap, filter, switchMap } from 'rxjs/operators';
+import { distinctUntilChanged, filter, switchMap, tap } from 'rxjs/operators';
 
-import { createUserDB, createStoreDB, createFastStoreDB } from '@wcpos/database';
+import { createFastStoreDB, createStoreDB, createUserDB } from '@wcpos/database';
 import type {
 	SiteDocument,
 	StoreDatabase,
@@ -16,7 +16,7 @@ import type {
 	WPCredentialsDocument,
 } from '@wcpos/database';
 
-import { isWebApp, initialProps } from './initial-props';
+import { initialProps, isWebApp } from './initial-props';
 
 import type { RxState } from 'rxdb';
 

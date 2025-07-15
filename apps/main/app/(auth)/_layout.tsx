@@ -1,4 +1,4 @@
-import { Stack, Redirect } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
 // import * as StatusBar from 'expo-status-bar';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';

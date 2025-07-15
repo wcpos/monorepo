@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
+import { LinkingOptions, NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 import get from 'lodash/get';

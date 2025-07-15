@@ -1,4 +1,4 @@
-import { ExpoConfig, ConfigContext } from 'expo/config';
+import { ConfigContext, ExpoConfig } from 'expo/config';
 
 // Optional: Access environment variables or other dynamic values
 export default ({ config }: ConfigContext): ExpoConfig => ({
@@ -38,8 +38,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 		favicon: './assets/images/favicon.png',
 	},
 	plugins: [
-		'expo-router',
 		'expo-sqlite',
+		[
+			'expo-router',
+			{
+				sitemap: false,
+			},
+		],
 		[
 			'expo-splash-screen',
 			{
@@ -64,7 +69,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 	],
 	experiments: {
 		typedRoutes: true,
-		baseUrl: '/pos',
+		// baseUrl: '/pos',
 		reactCanary: true,
 	},
 	extra: {
