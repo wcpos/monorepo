@@ -130,6 +130,7 @@ export const transformCustomerJSONToOrderJSON = (
 			address_2: customer?.shipping?.address_2 || '',
 			city: customer?.shipping?.city || '',
 			state: customer?.shipping?.state || '',
+			postcode: customer?.shipping?.postcode || '',
 			country: customer?.shipping?.country || '',
 		},
 	};
