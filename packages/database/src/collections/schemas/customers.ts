@@ -140,6 +140,9 @@ export const customersLiteral = {
 				state: {
 					type: 'string',
 				},
+				phone: {
+					type: 'string',
+				},
 			},
 		},
 		is_paying_customer: {

@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
-import { FormField, FormInput, FormCombobox } from '@wcpos/components/form';
+import { FormCombobox, FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -27,6 +27,7 @@ export const shippingAddressSchema = z.object({
 			state: z.string().optional(),
 			country: z.string().optional(),
 			postcode: z.string().optional(),
+			phone: z.string().optional(),
 		})
 		.optional(),
 });
@@ -62,12 +63,18 @@ export const ShippingAddressForm = () => {
 					)}
 				/>
 			</HStack>
-			<FormField
-				control={control}
-				name="shipping.company"
-				render={({ field }) => <FormInput label={t('Company', { _tags: 'core' })} {...field} />}
-			/>
-
+			<HStack className="gap-4">
+				<FormField
+					control={control}
+					name="shipping.company"
+					render={({ field }) => <FormInput label={t('Company', { _tags: 'core' })} {...field} />}
+				/>
+				<FormField
+					control={control}
+					name="shipping.phone"
+					render={({ field }) => <FormInput label={t('Phone', { _tags: 'core' })} {...field} />}
+				/>
+			</HStack>
 			<FormField
 				control={control}
 				name="shipping.address_1"
