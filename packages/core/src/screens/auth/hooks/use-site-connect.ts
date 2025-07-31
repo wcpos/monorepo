@@ -1,20 +1,29 @@
 import * as React from 'react';
 
-import find from 'lodash/find';
-import get from 'lodash/get';
-
-import useHttpClient from '@wcpos/hooks/use-http-client';
 import log from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { parseLinkHeader } from '../../../lib/url';
+import { useApiDiscovery } from './use-api-discovery';
+import { useAuthTesting } from './use-auth-testing';
+import { useUrlDiscovery } from './use-url-discovery';
 
 type SiteDocument = import('@wcpos/database').SiteDocument;
 
 interface WpJsonResponse {
 	uuid: string;
-	authentication: Record<string, unknown>;
+	authentication: {
+		'application-passwords'?: {
+			endpoints: {
+				authorization: string;
+			};
+		};
+		wcpos?: {
+			endpoints: {
+				authorization: string;
+			};
+		};
+	};
 	description: string;
 	gmt_offset: string;
 	home: string;
@@ -24,118 +33,226 @@ interface WpJsonResponse {
 	site_logo: string;
 	timezone_string: string;
 	url: string;
+	wp_version?: string;
+	wc_version?: string;
+	wcpos_version?: string;
+	wcpos_pro_version?: string;
+	license?: {
+		key: string;
+		status: string;
+		instance: string;
+		expires: string;
+	};
 	_links: Record<string, unknown>;
 }
 
+interface ExtendedSiteData extends WpJsonResponse {
+	wp_api_url: string;
+	wc_api_url: string;
+	wcpos_api_url: string;
+	wcpos_login_url: string;
+	use_jwt_as_param?: boolean;
+}
+
+export type SiteConnectStatus =
+	| 'idle'
+	| 'discovering-url'
+	| 'discovering-api'
+	| 'testing-auth'
+	| 'saving'
+	| 'success'
+	| 'error';
+
+export interface SiteConnectProgress {
+	step: number;
+	totalSteps: number;
+	message: string;
+}
+
+interface UseSiteConnectReturn {
+	status: SiteConnectStatus;
+	progress: SiteConnectProgress | null;
+	error: string | null;
+	loading: boolean;
+	onConnect: (url: string) => Promise<SiteDocument | null>;
+	reset: () => void;
+}
+
 /**
- * TODO - remove the need for direct access to the userDB here
+ * Main hook for connecting to a WooCommerce site
+ * Orchestrates URL discovery, API discovery, and authorization testing
  */
-const useSiteConnect = () => {
+const useSiteConnect = (): UseSiteConnectReturn => {
 	const { user, userDB } = useAppState();
-	const [loading, setLoading] = React.useState(false);
-	const [error, setError] = React.useState(false);
-	const http = useHttpClient();
+	const [status, setStatus] = React.useState<SiteConnectStatus>('idle');
+	const [progress, setProgress] = React.useState<SiteConnectProgress | null>(null);
+	const [error, setError] = React.useState<string | null>(null);
 	const t = useT();
 
+	// Individual discovery hooks
+	const urlDiscovery = useUrlDiscovery();
+	const apiDiscovery = useApiDiscovery();
+	const authTesting = useAuthTesting();
+
+	const loading = status !== 'idle' && status !== 'success' && status !== 'error';
+
 	/**
-	 *
+	 * Update progress information
 	 */
-	const getSiteData = React.useCallback(
-		async (wpApiUrl: string): Promise<WpJsonResponse> => {
-			const wcNamespace = 'wc/v3';
-			const wcposNamespace = 'wcpos/v1';
+	const updateProgress = React.useCallback((step: number, message: string) => {
+		setProgress({
+			step,
+			totalSteps: 4,
+			message,
+		});
+	}, []);
 
-			// hack - add param to break cache
-			const response = await http.get(wpApiUrl, { params: { wcpos: 1 } });
-			const data = get(response, 'data') as WpJsonResponse;
+	/**
+	 * Reset all state
+	 */
+	const reset = React.useCallback(() => {
+		setStatus('idle');
+		setProgress(null);
+		setError(null);
+	}, []);
 
-			/**
-			 * I have seen cases where the data is not complete, the wp-json index can be 50kb for some sites
-			 */
-			if (!data || typeof data !== 'object') {
-				throw Error(t('Bad API response', { _tags: 'core' }));
-			}
+	/**
+	 * Save site data to database
+	 */
+	const saveSiteData = React.useCallback(
+		async (
+			siteData: WpJsonResponse,
+			endpoints: any,
+			authResult: any
+		): Promise<SiteDocument | null> => {
+			try {
+				log.debug('Saving site data to database');
 
-			const namespaces = get(data, 'namespaces');
-			if (!namespaces) {
-				throw Error(t('WordPress API not found', { _tags: 'core' }));
+				// Combine all the data into the extended site data format
+				const extendedSiteData: ExtendedSiteData = {
+					...siteData,
+					...endpoints,
+					use_jwt_as_param: authResult.useJwtAsParam,
+				};
+
+				// Parse and validate the data using the database schema
+				const parsedData = (userDB.sites as any).parseRestResponse(extendedSiteData);
+
+				// Check if site already exists
+				const existingSite = await (userDB.sites as any).findOneFix(siteData.uuid).exec();
+
+				if (existingSite) {
+					// Update existing site
+					await existingSite.incrementalPatch(parsedData);
+					log.debug('Updated existing site:', siteData.uuid);
+					return existingSite.getLatest();
+				} else {
+					// Add new site to user's sites list
+					await user.incrementalUpdate({ $push: { sites: parsedData } });
+					const newSite = await (userDB.sites as any).findOneFix(siteData.uuid).exec();
+					log.debug('Added new site:', siteData.uuid);
+					return newSite;
+				}
+			} catch (err) {
+				log.error('Failed to save site data:', err);
+				throw new Error(t('Failed to save site data', { _tags: 'core' }));
 			}
-			if (!namespaces.includes(wcNamespace)) {
-				throw Error(t('WooCommerce API not found', { _tags: 'core' }));
-			}
-			if (!namespaces.includes(wcposNamespace)) {
-				throw Error(t('WooCommerce POS API not found', { _tags: 'core' }));
-			}
-			return {
-				...data,
-				wp_api_url: wpApiUrl,
-				wc_api_url: `${wpApiUrl}wc/v3`,
-				wc_api_auth_url: `${wpApiUrl}wcpos/v1/jwt`,
-			};
 		},
-		[http, t]
+		[user, userDB.sites, t]
 	);
 
 	/**
-	 *
-	 */
-	const getWPAPIUrl = React.useCallback(
-		async (url: string) => {
-			const protocol = 'https';
-			// if (Platform.OS === 'web' && process.env.NODE_ENV === 'development') {
-			// 	protocol = 'https';
-			// }
-			const urlWithoutProtocol = url.replace(/^.*:\/{2,}|\s|\/+$/g, '') || '';
-			const response = await http.head(`${protocol}://${urlWithoutProtocol}`);
-			if (!response) {
-				throw Error(t('URL not found', { _tags: 'core' }));
-			}
-			const link = get(response, ['headers', 'link']);
-			if (!link) {
-				/**
-				 * TODO
-				 *
-				 * For CORS requests only a few headers are allowed by default.
-				 *  Access-Control-Expose-Headers: Link is needed on the server side to get the link header
-				 */
-				throw Error(t('Link header is not exposed', { _tags: 'core' }));
-			}
-
-			// Parse the link header
-			const parsed = parseLinkHeader(link);
-			return get(parsed, ['https://api.w.org/', 'url']);
-		},
-		[http, t]
-	);
-
-	/**
-	 *
+	 * Main connection function
 	 */
 	const onConnect = React.useCallback(
-		async (url: string): Promise<SiteDocument | undefined> => {
-			if (url === '') return;
-			setLoading(true);
+		async (url: string): Promise<SiteDocument | null> => {
+			if (!url || url.trim() === '') {
+				setError(t('URL is required', { _tags: 'core' }));
+				return null;
+			}
+
+			setStatus('discovering-url');
+			setError(null);
+			setProgress(null);
 
 			try {
-				const wpApiUrl = await getWPAPIUrl(url);
+				// Step 1: Discover WordPress API URL
+				updateProgress(1, t('Discovering WordPress API...', { _tags: 'core' }));
+				setStatus('discovering-url');
+
+				const wpApiUrl = await urlDiscovery.discoverWpApiUrl(url);
 				if (!wpApiUrl) {
-					throw Error(t('Site does not seem to be a WordPress site', { _tags: 'core' }));
+					throw new Error(
+						urlDiscovery.error || t('Failed to discover WordPress API', { _tags: 'core' })
+					);
 				}
 
-				const siteData = await getSiteData(wpApiUrl);
-				const parsedData = userDB.sites.parseRestResponse(siteData);
-				await user.incrementalUpdate({ $push: { sites: parsedData } });
-				return await userDB.sites.findOneFix(siteData.uuid).exec();
+				// Step 2: Discover and validate API endpoints
+				updateProgress(2, t('Validating API endpoints...', { _tags: 'core' }));
+				setStatus('discovering-api');
+
+				const apiResult = await apiDiscovery.discoverApiEndpoints(wpApiUrl);
+				if (!apiResult) {
+					throw new Error(
+						apiDiscovery.error || t('Failed to discover API endpoints', { _tags: 'core' })
+					);
+				}
+
+				// Step 3: Test authorization methods
+				updateProgress(3, t('Testing authorization methods...', { _tags: 'core' }));
+				setStatus('testing-auth');
+
+				const authResult = await authTesting.testAuthorizationMethod(
+					apiResult.endpoints.wcpos_api_url
+				);
+				if (!authResult) {
+					throw new Error(
+						authTesting.error || t('Failed to test authorization methods', { _tags: 'core' })
+					);
+				}
+
+				// Step 4: Save to database
+				updateProgress(4, t('Saving site configuration...', { _tags: 'core' }));
+				setStatus('saving');
+
+				const savedSite = await saveSiteData(apiResult.siteData, apiResult.endpoints, authResult);
+				if (!savedSite) {
+					throw new Error(t('Failed to save site configuration', { _tags: 'core' }));
+				}
+
+				setStatus('success');
+				setProgress({
+					step: 4,
+					totalSteps: 4,
+					message: t('Site connected successfully!', { _tags: 'core' }),
+				});
+
+				log.debug('Site connection completed successfully:', {
+					uuid: savedSite.uuid,
+					url: savedSite.url,
+					name: savedSite.name,
+				});
+
+				return savedSite;
 			} catch (err) {
-				setError(err.message);
-			} finally {
-				setLoading(false);
+				const errorMessage = err.message || t('Failed to connect to site', { _tags: 'core' });
+				setError(errorMessage);
+				setStatus('error');
+				log.error('Site connection failed:', errorMessage);
+				return null;
 			}
 		},
-		[getSiteData, getWPAPIUrl, t, user, userDB.sites]
+		[urlDiscovery, apiDiscovery, authTesting, saveSiteData, updateProgress, t]
 	);
 
-	return { onConnect, loading, error };
+	return {
+		status,
+		progress,
+		error,
+		loading,
+		onConnect,
+		reset,
+	};
 };
 
 export default useSiteConnect;

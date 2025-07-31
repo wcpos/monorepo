@@ -6,7 +6,7 @@ export type InitialSiteProps = {
 	name: string;
 	timezone_string: string;
 	url: string;
-	wc_api_auth_url: string;
+	wcpos_login_url: string;
 	wc_api_url: string;
 	wp_api_url: string;
 };

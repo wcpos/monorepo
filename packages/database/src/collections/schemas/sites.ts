@@ -1,6 +1,6 @@
 export const sitesLiteral = {
 	title: 'Site schema',
-	version: 1,
+	version: 2,
 	description: 'WordPress site',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -52,7 +52,7 @@ export const sitesLiteral = {
 		wcpos_api_url: {
 			type: 'string',
 		},
-		wc_api_auth_url: {
+		wcpos_login_url: {
 			type: 'string',
 		},
 		wp_credentials: {

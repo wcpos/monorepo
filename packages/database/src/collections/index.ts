@@ -20,7 +20,7 @@ import { usersLiteral } from './schemas/users';
 import { variationsLiteral } from './schemas/variations';
 import { wpCredentialsLiteral } from './schemas/wp-credientials';
 
-import type { RxCollectionCreator, RxCollection, RxDocument, RxDatabase } from 'rxdb';
+import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
 
 const roundToSixDecimals = (value: any): number => {
 	const num = toNumber(value);
@@ -49,6 +49,9 @@ const sites: RxCollectionCreator<SiteDocumentType> = {
 	migrationStrategies: {
 		1(oldDoc) {
 			oldDoc.use_jwt_as_param = false;
+			return oldDoc;
+		},
+		2(oldDoc) {
 			return oldDoc;
 		},
 	},
