@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import useHttpClient from '@wcpos/hooks/use-http-client';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 
@@ -33,6 +34,7 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 	const [testResult, setTestResult] = React.useState<AuthTestResult | null>(null);
 	const http = useHttpClient();
 	const t = useT();
+	// Logger available as 'log'
 
 	/**
 	 * Test authorization with Bearer token in header
@@ -40,8 +42,6 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 	const testHeaderAuth = React.useCallback(
 		async (wcposApiUrl: string, token: string): Promise<boolean> => {
 			try {
-				log.debug('Testing header-based authorization');
-
 				const response = await http.get(`${wcposApiUrl}auth/test`, {
 					headers: {
 						'X-WCPOS': '1',
@@ -52,11 +52,8 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 
 				const data = response?.data;
 				const isSuccess = data && data.status === 'success';
-
-				log.debug('Header auth test result:', { success: isSuccess, data });
 				return isSuccess;
-			} catch (err) {
-				log.debug('Header auth test failed:', err.message);
+			} catch {
 				return false;
 			}
 		},
@@ -69,8 +66,6 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 	const testParamAuth = React.useCallback(
 		async (wcposApiUrl: string, token: string): Promise<boolean> => {
 			try {
-				log.debug('Testing parameter-based authorization');
-
 				const response = await http.get(`${wcposApiUrl}auth/test`, {
 					params: {
 						authorization: `Bearer ${token}`,
@@ -83,11 +78,8 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 
 				const data = response?.data;
 				const isSuccess = data && data.status === 'success';
-
-				log.debug('Parameter auth test result:', { success: isSuccess, data });
 				return isSuccess;
-			} catch (err) {
-				log.debug('Parameter auth test failed:', err.message);
+			} catch {
 				return false;
 			}
 		},
@@ -126,8 +118,6 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 			setTestResult(null);
 
 			try {
-				log.debug('Starting authorization method testing for:', wcposApiUrl);
-
 				// Use provided token or generate a mock one for testing
 				const testToken = accessToken || generateMockToken();
 
@@ -143,15 +133,12 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 				if (headerSupported && paramSupported) {
 					// Both work, prefer headers for security
 					useJwtAsParam = false;
-					log.debug('Both authorization methods supported, using headers');
 				} else if (headerSupported && !paramSupported) {
 					// Only headers work
 					useJwtAsParam = false;
-					log.debug('Only header authorization supported');
 				} else if (!headerSupported && paramSupported) {
 					// Only params work
 					useJwtAsParam = true;
-					log.debug('Only parameter authorization supported');
 				} else {
 					// Neither work - this is an error condition
 					throw new Error(t('Server does not support any authorization method', { _tags: 'core' }));
@@ -166,14 +153,16 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 				setTestResult(result);
 				setStatus('success');
 
-				log.debug('Authorization testing completed:', result);
 				return result;
 			} catch (err) {
 				const errorMessage =
 					err.message || t('Failed to test authorization methods', { _tags: 'core' });
 				setError(errorMessage);
 				setStatus('error');
-				log.error('Authorization testing failed:', errorMessage);
+				log.error(
+					`[${ERROR_CODES.INVALID_CONFIGURATION}] Authorization testing failed: ${errorMessage}`,
+					{ showToast: true }
+				);
 				return null;
 			}
 		},

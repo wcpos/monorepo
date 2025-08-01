@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -51,10 +52,10 @@ interface ExtendedSiteData extends WpJsonResponse {
 	wc_api_url: string;
 	wcpos_api_url: string;
 	wcpos_login_url: string;
-	use_jwt_as_param?: boolean;
+	use_jwt_as_param: boolean;
 }
 
-export type SiteConnectStatus =
+type SiteConnectStatus =
 	| 'idle'
 	| 'discovering-url'
 	| 'discovering-api'
@@ -63,7 +64,7 @@ export type SiteConnectStatus =
 	| 'success'
 	| 'error';
 
-export interface SiteConnectProgress {
+interface SiteConnectProgress {
 	step: number;
 	totalSteps: number;
 	message: string;
@@ -88,6 +89,7 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 	const [progress, setProgress] = React.useState<SiteConnectProgress | null>(null);
 	const [error, setError] = React.useState<string | null>(null);
 	const t = useT();
+	// Logger available as 'log'
 
 	// Individual discovery hooks
 	const urlDiscovery = useUrlDiscovery();
@@ -126,8 +128,6 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 			authResult: any
 		): Promise<SiteDocument | null> => {
 			try {
-				log.debug('Saving site data to database');
-
 				// Combine all the data into the extended site data format
 				const extendedSiteData: ExtendedSiteData = {
 					...siteData,
@@ -144,17 +144,28 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 				if (existingSite) {
 					// Update existing site
 					await existingSite.incrementalPatch(parsedData);
-					log.debug('Updated existing site:', siteData.uuid);
+					log.debug(`Updated site: ${siteData.name}`);
 					return existingSite.getLatest();
 				} else {
 					// Add new site to user's sites list
 					await user.incrementalUpdate({ $push: { sites: parsedData } });
 					const newSite = await (userDB.sites as any).findOneFix(siteData.uuid).exec();
-					log.debug('Added new site:', siteData.uuid);
+					log.debug(`Added new site: ${siteData.name}`);
 					return newSite;
 				}
 			} catch (err) {
-				log.error('Failed to save site data:', err);
+				// Determine error type and code
+				let errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR; // Default database error
+				if (err.name === 'ValidationError') {
+					errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
+				} else if (err.name === 'RxError') {
+					errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
+				}
+
+				log.error(`[${errorCode}] Failed to save site data: ${err.message}`, {
+					showToast: true,
+				});
+
 				throw new Error(t('Failed to save site data', { _tags: 'core' }));
 			}
 		},
@@ -167,7 +178,12 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 	const onConnect = React.useCallback(
 		async (url: string): Promise<SiteDocument | null> => {
 			if (!url || url.trim() === '') {
-				setError(t('URL is required', { _tags: 'core' }));
+				const errorMsg = t('URL is required', { _tags: 'core' });
+				log.error(errorMsg, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
+				});
+				setError(errorMsg);
 				return null;
 			}
 
@@ -227,18 +243,13 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 					message: t('Site connected successfully!', { _tags: 'core' }),
 				});
 
-				log.debug('Site connection completed successfully:', {
-					uuid: savedSite.uuid,
-					url: savedSite.url,
-					name: savedSite.name,
-				});
+				log.info(`Site connected: ${savedSite.name}`);
 
 				return savedSite;
 			} catch (err) {
 				const errorMessage = err.message || t('Failed to connect to site', { _tags: 'core' });
 				setError(errorMessage);
 				setStatus('error');
-				log.error('Site connection failed:', errorMessage);
 				return null;
 			}
 		},

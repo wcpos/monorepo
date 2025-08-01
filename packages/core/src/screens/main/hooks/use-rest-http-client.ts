@@ -52,7 +52,7 @@ function extractValidJSON(responseString) {
 export const useRestHttpClient = (endpoint = '') => {
 	const { site, wpCredentials, store, initialProps } = useAppState();
 	// const wcAPIURL = useObservableState(site.wc_api_url$, site.wc_api_url);
-	const jwt = useObservableEagerState(wpCredentials.jwt$);
+	const jwt = useObservableEagerState(wpCredentials.access_token$);
 
 	const router = useRouter();
 

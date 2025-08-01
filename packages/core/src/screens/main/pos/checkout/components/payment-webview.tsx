@@ -31,7 +31,7 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 		get(order, ['links', 'payment', 0, 'href'])
 	);
 	const { wpCredentials } = useAppState();
-	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
+	const jwt = useObservableState(wpCredentials.access_token$, wpCredentials.access_token);
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 

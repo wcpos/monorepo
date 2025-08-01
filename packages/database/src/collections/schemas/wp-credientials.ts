@@ -1,6 +1,6 @@
 export const wpCredentialsLiteral = {
 	title: 'WP Credentials schema',
-	version: 0,
+	version: 1,
 	description: 'WordPress credentials',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -38,17 +38,14 @@ export const wpCredentialsLiteral = {
 		avatar_url: {
 			type: 'string',
 		},
-		jwt: {
+		access_token: {
 			type: 'string',
 		},
-		wp_nonce: {
+		refresh_token: {
 			type: 'string',
 		},
-		key_id: {
+		expires_at: {
 			type: 'number',
-		},
-		key_permissions: {
-			type: 'string',
 		},
 		stores: {
 			type: 'array',

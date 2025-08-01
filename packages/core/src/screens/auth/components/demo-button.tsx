@@ -29,7 +29,7 @@ const DemoButton = () => {
 			);
 			site.getLatest().incrementalUpdate({ $push: { wp_credentials: data } });
 		} catch (err) {
-			log.error(err);
+			log.error(`Demo connection failed: ${err.message}`);
 		} finally {
 			setLoading(false);
 		}

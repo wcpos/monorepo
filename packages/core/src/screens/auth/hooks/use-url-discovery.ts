@@ -4,6 +4,7 @@ import get from 'lodash/get';
 
 import useHttpClient from '@wcpos/hooks/use-http-client';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 import { parseLinkHeader } from '../../../lib/url';
@@ -27,6 +28,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	const [wpApiUrl, setWpApiUrl] = React.useState<string | null>(null);
 	const http = useHttpClient();
 	const t = useT();
+	// Logger available as 'log'
 
 	/**
 	 * Clean and normalize the input URL
@@ -43,7 +45,6 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	const tryLinkHeaderDiscovery = React.useCallback(
 		async (normalizedUrl: string): Promise<string | null> => {
 			try {
-				log.debug('Attempting Link header discovery for:', normalizedUrl);
 				const response = await http.head(normalizedUrl);
 
 				if (!response) {
@@ -52,7 +53,6 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 
 				const link = get(response, ['headers', 'link']);
 				if (!link) {
-					log.debug('Link header not found, will try fallback method');
 					return null;
 				}
 
@@ -61,13 +61,11 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				const wpApiUrl = get(parsed, ['https://api.w.org/', 'url']);
 
 				if (wpApiUrl) {
-					log.debug('Successfully discovered wp-json URL from Link header:', wpApiUrl);
 					return wpApiUrl;
 				}
 
 				return null;
-			} catch (err) {
-				log.debug('Link header discovery failed:', err.message);
+			} catch {
 				return null;
 			}
 		},
@@ -81,19 +79,16 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 		async (normalizedUrl: string): Promise<string | null> => {
 			try {
 				const fallbackUrl = `${normalizedUrl}/wp-json/`;
-				log.debug('Attempting fallback discovery for:', fallbackUrl);
 
 				// Just do a HEAD request to check if the endpoint exists
 				const response = await http.head(fallbackUrl);
 
 				if (response && response.status === 200) {
-					log.debug('Successfully discovered wp-json URL via fallback:', fallbackUrl);
 					return fallbackUrl;
 				}
 
 				return null;
-			} catch (err) {
-				log.debug('Fallback discovery failed:', err.message);
+			} catch {
 				return null;
 			}
 		},
@@ -106,7 +101,12 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	const discoverWpApiUrl = React.useCallback(
 		async (url: string): Promise<string | null> => {
 			if (!url || url.trim() === '') {
-				setError(t('URL is required', { _tags: 'core' }));
+				const errorMsg = t('URL is required', { _tags: 'core' });
+				log.error(errorMsg, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
+				});
+				setError(errorMsg);
 				return null;
 			}
 
@@ -116,14 +116,12 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 
 			try {
 				const normalizedUrl = normalizeUrl(url);
-				log.debug('Starting URL discovery for:', normalizedUrl);
 
 				// Step 1: Try Link header discovery
 				let discoveredUrl = await tryLinkHeaderDiscovery(normalizedUrl);
 
 				// Step 2: If Link header failed, try fallback
 				if (!discoveredUrl) {
-					log.debug('Link header discovery failed, trying fallback method');
 					discoveredUrl = await tryFallbackDiscovery(normalizedUrl);
 				}
 
@@ -133,14 +131,12 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 
 				setWpApiUrl(discoveredUrl);
 				setStatus('success');
-				log.debug('URL discovery completed successfully:', discoveredUrl);
+				log.debug(`WordPress API URL discovered: ${discoveredUrl}`);
 				return discoveredUrl;
-			} catch (err) {
-				const errorMessage =
-					err.message || t('Failed to discover WordPress API', { _tags: 'core' });
+			} catch {
+				const errorMessage = t('Failed to discover WordPress API', { _tags: 'core' });
 				setError(errorMessage);
 				setStatus('error');
-				log.error('URL discovery failed:', errorMessage);
 				return null;
 			}
 		},

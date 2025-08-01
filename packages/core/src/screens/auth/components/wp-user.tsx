@@ -6,13 +6,13 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import {
 	AlertDialog,
-	AlertDialogHeader,
 	AlertDialogAction,
 	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
-	AlertDialogTitle,
 	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
@@ -32,7 +32,7 @@ interface Props {
 	wpUser: import('@wcpos/database').WPCredentialsDocument;
 }
 
-const WpUser = ({ site, wpUser }: Props) => {
+export const WpUser = ({ site, wpUser }: Props) => {
 	const { login } = useAppState();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const stores = useObservableSuspense(wpUser.populateResource('stores'));
@@ -130,5 +130,3 @@ const WpUser = ({ site, wpUser }: Props) => {
 		</View>
 	);
 };
-
-export default WpUser;

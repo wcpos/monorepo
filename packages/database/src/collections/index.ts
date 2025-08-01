@@ -97,6 +97,11 @@ export type WPCredentialsDocument = RxDocument<WPCredentialsDocumentType>;
 export type WPCredentialsCollection = RxCollection<WPCredentialsDocumentType>;
 const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 	schema: wpCredentialsSchema,
+	migrationStrategies: {
+		1(oldDoc) {
+			return oldDoc;
+		},
+	},
 };
 
 /**

@@ -52,7 +52,7 @@ export const Login = () => {
 						.incrementalPatch({ wp_credentials: [...site.wp_credentials, uuid] });
 				}
 			} catch (err) {
-				log.error(err);
+				log.error(`Login WebView error: ${err.message}`);
 			} finally {
 				// navigate back
 				router.back();

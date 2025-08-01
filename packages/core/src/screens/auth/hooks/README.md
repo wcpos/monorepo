@@ -34,7 +34,7 @@ Handles REST API endpoint discovery and validation.
 - Fetches and validates WordPress REST API index
 - Validates required namespaces (wp/v2, wc/v3, wcpos/v1)
 - Checks WCPOS version compatibility (>= 1.8.0)
-- Validates authentication endpoints
+- Validates authentication endpoints and extracts WCPOS login URL
 - Builds complete endpoint configuration
 
 **Usage:**
@@ -74,7 +74,25 @@ const handleAuthTesting = async () => {
 };
 ```
 
-### 4. `useSiteConnect` (Main Hook)
+### 4. `useLoginHandler`
+Handles OAuth login responses and saves credentials to the database.
+
+**Features:**
+- Processes OAuth success responses
+- Extracts access tokens, refresh tokens, and user information
+- Creates or updates WordPress credentials in the database
+- Links credentials to sites
+- Handles errors gracefully
+
+**Usage:**
+```typescript
+const { handleLoginSuccess, isProcessing, error } = useLoginHandler(site);
+
+// Called when OAuth login succeeds
+await handleLoginSuccess(oauthResponse);
+```
+
+### 5. `useSiteConnect` (Main Hook)
 Orchestrates all discovery steps with comprehensive progress tracking and error handling.
 
 **Features:**
@@ -139,6 +157,26 @@ The complete discovery flow follows this sequence:
    - Update existing site or create new one
    - Link site to user account
 
+## Authentication and Credentials
+
+### WordPress Credentials Schema
+
+The system stores WordPress user credentials with the following key fields:
+
+- `access_token` - The OAuth access token for API requests
+- `refresh_token` - The refresh token for obtaining new access tokens  
+- `expires_in` - Token expiration information
+- `uuid` - Unique identifier for the WordPress user
+- `id` - WordPress user ID
+- `display_name` - User's display name
+- `first_name`, `last_name`, `email` - User profile information
+
+### Migration Notes
+
+The credentials schema has evolved:
+- **v1**: Added `refresh_token` field
+- **v2**: Migrated from `jwt` to `access_token`, removed unused fields (`username`, `wp_nonce`, `key_id`, `key_permissions`)
+
 ## Error Handling
 
 Each hook provides detailed error states and messages:
@@ -159,7 +197,23 @@ Each hook provides detailed error states and messages:
   - Network connectivity issues
   - Invalid API responses
 
+- **Login Handler Errors**
+  - Invalid OAuth response format
+  - Database insertion/update failures
+  - Site linking failures
+
 - **Persistence Errors**
   - Database validation failures
   - Site creation/update failures
   - User account linking issues
+
+## Benefits of the New Architecture
+
+1. **Modularity**: Each hook has a single responsibility
+2. **Reusability**: Individual hooks can be used independently
+3. **Testability**: Easier to unit test individual components
+4. **Robustness**: Comprehensive error handling and fallback logic
+5. **User Experience**: Detailed progress tracking and status updates
+6. **Maintainability**: Clear separation of concerns
+7. **Extensibility**: Easy to add new discovery steps or modify existing ones
+8. **Modern Authentication**: OAuth 2.0 flow with proper token management

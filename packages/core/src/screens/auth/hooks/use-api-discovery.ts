@@ -5,6 +5,7 @@ import semver from 'semver';
 
 import useHttpClient from '@wcpos/hooks/use-http-client';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 
@@ -74,30 +75,60 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 	const [endpoints, setEndpoints] = React.useState<ApiEndpoints | null>(null);
 	const http = useHttpClient();
 	const t = useT();
+	// Logger available as 'log'
 
 	/**
 	 * Fetch and validate the WordPress REST API index
 	 */
 	const fetchApiIndex = React.useCallback(
 		async (wpApiUrl: string): Promise<WpJsonResponse> => {
-			log.debug('Fetching WordPress API index from:', wpApiUrl);
+			try {
+				// Add cache-busting param
+				const response = await http.get(wpApiUrl, { params: { wcpos: 1 } });
+				const data = get(response, 'data') as WpJsonResponse;
 
-			// Add cache-busting param
-			const response = await http.get(wpApiUrl, { params: { wcpos: 1 } });
-			const data = get(response, 'data') as WpJsonResponse;
+				// Basic validation
+				if (!data || typeof data !== 'object') {
+					log.error(`Bad API response from ${wpApiUrl}`, {
+						showToast: true,
+						context: { errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT, wpApiUrl },
+					});
+					throw new Error(t('Bad API response', { _tags: 'core' }));
+				}
 
-			// Basic validation
-			if (!data || typeof data !== 'object') {
-				throw new Error(t('Bad API response', { _tags: 'core' }));
+				const namespaces = get(data, 'namespaces');
+				if (!namespaces || !Array.isArray(namespaces)) {
+					log.error(
+						`[${ERROR_CODES.WOOCOMMERCE_API_DISABLED}] WordPress API not found at ${wpApiUrl}`,
+						{
+							showToast: true,
+						}
+					);
+					throw new Error(t('WordPress API not found', { _tags: 'core' }));
+				}
+
+				log.debug(
+					`WordPress API discovered: ${data.name} (WC ${data.wc_version}, WCPOS ${data.wcpos_version})`
+				);
+				return data;
+			} catch (error) {
+				// If it's already one of our logged errors, re-throw
+				if (
+					error.message.includes('Bad API response') ||
+					error.message.includes('WordPress API not found')
+				) {
+					throw error;
+				}
+
+				// Handle network/connection errors
+				log.error(
+					`[${ERROR_CODES.CONNECTION_REFUSED}] Failed to connect to ${wpApiUrl}: ${error.message}`,
+					{
+						showToast: true,
+					}
+				);
+				throw error;
 			}
-
-			const namespaces = get(data, 'namespaces');
-			if (!namespaces || !Array.isArray(namespaces)) {
-				throw new Error(t('WordPress API not found', { _tags: 'core' }));
-			}
-
-			log.debug('WordPress API index fetched successfully. Namespaces:', namespaces);
-			return data;
 		},
 		[http, t]
 	);
@@ -113,23 +144,27 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 			// Check for WooCommerce API
 			if (!namespaces.includes(wcNamespace)) {
+				log.error('WooCommerce API not found', {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.WOOCOMMERCE_API_DISABLED },
+				});
 				throw new Error(t('WooCommerce API not found', { _tags: 'core' }));
 			}
 
 			// Check for WCPOS API
 			if (!namespaces.includes(wcposNamespace)) {
+				log.error('WooCommerce POS plugin not found', {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.PLUGIN_NOT_FOUND },
+				});
 				throw new Error(t('WooCommerce POS API not found', { _tags: 'core' }));
 			}
 
 			// Check WCPOS version (should be >= 1.8.0 for proper auth endpoints)
 			const wcposVersion = data.wcpos_version || data.wcpos_pro_version;
 			if (wcposVersion && !semver.gte(wcposVersion, '1.8.0')) {
-				log.warn(
-					`WCPOS version ${wcposVersion} may not support all authentication features. Consider upgrading to 1.8.0+`
-				);
+				log.warn(`WCPOS version ${wcposVersion} may not support all features (recommend 1.8.0+)`);
 			}
-
-			log.debug('API requirements validated successfully');
 		},
 		[t]
 	);
@@ -142,12 +177,20 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			const auth = data.authentication;
 
 			if (!auth || typeof auth !== 'object') {
+				log.error('Authentication configuration not found', {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION },
+				});
 				throw new Error(t('Authentication configuration not found', { _tags: 'core' }));
 			}
 
 			// Check for WCPOS auth endpoint (required for proper authentication)
 			const wcposAuth = auth.wcpos;
 			if (!wcposAuth || !wcposAuth.endpoints || !wcposAuth.endpoints.authorization) {
+				log.error('WCPOS authentication endpoint not found', {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.PLUGIN_NOT_FOUND },
+				});
 				throw new Error(
 					t(
 						'WCPOS authentication endpoint not found. Please ensure WCPOS plugin is version 1.8.0 or higher',
@@ -158,6 +201,10 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 			const loginUrl = wcposAuth.endpoints.authorization;
 			if (!loginUrl || typeof loginUrl !== 'string') {
+				log.error('WCPOS login URL is invalid', {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.INVALID_URL_FORMAT },
+				});
 				throw new Error(
 					t('WCPOS login URL is invalid. Please ensure WCPOS plugin is properly configured', {
 						_tags: 'core',
@@ -165,7 +212,6 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				);
 			}
 
-			log.debug('Authentication endpoints validated successfully. Login URL:', loginUrl);
 			return loginUrl;
 		},
 		[t]
@@ -197,7 +243,12 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			wpApiUrl: string
 		): Promise<{ siteData: WpJsonResponse; endpoints: ApiEndpoints } | null> => {
 			if (!wpApiUrl || wpApiUrl.trim() === '') {
-				setError(t('WordPress API URL is required', { _tags: 'core' }));
+				const errorMsg = t('WordPress API URL is required', { _tags: 'core' });
+				log.error(errorMsg, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
+				});
+				setError(errorMsg);
 				return null;
 			}
 
@@ -207,8 +258,6 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			setEndpoints(null);
 
 			try {
-				log.debug('Starting API discovery for:', wpApiUrl);
-
 				// Step 1: Fetch WordPress API index
 				const data = await fetchApiIndex(wpApiUrl);
 
@@ -225,11 +274,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				setEndpoints(apiEndpoints);
 				setStatus('success');
 
-				log.debug('API discovery completed successfully:', {
-					endpoints: apiEndpoints,
-					wcpos_version: data.wcpos_version,
-					wc_version: data.wc_version,
-				});
+				log.info(`API discovery completed: ${data.name}`);
 
 				return { siteData: data, endpoints: apiEndpoints };
 			} catch (err) {
@@ -237,7 +282,6 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					err.message || t('Failed to discover API endpoints', { _tags: 'core' });
 				setError(errorMessage);
 				setStatus('error');
-				log.error('API discovery failed:', errorMessage);
 				return null;
 			}
 		},

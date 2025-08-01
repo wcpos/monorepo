@@ -3,16 +3,17 @@ import * as React from 'react';
 import { isCancel } from 'axios';
 import get from 'lodash/get';
 
-import { Toast } from '@wcpos/components/toast';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 type AxiosResponse = import('axios').AxiosResponse;
-type AxiosError = import('axios').AxiosError;
 
 /**
  *
  */
 const useHttpErrorHandler = () => {
+	// Logger is available as 'log'
+
 	/**
 	 *
 	 */
@@ -21,65 +22,65 @@ const useHttpErrorHandler = () => {
 			return;
 		}
 
+		const endpoint = res.config?.url || 'unknown';
+
 		switch (res.status) {
 			case 0:
-				/**
-				 * This can happen for self-signed certificates, eg: development servers
-				 * The solution for web is to go to the site and manually trust the certificate
-				 * TODO - what happens on desktop and mobile?
-				 *
-				 * status = 0
-				 */
-				Toast.show({
-					type: 'error',
-					text1: 'Domain is invalid',
-					// text2: 'Please check the domain and try again',
+				// SSL certificate error or invalid domain
+				log.error(`SSL certificate error: ${endpoint}`, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.SSL_CERTIFICATE_ERROR, endpoint },
 				});
 				break;
 			case 400:
-				Toast.show({ type: 'error', text1: res.data.message });
+				log.error(`Bad request: ${res.data?.message || endpoint}`, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.INVALID_REQUEST_FORMAT, endpoint },
+				});
 				break;
 			case 401:
-				if (res.data) {
-					/**
-					 * TODO - Errors may be better in a global Dialog component, like Snackbar?
-					 */
-					Toast.show({
-						type: 'error',
-						text1: `Recieved "${res.data.message}" when trying to access endpoint: ${res.config.url}`,
-					});
-				}
+				const authMessage = res.data?.message || 'Authentication failed';
+				log.error(authMessage, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.INVALID_CREDENTIALS, endpoint },
+				});
 				break;
 			case 403:
-				if (res.data) {
-					/**
-					 * TODO - Errors may be better in a global Dialog component, like Snackbar?
-					 */
-					Toast.show({
-						type: 'error',
-						text1: `Recieved "${res.data.message}" when trying to access endpoint: ${res.config.url}`,
-					});
-				} else {
-					Toast.show({
-						type: 'error',
-						text1: `Recieved "Forbidden" when trying to access endpoint: ${res.config.url}`,
-					});
-				}
+				const forbiddenMessage = res.data?.message || 'Access forbidden';
+				log.error(forbiddenMessage, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.INSUFFICIENT_PERMISSIONS, endpoint },
+				});
 				break;
 			case 404:
-				if (res.data) {
-					Toast.show({
-						type: 'error',
-						text1: res.data.message,
-					});
-				}
-				log.error('404 error', res);
+				log.error(`Endpoint not found: ${endpoint}`, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.PLUGIN_NOT_FOUND, endpoint },
+				});
 				break;
 			case 500:
-				log.error('500 Internal server error', res);
+				log.error(`Internal server error: ${endpoint}`, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.CONNECTION_REFUSED, endpoint },
+				});
+				break;
+			case 502:
+			case 503:
+			case 504:
+				log.error(`Server unavailable (${res.status}): ${endpoint}`, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.CONNECTION_TIMEOUT, endpoint, status: res.status },
+				});
 				break;
 			default:
-				log.error('Unknown error', res);
+				log.error(`Unexpected response (${res.status}): ${endpoint}`, {
+					showToast: true,
+					context: {
+						errorCode: ERROR_CODES.UNEXPECTED_RESPONSE_CODE,
+						endpoint,
+						status: res.status,
+					},
+				});
 		}
 	}, []);
 
@@ -90,21 +91,28 @@ const useHttpErrorHandler = () => {
 		(error: unknown) => {
 			const response = get(error, 'response');
 			const request = get(error, 'request');
+			const config = get(error, 'config') as any;
+			const endpoint = config?.url || 'unknown';
 
 			if (response) {
 				// client received an error response (5xx, 4xx)
 				errorResponseHandler(response);
 			} else if (request) {
 				// client never received a response, or request never left
-				log.error(request);
-				Toast.show({ type: 'error', text1: 'Server is unavailable' });
+				log.error(`Server unavailable: ${endpoint}`, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.CONNECTION_REFUSED, endpoint },
+				});
 			} else if (isCancel(error)) {
-				// handle cancel
-				log.info('Request canceled');
+				// handle cancel - no logging needed for cancelled requests
+				return;
 			} else {
-				// anything else
-				log.error(error);
-				Toast.show({ type: 'error', text1: 'Network error' });
+				// anything else - network error, DNS failure, etc.
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				log.error(`Network error: ${errorMessage}`, {
+					showToast: true,
+					context: { errorCode: ERROR_CODES.NETWORK_UNREACHABLE, endpoint },
+				});
 			}
 		},
 		[errorResponseHandler]

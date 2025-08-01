@@ -69,8 +69,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 	],
 	experiments: {
 		typedRoutes: true,
-		// baseUrl: '/pos',
 		reactCanary: true,
+		// Use environment variable for baseUrl if provided (for web bundle builds)
+		...(process.env.WCPOS_BASEURL_PLACEHOLDER && {
+			baseUrl: process.env.WCPOS_BASEURL_PLACEHOLDER,
+		}),
 	},
 	extra: {
 		router: {
