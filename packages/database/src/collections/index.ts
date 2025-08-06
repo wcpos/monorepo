@@ -264,7 +264,14 @@ export type OrderCollection = RxCollection<OrderDocumentType>;
 const orders: RxCollectionCreator<OrderDocumentType> = {
 	schema: orderSchema,
 	options: {
-		searchFields: ['number', 'billing.first_name', 'billing.last_name', 'billing.email'],
+		searchFields: [
+			'number',
+			'billing.first_name',
+			'billing.last_name',
+			'billing.email',
+			'billing.company',
+			'billing.phone',
+		],
 		middlewares: {
 			preInsert: {
 				handle: (doc) => {
