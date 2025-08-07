@@ -66,6 +66,7 @@
     "html-entities": "2.6.0",
     "react-hook-form": "^7.61.1",
     "react-native-calendars": "^1.1313.0",
+    "react-native-keyboard-controller": "^1.16.8",
     "react-native-resizable-panels": "^0.0.3",
     "react-native-toast-message": "^2.3.2",
     "recharts": "^2.15.0",

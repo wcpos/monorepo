@@ -21,19 +21,18 @@
     "preinstall": "pnpm ignored-builds || true",
     "expo:install": "pnpm --filter main exec expo install"
   },
-  "packageManager": "pnpm@10.12.1",
+  "packageManager": "pnpm@10.14.0",
   "pnpm": {
     "overrides": {
       "expo": "53.0.20",
-      "pnpm": "10.12.1",
+      "pnpm": "10.14.0",
       "react": "19.1.1",
       "react-dom": "19.1.1",
       "react-native": "0.79.2",
       "react-native-edge-to-edge": "^1.6.2",
       "react-native-gesture-handler": "2.24.0",
       "react-native-safe-area-context": "5.4.0",
-      "@types/react": "19.1.2",
-      "@react-navigation/drawer": "7.5.5"
+      "@react-navigation/drawer": "7.5.6"
     },
     "onlyBuiltDependencies": [
       "better-sqlite3",
