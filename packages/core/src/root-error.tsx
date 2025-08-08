@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { clearAllDB } from '@wcpos/database';
+import { clearAllDB, type ClearDBResult } from '@wcpos/database';
 import log from '@wcpos/utils/logger';
 
 import type { FallbackProps } from 'react-error-boundary';
@@ -48,11 +48,11 @@ const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 	const handleReset = async () => {
 		// clear userDB to ensure clean start
 		await clearAllDB()
-			.then(() => {
-				log.info('DB cleared successfully');
+			.then((result: ClearDBResult) => {
+				log.info(result.message);
 			})
 			.catch((error) => {
-				log.error(error);
+				log.error('Failed to clear database:', error);
 			});
 
 		/**

@@ -3,6 +3,7 @@ import './plugins';
 export { createUserDB, createStoreDB, createTemporaryDB, createFastStoreDB } from './create-db';
 export { userCollections, storeCollections, syncCollections } from './collections';
 export { clearAllDB } from './clear-all-db';
+export type { ClearDBResult } from './clear-all-db';
 
 /**
  * Re-export some rxdb helpers

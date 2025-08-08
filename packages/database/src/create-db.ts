@@ -6,14 +6,14 @@ import { defaultConfig } from './adapters/default';
 import { ephemeralStorageConfig } from './adapters/ephemeral';
 import { fastStorageConfig } from './adapters/fast';
 import {
-	storeCollections,
 	StoreCollections,
-	userCollections,
-	UserCollections,
-	syncCollections,
+	storeCollections,
 	SyncCollections,
-	temporaryCollections,
+	syncCollections,
 	TemporaryCollections,
+	temporaryCollections,
+	UserCollections,
+	userCollections,
 } from './collections';
 
 /**
