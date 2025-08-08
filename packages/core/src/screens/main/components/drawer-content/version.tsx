@@ -17,7 +17,7 @@ const Version = () => {
 				screenSize === 'lg' && 'px-0 text-center'
 			)}
 		>
-			{screenSize === 'lg' ? 'v 2.0.0' : 'Version 2.0.0'}
+			{screenSize === 'lg' ? 'v 1.8.0' : 'Version 1.8.0'}
 		</Text>
 	);
 };
