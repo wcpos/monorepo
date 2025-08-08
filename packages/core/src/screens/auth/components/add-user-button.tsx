@@ -41,15 +41,19 @@ export function AddUserButton({ site }: Props) {
 	);
 
 	React.useEffect(() => {
-		log.debug(`OAuth login successful for site: ${site.name}`);
-
 		if (response?.type === 'success') {
+			log.debug(`Login successful for site: ${site.name}`);
 			handleLoginSuccess(response as any);
 		} else if (response?.type === 'error') {
-			log.error(`OAuth login failed: ${response.error}`);
-			// TODO: Show error toast/notification
+			log.error(`Login failed: ${response.error}`, {
+				showToast: true,
+				context: {
+					siteName: site.name,
+					response,
+				},
+			});
 		}
-	}, [response, handleLoginSuccess]);
+	}, [response, handleLoginSuccess, site.name]);
 
 	return (
 		<Tooltip>

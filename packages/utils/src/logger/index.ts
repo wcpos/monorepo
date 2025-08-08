@@ -3,6 +3,21 @@
  */
 import { logger } from 'react-native-logs';
 
+// Custom options interface
+export interface LoggerOptions {
+	showToast?: boolean;
+	saveToDb?: boolean;
+	context?: any;
+}
+
+// Extended logger interface with custom options support
+export interface ExtendedLogger {
+	error: (message: string, options?: LoggerOptions) => void;
+	warn: (message: string, options?: LoggerOptions) => void;
+	info: (message: string, options?: LoggerOptions) => void;
+	debug: (message: string, options?: LoggerOptions) => void;
+}
+
 // Global state
 let toastShow: ((config: any) => void) | null = null;
 let dbCollection: any | null = null;
@@ -31,7 +46,7 @@ const mainTransport = (props: any) => {
 
 	// Parse message and options
 	let message: string;
-	let options: { showToast?: boolean; saveToDb?: boolean; context?: any } = {};
+	let options: LoggerOptions = {};
 
 	if (Array.isArray(rawMsg)) {
 		message = String(rawMsg[0] || '');
@@ -57,29 +72,25 @@ const mainTransport = (props: any) => {
 	consoleMethod(`${timestamp} | ${levelText} : ${message}`);
 
 	// 2. Show toast if available and requested
-	const shouldShowToast = options.showToast ?? (level.text === 'warn' || level.text === 'error');
-	if (shouldShowToast && toastShow) {
+	if (options.showToast && toastShow) {
 		// Get error code from context
 		const errorCode = options.context?.errorCode;
 
 		toastShow({
-			type: level.text === 'error' ? 'error' : level.text === 'warn' ? 'error' : 'info',
-			text1: errorCode ? `Error ${errorCode}` : 'Notification',
-			text2: message,
-			props: errorCode
+			type: level.text === 'warn' ? 'warning' : level.text,
+			title: message,
+			action: errorCode
 				? {
-						action: {
-							label: 'Help',
-							action: () => console.log(`Opening help for error code: ${errorCode}`),
-						},
+						label: 'Help',
+						onClick: () => console.log(`Opening help for error code: ${errorCode}`),
 					}
 				: undefined,
+			// text2: message,
 		});
 	}
 
 	// 3. Save to database if available and requested
-	const shouldSaveToDb = options.saveToDb ?? (level.text !== 'silly' && level.text !== 'debug');
-	if (shouldSaveToDb && dbCollection && generateId) {
+	if (options.saveToDb && dbCollection && generateId) {
 		// Get error code from context
 		const errorCode = options.context?.errorCode;
 
@@ -101,6 +112,6 @@ const log = logger.createLogger({
 	severity: __DEV__ ? 'debug' : 'error',
 	transport: mainTransport as any,
 	enabled: true,
-});
+}) as ExtendedLogger;
 
 export default log;

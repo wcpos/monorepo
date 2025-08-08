@@ -7,7 +7,7 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
-import { Toast, toastConfig } from '@wcpos/components/toast';
+import { Toast, Toaster } from '@wcpos/components/toast';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
 import { setToast } from '@wcpos/utils/logger';
@@ -50,7 +50,7 @@ export default function RootLayout() {
 						<HydrationProviders>
 							<RootStack />
 							<ErrorBoundary>
-								<Toast config={toastConfig} />
+								<Toaster position="top-center" richColors />
 							</ErrorBoundary>
 						</HydrationProviders>
 					</KeyboardProvider>

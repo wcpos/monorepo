@@ -1,16 +1,14 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-
 import {
 	AlertDialog,
+	AlertDialogAction,
 	AlertDialogCancel,
 	AlertDialogContent,
 	AlertDialogDescription,
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-	AlertDialogAction,
 } from '@wcpos/components/alert-dialog';
 import { Avatar } from '@wcpos/components/avatar';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -20,12 +18,12 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { cn } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
-import useHttpClient from '@wcpos/hooks/use-http-client';
 
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
+import { useSiteInfo } from '../../../hooks/use-site-info';
 import { useVersionCheck } from '../../../hooks/use-version-check';
 
 interface Props {
@@ -48,25 +46,9 @@ export const Site = ({ user, site, idx }: Props) => {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 	const { wcposVersionPass } = useVersionCheck({ site });
-	const http = useHttpClient();
 
-	/**
-	 * A bit of a hack to get the latest site info
-	 */
-	React.useEffect(() => {
-		const fetchSiteInfo = async () => {
-			const response = await http.get(site.wp_api_url, { params: { wcpos: 1 } });
-			const data = get(response, 'data', {});
-			site.incrementalPatch({
-				wp_version: data?.wp_version,
-				wc_version: data?.wc_version,
-				wcpos_version: data?.wcpos_version,
-				wcpos_pro_version: data?.wcpos_pro_version,
-				license: data?.license || {},
-			});
-		};
-		fetchSiteInfo();
-	}, []);
+	// Fetch and update site info
+	useSiteInfo({ site });
 
 	/**
 	 * Remove site

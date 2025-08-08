@@ -59,7 +59,6 @@ export const useHttpClient = (errorHandler?: (error: unknown) => unknown) => {
 				const response = await limiter.schedule(() => http.request(config));
 				return response;
 			} catch (error) {
-				log.error(error);
 				/**
 				 * Run custom error handler first, then passthrough to default
 				 * This allows us to override the default error handler, eg: detecting 401 and showing login modal
@@ -68,12 +67,14 @@ export const useHttpClient = (errorHandler?: (error: unknown) => unknown) => {
 				if (typeof errorHandler === 'function') {
 					err = errorHandler(err);
 				}
-				if (err) {
-					defaultErrorHandler(err);
-				}
+				// if (err) {
+				// 	defaultErrorHandler(err);
+				// }
+				log.debug(err);
+				throw err;
 			}
 		},
-		[defaultErrorHandler, errorHandler]
+		[errorHandler]
 	);
 
 	/**
