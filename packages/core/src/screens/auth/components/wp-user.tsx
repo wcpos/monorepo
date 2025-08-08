@@ -21,11 +21,11 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
-import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { useUserValidation } from '../../../hooks/use-user-validation';
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
@@ -37,6 +37,7 @@ export const WpUser = ({ site, wpUser }: Props) => {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const stores = useObservableSuspense(wpUser.populateResource('stores'));
 	const t = useT();
+	const { isValid, isLoading } = useUserValidation({ site, wpUser });
 
 	/**
 	 *
@@ -46,7 +47,7 @@ export const WpUser = ({ site, wpUser }: Props) => {
 			if (!storeID) {
 				Toast.show({
 					type: 'error',
-					text1: t('No store selected', { _tags: 'core' }),
+					title: t('No store selected', { _tags: 'core' }),
 				});
 			}
 			login({
@@ -79,10 +80,15 @@ export const WpUser = ({ site, wpUser }: Props) => {
 	 */
 	return (
 		<View>
-			{stores.length > 1 ? (
-				<Select onValueChange={({ value }) => handleLogin(value)}>
+			{Array.isArray(stores) && stores.length > 1 ? (
+				<Select onValueChange={({ value }) => handleLogin(value)} disabled={!isValid || isLoading}>
 					<SelectPrimitiveTrigger asChild>
-						<ButtonPill size="xs" removable onRemove={() => setDeleteDialogOpened(true)}>
+						<ButtonPill
+							size="xs"
+							removable
+							onRemove={() => setDeleteDialogOpened(true)}
+							disabled={isLoading}
+						>
 							<ButtonText>{wpUser.display_name ? wpUser.display_name : 'No name?'}</ButtonText>
 						</ButtonPill>
 					</SelectPrimitiveTrigger>
@@ -101,6 +107,7 @@ export const WpUser = ({ site, wpUser }: Props) => {
 					}}
 					removable
 					onRemove={() => setDeleteDialogOpened(true)}
+					disabled={isLoading}
 				>
 					<ButtonText>{wpUser.display_name ? wpUser.display_name : 'No name?'}</ButtonText>
 				</ButtonPill>
@@ -121,7 +128,7 @@ export const WpUser = ({ site, wpUser }: Props) => {
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
-						<AlertDialogAction variant="destructive" onPress={handleRemoveWpUser}>
+						<AlertDialogAction onPress={handleRemoveWpUser}>
 							{t('Remove', { _tags: 'core' })}
 						</AlertDialogAction>
 					</AlertDialogFooter>

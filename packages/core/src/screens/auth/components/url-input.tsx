@@ -24,7 +24,7 @@ export default function UrlInput() {
 		if (error) {
 			Toast.show({
 				type: 'error',
-				text1: t('{message}', { _tags: 'core', message: error || 'Error' }),
+				title: t('{message}', { _tags: 'core', message: error || 'Error' }),
 			});
 		}
 	}, [error, t]);

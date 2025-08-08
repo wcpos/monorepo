@@ -31,6 +31,9 @@ export interface AppStateState {
 	storeDB: StoreDatabase;
 	fastStoreDB: SyncDatabase;
 	extraData: RxState<any>;
+	login: (props: { siteID: string; wpCredentialsID: string; storeID: string }) => Promise<void>;
+	logout: () => Promise<void>;
+	switchStore: (store: StoreDocument) => Promise<void>;
 }
 
 export const AppStateContext = React.createContext<AppStateState | undefined>(undefined);
