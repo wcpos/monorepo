@@ -5,7 +5,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 	name: 'WooCommerce POS',
 	slug: 'wcpos',
 	owner: 'wcpos',
-	version: '2.0.0',
+	version: '1.8.0',
 	orientation: 'default',
 	icon: './assets/images/icon.png',
 	scheme: 'wcpos',
@@ -19,6 +19,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 	ios: {
 		supportsTablet: true,
 		bundleIdentifier: 'com.wcpos.main',
+		buildNumber: '1',
 		infoPlist: {
 			ITSAppUsesNonExemptEncryption: false,
 		},
@@ -30,6 +31,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 			backgroundColor: '#ffffff',
 		},
 		package: 'com.wcpos.main',
+		versionCode: 1,
 		jsEngine: 'hermes',
 	},
 	web: {
