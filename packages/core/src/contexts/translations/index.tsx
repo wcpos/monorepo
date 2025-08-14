@@ -31,7 +31,7 @@ const localTranslationsResource = new ObservableResource(of(null));
  * - load the translations from local storage (if any)
  */
 export const TranslationProvider = ({ children }) => {
-	const { translationsState } = useAppState();
+	const { translationsState, ...rest } = useAppState();
 	const { locale } = useLocale();
 	const translations = useObservableEagerState(translationsState.get$(locale));
 

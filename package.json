@@ -11,6 +11,7 @@
     "clean": "node scripts/clean-node-modules",
     "electron": "pnpm --filter @wcpos/app-electron",
     "main": "pnpm --filter @wcpos/main",
+    "web": "pnpm --filter @wcpos/web-bundle",
     "components": "pnpm --filter @wcpos/components",
     "core": "pnpm --filter @wcpos/core",
     "database": "pnpm --filter @wcpos/database",

@@ -1,188 +1,110 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
-import { from, shareReplay } from 'rxjs';
-import { distinctUntilChanged, filter, switchMap, tap } from 'rxjs/operators';
+import type { StoreDocument } from '@wcpos/database';
+import Platform from '@wcpos/utils/platform';
 
-import { createFastStoreDB, createStoreDB, createUserDB } from '@wcpos/database';
-import type {
-	SiteDocument,
-	StoreDatabase,
-	StoreDocument,
-	SyncDatabase,
-	UserDatabase,
-	UserDocument,
-	WPCredentialsDocument,
-} from '@wcpos/database';
+import { useHydrationSuspense } from './use-hydration-suspense';
+import { hydrateUserSession } from './hydration-steps';
 
-import { initialProps, isWebApp } from './initial-props';
+import type { HydrationContext } from './hydration-steps';
 
-import type { RxState } from 'rxdb';
-
-export interface AppStateState {
-	userDB: UserDatabase;
-	appState: RxState<any>;
-	translationsState: RxState<any>;
-	user: UserDocument;
-	site: SiteDocument;
-	wpCredentials: WPCredentialsDocument;
-	store: StoreDocument;
-	storeDB: StoreDatabase;
-	fastStoreDB: SyncDatabase;
-	extraData: RxState<any>;
-	login: (props: { siteID: string; wpCredentialsID: string; storeID: string }) => Promise<void>;
-	logout: () => Promise<void>;
-	switchStore: (store: StoreDocument) => Promise<void>;
-}
-
-export const AppStateContext = React.createContext<AppStateState | undefined>(undefined);
-
-/**
- * UserDB Resources
- */
-/**
- * NOTE: The userDB promise will be called before the app is rendered
- * - current state for logged in user, site, store, etc.
- * - translations state for language translations
- */
-const userDBPromise = createUserDB().then(async (userDB) => {
-	if (!userDB) {
-		throw new Error('Error creating userDB');
-	}
-	const appState = await userDB.addState('v2');
-	const translationsState = await userDB.addState('translations_v2');
-	return { userDB, appState, translationsState };
-});
-export const userDB$ = from(userDBPromise).pipe(shareReplay(1));
-const userDBResource = new ObservableResource(userDB$);
-
-/**
- * Re-use userDB to get the user
- */
-const user$ = userDB$.pipe(
-	switchMap(({ userDB }) =>
-		userDB.users.findOne().$.pipe(
-			tap((user) => {
-				if (!isRxDocument(user)) {
-					userDB.users.insert({ first_name: 'Global', last_name: 'User' });
-				}
-			})
-		)
-	),
-	filter((user) => isRxDocument(user)),
-	distinctUntilChanged((prev, curr) => prev?.uuid === curr?.uuid)
-);
-const userResource = new ObservableResource(user$);
-
-/**
- * Re-use userDB and currentState to get the other resources
- */
-const storeResource$ = userDB$.pipe(
-	switchMap(({ userDB, appState }) => {
-		return appState.current$.pipe(
-			switchMap(async (current) => {
-				let site, wpCredentials, store, storeDB, fastStoreDB, extraData;
-				/**
-				 * Becareful! RxDB will return a value if primary ID is empty, it sucks, I hate it.
-				 */
-				if (current?.siteID) {
-					site = await userDB.sites.findOne(current.siteID).exec();
-				}
-				if (current?.wpCredentialsID) {
-					wpCredentials = await userDB.wp_credentials.findOne(current.wpCredentialsID).exec();
-				}
-				if (current?.storeID) {
-					store = await userDB.stores.findOne(current.storeID).exec();
-				}
-				if (isRxDocument(store)) {
-					storeDB = await createStoreDB(store.localID);
-					fastStoreDB = await createFastStoreDB(store.localID);
-					extraData = await storeDB.addState('data_v2');
-				}
-				return { site, wpCredentials, store, storeDB, fastStoreDB, extraData };
-			})
-		);
-	})
-);
-const storeResource = new ObservableResource(storeResource$);
+export const AppStateContext = React.createContext<any | undefined>(undefined);
 
 /**
  *
  */
-export const AppStateProvider = ({ children }) => {
-	const { userDB, appState, translationsState } = useObservableSuspense(userDBResource);
-	const user = useObservableSuspense(userResource);
-	const { site, wpCredentials, store, storeDB, fastStoreDB, extraData } =
-		useObservableSuspense(storeResource);
+export const AppStateProvider = ({ children }: { children: React.ReactNode }) => {
+	const hydration = useHydrationSuspense();
 
-	/**
-	 *
-	 */
+	// Handle errors by throwing them - let error boundaries handle display
+	if (hydration.error) {
+		throw hydration.error;
+	}
+
+	const [state, setState] = React.useState(hydration.context);
+
+	// Function to update app state (for runtime changes like login, logout, store switch)
+	const updateAppState = React.useCallback((updates: Partial<HydrationContext>) => {
+		setState((prev) => ({ ...prev, ...updates }));
+	}, []);
+
+	// App actions
 	const login = React.useCallback(
-		async ({ siteID, wpCredentialsID, storeID }) => {
-			await appState.set('current', () => ({
+		async ({
+			siteID,
+			wpCredentialsID,
+			storeID,
+		}: {
+			siteID: string;
+			wpCredentialsID: string;
+			storeID: string;
+		}) => {
+			// Update database state
+			await state.appState.set('current', () => ({
 				siteID,
 				wpCredentialsID,
 				storeID,
 			}));
+
+			// Hydrate session data from database
+			const sessionData = await hydrateUserSession(state.userDB, {
+				siteID,
+				wpCredentialsID,
+				storeID,
+			});
+
+			// Update React state
+			updateAppState(sessionData);
 		},
-		[appState]
+		[state.appState, state.userDB, updateAppState]
 	);
 
-	/**
-	 *
-	 */
 	const logout = React.useCallback(async () => {
-		await appState.set('current', () => null);
+		await state.appState.set('current', () => null);
 
-		if (isWebApp) {
-			window.location.href = initialProps?.logout_url;
+		updateAppState({
+			site: undefined,
+			wpCredentials: undefined,
+			store: undefined,
+			storeDB: undefined,
+			fastStoreDB: undefined,
+			extraData: undefined,
+		});
+
+		if (Platform.isWeb && typeof window !== 'undefined') {
+			// Get logout URL from global initialProps if available
+			const initialProps = (globalThis as any).initialProps;
+			if (initialProps?.logout_url) {
+				window.location.href = initialProps.logout_url;
+			} else {
+				// Fallback to reloading the page
+				window.location.reload();
+			}
 		}
-	}, [appState]);
+	}, [state.appState, updateAppState]);
 
-	/**
-	 *
-	 */
 	const switchStore = React.useCallback(
 		async (store: StoreDocument) => {
-			await appState.set('current', (v) => ({ ...v, storeID: store.localID }));
+			const current = await state.appState.get('current');
+			const newState = { ...current, storeID: store.localID };
+			await state.appState.set('current', newState);
+
+			const sessionData = await hydrateUserSession(state.userDB, newState);
+
+			updateAppState(sessionData);
 		},
-		[appState]
+		[state.appState, state.userDB, updateAppState]
 	);
 
-	const value = React.useMemo(
-		() => ({
-			userDB,
-			appState,
-			translationsState,
-			user,
-			site,
-			wpCredentials,
-			store,
-			storeDB,
-			fastStoreDB,
-			extraData,
+	const value = React.useMemo(() => {
+		return {
+			...state,
+			updateAppState,
 			login,
 			logout,
 			switchStore,
-		}),
-		[
-			userDB,
-			appState,
-			translationsState,
-			user,
-			site,
-			wpCredentials,
-			store,
-			storeDB,
-			fastStoreDB,
-			extraData,
-			login,
-			logout,
-			switchStore,
-		]
-	);
+		};
+	}, [state, updateAppState, login, logout, switchStore]);
 
 	return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 };

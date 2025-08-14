@@ -2,9 +2,7 @@ import * as React from 'react';
 
 import { getLocales } from 'expo-localization';
 import { useObservableEagerState } from 'observable-hooks';
-import { of, Observable } from 'rxjs';
-
-import type { StoreDocument } from '@wcpos/database';
+import { of } from 'rxjs';
 
 import locales from './locales.json';
 import { useAppState } from '../../contexts/app-state';

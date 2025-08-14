@@ -4,7 +4,7 @@ const { getDefaultConfig } = require('expo/metro-config');
 const { FileStore } = require('metro-cache');
 const { withNativeWind } = require('nativewind/metro');
 
-const config = getDefaultConfig(__dirname);
+let config = getDefaultConfig(__dirname);
 
 // Add electron support
 if (process.env.ELECTRON === 'true') {
@@ -26,4 +26,14 @@ config.cacheStores = [
 	new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
 ];
 
-module.exports = withNativeWind(config, { input: './global.css' });
+// Apply NativeWind configuration
+config = withNativeWind(config, { input: './global.css' });
+
+// Enable Atlas analytics when EXPO_UNSTABLE_ATLAS is set
+// This must be done last to wrap all other Metro configurations
+if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
+	const { withExpoAtlas } = require('expo-atlas/metro');
+	config = withExpoAtlas(config);
+}
+
+module.exports = config;

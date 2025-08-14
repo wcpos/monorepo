@@ -1,5 +1,3 @@
-const isWebApp = true;
-
 /**
  * Initial Props
  * - only web at the moment, but may be useful for other platforms in the future
@@ -9,4 +7,4 @@ if (globalThis.initialProps) {
 	initialProps = Object.freeze(globalThis.initialProps); // prevent accidental mutation
 }
 
-export { isWebApp, initialProps };
+export { initialProps };

@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { Logo } from '@wcpos/components/logo';
 import { Progress } from '@wcpos/components/progress';
+import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 // Keep the splash screen visible while we get the js SplashScreen ready
@@ -14,7 +15,7 @@ SplashScreen.preventAutoHideAsync();
  * NOTE: the ThemeProvider is not loaded yet, so we can't use any theme related components here
  * @TODO - should we have a timeout and a way to force clear the local DBs if it takes too long?
  */
-export const Splash = ({ progress = 0 }: { progress?: number }) => {
+export const Splash = ({ progress = 0, message }: { progress?: number; message?: string }) => {
 	React.useEffect(() => {
 		// Once our JS-based splash is ready to be shown, hide the native splash.
 		// Then we conditionally render our custom splash UI or the real app.
@@ -30,6 +31,7 @@ export const Splash = ({ progress = 0 }: { progress?: number }) => {
 			<VStack className="w-48 items-center justify-center">
 				<View className="h-10 w-full" />
 				<Logo width={120} height={120} />
+				{message && <Text className="text-center text-sm text-muted-foreground">{message}</Text>}
 				<View className="h-10 w-full">
 					<Progress value={progress} />
 				</View>

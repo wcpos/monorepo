@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
 
 import * as ProgressPrimitive from '@rn-primitives/progress';
 import Animated, {
 	Extrapolation,
 	interpolate,
+	type SharedValue,
 	useAnimatedStyle,
 	useDerivedValue,
 	withSpring,
@@ -12,31 +12,39 @@ import Animated, {
 
 import { cn } from '../lib/utils';
 
-const Progress = React.forwardRef<
-	ProgressPrimitive.RootRef,
-	ProgressPrimitive.RootProps & {
-		indicatorClassName?: string;
-	}
->(({ className, value, indicatorClassName, ...props }, ref) => {
+export function Progress({
+	className,
+	value,
+	sharedValue,
+	indicatorClassName,
+	...props
+}: ProgressPrimitive.RootProps & {
+	indicatorClassName?: string;
+	sharedValue?: SharedValue<number>;
+}) {
 	return (
 		<ProgressPrimitive.Root
-			ref={ref}
 			className={cn(
 				'bg-secondary/20 relative h-2.5 w-full overflow-hidden rounded-full',
 				className
 			)}
 			{...props}
 		>
-			<Indicator value={value} className={indicatorClassName} />
+			<Indicator value={value} sharedValue={sharedValue} className={indicatorClassName} />
 		</ProgressPrimitive.Root>
 	);
-});
-Progress.displayName = ProgressPrimitive.Root.displayName;
+}
 
-export { Progress };
-
-function Indicator({ value, className }: { value: number | undefined | null; className?: string }) {
-	const progress = useDerivedValue(() => value ?? 0);
+function Indicator({
+	value,
+	sharedValue,
+	className,
+}: {
+	value: number | undefined | null;
+	sharedValue?: SharedValue<number>;
+	className?: string;
+}) {
+	const progress = useDerivedValue(() => sharedValue?.value ?? value ?? 0);
 
 	const indicator = useAnimatedStyle(() => {
 		return {
@@ -46,17 +54,6 @@ function Indicator({ value, className }: { value: number | undefined | null; cla
 			),
 		};
 	});
-
-	if (Platform.OS === 'web') {
-		return (
-			<View
-				className={cn('bg-primary web:transition-all h-full w-full flex-1', className)}
-				style={{ transform: `translateX(-${100 - (value ?? 0)}%)` }}
-			>
-				<ProgressPrimitive.Indicator className={cn('h-full w-full', className)} />
-			</View>
-		);
-	}
 
 	return (
 		<ProgressPrimitive.Indicator asChild>
