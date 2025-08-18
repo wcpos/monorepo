@@ -32,6 +32,12 @@ const processErrorHandlers = async (
 	errorHandlers: HttpErrorHandler[],
 	makeRequest: (config: AxiosRequestConfig) => Promise<AxiosResponse>
 ): Promise<AxiosResponse | AxiosError> => {
+	// Safety check - ensure errorHandlers is an array
+	if (!Array.isArray(errorHandlers)) {
+		console.error('processErrorHandlers: errorHandlers is not an array:', errorHandlers);
+		return error;
+	}
+
 	// Sort handlers by priority (higher first)
 	const sortedHandlers = [...errorHandlers].sort((a, b) => (b.priority || 0) - (a.priority || 0));
 
@@ -100,17 +106,36 @@ const processErrorHandlers = async (
 	return error;
 };
 
+// Create a stable empty array to avoid recreating it on every render
+const EMPTY_ERROR_HANDLERS: HttpErrorHandler[] = [];
+
 /**
  * Http Client provides a standard API for all platforms
  * also wraps request to provide a common error handler
  *
+ * @param errorHandlers - Array of error handlers. IMPORTANT: Must be a stable reference
+ *                       to avoid infinite re-renders. Use useMemo, useState, or a constant
+ *                       outside the component if passing handlers.
+ *
+ * @example
+ * // ✅ Good - no arguments (uses stable empty array)
+ * const httpClient = useHttpClient();
+ *
+ * // ✅ Good - stable reference
+ * const ERROR_HANDLERS = [{ name: 'retry', ... }];
+ * const httpClient = useHttpClient(ERROR_HANDLERS);
+ *
+ * // ✅ Good - memoized
+ * const errorHandlers = useMemo(() => [{ name: 'retry', ... }], []);
+ * const httpClient = useHttpClient(errorHandlers);
+ *
+ * // ❌ BAD - will cause infinite re-renders!
+ * const httpClient = useHttpClient([{ name: 'retry', ... }]);
+ *
  * TODO - how best to cancel requests
  * TODO - becareful to use useOnlineStatus because it emits a lot of events
  */
-export const useHttpClient = (
-	errorHandlers: HttpErrorHandler[] = [],
-	legacyErrorHandler?: (error: unknown) => unknown
-) => {
+export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HANDLERS) => {
 	// const defaultErrorHandler = useHttpErrorHandler();
 
 	/**
@@ -145,7 +170,7 @@ export const useHttpClient = (
 				return response;
 			} catch (error) {
 				// Process through error handlers first
-				if (errorHandlers.length > 0) {
+				if (errorHandlers && errorHandlers.length > 0) {
 					const result = await processErrorHandlers(
 						error as AxiosError,
 						reqConfig,
@@ -162,17 +187,11 @@ export const useHttpClient = (
 					error = result as AxiosError;
 				}
 
-				// Fall back to legacy error handler if provided
-				let err = error;
-				if (typeof legacyErrorHandler === 'function') {
-					err = legacyErrorHandler(err);
-				}
-
-				log.debug(err);
-				throw err;
+				log.debug(error);
+				throw error;
 			}
 		},
-		[errorHandlers, legacyErrorHandler, makeRequest]
+		[errorHandlers, makeRequest]
 	);
 
 	/**

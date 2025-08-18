@@ -33,7 +33,7 @@ export function Splash() {
 	}, [progress.value, hideSplash]);
 
 	return (
-		<View className="absolute inset-0 flex items-center justify-center bg-white">
+		<View className="absolute inset-0 flex items-center justify-center bg-[#F0F4F8]">
 			<VStack className="w-48 items-center justify-center">
 				<View className="h-10 w-full" />
 				<Logo width={120} height={120} />

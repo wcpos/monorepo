@@ -1,20 +1,15 @@
 import * as React from 'react';
 
-import { CanceledError } from 'axios';
-import { useRouter } from 'expo-router';
 import get from 'lodash/get';
 import merge from 'lodash/merge';
 import { useObservableEagerState } from 'observable-hooks';
-import { BehaviorSubject } from 'rxjs';
-import semver from 'semver';
 
 import useHttpClient, { RequestConfig } from '@wcpos/hooks/use-http-client';
-import useOnlineStatus from '@wcpos/hooks/use-online-status';
+import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import log from '@wcpos/utils/logger';
 
-import { useAppState } from '../../../contexts/app-state';
-
-const errorSubject = new BehaviorSubject(null);
+import { useAppState } from '../../../../contexts/app-state';
+import { errorSubject, useAuthErrorHandler } from './auth-error-handler';
 
 /**
  *
@@ -37,7 +32,7 @@ function extractValidJSON(responseString) {
 	for (let i = possibleJson.length; i > 0; i--) {
 		try {
 			return JSON.parse(possibleJson.substring(0, i));
-		} catch (error) {
+		} catch {
 			// Not a valid JSON yet, continue trimming
 		}
 	}
@@ -50,35 +45,69 @@ function extractValidJSON(responseString) {
  * TODO - becareful to use useOnlineStatus because it emits a lot of events
  */
 export const useRestHttpClient = (endpoint = '') => {
-	const { site, wpCredentials, store, initialProps } = useAppState();
+	const { site, wpCredentials, store } = useAppState();
 	// const wcAPIURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableEagerState(wpCredentials.access_token$);
 
-	const router = useRouter();
+	/**
+	 * Create a fresh HTTP client for token refresh requests
+	 * This avoids circular error handling during token refresh
+	 */
+	const getHttpClient = React.useCallback(() => {
+		return {
+			post: async (url: string, data: any, config: any = {}) => {
+				const response = await fetch(url, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						...config.headers,
+					},
+					body: JSON.stringify(data),
+				});
 
-	// React.useEffect(() => {
-	// 	console.log('isAuth', isAuth);
-	// }, [isAuth]);
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+
+				return {
+					data: await response.json(),
+					status: response.status,
+					statusText: response.statusText,
+				};
+			},
+		};
+	}, []);
 
 	/**
-	 * Intercept errors and check for 401
+	 * Create token refresh handler using the existing utility
 	 */
-	const errorHandler = React.useCallback(
-		(error) => {
-			if (error.response && error.response.status === 401) {
-				errorSubject.next(error);
-				router.push('/(app)/(modals)/login');
-				return new CanceledError('401 - redirected to login');
-			}
-			return error;
-		},
-		[router]
+	const tokenRefreshHandler = React.useMemo(
+		() =>
+			createTokenRefreshHandler({
+				site,
+				wpUser: wpCredentials,
+				getHttpClient,
+			}),
+		[site, wpCredentials, getHttpClient]
+	);
+
+	/**
+	 * Get the fallback auth error handler for cases where token refresh fails
+	 */
+	const fallbackAuthHandler = useAuthErrorHandler(site, wpCredentials);
+
+	/**
+	 * Error handlers for HTTP requests - token refresh first, then fallback
+	 */
+	const errorHandlers = React.useMemo(
+		() => [tokenRefreshHandler, fallbackAuthHandler],
+		[tokenRefreshHandler, fallbackAuthHandler]
 	);
 
 	/**
 	 *
 	 */
-	const httpClient = useHttpClient(errorHandler);
+	const httpClient = useHttpClient(errorHandlers);
 
 	/**
 	 *
@@ -124,7 +153,9 @@ export const useRestHttpClient = (endpoint = '') => {
 				 * eg: rando WordPress plugin echo's out a bunch of HTML before the JSON
 				 */
 				if (typeof response?.data === 'string') {
-					log.error('Trying to recover from invalid JSON response', response?.data);
+					log.error('Trying to recover from invalid JSON response', {
+						context: { responseData: response?.data },
+					});
 					response.data = extractValidJSON(response?.data);
 				}
 				return response;
