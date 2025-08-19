@@ -2,14 +2,14 @@
   <h1>Monorepo for <a href="https://wcpos.com">WooCommerce POS</a></h1>
   <p>React Native cross-platform applications for taking WooCommerce orders at the Point of Sale.</p>
   <p>
-    <a href="https://wcpos.github.io/managed-expo/">
-      <img src="https://github.com/wcpos/managed-expo/actions/workflows/build-web-app.yml/badge.svg" alt="Web App" />
+    <a href="https://wcpos.expo.app/">
+      <img src="https://github.com/wcpos/monorepo/actions/workflows/deploy.yml/badge.svg" alt="Web App" />
     </a>
     <a href="https://github.com/wcpos/electron/releases">
       <img src="https://github.com/wcpos/electron/actions/workflows/tag-and-release.yml/badge.svg" alt="Desktop App" />
     </a>
     <a href="https://github.com/wcpos/managed-expo">
-      <img src="https://github.com/wcpos/managed-expo/actions/workflows/standalone.yml/badge.svg" alt="Native Apps" />
+      <img src="https://github.com/wcpos/monorepo/actions/workflows/build.yml/badge.svg" alt="Native Apps" />
     </a>
     <a href="https://wcpos.com/discord">
       <img src="https://img.shields.io/discord/711884517081612298?color=%237289DA&label=WCPOS&logo=discord&logoColor=white" alt="Discord Chat" />

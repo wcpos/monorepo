@@ -590,8 +590,8 @@ importers:
         specifier: 16.17.2
         version: 16.17.2(rxjs@7.8.2)(socks@2.8.7)
       rxdb-premium:
-        specifier: 16.17.1
-        version: 16.17.1(rxdb@16.17.2(rxjs@7.8.2)(socks@2.8.7))(rxjs@7.8.2)
+        specifier: 16.17.2
+        version: 16.17.2(rxdb@16.17.2(rxjs@7.8.2)(socks@2.8.7))(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -9244,10 +9244,10 @@ packages:
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
 
-  rxdb-premium@16.17.1:
-    resolution: {integrity: sha512-bq3vIcKXj4R1U5hglWVeeGiTd0DQgCejic9wykLPIGIivRuC/9jTtZ+9nkd6NT4Urh0X+k+esdgROv1eDweAdQ==}
+  rxdb-premium@16.17.2:
+    resolution: {integrity: sha512-4Ef27mnKcYJrdYXKYQYOqpB8GdWZ5pQJ48COcyTM+xCc23vXrrJx+PVW084DcAYLHSyILtqmQKJ7IwhxPxGphQ==}
     peerDependencies:
-      rxdb: 16.17.1
+      rxdb: 16.17.2
       rxjs: '*'
 
   rxdb@16.17.2:
@@ -21344,7 +21344,7 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
-  rxdb-premium@16.17.1(rxdb@16.17.2(rxjs@7.8.2)(socks@2.8.7))(rxjs@7.8.2):
+  rxdb-premium@16.17.2(rxdb@16.17.2(rxjs@7.8.2)(socks@2.8.7))(rxjs@7.8.2):
     dependencies:
       '@koa/cors': 5.0.0
       array-push-at-sort-position: 4.0.1
