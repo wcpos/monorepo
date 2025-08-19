@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { isRxDocument } from 'rxdb';
+import { Blob } from 'expo-blob';
 
 import useHttpClient from '@wcpos/hooks/use-http-client';
 
@@ -27,7 +28,7 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 				const existingAttachment = document.getAttachment(imageUrl);
 				if (existingAttachment) {
 					const blob = await existingAttachment.getData();
-					const objectUrl = URL.createObjectURL(blob as Blob);
+					const objectUrl = URL.createObjectURL(blob);
 					setBlobUrl(objectUrl);
 					return;
 				}
