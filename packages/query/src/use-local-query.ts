@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useQueryManager } from './provider';
-import { Query, QueryParams, QueryHooks } from './query-state';
+import { Query, QueryHooks, QueryParams } from './query-state';
 
 export interface QueryOptions {
 	queryKeys: (string | number | object)[];

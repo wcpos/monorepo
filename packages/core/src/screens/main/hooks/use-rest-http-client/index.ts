@@ -6,6 +6,7 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import useHttpClient, { RequestConfig } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
+import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import log from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
@@ -41,12 +42,9 @@ function extractValidJSON(responseString) {
 	return null;
 }
 
-/**
- * TODO - becareful to use useOnlineStatus because it emits a lot of events
- */
 export const useRestHttpClient = (endpoint = '') => {
 	const { site, wpCredentials, store } = useAppState();
-	// const wcAPIURL = useObservableState(site.wc_api_url$, site.wc_api_url);
+	const { status: onlineStatus } = useOnlineStatus();
 	const jwt = useObservableEagerState(wpCredentials.access_token$);
 
 	/**
@@ -114,6 +112,23 @@ export const useRestHttpClient = (endpoint = '') => {
 	 */
 	const request = React.useCallback(
 		async (reqConfig: RequestConfig = {}) => {
+			// Check connection status and provide better error context
+			if (onlineStatus === 'offline') {
+				const error = new Error('Device is offline');
+				log.error('HTTP request failed: Device offline', {
+					context: { endpoint, reqConfig, onlineStatus },
+				});
+				throw error;
+			}
+
+			if (onlineStatus === 'online-website-unavailable') {
+				const error = new Error('Website is unreachable');
+				log.error('HTTP request failed: Website unreachable', {
+					context: { endpoint, reqConfig, onlineStatus },
+				});
+				throw error;
+			}
+
 			const shouldUseJwtAsParam = get(
 				window,
 				['initialProps', 'site', 'use_jwt_as_param'],
@@ -161,7 +176,7 @@ export const useRestHttpClient = (endpoint = '') => {
 				return response;
 			});
 		},
-		[endpoint, httpClient, jwt, store.id, site]
+		[endpoint, httpClient, jwt, store.id, site, onlineStatus]
 	);
 
 	/**
@@ -171,6 +186,7 @@ export const useRestHttpClient = (endpoint = '') => {
 		() => ({
 			endpoint,
 			request,
+			onlineStatus,
 			get(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'GET', url });
 			},
@@ -213,6 +229,6 @@ export const useRestHttpClient = (endpoint = '') => {
 			 */
 			error$: errorSubject.asObservable(),
 		}),
-		[endpoint, request]
+		[endpoint, request, onlineStatus]
 	);
 };

@@ -66,6 +66,8 @@ export const useCollection = <K extends CollectionKey>(
 				return t('Category', { _tags: 'core' });
 			case 'products/tags':
 				return t('Tag', { _tags: 'core' });
+			case 'logs':
+				return t('Log', { _tags: 'core' });
 			default:
 				return t('Document', { _tags: 'core' });
 		}
