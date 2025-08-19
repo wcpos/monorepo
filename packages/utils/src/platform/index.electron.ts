@@ -4,6 +4,7 @@ interface TestPlatform extends PlatformStatic {
 	OS: 'test';
 	isTesting: true;
 }
+
 type PlatformType = (TestPlatform | typeof RNPlatform) & {
 	isElectron: boolean;
 	isNative: boolean;

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
+import { type StyleProp, type TextStyle, View, type ViewStyle } from 'react-native';
 
 import { DrawerProps } from '@react-navigation/drawer/src/types';
 
@@ -8,6 +8,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import Platform from '@wcpos/utils/platform';
 
 type Props = {
 	/**
@@ -76,23 +77,38 @@ type Props = {
  */
 const DrawItem = ({ label, icon, focused, onPress, drawerType, style, ...rest }: Props) => {
 	return drawerType === 'permanent' ? (
-		<Tooltip style={style}>
-			<TooltipTrigger asChild onPress={onPress}>
-				<Button
-					size="xl"
-					className={cn(
-						'native:h-12 native:px-4 native:py-2 h-10 rounded-none border-x-4 border-transparent bg-transparent px-3',
-						focused && 'border-l-primary text-primary',
-						!focused && 'hover:bg-white/10'
-					)}
-				>
-					{icon({ focused })}
-				</Button>
-			</TooltipTrigger>
-			<TooltipContent side="right">
-				<Text>{label}</Text>
-			</TooltipContent>
-		</Tooltip>
+		Platform.OS !== 'web' ? (
+			<Button
+				onPress={onPress}
+				size="xl"
+				style={style}
+				className={cn(
+					'native:h-12 native:px-4 native:py-2 h-10 rounded-none border-x-4 border-transparent bg-transparent px-3',
+					focused && 'border-l-primary text-primary',
+					!focused && 'hover:bg-white/10'
+				)}
+			>
+				{icon({ focused })}
+			</Button>
+		) : (
+			<Tooltip style={style}>
+				<TooltipTrigger asChild onPress={onPress}>
+					<Button
+						size="xl"
+						className={cn(
+							'native:h-12 native:px-4 native:py-2 h-10 rounded-none border-x-4 border-transparent bg-transparent px-3',
+							focused && 'border-l-primary text-primary',
+							!focused && 'hover:bg-white/10'
+						)}
+					>
+						{icon({ focused })}
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent side="right">
+					<Text>{label}</Text>
+				</TooltipContent>
+			</Tooltip>
+		)
 	) : (
 		<Button
 			onPress={onPress}
