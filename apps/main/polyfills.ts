@@ -1,4 +1,6 @@
 import * as Crypto from 'expo-crypto';
+import { decode, encode } from 'js-base64';
+import { Blob } from 'expo-blob';
 
 if (typeof global.crypto === 'undefined') {
 	global.crypto = {
@@ -8,4 +10,16 @@ if (typeof global.crypto === 'undefined') {
 			digest: Crypto.digest,
 		},
 	};
+}
+
+if (!global.btoa) {
+	global.btoa = encode;
+}
+
+if (!global.atob) {
+	global.atob = decode;
+}
+
+if (!global.Blob) {
+	global.Blob = Blob;
 }

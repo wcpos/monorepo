@@ -9,7 +9,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
 	return {
 		...config,
-		name: 'WCPOS - Point of Sale for WooCommerce',
+		name: 'WCPOS',
 		slug: 'wcpos',
 		owner: 'wcpos',
 		version: '1.8.0', // manual user-facing version
@@ -92,7 +92,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
 		experiments: {
 			typedRoutes: true,
-			reactCanary: true,
+			reactCompiler: true,
 			...(process.env.WCPOS_BASEURL_PLACEHOLDER && {
 				baseUrl: process.env.WCPOS_BASEURL_PLACEHOLDER,
 			}),

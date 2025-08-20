@@ -1,5 +1,3 @@
-import get from 'lodash/get';
-
 import log from '@wcpos/utils/logger';
 
 import type { AxiosRequestConfig } from 'axios';
