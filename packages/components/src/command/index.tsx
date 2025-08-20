@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { type DialogProps } from '@radix-ui/react-dialog';
 

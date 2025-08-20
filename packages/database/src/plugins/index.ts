@@ -9,7 +9,7 @@ import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
-import { setPremiumFlag, disableVersionCheck } from 'rxdb-premium/plugins/shared';
+import { disableVersionCheck, setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';

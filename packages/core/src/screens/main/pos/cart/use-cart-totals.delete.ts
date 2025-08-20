@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState, useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { BehaviorSubject } from 'rxjs';
 
 import { useAppState } from '../../../../contexts/app-state';

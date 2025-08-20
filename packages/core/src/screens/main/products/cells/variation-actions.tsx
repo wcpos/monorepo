@@ -7,10 +7,10 @@ import {
 	AlertDialogAction,
 	AlertDialogCancel,
 	AlertDialogContent,
+	AlertDialogDescription,
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-	AlertDialogDescription,
 } from '@wcpos/components/alert-dialog';
 import {
 	DropdownMenu,

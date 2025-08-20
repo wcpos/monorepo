@@ -7,16 +7,16 @@ import * as z from 'zod';
 
 import {
 	Dialog,
-	DialogContent,
-	DialogTitle,
 	DialogBody,
+	DialogContent,
 	DialogHeader,
+	DialogTitle,
 } from '@wcpos/components/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';

@@ -1,8 +1,8 @@
-import { Observable, forkJoin, from } from 'rxjs';
+import { forkJoin, from, Observable } from 'rxjs';
 
 import type { StoreDatabase } from '@wcpos/database';
 
-import { mergeWithInitalValues, UISettingSchema, UISettingState, UISettingID } from './utils';
+import { mergeWithInitalValues, UISettingID, UISettingSchema, UISettingState } from './utils';
 
 const settingIds: UISettingID[] = [
 	'pos-products',

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
-import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';

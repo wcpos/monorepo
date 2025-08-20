@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { endOfDay, startOfDay } from 'date-fns';
 import toNumber from 'lodash/toNumber';
-import { useObservableEagerState, ObservableResource, useObservable } from 'observable-hooks';
+import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
 

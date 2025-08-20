@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState, useSubscription, useObservable } from 'observable-hooks';
+import { useObservable, useObservableEagerState, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
 import { useFeeLineData } from './use-fee-line-data';

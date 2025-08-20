@@ -1,14 +1,14 @@
 import { KeywordCxt } from 'ajv';
-import { _, str, or, getProperty, operators } from 'ajv/dist/compile/codegen';
+import { _, getProperty, operators, or, str } from 'ajv/dist/compile/codegen';
 
 import type Ajv from 'ajv';
 import type {
-	Plugin,
-	CodeKeywordDefinition,
-	KeywordErrorDefinition,
 	Code,
-	Name,
+	CodeKeywordDefinition,
 	ErrorObject,
+	KeywordErrorDefinition,
+	Name,
+	Plugin,
 } from 'ajv';
 import type { Rule } from 'ajv/dist/compile/rules';
 import type { AddedFormat } from 'ajv/dist/types';

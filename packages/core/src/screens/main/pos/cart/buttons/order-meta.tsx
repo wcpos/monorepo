@@ -3,11 +3,11 @@ import * as React from 'react';
 import { Button } from '@wcpos/components/button';
 import {
 	Dialog,
-	DialogTrigger,
+	DialogBody,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-	DialogBody,
+	DialogTrigger,
 } from '@wcpos/components/dialog';
 
 import { EditOrderMeta } from './edit-order-meta';

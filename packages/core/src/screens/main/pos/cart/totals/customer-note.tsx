@@ -9,7 +9,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Pressable } from '@wcpos/components/pressable';
 import { Text } from '@wcpos/components/text';
 import { Textarea } from '@wcpos/components/textarea';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../../../contexts/translations';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -55,7 +55,7 @@ export const CustomerNote = () => {
 	 *
 	 */
 	return (
-		<HStack className="p-2 border-y-1 bg-gray-50 items-start">
+		<HStack className="border-y-1 items-start bg-gray-50 p-2">
 			<Tooltip>
 				<TooltipTrigger>
 					<Icon name="messageLines" className="fill-secondary-foreground" />

@@ -3,11 +3,11 @@ import * as React from 'react';
 import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import {
 	Table,
-	TableHeader,
-	TableHead,
-	TableRow,
-	TableCell,
 	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
 } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 
@@ -43,7 +43,7 @@ export const KeyboardShortcuts = () => {
 					{shortcuts.map((shortcut) => (
 						<TableRow key={shortcut.key}>
 							<TableCell>
-								<Text className="p-2 border border-border rounded bg-muted font-mono text-sm">
+								<Text className="border-border bg-muted rounded border p-2 font-mono text-sm">
 									{shortcut.key}
 								</Text>
 							</TableCell>

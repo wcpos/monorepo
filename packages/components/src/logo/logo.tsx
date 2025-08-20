@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { StyleProp, ViewProps } from 'react-native';
 
-import Svg, { Path, G, Circle, Line, SvgProps } from 'react-native-svg';
+import Svg, { Circle, G, Line, Path, SvgProps } from 'react-native-svg';
 
 interface Props extends SvgProps {
 	animate?: boolean;

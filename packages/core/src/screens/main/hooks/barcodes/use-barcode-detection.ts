@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { NativeSyntheticEvent, TextInputKeyPressEventData, Platform } from 'react-native';
+import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'react-native';
 
 import { useFocusEffect } from 'expo-router';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';

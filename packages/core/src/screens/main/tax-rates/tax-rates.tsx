@@ -2,18 +2,18 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
-import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 
 import {
 	Modal,
-	ModalContent,
-	ModalTitle,
-	ModalHeader,
 	ModalBody,
-	ModalFooter,
 	ModalClose,
+	ModalContent,
+	ModalFooter,
+	ModalHeader,
+	ModalTitle,
 } from '@wcpos/components/modal';
-import { Tabs, TabsContent, ScrollableTabsList, TabsTrigger } from '@wcpos/components/tabs';
+import { ScrollableTabsList, Tabs, TabsContent, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 
 import { TaxRatesFooter } from './footer';

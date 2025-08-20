@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, StyleSheet, View, ScrollView } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 
 import * as DialogPrimitive from '@rn-primitives/dialog';
 import * as Slot from '@rn-primitives/slot';
@@ -15,7 +15,7 @@ import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
 import type { ButtonProps } from '../button';
-import type { PressableRef, TextRef, SlottableTextProps } from '@rn-primitives/types';
+import type { PressableRef, SlottableTextProps, TextRef } from '@rn-primitives/types';
 
 const Dialog = DialogPrimitive.Root;
 

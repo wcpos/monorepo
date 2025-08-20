@@ -12,7 +12,7 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { useNumberFormat, NumberFormatOptions } from '../hooks/use-number-format';
+import { NumberFormatOptions, useNumberFormat } from '../hooks/use-number-format';
 
 export interface NumberInputProps {
 	/**  */

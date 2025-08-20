@@ -10,10 +10,10 @@ import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/
 import {
 	Form,
 	FormField,
-	FormSwitch,
+	FormInput,
 	FormRadioGroup,
 	FormSelect,
-	FormInput,
+	FormSwitch,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';

@@ -4,6 +4,9 @@
       "lint": {
         "outputs": []
       },
+      "lint:fix": {
+        "outputs": []
+      },
       "test": {
         "dependsOn": ["build"],
         "inputs": ["**/*.{ts,tsx,js,jsx}"]

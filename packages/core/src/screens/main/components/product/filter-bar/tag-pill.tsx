@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
-import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';

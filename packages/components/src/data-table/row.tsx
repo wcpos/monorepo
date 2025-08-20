@@ -3,7 +3,7 @@ import * as React from 'react';
 import { flexRender, Row } from '@tanstack/react-table';
 
 import { cn, getFlexAlign } from '../lib/utils';
-import { TableRow, TableCell } from '../table';
+import { TableCell, TableRow } from '../table';
 
 export type Renderable<TProps> = React.ReactNode | React.ComponentType<TProps>;
 

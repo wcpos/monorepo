@@ -1,5 +1,5 @@
 import type { Format, FormatDefinition } from 'ajv';
-import type { FormatValidator, FormatCompare } from 'ajv/dist/types';
+import type { FormatCompare, FormatValidator } from 'ajv/dist/types';
 
 export type FormatMode = 'fast' | 'full';
 

@@ -4,9 +4,9 @@ import { ScrollView, View } from 'react-native';
 import {
 	Column,
 	ColumnDef,
-	useReactTable,
-	getCoreRowModel,
 	flexRender,
+	getCoreRowModel,
+	useReactTable,
 } from '@tanstack/react-table';
 import find from 'lodash/find';
 import get from 'lodash/get';
@@ -17,13 +17,13 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { cn, getFlexAlign } from '@wcpos/components/lib/utils';
 import { Suspense } from '@wcpos/components/suspense';
 import {
+	PulseTableRow,
 	Table,
-	TableHeader,
-	TableRow,
-	TableHead,
 	TableBody,
 	TableCell,
-	PulseTableRow,
+	TableHead,
+	TableHeader,
+	TableRow,
 } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 

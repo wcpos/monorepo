@@ -2,13 +2,13 @@ import * as React from 'react';
 
 import { decode } from 'html-entities';
 import {
-	useObservableSuspense,
-	useObservableEagerState,
 	ObservableResource,
+	useObservableEagerState,
+	useObservableSuspense,
 } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { from, of } from 'rxjs';
-import { switchMap, shareReplay, tap, distinctUntilChanged, filter } from 'rxjs/operators';
+import { distinctUntilChanged, filter, shareReplay, switchMap, tap } from 'rxjs/operators';
 import useDeepCompareEffect from 'use-deep-compare-effect';
 
 import { createTemporaryDB } from '@wcpos/database';

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { isToday, isYesterday, isSameDay } from 'date-fns';
+import { isSameDay, isToday, isYesterday } from 'date-fns';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -13,9 +13,9 @@ import type { Query } from '@wcpos/query';
 import { DateRangeCalendar } from './calendar';
 import { useT } from '../../../../../contexts/translations';
 import {
-	useLocalDate,
-	convertUTCStringToLocalDate,
 	convertLocalDateToUTCString,
+	convertUTCStringToLocalDate,
+	useLocalDate,
 } from '../../../../../hooks/use-local-date';
 
 interface Props {

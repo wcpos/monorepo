@@ -3,7 +3,7 @@ import * as React from 'react';
 import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { of } from 'rxjs';
-import { startWith, switchMap, tap, map } from 'rxjs/operators';
+import { map, startWith, switchMap, tap } from 'rxjs/operators';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';

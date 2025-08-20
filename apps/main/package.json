@@ -11,7 +11,9 @@
     "build": "expo export --output-dir ./build --platform all",
     "build:web": "expo export --output-dir ./web-build --platform=web",
     "build:electron": "ELECTRON=true expo export --output-dir ./electron-build --platform=web",
-    "eas-build-post-install": "pnpm run -w build:main"
+    "eas-build-post-install": "pnpm run -w build:main",
+    "lint": "eslint app components hooks --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint app components hooks --ext .js,.jsx,.ts,.tsx --fix"
   },
   "jest": {
     "preset": "jest-expo"

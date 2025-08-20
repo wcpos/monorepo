@@ -10,9 +10,9 @@ import {
 	Form,
 	FormField,
 	FormInput,
+	FormRadioGroup,
 	FormSelect,
 	FormSwitch,
-	FormRadioGroup,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';

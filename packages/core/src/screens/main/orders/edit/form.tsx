@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@wcpos/components/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import {
 	Form,
 	FormCombobox,

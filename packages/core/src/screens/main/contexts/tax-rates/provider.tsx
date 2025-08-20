@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { useObservableSuspense, useObservableEagerState, useObservable } from 'observable-hooks';
+import { useObservable, useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { combineLatest, of } from 'rxjs';
-import { map, switchMap, distinctUntilChanged } from 'rxjs/operators';
+import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { filterTaxRates } from './tax-rates.helpers';
 import { useAppState } from '../../../../contexts/app-state';

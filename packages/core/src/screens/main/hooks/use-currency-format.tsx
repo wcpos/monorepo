@@ -4,7 +4,7 @@ import { decode } from 'html-entities';
 import defaults from 'lodash/defaults';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useNumberFormat, NumberFormatOptions } from './use-number-format';
+import { NumberFormatOptions, useNumberFormat } from './use-number-format';
 import { useAppState } from '../../../contexts/app-state';
 import allCurrencies from '../../../contexts/currencies/currencies.json';
 

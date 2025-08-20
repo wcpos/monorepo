@@ -28,13 +28,13 @@ export const Quantity = ({ row, column }: CellContext<Props, 'quantity'>) => {
 	 *
 	 */
 	return (
-		<VStack className="justify-center items-center gap-1">
+		<VStack className="items-center justify-center gap-1">
 			<NumberInput
 				value={item.quantity}
 				onChangeText={(quantity) => updateLineItem(uuid, { quantity })}
 			/>
 			{column.columnDef.meta.show('split') && item.quantity > 1 && (
-				<Text variant="link" className="text-sm text-primary" onPress={() => splitLineItem(uuid)}>
+				<Text variant="link" className="text-primary text-sm" onPress={() => splitLineItem(uuid)}>
 					{t('Split', { _tags: 'core', _context: 'Split quantity' })}
 				</Text>
 			)}

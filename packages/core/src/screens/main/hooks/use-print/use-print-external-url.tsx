@@ -13,11 +13,11 @@ function logMessages({
 }) {
 	if (!suppressErrors) {
 		if (level === 'error') {
-			console.error(...messages); // eslint-disable-line no-console
+			console.error(...messages);
 		} else if (level === 'warning') {
-			console.warn(...messages); // eslint-disable-line no-console
+			console.warn(...messages);
 		} else if (level === 'debug') {
-			console.debug(...messages); // eslint-disable-line no-console
+			console.debug(...messages);
 		}
 	}
 }

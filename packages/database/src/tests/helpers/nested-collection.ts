@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import { createRxDatabase, RxStorage, RxCollection, randomCouchString } from 'rxdb';
+import { createRxDatabase, randomCouchString, RxCollection, RxStorage } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 import { v4 as uuidv4 } from 'uuid';
 

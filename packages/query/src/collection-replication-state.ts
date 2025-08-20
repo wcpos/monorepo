@@ -1,6 +1,6 @@
 import isEmpty from 'lodash/isEmpty';
-import { BehaviorSubject, Subject, Observable, Subscription, interval, combineLatest } from 'rxjs';
-import { switchMap, filter, distinctUntilChanged, map, startWith } from 'rxjs/operators';
+import { BehaviorSubject, combineLatest, interval, Observable, Subject, Subscription } from 'rxjs';
+import { distinctUntilChanged, filter, map, startWith, switchMap } from 'rxjs/operators';
 
 import { DataFetcher } from './data-fetcher';
 import { Logger } from './logger';

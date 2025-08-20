@@ -1,4 +1,4 @@
-import { sumTaxes, sumItemizedTaxes } from './sum-taxes';
+import { sumItemizedTaxes, sumTaxes } from './sum-taxes';
 
 describe('Calculate Taxes', () => {
 	it('should sum taxes', () => {

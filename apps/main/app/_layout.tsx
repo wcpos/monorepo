@@ -25,6 +25,7 @@ export const unstable_settings = {
 
 function RootStack() {
 	const { storeDB } = useAppState();
+	setToast(Toast.show);
 
 	return (
 		<Stack screenOptions={{ headerShown: false }}>
@@ -37,11 +38,6 @@ function RootStack() {
 }
 
 export default function RootLayout() {
-	React.useEffect(() => {
-		// Logger works immediately with console, add Toast when ready
-		setToast(Toast.show);
-	}, []);
-
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<SafeAreaProvider style={{ overflow: 'hidden' }}>

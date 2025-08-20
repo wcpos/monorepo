@@ -1,4 +1,4 @@
-import { Platform as RNPlatform, PlatformStatic } from 'react-native';
+import { PlatformStatic, Platform as RNPlatform } from 'react-native';
 
 interface TestPlatform extends PlatformStatic {
 	OS: 'test';

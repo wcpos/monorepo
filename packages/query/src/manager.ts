@@ -13,7 +13,7 @@ import { SubscribableBase } from './subscribable-base';
 import { buildEndpointWithParams } from './utils';
 
 import type { QueryParams } from './query-state';
-import type { RxDatabase, RxCollection } from 'rxdb';
+import type { RxCollection, RxDatabase } from 'rxdb';
 
 /**
  *

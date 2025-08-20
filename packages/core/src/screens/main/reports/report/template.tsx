@@ -5,12 +5,12 @@ import { useFocusEffect } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs';
 
-import { Text, Row, Line, Br } from '@wcpos/components/print';
+import { Br, Line, Row, Text } from '@wcpos/components/print';
 
 import { calculateTotals } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useLocalDate, convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
+import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';

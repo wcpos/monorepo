@@ -2,12 +2,12 @@ import React, { type FunctionComponent, type PropsWithChildren } from 'react';
 import { type ViewProps } from 'react-native';
 
 import Animated, {
+	type AnimatedProps,
 	useAnimatedStyle,
 	withSpring,
-	type AnimatedProps,
 } from 'react-native-reanimated';
 
-import { useDraggable, type DraggableConstraints, type UseDroppableOptions } from '../hooks';
+import { type DraggableConstraints, useDraggable, type UseDroppableOptions } from '../hooks';
 
 import type { AnimatedStyleWorklet } from '../types';
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/button';

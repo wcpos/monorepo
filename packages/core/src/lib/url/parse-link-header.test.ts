@@ -13,8 +13,7 @@ describe('Parse Link Header', () => {
 				page: '3',
 				per_page: '100',
 				rel: 'last',
-				url:
-					'https://api.github.com/user/9287/repos?client_id=1&client_secret=2&page=3&per_page=100',
+				url: 'https://api.github.com/user/9287/repos?client_id=1&client_secret=2&page=3&per_page=100',
 			},
 			next: {
 				client_id: '1',
@@ -22,8 +21,7 @@ describe('Parse Link Header', () => {
 				page: '2',
 				per_page: '100',
 				rel: 'next',
-				url:
-					'https://api.github.com/user/9287/repos?client_id=1&client_secret=2&page=2&per_page=100',
+				url: 'https://api.github.com/user/9287/repos?client_id=1&client_secret=2&page=2&per_page=100',
 			},
 		});
 	});
@@ -40,8 +38,7 @@ describe('Parse Link Header', () => {
 				page: '3',
 				per_page: '100',
 				rel: 'last',
-				url:
-					'https://api.github.com/user/9287/repos?client_id=1&client_secret=2&page=3&per_page=100',
+				url: 'https://api.github.com/user/9287/repos?client_id=1&client_secret=2&page=3&per_page=100',
 			},
 			next: {
 				client_id: '1',
@@ -49,8 +46,7 @@ describe('Parse Link Header', () => {
 				page: '2',
 				per_page: '100',
 				rel: 'next',
-				url:
-					'https://api.github.com/user/9287/repos?client_id=1&client_secret=2&page=2&per_page=100',
+				url: 'https://api.github.com/user/9287/repos?client_id=1&client_secret=2&page=2&per_page=100',
 			},
 		});
 	});

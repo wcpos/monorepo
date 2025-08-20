@@ -9,9 +9,9 @@ import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
+	convertVariationToLineItemWithoutTax,
 	findByProductVariationID,
 	getUuidFromLineItem,
-	convertVariationToLineItemWithoutTax,
 } from './utils';
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';

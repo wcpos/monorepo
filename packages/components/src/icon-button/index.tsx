@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, Platform } from 'react-native';
+import { Platform, Pressable } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import * as Haptics from 'expo-haptics';

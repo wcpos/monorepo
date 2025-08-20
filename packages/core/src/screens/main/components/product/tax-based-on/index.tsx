@@ -38,7 +38,7 @@ export const TaxBasedOn = () => {
 				) : (
 					<HStack space="xs">
 						<Icon size="sm" variant="error" name="triangleExclamation" />
-						<Text variant="link" className="text-xs text-error">
+						<Text variant="link" className="text-error text-xs">
 							{taxBasedOnLabel}
 						</Text>
 					</HStack>

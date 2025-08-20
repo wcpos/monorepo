@@ -3,11 +3,11 @@ import * as React from 'react';
 import { Icon } from '@wcpos/components/icon';
 import {
 	Table,
-	TableHeader,
-	TableHead,
 	TableBody,
-	TableRow,
 	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
 } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 

@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
-import { ModalContent, ModalTitle, ModalBody, Modal, ModalHeader } from '@wcpos/components/modal';
+import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';

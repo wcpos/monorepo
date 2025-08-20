@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { reducer, ACTIONS, Action, Config, CalculatorState } from './reducer';
+import { Action, ACTIONS, CalculatorState, Config, reducer } from './reducer';
 
 export interface UseCalculatorProps {
 	initialValue?: string;

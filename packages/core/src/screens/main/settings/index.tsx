@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody } from '@wcpos/components/modal';
+import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Suspense } from '@wcpos/components/suspense';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';

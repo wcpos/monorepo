@@ -36,7 +36,7 @@ export const Taxes = ({ totalTax, taxLines = [] }: Props) => {
 						const displayTax = parseFloat(tax.tax_total) + parseFloat(tax.shipping_tax_total);
 						return (
 							<HStack key={index} className="justify-end">
-								<Text className="text-xs text-muted-foreground">
+								<Text className="text-muted-foreground text-xs">
 									{inclOrExcl} {tax.label}
 								</Text>
 								<Text>{format(displayTax || 0)}</Text>
@@ -52,7 +52,7 @@ export const Taxes = ({ totalTax, taxLines = [] }: Props) => {
 		<HStack>
 			<Text className="grow">{t('Total Tax', { _tags: 'core' })}:</Text>
 			<HStack>
-				<Text className="text-xs text-muted-foreground">{inclOrExcl}</Text>
+				<Text className="text-muted-foreground text-xs">{inclOrExcl}</Text>
 				<Text>{format(totalTax || 0)}</Text>
 			</HStack>
 		</HStack>

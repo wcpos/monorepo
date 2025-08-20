@@ -9,11 +9,11 @@ import * as z from 'zod';
 import { Button } from '@wcpos/components/button';
 import {
 	Form,
+	FormCombobox,
 	FormField,
 	FormInput,
-	FormSwitch,
 	FormSelect,
-	FormCombobox,
+	FormSwitch,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';

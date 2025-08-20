@@ -1,6 +1,6 @@
 import { RxJsonSchema } from 'rxdb';
 
-import { pruneProperties, coerceData } from './validate';
+import { coerceData, pruneProperties } from './validate';
 
 describe('pruneProperties', () => {
 	const schema: RxJsonSchema<any> = {

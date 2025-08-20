@@ -60,7 +60,7 @@ export const useDraggable = ({
 		containerRef,
 		panGestureState,
 	} = useDndContext();
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 	const [node, setNodeRef] = useNodeRef<NativeElement, any>();
 	// const key = useUniqueId("Draggable");
 	// eslint-disable-next-line react-hooks/rules-of-hooks

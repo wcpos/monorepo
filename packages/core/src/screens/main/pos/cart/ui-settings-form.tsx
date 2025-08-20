@@ -8,8 +8,8 @@ import * as z from 'zod';
 import {
 	Form,
 	FormField,
-	FormSwitch,
 	FormInput,
+	FormSwitch,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';

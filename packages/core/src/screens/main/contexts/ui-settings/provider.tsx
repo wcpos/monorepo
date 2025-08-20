@@ -8,12 +8,12 @@ import log from '@wcpos/utils/logger';
 
 import { useUILabel } from './use-ui-label';
 import {
-	UISettingSchema,
-	UISettingState,
+	mergeWithInitalValues,
+	patchState,
 	resetToInitialValues,
 	UISettingID,
-	patchState,
-	mergeWithInitalValues,
+	UISettingSchema,
+	UISettingState,
 } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 

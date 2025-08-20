@@ -4,7 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { useReactToPrint } from 'react-to-print';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { Card, CardContent, CardHeader, CardFooter } from '@wcpos/components/card';
+import { Card, CardContent, CardFooter, CardHeader } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
 import {
 	Select,

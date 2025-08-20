@@ -27,7 +27,7 @@ export const ShippingTitle = ({ row }: CellContext<Props, 'name'>) => {
 	const t = useT();
 
 	return (
-		<HStack className="gap-0 w-full">
+		<HStack className="w-full gap-0">
 			<View className="flex-1">
 				<EditableName
 					value={item.method_title}

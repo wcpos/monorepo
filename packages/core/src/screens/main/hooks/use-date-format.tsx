@@ -1,13 +1,13 @@
 import * as React from 'react';
 
-import { differenceInHours, isToday, isValid, formatDistance } from 'date-fns';
+import { differenceInHours, formatDistance, isToday, isValid } from 'date-fns';
 import { useFocusEffect } from 'expo-router';
 import { useObservableRef, useObservableState } from 'observable-hooks';
-import { switchMap, map, filter } from 'rxjs/operators';
+import { filter, map, switchMap } from 'rxjs/operators';
 
 import { useHeartbeatObservable } from '@wcpos/hooks/use-heartbeat';
 
-import { useLocalDate, convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
+import { convertUTCStringToLocalDate, useLocalDate } from '../../../hooks/use-local-date';
 
 /**
  *

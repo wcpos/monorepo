@@ -3,12 +3,12 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import {
+	Select,
 	SelectContent,
 	SelectGroup,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-	Select,
 } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 

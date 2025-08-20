@@ -1,21 +1,21 @@
 import * as React from 'react';
 import {
-	RefreshControl,
 	LayoutChangeEvent,
+	NativeScrollEvent,
+	NativeSyntheticEvent,
+	RefreshControl,
 	ScrollView,
 	View,
-	NativeSyntheticEvent,
-	NativeScrollEvent,
 } from 'react-native';
 
 import {
 	ColumnDef,
+	ExpandedState,
 	flexRender,
 	getCoreRowModel,
-	useReactTable,
-	Row,
 	getExpandedRowModel,
-	ExpandedState,
+	Row,
+	useReactTable,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useObservableRef } from 'observable-hooks';

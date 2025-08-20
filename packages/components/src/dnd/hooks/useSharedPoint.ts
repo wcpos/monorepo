@@ -1,4 +1,4 @@
-import { useSharedValue, type SharedValue } from 'react-native-reanimated';
+import { type SharedValue, useSharedValue } from 'react-native-reanimated';
 
 import type { Point } from '../utils';
 

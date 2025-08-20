@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, Linking } from 'react-native';
+import { Linking, View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';

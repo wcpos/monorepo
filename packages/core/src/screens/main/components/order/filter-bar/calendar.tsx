@@ -1,19 +1,19 @@
 import * as React from 'react';
 
 import {
-	startOfWeek,
-	endOfWeek,
-	startOfMonth,
-	endOfMonth,
-	subDays,
-	subWeeks,
-	subMonths,
 	endOfDay,
-	startOfDay,
+	endOfMonth,
+	endOfWeek,
 	format,
+	startOfDay,
+	startOfMonth,
+	startOfWeek,
+	subDays,
+	subMonths,
+	subWeeks,
 } from 'date-fns';
 
-import { Button, ButtonText, ButtonPill } from '@wcpos/components/button';
+import { Button, ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Calendar, DateRange } from '@wcpos/components/calendar';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';

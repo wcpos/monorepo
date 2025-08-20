@@ -18,5 +18,5 @@ export const Avatar = ({ row }: CellContext<{ document: CustomerDocument }, 'ava
 	const avatarUrl = useObservableEagerState(customer.avatar_url$);
 	const source = useImageAttachment(customer, avatarUrl);
 
-	return <Image source={source} className="w-10 h-10 rounded" recyclingKey={customer.uuid} />;
+	return <Image source={source} className="h-10 w-10 rounded" recyclingKey={customer.uuid} />;
 };

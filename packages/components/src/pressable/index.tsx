@@ -1,10 +1,10 @@
 import * as React from 'react';
 import {
+	PressableStateCallbackType,
 	Pressable as RNPressable,
 	StyleProp,
-	ViewStyle,
 	View,
-	PressableStateCallbackType,
+	ViewStyle,
 } from 'react-native';
 
 export type PressableProps = import('react-native').PressableProps & {

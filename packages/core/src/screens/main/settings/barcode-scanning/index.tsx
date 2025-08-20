@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { ModalFooter, ModalClose } from '@wcpos/components/modal';
+import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 

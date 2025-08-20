@@ -7,6 +7,8 @@
     "dev:electron": "turbo dev --filter=\"{./apps/electron}...\"",
     "build": "turbo build",
     "build:main": "turbo build --filter=\"...{./apps/main}\"",
+    "lint": "turbo lint --continue --concurrency=1",
+    "lint:fix": "turbo lint:fix --continue --concurrency=1",
     "main:expo": "pnpm --filter @wcpos/main exec expo",
     "clean": "node scripts/clean-node-modules",
     "electron": "pnpm --filter @wcpos/app-electron",

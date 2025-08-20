@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { ButtonText, ButtonPill } from '@wcpos/components/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';

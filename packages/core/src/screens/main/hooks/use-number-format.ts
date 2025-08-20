@@ -3,7 +3,7 @@ import * as React from 'react';
 import defaults from 'lodash/defaults';
 import round from 'lodash/round';
 import { useObservableEagerState } from 'observable-hooks';
-import { numericFormatter, NumericFormatProps } from 'react-number-format';
+import { NumericFormatProps, numericFormatter } from 'react-number-format';
 
 import { useAppState } from '../../../contexts/app-state';
 

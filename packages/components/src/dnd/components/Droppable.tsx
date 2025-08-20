@@ -1,9 +1,9 @@
 import React, { type FunctionComponent, type PropsWithChildren } from 'react';
 import { type ViewProps } from 'react-native';
 
-import Animated, { useAnimatedStyle, type AnimatedProps } from 'react-native-reanimated';
+import Animated, { type AnimatedProps, useAnimatedStyle } from 'react-native-reanimated';
 
-import { useDroppable, type UseDraggableOptions } from '../hooks';
+import { type UseDraggableOptions, useDroppable } from '../hooks';
 
 import type { AnimatedStyleWorklet } from '../types';
 

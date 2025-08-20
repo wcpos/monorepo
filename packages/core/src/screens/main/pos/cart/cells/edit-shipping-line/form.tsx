@@ -7,14 +7,14 @@ import toString from 'lodash/toString';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { DialogClose, DialogFooter, useRootContext, DialogAction } from '@wcpos/components/dialog';
+import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
 import {
 	Form,
 	FormField,
-	FormSwitch,
 	FormInput,
 	FormRadioGroup,
 	FormSelect,
+	FormSwitch,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';

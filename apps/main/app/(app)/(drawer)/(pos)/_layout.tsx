@@ -1,8 +1,8 @@
 import React from 'react';
 
 import { Stack, useGlobalSearchParams } from 'expo-router';
-import { useObservableEagerState, ObservableResource } from 'observable-hooks';
-import { map, distinctUntilChanged } from 'rxjs/operators';
+import { ObservableResource, useObservableEagerState } from 'observable-hooks';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';

@@ -8,18 +8,18 @@ import map from 'lodash/map';
 import pickBy from 'lodash/pickBy';
 import uniq from 'lodash/uniq';
 import { ObservableResource } from 'observable-hooks';
-import { isRxCollection, RxPlugin, RxCollection, RxDocument } from 'rxdb';
+import { isRxCollection, RxCollection, RxDocument, RxPlugin } from 'rxdb';
 import { combineLatest, forkJoin } from 'rxjs';
 import {
-	switchMap,
-	tap,
 	distinctUntilChanged,
-	map as rxMap,
 	filter,
 	mergeMap,
 	pluck,
-	toArray,
+	map as rxMap,
 	startWith,
+	switchMap,
+	tap,
+	toArray,
 } from 'rxjs/operators';
 
 /**

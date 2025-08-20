@@ -1,5 +1,5 @@
 import { utc } from '@date-fns/utc';
-import { parseISO, format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import * as Locales from 'date-fns/locale';
 
 import { useLocale } from './use-locale';

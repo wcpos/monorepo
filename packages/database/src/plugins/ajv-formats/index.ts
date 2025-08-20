@@ -2,16 +2,16 @@ import { _, Name } from 'ajv/dist/compile/codegen';
 
 import {
 	DefinedFormats,
+	fastFormats,
 	FormatMode,
 	FormatName,
 	formatNames,
-	fastFormats,
 	fullFormats,
 } from './formats';
 import formatLimit from './limit';
 
 import type Ajv from 'ajv';
-import type { Plugin, Format } from 'ajv';
+import type { Format, Plugin } from 'ajv';
 
 export type { FormatMode, FormatName } from './formats';
 export type { LimitFormatError } from './limit';

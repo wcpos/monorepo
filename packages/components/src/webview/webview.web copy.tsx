@@ -1,4 +1,5 @@
 import * as React from 'react';
+
 import Button from '../button';
 
 type WebViewProps = {
@@ -7,14 +8,12 @@ type WebViewProps = {
 	onMessage?: (event: MessageEvent) => void;
 	onLoad?: (event: React.SyntheticEvent<HTMLIFrameElement, Event>) => void;
 	onError?: (event: React.SyntheticEvent<HTMLIFrameElement, Event>) => void;
-	
 };
 
 const WebViewBase = (
 	{ src, title, onError, onMessage, onLoad }: WebViewProps,
 	ref: React.Ref<HTMLIFrameElement>
 ) => {
-	// eslint-disable-next-line consistent-return
 	// React.useEffect(() => {
 	// 	if (typeof onMessage === 'function') {
 	// 		window.addEventListener('message', onMessage);

@@ -4,8 +4,8 @@ import { View } from 'react-native';
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
-import { ButtonText, Button } from '@wcpos/components/button';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@wcpos/components/collapsible';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';

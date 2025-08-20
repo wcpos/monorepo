@@ -1,5 +1,5 @@
-import React, { Children, useMemo, type FunctionComponent, type PropsWithChildren } from 'react';
-import { View, type FlexStyle, type ViewProps } from 'react-native';
+import React, { Children, type FunctionComponent, type PropsWithChildren, useMemo } from 'react';
+import { type FlexStyle, View, type ViewProps } from 'react-native';
 
 import { useDraggableStack, type UseDraggableStackOptions } from '../hooks/useDraggableStack';
 

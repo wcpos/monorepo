@@ -24,8 +24,8 @@ export const VariableProductImage = ({
 	const source = useImageAttachment(product, imageURL);
 
 	return (
-		<Pressable onPress={() => row.toggleExpanded()} className="w-full h-20">
-			<Image source={source} recyclingKey={product.uuid} className="w-full h-full" />
+		<Pressable onPress={() => row.toggleExpanded()} className="h-20 w-full">
+			<Image source={source} recyclingKey={product.uuid} className="h-full w-full" />
 		</Pressable>
 	);
 };

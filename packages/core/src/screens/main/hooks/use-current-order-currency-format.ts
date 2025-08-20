@@ -1,6 +1,6 @@
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useCurrencyFormat, CurrencyFormatOptions } from './use-currency-format';
+import { CurrencyFormatOptions, useCurrencyFormat } from './use-currency-format';
 import { useCurrentOrder } from '../pos/contexts/current-order';
 
 /**

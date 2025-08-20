@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import isString from 'lodash/isString';
 import {
-	useObservableSuspense,
 	ObservableResource,
 	useObservableEagerState,
+	useObservableSuspense,
 } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -12,10 +12,10 @@ import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Select,
 	SelectContent,
-	SelectItem,
-	SelectPrimitiveTrigger,
 	SelectGroup,
+	SelectItem,
 	SelectLabel,
+	SelectPrimitiveTrigger,
 	SelectSeparator,
 } from '@wcpos/components/select';
 import type { OrderCollection, StoreDocument } from '@wcpos/database';

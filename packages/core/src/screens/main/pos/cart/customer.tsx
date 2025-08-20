@@ -7,9 +7,9 @@ import {
 	Dialog,
 	DialogBody,
 	DialogContent,
+	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-	DialogHeader,
 } from '@wcpos/components/dialog';
 
 import { EditCartCustomerForm } from './edit-cart-customer';

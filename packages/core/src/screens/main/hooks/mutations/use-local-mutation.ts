@@ -6,9 +6,9 @@ import set from 'lodash/set';
 
 import { Toast } from '@wcpos/components/toast';
 import type {
+	CustomerDocument,
 	OrderDocument,
 	ProductDocument,
-	CustomerDocument,
 	ProductVariationDocument,
 } from '@wcpos/database';
 import log from '@wcpos/utils/logger';

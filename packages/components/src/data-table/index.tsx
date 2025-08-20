@@ -1,23 +1,23 @@
 import * as React from 'react';
-import { ActivityIndicator, RefreshControl, LayoutChangeEvent } from 'react-native';
+import { ActivityIndicator, LayoutChangeEvent, RefreshControl } from 'react-native';
 
 import { FlashList } from '@shopify/flash-list';
 import {
 	ColumnDef,
+	ExpandedState,
 	flexRender,
 	getCoreRowModel,
-	useReactTable,
-	Row,
 	getExpandedRowModel,
-	ExpandedState,
+	Row,
+	useReactTable,
 } from '@tanstack/react-table';
 import { useFocusEffect } from 'expo-router';
 import { useObservableRef } from 'observable-hooks';
 import Animated, {
-	useSharedValue,
-	useAnimatedStyle,
 	FadeInUp,
 	FadeOutUp,
+	useAnimatedStyle,
+	useSharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 

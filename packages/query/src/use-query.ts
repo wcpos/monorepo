@@ -1,11 +1,11 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { map, filter } from 'rxjs/operators';
+import { filter, map } from 'rxjs/operators';
 
 import { useQueryManager } from './provider';
 
-import type { QueryParams, QueryHooks } from './query-state';
+import type { QueryHooks, QueryParams } from './query-state';
 
 export interface QueryOptions {
 	queryKeys: (string | number | object)[];

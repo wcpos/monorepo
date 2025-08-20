@@ -1,4 +1,4 @@
-import { useSubscription, useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
 import { Toast } from '@wcpos/components/toast';
 

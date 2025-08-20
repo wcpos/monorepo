@@ -2,7 +2,7 @@ import React from 'react';
 import { Platform } from 'react-native';
 
 import { format } from 'date-fns';
-import { Calendar as RNCalendar, LocaleConfig, CalendarProps } from 'react-native-calendars';
+import { CalendarProps, LocaleConfig, Calendar as RNCalendar } from 'react-native-calendars';
 
 import { Icon } from '../icon';
 import { updateLocaleConfig } from './locales';

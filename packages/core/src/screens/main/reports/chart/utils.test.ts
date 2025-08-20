@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 
 import type { OrderDocument } from '@wcpos/database';
 
-import { determineInterval, generateAllDates, aggregateData } from './utils';
+import { aggregateData, determineInterval, generateAllDates } from './utils';
 
 describe('Chart Utils', () => {
 	describe('determineInterval', () => {

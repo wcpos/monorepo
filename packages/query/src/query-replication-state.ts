@@ -1,7 +1,7 @@
 import intersection from 'lodash/intersection';
 import isEmpty from 'lodash/isEmpty';
-import { BehaviorSubject, Observable, Subscription, Subject, interval } from 'rxjs';
-import { filter, switchMap, startWith } from 'rxjs/operators';
+import { BehaviorSubject, interval, Observable, Subject, Subscription } from 'rxjs';
+import { filter, startWith, switchMap } from 'rxjs/operators';
 
 import { DataFetcher } from './data-fetcher';
 import { SubscribableBase } from './subscribable-base';

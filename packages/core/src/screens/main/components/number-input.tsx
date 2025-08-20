@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { Input } from '@wcpos/components/input';
 
-import { useNumberFormat, NumberFormatOptions } from '../hooks/use-number-format';
+import { NumberFormatOptions, useNumberFormat } from '../hooks/use-number-format';
 
 export interface NumberInputProps {
 	/**  */

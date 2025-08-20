@@ -4,11 +4,11 @@ import get from 'lodash/get';
 import isNil from 'lodash/isNil';
 
 import {
-	toNumericString,
+	applyThousandSeparator,
+	limitToScale,
 	roundToPrecision,
 	splitDecimal,
-	limitToScale,
-	applyThousandSeparator,
+	toNumericString,
 } from './format-number.helpers';
 import symbols from './symbols.json';
 import { Text } from '../text';
@@ -90,7 +90,7 @@ export const FormatNumber = ({
 		(numStr: string) => {
 			const hasDecimalSeparator =
 				numStr.indexOf('.') !== -1 || (decimalPrecision && fixedDecimalPrecision);
-			let { beforeDecimal, afterDecimal, addNegation } = splitDecimal(numStr, allowNegative); // eslint-disable-line prefer-const
+			let { beforeDecimal, afterDecimal, addNegation } = splitDecimal(numStr, allowNegative);
 
 			// apply decimal precision if its defined
 			if (decimalPrecision !== undefined) {

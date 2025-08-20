@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useRouter, Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 
 import {
 	AlertDialog,

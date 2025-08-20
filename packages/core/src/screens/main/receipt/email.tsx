@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/dialog';
-import { Form, FormInput, FormField, FormSwitch } from '@wcpos/components/form';
+import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 

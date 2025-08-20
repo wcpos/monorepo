@@ -19,27 +19,7 @@ export const unstable_settings = {
 	initialRouteName: '(drawer)',
 };
 
-export default function AppLayout() {
-	const { site } = useAppState();
-	const wpAPIURL = useObservableEagerState(site.wp_api_url$) as string;
-	const { collection: logCollection } = useCollection('logs');
-
-	setDatabase(logCollection);
-
-	if (!wpAPIURL) {
-		throw new Error('No WP API URL');
-	}
-
-	return (
-		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
-			<ExtraDataProvider>
-				<AppLayoutInner />
-			</ExtraDataProvider>
-		</OnlineStatusProvider>
-	);
-}
-
-function AppLayoutInner() {
+function AppStack() {
 	const { storeDB, fastStoreDB } = useAppState();
 	const { locale } = useLocale();
 
@@ -93,5 +73,24 @@ function AppLayoutInner() {
 			<Errors />
 			{/* TODO - we need a app-wide event bus to channel errors to the snackbar */}
 		</QueryProvider>
+	);
+}
+
+export default function AppLayout() {
+	const { site } = useAppState();
+	const wpAPIURL = useObservableEagerState(site.wp_api_url$) as string;
+	const { collection: logCollection } = useCollection('logs');
+	setDatabase(logCollection);
+
+	if (!wpAPIURL) {
+		throw new Error('No WP API URL');
+	}
+
+	return (
+		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
+			<ExtraDataProvider>
+				<AppStack />
+			</ExtraDataProvider>
+		</OnlineStatusProvider>
 	);
 }

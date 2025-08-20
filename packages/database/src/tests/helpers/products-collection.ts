@@ -1,7 +1,7 @@
-import { createRxDatabase, RxStorage, RxCollection, randomCouchString } from 'rxdb';
+import { createRxDatabase, randomCouchString, RxCollection, RxStorage } from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { productDefaultSchema, generateProduct } from './product-schemas';
+import { generateProduct, productDefaultSchema } from './product-schemas';
 
 export async function create(
 	size: number = 20,

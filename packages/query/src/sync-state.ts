@@ -1,4 +1,4 @@
-import type { SyncCollection, StoreCollection } from '@wcpos/database';
+import type { StoreCollection, SyncCollection } from '@wcpos/database';
 
 import type { Logger } from './logger';
 import type { RxDocument } from 'rxdb';

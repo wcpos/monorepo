@@ -35,7 +35,7 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
 	 */
 	return (
-		<HStack className="p-2 bg-input">
+		<HStack className="bg-input p-2">
 			<HStack className="flex-1">
 				{!!searchTerm && (
 					<ButtonPill

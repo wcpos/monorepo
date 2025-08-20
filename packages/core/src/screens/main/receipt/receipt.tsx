@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useNavigationState } from '@react-navigation/native';
 import get from 'lodash/get';
-import { useObservableSuspense, ObservableResource, useObservableState } from 'observable-hooks';
+import { ObservableResource, useObservableState, useObservableSuspense } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { map } from 'rxjs/operators';
 
@@ -17,13 +17,13 @@ import {
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import {
 	Modal,
-	ModalContent,
-	ModalFooter,
-	ModalTitle,
+	ModalAction,
 	ModalBody,
 	ModalClose,
+	ModalContent,
+	ModalFooter,
 	ModalHeader,
-	ModalAction,
+	ModalTitle,
 } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { WebView } from '@wcpos/components/webview';

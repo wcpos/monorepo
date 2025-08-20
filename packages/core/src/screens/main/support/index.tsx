@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Dimensions } from 'react-native';
+import { Dimensions, View } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, StyleSheet, View, ScrollView, type GestureResponderEvent } from 'react-native';
+import { type GestureResponderEvent, Platform, ScrollView, StyleSheet, View } from 'react-native';
 
 import * as Slot from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';

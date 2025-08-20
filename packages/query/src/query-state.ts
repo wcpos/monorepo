@@ -6,18 +6,18 @@ import isEqual from 'lodash/isEqual';
 import pick from 'lodash/pick';
 import set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
-import { Subject, BehaviorSubject, ReplaySubject, from } from 'rxjs';
-import { map, switchMap, distinctUntilChanged, startWith } from 'rxjs/operators';
+import { BehaviorSubject, from, ReplaySubject, Subject } from 'rxjs';
+import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 
 import { SubscribableBase } from './subscribable-base';
 
 import type {
+	MangoQuery,
+	MangoQuerySelector,
+	MangoQuerySortPart,
 	RxCollection,
 	RxDocument,
-	MangoQuery,
 	RxQuery,
-	MangoQuerySortPart,
-	MangoQuerySelector,
 } from 'rxdb';
 
 type DocumentType<C> = C extends RxCollection<infer D> ? RxDocument<D, object> : never;
@@ -225,7 +225,7 @@ export class Query<T extends RxCollection>
 					distinctUntilChanged((prev, next) => {
 						const idsAreEqual = isEqual(
 							prev.hits.map((hit) => hit.id),
-							next.hits.map((hit) => hit.id),
+							next.hits.map((hit) => hit.id)
 						);
 						let childrenAreEqual = true;
 						if (idsAreEqual && next.searchActive) {
@@ -239,11 +239,11 @@ export class Query<T extends RxCollection>
 							});
 						}
 						return idsAreEqual && childrenAreEqual;
-					}),
+					})
 				)
 				.subscribe((result) => {
 					this.subjects.result.next(result);
-				}),
+				})
 		);
 	}
 
@@ -300,9 +300,9 @@ export class Query<T extends RxCollection>
 								document: doc,
 							})),
 						};
-					}),
+					})
 				);
-			}),
+			})
 		);
 	}
 
@@ -485,9 +485,9 @@ export class Query<T extends RxCollection>
 						// I don't know if this is the best way
 						searchInstance.collection.$.pipe(
 							startWith(null),
-							switchMap(() => searchInstance.find(searchTerm)),
-						),
-					),
+							switchMap(() => searchInstance.find(searchTerm))
+						)
+					)
 				)
 				.subscribe((results: DocumentType<T>[]) => {
 					const uuids = results.map((result) => result[this.primaryKey]);
@@ -499,7 +499,7 @@ export class Query<T extends RxCollection>
 						searchTerm,
 					};
 					this.exec();
-				}),
+				})
 		);
 	}
 	debouncedSearch = debounce(this.search, 250);
@@ -532,7 +532,7 @@ export class Query<T extends RxCollection>
 						(orClause) =>
 							orClause[field] ||
 							get(orClause, [field, '$elemMatch']) ||
-							get(orClause, [field, '$not', '$elemMatch']),
+							get(orClause, [field, '$not', '$elemMatch'])
 					);
 					return !hasField;
 				}
@@ -620,7 +620,7 @@ export class Query<T extends RxCollection>
 
 		// Check if `$elemMatch` condition already exists in `$and`
 		const existingCondition = andConditions.find((cond) =>
-			isEqual(get(cond, [path, '$elemMatch']), criteria),
+			isEqual(get(cond, [path, '$elemMatch']), criteria)
 		);
 
 		if (!existingCondition) {
@@ -708,7 +708,7 @@ export class Query<T extends RxCollection>
 					return elemMatch && isEqual(pick(elemMatch, ['id', 'name']), match);
 				});
 				return !matchesAttribute;
-			}),
+			})
 		);
 
 		// If $and array is empty, create a new selector without it
@@ -803,7 +803,7 @@ export class Query<T extends RxCollection>
 				}
 				return matches;
 			},
-			[],
+			[]
 		);
 
 		this._variationMatchesCache.set(this.currentRxQuery, matches);

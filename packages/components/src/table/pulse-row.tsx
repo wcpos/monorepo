@@ -3,12 +3,12 @@ import * as React from 'react';
 import { useAugmentedRef } from '@rn-primitives/hooks';
 import { Row, Table } from '@tanstack/react-table';
 import Animated, {
-	useSharedValue,
-	useAnimatedStyle,
-	withTiming,
-	withSequence,
 	cancelAnimation,
 	runOnJS,
+	useAnimatedStyle,
+	useSharedValue,
+	withSequence,
+	withTiming,
 } from 'react-native-reanimated';
 
 import { cn } from '../lib/utils';

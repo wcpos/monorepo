@@ -1,9 +1,9 @@
 import * as React from 'react';
 import {
-	TextInput as RNTextInput,
-	View,
 	NativeSyntheticEvent,
+	TextInput as RNTextInput,
 	TextInputKeyPressEventData,
+	View,
 } from 'react-native';
 
 import { useAugmentedRef } from '@rn-primitives/hooks';

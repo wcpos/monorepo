@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View, type GestureResponderEvent } from 'react-native';
+import { type GestureResponderEvent, Pressable, View } from 'react-native';
 
 import * as Collapsible from '@radix-ui/react-collapsible';
 import { useAugmentedRef, useControllableState } from '@rn-primitives/hooks';

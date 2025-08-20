@@ -2,10 +2,10 @@ import { RxPlugin } from 'rxdb';
 import { Subject } from 'rxjs';
 
 import {
-	storeCollections,
-	syncCollections,
 	StoreCollections,
+	storeCollections,
 	SyncCollections,
+	syncCollections,
 } from '../collections';
 
 type CollectionKey = keyof typeof storeCollections;

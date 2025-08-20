@@ -12,8 +12,8 @@ import {
 	Form,
 	FormField,
 	FormInput,
-	FormSelect,
 	FormRadioGroup,
+	FormSelect,
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';

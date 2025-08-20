@@ -12,21 +12,21 @@
  * @returns {any} - A proxy representing the remote storage adapter.
  */
 export function createRemoteStorageProxy(prefix = '') {
-    if (typeof window === 'undefined' || !window.ipcRenderer) {
-      throw new Error(
-        "Remote storage proxy can only be created in the renderer with ipcRenderer exposed"
-      );
-    }
-    return new Proxy(() => {}, {
-      get(target, prop) {
-        const newPrefix = prefix ? `${prefix}.${String(prop)}` : String(prop);
-        return createRemoteStorageProxy(newPrefix);
-      },
-      async apply(target, thisArg, args) {
-        return await window.ipcRenderer.invoke('rxStorage', {
-          methodPath: prefix,
-          args,
-        });
-      },
-    });
-  }
+	if (typeof window === 'undefined' || !window.ipcRenderer) {
+		throw new Error(
+			'Remote storage proxy can only be created in the renderer with ipcRenderer exposed'
+		);
+	}
+	return new Proxy(() => {}, {
+		get(target, prop) {
+			const newPrefix = prefix ? `${prefix}.${String(prop)}` : String(prop);
+			return createRemoteStorageProxy(newPrefix);
+		},
+		async apply(target, thisArg, args) {
+			return await window.ipcRenderer.invoke('rxStorage', {
+				methodPath: prefix,
+				args,
+			});
+		},
+	});
+}

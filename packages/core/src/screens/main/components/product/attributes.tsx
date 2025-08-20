@@ -31,7 +31,7 @@ export const PlainAttributes = ({ row }: CellContext<{ document: ProductDocument
 				.filter((attr: any) => !attr.variation)
 				.map((attr: any, index: number) => (
 					<HStack key={index} className="flex-wrap gap-0">
-						<Text className="text-xs text-muted-foreground" decodeHtml>{`${attr.name}: `}</Text>
+						<Text className="text-muted-foreground text-xs" decodeHtml>{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
 							<Text className="text-xs" key={index} decodeHtml>
 								{option}
@@ -150,11 +150,11 @@ export const ProductAttributes = ({ row, table }) => {
 				.filter((attr: any) => attr.variation)
 				.map((attr: any, index: number) => (
 					<HStack key={index} className="flex-wrap gap-0">
-						<Text className="text-xs text-muted-foreground" decodeHtml>{`${attr.name}: `}</Text>
+						<Text className="text-muted-foreground text-xs" decodeHtml>{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
 							<React.Fragment key={index}>
 								<Text
-									className="text-xs text-primary"
+									className="text-primary text-xs"
 									variant="link"
 									onPress={() => handleSelect(attr, option)}
 									decodeHtml
@@ -166,7 +166,7 @@ export const ProductAttributes = ({ row, table }) => {
 						))}
 					</HStack>
 				))}
-			<Text className="text-xs text-primary" variant="link" onPress={handleExpand}>
+			<Text className="text-primary text-xs" variant="link" onPress={handleExpand}>
 				{expandText}
 			</Text>
 		</VStack>

@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { UISettingsContext } from './provider';
-import { UISettingID, UISettingState, UISettingSchema } from './utils';
+import { UISettingID, UISettingSchema, UISettingState } from './utils';
 
 /**
  *

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, View, ViewProps, Platform } from 'react-native';
+import { Platform, Pressable, View, ViewProps } from 'react-native';
 import type { PressableStateCallbackType } from 'react-native';
 
 import { cva } from 'class-variance-authority';

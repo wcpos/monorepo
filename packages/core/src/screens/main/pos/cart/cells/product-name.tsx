@@ -63,7 +63,7 @@ export const ProductName = ({ row, column }: CellContext<Props, 'name'>) => {
 					{metaData.map((meta: any) => (
 						<HStack key={meta.id || meta.key || meta.display_key} className="flex-wrap gap-0">
 							<Text
-								className="text-xs text-muted-foreground"
+								className="text-muted-foreground text-xs"
 								decodeHtml
 							>{`${meta.display_key || meta.key}: `}</Text>
 							<Text className="text-xs" decodeHtml>

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState, useObservable } from 'observable-hooks';
+import { useObservable, useObservableState } from 'observable-hooks';
 import { combineLatest, of } from 'rxjs';
 import { filter, map, switchMap } from 'rxjs/operators';
 

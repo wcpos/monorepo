@@ -32,7 +32,7 @@ export type UseDroppableOptions = { id: UniqueIdentifier; data?: Data; disabled?
 export const useDroppable = ({ id, data = {}, disabled = false }: UseDroppableOptions) => {
 	const { droppableLayouts, droppableOptions, droppableActiveId, containerRef, panGestureState } =
 		useDndContext();
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 	const [node, setNodeRef] = useNodeRef<NativeElement, any>();
 	//            ^?
 	// eslint-disable-next-line react-hooks/rules-of-hooks

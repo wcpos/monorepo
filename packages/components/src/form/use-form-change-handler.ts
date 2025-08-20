@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { UseFormReturn, FieldValues } from 'react-hook-form';
+import { FieldValues, UseFormReturn } from 'react-hook-form';
 
 interface UseFormChangeHandlerOptions<T extends FieldValues> {
 	form: UseFormReturn<T>;

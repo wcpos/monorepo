@@ -1,23 +1,23 @@
 import { ProductDocument } from '@wcpos/database';
 
 import {
-	sanitizePrice,
-	getUuidFromLineItemMetaData,
-	getTaxStatusFromMetaData,
-	getMetaDataValueByKey,
-	getUuidFromLineItem,
-	findByMetaDataUUID,
-	findByProductVariationID,
-	transformCustomerJSONToOrderJSON,
+	calculateDefaultAmount,
 	convertProductToLineItemWithoutTax,
 	convertVariationToLineItemWithoutTax,
-	updatePosDataMeta,
-	parsePosData,
-	extractLineItemPrices,
-	extractLineItemData,
 	extractFeeLineData,
-	calculateDefaultAmount,
+	extractLineItemData,
+	extractLineItemPrices,
 	extractShippingLineData,
+	findByMetaDataUUID,
+	findByProductVariationID,
+	getMetaDataValueByKey,
+	getTaxStatusFromMetaData,
+	getUuidFromLineItem,
+	getUuidFromLineItemMetaData,
+	parsePosData,
+	sanitizePrice,
+	transformCustomerJSONToOrderJSON,
+	updatePosDataMeta,
 } from './utils';
 
 describe('Utilities', () => {

@@ -2,11 +2,11 @@ import * as React from 'react';
 
 import {
 	Dialog,
-	DialogTrigger,
+	DialogBody,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-	DialogBody,
+	DialogTrigger,
 } from '@wcpos/components/dialog';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';

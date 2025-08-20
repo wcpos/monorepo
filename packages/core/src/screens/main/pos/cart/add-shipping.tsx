@@ -12,9 +12,9 @@ import {
 	Form,
 	FormField,
 	FormInput,
-	FormSwitch,
 	FormRadioGroup,
 	FormSelect,
+	FormSwitch,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';

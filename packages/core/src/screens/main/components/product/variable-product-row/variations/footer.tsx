@@ -41,7 +41,7 @@ export const VariationTableFooter = ({ query, parent, count }) => {
 	const t = useT();
 
 	return (
-		<HStack space="xs" className="p-2 justify-end border-border border-b bg-muted">
+		<HStack space="xs" className="border-border bg-muted justify-end border-b p-2">
 			<Text className="text-xs">
 				{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
 			</Text>

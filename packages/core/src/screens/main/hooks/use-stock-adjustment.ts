@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useQueryManager, CollectionReplicationState } from '@wcpos/query';
+import { CollectionReplicationState, useQueryManager } from '@wcpos/query';
 
 import { useCollection } from './use-collection';
 

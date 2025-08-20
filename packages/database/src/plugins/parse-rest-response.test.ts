@@ -1,6 +1,6 @@
 import { RxJsonSchema } from 'rxdb';
 
-import { pruneProperties, coerceData, parseRestResponse } from './parse-rest-response';
+import { coerceData, parseRestResponse, pruneProperties } from './parse-rest-response';
 
 describe('pruneProperties', () => {
 	const schema = {

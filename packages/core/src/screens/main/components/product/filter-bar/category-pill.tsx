@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
-import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import { Combobox, ComboboxTrigger, ComboboxContent } from '@wcpos/components/combobox';
+import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
 import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';

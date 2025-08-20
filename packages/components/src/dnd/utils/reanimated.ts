@@ -1,10 +1,10 @@
 import { LayoutRectangle } from 'react-native';
 
 import {
-	SharedValue,
-	withSpring,
 	type AnimatableValue,
 	type AnimationCallback,
+	SharedValue,
+	withSpring,
 	type WithSpringConfig,
 } from 'react-native-reanimated';
 

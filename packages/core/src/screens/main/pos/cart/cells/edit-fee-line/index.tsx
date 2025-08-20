@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/components/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { Tree } from '@wcpos/components/tree';
 

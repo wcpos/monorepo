@@ -6,7 +6,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import { MetaData } from './meta-data';
-import { ProductAttributes, PlainAttributes } from '../../../components/product/attributes';
+import { PlainAttributes, ProductAttributes } from '../../../components/product/attributes';
 import { ProductCategories } from '../../../components/product/categories';
 import GroupedNames from '../../../components/product/grouped-names';
 import { ProductTags } from '../../../components/product/tags';

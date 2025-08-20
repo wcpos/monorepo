@@ -5,7 +5,7 @@ import { HStack } from '../hstack';
 import { Icon } from '../icon';
 import { IconButton } from '../icon-button';
 import { Text } from '../text';
-import { Tooltip, TooltipTrigger, TooltipContent } from '../tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../tooltip';
 import { VStack } from '../vstack';
 
 import type { FallbackProps } from 'react-error-boundary';

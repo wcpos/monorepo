@@ -1,4 +1,4 @@
-import { Subscription, Subject } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 
 export class SubscribableBase {
 	public isCanceled = false;

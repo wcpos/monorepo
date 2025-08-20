@@ -4,14 +4,14 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import {
 	Combobox,
-	ComboboxTrigger,
 	ComboboxContent,
-	ComboboxValue,
-	ComboboxInput,
 	ComboboxEmpty,
-	ComboboxList,
+	ComboboxInput,
 	ComboboxItem,
 	ComboboxItemText,
+	ComboboxList,
+	ComboboxTrigger,
+	ComboboxValue,
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
