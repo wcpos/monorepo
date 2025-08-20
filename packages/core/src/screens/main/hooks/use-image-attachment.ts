@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { isRxDocument } from 'rxdb';
-import { Blob } from 'expo-blob';
 
 import useHttpClient from '@wcpos/hooks/use-http-client';
 

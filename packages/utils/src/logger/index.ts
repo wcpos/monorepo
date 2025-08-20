@@ -68,7 +68,9 @@ const mainTransport = (props: any) => {
 					? console.info
 					: console.log;
 
-	consoleMethod(`${timestamp} | ${levelText} : ${message}`);
+	// Include context in console output if available
+	const contextStr = options.context ? ` | Context: ${JSON.stringify(options.context)}` : '';
+	consoleMethod(`${timestamp} | ${levelText} : ${message}${contextStr}`);
 
 	// 2. Show toast if available and requested
 	if (options.showToast && toastShow) {
