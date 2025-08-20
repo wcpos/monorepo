@@ -158,6 +158,9 @@ importers:
       expo-dev-client:
         specifier: ~6.0.3
         version: 6.0.3(expo@54.0.0-preview.4)
+      expo-file-system:
+        specifier: ~19.0.3
+        version: 19.0.3(expo@54.0.0-preview.4)(react-native@0.81.0(@babel/core@7.28.3)(@react-native/metro-config@0.81.0(@babel/core@7.28.3))(@types/react@19.1.10)(react@19.1.1))
       expo-haptics:
         specifier: ~15.0.2
         version: 15.0.2(expo@54.0.0-preview.4)
@@ -1463,8 +1466,8 @@ packages:
     resolution: {integrity: sha512-F+nKc0xW+kVbBRhFzaMgPy3KwmuNTYX1fx6+FxxoSnNgwYX6LD7AKBTWkU0MQ6IBoe7dz069CNkR673sPAgkCQ==}
     engines: {node: '>=14'}
 
-  '@electron/node-gyp@git+https://git@github.com:electron/node-gyp.git#06b29aafb7708acef8b3669835c8a7857ebc92d2':
-    resolution: {commit: 06b29aafb7708acef8b3669835c8a7857ebc92d2, repo: git@github.com:electron/node-gyp.git, type: git}
+  '@electron/node-gyp@https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2':
+    resolution: {tarball: https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2}
     version: 10.2.0-electron.1
     engines: {node: '>=12.13.0'}
     hasBin: true
@@ -6289,6 +6292,12 @@ packages:
     resolution: {integrity: sha512-sRjQ9O4p+yV0q0cB/FsQCco27my0ZNBWX3y3HgzOdFxEkXPRXYA1tN1k5r2MRykfnnMLtxlixijNRXMT/LdDTQ==}
     peerDependencies:
       expo: 54.0.0-preview.4
+
+  expo-file-system@19.0.3:
+    resolution: {integrity: sha512-CW1uBU0xVwoi/pluyt32E++Zn2TNVkBaR0m+T6jZwUTmGKqxodwtGlfcdu6wr9hM0b5FSTBdY8NtHZuabIrdnA==}
+    peerDependencies:
+      expo: 54.0.0-preview.4
+      react-native: 0.81.0
 
   expo-font@14.0.2:
     resolution: {integrity: sha512-gye8kWjfny434LzQ1tXVlDkECXBP9aUl3R1cQIvtZ+QLckFMLZiUOj4V7J1Ei5PNz/JL4iYCocFUBZj0cH3kug==}
@@ -11960,7 +11969,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@electron/node-gyp@git+https://git@github.com:electron/node-gyp.git#06b29aafb7708acef8b3669835c8a7857ebc92d2':
+  '@electron/node-gyp@https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2':
     dependencies:
       env-paths: 2.2.1
       exponential-backoff: 3.1.2
@@ -12023,7 +12032,7 @@ snapshots:
 
   '@electron/rebuild@3.7.2':
     dependencies:
-      '@electron/node-gyp': git+https://git@github.com:electron/node-gyp.git#06b29aafb7708acef8b3669835c8a7857ebc92d2
+      '@electron/node-gyp': https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2
       '@malept/cross-spawn-promise': 2.0.0
       chalk: 4.1.2
       debug: 4.4.1
@@ -18309,6 +18318,11 @@ snapshots:
     dependencies:
       expo: 54.0.0-preview.4(@babel/core@7.28.3)(@expo/metro-runtime@6.1.0)(expo-router@6.0.0-beta.4)(graphql@15.10.1)(react-native-webview@13.15.0(react-native@0.81.0(@babel/core@7.28.3)(@react-native/metro-config@0.81.0(@babel/core@7.28.3))(@types/react@19.1.10)(react@19.1.1))(react@19.1.1))(react-native@0.81.0(@babel/core@7.28.3)(@react-native/metro-config@0.81.0(@babel/core@7.28.3))(@types/react@19.1.10)(react@19.1.1))(react@19.1.1)
       expo-dev-menu-interface: 2.0.0(expo@54.0.0-preview.4)
+
+  expo-file-system@19.0.3(expo@54.0.0-preview.4)(react-native@0.81.0(@babel/core@7.28.3)(@react-native/metro-config@0.81.0(@babel/core@7.28.3))(@types/react@19.1.10)(react@19.1.1)):
+    dependencies:
+      expo: 54.0.0-preview.4(@babel/core@7.28.3)(@expo/metro-runtime@6.1.0)(expo-router@6.0.0-beta.4)(graphql@15.10.1)(react-native-webview@13.15.0(react-native@0.81.0(@babel/core@7.28.3)(@react-native/metro-config@0.81.0(@babel/core@7.28.3))(@types/react@19.1.10)(react@19.1.1))(react@19.1.1))(react-native@0.81.0(@babel/core@7.28.3)(@react-native/metro-config@0.81.0(@babel/core@7.28.3))(@types/react@19.1.10)(react@19.1.1))(react@19.1.1)
+      react-native: 0.81.0(@babel/core@7.28.3)(@react-native/metro-config@0.81.0(@babel/core@7.28.3))(@types/react@19.1.10)(react@19.1.1)
 
   expo-font@14.0.2(expo@54.0.0-preview.4)(react-native@0.81.0(@babel/core@7.28.3)(@react-native/metro-config@0.81.0(@babel/core@7.28.3))(@types/react@19.1.10)(react@19.1.1))(react@19.1.1):
     dependencies:
