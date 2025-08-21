@@ -22,7 +22,7 @@
     "expo-sqlite": "~16.0.3"
   },
   "dependencies": {
-    "expo-file-system": "~19.0.3",
+    "expo-file-system": "~19.0.4",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.4",

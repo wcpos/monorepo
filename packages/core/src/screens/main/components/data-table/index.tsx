@@ -44,6 +44,15 @@ interface Props {
 	getItemType?: (row: any) => string;
 }
 
+/**
+ * React Compiler breaks tanstack/react-table
+ * https://github.com/facebook/react/issues/33057
+ */
+function useReactTableWrapper(...args) {
+	'use no memo';
+	return { ...useReactTable(...args) };
+}
+
 function DataTable<TData>({
 	id,
 	query,
@@ -89,7 +98,7 @@ function DataTable<TData>({
 		[query]
 	);
 
-	const table = useReactTable<TData>({
+	const table = useReactTableWrapper({
 		columns,
 		data: deferredResult.hits,
 		getRowId: (row: { id: string; document: TData }) => row.id,

@@ -4,8 +4,25 @@ import { View } from 'react-native';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { ItemContext, RootContext, useItemContext, useRootContext } from './utils/contexts';
+import { useOnEndReached } from './utils/use-on-end-reached';
 
-import type { BaseItemContext, ItemProps, ListProps, RootProps } from './types';
+import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } from './types';
+
+// Web-specific extended context that includes virtualizer data
+interface WebItemContext<T> extends BaseItemContext<T> {
+	rowVirtualizer: any;
+	vItem: any;
+	horizontal: boolean;
+}
+
+/**
+ * React Compiler breaks @tanstack/react-virtual
+ * https://github.com/TanStack/virtual/issues/736
+ */
+function useVirtualWrapper(...args) {
+	'use no memo';
+	return { ...useVirtualizer(...args) };
+}
 
 function Root({ style, ...props }: RootProps) {
 	const parentRef = React.useRef<HTMLDivElement>(null);
@@ -42,7 +59,7 @@ function List<T>({
 	const { scrollElement } = useRootContext();
 
 	// set up virtualizer
-	const rowVirtualizer = useVirtualizer({
+	const rowVirtualizer = useVirtualWrapper({
 		count: data.length,
 		getScrollElement: () => scrollElement,
 		horizontal,
@@ -63,35 +80,15 @@ function List<T>({
 		[rowVirtualizer]
 	);
 
-	// fire onEndReached when within threshold of end
-	const endReachedRef = React.useRef(false);
-	React.useEffect(() => {
-		if (!scrollElement || typeof onEndReached !== 'function') return;
-
-		const container = scrollElement;
-		const handleScroll = () => {
-			const offset = horizontal ? container.scrollLeft : container.scrollTop;
-			const viewSize = horizontal ? container.clientWidth : container.clientHeight;
-			const fullSize = horizontal ? container.scrollWidth : container.scrollHeight;
-
-			const distanceFromEnd = fullSize - (offset + viewSize);
-
-			// when within threshold → fire once
-			if (distanceFromEnd <= viewSize * onEndReachedThreshold) {
-				if (!endReachedRef.current) {
-					onEndReached();
-					endReachedRef.current = true;
-				}
-			} else {
-				// reset when scrolled away
-				endReachedRef.current = false;
-			}
-		};
-
-		container.addEventListener('scroll', handleScroll);
-		handleScroll();
-		return () => container.removeEventListener('scroll', handleScroll);
-	}, [scrollElement, horizontal, onEndReached, onEndReachedThreshold]);
+	// Handle onEndReached logic
+	useOnEndReached({
+		scrollElement,
+		horizontal,
+		onEndReached,
+		onEndReachedThreshold,
+		data,
+		getTotalSize: () => rowVirtualizer.getTotalSize(),
+	});
 
 	// empty state
 	if (data.length === 0) {
@@ -129,7 +126,7 @@ function List<T>({
 					<ItemContext.Provider
 						key={key}
 						value={
-							{ item, index: vItem.index, rowVirtualizer, vItem, horizontal } as BaseItemContext<T>
+							{ item, index: vItem.index, rowVirtualizer, vItem, horizontal } as WebItemContext<T>
 						}
 					>
 						{renderItem({ item, index: vItem.index, target: 'Cell' })}
