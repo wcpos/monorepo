@@ -38,6 +38,10 @@
             "hide": false
           },
           {
+            "key": "brands",
+            "hide": false
+          },
+          {
             "key": "attributes",
             "show": false
           },
@@ -237,6 +241,11 @@
       },
       {
         "key": "tags",
+        "disableSort": true,
+        "show": false
+      },
+      {
+        "key": "brands",
         "disableSort": true,
         "show": false
       },

@@ -16,6 +16,7 @@ import { StockStatusPill } from './stock-status-pill';
 import { TagPill } from './tag-pill';
 import usePullDocument from '../../../contexts/use-pull-document';
 import { useCollection } from '../../../hooks/use-collection';
+import { BrandsPill } from './brands-pill';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 
@@ -27,14 +28,18 @@ interface Props {
  *
  */
 const FilterBar = ({ query }: Props) => {
+	const pullDocument = usePullDocument();
 	const { collection: categoryCollection } = useCollection('products/categories');
 	const { collection: tagCollection } = useCollection('products/tags');
-	const pullDocument = usePullDocument();
+	const { collection: brandCollection } = useCollection('products/brands');
 	const selectedCategoryID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getElemMatchId('categories')))
 	);
 	const selectedTagID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getElemMatchId('tags')))
+	);
+	const selectedBrandID = useObservableEagerState(
+		query.rxQuery$.pipe(map(() => query.getElemMatchId('brands')))
 	);
 
 	const selectedCategory$ = useObservable(
@@ -85,6 +90,30 @@ const FilterBar = ({ query }: Props) => {
 		[selectedTag$]
 	);
 
+	const selectedBrand$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(([id]) => {
+					if (!id) {
+						return of(undefined);
+					}
+					return brandCollection.findOne({ selector: { id } }).$.pipe(
+						tap((doc) => {
+							if (!isRxDocument(doc)) {
+								pullDocument(id, brandCollection);
+							}
+						})
+					);
+				})
+			),
+		[selectedBrandID]
+	);
+
+	const selectedBrandResource = React.useMemo(
+		() => new ObservableResource(selectedBrand$),
+		[selectedBrand$]
+	);
+
 	/**
 	 *
 	 */
@@ -102,6 +131,9 @@ const FilterBar = ({ query }: Props) => {
 			</Suspense>
 			<Suspense>
 				<TagPill query={query} resource={selectedTagResource} selectedID={selectedTagID} />
+			</Suspense>
+			<Suspense>
+				<BrandsPill query={query} resource={selectedBrandResource} selectedID={selectedBrandID} />
 			</Suspense>
 		</HStack>
 	);

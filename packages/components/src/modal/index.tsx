@@ -14,8 +14,7 @@ import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
-import type { ButtonProps } from '../button';
-import type { PressableRef, SlottableTextProps, TextRef } from '@rn-primitives/types';
+import type { SlottablePressableProps, SlottableTextProps } from '@rn-primitives/types';
 
 interface ModalContextProps {
 	onClose: (open: boolean) => void;
@@ -39,56 +38,43 @@ const Modal = ({ children, onClose }: { children: React.ReactNode; onClose?: () 
 	);
 };
 
-const ModalClose = React.forwardRef<PressableRef, ButtonProps>(
-	({ asChild, disabled, ...props }, ref) => {
-		const { onClose } = useRootContext();
+function ModalClose({ asChild, disabled, ...props }: SlottablePressableProps) {
+	const { onClose } = useRootContext();
 
-		function onPress(ev: GestureResponderEvent) {
-			if (props?.onPress) {
-				props.onPress(ev);
-			}
-			onClose(false);
+	function onPress(ev: GestureResponderEvent) {
+		if (props?.onPress) {
+			props.onPress(ev);
 		}
-
-		const Component = asChild ? Slot.Pressable : Button;
-
-		return (
-			<Component
-				ref={ref}
-				aria-disabled={disabled ?? undefined}
-				disabled={disabled ?? undefined}
-				onPress={onPress}
-				variant="outline"
-				{...props}
-			/>
-		);
+		onClose(false);
 	}
-);
 
-ModalClose.displayName = 'ModalClose';
+	const Component = asChild ? Slot.Pressable : Button;
 
-const ModalAction = React.forwardRef<PressableRef, ButtonProps>(
-	({ asChild, disabled, ...props }, ref) => {
-		const Component = asChild ? Slot.Pressable : Button;
+	return (
+		<Component
+			aria-disabled={disabled ?? undefined}
+			disabled={disabled ?? undefined}
+			onPress={onPress}
+			variant="outline"
+			{...props}
+		/>
+	);
+}
 
-		return (
-			<Component
-				ref={ref}
-				role="button"
-				aria-disabled={disabled ?? undefined}
-				disabled={disabled ?? undefined}
-				{...props}
-			/>
-		);
-	}
-);
+function ModalAction({ asChild, disabled, ...props }: SlottablePressableProps) {
+	const Component = asChild ? Slot.Pressable : Button;
 
-ModalAction.displayName = 'ModalAction';
+	return (
+		<Component
+			role="button"
+			aria-disabled={disabled ?? undefined}
+			disabled={disabled ?? undefined}
+			{...props}
+		/>
+	);
+}
 
-const ModalOverlayWeb = React.forwardRef<
-	React.ElementRef<typeof View>,
-	React.ComponentPropsWithoutRef<typeof View>
->(({ className, ...props }, ref) => {
+function ModalOverlayWeb({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) {
 	return (
 		<View
 			className={cn(
@@ -98,17 +84,15 @@ const ModalOverlayWeb = React.forwardRef<
 				className
 			)}
 			{...props}
-			ref={ref}
 		/>
 	);
-});
+}
 
-ModalOverlayWeb.displayName = 'ModalOverlayWeb';
-
-const ModalOverlayNative = React.forwardRef<
-	React.ElementRef<typeof View>,
-	React.ComponentPropsWithoutRef<typeof View>
->(({ className, children, ...props }, ref) => {
+function ModalOverlayNative({
+	className,
+	children,
+	...props
+}: React.ComponentPropsWithoutRef<typeof View>) {
 	const insets = useSafeAreaInsets();
 
 	return (
@@ -120,7 +104,6 @@ const ModalOverlayNative = React.forwardRef<
 				className
 			)}
 			{...props}
-			ref={ref}
 		>
 			<KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={insets.bottom}>
 				<Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
@@ -129,9 +112,7 @@ const ModalOverlayNative = React.forwardRef<
 			</KeyboardAvoidingView>
 		</View>
 	);
-});
-
-ModalOverlayNative.displayName = 'ModalOverlayNative';
+}
 
 const ModalOverlay = Platform.select({
 	web: ModalOverlayWeb,
@@ -157,14 +138,15 @@ const modalContentVariants = cva(
 	}
 );
 
-const ModalContent = React.forwardRef<
-	React.ElementRef<typeof View>,
-	React.ComponentPropsWithoutRef<typeof View> & VariantProps<typeof modalContentVariants>
->(({ className, size, children, ...props }, ref) => {
+function ModalContent({
+	className,
+	size,
+	children,
+	...props
+}: React.ComponentPropsWithoutRef<typeof View> & VariantProps<typeof modalContentVariants>) {
 	return (
 		<ModalOverlay>
 			<View
-				ref={ref}
 				className={cn(
 					modalContentVariants({ size }),
 					'web:cursor-default web:duration-200 border-border bg-background z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg',
@@ -182,49 +164,48 @@ const ModalContent = React.forwardRef<
 			</View>
 		</ModalOverlay>
 	);
-});
-ModalContent.displayName = 'ModalContent';
+}
 
 /**
  * NOTE: extra space on right for the close button
  */
-const ModalHeader = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
-	<View
-		className={cn('flex flex-col gap-1.5 pl-4 pr-8 text-center sm:text-left', className)}
-		{...props}
-	/>
-);
-ModalHeader.displayName = 'ModalHeader';
+function ModalHeader({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) {
+	return (
+		<View
+			className={cn('flex flex-col gap-1.5 pl-4 pr-8 text-center sm:text-left', className)}
+			{...props}
+		/>
+	);
+}
 
-const ModalBody = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof ScrollView>) => (
-	<ScrollView
-		horizontal={false}
-		className={cn('flex flex-col gap-2 px-4 py-1', className)}
-		{...props}
-	/>
-);
-ModalBody.displayName = 'ModalBody';
+function ModalBody({ className, ...props }: React.ComponentPropsWithoutRef<typeof ScrollView>) {
+	return (
+		<ScrollView
+			horizontal={false}
+			className={cn('flex flex-col gap-2 px-4 py-1', className)}
+			{...props}
+		/>
+	);
+}
 
-const ModalFooter = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
-	<View
-		className={cn('flex flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end', className)}
-		{...props}
-	/>
-);
-ModalFooter.displayName = 'ModalFooter';
+function ModalFooter({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) {
+	return (
+		<View
+			className={cn('flex flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end', className)}
+			{...props}
+		/>
+	);
+}
 
-const ModalTitle = React.forwardRef<TextRef, SlottableTextProps>(
-	({ className, asChild, ...props }, ref) => {
-		const Component = asChild ? Slot.Text : Text;
+function ModalTitle({ className, asChild, ...props }: SlottableTextProps) {
+	const Component = asChild ? Slot.Text : Text;
 
-		return (
-			<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
-				<Component {...props} ref={ref} />
-			</TextClassContext.Provider>
-		);
-	}
-);
-ModalTitle.displayName = 'ModalTitle';
+	return (
+		<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
+			<Component {...props} />
+		</TextClassContext.Provider>
+	);
+}
 
 export {
 	Modal,

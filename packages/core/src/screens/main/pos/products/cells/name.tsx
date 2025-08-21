@@ -11,6 +11,7 @@ import { ProductCategories } from '../../../components/product/categories';
 import GroupedNames from '../../../components/product/grouped-names';
 import { ProductTags } from '../../../components/product/tags';
 import { StockQuantity } from '../cells/stock-quantity';
+import { ProductBrands } from '../../../components/product/brands';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -19,7 +20,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const Name = (props: CellContext<{ document: ProductDocument }, 'name'>) => {
+export function Name(props: CellContext<{ document: ProductDocument }, 'name'>) {
 	const product = props.row.original.document;
 	const { show } = props.column.columnDef.meta;
 	const name = useObservableEagerState(product.name$);
@@ -38,6 +39,7 @@ export const Name = (props: CellContext<{ document: ProductDocument }, 'name'>) 
 			{show('meta_data') && <MetaData product={product} />}
 			{show('categories') && <ProductCategories {...props} />}
 			{show('tags') && <ProductTags {...props} />}
+			{show('brands') && <ProductBrands {...props} />}
 			{show('attributes') && <PlainAttributes {...props} />}
 
 			{product.type === 'variable' && (
@@ -51,4 +53,4 @@ export const Name = (props: CellContext<{ document: ProductDocument }, 'name'>) 
 			{product.type === 'grouped' && <GroupedNames {...props} />}
 		</VStack>
 	);
-};
+}
