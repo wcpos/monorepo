@@ -24,7 +24,7 @@ function useVirtualWrapper(...args) {
 	return { ...useVirtualizer(...args) };
 }
 
-function Root({ style, ...props }: RootProps) {
+function Root({ style, horizontal = false, ...props }: RootProps) {
 	const parentRef = React.useRef<HTMLDivElement>(null);
 	const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null);
 
@@ -34,9 +34,30 @@ function Root({ style, ...props }: RootProps) {
 		}
 	}, []);
 
+	const value = React.useMemo(
+		() => ({
+			ref: parentRef,
+			scrollElement,
+			horizontal,
+		}),
+		[horizontal, scrollElement]
+	);
+
 	return (
-		<RootContext.Provider value={{ ref: parentRef, scrollElement }}>
-			<View {...props} ref={parentRef} style={[{ overflow: 'auto', display: 'block' }, style]} />
+		<RootContext.Provider value={value}>
+			<View
+				{...props}
+				ref={parentRef}
+				style={[
+					{
+						overflow: 'auto',
+						display: 'block',
+						overflowX: horizontal ? 'auto' : 'hidden',
+						overflowY: horizontal ? 'hidden' : 'auto',
+					},
+					style,
+				]}
+			/>
 		</RootContext.Provider>
 	);
 }
@@ -50,13 +71,12 @@ function List<T>({
 	parentProps,
 	estimatedItemSize,
 	overscan = 4,
-	horizontal = false,
 	keyExtractor,
 	onEndReached,
 	onEndReachedThreshold = 0.5,
 	...rest
 }: ListProps<T>) {
-	const { scrollElement } = useRootContext();
+	const { scrollElement, horizontal } = useRootContext();
 
 	// set up virtualizer
 	const rowVirtualizer = useVirtualWrapper({
@@ -125,9 +145,7 @@ function List<T>({
 				return (
 					<ItemContext.Provider
 						key={key}
-						value={
-							{ item, index: vItem.index, rowVirtualizer, vItem, horizontal } as WebItemContext<T>
-						}
+						value={{ item, index: vItem.index, rowVirtualizer, vItem } as WebItemContext<T>}
 					>
 						{renderItem({ item, index: vItem.index, target: 'Cell' })}
 					</ItemContext.Provider>
@@ -138,7 +156,8 @@ function List<T>({
 }
 
 function Item({ children, ...props }: ItemProps<any>) {
-	const { index, rowVirtualizer, vItem, horizontal } = useItemContext() as BaseItemContext<any>;
+	const { index, rowVirtualizer, vItem } = useItemContext() as BaseItemContext<any>;
+	const { horizontal } = useRootContext();
 
 	return (
 		<View

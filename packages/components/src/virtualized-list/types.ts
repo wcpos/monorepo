@@ -3,7 +3,10 @@ import type { ViewProps } from 'react-native';
 
 import type { FlashListProps } from '@shopify/flash-list';
 
-type RootProps = ViewProps;
+type RootProps = ViewProps & {
+	/** Horizontal instead of vertical list */
+	horizontal?: boolean;
+};
 
 interface VirtualizedListHandle {
 	scrollToIndex(params: {
@@ -12,6 +15,8 @@ interface VirtualizedListHandle {
 		animated?: boolean;
 	}): void;
 	scrollToOffset(offset: number, animated?: boolean): void;
+	/** Horizontal instead of vertical list */
+	horizontal?: boolean;
 }
 
 type ListProps<T> = {
@@ -25,9 +30,6 @@ type ListProps<T> = {
 
 	/** Average/constant item size (px).  Required for perf */
 	estimatedItemSize: number;
-
-	/** Horizontal instead of vertical list */
-	horizontal?: boolean;
 
 	/** Number of extra items to render outside the viewport */
 	overscan?: number; // default 4
@@ -66,6 +68,7 @@ type ItemProps<T> = ViewProps & {
 type RootContext = {
 	ref: React.RefObject<HTMLDivElement | null>;
 	scrollElement: HTMLDivElement | null;
+	horizontal?: boolean;
 } | null;
 
 /**

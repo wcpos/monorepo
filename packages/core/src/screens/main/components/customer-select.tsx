@@ -23,6 +23,7 @@ import { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { useQuery } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
+import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
 
 export function CustomerSelect({
 	withGuest,
@@ -121,7 +122,11 @@ export function CustomerList({ query, withGuest }: { query: any; withGuest: bool
 					query.loadMore();
 				}
 			}}
-			renderItem={({ item }) => <CustomerSelectItem customer={item.document} />}
+			renderItem={({ item }) => (
+				<ComboboxItem>
+					<CustomerSelectItem customer={item.document} />
+				</ComboboxItem>
+			)}
 			estimatedItemSize={44}
 			ListEmptyComponent={
 				<ComboboxEmpty>{t('No customers found', { _tags: 'core' })}</ComboboxEmpty>
@@ -132,6 +137,7 @@ export function CustomerList({ query, withGuest }: { query: any; withGuest: bool
 
 function CustomerSelectItem({ customer }: { customer: CustomerDocument }) {
 	const t = useT();
+	const { format } = useCustomerNameFormat();
 
 	if (customer.id === 0) {
 		return (
@@ -147,12 +153,10 @@ function CustomerSelectItem({ customer }: { customer: CustomerDocument }) {
 		return (
 			<HStack className="items-start">
 				<Avatar source={customer.avatar_url} recyclingKey={customer.uuid} />
-				<VStack space="sm">
-					<Text>
-						{customer.first_name} {customer.last_name}
-					</Text>
+				<VStack space="xs">
+					<Text>{format(customer)}</Text>
 
-					<Text className="text-sm">{customer.email}</Text>
+					<Text className="text-secondary text-sm">{customer.email}</Text>
 					{/* {(customer.billing.company || customer.billing.phone) && (
 						<Text className="text-sm">
 							{customer.billing.company}{' '}

@@ -6,7 +6,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-export const useCustomerNameFormat = () => {
+export function useCustomerNameFormat() {
 	const t = useT();
 
 	/**
@@ -39,4 +39,4 @@ export const useCustomerNameFormat = () => {
 	);
 
 	return { format };
-};
+}

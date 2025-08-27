@@ -27,7 +27,7 @@
   "packageManager": "pnpm@10.14.0",
   "pnpm": {
     "overrides": {
-      "expo": "54.0.0-preview.5",
+      "expo": "54.0.0-preview.9",
       "pnpm": "10.14.0",
       "react": "19.1.1",
       "react-dom": "19.1.1",

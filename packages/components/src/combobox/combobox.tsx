@@ -174,6 +174,7 @@ function ComboboxInput(props: ComboboxInputProps) {
 			value={inputValue}
 			onChangeText={handleChange}
 			aria-busy={isPending}
+			className="mb-2"
 			{...props}
 		/>
 	);
@@ -197,7 +198,7 @@ function ComboboxList({
 	}, [data, filterValue, shouldFilter, filter]);
 
 	return (
-		<VirtualizedListPrimitive.Root>
+		<VirtualizedListPrimitive.Root className="flex-1">
 			<VirtualizedListPrimitive.List
 				data={filteredData}
 				estimatedItemSize={estimatedItemSize}
