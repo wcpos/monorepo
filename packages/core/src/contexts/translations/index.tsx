@@ -1,26 +1,15 @@
 import * as React from 'react';
 
 import { createNativeInstance, TxNative } from '@transifex/native';
-import {
-	ObservableResource,
-	useObservableEagerState,
-	useObservableSuspense,
-} from 'observable-hooks';
-import { of } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { useObservableEagerState } from 'observable-hooks';
+
+import log from '@wcpos/utils/logger';
 
 import CustomCache from './cache';
 import { useLocale } from '../../hooks/use-locale';
-// import { userDB$ } from '../../hydrate-data/global-user';
 import { useAppState } from '../app-state';
 
 export const TranslationContext = React.createContext<TxNative['translate']>(null);
-
-/**
- *
- */
-// const localTranslations$ = userDB$.pipe(switchMap((userDB) => userDB.getLocal$('translations')));
-const localTranslationsResource = new ObservableResource(of(null));
 
 /**
  * This is a stripped down version of the TransifexProvider
@@ -66,7 +55,15 @@ export const TranslationProvider = ({ children }) => {
 	txInstance.currentLocale = locale;
 
 	React.useEffect(() => {
-		txInstance.fetchTranslations(locale);
+		const fetchTranslations = async () => {
+			try {
+				await txInstance.fetchTranslations(locale);
+			} catch (error) {
+				log.error('Error fetching translations', { context: { error } });
+			}
+		};
+
+		fetchTranslations();
 	}, [locale]);
 
 	/**

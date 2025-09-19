@@ -1,16 +1,19 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import * as Slot from '@rn-primitives/slot';
 
+import Platform from '@wcpos/utils/platform';
+
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 import { defaultFilter } from './utils/filter';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
+import { Text, TextClassContext } from '../text';
 import { Icon } from '../icon';
 
 import type {
@@ -21,7 +24,6 @@ import type {
 	ComboboxListProps,
 	ComboboxRootContextType,
 	ComboboxRootProps,
-	ComboboxTriggerProps,
 	ComboboxValueProps,
 	Option,
 } from './types';
@@ -122,6 +124,9 @@ function ComboboxContent({
 }: PopoverPrimitive.ContentProps & { portalHost?: string }) {
 	const context = useComboboxRootContext();
 
+	// Enable arrow key navigation when combobox is open
+	useArrowKeyNavigation();
+
 	return (
 		<PopoverPrimitive.Portal hostName={portalHost}>
 			<PopoverPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
@@ -168,11 +173,33 @@ function ComboboxInput(props: ComboboxInputProps) {
 		[onFilterChange, startTransition]
 	);
 
+	const handleKeyPress = React.useCallback((event: any) => {
+		if (Platform.OS !== 'web') return;
+
+		// Special case: down arrow from input should move to first item
+		if (event.nativeEvent?.key === 'ArrowDown') {
+			event.preventDefault();
+			// Move focus to next focusable element (first item in list)
+			const currentElement = document.activeElement as HTMLElement;
+			if (currentElement) {
+				const focusableElements = Array.from(
+					document.querySelectorAll(
+						'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+					)
+				) as HTMLElement[];
+				const currentIndex = focusableElements.indexOf(currentElement);
+				const nextIndex = (currentIndex + 1) % focusableElements.length;
+				focusableElements[nextIndex]?.focus();
+			}
+		}
+	}, []);
+
 	return (
 		<Input
 			autoFocus
 			value={inputValue}
 			onChangeText={handleChange}
+			onKeyPress={handleKeyPress}
 			aria-busy={isPending}
 			className="mb-2"
 			{...props}
@@ -252,6 +279,7 @@ function ComboboxItemText({ className, ...props }: ComboboxItemTextProps) {
 				'native:text-base web:group-focus:text-accent-foreground text-popover-foreground text-sm',
 				className
 			)}
+			decodeHtml
 			{...props}
 		>
 			{item.label}

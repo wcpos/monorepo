@@ -27,15 +27,15 @@
   "packageManager": "pnpm@10.14.0",
   "pnpm": {
     "overrides": {
-      "expo": "54.0.0-preview.9",
+      "expo": "54.0.9",
       "pnpm": "10.14.0",
       "react": "19.1.1",
       "react-dom": "19.1.1",
-      "react-native": "0.81.0",
+      "react-native": "0.81.4",
       "react-native-edge-to-edge": "^1.6.2",
       "react-native-gesture-handler": "2.28.0",
       "react-native-safe-area-context": "5.6.1",
-      "@react-navigation/drawer": "7.5.7"
+      "@react-navigation/drawer": "^7.5.0"
     },
     "onlyBuiltDependencies": [
       "better-sqlite3",

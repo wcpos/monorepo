@@ -7,10 +7,10 @@
     "lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix"
   },
   "peerDependencies": {
-    "@shopify/flash-list": "2.0.3",
+    "@shopify/flash-list": "2.0.2",
     "expo-haptics": "~15.0.3",
     "expo-image": "~3.0.4",
-    "expo-router": "~6.0.0-beta.8",
+    "expo-router": "~6.0.0",
     "react-native-gesture-handler": "2.28.0",
     "react-native-svg": "15.12.1",
     "react-native-webview": "13.15.0",
@@ -21,7 +21,7 @@
     "@types/lodash": "^4.17.20",
     "expo-haptics": "~15.0.3",
     "expo-image": "~3.0.4",
-    "expo-router": "~6.0.0-beta.8",
+    "expo-router": "~6.0.0",
     "react-native-svg": "15.12.1"
   },
   "dependencies": {
@@ -70,11 +70,11 @@
     "lodash": "^4.17.21",
     "react-hook-form": "^7.61.1",
     "react-native-calendars": "^1.1313.0",
-    "react-native-keyboard-controller": "^1.16.8",
+    "react-native-keyboard-controller": "1.18.5",
     "react-native-resizable-panels": "^0.0.3",
     "sonner": "^2.0.7",
     "sonner-native": "^0.21.0",
-    "tailwind-merge": "3.2.0",
+    "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7"
   }
 }

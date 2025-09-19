@@ -1,3 +1,5 @@
+import type { ViewProps } from 'react-native';
+
 import type { ListProps as VirtualizedListPrimitiveProps } from '@wcpos/components/virtualized-list';
 
 export interface Option {
@@ -22,15 +24,18 @@ type ComboboxRootProps = {
 	disabled?: boolean;
 };
 
-type ComboboxTriggerProps = {};
+type ComboboxTriggerProps = object;
 
 type ComboboxValueProps = {
 	placeholder: string;
+	asChild?: boolean;
+	className?: string;
 };
 
 type ComboboxInputProps = {
 	value?: string;
 	placeholder?: string;
+	onKeyPress?: (event: any) => void;
 };
 
 export type ComboboxListProps<T> = Omit<VirtualizedListPrimitiveProps<T>, 'data'> & {
@@ -39,14 +44,19 @@ export type ComboboxListProps<T> = Omit<VirtualizedListPrimitiveProps<T>, 'data'
 	filter?: (data: T[], filterValue: string, threshold?: number) => T[];
 };
 
-type ComboboxEmptyProps = {};
-
-type ComboboxItemProps = {
-	value: string;
-	label: string;
+type ComboboxEmptyProps = ViewProps & {
+	children?: React.ReactNode;
 };
 
-type ComboboxItemTextProps = {};
+type ComboboxItemProps = ViewProps & {
+	value: string;
+	label: string;
+	disabled?: boolean;
+};
+
+type ComboboxItemTextProps = {
+	className?: string;
+};
 
 export type {
 	ComboboxRootProps,
