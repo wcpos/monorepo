@@ -7,15 +7,14 @@ import { cssInterop } from 'nativewind';
  *
  */
 const ExpoImageWithClassname = cssInterop(ExpoImage, {
-	className: {
-		target: 'style',
-		nativeStyleToProp: { width: true, height: true, borderRadius: true },
-	},
+	className: 'style',
 });
 
 export type ImageProps = ExpoImageProps & {
 	/** Image border shape */
 	// border?: 'square' | 'rounded' | 'circular';
+	/** CSS class name for styling */
+	className?: string;
 };
 
 /**

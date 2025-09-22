@@ -11,7 +11,7 @@ import { useT } from '../../../contexts/translations';
 import { useLoginHandler } from '../hooks/use-login-handler';
 import useSiteConnect from '../hooks/use-site-connect';
 
-const DemoButton = () => {
+export function DemoButton() {
 	const { onConnect, loading: siteConnectLoading } = useSiteConnect();
 	const [connectedSite, setConnectedSite] = React.useState<
 		import('@wcpos/database').SiteDocument | null
@@ -116,6 +116,4 @@ const DemoButton = () => {
 			<ButtonText>{t('Enter Demo Store', { _tags: 'core' })}</ButtonText>
 		</Button>
 	);
-};
-
-export default DemoButton;
+}

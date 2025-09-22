@@ -42,6 +42,10 @@ export const useLoginHandler = (
 			setError(null);
 
 			try {
+				log.debug('Processing login success response', {
+					context: { response },
+				});
+
 				const { params } = response;
 
 				// Validate required response parameters

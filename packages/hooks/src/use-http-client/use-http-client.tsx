@@ -45,7 +45,17 @@ const processErrorHandlers = async (
 	const maxRetries = 3;
 
 	for (const handler of sortedHandlers) {
+		log.debug(`Processing error with handler: ${handler.name}`, {
+			context: {
+				handlerName: handler.name,
+				handlerPriority: handler.priority,
+				canHandle: handler.canHandle(error),
+				errorStatus: error.response?.status,
+			},
+		});
+		
 		if (!handler.canHandle(error)) {
+			log.debug(`Handler ${handler.name} cannot handle this error, skipping`);
 			continue;
 		}
 
@@ -92,12 +102,24 @@ const processErrorHandlers = async (
 				context: {
 					error: handlerError instanceof Error ? handlerError.message : String(handlerError),
 					originalStatus: error.response?.status,
+					handlerIntercepts: handler.intercepts,
+					willStopChain: handler.intercepts,
 				},
 			});
 
+			// Special case: If token refresh handler throws an error with refresh token invalid flag,
+			// continue the chain to let the fallback handler process it
+			if (handler.name === 'token-refresh' && handlerError === error && (error as any).isRefreshTokenInvalid) {
+				log.debug(`Token refresh handler failed with invalid refresh token, continuing chain to fallback handler`);
+				continue; // Continue to next handler instead of breaking
+			}
+
 			// If this handler intercepts, stop the chain
 			if (handler.intercepts) {
+				log.debug(`Handler ${handler.name} intercepts and failed, stopping error chain`);
 				break;
+			} else {
+				log.debug(`Handler ${handler.name} failed but does not intercept, continuing chain`);
 			}
 		}
 	}

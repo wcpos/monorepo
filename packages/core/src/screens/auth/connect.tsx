@@ -8,9 +8,9 @@ import { Logo } from '@wcpos/components/logo';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
 
-import DemoButton from './components/demo-button';
+import { DemoButton } from './components/demo-button';
 import { Sites } from './components/sites';
-import UrlInput from './components/url-input';
+import { UrlInput } from './components/url-input';
 import { useAppState } from '../../contexts/app-state';
 
 export const Connect = () => {

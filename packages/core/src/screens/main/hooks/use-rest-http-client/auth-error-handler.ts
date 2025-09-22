@@ -7,47 +7,18 @@ import { BehaviorSubject } from 'rxjs';
 import log from '@wcpos/utils/logger';
 import type { HttpErrorHandler } from '@wcpos/hooks/use-http-client';
 
-import type { LoginResponse, Site, TokenRefreshResponse, WPCredentials } from './types';
+import { useLoginHandler } from '../../../auth/hooks/use-login-handler';
+
+import type { Site, WPCredentials } from './types';
 
 const errorSubject = new BehaviorSubject(null);
-
-/**
- * Custom hook for handling login flow
- */
-const useLoginHandler = (site: Site) => {
-	const [isProcessing, setIsProcessing] = React.useState(false);
-	const [error, setError] = React.useState<Error | null>(null);
-
-	const handleLoginSuccess = React.useCallback((response: any) => {
-		setIsProcessing(true);
-		setError(null);
-
-		try {
-			// TODO: Handle the successful login response
-			// This should update the wpCredentials with new tokens
-			log.debug('Login success, updating tokens', { context: { response } });
-
-			// You'll need to implement this based on your app state management
-			// site.updateTokens(response.params);
-		} catch (err) {
-			setError(err instanceof Error ? err : new Error('Login failed'));
-			log.error('Failed to handle login success', {
-				context: { error: err },
-				showToast: true,
-			});
-		} finally {
-			setIsProcessing(false);
-		}
-	}, []);
-
-	return { handleLoginSuccess, isProcessing, error };
-};
 
 /**
  * Hook that creates an auth error handler for token refresh and login redirect
  */
 export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): HttpErrorHandler => {
-	const { handleLoginSuccess, isProcessing } = useLoginHandler(site);
+	const { handleLoginSuccess } = useLoginHandler(site as any);
+	const [shouldTriggerAuth, setShouldTriggerAuth] = React.useState(false);
 
 	const redirectUri = makeRedirectUri({
 		scheme: 'wcpos',
@@ -59,7 +30,7 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 		authorizationEndpoint: site.wcpos_login_url,
 	};
 
-	const [request, response, promptAsync] = useAuthRequest(
+	const [, response, promptAsync] = useAuthRequest(
 		{
 			clientId: 'unused', // expo requires this field
 			responseType: ResponseType.Token,
@@ -70,6 +41,20 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 		},
 		discovery
 	);
+
+	// Handle OAuth trigger
+	React.useEffect(() => {
+		if (shouldTriggerAuth) {
+			log.debug('Triggering OAuth flow from state');
+			setShouldTriggerAuth(false); // Reset the flag
+			promptAsync().catch((authError) => {
+				log.error('Authentication flow failed', {
+					context: { error: authError instanceof Error ? authError.message : String(authError) },
+					showToast: true,
+				});
+			});
+		}
+	}, [shouldTriggerAuth, promptAsync]);
 
 	// Handle auth response
 	React.useEffect(() => {
@@ -94,30 +79,62 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 		() => ({
 			name: 'fallback-auth-handler',
 			priority: 50, // Lower priority - runs after token refresh handler
-			canHandle: (error) => error.response?.status === 401,
+			canHandle: (error) => {
+				const canHandle =
+					error.response?.status === 401 ||
+					(error as any).isRefreshTokenInvalid ||
+					(error as any).refreshTokenInvalid ||
+					(error instanceof Error && error.message === 'REFRESH_TOKEN_INVALID');
+
+				log.debug('Fallback auth handler canHandle check', {
+					context: {
+						canHandle,
+						errorStatus: error.response?.status,
+						hasRefreshTokenInvalidFlag: (error as any).isRefreshTokenInvalid,
+						hasRefreshTokenInvalidFlag2: (error as any).refreshTokenInvalid,
+						errorMessage: error instanceof Error ? error.message : String(error),
+					},
+				});
+
+				return canHandle;
+			},
 			handle: async (context) => {
-				// Token refresh has already failed if we reach this handler
-				log.debug('Token refresh failed, attempting OAuth flow');
+				const { error } = context;
+
+				log.debug('Fallback auth handler triggered', {
+					context: {
+						errorMessage: error instanceof Error ? error.message : String(error),
+						errorStatus: (error as any)?.response?.status,
+						hasRefreshTokenInvalidFlag: (error as any)?.isRefreshTokenInvalid,
+						hasRefreshTokenInvalidFlag2: (error as any)?.refreshTokenInvalid,
+					},
+				});
+
+				// Check if this is a refresh token invalid error
+				const isRefreshTokenInvalid =
+					(error as any).isRefreshTokenInvalid ||
+					(error as any).refreshTokenInvalid ||
+					(error instanceof Error && error.message === 'REFRESH_TOKEN_INVALID');
+
+				if (isRefreshTokenInvalid) {
+					log.debug('Refresh token is invalid, launching OAuth flow');
+				} else {
+					log.debug('Token refresh failed, attempting OAuth flow');
+				}
+
 				errorSubject.next(context.error);
 
-				// Try the OAuth flow as last resort
-				try {
-					await promptAsync();
-					// If promptAsync succeeds, the useEffect will handle the response
-					// For now, we'll throw a CanceledError to stop the request chain
-					throw new CanceledError('401 - attempting re-authentication');
-				} catch (authError) {
-					// If auth flow fails, throw the error to let the app handle it
-					log.error('Authentication flow failed', {
-						context: { error: authError instanceof Error ? authError.message : String(authError) },
-						showToast: true,
-					});
-					throw new CanceledError('401 - authentication failed');
-				}
+				// Trigger OAuth flow asynchronously via state
+				log.debug('Setting flag to trigger OAuth flow');
+				setShouldTriggerAuth(true);
+
+				// Throw a CanceledError to stop the request chain
+				// The OAuth flow will be handled by the useEffect
+				throw new CanceledError('401 - attempting re-authentication');
 			},
 			intercepts: true, // This handler intercepts and stops the error chain
 		}),
-		[promptAsync]
+		[setShouldTriggerAuth]
 	);
 };
 

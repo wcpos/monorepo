@@ -88,8 +88,24 @@ export const createTokenRefreshHandler = ({
 				const refreshData: TokenRefreshResponse = refreshResponse.data;
 				const { access_token, expires_at } = refreshData;
 
+				log.debug('Token refresh response received', {
+					context: {
+						userId: wpUser.id,
+						responseStatus: refreshResponse.status,
+						hasAccessToken: !!access_token,
+						responseData: refreshData,
+					},
+				});
+
 				if (!access_token) {
-					throw new Error('No access token in refresh response');
+					log.error('No access token in refresh response - refresh token may be invalid', {
+						context: {
+							userId: wpUser.id,
+							responseData: refreshData,
+							responseStatus: refreshResponse.status,
+						},
+					});
+					throw new Error('REFRESH_TOKEN_INVALID');
 				}
 
 				log.debug('Token refresh successful', {
@@ -137,6 +153,38 @@ export const createTokenRefreshHandler = ({
 			} catch (refreshError) {
 				const errorMsg =
 					refreshError instanceof Error ? refreshError.message : String(refreshError);
+
+				// Check if the refresh token itself is invalid (401 or no access token in response)
+				const isRefreshTokenInvalid =
+					(refreshError instanceof Error && errorMsg.includes('401')) ||
+					(refreshError instanceof Error && errorMsg === 'REFRESH_TOKEN_INVALID') ||
+					(refreshError as any)?.response?.status === 401;
+
+				if (isRefreshTokenInvalid) {
+					log.error('Refresh token is invalid, triggering re-authentication', {
+						context: {
+							userId: wpUser.id,
+							siteUrl: site.url,
+							originalUrl: originalConfig.url,
+							refreshError: errorMsg,
+						},
+					});
+
+					// Mark the original error as refresh token invalid and let other handlers process it
+					(error as any).isRefreshTokenInvalid = true;
+					(error as any).refreshTokenInvalid = true;
+
+					log.debug('Token refresh handler: Marked error as invalid, letting chain continue', {
+						context: {
+							originalErrorStatus: error.response?.status,
+							hasRefreshTokenInvalidFlag: (error as any).isRefreshTokenInvalid,
+						},
+					});
+
+					// Throw the marked error to let other handlers process it
+					// The fallback handler will catch this specific error
+					throw error;
+				}
 
 				log.error('Token refresh failed', {
 					context: {

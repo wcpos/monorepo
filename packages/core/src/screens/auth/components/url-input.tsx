@@ -12,7 +12,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useT } from '../../../contexts/translations';
 import useSiteConnect from '../hooks/use-site-connect';
 
-export default function UrlInput() {
+export function UrlInput() {
 	const { onConnect, loading, error } = useSiteConnect();
 	const [url, setURL] = React.useState('');
 	const t = useT();
