@@ -21,7 +21,7 @@ export const ProductVariationImage = ({
 	const variation = row.original.document;
 	const image = useObservableEagerState(variation.image$);
 	const imageURL = get(image, 'src', undefined);
-	const source = useImageAttachment(variation, imageURL);
+	const { uri } = useImageAttachment(variation, imageURL);
 
 	return (
 		<>
@@ -32,7 +32,7 @@ export const ProductVariationImage = ({
 				</Svg>
 			</View> */}
 			<View className="w-full pl-3">
-				<Image source={source} recyclingKey={variation.uuid} className="h-20 w-full" />
+				<Image source={{ uri }} recyclingKey={variation.uuid} className="h-20 w-full" />
 			</View>
 		</>
 	);

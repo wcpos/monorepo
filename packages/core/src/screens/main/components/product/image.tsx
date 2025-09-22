@@ -18,7 +18,17 @@ export const ProductImage = ({ row }: CellContext<{ document: ProductDocument },
 	const product = row.original.document;
 	const images = useObservableEagerState(product.images$);
 	const imageURL = get(images, [0, 'src'], undefined);
-	const source = useImageAttachment(product, imageURL);
+	const { uri, error } = useImageAttachment(product, imageURL);
 
-	return <Image source={source} recyclingKey={product.uuid} className="h-20 w-full" />;
+	if (error) {
+		return (
+			<Image
+				source={{ uri: 'https://via.placeholder.com/150' }}
+				recyclingKey={product.uuid}
+				className="h-20 w-full"
+			/>
+		);
+	}
+
+	return <Image source={{ uri }} recyclingKey={product.uuid} className="h-20 w-full" />;
 };

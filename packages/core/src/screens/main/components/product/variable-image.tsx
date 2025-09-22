@@ -21,11 +21,11 @@ export const VariableProductImage = ({
 	const product = row.original.document;
 	const images = useObservableEagerState(product.images$);
 	const imageURL = get(images, [0, 'src'], undefined);
-	const source = useImageAttachment(product, imageURL);
+	const { uri } = useImageAttachment(product, imageURL);
 
 	return (
 		<Pressable onPress={() => row.toggleExpanded()} className="h-20 w-full">
-			<Image source={source} recyclingKey={product.uuid} className="h-full w-full" />
+			<Image source={{ uri }} recyclingKey={product.uuid} className="h-full w-full" />
 		</Pressable>
 	);
 };

@@ -69,7 +69,7 @@ export const UserMenu = () => {
 	const avatarUrl = useObservableEagerState(wpCredentials?.avatar_url$);
 	const stores = useObservableEagerState(wpCredentials?.stores$);
 	const t = useT();
-	const avatarSource = useImageAttachment(wpCredentials, avatarUrl);
+	const { uri } = useImageAttachment(wpCredentials, avatarUrl);
 
 	/**
 	 *
@@ -85,7 +85,7 @@ export const UserMenu = () => {
 				<Button className="rounded-none bg-transparent px-3 hover:bg-white/10">
 					<HStack>
 						<Avatar
-							source={avatarSource}
+							source={{ uri }}
 							// placeholder="PK"
 						/>
 						{screenSize !== 'sm' ? <ButtonText>{wpCredentials?.display_name}</ButtonText> : null}
