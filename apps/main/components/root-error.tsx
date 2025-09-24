@@ -1,5 +1,7 @@
 import * as React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { clearAllDB, type ClearDBResult } from '@wcpos/database';
 import log from '@wcpos/utils/logger';
