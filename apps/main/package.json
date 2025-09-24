@@ -20,11 +20,11 @@
   },
   "dependencies": {
     "@react-native-community/netinfo": "11.4.1",
-    "@react-navigation/drawer": "^7.5.0",
+    "@react-navigation/drawer": "^7.5.8",
     "@shopify/flash-list": "2.0.2",
     "@shopify/react-native-skia": "2.2.12",
     "@tailwindcss/postcss": "^4.1.13",
-    "expo": "54.0.9",
+    "expo": "54.0.10",
     "expo-auth-session": "~7.0.4",
     "expo-blob": "^0.1.0",
     "expo-constants": "~18.0.4",

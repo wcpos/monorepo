@@ -52,7 +52,7 @@ export function pruneProperties(schema: ExtendedRxJsonSchema<any>, json: Record<
 	const topLevelFields = Object.keys(schema.properties);
 	const omitProperties = difference(Object.keys(json), topLevelFields);
 	if (omitProperties.length > 0) {
-		log.debug('the following properties are being omitted', omitProperties);
+		log.debug('the following properties are being omitted', { context: { omitProperties } });
 		omitProperties.forEach((prop: string) => {
 			unset(json, prop);
 		});
