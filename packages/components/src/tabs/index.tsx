@@ -1,13 +1,10 @@
 import * as React from 'react';
-import { ScrollView } from 'react-native';
 
 import * as TabsPrimitive from '@rn-primitives/tabs';
-import debounce from 'lodash/debounce';
-import {
-	runOnJS,
+import Animated, {
 	scrollTo,
-	useAnimatedReaction,
 	useAnimatedRef,
+	useAnimatedScrollHandler,
 	useSharedValue,
 } from 'react-native-reanimated';
 
@@ -18,93 +15,106 @@ import { TextClassContext } from '../text';
 
 const Tabs = TabsPrimitive.Root;
 
-const TabsList = React.forwardRef<
-	React.ElementRef<typeof TabsPrimitive.List>,
-	React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
->(({ className, ...props }, ref) => (
-	<TabsPrimitive.List
-		ref={ref}
-		className={cn('bg-muted inline-flex items-center justify-center rounded-md p-1', className)}
-		{...props}
-	/>
-));
-TabsList.displayName = TabsPrimitive.List.displayName;
+/**
+ *
+ */
+function TabsList({ className, ...props }: TabsPrimitive.ListProps) {
+	return (
+		<TabsPrimitive.List
+			className={cn('bg-muted inline-flex items-center justify-center rounded-md p-1', className)}
+			{...props}
+		/>
+	);
+}
 
-const ScrollableTabsList = React.forwardRef<
-	React.ElementRef<typeof TabsPrimitive.List>,
-	React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
->(({ className, children, ...props }, ref) => {
-	const [activeIndex, setActiveIndex] = React.useState(-1);
-	const scrollRef = useAnimatedRef<ScrollView>();
+/**
+ *
+ */
+function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.ListProps) {
+	const scrollRef = useAnimatedRef<Animated.ScrollView>();
 	const totalWidth = useSharedValue(0);
 	const containerWidth = useSharedValue(0);
+	const scrollX = useSharedValue(0);
 	const [scrollable, setScrollable] = React.useState(false);
 	const { value, onValueChange } = TabsPrimitive.useRootContext();
 	const triggersRef = React.useRef<(React.RefObject<any> | null)[]>([]);
+	const tabPositions = React.useRef<{ [key: string]: { x: number; width: number } }>({});
 
 	// Convert children to an array to safely access them
-	const childrenArray = React.Children.toArray(children);
+	const childrenArray = React.Children.toArray(children) as React.ReactElement[];
 
+	// Handle scroll position updates
+	const scrollHandler = useAnimatedScrollHandler({
+		onScroll: (event) => {
+			scrollX.value = event.contentOffset.x;
+		},
+	});
+
+	// Measure and store tab positions
+	const measureTab = React.useCallback((index: number, value: string) => {
+		const trigger = triggersRef.current[index]?.current;
+		if (trigger) {
+			trigger.measure((x: number, y: number, width: number) => {
+				tabPositions.current[value] = { x, width };
+			});
+		}
+	}, []);
+
+	// Scroll to active tab
+	const scrollToActiveTab = React.useCallback(() => {
+		if (!value || !scrollRef.current) return;
+
+		const tabInfo = tabPositions.current[value];
+		if (!tabInfo) return;
+
+		const { x, width } = tabInfo;
+		const currentContainerWidth = containerWidth.value;
+
+		// Calculate target scroll position to center the tab
+		const targetScrollX = x - (currentContainerWidth / 2 - width / 2);
+
+		// Ensure we don't scroll beyond bounds
+		const maxScrollX = totalWidth.value - currentContainerWidth;
+		const finalScrollX = Math.max(0, Math.min(targetScrollX, maxScrollX));
+
+		scrollTo(scrollRef, finalScrollX, 0, true);
+	}, [value, containerWidth, totalWidth, scrollRef]);
+
+	// Effect to handle scrolling when value changes
 	React.useEffect(() => {
-		// Compute active index on the JS thread.
-		const index = childrenArray.findIndex(
-			(child) => React.isValidElement(child) && child.props.value === value
-		);
-		setActiveIndex(index);
-	}, [value, childrenArray]);
+		// Small delay to ensure measurements are ready
+		const timer = setTimeout(() => {
+			scrollToActiveTab();
+		}, 100);
+		return () => clearTimeout(timer);
+	}, [value, scrollToActiveTab]);
 
-	const handleMeasureAndScroll = React.useCallback(
-		debounce((currentContainerWidth: number) => {
-			if (activeIndex !== -1 && triggersRef.current[activeIndex]) {
-				const activeTrigger = triggersRef.current[activeIndex]?.current;
-				if (activeTrigger) {
-					activeTrigger.measure(
-						(x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
-							const targetScrollX = x - (currentContainerWidth / 2 - width / 2);
-							scrollTo(scrollRef, targetScrollX, 0, true);
-						}
-					);
-				}
-			}
-		}, 100),
-		[activeIndex, scrollRef]
-	);
-
-	useAnimatedReaction(
-		() => containerWidth.value,
-		(currentContainerWidth) => {
-			runOnJS(handleMeasureAndScroll)(currentContainerWidth);
-		},
-		[containerWidth]
-	);
-
-	useAnimatedReaction(
-		() => {
-			return totalWidth.value > containerWidth.value;
-		},
-		(result, previous) => {
-			if (result !== previous) {
-				runOnJS(setScrollable)(result);
-			}
-		},
-		[totalWidth, containerWidth, setScrollable]
-	);
+	// Update scrollable state
+	React.useEffect(() => {
+		setScrollable(totalWidth.value > containerWidth.value);
+	}, [totalWidth.value, containerWidth.value]);
 
 	const currentIndex = childrenArray.findIndex(
-		(child) => React.isValidElement(child) && child.props.value === value
+		(child) => React.isValidElement(child) && (child as any).props.value === value
 	);
 
 	const onPressLeft = React.useCallback(() => {
 		if (currentIndex > 0) {
-			const previousValue = childrenArray[currentIndex - 1].props.value;
-			onValueChange(previousValue);
+			const previousChild = childrenArray[currentIndex - 1];
+			if (React.isValidElement(previousChild)) {
+				const previousValue = (previousChild as any).props.value;
+				onValueChange(previousValue);
+			}
 		}
 	}, [currentIndex, childrenArray, onValueChange]);
 
 	const onPressRight = React.useCallback(() => {
 		if (currentIndex < childrenArray.length - 1) {
-			const nextValue = childrenArray[currentIndex + 1].props.value;
-			onValueChange(nextValue);
+			const nextChild = childrenArray[currentIndex + 1];
+			if (React.isValidElement(nextChild)) {
+				const nextValue = (nextChild as any).props.value;
+				onValueChange(nextValue);
+			}
 		}
 	}, [currentIndex, childrenArray, onValueChange]);
 
@@ -113,11 +123,13 @@ const ScrollableTabsList = React.forwardRef<
 			{scrollable && (
 				<IconButton name="chevronLeft" onPress={onPressLeft} disabled={currentIndex === 0} />
 			)}
-			<ScrollView
+			<Animated.ScrollView
 				ref={scrollRef}
 				horizontal
 				showsHorizontalScrollIndicator={false}
 				style={{ flex: 1 }}
+				onScroll={scrollHandler}
+				scrollEventThrottle={16}
 				onContentSizeChange={(w, h) => {
 					totalWidth.value = w;
 				}}
@@ -126,7 +138,6 @@ const ScrollableTabsList = React.forwardRef<
 				}}
 			>
 				<TabsPrimitive.List
-					ref={ref}
 					className={cn(
 						'bg-muted inline-flex w-full flex-row items-center justify-center rounded-md p-2',
 						className
@@ -139,12 +150,21 @@ const ScrollableTabsList = React.forwardRef<
 							triggersRef.current[index] = React.createRef();
 						}
 
-						return React.cloneElement(child as React.ReactElement, {
-							ref: triggersRef.current[index],
-						});
+						const childValue = (child as any).props.value;
+
+						return React.cloneElement(
+							child as React.ReactElement,
+							{
+								ref: triggersRef.current[index],
+								onLayout: () => {
+									// Measure tab position after layout
+									measureTab(index, childValue);
+								},
+							} as any
+						);
 					})}
 				</TabsPrimitive.List>
-			</ScrollView>
+			</Animated.ScrollView>
 			{scrollable && (
 				<IconButton
 					name="chevronRight"
@@ -154,13 +174,12 @@ const ScrollableTabsList = React.forwardRef<
 			)}
 		</HStack>
 	);
-});
-ScrollableTabsList.displayName = 'ScrollableTabsList';
+}
 
-const TabsTrigger = React.forwardRef<
-	React.ElementRef<typeof TabsPrimitive.Trigger>,
-	React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
->(({ className, ...props }, ref) => {
+/**
+ *
+ */
+function TabsTrigger({ className, ...props }: TabsPrimitive.TriggerProps) {
 	const { value } = TabsPrimitive.useRootContext();
 	return (
 		<TextClassContext.Provider
@@ -170,7 +189,6 @@ const TabsTrigger = React.forwardRef<
 			)}
 		>
 			<TabsPrimitive.Trigger
-				ref={ref}
 				className={cn(
 					'web:whitespace-nowrap inline-flex items-center justify-center rounded-sm px-3 py-1.5 shadow-none',
 					'web:ring-offset-background web:transition-all web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
@@ -182,23 +200,22 @@ const TabsTrigger = React.forwardRef<
 			/>
 		</TextClassContext.Provider>
 	);
-});
-TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
+}
 
-const TabsContent = React.forwardRef<
-	React.ElementRef<typeof TabsPrimitive.Content>,
-	React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
->(({ className, ...props }, ref) => (
-	<TabsPrimitive.Content
-		ref={ref}
-		className={cn(
-			'pt-4',
-			'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
-			className
-		)}
-		{...props}
-	/>
-));
-TabsContent.displayName = TabsPrimitive.Content.displayName;
+/**
+ *
+ */
+function TabsContent({ className, ...props }: TabsPrimitive.ContentProps) {
+	return (
+		<TabsPrimitive.Content
+			className={cn(
+				'pt-4',
+				'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
+				className
+			)}
+			{...props}
+		/>
+	);
+}
 
 export { ScrollableTabsList, Tabs, TabsContent, TabsList, TabsTrigger };
