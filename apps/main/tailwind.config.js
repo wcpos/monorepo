@@ -1,4 +1,4 @@
-const { hairlineWidth } = require('nativewind/theme');
+// const { hairlineWidth } = require('react-native-css');
 
 /**
  * https://github.com/nativewind/nativewind/pull/1346
@@ -13,7 +13,7 @@ module.exports = {
 		'../../packages/components/src/**/*.{ts,tsx}',
 		'../../packages/core/src/**/*.{ts,tsx}',
 	],
-	presets: [require('nativewind/preset')],
+	// presets: [require('nativewind/preset')], // Not available in NativeWind v5
 	prefix: '',
 	theme: {
 		container: {
@@ -141,7 +141,7 @@ module.exports = {
 				sm: 'calc(var(--radius) - 4px)',
 			},
 			borderWidth: {
-				hairline: hairlineWidth(),
+				hairline: 1,
 			},
 			keyframes: {
 				'accordion-down': {
