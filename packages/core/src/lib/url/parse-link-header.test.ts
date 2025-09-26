@@ -1,4 +1,4 @@
-import parse from './parse-link-header';
+import { parseLinkHeader as parse } from './parse-link-header';
 
 describe('Parse Link Header', () => {
 	it('parsing a proper link header with next and last', () => {

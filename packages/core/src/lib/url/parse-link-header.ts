@@ -74,10 +74,8 @@ function checkHeader(linkHeader: string | null | undefined) {
 	return true;
 }
 
-function parseLinkHeader(linkHeader: string | null | undefined): Links | null {
+export function parseLinkHeader(linkHeader: string | null | undefined): Links | null {
 	if (!checkHeader(linkHeader)) return null;
 
 	return linkHeader.split(/,\s*</).map(parseLink).filter(hasRel).reduce(intoRels, {});
 }
-
-export default parseLinkHeader;

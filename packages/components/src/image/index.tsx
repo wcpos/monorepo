@@ -1,12 +1,12 @@
 import * as React from 'react';
 
 import { Image as ExpoImage, ImageProps as ExpoImageProps } from 'expo-image';
-import { cssInterop } from 'nativewind';
+import { styled } from 'react-native-css';
 
 /**
  *
  */
-const ExpoImageWithClassname = cssInterop(ExpoImage, {
+const ExpoImageWithClassname = styled(ExpoImage, {
 	className: 'style',
 });
 

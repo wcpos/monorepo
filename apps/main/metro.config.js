@@ -26,9 +26,6 @@ config.cacheStores = [
 	new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
 ];
 
-// Apply NativeWind configuration
-config = withNativeWind(config, { input: './global.css' });
-
 // Enable Atlas analytics when EXPO_UNSTABLE_ATLAS is set
 // This must be done last to wrap all other Metro configurations
 if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
@@ -36,4 +33,4 @@ if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
 	config = withExpoAtlas(config);
 }
 
-module.exports = config;
+module.exports = withNativeWind(config);
