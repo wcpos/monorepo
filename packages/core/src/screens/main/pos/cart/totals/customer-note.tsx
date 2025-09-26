@@ -55,7 +55,7 @@ export const CustomerNote = () => {
 	 *
 	 */
 	return (
-		<HStack className="border-y-1 items-start bg-gray-50 p-2">
+		<HStack className="border-y items-start bg-gray-50 p-2">
 			<Tooltip>
 				<TooltipTrigger>
 					<Icon name="messageLines" className="fill-secondary-foreground" />

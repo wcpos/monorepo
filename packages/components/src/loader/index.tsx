@@ -31,9 +31,9 @@ const loaderVariants = cva('inset-0 content-center items-center', {
 		size: {
 			default: Platform.OS === 'web' ? 'size-4' : 'size-5',
 			xs: Platform.OS === 'web' ? 'size-3' : 'size-4',
-			sm: Platform.OS === 'web' ? 'size-[0.8125rem]' : 'size-[1.125rem]',
+			sm: Platform.OS === 'web' ? 'size-3.25' : 'size-4.5',
 			lg: Platform.OS === 'web' ? 'size-4' : 'size-5',
-			xl: Platform.OS === 'web' ? 'size-[1.125rem]' : 'size-6',
+			xl: Platform.OS === 'web' ? 'size-4.5' : 'size-6',
 			'2xl': Platform.OS === 'web' ? 'size-5' : 'size-7',
 			'3xl': Platform.OS === 'web' ? 'size-6' : 'size-8',
 			'4xl': Platform.OS === 'web' ? 'size-7' : 'size-9',

@@ -249,7 +249,7 @@ importers:
         specifier: 0.6.0
         version: 0.6.0(@babel/core@7.28.3)(react-native@0.81.4(@babel/core@7.28.3)(@types/react@19.1.13)(react@19.1.0))(react@19.1.0)
       tailwindcss:
-        specifier: 4.1.13
+        specifier: ^4.1.13
         version: 4.1.13
       tailwindcss-animate:
         specifier: ^1.0.7

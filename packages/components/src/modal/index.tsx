@@ -127,7 +127,7 @@ const modalContentVariants = cva(
 				default: 'w-96',
 				xs: 'w-64',
 				sm: 'w-80',
-				lg: 'w-128',
+				lg: 'w-lg',
 				xl: 'w-160',
 				full: 'w-full',
 			},

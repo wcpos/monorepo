@@ -31,9 +31,9 @@ const iconVariants = cva('inset-0 content-center items-center', {
 		size: {
 			default: 'size-3.5', // 14px
 			xs: 'size-3', // 12px
-			sm: 'size-[0.8125rem]', // 13px
+			sm: 'size-3.25', // 13px
 			lg: 'size-4', // 16px
-			xl: 'size-[1.125rem]', // 18px
+			xl: 'size-4.5', // 18px
 			'2xl': 'size-5', // 20px
 			'3xl': 'size-6', // 24px
 			'4xl': 'size-7', // 28px

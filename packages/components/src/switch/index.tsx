@@ -170,7 +170,7 @@ const SwitchNative = React.forwardRef<
 			>
 				<Animated.View
 					style={animatedThumbStyle}
-					className={cn('px-0.5', size === 'sm' || size === 'xs' ? 'px-[1px]' : 'px-0.5')}
+					className={cn('px-0.5', size === 'sm' || size === 'xs' ? 'px-px' : 'px-0.5')}
 				>
 					<SwitchPrimitives.Thumb className={cn(nativeThumbVariants({ size }))} />
 				</Animated.View>

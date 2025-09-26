@@ -17,7 +17,7 @@ const ButtonText = Text;
 
 const buttonVariants = cva(
 	[
-		'group flex max-w-full flex-shrink items-center justify-center rounded-md',
+		'group flex max-w-full shrink items-center justify-center rounded-md',
 		'web:transition-colors web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
 	],
 	{

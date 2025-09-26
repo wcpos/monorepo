@@ -55,7 +55,7 @@ export const PayButton = () => {
 			size="lg"
 			onPress={handlePay}
 			variant="success"
-			className="flex-[3] rounded-t-none rounded-bl-none"
+			className="flex-3 rounded-t-none rounded-bl-none"
 			loading={loading}
 		>
 			{t('Checkout {order_total}', {
