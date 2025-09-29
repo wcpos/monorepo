@@ -33,4 +33,6 @@ if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
 	config = withExpoAtlas(config);
 }
 
-module.exports = withNativeWind(config);
+module.exports = withNativeWind(config, {
+	input: './global.css',
+});

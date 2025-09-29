@@ -1,9 +1,12 @@
-// const { hairlineWidth } = require('react-native-css');
-
 /**
- * https://github.com/nativewind/nativewind/pull/1346
+ * Tailwind CSS v4 Configuration for NativeWind v5
+ *
+ * Platform-specific values are defined as CSS variables in global.css
+ * using @media queries (ios, android, web). This approach avoids the
+ * need to import react-native modules in the config file.
+ *
+ * @see https://github.com/nativewind/nativewind/pull/1346
  */
-const isWeb = process.env.NATIVEWIND_OS === 'web';
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -30,51 +33,21 @@ module.exports = {
 				160: '40rem',
 			},
 			fontSize: {
-				'3xs': isWeb
-					? ['0.625rem', { lineHeight: '0.75rem' }] // 10px / 12px
-					: [11, 0.929], // 11px / 13px
-				'2xs': isWeb
-					? ['0.6875rem', { lineHeight: '0.8125rem' }] // 11px / 13px
-					: [12, 1], // 12px / 14px
-				xs: isWeb
-					? ['0.75rem', { lineHeight: '0.875rem' }] // 12px / 14px
-					: [13, 1.071], // 13px / 15px
-				sm: isWeb
-					? ['0.8125rem', { lineHeight: '0.9375rem' }] // 13px / 15px
-					: [14, 1.143], // 14px / 16px
-				base: isWeb
-					? ['0.875rem', '1rem'] // 14px / 16px
-					: [16, 1.429], // 16px / 20px
-				lg: isWeb
-					? ['1rem', { lineHeight: '1.25rem' }] // 16px / 20px
-					: [18, 1.714], // 18px / 24px
-				xl: isWeb
-					? ['1.125rem', { lineHeight: '1.5rem' }] // 18px / 24px
-					: [20, 2], // 20px / 28px
-				'2xl': isWeb
-					? ['1.25rem', { lineHeight: '1.75rem' }] // 20px / 28px
-					: [24, 2], // 20px / 28px
-				'3xl': isWeb
-					? ['1.5rem', { lineHeight: '2rem' }] // 24px / 32px
-					: [30, 1],
-				'4xl': isWeb
-					? ['1.875rem', { lineHeight: '2.25rem' }] // 30px / 36px
-					: [36, 1],
-				'5xl': isWeb
-					? ['2.25rem', { lineHeight: '2.5rem' }] // 36px / 40px
-					: [48, 1],
-				'6xl': isWeb
-					? ['3rem', { lineHeight: '1' }] // 48px
-					: [60, 1],
-				'7xl': isWeb
-					? ['3.75rem', { lineHeight: '1' }] // 60px
-					: [72, 1],
-				'8xl': isWeb
-					? ['4.5rem', { lineHeight: '1' }] // 72px
-					: [96, 1],
-				'9xl': isWeb
-					? ['6rem', { lineHeight: '1' }] // 96px
-					: [120, 1],
+				'3xs': ['var(--font-3xs)', 'var(--font-3xs-height)'],
+				'2xs': ['var(--font-2xs)', 'var(--font-2xs-height)'],
+				xs: ['var(--font-xs)', 'var(--font-xs-height)'],
+				sm: ['var(--font-sm)', 'var(--font-sm-height)'],
+				base: ['var(--font-base)', 'var(--font-base-height)'],
+				lg: ['var(--font-lg)', 'var(--font-lg-height)'],
+				xl: ['var(--font-xl)', 'var(--font-xl-height)'],
+				'2xl': ['var(--font-2xl)', 'var(--font-2xl-height)'],
+				'3xl': ['var(--font-3xl)', 'var(--font-3xl-height)'],
+				'4xl': ['var(--font-4xl)', 'var(--font-4xl-height)'],
+				'5xl': ['var(--font-5xl)', 'var(--font-5xl-height)'],
+				'6xl': ['var(--font-6xl)', '1'],
+				'7xl': ['var(--font-7xl)', '1'],
+				'8xl': ['var(--font-8xl)', '1'],
+				'9xl': ['var(--font-9xl)', '1'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',
@@ -141,7 +114,7 @@ module.exports = {
 				sm: 'calc(var(--radius) - 4px)',
 			},
 			borderWidth: {
-				hairline: 1,
+				hairline: 'var(--hairline-width)',
 			},
 			keyframes: {
 				'accordion-down': {
