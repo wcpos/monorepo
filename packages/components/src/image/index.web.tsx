@@ -1,14 +1,6 @@
 import * as React from 'react';
 
 import { Image as ExpoImage, ImageProps as ExpoImageProps } from 'expo-image';
-import { styled } from 'react-native-css';
-
-/**
- * Styled ExpoImage component for native platforms with className support
- */
-const ExpoImageWithClassname = styled(ExpoImage, {
-	className: 'style',
-});
 
 export type ImageProps = ExpoImageProps & {
 	/** Image border shape */
@@ -18,15 +10,16 @@ export type ImageProps = ExpoImageProps & {
 };
 
 /**
- * Native-specific Image component that uses styled wrapper for className support
+ * Web-specific Image component that passes className directly to ExpoImage
  */
-export function Image({ source, ...props }: ImageProps) {
+export function Image({ source, className, ...props }: ImageProps) {
 	return (
-		<ExpoImageWithClassname
+		<ExpoImage
 			source={source}
 			responsivePolicy="initial"
 			contentFit="contain"
 			transition={250}
+			className={className}
 			{...props}
 		/>
 	);
