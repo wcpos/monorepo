@@ -1,26 +1,19 @@
 import * as React from 'react';
 
-import { DrawerDescriptorMap, DrawerNavigationHelpers } from '@react-navigation/drawer/src/types';
-import {
-	CommonActions,
-	DrawerActions,
-	DrawerNavigationState,
-	ParamListBase,
-} from '@react-navigation/native';
+import { CommonActions, DrawerActions } from '@react-navigation/native';
 
-// import type { DrawerDescriptorMap, DrawerNavigationHelpers } from '../types';
 import DrawerItem from './drawer-item';
 
-type Props = {
-	state: DrawerNavigationState<ParamListBase>;
-	navigation: DrawerNavigationHelpers;
-	descriptors: DrawerDescriptorMap;
-};
+import type { DrawerContentComponentProps } from '@react-navigation/drawer';
 
 /**
  * Component that renders the navigation list in the drawer.
  */
-export default function DrawerItemList({ state, navigation, descriptors }: Props) {
+export default function DrawerItemList({
+	state,
+	navigation,
+	descriptors,
+}: DrawerContentComponentProps) {
 	const focusedRoute = state.routes[state.index];
 	const focusedDescriptor = descriptors[focusedRoute.key];
 	const focusedOptions = focusedDescriptor.options;

@@ -40,27 +40,23 @@ const buttonVariants = cva(
 	}
 );
 
-type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
-	VariantProps<typeof buttonVariants> & {
-		name: IconName;
-		loading?: boolean;
-		iconClassName?: string;
-		disableHaptics?: boolean;
-	};
+type ButtonProps = VariantProps<typeof buttonVariants> & {
+	name: IconName;
+	loading?: boolean;
+	iconClassName?: string;
+	disableHaptics?: boolean;
+};
 
-const IconButtonBase = (
-	{
-		className,
-		name,
-		variant,
-		size,
-		loading,
-		disableHaptics = false,
-		onPress,
-		...props
-	}: ButtonProps,
-	ref: React.ElementRef<typeof Pressable>
-) => {
+function IconButton({
+	className,
+	name,
+	variant,
+	size,
+	loading,
+	disableHaptics = false,
+	onPress,
+	...props
+}: ButtonProps) {
 	// Create a wrapped onPress handler that includes haptics
 	const handlePress = React.useCallback(
 		(e: any) => {
@@ -78,7 +74,6 @@ const IconButtonBase = (
 				props.disabled && 'web:pointer-events-none opacity-50',
 				buttonVariants({ variant, size, className })
 			)}
-			ref={ref}
 			role="button"
 			onPress={handlePress}
 			{...props}
@@ -86,6 +81,6 @@ const IconButtonBase = (
 			<Icon name={name} variant={variant} size={size} loading={loading} className={className} />
 		</Pressable>
 	);
-};
+}
 
-export const IconButton = React.forwardRef(IconButtonBase);
+export { IconButton };
