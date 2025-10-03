@@ -33,21 +33,16 @@ module.exports = {
 				160: '40rem',
 			},
 			fontSize: {
-				'3xs': ['var(--font-3xs)', 'var(--font-3xs-height)'],
-				'2xs': ['var(--font-2xs)', 'var(--font-2xs-height)'],
-				xs: ['var(--font-xs)', 'var(--font-xs-height)'],
-				sm: ['var(--font-sm)', 'var(--font-sm-height)'],
-				base: ['var(--font-base)', 'var(--font-base-height)'],
-				lg: ['var(--font-lg)', 'var(--font-lg-height)'],
-				xl: ['var(--font-xl)', 'var(--font-xl-height)'],
-				'2xl': ['var(--font-2xl)', 'var(--font-2xl-height)'],
-				'3xl': ['var(--font-3xl)', 'var(--font-3xl-height)'],
-				'4xl': ['var(--font-4xl)', 'var(--font-4xl-height)'],
-				'5xl': ['var(--font-5xl)', 'var(--font-5xl-height)'],
-				'6xl': ['var(--font-6xl)', '1'],
-				'7xl': ['var(--font-7xl)', '1'],
-				'8xl': ['var(--font-8xl)', '1'],
-				'9xl': ['var(--font-9xl)', '1'],
+				// Native uses default rem=14px, Web scales down by 87.5%
+				xs: ['0.75rem', '1.167'], // Native: 10.5px, Web: 10.5px
+				sm: ['0.875rem', '1.143'], // Native: 12.25px, Web: 12.25px
+				base: ['1rem', '1.5'], // Native: 16px, Web: 14px (using unitless for direct px on native)
+				lg: ['1.125rem', '1.556'], // Native: 15.75px, Web: 15.75px
+				xl: ['1.25rem', '1.4'], // Native: 17.5px, Web: 17.5px
+				'2xl': ['1.5rem', '1.333'], // Native: 21px, Web: 21px
+				'3xl': ['1.875rem', '1.2'], // Native: 26.25px, Web: 26.25px
+				'4xl': ['2.25rem', '1.111'], // Native: 31.5px, Web: 31.5px
+				'5xl': ['3rem', '1.083'], // Native: 42px, Web: 42px
 			},
 			colors: {
 				border: 'hsl(var(--border))',

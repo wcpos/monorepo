@@ -7,43 +7,15 @@
 @import "nativewind/theme";
 
 @layer base {
+  /* Web-specific adjustment: Scale down to 14px base */
+  /* On native, rem values are converted at build time by inlineRem */
+  @media (min-width: 0px) {
+    :root {
+      font-size: 87.5%; /* 14/16 = 0.875, so 1rem = 14px on web */
+    }
+  }
+  
   :root {
-    /* =================================================================
-     * Typography System
-     * =================================================================
-     * Font sizes are defined as CSS variables that adapt based on platform.
-     * Web uses rem units for scalability, while native platforms use
-     * pixel values with line-height ratios.
-     */
-    
-    /* Font sizes - Default values for web */
-    --font-3xs: 0.625rem; /* 10px */
-    --font-3xs-height: 0.75rem; /* 12px */
-    --font-2xs: 0.6875rem; /* 11px */
-    --font-2xs-height: 0.8125rem; /* 13px */
-    --font-xs: 0.75rem; /* 12px */
-    --font-xs-height: 0.875rem; /* 14px */
-    --font-sm: 0.8125rem; /* 13px */
-    --font-sm-height: 0.9375rem; /* 15px */
-    --font-base: 0.875rem; /* 14px */
-    --font-base-height: 1rem; /* 16px */
-    --font-lg: 1rem; /* 16px */
-    --font-lg-height: 1.25rem; /* 20px */
-    --font-xl: 1.125rem; /* 18px */
-    --font-xl-height: 1.5rem; /* 24px */
-    --font-2xl: 1.25rem; /* 20px */
-    --font-2xl-height: 1.75rem; /* 28px */
-    --font-3xl: 1.5rem; /* 24px */
-    --font-3xl-height: 2rem; /* 32px */
-    --font-4xl: 1.875rem; /* 30px */
-    --font-4xl-height: 2.25rem; /* 36px */
-    --font-5xl: 2.25rem; /* 36px */
-    --font-5xl-height: 2.5rem; /* 40px */
-    --font-6xl: 3rem; /* 48px */
-    --font-7xl: 3.75rem; /* 60px */
-    --font-8xl: 4.5rem; /* 72px */
-    --font-9xl: 6rem; /* 96px */
-    
     /* =================================================================
      * Platform-specific Values
      * =================================================================
@@ -96,86 +68,13 @@
   }
 
   /* =================================================================
-   * Native Platform Overrides (iOS & Android)
+   * Native Platform Overrides
    * =================================================================
-   * On native platforms, font sizes should use pixel values directly.
-   * Line heights are now interpreted as em units per the migration guide.
-   * 
-   * @see https://www.nativewind.dev/v5/guides/migrate-from-v4
+   * With inlineRem: 16, we only need platform-specific overrides for
+   * values that can't be expressed in rem units.
    */
-  @media ios {
+  @media ios, android {
     :root {
-      /* Typography - Native pixel values */
-      --font-3xs: 11px;
-      --font-3xs-height: 1.182; /* 13px / 11px = 1.182 (unitless for em) */
-      --font-2xs: 12px;
-      --font-2xs-height: 1.167; /* 14px / 12px = 1.167 (unitless for em) */
-      --font-xs: 13px;
-      --font-xs-height: 1.154; /* 15px / 13px = 1.154 (unitless for em) */
-      --font-sm: 14px;
-      --font-sm-height: 1.143; /* 16px / 14px = 1.143 (unitless for em) */
-      --font-base: 16px;
-      --font-base-height: 1.25; /* 20px / 16px = 1.25 (unitless for em) */
-      --font-lg: 18px;
-      --font-lg-height: 1.333; /* 24px / 18px = 1.333 (unitless for em) */
-      --font-xl: 20px;
-      --font-xl-height: 1.4; /* 28px / 20px = 1.4 (unitless for em) */
-      --font-2xl: 24px;
-      --font-2xl-height: 1.167; /* 28px / 24px = 1.167 (unitless for em) */
-      --font-3xl: 30px;
-      --font-3xl-height: 1.2; /* 36px / 30px = 1.2 (unitless for em) */
-      --font-4xl: 36px;
-      --font-4xl-height: 1.111; /* 40px / 36px = 1.111 (unitless for em) */
-      --font-5xl: 48px;
-      --font-5xl-height: 1.083; /* 52px / 48px = 1.083 (unitless for em) */
-      --font-6xl: 60px;
-      --font-6xl-height: 1; /* 60px / 60px = 1 (unitless for em) */
-      --font-7xl: 72px;
-      --font-7xl-height: 1; /* 72px / 72px = 1 (unitless for em) */
-      --font-8xl: 96px;
-      --font-8xl-height: 1; /* 96px / 96px = 1 (unitless for em) */
-      --font-9xl: 120px;
-      --font-9xl-height: 1; /* 120px / 120px = 1 (unitless for em) */
-      
-      /* Platform-specific values */
-      --hairline-width: hairlineWidth(); /* React Native's StyleSheet.hairlineWidth */
-    }
-  }
-
-  @media android {
-    :root {
-      /* Typography - Native pixel values (same as iOS) */
-      --font-3xs: 11px;
-      --font-3xs-height: 1.182; /* 13px / 11px = 1.182 (unitless for em) */
-      --font-2xs: 12px;
-      --font-2xs-height: 1.167; /* 14px / 12px = 1.167 (unitless for em) */
-      --font-xs: 13px;
-      --font-xs-height: 1.154; /* 15px / 13px = 1.154 (unitless for em) */
-      --font-sm: 14px;
-      --font-sm-height: 1.143; /* 16px / 14px = 1.143 (unitless for em) */
-      --font-base: 16px;
-      --font-base-height: 1.25; /* 20px / 16px = 1.25 (unitless for em) */
-      --font-lg: 18px;
-      --font-lg-height: 1.333; /* 24px / 18px = 1.333 (unitless for em) */
-      --font-xl: 20px;
-      --font-xl-height: 1.4; /* 28px / 20px = 1.4 (unitless for em) */
-      --font-2xl: 24px;
-      --font-2xl-height: 1.167; /* 28px / 24px = 1.167 (unitless for em) */
-      --font-3xl: 30px;
-      --font-3xl-height: 1.2; /* 36px / 30px = 1.2 (unitless for em) */
-      --font-4xl: 36px;
-      --font-4xl-height: 1.111; /* 40px / 36px = 1.111 (unitless for em) */
-      --font-5xl: 48px;
-      --font-5xl-height: 1.083; /* 52px / 48px = 1.083 (unitless for em) */
-      --font-6xl: 60px;
-      --font-6xl-height: 1; /* 60px / 60px = 1 (unitless for em) */
-      --font-7xl: 72px;
-      --font-7xl-height: 1; /* 72px / 72px = 1 (unitless for em) */
-      --font-8xl: 96px;
-      --font-8xl-height: 1; /* 96px / 96px = 1 (unitless for em) */
-      --font-9xl: 120px;
-      --font-9xl-height: 1; /* 120px / 120px = 1 (unitless for em) */
-      
       /* Platform-specific values */
       --hairline-width: hairlineWidth(); /* React Native's StyleSheet.hairlineWidth */
     }
@@ -228,7 +127,5 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-size: var(--font-base);
-    line-height: var(--font-base-height);
   }
 }
