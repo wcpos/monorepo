@@ -1,15 +1,17 @@
 /**
  * Tailwind CSS v4 Configuration for NativeWind v5
  *
- * Platform-specific values are defined as CSS variables in global.css
- * using @media queries (ios, android, web). This approach avoids the
- * need to import react-native modules in the config file.
- *
- * @see https://github.com/nativewind/nativewind/pull/1346
+ * This version uses the modern oklch color format for better color handling
+ * and opacity support. The oklch format provides better perceptual uniformity
+ * and wider color gamut compared to HSL.
  */
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+	corePlugins: {
+		// ESSENTIAL: Must be enabled for opacity modifiers to work with custom colors
+		backgroundOpacity: true,
+	},
 	darkMode: ['class'],
 	content: [
 		'./app/**/*.{js,jsx,ts,tsx}',
@@ -45,62 +47,64 @@ module.exports = {
 				'5xl': ['3rem', '1.083'], // Native: 42px, Web: 42px
 			},
 			colors: {
-				border: 'hsl(var(--border))',
-				input: 'hsl(var(--input))',
-				ring: 'hsl(var(--ring))',
-				background: 'hsl(var(--background))',
-				foreground: 'hsl(var(--foreground))',
+				// Semantic color mappings for backward compatibility
+				// These reference the CSS variables which now map to standard Tailwind colors
+				border: 'var(--border)',
+				input: 'var(--input)',
+				ring: 'var(--ring)',
+				background: 'var(--background)',
+				foreground: 'var(--foreground)',
 				primary: {
-					DEFAULT: 'hsl(var(--primary))',
-					foreground: 'hsl(var(--primary-foreground))',
+					DEFAULT: 'var(--primary)',
+					foreground: 'var(--primary-foreground)',
 				},
 				secondary: {
-					DEFAULT: 'hsl(var(--secondary))',
-					foreground: 'hsl(var(--secondary-foreground))',
+					DEFAULT: 'var(--secondary)',
+					foreground: 'var(--secondary-foreground)',
 				},
 				tertiary: {
-					DEFAULT: 'hsl(var(--tertiary))',
-					foreground: 'hsl(var(--tertiary-foreground))',
+					DEFAULT: 'var(--tertiary)',
+					foreground: 'var(--tertiary-foreground)',
 				},
 				destructive: {
-					DEFAULT: 'hsl(var(--destructive))',
-					foreground: 'hsl(var(--destructive-foreground))',
+					DEFAULT: 'var(--destructive)',
+					foreground: 'var(--destructive-foreground)',
 				},
 				success: {
-					DEFAULT: 'hsl(var(--success))',
-					foreground: 'hsl(var(--success-foreground))',
+					DEFAULT: 'var(--success)',
+					foreground: 'var(--success-foreground)',
 				},
 				warning: {
-					DEFAULT: 'hsl(var(--warning))',
-					foreground: 'hsl(var(--warning-foreground))',
+					DEFAULT: 'var(--warning)',
+					foreground: 'var(--warning-foreground)',
 				},
 				attention: {
-					DEFAULT: 'hsl(var(--attention))',
-					foreground: 'hsl(var(--attention-foreground))',
+					DEFAULT: 'var(--attention)',
+					foreground: 'var(--attention-foreground)',
 				},
 				info: {
-					DEFAULT: 'hsl(var(--info))',
-					foreground: 'hsl(var(--info-foreground))',
+					DEFAULT: 'var(--info)',
+					foreground: 'var(--info-foreground)',
 				},
 				error: {
-					DEFAULT: 'hsl(var(--error))',
-					foreground: 'hsl(var(--error-foreground))',
+					DEFAULT: 'var(--error)',
+					foreground: 'var(--error-foreground)',
 				},
 				muted: {
-					DEFAULT: 'hsl(var(--muted))',
-					foreground: 'hsl(var(--muted-foreground))',
+					DEFAULT: 'var(--muted)',
+					foreground: 'var(--muted-foreground)',
 				},
 				accent: {
-					DEFAULT: 'hsl(var(--accent))',
-					foreground: 'hsl(var(--accent-foreground))',
+					DEFAULT: 'var(--accent)',
+					foreground: 'var(--accent-foreground)',
 				},
 				popover: {
-					DEFAULT: 'hsl(var(--popover))',
-					foreground: 'hsl(var(--popover-foreground))',
+					DEFAULT: 'var(--popover)',
+					foreground: 'var(--popover-foreground)',
 				},
 				card: {
-					DEFAULT: 'hsl(var(--card))',
-					foreground: 'hsl(var(--card-foreground))',
+					DEFAULT: 'var(--card)',
+					foreground: 'var(--card-foreground)',
 				},
 			},
 			borderRadius: {

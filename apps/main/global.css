@@ -6,6 +6,86 @@
 
 @import "nativewind/theme";
 
+@theme {
+  /* Primary colors using Tailwind v4 convention */
+  --color-primary-50: oklch(0.95 0.02 237);
+  --color-primary-100: oklch(0.90 0.04 237);
+  --color-primary-200: oklch(0.85 0.08 237);
+  --color-primary-300: oklch(0.75 0.14 237);
+  --color-primary-400: oklch(0.65 0.18 237);
+  --color-primary-500: oklch(0.60 0.20 237);
+  --color-primary-600: oklch(0.55 0.18 237);
+  --color-primary-700: oklch(0.50 0.16 237);
+  --color-primary-800: oklch(0.45 0.14 237);
+  --color-primary-900: oklch(0.40 0.12 237);
+  --color-primary-950: oklch(0.30 0.10 237);
+  
+  /* Neutral colors */
+  --color-neutral-50: oklch(1.00 0 0);
+  --color-neutral-100: oklch(0.98 0 0);
+  --color-neutral-200: oklch(0.96 0.01 256);
+  --color-neutral-300: oklch(0.92 0.02 256);
+  --color-neutral-400: oklch(0.70 0.03 256);
+  --color-neutral-500: oklch(0.55 0.04 256);
+  --color-neutral-600: oklch(0.45 0.05 256);
+  --color-neutral-700: oklch(0.37 0.06 256);
+  --color-neutral-800: oklch(0.28 0.07 256);
+  --color-neutral-900: oklch(0.21 0.08 256);
+  --color-neutral-950: oklch(0.15 0.08 256);
+  
+  /* Success (green) colors */
+  --color-success-50: oklch(0.95 0.03 152);
+  --color-success-100: oklch(0.90 0.06 152);
+  --color-success-200: oklch(0.80 0.10 152);
+  --color-success-300: oklch(0.70 0.13 152);
+  --color-success-400: oklch(0.60 0.15 152);
+  --color-success-500: oklch(0.52 0.15 152);
+  --color-success-600: oklch(0.48 0.14 152);
+  --color-success-700: oklch(0.44 0.12 152);
+  --color-success-800: oklch(0.38 0.10 152);
+  --color-success-900: oklch(0.32 0.08 152);
+  --color-success-950: oklch(0.25 0.06 152);
+  
+  /* Error/Destructive (red) colors */
+  --color-error-50: oklch(0.95 0.03 24);
+  --color-error-100: oklch(0.90 0.06 24);
+  --color-error-200: oklch(0.85 0.10 24);
+  --color-error-300: oklch(0.75 0.15 24);
+  --color-error-400: oklch(0.68 0.18 24);
+  --color-error-500: oklch(0.64 0.19 24);
+  --color-error-600: oklch(0.58 0.18 24);
+  --color-error-700: oklch(0.52 0.16 24);
+  --color-error-800: oklch(0.47 0.15 26);
+  --color-error-900: oklch(0.42 0.12 26);
+  --color-error-950: oklch(0.30 0.10 26);
+  
+  /* Warning (orange) colors */
+  --color-warning-50: oklch(0.95 0.03 67);
+  --color-warning-100: oklch(0.90 0.06 67);
+  --color-warning-200: oklch(0.85 0.10 67);
+  --color-warning-300: oklch(0.80 0.14 67);
+  --color-warning-400: oklch(0.75 0.16 67);
+  --color-warning-500: oklch(0.70 0.17 67);
+  --color-warning-600: oklch(0.64 0.16 67);
+  --color-warning-700: oklch(0.58 0.15 67);
+  --color-warning-800: oklch(0.52 0.13 67);
+  --color-warning-900: oklch(0.45 0.11 67);
+  --color-warning-950: oklch(0.35 0.09 67);
+  
+  /* Info (blue) colors */
+  --color-info-50: oklch(0.95 0.03 245);
+  --color-info-100: oklch(0.90 0.06 245);
+  --color-info-200: oklch(0.85 0.10 245);
+  --color-info-300: oklch(0.78 0.15 245);
+  --color-info-400: oklch(0.70 0.18 245);
+  --color-info-500: oklch(0.66 0.20 245);
+  --color-info-600: oklch(0.58 0.18 245);
+  --color-info-700: oklch(0.52 0.16 245);
+  --color-info-800: oklch(0.48 0.18 245);
+  --color-info-900: oklch(0.42 0.14 245);
+  --color-info-950: oklch(0.32 0.12 245);
+}
+
 @layer base {
   /* Web-specific adjustment: Scale down to 14px base */
   /* On native, rem values are converted at build time by inlineRem */
@@ -25,46 +105,47 @@
     --hairline-width: 1px;
     
     /* =================================================================
-     * Color System
+     * Semantic Color Mappings
+     * These map to the Tailwind v4 standard colors defined in @theme
      * =================================================================
      */
-    --background: 0 0% 100%;
-    --foreground: 210.66 39.5% 23.3%;
-    --card: 0 0% 100%;
-    --card-foreground: 210.66 39.5% 23.3%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 210.66 39.5% 23.3%;
-    --primary: 202.36 82.8% 41%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 21.6% 49%;
-    --secondary-foreground: 210 40% 98%;;
-    --tertiary: 29 89% 54%;
-    --tertiary-foreground: 210 40% 98%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 209 28% 39%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 356 75% 53%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 166 72% 28%;
-    --success-foreground: 210 40% 98%;
-    --info: 207 90% 54%;
-    --info-foreground: 210 40% 98%;
-    --attention: 50 100% 80%;
-    --attention-foreground: 210.66 39.5% 23.3%;
-    --warning: 20 80% 55%; 
-    --warning-foreground: 210 40% 98%;
-    --error: 356 75% 53%;
-    --error-foreground: 210 40% 98%;
-    --border: 212 33% 89%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 202.36 82.8% 41%;
+    --background: var(--color-neutral-50);
+    --foreground: var(--color-neutral-900);
+    --card: var(--color-neutral-50);
+    --card-foreground: var(--color-neutral-900);
+    --popover: var(--color-neutral-50);
+    --popover-foreground: var(--color-neutral-900);
+    --primary: var(--color-primary-500);
+    --primary-foreground: var(--color-neutral-50);
+    --secondary: var(--color-neutral-500);
+    --secondary-foreground: var(--color-neutral-50);
+    --tertiary: var(--color-warning-400);
+    --tertiary-foreground: var(--color-neutral-50);
+    --muted: var(--color-neutral-200);
+    --muted-foreground: var(--color-neutral-700);
+    --accent: var(--color-neutral-200);
+    --accent-foreground: var(--color-neutral-950);
+    --destructive: var(--color-error-500);
+    --destructive-foreground: var(--color-neutral-50);
+    --success: var(--color-success-500);
+    --success-foreground: var(--color-neutral-50);
+    --info: var(--color-info-500);
+    --info-foreground: var(--color-neutral-50);
+    --attention: var(--color-warning-200);
+    --attention-foreground: var(--color-neutral-900);
+    --warning: var(--color-warning-500);
+    --warning-foreground: var(--color-neutral-50);
+    --error: var(--color-error-500);
+    --error-foreground: var(--color-neutral-50);
+    --border: var(--color-neutral-300);
+    --input: var(--color-neutral-200);
+    --ring: var(--color-primary-500);
     --radius: 0.5rem;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --chart-1: var(--color-error-400);
+    --chart-2: var(--color-info-400);
+    --chart-3: var(--color-primary-700);
+    --chart-4: var(--color-warning-300);
+    --chart-5: var(--color-success-400);
   }
 
   /* =================================================================
@@ -81,42 +162,42 @@
   }
 
   .dark {
-    --background: 210.66 39.5% 23.3%;
-    --foreground: 210 40% 98%;
-    --card: 210.66 39.5% 23.3%;
-    --card-foreground: 210 40% 98%;
-    --popover: 210.66 39.5% 23.3%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --tertiary: 29 89% 30%;
-    --tertiary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 120 60% 30%;
-    --success-foreground: 210 40% 98%;
-    --info: 207 90% 30%;
-    --info-foreground: 210 40% 98%;
-    --attention: 50 100% 50%;
-    --attention-foreground: 210 40% 98%;
-    --warning: 25 100% 40%;
-    --warning-foreground: 210 40% 98%;
-    --error: 0 62.8% 30.6%;
-    --error-foreground: 210 40% 98%;
-    --border: 212 33% 89%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --background: var(--color-neutral-900);
+    --foreground: var(--color-neutral-50);
+    --card: var(--color-neutral-900);
+    --card-foreground: var(--color-neutral-50);
+    --popover: var(--color-neutral-900);
+    --popover-foreground: var(--color-neutral-50);
+    --primary: var(--color-primary-100);
+    --primary-foreground: var(--color-neutral-950);
+    --secondary: var(--color-neutral-800);
+    --secondary-foreground: var(--color-neutral-50);
+    --tertiary: var(--color-warning-600);
+    --tertiary-foreground: var(--color-neutral-50);
+    --muted: var(--color-neutral-800);
+    --muted-foreground: var(--color-neutral-400);
+    --accent: var(--color-neutral-800);
+    --accent-foreground: var(--color-neutral-50);
+    --destructive: var(--color-error-800);
+    --destructive-foreground: var(--color-neutral-50);
+    --success: var(--color-success-700);
+    --success-foreground: var(--color-neutral-50);
+    --info: var(--color-info-800);
+    --info-foreground: var(--color-neutral-50);
+    --attention: var(--color-warning-400);
+    --attention-foreground: var(--color-neutral-50);
+    --warning: var(--color-warning-600);
+    --warning-foreground: var(--color-neutral-50);
+    --error: var(--color-error-800);
+    --error-foreground: var(--color-neutral-50);
+    --border: var(--color-neutral-300);
+    --input: var(--color-neutral-800);
+    --ring: var(--color-neutral-200);
+    --chart-1: var(--color-primary-400);
+    --chart-2: var(--color-success-400);
+    --chart-3: var(--color-warning-400);
+    --chart-4: var(--color-error-400);
+    --chart-5: var(--color-info-400);
   }
 }
 
