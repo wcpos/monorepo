@@ -47,8 +47,34 @@ module.exports = {
 				'5xl': ['3rem', '1.083'], // Native: 42px, Web: 42px
 			},
 			colors: {
-				// Semantic color mappings for backward compatibility
-				// These reference the CSS variables which now map to standard Tailwind colors
+				// Polaris-inspired color system
+				// Surface colors for backgrounds
+				surface: {
+					DEFAULT: 'var(--color-bg-surface)',
+					secondary: 'var(--color-bg-surface-secondary)',
+					tertiary: 'var(--color-bg-surface-tertiary)',
+					disabled: 'var(--color-bg-surface-disabled)',
+					brand: 'var(--color-bg-surface-brand)',
+					success: 'var(--color-bg-surface-success)',
+					critical: 'var(--color-bg-surface-critical)',
+					warning: 'var(--color-bg-surface-warning)',
+					info: 'var(--color-bg-surface-info)',
+					magic: 'var(--color-bg-surface-magic)',
+				},
+				// Fill colors for buttons and strong elements
+				fill: {
+					DEFAULT: 'var(--color-bg-fill)',
+					secondary: 'var(--color-bg-fill-secondary)',
+					tertiary: 'var(--color-bg-fill-tertiary)',
+					disabled: 'var(--color-bg-fill-disabled)',
+					brand: 'var(--color-bg-fill-brand)',
+					success: 'var(--color-bg-fill-success)',
+					critical: 'var(--color-bg-fill-critical)',
+					warning: 'var(--color-bg-fill-warning)',
+					info: 'var(--color-bg-fill-info)',
+					magic: 'var(--color-bg-fill-magic)',
+				},
+				// Legacy semantic mappings for backward compatibility
 				border: 'var(--border)',
 				input: 'var(--input)',
 				ring: 'var(--ring)',
@@ -106,6 +132,37 @@ module.exports = {
 					DEFAULT: 'var(--card)',
 					foreground: 'var(--card-foreground)',
 				},
+			},
+			// Add text colors
+			textColor: {
+				DEFAULT: 'var(--color-text)',
+				secondary: 'var(--color-text-secondary)',
+				disabled: 'var(--color-text-disabled)',
+				'on-fill': 'var(--color-text-on-fill)',
+				brand: 'var(--color-text-brand)',
+				'on-brand': 'var(--color-text-on-brand)',
+				success: 'var(--color-text-success)',
+				'on-success': 'var(--color-text-on-success)',
+				critical: 'var(--color-text-critical)',
+				'on-critical': 'var(--color-text-on-critical)',
+				warning: 'var(--color-text-warning)',
+				'on-warning': 'var(--color-text-on-warning)',
+				info: 'var(--color-text-info)',
+				'on-info': 'var(--color-text-on-info)',
+				magic: 'var(--color-text-magic)',
+				'on-magic': 'var(--color-text-on-magic)',
+			},
+			// Add border colors
+			borderColor: {
+				DEFAULT: 'var(--color-border)',
+				secondary: 'var(--color-border-secondary)',
+				disabled: 'var(--color-border-disabled)',
+				brand: 'var(--color-border-brand)',
+				success: 'var(--color-border-success)',
+				critical: 'var(--color-border-critical)',
+				warning: 'var(--color-border-warning)',
+				info: 'var(--color-border-info)',
+				magic: 'var(--color-border-magic)',
 			},
 			borderRadius: {
 				lg: 'var(--radius)',

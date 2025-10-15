@@ -7,83 +7,213 @@
 @import "nativewind/theme";
 
 @theme {
-  /* Primary colors using Tailwind v4 convention */
-  --color-primary-50: oklch(0.95 0.02 237);
-  --color-primary-100: oklch(0.90 0.04 237);
-  --color-primary-200: oklch(0.85 0.08 237);
-  --color-primary-300: oklch(0.75 0.14 237);
-  --color-primary-400: oklch(0.65 0.18 237);
-  --color-primary-500: oklch(0.60 0.20 237);
-  --color-primary-600: oklch(0.55 0.18 237);
-  --color-primary-700: oklch(0.50 0.16 237);
-  --color-primary-800: oklch(0.45 0.14 237);
-  --color-primary-900: oklch(0.40 0.12 237);
-  --color-primary-950: oklch(0.30 0.10 237);
+  /* =================================================================
+   * Base Color Scales (Polaris-inspired)
+   * Each color has 16 shades for maximum flexibility
+   * =================================================================
+   */
   
-  /* Neutral colors */
-  --color-neutral-50: oklch(1.00 0 0);
-  --color-neutral-100: oklch(0.98 0 0);
-  --color-neutral-200: oklch(0.96 0.01 256);
-  --color-neutral-300: oklch(0.92 0.02 256);
-  --color-neutral-400: oklch(0.70 0.03 256);
-  --color-neutral-500: oklch(0.55 0.04 256);
-  --color-neutral-600: oklch(0.45 0.05 256);
-  --color-neutral-700: oklch(0.37 0.06 256);
-  --color-neutral-800: oklch(0.28 0.07 256);
-  --color-neutral-900: oklch(0.21 0.08 256);
-  --color-neutral-950: oklch(0.15 0.08 256);
+  /* Gray scale - for neutrals and UI structure */
+  --color-gray-1: oklch(0.99 0 0);
+  --color-gray-2: oklch(0.98 0 0);
+  --color-gray-3: oklch(0.97 0 0);
+  --color-gray-4: oklch(0.95 0 0);
+  --color-gray-5: oklch(0.93 0 0);
+  --color-gray-6: oklch(0.90 0 0);
+  --color-gray-7: oklch(0.85 0 0);
+  --color-gray-8: oklch(0.78 0 0);
+  --color-gray-9: oklch(0.70 0 0);
+  --color-gray-10: oklch(0.60 0 0);
+  --color-gray-11: oklch(0.50 0 0);
+  --color-gray-12: oklch(0.40 0 0);
+  --color-gray-13: oklch(0.32 0 0);
+  --color-gray-14: oklch(0.25 0 0);
+  --color-gray-15: oklch(0.18 0 0);
+  --color-gray-16: oklch(0.10 0 0);
   
-  /* Success (green) colors */
-  --color-success-50: oklch(0.95 0.03 152);
-  --color-success-100: oklch(0.90 0.06 152);
-  --color-success-200: oklch(0.80 0.10 152);
-  --color-success-300: oklch(0.70 0.13 152);
-  --color-success-400: oklch(0.60 0.15 152);
-  --color-success-500: oklch(0.52 0.15 152);
-  --color-success-600: oklch(0.48 0.14 152);
-  --color-success-700: oklch(0.44 0.12 152);
-  --color-success-800: oklch(0.38 0.10 152);
-  --color-success-900: oklch(0.32 0.08 152);
-  --color-success-950: oklch(0.25 0.06 152);
+  /* Blue scale - for primary/brand actions */
+  --color-blue-1: oklch(0.98 0.01 237);
+  --color-blue-2: oklch(0.96 0.02 237);
+  --color-blue-3: oklch(0.94 0.04 237);
+  --color-blue-4: oklch(0.90 0.06 237);
+  --color-blue-5: oklch(0.85 0.09 237);
+  --color-blue-6: oklch(0.78 0.13 237);
+  --color-blue-7: oklch(0.70 0.17 237);
+  --color-blue-8: oklch(0.62 0.20 237);
+  --color-blue-9: oklch(0.55 0.22 237);
+  --color-blue-10: oklch(0.48 0.21 237);
+  --color-blue-11: oklch(0.42 0.19 237);
+  --color-blue-12: oklch(0.36 0.17 237);
+  --color-blue-13: oklch(0.30 0.14 237);
+  --color-blue-14: oklch(0.24 0.11 237);
+  --color-blue-15: oklch(0.18 0.08 237);
+  --color-blue-16: oklch(0.12 0.05 237);
   
-  /* Error/Destructive (red) colors */
-  --color-error-50: oklch(0.95 0.03 24);
-  --color-error-100: oklch(0.90 0.06 24);
-  --color-error-200: oklch(0.85 0.10 24);
-  --color-error-300: oklch(0.75 0.15 24);
-  --color-error-400: oklch(0.68 0.18 24);
-  --color-error-500: oklch(0.64 0.19 24);
-  --color-error-600: oklch(0.58 0.18 24);
-  --color-error-700: oklch(0.52 0.16 24);
-  --color-error-800: oklch(0.47 0.15 26);
-  --color-error-900: oklch(0.42 0.12 26);
-  --color-error-950: oklch(0.30 0.10 26);
+  /* Green scale - for success states */
+  --color-green-1: oklch(0.98 0.01 142);
+  --color-green-2: oklch(0.96 0.02 142);
+  --color-green-3: oklch(0.94 0.04 142);
+  --color-green-4: oklch(0.90 0.07 142);
+  --color-green-5: oklch(0.85 0.10 142);
+  --color-green-6: oklch(0.78 0.14 142);
+  --color-green-7: oklch(0.70 0.17 142);
+  --color-green-8: oklch(0.62 0.19 142);
+  --color-green-9: oklch(0.54 0.20 142);
+  --color-green-10: oklch(0.47 0.19 142);
+  --color-green-11: oklch(0.40 0.17 142);
+  --color-green-12: oklch(0.34 0.15 142);
+  --color-green-13: oklch(0.28 0.12 142);
+  --color-green-14: oklch(0.22 0.09 142);
+  --color-green-15: oklch(0.16 0.06 142);
+  --color-green-16: oklch(0.10 0.03 142);
   
-  /* Warning (orange) colors */
-  --color-warning-50: oklch(0.95 0.03 67);
-  --color-warning-100: oklch(0.90 0.06 67);
-  --color-warning-200: oklch(0.85 0.10 67);
-  --color-warning-300: oklch(0.80 0.14 67);
-  --color-warning-400: oklch(0.75 0.16 67);
-  --color-warning-500: oklch(0.70 0.17 67);
-  --color-warning-600: oklch(0.64 0.16 67);
-  --color-warning-700: oklch(0.58 0.15 67);
-  --color-warning-800: oklch(0.52 0.13 67);
-  --color-warning-900: oklch(0.45 0.11 67);
-  --color-warning-950: oklch(0.35 0.09 67);
+  /* Red scale - for errors and critical states */
+  --color-red-1: oklch(0.98 0.01 25);
+  --color-red-2: oklch(0.96 0.02 25);
+  --color-red-3: oklch(0.94 0.04 25);
+  --color-red-4: oklch(0.90 0.07 25);
+  --color-red-5: oklch(0.85 0.11 25);
+  --color-red-6: oklch(0.78 0.16 25);
+  --color-red-7: oklch(0.70 0.20 25);
+  --color-red-8: oklch(0.62 0.23 25);
+  --color-red-9: oklch(0.54 0.24 25);
+  --color-red-10: oklch(0.47 0.23 25);
+  --color-red-11: oklch(0.40 0.20 25);
+  --color-red-12: oklch(0.34 0.17 25);
+  --color-red-13: oklch(0.28 0.14 25);
+  --color-red-14: oklch(0.22 0.11 25);
+  --color-red-15: oklch(0.16 0.08 25);
+  --color-red-16: oklch(0.10 0.05 25);
   
-  /* Info (blue) colors */
-  --color-info-50: oklch(0.95 0.03 245);
-  --color-info-100: oklch(0.90 0.06 245);
-  --color-info-200: oklch(0.85 0.10 245);
-  --color-info-300: oklch(0.78 0.15 245);
-  --color-info-400: oklch(0.70 0.18 245);
-  --color-info-500: oklch(0.66 0.20 245);
-  --color-info-600: oklch(0.58 0.18 245);
-  --color-info-700: oklch(0.52 0.16 245);
-  --color-info-800: oklch(0.48 0.18 245);
-  --color-info-900: oklch(0.42 0.14 245);
-  --color-info-950: oklch(0.32 0.12 245);
+  /* Yellow scale - for warnings */
+  --color-yellow-1: oklch(0.98 0.01 85);
+  --color-yellow-2: oklch(0.96 0.03 85);
+  --color-yellow-3: oklch(0.94 0.06 85);
+  --color-yellow-4: oklch(0.90 0.10 85);
+  --color-yellow-5: oklch(0.85 0.14 85);
+  --color-yellow-6: oklch(0.78 0.18 85);
+  --color-yellow-7: oklch(0.70 0.20 85);
+  --color-yellow-8: oklch(0.62 0.21 85);
+  --color-yellow-9: oklch(0.54 0.20 85);
+  --color-yellow-10: oklch(0.47 0.18 85);
+  --color-yellow-11: oklch(0.40 0.15 85);
+  --color-yellow-12: oklch(0.34 0.12 85);
+  --color-yellow-13: oklch(0.28 0.09 85);
+  --color-yellow-14: oklch(0.22 0.07 85);
+  --color-yellow-15: oklch(0.16 0.05 85);
+  --color-yellow-16: oklch(0.10 0.03 85);
+  
+  /* Purple scale - for special/magic states */
+  --color-purple-1: oklch(0.98 0.01 300);
+  --color-purple-2: oklch(0.96 0.02 300);
+  --color-purple-3: oklch(0.94 0.04 300);
+  --color-purple-4: oklch(0.90 0.07 300);
+  --color-purple-5: oklch(0.85 0.10 300);
+  --color-purple-6: oklch(0.78 0.14 300);
+  --color-purple-7: oklch(0.70 0.18 300);
+  --color-purple-8: oklch(0.62 0.21 300);
+  --color-purple-9: oklch(0.54 0.23 300);
+  --color-purple-10: oklch(0.47 0.22 300);
+  --color-purple-11: oklch(0.40 0.20 300);
+  --color-purple-12: oklch(0.34 0.17 300);
+  --color-purple-13: oklch(0.28 0.14 300);
+  --color-purple-14: oklch(0.22 0.11 300);
+  --color-purple-15: oklch(0.16 0.08 300);
+  --color-purple-16: oklch(0.10 0.05 300);
+  
+  /* =================================================================
+   * Color Role Tokens (Polaris-inspired)
+   * Each role has: surface, text, fill, border, and icon variants
+   * =================================================================
+   */
+  
+  /* Default role - baseline UI colors */
+  --color-bg-surface: var(--color-gray-2);
+  --color-bg-surface-secondary: var(--color-gray-3);
+  --color-bg-surface-tertiary: var(--color-gray-4);
+  --color-bg-surface-disabled: var(--color-gray-4);
+  --color-bg-fill: var(--color-gray-7);
+  --color-bg-fill-secondary: var(--color-gray-8);
+  --color-bg-fill-tertiary: var(--color-gray-11);
+  --color-bg-fill-disabled: var(--color-gray-6);
+  --color-text: var(--color-gray-15);
+  --color-text-secondary: var(--color-gray-13);
+  --color-text-disabled: var(--color-gray-10);
+  --color-text-on-fill: var(--color-gray-1);
+  --color-icon: var(--color-gray-12);
+  --color-icon-secondary: var(--color-gray-10);
+  --color-icon-disabled: var(--color-gray-8);
+  --color-border: var(--color-gray-7);
+  --color-border-secondary: var(--color-gray-6);
+  --color-border-disabled: var(--color-gray-5);
+  
+  /* Brand/Primary role - main actions */
+  --color-bg-fill-brand: var(--color-blue-9);
+  --color-bg-fill-brand-hover: var(--color-blue-10);
+  --color-bg-fill-brand-active: var(--color-blue-11);
+  --color-bg-fill-brand-disabled: var(--color-blue-6);
+  --color-bg-surface-brand: var(--color-blue-3);
+  --color-text-brand: var(--color-blue-11);
+  --color-text-brand-hover: var(--color-blue-12);
+  --color-text-on-brand: var(--color-gray-1);
+  --color-icon-brand: var(--color-blue-10);
+  --color-border-brand: var(--color-blue-8);
+  
+  /* Success role */
+  --color-bg-fill-success: var(--color-green-9);
+  --color-bg-fill-success-hover: var(--color-green-10);
+  --color-bg-fill-success-active: var(--color-green-11);
+  --color-bg-surface-success: var(--color-green-3);
+  --color-bg-surface-success-hover: var(--color-green-4);
+  --color-bg-surface-success-active: var(--color-green-5);
+  --color-text-success: var(--color-green-14);
+  --color-text-on-success: var(--color-gray-1);
+  --color-icon-success: var(--color-green-12);
+  --color-border-success: var(--color-green-8);
+  
+  /* Critical/Error role */
+  --color-bg-fill-critical: var(--color-red-9);
+  --color-bg-fill-critical-hover: var(--color-red-10);
+  --color-bg-fill-critical-active: var(--color-red-11);
+  --color-bg-surface-critical: var(--color-red-3);
+  --color-bg-surface-critical-hover: var(--color-red-4);
+  --color-bg-surface-critical-active: var(--color-red-5);
+  --color-text-critical: var(--color-red-14);
+  --color-text-on-critical: var(--color-gray-1);
+  --color-icon-critical: var(--color-red-12);
+  --color-border-critical: var(--color-red-8);
+  
+  /* Warning role */
+  --color-bg-fill-warning: var(--color-yellow-9);
+  --color-bg-fill-warning-hover: var(--color-yellow-10);
+  --color-bg-fill-warning-active: var(--color-yellow-11);
+  --color-bg-surface-warning: var(--color-yellow-3);
+  --color-bg-surface-warning-hover: var(--color-yellow-4);
+  --color-bg-surface-warning-active: var(--color-yellow-5);
+  --color-text-warning: var(--color-yellow-14);
+  --color-text-on-warning: var(--color-gray-1);
+  --color-icon-warning: var(--color-yellow-12);
+  --color-border-warning: var(--color-yellow-8);
+  
+  /* Info role */
+  --color-bg-fill-info: var(--color-blue-8);
+  --color-bg-fill-info-hover: var(--color-blue-9);
+  --color-bg-fill-info-active: var(--color-blue-10);
+  --color-bg-surface-info: var(--color-blue-2);
+  --color-bg-surface-info-hover: var(--color-blue-3);
+  --color-bg-surface-info-active: var(--color-blue-4);
+  --color-text-info: var(--color-blue-13);
+  --color-text-on-info: var(--color-gray-1);
+  --color-icon-info: var(--color-blue-11);
+  --color-border-info: var(--color-blue-7);
+  
+  /* Magic role */
+  --color-bg-fill-magic: var(--color-purple-9);
+  --color-bg-surface-magic: var(--color-purple-3);
+  --color-text-magic: var(--color-purple-14);
+  --color-text-on-magic: var(--color-gray-1);
+  --color-icon-magic: var(--color-purple-12);
+  --color-border-magic: var(--color-purple-8);
 }
 
 @layer base {
@@ -106,46 +236,46 @@
     
     /* =================================================================
      * Semantic Color Mappings
-     * These map to the Tailwind v4 standard colors defined in @theme
+     * Map Polaris-style tokens to shadcn/ui naming
      * =================================================================
      */
-    --background: var(--color-neutral-50);
-    --foreground: var(--color-neutral-900);
-    --card: var(--color-neutral-50);
-    --card-foreground: var(--color-neutral-900);
-    --popover: var(--color-neutral-50);
-    --popover-foreground: var(--color-neutral-900);
-    --primary: var(--color-primary-500);
-    --primary-foreground: var(--color-neutral-50);
-    --secondary: var(--color-neutral-500);
-    --secondary-foreground: var(--color-neutral-50);
-    --tertiary: var(--color-warning-400);
-    --tertiary-foreground: var(--color-neutral-50);
-    --muted: var(--color-neutral-200);
-    --muted-foreground: var(--color-neutral-700);
-    --accent: var(--color-neutral-200);
-    --accent-foreground: var(--color-neutral-950);
-    --destructive: var(--color-error-500);
-    --destructive-foreground: var(--color-neutral-50);
-    --success: var(--color-success-500);
-    --success-foreground: var(--color-neutral-50);
-    --info: var(--color-info-500);
-    --info-foreground: var(--color-neutral-50);
-    --attention: var(--color-warning-200);
-    --attention-foreground: var(--color-neutral-900);
-    --warning: var(--color-warning-500);
-    --warning-foreground: var(--color-neutral-50);
-    --error: var(--color-error-500);
-    --error-foreground: var(--color-neutral-50);
-    --border: var(--color-neutral-300);
-    --input: var(--color-neutral-200);
-    --ring: var(--color-primary-500);
+    --background: var(--color-bg-surface);
+    --foreground: var(--color-text);
+    --card: var(--color-bg-surface-secondary);
+    --card-foreground: var(--color-text);
+    --popover: var(--color-bg-surface-secondary);
+    --popover-foreground: var(--color-text);
+    --primary: var(--color-bg-fill-brand);
+    --primary-foreground: var(--color-text-on-brand);
+    --secondary: var(--color-bg-surface-tertiary);
+    --secondary-foreground: var(--color-text);
+    --tertiary: var(--color-bg-fill-secondary);
+    --tertiary-foreground: var(--color-text-on-fill);
+    --muted: var(--color-bg-surface-tertiary);
+    --muted-foreground: var(--color-text-secondary);
+    --accent: var(--color-bg-surface-brand);
+    --accent-foreground: var(--color-text-brand);
+    --destructive: var(--color-bg-fill-critical);
+    --destructive-foreground: var(--color-text-on-critical);
+    --success: var(--color-bg-fill-success);
+    --success-foreground: var(--color-text-on-success);
+    --info: var(--color-bg-fill-info);
+    --info-foreground: var(--color-text-on-info);
+    --attention: var(--color-bg-surface-warning);
+    --attention-foreground: var(--color-text-warning);
+    --warning: var(--color-bg-fill-warning);
+    --warning-foreground: var(--color-text-on-warning);
+    --error: var(--color-bg-fill-critical);
+    --error-foreground: var(--color-text-on-critical);
+    --border: var(--color-border);
+    --input: var(--color-bg-surface-secondary);
+    --ring: var(--color-border-brand);
     --radius: 0.5rem;
-    --chart-1: var(--color-error-400);
-    --chart-2: var(--color-info-400);
-    --chart-3: var(--color-primary-700);
-    --chart-4: var(--color-warning-300);
-    --chart-5: var(--color-success-400);
+    --chart-1: var(--color-blue-10);
+    --chart-2: var(--color-green-10);
+    --chart-3: var(--color-purple-10);
+    --chart-4: var(--color-yellow-10);
+    --chart-5: var(--color-red-10);
   }
 
   /* =================================================================
@@ -162,42 +292,47 @@
   }
 
   .dark {
-    --background: var(--color-neutral-900);
-    --foreground: var(--color-neutral-50);
-    --card: var(--color-neutral-900);
-    --card-foreground: var(--color-neutral-50);
-    --popover: var(--color-neutral-900);
-    --popover-foreground: var(--color-neutral-50);
-    --primary: var(--color-primary-100);
-    --primary-foreground: var(--color-neutral-950);
-    --secondary: var(--color-neutral-800);
-    --secondary-foreground: var(--color-neutral-50);
-    --tertiary: var(--color-warning-600);
-    --tertiary-foreground: var(--color-neutral-50);
-    --muted: var(--color-neutral-800);
-    --muted-foreground: var(--color-neutral-400);
-    --accent: var(--color-neutral-800);
-    --accent-foreground: var(--color-neutral-50);
-    --destructive: var(--color-error-800);
-    --destructive-foreground: var(--color-neutral-50);
-    --success: var(--color-success-700);
-    --success-foreground: var(--color-neutral-50);
-    --info: var(--color-info-800);
-    --info-foreground: var(--color-neutral-50);
-    --attention: var(--color-warning-400);
-    --attention-foreground: var(--color-neutral-50);
-    --warning: var(--color-warning-600);
-    --warning-foreground: var(--color-neutral-50);
-    --error: var(--color-error-800);
-    --error-foreground: var(--color-neutral-50);
-    --border: var(--color-neutral-300);
-    --input: var(--color-neutral-800);
-    --ring: var(--color-neutral-200);
-    --chart-1: var(--color-primary-400);
-    --chart-2: var(--color-success-400);
-    --chart-3: var(--color-warning-400);
-    --chart-4: var(--color-error-400);
-    --chart-5: var(--color-info-400);
+    /* Invert the color scales for dark mode */
+    --color-bg-surface: var(--color-gray-15);
+    --color-bg-surface-secondary: var(--color-gray-14);
+    --color-bg-surface-tertiary: var(--color-gray-13);
+    --color-bg-surface-disabled: var(--color-gray-13);
+    --color-bg-fill: var(--color-gray-11);
+    --color-bg-fill-secondary: var(--color-gray-10);
+    --color-bg-fill-tertiary: var(--color-gray-8);
+    --color-bg-fill-disabled: var(--color-gray-12);
+    --color-text: var(--color-gray-2);
+    --color-text-secondary: var(--color-gray-4);
+    --color-text-disabled: var(--color-gray-8);
+    --color-text-on-fill: var(--color-gray-16);
+    --color-icon: var(--color-gray-4);
+    --color-icon-secondary: var(--color-gray-6);
+    --color-icon-disabled: var(--color-gray-10);
+    --color-border: var(--color-gray-11);
+    --color-border-secondary: var(--color-gray-12);
+    --color-border-disabled: var(--color-gray-13);
+    
+    /* Adjust role colors for dark mode */
+    --color-bg-surface-brand: var(--color-blue-13);
+    --color-bg-surface-success: var(--color-green-14);
+    --color-bg-surface-critical: var(--color-red-14);
+    --color-bg-surface-warning: var(--color-yellow-14);
+    --color-bg-surface-info: var(--color-blue-14);
+    --color-bg-surface-magic: var(--color-purple-14);
+    
+    --color-text-brand: var(--color-blue-6);
+    --color-text-success: var(--color-green-6);
+    --color-text-critical: var(--color-red-6);
+    --color-text-warning: var(--color-yellow-6);
+    --color-text-info: var(--color-blue-5);
+    --color-text-magic: var(--color-purple-6);
+    
+    --color-icon-brand: var(--color-blue-7);
+    --color-icon-success: var(--color-green-7);
+    --color-icon-critical: var(--color-red-7);
+    --color-icon-warning: var(--color-yellow-7);
+    --color-icon-info: var(--color-blue-6);
+    --color-icon-magic: var(--color-purple-7);
   }
 }
 
