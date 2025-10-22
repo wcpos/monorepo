@@ -17,7 +17,7 @@ function Card({ className, ...props }: ViewProps) {
 }
 
 function CardHeader({ className, ...props }: ViewProps) {
-	return <View className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />;
+	return <View className={cn('flex flex-col p-6', className)} {...props} />;
 }
 
 function CardTitle({ className, ...props }: TextProps) {

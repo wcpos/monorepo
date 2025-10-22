@@ -83,13 +83,13 @@ export const PageUpgrade = ({
 				<View className="w-full sm:w-1/2">
 					<View className={cn('relative w-full', page !== 'reports' && 'drop-shadow-md')}>
 						<View className="w-full pb-[100%]" />
-						<Image source={imageURL} className="absolute left-0 top-0 h-full w-full" />
+						<Image source={imageURL} className="absolute top-0 left-0 h-full w-full" />
 					</View>
 				</View>
-				<VStack className="w-full space-y-4 p-4 sm:w-1/2">
+				<VStack className="w-full gap-4 p-4 sm:w-1/2">
 					<Text className="text-center text-2xl font-bold sm:text-left">{title}</Text>
 					<Text className="text-center sm:text-left">{description}</Text>
-					<HStack className="justify-center space-x-2 sm:justify-start">
+					<HStack className="justify-center gap-2 sm:justify-start">
 						<Button variant="secondary" onPress={() => Linking.openURL(demoURL)}>
 							{t('View Demo', { _tags: 'core' })}
 						</Button>

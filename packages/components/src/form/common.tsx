@@ -43,7 +43,7 @@ function FormItem({ className, ...props }: ViewProps) {
 
 	return (
 		<FormItemContext.Provider value={{ nativeID }}>
-			<View className={cn('space-y-1', className)} {...props} />
+			<View className={cn('gap-1', className)} {...props} />
 		</FormItemContext.Provider>
 	);
 }
@@ -57,7 +57,7 @@ function FormLabel({
 
 	return (
 		<Label
-			className={cn('native:pb-2 px-px pb-1', error && 'text-destructive', className)}
+			className={cn('p-1', error && 'text-destructive', className)}
 			nativeID={formItemNativeID}
 			{...props}
 		/>
