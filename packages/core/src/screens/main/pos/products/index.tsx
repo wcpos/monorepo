@@ -103,9 +103,9 @@ function renderItem({ item, index, table }) {
 /**
  *
  */
-const TableFooter = () => {
+const TableFooter = (props) => {
 	return (
-		<DataTableFooter>
+		<DataTableFooter {...props}>
 			<TaxBasedOn />
 		</DataTableFooter>
 	);

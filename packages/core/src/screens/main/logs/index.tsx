@@ -84,7 +84,8 @@ export function LogsScreen() {
 								noDataMessage={t('No logs found', { _tags: 'core' })}
 								estimatedItemSize={100}
 								keyExtractor={(row) => row.original.document.logId}
-								showFooter={false}
+								ListFooterComponent={() => {}}
+								TableFooterComponent={() => {}}
 							/>
 						</Suspense>
 					</ErrorBoundary>

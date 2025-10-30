@@ -23,7 +23,7 @@ import { TextCell } from '../../components/text-cell';
 import { useT } from '../../../../contexts/translations';
 import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
-import { ListFooterComponent } from './list-footer';
+import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
 
 import type { ColumnDef, HeaderContext, SortingState } from '@tanstack/react-table';
 
@@ -42,6 +42,8 @@ interface Props {
 	renderHeader?: (props: any) => React.ReactNode;
 	tableConfig?: any;
 	getItemType?: (row: any) => string;
+	ListFooterComponent?: React.ComponentType<any>;
+	TableFooterComponent?: React.ComponentType<any>;
 }
 
 /**
@@ -64,6 +66,8 @@ function DataTable<TData>({
 	renderHeader,
 	tableConfig,
 	getItemType,
+	ListFooterComponent,
+	TableFooterComponent,
 }: Props) {
 	const { uiSettings, getUILabel } = useUISettings(id);
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
@@ -167,13 +171,21 @@ function DataTable<TData>({
 							</Text>
 						</TableRow>
 					)}
-					ListFooterComponent={() => <ListFooterComponent query={query} />}
+					ListFooterComponent={
+						ListFooterComponent
+							? () => <ListFooterComponent query={query} />
+							: () => <DefaultListFooterComponent query={query} />
+					}
 					extraData={extraData}
 				/>
 			</VirtualizedList.Root>
 			{showFooter && (
 				<TableFooter>
-					<DataTableFooter query={query} count={result.hits.length} />
+					{TableFooterComponent ? (
+						<TableFooterComponent query={query} count={result.hits.length} />
+					) : (
+						<DataTableFooter query={query} count={result.hits.length} />
+					)}
 				</TableFooter>
 			)}
 		</Table>
