@@ -1,27 +1,18 @@
 import * as React from 'react';
 
-import Bottleneck from 'bottleneck';
 import set from 'lodash/set';
 
 import log from '@wcpos/utils/logger';
 
 import http from './http';
+import { scheduleRequest } from './request-queue';
+import { requestStateManager } from './request-state-manager';
 
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
 type AxiosRequestConfig = import('axios').AxiosRequestConfig;
 type AxiosError = import('axios').AxiosError;
 type AxiosResponse = import('axios').AxiosResponse;
-
-const limiter = new Bottleneck({
-	maxConcurrent: 10,
-	highWater: 50,
-	strategy: Bottleneck.strategy.BLOCK,
-});
-
-limiter.on('error', (error) => {
-	console.error('Queue limit exceeded!', error);
-});
 
 /**
  * Process multiple error handlers in order of priority
@@ -53,7 +44,7 @@ const processErrorHandlers = async (
 				errorStatus: error.response?.status,
 			},
 		});
-		
+
 		if (!handler.canHandle(error)) {
 			log.debug(`Handler ${handler.name} cannot handle this error, skipping`);
 			continue;
@@ -109,8 +100,14 @@ const processErrorHandlers = async (
 
 			// Special case: If token refresh handler throws an error with refresh token invalid flag,
 			// continue the chain to let the fallback handler process it
-			if (handler.name === 'token-refresh' && handlerError === error && (error as any).isRefreshTokenInvalid) {
-				log.debug(`Token refresh handler failed with invalid refresh token, continuing chain to fallback handler`);
+			if (
+				handler.name === 'token-refresh' &&
+				handlerError === error &&
+				(error as any).isRefreshTokenInvalid
+			) {
+				log.debug(
+					`Token refresh handler failed with invalid refresh token, continuing chain to fallback handler`
+				);
 				continue; // Continue to next handler instead of breaking
 			}
 
@@ -164,6 +161,42 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 	 * Make the actual HTTP request
 	 */
 	const makeRequest = React.useCallback(async (config: AxiosRequestConfig) => {
+		// Pre-flight check: ensure request can proceed based on global state
+		const canProceed = requestStateManager.checkCanProceed();
+		if (!canProceed.ok) {
+			// Create error with additional context
+			const error = new Error(canProceed.reason || 'Request blocked') as any;
+			error.errorCode = canProceed.errorCode;
+			error.isPreFlightBlocked = true;
+			
+			log.debug('Request blocked by pre-flight check', {
+				context: {
+					errorCode: canProceed.errorCode,
+					reason: canProceed.reason,
+					url: config.url,
+					method: config.method,
+				},
+			});
+			throw error;
+		}
+
+		// If token refresh is in progress, wait for it to complete
+		if (requestStateManager.isTokenRefreshing()) {
+			log.debug('Token refresh in progress, waiting before making request', {
+				context: {
+					url: config.url,
+					method: config.method,
+				},
+			});
+			await requestStateManager.awaitTokenRefresh();
+			log.debug('Token refresh completed, proceeding with request', {
+				context: {
+					url: config.url,
+					method: config.method,
+				},
+			});
+		}
+
 		const processedConfig = { ...config };
 
 		if (processedConfig.method?.toLowerCase() !== 'head') {
@@ -179,7 +212,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			set(processedConfig, ['params', 'XDEBUG_SESSION'], 'start');
 		}
 
-		return limiter.schedule(() => http.request(processedConfig));
+		return scheduleRequest(() => http.request(processedConfig));
 	}, []);
 
 	/**

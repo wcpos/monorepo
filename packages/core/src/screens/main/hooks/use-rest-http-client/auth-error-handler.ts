@@ -5,7 +5,9 @@ import { makeRedirectUri, ResponseType, useAuthRequest } from 'expo-auth-session
 import { BehaviorSubject } from 'rxjs';
 
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type { HttpErrorHandler } from '@wcpos/hooks/use-http-client';
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 
 import { useLoginHandler } from '../../../auth/hooks/use-login-handler';
 
@@ -45,32 +47,49 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 	// Handle OAuth trigger
 	React.useEffect(() => {
 		if (shouldTriggerAuth) {
-			log.debug('Triggering OAuth flow from state');
+			log.debug('Triggering OAuth authentication flow');
 			setShouldTriggerAuth(false); // Reset the flag
 			promptAsync().catch((authError) => {
-				log.error('Authentication flow failed', {
-					context: { error: authError instanceof Error ? authError.message : String(authError) },
+				log.error('Authentication failed - please try again', {
 					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.AUTH_REQUIRED,
+						siteName: site.name,
+						error: authError instanceof Error ? authError.message : String(authError),
+					},
 				});
 			});
 		}
-	}, [shouldTriggerAuth, promptAsync]);
+	}, [shouldTriggerAuth, promptAsync, site.name]);
 
 	// Handle auth response
 	React.useEffect(() => {
 		if (response?.type === 'success') {
-			log.debug(`Login successful for site: ${site.name}`);
-			handleLoginSuccess(response as any);
-		} else if (response?.type === 'error') {
-			log.error(`Login failed: ${response.error}`, {
+			log.success('Successfully logged in', {
 				showToast: true,
+			});
+			log.debug('Authentication successful', {
 				context: {
 					siteName: site.name,
-					response,
+					userId: wpCredentials.id,
+				},
+			});
+			// Clear auth failed state on successful login
+			requestStateManager.setAuthFailed(false);
+			handleLoginSuccess(response as any);
+		} else if (response?.type === 'error') {
+			log.error('Login failed - please check your credentials', {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.INVALID_CREDENTIALS,
+					siteName: site.name,
+					errorDetails: response.error,
 				},
 			});
 		}
-	}, [response, handleLoginSuccess, site.name]);
+	}, [response, handleLoginSuccess, site.name, wpCredentials.id]);
 
 	// Token refresh is now handled by the dedicated createTokenRefreshHandler
 	// This handler only deals with cases where token refresh has already failed

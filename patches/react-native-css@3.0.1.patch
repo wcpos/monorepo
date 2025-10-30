@@ -1,0 +1,130 @@
+diff --git a/dist/commonjs/native/styles/index.js b/dist/commonjs/native/styles/index.js
+index 6512ed54c117efaa85d9024e090942ea714f08ba..29d19b5c6042d56fd346c4a98c52992ab3a98880 100644
+--- a/dist/commonjs/native/styles/index.js
++++ b/dist/commonjs/native/styles/index.js
+@@ -66,9 +66,36 @@ function deepMergeConfig(config, left, right, rightIsInline = false) {
+       ...left
+     };
+   }
+-  let result = config.target ? Object.assign({}, left, right) : {
+-    ...left
+-  };
++    // Handle style merging to support both className and inline style props
++    let result;
++    if (config.target) {
++      if (Array.isArray(config.target) && config.target.length === 1 && config.target[0] === "style") {
++        // Special handling for style target when we have inline styles
++        result = { ...left, ...right };
++        // More performant approach - check for non-overlapping properties without Sets
++        if (left?.style && right?.style && rightIsInline) {
++          const leftStyle = left.style;
++          const rightStyle = right.style;
++          // Quick check: do any left properties NOT exist in right?
++          let hasNonOverlappingProperties = false;
++          for (const key in leftStyle) {
++            if (!(key in rightStyle)) {
++              hasNonOverlappingProperties = true;
++              break; // Early exit for performance
++            }
++          }
++  
++          if (hasNonOverlappingProperties) {
++            result.style = [leftStyle, rightStyle];
++          }
++          // Otherwise, Object.assign above will handle the override correctly
++        }
++      } else {
++        result = Object.assign({}, left, right);
++      }
++    } else {
++      result = { ...left };
++    };
+   if (right && rightIsInline && config.source in right && config.target !== config.source) {
+     delete result[config.source];
+   }
+diff --git a/dist/module/native/styles/index.js b/dist/module/native/styles/index.js
+index 6e52ce002e9fe6369e27ebd8226285b66e65a107..103ace8a23e06ee0d3258b3296441ad905061d52 100644
+--- a/dist/module/native/styles/index.js
++++ b/dist/module/native/styles/index.js
+@@ -61,9 +61,36 @@ function deepMergeConfig(config, left, right, rightIsInline = false) {
+       ...left
+     };
+   }
+-  let result = config.target ? Object.assign({}, left, right) : {
+-    ...left
+-  };
++  // Handle style merging to support both className and inline style props
++  let result;
++  if (config.target) {
++    if (Array.isArray(config.target) && config.target.length === 1 && config.target[0] === "style") {
++      // Special handling for style target when we have inline styles
++      result = { ...left, ...right };
++      // More performant approach - check for non-overlapping properties without Sets
++      if (left?.style && right?.style && rightIsInline) {
++        const leftStyle = left.style;
++        const rightStyle = right.style;
++        // Quick check: do any left properties NOT exist in right?
++        let hasNonOverlappingProperties = false;
++        for (const key in leftStyle) {
++          if (!(key in rightStyle)) {
++            hasNonOverlappingProperties = true;
++            break; // Early exit for performance
++          }
++        }
++
++        if (hasNonOverlappingProperties) {
++          result.style = [leftStyle, rightStyle];
++        }
++        // Otherwise, Object.assign above will handle the override correctly
++      }
++    } else {
++      result = Object.assign({}, left, right);
++    }
++  } else {
++    result = { ...left };
++  }
+   if (right && rightIsInline && config.source in right && config.target !== config.source) {
+     delete result[config.source];
+   }
+diff --git a/src/native/styles/index.ts b/src/native/styles/index.ts
+index 09ab073edc5d73eec0940f38b016c862004a4b87..acf731e5bde165918d90361541959f7bf969b000 100644
+--- a/src/native/styles/index.ts
++++ b/src/native/styles/index.ts
+@@ -135,7 +135,36 @@ function deepMergeConfig(
+     return { ...left };
+   }
+ 
+-  let result = config.target ? Object.assign({}, left, right) : { ...left };
++  // Handle style merging to support both className and inline style props
++  let result: Record<string, any> | undefined;
++  if (config.target) {
++    if (Array.isArray(config.target) && config.target.length === 1 && config.target[0] === "style") {
++      // Special handling for style target when we have inline styles
++      result = { ...left, ...right };
++      // More performant approach - check for non-overlapping properties without Sets
++      if (left?.style && right?.style && rightIsInline) {
++        const leftStyle = left.style;
++        const rightStyle = right.style;
++        // Quick check: do any left properties NOT exist in right?
++        let hasNonOverlappingProperties = false;
++        for (const key in leftStyle) {
++          if (!(key in rightStyle)) {
++            hasNonOverlappingProperties = true;
++            break; // Early exit for performance
++          }
++        }
++
++        if (hasNonOverlappingProperties) {
++          result.style = [leftStyle, rightStyle];
++        }
++        // Otherwise, Object.assign above will handle the override correctly
++      }
++    } else {
++      result = Object.assign({}, left, right);
++    }
++  } else {
++    result = { ...left };
++  }
+ 
+   if (
+     right &&

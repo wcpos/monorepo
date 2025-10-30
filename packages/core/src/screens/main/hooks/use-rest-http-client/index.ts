@@ -6,8 +6,10 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import useHttpClient, { RequestConfig } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { errorSubject, useAuthErrorHandler } from './auth-error-handler';
@@ -22,7 +24,13 @@ function extractValidJSON(responseString) {
 	const indexOfJsonStart = responseString.search(/[{[]/);
 
 	if (indexOfJsonStart === -1) {
-		log.error('No JSON found in the response');
+		log.error('Server returned invalid response - no JSON found', {
+			saveToDb: true,
+			context: {
+				errorCode: ERROR_CODES.MALFORMED_JSON_RESPONSE,
+				responsePreview: responseString.substring(0, 200),
+			},
+		});
 		return null;
 	}
 
@@ -38,7 +46,13 @@ function extractValidJSON(responseString) {
 		}
 	}
 
-	log.error('Valid JSON not found in the response');
+	log.error('Unable to parse server response', {
+		saveToDb: true,
+		context: {
+			errorCode: ERROR_CODES.MALFORMED_JSON_RESPONSE,
+			responsePreview: responseString.substring(0, 200),
+		},
+	});
 	return null;
 }
 
@@ -103,6 +117,15 @@ export const useRestHttpClient = (endpoint = '') => {
 	);
 
 	/**
+	 * Sync online status with the request state manager
+	 */
+	React.useEffect(() => {
+		const isOffline = onlineStatus === 'offline' || onlineStatus === 'online-website-unavailable';
+		requestStateManager.setOffline(isOffline);
+		// Logging happens in requestStateManager.setOffline()
+	}, [onlineStatus]);
+
+	/**
 	 *
 	 */
 	const httpClient = useHttpClient(errorHandlers);
@@ -112,22 +135,8 @@ export const useRestHttpClient = (endpoint = '') => {
 	 */
 	const request = React.useCallback(
 		async (reqConfig: RequestConfig = {}) => {
-			// Check connection status and provide better error context
-			if (onlineStatus === 'offline') {
-				const error = new Error('Device is offline');
-				log.error('HTTP request failed: Device offline', {
-					context: { endpoint, reqConfig, onlineStatus },
-				});
-				throw error;
-			}
-
-			if (onlineStatus === 'online-website-unavailable') {
-				const error = new Error('Website is unreachable');
-				log.error('HTTP request failed: Website unreachable', {
-					context: { endpoint, reqConfig, onlineStatus },
-				});
-				throw error;
-			}
+			// Online status is now checked by the request state manager pre-flight check
+			// No need to manually check here - requests will be blocked automatically
 
 			const shouldUseJwtAsParam = get(
 				window,
@@ -161,20 +170,30 @@ export const useRestHttpClient = (endpoint = '') => {
 
 			const config = merge({}, defaultConfig, reqConfig);
 
-			return httpClient.request(config).then((response) => {
-				/**
-				 * This is a HACK
-				 * Some servers return invalid JSON, so we try to recover from it
-				 * eg: rando WordPress plugin echo's out a bunch of HTML before the JSON
-				 */
-				if (typeof response?.data === 'string') {
-					log.error('Trying to recover from invalid JSON response', {
-						context: { responseData: response?.data },
-					});
-					response.data = extractValidJSON(response?.data);
+		return httpClient.request(config).then((response) => {
+			/**
+			 * This is a HACK
+			 * Some servers return invalid JSON, so we try to recover from it
+			 * eg: rando WordPress plugin echo's out a bunch of HTML before the JSON
+			 */
+			if (typeof response?.data === 'string') {
+				log.warn('Server returned text instead of JSON - attempting recovery', {
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.JSON_RECOVERY_ATTEMPTED,
+						endpoint,
+						url: config.url,
+						responsePreview: response.data.substring(0, 200),
+					},
+				});
+				response.data = extractValidJSON(response?.data);
+				
+				if (response.data) {
+					log.debug('Successfully recovered valid JSON from response');
 				}
-				return response;
-			});
+			}
+			return response;
+		});
 		},
 		[endpoint, httpClient, jwt, store.id, site, onlineStatus]
 	);
