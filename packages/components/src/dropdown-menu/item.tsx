@@ -8,7 +8,7 @@ import { TextClassContext } from '../text';
 
 const itemVariants = cva(
 	[
-		'web:cursor-default native:py-2 relative flex flex-row items-center gap-2 rounded-sm px-2 py-1.5',
+		'web:cursor-default relative flex flex-row items-center gap-2 rounded-sm px-2 py-1.5',
 		'web:outline-none web:focus:bg-accent active:bg-accent web:hover:bg-accent group',
 	],
 	{

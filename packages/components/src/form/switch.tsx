@@ -47,7 +47,7 @@ export function FormSwitch({
 				/>
 				{!!label && (
 					<FormLabel
-						className="native:pb-0 grow"
+						className="grow"
 						nativeID={formItemNativeID}
 						onPress={handleOnLabelPress}
 					>

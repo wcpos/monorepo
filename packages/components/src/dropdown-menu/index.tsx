@@ -36,7 +36,7 @@ function DropdownMenuSubTrigger({
 		<TextClassContext.Provider value={cn('select-none', open && 'native:text-accent-foreground')}>
 			<DropdownMenuPrimitive.SubTrigger
 				className={cn(
-					'web:cursor-default web:select-none web:focus:bg-accent web:hover:bg-accent active:bg-accent native:py-2 web:outline-none',
+					'web:cursor-default web:select-none web:focus:bg-accent web:hover:bg-accent active:bg-accent web:outline-none',
 					'flex flex-row items-center gap-2 rounded-sm px-2 py-1.5',
 					open && 'bg-accent',
 					inset && 'pl-8',
@@ -120,7 +120,7 @@ function DropdownMenuCheckboxItem({
 	return (
 		<DropdownMenuPrimitive.CheckboxItem
 			className={cn(
-				'web:cursor-default web:group native:py-2 web:outline-none web:focus:bg-accent active:bg-accent',
+				'web:cursor-default web:group web:outline-none web:focus:bg-accent active:bg-accent',
 				'relative flex flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
 				props.disabled && 'web:pointer-events-none opacity-50',
 				className
@@ -147,7 +147,7 @@ function DropdownMenuRadioItem({
 	return (
 		<DropdownMenuPrimitive.RadioItem
 			className={cn(
-				'web:cursor-default web:group native:py-2 web:outline-none web:focus:bg-accent active:bg-accent',
+				'web:cursor-default web:group web:outline-none web:focus:bg-accent active:bg-accent',
 				'relative flex flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
 				props.disabled && 'web:pointer-events-none opacity-50',
 				className

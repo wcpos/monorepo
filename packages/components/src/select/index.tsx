@@ -25,7 +25,6 @@ function SelectTrigger({ className, children, ...props }: SelectPrimitive.Trigge
 	return (
 		<SelectPrimitiveTrigger
 			className={cn(
-				'native:h-12',
 				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
 				'text-muted-foreground flex h-10 flex-row items-center justify-between gap-2 px-3 py-2 text-sm',
 				'border-input bg-background rounded-md border',
@@ -143,7 +142,6 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 	return (
 		<SelectPrimitive.Item
 			className={cn(
-				'native:py-2 native:pl-10',
 				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent',
 				'relative flex w-full flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
 				props.disabled && 'web:pointer-events-none opacity-50',
@@ -151,12 +149,12 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 			)}
 			{...props}
 		>
-			<View className="native:left-3.5 native:pt-px absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+			<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
 				<SelectPrimitive.ItemIndicator>
 					<Icon name="check" className="text-popover-foreground" />
 				</SelectPrimitive.ItemIndicator>
 			</View>
-			<SelectPrimitive.ItemText className="native:text-base web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
+			<SelectPrimitive.ItemText className="web:group-focus:text-accent-foreground text-popover-foreground text-sm" />
 		</SelectPrimitive.Item>
 	);
 }
@@ -174,7 +172,7 @@ function SelectButton({ className, children, ...props }: ButtonProps) {
 	return (
 		<Button
 			className={cn(
-				'native:h-12 web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
+				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
 				'border-input bg-background text-muted-foreground flex h-10 flex-row items-center justify-between rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
 				props.disabled && 'web:cursor-not-allowed opacity-50',
 				className

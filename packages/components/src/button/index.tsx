@@ -81,11 +81,11 @@ const buttonVariants = cva(
 				'ghost-error': 'bg-error/15 web:hover:bg-error active:bg-error text-error-foreground',
 			},
 			size: {
-				default: 'native:h-12 native:px-5 native:py-3 h-10 px-4 py-2',
-				xs: 'native:h-8 native:px-3 h-6 px-2',
-				sm: 'native:h-10 native:px-4 h-9 px-3',
-				lg: 'native:h-14 native:px-10 h-11 px-8',
-				xl: 'native:h-16 native:px-8 h-14 px-10',
+				default: 'h-10 px-4 py-2',
+				xs: 'h-6 px-2',
+				sm: 'h-9 px-3',
+				lg: 'h-11 px-8',
+				xl: 'h-14 px-10',
 			},
 		},
 		defaultVariants: {
@@ -143,11 +143,11 @@ const buttonTextVariants = cva(
 				'ghost-error': 'text-error group-hover:text-error-foreground',
 			},
 			size: {
-				default: 'native:leading-6',
-				xs: 'native:leading-5 text-xs',
-				sm: 'native:leading-6 text-sm',
-				lg: 'native:leading-7 text-lg',
-				xl: 'native:leading-8 text-xl',
+				default: '',
+				xs: 'text-xs',
+				sm: 'text-sm',
+				lg: 'text-lg',
+				xl: 'text-xl',
 			},
 		},
 		defaultVariants: {

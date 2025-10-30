@@ -91,7 +91,7 @@ function ComboboxValue({ asChild, placeholder, className, ...props }: ComboboxVa
 		<View
 			className={cn(
 				'w-full flex-row items-center',
-				'native:h-12 border-input bg-background h-10 rounded-md border px-2',
+				'border-input bg-background h-10 rounded-md border px-2',
 				'web:ring-offset-background',
 				// isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
 				// disabled && 'web:cursor-not-allowed opacity-50',
@@ -238,7 +238,7 @@ function ComboboxList({
 function ComboboxEmpty({ children, className, ...props }: ComboboxEmptyProps) {
 	return (
 		<View className={cn('prx-2 py-1.5', className)} {...props}>
-			<Text className="native:text-base web:group-focus:text-accent-foreground text-popover-foreground text-sm">
+			<Text className="web:group-focus:text-accent-foreground text-popover-foreground text-sm">
 				{children}
 			</Text>
 		</View>
@@ -276,7 +276,7 @@ function ComboboxItemText({ className, ...props }: ComboboxItemTextProps) {
 	return (
 		<Text
 			className={cn(
-				'native:text-base web:group-focus:text-accent-foreground text-popover-foreground text-sm',
+				'web:group-focus:text-accent-foreground text-popover-foreground text-sm',
 				className
 			)}
 			decodeHtml
