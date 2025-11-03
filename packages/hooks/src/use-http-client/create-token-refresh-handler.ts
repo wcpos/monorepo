@@ -77,17 +77,45 @@ export const createTokenRefreshHandler = ({
 					// Wait for the in-progress refresh to complete
 					await requestStateManager.awaitTokenRefresh();
 
-					log.debug('Token refresh completed, retrying original request', {
+					// Get the refreshed token from the state manager
+					const freshToken = requestStateManager.getRefreshedToken();
+
+					if (!freshToken) {
+						log.error('Token refresh completed but no token available', {
+							saveToDb: true,
+							context: {
+								errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
+								userId: wpUser.id,
+								originalUrl: originalConfig.url,
+							},
+						});
+						throw error;
+					}
+
+					log.debug('Token refresh completed, retrying with fresh token', {
 						context: {
 							userId: wpUser.id,
 							originalUrl: originalConfig.url,
 						},
 					});
 
-					// The token has been updated in the database by the first request
-					// The retry will pick up the new token from the request config
-					// which should already be updated via the observable in useRestHttpClient
-					return await retryRequest(originalConfig);
+					// Update the config with the fresh token
+					const updatedConfig = { ...originalConfig };
+
+					if (site.use_jwt_as_param) {
+						updatedConfig.params = {
+							...updatedConfig.params,
+							authorization: `Bearer ${freshToken}`,
+						};
+					} else {
+						updatedConfig.headers = {
+							...updatedConfig.headers,
+							Authorization: `Bearer ${freshToken}`,
+						};
+					}
+
+					// Retry with the fresh token
+					return await retryRequest(updatedConfig);
 				} catch (refreshError) {
 					// Refresh failed while we were waiting - likely invalid refresh token
 					log.debug('Token refresh failed while waiting for completion', {
@@ -110,10 +138,7 @@ export const createTokenRefreshHandler = ({
 				},
 			});
 
-			// Variable to store the new access token
-			let newAccessToken: string | null = null;
-
-			// Start the token refresh
+			// Start the token refresh - this will return the new token
 			try {
 				await requestStateManager.startTokenRefresh(async () => {
 					// Pause the queue during token refresh
@@ -148,18 +173,18 @@ export const createTokenRefreshHandler = ({
 							},
 						});
 
-					if (!access_token) {
-						log.error('Session refresh failed - please log in again', {
-							showToast: true,
-							saveToDb: true,
-							context: {
-								errorCode: ERROR_CODES.REFRESH_TOKEN_INVALID,
-								userId: wpUser.id,
-								responseStatus: refreshResponse.status,
-							},
-						});
-						throw new Error('REFRESH_TOKEN_INVALID');
-					}
+						if (!access_token) {
+							log.error('Session refresh failed - please log in again', {
+								showToast: true,
+								saveToDb: true,
+								context: {
+									errorCode: ERROR_CODES.REFRESH_TOKEN_INVALID,
+									userId: wpUser.id,
+									responseStatus: refreshResponse.status,
+								},
+							});
+							throw new Error('REFRESH_TOKEN_INVALID');
+						}
 
 						log.debug('Token refresh successful', {
 							context: {
@@ -174,11 +199,11 @@ export const createTokenRefreshHandler = ({
 							expires_at,
 						});
 
-						// Store the new token for use in retry
-						newAccessToken = access_token;
-
 						// Resume the queue now that token is refreshed
 						resumeQueue();
+
+						// Return the new token - it will be stored in RequestStateManager
+						return access_token;
 					} catch (refreshError) {
 						// Resume queue even if refresh failed
 						resumeQueue();
@@ -233,30 +258,43 @@ export const createTokenRefreshHandler = ({
 					}
 				});
 
-				// Token refresh completed successfully, update config with new token
+				// Token refresh completed successfully, get the token from state manager
+				const freshToken = requestStateManager.getRefreshedToken();
+
+				if (!freshToken) {
+					log.error('Token refresh completed but no token available', {
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
+							userId: wpUser.id,
+							originalUrl: originalConfig.url,
+						},
+					});
+					throw error;
+				}
+
+				// Update config with the fresh token
 				const updatedConfig = { ...originalConfig };
 
-				if (newAccessToken) {
-					if (site.use_jwt_as_param) {
-						// Update JWT in query parameters
-						updatedConfig.params = {
-							...updatedConfig.params,
-							authorization: `Bearer ${newAccessToken}`,
-						};
-					} else {
-						// Update JWT in Authorization header
-						updatedConfig.headers = {
-							...updatedConfig.headers,
-							Authorization: `Bearer ${newAccessToken}`,
-						};
-					}
+				if (site.use_jwt_as_param) {
+					// Update JWT in query parameters
+					updatedConfig.params = {
+						...updatedConfig.params,
+						authorization: `Bearer ${freshToken}`,
+					};
+				} else {
+					// Update JWT in Authorization header
+					updatedConfig.headers = {
+						...updatedConfig.headers,
+						Authorization: `Bearer ${freshToken}`,
+					};
 				}
 
 				log.debug('Retrying request after successful token refresh', {
 					context: {
 						userId: wpUser.id,
 						originalUrl: originalConfig.url,
-						hasNewToken: !!newAccessToken,
+						hasNewToken: !!freshToken,
 					},
 				});
 

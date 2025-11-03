@@ -11,6 +11,7 @@ class RequestStateManager {
 	// Token refresh coordination
 	private tokenRefreshPromise: Promise<void> | null = null;
 	private isRefreshing = false;
+	private refreshedToken: string | null = null; // Store the new token for waiting requests
 
 	// Global state flags
 	private offline = false;
@@ -73,7 +74,7 @@ class RequestStateManager {
 	 * Start a token refresh operation. Only the first caller proceeds with refresh,
 	 * subsequent callers await the same promise.
 	 */
-	async startTokenRefresh(refreshFn: () => Promise<void>): Promise<void> {
+	async startTokenRefresh(refreshFn: () => Promise<string>): Promise<void> {
 		if (this.tokenRefreshPromise) {
 			log.debug('Token refresh already in progress, awaiting existing operation');
 			return this.tokenRefreshPromise;
@@ -81,10 +82,12 @@ class RequestStateManager {
 
 		log.debug('Starting coordinated token refresh');
 		this.isRefreshing = true;
+		this.refreshedToken = null; // Clear any previous token
 
 		this.tokenRefreshPromise = refreshFn()
-			.then(() => {
+			.then((newToken) => {
 				log.debug('Token refresh completed successfully');
+				this.refreshedToken = newToken; // Store the new token for waiting requests
 				this.isRefreshing = false;
 				this.authFailed = false; // Clear auth failed state on success
 				this.tokenRefreshPromise = null;
@@ -96,6 +99,7 @@ class RequestStateManager {
 						error: error instanceof Error ? error.message : String(error),
 					},
 				});
+				this.refreshedToken = null; // Clear token on failure
 				this.isRefreshing = false;
 				this.tokenRefreshPromise = null;
 				throw error;
@@ -201,12 +205,27 @@ class RequestStateManager {
 	}
 
 	/**
+	 * Get the refreshed token (only available after successful refresh)
+	 */
+	getRefreshedToken(): string | null {
+		return this.refreshedToken;
+	}
+
+	/**
+	 * Clear the refreshed token
+	 */
+	clearRefreshedToken(): void {
+		this.refreshedToken = null;
+	}
+
+	/**
 	 * Reset all state (useful for testing or logout)
 	 */
 	reset(): void {
 		log.debug('Resetting request state manager');
 		this.tokenRefreshPromise = null;
 		this.isRefreshing = false;
+		this.refreshedToken = null;
 		this.offline = false;
 		this.authFailed = false;
 		this.requestsPaused = false;
