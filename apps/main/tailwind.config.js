@@ -1,9 +1,8 @@
 /**
  * Tailwind CSS v4 Configuration for NativeWind v5
  *
- * This version uses the modern oklch color format for better color handling
- * and opacity support. The oklch format provides better perceptual uniformity
- * and wider color gamut compared to HSL.
+ * Uses modern oklch color format for better color handling and opacity support.
+ * Colors are defined in global.css with oklch() wrapper and referenced here directly.
  */
 
 /** @type {import('tailwindcss').Config} */
@@ -36,45 +35,17 @@ module.exports = {
 			},
 			fontSize: {
 				// Native uses default rem=14px, Web scales down by 87.5%
-				xs: ['0.75rem', '1.167'], // Native: 10.5px, Web: 10.5px
-				sm: ['0.875rem', '1.143'], // Native: 12.25px, Web: 12.25px
-				base: ['1rem', '1.5'], // Native: 16px, Web: 14px (using unitless for direct px on native)
-				lg: ['1.125rem', '1.556'], // Native: 15.75px, Web: 15.75px
-				xl: ['1.25rem', '1.4'], // Native: 17.5px, Web: 17.5px
-				'2xl': ['1.5rem', '1.333'], // Native: 21px, Web: 21px
-				'3xl': ['1.875rem', '1.2'], // Native: 26.25px, Web: 26.25px
-				'4xl': ['2.25rem', '1.111'], // Native: 31.5px, Web: 31.5px
-				'5xl': ['3rem', '1.083'], // Native: 42px, Web: 42px
+				xs: ['0.8125rem', '1.167'],
+				sm: ['0.875rem', '1.143'],
+				base: ['1rem', '1.5'],
+				lg: ['1.125rem', '1.556'],
+				xl: ['1.25rem', '1.4'],
+				'2xl': ['1.5rem', '1.333'],
+				'3xl': ['1.875rem', '1.2'],
+				'4xl': ['2.25rem', '1.111'],
+				'5xl': ['3rem', '1.083'],
 			},
 			colors: {
-				// Polaris-inspired color system
-				// Surface colors for backgrounds
-				surface: {
-					DEFAULT: 'var(--color-bg-surface)',
-					secondary: 'var(--color-bg-surface-secondary)',
-					tertiary: 'var(--color-bg-surface-tertiary)',
-					disabled: 'var(--color-bg-surface-disabled)',
-					brand: 'var(--color-bg-surface-brand)',
-					success: 'var(--color-bg-surface-success)',
-					critical: 'var(--color-bg-surface-critical)',
-					warning: 'var(--color-bg-surface-warning)',
-					info: 'var(--color-bg-surface-info)',
-					magic: 'var(--color-bg-surface-magic)',
-				},
-				// Fill colors for buttons and strong elements
-				fill: {
-					DEFAULT: 'var(--color-bg-fill)',
-					secondary: 'var(--color-bg-fill-secondary)',
-					tertiary: 'var(--color-bg-fill-tertiary)',
-					disabled: 'var(--color-bg-fill-disabled)',
-					brand: 'var(--color-bg-fill-brand)',
-					success: 'var(--color-bg-fill-success)',
-					critical: 'var(--color-bg-fill-critical)',
-					warning: 'var(--color-bg-fill-warning)',
-					info: 'var(--color-bg-fill-info)',
-					magic: 'var(--color-bg-fill-magic)',
-				},
-				// Legacy semantic mappings for backward compatibility
 				border: 'var(--border)',
 				input: 'var(--input)',
 				ring: 'var(--ring)',
@@ -132,37 +103,6 @@ module.exports = {
 					DEFAULT: 'var(--card)',
 					foreground: 'var(--card-foreground)',
 				},
-			},
-			// Add text colors
-			textColor: {
-				DEFAULT: 'var(--color-text)',
-				secondary: 'var(--color-text-secondary)',
-				disabled: 'var(--color-text-disabled)',
-				'on-fill': 'var(--color-text-on-fill)',
-				brand: 'var(--color-text-brand)',
-				'on-brand': 'var(--color-text-on-brand)',
-				success: 'var(--color-text-success)',
-				'on-success': 'var(--color-text-on-success)',
-				critical: 'var(--color-text-critical)',
-				'on-critical': 'var(--color-text-on-critical)',
-				warning: 'var(--color-text-warning)',
-				'on-warning': 'var(--color-text-on-warning)',
-				info: 'var(--color-text-info)',
-				'on-info': 'var(--color-text-on-info)',
-				magic: 'var(--color-text-magic)',
-				'on-magic': 'var(--color-text-on-magic)',
-			},
-			// Add border colors
-			borderColor: {
-				DEFAULT: 'var(--color-border)',
-				secondary: 'var(--color-border-secondary)',
-				disabled: 'var(--color-border-disabled)',
-				brand: 'var(--color-border-brand)',
-				success: 'var(--color-border-success)',
-				critical: 'var(--color-border-critical)',
-				warning: 'var(--color-border-warning)',
-				info: 'var(--color-border-info)',
-				magic: 'var(--color-border-magic)',
 			},
 			borderRadius: {
 				lg: 'var(--radius)',
