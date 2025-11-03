@@ -217,41 +217,41 @@ export const createTokenRefreshHandler = ({
 							(refreshError instanceof Error && errorMsg === 'REFRESH_TOKEN_INVALID') ||
 							(refreshError as any)?.response?.status === 401;
 
-					if (isRefreshTokenInvalid) {
-						log.error('Your session has expired - please log in again', {
-							showToast: true,
+						if (isRefreshTokenInvalid) {
+							log.error('Your session has expired - please log in again', {
+								showToast: true,
+								saveToDb: true,
+								context: {
+									errorCode: ERROR_CODES.REFRESH_TOKEN_INVALID,
+									userId: wpUser.id,
+									siteUrl: site.url,
+								},
+							});
+
+							// Set auth failed state
+							requestStateManager.setAuthFailed(true);
+
+							// Mark the original error as refresh token invalid and let other handlers process it
+							(error as any).isRefreshTokenInvalid = true;
+							(error as any).refreshTokenInvalid = true;
+
+							log.debug('Refresh token invalid - triggering OAuth fallback handler');
+
+							// Throw the marked error to let other handlers process it
+							// The fallback handler will catch this specific error
+							throw error;
+						}
+
+						log.error('Unable to refresh session', {
 							saveToDb: true,
 							context: {
-								errorCode: ERROR_CODES.REFRESH_TOKEN_INVALID,
+								errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
+								error: errorMsg,
 								userId: wpUser.id,
 								siteUrl: site.url,
+								originalStatus: error.response?.status,
 							},
 						});
-
-						// Set auth failed state
-						requestStateManager.setAuthFailed(true);
-
-						// Mark the original error as refresh token invalid and let other handlers process it
-						(error as any).isRefreshTokenInvalid = true;
-						(error as any).refreshTokenInvalid = true;
-
-						log.debug('Refresh token invalid - triggering OAuth fallback handler');
-
-						// Throw the marked error to let other handlers process it
-						// The fallback handler will catch this specific error
-						throw error;
-					}
-
-					log.error('Unable to refresh session', {
-						saveToDb: true,
-						context: {
-							errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
-							error: errorMsg,
-							userId: wpUser.id,
-							siteUrl: site.url,
-							originalStatus: error.response?.status,
-						},
-					});
 
 						// Re-throw the original error since refresh failed
 						throw error;
