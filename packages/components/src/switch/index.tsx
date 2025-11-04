@@ -41,7 +41,7 @@ const webSwitchVariants = cva(
 );
 
 const webThumbVariants = cva(
-	'bg-background shadow-foreground/5 pointer-events-none block rounded-full shadow-md ring-0 transition-transform',
+	'bg-background  pointer-events-none block rounded-full shadow-md ring-0 transition-transform',
 	{
 		variants: {
 			size: {

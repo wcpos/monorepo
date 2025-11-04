@@ -190,10 +190,10 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.TriggerProps) {
 		>
 			<TabsPrimitive.Trigger
 				className={cn(
-					'web:whitespace-nowrap inline-flex items-center justify-center rounded-sm px-3 py-1.5 shadow-none',
+					'web:whitespace-nowrap inline-flex items-center justify-center rounded-md px-3 py-1.5',
 					'web:ring-offset-background web:transition-all web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
 					props.disabled && 'web:pointer-events-none opacity-50',
-					props.value === value && 'bg-primary shadow-foreground/10 shadow-lg',
+					props.value === value && 'bg-primary shadow-sm',
 					className
 				)}
 				{...props}

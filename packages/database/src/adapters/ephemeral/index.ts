@@ -9,5 +9,6 @@ export const devStorage = wrappedValidateZSchemaStorage({
 
 export const ephemeralStorageConfig = {
 	storage: __DEV__ ? devStorage : storage,
+	multiInstance: false, // must be false for react native
 	ignoreDuplicate: !!__DEV__,
 };

@@ -46,7 +46,12 @@ export default function RootLayout() {
 						<HydrationProviders>
 							<RootStack />
 							<ErrorBoundary>
-								<Toaster position="top-center" richColors />
+								<Toaster
+									position="top-center"
+									// Force light theme for now
+									theme="light"
+									richColors
+								/>
 							</ErrorBoundary>
 						</HydrationProviders>
 					</KeyboardProvider>

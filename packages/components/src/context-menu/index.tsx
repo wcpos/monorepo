@@ -53,7 +53,7 @@ const ContextMenuSubContent = React.forwardRef<
 		<ContextMenuPrimitive.SubContent
 			ref={ref}
 			className={cn(
-				'border-border bg-popover shadow-foreground/5 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 mt-1 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
+				'border-border bg-popover data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 mt-1 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
 				open
 					? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 					: 'web:animate-out web:fade-out-0 web:zoom-out',
@@ -92,7 +92,7 @@ const ContextMenuContent = React.forwardRef<
 				<ContextMenuPrimitive.Content
 					ref={ref}
 					className={cn(
-						'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 border-border bg-popover shadow-foreground/5 z-50 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
+						'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 border-border bg-popover z-50 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
 						open
 							? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 							: 'web:animate-out web:fade-out-0 web:zoom-out-95',

@@ -8,7 +8,7 @@ function Card({ className, ...props }: ViewProps) {
 	return (
 		<View
 			className={cn(
-				'border-border bg-card shadow-foreground/10 rounded-lg border shadow-sm',
+				'border-border bg-card rounded-lg border shadow-md',
 				className
 			)}
 			{...props}
@@ -17,7 +17,7 @@ function Card({ className, ...props }: ViewProps) {
 }
 
 function CardHeader({ className, ...props }: ViewProps) {
-	return <View className={cn('flex flex-col p-6', className)} {...props} />;
+	return <View className={cn('flex flex-col p-6 rounded-t-lg', className)} {...props} />;
 }
 
 function CardTitle({ className, ...props }: TextProps) {

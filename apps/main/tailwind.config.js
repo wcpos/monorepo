@@ -35,8 +35,8 @@ module.exports = {
 			},
 			fontSize: {
 				// Native uses default rem=14px, Web scales down by 87.5%
-				xs: ['0.8125rem', '1.167'],
-				sm: ['0.875rem', '1.143'],
+				xs: ['0.875rem', '1.143'],
+				sm: ['0.9375rem', '1.25'],
 				base: ['1rem', '1.5'],
 				lg: ['1.125rem', '1.556'],
 				xl: ['1.25rem', '1.4'],
@@ -103,11 +103,6 @@ module.exports = {
 					DEFAULT: 'var(--card)',
 					foreground: 'var(--card-foreground)',
 				},
-			},
-			borderRadius: {
-				lg: 'var(--radius)',
-				md: 'calc(var(--radius) - 2px)',
-				sm: 'calc(var(--radius) - 4px)',
 			},
 			borderWidth: {
 				hairline: 'var(--hairline-width)',
