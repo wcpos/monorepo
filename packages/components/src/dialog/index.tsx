@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, ScrollViewProps, StyleSheet, View, ViewProps } from 'react-native';
 
 import * as DialogPrimitive from '@rn-primitives/dialog';
 import * as Slot from '@rn-primitives/slot';
@@ -12,10 +12,8 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
-import { Text, TextClassContext } from '../text';
 
-import type { ButtonProps } from '../button';
-import type { PressableRef, SlottableTextProps, TextRef } from '@rn-primitives/types';
+import type { SlottablePressableProps } from '@rn-primitives/types';
 
 const Dialog = DialogPrimitive.Root;
 
@@ -23,36 +21,29 @@ const DialogTrigger = DialogPrimitive.Trigger;
 
 const DialogPortal = DialogPrimitive.Portal;
 
+const DialogTitle = DialogPrimitive.Title;
+
 /**
  * @TODO - it would be good to expand the Dialog context to include button presses from the Action component.
  */
 const useRootContext = DialogPrimitive.useRootContext;
 
-const DialogOverlayWeb = React.forwardRef<
-	React.ElementRef<typeof DialogPrimitive.Overlay>,
-	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => {
+function DialogOverlayWeb({ className, ...props }: DialogPrimitive.OverlayProps) {
 	const { open } = DialogPrimitive.useRootContext();
 	return (
 		<DialogPrimitive.Overlay
 			className={cn(
-				'absolute bottom-0 left-0 right-0 top-0 flex items-center justify-center bg-black/70 p-2',
+				'absolute top-0 right-0 bottom-0 left-0 flex items-center justify-center bg-black/70 p-2',
 				open ? 'web:animate-in web:fade-in-0' : 'web:animate-out web:fade-out-0',
 				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				className
 			)}
 			{...props}
-			ref={ref}
 		/>
 	);
-});
+}
 
-DialogOverlayWeb.displayName = 'DialogOverlayWeb';
-
-const DialogOverlayNative = React.forwardRef<
-	React.ElementRef<typeof DialogPrimitive.Overlay>,
-	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, children, ...props }, ref) => {
+function DialogOverlayNative({ className, children, ...props }: DialogPrimitive.OverlayProps) {
 	const insets = useSafeAreaInsets();
 
 	return (
@@ -64,7 +55,6 @@ const DialogOverlayNative = React.forwardRef<
 				className
 			)}
 			{...props}
-			ref={ref}
 		>
 			<KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={insets.bottom}>
 				<Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
@@ -73,16 +63,15 @@ const DialogOverlayNative = React.forwardRef<
 			</KeyboardAvoidingView>
 		</DialogPrimitive.Overlay>
 	);
-});
+}
 
-DialogOverlayNative.displayName = 'DialogOverlayNative';
-
-const DialogClose = React.forwardRef<PressableRef, ButtonProps>(({ asChild, ...props }, ref) => (
-	<DialogPrimitive.Close ref={ref} asChild>
-		{asChild ? <Slot.Pressable {...props} /> : <Button variant="outline" {...props} />}
-	</DialogPrimitive.Close>
-));
-DialogClose.displayName = 'DialogClose';
+function DialogClose({ asChild, ...props }: DialogPrimitive.CloseProps) {
+	return (
+		<DialogPrimitive.Close asChild>
+			{asChild ? <Slot.Pressable {...props} /> : <Button variant="outline" {...props} />}
+		</DialogPrimitive.Close>
+	);
+}
 
 const DialogOverlay = Platform.select({
 	web: DialogOverlayWeb,
@@ -109,18 +98,18 @@ const dialogContentVariants = cva(
 	}
 );
 
-const DialogContent = React.forwardRef<
-	React.ElementRef<typeof DialogPrimitive.Content>,
-	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
-		portalHost?: string;
-	} & VariantProps<typeof dialogContentVariants>
->(({ className, size, children, portalHost, ...props }, ref) => {
+function DialogContent({
+	className,
+	size,
+	children,
+	portalHost,
+	...props
+}: DialogPrimitive.ContentProps & VariantProps<typeof dialogContentVariants>) {
 	const { open } = DialogPrimitive.useRootContext();
 	return (
 		<DialogPortal hostName={portalHost}>
 			<DialogOverlay>
 				<DialogPrimitive.Content
-					ref={ref}
 					className={cn(
 						dialogContentVariants({ size }),
 						open
@@ -131,7 +120,7 @@ const DialogContent = React.forwardRef<
 					{...props}
 				>
 					{children}
-					<View className="absolute right-2 top-2">
+					<View className="absolute top-2 right-2">
 						<DialogClose
 							className="web:transition-opacity web:hover:opacity-100 opacity-70"
 							asChild
@@ -143,88 +132,67 @@ const DialogContent = React.forwardRef<
 			</DialogOverlay>
 		</DialogPortal>
 	);
-});
-DialogContent.displayName = DialogPrimitive.Content.displayName;
+}
 
 /**
  * NOTE: extra space on right for the close button
  */
-const DialogHeader = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
-	<View
-		className={cn('flex flex-col gap-1.5 pl-4 pr-8 text-center sm:text-left', className)}
-		{...props}
-	/>
-);
-DialogHeader.displayName = 'DialogHeader';
+function DialogHeader({ className, ...props }: ViewProps) {
+	return (
+		<View
+			className={cn('flex flex-col gap-1.5 pr-8 pl-4 text-center sm:text-left', className)}
+			{...props}
+		/>
+	);
+}
 
-const DialogFooter = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
-	<View
-		className={cn(
-			'flex max-w-full flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end',
-			className
-		)}
-		{...props}
-	/>
-);
-DialogFooter.displayName = 'DialogFooter';
+function DialogFooter({ className, ...props }: ViewProps) {
+	return (
+		<View
+			className={cn(
+				'flex max-w-full flex-col-reverse gap-2 px-4 sm:flex-row sm:justify-end',
+				className
+			)}
+			{...props}
+		/>
+	);
+}
 
-const DialogTitle = React.forwardRef<TextRef, SlottableTextProps>(
-	({ className, asChild, ...props }, ref) => {
-		const Component = asChild ? Slot.Text : Text;
+function DialogDescription({ className, ...props }: DialogPrimitive.DescriptionProps) {
+	return (
+		<DialogPrimitive.Description
+			className={cn('text-muted-foreground text-sm', className)}
+			{...props}
+		/>
+	);
+}
 
-		return (
-			<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
-				<DialogPrimitive.Title asChild>
-					<Component {...props} ref={ref} />
-				</DialogPrimitive.Title>
-			</TextClassContext.Provider>
-		);
-	}
-);
-DialogTitle.displayName = 'DialogTitle';
-
-const DialogDescription = React.forwardRef<
-	React.ElementRef<typeof DialogPrimitive.Description>,
-	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
->(({ className, ...props }, ref) => (
-	<DialogPrimitive.Description
-		ref={ref}
-		className={cn('text-muted-foreground text-sm', className)}
-		{...props}
-	/>
-));
-DialogDescription.displayName = DialogPrimitive.Description.displayName;
-
-const DialogBody = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof ScrollView>) => (
-	<ScrollView
-		horizontal={false}
-		className={cn('flex flex-col gap-2 px-4 py-1', className)}
-		{...props}
-	/>
-);
-DialogBody.displayName = 'DialogBody';
+function DialogBody({ className, ...props }: ScrollViewProps) {
+	return (
+		<ScrollView
+			horizontal={false}
+			className={cn('flex flex-col gap-2 px-4 py-1', className)}
+			{...props}
+		/>
+	);
+}
 
 /**
  * TODO: it would be nice to pass the onPress handler to the useRootContext hook so that we can
  * detect button presses from anywhere in the dialog.
  */
-const DialogAction = React.forwardRef<PressableRef, ButtonProps>(
-	({ asChild, disabled, ...props }, ref) => {
-		return asChild ? (
-			<Slot.Pressable
-				ref={ref}
-				aria-disabled={disabled ?? undefined}
-				role="button"
-				disabled={disabled ?? undefined}
-				{...props}
-			/>
-		) : (
-			<Button aria-disabled={disabled ?? undefined} disabled={disabled ?? undefined} {...props} />
-		);
-	}
-);
-
-DialogAction.displayName = 'DialogAction';
+function DialogAction({ asChild, disabled, ...props }: SlottablePressableProps) {
+	return asChild ? (
+		<Slot.Pressable
+			aria-disabled={disabled ?? undefined}
+			role="button"
+			disabled={disabled ?? undefined}
+			{...props}
+		/>
+	) : (
+		<Button aria-disabled={disabled ?? undefined} disabled={disabled ?? undefined} {...props} />
+	);
+}
 
 export {
 	Dialog,
