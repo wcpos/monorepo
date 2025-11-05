@@ -6,6 +6,8 @@
 
 @import "nativewind/theme";
 
+@import "tw-animate-css";
+
 @theme {
   /* No theme-level custom properties needed */
 }

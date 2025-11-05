@@ -48,6 +48,7 @@ const clean = (dir) => {
 	rm(`${dir}/build`);
 	rm(`${dir}/dist`);
 	rm(`${dir}/.expo`);
+	rm(`${dir}/.turbo`);
 	rm(`${dir}/pnpm-lock.yaml`);
 };
 
