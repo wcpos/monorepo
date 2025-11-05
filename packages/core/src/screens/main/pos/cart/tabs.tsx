@@ -42,7 +42,7 @@ export const OpenOrderTabs = () => {
 			orientation="horizontal"
 			className="h-7"
 		>
-			<ScrollableTabsList className="p-0">
+			<ScrollableTabsList className="bg-transparent p-0">
 				{openOrders.map(({ id, document }) => (
 					<TabsTrigger
 						key={id}
