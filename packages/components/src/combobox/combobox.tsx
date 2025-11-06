@@ -229,6 +229,7 @@ function ComboboxList({
 			<VirtualizedListPrimitive.List
 				data={filteredData}
 				estimatedItemSize={estimatedItemSize}
+				style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0 }}
 				{...restVirtualizedListProps}
 			/>
 		</VirtualizedListPrimitive.Root>
@@ -245,14 +246,14 @@ function ComboboxEmpty({ children, className, ...props }: ComboboxEmptyProps) {
 	);
 }
 
-function ComboboxItem({ value, label, className, ...props }: ComboboxItemProps) {
+function ComboboxItem({ value, label, item, className, ...props }: ComboboxItemProps) {
 	const { onValueChange } = useComboboxRootContext();
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
 
 	const handlePress = React.useCallback(() => {
-		onValueChange({ value, label });
+		onValueChange({ value, label, item });
 		onOpenChange(false);
-	}, [onValueChange, value, label, onOpenChange]);
+	}, [onValueChange, value, label, item, onOpenChange]);
 
 	return (
 		<VirtualizedListPrimitive.Item>

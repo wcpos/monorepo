@@ -51,6 +51,7 @@ type ComboboxEmptyProps = ViewProps & {
 type ComboboxItemProps = ViewProps & {
 	value: string;
 	label: string;
+	item: any; // allow the item object to be passed in
 	disabled?: boolean;
 };
 

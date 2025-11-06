@@ -123,7 +123,7 @@ export function CustomerList({ query, withGuest }: { query: any; withGuest: bool
 				}
 			}}
 			renderItem={({ item }) => (
-				<ComboboxItem>
+				<ComboboxItem value={item.document.id} item={item.document}>
 					<CustomerSelectItem customer={item.document} />
 				</ComboboxItem>
 			)}
