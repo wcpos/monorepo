@@ -19,6 +19,7 @@ function Textarea({
 	minHeight = 40,
 	style,
 	onFocus,
+	onSelectionChange,
 	...props
 }: TextareaProps) {
 	/**
@@ -71,6 +72,18 @@ function Textarea({
 	);
 
 	/**
+	 * Handler for when the selection changes (cursor position or text selection).
+	 * Updates the local selection state to prevent cursor jumping on re-renders.
+	 */
+	const handleSelectionChange = React.useCallback(
+		(e: any) => {
+			setSelection(e.nativeEvent.selection);
+			onSelectionChange?.(e);
+		},
+		[onSelectionChange]
+	);
+
+	/**
 	 * Effect to reset the height of the TextInput to `minHeight` when the value is empty.
 	 * This ensures the TextInput shrinks back to its minimum height when all text is deleted.
 	 */
@@ -94,6 +107,7 @@ function Textarea({
 			onContentSizeChange={onContentSizeChange}
 			onFocus={handleFocus}
 			selection={selection}
+			onSelectionChange={handleSelectionChange}
 			style={[style, animatedStyle]}
 			{...props}
 		/>
