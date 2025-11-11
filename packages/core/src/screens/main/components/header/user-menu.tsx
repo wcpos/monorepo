@@ -24,6 +24,7 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import Platform from '@wcpos/utils/platform';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
@@ -102,7 +103,7 @@ export const UserMenu = () => {
 					<Icon name="commentQuestion" />
 					<Text>{t('Support', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>
-				{isWebApp && (
+				{Platform.isWeb && (
 					<DropdownMenuItem
 						onPress={() => Linking.openURL('https://github.com/wcpos/electron/releases')}
 					>
@@ -129,7 +130,7 @@ export const UserMenu = () => {
 						<DropdownMenuSeparator />
 					</>
 				)}
-				{isWebApp && (
+				{Platform.isWeb && (
 					<DropdownMenuItem onPress={() => Linking.openURL(`${site.home}/wp-admin`)}>
 						<Icon name="wordpress" />
 						<Text>{t('WordPress Admin', { _tags: 'core' })}</Text>

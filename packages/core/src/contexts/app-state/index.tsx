@@ -60,6 +60,19 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 	);
 
 	const logout = React.useCallback(async () => {
+		if (Platform.isWeb) {
+			// Get logout URL from global initialProps if available
+			const initialProps = (globalThis as any).initialProps;
+			if (initialProps?.logout_url) {
+				window.location.href = initialProps.logout_url;
+			} else {
+				// Fallback to reloading the page
+				window.location.reload();
+			}
+			return;
+		}
+
+		// Native logout
 		await state.appState.set('current', () => null);
 
 		updateAppState({
@@ -70,17 +83,6 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 			fastStoreDB: undefined,
 			extraData: undefined,
 		});
-
-		if (Platform.isWeb && typeof window !== 'undefined') {
-			// Get logout URL from global initialProps if available
-			const initialProps = (globalThis as any).initialProps;
-			if (initialProps?.logout_url) {
-				window.location.href = initialProps.logout_url;
-			} else {
-				// Fallback to reloading the page
-				window.location.reload();
-			}
-		}
 	}, [state.appState, updateAppState]);
 
 	const switchStore = React.useCallback(
