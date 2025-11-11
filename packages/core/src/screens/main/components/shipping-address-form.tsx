@@ -67,12 +67,20 @@ export const ShippingAddressForm = () => {
 				<FormField
 					control={control}
 					name="shipping.company"
-					render={({ field }) => <FormInput label={t('Company', { _tags: 'core' })} {...field} />}
+					render={({ field }) => (
+						<View className="flex-1">
+							<FormInput label={t('Company', { _tags: 'core' })} {...field} />
+						</View>
+					)}
 				/>
 				<FormField
 					control={control}
 					name="shipping.phone"
-					render={({ field }) => <FormInput label={t('Phone', { _tags: 'core' })} {...field} />}
+					render={({ field }) => (
+						<View className="flex-1">
+							<FormInput label={t('Phone', { _tags: 'core' })} {...field} />
+						</View>
+					)}
 				/>
 			</HStack>
 			<FormField

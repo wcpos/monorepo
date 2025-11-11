@@ -186,6 +186,9 @@ export const ordersLiteral = {
 				state: {
 					type: 'string',
 				},
+				phone: {
+					type: 'string',
+				},
 			},
 		},
 		payment_method: {
