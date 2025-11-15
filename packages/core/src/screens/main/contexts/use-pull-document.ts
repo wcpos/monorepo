@@ -3,8 +3,8 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { isRxDocument } from 'rxdb';
 
-import { Toast } from '@wcpos/components/toast';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
@@ -40,15 +40,21 @@ const usePullDocument = () => {
 					// 		message: t('Item synced', { _tags: 'core' }),
 					// 	});
 					// }
-					return success;
-				}
-			} catch (err) {
-				log.error(err);
-				Toast.show({
-					type: 'error',
-					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
-				});
+				return success;
 			}
+		} catch (err) {
+			log.error(t('There was an error: {error}', { _tags: 'core', error: err.message }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					documentId: id,
+					collectionName: collection.name,
+					endpoint,
+					error: err instanceof Error ? err.message : String(err),
+				},
+			});
+		}
 		},
 		[http, t]
 	);

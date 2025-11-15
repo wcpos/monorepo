@@ -16,8 +16,9 @@ import {
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
-import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
 import { CurrencyInput } from '../../../components/currency-input';
@@ -95,20 +96,29 @@ export const EditVariationForm = ({ variation }: Props) => {
 					document: variation,
 					data,
 				});
-				await pushDocument(variation).then((savedDoc) => {
-					if (isRxDocument(savedDoc)) {
-						Toast.show({
-							type: 'success',
-							text1: t('{name} saved', { _tags: 'core', name: variation.name }),
-						});
-					}
-				});
-			} catch (error) {
-				Toast.show({
-					type: 'error',
-					text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
-				});
-			} finally {
+			await pushDocument(variation).then((savedDoc) => {
+				if (isRxDocument(savedDoc)) {
+					log.success(t('{name} saved', { _tags: 'core', name: variation.name }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							variationId: savedDoc.id,
+							variationName: variation.name,
+						},
+					});
+				}
+			});
+		} catch (error) {
+			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					variationId: variation.id,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		} finally {
 				setLoading(false);
 			}
 		},

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { Toast } from '@wcpos/components/toast';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
@@ -49,14 +49,18 @@ export const useAddFee = () => {
 					meta_data,
 				});
 
-				await addItemToOrder('fee_lines', newFeeLine);
-			} catch (error) {
-				log.error(error);
-				Toast.show({
-					type: 'error',
-					text1: t('Error adding Fee to cart', { _tags: 'core' }),
-				});
-			}
+			await addItemToOrder('fee_lines', newFeeLine);
+		} catch (error) {
+			log.error(t('Error adding Fee to cart', { _tags: 'core' }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					feeName: data.name,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		}
 		},
 		[calculateFeeLineTaxesAndTotals, addItemToOrder, t]
 	);

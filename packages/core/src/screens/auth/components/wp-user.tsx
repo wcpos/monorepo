@@ -21,7 +21,8 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
-import { Toast } from '@wcpos/components/toast';
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -45,10 +46,15 @@ export const WpUser = ({ site, wpUser }: Props) => {
 	const handleLogin = React.useCallback(
 		async (storeID: string) => {
 			if (!storeID) {
-				Toast.show({
-					type: 'error',
-					title: t('No store selected', { _tags: 'core' }),
+				log.error(t('No store selected', { _tags: 'core' }), {
+					showToast: true,
+					context: {
+						errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS,
+						siteId: site.uuid,
+						userId: wpUser.uuid,
+					},
 				});
+				return;
 			}
 			login({
 				siteID: site.uuid,

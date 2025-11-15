@@ -162,8 +162,11 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 					errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
 				}
 
-				log.error(`[${errorCode}] Failed to save site data: ${err.message}`, {
+				log.error(`Failed to save site data: ${err.message}`, {
 					showToast: true,
+					context: {
+						errorCode,
+					},
 				});
 
 				throw new Error(t('Failed to save site data', { _tags: 'core' }));

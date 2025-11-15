@@ -1,6 +1,7 @@
 import toNumber from 'lodash/toNumber';
 
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -27,7 +28,12 @@ export const sanitizePrice = (price?: string) => (price && price !== '' ? String
  */
 export const getUuidFromLineItemMetaData = (metaData: CartLine['meta_data']) => {
 	if (!Array.isArray(metaData)) {
-		log.error('metaData is not an array');
+		log.error('metaData is not an array', {
+			context: {
+				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
+				metaData,
+			},
+		});
 		return;
 	}
 	const uuidMeta = metaData.find((meta) => meta.key === '_woocommerce_pos_uuid');
@@ -41,7 +47,12 @@ export const getUuidFromLineItemMetaData = (metaData: CartLine['meta_data']) => 
  */
 export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
 	if (!Array.isArray(metaData)) {
-		log.error('metaData is not an array');
+		log.error('metaData is not an array', {
+			context: {
+				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
+				metaData,
+			},
+		});
 		return;
 	}
 	const taxStatusMetaData = metaData.find((meta) => meta.key === '_woocommerce_pos_tax_status');
@@ -53,7 +64,13 @@ export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
  */
 export const getMetaDataValueByKey = (metaData: CartLine['meta_data'], key: string) => {
 	if (!Array.isArray(metaData)) {
-		log.error('metaData is not an array');
+		log.error('metaData is not an array', {
+			context: {
+				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
+				metaData,
+				key,
+			},
+		});
 		return;
 	}
 	const meta = metaData.find((m) => m.key === key);
@@ -88,7 +105,14 @@ export const findByProductVariationID = (
 	variationId = 0
 ) => {
 	if (!Array.isArray(lineItems)) {
-		log.error('lineItems is not an array');
+		log.error('lineItems is not an array', {
+			context: {
+				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
+				lineItems,
+				productId,
+				variationId,
+			},
+		});
 		return;
 	}
 	const matchingItems = lineItems.filter(
@@ -292,7 +316,13 @@ export const parsePosData = (item: CartLine) => {
 			return JSON.parse(posData);
 		}
 	} catch (error) {
-		log.error('Error parsing posData:', error);
+		log.error('Error parsing posData', {
+			context: {
+				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
+				posData,
+				error: error instanceof Error ? error.message : String(error),
+			},
+		});
 	}
 	return null;
 };

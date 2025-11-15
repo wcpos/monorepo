@@ -15,8 +15,9 @@ import {
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
-import { Toast } from '@wcpos/components/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
@@ -61,31 +62,39 @@ export const AddNewCustomer = () => {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-				const savedDoc = await create({ data });
-				if (isRxDocument(savedDoc)) {
-					Toast.show({
-						type: 'success',
-						text1: t('{name} saved', { _tags: 'core', name: format(savedDoc) }),
-					});
-					if (currentOrder) {
-						const json = savedDoc.toJSON();
-						await localPatch({
-							document: currentOrder,
-							data: {
-								customer_id: json.id,
-								billing: json.billing,
-								shipping: json.shipping,
-							},
-						});
-						setOpen(false);
-					}
-				}
-			} catch (error) {
-				Toast.show({
-					type: 'error',
-					text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+			const savedDoc = await create({ data });
+			if (isRxDocument(savedDoc)) {
+				log.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						customerId: savedDoc.id,
+						customerName: format(savedDoc),
+					},
 				});
-			} finally {
+				if (currentOrder) {
+					const json = savedDoc.toJSON();
+					await localPatch({
+						document: currentOrder,
+						data: {
+							customer_id: json.id,
+							billing: json.billing,
+							shipping: json.shipping,
+						},
+					});
+					setOpen(false);
+				}
+			}
+		} catch (error) {
+			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		} finally {
 				setLoading(false);
 			}
 		},

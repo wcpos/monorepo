@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Toast } from '@wcpos/components/toast';
 import { isRxDocument } from '@wcpos/database';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -71,17 +71,25 @@ export const useAddProduct = () => {
 
 			// returned success should be the updated order
 			if (success) {
-				Toast.show({
-					type: 'success',
-					text1: t('{name} added to cart', { _tags: 'core', name: product.name }),
+				log.success(t('{name} added to cart', { _tags: 'core', name: product.name }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						productId: product.id,
+						productName: product.name,
+						orderId: currentOrder.id,
+					},
 				});
 			} else {
-				log.error('Error adding product to order', {
-					product: product.id,
-				});
-				Toast.show({
-					type: 'error',
-					text1: t('Error adding {name} to cart', { _tags: 'core', name: product.name }),
+				log.error(t('Error adding {name} to cart', { _tags: 'core', name: product.name }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						productId: product.id,
+						productName: product.name,
+						orderId: currentOrder.id,
+					},
 				});
 			}
 		},

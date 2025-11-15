@@ -8,6 +8,14 @@ export interface LoggerOptions {
 	showToast?: boolean;
 	saveToDb?: boolean;
 	context?: any;
+	toast?: {
+		text2?: string; // Secondary message
+		dismissable?: boolean; // Show close button
+		action?: {
+			label: string; // Action button label (e.g., "Undo")
+			onClick: () => void; // Custom action handler
+		};
+	};
 }
 
 // Extended logger interface with custom options support
@@ -83,17 +91,46 @@ const mainTransport = (props: any) => {
 			toastType = 'warning';
 		}
 
-		toastShow({
+		// Build toast config with support for complex props
+		const toastConfig: any = {
 			type: toastType,
-			title: message,
-			action: errorCode
-				? {
-						label: 'Help',
-						onClick: () => console.log(`Opening help for error code: ${errorCode}`),
-					}
-				: undefined,
-			// text2: message,
-		});
+			text1: message, // Use text1 for legacy format compatibility
+		};
+
+		// Add secondary message if provided
+		if (options.toast?.text2) {
+			toastConfig.text2 = options.toast.text2;
+		}
+
+		// Build props object if needed
+		const toastProps: any = {};
+
+		// Add dismissable prop
+		if (options.toast?.dismissable !== undefined) {
+			toastProps.dismissable = options.toast.dismissable;
+		}
+
+		// Handle actions - custom action takes precedence, fallback to Help for error codes
+		if (options.toast?.action) {
+			// Custom action provided
+			toastProps.action = {
+				label: options.toast.action.label,
+				action: options.toast.action.onClick,
+			};
+		} else if (errorCode) {
+			// Default Help action for error codes
+			toastProps.action = {
+				label: 'Help',
+				action: () => console.log(`Opening help for error code: ${errorCode}`),
+			};
+		}
+
+		// Only add props if we have any
+		if (Object.keys(toastProps).length > 0) {
+			toastConfig.props = toastProps;
+		}
+
+		toastShow(toastConfig);
 	}
 
 	// 3. Save to database if available and requested

@@ -5,7 +5,8 @@ import { useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { Button } from '@wcpos/components/button';
-import { Toast } from '@wcpos/components/toast';
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
 import usePushDocument from '../../../contexts/use-push-document';
@@ -38,9 +39,14 @@ export const PayButton = () => {
 				}
 			});
 		} catch (error) {
-			Toast.show({
-				type: 'error',
-				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					orderId: currentOrder.id,
+					error: error instanceof Error ? error.message : String(error),
+				},
 			});
 		} finally {
 			setLoading(false);

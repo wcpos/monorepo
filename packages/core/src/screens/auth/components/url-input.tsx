@@ -6,8 +6,9 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Input } from '@wcpos/components/input';
 import { Label } from '@wcpos/components/label';
-import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 import useSiteConnect from '../hooks/use-site-connect';
@@ -22,12 +23,16 @@ export function UrlInput() {
 	 */
 	React.useEffect(() => {
 		if (error) {
-			Toast.show({
-				type: 'error',
-				title: t('{message}', { _tags: 'core', message: error || 'Error' }),
+			log.error(t('{message}', { _tags: 'core', message: error || 'Error' }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.INVALID_URL_FORMAT,
+					url,
+				},
 			});
 		}
-	}, [error, t]);
+	}, [error, t, url]);
 
 	/**
 	 *

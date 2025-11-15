@@ -1,0 +1,65 @@
+category,pattern,log_level,error_code,show_toast,save_to_db,toast_extras,rationale,example_file,count
+POS_ADD_ITEM_SUCCESS,Product/variation/fee/shipping added successfully,success,none,yes,yes,none,User feedback + audit trail of cart changes,use-add-product.ts,4
+POS_ADD_ITEM_ERROR,Failed to add item to cart,error,TRANSACTION_FAILED,yes,yes,none,User blocked + needs tracking for support,use-add-product.ts,4
+POS_REMOVE_ITEM,Item removed with undo action,success,none,yes,yes,undo_action,User feedback + audit trail + allows undo,use-remove-line-item.ts,1
+VOID_ORDER,Order voided with undo action,success,none,yes,yes,undo_action,Critical operation + audit trail + allows undo,void.tsx,1
+VOID_UNDO_ERROR,Failed to restore voided order,error,TRANSACTION_FAILED,yes,yes,none,Critical failure needs immediate attention,void.tsx,1
+SAVE_ORDER_SUCCESS,Order saved to server successfully,success,none,yes,yes,none,User feedback + audit trail,save-order.tsx,1
+SAVE_ORDER_ERROR,Failed to save order to server,error,TRANSACTION_FAILED,yes,yes,none,User blocked + needs tracking,save-order.tsx,1
+CHECKOUT_ERROR,Checkout failed,error,TRANSACTION_FAILED,yes,yes,none,User blocked + financial tracking,pay.tsx,1
+PAYMENT_PROCESSING_ERROR,Payment gateway error,error,PAYMENT_GATEWAY_ERROR,yes,yes,none,Financial + user blocked + needs tracking,payment-webview.tsx,2
+CUSTOMER_SAVE_SUCCESS,Customer saved successfully,success,none,yes,yes,none,User feedback + data audit trail,add-customer.tsx,3
+CUSTOMER_SAVE_ERROR,Failed to save customer,error,TRANSACTION_FAILED,yes,yes,none,User blocked + needs tracking,add-customer.tsx,3
+CUSTOMER_NOT_FOUND,Customer record not found,error,RECORD_NOT_FOUND,yes,yes,none,User blocked + data integrity issue,edit-cart-customer.tsx,1
+ORDER_SAVE_SUCCESS,Order record saved successfully,success,none,yes,yes,none,User feedback + data audit trail,orders/edit/form.tsx,1
+ORDER_SAVE_ERROR,Failed to save order record,error,TRANSACTION_FAILED,yes,yes,none,User blocked + needs tracking,orders/edit/form.tsx,1
+PRODUCT_SAVE_SUCCESS,Product saved successfully,success,none,yes,yes,none,User feedback + data audit trail,products/edit/product/form.tsx,2
+PRODUCT_SAVE_ERROR,Failed to save product,error,TRANSACTION_FAILED,yes,yes,none,User blocked + needs tracking,products/edit/product/form.tsx,2
+VARIATION_SAVE_SUCCESS,Variation saved successfully,success,none,yes,yes,none,User feedback + data audit trail,products/edit/variation/form.tsx,1
+VARIATION_SAVE_ERROR,Failed to save variation,error,TRANSACTION_FAILED,yes,yes,none,User blocked + needs tracking,products/edit/variation/form.tsx,1
+EMAIL_SENT_SUCCESS,Receipt email sent successfully,success,none,yes,yes,none,User feedback + communication audit,receipt/email.tsx,1
+EMAIL_SEND_ERROR,Failed to send receipt email,error,CONNECTION_REFUSED,yes,yes,none,User needs to know + track failures,receipt/email.tsx,1
+DOCUMENT_DELETE_SUCCESS,Document deleted from server,success,none,yes,yes,none,User feedback + audit trail,use-delete-document.tsx,1
+DOCUMENT_DELETE_ERROR,Failed to delete document,error,TRANSACTION_FAILED,yes,yes,none,User blocked + needs tracking,use-delete-document.tsx,1
+DOCUMENT_PUSH_ERROR,Failed to push document to server,error,TRANSACTION_FAILED,yes,yes,none,User blocked + sync tracking,use-push-document.ts,1
+DOCUMENT_PULL_ERROR,Failed to pull document from server,error,TRANSACTION_FAILED,yes,yes,none,User blocked + sync tracking,use-pull-document.ts,1
+LOCAL_PATCH_ERROR,Failed to patch local document,error,TRANSACTION_FAILED or CONSTRAINT_VIOLATION,yes,yes,none,User blocked + data integrity,use-local-mutation.ts,1
+MUTATION_SAVE_SUCCESS,Generic document save success,success,none,yes,yes,none,User feedback + audit trail,use-mutation.ts,1
+MUTATION_ERROR,Generic mutation error,error,varies,yes,yes,none,User blocked + needs tracking,use-mutation.ts,1
+BARCODE_NOT_FOUND,Barcode scan found 0 or multiple products,error,RECORD_NOT_FOUND,yes,yes,text2,User needs guidance + track issues,use-barcode.ts,2
+BARCODE_OUT_OF_STOCK,Scanned product out of stock,warn,none,yes,no,text2,User notification only,use-barcode.ts,1
+BARCODE_SHORT,Barcode too short,warn,none,yes,no,text2,User validation feedback,use-barcode-detection.ts,1
+BARCODE_SUCCESS,Product added via barcode scan,success,none,yes,yes,text2,User feedback + audit trail,use-barcode.ts,2
+QUERY_ERROR,Query manager error,error,QUERY_SYNTAX_ERROR,yes,yes,none,App-wide error display + tracking,errors.tsx,1
+AUTH_NO_STORE,No store selected for login,error,MISSING_REQUIRED_PARAMETERS,yes,no,none,User validation feedback,wp-user.tsx,1
+AUTH_URL_ERROR,Invalid URL during connection,error,INVALID_URL_FORMAT,yes,yes,none,User blocked + track connection issues,url-input.tsx,1
+DATA_TYPE_ERROR,MetaData or lineItems not array,error,INVALID_DATA_TYPE,no,no,none,Developer troubleshooting only,utils.ts,5
+METADATA_PARSE_ERROR,Failed to parse metadata JSON,error,INVALID_DATA_TYPE,no,no,none,Developer troubleshooting only,variable-price.tsx,3
+LOGIN_PATCH_ERROR,Failed to update login credentials,error,TRANSACTION_FAILED,no,yes,none,Track auth failures,login.tsx,1
+TRANSLATION_FETCH_ERROR,Failed to fetch translations,error,CONNECTION_REFUSED,no,no,none,Developer troubleshooting only,translations/index.tsx,1
+TOKEN_REFRESH_SUCCESS,Token refresh completed,debug,none,no,no,none,Developer troubleshooting only,create-token-refresh-handler.ts,9
+TOKEN_REFRESH_FAILED,Token refresh failed,error,TOKEN_REFRESH_FAILED or REFRESH_TOKEN_INVALID,varies,yes,none,Critical auth + needs tracking,create-token-refresh-handler.ts,5
+REQUEST_STATE_CHANGES,State manager lifecycle events,debug,none,no,no,none,Developer troubleshooting only,request-state-manager.ts,16
+REQUEST_QUEUE_FULL,Too many requests queued,error,REQUEST_QUEUE_FULL,yes,yes,none,User blocked + system issue,request-queue.ts,1
+REQUEST_QUEUE_DEBUG,Queue coordination events,debug,none,no,no,none,Developer troubleshooting only,request-queue.ts,3
+HTTP_ERROR_HANDLER,Handler processing events,debug,none,no,no,none,Developer troubleshooting only,use-http-client.tsx,11
+HTTP_ERRORS,HTTP status code errors,error,varies by status,yes,no,none,User blocked + immediate action needed,use-http-error-handler.tsx,10
+AUTH_ERROR_HANDLING,OAuth fallback and auth errors,debug or error,varies,varies,varies,none,Auth flow coordination,auth-error-handler.ts,10
+API_DISCOVERY,API endpoint discovery and validation,info or error,varies,varies,no,none,Setup flow + user feedback,use-api-discovery.ts,12
+SITE_CONNECTION,Site connection flow,info or debug,varies,no,no,none,Setup flow tracking,use-site-connect.ts,5
+LOGIN_FLOW,Login processing,info or debug,varies,varies,varies,none,Auth flow tracking,use-login-handler.ts,7
+URL_DISCOVERY,URL discovery and validation,debug,none,no,no,none,Setup flow tracking,use-url-discovery.ts,2
+DB_CREATE_ERROR,Database creation failure,error,CONNECTION_FAILED,yes,yes,none,Critical + blocks app,create-db.ts,4
+DB_CLEAR_DEBUG,Database clearing progress,debug,none,no,no,none,Developer troubleshooting only,clear-all-db.ts,13
+DB_CLEAR_ERROR,Database clearing failure,error,TRANSACTION_FAILED,yes,yes,none,Critical operation + needs tracking,clear-all-db.ts,1
+DB_VALIDATION_ERROR,Schema validation failed,error,CONSTRAINT_VIOLATION,no,yes,none,Track data integrity issues,validate.ts,1
+DB_VALIDATION_DEBUG,Validation error details,debug,none,no,no,none,Developer troubleshooting only,validate.ts,1
+DB_DELETE_SUCCESS,Database deleted successfully,info,none,no,no,none,System operation audit trail,delete-db.ts,1
+DB_DELETE_ERROR,Database deletion failed,error,TRANSACTION_FAILED,no,yes,none,Track system issues,delete-db.ts,1
+SQLITE_ERRORS,SQLite operation failures,error,varies,no,yes,none,Track database issues,index.electron.ts,5
+USER_VALIDATION,User validation checks,debug,none,no,no,none,Developer troubleshooting only,use-user-validation.ts,4
+SITE_INFO,Site information logging,debug or info,none,no,no,none,Developer troubleshooting only,use-site-info.ts,2
+ONLINE_STATUS,Network online/offline status,info,none,no,no,none,Important state change,online.tsx,3
+MISC_DEBUG,Various debug logging,debug,none,no,no,none,Developer troubleshooting only,various,10+
+
+SUMMARY_TOTALS,Total log statements across codebase,all,varies,varies,varies,varies,Complete migration of 247 log statements,all,247

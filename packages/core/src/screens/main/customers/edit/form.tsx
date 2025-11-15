@@ -6,7 +6,8 @@ import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { Toast } from '@wcpos/components/toast';
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
@@ -53,20 +54,29 @@ export const EditCustomerForm = ({ customer }: Props) => {
 					document: customer,
 					data,
 				});
-				await pushDocument(customer).then((savedDoc) => {
-					if (isRxDocument(savedDoc)) {
-						Toast.show({
-							type: 'success',
-							text1: t('{name} saved', { _tags: 'core', name: format(savedDoc) }),
-						});
-					}
-				});
-			} catch (error) {
-				Toast.show({
-					type: 'error',
-					text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
-				});
-			} finally {
+			await pushDocument(customer).then((savedDoc) => {
+				if (isRxDocument(savedDoc)) {
+					log.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							customerId: savedDoc.id,
+							customerName: format(savedDoc),
+						},
+					});
+				}
+			});
+		} catch (error) {
+			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					customerId: customer.id,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		} finally {
 				setLoading(false);
 			}
 		},

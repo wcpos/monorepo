@@ -19,9 +19,9 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
-import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
@@ -125,20 +125,29 @@ export const EditOrderForm = ({ order }: Props) => {
 					document: order,
 					data,
 				});
-				await pushDocument(order).then((savedDoc) => {
-					if (isRxDocument(savedDoc)) {
-						Toast.show({
-							type: 'success',
-							text1: t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
-						});
-					}
-				});
-			} catch (error) {
-				Toast.show({
-					type: 'error',
-					text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
-				});
-			} finally {
+			await pushDocument(order).then((savedDoc) => {
+				if (isRxDocument(savedDoc)) {
+					log.success(t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							orderId: savedDoc.id,
+							orderNumber: savedDoc.number,
+						},
+					});
+				}
+			});
+		} catch (error) {
+			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					orderId: order.id,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		} finally {
 				setLoading(false);
 			}
 		},
@@ -197,7 +206,13 @@ export const EditOrderForm = ({ order }: Props) => {
 
 				form.setValue('customer_id', customerId);
 			} catch (error) {
-				log.error('Error fetching customer:', error);
+				log.error('Error fetching customer', {
+					context: {
+						errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+						customerId,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
 			}
 		},
 		[form, collection, guestCustomer, t]

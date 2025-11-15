@@ -50,12 +50,12 @@ export const useLoginHandler = (
 
 				// Validate required response parameters
 				if (!params.uuid || !params.access_token || !params.refresh_token) {
-					log.error(
-						`[${ERROR_CODES.MISSING_REQUIRED_PARAMETERS}] Invalid login response - missing required parameters`,
-						{
-							showToast: true,
-						}
-					);
+					log.error('Invalid login response - missing required parameters', {
+						showToast: true,
+						context: {
+							errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS,
+						},
+					});
 					throw new Error('Invalid login response - missing required parameters');
 				}
 
@@ -130,8 +130,11 @@ export const useLoginHandler = (
 					errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
 				}
 
-				log.error(`[${errorCode}] Failed to save WordPress credentials: ${errorMessage}`, {
+				log.error(`Failed to save WordPress credentials: ${errorMessage}`, {
 					showToast: true,
+					context: {
+						errorCode,
+					},
 				});
 
 				setError(errorMessage);

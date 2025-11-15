@@ -1,6 +1,7 @@
 import { createRxDatabase, removeRxDatabase } from 'rxdb';
 
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { defaultConfig } from './adapters/default';
 import { ephemeralStorageConfig } from './adapters/ephemeral';
@@ -30,7 +31,15 @@ export const createUserDB = async () => {
 		const collections = await db?.addCollections(userCollections);
 		return db;
 	} catch (error) {
-		log.error(error);
+		log.error('Failed to create user database', {
+			showToast: true,
+			saveToDb: true,
+			context: {
+				errorCode: ERROR_CODES.CONNECTION_FAILED,
+				databaseName: name,
+				error: error instanceof Error ? error.message : String(error),
+			},
+		});
 		// removeDB('wcposusers_v150');
 	}
 };
@@ -50,7 +59,16 @@ export const createStoreDB = async (id: string) => {
 		const collections = await db?.addCollections(storeCollections);
 		return db;
 	} catch (error) {
-		log.error(error);
+		log.error('Failed to create store database', {
+			showToast: true,
+			saveToDb: true,
+			context: {
+				errorCode: ERROR_CODES.CONNECTION_FAILED,
+				databaseName: name,
+				storeId: id,
+				error: error instanceof Error ? error.message : String(error),
+			},
+		});
 	}
 };
 
@@ -69,7 +87,16 @@ export const createFastStoreDB = async (id: string) => {
 		const collections = await db?.addCollections(syncCollections);
 		return db;
 	} catch (error) {
-		log.error(error);
+		log.error('Failed to create fast store database', {
+			showToast: true,
+			saveToDb: true,
+			context: {
+				errorCode: ERROR_CODES.CONNECTION_FAILED,
+				databaseName: name,
+				storeId: id,
+				error: error instanceof Error ? error.message : String(error),
+			},
+		});
 	}
 };
 
@@ -93,6 +120,14 @@ export const createTemporaryDB = async () => {
 
 		return db;
 	} catch (error) {
-		log.error(error);
+		log.error('Failed to create temporary database', {
+			showToast: true,
+			saveToDb: true,
+			context: {
+				errorCode: ERROR_CODES.CONNECTION_FAILED,
+				databaseName: 'temporary',
+				error: error instanceof Error ? error.message : String(error),
+			},
+		});
 	}
 };

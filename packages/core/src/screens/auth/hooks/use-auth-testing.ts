@@ -159,10 +159,12 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 					err.message || t('Failed to test authorization methods', { _tags: 'core' });
 				setError(errorMessage);
 				setStatus('error');
-				log.error(
-					`[${ERROR_CODES.INVALID_CONFIGURATION}] Authorization testing failed: ${errorMessage}`,
-					{ showToast: true }
-				);
+				log.error(`Authorization testing failed: ${errorMessage}`, {
+					showToast: true,
+					context: {
+						errorCode: ERROR_CODES.INVALID_CONFIGURATION,
+					},
+				});
 				return null;
 			}
 		},

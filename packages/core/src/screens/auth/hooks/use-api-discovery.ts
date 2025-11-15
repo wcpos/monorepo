@@ -98,12 +98,13 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 				const namespaces = get(data, 'namespaces');
 				if (!namespaces || !Array.isArray(namespaces)) {
-					log.error(
-						`[${ERROR_CODES.WOOCOMMERCE_API_DISABLED}] WordPress API not found at ${wpApiUrl}`,
-						{
-							showToast: true,
-						}
-					);
+					log.error(`WordPress API not found at ${wpApiUrl}`, {
+						showToast: true,
+						context: {
+							errorCode: ERROR_CODES.WOOCOMMERCE_API_DISABLED,
+							wpApiUrl,
+						},
+					});
 					throw new Error(t('WordPress API not found', { _tags: 'core' }));
 				}
 
@@ -121,12 +122,13 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				}
 
 				// Handle network/connection errors
-				log.error(
-					`[${ERROR_CODES.CONNECTION_REFUSED}] Failed to connect to ${wpApiUrl}: ${error.message}`,
-					{
-						showToast: true,
-					}
-				);
+				log.error(`Failed to connect to ${wpApiUrl}: ${error.message}`, {
+					showToast: true,
+					context: {
+						errorCode: ERROR_CODES.CONNECTION_REFUSED,
+						wpApiUrl,
+					},
+				});
 				throw error;
 			}
 		},

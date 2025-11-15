@@ -3,7 +3,6 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { RxDocument } from 'rxdb';
 
-import { Toast } from '@wcpos/components/toast';
 import type {
 	CustomerDocument,
 	OrderDocument,
@@ -122,12 +121,17 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	 */
 	const handleSuccess = React.useCallback(
 		(doc: RxDocument) => {
-			Toast.show({
-				type: 'success',
-				text1: t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }),
+			log.success(t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					documentId: doc.id,
+					collectionName,
+					collectionLabel,
+				},
 			});
 		},
-		[collectionLabel, t]
+		[collectionLabel, collectionName, t]
 	);
 
 	/**

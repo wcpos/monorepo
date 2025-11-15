@@ -4,6 +4,7 @@ import { createNativeInstance, TxNative } from '@transifex/native';
 import { useObservableEagerState } from 'observable-hooks';
 
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import CustomCache from './cache';
 import { useLocale } from '../../hooks/use-locale';
@@ -59,7 +60,13 @@ export const TranslationProvider = ({ children }) => {
 			try {
 				await txInstance.fetchTranslations(locale);
 			} catch (error) {
-				log.error('Error fetching translations', { context: { error } });
+				log.error('Error fetching translations', {
+					context: {
+						errorCode: ERROR_CODES.CONNECTION_REFUSED,
+						locale,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
 			}
 		};
 

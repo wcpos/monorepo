@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { Toast } from '@wcpos/components/toast';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
@@ -20,20 +20,29 @@ const useDeleteDocument = () => {
 		async (id, collection, params) => {
 			let endpoint = collection.name;
 			try {
-				const { data } = await http.delete((endpoint += `/${id}`), { params });
-				if (data.id === id) {
-					Toast.show({
-						type: 'success',
-						text1: t('Item deleted', { _tags: 'core' }),
-					});
-				}
-			} catch (err) {
-				log.error(err);
-				Toast.show({
-					type: 'error',
-					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
+			const { data } = await http.delete((endpoint += `/${id}`), { params });
+			if (data.id === id) {
+				log.success(t('Item deleted', { _tags: 'core' }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						documentId: id,
+						collectionName: collection.name,
+					},
 				});
 			}
+		} catch (err) {
+			log.error(t('There was an error: {error}', { _tags: 'core', error: err.message }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					documentId: id,
+					collectionName: collection.name,
+					error: err instanceof Error ? err.message : String(err),
+				},
+			});
+		}
 		},
 		[http, t]
 	);

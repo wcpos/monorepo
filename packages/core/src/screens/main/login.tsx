@@ -6,6 +6,7 @@ import get from 'lodash/get';
 import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { WebView } from '@wcpos/components/webview';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';
@@ -28,13 +29,20 @@ export const LoginModal = () => {
 
 			try {
 				if (wpCredentials.uuid === uuid) {
-					await wpCredentials.incrementalPatch({
-						jwt,
-					});
-				}
-			} catch (err) {
-				log.error(err);
-			} finally {
+				await wpCredentials.incrementalPatch({
+					jwt,
+				});
+			}
+		} catch (err) {
+			log.error('Failed to update credentials', {
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					uuid,
+					error: err instanceof Error ? err.message : String(err),
+				},
+			});
+		} finally {
 				router.back();
 			}
 		},

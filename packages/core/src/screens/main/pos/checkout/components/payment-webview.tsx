@@ -6,9 +6,9 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Toast } from '@wcpos/components/toast';
 import { WebView } from '@wcpos/components/webview';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useUISettings } from '../../../contexts/ui-settings';
@@ -75,13 +75,20 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 								pathname: `cart`,
 							});
 						}
-					}
-				} catch (err) {
-					log.error(err);
-					Toast.show({ text1: err?.message, type: 'error' });
-				} finally {
-					setLoading(false);
 				}
+			} catch (err) {
+				log.error(err?.message || 'Payment processing error', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
+						orderId: order.id,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
+			} finally {
+				setLoading(false);
+			}
 			}
 		},
 		[router, order, stockAdjustment, uiSettings.autoShowReceipt, setLoading]
@@ -103,13 +110,21 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 				<WebView
 					src={paymentURLWithToken}
 					onLoad={onWebViewLoaded}
-					onMessage={(event) => {
-						if (event?.data?.payload?.data) {
-							Toast.show({ text1: event?.data?.payload?.message, type: 'error' });
-						} else {
-							handlePaymentReceived(event);
-						}
-					}}
+				onMessage={(event) => {
+					if (event?.data?.payload?.data) {
+						log.error(event?.data?.payload?.message || 'Payment error', {
+							showToast: true,
+							saveToDb: true,
+							context: {
+								errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
+								orderId: order.id,
+								payloadData: event?.data?.payload?.data,
+							},
+						});
+					} else {
+						handlePaymentReceived(event);
+					}
+				}}
 					className="h-full flex-1"
 					{...props}
 				/>

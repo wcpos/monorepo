@@ -7,8 +7,9 @@ import * as z from 'zod';
 
 import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
-import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
@@ -40,19 +41,32 @@ export const EmailForm = ({ order }: Props) => {
 		async ({ email, saveEmail }) => {
 			try {
 				setLoading(true);
-				const { data } = await http.post(`/orders/${orderID}/email`, {
-					email,
-					save_to: saveEmail ? 'billing' : '',
+			const { data } = await http.post(`/orders/${orderID}/email`, {
+				email,
+				save_to: saveEmail ? 'billing' : '',
+			});
+			if (data && data.success) {
+				log.success(t('Email sent', { _tags: 'core' }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						orderId: orderID,
+						email,
+					},
 				});
-				if (data && data.success) {
-					Toast.show({
-						type: 'success',
-						text1: t('Email sent', { _tags: 'core' }),
-					});
-				}
-			} catch (error) {
-				console.log(error);
-			} finally {
+			}
+		} catch (error) {
+			log.error('Failed to send receipt email', {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.CONNECTION_REFUSED,
+					orderId: orderID,
+					email,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		} finally {
 				setLoading(false);
 			}
 		},

@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { Button } from '@wcpos/components/button';
-import { Toast } from '@wcpos/components/toast';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
 import useDeleteDocument from '../../../contexts/use-delete-document';
@@ -25,11 +25,19 @@ export const VoidButton = () => {
 	const undoRemove = React.useCallback(
 		async (orderJson) => {
 			try {
-				await currentOrder.collection.insert(orderJson);
-				router.setParams({ orderID: orderJson.uuid });
-			} catch (err) {
-				log.error(err);
-			}
+			await currentOrder.collection.insert(orderJson);
+			router.setParams({ orderID: orderJson.uuid });
+		} catch (err) {
+			log.error('Failed to restore order', {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					orderId: orderJson.uuid,
+					error: err instanceof Error ? err.message : String(err),
+				},
+			});
+		}
 		},
 		[router, currentOrder.collection]
 	);
@@ -44,12 +52,19 @@ export const VoidButton = () => {
 			deleteDocument(latest.id, latest.collection);
 		}
 		latest.remove();
-		Toast.show({
-			type: 'success',
-			text1: t('Order removed', { _tags: 'core' }),
-			props: {
+		log.success(t('Order removed', { _tags: 'core' }), {
+			showToast: true,
+			saveToDb: true,
+			toast: {
 				dismissable: true,
-				action: { label: t('Undo', { _tags: 'core' }), action: () => undoRemove(orderJson) },
+				action: {
+					label: t('Undo', { _tags: 'core' }),
+					onClick: () => undoRemove(orderJson),
+				},
+			},
+			context: {
+				orderId: latest.id,
+				orderNumber: latest.number,
 			},
 		});
 	}, [currentOrder, t, deleteDocument, undoRemove]);

@@ -5,6 +5,7 @@ import { useObservableState } from 'observable-hooks';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { PriceWithTax } from './price-with-tax';
 
@@ -17,14 +18,22 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
  */
 function getVariablePrices(metaData) {
 	if (!metaData) {
-		log.error('metaData is not defined');
+		log.error('metaData is not defined', {
+			context: {
+				errorCode: ERROR_CODES.MISSING_REQUIRED_FIELD,
+			},
+		});
 		return null;
 	}
 
 	const metaDataEntry = metaData.find((m) => m.key === '_woocommerce_pos_variable_prices');
 
 	if (!metaDataEntry) {
-		log.error("No '_woocommerce_pos_variable_prices' key found in metaData");
+		log.error("No '_woocommerce_pos_variable_prices' key found in metaData", {
+			context: {
+				errorCode: ERROR_CODES.MISSING_REQUIRED_FIELD,
+			},
+		});
 		return null;
 	}
 
@@ -32,7 +41,13 @@ function getVariablePrices(metaData) {
 		const variablePrices = JSON.parse(metaDataEntry.value);
 		return variablePrices;
 	} catch (error) {
-		log.error("Unable to parse '_woocommerce_pos_variable_prices' value into JSON:", error);
+		log.error("Unable to parse '_woocommerce_pos_variable_prices' value into JSON", {
+			context: {
+				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
+				value: metaDataEntry.value,
+				error: error instanceof Error ? error.message : String(error),
+			},
+		});
 		return null;
 	}
 }

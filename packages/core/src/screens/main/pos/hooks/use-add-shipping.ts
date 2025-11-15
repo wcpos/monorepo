@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { Toast } from '@wcpos/components/toast';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
@@ -49,14 +49,19 @@ export const useAddShipping = () => {
 					meta_data,
 				});
 
-				await addItemToOrder('shipping_lines', newShippingLine);
-			} catch (error) {
-				log.error(error);
-				Toast.show({
-					type: 'error',
-					text1: t('Error adding Shipping to cart', { _tags: 'core' }),
-				});
-			}
+			await addItemToOrder('shipping_lines', newShippingLine);
+		} catch (error) {
+			log.error(t('Error adding Shipping to cart', { _tags: 'core' }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					methodTitle: data.method_title,
+					methodId: data.method_id,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		}
 		},
 		[addItemToOrder, calculateShippingLineTaxesAndTotals, t]
 	);

@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Toast } from '@wcpos/components/toast';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -72,24 +72,31 @@ export const useAddVariation = () => {
 				success = await addItemToOrder('line_items', newLineItem);
 			}
 
-			// returned success should be the updated order
-
-			if (success) {
-				Toast.show({
-					type: 'success',
-					text1: t('{name} added to cart', { _tags: 'core', name: parent.name }),
-				});
-			} else {
-				log.error('Error adding variation to order', {
-					variation: variation.id,
-					parent: parent.id,
-					metaData,
-				});
-				Toast.show({
-					type: 'error',
-					text1: t('Error adding {name} to cart', { _tags: 'core', name: parent.name }),
-				});
-			}
+		// returned success should be the updated order
+		if (success) {
+			log.success(t('{name} added to cart', { _tags: 'core', name: parent.name }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					variationId: variation.id,
+					productId: parent.id,
+					productName: parent.name,
+					orderId: currentOrder.id,
+				},
+			});
+		} else {
+			log.error(t('Error adding {name} to cart', { _tags: 'core', name: parent.name }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					variationId: variation.id,
+					productId: parent.id,
+					productName: parent.name,
+					orderId: currentOrder.id,
+				},
+			});
+		}
 		},
 		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]
 	);

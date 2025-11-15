@@ -4,7 +4,6 @@ import cloneDeep from 'lodash/cloneDeep';
 import get from 'lodash/get';
 import set from 'lodash/set';
 
-import { Toast } from '@wcpos/components/toast';
 import type {
 	CustomerDocument,
 	OrderDocument,
@@ -12,6 +11,7 @@ import type {
 	ProductVariationDocument,
 } from '@wcpos/database';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
@@ -77,18 +77,25 @@ export const useLocalMutation = () => {
 					return old;
 				});
 
-				return { changes, document: doc };
-			} catch (error) {
-				log.error('Error patching document', error);
-				let message = error.message;
-				if (error?.rxdb) {
-					message = 'rxdb ' + error.code;
-				}
-				Toast.show({
-					type: 'error',
-					text1: t('There was an error: {message}', { _tags: 'core', message }),
-				});
+			return { changes, document: doc };
+		} catch (error) {
+			let message = error.message;
+			let errorCode = ERROR_CODES.TRANSACTION_FAILED;
+			if (error?.rxdb) {
+				message = 'rxdb ' + error.code;
+				errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
 			}
+			log.error(t('There was an error: {message}', { _tags: 'core', message }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode,
+					documentId: document.id,
+					collectionName: document.collection?.name,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			});
+		}
 		},
 		[t]
 	);

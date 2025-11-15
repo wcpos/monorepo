@@ -2,6 +2,7 @@ import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import type { SQLiteQueryWithParams } from 'rxdb-premium/plugins/storage-sqlite';
 
@@ -39,7 +40,14 @@ export const storage = getRxStorageSQLite({
 				}
 				return result;
 			} catch (error: any) {
-				log.error(error);
+				log.error('Failed to open SQLite database', {
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.CONNECTION_FAILED,
+						databaseName: name,
+						error: error.message,
+					},
+				});
 				// Throw a serializable error object
 				throw { message: error.message, stack: error.stack };
 			}
@@ -57,7 +65,14 @@ export const storage = getRxStorageSQLite({
 				}
 				return result;
 			} catch (error: any) {
-				log.error(error);
+				log.error('Failed to execute SQLite query', {
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.QUERY_SYNTAX_ERROR,
+						databaseName: db.name,
+						error: error.message,
+					},
+				});
 				throw { message: error.message, stack: error.stack };
 			}
 		},
@@ -72,7 +87,14 @@ export const storage = getRxStorageSQLite({
 				// Return db to keep the promise chain consistent
 				return db;
 			} catch (error: any) {
-				log.error(error);
+				log.error('Failed to run SQLite command', {
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.QUERY_SYNTAX_ERROR,
+						databaseName: db.name,
+						error: error.message,
+					},
+				});
 				throw { message: error.message, stack: error.stack };
 			}
 		},
@@ -95,7 +117,16 @@ export const storage = getRxStorageSQLite({
 				});
 				return db;
 			} catch (error: any) {
-				log.error(error);
+				log.error('Failed to set SQLite pragma', {
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.QUERY_SYNTAX_ERROR,
+						databaseName: db.name,
+						pragma,
+						value,
+						error: error.message,
+					},
+				});
 				throw { message: error.message, stack: error.stack };
 			}
 		},
@@ -108,7 +139,14 @@ export const storage = getRxStorageSQLite({
 				});
 				return result; // Return the result from the close IPC call
 			} catch (error: any) {
-				log.error(error);
+				log.error('Failed to close SQLite database', {
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.CONNECTION_FAILED,
+						databaseName: db.name,
+						error: error.message,
+					},
+				});
 				throw { message: error.message, stack: error.stack };
 			}
 		},

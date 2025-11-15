@@ -1,6 +1,7 @@
 import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
-import { Toast } from '@wcpos/components/toast';
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
@@ -35,10 +36,17 @@ export const useBarcode = (
 		const results = await barcodeSearch(barcode);
 
 		if (results.length === 0 || results.length > 1) {
-			Toast.show({
-				text1,
-				text2: t('{count} products found locally', { count: results.length, _tags: 'core' }),
-				type: 'error',
+			log.error(text1, {
+				showToast: true,
+				saveToDb: true,
+				toast: {
+					text2: t('{count} products found locally', { count: results.length, _tags: 'core' }),
+				},
+				context: {
+					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+					barcode,
+					resultsCount: results.length,
+				},
 			});
 			productQuery.search(barcode);
 			querySearchInputRef.current?.setSearch(barcode);
@@ -51,10 +59,17 @@ export const useBarcode = (
 		 * TODO: what if product is out of stock?
 		 */
 		if (!showOutOfStock && product.stock_status !== 'instock') {
-			Toast.show({
-				text1,
-				text2: t('{name} out of stock', { name: product.name, _tags: 'core' }),
-				type: 'error',
+			log.warn(text1, {
+				showToast: true,
+				toast: {
+					text2: t('{name} out of stock', { name: product.name, _tags: 'core' }),
+				},
+				context: {
+					barcode,
+					productId: product.id,
+					productName: product.name,
+					stockStatus: product.stock_status,
+				},
 			});
 			return;
 		}
@@ -94,10 +109,17 @@ export const useBarcode = (
 		/**
 		 * Show success message
 		 */
-		Toast.show({
-			text1,
-			text2: t('{name} added to cart', { name: product.name, _tags: 'core' }),
-			type: 'success',
+		log.success(text1, {
+			showToast: true,
+			saveToDb: true,
+			toast: {
+				text2: t('{name} added to cart', { name: product.name, _tags: 'core' }),
+			},
+			context: {
+				barcode,
+				productId: product.id,
+				productName: product.name,
+			},
 		});
 
 		// clear search after successful scan?

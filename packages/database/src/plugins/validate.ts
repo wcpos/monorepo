@@ -2,6 +2,7 @@ import { wrappedValidateStorageFactory } from 'rxdb';
 import ZSchema from 'z-schema';
 
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import type { RxJsonSchema } from 'rxdb';
 
@@ -41,8 +42,14 @@ export function getValidator(schema: RxJsonSchema<any>) {
 					message,
 				})
 			);
-			log.error('z-schema validation failed', docData);
-			log.error('z-schema validation errors', formattedZSchemaErrors);
+			log.error('z-schema validation failed', {
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.CONSTRAINT_VIOLATION,
+					schemaTitle: schema.title,
+				},
+			});
+			log.debug('z-schema validation errors', { context: { errors: formattedZSchemaErrors } });
 			return formattedZSchemaErrors;
 		} else {
 			return [];

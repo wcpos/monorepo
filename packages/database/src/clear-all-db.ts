@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import * as FileSystem from 'expo-file-system';
 
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 export interface ClearDBResult {
 	success: boolean;
@@ -109,7 +110,14 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 			databasesDeleted: deletedCount,
 		};
 	} catch (error) {
-		log.error('Failed to clear databases:', error);
+		log.error('Failed to clear databases', {
+			showToast: true,
+			saveToDb: true,
+			context: {
+				errorCode: ERROR_CODES.TRANSACTION_FAILED,
+				error: error instanceof Error ? error.message : String(error),
+			},
+		});
 		throw error;
 	}
 };

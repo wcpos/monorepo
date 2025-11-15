@@ -3,8 +3,8 @@ import * as React from 'react';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 
-import { Toast } from '@wcpos/components/toast';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
@@ -62,15 +62,21 @@ const usePushDocument = () => {
 				// FIXME: I think this is done automatically by the patch, ie: preSave?
 				// I need tests so I can be sure
 				// await collection.upsertRefs(parsedData);
-				return latestDoc.incrementalPatch(parsedData);
-				// return latestDoc.patch(parsedData);
-			} catch (err) {
-				log.error(err);
-				Toast.show({
-					type: 'error',
-					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
-				});
-			}
+			return latestDoc.incrementalPatch(parsedData);
+			// return latestDoc.patch(parsedData);
+		} catch (err) {
+			log.error(t('There was an error: {error}', { _tags: 'core', error: err.message }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					documentId: latestDoc.id,
+					collectionName: collection.name,
+					endpoint,
+					error: err instanceof Error ? err.message : String(err),
+				},
+			});
+		}
 		},
 		[http, t]
 	);

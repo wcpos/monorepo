@@ -12,8 +12,9 @@ import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/
 import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
@@ -90,10 +91,15 @@ export const EditCartCustomerForm = () => {
 		await handleSaveToOrder(data);
 		const customer = await customerCollection.findOne({ selector: { id: customerID } }).exec();
 		if (!customer) {
-			Toast.show({
-				type: 'error',
-				text1: t('No customer found', { _tags: 'core' }),
+			log.error(t('No customer found', { _tags: 'core' }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+					customerId: customerID,
+				},
 			});
+			return;
 		}
 		setLoading(true);
 		try {
@@ -105,16 +111,25 @@ export const EditCartCustomerForm = () => {
 				},
 			});
 			if (isRxDocument(savedDoc)) {
-				Toast.show({
-					type: 'success',
-					text1: t('{name} saved', { _tags: 'core', name: format(savedDoc) }),
+				log.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						customerId: savedDoc.id,
+						customerName: format(savedDoc),
+					},
 				});
 			}
 			onOpenChange(false);
 		} catch (error) {
-			Toast.show({
-				type: 'error',
-				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					customerId: customerID,
+					error: error instanceof Error ? error.message : String(error),
+				},
 			});
 		} finally {
 			setLoading(false);

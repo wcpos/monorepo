@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Toast } from '@wcpos/components/toast';
+import log from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -99,27 +99,36 @@ export const useRemoveLineItem = () => {
 				},
 			});
 
-			if (itemToRestore) {
-				Toast.show({
-					type: 'success',
-					text1: t('{name} removed from cart', {
-						name: itemToRestore?.name || itemToRestore?.method_title,
-						_tags: 'core',
-					}),
-					props: {
+		if (itemToRestore) {
+			log.success(
+				t('{name} removed from cart', {
+					name: itemToRestore?.name || itemToRestore?.method_title,
+					_tags: 'core',
+				}),
+				{
+					showToast: true,
+					saveToDb: true,
+					toast: {
 						dismissable: true,
 						action: {
 							label: t('Undo', { _tags: 'core' }),
-							action: () => undoRemove(uuid, type, itemToRestore),
+							onClick: () => undoRemove(uuid, type, itemToRestore),
 						},
 					},
-				});
-			} else {
-				// should we show a snackbar if the item was not found?
-			}
+					context: {
+						itemName: itemToRestore?.name || itemToRestore?.method_title,
+						itemType: type,
+						orderId: currentOrder.id,
+					},
+				}
+			);
+		} else {
+			// should we show a snackbar if the item was not found?
+		}
 		},
 		[currentOrder, localPatch, t, undoRemove]
 	);
 
 	return { removeLineItem };
 };
+
