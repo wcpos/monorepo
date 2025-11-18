@@ -79,7 +79,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	 */
 	const handleError = React.useCallback(
 		(error: Error | any) => {
-			let errorCode: string = ERROR_CODES.QUERY_SYNTAX_ERROR;
+			let errorCode: string = ERROR_CODES.TRANSACTION_FAILED;
 			let message = error.message || String(error);
 
 			if (error?.rxdb) {
@@ -98,6 +98,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 						message = 'Invalid data format';
 						break;
 					default:
+						errorCode = ERROR_CODES.TRANSACTION_FAILED;
 						message = `Database error: ${error.code || 'unknown'}`;
 				}
 			}

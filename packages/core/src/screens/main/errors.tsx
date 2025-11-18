@@ -14,15 +14,28 @@ export const Errors = () => {
 	const manager = useQueryManager();
 
 	/**
-	 *
+	 * Handle query manager errors - could be from HTTP (replication) or DB (local query)
 	 */
 	useSubscription(manager.error$, (error) => {
-		log.error(error.message || 'Query error', {
+		// Detect if error is from HTTP (has response/request) or DB operation
+		const isHttpError = error && (error.response || error.request || error.isAxiosError);
+		
+		// Use appropriate error code based on error source
+		const errorCode = isHttpError
+			? ERROR_CODES.CONNECTION_REFUSED  // API error
+			: ERROR_CODES.QUERY_SYNTAX_ERROR; // DB query error
+		
+		const errorMessage = isHttpError
+			? 'Failed to sync with server'
+			: 'Query error';
+		
+		log.error(error.message || errorMessage, {
 			showToast: true,
 			saveToDb: true,
 			context: {
-				errorCode: ERROR_CODES.QUERY_SYNTAX_ERROR,
+				errorCode,
 				error: error instanceof Error ? error.message : String(error),
+				isHttpError,
 			},
 		});
 	});

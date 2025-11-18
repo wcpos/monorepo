@@ -97,10 +97,14 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			validationInProgress.current = true;
 			lastValidationKey.current = validationKey;
 
-			// Reset state
-			setIsLoading(true);
-			setError(null);
+		// Reset state
+		setIsLoading(true);
+		setError(null);
 
+		/**
+		 * Fetch user data from server (HTTP operation)
+		 */
+		const fetchUserData = async () => {
 			try {
 				// Build the endpoint URL
 				const endpoint = `${apiUrl}cashier/${userId}`;
@@ -137,15 +141,14 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					const errorMsg = `Invalid response status: ${response?.status}`;
 					log.error('User validation failed', {
 						context: {
+							errorCode: ERROR_CODES.CONNECTION_REFUSED,
 							status: response?.status,
 							statusText: response?.statusText,
 							userId,
 							siteUrl,
 						},
 					});
-					setError(errorMsg);
-					setIsValid(false);
-					return;
+					throw new Error(errorMsg);
 				}
 
 				const data = get(response, 'data', {});
@@ -153,16 +156,15 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				// Check if data exists and has expected structure
 				if (!data || typeof data !== 'object') {
 					const errorMsg = 'Invalid response data';
-					log.debug('User validation response contains no valid data', {
+					log.error('User validation response contains no valid data', {
 						context: {
+							errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
 							userId,
 							siteUrl,
 							hasData: !!data,
 						},
 					});
-					setError(errorMsg);
-					setIsValid(false);
-					return;
+					throw new Error(errorMsg);
 				}
 
 				// Sanity check: verify that the response ID matches the expected user ID
@@ -170,16 +172,35 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					const errorMsg = `User ID mismatch: expected ${userId}, got ${data.id}`;
 					log.error('User validation failed - ID mismatch', {
 						context: {
+							errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
 							expectedUserId: userId,
 							receivedUserId: data.id,
 							siteUrl,
 						},
 					});
-					setError(errorMsg);
-					setIsValid(false);
-					return;
+					throw new Error(errorMsg);
 				}
 
+				return data;
+			} catch (error) {
+				const errorMsg = error instanceof Error ? error.message : String(error);
+				log.error('Failed to fetch user data from server', {
+					context: {
+						errorCode: ERROR_CODES.CONNECTION_REFUSED,
+						error: errorMsg,
+						userId,
+						siteUrl,
+					},
+				});
+				throw error;
+			}
+		};
+
+		/**
+		 * Update user data in local database (DB operation)
+		 */
+		const updateUserInDB = async (data: any) => {
+			try {
 				// Update user fields directly with response data
 				const updateData: any = {};
 				const fieldsToUpdate = [
@@ -220,23 +241,35 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						siteID: site.uuid,
 					});
 				}
-
-				setIsValid(true);
 			} catch (error) {
 				const errorMsg = error instanceof Error ? error.message : String(error);
-				log.error('User validation failed', {
+				log.error('Failed to update user in local database', {
 					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						error: errorMsg,
 						userId,
-						siteUrl,
 					},
 				});
-				setError(errorMsg);
-				setIsValid(false);
-			} finally {
-				validationInProgress.current = false;
-				setIsLoading(false);
+				throw error;
 			}
+		};
+
+		try {
+			// Fetch user data from server
+			const data = await fetchUserData();
+			
+			// Update local database with fetched data
+			await updateUserInDB(data);
+
+			setIsValid(true);
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			setError(errorMsg);
+			setIsValid(false);
+		} finally {
+			validationInProgress.current = false;
+			setIsLoading(false);
+		}
 		};
 
 		validateUser();

@@ -12,6 +12,7 @@ import { useLocalQuery } from '@wcpos/query';
 import { Context } from './cells/context';
 import { Date } from './cells/date';
 import { Level } from './cells/level';
+import { Code } from './cells/code';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
@@ -25,7 +26,7 @@ const cells = {
 	context: Context,
 	timestamp: Date,
 	level: Level,
-	code: () => null,
+	code: Code,
 };
 
 function renderCell(columnKey: string, info: any) {

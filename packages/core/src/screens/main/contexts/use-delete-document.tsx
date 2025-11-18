@@ -32,13 +32,14 @@ const useDeleteDocument = () => {
 				});
 			}
 		} catch (err) {
-			log.error(t('There was an error: {error}', { _tags: 'core', error: err.message }), {
+			log.error(t('Failed to delete from server: {error}', { _tags: 'core', error: err.message }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
+					errorCode: ERROR_CODES.CONNECTION_REFUSED,
 					documentId: id,
 					collectionName: collection.name,
+					endpoint,
 					error: err instanceof Error ? err.message : String(err),
 				},
 			});

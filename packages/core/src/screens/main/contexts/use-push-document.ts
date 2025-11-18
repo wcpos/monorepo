@@ -19,66 +19,127 @@ const usePushDocument = () => {
 	const t = useT();
 
 	/**
+	 * Prepare document data from local database (DB operation)
+	 */
+	const prepareDocumentData = React.useCallback(
+		async (doc: RxDocument) => {
+			try {
+				const latestDoc = doc.getLatest();
+				const json = latestDoc.toJSON();
+				return { json, latestDoc };
+			} catch (err) {
+				log.error(t('Failed to prepare document data: {error}', { _tags: 'core', error: err.message }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						documentId: doc.id,
+						collectionName: doc.collection.name,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
+				throw err;
+			}
+		},
+		[t]
+	);
+
+	/**
+	 * Send document data to server (HTTP operation)
+	 */
+	const sendToServer = React.useCallback(
+		async (endpoint: string, json: any, docId: number | string) => {
+			try {
+				const response = await http.post(endpoint, json);
+				const data = get(response, 'data');
+				
+				/**
+				 * It's possible for the WC REST API server to return a 200 response but with data = ""
+				 * Do a check here to see if the data is empty and if so, throw an error
+				 */
+				if (isEmpty(data)) {
+					throw new Error('Empty response from server');
+				}
+				
+				return data;
+			} catch (err) {
+				log.error(t('Failed to send to server: {error}', { _tags: 'core', error: err.message }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.CONNECTION_REFUSED,
+						documentId: docId,
+						endpoint,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
+				throw err;
+			}
+		},
+		[http, t]
+	);
+
+	/**
+	 * Update local document with server response (DB operation)
+	 * 
 	 * TODO - I'm confused about when to use incrementalPatch v patch
 	 * sometimes it works, sometimes I get a db error about using the previous version
 	 * "Document update conflict. When changing a document you must work on the previous revision"
 	 */
+	const updateLocalDocument = React.useCallback(
+		async (latestDoc: RxDocument, serverData: any) => {
+			try {
+				const parsedData = latestDoc.collection.parseRestResponse(serverData);
+				
+				// FIXME: I think this is done automatically by the patch, ie: preSave?
+				// I need tests so I can be sure
+				// await collection.upsertRefs(parsedData);
+				
+				return latestDoc.incrementalPatch(parsedData);
+			} catch (err) {
+				log.error(t('Failed to update local document: {error}', { _tags: 'core', error: err.message }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						documentId: latestDoc.id,
+						collectionName: latestDoc.collection.name,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
+				throw err;
+			}
+		},
+		[t]
+	);
+
+	/**
+	 * Main push document function - orchestrates prepare, send, and update
+	 */
 	return React.useCallback(
 		async (doc: RxDocument) => {
-			const latestDoc = doc.getLatest();
-			// const latestDoc = doc;
 			const collection = doc.collection;
 			let endpoint = collection.name;
 			if (collection.name === 'variations') {
 				// TODO: make more general, are there other cases?
 				endpoint = `products/${doc.parent_id}/variations`;
 			}
+			
+			// Prepare data from local DB
+			const { json, latestDoc } = await prepareDocumentData(doc);
+			
+			// Add document ID to endpoint if it exists
 			if (latestDoc.id) {
 				endpoint += `/${latestDoc.id}`;
 			}
-			try {
-				/**
-				 * FIXME: this is a hack to customise the data sent to the server for orders
-				 * It's not ideal, but it works for now
-				 */
-				// const populatedData =
-				// 	latestDoc.collection.name === 'orders'
-				// 		? await latestDoc.toPopulatedOrderJSON()
-				// 		: await latestDoc.toPopulatedJSON();
-
-				const json = latestDoc.toJSON();
-				const response = await http.post(endpoint, json);
-				const data = get(response, 'data');
-				/**
-				 * It's possible for the WC REST API server to retrun a 200 response but with data = ""
-				 * Do a check here to see if the data is empty and if so, throw an error
-				 */
-				if (isEmpty(data)) {
-					throw new Error('Empty response from server');
-				}
-				//
-				const parsedData = latestDoc.collection.parseRestResponse(data);
-
-				// FIXME: I think this is done automatically by the patch, ie: preSave?
-				// I need tests so I can be sure
-				// await collection.upsertRefs(parsedData);
-			return latestDoc.incrementalPatch(parsedData);
-			// return latestDoc.patch(parsedData);
-		} catch (err) {
-			log.error(t('There was an error: {error}', { _tags: 'core', error: err.message }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					documentId: latestDoc.id,
-					collectionName: collection.name,
-					endpoint,
-					error: err instanceof Error ? err.message : String(err),
-				},
-			});
-		}
+			
+			// Send to server
+			const serverData = await sendToServer(endpoint, json, latestDoc.id);
+			
+			// Update local document with server response
+			return await updateLocalDocument(latestDoc, serverData);
 		},
-		[http, t]
+		[prepareDocumentData, sendToServer, updateLocalDocument]
 	);
 };
 

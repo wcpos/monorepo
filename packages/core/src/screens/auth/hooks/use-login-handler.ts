@@ -117,30 +117,45 @@ export const useLoginHandler = (
 
 				// Navigate back on success
 				router.back();
-			} catch (err) {
-				const errorMessage = err.message || 'Failed to save WordPress credentials';
+		} catch (err) {
+			const errorMessage = err.message || 'Failed to save WordPress credentials';
 
-				// Determine error type and code based on error characteristics
-				let errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR; // Default
-				if (err.message?.includes('missing required parameters')) {
-					errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
-				} else if (err.name === 'ValidationError') {
-					errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
-				} else if (err.name === 'RxError') {
-					errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
+			// Determine error type and code based on error characteristics
+			let errorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
+			
+			if (err.message?.includes('missing required parameters')) {
+				errorCode = ERROR_CODES.MISSING_REQUIRED_FIELD;
+			} else if (err.name === 'ValidationError') {
+				errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+			} else if (err.name === 'RxError') {
+				// Check for specific RxDB error codes
+				switch (err.code) {
+					case 'RX1':
+						errorCode = ERROR_CODES.DUPLICATE_RECORD;
+						break;
+					case 'RX2':
+						errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+						break;
+					case 'RX3':
+						errorCode = ERROR_CODES.INVALID_DATA_TYPE;
+						break;
+					default:
+						errorCode = ERROR_CODES.TRANSACTION_FAILED;
 				}
-
-				log.error(`Failed to save WordPress credentials: ${errorMessage}`, {
-					showToast: true,
-					context: {
-						errorCode,
-					},
-				});
-
-				setError(errorMessage);
-			} finally {
-				setIsProcessing(false);
 			}
+
+			log.error(`Failed to save WordPress credentials: ${errorMessage}`, {
+				showToast: true,
+				context: {
+					errorCode,
+					error: errorMessage,
+				},
+			});
+
+			setError(errorMessage);
+		} finally {
+			setIsProcessing(false);
+		}
 		},
 		[userDB.wp_credentials, site]
 	);

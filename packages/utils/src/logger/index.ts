@@ -3,6 +3,8 @@
  */
 import { logger } from 'react-native-logs';
 
+import { getErrorCodeDocURL } from './constants';
+
 // Custom options interface
 export interface LoggerOptions {
 	showToast?: boolean;
@@ -11,6 +13,7 @@ export interface LoggerOptions {
 	toast?: {
 		text2?: string; // Secondary message
 		dismissable?: boolean; // Show close button
+		showErrorCode?: boolean; // Show error code "Help" link (default: true if errorCode exists)
 		action?: {
 			label: string; // Action button label (e.g., "Undo")
 			onClick: () => void; // Custom action handler
@@ -91,43 +94,48 @@ const mainTransport = (props: any) => {
 			toastType = 'warning';
 		}
 
-		// Build toast config with support for complex props
+		// Build toast config using NEW format (not legacy text1/text2)
 		const toastConfig: any = {
 			type: toastType,
-			text1: message, // Use text1 for legacy format compatibility
+			title: message, // New format uses 'title' not 'text1'
 		};
 
-		// Add secondary message if provided
+		// Add secondary message (description in new format)
 		if (options.toast?.text2) {
-			toastConfig.text2 = options.toast.text2;
+			toastConfig.description = options.toast.text2;
 		}
 
-		// Build props object if needed
-		const toastProps: any = {};
-
-		// Add dismissable prop
+		// Add dismissable/close button
 		if (options.toast?.dismissable !== undefined) {
-			toastProps.dismissable = options.toast.dismissable;
+			toastConfig.closeButton = options.toast.dismissable;
 		}
 
-		// Handle actions - custom action takes precedence, fallback to Help for error codes
+		// Handle actions - custom action takes precedence, then error code help link
 		if (options.toast?.action) {
-			// Custom action provided
-			toastProps.action = {
+			// Custom action takes precedence
+			toastConfig.action = {
 				label: options.toast.action.label,
-				action: options.toast.action.onClick,
+				onClick: options.toast.action.onClick,
 			};
 		} else if (errorCode) {
-			// Default Help action for error codes
-			toastProps.action = {
-				label: 'Help',
-				action: () => console.log(`Opening help for error code: ${errorCode}`),
-			};
-		}
-
-		// Only add props if we have any
-		if (Object.keys(toastProps).length > 0) {
-			toastConfig.props = toastProps;
+			// Show error code help link by default (can be disabled per-call)
+			const shouldShowErrorCode = options.toast?.showErrorCode ?? true;
+			
+			if (shouldShowErrorCode) {
+				const errorCodeURL = getErrorCodeDocURL(errorCode);
+				toastConfig.action = {
+					label: 'Help',
+					onClick: async () => {
+						// Dynamically import to avoid circular dependencies
+						try {
+							const { openExternalURL } = await import('../open-external-url');
+							await openExternalURL(errorCodeURL);
+						} catch (error) {
+							console.error(`Failed to open error code documentation: ${errorCodeURL}`, error);
+						}
+					},
+				};
+			}
 		}
 
 		toastShow(toastConfig);

@@ -21,42 +21,75 @@ const usePullDocument = () => {
 	const http = useRestHttpClient();
 	const t = useT();
 
+	/**
+	 * Fetch document data from server (HTTP operation)
+	 */
+	const fetchFromServer = React.useCallback(
+		async (endpoint: string, id: number) => {
+			try {
+				const response = await http.get(`${endpoint}/${id}`);
+				return get(response, 'data');
+			} catch (err) {
+				log.error(t('Failed to fetch from server: {error}', { _tags: 'core', error: err.message }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.CONNECTION_REFUSED,
+						documentId: id,
+						endpoint,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
+				throw err;
+			}
+		},
+		[http, t]
+	);
+
+	/**
+	 * Save document data to local database (DB operation)
+	 */
+	const saveToLocalDB = React.useCallback(
+		async (data: any, collection: RxCollection, id: number) => {
+			try {
+				const parsedData = collection.parseRestResponse(data);
+				const success = await collection.upsert(parsedData);
+				return success;
+			} catch (err) {
+				log.error(t('Failed to save to local database: {error}', { _tags: 'core', error: err.message }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						documentId: id,
+						collectionName: collection.name,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
+				throw err;
+			}
+		},
+		[t]
+	);
+
+	/**
+	 * Main pull document function - orchestrates fetch and save
+	 */
 	return React.useCallback(
 		async (id: number, collection: RxCollection, apiEndpoint?: string) => {
-			let endpoint = apiEndpoint || collection.name;
+			const endpoint = apiEndpoint || collection.name;
 			// quick hack to stop the Guest customer error
 			const num = Number(id);
 			if (!(Number.isInteger(num) && num > 0)) {
 				return;
 			}
-			try {
-				const response = await http.get((endpoint += `/${id}`));
-				const data = get(response, 'data');
-				if (data) {
-					const parsedData = collection.parseRestResponse(data);
-					const success = await collection.upsert(parsedData);
-					// if (isRxDocument(success)) {
-					// 	addSnackbar({
-					// 		message: t('Item synced', { _tags: 'core' }),
-					// 	});
-					// }
-				return success;
+
+			const data = await fetchFromServer(endpoint, id);
+			if (data) {
+				return await saveToLocalDB(data, collection, id);
 			}
-		} catch (err) {
-			log.error(t('There was an error: {error}', { _tags: 'core', error: err.message }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					documentId: id,
-					collectionName: collection.name,
-					endpoint,
-					error: err instanceof Error ? err.message : String(err),
-				},
-			});
-		}
 		},
-		[http, t]
+		[fetchFromServer, saveToLocalDB]
 	);
 };
 

@@ -153,24 +153,39 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 					log.debug(`Added new site: ${siteData.name}`);
 					return newSite;
 				}
-			} catch (err) {
-				// Determine error type and code
-				let errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR; // Default database error
-				if (err.name === 'ValidationError') {
-					errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
-				} else if (err.name === 'RxError') {
-					errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
+		} catch (err) {
+			// Determine error type and code
+			let errorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
+			
+			if (err.name === 'ValidationError') {
+				errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+			} else if (err.name === 'RxError') {
+				// Check for specific RxDB error codes
+				switch (err.code) {
+					case 'RX1':
+						errorCode = ERROR_CODES.DUPLICATE_RECORD;
+						break;
+					case 'RX2':
+						errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+						break;
+					case 'RX3':
+						errorCode = ERROR_CODES.INVALID_DATA_TYPE;
+						break;
+					default:
+						errorCode = ERROR_CODES.TRANSACTION_FAILED;
 				}
-
-				log.error(`Failed to save site data: ${err.message}`, {
-					showToast: true,
-					context: {
-						errorCode,
-					},
-				});
-
-				throw new Error(t('Failed to save site data', { _tags: 'core' }));
 			}
+
+			log.error(`Failed to save site data: ${err.message}`, {
+				showToast: true,
+				context: {
+					errorCode,
+					error: err.message,
+				},
+			});
+
+			throw new Error(t('Failed to save site data', { _tags: 'core' }));
+		}
 		},
 		[user, userDB.sites, t]
 	);

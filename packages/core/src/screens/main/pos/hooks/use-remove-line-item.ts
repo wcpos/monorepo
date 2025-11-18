@@ -99,36 +99,35 @@ export const useRemoveLineItem = () => {
 				},
 			});
 
-		if (itemToRestore) {
-			log.success(
-				t('{name} removed from cart', {
-					name: itemToRestore?.name || itemToRestore?.method_title,
-					_tags: 'core',
-				}),
-				{
-					showToast: true,
-					saveToDb: true,
-					toast: {
-						dismissable: true,
-						action: {
-							label: t('Undo', { _tags: 'core' }),
-							onClick: () => undoRemove(uuid, type, itemToRestore),
+			if (itemToRestore) {
+				log.success(
+					t('{name} removed from cart', {
+						name: itemToRestore?.name || itemToRestore?.method_title,
+						_tags: 'core',
+					}),
+					{
+						showToast: true,
+						saveToDb: true,
+						toast: {
+							dismissable: true,
+							action: {
+								label: t('Undo', { _tags: 'core' }),
+								onClick: () => undoRemove(uuid, type, itemToRestore),
+							},
 						},
-					},
-					context: {
-						itemName: itemToRestore?.name || itemToRestore?.method_title,
-						itemType: type,
-						orderId: currentOrder.id,
-					},
-				}
-			);
-		} else {
-			// should we show a snackbar if the item was not found?
-		}
+						context: {
+							itemName: itemToRestore?.name || itemToRestore?.method_title,
+							itemType: type,
+							orderId: currentOrder.id,
+						},
+					}
+				);
+			} else {
+				// should we show a snackbar if the item was not found?
+			}
 		},
 		[currentOrder, localPatch, t, undoRemove]
 	);
 
 	return { removeLineItem };
 };
-
