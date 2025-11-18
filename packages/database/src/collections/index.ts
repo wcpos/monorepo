@@ -366,7 +366,12 @@ const logSchema: RxJsonSchema<LogDocumentType> = logsLiteral;
 type LogDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof logsLiteral>;
 export type LogDocument = RxDocument<LogDocumentType>;
 export type LogCollection = RxCollection<LogDocumentType>;
-const logs: RxCollectionCreator<LogDocumentType> = { schema: logSchema };
+const logs: RxCollectionCreator<LogDocumentType> = {
+	schema: logSchema,
+	options: {
+		searchFields: ['message', 'context.error', 'context.errorCode'],
+	},
+};
 
 export type UserCollections = {
 	users: UserCollection;

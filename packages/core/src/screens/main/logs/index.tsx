@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
+import { VStack } from '@wcpos/components/vstack';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
@@ -13,12 +14,15 @@ import { Context } from './cells/context';
 import { Date } from './cells/date';
 import { Level } from './cells/level';
 import { Code } from './cells/code';
+import { FilterBar } from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 import { TextCell } from '../components/text-cell';
+import { LogsFooter } from './footer';
+import { QuerySearchInput } from '../components/query-search-input';
 
 type LogDocument = import('@wcpos/database').LogDocument;
 
@@ -36,10 +40,6 @@ function renderCell(columnKey: string, info: any) {
 	}
 
 	return <TextCell {...info} />;
-}
-
-function TableFooter() {
-	return null;
 }
 
 /**
@@ -69,11 +69,21 @@ export function LogsScreen() {
 		<View className="h-full p-2" style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}>
 			<Card className="flex-1">
 				<CardHeader className="bg-input p-2">
-					<HStack className="justify-end">
-						<UISettingsDialog title={t('Logs Settings', { _tags: 'core' })}>
-							<UISettingsForm />
-						</UISettingsDialog>
-					</HStack>
+					<VStack>
+						<HStack>
+							<QuerySearchInput
+								query={query}
+								placeholder={t('Search Logs', { _tags: 'core' })}
+								className="flex-1"
+							/>
+							<UISettingsDialog title={t('Logs Settings', { _tags: 'core' })}>
+								<UISettingsForm />
+							</UISettingsDialog>
+						</HStack>
+						<ErrorBoundary>
+							<FilterBar query={query} />
+						</ErrorBoundary>
+					</VStack>
 				</CardHeader>
 				<CardContent className="flex-1 p-0">
 					<ErrorBoundary>
@@ -86,7 +96,7 @@ export function LogsScreen() {
 								estimatedItemSize={100}
 								keyExtractor={(row) => row.original.document.logId}
 								ListFooterComponent={() => {}}
-								TableFooterComponent={() => {}}
+								TableFooterComponent={LogsFooter}
 							/>
 						</Suspense>
 					</ErrorBoundary>
