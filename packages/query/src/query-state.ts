@@ -6,8 +6,11 @@ import isEqual from 'lodash/isEqual';
 import pick from 'lodash/pick';
 import set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
-import { BehaviorSubject, from, ReplaySubject, Subject } from 'rxjs';
+import { BehaviorSubject, from, ReplaySubject } from 'rxjs';
 import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
+
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { SubscribableBase } from './subscribable-base';
 
@@ -30,7 +33,6 @@ export interface QueryConfig<T> {
 	initialParams?: QueryParams;
 	// hooks?: QueryHooks;
 	endpoint?: string;
-	errorSubject: Subject<Error>;
 	greedy?: boolean;
 	locale?: string;
 	autoExec?: boolean;
@@ -103,7 +105,6 @@ export class Query<T extends RxCollection>
 	public readonly id: string;
 	public readonly collection: T;
 	public readonly primaryKey: string;
-	public readonly errorSubject: Subject<Error>;
 	public readonly searchInstancePromise: Promise<void>;
 	public readonly locale: string;
 	public readonly endpoint; // @FIXME - this is used in the replication state but not in this class
@@ -145,7 +146,6 @@ export class Query<T extends RxCollection>
 		collection,
 		initialParams = {},
 		endpoint,
-		errorSubject,
 		greedy = false,
 		locale = 'en',
 		autoExec = true,
@@ -156,7 +156,6 @@ export class Query<T extends RxCollection>
 		this.id = id;
 		this.collection = collection;
 		this.primaryKey = collection.schema.primaryPath;
-		this.errorSubject = errorSubject;
 		this.searchInstancePromise = collection.initSearch(locale);
 		this.locale = locale;
 		this.endpoint = endpoint; // @FIXME - this is used in the replication state but not in this class
@@ -200,7 +199,11 @@ export class Query<T extends RxCollection>
 	 */
 	loadMore() {
 		if (!this.infiniteScroll) {
-			this.errorSubject.next(new Error('loadMore() called but infiniteScroll is not enabled'));
+			log.error('loadMore() called but infiniteScroll is not enabled', {
+				showToast: true,
+				saveToDb: true,
+				context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, queryId: this.id },
+			});
 			return;
 		}
 		this.currentPage++;

@@ -1,3 +1,5 @@
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type { StoreCollection, SyncCollection } from '@wcpos/database';
 
 import type { Logger } from './logger';
@@ -87,7 +89,14 @@ export class SyncStateManager {
 						await doc.remove();
 					}
 
-					console.warn(`Removed ${docsToRemove.length} duplicate documents with ID: ${id}`);
+					log.warn(`Removed ${docsToRemove.length} duplicate documents with ID: ${id}`, {
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.DUPLICATE_RECORD,
+							id,
+							collection: this.collection.name,
+						},
+					});
 				}
 
 				// Remove duplicates from the result array
@@ -222,7 +231,14 @@ export class SyncStateManager {
 				await this.syncCollection.bulkUpsert(synced);
 
 				if (result.error.length > 0) {
-					console.error('Error inserting documents', result.error);
+					log.error('Error inserting documents', {
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.DB_INSERT_FAILED,
+							collection: this.collection.name,
+							errors: result.error,
+						},
+					});
 				}
 			}
 
@@ -241,7 +257,7 @@ export class SyncStateManager {
 		}
 
 		if (skipped.length > 0) {
-			console.log('Skipped', skipped);
+			log.debug('Skipped older documents', { context: { skipped } });
 		}
 
 		if (responseMap.size > 0) {
@@ -260,7 +276,14 @@ export class SyncStateManager {
 				await this.syncCollection.bulkUpsert(synced);
 
 				if (result.error.length > 0) {
-					console.error('Error upserting documents', result.error);
+					log.error('Error upserting documents', {
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.DB_UPSERT_FAILED,
+							collection: this.collection.name,
+							errors: result.error,
+						},
+					});
 				}
 			}
 
@@ -289,7 +312,15 @@ export class SyncStateManager {
 
 			// removed from sync should match removed from local DB, this should never happen
 			if (result.length !== removed.length) {
-				console.error('Mismatch between removed from sync and local DB', result, removed);
+				log.warn('Mismatch between removed from sync and local DB', {
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.DB_REMOVE_MISMATCH,
+						collection: this.collection.name,
+						syncRemoved: removed.length,
+						localRemoved: result.length,
+					},
+				});
 			}
 
 			return result;

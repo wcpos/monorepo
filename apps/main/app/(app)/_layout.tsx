@@ -7,12 +7,11 @@ import { useAppState } from '@wcpos/core/contexts/app-state';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
-import { Errors } from '@wcpos/core/screens/main/errors';
+import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { useRestHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client';
 import { OnlineStatusProvider } from '@wcpos/hooks/use-online-status';
 import { QueryProvider } from '@wcpos/query';
 import { setDatabase } from '@wcpos/utils/logger';
-import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -70,8 +69,6 @@ function AppStack() {
 					<PortalHost />
 				</ErrorBoundary>
 			</UISettingsProvider>
-			<Errors />
-			{/* TODO - we need a app-wide event bus to channel errors to the snackbar */}
 		</QueryProvider>
 	);
 }

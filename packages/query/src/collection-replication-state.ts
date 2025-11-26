@@ -1,11 +1,12 @@
 import isEmpty from 'lodash/isEmpty';
-import { BehaviorSubject, combineLatest, interval, Observable, Subject, Subscription } from 'rxjs';
+import { BehaviorSubject, combineLatest, interval, Observable, Subscription } from 'rxjs';
 import { distinctUntilChanged, filter, map, startWith, switchMap } from 'rxjs/operators';
 
 import { DataFetcher } from './data-fetcher';
 import { Logger } from './logger';
 import { SubscribableBase } from './subscribable-base';
 import { SyncStateManager } from './sync-state';
+import { logError } from './utils';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 type ProductVariationCollection = import('@wcpos/database').ProductVariationCollection;
@@ -30,7 +31,6 @@ interface CollectionReplicationConfig<Collection> {
 	httpClient: any;
 	hooks?: any;
 	endpoint: string;
-	errorSubject: Subject<Error>;
 }
 
 /**
@@ -40,7 +40,6 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	private dataFetcher: DataFetcher;
 	public syncStateManager: SyncStateManager; // used by query replication state
 	private logger: Logger;
-	private errorSubject: Subject<Error>;
 	private collection: T;
 	private endpoint: string;
 
@@ -75,7 +74,6 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			throw new Error('collection is required');
 		}
 
-		this.errorSubject = config.errorSubject;
 		this.collection = config.collection;
 		this.endpoint = config.endpoint;
 
@@ -198,7 +196,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			await this.syncStateManager.removeStaleRecords();
 			await this.update();
 		} catch (error) {
-			this.errorSubject.next(error);
+			logError(error, 'Failed to fetch remote state');
 		} finally {
 			this.subjects.active.next(false);
 
@@ -229,7 +227,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				this.subjects.active.next(false);
 				await this.update();
 			} catch (error) {
-				this.errorSubject.next(error);
+				logError(error, 'Failed to fetch remote updates');
 			} finally {
 				this.subjects.active.next(false);
 			}
@@ -273,7 +271,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		}
 
 		this.subjects.active.next(true);
-		const params = {};
+		const params: any = {};
 
 		/**
 		 * @FIXME - this is a hack for the products endpoint, the general fetchRemoteByIDs should
@@ -294,7 +292,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 			await this.bulkUpsertResponse(response);
 		} catch (error) {
-			this.errorSubject.next(error);
+			logError(error, 'Failed to sync remote items');
 		} finally {
 			this.subjects.active.next(false);
 		}
@@ -317,7 +315,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 			await this.syncStateManager.processServerResponse(documents);
 		} catch (error) {
-			this.errorSubject.next(error);
+			logError(error, 'Failed to upsert items');
 		}
 	}
 
@@ -354,7 +352,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				return result.success[0];
 			}
 		} catch (error) {
-			this.errorSubject.next(error);
+			logError(error, 'Failed to remote patch');
 		}
 	};
 
@@ -372,7 +370,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				return result.success[0];
 			}
 		} catch (error) {
-			this.errorSubject.next(error);
+			logError(error, 'Failed to remote create');
 		}
 	};
 }

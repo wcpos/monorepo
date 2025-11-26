@@ -1,7 +1,8 @@
 import cloneDeep from 'lodash/cloneDeep';
 import forEach from 'lodash/forEach';
-import { Observable, Subject, Subscription } from 'rxjs';
-import { filter, map } from 'rxjs/operators';
+
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { CollectionReplicationState } from './collection-replication-state';
 import allHooks from './hooks';
@@ -44,14 +45,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		CollectionReplicationState<RxCollection>
 	>;
 	public readonly activeQueryReplications: Registry<string, QueryReplicationState<RxCollection>>;
-
-	/**
-	 *
-	 */
-	public readonly subjects = {
-		error: new Subject<Error>(),
-	};
-	readonly error$: Observable<Error> = this.subjects.error.asObservable();
 
 	/**
 	 * Enforce singleton pattern
@@ -124,7 +117,11 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		try {
 			return JSON.stringify(params);
 		} catch (error) {
-			this.subjects.error.next(new Error(`Failed to serialize query key: ${error}`));
+			log.error(`Failed to serialize query key: ${error}`, {
+				showToast: true,
+				saveToDb: true,
+				context: { errorCode: ERROR_CODES.INVALID_REQUEST_FORMAT },
+			});
 		}
 	}
 
@@ -155,7 +152,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					initialParams,
 					hooks,
 					endpoint,
-					errorSubject: this.subjects.error,
 					greedy,
 					locale: this.locale,
 					infiniteScroll,
@@ -197,7 +193,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 						initialParams,
 						hooks,
 						endpoint,
-						errorSubject: this.subjects.error,
 						greedy,
 						locale: this.locale,
 						infiniteScroll,
@@ -217,16 +212,22 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 	getCollection(collectionName: string) {
 		if (!this.localDB.collections[collectionName]) {
-			this.subjects.error.next(new Error(`Collection with name: ${collectionName} not found.`));
+			log.error(`Collection with name: ${collectionName} not found.`, {
+				showToast: true,
+				saveToDb: true,
+				context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, collectionName },
+			});
 		}
 		return this.localDB.collections[collectionName];
 	}
 
 	getSyncCollection(collectionName: string) {
 		if (!this.fastLocalDB.collections[collectionName]) {
-			this.subjects.error.next(
-				new Error(`Sync collection with name: ${collectionName} not found.`)
-			);
+			log.error(`Sync collection with name: ${collectionName} not found.`, {
+				showToast: true,
+				saveToDb: true,
+				context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, collectionName },
+			});
 		}
 		return this.fastLocalDB.collections[collectionName];
 	}
@@ -236,7 +237,11 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		const query = this.queryStates.get(key);
 
 		if (!query) {
-			this.subjects.error.next(new Error(`Query with key: ${key} not found.`));
+			log.error(`Query with key: ${key} not found.`, {
+				showToast: true,
+				saveToDb: true,
+				context: { errorCode: ERROR_CODES.RECORD_NOT_FOUND, queryKey: key },
+			});
 		}
 
 		return query;
@@ -338,7 +343,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				collection,
 				syncCollection,
 				endpoint,
-				errorSubject: this.subjects.error,
 			});
 
 			/**
@@ -364,7 +368,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				collectionReplication,
 				collection,
 				endpoint: queryEndpoint,
-				errorSubject: this.subjects.error,
 				greedy,
 			});
 

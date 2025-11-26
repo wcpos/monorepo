@@ -1,11 +1,11 @@
 import intersection from 'lodash/intersection';
 import isEmpty from 'lodash/isEmpty';
-import { BehaviorSubject, interval, Observable, Subject, Subscription } from 'rxjs';
+import { BehaviorSubject, interval, Observable, Subscription } from 'rxjs';
 import { filter, startWith, switchMap } from 'rxjs/operators';
 
 import { DataFetcher } from './data-fetcher';
 import { SubscribableBase } from './subscribable-base';
-import { getParamValueFromEndpoint } from './utils';
+import { getParamValueFromEndpoint, logError } from './utils';
 
 import type { CollectionReplicationState } from './collection-replication-state';
 import type { RxCollection } from 'rxdb';
@@ -16,7 +16,6 @@ interface QueryReplicationConfig<T extends RxCollection> {
 	collectionReplication: CollectionReplicationState<T>;
 	hooks?: any;
 	endpoint: string;
-	errorSubject: Subject<Error>;
 	greedy?: boolean;
 }
 
@@ -25,7 +24,6 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	public readonly collection: T;
 	public readonly httpClient: any;
 	public readonly endpoint: any;
-	public readonly errorSubject: Subject<Error>;
 	public readonly collectionReplication: CollectionReplicationState<T>;
 	public syncCompleted = false;
 	public readonly greedy;
@@ -58,7 +56,6 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		this.collection = config.collection;
 		this.endpoint = config.endpoint;
 		this.collectionReplication = config.collectionReplication;
-		this.errorSubject = config.errorSubject;
 		this.greedy = config.greedy || false;
 
 		// @NOTE: this endpoint is different to the general collection endpoint, it has query params
@@ -170,7 +167,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 			await this.collectionReplication.bulkUpsertResponse(response);
 		} catch (error) {
-			this.errorSubject.next(error);
+			logError(error, 'Failed to sync query items');
 		} finally {
 			this.collectionReplication.start();
 			this.subjects.active.next(false);
