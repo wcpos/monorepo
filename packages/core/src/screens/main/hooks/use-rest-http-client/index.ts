@@ -170,7 +170,8 @@ export const useRestHttpClient = (endpoint = '') => {
 
 			const config = merge({}, defaultConfig, reqConfig);
 
-		return httpClient.request(config).then((response) => {
+		try {
+			const response = await httpClient.request(config);
 			/**
 			 * This is a HACK
 			 * Some servers return invalid JSON, so we try to recover from it
@@ -193,7 +194,11 @@ export const useRestHttpClient = (endpoint = '') => {
 				}
 			}
 			return response;
-		});
+		} catch (error) {
+			// Re-throw the error - it will be caught by DataFetcher or other callers
+			// Using try/catch ensures the rejection is properly handled in this async context
+			throw error;
+		}
 		},
 		[endpoint, httpClient, jwt, store.id, site, onlineStatus]
 	);

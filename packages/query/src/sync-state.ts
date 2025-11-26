@@ -1,8 +1,7 @@
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
-import type { StoreCollection, SyncCollection } from '@wcpos/database';
 
-import type { Logger } from './logger';
+import type { StoreCollection, SyncCollection } from '@wcpos/database';
 import type { RxDocument } from 'rxdb';
 
 interface ServerRecord {
@@ -14,7 +13,6 @@ interface SyncStateManagerOptions {
 	collection: StoreCollection;
 	syncCollection: SyncCollection;
 	endpoint: string;
-	logger: Logger;
 }
 
 /**
@@ -24,13 +22,11 @@ export class SyncStateManager {
 	public collection: StoreCollection;
 	public syncCollection: SyncCollection;
 	private endpoint: string;
-	private logger: Logger;
 
-	constructor({ collection, syncCollection, endpoint, logger }: SyncStateManagerOptions) {
+	constructor({ collection, syncCollection, endpoint }: SyncStateManagerOptions) {
 		this.collection = collection;
 		this.syncCollection = syncCollection;
 		this.endpoint = endpoint;
-		this.logger = logger;
 	}
 
 	/**
@@ -218,10 +214,10 @@ export class SyncStateManager {
 		if (localDocs.size === 0) {
 			const result = await this.collection.bulkInsert(response);
 			if (result.success.length > 0) {
-				await this.logger.logAddedDocuments(
-					result.success.map((doc: any) => doc.id),
-					this.collection.name
-				);
+				log.debug(`Synced new ${this.collection.name}`, {
+					saveToDb: true,
+					context: { ids: result.success.map((doc: any) => doc.id) },
+				});
 
 				const synced = result.success.map((doc: any) => ({
 					id: doc.id,
@@ -263,10 +259,10 @@ export class SyncStateManager {
 		if (responseMap.size > 0) {
 			const result = await this.collection.bulkUpsert(Array.from(responseMap.values()));
 			if (result.success.length > 0) {
-				await this.logger.logAddedDocuments(
-					result.success.map((doc: any) => doc.id),
-					this.collection.name
-				);
+				log.debug(`Synced ${this.collection.name}`, {
+					saveToDb: true,
+					context: { ids: result.success.map((doc: any) => doc.id) },
+				});
 
 				const synced = result.success.map((doc: any) => ({
 					id: doc.id,
@@ -308,7 +304,11 @@ export class SyncStateManager {
 		if (removed.length > 0) {
 			const ids = removed.map((doc) => doc.id);
 			const result = await this.collection.find({ selector: { id: { $in: ids } } }).remove();
-			this.logger.logRemovedDocuments(ids, this.collection.name);
+
+			log.debug(`Removed ${this.collection.name}`, {
+				saveToDb: true,
+				context: { ids },
+			});
 
 			// removed from sync should match removed from local DB, this should never happen
 			if (result.length !== removed.length) {

@@ -1,6 +1,5 @@
 import type { StoreDatabase, SyncDatabase } from '@wcpos/database';
 
-import { Logger } from '../src/logger';
 import { SyncStateManager } from '../src/sync-state';
 import { createStoreDatabase, createSyncDatabase } from './helpers/db';
 
@@ -12,14 +11,10 @@ describe('SyncStateManager', () => {
 	beforeEach(async () => {
 		syncDB = await createSyncDatabase();
 		storeDB = await createStoreDatabase();
-		const logger = new Logger({
-			storeDB,
-		});
 		syncStateManager = new SyncStateManager({
 			syncCollection: syncDB.collections.products,
 			collection: storeDB.collections.products,
 			endpoint: 'products',
-			logger,
 		});
 	});
 

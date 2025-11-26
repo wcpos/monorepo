@@ -1,9 +1,11 @@
 import isEmpty from 'lodash/isEmpty';
-import { BehaviorSubject, combineLatest, interval, Observable, Subscription } from 'rxjs';
+import { BehaviorSubject, combineLatest, interval, Observable } from 'rxjs';
 import { distinctUntilChanged, filter, map, startWith, switchMap } from 'rxjs/operators';
 
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
 import { DataFetcher } from './data-fetcher';
-import { Logger } from './logger';
 import { SubscribableBase } from './subscribable-base';
 import { SyncStateManager } from './sync-state';
 import { logError } from './utils';
@@ -39,7 +41,6 @@ interface CollectionReplicationConfig<Collection> {
 export class CollectionReplicationState<T extends Collection> extends SubscribableBase {
 	private dataFetcher: DataFetcher;
 	public syncStateManager: SyncStateManager; // used by query replication state
-	private logger: Logger;
 	private collection: T;
 	private endpoint: string;
 
@@ -78,12 +79,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.endpoint = config.endpoint;
 
 		// Initialize components
-		this.logger = new Logger({ storeDB: config.collection.database });
 		this.dataFetcher = new DataFetcher(config.httpClient, config.endpoint);
 		this.syncStateManager = new SyncStateManager({
 			syncCollection: config.syncCollection,
 			endpoint: config.endpoint,
-			logger: this.logger,
 			collection: this.collection,
 		});
 
@@ -110,7 +109,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.addSub(
 			'polling',
 			polling$.subscribe(() => {
-				this.run();
+				// Catch any errors to prevent unhandled promise rejections
+				this.run().catch(() => {
+					// Errors are already logged in run() and its sub-methods
+				});
 			})
 		);
 
@@ -186,11 +188,26 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		try {
 			const response = await this.dataFetcher.fetchAllRemoteIds();
 			if (!Array.isArray(response?.data)) {
-				await this.logger.logInvalidResponse('Invalid response fetching remote state');
+				log.error('Invalid response fetching remote state', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+						endpoint: this.endpoint,
+					},
+				});
 				return;
 			}
 
-			await this.logger.logFetchStatus(this.dataFetcher.endpoint, response.headers, 'all');
+			log.debug(`Fetched all IDs for ${this.endpoint}`, {
+				saveToDb: true,
+				context: {
+					total: response.headers?.['x-wp-total'] ?? 'unknown',
+					execution_time: response.headers?.['x-execution-time'] ?? 'unknown',
+					server_load: response.headers?.['x-server-load'] ?? 'unknown',
+				},
+			});
+
 			await this.syncStateManager.processFullAudit(response.data);
 			this.subjects.active.next(false);
 			await this.syncStateManager.removeStaleRecords();
@@ -216,11 +233,26 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			try {
 				const response = await this.dataFetcher.fetchRecentRemoteUpdates(modifiedAfter);
 				if (!Array.isArray(response?.data)) {
-					await this.logger.logInvalidResponse('Invalid response checking updates');
+					log.error('Invalid response checking updates', {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+							endpoint: this.endpoint,
+						},
+					});
 					return;
 				}
 
-				await this.logger.logFetchStatus(this.dataFetcher.endpoint, response.headers, 'updates');
+				log.debug(`Checked for updates: ${this.endpoint}`, {
+					saveToDb: true,
+					context: {
+						total: response.headers?.['x-wp-total'] ?? 'unknown',
+						execution_time: response.headers?.['x-execution-time'] ?? 'unknown',
+						server_load: response.headers?.['x-server-load'] ?? 'unknown',
+					},
+				});
+
 				if (!isEmpty(response.data)) {
 					await this.syncStateManager.processModifiedAfter(response.data);
 				}
@@ -304,7 +336,14 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	public async bulkUpsertResponse(response: any) {
 		try {
 			if (!Array.isArray(response?.data)) {
-				await this.logger.logInvalidResponse('Invalid response from server');
+				log.error('Invalid response from server', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+						endpoint: this.endpoint,
+					},
+				});
 				return;
 			}
 

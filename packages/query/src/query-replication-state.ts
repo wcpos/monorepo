@@ -77,7 +77,10 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		this.addSub(
 			'polling',
 			polling$.subscribe(() => {
-				this.run();
+				// Catch any errors to prevent unhandled promise rejections
+				this.run().catch(() => {
+					// Errors are already logged in run() and its sub-methods
+				});
 			})
 		);
 	}
