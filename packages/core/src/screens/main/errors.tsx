@@ -1,5 +1,3 @@
-import * as React from 'react';
-
 import { useSubscription } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
@@ -17,19 +15,30 @@ export const Errors = () => {
 	 * Handle query manager errors - could be from HTTP (replication) or DB (local query)
 	 */
 	useSubscription(manager.error$, (error) => {
+		if (!error) return;
+
+		// Check if error already has an error code
+		let errorCode = (error as any).errorCode;
+
 		// Detect if error is from HTTP (has response/request) or DB operation
-		const isHttpError = error && (error.response || error.request || error.isAxiosError);
-		
-		// Use appropriate error code based on error source
-		const errorCode = isHttpError
-			? ERROR_CODES.CONNECTION_REFUSED  // API error
-			: ERROR_CODES.QUERY_SYNTAX_ERROR; // DB query error
-		
-		const errorMessage = isHttpError
-			? 'Failed to sync with server'
-			: 'Query error';
-		
-		log.error(error.message || errorMessage, {
+		const isHttpError =
+			error && ((error as any).response || (error as any).request || (error as any).isAxiosError);
+
+		if (!errorCode) {
+			if (isHttpError) {
+				errorCode = ERROR_CODES.CONNECTION_REFUSED;
+			} else if ((error as any).message?.includes('SQL')) {
+				errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
+			} else {
+				// Default to a generic system error if we can't classify
+				errorCode = ERROR_CODES.SERVICE_UNAVAILABLE;
+			}
+		}
+
+		const errorMessage =
+			error.message || (isHttpError ? 'Failed to sync with server' : 'Query error');
+
+		log.error(errorMessage, {
 			showToast: true,
 			saveToDb: true,
 			context: {

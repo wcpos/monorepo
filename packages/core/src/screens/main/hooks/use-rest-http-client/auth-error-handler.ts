@@ -50,7 +50,7 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 			log.debug('Triggering OAuth authentication flow');
 			setShouldTriggerAuth(false); // Reset the flag
 			promptAsync().catch((authError) => {
-				log.error('Authentication failed - please try again', {
+				log.warn('Authentication failed - please try again', {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -79,7 +79,7 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 			requestStateManager.setAuthFailed(false);
 			handleLoginSuccess(response as any);
 		} else if (response?.type === 'error') {
-			log.error('Login failed - please check your credentials', {
+			log.warn('Login failed - please check your credentials', {
 				showToast: true,
 				saveToDb: true,
 				context: {

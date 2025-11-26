@@ -70,14 +70,16 @@ const mainTransport = (props: any) => {
 	// 1. Always log to console
 	const timestamp = new Date().toLocaleTimeString();
 	const levelText = level.text.toUpperCase();
-	const consoleMethod =
-		level.text === 'error'
-			? console.error
-			: level.text === 'warn'
-				? console.warn
-				: level.text === 'info' || level.text === 'success'
-					? console.info
-					: console.log;
+	// const consoleMethod =
+	// 	level.text === 'error'
+	// 		? console.error
+	// 		: level.text === 'warn'
+	// 			? console.warn
+	// 			: level.text === 'info' || level.text === 'success'
+	// 				? console.info
+	// 				: console.log;
+	// console.errors open a redbox in development which is annoying
+	const consoleMethod = console.log;
 
 	// Include context in console output if available
 	const contextStr = options.context ? ` | Context: ${JSON.stringify(options.context)}` : '';
@@ -120,7 +122,7 @@ const mainTransport = (props: any) => {
 		} else if (errorCode) {
 			// Show error code help link by default (can be disabled per-call)
 			const shouldShowErrorCode = options.toast?.showErrorCode ?? true;
-			
+
 			if (shouldShowErrorCode) {
 				const errorCodeURL = getErrorCodeDocURL(errorCode);
 				toastConfig.action = {

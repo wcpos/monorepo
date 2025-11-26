@@ -114,7 +114,8 @@ const processErrorHandlers = async (
 			// If this handler intercepts, stop the chain
 			if (handler.intercepts) {
 				log.debug(`Handler ${handler.name} intercepts and failed, stopping error chain`);
-				break;
+				// Return the handler error instead of the original error so we can propagate substitutions (e.g. CanceledError)
+				return handlerError as any;
 			} else {
 				log.debug(`Handler ${handler.name} failed but does not intercept, continuing chain`);
 			}
@@ -168,7 +169,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 			const error = new Error(canProceed.reason || 'Request blocked') as any;
 			error.errorCode = canProceed.errorCode;
 			error.isPreFlightBlocked = true;
-			
+
 			log.debug('Request blocked by pre-flight check', {
 				context: {
 					errorCode: canProceed.errorCode,
@@ -240,6 +241,17 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 
 					// Otherwise, it's still an error - use it as the new error
 					error = result as AxiosError;
+				}
+
+				if (http.isCancel(error)) {
+					log.debug('Request canceled, suppressing error', {
+						context: {
+							message: error.message,
+						},
+					});
+					// Return a promise that never resolves to prevent unhandled rejections
+					// and stop component rendering flow that depends on response
+					return new Promise(() => {});
 				}
 
 				log.debug(error);

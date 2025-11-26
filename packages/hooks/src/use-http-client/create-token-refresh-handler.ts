@@ -174,7 +174,7 @@ export const createTokenRefreshHandler = ({
 						});
 
 						if (!access_token) {
-							log.error('Session refresh failed - please log in again', {
+							log.warn('Session refresh failed - please log in again', {
 								showToast: true,
 								saveToDb: true,
 								context: {
@@ -212,13 +212,18 @@ export const createTokenRefreshHandler = ({
 							refreshError instanceof Error ? refreshError.message : String(refreshError);
 
 						// Check if the refresh token itself is invalid (401 or no access token in response)
+						// Also check for other 4xx errors (400, 403, 404) which imply the refresh endpoint is unreachable or request is bad
 						const isRefreshTokenInvalid =
-							(refreshError instanceof Error && errorMsg.includes('401')) ||
+							(refreshError instanceof Error &&
+								(errorMsg.includes('401') ||
+									errorMsg.includes('403') ||
+									errorMsg.includes('404') ||
+									errorMsg.includes('400'))) ||
 							(refreshError instanceof Error && errorMsg === 'REFRESH_TOKEN_INVALID') ||
-							(refreshError as any)?.response?.status === 401;
+							[400, 401, 403, 404].includes((refreshError as any)?.response?.status);
 
 						if (isRefreshTokenInvalid) {
-							log.error('Your session has expired - please log in again', {
+							log.warn('Your session has expired - please log in again', {
 								showToast: true,
 								saveToDb: true,
 								context: {
@@ -242,7 +247,7 @@ export const createTokenRefreshHandler = ({
 							throw error;
 						}
 
-						log.error('Unable to refresh session', {
+						log.warn('Unable to refresh session', {
 							saveToDb: true,
 							context: {
 								errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
@@ -262,7 +267,7 @@ export const createTokenRefreshHandler = ({
 				const freshToken = requestStateManager.getRefreshedToken();
 
 				if (!freshToken) {
-					log.error('Token refresh completed but no token available', {
+					log.warn('Token refresh completed but no token available', {
 						saveToDb: true,
 						context: {
 							errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
