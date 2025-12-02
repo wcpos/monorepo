@@ -28,22 +28,37 @@ export default function POSLayout() {
 	const storeID = useObservableEagerState(store.id$);
 	const { collection: ordersCollection } = useCollection('orders');
 	const segments = useSegments();
-	// Handle catch-all route param - [...orderId] returns an array
+	// Handle catch-all route param - [...orderId] returns an array (could be empty array for /cart)
 	const params = useGlobalSearchParams<{ orderId: string | string[] }>();
-	const orderIdFromParams = Array.isArray(params.orderId) ? params.orderId[0] : params.orderId;
+
+	// Extract orderId: handle array (catch-all) vs string, and handle empty array
+	let orderIdFromParams: string | undefined;
+	if (Array.isArray(params.orderId)) {
+		// Catch-all route: empty array means /cart (new order), non-empty means /cart/uuid
+		orderIdFromParams = params.orderId.length > 0 ? params.orderId[0] : undefined;
+	} else {
+		orderIdFromParams = params.orderId;
+	}
 
 	// Check if we're currently in the POS route structure
 	const isInPOSRoute = segments.includes('(pos)');
 
+	// Check if we're at a /cart route (with or without orderId)
+	const isAtCartRoute = segments.includes('cart');
+
 	// Remember the last valid orderId when in POS routes
 	// This prevents losing the orderId when a modal (like settings) is opened
+	// Only remember if we're NOT at a cart route - this ensures /cart (new order) works
 	const lastOrderIdRef = React.useRef<string | undefined>(undefined);
-	if (isInPOSRoute) {
-		// Only update the ref when we're actually in a POS route
+	if (isInPOSRoute && !isAtCartRoute) {
+		// Only preserve orderId when not explicitly at a cart route
+		// This allows /cart to show a new order instead of remembered order
+	} else if (isInPOSRoute && isAtCartRoute && orderIdFromParams) {
+		// At cart route with an orderId - remember it
 		lastOrderIdRef.current = orderIdFromParams;
 	}
 
-	// Use the route param if in POS, otherwise use the remembered value
+	// Use the route param if in POS, otherwise use the remembered value (for modals)
 	const orderId = isInPOSRoute ? orderIdFromParams : lastOrderIdRef.current;
 
 	/**
