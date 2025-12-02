@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Tabs, useGlobalSearchParams, usePathname, useSegments } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -22,20 +22,10 @@ export default function TabsLayout() {
 	const { screenSize } = useTheme();
 	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const { bottom } = useSafeAreaInsets();
-	const pathname = usePathname();
-	const segments = useSegments();
-	const params = useGlobalSearchParams();
-
-	console.log('[Tabs Layout] ===================');
-	console.log('[Tabs Layout] screenSize:', screenSize);
-	console.log('[Tabs Layout] pathname:', pathname);
-	console.log('[Tabs Layout] segments:', segments);
-	console.log('[Tabs Layout] params:', params);
 
 	// On larger screens, render columns layout (preserves orderId, no redirect needed)
 	// This handles the case when user resizes from small to large screen
 	if (screenSize !== 'sm') {
-		console.log('[Tabs Layout] screenSize is NOT sm, rendering columns layout');
 		return (
 			<View style={{ flex: 1, paddingBottom: bottom }}>
 				<PanelGroup
@@ -61,8 +51,6 @@ export default function TabsLayout() {
 			</View>
 		);
 	}
-
-	console.log('[Tabs Layout] Rendering tabs layout');
 
 	return (
 		<Tabs screenOptions={{ headerShown: false }}>
