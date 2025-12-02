@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { Stack, useGlobalSearchParams } from 'expo-router';
+import { Stack, useGlobalSearchParams, usePathname, useSegments } from 'expo-router';
 import { ObservableResource, useObservableEagerState } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 
@@ -27,7 +27,17 @@ export default function POSLayout() {
 	const cashierID = useObservableEagerState(wpCredentials.id$);
 	const storeID = useObservableEagerState(store.id$);
 	const { collection: ordersCollection } = useCollection('orders');
-	const { orderId } = useGlobalSearchParams<{ orderId: string }>();
+	const pathname = usePathname();
+	const segments = useSegments();
+	// Handle catch-all route param - [...orderId] returns an array
+	const params = useGlobalSearchParams<{ orderId: string | string[] }>();
+	const orderId = Array.isArray(params.orderId) ? params.orderId[0] : params.orderId;
+
+	console.log('[POS Layout] ===================');
+	console.log('[POS Layout] pathname:', pathname);
+	console.log('[POS Layout] segments:', segments);
+	console.log('[POS Layout] params:', params);
+	console.log('[POS Layout] orderId (extracted):', orderId);
 
 	/**
 	 * We then need to filter the open orders to limit by cashier and store

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Redirect } from 'expo-router';
+import { useGlobalSearchParams, usePathname, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -19,10 +19,32 @@ export default function ResizablePOSColumns() {
 	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const { screenSize } = useTheme();
 	const { bottom } = useSafeAreaInsets();
+	const pathname = usePathname();
+	const segments = useSegments();
+	const params = useGlobalSearchParams();
 
+	console.log('[Columns] ===================');
+	console.log('[Columns] screenSize:', screenSize);
+	console.log('[Columns] pathname:', pathname);
+	console.log('[Columns] segments:', segments);
+	console.log('[Columns] params:', params);
+
+	// On small screens, render just the cart view (preserves orderId, no redirect needed)
+	// This handles the case when user resizes from large to small screen
 	if (screenSize === 'sm') {
-		return <Redirect href="(tabs)" />;
+		console.log('[Columns] screenSize is sm, rendering cart-only view');
+		return (
+			<View style={{ flex: 1, paddingBottom: bottom }}>
+				<Suspense>
+					<ErrorBoundary>
+						<OpenOrders />
+					</ErrorBoundary>
+				</Suspense>
+			</View>
+		);
 	}
+
+	console.log('[Columns] Rendering columns layout');
 
 	/**
 	 *
