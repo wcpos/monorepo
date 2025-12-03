@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, ViewProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import get from 'lodash/get';
@@ -53,12 +53,23 @@ export type IconProps = VariantProps<typeof iconVariants> & {
 	name: IconName;
 	loading?: boolean;
 	fill?: string;
+	className?: string;
+	pointerEvents?: ViewProps['pointerEvents'];
 };
 
 /**
  *
  */
-export const Icon = ({ name, variant, size, loading, className, fill, ...props }: IconProps) => {
+export const Icon = ({
+	name,
+	variant,
+	size,
+	loading,
+	className,
+	fill,
+	pointerEvents,
+	...props
+}: IconProps) => {
 	const Svg = get(Svgs, name, Svgs.circleExclamation) as React.FC<SvgProps>;
 	const textClass = React.useContext(TextClassContext);
 	const resolvedColor = getResolvedColor(variant, cn(textClass, className));
@@ -73,8 +84,18 @@ export const Icon = ({ name, variant, size, loading, className, fill, ...props }
 	 * So, we need to manually tranform the className to the correct color
 	 */
 	return (
-		<View className={cn(textClass, iconVariants({ variant, size }), className)} {...props}>
-			<Svg width="100%" height="100%" fill={fill || resolvedColor} color={fill || resolvedColor} />
+		<View
+			className={cn(textClass, iconVariants({ variant, size }), className)}
+			pointerEvents={pointerEvents}
+			{...props}
+		>
+			<Svg
+				width="100%"
+				height="100%"
+				fill={fill || resolvedColor}
+				color={fill || resolvedColor}
+				pointerEvents={pointerEvents}
+			/>
 		</View>
 	);
 };

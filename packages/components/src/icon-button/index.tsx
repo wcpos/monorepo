@@ -78,7 +78,14 @@ function IconButton({
 			onPress={handlePress}
 			{...props}
 		>
-			<Icon name={name} variant={variant} size={size} loading={loading} className={className} />
+			<Icon
+				name={name}
+				variant={variant}
+				size={size}
+				loading={loading}
+				className={className}
+				pointerEvents="none"
+			/>
 		</Pressable>
 	);
 }
