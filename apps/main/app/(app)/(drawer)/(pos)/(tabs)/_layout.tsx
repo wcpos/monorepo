@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { Tabs } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -22,6 +23,17 @@ export default function TabsLayout() {
 	const { screenSize } = useTheme();
 	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const { bottom } = useSafeAreaInsets();
+
+	const tabPressListener = React.useMemo(
+		() => ({
+			tabPress: () => {
+				if (Platform.OS !== 'web') {
+					Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+				}
+			},
+		}),
+		[]
+	);
 
 	// On larger screens, render columns layout (preserves orderId, no redirect needed)
 	// This handles the case when user resizes from small to large screen
@@ -56,6 +68,7 @@ export default function TabsLayout() {
 		<Tabs screenOptions={{ headerShown: false }}>
 			<Tabs.Screen
 				name="index"
+				listeners={tabPressListener}
 				options={{
 					title: 'Products',
 					tabBarIcon: ({ focused }) => (
@@ -65,6 +78,7 @@ export default function TabsLayout() {
 			/>
 			<Tabs.Screen
 				name="cart"
+				listeners={tabPressListener}
 				options={{
 					title: 'Cart',
 					tabBarIcon: ({ focused }) => (
