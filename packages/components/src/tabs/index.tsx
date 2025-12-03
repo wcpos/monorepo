@@ -1,5 +1,7 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 
+import * as Haptics from 'expo-haptics';
 import * as TabsPrimitive from '@rn-primitives/tabs';
 import Animated, {
 	scrollTo,
@@ -179,8 +181,19 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 /**
  *
  */
-function TabsTrigger({ className, ...props }: TabsPrimitive.TriggerProps) {
+function TabsTrigger({ className, onPress, ...props }: TabsPrimitive.TriggerProps) {
 	const { value } = TabsPrimitive.useRootContext();
+
+	const handlePress = React.useCallback(
+		(e: any) => {
+			if (Platform.OS !== 'web' && !props.disabled) {
+				Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+			}
+			onPress?.(e);
+		},
+		[props.disabled, onPress]
+	);
+
 	return (
 		<TextClassContext.Provider
 			value={cn(
@@ -196,6 +209,7 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.TriggerProps) {
 					props.value === value && 'bg-primary shadow-sm',
 					className
 				)}
+				onPress={handlePress}
 				{...props}
 			/>
 		</TextClassContext.Provider>

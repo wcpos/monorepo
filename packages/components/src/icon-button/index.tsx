@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, Pressable } from 'react-native';
+import { Platform, Pressable, PressableProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import * as Haptics from 'expo-haptics';
@@ -40,12 +40,14 @@ const buttonVariants = cva(
 	}
 );
 
-type ButtonProps = VariantProps<typeof buttonVariants> & {
-	name: IconName;
-	loading?: boolean;
-	iconClassName?: string;
-	disableHaptics?: boolean;
-};
+type ButtonProps = PressableProps &
+	VariantProps<typeof buttonVariants> & {
+		name: IconName;
+		loading?: boolean;
+		iconClassName?: string;
+		disableHaptics?: boolean;
+		className?: string;
+	};
 
 function IconButton({
 	className,
