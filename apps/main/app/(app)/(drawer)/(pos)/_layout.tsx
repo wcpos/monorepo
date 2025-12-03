@@ -119,7 +119,13 @@ function POSStack() {
 
 	return (
 		<TaxRatesProvider taxQuery={taxQuery} order={currentOrder}>
-			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
+			<Stack
+				screenOptions={{
+					animation: 'none',
+					headerShown: false,
+					contentStyle: { backgroundColor: '#F0F4F8' },
+				}}
+			>
 				<Stack.Screen name="index" />
 				<Stack.Screen
 					name="(modals)/cart/[orderId]/checkout"

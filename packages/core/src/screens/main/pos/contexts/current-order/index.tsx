@@ -42,7 +42,12 @@ export const CurrentOrderProvider = ({
 	 */
 	const setCurrentOrderID = React.useCallback(
 		(orderId: string) => {
-			router.setParams({ orderId });
+			if (orderId) {
+				router.navigate(`/cart/${orderId}`);
+			} else {
+				// Navigate to /cart for new orders - this keeps us on the cart tab in tabs layout
+				router.navigate('/cart');
+			}
 		},
 		[router]
 	);
