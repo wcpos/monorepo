@@ -1,12 +1,11 @@
 import React from 'react';
 
-import { makeRedirectUri, ResponseType, useAuthRequest } from 'expo-auth-session';
-
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import log from '@wcpos/utils/logger';
 
+import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
 import { useLoginHandler } from '../hooks/use-login-handler';
 
 interface Props {
@@ -15,36 +14,24 @@ interface Props {
 
 export function AddUserButton({ site }: Props) {
 	const { handleLoginSuccess, isProcessing, error } = useLoginHandler(site);
+	const processedResponseRef = React.useRef<string | null>(null);
 
-	const redirectUri = makeRedirectUri({
-		scheme: 'wcpos',
-		path: (window as any)?.baseUrl ?? undefined,
-	});
-
-	// point at this site's auth endpoint
-	const discovery = {
-		authorizationEndpoint: site.wcpos_login_url,
-	};
-
-	// we only need `token`, `refresh_token`, `expires_in` in the query params,
-	// so use ResponseType.Token to pick them all up
-	const [request, response, promptAsync] = useAuthRequest(
-		{
-			clientId: 'unused', // expo requires this field
-			responseType: ResponseType.Token,
-			redirectUri,
-			extraParams: { redirect_uri: redirectUri },
-			scopes: [],
-			usePKCE: false,
-		},
-		discovery
-	);
+	const { isReady, response, promptAsync } = useWcposAuth({ site });
 
 	React.useEffect(() => {
-		if (response?.type === 'success') {
+		if (!response) return;
+
+		// Create a unique key to prevent double-processing
+		const responseKey = response.params?.access_token || response.error || response.type;
+		if (processedResponseRef.current === responseKey) {
+			return;
+		}
+
+		if (response.type === 'success') {
 			log.debug(`Login successful for site: ${site.name}`);
-			handleLoginSuccess(response as any);
-		} else if (response?.type === 'error') {
+			processedResponseRef.current = responseKey;
+			handleLoginSuccess({ params: response.params } as any);
+		} else if (response.type === 'error') {
 			log.error(`Login failed: ${response.error}`, {
 				showToast: true,
 				context: {
@@ -52,6 +39,7 @@ export function AddUserButton({ site }: Props) {
 					response,
 				},
 			});
+			processedResponseRef.current = responseKey;
 		}
 	}, [response, handleLoginSuccess, site.name]);
 
@@ -61,7 +49,7 @@ export function AddUserButton({ site }: Props) {
 				<IconButton
 					name="circlePlus"
 					size="xl"
-					disabled={!request || isProcessing}
+					disabled={!isReady || isProcessing}
 					onPress={() => promptAsync()}
 				/>
 			</TooltipTrigger>

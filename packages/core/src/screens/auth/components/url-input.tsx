@@ -19,12 +19,13 @@ export function UrlInput() {
 	const t = useT();
 
 	/**
-	 *
+	 * NOTE: We don't show a toast here because specific error messages are already
+	 * displayed by the hooks (use-url-discovery, use-api-discovery, use-auth-testing).
+	 * We only log for debugging and database persistence purposes.
 	 */
 	React.useEffect(() => {
 		if (error) {
 			log.error(t('{message}', { _tags: 'core', message: error || 'Error' }), {
-				showToast: true,
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.INVALID_URL_FORMAT,

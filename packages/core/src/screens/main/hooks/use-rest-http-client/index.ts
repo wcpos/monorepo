@@ -4,9 +4,8 @@ import get from 'lodash/get';
 import merge from 'lodash/merge';
 import { useObservableEagerState } from 'observable-hooks';
 
-import useHttpClient, { RequestConfig } from '@wcpos/hooks/use-http-client';
+import useHttpClient, { RequestConfig, requestStateManager } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
-import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
@@ -170,37 +169,37 @@ export const useRestHttpClient = (endpoint = '') => {
 
 			const config = merge({}, defaultConfig, reqConfig);
 
-		try {
-			const response = await httpClient.request(config);
-			/**
-			 * This is a HACK
-			 * Some servers return invalid JSON, so we try to recover from it
-			 * eg: rando WordPress plugin echo's out a bunch of HTML before the JSON
-			 */
-			if (typeof response?.data === 'string') {
-				log.warn('Server returned text instead of JSON - attempting recovery', {
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.JSON_RECOVERY_ATTEMPTED,
-						endpoint,
-						url: config.url,
-						responsePreview: response.data.substring(0, 200),
-					},
-				});
-				response.data = extractValidJSON(response?.data);
-				
-				if (response.data) {
-					log.debug('Successfully recovered valid JSON from response');
+			try {
+				const response = await httpClient.request(config);
+				/**
+				 * This is a HACK
+				 * Some servers return invalid JSON, so we try to recover from it
+				 * eg: rando WordPress plugin echo's out a bunch of HTML before the JSON
+				 */
+				if (typeof response?.data === 'string') {
+					log.warn('Server returned text instead of JSON - attempting recovery', {
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.JSON_RECOVERY_ATTEMPTED,
+							endpoint,
+							url: config.url,
+							responsePreview: response.data.substring(0, 200),
+						},
+					});
+					response.data = extractValidJSON(response?.data);
+
+					if (response.data) {
+						log.debug('Successfully recovered valid JSON from response');
+					}
 				}
+				return response;
+			} catch (error) {
+				// Re-throw the error - it will be caught by DataFetcher or other callers
+				// Using try/catch ensures the rejection is properly handled in this async context
+				throw error;
 			}
-			return response;
-		} catch (error) {
-			// Re-throw the error - it will be caught by DataFetcher or other callers
-			// Using try/catch ensures the rejection is properly handled in this async context
-			throw error;
-		}
 		},
-		[endpoint, httpClient, jwt, store.id, site, onlineStatus]
+		[endpoint, httpClient, jwt, store.id, site]
 	);
 
 	/**

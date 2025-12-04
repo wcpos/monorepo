@@ -29,7 +29,7 @@ interface UseLoginHandlerReturn {
  * Hook for handling OAuth login responses and saving credentials
  */
 export const useLoginHandler = (
-	site: import('@wcpos/database').SiteDocument
+	site: import('@wcpos/database').SiteDocument | null
 ): UseLoginHandlerReturn => {
 	const { userDB } = useAppState();
 	const [isProcessing, setIsProcessing] = React.useState(false);
@@ -38,6 +38,12 @@ export const useLoginHandler = (
 
 	const handleLoginSuccess = React.useCallback(
 		async (response: LoginResponse): Promise<void> => {
+			// Guard: site must be available
+			if (!site) {
+				log.debug('Login handler called but site is not yet available, skipping');
+				return;
+			}
+
 			setIsProcessing(true);
 			setError(null);
 
@@ -115,47 +121,49 @@ export const useLoginHandler = (
 
 				log.info(`Login successful: ${credentialsData.display_name} at ${site.name}`);
 
-				// Navigate back on success
-				router.back();
-		} catch (err) {
-			const errorMessage = err.message || 'Failed to save WordPress credentials';
-
-			// Determine error type and code based on error characteristics
-			let errorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
-			
-			if (err.message?.includes('missing required parameters')) {
-				errorCode = ERROR_CODES.MISSING_REQUIRED_FIELD;
-			} else if (err.name === 'ValidationError') {
-				errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
-			} else if (err.name === 'RxError') {
-				// Check for specific RxDB error codes
-				switch (err.code) {
-					case 'RX1':
-						errorCode = ERROR_CODES.DUPLICATE_RECORD;
-						break;
-					case 'RX2':
-						errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
-						break;
-					case 'RX3':
-						errorCode = ERROR_CODES.INVALID_DATA_TYPE;
-						break;
-					default:
-						errorCode = ERROR_CODES.TRANSACTION_FAILED;
+				// Navigate back on success (only if we can go back)
+				if (router.canGoBack()) {
+					router.back();
 				}
+			} catch (err) {
+				const errorMessage = err.message || 'Failed to save WordPress credentials';
+
+				// Determine error type and code based on error characteristics
+				let errorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
+
+				if (err.message?.includes('missing required parameters')) {
+					errorCode = ERROR_CODES.MISSING_REQUIRED_FIELD;
+				} else if (err.name === 'ValidationError') {
+					errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+				} else if (err.name === 'RxError') {
+					// Check for specific RxDB error codes
+					switch (err.code) {
+						case 'RX1':
+							errorCode = ERROR_CODES.DUPLICATE_RECORD;
+							break;
+						case 'RX2':
+							errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+							break;
+						case 'RX3':
+							errorCode = ERROR_CODES.INVALID_DATA_TYPE;
+							break;
+						default:
+							errorCode = ERROR_CODES.TRANSACTION_FAILED;
+					}
+				}
+
+				log.error(`Failed to save WordPress credentials: ${errorMessage}`, {
+					showToast: true,
+					context: {
+						errorCode,
+						error: errorMessage,
+					},
+				});
+
+				setError(errorMessage);
+			} finally {
+				setIsProcessing(false);
 			}
-
-			log.error(`Failed to save WordPress credentials: ${errorMessage}`, {
-				showToast: true,
-				context: {
-					errorCode,
-					error: errorMessage,
-				},
-			});
-
-			setError(errorMessage);
-		} finally {
-			setIsProcessing(false);
-		}
 		},
 		[userDB.wp_credentials, site]
 	);

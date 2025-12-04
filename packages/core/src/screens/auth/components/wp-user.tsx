@@ -70,7 +70,7 @@ export const WpUser = ({ site, wpUser }: Props) => {
 	 */
 	const handleRemoveWpUser = React.useCallback(async () => {
 		try {
-			await wpUser.remove();
+			await wpUser.incrementalRemove();
 			await site.incrementalUpdate({
 				$pullAll: {
 					wp_credentials: [wpUser.uuid],
