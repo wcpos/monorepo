@@ -10,11 +10,16 @@ import addFormats from './ajv-formats';
 
 import type { RxDocumentData, RxJsonSchema } from 'rxdb';
 
-// const ajv = new Ajv({
-// 	strict: false,
-// });
-
-const ajv = new Ajv({ strict: 'log', coerceTypes: true });
+/**
+ * multipleOfPrecision: Handle floating-point precision issues with multipleOf validation.
+ * Without this, values like 2137.3 fail `multipleOf: 0.000001` due to IEEE 754 representation.
+ * Setting to 6 means we tolerate differences up to 1e-6 when checking multipleOf.
+ */
+const ajv = new Ajv({
+	strict: 'log',
+	coerceTypes: true,
+	multipleOfPrecision: 6,
+});
 ajv.addVocabulary([
 	'version',
 	'primaryKey',

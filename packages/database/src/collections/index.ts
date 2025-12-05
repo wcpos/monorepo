@@ -1,5 +1,4 @@
 import isNaN from 'lodash/isNaN';
-import round from 'lodash/round';
 import toNumber from 'lodash/toNumber';
 import { ExtractDocumentTypeFromTypedRxJsonSchema, RxJsonSchema } from 'rxdb';
 
@@ -22,10 +21,20 @@ import { wpCredentialsLiteral } from './schemas/wp-credientials';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
 
-const roundToSixDecimals = (value: any): number => {
+/**
+ * Convert a decimal value to a sortable integer for RxDB indexing.
+ *
+ * RxDB requires `multipleOf` for indexed number fields, but floating-point
+ * values like 2137.3 can't be exactly represented in IEEE 754, causing
+ * `multipleOf: 0.000001` validation to fail.
+ *
+ * Solution: Store as integer (value * 1,000,000) with multipleOf: 1.
+ * This preserves 6 decimal places of precision as an exact integer.
+ */
+const toSortableInteger = (value: any): number => {
 	const num = toNumber(value);
 	if (isNaN(num)) return 0;
-	return round(num, 6);
+	return Math.round(num * 1000000);
 };
 
 /**
@@ -127,14 +136,14 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 		middlewares: {
 			preInsert: {
 				handle: (doc) => {
-					doc.sortable_price = roundToSixDecimals(doc.price);
+					doc.sortable_price = toSortableInteger(doc.price);
 					return doc;
 				},
 				parallel: false,
 			},
 			preSave: {
 				handle: (doc) => {
-					doc.sortable_price = roundToSixDecimals(doc.price);
+					doc.sortable_price = toSortableInteger(doc.price);
 					return doc;
 				},
 				parallel: false,
@@ -143,10 +152,14 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 	},
 	migrationStrategies: {
 		1(oldDoc) {
-			oldDoc.sortable_price = roundToSixDecimals(oldDoc.price);
+			oldDoc.sortable_price = toSortableInteger(oldDoc.price);
 			return oldDoc;
 		},
 		2(oldDoc) {
+			return oldDoc;
+		},
+		// v3: Removed multipleOf constraint from sortable_price (floating-point incompatibility)
+		3(oldDoc) {
 			return oldDoc;
 		},
 	},
@@ -168,14 +181,14 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 		middlewares: {
 			preInsert: {
 				handle: (doc) => {
-					doc.sortable_price = roundToSixDecimals(doc.price);
+					doc.sortable_price = toSortableInteger(doc.price);
 					return doc;
 				},
 				parallel: false,
 			},
 			preSave: {
 				handle: (doc) => {
-					doc.sortable_price = roundToSixDecimals(doc.price);
+					doc.sortable_price = toSortableInteger(doc.price);
 					return doc;
 				},
 				parallel: false,
@@ -188,10 +201,14 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 			return oldDoc;
 		},
 		2(oldDoc) {
-			oldDoc.sortable_price = roundToSixDecimals(oldDoc.price);
+			oldDoc.sortable_price = toSortableInteger(oldDoc.price);
 			return oldDoc;
 		},
 		3(oldDoc) {
+			return oldDoc;
+		},
+		// v4: Removed multipleOf constraint from sortable_price (floating-point incompatibility)
+		4(oldDoc) {
 			return oldDoc;
 		},
 	},
@@ -275,14 +292,14 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 		middlewares: {
 			preInsert: {
 				handle: (doc) => {
-					doc.sortable_total = roundToSixDecimals(doc.total);
+					doc.sortable_total = toSortableInteger(doc.total);
 					return doc;
 				},
 				parallel: false,
 			},
 			preSave: {
 				handle: (doc) => {
-					doc.sortable_total = roundToSixDecimals(doc.total);
+					doc.sortable_total = toSortableInteger(doc.total);
 					return doc;
 				},
 				parallel: false,
@@ -291,10 +308,14 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 	},
 	migrationStrategies: {
 		1(oldDoc) {
-			oldDoc.sortable_total = roundToSixDecimals(oldDoc.total);
+			oldDoc.sortable_total = toSortableInteger(oldDoc.total);
 			return oldDoc;
 		},
 		2(oldDoc) {
+			return oldDoc;
+		},
+		// v3: Removed multipleOf constraint from sortable_total (floating-point incompatibility)
+		3(oldDoc) {
 			return oldDoc;
 		},
 	},

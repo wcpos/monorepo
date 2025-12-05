@@ -5,10 +5,10 @@ import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 import type { SQLiteBasics } from 'rxdb-premium/plugins/storage-sqlite';
 
 // Keep a cache of database connections keyed by database name
-const dbCache = new Map<string, any>();
+export const dbCache = new Map<string, any>();
 
 // Function to close all database connections
-async function closeAllDatabases() {
+export async function closeAllDatabases() {
 	console.log('Closing all database connections');
 	for (const [dbName, db] of dbCache.entries()) {
 		try {

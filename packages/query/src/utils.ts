@@ -1,45 +1,10 @@
 import snakeCase from 'lodash/snakeCase';
 import { stringify } from 'query-string';
 
-import log from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
-
 /**
  * @NOTE - query-string is part of the `react-navigation` package, if I install a newer version of that package,
  * it breaks `react-navigation` :(
  */
-
-/**
- * Helper to classify and log errors from the query package
- */
-export const logError = (error: any, defaultMessage: string = 'An error occurred') => {
-	let errorCode = error?.errorCode;
-	const isHttpError =
-		error && (error.response || error.request || error.isAxiosError || error.config);
-
-	if (!errorCode) {
-		if (isHttpError) {
-			// If it's an HTTP error without a specific code, use a generic connection error
-			errorCode = ERROR_CODES.CONNECTION_REFUSED;
-		} else if (error?.message?.includes('SQL')) {
-			errorCode = ERROR_CODES.QUERY_SYNTAX_ERROR;
-		} else {
-			errorCode = ERROR_CODES.SERVICE_UNAVAILABLE;
-		}
-	}
-
-	const message = error?.message || defaultMessage;
-
-	log.error(message, {
-		showToast: true,
-		saveToDb: true,
-		context: {
-			errorCode,
-			error: error instanceof Error ? error.message : String(error),
-			isHttpError,
-		},
-	});
-};
 
 /**
  *

@@ -54,20 +54,39 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 			return;
 		}
 
-		if (response.type === 'success') {
-			log.success('Successfully logged in', {
-				showToast: true,
-			});
-			log.debug('Authentication successful', {
-				context: {
-					siteName: site.name,
-					userId: wpCredentials.id,
-				},
-			});
+		const processSuccessfulLogin = async () => {
 			processedResponseRef.current = responseKey;
-			// Clear auth failed state on successful login
-			requestStateManager.setAuthFailed(false);
-			handleLoginSuccess({ params: response.params } as any);
+
+			try {
+				// Save tokens FIRST before clearing auth failed state
+				await handleLoginSuccess({ params: response.params } as any);
+
+				// Only clear auth failed state AFTER tokens are successfully saved
+				requestStateManager.setAuthFailed(false);
+
+				log.success('Successfully logged in', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						siteName: site.name,
+						userId: wpCredentials.id,
+					},
+				});
+			} catch (error) {
+				log.error('Failed to save login credentials', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						siteName: site.name,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			}
+		};
+
+		if (response.type === 'success') {
+			processSuccessfulLogin();
 		} else if (response.type === 'error') {
 			log.warn('Login failed - please check your credentials', {
 				showToast: true,

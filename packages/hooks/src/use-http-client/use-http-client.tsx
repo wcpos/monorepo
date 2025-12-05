@@ -5,6 +5,7 @@ import set from 'lodash/set';
 import log from '@wcpos/utils/logger';
 
 import http from './http';
+import { parseWpError } from './parse-wp-error';
 import { scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
@@ -252,6 +253,15 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 					// Return a promise that never resolves to prevent unhandled rejections
 					// and stop component rendering flow that depends on response
 					return new Promise(() => {});
+				}
+
+				// Enrich error with WordPress/WooCommerce error details before throwing
+				const axiosError = error as AxiosError;
+				if (axiosError.response?.data) {
+					const wpError = parseWpError(axiosError.response.data, axiosError.message);
+					(error as any).wpCode = wpError.code;
+					(error as any).wpMessage = wpError.message;
+					(error as any).wpStatus = wpError.status;
 				}
 
 				log.debug(error);

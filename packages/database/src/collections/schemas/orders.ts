@@ -1,6 +1,6 @@
 export const ordersLiteral = {
 	title: 'WooCommerce Order schema',
-	version: 2,
+	version: 3,
 	description: 'WooCommerce Order schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -87,10 +87,13 @@ export const ordersLiteral = {
 			type: 'string',
 		},
 		sortable_total: {
+			// Stored as number (value * 1,000,000) to support all currency decimal places
+			// Using number type to avoid 32-bit integer overflow for large order totals
+			// Max ~9 billion in original currency (9,000,000,000 * 1,000,000)
 			type: 'number',
-			minimum: -2147483647,
-			maximum: 2147483647,
-			multipleOf: 0.000001,
+			minimum: -9007199254740991,
+			maximum: 9007199254740991,
+			multipleOf: 1,
 		},
 		total_tax: {
 			type: 'string',

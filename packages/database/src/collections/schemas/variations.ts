@@ -1,6 +1,6 @@
 export const variationsLiteral = {
 	title: 'WooCommerce Product Variation schema',
-	version: 3,
+	version: 4,
 	description: 'WooCommerce Product Variation schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -51,16 +51,47 @@ export const variationsLiteral = {
 			type: 'string',
 		},
 		sortable_price: {
-			type: 'number',
+			// Stored as integer (value * 1,000,000) to avoid floating-point precision issues
+			type: 'integer',
 			minimum: -2147483647,
 			maximum: 2147483647,
-			multipleOf: 0.000001,
+			multipleOf: 1,
 		},
 		regular_price: {
 			type: 'string',
 		},
 		sale_price: {
 			type: 'string',
+		},
+		cost_of_goods_sold: {
+			description: 'Cost of Goods Sold data.',
+			type: 'object',
+			properties: {
+				values: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							defined_value: {
+								description: 'The specified cost value.',
+								type: 'number',
+							},
+							effective_value: {
+								description: 'The effective cost value (read-only).',
+								type: 'number',
+							},
+						},
+					},
+				},
+				total_value: {
+					description: 'The cumulative cost (read-only).',
+					type: 'number',
+				},
+				defined_value_is_additive: {
+					description: 'Whether the defined value adds to the parent cost (variations only).',
+					type: 'boolean',
+				},
+			},
 		},
 		date_on_sale_from: {
 			type: 'string',

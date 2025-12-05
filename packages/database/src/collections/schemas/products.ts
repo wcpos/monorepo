@@ -1,6 +1,6 @@
 export const productsLiteral = {
 	title: 'WooCommerce Product schema',
-	version: 2,
+	version: 3,
 	description: 'WooCommerce Product schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -76,16 +76,43 @@ export const productsLiteral = {
 			type: 'string',
 		},
 		sortable_price: {
-			type: 'number',
+			// Stored as integer (value * 1,000,000) to avoid floating-point precision issues
+			type: 'integer',
 			minimum: -2147483647,
 			maximum: 2147483647,
-			multipleOf: 0.000001,
+			multipleOf: 1,
 		},
 		regular_price: {
 			type: 'string',
 		},
 		sale_price: {
 			type: 'string',
+		},
+		cost_of_goods_sold: {
+			description: 'Cost of Goods Sold data.',
+			type: 'object',
+			properties: {
+				values: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							defined_value: {
+								description: 'The specified cost value.',
+								type: 'number',
+							},
+							effective_value: {
+								description: 'The effective cost value (read-only).',
+								type: 'number',
+							},
+						},
+					},
+				},
+				total_value: {
+					description: 'The cumulative cost (read-only).',
+					type: 'number',
+				},
+			},
 		},
 		date_on_sale_from: {
 			type: 'string',

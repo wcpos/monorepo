@@ -23,6 +23,12 @@ export class SyncStateManager {
 	public syncCollection: SyncCollection;
 	private endpoint: string;
 
+	/**
+	 * Mutex lock to prevent concurrent processServerResponse calls
+	 * This prevents race conditions where the same documents are inserted twice
+	 */
+	private processLock: Promise<void> = Promise.resolve();
+
 	constructor({ collection, syncCollection, endpoint }: SyncStateManagerOptions) {
 		this.collection = collection;
 		this.syncCollection = syncCollection;
@@ -205,8 +211,28 @@ export class SyncStateManager {
 	/**
 	 * Save the server response to the local DB and sync state
 	 * @NOTE - we need to make sure we are not overwriting a newer date_modified_gmt
+	 * @NOTE - uses a mutex lock to prevent race conditions from concurrent calls
 	 */
 	public async processServerResponse(response: any[]) {
+		// Wait for any pending operation to complete
+		const previousLock = this.processLock;
+		let releaseLock: () => void;
+		this.processLock = new Promise((resolve) => {
+			releaseLock = resolve;
+		});
+
+		try {
+			await previousLock;
+			return await this._processServerResponseInternal(response);
+		} finally {
+			releaseLock!();
+		}
+	}
+
+	/**
+	 * Internal implementation of processServerResponse (called within mutex lock)
+	 */
+	private async _processServerResponseInternal(response: any[]) {
 		const primaryPath = this.collection.schema.primaryPath;
 		const responseMap = new Map(response.map((doc: any) => [doc[primaryPath], doc]));
 		const localDocs = await this.collection.findByIds(Array.from(responseMap.keys())).exec();
@@ -228,9 +254,10 @@ export class SyncStateManager {
 
 				if (result.error.length > 0) {
 					log.error('Error inserting documents', {
+						showToast: true,
 						saveToDb: true,
 						context: {
-							errorCode: ERROR_CODES.DB_INSERT_FAILED,
+							errorCode: ERROR_CODES.INSERT_FAILED,
 							collection: this.collection.name,
 							errors: result.error,
 						},
@@ -273,6 +300,7 @@ export class SyncStateManager {
 
 				if (result.error.length > 0) {
 					log.error('Error upserting documents', {
+						showToast: true,
 						saveToDb: true,
 						context: {
 							errorCode: ERROR_CODES.DB_UPSERT_FAILED,

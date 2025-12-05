@@ -3,9 +3,12 @@ import isEmpty from 'lodash/isEmpty';
 import { BehaviorSubject, interval, Observable, Subscription } from 'rxjs';
 import { filter, startWith, switchMap } from 'rxjs/operators';
 
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
 import { DataFetcher } from './data-fetcher';
 import { SubscribableBase } from './subscribable-base';
-import { getParamValueFromEndpoint, logError } from './utils';
+import { getParamValueFromEndpoint } from './utils';
 
 import type { CollectionReplicationState } from './collection-replication-state';
 import type { RxCollection } from 'rxdb';
@@ -169,8 +172,20 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 			}
 
 			await this.collectionReplication.bulkUpsertResponse(response);
-		} catch (error) {
-			logError(error, 'Failed to sync query items');
+		} catch (error: any) {
+			// Error is already enriched with wpCode/wpMessage by httpClient
+			const message = error.wpMessage || error.message || 'Failed to sync query items';
+			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
+
+			log.error(message, {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode,
+					endpoint: this.endpoint,
+					wpStatus: error.wpStatus,
+				},
+			});
 		} finally {
 			this.collectionReplication.start();
 			this.subjects.active.next(false);

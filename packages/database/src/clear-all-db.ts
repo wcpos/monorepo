@@ -1,8 +1,10 @@
+import { Directory } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
-import * as FileSystem from 'expo-file-system';
 
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
+import { closeAllDatabases, dbCache } from './adapters/default';
 
 export interface ClearDBResult {
 	success: boolean;
@@ -13,9 +15,12 @@ export interface ClearDBResult {
 /**
  * Completely wipes all SQLite databases used by the app
  *
- * This function combines the best of both approaches:
- * 1. Uses Expo SQLite's built-in deleteDatabaseAsync for known databases
- * 2. Falls back to directory listing + deletion for unknown databases
+ * This function:
+ * 1. Closes all open database connections first (required before deletion)
+ * 2. Uses Expo SQLite's built-in deleteDatabaseAsync for known databases
+ * 3. Falls back to directory listing + deletion for unknown databases
+ *
+ * Note: The "temporary" database uses in-memory storage and doesn't need SQLite deletion.
  *
  * Based on the Expo SQLite docs: https://docs.expo.dev/versions/latest/sdk/sqlite/
  *
@@ -25,10 +30,16 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 	try {
 		log.debug('Starting to clear all SQLite databases');
 
+		// Step 1: Close all open database connections first
+		// Databases must be closed before they can be deleted
+		log.debug(`Closing ${dbCache.size} cached database connections`);
+		await closeAllDatabases();
+
 		let deletedCount = 0;
 
-		// Step 1: Try to delete known database names from create-db.ts
-		const knownDatabases = ['wcposusers_v2', 'temporary_v2'];
+		// Step 2: Try to delete known database names from create-db.ts
+		// Note: "temporary" database uses memory storage, not SQLite, so it's not included
+		const knownDatabases = ['wcposusers_v2'];
 
 		for (const dbName of knownDatabases) {
 			try {
@@ -38,23 +49,28 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 				log.debug(`Successfully deleted database: ${dbName}`);
 			} catch (error) {
 				// Database might not exist, which is fine
-				log.debug(`Could not delete database ${dbName} (likely doesn't exist):`, error);
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				log.debug(
+					`Could not delete database ${dbName}: ${errorMessage || 'Database does not exist'}`
+				);
 			}
 		}
 
-		// Step 2: Try to find and delete store databases by checking the directory
+		// Step 3: Try to find and delete store databases by checking the directory
 		// This handles the dynamic store_v2_{id} and fast_store_v3_{id} databases
 		try {
 			const databaseDirectory = SQLite.defaultDatabaseDirectory;
 			log.debug(`Checking database directory: ${databaseDirectory}`);
 
-			const dirInfo = await FileSystem.getInfoAsync(databaseDirectory);
-			if (dirInfo.exists) {
-				const files = await FileSystem.readDirectoryAsync(databaseDirectory);
-				log.debug(`Found ${files.length} files in database directory`);
+			const directory = new Directory(databaseDirectory);
+
+			if (directory.exists) {
+				const contents = await directory.list();
+				const fileNames = contents.map((item) => item.name);
+				log.debug(`Found ${fileNames.length} files in database directory`);
 
 				// Filter for files that look like our app's databases
-				const appDatabaseFiles = files.filter((file) => {
+				const appDatabaseFiles = fileNames.filter((file) => {
 					// Skip auxiliary files like -wal and -shm
 					if (file.endsWith('-wal') || file.endsWith('-shm')) {
 						return false;
@@ -64,8 +80,7 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 					return (
 						file.startsWith('wcposusers_') ||
 						file.startsWith('store_v2_') ||
-						file.startsWith('fast_store_v3_') ||
-						file.startsWith('temporary_')
+						file.startsWith('fast_store_v3_')
 					);
 				});
 
@@ -86,14 +101,16 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 						deletedCount++;
 						log.debug(`Successfully deleted database: ${fileName}`);
 					} catch (error) {
-						log.debug(`Could not delete database ${fileName}:`, error);
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						log.debug(`Could not delete database ${fileName}: ${errorMessage}`);
 					}
 				}
 			} else {
-				log.debug('Database directory does not exist');
+				log.debug('Database directory does not exist (no databases have been created yet)');
 			}
 		} catch (error) {
-			log.debug('Could not access database directory:', error);
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			log.debug(`Could not access database directory: ${errorMessage}`);
 			// This is not a fatal error, we can still report success for known databases
 		}
 
@@ -102,7 +119,7 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 				? `Successfully cleared ${deletedCount} databases`
 				: 'No databases found to clear (this might mean the app is already in a clean state)';
 
-		log.debug(message);
+		log.info(message);
 
 		return {
 			success: true,

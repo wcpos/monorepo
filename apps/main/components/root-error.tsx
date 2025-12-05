@@ -1,12 +1,26 @@
 import * as React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { NativeModules, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { clearAllDB, type ClearDBResult } from '@wcpos/database';
+import { clearAllDB } from '@wcpos/database';
 import log from '@wcpos/utils/logger';
 
 import type { FallbackProps } from 'react-error-boundary';
+
+/**
+ * Reload the app - handles web and native platforms
+ */
+const reloadApp = () => {
+	if (Platform.OS === 'web') {
+		// Web: use window.location.reload()
+		window.location.reload();
+	} else {
+		// Native: use DevSettings.reload() (works in development builds)
+		// For production, you would need expo-updates installed
+		NativeModules.DevSettings?.reload();
+	}
+};
 
 /**
  * NOTE: we don't have access to the theme here, so we can't use tailwind
@@ -51,23 +65,16 @@ const styles: any = StyleSheet.create({
  */
 export const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 	const handleReset = async () => {
-		// clear userDB to ensure clean start
-		await clearAllDB()
-			.then((result: ClearDBResult) => {
-				log.info(result.message);
-			})
-			.catch((error) => {
-				log.error('Failed to clear database:', error);
-			});
-
-		/**
-		 * This won't work because createUserDB is called at the start of the app, not in the error boundary
-		 * I need to fix this, but in the meantime, we'll just reload the app
-		 */
-		// resetErrorBoundary();
-		if (window && window.location) {
-			window.location.reload();
+		// Clear databases to ensure clean start
+		try {
+			const result = await clearAllDB();
+			log.info(result.message);
+		} catch (err) {
+			log.error('Failed to clear database:', err);
 		}
+
+		// Reload the app to reinitialize everything
+		reloadApp();
 	};
 
 	return (

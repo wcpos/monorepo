@@ -8,7 +8,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { DataFetcher } from './data-fetcher';
 import { SubscribableBase } from './subscribable-base';
 import { SyncStateManager } from './sync-state';
-import { logError } from './utils';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 type ProductVariationCollection = import('@wcpos/database').ProductVariationCollection;
@@ -188,11 +187,15 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		try {
 			const response = await this.dataFetcher.fetchAllRemoteIds();
 			if (!Array.isArray(response?.data)) {
-				log.error('Invalid response fetching remote state', {
+				// Server returned 200 but with unexpected data format
+				const errorCode = response?.data?.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
+				const errorMessage = response?.data?.message || 'Invalid response fetching remote state';
+
+				log.error(errorMessage, {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+						errorCode,
 						endpoint: this.endpoint,
 					},
 				});
@@ -212,8 +215,20 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			this.subjects.active.next(false);
 			await this.syncStateManager.removeStaleRecords();
 			await this.update();
-		} catch (error) {
-			logError(error, 'Failed to fetch remote state');
+		} catch (error: any) {
+			// Error is already enriched with wpCode/wpMessage by httpClient
+			const message = error.wpMessage || error.message || 'Failed to fetch remote state';
+			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
+
+			log.error(message, {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode,
+					endpoint: this.endpoint,
+					wpStatus: error.wpStatus,
+				},
+			});
 		} finally {
 			this.subjects.active.next(false);
 
@@ -233,11 +248,15 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			try {
 				const response = await this.dataFetcher.fetchRecentRemoteUpdates(modifiedAfter);
 				if (!Array.isArray(response?.data)) {
-					log.error('Invalid response checking updates', {
+					// Server returned 200 but with unexpected data format
+					const errorCode = response?.data?.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
+					const errorMessage = response?.data?.message || 'Invalid response checking updates';
+
+					log.error(errorMessage, {
 						showToast: true,
 						saveToDb: true,
 						context: {
-							errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+							errorCode,
 							endpoint: this.endpoint,
 						},
 					});
@@ -258,8 +277,20 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				}
 				this.subjects.active.next(false);
 				await this.update();
-			} catch (error) {
-				logError(error, 'Failed to fetch remote updates');
+			} catch (error: any) {
+				// Error is already enriched with wpCode/wpMessage by httpClient
+				const message = error.wpMessage || error.message || 'Failed to check for updates';
+				const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
+
+				log.error(message, {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode,
+						endpoint: this.endpoint,
+						wpStatus: error.wpStatus,
+					},
+				});
 			} finally {
 				this.subjects.active.next(false);
 			}
@@ -323,8 +354,20 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				response = await this.dataFetcher.fetchRemoteByIDs({ include }, params);
 			}
 			await this.bulkUpsertResponse(response);
-		} catch (error) {
-			logError(error, 'Failed to sync remote items');
+		} catch (error: any) {
+			// Error is already enriched with wpCode/wpMessage by httpClient
+			const message = error.wpMessage || error.message || 'Failed to sync remote items';
+			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
+
+			log.error(message, {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode,
+					endpoint: this.endpoint,
+					wpStatus: error.wpStatus,
+				},
+			});
 		} finally {
 			this.subjects.active.next(false);
 		}
@@ -334,28 +377,28 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 * This is used by the Query Replication State also
 	 */
 	public async bulkUpsertResponse(response: any) {
-		try {
-			if (!Array.isArray(response?.data)) {
-				log.error('Invalid response from server', {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
-						endpoint: this.endpoint,
-					},
-				});
-				return;
-			}
+		if (!Array.isArray(response?.data)) {
+			// Server returned 200 but with unexpected data format
+			const errorCode = response?.data?.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
+			const errorMessage = response?.data?.message || 'Invalid response from server';
 
-			const documents = response.data.map((doc: any) => this.collection.parseRestResponse(doc));
-			if (documents.length === 0) {
-				return;
-			}
-
-			await this.syncStateManager.processServerResponse(documents);
-		} catch (error) {
-			logError(error, 'Failed to upsert items');
+			log.error(errorMessage, {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode,
+					endpoint: this.endpoint,
+				},
+			});
+			return;
 		}
+
+		const documents = response.data.map((doc: any) => this.collection.parseRestResponse(doc));
+		if (documents.length === 0) {
+			return;
+		}
+
+		await this.syncStateManager.processServerResponse(documents);
 	}
 
 	start() {
@@ -372,7 +415,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 * @TODO - these should be done with flags in the sync collection
 	 * ------------------------------
 	 */
-	remotePatch = async (doc, data) => {
+	remotePatch = async (doc: any, data: any) => {
 		try {
 			if (!doc.id) {
 				throw new Error('document does not have an id');
@@ -390,12 +433,25 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			if (result?.success.length === 1) {
 				return result.success[0];
 			}
-		} catch (error) {
-			logError(error, 'Failed to remote patch');
+		} catch (error: any) {
+			// Error is already enriched with wpCode/wpMessage by httpClient
+			const message = error.wpMessage || error.message || 'Failed to update item';
+			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
+
+			log.error(message, {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode,
+					endpoint: this.endpoint,
+					documentId: doc.id,
+					wpStatus: error.wpStatus,
+				},
+			});
 		}
 	};
 
-	remoteCreate = async (data) => {
+	remoteCreate = async (data: any) => {
 		try {
 			const response = await this.dataFetcher.remoteCreate(data);
 
@@ -408,8 +464,20 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			if (result?.success.length === 1) {
 				return result.success[0];
 			}
-		} catch (error) {
-			logError(error, 'Failed to remote create');
+		} catch (error: any) {
+			// Error is already enriched with wpCode/wpMessage by httpClient
+			const message = error.wpMessage || error.message || 'Failed to create item';
+			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
+
+			log.error(message, {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode,
+					endpoint: this.endpoint,
+					wpStatus: error.wpStatus,
+				},
+			});
 		}
 	};
 }
