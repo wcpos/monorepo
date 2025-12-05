@@ -69,6 +69,11 @@
         "align": "center"
       },
       {
+        "key": "cost_of_goods_sold",
+        "show": false,
+        "align": "right"
+      },
+      {
         "key": "price",
         "align": "right",
         "show": true,
@@ -248,6 +253,11 @@
         "key": "brands",
         "disableSort": true,
         "show": false
+      },
+      {
+        "key": "cost_of_goods_sold",
+        "show": false,
+        "align": "right"
       },
       {
         "key": "price",

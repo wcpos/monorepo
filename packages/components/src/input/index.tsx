@@ -156,9 +156,7 @@ function InputField({
 			ref={mergedRef}
 			editable={editable}
 			className={cn(
-				'w-full flex-1 bg-transparent px-3 py-2',
-				'text-foreground placeholder:text-muted-foreground text-base',
-				'web:focus-visible:outline-none outline-none',
+				'text-foreground placeholder:text-muted-foreground web:focus-visible:outline-none w-full flex-1 bg-transparent px-3 py-2 text-base outline-none',
 				!editable && 'web:cursor-not-allowed opacity-50',
 				className
 			)}
@@ -183,8 +181,7 @@ function Right({ children, className }: { children: React.ReactNode; className?:
 }
 
 interface InputProps
-	extends Omit<InputFieldProps, 'children'>,
-		Omit<RootProps, 'children' | 'editable'> {
+	extends Omit<InputFieldProps, 'children'>, Omit<RootProps, 'children' | 'editable'> {
 	clearable?: boolean;
 	defaultValue?: string;
 	inputClassName?: string;

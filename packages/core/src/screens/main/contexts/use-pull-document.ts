@@ -3,6 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { isRxDocument } from 'rxdb';
 
+import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -29,8 +30,13 @@ const usePullDocument = () => {
 			try {
 				const response = await http.get(`${endpoint}/${id}`);
 				return get(response, 'data');
-			} catch (err) {
-				log.error(t('Failed to fetch from server: {error}', { _tags: 'core', error: err.message }), {
+			} catch (err: any) {
+				// Extract the WooCommerce/WordPress error message from the response
+				const serverMessage = extractErrorMessage(
+					err?.response?.data,
+					t('Failed to fetch from server', { _tags: 'core' })
+				);
+				log.error(serverMessage, {
 					showToast: true,
 					saveToDb: true,
 					context: {

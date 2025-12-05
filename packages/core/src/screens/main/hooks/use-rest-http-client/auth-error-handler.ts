@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { CanceledError } from 'axios';
-import { makeRedirectUri, ResponseType, useAuthRequest } from 'expo-auth-session';
 import { BehaviorSubject } from 'rxjs';
 
 import log from '@wcpos/utils/logger';
@@ -9,6 +8,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type { HttpErrorHandler } from '@wcpos/hooks/use-http-client';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 
+import { useWcposAuth } from '../../../../hooks/use-wcpos-auth';
 import { useLoginHandler } from '../../../auth/hooks/use-login-handler';
 
 import type { Site, WPCredentials } from './types';
@@ -21,28 +21,9 @@ const errorSubject = new BehaviorSubject(null);
 export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): HttpErrorHandler => {
 	const { handleLoginSuccess } = useLoginHandler(site as any);
 	const [shouldTriggerAuth, setShouldTriggerAuth] = React.useState(false);
+	const processedResponseRef = React.useRef<string | null>(null);
 
-	const redirectUri = makeRedirectUri({
-		scheme: 'wcpos',
-		path: (window as any)?.baseUrl ?? undefined,
-	});
-
-	// Point at this site's auth endpoint
-	const discovery = {
-		authorizationEndpoint: site.wcpos_login_url,
-	};
-
-	const [, response, promptAsync] = useAuthRequest(
-		{
-			clientId: 'unused', // expo requires this field
-			responseType: ResponseType.Token,
-			redirectUri,
-			extraParams: { redirect_uri: redirectUri },
-			scopes: [],
-			usePKCE: false,
-		},
-		discovery
-	);
+	const { response, promptAsync } = useWcposAuth({ site });
 
 	// Handle OAuth trigger
 	React.useEffect(() => {
@@ -65,7 +46,15 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 
 	// Handle auth response
 	React.useEffect(() => {
-		if (response?.type === 'success') {
+		if (!response) return;
+
+		// Create a unique key to prevent double-processing
+		const responseKey = response.params?.access_token || response.error || response.type;
+		if (processedResponseRef.current === responseKey) {
+			return;
+		}
+
+		if (response.type === 'success') {
 			log.success('Successfully logged in', {
 				showToast: true,
 			});
@@ -75,10 +64,11 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 					userId: wpCredentials.id,
 				},
 			});
+			processedResponseRef.current = responseKey;
 			// Clear auth failed state on successful login
 			requestStateManager.setAuthFailed(false);
-			handleLoginSuccess(response as any);
-		} else if (response?.type === 'error') {
+			handleLoginSuccess({ params: response.params } as any);
+		} else if (response.type === 'error') {
 			log.warn('Login failed - please check your credentials', {
 				showToast: true,
 				saveToDb: true,
@@ -88,6 +78,27 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 					errorDetails: response.error,
 				},
 			});
+			processedResponseRef.current = responseKey;
+		} else if (
+			response.type === 'dismiss' ||
+			response.type === 'cancel' ||
+			response.type === 'locked'
+		) {
+			// User cancelled or dismissed the auth window
+			// NOTE: We DO NOT reset authFailed state here.
+			// This ensures that background requests continue to be blocked.
+			// User must actively trigger a new request (e.g. pull to refresh) or click the Login button in the toast to retry.
+
+			log.warn('Login cancelled', {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.AUTH_REQUIRED,
+					siteName: site.name,
+					status: response.type,
+				},
+			});
+			processedResponseRef.current = responseKey;
 		}
 	}, [response, handleLoginSuccess, site.name, wpCredentials.id]);
 
@@ -101,6 +112,7 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 			canHandle: (error) => {
 				const canHandle =
 					error.response?.status === 401 ||
+					(error as any).errorCode === ERROR_CODES.AUTH_REQUIRED ||
 					(error as any).isRefreshTokenInvalid ||
 					(error as any).refreshTokenInvalid ||
 					(error instanceof Error && error.message === 'REFRESH_TOKEN_INVALID');
@@ -109,6 +121,7 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 					context: {
 						canHandle,
 						errorStatus: error.response?.status,
+						errorCode: (error as any).errorCode,
 						hasRefreshTokenInvalidFlag: (error as any).isRefreshTokenInvalid,
 						hasRefreshTokenInvalidFlag2: (error as any).refreshTokenInvalid,
 						errorMessage: error instanceof Error ? error.message : String(error),
@@ -124,6 +137,7 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 					context: {
 						errorMessage: error instanceof Error ? error.message : String(error),
 						errorStatus: (error as any)?.response?.status,
+						errorCode: (error as any)?.errorCode,
 						hasRefreshTokenInvalidFlag: (error as any)?.isRefreshTokenInvalid,
 						hasRefreshTokenInvalidFlag2: (error as any)?.refreshTokenInvalid,
 					},
@@ -137,23 +151,40 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 
 				if (isRefreshTokenInvalid) {
 					log.debug('Refresh token is invalid, launching OAuth flow');
+					// Auto-launch for session expiration
+					setShouldTriggerAuth(true);
+				} else if ((error as any).errorCode === ERROR_CODES.AUTH_REQUIRED) {
+					log.debug('Auth required (pre-flight blocked), showing toast');
+					// For pre-flight blocks (e.g. user cancelled previously), show Toast with Login button
+					// instead of auto-launching to avoid intrusive loops
+					log.warn('Please log in to continue', {
+						showToast: true,
+						saveToDb: true,
+						toast: {
+							action: {
+								label: 'Login',
+								onClick: () => setShouldTriggerAuth(true),
+							},
+						},
+						context: {
+							errorCode: ERROR_CODES.AUTH_REQUIRED,
+							siteName: site.name,
+						},
+					});
 				} else {
 					log.debug('Token refresh failed, attempting OAuth flow');
+					// Auto-launch for other auth failures
+					setShouldTriggerAuth(true);
 				}
 
 				errorSubject.next(context.error);
 
-				// Trigger OAuth flow asynchronously via state
-				log.debug('Setting flag to trigger OAuth flow');
-				setShouldTriggerAuth(true);
-
-				// Throw a CanceledError to stop the request chain
-				// The OAuth flow will be handled by the useEffect
+				// Throw a CanceledError to stop the request chain and suppress upstream errors
 				throw new CanceledError('401 - attempting re-authentication');
 			},
 			intercepts: true, // This handler intercepts and stops the error chain
 		}),
-		[setShouldTriggerAuth]
+		[setShouldTriggerAuth, site.name]
 	);
 };
 

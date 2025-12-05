@@ -4,7 +4,9 @@ import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
 import useHttpClient, { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client';
+import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../contexts/app-state';
 import { mergeStoresWithResponse } from '../utils/merge-stores';
@@ -182,12 +184,16 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				}
 
 				return data;
-			} catch (error) {
-				const errorMsg = error instanceof Error ? error.message : String(error);
-				log.error('Failed to fetch user data from server', {
+			} catch (error: any) {
+				// Extract the WooCommerce/WordPress error message from the response
+				const serverMessage = extractErrorMessage(
+					error?.response?.data,
+					'Failed to fetch user data from server'
+				);
+				log.error(serverMessage, {
 					context: {
 						errorCode: ERROR_CODES.CONNECTION_REFUSED,
-						error: errorMsg,
+						error: error instanceof Error ? error.message : String(error),
 						userId,
 						siteUrl,
 					},

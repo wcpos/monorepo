@@ -3,6 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 
+import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -62,8 +63,13 @@ const usePushDocument = () => {
 				}
 				
 				return data;
-			} catch (err) {
-				log.error(t('Failed to send to server: {error}', { _tags: 'core', error: err.message }), {
+			} catch (err: any) {
+				// Extract the WooCommerce/WordPress error message from the response
+				const serverMessage = extractErrorMessage(
+					err?.response?.data,
+					t('Failed to send to server', { _tags: 'core' })
+				);
+				log.error(serverMessage, {
 					showToast: true,
 					saveToDb: true,
 					context: {

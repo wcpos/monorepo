@@ -220,6 +220,7 @@ export const createTokenRefreshHandler = ({
 									errorMsg.includes('404') ||
 									errorMsg.includes('400'))) ||
 							(refreshError instanceof Error && errorMsg === 'REFRESH_TOKEN_INVALID') ||
+							(refreshError as any)?.errorCode === ERROR_CODES.AUTH_REQUIRED || // Check for pre-flight block
 							[400, 401, 403, 404].includes((refreshError as any)?.response?.status);
 
 						if (isRefreshTokenInvalid) {

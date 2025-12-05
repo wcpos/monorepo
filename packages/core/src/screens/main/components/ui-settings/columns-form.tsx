@@ -5,11 +5,12 @@ import * as z from 'zod';
 
 import { Collapsible, CollapsibleContent } from '@wcpos/components/collapsible';
 import {
-	DndProvider,
-	DndProviderProps,
-	Draggable,
-	DraggableStack,
-	DraggableStackProps,
+	List,
+	// DndProvider,
+	// DndProviderProps,
+	// Draggable,
+	// DraggableStack,
+	// DraggableStackProps,
 } from '@wcpos/components/dnd';
 import { FormField, FormSwitch } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
@@ -88,7 +89,8 @@ export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
 		<VStack>
 			<Text className="font-semibold">{t('Columns', { _tags: 'core' })}</Text>
 			<VStack>
-				<DndProvider onFinalize={handleFinalize}>
+				{/* <List /> */}
+				{/* <DndProvider onFinalize={handleFinalize}>
 					<DraggableStack direction="column" gap={10} onOrderChange={onStackOrderChange}>
 						{fields.map((column, columnIndex) => {
 							return (
@@ -138,7 +140,7 @@ export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
 							);
 						})}
 					</DraggableStack>
-				</DndProvider>
+				</DndProvider> */}
 			</VStack>
 		</VStack>
 	);

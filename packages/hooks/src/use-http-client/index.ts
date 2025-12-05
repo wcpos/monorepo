@@ -2,8 +2,15 @@ export { useHttpClient as default } from './use-http-client';
 export { createTokenRefreshHandler } from './create-token-refresh-handler';
 export { requestStateManager } from './request-state-manager';
 export { scheduleRequest, pauseQueue, resumeQueue, getQueueMetrics } from './request-queue';
+export {
+	extractErrorMessage,
+	extractWpErrorCode,
+	parseWpError,
+	isWpErrorResponse,
+} from './parse-wp-error';
 export type { RequestConfig } from './types';
 export type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
+export type { WpErrorResponse, ParsedWpError } from './parse-wp-error';
 
 /**
  * Note: requestStateManager.getRefreshedToken() is available for advanced use cases

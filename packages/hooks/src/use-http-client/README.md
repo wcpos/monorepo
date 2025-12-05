@@ -103,6 +103,45 @@ Before entering the queue, every request checks:
 2.  **Auth Status**: Fails immediately if `authFailed` flag is true.
 3.  **Refresh Status**: Waits if a token refresh is in progress.
 
+### 6. WordPress/WooCommerce Error Parsing
+WordPress and WooCommerce return errors in a specific format:
+
+```json
+{
+  "code": "woocommerce_rest_cannot_view",
+  "message": "Sorry, you cannot view this resource.",
+  "data": {
+    "status": 401
+  }
+}
+```
+
+The `extractErrorMessage` utility extracts the server's actual error message for display to users:
+
+```typescript
+import { extractErrorMessage, parseWpError, extractWpErrorCode } from '@wcpos/hooks/use-http-client';
+
+try {
+  await httpClient.get('/api/resource');
+} catch (error) {
+  // Extract the WP/WC error message, or use fallback
+  const message = extractErrorMessage(error.response?.data, 'Request failed');
+  
+  // Parse full error details
+  const { message, code, status, isWpError } = parseWpError(error.response?.data, 'Request failed');
+  
+  // Just get the error code (e.g., "woocommerce_rest_cannot_view")
+  const wpErrorCode = extractWpErrorCode(error.response?.data);
+  
+  log.error(message, {
+    showToast: true,
+    context: { wpErrorCode }
+  });
+}
+```
+
+This ensures users see helpful server messages like "Sorry, you cannot list resources" instead of generic "Authentication failed" messages.
+
 ## API Reference
 
 ### `useHttpClient(errorHandlers?)`

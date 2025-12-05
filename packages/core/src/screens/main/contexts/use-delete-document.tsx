@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -31,8 +32,13 @@ const useDeleteDocument = () => {
 					},
 				});
 			}
-		} catch (err) {
-			log.error(t('Failed to delete from server: {error}', { _tags: 'core', error: err.message }), {
+		} catch (err: any) {
+			// Extract the WooCommerce/WordPress error message from the response
+			const serverMessage = extractErrorMessage(
+				err?.response?.data,
+				t('Failed to delete from server', { _tags: 'core' })
+			);
+			log.error(serverMessage, {
 				showToast: true,
 				saveToDb: true,
 				context: {
