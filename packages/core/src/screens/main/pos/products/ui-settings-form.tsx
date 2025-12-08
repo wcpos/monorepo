@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservableState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -33,9 +32,9 @@ export const schema = z.object({
  */
 export const UISettingsForm = () => {
 	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('pos-products');
-	const formData = useObservableState(uiSettings.$, uiSettings.get());
-	// const { buttonPressHandlerRef } = useDialogContext();
-	// buttonPressHandlerRef.current = resetUI;
+	// Get initial data once - don't subscribe to changes while editing
+	const initialData = React.useMemo(() => uiSettings.get(), [uiSettings]);
+	const { buttonPressHandlerRef } = useDialogContext();
 	const t = useT();
 
 	/**
@@ -43,20 +42,20 @@ export const UISettingsForm = () => {
 	 */
 	const form = useForm<z.infer<typeof schema>>({
 		resolver: zodResolver(schema),
-		defaultValues: {
-			...formData,
-		},
+		defaultValues: initialData,
 	});
 
 	/**
-	 * Track formData changes and reset form
+	 * Handle reset button
 	 */
-	React.useEffect(() => {
-		form.reset({ ...formData });
-	}, [formData, form]);
+	buttonPressHandlerRef.current = React.useCallback(async () => {
+		await resetUI();
+		form.reset(uiSettings.get());
+	}, [resetUI, form, uiSettings]);
 
 	/**
-	 *
+	 * Form is the source of truth during editing.
+	 * Changes are saved to RxDB but we don't re-sync back to avoid loops.
 	 */
 	useFormChangeHandler({ form, onChange: patchUI });
 
@@ -72,7 +71,7 @@ export const UISettingsForm = () => {
 						name="showOutOfStock"
 						render={({ field }) => <FormSwitch label={getUILabel('showOutOfStock')} {...field} />}
 					/>
-					<UISettingsColumnsForm columns={formData.columns} getUILabel={getUILabel} />
+					<UISettingsColumnsForm columns={initialData.columns} getUILabel={getUILabel} />
 					<FormField
 						control={form.control}
 						name="metaDataKeys"

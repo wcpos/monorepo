@@ -28,11 +28,66 @@ export interface ExtendedLogger {
 	info: (message: string, options?: LoggerOptions) => void;
 	debug: (message: string, options?: LoggerOptions) => void;
 	success: (message: string, options?: LoggerOptions) => void;
+	setLevel: (level: LogLevel) => void;
+	getLevel: () => LogLevel;
 }
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 // Global state
 let toastShow: ((config: any) => void) | null = null;
 let dbCollection: any | null = null;
+
+// Log level severity (lower = more verbose)
+const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
+	debug: 0,
+	info: 1,
+	warn: 2,
+	error: 3,
+};
+
+// Initialize log level from localStorage (if available) or use default
+function getInitialLogLevel(): LogLevel {
+	if (typeof window !== 'undefined' && window.localStorage) {
+		const stored = localStorage.getItem('wcpos_log_level');
+		if (stored && LOG_LEVEL_SEVERITY.hasOwnProperty(stored)) {
+			return stored as LogLevel;
+		}
+	}
+	return __DEV__ ? 'debug' : 'info';
+}
+
+let currentLogLevel: LogLevel = getInitialLogLevel();
+
+/**
+ * Safe JSON stringify that handles circular references and large objects
+ */
+function safeStringify(obj: any, maxLength = 10000): string {
+	const seen = new WeakSet();
+	try {
+		const result = JSON.stringify(obj, (key, value) => {
+			// Handle circular references
+			if (typeof value === 'object' && value !== null) {
+				if (seen.has(value)) {
+					return '[Circular]';
+				}
+				seen.add(value);
+			}
+			// Truncate very long strings
+			if (typeof value === 'string' && value.length > 1000) {
+				return value.substring(0, 1000) + '... [truncated]';
+			}
+			return value;
+		});
+		// Truncate the entire result if too long
+		if (result && result.length > maxLength) {
+			return result.substring(0, maxLength) + '... [truncated]';
+		}
+		return result;
+	} catch (e) {
+		return '[Unable to stringify]';
+	}
+}
 
 /**
  * Set Toast function - call when Toast component is ready
@@ -67,23 +122,25 @@ const mainTransport = (props: any) => {
 		message = String(rawMsg || '');
 	}
 
-	// 1. Always log to console
-	const timestamp = new Date().toLocaleTimeString();
-	const levelText = level.text.toUpperCase();
-	// const consoleMethod =
-	// 	level.text === 'error'
-	// 		? console.error
-	// 		: level.text === 'warn'
-	// 			? console.warn
-	// 			: level.text === 'info' || level.text === 'success'
-	// 				? console.info
-	// 				: console.log;
-	// console.errors open a redbox in development which is annoying
-	const consoleMethod = console.log;
+	// Check if this log level should be shown (based on runtime level)
+	const levelName = level.text as LogLevel;
+	const levelSeverity = LOG_LEVEL_SEVERITY[levelName] ?? 0;
+	const currentSeverity = LOG_LEVEL_SEVERITY[currentLogLevel];
+	
+	// Skip console logging if below current level (but still allow toast/db)
+	const shouldLogToConsole = levelSeverity >= currentSeverity;
 
-	// Include context in console output if available
-	const contextStr = options.context ? ` | Context: ${JSON.stringify(options.context)}` : '';
-	consoleMethod(`${timestamp} | ${levelText} : ${message}${contextStr}`);
+	// 1. Log to console if level permits
+	if (shouldLogToConsole) {
+		const timestamp = new Date().toLocaleTimeString();
+		const levelText = level.text.toUpperCase();
+		// console.errors open a redbox in development which is annoying
+		const consoleMethod = console.log;
+
+		// Include context in console output if available (using safe stringify)
+		const contextStr = options.context ? ` | Context: ${safeStringify(options.context)}` : '';
+		consoleMethod(`${timestamp} | ${levelText} : ${message}${contextStr}`);
+	}
 
 	// 2. Show toast if available and requested
 	if (options.showToast && toastShow) {
@@ -169,14 +226,53 @@ const mainTransport = (props: any) => {
  *
  * In development: all logs (debug, info, warn, error)
  * In production: info, warn, error (debug is filtered for performance)
+ *
+ * Runtime log level can be changed via browser console:
+ *   window.wcposLog.setLevel('debug')  // Show all logs
+ *   window.wcposLog.setLevel('info')   // Default production level
+ *   window.wcposLog.setLevel('warn')   // Only warnings and errors
+ *   window.wcposLog.setLevel('error')  // Only errors
+ *   window.wcposLog.getLevel()         // Get current level
  */
 const baseLogger = logger.createLogger({
-	severity: __DEV__ ? 'debug' : 'info',
+	severity: 'debug', // Always allow all levels through, we filter in transport
 	transport: mainTransport as any,
 	enabled: true,
 });
 
-// Extend with custom success method
+/**
+ * Set the runtime log level (persists to localStorage)
+ */
+const setLevel = (level: LogLevel) => {
+	if (!LOG_LEVEL_SEVERITY.hasOwnProperty(level)) {
+		console.warn(`Invalid log level: ${level}. Valid levels: debug, info, warn, error`);
+		return;
+	}
+	currentLogLevel = level;
+	// Persist to localStorage so it survives page refresh
+	if (typeof window !== 'undefined' && window.localStorage) {
+		localStorage.setItem('wcpos_log_level', level);
+	}
+	console.log(`Log level set to: ${level} (saved to localStorage)`);
+};
+
+/**
+ * Get the current log level
+ */
+const getLevel = (): LogLevel => currentLogLevel;
+
+/**
+ * Reset log level to default (clears localStorage)
+ */
+const resetLevel = () => {
+	if (typeof window !== 'undefined' && window.localStorage) {
+		localStorage.removeItem('wcpos_log_level');
+	}
+	currentLogLevel = __DEV__ ? 'debug' : 'info';
+	console.log(`Log level reset to default: ${currentLogLevel}`);
+};
+
+// Extend with custom methods
 const log = {
 	...baseLogger,
 	success: (message: string, options?: LoggerOptions) => {
@@ -187,6 +283,22 @@ const log = {
 			rawMsg: options ? [message, options] : message,
 		});
 	},
+	setLevel,
+	getLevel,
 } as ExtendedLogger;
+
+// Expose to window for browser console access
+if (typeof window !== 'undefined') {
+	(window as any).wcposLog = {
+		setLevel,
+		getLevel,
+		resetLevel,
+		debug: log.debug,
+		info: log.info,
+		warn: log.warn,
+		error: log.error,
+		success: log.success,
+	};
+}
 
 export default log;

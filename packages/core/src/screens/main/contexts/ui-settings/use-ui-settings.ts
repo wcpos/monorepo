@@ -23,6 +23,7 @@ export const useUISettings = <T extends UISettingID>(id: T) => {
 
 	/**
 	 * Get UI Settings for the specified ID
+	 * NOTE: This will throw a Promise if the observable hasn't emitted yet (Suspense)
 	 */
 	const uiSettings = useObservableSuspense(resources[id]) as UISettingState<T>;
 

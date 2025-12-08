@@ -31,6 +31,7 @@ export const CurrentOrderProvider = ({
 }: CurrentOrderContextProviderProps) => {
 	const { newOrder } = useNewOrder();
 	const openOrders = useObservableSuspense(resource);
+
 	let currentOrder = openOrders.find((order) => order.id === currentOrderUUID)?.document;
 	if (!currentOrder) {
 		currentOrder = newOrder;

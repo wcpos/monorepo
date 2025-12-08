@@ -50,8 +50,23 @@ type ListProps<T> = {
 	 */
 	parentComponent?: typeof View;
 
-	/** Any props you’d normally pass to that wrapper. */
+	/** Any props you'd normally pass to that wrapper. */
 	parentProps?: Omit<React.ComponentProps<typeof View>, 'children'>;
+
+	/**
+	 * Extra data that, when changed, will trigger a re-render of all items.
+	 * Useful for forcing re-renders when data outside of `data` array changes
+	 * (e.g., column visibility, selection state, etc.)
+	 */
+	extraData?: any;
+
+	/**
+	 * Type extractor for heterogeneous lists
+	 */
+	getItemType?: (item: T) => string;
+
+	/** Footer component */
+	ListFooterComponent?: FlashListProps<T>['ListFooterComponent'];
 };
 
 type ItemProps<T> = ViewProps & {

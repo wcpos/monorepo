@@ -6,6 +6,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import type { SQLiteQueryWithParams } from 'rxdb-premium/plugins/storage-sqlite';
 
+// Default timeout for IPC calls (30 seconds)
+const IPC_TIMEOUT = 30000;
+
 /**
  * Returns a promise that resolves when window.ipcRenderer is available.
  * This implementation continuously polls without a timeout.
@@ -21,6 +24,27 @@ const waitForIpcRenderer = new Promise<void>((resolve) => {
 	};
 	check();
 });
+
+/**
+ * Wraps an IPC invoke call with a timeout to prevent infinite hangs.
+ * This is important because when the app is backgrounded, IPC can become slow
+ * or stalled, and we don't want the renderer to wait forever.
+ */
+async function invokeWithTimeout<T>(
+	channel: string,
+	args: unknown,
+	timeout = IPC_TIMEOUT
+): Promise<T> {
+	return Promise.race([
+		window.ipcRenderer.invoke(channel, args) as Promise<T>,
+		new Promise<never>((_, reject) =>
+			setTimeout(
+				() => reject(new Error(`IPC call to '${channel}' timed out after ${timeout}ms`)),
+				timeout
+			)
+		),
+	]);
+}
 
 /**
  * The sqliteBasics configuration for RxDB using IPC in Electron.
@@ -55,7 +79,7 @@ export const storage = getRxStorageSQLite({
 		all: async (db, queryWithParams: SQLiteQueryWithParams) => {
 			try {
 				await waitForIpcRenderer;
-				const result = await window.ipcRenderer.invoke('sqlite', {
+				const result = await invokeWithTimeout('sqlite', {
 					type: 'all',
 					name: db.name,
 					sql: queryWithParams,
@@ -65,10 +89,11 @@ export const storage = getRxStorageSQLite({
 				}
 				return result;
 			} catch (error: any) {
-				log.error('Failed to execute SQLite query', {
+				const isTimeout = error.message?.includes('timed out');
+				log.error(isTimeout ? 'SQLite query timed out' : 'Failed to execute SQLite query', {
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.QUERY_SYNTAX_ERROR,
+						errorCode: isTimeout ? ERROR_CODES.QUERY_TIMEOUT : ERROR_CODES.QUERY_SYNTAX_ERROR,
 						databaseName: db.name,
 						error: error.message,
 					},
@@ -79,7 +104,7 @@ export const storage = getRxStorageSQLite({
 		run: async (db, queryWithParams: SQLiteQueryWithParams) => {
 			try {
 				await waitForIpcRenderer;
-				await window.ipcRenderer.invoke('sqlite', {
+				await invokeWithTimeout('sqlite', {
 					type: 'run',
 					name: db.name,
 					sql: queryWithParams,
@@ -87,10 +112,11 @@ export const storage = getRxStorageSQLite({
 				// Return db to keep the promise chain consistent
 				return db;
 			} catch (error: any) {
-				log.error('Failed to run SQLite command', {
+				const isTimeout = error.message?.includes('timed out');
+				log.error(isTimeout ? 'SQLite command timed out' : 'Failed to run SQLite command', {
 					saveToDb: true,
 					context: {
-						errorCode: ERROR_CODES.QUERY_SYNTAX_ERROR,
+						errorCode: isTimeout ? ERROR_CODES.QUERY_TIMEOUT : ERROR_CODES.QUERY_SYNTAX_ERROR,
 						databaseName: db.name,
 						error: error.message,
 					},

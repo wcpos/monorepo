@@ -7,7 +7,7 @@ import {
 	useObservableSuspense,
 } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
-import { from, of } from 'rxjs';
+import { from } from 'rxjs';
 import { distinctUntilChanged, filter, shareReplay, switchMap, tap } from 'rxjs/operators';
 import useDeepCompareEffect from 'use-deep-compare-effect';
 
@@ -37,7 +37,6 @@ const newOrder$ = temporaryDB$.pipe(
 		)
 	),
 	distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
-	// tap((order) => console.log('emitting new order', order))
 );
 
 /**
@@ -52,11 +51,13 @@ const newOrderResource = new ObservableResource(newOrder$);
 export const useNewOrder = () => {
 	const { store, wpCredentials } = useAppState();
 	const { defaultCustomerResource } = useDefaultCustomer();
+
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
 	const currency = useObservableEagerState(store.currency$);
 	// const prices_include_tax = useObservableEagerState(store.prices_include_tax$);
 	const tax_based_on = useObservableEagerState(store.tax_based_on$);
 	const country = useObservableEagerState(store.store_country$);
+
 	const newOrder = useObservableSuspense(newOrderResource);
 
 	/**

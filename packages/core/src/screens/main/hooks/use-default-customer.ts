@@ -25,7 +25,8 @@ export const useDefaultCustomer = () => {
 	});
 
 	/**
-	 *
+	 * Execute query when defaultCustomerID changes
+	 * Needed to fetch the customer document from RxDB
 	 */
 	React.useEffect(() => {
 		query.where('id').equals(defaultCustomerID).exec();

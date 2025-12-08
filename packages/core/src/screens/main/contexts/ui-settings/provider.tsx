@@ -65,7 +65,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	const patch = React.useCallback(
 		async <T extends UISettingID>(id: T, data: Partial<UISettingSchema<T>>) => {
 			const state = await storeDB.addState(`${id}_v2`);
-			await patchState(state, data);
+			return patchState(state, data) as Promise<UISettingState<T>>;
 		},
 		[storeDB]
 	);
@@ -74,13 +74,28 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	 * Create a reusable function to generate ObservableResource instances
 	 */
 	const createUIResource = React.useCallback(
-		(id: UISettingID) => {
-			const observable$ = from(storeDB.addState(`${id}_v2`)).pipe(
+		<T extends UISettingID>(id: T) => {
+			// Add timeout detection for potential hangs
+			const addStatePromise = storeDB.addState(`${id}_v2`);
+			const timeoutId = setTimeout(() => {
+				log.warn(`storeDB.addState('${id}_v2') is taking longer than 5 seconds - possible hang`);
+			}, 5000);
+
+			const observable$ = from(addStatePromise).pipe(
 				switchMap(async (state) => {
-					await mergeWithInitalValues(id, state);
-					return state;
+					clearTimeout(timeoutId);
+					try {
+						await mergeWithInitalValues(id, state as UISettingState<UISettingID>);
+						return state as UISettingState<T>;
+					} catch (error) {
+						log.error(`Failed to merge initial values for ${id}`, {
+							context: { error: String(error) },
+						});
+						throw error;
+					}
 				})
 			);
+
 			return new ObservableResource(observable$);
 		},
 		[storeDB]

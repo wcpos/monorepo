@@ -5,6 +5,7 @@ A progressive enhancement logger for WooCommerce POS that supports console loggi
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Runtime Log Level Control](#runtime-log-level-control)
 - [API Reference](#api-reference)
 - [Toast Options](#toast-options)
 - [Error Codes](#error-codes)
@@ -67,6 +68,47 @@ setToast(Toast.show);
 // 2. Enable database logging (when user logs in)
 const { storeDB } = useAppState();
 setDatabase(storeDB.collections.logs);
+```
+
+## Runtime Log Level Control
+
+In production builds, `log.debug()` messages are hidden by default. You can change the log level at runtime via the browser console:
+
+```javascript
+// Show all logs (including debug)
+window.wcposLog.setLevel('debug')
+
+// Default production level (info, warn, error)
+window.wcposLog.setLevel('info')
+
+// Only warnings and errors
+window.wcposLog.setLevel('warn')
+
+// Only errors
+window.wcposLog.setLevel('error')
+
+// Check current level
+window.wcposLog.getLevel()
+```
+
+You can also call log methods directly from the console:
+
+```javascript
+window.wcposLog.debug('Test debug message')
+window.wcposLog.info('Test info message')
+window.wcposLog.error('Test error message')
+```
+
+### Programmatic Usage
+
+```typescript
+import log from '@wcpos/utils/logger';
+
+// Get current level
+const level = log.getLevel(); // 'debug' | 'info' | 'warn' | 'error'
+
+// Set level programmatically
+log.setLevel('debug');
 ```
 
 ## API Reference
