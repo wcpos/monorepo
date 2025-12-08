@@ -115,6 +115,29 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			})
 		);
 
+		// On web, browser tabs throttle timers when in background.
+		// Check for updates when the tab becomes visible again.
+		if (typeof document !== 'undefined' && document.addEventListener) {
+			const handleVisibilityChange = () => {
+				if (
+					document.visibilityState === 'visible' &&
+					!this.subjects.paused.getValue() &&
+					!this.subjects.active.getValue()
+				) {
+					this.run().catch(() => {
+						// Errors are already logged in run() and its sub-methods
+					});
+				}
+			};
+
+			document.addEventListener('visibilitychange', handleVisibilityChange);
+
+			// Store cleanup function - will be called on cancel via SubscribableBase
+			this.addSub('visibility', {
+				unsubscribe: () => document.removeEventListener('visibilitychange', handleVisibilityChange),
+			});
+		}
+
 		const remoteCount$ = this.syncStateManager.syncCollection
 			.count({
 				selector: {
@@ -202,7 +225,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				return;
 			}
 
-			log.debug(`Fetched all IDs for ${this.endpoint}`, {
+			log.info(`Fetched all IDs for ${this.endpoint}`, {
 				saveToDb: true,
 				context: {
 					total: response.headers?.['x-wp-total'] ?? 'unknown',
@@ -263,14 +286,14 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 					return;
 				}
 
-				log.debug(`Checked for updates: ${this.endpoint}`, {
-					saveToDb: true,
-					context: {
-						total: response.headers?.['x-wp-total'] ?? 'unknown',
-						execution_time: response.headers?.['x-execution-time'] ?? 'unknown',
-						server_load: response.headers?.['x-server-load'] ?? 'unknown',
-					},
-				});
+			log.info(`Checked for updates: ${this.endpoint}`, {
+				saveToDb: true,
+				context: {
+					total: response.headers?.['x-wp-total'] ?? 'unknown',
+					execution_time: response.headers?.['x-execution-time'] ?? 'unknown',
+					server_load: response.headers?.['x-server-load'] ?? 'unknown',
+				},
+			});
 
 				if (!isEmpty(response.data)) {
 					await this.syncStateManager.processModifiedAfter(response.data);

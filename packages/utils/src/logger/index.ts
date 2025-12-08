@@ -160,9 +160,18 @@ const mainTransport = (props: any) => {
 	}
 };
 
-// Create logger with custom levels
+/**
+ * Log Level Guidelines:
+ * - DEBUG: Internal flow details, retries, skipped items (developer only, hidden in production)
+ * - INFO:  Meaningful state changes worth tracking - successful syncs, logins, connections
+ * - WARN:  Potential issues that don't block functionality
+ * - ERROR: Failures that need attention
+ *
+ * In development: all logs (debug, info, warn, error)
+ * In production: info, warn, error (debug is filtered for performance)
+ */
 const baseLogger = logger.createLogger({
-	severity: __DEV__ ? 'debug' : 'error',
+	severity: __DEV__ ? 'debug' : 'info',
 	transport: mainTransport as any,
 	enabled: true,
 });

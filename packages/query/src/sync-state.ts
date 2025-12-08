@@ -240,10 +240,10 @@ export class SyncStateManager {
 		if (localDocs.size === 0) {
 			const result = await this.collection.bulkInsert(response);
 			if (result.success.length > 0) {
-				log.debug(`Synced new ${this.collection.name}`, {
-					saveToDb: true,
-					context: { ids: result.success.map((doc: any) => doc.id) },
-				});
+			log.info(`Synced new ${this.collection.name}`, {
+				saveToDb: true,
+				context: { ids: result.success.map((doc: any) => doc.id) },
+			});
 
 				const synced = result.success.map((doc: any) => ({
 					id: doc.id,
@@ -286,10 +286,10 @@ export class SyncStateManager {
 		if (responseMap.size > 0) {
 			const result = await this.collection.bulkUpsert(Array.from(responseMap.values()));
 			if (result.success.length > 0) {
-				log.debug(`Synced ${this.collection.name}`, {
-					saveToDb: true,
-					context: { ids: result.success.map((doc: any) => doc.id) },
-				});
+			log.info(`Synced ${this.collection.name}`, {
+				saveToDb: true,
+				context: { ids: result.success.map((doc: any) => doc.id) },
+			});
 
 				const synced = result.success.map((doc: any) => ({
 					id: doc.id,
@@ -333,10 +333,10 @@ export class SyncStateManager {
 			const ids = removed.map((doc) => doc.id);
 			const result = await this.collection.find({ selector: { id: { $in: ids } } }).remove();
 
-			log.debug(`Removed ${this.collection.name}`, {
-				saveToDb: true,
-				context: { ids },
-			});
+		log.info(`Removed ${this.collection.name}`, {
+			saveToDb: true,
+			context: { ids },
+		});
 
 			// removed from sync should match removed from local DB, this should never happen
 			if (result.length !== removed.length) {
