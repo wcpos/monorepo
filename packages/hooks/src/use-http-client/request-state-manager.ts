@@ -1,5 +1,82 @@
+/**
+ * Request State Manager
+ *
+ * A singleton that coordinates global HTTP request state across all components
+ * and hook instances in the application.
+ *
+ * ## Purpose
+ *
+ * Without centralized coordination, multiple concurrent 401 errors would each
+ * trigger independent token refresh attempts, causing race conditions and
+ * wasted requests. This manager ensures:
+ *
+ * 1. **Single Token Refresh**: Only one refresh happens at a time
+ * 2. **Request Blocking**: Requests wait or fail-fast based on global state
+ * 3. **State Synchronization**: All hook instances share the same state
+ *
+ * ## State Flags
+ *
+ * | Flag | When Set | Effect |
+ * |------|----------|--------|
+ * | `offline` | Device loses network | Requests fail immediately with DEVICE_OFFLINE |
+ * | `authFailed` | Token refresh fails | Requests fail immediately with AUTH_REQUIRED |
+ * | `isRefreshing` | Token refresh in progress | Requests wait for completion |
+ * | `requestsPaused` | Manual pause (recovery) | Requests fail with SERVICE_UNAVAILABLE |
+ *
+ * ## Token Refresh Coordination
+ *
+ * Uses a shared promise pattern to prevent race conditions:
+ *
+ * ```
+ * Request A: 401 → startTokenRefresh() → Creates promise, starts refresh
+ * Request B: 401 → isTokenRefreshing() → true → awaitTokenRefresh() → Waits
+ * Request C: 401 → isTokenRefreshing() → true → awaitTokenRefresh() → Waits
+ *
+ * Refresh completes → Promise resolves → All requests get new token
+ * ```
+ *
+ * ## Usage
+ *
+ * ```typescript
+ * import { requestStateManager } from '@wcpos/hooks/use-http-client';
+ *
+ * // Pre-flight check (used by useHttpClient)
+ * const { ok, reason, errorCode } = requestStateManager.checkCanProceed();
+ * if (!ok) throw new Error(reason);
+ *
+ * // Token refresh coordination (used by token-refresh handler)
+ * if (requestStateManager.isTokenRefreshing()) {
+ *   await requestStateManager.awaitTokenRefresh();
+ *   const newToken = requestStateManager.getRefreshedToken();
+ * } else {
+ *   await requestStateManager.startTokenRefresh(async () => {
+ *     const token = await refreshFromServer();
+ *     return token;
+ *   });
+ * }
+ *
+ * // State management (used by useRestHttpClient, auth handlers)
+ * requestStateManager.setOffline(true);
+ * requestStateManager.setAuthFailed(true);
+ * ```
+ *
+ * @see README.md - Full architecture documentation
+ */
+
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
+/**
+ * Result of pre-flight check
+ */
+interface CanProceedResult {
+	/** Whether the request can proceed */
+	ok: boolean;
+	/** Human-readable reason if blocked */
+	reason?: string;
+	/** Machine-readable error code if blocked */
+	errorCode?: string;
+}
 
 /**
  * Singleton class that manages global HTTP request state across the application.
@@ -11,7 +88,7 @@ class RequestStateManager {
 	// Token refresh coordination
 	private tokenRefreshPromise: Promise<void> | null = null;
 	private isRefreshing = false;
-	private refreshedToken: string | null = null; // Store the new token for waiting requests
+	private refreshedToken: string | null = null;
 
 	// Global state flags
 	private offline = false;
@@ -31,10 +108,24 @@ class RequestStateManager {
 		return RequestStateManager.instance;
 	}
 
+	// ============================================================================
+	// PRE-FLIGHT CHECKS
+	// ============================================================================
+
 	/**
-	 * Check if a request can proceed based on current global state
+	 * Check if a request can proceed based on current global state.
+	 *
+	 * This is called before every request to fail-fast when we know
+	 * the request cannot succeed.
+	 *
+	 * Order of checks:
+	 * 1. Offline - No point trying if there's no network
+	 * 2. Auth Failed - No point trying if we need re-authentication
+	 * 3. Paused - System is in recovery mode
+	 *
+	 * @returns Object with `ok` boolean and optional error details
 	 */
-	checkCanProceed(): { ok: boolean; reason?: string; errorCode?: string } {
+	checkCanProceed(): CanProceedResult {
 		if (this.offline) {
 			return {
 				ok: false,
@@ -63,18 +154,46 @@ class RequestStateManager {
 		return { ok: true };
 	}
 
+	// ============================================================================
+	// TOKEN REFRESH COORDINATION
+	// ============================================================================
+
 	/**
-	 * Check if a token refresh is currently in progress
+	 * Check if a token refresh is currently in progress.
+	 *
+	 * Used by token-refresh handler to decide whether to:
+	 * - Start a new refresh (if false)
+	 * - Wait for existing refresh (if true)
 	 */
 	isTokenRefreshing(): boolean {
 		return this.isRefreshing;
 	}
 
 	/**
-	 * Start a token refresh operation. Only the first caller proceeds with refresh,
-	 * subsequent callers await the same promise.
+	 * Start a token refresh operation.
+	 *
+	 * Only the first caller actually performs the refresh. Subsequent callers
+	 * (while refresh is in progress) will receive the same promise via
+	 * `awaitTokenRefresh()`.
+	 *
+	 * The refresh function should:
+	 * 1. Call the auth/refresh endpoint
+	 * 2. Save new token to database
+	 * 3. Return the new access token string
+	 *
+	 * @param refreshFn - Async function that performs the token refresh
+	 * @returns Promise that resolves when refresh is complete
+	 *
+	 * @example
+	 * await requestStateManager.startTokenRefresh(async () => {
+	 *   const response = await fetch('/auth/refresh', { ... });
+	 *   const { access_token } = await response.json();
+	 *   await wpUser.incrementalPatch({ access_token });
+	 *   return access_token;
+	 * });
 	 */
 	async startTokenRefresh(refreshFn: () => Promise<string>): Promise<void> {
+		// If refresh is already in progress, return the existing promise
 		if (this.tokenRefreshPromise) {
 			log.debug('Token refresh already in progress, awaiting existing operation');
 			return this.tokenRefreshPromise;
@@ -82,24 +201,24 @@ class RequestStateManager {
 
 		log.debug('Starting coordinated token refresh');
 		this.isRefreshing = true;
-		this.refreshedToken = null; // Clear any previous token
+		this.refreshedToken = null;
 
+		// Create and store the promise so other callers can await it
 		this.tokenRefreshPromise = refreshFn()
 			.then((newToken) => {
 				log.debug('Token refresh completed successfully');
-				this.refreshedToken = newToken; // Store the new token for waiting requests
+				this.refreshedToken = newToken;
 				this.isRefreshing = false;
-				this.authFailed = false; // Clear auth failed state on success
+				this.authFailed = false; // Clear auth failed on successful refresh
 				this.tokenRefreshPromise = null;
 			})
 			.catch((error) => {
-				// Error already logged by token refresh handler
 				log.debug('Token refresh operation failed', {
 					context: {
 						error: error instanceof Error ? error.message : String(error),
 					},
 				});
-				this.refreshedToken = null; // Clear token on failure
+				this.refreshedToken = null;
 				this.isRefreshing = false;
 				this.tokenRefreshPromise = null;
 				throw error;
@@ -109,7 +228,13 @@ class RequestStateManager {
 	}
 
 	/**
-	 * Await an in-progress token refresh
+	 * Wait for an in-progress token refresh to complete.
+	 *
+	 * Called by requests that encounter a 401 while a refresh is already
+	 * in progress. They wait for the refresh to complete, then retry
+	 * with the new token.
+	 *
+	 * @throws If the token refresh fails
 	 */
 	async awaitTokenRefresh(): Promise<void> {
 		if (!this.tokenRefreshPromise) {
@@ -132,9 +257,38 @@ class RequestStateManager {
 	}
 
 	/**
-	 * Pause all requests (for external control or future use)
-	 * Note: Currently not used by token refresh - it relies on shared promises instead.
-	 * This flag can be set externally to block all requests via pre-flight checks.
+	 * Get the token that was obtained from the last successful refresh.
+	 *
+	 * This is used by waiting requests to get the new token without having
+	 * to re-read from the database (which might have async delays).
+	 *
+	 * @returns The refreshed access token, or null if refresh hasn't completed
+	 */
+	getRefreshedToken(): string | null {
+		return this.refreshedToken;
+	}
+
+	/**
+	 * Clear the stored refreshed token.
+	 *
+	 * Called after the token has been used or on logout.
+	 */
+	clearRefreshedToken(): void {
+		this.refreshedToken = null;
+	}
+
+	// ============================================================================
+	// STATE MANAGEMENT
+	// ============================================================================
+
+	/**
+	 * Pause all requests.
+	 *
+	 * This is a manual override for external control (e.g., during system recovery).
+	 * Paused requests fail immediately with SERVICE_UNAVAILABLE.
+	 *
+	 * Note: Token refresh coordination does NOT use this flag. It relies on the
+	 * shared promise pattern instead, which allows requests to wait rather than fail.
 	 */
 	pauseRequests(): void {
 		if (!this.requestsPaused) {
@@ -144,7 +298,7 @@ class RequestStateManager {
 	}
 
 	/**
-	 * Resume all requests after pause
+	 * Resume all requests after pause.
 	 */
 	resumeRequests(): void {
 		if (this.requestsPaused) {
@@ -154,12 +308,16 @@ class RequestStateManager {
 	}
 
 	/**
-	 * Set offline status
+	 * Set offline status.
+	 *
+	 * Called by useRestHttpClient when online status changes.
+	 * When offline, all requests fail immediately with DEVICE_OFFLINE.
+	 *
+	 * @param isOffline - True if device is offline
 	 */
 	setOffline(isOffline: boolean): void {
 		if (this.offline !== isOffline) {
 			this.offline = isOffline;
-			// Log significant state changes
 			if (isOffline) {
 				log.debug('Device is now offline - requests will be blocked');
 			} else {
@@ -169,12 +327,24 @@ class RequestStateManager {
 	}
 
 	/**
-	 * Set authentication failed status
+	 * Set authentication failed status.
+	 *
+	 * Called when:
+	 * - Token refresh fails with invalid refresh token
+	 * - User cancels OAuth flow (stays true - requires explicit login)
+	 *
+	 * Cleared when:
+	 * - Token refresh succeeds
+	 * - OAuth login succeeds
+	 *
+	 * When true, all requests fail immediately with AUTH_REQUIRED.
+	 * This prevents background polling from spamming failed requests.
+	 *
+	 * @param failed - True if authentication has failed
 	 */
 	setAuthFailed(failed: boolean): void {
 		if (this.authFailed !== failed) {
 			this.authFailed = failed;
-			// Log significant state changes
 			if (failed) {
 				log.debug('Authentication failed - requests will be blocked until re-auth');
 			} else {
@@ -183,43 +353,42 @@ class RequestStateManager {
 		}
 	}
 
+	// ============================================================================
+	// STATE GETTERS
+	// ============================================================================
+
 	/**
-	 * Get current offline status
+	 * Get current offline status.
 	 */
 	isOffline(): boolean {
 		return this.offline;
 	}
 
 	/**
-	 * Get current auth failed status
+	 * Get current auth failed status.
 	 */
 	isAuthFailed(): boolean {
 		return this.authFailed;
 	}
 
 	/**
-	 * Check if requests are currently paused
+	 * Check if requests are currently paused.
 	 */
 	areRequestsPaused(): boolean {
 		return this.requestsPaused;
 	}
 
-	/**
-	 * Get the refreshed token (only available after successful refresh)
-	 */
-	getRefreshedToken(): string | null {
-		return this.refreshedToken;
-	}
+	// ============================================================================
+	// RESET
+	// ============================================================================
 
 	/**
-	 * Clear the refreshed token
-	 */
-	clearRefreshedToken(): void {
-		this.refreshedToken = null;
-	}
-
-	/**
-	 * Reset all state (useful for testing or logout)
+	 * Reset all state to initial values.
+	 *
+	 * Used for:
+	 * - Logout (clear all state)
+	 * - Testing (ensure clean state between tests)
+	 * - Recovery from stuck states
 	 */
 	reset(): void {
 		log.debug('Resetting request state manager');

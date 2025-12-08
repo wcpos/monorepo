@@ -1,3 +1,55 @@
+/**
+ * Fallback Authentication Error Handler
+ *
+ * This handler is the last line of defense for authentication errors. It runs
+ * AFTER the token-refresh handler has already attempted (and failed) to refresh
+ * the JWT token.
+ *
+ * ## When This Handler Runs
+ *
+ * 1. **Token Refresh Failed**: The token-refresh handler tried to call /auth/refresh
+ *    but got an error (401, 403, 404). It marked the error with `isRefreshTokenInvalid`
+ *    and threw it. This handler catches it.
+ *
+ * 2. **Pre-flight Block**: The RequestStateManager blocked a request because
+ *    `authFailed = true`. The error has `errorCode: AUTH_REQUIRED`.
+ *
+ * 3. **Direct 401**: A 401 that somehow bypassed token-refresh (shouldn't happen
+ *    in normal flow, but handled for safety).
+ *
+ * ## Behavior Based on Error Type
+ *
+ * | Error Type | Behavior | Rationale |
+ * |------------|----------|-----------|
+ * | `isRefreshTokenInvalid` | Auto-launch OAuth | Session expired, needs immediate action |
+ * | `AUTH_REQUIRED` (pre-flight) | Show toast with [Login] button | User may have cancelled intentionally |
+ * | Other 401 | Auto-launch OAuth | Unexpected auth failure, try to recover |
+ *
+ * ## Why CanceledError?
+ *
+ * After triggering OAuth, we throw `CanceledError` to:
+ * 1. Stop the error handler chain (no more handlers run)
+ * 2. Prevent upstream error logging (useHttpClient suppresses CanceledError)
+ * 3. Leave the request in a "pending" state (component shows loading)
+ *
+ * This is a semantic hack - we're not actually canceling the request, but it
+ * achieves the desired behavior of stopping error propagation.
+ *
+ * ## OAuth Response Handling
+ *
+ * The useEffect watching `response` handles OAuth outcomes:
+ * - **success**: Save tokens, clear authFailed, show success toast
+ * - **error**: Show error toast (authFailed stays true)
+ * - **cancel/dismiss**: Show info toast (authFailed stays true)
+ *
+ * When authFailed stays true, subsequent requests are blocked at pre-flight.
+ * User must click [Login] button or interact with UI to retry.
+ *
+ * @see create-token-refresh-handler.ts - Runs before this handler
+ * @see request-state-manager.ts - Manages authFailed state
+ * @see README.md - Full architecture documentation
+ */
+
 import * as React from 'react';
 
 import { CanceledError } from 'axios';
@@ -13,23 +65,51 @@ import { useLoginHandler } from '../../../auth/hooks/use-login-handler';
 
 import type { Site, WPCredentials } from './types';
 
+/**
+ * RxJS subject for error events.
+ * Components can subscribe to be notified of auth errors.
+ */
 const errorSubject = new BehaviorSubject(null);
 
 /**
- * Hook that creates an auth error handler for token refresh and login redirect
+ * Hook that creates the fallback authentication error handler.
+ *
+ * This hook manages:
+ * 1. OAuth flow triggering via expo-auth-session
+ * 2. OAuth response processing
+ * 3. Token persistence after successful login
+ * 4. User ID validation (security check)
+ *
+ * @param site - Site configuration (login URL, name)
+ * @param wpCredentials - WordPress user credentials document
+ * @param onUserMismatch - Optional callback when logged in user doesn't match expected user
+ * @returns HttpErrorHandler for use with useHttpClient
  */
-export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): HttpErrorHandler => {
+export const useAuthErrorHandler = (
+	site: Site,
+	wpCredentials: WPCredentials,
+	onUserMismatch?: () => void
+): HttpErrorHandler => {
 	const { handleLoginSuccess } = useLoginHandler(site as any);
 	const [shouldTriggerAuth, setShouldTriggerAuth] = React.useState(false);
+
+	/**
+	 * Ref to track processed OAuth responses.
+	 * Prevents double-processing when response object changes but content is same.
+	 */
 	const processedResponseRef = React.useRef<string | null>(null);
 
+	// Setup OAuth flow via platform-specific useWcposAuth hook
 	const { response, promptAsync } = useWcposAuth({ site });
 
-	// Handle OAuth trigger
+	// ============================================================================
+	// EFFECT: Trigger OAuth when flag is set
+	// ============================================================================
+
 	React.useEffect(() => {
 		if (shouldTriggerAuth) {
 			log.debug('Triggering OAuth authentication flow');
-			setShouldTriggerAuth(false); // Reset the flag
+			setShouldTriggerAuth(false);
 			promptAsync().catch((authError) => {
 				log.warn('Authentication failed - please try again', {
 					showToast: true,
@@ -44,24 +124,57 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 		}
 	}, [shouldTriggerAuth, promptAsync, site.name]);
 
-	// Handle auth response
+	// ============================================================================
+	// EFFECT: Process OAuth response
+	// ============================================================================
+
 	React.useEffect(() => {
 		if (!response) return;
 
-		// Create a unique key to prevent double-processing
+		// Deduplicate responses using a key based on response content
 		const responseKey = response.params?.access_token || response.error || response.type;
 		if (processedResponseRef.current === responseKey) {
 			return;
 		}
 
+		/**
+		 * Handle successful OAuth login.
+		 * Order is important:
+		 * 1. Validate user ID matches expected user
+		 * 2. Save tokens BEFORE clearing authFailed
+		 */
 		const processSuccessfulLogin = async () => {
 			processedResponseRef.current = responseKey;
 
 			try {
-				// Save tokens FIRST before clearing auth failed state
+				// Security check: Validate returned user ID matches expected user
+				const returnedUserId = response.params?.id;
+				const expectedUserId = wpCredentials.id;
+
+				if (returnedUserId && expectedUserId && String(returnedUserId) !== String(expectedUserId)) {
+					log.error('Security: Logged in as different user than expected', {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.INVALID_CREDENTIALS,
+							expectedUserId,
+							returnedUserId,
+							siteName: site.name,
+						},
+					});
+
+					// Trigger logout callback if provided
+					if (onUserMismatch) {
+						onUserMismatch();
+					}
+					return;
+				}
+
+				// 1. Save tokens to database
 				await handleLoginSuccess({ params: response.params } as any);
 
-				// Only clear auth failed state AFTER tokens are successfully saved
+				// 2. Clear authFailed AFTER tokens are saved
+				// This allows pending requests to proceed with new token
 				requestStateManager.setAuthFailed(false);
 
 				log.success('Successfully logged in', {
@@ -88,6 +201,8 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 		if (response.type === 'success') {
 			processSuccessfulLogin();
 		} else if (response.type === 'error') {
+			// OAuth returned an error (e.g., invalid credentials)
+			// authFailed stays true - user needs to try again
 			log.warn('Login failed - please check your credentials', {
 				showToast: true,
 				saveToDb: true,
@@ -103,11 +218,9 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 			response.type === 'cancel' ||
 			response.type === 'locked'
 		) {
-			// User cancelled or dismissed the auth window
-			// NOTE: We DO NOT reset authFailed state here.
-			// This ensures that background requests continue to be blocked.
-			// User must actively trigger a new request (e.g. pull to refresh) or click the Login button in the toast to retry.
-
+			// User intentionally closed the auth window
+			// authFailed stays true - prevents background request spam
+			// User must click [Login] or interact with UI to retry
 			log.warn('Login cancelled', {
 				showToast: true,
 				saveToDb: true,
@@ -119,15 +232,26 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 			});
 			processedResponseRef.current = responseKey;
 		}
-	}, [response, handleLoginSuccess, site.name, wpCredentials.id]);
+	}, [response, handleLoginSuccess, site.name, wpCredentials.id, onUserMismatch]);
 
-	// Token refresh is now handled by the dedicated createTokenRefreshHandler
-	// This handler only deals with cases where token refresh has already failed
+	// ============================================================================
+	// ERROR HANDLER
+	// ============================================================================
 
 	return React.useMemo(
 		() => ({
 			name: 'fallback-auth-handler',
-			priority: 50, // Lower priority - runs after token refresh handler
+			priority: 50, // Lower than token-refresh (100) - runs second
+			intercepts: true, // Stops error chain when handling
+
+			/**
+			 * Check if this handler should process the error.
+			 *
+			 * Catches:
+			 * - Direct 401 errors (backup)
+			 * - Pre-flight AUTH_REQUIRED errors
+			 * - Errors marked by token-refresh handler as refresh failures
+			 */
 			canHandle: (error) => {
 				const canHandle =
 					error.response?.status === 401 ||
@@ -149,6 +273,13 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 
 				return canHandle;
 			},
+
+			/**
+			 * Handle the authentication error.
+			 *
+			 * Determines whether to auto-launch OAuth or show a toast with [Login] button,
+			 * then throws CanceledError to suppress upstream error handling.
+			 */
 			handle: async (context) => {
 				const { error } = context;
 
@@ -162,20 +293,20 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 					},
 				});
 
-				// Check if this is a refresh token invalid error
 				const isRefreshTokenInvalid =
 					(error as any).isRefreshTokenInvalid ||
 					(error as any).refreshTokenInvalid ||
 					(error instanceof Error && error.message === 'REFRESH_TOKEN_INVALID');
 
 				if (isRefreshTokenInvalid) {
+					// Session expired - immediate OAuth is appropriate
 					log.debug('Refresh token is invalid, launching OAuth flow');
-					// Auto-launch for session expiration
 					setShouldTriggerAuth(true);
 				} else if ((error as any).errorCode === ERROR_CODES.AUTH_REQUIRED) {
+					// Pre-flight block (user may have cancelled previously)
+					// Show toast with [Login] button instead of auto-launching
+					// This prevents OAuth window spam if user keeps dismissing
 					log.debug('Auth required (pre-flight blocked), showing toast');
-					// For pre-flight blocks (e.g. user cancelled previously), show Toast with Login button
-					// instead of auto-launching to avoid intrusive loops
 					log.warn('Please log in to continue', {
 						showToast: true,
 						saveToDb: true,
@@ -191,17 +322,20 @@ export const useAuthErrorHandler = (site: Site, wpCredentials: WPCredentials): H
 						},
 					});
 				} else {
+					// Unknown auth failure - try OAuth
 					log.debug('Token refresh failed, attempting OAuth flow');
-					// Auto-launch for other auth failures
 					setShouldTriggerAuth(true);
 				}
 
+				// Notify subscribers of the auth error
 				errorSubject.next(context.error);
 
-				// Throw a CanceledError to stop the request chain and suppress upstream errors
+				// Throw CanceledError to:
+				// 1. Stop the error handler chain
+				// 2. Prevent upstream error logging (useHttpClient suppresses this)
+				// 3. Leave the calling component in "loading" state
 				throw new CanceledError('401 - attempting re-authentication');
 			},
-			intercepts: true, // This handler intercepts and stops the error chain
 		}),
 		[setShouldTriggerAuth, site.name]
 	);

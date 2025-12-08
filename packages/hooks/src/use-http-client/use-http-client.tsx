@@ -245,14 +245,21 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 				}
 
 				if (http.isCancel(error)) {
-					log.debug('Request canceled, suppressing error', {
+					log.debug('Request canceled (auth in progress)', {
 						context: {
 							message: error.message,
 						},
 					});
-					// Return a promise that never resolves to prevent unhandled rejections
-					// and stop component rendering flow that depends on response
-					return new Promise(() => {});
+					// Throw the CanceledError so callers can handle it appropriately.
+					// Previously we returned a never-resolving promise, but that caused:
+					// 1. CollectionReplicationState to hang (active$ stayed true forever)
+					// 2. No way to recover when auth completed
+					//
+					// Callers should check for CanceledError and handle gracefully:
+					// - Don't show error toast (auth is being handled)
+					// - Set active$ = false
+					// - Let polling retry later
+					throw error;
 				}
 
 				// Enrich error with WordPress/WooCommerce error details before throwing

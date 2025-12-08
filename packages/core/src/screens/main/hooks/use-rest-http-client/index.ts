@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import merge from 'lodash/merge';
-import { useObservableEagerState } from 'observable-hooks';
 
 import useHttpClient, { RequestConfig, requestStateManager } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
@@ -56,9 +55,21 @@ function extractValidJSON(responseString) {
 }
 
 export const useRestHttpClient = (endpoint = '') => {
-	const { site, wpCredentials, store } = useAppState();
+	const { site, wpCredentials, store, logout } = useAppState();
 	const { status: onlineStatus } = useOnlineStatus();
-	const jwt = useObservableEagerState(wpCredentials.access_token$);
+
+	/**
+	 * NOTE: We intentionally do NOT use useObservableEagerState for the JWT token.
+	 *
+	 * The httpClient object is passed to Query classes at construction time and held
+	 * as a reference. If we capture the JWT in React state (via useObservableEagerState),
+	 * when the token changes:
+	 * 1. React re-renders and creates a NEW httpClient object
+	 * 2. But Query still holds the OLD reference with the OLD token
+	 *
+	 * Instead, we read the token fresh from wpCredentials.access_token at request time.
+	 * This way, even stale httpClient references will use the CURRENT token.
+	 */
 
 	/**
 	 * Create a fresh HTTP client for token refresh requests
@@ -103,9 +114,10 @@ export const useRestHttpClient = (endpoint = '') => {
 	);
 
 	/**
-	 * Get the fallback auth error handler for cases where token refresh fails
+	 * Get the fallback auth error handler for cases where token refresh fails.
+	 * Pass logout callback for security - if user logs in as different user, force logout.
 	 */
-	const fallbackAuthHandler = useAuthErrorHandler(site, wpCredentials);
+	const fallbackAuthHandler = useAuthErrorHandler(site, wpCredentials, logout);
 
 	/**
 	 * Error handlers for HTTP requests - token refresh first, then fallback
@@ -130,12 +142,20 @@ export const useRestHttpClient = (endpoint = '') => {
 	const httpClient = useHttpClient(errorHandlers);
 
 	/**
+	 * Main request function.
 	 *
+	 * IMPORTANT: Reads JWT fresh from wpCredentials.access_token at request time,
+	 * not from a captured closure. This ensures that even if Query holds a stale
+	 * httpClient reference, it will always use the CURRENT token.
 	 */
 	const request = React.useCallback(
 		async (reqConfig: RequestConfig = {}) => {
 			// Online status is now checked by the request state manager pre-flight check
 			// No need to manually check here - requests will be blocked automatically
+
+			// Read JWT fresh at request time (not from React state)
+			// This ensures we always use the latest token, even if httpClient reference is stale
+			const jwt = wpCredentials.access_token;
 
 			const shouldUseJwtAsParam = get(
 				window,
@@ -199,7 +219,7 @@ export const useRestHttpClient = (endpoint = '') => {
 				throw error;
 			}
 		},
-		[endpoint, httpClient, jwt, store.id, site]
+		[endpoint, httpClient, wpCredentials, store.id, site]
 	);
 
 	/**

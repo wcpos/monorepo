@@ -1,3 +1,75 @@
+/**
+ * Token Refresh Error Handler Factory
+ *
+ * Creates an HttpErrorHandler that automatically refreshes expired JWT tokens
+ * and retries the original request.
+ *
+ * ## How It Works
+ *
+ * This handler is registered with priority 100 (highest) so it runs first when
+ * a 401 error occurs.
+ *
+ * ### Single Request Flow
+ * ```
+ * 1. Request fails with 401
+ * 2. Handler checks: Is refresh already in progress? NO
+ * 3. Start refresh via RequestStateManager
+ * 4. Call /auth/refresh endpoint with refresh_token
+ * 5. Save new access_token to database
+ * 6. Retry original request with new token
+ * 7. Return response (success!)
+ * ```
+ *
+ * ### Multiple Concurrent 401s
+ * ```
+ * Request A: 401 → isTokenRefreshing()? NO → Start refresh
+ * Request B: 401 → isTokenRefreshing()? YES → Wait for A's refresh
+ * Request C: 401 → isTokenRefreshing()? YES → Wait for A's refresh
+ *
+ * A's refresh completes → B and C get token → All retry → All succeed
+ * ```
+ *
+ * ### When Refresh Fails
+ *
+ * If the refresh token is invalid (401, 403, 404 from /auth/refresh):
+ * 1. Sets `authFailed = true` in RequestStateManager
+ * 2. Marks error with `isRefreshTokenInvalid = true`
+ * 3. Throws error to continue handler chain
+ * 4. Fallback auth handler catches it and triggers OAuth
+ *
+ * ## Why a Fresh HTTP Client?
+ *
+ * The refresh request uses a raw `fetch` wrapper instead of `useHttpClient`.
+ * This avoids circular error handling - if the refresh request itself got a 401,
+ * it would try to refresh again, causing infinite loops.
+ *
+ * ## Integration Points
+ *
+ * - **RequestStateManager**: Coordinates refresh across all requests
+ * - **Fallback Auth Handler**: Catches errors when refresh fails
+ * - **WPUser Document**: Stores tokens in RxDB
+ *
+ * @example
+ * const handler = createTokenRefreshHandler({
+ *   site: { wcpos_api_url: 'https://example.com/wp-json/wcpos/v1/' },
+ *   wpUser: wpCredentialsDocument,
+ *   getHttpClient: () => ({
+ *     post: async (url, data, config) => {
+ *       const response = await fetch(url, {
+ *         method: 'POST',
+ *         body: JSON.stringify(data),
+ *         headers: { 'Content-Type': 'application/json', ...config?.headers }
+ *       });
+ *       return { data: await response.json(), status: response.status };
+ *     }
+ *   })
+ * });
+ *
+ * @see request-state-manager.ts - Token refresh coordination
+ * @see auth-error-handler.ts - Fallback when refresh fails
+ * @see README.md - Full architecture documentation
+ */
+
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -7,23 +79,55 @@ import { requestStateManager } from './request-state-manager';
 import type { AxiosRequestConfig } from 'axios';
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
+/**
+ * RxDB document interface for WordPress credentials.
+ * This is a subset of the full RxDocument interface with the methods we need.
+ */
+interface WPCredentialsDocument {
+	/** User ID for logging */
+	id?: number;
+	/** The refresh token used to obtain new access tokens */
+	refresh_token?: string;
+	/** RxDB method to update token in database */
+	incrementalPatch: (data: { access_token: string; expires_at: number }) => Promise<any>;
+	/**
+	 * Returns the latest known state of the RxDocument.
+	 * This is important when the document may have been updated elsewhere
+	 * (e.g., by OAuth login saving new tokens).
+	 * @see https://rxdb.info/rx-document.html#getlatest
+	 */
+	getLatest: () => WPCredentialsDocument;
+}
+
+/**
+ * Configuration for creating the token refresh handler
+ */
 interface TokenRefreshConfig {
+	/** Site configuration with API URL */
 	site: {
+		/** Base URL for WCPOS REST API (e.g., 'https://example.com/wp-json/wcpos/v1/') */
 		wcpos_api_url?: string;
+		/** If true, JWT is sent as query param instead of header */
 		use_jwt_as_param?: boolean;
+		/** Site URL for logging */
 		url?: string;
 	};
-	wpUser: {
-		id?: number;
-		refresh_token?: string;
-		incrementalPatch: (data: { access_token: string; expires_at: number }) => Promise<any>;
-	};
-	// Function to get a fresh HTTP client for the refresh request
+	/** WordPress user credentials document (RxDB document) */
+	wpUser: WPCredentialsDocument;
+	/**
+	 * Factory for a fresh HTTP client used for the refresh request.
+	 *
+	 * This should NOT use useHttpClient to avoid circular error handling.
+	 * A simple fetch wrapper is recommended.
+	 */
 	getHttpClient: () => {
 		post: (url: string, data: any, config?: AxiosRequestConfig) => Promise<any>;
 	};
 }
 
+/**
+ * Response structure from the /auth/refresh endpoint
+ */
 interface TokenRefreshResponse {
 	access_token: string;
 	token_type: string;
@@ -32,8 +136,13 @@ interface TokenRefreshResponse {
 }
 
 /**
- * Creates a token refresh error handler that automatically refreshes expired tokens
- * and retries the original request with the new token.
+ * Creates a token refresh error handler.
+ *
+ * This handler:
+ * - Intercepts 401 errors
+ * - Attempts to refresh the JWT token
+ * - Retries the original request with the new token
+ * - Marks errors for fallback handling if refresh fails
  */
 export const createTokenRefreshHandler = ({
 	site,
@@ -42,29 +151,52 @@ export const createTokenRefreshHandler = ({
 }: TokenRefreshConfig): HttpErrorHandler => {
 	return {
 		name: 'token-refresh',
-		priority: 100, // High priority to run first
-		intercepts: true, // This handler stops the error chain if successful
+		priority: 100, // Highest priority - runs first
+		intercepts: true, // Stops the error chain if successful
 
+		/**
+		 * Only handle 401 Unauthorized errors.
+		 *
+		 * Other errors (network, 5xx, etc.) pass through to other handlers.
+		 */
 		canHandle: (error) => {
-			// Only handle 401 Unauthorized errors
 			return error.response?.status === 401;
 		},
 
+		/**
+		 * Attempt to refresh the token and retry the request.
+		 */
 		handle: async (context: HttpErrorHandlerContext) => {
 			const { error, originalConfig, retryRequest } = context;
 
-			// Check if we have the required data for token refresh
-			if (!site.wcpos_api_url || !wpUser.refresh_token) {
+			// ================================================================
+			// GUARD: Check if we can attempt refresh
+			// ================================================================
+
+			// IMPORTANT: Read refresh_token fresh from the document to ensure we get the
+			// latest value. After OAuth login, the document is patched with new tokens,
+			// but we need to ensure we read the current value, not a stale cached one.
+			//
+			// RxDB's getLatest() returns the latest known state of the document.
+			// See: https://rxdb.info/rx-document.html#getlatest
+			const latestDoc = wpUser.getLatest();
+			const currentRefreshToken = latestDoc?.refresh_token;
+
+			if (!site.wcpos_api_url || !currentRefreshToken) {
 				log.debug('Skipping token refresh - missing required data', {
 					context: {
 						hasApiUrl: !!site.wcpos_api_url,
-						hasRefreshToken: !!wpUser.refresh_token,
+						hasRefreshToken: !!currentRefreshToken,
 					},
 				});
+				// Can't refresh - let other handlers deal with it
 				throw error;
 			}
 
-			// Check if token refresh is already in progress
+			// ================================================================
+			// CASE 1: Refresh already in progress - wait for it
+			// ================================================================
+
 			if (requestStateManager.isTokenRefreshing()) {
 				log.debug('Token refresh already in progress, awaiting completion', {
 					context: {
@@ -74,10 +206,7 @@ export const createTokenRefreshHandler = ({
 				});
 
 				try {
-					// Wait for the in-progress refresh to complete
 					await requestStateManager.awaitTokenRefresh();
-
-					// Get the refreshed token from the state manager
 					const freshToken = requestStateManager.getRefreshedToken();
 
 					if (!freshToken) {
@@ -99,25 +228,14 @@ export const createTokenRefreshHandler = ({
 						},
 					});
 
-					// Update the config with the fresh token
-					const updatedConfig = { ...originalConfig };
-
-					if (site.use_jwt_as_param) {
-						updatedConfig.params = {
-							...updatedConfig.params,
-							authorization: `Bearer ${freshToken}`,
-						};
-					} else {
-						updatedConfig.headers = {
-							...updatedConfig.headers,
-							Authorization: `Bearer ${freshToken}`,
-						};
-					}
-
-					// Retry with the fresh token
-					return await retryRequest(updatedConfig);
+					// Retry with the token that was refreshed by the first request
+					return await retryWithNewToken(
+						originalConfig,
+						freshToken,
+						site.use_jwt_as_param,
+						retryRequest
+					);
 				} catch (refreshError) {
-					// Refresh failed while we were waiting - likely invalid refresh token
 					log.debug('Token refresh failed while waiting for completion', {
 						context: {
 							userId: wpUser.id,
@@ -129,7 +247,10 @@ export const createTokenRefreshHandler = ({
 				}
 			}
 
-			// This is the first 401, start the token refresh process
+			// ================================================================
+			// CASE 2: First 401 - start the refresh
+			// ================================================================
+
 			log.debug('Access token expired, starting token refresh', {
 				context: {
 					userId: wpUser.id,
@@ -138,28 +259,28 @@ export const createTokenRefreshHandler = ({
 				},
 			});
 
-			// Start the token refresh - this will return the new token
 			try {
 				await requestStateManager.startTokenRefresh(async () => {
-					// Pause the queue during token refresh
+					// Pause queue to prevent other requests from using stale token
 					pauseQueue();
 
-					try {
-						// Use a fresh HTTP client to avoid circular error handling
-						const httpClient = getHttpClient();
+				try {
+					// Use fresh HTTP client to avoid circular error handling
+					const httpClient = getHttpClient();
 
-						// Make the token refresh request
-						const refreshResponse = await httpClient.post(
-							`${site.wcpos_api_url}auth/refresh`,
-							{
-								refresh_token: wpUser.refresh_token,
-							},
-							{
-								headers: {
-									'X-WCPOS': '1',
-								},
-							}
-						);
+					log.debug('Attempting token refresh', {
+						context: {
+							userId: wpUser.id,
+							hasRefreshToken: !!currentRefreshToken,
+							refreshTokenPreview: currentRefreshToken ? `${currentRefreshToken.substring(0, 20)}...` : 'none',
+						},
+					});
+
+					const refreshResponse = await httpClient.post(
+						`${site.wcpos_api_url}auth/refresh`,
+						{ refresh_token: currentRefreshToken },
+						{ headers: { 'X-WCPOS': '1' } }
+					);
 
 						const refreshData: TokenRefreshResponse = refreshResponse.data;
 						const { access_token, expires_at } = refreshData;
@@ -193,78 +314,20 @@ export const createTokenRefreshHandler = ({
 							},
 						});
 
-						// Update the wpUser document with new token
-						await wpUser.incrementalPatch({
-							access_token,
-							expires_at,
-						});
+						// Persist new token to database
+						await wpUser.incrementalPatch({ access_token, expires_at });
 
-						// Resume the queue now that token is refreshed
 						resumeQueue();
-
-						// Return the new token - it will be stored in RequestStateManager
 						return access_token;
 					} catch (refreshError) {
-						// Resume queue even if refresh failed
 						resumeQueue();
-
-						const errorMsg =
-							refreshError instanceof Error ? refreshError.message : String(refreshError);
-
-						// Check if the refresh token itself is invalid (401 or no access token in response)
-						// Also check for other 4xx errors (400, 403, 404) which imply the refresh endpoint is unreachable or request is bad
-						const isRefreshTokenInvalid =
-							(refreshError instanceof Error &&
-								(errorMsg.includes('401') ||
-									errorMsg.includes('403') ||
-									errorMsg.includes('404') ||
-									errorMsg.includes('400'))) ||
-							(refreshError instanceof Error && errorMsg === 'REFRESH_TOKEN_INVALID') ||
-							(refreshError as any)?.errorCode === ERROR_CODES.AUTH_REQUIRED || // Check for pre-flight block
-							[400, 401, 403, 404].includes((refreshError as any)?.response?.status);
-
-						if (isRefreshTokenInvalid) {
-							log.warn('Your session has expired - please log in again', {
-								showToast: true,
-								saveToDb: true,
-								context: {
-									errorCode: ERROR_CODES.REFRESH_TOKEN_INVALID,
-									userId: wpUser.id,
-									siteUrl: site.url,
-								},
-							});
-
-							// Set auth failed state
-							requestStateManager.setAuthFailed(true);
-
-							// Mark the original error as refresh token invalid and let other handlers process it
-							(error as any).isRefreshTokenInvalid = true;
-							(error as any).refreshTokenInvalid = true;
-
-							log.debug('Refresh token invalid - triggering OAuth fallback handler');
-
-							// Throw the marked error to let other handlers process it
-							// The fallback handler will catch this specific error
-							throw error;
-						}
-
-						log.warn('Unable to refresh session', {
-							saveToDb: true,
-							context: {
-								errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
-								error: errorMsg,
-								userId: wpUser.id,
-								siteUrl: site.url,
-								originalStatus: error.response?.status,
-							},
-						});
-
-						// Re-throw the original error since refresh failed
+						handleRefreshError(refreshError, error, wpUser, site);
+						// handleRefreshError always throws
 						throw error;
 					}
 				});
 
-				// Token refresh completed successfully, get the token from state manager
+				// Refresh succeeded - retry with new token
 				const freshToken = requestStateManager.getRefreshedToken();
 
 				if (!freshToken) {
@@ -279,23 +342,6 @@ export const createTokenRefreshHandler = ({
 					throw error;
 				}
 
-				// Update config with the fresh token
-				const updatedConfig = { ...originalConfig };
-
-				if (site.use_jwt_as_param) {
-					// Update JWT in query parameters
-					updatedConfig.params = {
-						...updatedConfig.params,
-						authorization: `Bearer ${freshToken}`,
-					};
-				} else {
-					// Update JWT in Authorization header
-					updatedConfig.headers = {
-						...updatedConfig.headers,
-						Authorization: `Bearer ${freshToken}`,
-					};
-				}
-
 				log.debug('Retrying request after successful token refresh', {
 					context: {
 						userId: wpUser.id,
@@ -304,13 +350,111 @@ export const createTokenRefreshHandler = ({
 					},
 				});
 
-				// Retry the original request with the new token
-				return await retryRequest(updatedConfig);
+				return await retryWithNewToken(
+					originalConfig,
+					freshToken,
+					site.use_jwt_as_param,
+					retryRequest
+				);
 			} catch (refreshError) {
-				// This catch handles errors thrown from startTokenRefresh
-				// which have already been processed above
+				// Error was already processed in handleRefreshError
 				throw refreshError;
 			}
 		},
 	};
 };
+
+/**
+ * Retry request with a new access token
+ */
+async function retryWithNewToken(
+	originalConfig: AxiosRequestConfig,
+	token: string,
+	useJwtAsParam: boolean | undefined,
+	retryRequest: (config: AxiosRequestConfig) => Promise<any>
+) {
+	const updatedConfig = { ...originalConfig };
+
+	if (useJwtAsParam) {
+		updatedConfig.params = {
+			...updatedConfig.params,
+			authorization: `Bearer ${token}`,
+		};
+	} else {
+		updatedConfig.headers = {
+			...updatedConfig.headers,
+			Authorization: `Bearer ${token}`,
+		};
+	}
+
+	return await retryRequest(updatedConfig);
+}
+
+/**
+ * Handle token refresh errors.
+ *
+ * Determines if the refresh token is invalid and should trigger OAuth,
+ * or if it's a transient error.
+ *
+ * @throws Always throws - either the original error (marked) or as-is
+ */
+function handleRefreshError(
+	refreshError: unknown,
+	originalError: any,
+	wpUser: TokenRefreshConfig['wpUser'],
+	site: TokenRefreshConfig['site']
+): never {
+	const errorMsg = refreshError instanceof Error ? refreshError.message : String(refreshError);
+
+	// Determine if this is an invalid refresh token (requires re-auth)
+	// vs a transient error (can retry later)
+	const isRefreshTokenInvalid =
+		// Error message contains HTTP status codes indicating auth failure
+		(refreshError instanceof Error &&
+			(errorMsg.includes('401') ||
+				errorMsg.includes('403') ||
+				errorMsg.includes('404') ||
+				errorMsg.includes('400'))) ||
+		// Explicit invalid token error
+		(refreshError instanceof Error && errorMsg === 'REFRESH_TOKEN_INVALID') ||
+		// Pre-flight auth block
+		(refreshError as any)?.errorCode === ERROR_CODES.AUTH_REQUIRED ||
+		// HTTP response status
+		[400, 401, 403, 404].includes((refreshError as any)?.response?.status);
+
+	if (isRefreshTokenInvalid) {
+		log.warn('Your session has expired - please log in again', {
+			showToast: true,
+			saveToDb: true,
+			context: {
+				errorCode: ERROR_CODES.REFRESH_TOKEN_INVALID,
+				userId: wpUser.id,
+				siteUrl: site.url,
+			},
+		});
+
+		// Block future requests until re-auth
+		requestStateManager.setAuthFailed(true);
+
+		// Mark error for fallback handler to catch
+		originalError.isRefreshTokenInvalid = true;
+		originalError.refreshTokenInvalid = true;
+
+		log.debug('Refresh token invalid - triggering OAuth fallback handler');
+		throw originalError;
+	}
+
+	// Transient error - log and re-throw
+	log.warn('Unable to refresh session', {
+		saveToDb: true,
+		context: {
+			errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
+			error: errorMsg,
+			userId: wpUser.id,
+			siteUrl: site.url,
+			originalStatus: originalError.response?.status,
+		},
+	});
+
+	throw originalError;
+}
