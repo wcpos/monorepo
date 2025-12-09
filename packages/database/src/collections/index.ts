@@ -91,6 +91,12 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 				postcode: oldDoc.store_postcode,
 				city: oldDoc.store_city,
 			};
+			return oldDoc;
+		},
+		3(oldDoc: StoreDocumentType) {
+			// Add theme field with default 'system'
+			oldDoc.theme = 'system';
+			return oldDoc;
 		},
 	},
 };

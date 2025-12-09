@@ -1,12 +1,12 @@
 import * as React from 'react';
 
 import { Image as ExpoImage, ImageProps as ExpoImageProps } from 'expo-image';
-import { styled } from 'react-native-css';
+import { withUniwind } from 'uniwind';
 
 /**
  * Styled ExpoImage component for native platforms with className support
  */
-const ExpoImageWithClassname = styled(ExpoImage, {
+const ExpoImageWithClassname = withUniwind(ExpoImage, {
 	className: 'style',
 });
 

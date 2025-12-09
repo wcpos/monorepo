@@ -72,7 +72,7 @@ export function CustomersScreen() {
 	return (
 		<View className="h-full p-2" style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}>
 			<Card className="flex-1">
-				<CardHeader className="bg-input p-0">
+				<CardHeader className="bg-surface p-0">
 					<HStack className="p-2">
 						<QuerySearchInput
 							query={query}

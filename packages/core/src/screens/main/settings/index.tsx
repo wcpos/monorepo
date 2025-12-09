@@ -10,6 +10,7 @@ import { BarcodeScanning } from './barcode-scanning';
 import { GeneralSettings } from './general';
 import { KeyboardShortcuts } from './shortcuts';
 import { TaxSettings } from './tax';
+import { ThemeSettings } from './theme';
 import { useT } from '../../../contexts/translations';
 
 /**
@@ -36,11 +37,16 @@ export const SettingsScreen = () => {
 			label: t('Keyboard Shortcuts', { _tags: 'core' }),
 			component: <KeyboardShortcuts />,
 		},
+		{
+			value: 'theme',
+			label: t('Theme', { _tags: 'core' }),
+			component: <ThemeSettings />,
+		},
 	];
 
 	return (
 		<Modal>
-			<ModalContent size="xl">
+			<ModalContent size="2xl">
 				<ModalHeader>
 					<ModalTitle>{t('Settings', { _tags: 'core' })}</ModalTitle>
 				</ModalHeader>

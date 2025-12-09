@@ -1,10 +1,11 @@
 import * as React from 'react';
-import { Platform, View, ViewProps } from 'react-native';
+import { View, ViewProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import get from 'lodash/get';
+import { useCSSVariable } from 'uniwind';
 
-import { getResolvedColor } from '../lib/icon-colors';
+import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
 import { TextClassContext } from '../text';
@@ -13,6 +14,23 @@ import * as Svgs from './components/fontawesome/solid';
 import type { SvgProps } from 'react-native-svg';
 
 export type IconName = Extract<keyof typeof Svgs, string>;
+
+/**
+ * Map variant to CSS variable name for SVG fill colors
+ */
+const variantToCSSVariable: Record<string, string> = {
+	default: '--color-foreground',
+	primary: '--color-primary',
+	destructive: '--color-destructive',
+	secondary: '--color-secondary',
+	muted: '--color-muted-foreground',
+	success: '--color-success',
+	error: '--color-error',
+	warning: '--color-warning',
+	info: '--color-info',
+	accent: '--color-accent-foreground',
+	attention: '--color-attention',
+};
 
 /**
  * We need to make the icons bigger for native apps
@@ -33,14 +51,14 @@ const iconVariants = cva('inset-0 content-center items-center', {
 			attention: 'text-attention',
 		},
 		size: {
-			default: Platform.OS === 'web' ? 'size-3.5' : 'size-4.5',
-			xs: Platform.OS === 'web' ? 'size-3' : 'size-3.5',
-			sm: Platform.OS === 'web' ? 'size-3.25' : 'size-4',
-			lg: Platform.OS === 'web' ? 'size-4' : 'size-5',
-			xl: Platform.OS === 'web' ? 'size-4.5' : 'size-6',
-			'2xl': Platform.OS === 'web' ? 'size-5' : 'size-7',
-			'3xl': Platform.OS === 'web' ? 'size-6' : 'size-8',
-			'4xl': Platform.OS === 'web' ? 'size-7' : 'size-9',
+			default: 'size-4.5',
+			xs: 'size-3.5',
+			sm: 'size-4',
+			lg: 'size-5',
+			xl: 'size-6',
+			'2xl': 'size-7',
+			'3xl': 'size-8',
+			'4xl': 'size-9',
 		},
 	},
 	defaultVariants: {
@@ -62,7 +80,7 @@ export type IconProps = VariantProps<typeof iconVariants> & {
  */
 export const Icon = ({
 	name,
-	variant,
+	variant = 'default',
 	size,
 	loading,
 	className,
@@ -72,7 +90,19 @@ export const Icon = ({
 }: IconProps) => {
 	const Svg = get(Svgs, name, Svgs.circleExclamation) as React.FC<SvgProps>;
 	const textClass = React.useContext(TextClassContext);
-	const resolvedColor = getResolvedColor(variant, cn(textClass, className));
+
+	// Combine all classNames to find the effective text color
+	// Order matters: textClass (from context like Button) → iconVariants → className (explicit override)
+	const combinedClassName = cn(textClass, iconVariants({ variant, size }), className);
+
+	// Extract CSS variable from className, falling back to variant's default
+	const cssVariable =
+		getColorVariableFromClassName(combinedClassName) ||
+		variantToCSSVariable[variant ?? 'default'] ||
+		'--color-foreground';
+
+	// Use Uniwind's useCSSVariable hook to get the actual theme color
+	const resolvedColor = useCSSVariable(cssVariable);
 
 	if (loading) {
 		return <Loader variant={variant} size={size} className={className} {...props} />;
@@ -80,15 +110,10 @@ export const Icon = ({
 
 	/**
 	 * Put the iconVariants after the inherited textClass
-	 * NOTE: fill="currentColor" or color="currentColor" is not inheriting the CSS variables on iOS/Android
-	 * So, we need to manually tranform the className to the correct color
+	 * Using useCSSVariable to get the actual theme color for SVG fill
 	 */
 	return (
-		<View
-			className={cn(textClass, iconVariants({ variant, size }), className)}
-			pointerEvents={pointerEvents}
-			{...props}
-		>
+		<View className={combinedClassName} pointerEvents={pointerEvents} {...props}>
 			<Svg
 				width="100%"
 				height="100%"

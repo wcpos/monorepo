@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import * as Slot from '@rn-primitives/slot';
 import * as TablePrimitive from '@rn-primitives/table';
+import { useCSSVariable } from 'uniwind';
 
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
@@ -66,27 +67,32 @@ function TableRow({
 	...props
 }: SlottableViewProps & { index?: number }) {
 	const Component = asChild ? Slot.View : View;
+	// Use theme-aware colors for alternating rows
+	const tableRowColor = useCSSVariable('--color-table-row');
+	const tableRowAltColor = useCSSVariable('--color-table-row-alt');
+
 	return (
 		<Component
 			role="row"
-			className={cn(
-				'web:transition-colors web:data-[state=selected]:bg-muted flex-row',
-				index % 2 ? 'bg-[#F9FBFD]' : 'bg-card',
-				className
-			)}
+			className={cn('web:transition-colors web:data-[state=selected]:bg-muted flex-row', className)}
+			style={{ backgroundColor: index % 2 ? tableRowAltColor : tableRowColor }}
 			{...props}
 		/>
 	);
 }
 
-function TableHead({ className, ...props }: TablePrimitive.HeadProps) {
+function TableHead({ className, style, ...props }: TablePrimitive.HeadProps) {
+	// Use theme-aware table header background color
+	const tableHeaderColor = useCSSVariable('--color-table-header');
+
 	return (
 		<TextClassContext.Provider value="text-muted-foreground text-xs uppercase text-left font-medium">
 			<TablePrimitive.Head
 				className={cn(
-					'bg-muted h-8 flex-1 flex-col justify-center px-2 [&:has([role=checkbox])]:pr-0',
+					'h-8 flex-1 flex-col justify-center px-2 [&:has([role=checkbox])]:pr-0',
 					className
 				)}
+				style={[{ backgroundColor: tableHeaderColor }, style]}
 				{...props}
 			/>
 		</TextClassContext.Provider>

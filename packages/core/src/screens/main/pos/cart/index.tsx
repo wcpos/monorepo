@@ -40,7 +40,7 @@ export const OpenOrders = ({ isColumn = false }) => {
 			<ErrorBoundary>
 				{currentOrder.isNew ? (
 					<Card className="flex-1">
-						<CardHeader className="bg-input p-2">
+						<CardHeader className="bg-surface p-2">
 							<ErrorBoundary>
 								<CartHeader />
 							</ErrorBoundary>
@@ -51,7 +51,7 @@ export const OpenOrders = ({ isColumn = false }) => {
 					</Card>
 				) : (
 					<Card className="flex-1">
-						<CardHeader className="bg-input p-2">
+						<CardHeader className="bg-surface p-2">
 							<ErrorBoundary>
 								<CartHeader />
 							</ErrorBoundary>
@@ -80,7 +80,7 @@ export const OpenOrders = ({ isColumn = false }) => {
 							<HStack className="w-full gap-0">
 								<ErrorBoundary>
 									<VoidButton />
-									<ButtonGroupSeparator className="bg-input" />
+									<ButtonGroupSeparator className="bg-surface" />
 									<PayButton />
 								</ErrorBoundary>
 							</HStack>

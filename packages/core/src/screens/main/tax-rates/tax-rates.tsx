@@ -51,7 +51,7 @@ export const TaxRates = ({ query }: Props) => {
 	 */
 	return (
 		<Modal>
-			<ModalContent size="xl">
+			<ModalContent size="2xl">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>{t('Tax Rates', { _tags: 'core' })}</Text>

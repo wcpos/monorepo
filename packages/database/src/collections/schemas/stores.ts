@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 2,
+	version: 3,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -466,6 +466,12 @@ export const storesLiteral = {
 		barcode_scanning_suffix: {
 			title: 'Barcode scanner suffix',
 			type: 'string',
+		},
+		theme: {
+			title: 'App Theme',
+			description: 'The visual theme for the app (system, light, dark, ocean, sunset, monochrome)',
+			type: 'string',
+			default: 'system',
 		},
 		date_created_gmt: {
 			type: 'string',

@@ -57,10 +57,7 @@
     "ignoredBuiltDependencies": [
       "@firebase/util",
       "electron-winstaller"
-    ],
-    "patchedDependencies": {
-      "react-native-css@3.0.1": "patches/react-native-css@3.0.1.patch"
-    }
+    ]
   },
   "dependencies": {
     "turbo": "^2.5.0",
