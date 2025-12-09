@@ -10,10 +10,23 @@ import Animated, {
 	withTiming,
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
+import { useCSSVariable } from 'uniwind';
 
-import { getResolvedColor } from '../lib/icon-colors';
+import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
+
+/**
+ * Map variant to CSS variable name for SVG stroke colors
+ */
+const variantToCSSVariable: Record<string, string> = {
+	default: '--color-foreground',
+	primary: '--color-primary',
+	destructive: '--color-destructive',
+	secondary: '--color-secondary',
+	muted: '--color-muted-foreground',
+	success: '--color-success',
+};
 
 /**
  * Should match text and icon variants
@@ -50,10 +63,21 @@ type LoaderProps = ViewProps & VariantProps<typeof loaderVariants>;
 /**
  *
  */
-export const Loader = ({ className, variant, size, ...props }: LoaderProps) => {
+export const Loader = ({ className, variant = 'default', size, ...props }: LoaderProps) => {
 	const textClass = React.useContext(TextClassContext);
 	const rotation = useSharedValue(0);
-	const resolvedColor = getResolvedColor(variant, cn(textClass, className));
+
+	// Combine all classNames to find the effective text color
+	const combinedClassName = cn(loaderVariants({ variant, size }), textClass, className);
+
+	// Extract CSS variable from className, falling back to variant's default
+	const cssVariable =
+		getColorVariableFromClassName(combinedClassName) ||
+		variantToCSSVariable[variant ?? 'default'] ||
+		'--color-foreground';
+
+	// Use Uniwind's useCSSVariable hook to get the actual theme color
+	const resolvedColor = useCSSVariable(cssVariable);
 
 	React.useEffect(() => {
 		rotation.value = withRepeat(
@@ -71,7 +95,7 @@ export const Loader = ({ className, variant, size, ...props }: LoaderProps) => {
 	}));
 
 	return (
-		<View className={cn(loaderVariants({ variant, size }), textClass, className)} {...props}>
+		<View className={combinedClassName} {...props}>
 			<Animated.View style={[{ width: '100%', height: '100%' }, animatedStyle]}>
 				<Svg viewBox="0 0 32 32" width="100%" height="100%">
 					<Circle

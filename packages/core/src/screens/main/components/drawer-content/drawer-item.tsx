@@ -72,7 +72,7 @@ type Props = {
 	drawerType?: DrawerNavigationOptions['drawerType'];
 };
 
-// Separate component for permanent drawer items
+// Separate component for permanent drawer items (icon-only on large screens)
 const PermanentDrawerItem = ({ icon, label, focused, onPress, style }) => {
 	const button = (
 		<Button
@@ -81,8 +81,7 @@ const PermanentDrawerItem = ({ icon, label, focused, onPress, style }) => {
 			style={style}
 			className={cn(
 				'native:h-12 native:px-4 native:py-2 h-10 rounded-none border-x-4 border-transparent bg-transparent px-3',
-				focused && 'border-l-primary text-primary',
-				!focused && 'hover:bg-white/10'
+				focused ? 'border-l-primary' : 'hover:bg-white/10'
 			)}
 		>
 			{icon({ focused })}
@@ -106,21 +105,24 @@ const PermanentDrawerItem = ({ icon, label, focused, onPress, style }) => {
 	return button;
 };
 
-// Standard drawer item with label
+// Standard drawer item with label (shown on smaller screens when drawer opens)
 const StandardDrawerItem = ({ icon, label, focused, onPress, style }) => (
 	<Button
 		onPress={onPress}
 		size="xl"
 		className={cn(
 			'native:h-12 native:px-4 native:py-2 h-10 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
-			focused && 'border-l-primary text-primary',
-			!focused && 'hover:bg-white/10'
+			focused ? 'border-l-primary' : 'hover:bg-white/10'
 		)}
 		style={style}
 	>
 		<HStack className="gap-3">
 			{icon({ focused })}
-			<ButtonText className={cn('pr-2', focused && 'text-primary')}>{label}</ButtonText>
+			<ButtonText
+				className={cn('pr-2', focused ? 'text-primary' : 'text-sidebar-foreground')}
+			>
+				{label}
+			</ButtonText>
 		</HStack>
 	</Button>
 );

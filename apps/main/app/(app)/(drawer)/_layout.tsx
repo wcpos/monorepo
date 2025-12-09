@@ -1,4 +1,5 @@
 import { Drawer } from 'expo-router/drawer';
+import { useCSSVariable } from 'uniwind';
 
 import { Icon } from '@wcpos/components/icon';
 import { useTheme } from '@wcpos/core/contexts/theme';
@@ -15,6 +16,11 @@ export default function DrawerLayout() {
 	const { screenSize } = useTheme();
 	const t = useT();
 
+	// Get theme-aware colors for navigation
+	const sidebarColor = useCSSVariable('--color-sidebar');
+	const sidebarBorderColor = useCSSVariable('--color-sidebar-border');
+	const backgroundColor = useCSSVariable('--color-background');
+
 	return (
 		<Drawer
 			screenOptions={{
@@ -23,9 +29,9 @@ export default function DrawerLayout() {
 				},
 				drawerType: screenSize === 'lg' ? 'permanent' : 'front',
 				drawerStyle: {
-					backgroundColor: '#243B53',
+					backgroundColor: sidebarColor,
 					width: screenSize === 'lg' ? 'auto' : 200,
-					borderRightColor: 'rgba(0, 0, 0, 0.2)',
+					borderRightColor: sidebarBorderColor,
 					borderTopRightRadius: 0,
 					borderBottomRightRadius: 0,
 					paddingRight: 0,
@@ -35,7 +41,7 @@ export default function DrawerLayout() {
 					paddingRight: 0,
 					paddingLeft: 0,
 				},
-				sceneStyle: { backgroundColor: '#F0F4F8' },
+				sceneStyle: { backgroundColor },
 			}}
 			drawerContent={DrawerContent}
 		>
@@ -45,7 +51,11 @@ export default function DrawerLayout() {
 					title: t('POS', { _tags: 'core' }),
 					drawerLabel: t('POS', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon size="xl" name="cashRegister" className={focused && 'text-primary'} />
+						<Icon
+							size="xl"
+							name="cashRegister"
+							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
+						/>
 					),
 				}}
 			/>
@@ -55,7 +65,11 @@ export default function DrawerLayout() {
 					title: t('Products', { _tags: 'core' }),
 					drawerLabel: t('Products', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon size="xl" name="gifts" className={focused && 'text-primary'} />
+						<Icon
+							size="xl"
+							name="gifts"
+							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
+						/>
 					),
 				}}
 			/>
@@ -65,7 +79,11 @@ export default function DrawerLayout() {
 					title: t('Orders', { _tags: 'core' }),
 					drawerLabel: t('Orders', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon size="xl" name="receipt" className={focused && 'text-primary'} />
+						<Icon
+							size="xl"
+							name="receipt"
+							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
+						/>
 					),
 				}}
 			/>
@@ -75,7 +93,11 @@ export default function DrawerLayout() {
 					title: t('Customers', { _tags: 'core' }),
 					drawerLabel: t('Customers', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon size="xl" name="users" className={focused && 'text-primary'} />
+						<Icon
+							size="xl"
+							name="users"
+							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
+						/>
 					),
 				}}
 			/>
@@ -85,7 +107,11 @@ export default function DrawerLayout() {
 					title: t('Reports', { _tags: 'core' }),
 					drawerLabel: t('Reports', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon size="xl" name="chartMixedUpCircleDollar" className={focused && 'text-primary'} />
+						<Icon
+							size="xl"
+							name="chartMixedUpCircleDollar"
+							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
+						/>
 					),
 				}}
 			/>
@@ -95,7 +121,11 @@ export default function DrawerLayout() {
 					title: t('Logs', { _tags: 'core' }),
 					drawerLabel: t('Logs', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon size="xl" name="heartPulse" className={focused && 'text-primary'} />
+						<Icon
+							size="xl"
+							name="heartPulse"
+							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
+						/>
 					),
 					drawerItemStyle: { marginTop: 'auto' },
 				}}
@@ -106,7 +136,11 @@ export default function DrawerLayout() {
 					title: t('Support', { _tags: 'core' }),
 					drawerLabel: t('Support', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon size="xl" name="commentQuestion" className={focused && 'text-primary'} />
+						<Icon
+							size="xl"
+							name="commentQuestion"
+							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
+						/>
 					),
 				}}
 			/>

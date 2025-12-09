@@ -3,6 +3,7 @@ import React from 'react';
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
 import { ObservableResource, useObservableEagerState } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
+import { useCSSVariable } from 'uniwind';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
@@ -108,6 +109,7 @@ export default function POSLayout() {
 
 function POSStack() {
 	const { currentOrder } = useCurrentOrder();
+	const backgroundColor = useCSSVariable('--color-background');
 
 	/**
 	 *
@@ -123,7 +125,7 @@ function POSStack() {
 				screenOptions={{
 					animation: 'none',
 					headerShown: false,
-					contentStyle: { backgroundColor: '#F0F4F8' },
+					contentStyle: { backgroundColor },
 				}}
 			>
 				<Stack.Screen name="index" />

@@ -32,7 +32,7 @@ export const Report = () => {
 	return (
 		<View className="h-full p-2 pl-0 pt-0">
 			<Card className="flex-1">
-				<CardHeader className="bg-input p-2">
+				<CardHeader className="bg-surface p-2">
 					<HStack>
 						<Text className="text-lg">{t('Report', { _tags: 'core' })}</Text>
 						<Select

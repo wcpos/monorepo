@@ -10,6 +10,7 @@ import Animated, {
 	withSequence,
 	withTiming,
 } from 'react-native-reanimated';
+import { useCSSVariable } from 'uniwind';
 
 import { cn } from '../lib/utils';
 
@@ -26,17 +27,27 @@ interface PulseTableRowRef extends React.RefObject<Animated.View> {
 }
 
 /**
- *
+ * Table row with pulse animation for add/remove feedback.
+ * Uses theme-aware colors for alternating rows and pulse effects.
  */
 export const PulseTableRow = React.forwardRef<PulseTableRowRef, PulseTableRowProps>(
 	({ className, index = 0, onRemove = () => {}, ...props }, ref) => {
-		const backgroundColor = useSharedValue(
-			index % 2 === 0 ? 'transparent' : 'hsla(210, 40%, 96%, 0.4)'
-		);
+		// Get theme-aware colors
+		const tableRowColor = useCSSVariable('--color-table-row');
+		const tableRowAltColor = useCSSVariable('--color-table-row-alt');
+		const successColor = useCSSVariable('--color-success');
+		const errorColor = useCSSVariable('--color-error');
 
+		// Determine the base color based on row index
+		const baseColor = index % 2 === 0 ? tableRowColor : tableRowAltColor;
+
+		// Shared value for animated background color
+		const backgroundColor = useSharedValue(baseColor);
+
+		// Update base color when index or theme colors change
 		React.useEffect(() => {
-			backgroundColor.value = index % 2 === 0 ? 'transparent' : 'hsla(210, 40%, 96%, 0.4)';
-		}, [index]);
+			backgroundColor.value = baseColor;
+		}, [index, baseColor, backgroundColor]);
 
 		const animatedStyle = useAnimatedStyle(() => {
 			return {
@@ -50,32 +61,26 @@ export const PulseTableRow = React.forwardRef<PulseTableRowRef, PulseTableRowPro
 				pulseAdd(callback?: () => void) {
 					props.table.options.meta?.scrollToRow(props.row.id);
 					cancelAnimation(backgroundColor);
+					// Pulse to success color then back to base
 					backgroundColor.value = withSequence(
-						withTiming('hsla(162, 63%, 41%, 0.8)', { duration: 500 }),
-						withTiming(
-							index % 2 === 0 ? 'transparent' : 'hsla(210, 40%, 96%, 0.4)',
-							{ duration: 500 },
-							callback
-								? () => {
-										'worklet';
-										runOnJS(callback)();
-									}
-								: undefined
-						)
+						withTiming(successColor, { duration: 400 }),
+						withTiming(baseColor, { duration: 400 }, (finished) => {
+							'worklet';
+							if (finished && callback) {
+								runOnJS(callback)();
+							}
+						})
 					);
 				},
 				pulseRemove(callback?: () => void) {
 					cancelAnimation(backgroundColor);
-					backgroundColor.value = withTiming(
-						'hsl(356, 75%, 53%)',
-						{ duration: 500 },
-						callback
-							? () => {
-									'worklet';
-									runOnJS(callback)();
-								}
-							: undefined
-					);
+					// Pulse to error color
+					backgroundColor.value = withTiming(errorColor, { duration: 400 }, (finished) => {
+						'worklet';
+						if (finished && callback) {
+							runOnJS(callback)();
+						}
+					});
 				},
 			},
 		});

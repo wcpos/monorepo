@@ -1,130 +1,508 @@
-@config "./tailwind.config.js";
+@import 'tailwindcss';
+@import 'uniwind';
+@import 'tw-animate-css';
 
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/preflight.css" layer(base);
-@import "tailwindcss/utilities.css";
-
-@import "nativewind/theme";
-
-@import "tw-animate-css";
+/* Content sources - tell Tailwind where to scan for class names */
+@source "./app/**/*.{js,jsx,ts,tsx}";
+@source "../../packages/components/src/**/*.{ts,tsx}";
+@source "../../packages/core/src/**/*.{ts,tsx}";
 
 @theme {
-  /* No theme-level custom properties needed */
+  /* Custom widths */
+  --width-128: 32rem;
+  --width-144: 36rem;
+  --width-160: 40rem;
+
+  /* Semantic colors (shadcn/ui) - referencing CSS variables */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-foreground: var(--tertiary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-attention: var(--attention);
+  --color-attention-foreground: var(--attention-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-error: var(--error);
+  --color-error-foreground: var(--error-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  
+  /* Navigation/Drawer colors */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  
+  /* Table row alternating colors */
+  --color-table-row: var(--table-row);
+  --color-table-row-alt: var(--table-row-alt);
+  --color-table-header: var(--table-header);
+  
+  /* Surface color - for subtle tinted backgrounds (card headers, filter bars, etc.) */
+  --color-surface: var(--surface);
+
+  /* Custom border width */
+  --border-width-hairline: var(--hairline-width);
+
+  /* Custom animations (web-only - React Native uses Reanimated) */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+}
+
+/* Web-only keyframes for accordion animations */
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+@layer theme {
+  :root {
+    /* ========================================
+     * LIGHT THEME
+     * Clean, professional light theme
+     * ======================================== */
+    @variant light {
+      --hairline-width: 1px;
+      
+      /* Base colors */
+      --background: oklch(0.97 0.01 240);
+      --foreground: oklch(0.25 0.03 250);
+      
+      /* Card - Pure white for contrast */
+      --card: oklch(1 0 0);
+      --card-foreground: oklch(0.25 0.03 250);
+      
+      /* Popover */
+      --popover: oklch(1 0 0);
+      --popover-foreground: oklch(0.25 0.03 250);
+      
+      /* Primary - Professional blue */
+      --primary: oklch(0.50 0.18 240);
+      --primary-foreground: oklch(0.98 0.01 240);
+      
+      /* Secondary */
+      --secondary: oklch(0.55 0.05 250);
+      --secondary-foreground: oklch(0.98 0.01 250);
+      
+      /* Tertiary */
+      --tertiary: oklch(0.68 0.16 65);
+      --tertiary-foreground: oklch(0.98 0.01 65);
+      
+      /* Muted */
+      --muted: oklch(0.94 0.01 250);
+      --muted-foreground: oklch(0.50 0.03 250);
+      
+      /* Accent */
+      --accent: oklch(0.94 0.02 240);
+      --accent-foreground: oklch(0.25 0.03 250);
+      
+      /* Semantic colors */
+      --destructive: oklch(0.55 0.22 25);
+      --destructive-foreground: oklch(0.98 0.01 25);
+      --success: oklch(0.48 0.18 160);
+      --success-foreground: oklch(0.98 0.01 160);
+      --info: oklch(0.55 0.18 240);
+      --info-foreground: oklch(0.98 0.01 240);
+      --attention: oklch(0.88 0.15 90);
+      --attention-foreground: oklch(0.25 0.03 90);
+      --warning: oklch(0.65 0.18 45);
+      --warning-foreground: oklch(0.98 0.01 45);
+      --error: oklch(0.55 0.22 25);
+      --error-foreground: oklch(0.98 0.01 25);
+      
+      /* Borders and inputs */
+      --border: oklch(0.88 0.01 250);
+      --input: oklch(1 0 0);
+      --ring: oklch(0.50 0.18 240);
+      --radius: 0.5rem;
+      
+      /* Surface - subtle tinted background for card headers, filter bars, etc. */
+      --surface: oklch(0.92 0.01 250);
+      
+      /* Sidebar/Navigation - Dark blue */
+      --sidebar: oklch(0.28 0.05 250);
+      --sidebar-foreground: oklch(0.92 0.01 250);
+      --sidebar-border: oklch(0.22 0.04 250);
+      
+      /* Table rows */
+      --table-row: oklch(1 0 0);
+      --table-row-alt: oklch(0.985 0.005 240);
+      --table-header: oklch(0.94 0.01 250);
+      
+      /* Charts */
+      --chart-1: oklch(0.65 0.18 35);
+      --chart-2: oklch(0.50 0.12 180);
+      --chart-3: oklch(0.35 0.05 250);
+      --chart-4: oklch(0.72 0.14 85);
+      --chart-5: oklch(0.68 0.16 45);
+    }
+
+    /* ========================================
+     * DARK THEME
+     * Modern dark blue-gray theme
+     * ======================================== */
+    @variant dark {
+      --hairline-width: 1px;
+      
+      /* Base colors - Dark blue-gray */
+      --background: oklch(0.18 0.025 250);
+      --foreground: oklch(0.92 0.01 250);
+      
+      /* Card - Slightly lighter for elevation */
+      --card: oklch(0.22 0.025 250);
+      --card-foreground: oklch(0.92 0.01 250);
+      
+      /* Popover */
+      --popover: oklch(0.24 0.025 250);
+      --popover-foreground: oklch(0.92 0.01 250);
+      
+      /* Primary - Bright blue for dark mode */
+      --primary: oklch(0.65 0.20 240);
+      --primary-foreground: oklch(0.15 0.02 250);
+      
+      /* Secondary */
+      --secondary: oklch(0.32 0.03 250);
+      --secondary-foreground: oklch(0.92 0.01 250);
+      
+      /* Tertiary */
+      --tertiary: oklch(0.70 0.16 65);
+      --tertiary-foreground: oklch(0.15 0.02 65);
+      
+      /* Muted */
+      --muted: oklch(0.28 0.025 250);
+      --muted-foreground: oklch(0.65 0.02 250);
+      
+      /* Accent */
+      --accent: oklch(0.30 0.03 250);
+      --accent-foreground: oklch(0.92 0.01 250);
+      
+      /* Semantic colors */
+      --destructive: oklch(0.55 0.20 25);
+      --destructive-foreground: oklch(0.98 0.01 25);
+      --success: oklch(0.65 0.18 160);
+      --success-foreground: oklch(0.15 0.02 160);
+      --info: oklch(0.65 0.18 240);
+      --info-foreground: oklch(0.15 0.02 240);
+      --attention: oklch(0.85 0.15 90);
+      --attention-foreground: oklch(0.18 0.025 90);
+      --warning: oklch(0.70 0.18 45);
+      --warning-foreground: oklch(0.15 0.02 45);
+      --error: oklch(0.55 0.20 25);
+      --error-foreground: oklch(0.98 0.01 25);
+      
+      /* Borders and inputs - Visible but subtle */
+      --border: oklch(0.32 0.025 250);
+      --input: oklch(0.22 0.025 250);
+      --ring: oklch(0.65 0.20 240);
+      --radius: 0.5rem;
+      
+      /* Surface - subtle tinted background for card headers, filter bars, etc. */
+      --surface: oklch(0.28 0.025 250);
+      
+      /* Sidebar/Navigation - Darker */
+      --sidebar: oklch(0.15 0.025 250);
+      --sidebar-foreground: oklch(0.85 0.01 250);
+      --sidebar-border: oklch(0.25 0.025 250);
+      
+      /* Table - header darker than rows for visual anchor */
+      --table-row: oklch(0.22 0.025 250);
+      --table-row-alt: oklch(0.25 0.025 250);
+      --table-header: oklch(0.18 0.025 250);
+      
+      /* Charts */
+      --chart-1: oklch(0.70 0.18 35);
+      --chart-2: oklch(0.55 0.14 180);
+      --chart-3: oklch(0.45 0.06 250);
+      --chart-4: oklch(0.75 0.14 85);
+      --chart-5: oklch(0.72 0.16 45);
+    }
+
+    /* ========================================
+     * OCEAN THEME
+     * Cool blues and teals
+     * ======================================== */
+    @variant ocean {
+      --hairline-width: 1px;
+      
+      --background: oklch(0.20 0.04 220);
+      --foreground: oklch(0.92 0.02 200);
+      --card: oklch(0.24 0.045 220);
+      --card-foreground: oklch(0.92 0.02 200);
+      --popover: oklch(0.26 0.045 220);
+      --popover-foreground: oklch(0.92 0.02 200);
+      --primary: oklch(0.65 0.15 200);
+      --primary-foreground: oklch(0.15 0.03 200);
+      --secondary: oklch(0.32 0.04 215);
+      --secondary-foreground: oklch(0.92 0.02 200);
+      --tertiary: oklch(0.60 0.12 180);
+      --tertiary-foreground: oklch(0.15 0.03 180);
+      --muted: oklch(0.28 0.04 220);
+      --muted-foreground: oklch(0.65 0.03 210);
+      --accent: oklch(0.30 0.045 215);
+      --accent-foreground: oklch(0.92 0.02 200);
+      --destructive: oklch(0.55 0.18 25);
+      --destructive-foreground: oklch(0.98 0.01 25);
+      --success: oklch(0.62 0.15 170);
+      --success-foreground: oklch(0.15 0.03 170);
+      --info: oklch(0.60 0.15 210);
+      --info-foreground: oklch(0.15 0.03 210);
+      --attention: oklch(0.82 0.14 90);
+      --attention-foreground: oklch(0.20 0.04 90);
+      --warning: oklch(0.68 0.16 45);
+      --warning-foreground: oklch(0.15 0.03 45);
+      --error: oklch(0.55 0.18 25);
+      --error-foreground: oklch(0.98 0.01 25);
+      --border: oklch(0.35 0.045 215);
+      --input: oklch(0.24 0.045 220);
+      --ring: oklch(0.65 0.15 200);
+      --radius: 0.5rem;
+      --surface: oklch(0.28 0.04 220);
+      --sidebar: oklch(0.16 0.04 225);
+      --sidebar-foreground: oklch(0.85 0.02 200);
+      --sidebar-border: oklch(0.28 0.04 220);
+      /* Table - header darker than rows for visual anchor */
+      --table-row: oklch(0.24 0.045 220);
+      --table-row-alt: oklch(0.27 0.045 218);
+      --table-header: oklch(0.20 0.045 220);
+      --chart-1: oklch(0.65 0.15 200);
+      --chart-2: oklch(0.55 0.12 180);
+      --chart-3: oklch(0.45 0.08 220);
+      --chart-4: oklch(0.70 0.12 170);
+      --chart-5: oklch(0.60 0.14 190);
+    }
+
+    /* ========================================
+     * SUNSET THEME
+     * Warm oranges and purples
+     * ======================================== */
+    @variant sunset {
+      --hairline-width: 1px;
+      
+      --background: oklch(0.22 0.06 320);
+      --foreground: oklch(0.92 0.03 40);
+      --card: oklch(0.26 0.065 320);
+      --card-foreground: oklch(0.92 0.03 40);
+      --popover: oklch(0.28 0.065 320);
+      --popover-foreground: oklch(0.92 0.03 40);
+      --primary: oklch(0.68 0.18 40);
+      --primary-foreground: oklch(0.18 0.05 320);
+      --secondary: oklch(0.35 0.06 330);
+      --secondary-foreground: oklch(0.92 0.03 40);
+      --tertiary: oklch(0.60 0.15 350);
+      --tertiary-foreground: oklch(0.18 0.05 350);
+      --muted: oklch(0.30 0.06 325);
+      --muted-foreground: oklch(0.65 0.04 350);
+      --accent: oklch(0.32 0.065 320);
+      --accent-foreground: oklch(0.92 0.03 40);
+      --destructive: oklch(0.55 0.20 25);
+      --destructive-foreground: oklch(0.98 0.01 25);
+      --success: oklch(0.60 0.14 160);
+      --success-foreground: oklch(0.18 0.04 160);
+      --info: oklch(0.58 0.15 280);
+      --info-foreground: oklch(0.18 0.04 280);
+      --attention: oklch(0.80 0.16 75);
+      --attention-foreground: oklch(0.22 0.06 75);
+      --warning: oklch(0.70 0.18 50);
+      --warning-foreground: oklch(0.18 0.05 50);
+      --error: oklch(0.55 0.20 15);
+      --error-foreground: oklch(0.98 0.01 15);
+      --border: oklch(0.38 0.06 325);
+      --input: oklch(0.26 0.065 320);
+      --ring: oklch(0.68 0.18 40);
+      --radius: 0.5rem;
+      --surface: oklch(0.30 0.06 325);
+      --sidebar: oklch(0.18 0.06 325);
+      --sidebar-foreground: oklch(0.85 0.03 40);
+      --sidebar-border: oklch(0.30 0.06 325);
+      /* Table - header darker than rows for visual anchor */
+      --table-row: oklch(0.26 0.065 320);
+      --table-row-alt: oklch(0.29 0.065 318);
+      --table-header: oklch(0.22 0.065 320);
+      --chart-1: oklch(0.68 0.18 40);
+      --chart-2: oklch(0.60 0.15 350);
+      --chart-3: oklch(0.50 0.10 320);
+      --chart-4: oklch(0.75 0.14 60);
+      --chart-5: oklch(0.58 0.15 280);
+    }
+
+    /* ========================================
+     * MONOCHROME THEME
+     * High contrast grayscale for accessibility
+     * All colors are pure grayscale (chroma = 0)
+     * 
+     * Lightness scale (darker to lighter):
+     * - Sidebar: 0.06 (almost black)
+     * - Background: 0.15 (dark base)
+     * - Card/Table-row: 0.22 (elevated surfaces)
+     * - Table-row-alt: 0.26 (subtle alternation)
+     * - Muted/Input: 0.30 (interactive backgrounds)
+     * - Table-header: 0.35 (distinct header)
+     * - Border: 0.42 (visible separation)
+     * - Muted-foreground: 0.70 (subtle text)
+     * - Foreground: 0.95 (primary text)
+     * ======================================== */
+    @variant monochrome {
+      --hairline-width: 1px;
+      
+      /* Base surfaces - clear hierarchy */
+      --background: oklch(0.15 0 0);
+      --foreground: oklch(0.95 0 0);
+      --card: oklch(0.22 0 0);
+      --card-foreground: oklch(0.95 0 0);
+      --popover: oklch(0.24 0 0);
+      --popover-foreground: oklch(0.95 0 0);
+      
+      /* Primary - very light for high visibility */
+      --primary: oklch(0.92 0 0);
+      --primary-foreground: oklch(0.12 0 0);
+      
+      /* Secondary - medium gray */
+      --secondary: oklch(0.45 0 0);
+      --secondary-foreground: oklch(0.98 0 0);
+      
+      /* Tertiary */
+      --tertiary: oklch(0.72 0 0);
+      --tertiary-foreground: oklch(0.12 0 0);
+      
+      /* Muted - for subtle backgrounds, distinct from card */
+      --muted: oklch(0.30 0 0);
+      --muted-foreground: oklch(0.70 0 0);
+      
+      /* Accent - slightly lighter than muted */
+      --accent: oklch(0.34 0 0);
+      --accent-foreground: oklch(0.95 0 0);
+      
+      /* Semantic colors - use lightness to convey meaning */
+      --destructive: oklch(0.45 0 0);
+      --destructive-foreground: oklch(0.98 0 0);
+      --success: oklch(0.72 0 0);
+      --success-foreground: oklch(0.12 0 0);
+      --info: oklch(0.78 0 0);
+      --info-foreground: oklch(0.12 0 0);
+      --attention: oklch(0.88 0 0);
+      --attention-foreground: oklch(0.12 0 0);
+      --warning: oklch(0.82 0 0);
+      --warning-foreground: oklch(0.12 0 0);
+      --error: oklch(0.45 0 0);
+      --error-foreground: oklch(0.98 0 0);
+      
+      /* Borders and inputs - visible on all surfaces */
+      --border: oklch(0.42 0 0);
+      --input: oklch(0.22 0 0);
+      --ring: oklch(0.92 0 0);
+      --radius: 0.5rem;
+      
+      /* Surface - subtle tinted background for card headers, filter bars, etc. */
+      --surface: oklch(0.30 0 0);
+      
+      /* Sidebar - darkest element */
+      --sidebar: oklch(0.06 0 0);
+      --sidebar-foreground: oklch(0.92 0 0);
+      --sidebar-border: oklch(0.20 0 0);
+      
+      /* Table - header darker than rows for visual anchor */
+      --table-row: oklch(0.22 0 0);
+      --table-row-alt: oklch(0.26 0 0);
+      --table-header: oklch(0.18 0 0);
+      
+      /* Charts */
+      --chart-1: oklch(0.92 0 0);
+      --chart-2: oklch(0.78 0 0);
+      --chart-3: oklch(0.62 0 0);
+      --chart-4: oklch(0.48 0 0);
+      --chart-5: oklch(0.34 0 0);
+    }
+  }
+
+  /* Native Platform Overrides */
+  @media ios {
+    :root {
+      --hairline-width: hairlineWidth();
+    }
+  }
 }
 
 @layer base {
-  /* Web-specific adjustment: Scale down to 14px base */
-  /* On native, rem values are converted at build time by inlineRem */
-  @media (min-width: 0px) {
-    :root {
-      font-size: 87.5%; /* 14/16 = 0.875, so 1rem = 14px on web only */
-    }
-  }
-  
+  /* Scale web font-size to 87.5% so 1rem = 14px (default is 16px) */
   :root {
-    /* Platform-specific values */
-    --hairline-width: 1px;
-    
-    /* Font settings */
-    --font-size-base: 14px;
-    --line-height-base: 16px;
-    
-    /* Semantic color mappings (shadcn/ui) - oklch format */
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.28 0.04 247);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.28 0.04 247);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.28 0.04 247);
-    --primary: oklch(0.48 0.15 237);
-    --primary-foreground: oklch(0.98 0.01 247);
-    --secondary: oklch(0.54 0.04 247);
-    --secondary-foreground: oklch(0.98 0.01 247);
-    --tertiary: oklch(0.68 0.16 65);
-    --tertiary-foreground: oklch(0.98 0.01 247);
-    --muted: oklch(0.96 0.01 247);
-    --muted-foreground: oklch(0.47 0.03 247);
-    --accent: oklch(0.96 0.01 247);
-    --accent-foreground: oklch(0.17 0.02 247);
-    --destructive: oklch(0.58 0.22 25);
-    --destructive-foreground: oklch(0.98 0.01 247);
-    --success: oklch(0.35 0.12 166);
-    --success-foreground: oklch(0.98 0.01 247);
-    --info: oklch(0.62 0.21 237);
-    --info-foreground: oklch(0.98 0.01 247);
-    --attention: oklch(0.92 0.13 95);
-    --attention-foreground: oklch(0.28 0.04 247);
-    --warning: oklch(0.62 0.17 35);
-    --warning-foreground: oklch(0.98 0.01 247);
-    --error: oklch(0.58 0.22 25);
-    --error-foreground: oklch(0.98 0.01 247);
-    --border: oklch(0.90 0.01 247);
-    --input: oklch(0.92 0.01 247);
-    --ring: oklch(0.48 0.15 237);
-    --radius: 0.5rem;
-    --chart-1: oklch(0.67 0.17 35);
-    --chart-2: oklch(0.44 0.09 180);
-    --chart-3: oklch(0.30 0.04 220);
-    --chart-4: oklch(0.75 0.13 85);
-    --chart-5: oklch(0.72 0.15 45);
+    font-size: 87.5%;
   }
 
-  /* =================================================================
-   * Native Platform Overrides
-   * =================================================================
-   * With inlineRem: 16, we only need platform-specific overrides for
-   * values that can't be expressed in rem units.
-   */
+  /* Native platforms keep default 16px rem (Uniwind handles rem conversion) */
   @media ios {
     :root {
-      /* Platform-specific values */
-      --hairline-width: hairlineWidth(); /* React Native's StyleSheet.hairlineWidth */
+      font-size: 100%;
+    }
+  }
+  @media android {
+    :root {
       font-size: 100%;
     }
   }
 
-  .dark {
-    /* Dark mode color overrides (shadcn/ui standard) - oklch format */
-    --background: oklch(0.15 0.02 247);
-    --foreground: oklch(0.98 0.01 247);
-    --card: oklch(0.15 0.02 247);
-    --card-foreground: oklch(0.98 0.01 247);
-    --popover: oklch(0.15 0.02 247);
-    --popover-foreground: oklch(0.98 0.01 247);
-    --primary: oklch(0.98 0.01 247);
-    --primary-foreground: oklch(0.17 0.02 247);
-    --secondary: oklch(0.24 0.02 247);
-    --secondary-foreground: oklch(0.98 0.01 247);
-    --tertiary: oklch(0.68 0.16 65);
-    --tertiary-foreground: oklch(0.98 0.01 247);
-    --muted: oklch(0.24 0.02 247);
-    --muted-foreground: oklch(0.68 0.02 247);
-    --accent: oklch(0.24 0.02 247);
-    --accent-foreground: oklch(0.98 0.01 247);
-    --destructive: oklch(0.38 0.18 25);
-    --destructive-foreground: oklch(0.98 0.01 247);
-    --success: oklch(0.35 0.12 166);
-    --success-foreground: oklch(0.98 0.01 247);
-    --info: oklch(0.62 0.21 237);
-    --info-foreground: oklch(0.98 0.01 247);
-    --attention: oklch(0.92 0.13 95);
-    --attention-foreground: oklch(0.15 0.02 247);
-    --warning: oklch(0.62 0.17 35);
-    --warning-foreground: oklch(0.98 0.01 247);
-    --error: oklch(0.38 0.18 25);
-    --error-foreground: oklch(0.98 0.01 247);
-    --border: oklch(0.24 0.02 247);
-    --input: oklch(0.24 0.02 247);
-    --ring: oklch(0.85 0.01 247);
-  }
-}
-
-@layer base {
   * {
     border-color: var(--border);
   }
   body {
     background-color: var(--background);
     color: var(--foreground);
+  }
+
+  /* Theme-aware scrollbar styles (web only) */
+  * {
+    /* Modern browsers (Firefox) */
+    scrollbar-color: var(--muted) var(--card);
+    scrollbar-width: thin;
+  }
+
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--card);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--muted);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+  ::-webkit-scrollbar-corner {
+    background: var(--card);
   }
 }

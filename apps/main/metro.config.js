@@ -2,7 +2,7 @@ const path = require('path');
 
 const { getDefaultConfig } = require('expo/metro-config');
 const { FileStore } = require('metro-cache');
-const { withNativeWind } = require('nativewind/metro');
+const { withUniwindConfig } = require('uniwind/metro');
 
 let config = getDefaultConfig(__dirname);
 
@@ -33,4 +33,7 @@ if (process.env.EXPO_UNSTABLE_ATLAS === 'true') {
 	config = withExpoAtlas(config);
 }
 
-module.exports = withNativeWind(config);
+module.exports = withUniwindConfig(config, {
+	cssEntryFile: './global.css',
+	extraThemes: ['ocean', 'sunset', 'monochrome'],
+});

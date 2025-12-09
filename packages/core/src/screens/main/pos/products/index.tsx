@@ -187,7 +187,7 @@ export const POSProducts = ({ isColumn = false }) => {
 	return (
 		<View className={`h-full p-2 ${isColumn && 'pr-0'}`}>
 			<Card className="flex-1">
-				<CardHeader className="bg-input p-2">
+				<CardHeader className="bg-surface p-2">
 					<ErrorBoundary>
 						<VStack>
 							<HStack>

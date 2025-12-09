@@ -4,6 +4,7 @@ import { Platform, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCSSVariable } from 'uniwind';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Icon } from '@wcpos/components/icon';
@@ -23,6 +24,13 @@ export default function TabsLayout() {
 	const { screenSize } = useTheme();
 	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const { bottom } = useSafeAreaInsets();
+
+	// Theme-aware colors for native tab bar styling
+	const backgroundColor = useCSSVariable('--color-background');
+	const cardColor = useCSSVariable('--color-card');
+	const primaryColor = useCSSVariable('--color-primary');
+	const mutedForeground = useCSSVariable('--color-muted-foreground');
+	const borderColor = useCSSVariable('--color-border');
 
 	const tabPressListener = React.useMemo(
 		() => ({
@@ -65,7 +73,15 @@ export default function TabsLayout() {
 	}
 
 	return (
-		<Tabs screenOptions={{ headerShown: false }}>
+		<Tabs
+			screenOptions={{
+				headerShown: false,
+				sceneStyle: { backgroundColor },
+				tabBarStyle: { backgroundColor: cardColor, borderTopColor: borderColor },
+				tabBarActiveTintColor: primaryColor,
+				tabBarInactiveTintColor: mutedForeground,
+			}}
+		>
 			<Tabs.Screen
 				name="index"
 				listeners={tabPressListener}

@@ -1,4 +1,5 @@
 import { Redirect, Stack } from 'expo-router';
+import { useCSSVariable } from 'uniwind';
 // import * as StatusBar from 'expo-status-bar';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -12,6 +13,7 @@ export const unstable_settings = {
 
 export default function AuthLayout() {
 	const { storeDB } = useAppState();
+	const backgroundColor = useCSSVariable('--color-background');
 	// StatusBar.setStatusBarStyle('dark', true);
 	// StatusBar.setStatusBarTranslucent(true);
 
@@ -21,7 +23,7 @@ export default function AuthLayout() {
 
 	return (
 		<>
-			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
+			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}>
 				<Stack.Screen name="connect" />
 				<Stack.Screen
 					name="(modals)/login"

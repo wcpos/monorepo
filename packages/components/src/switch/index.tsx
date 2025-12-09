@@ -30,7 +30,7 @@ const webSwitchVariants = cva(
 			},
 			checked: {
 				true: 'bg-primary',
-				false: 'bg-input',
+				false: 'bg-surface',
 			},
 		},
 		defaultVariants: {
@@ -162,7 +162,7 @@ const SwitchNative = React.forwardRef<
 			<SwitchPrimitives.Root
 				className={cn(
 					nativeSwitchVariants({ size }),
-					props.checked ? 'bg-primary' : 'bg-input',
+					props.checked ? 'bg-primary' : 'bg-surface',
 					className
 				)}
 				{...props}

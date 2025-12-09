@@ -158,7 +158,7 @@ export const FilterBar = () => {
 	 */
 	return (
 		<View className="p-2 pb-0">
-			<Card className="bg-input w-full p-2">
+			<Card className="bg-surface w-full p-2">
 				<HStack className="w-full flex-wrap">
 					<StatusPill query={query} />
 					<Suspense>

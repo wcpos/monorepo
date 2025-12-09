@@ -83,14 +83,18 @@ export const UserMenu = () => {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button className="rounded-none bg-transparent px-3 hover:bg-white/10">
+				<Button className="text-sidebar-foreground rounded-none bg-transparent px-3 hover:bg-white/10">
 					<HStack>
 						<Avatar
 							source={{ uri }}
 							// placeholder="PK"
 						/>
-						{screenSize !== 'sm' ? <ButtonText>{wpCredentials?.display_name}</ButtonText> : null}
-						<Icon name="caretDown" />
+						{screenSize !== 'sm' ? (
+							<ButtonText className="text-sidebar-foreground">
+								{wpCredentials?.display_name}
+							</ButtonText>
+						) : null}
+						<Icon name="caretDown" className="text-sidebar-foreground" />
 					</HStack>
 				</Button>
 			</DropdownMenuTrigger>

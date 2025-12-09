@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
+import { useCSSVariable } from 'uniwind';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
@@ -21,6 +22,7 @@ export const unstable_settings = {
 function AppStack() {
 	const { storeDB, fastStoreDB } = useAppState();
 	const { locale } = useLocale();
+	const backgroundColor = useCSSVariable('--color-background');
 
 	/**
 	 * The http client now has access to online status context
@@ -33,7 +35,7 @@ function AppStack() {
 				<Stack
 					screenOptions={{
 						headerShown: false,
-						contentStyle: { backgroundColor: '#F0F4F8' },
+						contentStyle: { backgroundColor },
 					}}
 				>
 					<Stack.Screen name="(drawer)" />

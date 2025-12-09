@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import { useCSSVariable } from 'uniwind';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -6,8 +7,10 @@ export const unstable_settings = {
 };
 
 export default function OrdersLayout() {
+	const backgroundColor = useCSSVariable('--color-background');
+
 	return (
-		<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F0F4F8' } }}>
+		<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}>
 			<Stack.Screen name="index" />
 			<Stack.Screen
 				name="(modals)/edit/[orderId]"
