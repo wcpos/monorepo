@@ -250,110 +250,180 @@
 
     /* ========================================
      * OCEAN THEME
-     * Cool blues and teals
+     * Deep sea blues with vibrant teal accents
+     * Evokes underwater depth and coral reef highlights
+     * 
+     * Hue range: 195-230 (cyan to deep blue)
+     * Lightness hierarchy:
+     * - Sidebar: 0.12 (deepest)
+     * - Table header: 0.16
+     * - Background: 0.18
+     * - Card/Table-row: 0.23
+     * - Table-row-alt: 0.26
+     * - Muted: 0.30
+     * - Surface: 0.34
      * ======================================== */
     @variant ocean {
       --hairline-width: 1px;
       
-      --background: oklch(0.20 0.04 220);
-      --foreground: oklch(0.92 0.02 200);
-      --card: oklch(0.24 0.045 220);
-      --card-foreground: oklch(0.92 0.02 200);
-      --popover: oklch(0.26 0.045 220);
-      --popover-foreground: oklch(0.92 0.02 200);
-      --primary: oklch(0.65 0.15 200);
-      --primary-foreground: oklch(0.15 0.03 200);
-      --secondary: oklch(0.32 0.04 215);
-      --secondary-foreground: oklch(0.92 0.02 200);
-      --tertiary: oklch(0.60 0.12 180);
-      --tertiary-foreground: oklch(0.15 0.03 180);
-      --muted: oklch(0.28 0.04 220);
-      --muted-foreground: oklch(0.65 0.03 210);
-      --accent: oklch(0.30 0.045 215);
-      --accent-foreground: oklch(0.92 0.02 200);
-      --destructive: oklch(0.55 0.18 25);
+      /* Deep ocean base - rich navy blue */
+      --background: oklch(0.18 0.05 230);
+      --foreground: oklch(0.94 0.02 195);
+      
+      /* Elevated surfaces - slightly lighter, more teal */
+      --card: oklch(0.23 0.055 225);
+      --card-foreground: oklch(0.94 0.02 195);
+      --popover: oklch(0.25 0.055 225);
+      --popover-foreground: oklch(0.94 0.02 195);
+      
+      /* Primary - vibrant cyan/teal (like bioluminescence) */
+      --primary: oklch(0.70 0.18 195);
+      --primary-foreground: oklch(0.15 0.04 195);
+      
+      /* Secondary - muted blue-gray */
+      --secondary: oklch(0.35 0.05 220);
+      --secondary-foreground: oklch(0.94 0.02 195);
+      
+      /* Tertiary - aquamarine accent */
+      --tertiary: oklch(0.65 0.14 175);
+      --tertiary-foreground: oklch(0.15 0.04 175);
+      
+      /* Muted - for subtle backgrounds, darker than surface */
+      --muted: oklch(0.30 0.05 225);
+      --muted-foreground: oklch(0.68 0.04 205);
+      
+      /* Accent - interactive hover states */
+      --accent: oklch(0.32 0.055 220);
+      --accent-foreground: oklch(0.94 0.02 195);
+      
+      /* Semantic colors - vibrant against dark background */
+      --destructive: oklch(0.58 0.20 25);
       --destructive-foreground: oklch(0.98 0.01 25);
-      --success: oklch(0.62 0.15 170);
-      --success-foreground: oklch(0.15 0.03 170);
-      --info: oklch(0.60 0.15 210);
-      --info-foreground: oklch(0.15 0.03 210);
-      --attention: oklch(0.82 0.14 90);
-      --attention-foreground: oklch(0.20 0.04 90);
-      --warning: oklch(0.68 0.16 45);
-      --warning-foreground: oklch(0.15 0.03 45);
-      --error: oklch(0.55 0.18 25);
+      --success: oklch(0.68 0.18 165);
+      --success-foreground: oklch(0.15 0.04 165);
+      --info: oklch(0.65 0.16 210);
+      --info-foreground: oklch(0.15 0.04 210);
+      --attention: oklch(0.85 0.15 85);
+      --attention-foreground: oklch(0.18 0.05 85);
+      --warning: oklch(0.72 0.18 55);
+      --warning-foreground: oklch(0.15 0.04 55);
+      --error: oklch(0.58 0.20 25);
       --error-foreground: oklch(0.98 0.01 25);
-      --border: oklch(0.35 0.045 215);
-      --input: oklch(0.24 0.045 220);
-      --ring: oklch(0.65 0.15 200);
+      
+      /* Borders and inputs */
+      --border: oklch(0.38 0.05 220);
+      --input: oklch(0.23 0.055 225);
+      --ring: oklch(0.70 0.18 195);
       --radius: 0.5rem;
-      --surface: oklch(0.28 0.04 220);
-      --sidebar: oklch(0.16 0.04 225);
-      --sidebar-foreground: oklch(0.85 0.02 200);
-      --sidebar-border: oklch(0.28 0.04 220);
-      /* Table - header darker than rows for visual anchor */
-      --table-row: oklch(0.24 0.045 220);
-      --table-row-alt: oklch(0.27 0.045 218);
-      --table-header: oklch(0.20 0.045 220);
-      --chart-1: oklch(0.65 0.15 200);
-      --chart-2: oklch(0.55 0.12 180);
-      --chart-3: oklch(0.45 0.08 220);
-      --chart-4: oklch(0.70 0.12 170);
-      --chart-5: oklch(0.60 0.14 190);
+      
+      /* Surface - for card headers, filter bars (lighter than muted) */
+      --surface: oklch(0.34 0.05 222);
+      
+      /* Sidebar - deepest part of the ocean */
+      --sidebar: oklch(0.12 0.05 235);
+      --sidebar-foreground: oklch(0.88 0.03 195);
+      --sidebar-border: oklch(0.22 0.05 230);
+      
+      /* Table - clear hierarchy with header as anchor */
+      --table-row: oklch(0.23 0.055 225);
+      --table-row-alt: oklch(0.26 0.055 223);
+      --table-header: oklch(0.16 0.055 228);
+      
+      /* Charts - ocean-inspired palette */
+      --chart-1: oklch(0.70 0.18 195);
+      --chart-2: oklch(0.60 0.15 175);
+      --chart-3: oklch(0.50 0.10 230);
+      --chart-4: oklch(0.75 0.14 165);
+      --chart-5: oklch(0.55 0.12 210);
     }
 
     /* ========================================
      * SUNSET THEME
-     * Warm oranges and purples
+     * Dramatic warm sunset with deep purple sky and golden highlights
+     * Evokes dusk transitioning from warm oranges to deep magentas
+     * 
+     * Hue range: 310-50 (magenta → orange → gold)
+     * Lightness hierarchy:
+     * - Sidebar: 0.14 (twilight)
+     * - Table header: 0.18
+     * - Background: 0.20
+     * - Card/Table-row: 0.25
+     * - Table-row-alt: 0.28
+     * - Muted: 0.32
+     * - Surface: 0.36
      * ======================================== */
     @variant sunset {
       --hairline-width: 1px;
       
-      --background: oklch(0.22 0.06 320);
-      --foreground: oklch(0.92 0.03 40);
-      --card: oklch(0.26 0.065 320);
-      --card-foreground: oklch(0.92 0.03 40);
-      --popover: oklch(0.28 0.065 320);
-      --popover-foreground: oklch(0.92 0.03 40);
-      --primary: oklch(0.68 0.18 40);
-      --primary-foreground: oklch(0.18 0.05 320);
-      --secondary: oklch(0.35 0.06 330);
-      --secondary-foreground: oklch(0.92 0.03 40);
-      --tertiary: oklch(0.60 0.15 350);
-      --tertiary-foreground: oklch(0.18 0.05 350);
-      --muted: oklch(0.30 0.06 325);
-      --muted-foreground: oklch(0.65 0.04 350);
-      --accent: oklch(0.32 0.065 320);
-      --accent-foreground: oklch(0.92 0.03 40);
-      --destructive: oklch(0.55 0.20 25);
-      --destructive-foreground: oklch(0.98 0.01 25);
-      --success: oklch(0.60 0.14 160);
-      --success-foreground: oklch(0.18 0.04 160);
-      --info: oklch(0.58 0.15 280);
-      --info-foreground: oklch(0.18 0.04 280);
-      --attention: oklch(0.80 0.16 75);
-      --attention-foreground: oklch(0.22 0.06 75);
-      --warning: oklch(0.70 0.18 50);
-      --warning-foreground: oklch(0.18 0.05 50);
-      --error: oklch(0.55 0.20 15);
-      --error-foreground: oklch(0.98 0.01 15);
-      --border: oklch(0.38 0.06 325);
-      --input: oklch(0.26 0.065 320);
-      --ring: oklch(0.68 0.18 40);
+      /* Deep magenta/purple sky base */
+      --background: oklch(0.20 0.07 315);
+      --foreground: oklch(0.95 0.04 50);
+      
+      /* Elevated surfaces - warmer purple */
+      --card: oklch(0.25 0.075 318);
+      --card-foreground: oklch(0.95 0.04 50);
+      --popover: oklch(0.27 0.075 318);
+      --popover-foreground: oklch(0.95 0.04 50);
+      
+      /* Primary - vibrant sunset orange/gold */
+      --primary: oklch(0.72 0.20 45);
+      --primary-foreground: oklch(0.18 0.06 315);
+      
+      /* Secondary - dusty rose/mauve */
+      --secondary: oklch(0.38 0.08 340);
+      --secondary-foreground: oklch(0.95 0.04 50);
+      
+      /* Tertiary - coral pink accent */
+      --tertiary: oklch(0.65 0.18 15);
+      --tertiary-foreground: oklch(0.18 0.06 15);
+      
+      /* Muted - for subtle backgrounds */
+      --muted: oklch(0.32 0.07 320);
+      --muted-foreground: oklch(0.68 0.05 355);
+      
+      /* Accent - interactive hover states */
+      --accent: oklch(0.34 0.075 318);
+      --accent-foreground: oklch(0.95 0.04 50);
+      
+      /* Semantic colors - warm-shifted for cohesion */
+      --destructive: oklch(0.58 0.22 20);
+      --destructive-foreground: oklch(0.98 0.02 20);
+      --success: oklch(0.65 0.16 155);
+      --success-foreground: oklch(0.18 0.05 155);
+      --info: oklch(0.62 0.14 260);
+      --info-foreground: oklch(0.18 0.05 260);
+      --attention: oklch(0.82 0.18 70);
+      --attention-foreground: oklch(0.20 0.07 70);
+      --warning: oklch(0.75 0.20 55);
+      --warning-foreground: oklch(0.18 0.06 55);
+      --error: oklch(0.58 0.22 15);
+      --error-foreground: oklch(0.98 0.02 15);
+      
+      /* Borders and inputs */
+      --border: oklch(0.42 0.07 325);
+      --input: oklch(0.25 0.075 318);
+      --ring: oklch(0.72 0.20 45);
       --radius: 0.5rem;
-      --surface: oklch(0.30 0.06 325);
-      --sidebar: oklch(0.18 0.06 325);
-      --sidebar-foreground: oklch(0.85 0.03 40);
-      --sidebar-border: oklch(0.30 0.06 325);
-      /* Table - header darker than rows for visual anchor */
-      --table-row: oklch(0.26 0.065 320);
-      --table-row-alt: oklch(0.29 0.065 318);
-      --table-header: oklch(0.22 0.065 320);
-      --chart-1: oklch(0.68 0.18 40);
-      --chart-2: oklch(0.60 0.15 350);
-      --chart-3: oklch(0.50 0.10 320);
-      --chart-4: oklch(0.75 0.14 60);
-      --chart-5: oklch(0.58 0.15 280);
+      
+      /* Surface - for card headers (lighter, warmer than muted) */
+      --surface: oklch(0.36 0.07 322);
+      
+      /* Sidebar - deep twilight purple */
+      --sidebar: oklch(0.14 0.07 320);
+      --sidebar-foreground: oklch(0.90 0.05 50);
+      --sidebar-border: oklch(0.25 0.07 318);
+      
+      /* Table - clear hierarchy */
+      --table-row: oklch(0.25 0.075 318);
+      --table-row-alt: oklch(0.28 0.075 316);
+      --table-header: oklch(0.18 0.075 320);
+      
+      /* Charts - sunset color palette */
+      --chart-1: oklch(0.72 0.20 45);
+      --chart-2: oklch(0.65 0.18 15);
+      --chart-3: oklch(0.55 0.12 315);
+      --chart-4: oklch(0.78 0.16 65);
+      --chart-5: oklch(0.60 0.15 340);
     }
 
     /* ========================================
