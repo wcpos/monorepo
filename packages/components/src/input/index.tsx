@@ -37,7 +37,7 @@ function Root({ children, className, disabled = false }: RootProps) {
 			<View
 				className={cn(
 					'w-full flex-row items-center',
-					'border-input bg-input h-10 rounded-md border',
+					'border-border bg-input h-10 rounded-md border',
 					'web:ring-offset-background',
 					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
 					disabled && 'web:cursor-not-allowed opacity-50',

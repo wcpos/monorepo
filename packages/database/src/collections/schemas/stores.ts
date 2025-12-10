@@ -471,7 +471,7 @@ export const storesLiteral = {
 			title: 'App Theme',
 			description: 'The visual theme for the app (system, light, dark, ocean, sunset, monochrome)',
 			type: 'string',
-			default: 'system',
+			default: 'light',
 		},
 		date_created_gmt: {
 			type: 'string',

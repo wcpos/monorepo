@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable } from 'react-native';
 
 import { Uniwind, useUniwind } from 'uniwind';
 
 import { Icon, IconName } from '@wcpos/components/icon';
+import { HStack } from '@wcpos/components/hstack';
 import { Label } from '@wcpos/components/label';
 import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
@@ -12,50 +13,6 @@ import { VStack } from '@wcpos/components/vstack';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
-
-/**
- * Theme options following Uniwind's theming API
- * @see https://docs.uniwind.dev/theming/basics
- * @see https://docs.uniwind.dev/theming/custom-themes
- */
-const themeOptions: { name: string; labelKey: string; icon: IconName; description: string }[] = [
-	{
-		name: 'system',
-		labelKey: 'System',
-		icon: 'circleHalfStroke',
-		description: 'Follow your device settings',
-	},
-	{
-		name: 'light',
-		labelKey: 'Light',
-		icon: 'sunBright',
-		description: 'Clean and bright',
-	},
-	{
-		name: 'dark',
-		labelKey: 'Dark',
-		icon: 'moon',
-		description: 'Easy on the eyes',
-	},
-	{
-		name: 'ocean',
-		labelKey: 'Ocean',
-		icon: 'water',
-		description: 'Cool blues and teals',
-	},
-	{
-		name: 'sunset',
-		labelKey: 'Sunset',
-		icon: 'sunHaze',
-		description: 'Warm oranges and purples',
-	},
-	{
-		name: 'monochrome',
-		labelKey: 'Monochrome',
-		icon: 'circleHalf',
-		description: 'High contrast grayscale',
-	},
-];
 
 /**
  * Theme Settings Component
@@ -68,6 +25,54 @@ export const ThemeSettings = () => {
 	const { theme, hasAdaptiveThemes } = useUniwind();
 	const { store } = useAppState();
 	const { localPatch } = useLocalMutation();
+
+	/**
+	 * Theme options following Uniwind's theming API
+	 * @see https://docs.uniwind.dev/theming/basics
+	 * @see https://docs.uniwind.dev/theming/custom-themes
+	 */
+	const themeOptions: { name: string; labelKey: string; icon: IconName; descriptionKey: string }[] =
+		React.useMemo(
+			() => [
+				{
+					name: 'system',
+					labelKey: 'System',
+					icon: 'circleHalfStroke',
+					descriptionKey: t('Follow your device settings', { _tags: 'core' }),
+				},
+				{
+					name: 'light',
+					labelKey: 'Light',
+					icon: 'sunBright',
+					descriptionKey: t('Clean and bright', { _tags: 'core' }),
+				},
+				{
+					name: 'dark',
+					labelKey: 'Dark',
+					icon: 'moon',
+					descriptionKey: t('Easy on the eyes', { _tags: 'core' }),
+				},
+				{
+					name: 'ocean',
+					labelKey: 'Ocean',
+					icon: 'water',
+					descriptionKey: t('Cool blues and teals', { _tags: 'core' }),
+				},
+				{
+					name: 'sunset',
+					labelKey: 'Sunset',
+					icon: 'sunHaze',
+					descriptionKey: t('Warm oranges and purples', { _tags: 'core' }),
+				},
+				{
+					name: 'monochrome',
+					labelKey: 'Monochrome',
+					icon: 'circleHalf',
+					descriptionKey: t('High contrast grayscale', { _tags: 'core' }),
+				},
+			],
+			[t]
+		);
 
 	// Determine the active theme option
 	// When hasAdaptiveThemes is true, we're following the system theme
@@ -102,35 +107,68 @@ export const ThemeSettings = () => {
 					})}
 				</Text>
 
-				<View className="flex-row flex-wrap gap-3 pt-2">
-					{themeOptions.map((option) => (
-						<Pressable
-							key={option.name}
-							onPress={() => handleThemeChange(option.name)}
-							className={`min-w-24 flex-1 items-center gap-2 rounded-lg border-2 p-3 ${
-								activeTheme === option.name
-									? 'border-primary bg-primary/10'
-									: 'border-border bg-card'
-							}`}
-						>
-							<Icon
-								name={option.icon}
-								size="xl"
-								className={activeTheme === option.name ? 'text-primary' : 'text-muted-foreground'}
-							/>
-							<Text
-								className={`text-sm font-medium ${
-									activeTheme === option.name ? 'text-primary' : 'text-foreground'
+				<VStack className="gap-3 pt-2">
+					{/* First row: System, Light, Dark */}
+					<HStack className="gap-3">
+						{themeOptions.slice(0, 3).map((option) => (
+							<Pressable
+								key={option.name}
+								onPress={() => handleThemeChange(option.name)}
+								className={`flex-1 items-center gap-2 rounded-lg border-2 p-3 ${
+									activeTheme === option.name
+										? 'border-primary bg-primary/10'
+										: 'border-border bg-card'
 								}`}
 							>
-								{t(option.labelKey, { _tags: 'core' })}
-							</Text>
-							<Text className="text-muted-foreground text-center text-xs" numberOfLines={2}>
-								{t(option.description, { _tags: 'core' })}
-							</Text>
-						</Pressable>
-					))}
-				</View>
+								<Icon
+									name={option.icon}
+									size="xl"
+									className={activeTheme === option.name ? 'text-primary' : 'text-muted-foreground'}
+								/>
+								<Text
+									className={`text-sm font-medium ${
+										activeTheme === option.name ? 'text-primary' : 'text-foreground'
+									}`}
+								>
+									{t(option.labelKey, { _tags: 'core' })}
+								</Text>
+								<Text className="text-muted-foreground text-center text-xs" numberOfLines={2}>
+									{t(option.descriptionKey, { _tags: 'core' })}
+								</Text>
+							</Pressable>
+						))}
+					</HStack>
+					{/* Second row: Ocean, Sunset, Monochrome */}
+					<HStack className="gap-3">
+						{themeOptions.slice(3, 6).map((option) => (
+							<Pressable
+								key={option.name}
+								onPress={() => handleThemeChange(option.name)}
+								className={`flex-1 items-center gap-2 rounded-lg border-2 p-3 ${
+									activeTheme === option.name
+										? 'border-primary bg-primary/10'
+										: 'border-border bg-card'
+								}`}
+							>
+								<Icon
+									name={option.icon}
+									size="xl"
+									className={activeTheme === option.name ? 'text-primary' : 'text-muted-foreground'}
+								/>
+								<Text
+									className={`text-sm font-medium ${
+										activeTheme === option.name ? 'text-primary' : 'text-foreground'
+									}`}
+								>
+									{t(option.labelKey, { _tags: 'core' })}
+								</Text>
+								<Text className="text-muted-foreground text-center text-xs" numberOfLines={2}>
+									{t(option.descriptionKey, { _tags: 'core' })}
+								</Text>
+							</Pressable>
+						))}
+					</HStack>
+				</VStack>
 
 				{/* Current theme status */}
 				<Text className="text-muted-foreground text-xs">

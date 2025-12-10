@@ -120,7 +120,7 @@ const ModalOverlay = Platform.select({
 });
 
 const modalContentVariants = cva(
-	'border-border web:cursor-default bg-background web:duration-200 max-h-full max-w-lg gap-4 rounded-lg border py-4 shadow-lg',
+	'border-border web:cursor-default bg-card web:duration-200 max-h-full max-w-lg gap-4 rounded-lg border py-4 shadow-lg',
 	{
 		variants: {
 			size: {
@@ -149,7 +149,7 @@ function ModalContent({
 			<View
 				className={cn(
 					modalContentVariants({ size }),
-					'web:cursor-default web:duration-200 border-border bg-background z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg',
+					'web:cursor-default web:duration-200 border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg',
 					'web:animate-in web:fade-in-0 web:zoom-in-95',
 					className
 				)}

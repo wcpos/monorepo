@@ -12,16 +12,15 @@ import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 import { Button } from '../button';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
+import { Text, TextClassContext } from '../text';
 
-import type { SlottablePressableProps } from '@rn-primitives/types';
+import type { SlottablePressableProps, SlottableTextProps } from '@rn-primitives/types';
 
 const Dialog = DialogPrimitive.Root;
 
 const DialogTrigger = DialogPrimitive.Trigger;
 
 const DialogPortal = DialogPrimitive.Portal;
-
-const DialogTitle = DialogPrimitive.Title;
 
 /**
  * @TODO - it would be good to expand the Dialog context to include button presses from the Action component.
@@ -79,7 +78,7 @@ const DialogOverlay = Platform.select({
 });
 
 const dialogContentVariants = cva(
-	'border-border web:cursor-default bg-background z-60 max-h-full max-w-full gap-4 rounded-lg border py-4',
+	'border-border web:cursor-default bg-card z-60 max-h-full max-w-full gap-4 rounded-lg border py-4',
 	{
 		variants: {
 			size: {
@@ -164,6 +163,21 @@ function DialogDescription({ className, ...props }: DialogPrimitive.DescriptionP
 			className={cn('text-muted-foreground text-sm', className)}
 			{...props}
 		/>
+	);
+}
+
+/**
+ * DialogTitle with proper text color for all themes
+ */
+function DialogTitle({ className, asChild, ...props }: SlottableTextProps) {
+	const Component = asChild ? Slot.Text : Text;
+
+	return (
+		<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
+			<DialogPrimitive.Title asChild>
+				<Component className={className} {...props} />
+			</DialogPrimitive.Title>
+		</TextClassContext.Provider>
 	);
 }
 

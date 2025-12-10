@@ -223,7 +223,7 @@
       
       /* Borders and inputs - Visible but subtle */
       --border: oklch(0.32 0.025 250);
-      --input: oklch(0.22 0.025 250);
+      --input: oklch(0.18 0.025 250);
       --ring: oklch(0.65 0.20 240);
       --radius: 0.5rem;
       
@@ -312,7 +312,7 @@
       
       /* Borders and inputs */
       --border: oklch(0.38 0.05 220);
-      --input: oklch(0.23 0.055 225);
+      --input: oklch(0.18 0.05 230);
       --ring: oklch(0.70 0.18 195);
       --radius: 0.5rem;
       
@@ -401,7 +401,7 @@
       
       /* Borders and inputs */
       --border: oklch(0.42 0.07 325);
-      --input: oklch(0.25 0.075 318);
+      --input: oklch(0.20 0.07 315);
       --ring: oklch(0.72 0.20 45);
       --radius: 0.5rem;
       
@@ -489,7 +489,7 @@
       
       /* Borders and inputs - visible on all surfaces */
       --border: oklch(0.42 0 0);
-      --input: oklch(0.22 0 0);
+      --input: oklch(0.15 0 0);
       --ring: oklch(0.92 0 0);
       --radius: 0.5rem;
       
@@ -514,19 +514,13 @@
       --chart-5: oklch(0.34 0 0);
     }
   }
-
-  /* Native Platform Overrides */
-  @media ios {
-    :root {
-      --hairline-width: hairlineWidth();
-    }
-  }
 }
 
 @layer base {
   /* Scale web font-size to 87.5% so 1rem = 14px (default is 16px) */
   :root {
     font-size: 87.5%;
+    --hairline-width: hairlineWidth();
   }
 
   /* Native platforms keep default 16px rem (Uniwind handles rem conversion) */

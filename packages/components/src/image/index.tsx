@@ -4,11 +4,10 @@ import { Image as ExpoImage, ImageProps as ExpoImageProps } from 'expo-image';
 import { withUniwind } from 'uniwind';
 
 /**
- * Styled ExpoImage component for native platforms with className support
+ * Styled ExpoImage component with className support.
+ * withUniwind automatically maps className → style prop.
  */
-const ExpoImageWithClassname = withUniwind(ExpoImage, {
-	className: 'style',
-});
+const StyledExpoImage = withUniwind(ExpoImage);
 
 export type ImageProps = ExpoImageProps & {
 	/** Image border shape */
@@ -18,11 +17,12 @@ export type ImageProps = ExpoImageProps & {
 };
 
 /**
- * Native-specific Image component that uses styled wrapper for className support
+ * Image component with Tailwind className support via Uniwind.
+ * Uses expo-image for optimized image loading.
  */
 export function Image({ source, ...props }: ImageProps) {
 	return (
-		<ExpoImageWithClassname
+		<StyledExpoImage
 			source={source}
 			responsivePolicy="initial"
 			contentFit="contain"
