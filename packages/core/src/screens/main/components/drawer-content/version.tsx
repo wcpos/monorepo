@@ -13,7 +13,7 @@ const Version = () => {
 	return (
 		<Text
 			className={cn(
-				'text-primary-foreground p-2 px-4 text-xs opacity-50',
+				'text-sidebar-foreground text-3xs p-2 px-4 opacity-50',
 				screenSize === 'lg' && 'px-0 text-center'
 			)}
 		>

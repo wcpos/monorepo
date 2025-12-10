@@ -13,6 +13,24 @@
   --width-144: 36rem;
   --width-160: 40rem;
 
+  /* Custom font sizes
+   * Using rem so sizes scale proportionally:
+   * - Web: 1rem = 14px (via 87.5% root font-size)
+   * - Native: 1rem = 16px (default)
+   * 
+   * Scale: 3xs(10/11) < 2xs(11/13) < xs(12/14) < sm(13/15) < base(14/16)
+   *        (web/native px values)
+   */
+  --text-3xs: 0.714rem;  /* 10px web, ~11px native */
+  --text-3xs--line-height: 1rem;
+  --text-2xs: 0.786rem;  /* 11px web, ~13px native */
+  --text-2xs--line-height: 1.1rem;
+  --text-xs: 0.857rem;   /* 12px web, ~14px native */
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.929rem;   /* 13px web, ~15px native */
+  --text-sm--line-height: 1.4rem;
+  /* text-base stays at 1rem (14px web, 16px native) */
+
   /* Semantic colors (shadcn/ui) - referencing CSS variables */
   --color-border: var(--border);
   --color-input: var(--input);
@@ -56,8 +74,11 @@
   --color-table-row-alt: var(--table-row-alt);
   --color-table-header: var(--table-header);
   
-  /* Surface color - for subtle tinted backgrounds (card headers, filter bars, etc.) */
-  --color-surface: var(--surface);
+  /* Card header color - for card headers, filter bars, toolbars within cards */
+  --color-card-header: var(--card-header);
+  
+  /* Footer color - for table footers, cart totals, and similar "footer" areas */
+  --color-footer: var(--footer);
 
   /* Custom border width */
   --border-width-hairline: var(--hairline-width);
@@ -91,12 +112,22 @@
     /* ========================================
      * LIGHT THEME
      * Clean, professional light theme
+     * Hue: 250 (blue-violet) for grey tints
+     * 
+     * Grey spectrum (darkest to lightest):
+     * - Border: 0.86
+     * - Card-header: 0.92 (darkest grey surface)
+     * - Footer/Table-header: 0.94
+     * - Muted: 0.965 (for buttons on card-header)
+     * - Background: 0.97
+     * - Table-row-alt: 0.985 (subtle alternating)
+     * - Card/Table-row: 1.0 (white)
      * ======================================== */
     @variant light {
       --hairline-width: 1px;
       
       /* Base colors */
-      --background: oklch(0.97 0.01 240);
+      --background: oklch(0.97 0.01 250);
       --foreground: oklch(0.25 0.03 250);
       
       /* Card - Pure white for contrast */
@@ -119,12 +150,12 @@
       --tertiary: oklch(0.68 0.16 65);
       --tertiary-foreground: oklch(0.98 0.01 65);
       
-      /* Muted */
-      --muted: oklch(0.94 0.01 250);
-      --muted-foreground: oklch(0.50 0.03 250);
+      /* Muted - for muted buttons, must be visible on card-header */
+      --muted: oklch(0.965 0.008 250);
+      --muted-foreground: oklch(0.45 0.03 250);
       
       /* Accent */
-      --accent: oklch(0.94 0.02 240);
+      --accent: oklch(0.94 0.01 250);
       --accent-foreground: oklch(0.25 0.03 250);
       
       /* Semantic colors */
@@ -142,23 +173,26 @@
       --error-foreground: oklch(0.98 0.01 25);
       
       /* Borders and inputs */
-      --border: oklch(0.88 0.01 250);
+      --border: oklch(0.86 0.015 250);
       --input: oklch(1 0 0);
       --ring: oklch(0.50 0.18 240);
       --radius: 0.5rem;
       
-      /* Surface - subtle tinted background for card headers, filter bars, etc. */
-      --surface: oklch(0.92 0.01 250);
+      /* Card header - darkest grey surface for headers, toolbars */
+      --card-header: oklch(0.92 0.012 250);
       
       /* Sidebar/Navigation - Dark blue */
       --sidebar: oklch(0.28 0.05 250);
       --sidebar-foreground: oklch(0.92 0.01 250);
       --sidebar-border: oklch(0.22 0.04 250);
       
-      /* Table rows */
+      /* Table - consistent grey spectrum */
       --table-row: oklch(1 0 0);
-      --table-row-alt: oklch(0.985 0.005 240);
+      --table-row-alt: oklch(0.985 0.005 250);
       --table-header: oklch(0.94 0.01 250);
+      
+      /* Footer - same as table-header for visual consistency */
+      --footer: oklch(0.94 0.01 250);
       
       /* Charts */
       --chart-1: oklch(0.65 0.18 35);
@@ -171,6 +205,17 @@
     /* ========================================
      * DARK THEME
      * Modern dark blue-gray theme
+     * Hue: 250 (blue-violet)
+     * 
+     * Grey spectrum (on card 0.22, lighter = more elevated):
+     * - Sidebar: 0.15 (darkest)
+     * - Background: 0.18
+     * - Card/Table-row: 0.22
+     * - Table-row-alt: 0.25 (subtle alternating)
+     * - Footer/Table-header: 0.27
+     * - Card-header: 0.30 (most elevated header)
+     * - Muted: 0.35 (visible on card-header)
+     * - Border: 0.38
      * ======================================== */
     @variant dark {
       --hairline-width: 1px;
@@ -199,12 +244,12 @@
       --tertiary: oklch(0.70 0.16 65);
       --tertiary-foreground: oklch(0.15 0.02 65);
       
-      /* Muted */
-      --muted: oklch(0.28 0.025 250);
+      /* Muted - for muted buttons, must be visible on card-header */
+      --muted: oklch(0.35 0.025 250);
       --muted-foreground: oklch(0.65 0.02 250);
       
       /* Accent */
-      --accent: oklch(0.30 0.03 250);
+      --accent: oklch(0.32 0.03 250);
       --accent-foreground: oklch(0.92 0.01 250);
       
       /* Semantic colors */
@@ -221,24 +266,27 @@
       --error: oklch(0.55 0.20 25);
       --error-foreground: oklch(0.98 0.01 25);
       
-      /* Borders and inputs - Visible but subtle */
-      --border: oklch(0.32 0.025 250);
+      /* Borders and inputs */
+      --border: oklch(0.38 0.025 250);
       --input: oklch(0.18 0.025 250);
       --ring: oklch(0.65 0.20 240);
       --radius: 0.5rem;
       
-      /* Surface - subtle tinted background for card headers, filter bars, etc. */
-      --surface: oklch(0.28 0.025 250);
+      /* Card header - most elevated surface for headers */
+      --card-header: oklch(0.30 0.025 250);
+      
+      /* Footer - same as table-header */
+      --footer: oklch(0.27 0.025 250);
       
       /* Sidebar/Navigation - Darker */
       --sidebar: oklch(0.15 0.025 250);
       --sidebar-foreground: oklch(0.85 0.01 250);
       --sidebar-border: oklch(0.25 0.025 250);
       
-      /* Table - header darker than rows for visual anchor */
+      /* Table - consistent spectrum */
       --table-row: oklch(0.22 0.025 250);
       --table-row-alt: oklch(0.25 0.025 250);
-      --table-header: oklch(0.18 0.025 250);
+      --table-header: oklch(0.27 0.025 250);
       
       /* Charts */
       --chart-1: oklch(0.70 0.18 35);
@@ -251,17 +299,16 @@
     /* ========================================
      * OCEAN THEME
      * Deep sea blues with vibrant teal accents
-     * Evokes underwater depth and coral reef highlights
-     * 
      * Hue range: 195-230 (cyan to deep blue)
-     * Lightness hierarchy:
+     * 
+     * Grey spectrum (on card 0.23, lighter = more elevated):
      * - Sidebar: 0.12 (deepest)
-     * - Table header: 0.16
      * - Background: 0.18
      * - Card/Table-row: 0.23
      * - Table-row-alt: 0.26
-     * - Muted: 0.30
-     * - Surface: 0.34
+     * - Footer/Table-header: 0.29
+     * - Card-header: 0.34 (most elevated)
+     * - Muted: 0.40 (visible on card-header)
      * ======================================== */
     @variant ocean {
       --hairline-width: 1px;
@@ -288,12 +335,12 @@
       --tertiary: oklch(0.65 0.14 175);
       --tertiary-foreground: oklch(0.15 0.04 175);
       
-      /* Muted - for subtle backgrounds, darker than surface */
-      --muted: oklch(0.30 0.05 225);
+      /* Muted - for muted buttons, must be visible on card-header */
+      --muted: oklch(0.40 0.05 225);
       --muted-foreground: oklch(0.68 0.04 205);
       
       /* Accent - interactive hover states */
-      --accent: oklch(0.32 0.055 220);
+      --accent: oklch(0.35 0.055 220);
       --accent-foreground: oklch(0.94 0.02 195);
       
       /* Semantic colors - vibrant against dark background */
@@ -311,23 +358,26 @@
       --error-foreground: oklch(0.98 0.01 25);
       
       /* Borders and inputs */
-      --border: oklch(0.38 0.05 220);
+      --border: oklch(0.42 0.05 220);
       --input: oklch(0.18 0.05 230);
       --ring: oklch(0.70 0.18 195);
       --radius: 0.5rem;
       
-      /* Surface - for card headers, filter bars (lighter than muted) */
-      --surface: oklch(0.34 0.05 222);
+      /* Card header - most elevated surface for headers */
+      --card-header: oklch(0.34 0.05 222);
       
       /* Sidebar - deepest part of the ocean */
       --sidebar: oklch(0.12 0.05 235);
       --sidebar-foreground: oklch(0.88 0.03 195);
       --sidebar-border: oklch(0.22 0.05 230);
       
-      /* Table - clear hierarchy with header as anchor */
+      /* Table - consistent spectrum */
       --table-row: oklch(0.23 0.055 225);
       --table-row-alt: oklch(0.26 0.055 223);
-      --table-header: oklch(0.16 0.055 228);
+      --table-header: oklch(0.29 0.05 224);
+      
+      /* Footer - same as table-header */
+      --footer: oklch(0.29 0.05 224);
       
       /* Charts - ocean-inspired palette */
       --chart-1: oklch(0.70 0.18 195);
@@ -340,17 +390,16 @@
     /* ========================================
      * SUNSET THEME
      * Dramatic warm sunset with deep purple sky and golden highlights
-     * Evokes dusk transitioning from warm oranges to deep magentas
-     * 
      * Hue range: 310-50 (magenta → orange → gold)
-     * Lightness hierarchy:
+     * 
+     * Grey spectrum (on card 0.25, lighter = more elevated):
      * - Sidebar: 0.14 (twilight)
-     * - Table header: 0.18
      * - Background: 0.20
      * - Card/Table-row: 0.25
      * - Table-row-alt: 0.28
-     * - Muted: 0.32
-     * - Surface: 0.36
+     * - Footer/Table-header: 0.31
+     * - Card-header: 0.36 (most elevated)
+     * - Muted: 0.42 (visible on card-header)
      * ======================================== */
     @variant sunset {
       --hairline-width: 1px;
@@ -377,12 +426,12 @@
       --tertiary: oklch(0.65 0.18 15);
       --tertiary-foreground: oklch(0.18 0.06 15);
       
-      /* Muted - for subtle backgrounds */
-      --muted: oklch(0.32 0.07 320);
+      /* Muted - for muted buttons, must be visible on card-header */
+      --muted: oklch(0.42 0.07 320);
       --muted-foreground: oklch(0.68 0.05 355);
       
       /* Accent - interactive hover states */
-      --accent: oklch(0.34 0.075 318);
+      --accent: oklch(0.38 0.075 318);
       --accent-foreground: oklch(0.95 0.04 50);
       
       /* Semantic colors - warm-shifted for cohesion */
@@ -400,23 +449,26 @@
       --error-foreground: oklch(0.98 0.02 15);
       
       /* Borders and inputs */
-      --border: oklch(0.42 0.07 325);
+      --border: oklch(0.45 0.07 325);
       --input: oklch(0.20 0.07 315);
       --ring: oklch(0.72 0.20 45);
       --radius: 0.5rem;
       
-      /* Surface - for card headers (lighter, warmer than muted) */
-      --surface: oklch(0.36 0.07 322);
+      /* Card header - most elevated surface for headers */
+      --card-header: oklch(0.36 0.07 322);
       
       /* Sidebar - deep twilight purple */
       --sidebar: oklch(0.14 0.07 320);
       --sidebar-foreground: oklch(0.90 0.05 50);
       --sidebar-border: oklch(0.25 0.07 318);
       
-      /* Table - clear hierarchy */
+      /* Table - consistent spectrum */
       --table-row: oklch(0.25 0.075 318);
       --table-row-alt: oklch(0.28 0.075 316);
-      --table-header: oklch(0.18 0.075 320);
+      --table-header: oklch(0.31 0.07 320);
+      
+      /* Footer - same as table-header */
+      --footer: oklch(0.31 0.07 320);
       
       /* Charts - sunset color palette */
       --chart-1: oklch(0.72 0.20 45);
@@ -431,16 +483,15 @@
      * High contrast grayscale for accessibility
      * All colors are pure grayscale (chroma = 0)
      * 
-     * Lightness scale (darker to lighter):
+     * Grey spectrum (on card 0.22, lighter = more elevated):
      * - Sidebar: 0.06 (almost black)
-     * - Background: 0.15 (dark base)
-     * - Card/Table-row: 0.22 (elevated surfaces)
-     * - Table-row-alt: 0.26 (subtle alternation)
-     * - Muted/Input: 0.30 (interactive backgrounds)
-     * - Table-header: 0.35 (distinct header)
-     * - Border: 0.42 (visible separation)
-     * - Muted-foreground: 0.70 (subtle text)
-     * - Foreground: 0.95 (primary text)
+     * - Background: 0.15
+     * - Card/Table-row: 0.22
+     * - Table-row-alt: 0.26
+     * - Footer/Table-header: 0.29
+     * - Card-header: 0.34 (most elevated)
+     * - Muted: 0.40 (visible on card-header)
+     * - Border: 0.45
      * ======================================== */
     @variant monochrome {
       --hairline-width: 1px;
@@ -465,12 +516,12 @@
       --tertiary: oklch(0.72 0 0);
       --tertiary-foreground: oklch(0.12 0 0);
       
-      /* Muted - for subtle backgrounds, distinct from card */
-      --muted: oklch(0.30 0 0);
+      /* Muted - for muted buttons, must be visible on card-header */
+      --muted: oklch(0.40 0 0);
       --muted-foreground: oklch(0.70 0 0);
       
-      /* Accent - slightly lighter than muted */
-      --accent: oklch(0.34 0 0);
+      /* Accent - interactive hover states */
+      --accent: oklch(0.36 0 0);
       --accent-foreground: oklch(0.95 0 0);
       
       /* Semantic colors - use lightness to convey meaning */
@@ -487,24 +538,27 @@
       --error: oklch(0.45 0 0);
       --error-foreground: oklch(0.98 0 0);
       
-      /* Borders and inputs - visible on all surfaces */
-      --border: oklch(0.42 0 0);
+      /* Borders and inputs */
+      --border: oklch(0.45 0 0);
       --input: oklch(0.15 0 0);
       --ring: oklch(0.92 0 0);
       --radius: 0.5rem;
       
-      /* Surface - subtle tinted background for card headers, filter bars, etc. */
-      --surface: oklch(0.30 0 0);
+      /* Card header - most elevated surface for headers */
+      --card-header: oklch(0.34 0 0);
       
       /* Sidebar - darkest element */
       --sidebar: oklch(0.06 0 0);
       --sidebar-foreground: oklch(0.92 0 0);
       --sidebar-border: oklch(0.20 0 0);
       
-      /* Table - header darker than rows for visual anchor */
+      /* Table - consistent spectrum */
       --table-row: oklch(0.22 0 0);
       --table-row-alt: oklch(0.26 0 0);
-      --table-header: oklch(0.18 0 0);
+      --table-header: oklch(0.29 0 0);
+      
+      /* Footer - same as table-header */
+      --footer: oklch(0.29 0 0);
       
       /* Charts */
       --chart-1: oklch(0.92 0 0);

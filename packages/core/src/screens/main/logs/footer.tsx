@@ -14,7 +14,7 @@ export function LogsFooter({ query, count }: { query: Query<any>; count: number 
 	 *
 	 */
 	return (
-		<HStack className="border-border bg-muted rounded-b-lg border-t p-2">
+		<HStack className="border-border bg-footer rounded-b-lg border-t p-2">
 			<HStack className="flex-1 justify-start *:flex-1"></HStack>
 			<HStack className="justify-end gap-0">
 				<Text className="text-xs">

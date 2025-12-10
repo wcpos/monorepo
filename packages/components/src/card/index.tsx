@@ -7,17 +7,14 @@ import { TextClassContext } from '../text';
 function Card({ className, ...props }: ViewProps) {
 	return (
 		<View
-			className={cn(
-				'border-border bg-card rounded-lg border shadow-md',
-				className
-			)}
+			className={cn('border-border bg-card rounded-lg border shadow-md', className)}
 			{...props}
 		/>
 	);
 }
 
 function CardHeader({ className, ...props }: ViewProps) {
-	return <View className={cn('flex flex-col p-6 rounded-t-lg', className)} {...props} />;
+	return <View className={cn('flex flex-col rounded-t-lg p-6', className)} {...props} />;
 }
 
 function CardTitle({ className, ...props }: TextProps) {
@@ -26,7 +23,7 @@ function CardTitle({ className, ...props }: TextProps) {
 			role="heading"
 			aria-level={3}
 			className={cn(
-				'text-card-foreground text-2xl font-semibold leading-none tracking-tight',
+				'text-card-foreground text-2xl leading-none font-semibold tracking-tight',
 				className
 			)}
 			{...props}

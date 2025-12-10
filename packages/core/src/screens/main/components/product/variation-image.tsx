@@ -32,7 +32,7 @@ export const ProductVariationImage = ({
 				</Svg>
 			</View> */}
 			<View className="w-full pl-3">
-				<Image source={{ uri }} recyclingKey={variation.uuid} className="h-20 w-full" />
+				<Image source={{ uri }} recyclingKey={variation.uuid} className="h-20 w-full rounded" />
 			</View>
 		</>
 	);

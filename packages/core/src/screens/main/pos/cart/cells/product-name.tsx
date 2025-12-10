@@ -59,7 +59,7 @@ export const ProductName = ({ row, column }: CellContext<Props, 'name'>) => {
 			{column.columnDef.meta.show('sku') && <Text className="text-sm">{item.sku}</Text>}
 
 			{metaData.length > 0 && (
-				<VStack space="xs">
+				<VStack space="none">
 					{metaData.map((meta: any) => (
 						<HStack key={meta.id || meta.key || meta.display_key} className="flex-wrap gap-0">
 							<Text

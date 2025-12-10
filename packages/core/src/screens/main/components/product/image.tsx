@@ -25,10 +25,10 @@ export const ProductImage = ({ row }: CellContext<{ document: ProductDocument },
 			<Image
 				source={{ uri: 'https://via.placeholder.com/150' }}
 				recyclingKey={product.uuid}
-				className="h-20 w-full"
+				className="h-20 w-full rounded"
 			/>
 		);
 	}
 
-	return <Image source={{ uri }} recyclingKey={product.uuid} className="h-20 w-full" />;
+	return <Image source={{ uri }} recyclingKey={product.uuid} className="h-20 w-full rounded" />;
 };

@@ -26,7 +26,7 @@ export const PlainAttributes = ({ row }: CellContext<{ document: ProductDocument
 	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
 	 */
 	return (
-		<VStack space="xs">
+		<VStack space="none">
 			{attributes
 				.filter((attr: any) => !attr.variation)
 				.map((attr: any, index: number) => (
@@ -145,7 +145,7 @@ export const ProductAttributes = ({ row, table }) => {
 	 * https://shopify.github.io/flash-list/docs/fundamentals/performant-components#remove-key-prop
 	 */
 	return (
-		<VStack space="xs">
+		<VStack space="none">
 			{(attributes || [])
 				.filter((attr: any) => attr.variation)
 				.map((attr: any, index: number) => (

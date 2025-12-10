@@ -25,7 +25,7 @@ export const VariableProductImage = ({
 
 	return (
 		<Pressable onPress={() => row.toggleExpanded()} className="h-20 w-full">
-			<Image source={{ uri }} recyclingKey={product.uuid} className="h-full w-full" />
+			<Image source={{ uri }} recyclingKey={product.uuid} className="h-full w-full rounded" />
 		</Pressable>
 	);
 };

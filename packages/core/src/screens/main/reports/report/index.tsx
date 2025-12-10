@@ -32,7 +32,7 @@ export const Report = () => {
 	return (
 		<View className="h-full p-2 pl-0 pt-0">
 			<Card className="flex-1">
-				<CardHeader className="bg-surface p-2">
+				<CardHeader className="bg-card-header p-2">
 					<HStack>
 						<Text className="text-lg">{t('Report', { _tags: 'core' })}</Text>
 						<Select
@@ -57,7 +57,7 @@ export const Report = () => {
 						</View>
 					</ScrollView>
 				</CardContent>
-				<CardFooter className="border-border bg-muted justify-end border-t p-2">
+				<CardFooter className="border-border bg-footer justify-end border-t p-2">
 					<Button onPress={handlePrint}>
 						<ButtonText>{t('Print', { _tags: 'core' })}</ButtonText>
 					</Button>

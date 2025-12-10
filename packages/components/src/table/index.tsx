@@ -36,7 +36,7 @@ function TableBody({ className, style, ...props }: TablePrimitive.BodyProps) {
 function TableFooter({ className, ...props }: TablePrimitive.FooterProps) {
 	return (
 		<TablePrimitive.Footer
-			className={cn('bg-muted/50 font-medium [&>tr]:last:border-b-0', className)}
+			className={cn('bg-footer font-medium [&>tr]:last:border-b-0', className)}
 			{...props}
 		/>
 	);
@@ -82,17 +82,14 @@ function TableRow({
 }
 
 function TableHead({ className, style, ...props }: TablePrimitive.HeadProps) {
-	// Use theme-aware table header background color
-	const tableHeaderColor = useCSSVariable('--color-table-header');
-
 	return (
 		<TextClassContext.Provider value="text-muted-foreground text-xs uppercase text-left font-medium">
 			<TablePrimitive.Head
 				className={cn(
-					'h-8 flex-1 flex-col justify-center px-2 [&:has([role=checkbox])]:pr-0',
+					'bg-table-header h-8 flex-1 flex-col justify-center px-2 [&:has([role=checkbox])]:pr-0',
 					className
 				)}
-				style={[{ backgroundColor: tableHeaderColor }, style]}
+				style={style}
 				{...props}
 			/>
 		</TextClassContext.Provider>
