@@ -80,7 +80,12 @@ function Combobox({
 }
 
 function ComboboxTrigger({ ...props }: PopoverPrimitive.TriggerProps) {
-	return <PopoverPrimitive.Trigger {...props} />;
+	return (
+		<PopoverPrimitive.Trigger
+			className={cn(props.disabled && 'web:cursor-not-allowed opacity-50', props.className)}
+			{...props}
+		/>
+	);
 }
 
 function ComboboxValue({ asChild, placeholder, className, ...props }: ComboboxValueProps) {
