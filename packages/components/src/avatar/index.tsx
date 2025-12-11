@@ -5,17 +5,7 @@ import { cn } from '../lib/utils';
  *
  */
 export const Avatar = (props: ImageProps) => {
-	return (
-		<Image
-			className={cn(
-				// Size
-				'h-5 w-5',
-				// Shape
-				'rounded-full'
-			)}
-			{...props}
-		/>
-	);
+	return <Image className={cn('h-5 w-5 rounded-full')} {...props} />;
 };
 
 Avatar.displayName = 'Avatar';

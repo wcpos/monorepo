@@ -80,7 +80,7 @@ const PermanentDrawerItem = ({ icon, label, focused, onPress, style }) => {
 			size="xl"
 			style={style}
 			className={cn(
-				'native:h-12 native:px-4 native:py-2 h-10 rounded-none border-x-4 border-transparent bg-transparent px-3',
+				'h-12 rounded-none border-x-4 border-transparent bg-transparent px-3',
 				focused ? 'border-l-primary' : 'hover:bg-white/10'
 			)}
 		>
@@ -111,16 +111,14 @@ const StandardDrawerItem = ({ icon, label, focused, onPress, style }) => (
 		onPress={onPress}
 		size="xl"
 		className={cn(
-			'native:h-12 native:px-4 native:py-2 h-10 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
+			'h-12 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
 			focused ? 'border-l-primary' : 'hover:bg-white/10'
 		)}
 		style={style}
 	>
 		<HStack className="gap-3">
 			{icon({ focused })}
-			<ButtonText
-				className={cn('pr-2', focused ? 'text-primary' : 'text-sidebar-foreground')}
-			>
+			<ButtonText className={cn('pr-2', focused ? 'text-primary' : 'text-sidebar-foreground')}>
 				{label}
 			</ButtonText>
 		</HStack>

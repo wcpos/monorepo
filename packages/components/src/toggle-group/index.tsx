@@ -22,11 +22,7 @@ const ToggleGroup = ({
 
 	return (
 		<ToggleGroupPrimitive.Root
-			className={cn(
-				'flex flex-row items-center gap-0',
-				'border-border rounded-md border',
-				className
-			)}
+			className={cn('border-border flex flex-row items-center gap-0 rounded-md border', className)}
 			{...props}
 		>
 			<ToggleGroupContext.Provider value={{ variant, size }}>

@@ -33,10 +33,9 @@ export const Tooltip = ({ active, payload, label }) => {
 	if (active && payload && payload.length) {
 		return (
 			<VStack
-				className={cn([
-					'border-border bg-popover shadow-foreground/5 web:animate-in web:fade-in-0 web:zoom-in-95 overflow-hidden rounded-md border px-3 py-1.5 shadow-md',
-					'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-				])}
+				className={cn(
+					'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 border-border bg-popover shadow-foreground/5 web:animate-in web:fade-in-0 web:zoom-in-95 overflow-hidden rounded-md border px-3 py-1.5 shadow-md'
+				)}
 			>
 				<Text className="font-semibold">{`${label}`}</Text>
 				<Text className="text-primary">{`${getLabel(payload[0].name)}: ${format(payload[0].value)}`}</Text>

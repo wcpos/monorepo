@@ -32,9 +32,8 @@ function DialogOverlayWeb({ className, ...props }: DialogPrimitive.OverlayProps)
 	return (
 		<DialogPrimitive.Overlay
 			className={cn(
-				'absolute top-0 right-0 bottom-0 left-0 flex items-center justify-center bg-black/70 p-2',
+				'absolute top-0 right-0 bottom-0 left-0 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				open ? 'web:animate-in web:fade-in-0' : 'web:animate-out web:fade-out-0',
-				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				className
 			)}
 			{...props}
@@ -49,8 +48,7 @@ function DialogOverlayNative({ className, children, ...props }: DialogPrimitive.
 		<DialogPrimitive.Overlay
 			style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
 			className={cn(
-				'flex items-center justify-center bg-black/70 p-2',
-				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
+				'flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				className
 			)}
 			{...props}

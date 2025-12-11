@@ -21,13 +21,7 @@ function AlertDialogOverlayWeb({ className, ...props }: AlertDialogPrimitive.Ove
 	return (
 		<AlertDialogPrimitive.Overlay
 			className={cn(
-				// Position
-				'absolute top-0 right-0 bottom-0 left-0',
-				// Layout and background
-				'z-50 flex items-center justify-center bg-black/80',
-				// Spacing
-				'p-2',
-				// Animation
+				'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/80 p-2',
 				open ? 'web:animate-in web:fade-in-0' : 'web:animate-out web:fade-out-0',
 				className
 			)}
@@ -44,13 +38,7 @@ function AlertDialogOverlayNative({
 	return (
 		<AlertDialogPrimitive.Overlay
 			style={StyleSheet.absoluteFill}
-			className={cn(
-				// Layout and background
-				'z-50 flex items-center justify-center bg-black/80',
-				// Spacing
-				'p-2',
-				className
-			)}
+			className={cn('z-50 flex items-center justify-center bg-black/80 p-2', className)}
 			{...props}
 			asChild
 		>
@@ -78,8 +66,7 @@ function AlertDialogContent({
 			<AlertDialogOverlay>
 				<AlertDialogPrimitive.Content
 					className={cn(
-						'border-border bg-background z-50 max-w-lg gap-4 rounded-lg border py-4',
-						'web:duration-200 shadow-lg',
+						'web:duration-200 border-border bg-background z-50 max-w-lg gap-4 rounded-lg border py-4 shadow-lg',
 						open
 							? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 							: 'web:animate-out web:fade-out-0 web:zoom-out-95',

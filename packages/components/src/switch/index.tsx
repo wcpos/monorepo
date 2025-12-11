@@ -16,10 +16,7 @@ import { useColorScheme } from '../lib/useColorScheme';
 import { cn } from '../lib/utils';
 
 const webSwitchVariants = cva(
-	[
-		'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed',
-		'peer shrink-0 cursor-pointer flex-row items-center rounded-full border-2 border-transparent transition-colors',
-	],
+	'focus-visible:ring-ring focus-visible:ring-offset-background peer shrink-0 cursor-pointer flex-row items-center rounded-full border-2 border-transparent transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed',
 	{
 		variants: {
 			size: {
@@ -41,7 +38,7 @@ const webSwitchVariants = cva(
 );
 
 const webThumbVariants = cva(
-	'bg-background  pointer-events-none block rounded-full shadow-md ring-0 transition-transform',
+	'bg-background pointer-events-none block rounded-full shadow-md ring-0 transition-transform',
 	{
 		variants: {
 			size: {

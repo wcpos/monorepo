@@ -36,9 +36,7 @@ function Root({ children, className, disabled = false }: RootProps) {
 		<InputContext.Provider value={{ isFocused, setIsFocused }}>
 			<View
 				className={cn(
-					'w-full flex-row items-center',
-					'border-border bg-input h-10 rounded-md border',
-					'web:ring-offset-background',
+					'border-border bg-input web:ring-offset-background h-10 w-full flex-row items-center rounded-md border',
 					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
 					disabled && 'web:cursor-not-allowed opacity-50',
 					className

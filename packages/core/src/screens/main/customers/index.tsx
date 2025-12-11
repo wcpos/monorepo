@@ -95,7 +95,7 @@ export function CustomersScreen() {
 						</UISettingsDialog>
 					</HStack>
 				</CardHeader>
-				<CardContent className="flex-1 p-0">
+				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable

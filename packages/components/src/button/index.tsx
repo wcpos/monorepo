@@ -16,10 +16,7 @@ import type { VariantProps } from 'class-variance-authority';
 const ButtonText = Text;
 
 const buttonVariants = cva(
-	[
-		'group flex max-w-full shrink items-center justify-center rounded-md',
-		'web:transition-colors web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
-	],
+	'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1 web:transition-colors group flex max-w-full shrink items-center justify-center rounded-md',
 	{
 		variants: {
 			variant: {
@@ -40,25 +37,25 @@ const buttonVariants = cva(
 				 * Outline buttons
 				 */
 				outline:
-					'border-input bg-background web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent border',
+					'border-border bg-card web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent border',
 				'outline-primary':
-					'border-primary bg-background web:hover:bg-primary/90 web:hover:text-primary-foreground active:bg-primary border',
+					'border-primary bg-card web:hover:bg-primary/90 web:hover:text-primary-foreground active:bg-primary border',
 				'outline-secondary':
-					'border-secondary bg-background web:hover:bg-secondary/90 web:hover:text-secondary-foreground active:bg-secondary border',
+					'border-secondary bg-card web:hover:bg-secondary/90 web:hover:text-secondary-foreground active:bg-secondary border',
 				'outline-muted':
-					'border-muted bg-background web:hover:bg-muted/90 web:hover:text-muted-foreground active:bg-muted border',
+					'border-muted bg-card web:hover:bg-muted/90 web:hover:text-muted-foreground active:bg-muted border',
 				'outline-success':
-					'border-success bg-background web:hover:bg-success/90 web:hover:text-success-foreground active:bg-success border',
+					'border-success bg-card web:hover:bg-success/90 web:hover:text-success-foreground active:bg-success border',
 				'outline-destructive':
-					'border-destructive bg-background web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive border',
+					'border-destructive bg-card web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive border',
 				'outline-info':
-					'border-info bg-background web:hover:bg-info/90 web:hover:text-info-foreground active:bg-info border',
+					'border-info bg-card web:hover:bg-info/90 web:hover:text-info-foreground active:bg-info border',
 				'outline-attention':
-					'border-attention bg-background web:hover:bg-attention/90 web:hover:text-attention-foreground active:bg-attention border',
+					'border-attention bg-card web:hover:bg-attention/90 web:hover:text-attention-foreground active:bg-attention border',
 				'outline-warning':
-					'border-warning bg-background web:hover:bg-warning/90 web:hover:text-warning-foreground active:bg-warning border',
+					'border-warning bg-card web:hover:bg-warning/90 web:hover:text-warning-foreground active:bg-warning border',
 				'outline-error':
-					'border-error bg-background web:hover:bg-error/90 web:hover:text-error-foreground active:bg-error border',
+					'border-error bg-card web:hover:bg-error/90 web:hover:text-error-foreground active:bg-error border',
 
 				/**
 				 * Ghost buttons

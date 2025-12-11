@@ -78,9 +78,7 @@ function ModalOverlayWeb({ className, ...props }: React.ComponentPropsWithoutRef
 	return (
 		<View
 			className={cn(
-				'absolute bottom-0 left-0 right-0 top-0 z-50 flex items-center justify-center bg-black/70 p-2',
-				'web:animate-in web:fade-in-0',
-				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
+				'web:animate-in web:fade-in-0 absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				className
 			)}
 			{...props}
@@ -99,8 +97,7 @@ function ModalOverlayNative({
 		<View
 			style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
 			className={cn(
-				'flex items-center justify-center bg-black/70 p-2',
-				'[&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
+				'flex items-center justify-center bg-black/70 p-2 [&>*:first-child]:max-h-full [&>*:first-child]:max-w-full',
 				className
 			)}
 			{...props}
@@ -149,14 +146,13 @@ function ModalContent({
 			<View
 				className={cn(
 					modalContentVariants({ size }),
-					'web:cursor-default web:duration-200 border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg',
-					'web:animate-in web:fade-in-0 web:zoom-in-95',
+					'web:animate-in web:fade-in-0 web:zoom-in-95 web:cursor-default web:duration-200 border-border bg-card z-50 max-h-full max-w-full gap-4 rounded-lg border shadow-lg',
 					className
 				)}
 				{...props}
 			>
 				{children}
-				<View className="absolute right-2 top-2">
+				<View className="absolute top-2 right-2">
 					<ModalClose className="web:transition-opacity web:hover:opacity-100 opacity-70" asChild>
 						<IconButton name="xmark" />
 					</ModalClose>
@@ -172,7 +168,7 @@ function ModalContent({
 function ModalHeader({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) {
 	return (
 		<View
-			className={cn('flex flex-col gap-1.5 pl-4 pr-8 text-center sm:text-left', className)}
+			className={cn('flex flex-col gap-1.5 pr-8 pl-4 text-center sm:text-left', className)}
 			{...props}
 		/>
 	);

@@ -56,7 +56,7 @@ export const OpenOrders = ({ isColumn = false }) => {
 								<CartHeader />
 							</ErrorBoundary>
 						</CardHeader>
-						<CardContent className="flex-1 p-0">
+						<CardContent className="border-border flex-1 border-t p-0">
 							<View className="flex-1">
 								<ErrorBoundary>
 									<CartTable />
@@ -66,7 +66,7 @@ export const OpenOrders = ({ isColumn = false }) => {
 							<ErrorBoundary>
 								<Totals />
 							</ErrorBoundary>
-							<HStack className="bg-muted p-2">
+							<HStack className="bg-footer p-2">
 								<View className="flex-1">
 									<AddNoteButton />
 								</View>

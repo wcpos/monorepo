@@ -154,8 +154,8 @@
       --muted: oklch(0.965 0.008 250);
       --muted-foreground: oklch(0.45 0.03 250);
       
-      /* Accent */
-      --accent: oklch(0.94 0.01 250);
+      /* Accent - subtle hover/focus states */
+      --accent: oklch(0.97 0.006 250);
       --accent-foreground: oklch(0.25 0.03 250);
       
       /* Semantic colors */
@@ -173,7 +173,7 @@
       --error-foreground: oklch(0.98 0.01 25);
       
       /* Borders and inputs */
-      --border: oklch(0.86 0.015 250);
+      --border: oklch(0.88 0.012 250);
       --input: oklch(1 0 0);
       --ring: oklch(0.50 0.18 240);
       --radius: 0.5rem;

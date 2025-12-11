@@ -36,8 +36,7 @@ function DropdownMenuSubTrigger({
 		<TextClassContext.Provider value={cn('select-none', open && 'native:text-accent-foreground')}>
 			<DropdownMenuPrimitive.SubTrigger
 				className={cn(
-					'web:cursor-default web:select-none web:focus:bg-accent web:hover:bg-accent active:bg-accent web:outline-none',
-					'flex flex-row items-center gap-2 rounded-sm px-2 py-1.5',
+					'web:cursor-default web:select-none web:focus:bg-accent web:hover:bg-accent active:bg-accent web:outline-none flex flex-row items-center gap-2 rounded-sm px-2 py-1.5',
 					open && 'bg-accent',
 					inset && 'pl-8',
 					className
@@ -56,8 +55,7 @@ function DropdownMenuSubContent({ className, ...props }: DropdownMenuPrimitive.S
 	return (
 		<DropdownMenuPrimitive.SubContent
 			className={cn(
-				'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-				'border-border bg-popover z-50 mt-1 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
+				'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 border-border bg-popover z-50 mt-1 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
 				open
 					? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 					: 'web:animate-out web:fade-out-0 web:zoom-out',
@@ -97,8 +95,7 @@ function DropdownMenuContent({
 			>
 				<DropdownMenuPrimitive.Content
 					className={cn(
-						'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2',
-						'border-border bg-popover z-50 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
+						'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 border-border bg-popover z-50 min-w-32 overflow-hidden rounded-md border p-1 shadow-md',
 						open
 							? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 							: 'web:animate-out web:fade-out-0 web:zoom-out-95',
@@ -120,8 +117,7 @@ function DropdownMenuCheckboxItem({
 	return (
 		<DropdownMenuPrimitive.CheckboxItem
 			className={cn(
-				'web:cursor-default web:group web:outline-none web:focus:bg-accent active:bg-accent',
-				'relative flex flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
+				'web:cursor-default web:group web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
 				props.disabled && 'web:pointer-events-none opacity-50',
 				className
 			)}
@@ -147,8 +143,7 @@ function DropdownMenuRadioItem({
 	return (
 		<DropdownMenuPrimitive.RadioItem
 			className={cn(
-				'web:cursor-default web:group web:outline-none web:focus:bg-accent active:bg-accent',
-				'relative flex flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
+				'web:cursor-default web:group web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
 				props.disabled && 'web:pointer-events-none opacity-50',
 				className
 			)}

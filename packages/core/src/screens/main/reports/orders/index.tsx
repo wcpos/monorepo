@@ -153,7 +153,7 @@ export const Orders = () => {
 	 *
 	 */
 	return (
-		<View className="h-full p-2 pr-0 pt-0">
+		<View className="h-full p-2 pt-0 pr-0">
 			<Card className="flex-1">
 				<CardHeader className="bg-card-header p-2">
 					<HStack className="justify-end">
@@ -162,7 +162,7 @@ export const Orders = () => {
 						</UISettingsDialog>
 					</HStack>
 				</CardHeader>
-				<CardContent className="flex-1 p-0">
+				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<OrderDocument>

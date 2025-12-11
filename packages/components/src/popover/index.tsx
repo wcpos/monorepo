@@ -31,8 +31,7 @@ function PopoverContent({
 							align={align}
 							sideOffset={sideOffset}
 							className={cn(
-								'web:cursor-auto web:outline-none web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 web:animate-in web:zoom-in-95 web:fade-in-0',
-								'border-border bg-popover z-50 w-72 rounded-md border p-2 shadow-md',
+								'web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 web:animate-in web:zoom-in-95 web:fade-in-0 web:cursor-auto web:outline-none border-border bg-popover z-50 w-72 rounded-md border p-2 shadow-md',
 								className
 							)}
 							{...props}

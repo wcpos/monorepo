@@ -11,10 +11,7 @@ import { cn } from '../lib/utils';
  *
  */
 const buttonVariants = cva(
-	[
-		'rounded-full p-2',
-		'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
-	],
+	'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1 rounded-full p-2',
 	{
 		variants: {
 			variant: {

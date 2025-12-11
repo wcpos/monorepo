@@ -44,8 +44,7 @@ function Label({
 		>
 			<LabelPrimitive.Text
 				className={cn(
-					'web:peer-disabled:cursor-not-allowed web:peer-disabled:opacity-7',
-					'text-foreground text-sm font-medium leading-none'
+					'web:peer-disabled:cursor-not-allowed web:peer-disabled:opacity-7 text-foreground text-sm leading-none font-medium'
 				)}
 				{...props}
 			/>

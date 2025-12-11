@@ -25,10 +25,7 @@ function SelectTrigger({ className, children, ...props }: SelectPrimitive.Trigge
 	return (
 		<SelectPrimitiveTrigger
 			className={cn(
-				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
-				'text-muted-foreground flex h-10 flex-row items-center justify-between gap-2 px-3 py-2 text-sm',
-				'border-input bg-background rounded-md border',
-				'[&>span]:line-clamp-1',
+				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 text-muted-foreground border-border bg-card flex h-10 flex-row items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
 				props.disabled && 'web:cursor-not-allowed opacity-50',
 				className
 			)}
@@ -99,8 +96,7 @@ function SelectContent({
 				>
 					<SelectPrimitive.Content
 						className={cn(
-							'border-border bg-popover relative z-50 max-h-96 min-w-32 rounded-md border px-1 py-2 shadow-md',
-							'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+							'border-border bg-popover data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-96 min-w-32 rounded-md border px-1 py-2 shadow-md',
 							position === 'popper' &&
 								'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
 							open
@@ -132,7 +128,7 @@ function SelectContent({
 function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {
 	return (
 		<SelectPrimitive.Label
-			className={cn('text-popover-foreground py-1.5 pl-8 pr-2 text-sm font-semibold', className)}
+			className={cn('text-popover-foreground py-1.5 pr-2 pl-8 text-sm font-semibold', className)}
 			{...props}
 		/>
 	);
@@ -142,8 +138,7 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.ItemProps
 	return (
 		<SelectPrimitive.Item
 			className={cn(
-				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent',
-				'relative flex w-full flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
+				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent relative flex w-full flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
 				props.disabled && 'web:pointer-events-none opacity-50',
 				className
 			)}
@@ -172,8 +167,7 @@ function SelectButton({ className, children, ...props }: ButtonProps) {
 	return (
 		<Button
 			className={cn(
-				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2',
-				'border-input bg-background text-muted-foreground flex h-10 flex-row items-center justify-between rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
+				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 border-input bg-background text-muted-foreground flex h-10 flex-row items-center justify-between rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
 				props.disabled && 'web:cursor-not-allowed opacity-50',
 				className
 			)}

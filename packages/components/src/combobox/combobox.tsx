@@ -90,11 +90,7 @@ function ComboboxValue({ asChild, placeholder, className, ...props }: ComboboxVa
 	return (
 		<View
 			className={cn(
-				'w-full flex-row items-center',
-				'border-input bg-background h-10 rounded-md border px-2',
-				'web:ring-offset-background',
-				// isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
-				// disabled && 'web:cursor-not-allowed opacity-50',
+				'border-border bg-card web:ring-offset-background h-10 w-full flex-row items-center rounded-md border px-2',
 				className
 			)}
 		>
@@ -136,9 +132,7 @@ function ComboboxContent({
 							align={align}
 							sideOffset={sideOffset}
 							className={cn(
-								'web:cursor-auto web:outline-none web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 web:animate-in web:zoom-in-95 web:fade-in-0',
-								'border-border bg-popover z-50 w-72 rounded-md border p-2 shadow-md',
-								'max-h-[300px]',
+								'border-border bg-popover web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 web:animate-in web:zoom-in-95 web:fade-in-0 web:cursor-auto web:outline-none z-50 max-h-[300px] w-72 rounded-md border p-2 shadow-md',
 								className
 							)}
 							{...props}
@@ -260,8 +254,7 @@ function ComboboxItem({ value, label, item, className, ...props }: ComboboxItemP
 			<Pressable
 				onPress={handlePress}
 				className={cn(
-					'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent',
-					'flex w-full flex-row items-center rounded-sm px-2 py-1.5',
+					'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex w-full flex-row items-center rounded-sm px-2 py-1.5',
 					props.disabled && 'web:pointer-events-none opacity-50',
 					className
 				)}

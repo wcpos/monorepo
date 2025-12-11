@@ -35,10 +35,7 @@ function PanelResizeHandle() {
 			/> */}
 			<View
 				className={cn(
-					'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transform',
-					'group-hover:border-border group-hover:bg-popover z-20 p-1 opacity-20 group-hover:rounded-md group-hover:border group-hover:opacity-100 group-hover:shadow-md',
-					'transition-opacity duration-200 ease-out',
-					'group-hover:animate-fadeIn group-hover:scale-95',
+					'group-hover:border-border group-hover:bg-popover group-hover:animate-fadeIn absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 transform p-1 opacity-20 transition-opacity duration-200 ease-out group-hover:scale-95 group-hover:rounded-md group-hover:border group-hover:opacity-100 group-hover:shadow-md',
 					direction === 'horizontal'
 						? 'group-hover:cursor-ew-resize'
 						: 'group-hover:cursor-ns-resize'
