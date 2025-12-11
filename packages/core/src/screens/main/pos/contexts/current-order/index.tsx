@@ -3,6 +3,8 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
+import Platform from '@wcpos/utils/platform';
+
 import { useNewOrder } from './use-new-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -39,15 +41,21 @@ export const CurrentOrderProvider = ({
 	const router = useRouter();
 
 	/**
-	 *
+	 * Update the current order without causing a full navigation/remount.
+	 * On web, we manually update the URL to keep nice URLs like /cart/uuid
 	 */
 	const setCurrentOrderID = React.useCallback(
 		(orderId: string) => {
-			if (orderId) {
-				router.navigate(`/cart/${orderId}`);
-			} else {
-				// Navigate to /cart for new orders - this keeps us on the cart tab in tabs layout
-				router.navigate('/cart');
+			// Use setParams to avoid remounting the screen
+			router.setParams({ orderId: orderId || undefined });
+
+			// On web, update the browser URL for nice URLs
+			// Run after setParams completes to override the query param URL
+			if (Platform.isWeb) {
+				requestAnimationFrame(() => {
+					const newPath = orderId ? `/cart/${orderId}` : '/cart';
+					window.history.replaceState(null, '', newPath);
+				});
 			}
 		},
 		[router]

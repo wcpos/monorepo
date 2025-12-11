@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { Icon } from '@wcpos/components/icon';
 import { ScrollableTabsList, Tabs, TabsTrigger } from '@wcpos/components/tabs';
-import { Text, TextClassContext } from '@wcpos/components/text';
+import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { CartTabTitle } from './tab-title';

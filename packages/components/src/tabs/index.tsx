@@ -1,19 +1,19 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
+import { Platform, ScrollView } from 'react-native';
 
 import * as Haptics from 'expo-haptics';
 import * as TabsPrimitive from '@rn-primitives/tabs';
-import Animated, {
-	scrollTo,
-	useAnimatedRef,
-	useAnimatedScrollHandler,
-	useSharedValue,
-} from 'react-native-reanimated';
+import { withUniwind } from 'uniwind';
+
+import log from '@wcpos/utils/logger';
 
 import { HStack } from '../hstack';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
+
+// Wrap ScrollView with uniwind to support className prop
+const StyledScrollView = withUniwind(ScrollView);
 
 const Tabs = TabsPrimitive.Root;
 
@@ -29,72 +29,143 @@ function TabsList({ className, ...props }: TabsPrimitive.ListProps) {
 	);
 }
 
+
 /**
  *
  */
+// Padding value for the tabs list (in pixels) - used in contentContainerStyle
+const LIST_PADDING = 8; // p-2 = 0.5rem = 8px
+
 function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.ListProps) {
-	const scrollRef = useAnimatedRef<Animated.ScrollView>();
-	const totalWidth = useSharedValue(0);
-	const containerWidth = useSharedValue(0);
-	const scrollX = useSharedValue(0);
+	const scrollRef = React.useRef<ScrollView>(null);
+	const totalWidthRef = React.useRef(0);
+	const containerWidthRef = React.useRef(0);
 	const [scrollable, setScrollable] = React.useState(false);
 	const { value, onValueChange } = TabsPrimitive.useRootContext();
-	const triggersRef = React.useRef<(React.RefObject<any> | null)[]>([]);
 	const tabPositions = React.useRef<{ [key: string]: { x: number; width: number } }>({});
+	const mountIdRef = React.useRef(Math.random().toString(36).substring(7));
+
+	// Log on mount/unmount to detect remounting
+	React.useEffect(() => {
+		const mountId = mountIdRef.current;
+		log.debug('ScrollableTabsList MOUNTED', { context: { mountId } });
+		return () => {
+			log.debug('ScrollableTabsList UNMOUNTED', { context: { mountId } });
+		};
+	}, []);
 
 	// Convert children to an array to safely access them
 	const childrenArray = React.Children.toArray(children) as React.ReactElement[];
 
-	// Handle scroll position updates
-	const scrollHandler = useAnimatedScrollHandler({
-		onScroll: (event) => {
-			scrollX.value = event.contentOffset.x;
-		},
-	});
-
-	// Measure and store tab positions
-	const measureTab = React.useCallback((index: number, value: string) => {
-		const trigger = triggersRef.current[index]?.current;
-		if (trigger) {
-			trigger.measure((x: number, y: number, width: number) => {
-				tabPositions.current[value] = { x, width };
+	// Store tab position from onLayout event
+	// Note: x position is relative to the List
+	const handleTabLayout = React.useCallback(
+		(childValue: string, event: { nativeEvent: { layout: { x: number; width: number } } }) => {
+			const { x, width } = event.nativeEvent.layout;
+			tabPositions.current[childValue] = { x, width };
+			log.debug('TAB LAYOUT', {
+				context: { mountId: mountIdRef.current, childValue, x, width },
 			});
+		},
+		[]
+	);
+
+	// Scroll to center the active tab
+	const scrollToActiveTab = React.useCallback((activeValue: string) => {
+		const tabInfo = tabPositions.current[activeValue];
+		if (!tabInfo || !scrollRef.current) {
+			log.debug('Cannot scroll - missing data', {
+				context: { activeValue, hasTabInfo: !!tabInfo, hasScrollRef: !!scrollRef.current },
+			});
+			return;
 		}
-	}, []);
-
-	// Scroll to active tab
-	const scrollToActiveTab = React.useCallback(() => {
-		if (!value || !scrollRef.current) return;
-
-		const tabInfo = tabPositions.current[value];
-		if (!tabInfo) return;
 
 		const { x, width } = tabInfo;
-		const currentContainerWidth = containerWidth.value;
+		const currentContainerWidth = containerWidthRef.current;
+		const currentTotalWidth = totalWidthRef.current;
 
 		// Calculate target scroll position to center the tab
-		const targetScrollX = x - (currentContainerWidth / 2 - width / 2);
+		const targetScrollX = x - currentContainerWidth / 2 + width / 2;
 
 		// Ensure we don't scroll beyond bounds
-		const maxScrollX = totalWidth.value - currentContainerWidth;
+		const maxScrollX = Math.max(0, currentTotalWidth - currentContainerWidth);
 		const finalScrollX = Math.max(0, Math.min(targetScrollX, maxScrollX));
 
-		scrollTo(scrollRef, finalScrollX, 0, true);
-	}, [value, containerWidth, totalWidth, scrollRef]);
+		log.debug('Scrolling to center tab', {
+			context: {
+				activeValue,
+				tabX: x,
+				tabWidth: width,
+				containerWidth: currentContainerWidth,
+				totalWidth: currentTotalWidth,
+				targetScrollX,
+				maxScrollX,
+				finalScrollX,
+			},
+		});
 
-	// Effect to handle scrolling when value changes
+		scrollRef.current.scrollTo({ x: finalScrollX, animated: true });
+	}, []);
+
+	// Scroll to active tab when value changes
+	// Needed to sync on tab selection - timing relies on prior layout measurements
 	React.useEffect(() => {
-		// Small delay to ensure measurements are ready
-		const timer = setTimeout(() => {
-			scrollToActiveTab();
-		}, 100);
-		return () => clearTimeout(timer);
+		if (value) {
+			log.debug('VALUE CHANGED - effect triggered', {
+				context: {
+					mountId: mountIdRef.current,
+					value,
+					tabPositionsKeys: Object.keys(tabPositions.current),
+					hasPosition: !!tabPositions.current[value],
+					containerWidth: containerWidthRef.current,
+					totalWidth: totalWidthRef.current,
+				},
+			});
+			// Small delay to ensure measurements are ready on initial render
+			const timer = setTimeout(() => {
+				log.debug('TIMEOUT FIRED - about to scroll', {
+					context: {
+						mountId: mountIdRef.current,
+						value,
+						tabPositions: tabPositions.current,
+						containerWidth: containerWidthRef.current,
+						totalWidth: totalWidthRef.current,
+					},
+				});
+				scrollToActiveTab(value);
+			}, 100);
+			return () => clearTimeout(timer);
+		}
 	}, [value, scrollToActiveTab]);
 
-	// Update scrollable state
-	React.useEffect(() => {
-		setScrollable(totalWidth.value > containerWidth.value);
-	}, [totalWidth.value, containerWidth.value]);
+	const updateScrollable = React.useCallback(() => {
+		const isScrollable = totalWidthRef.current > containerWidthRef.current;
+		setScrollable(isScrollable);
+		log.debug('SCROLLABLE STATE UPDATED', {
+			context: {
+				mountId: mountIdRef.current,
+				isScrollable,
+				totalWidth: totalWidthRef.current,
+				containerWidth: containerWidthRef.current,
+			},
+		});
+	}, []);
+
+	const handleContentSizeChange = React.useCallback(
+		(w: number) => {
+			totalWidthRef.current = w;
+			updateScrollable();
+		},
+		[updateScrollable]
+	);
+
+	const handleLayout = React.useCallback(
+		(event: { nativeEvent: { layout: { width: number } } }) => {
+			containerWidthRef.current = event.nativeEvent.layout.width;
+			updateScrollable();
+		},
+		[updateScrollable]
+	);
 
 	const currentIndex = childrenArray.findIndex(
 		(child) => React.isValidElement(child) && (child as any).props.value === value
@@ -125,48 +196,35 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 			{scrollable && (
 				<IconButton name="chevronLeft" onPress={onPressLeft} disabled={currentIndex === 0} />
 			)}
-			<Animated.ScrollView
+			<StyledScrollView
 				ref={scrollRef}
 				horizontal
 				showsHorizontalScrollIndicator={false}
-				style={{ flex: 1 }}
-				onScroll={scrollHandler}
+				className="web:scrollbar-hide flex-1"
+				contentContainerStyle={{ paddingHorizontal: LIST_PADDING }}
 				scrollEventThrottle={16}
-				onContentSizeChange={(w, h) => {
-					totalWidth.value = w;
-				}}
-				onLayout={(event) => {
-					containerWidth.value = event.nativeEvent.layout.width;
-				}}
+				onContentSizeChange={handleContentSizeChange}
+				onLayout={handleLayout}
 			>
 				<TabsPrimitive.List
-					className={cn(
-						'bg-muted inline-flex w-full flex-row items-center justify-center rounded-md p-2',
-						className
-					)}
+					className={cn('bg-muted inline-flex flex-row items-center rounded-md py-2', className)}
 					{...props}
 				>
 					{childrenArray.map((child, index) => {
-						// Ensure the ref array has the same length as children
-						if (!triggersRef.current[index]) {
-							triggersRef.current[index] = React.createRef();
-						}
-
 						const childValue = (child as any).props.value;
 
 						return React.cloneElement(
 							child as React.ReactElement,
 							{
-								ref: triggersRef.current[index],
-								onLayout: () => {
-									// Measure tab position after layout
-									measureTab(index, childValue);
+								key: childValue || index,
+								onLayout: (event: any) => {
+									handleTabLayout(childValue, event);
 								},
 							} as any
 						);
 					})}
 				</TabsPrimitive.List>
-			</Animated.ScrollView>
+			</StyledScrollView>
 			{scrollable && (
 				<IconButton
 					name="chevronRight"
