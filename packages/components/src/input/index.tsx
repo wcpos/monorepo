@@ -1,5 +1,10 @@
 import * as React from 'react';
-import { TextInput as RNTextInput, TextInputProps as RNTextInputProps, View } from 'react-native';
+import {
+	Platform,
+	TextInput as RNTextInput,
+	TextInputProps as RNTextInputProps,
+	View,
+} from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 
@@ -154,7 +159,7 @@ function InputField({
 			ref={mergedRef}
 			editable={editable}
 			className={cn(
-				'text-foreground placeholder:text-muted-foreground web:focus-visible:outline-none w-full flex-1 bg-transparent px-3 py-2 text-base outline-none',
+				'text-foreground placeholder:text-muted-foreground web:focus-visible:outline-none w-full flex-1 bg-transparent px-3 py-2 text-base leading-none outline-none',
 				!editable && 'web:cursor-not-allowed opacity-50',
 				className
 			)}
