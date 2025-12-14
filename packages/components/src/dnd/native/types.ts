@@ -105,6 +105,12 @@ export interface SortableItemProps {
 }
 
 /**
+ * Record types for shared values (Maps don't work in Reanimated worklets)
+ */
+export type PositionsRecord = Record<ItemId, number>;
+export type LayoutsRecord = Record<ItemId, ItemLayout>;
+
+/**
  * Context value for the sortable list
  */
 export interface SortableContextValue {
@@ -114,12 +120,10 @@ export interface SortableContextValue {
 	activeId: SharedValue<ItemId | null>;
 	activeIndex: SharedValue<number>;
 	targetIndex: SharedValue<number>;
-	positions: SharedValue<Map<ItemId, number>>;
-	layouts: SharedValue<Map<ItemId, ItemLayout>>;
+	positions: SharedValue<PositionsRecord>;
+	layouts: SharedValue<LayoutsRecord>;
 	registerItem: (id: ItemId, layout: ItemLayout) => void;
 	unregisterItem: (id: ItemId) => void;
-	startDrag: (id: ItemId, index: number) => void;
-	updateDrag: (translationY: number, translationX: number) => void;
-	endDrag: () => void;
-	getItemCount: () => number;
+	/** Called from JS thread to notify order change */
+	handleOrderChange: (fromIndex: number, toIndex: number, itemId: ItemId) => void;
 }

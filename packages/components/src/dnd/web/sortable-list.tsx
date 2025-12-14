@@ -1,4 +1,4 @@
-import { useEffect, useRef, memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
@@ -18,7 +18,7 @@ function SortableListInner<T>({
 	getItemId,
 	renderItem,
 	onOrderChange,
-	gap = 8,
+	gap = 0,
 	axis = 'vertical',
 	className = '',
 	showFlash = true,
@@ -103,9 +103,7 @@ function SortableListInner<T>({
 
 				if (showFlash) {
 					requestAnimationFrame(() => {
-						const element = document.querySelector(
-							`[data-sortable-id="${sourceData.itemId}"]`
-						);
+						const element = document.querySelector(`[data-sortable-id="${sourceData.itemId}"]`);
 						if (element instanceof HTMLElement) {
 							triggerPostMoveFlash(element);
 						}
@@ -121,10 +119,7 @@ function SortableListInner<T>({
 
 	return (
 		<DndContextProvider listId={listId} gap={gap} axis={axis} itemIds={itemIds}>
-			<div
-				className={`flex ${flexDirection} ${className}`}
-				data-sortable-list={listId}
-			>
+			<div className={`flex ${flexDirection} ${className}`} data-sortable-list={listId}>
 				{items.map((item, index) => {
 					const itemId = getItemId(item);
 					return (

@@ -1,18 +1,23 @@
 import * as React from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
+import { type LayoutChangeEvent, View, type ViewStyle } from 'react-native';
+
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+	useAnimatedReaction,
 	useAnimatedStyle,
+	useDerivedValue,
 	useSharedValue,
 	withSpring,
-	withTiming,
-	useAnimatedReaction,
-	runOnJS,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import * as Haptics from 'expo-haptics';
 
+import log from '@wcpos/utils/logger';
+
 import { useSortableContext } from './context';
-import type { SortableItemProps, ItemLayout } from './types';
+import { DropIndicator } from './drop-indicator';
+
+import type { ItemLayout, SortableItemProps } from './types';
 
 /**
  * Spring configuration for smooth animations
@@ -33,17 +38,12 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 		activeId,
 		activeIndex,
 		targetIndex,
+		positions,
 		layouts,
 		registerItem,
 		unregisterItem,
-		startDrag,
-		updateDrag,
-		endDrag,
-		getItemCount,
+		handleOrderChange,
 	} = useSortableContext();
-
-	// Track this item's position in the current order
-	const itemIndex = useSharedValue(-1);
 
 	// Animation values
 	const translateX = useSharedValue(0);
@@ -59,11 +59,37 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 	const startX = useSharedValue(0);
 	const startY = useSharedValue(0);
 
+	// Track drop indicator state
+	const [indicatorEdge, setIndicatorEdge] = React.useState<'top' | 'bottom' | 'left' | 'right' | null>(null);
+
+	// Determine if this item should show the drop indicator
+	useDerivedValue(() => {
+		const active = activeId.value;
+		const from = activeIndex.value;
+		const to = targetIndex.value;
+		const myIndex = positions.value[id] ?? -1;
+
+		// No indicator if no active drag, this is the dragged item, or indices are invalid
+		if (active === null || active === id || myIndex < 0 || from < 0 || to < 0 || from === to) {
+			scheduleOnRN(setIndicatorEdge, null);
+			return;
+		}
+
+		// Show indicator on the item at the target position
+		if (myIndex === to) {
+			const edge = axis === 'vertical' ? (from < to ? 'bottom' : 'top') : from < to ? 'right' : 'left';
+			scheduleOnRN(setIndicatorEdge, edge);
+		} else {
+			scheduleOnRN(setIndicatorEdge, null);
+		}
+	}, [id, axis]);
+
 	// Measure and register layout
 	const handleLayout = React.useCallback(
 		(event: LayoutChangeEvent) => {
 			const { x, y, width, height } = event.nativeEvent.layout;
 			const layout: ItemLayout = { x, y, width, height };
+			log.debug(`[DND] handleLayout for ${id}`, { context: { layout } });
 			registerItem(id, layout);
 		},
 		[id, registerItem]
@@ -81,6 +107,37 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 	}, []);
 
+	// Debug logging function (called from worklet via scheduleOnRN)
+	const logDragStart = React.useCallback(
+		(itemId: string, index: number, positionsSnapshot: Record<string, number>) => {
+			log.debug(`[DND] Drag started for ${itemId}`, {
+				context: { index, positions: positionsSnapshot },
+			});
+		},
+		[]
+	);
+
+	const logDragUpdate = React.useCallback(
+		(
+			from: number,
+			to: number,
+			translationY: number,
+			hasLayout: boolean,
+			itemSize: number,
+			offset: number,
+			newTarget: number
+		) => {
+			log.debug(`[DND] Drag update`, {
+				context: { from, to, translationY, hasLayout, itemSize, offset, newTarget },
+			});
+		},
+		[]
+	);
+
+	const logDragEnd = React.useCallback((from: number, to: number) => {
+		log.debug(`[DND] Drag ended`, { context: { from, to } });
+	}, []);
+
 	// Pan gesture for dragging
 	const panGesture = Gesture.Pan()
 		.enabled(!disabled)
@@ -93,17 +150,21 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 			scale.value = withSpring(1.02, SPRING_CONFIG);
 			opacity.value = 0.9;
 
-			// Find current index
-			const layout = layouts.value.get(id);
-			if (layout) {
-				const itemSize = axis === 'vertical' ? layout.height + gap : layout.width + gap;
-				const position = axis === 'vertical' ? layout.y : layout.x;
-				const index = Math.round(position / itemSize);
-				itemIndex.value = index;
-				startDrag(id, index);
+			// Get current index from positions
+			const positionsSnapshot = positions.value;
+			const index = positionsSnapshot[id] ?? -1;
+
+			// Log for debugging
+			scheduleOnRN(logDragStart, id, index, positionsSnapshot);
+
+			// Set drag state directly on shared values (don't call context function from worklet)
+			if (index >= 0) {
+				activeId.value = id;
+				activeIndex.value = index;
+				targetIndex.value = index;
 			}
 
-			runOnJS(triggerHaptic)();
+			scheduleOnRN(triggerHaptic);
 		})
 		.onUpdate((event) => {
 			'worklet';
@@ -116,8 +177,45 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 				translateX.value = startX.value + event.translationX;
 			}
 
-			// Update target position calculation
-			updateDrag(event.translationY, event.translationX);
+			// Calculate target index directly (don't call context function from worklet)
+			const currentLayout = layouts.value[id];
+			let calcItemSize = 0;
+			let calcOffset = 0;
+			let calcNewTarget = 0;
+
+			if (currentLayout) {
+				const translation = axis === 'vertical' ? event.translationY : event.translationX;
+				const itemSize =
+					axis === 'vertical' ? currentLayout.height + gap : currentLayout.width + gap;
+				const currentIndex = activeIndex.value;
+				const itemCount = Object.keys(positions.value).length;
+
+				// Calculate how many positions we've moved
+				const offset = Math.round(translation / itemSize);
+				const newTargetIndex = Math.max(0, Math.min(currentIndex + offset, itemCount - 1));
+
+				calcItemSize = itemSize;
+				calcOffset = offset;
+				calcNewTarget = newTargetIndex;
+
+				if (newTargetIndex !== targetIndex.value) {
+					targetIndex.value = newTargetIndex;
+				}
+			}
+
+			// Log every 50px to avoid spam
+			if (Math.abs(event.translationY) % 50 < 5) {
+				scheduleOnRN(
+					logDragUpdate,
+					activeIndex.value,
+					targetIndex.value,
+					event.translationY,
+					!!currentLayout,
+					calcItemSize,
+					calcOffset,
+					calcNewTarget
+				);
+			}
 		})
 		.onEnd(() => {
 			'worklet';
@@ -126,7 +224,12 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 			// Calculate final position
 			const from = activeIndex.value;
 			const to = targetIndex.value;
-			const layout = layouts.value.get(id);
+			const draggedId = activeId.value;
+
+			// Log end state
+			scheduleOnRN(logDragEnd, from, to);
+
+			const layout = layouts.value[id];
 
 			if (layout && from !== to && from >= 0 && to >= 0) {
 				// Animate to new position
@@ -149,7 +252,15 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 			opacity.value = 1;
 			zIndex.value = 0;
 
-			endDrag();
+			// Reset drag state
+			activeId.value = null;
+			activeIndex.value = -1;
+			targetIndex.value = -1;
+
+			// Call order change handler if order changed
+			if (from !== to && from >= 0 && to >= 0 && draggedId !== null) {
+				scheduleOnRN(handleOrderChange, from, to, draggedId);
+			}
 		});
 
 	// React to other items moving (when this item is NOT being dragged)
@@ -159,7 +270,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 			from: activeIndex.value,
 			to: targetIndex.value,
 		}),
-		(current, previous) => {
+		(current) => {
 			// Skip if this is the dragged item
 			if (current.active === id) return;
 			if (current.active === null) {
@@ -169,8 +280,8 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 				return;
 			}
 
-			// Calculate if this item needs to move
-			const myIndex = itemIndex.value;
+			// Get this item's index from positions
+			const myIndex = positions.value[id] ?? -1;
 			if (myIndex < 0) return;
 
 			const from = current.from;
@@ -191,7 +302,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 			}
 
 			// Apply offset animation
-			const layout = layouts.value.get(id);
+			const layout = layouts.value[id];
 			if (layout) {
 				const itemSize = axis === 'vertical' ? layout.height + gap : layout.width + gap;
 				const translation = offset * itemSize;
@@ -206,22 +317,33 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 		[id, axis, gap]
 	);
 
+	// Base styles for transparent background and margin
+	const baseStyle: ViewStyle = {
+		backgroundColor: 'transparent',
+		margin: 2,
+	};
+
 	// Animated styles
-	const animatedStyle = useAnimatedStyle(() => ({
-		transform: [
-			{ translateX: translateX.value },
-			{ translateY: translateY.value },
-			{ scale: scale.value },
-		],
-		opacity: opacity.value,
-		zIndex: zIndex.value,
-	}));
+	const animatedStyle = useAnimatedStyle(() => {
+		return {
+			transform: [
+				{ translateX: translateX.value },
+				{ translateY: translateY.value },
+				{ scale: scale.value },
+			] as ViewStyle['transform'],
+			opacity: opacity.value,
+			zIndex: zIndex.value,
+		};
+	});
 
 	return (
-		<GestureDetector gesture={panGesture}>
-			<Animated.View style={[style, animatedStyle]} onLayout={handleLayout}>
-				{children}
-			</Animated.View>
-		</GestureDetector>
+		<View style={{ position: 'relative' }}>
+			<GestureDetector gesture={panGesture}>
+				<Animated.View style={[baseStyle, style, animatedStyle]} onLayout={handleLayout}>
+					{children}
+				</Animated.View>
+			</GestureDetector>
+			{indicatorEdge ? <DropIndicator edge={indicatorEdge} gap={gap} /> : null}
+		</View>
 	);
 }

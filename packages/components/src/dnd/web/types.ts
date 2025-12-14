@@ -38,6 +38,7 @@ export interface SortableItemData {
 	itemId: ItemId;
 	listId: ListId;
 	index: number;
+	[key: string | symbol]: unknown;
 }
 
 /**

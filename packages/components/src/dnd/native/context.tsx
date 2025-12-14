@@ -1,7 +1,16 @@
 import * as React from 'react';
-import { useSharedValue, runOnJS } from 'react-native-reanimated';
 
-import type { ItemId, ListId, ItemLayout, SortableContextValue, ReorderResult } from './types';
+import { runOnUI, useSharedValue } from 'react-native-reanimated';
+
+import type {
+	ItemId,
+	ItemLayout,
+	LayoutsRecord,
+	ListId,
+	PositionsRecord,
+	ReorderResult,
+	SortableContextValue,
+} from './types';
 
 /**
  * Context for sortable list functionality
@@ -38,8 +47,6 @@ interface SortableContextProviderProps<T> {
 	items: T[];
 	getItemId: (item: T) => ItemId;
 	onOrderChange?: (result: ReorderResult<T>) => void;
-	onDragStart?: () => void;
-	onDragEnd?: () => void;
 }
 
 /**
@@ -53,19 +60,17 @@ export function SortableContextProvider<T>({
 	items,
 	getItemId,
 	onOrderChange,
-	onDragStart,
-	onDragEnd,
 }: SortableContextProviderProps<T>) {
 	// Shared values for drag state (accessible from UI thread)
 	const activeId = useSharedValue<ItemId | null>(null);
 	const activeIndex = useSharedValue<number>(-1);
 	const targetIndex = useSharedValue<number>(-1);
 
-	// Store positions (index in the visual order)
-	const positions = useSharedValue<Map<ItemId, number>>(new Map());
+	// Store positions (index in the visual order) - using plain objects for worklet compatibility
+	const positions = useSharedValue<PositionsRecord>({});
 
-	// Store layouts (measurements)
-	const layouts = useSharedValue<Map<ItemId, ItemLayout>>(new Map());
+	// Store layouts (measurements) - using plain objects for worklet compatibility
+	const layouts = useSharedValue<LayoutsRecord>({});
 
 	// Keep items ref up to date
 	const itemsRef = React.useRef(items);
@@ -78,96 +83,44 @@ export function SortableContextProvider<T>({
 
 	// Initialize positions when items change
 	React.useEffect(() => {
-		const newPositions = new Map<ItemId, number>();
+		const newPositions: PositionsRecord = {};
 		items.forEach((item, index) => {
 			const id = getItemId(item);
-			newPositions.set(id, index);
+			newPositions[id] = index;
 		});
-		positions.value = newPositions;
+		// Use runOnUI to ensure positions are available on UI thread
+		runOnUI(() => {
+			'worklet';
+			positions.value = newPositions;
+		})();
 	}, [items, getItemId, positions]);
 
-	// Register/unregister item layouts
+	// Register item layout (called from JS thread, updates on UI thread)
 	const registerItem = React.useCallback(
 		(id: ItemId, layout: ItemLayout) => {
-			'worklet';
-			const newLayouts = new Map(layouts.value);
-			newLayouts.set(id, layout);
-			layouts.value = newLayouts;
+			// Use runOnUI to ensure the shared value update happens on the UI thread
+			// where the gesture worklets will read it
+			runOnUI(() => {
+				'worklet';
+				layouts.value = { ...layouts.value, [id]: layout };
+			})();
 		},
 		[layouts]
 	);
 
+	// Unregister item layout (called from JS thread, updates on UI thread)
 	const unregisterItem = React.useCallback(
 		(id: ItemId) => {
-			'worklet';
-			const newLayouts = new Map(layouts.value);
-			newLayouts.delete(id);
-			layouts.value = newLayouts;
+			runOnUI(() => {
+				'worklet';
+				const { [id]: _, ...rest } = layouts.value;
+				layouts.value = rest;
+			})();
 		},
 		[layouts]
 	);
 
-	// Start dragging an item
-	const startDrag = React.useCallback(
-		(id: ItemId, index: number) => {
-			'worklet';
-			activeId.value = id;
-			activeIndex.value = index;
-			targetIndex.value = index;
-			if (onDragStart) {
-				runOnJS(onDragStart)();
-			}
-		},
-		[activeId, activeIndex, targetIndex, onDragStart]
-	);
-
-	// Update drag position and calculate target index
-	const updateDrag = React.useCallback(
-		(translationY: number, translationX: number) => {
-			'worklet';
-			if (activeId.value === null) return;
-
-			const currentLayout = layouts.value.get(activeId.value);
-			if (!currentLayout) return;
-
-			const translation = axis === 'vertical' ? translationY : translationX;
-			const itemSize = axis === 'vertical' ? currentLayout.height + gap : currentLayout.width + gap;
-			const currentIndex = activeIndex.value;
-
-			// Calculate how many positions we've moved
-			const offset = Math.round(translation / itemSize);
-			const newTargetIndex = Math.max(0, Math.min(currentIndex + offset, items.length - 1));
-
-			if (newTargetIndex !== targetIndex.value) {
-				targetIndex.value = newTargetIndex;
-			}
-		},
-		[activeId, activeIndex, targetIndex, layouts, axis, gap, items.length]
-	);
-
-	// End drag and finalize order
-	const endDrag = React.useCallback(() => {
-		'worklet';
-		const fromIndex = activeIndex.value;
-		const toIndex = targetIndex.value;
-		const draggedId = activeId.value;
-
-		// Reset state
-		activeId.value = null;
-		activeIndex.value = -1;
-		targetIndex.value = -1;
-
-		// Call onOrderChange if order changed
-		if (fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0 && draggedId !== null) {
-			runOnJS(handleOrderChange)(fromIndex, toIndex, draggedId);
-		}
-
-		if (onDragEnd) {
-			runOnJS(onDragEnd)();
-		}
-	}, [activeId, activeIndex, targetIndex, onDragEnd]);
-
-	// Handle order change on JS thread
+	// Handle order change on JS thread (called via scheduleOnRN from worklet)
 	const handleOrderChange = React.useCallback(
 		(fromIndex: number, toIndex: number, itemId: ItemId) => {
 			const currentItems = itemsRef.current;
@@ -190,8 +143,6 @@ export function SortableContextProvider<T>({
 		[]
 	);
 
-	const getItemCount = React.useCallback(() => items.length, [items.length]);
-
 	// Build context value
 	const value = React.useMemo<SortableContextValue>(
 		() => ({
@@ -205,10 +156,7 @@ export function SortableContextProvider<T>({
 			layouts,
 			registerItem,
 			unregisterItem,
-			startDrag,
-			updateDrag,
-			endDrag,
-			getItemCount,
+			handleOrderChange,
 		}),
 		[
 			listId,
@@ -221,10 +169,7 @@ export function SortableContextProvider<T>({
 			layouts,
 			registerItem,
 			unregisterItem,
-			startDrag,
-			updateDrag,
-			endDrag,
-			getItemCount,
+			handleOrderChange,
 		]
 	);
 

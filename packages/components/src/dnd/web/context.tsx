@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef } from 'react';
 
-import type { SortableContextValue, ItemId, ListId } from './types';
+import type { ItemId, ListId, SortableContextValue } from './types';
 
 /**
  * Context for sortable list functionality
@@ -39,7 +39,7 @@ interface SortableContextProviderProps {
 
 /**
  * Internal provider component used by SortableList
- * 
+ *
  * IMPORTANT: We use refs for mutable data and stable callbacks to prevent
  * unnecessary re-renders of children when items change.
  */
@@ -52,7 +52,7 @@ export function DndContextProvider({
 }: SortableContextProviderProps) {
 	// Map to store element refs
 	const elementMapRef = useRef<Map<ItemId, HTMLElement>>(new Map());
-	
+
 	// Store itemIds in a ref so getItemIndex callback stays stable
 	const itemIdsRef = useRef(itemIds);
 	itemIdsRef.current = itemIds;

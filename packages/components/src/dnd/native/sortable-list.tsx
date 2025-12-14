@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { View, type ViewStyle } from 'react-native';
+
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { SortableContextProvider } from './context';
 import { SortableItem } from './sortable-item';
+
 import type { SortableListProps } from './types';
 
 /**
@@ -29,7 +31,7 @@ function SortableListInner<T>({
 	getItemId,
 	renderItem,
 	onOrderChange,
-	gap = 8,
+	gap = 0,
 	axis = 'vertical',
 	style,
 	hapticFeedback = true,

@@ -1,13 +1,6 @@
-import {
-	type HTMLAttributes,
-	type ReactNode,
-	useEffect,
-	useRef,
-	useState,
-	useCallback,
-} from 'react';
-import { createPortal } from 'react-dom';
+import { type HTMLAttributes, useCallback, useEffect, useRef, useState } from 'react';
 
+import { createPortal } from 'react-dom';
 import {
 	draggable,
 	dropTargetForElements,
@@ -24,9 +17,9 @@ import invariant from 'tiny-invariant';
 import { useDndContext } from './context';
 import { DropIndicator } from './drop-indicator';
 import {
+	type DragState,
 	getSortableItemData,
 	isSortableItemData,
-	type DragState,
 	type SortableItemProps,
 } from './types';
 
@@ -34,8 +27,15 @@ import {
  * State styles applied based on drag state
  */
 const stateStyles: { [Key in DragState['type']]?: HTMLAttributes<HTMLDivElement>['className'] } = {
-	dragging: 'opacity-40',
+	dragging: 'opacity-70',
 };
+
+/**
+ * Base styles for sortable items with hover effects
+ * Uses transparent border by default to prevent layout shift on hover
+ */
+const baseItemStyles =
+	'bg-transparent rounded border border-transparent transition-all duration-150 hover:border-border/50 hover:shadow-sm';
 
 const idle: DragState = { type: 'idle' };
 
@@ -156,7 +156,7 @@ export function SortableItem({
 	// Default preview renders the children
 	const defaultPreview = useCallback(() => {
 		return (
-			<div className="rounded border border-solid bg-white p-2 shadow-lg">
+			<div className="border-border bg-card rounded border border-solid p-2 shadow-lg">
 				{children}
 			</div>
 		);
@@ -166,11 +166,11 @@ export function SortableItem({
 
 	return (
 		<>
-			<div className="relative">
+			<div className="relative m-0.5">
 				<div
 					data-sortable-id={id}
 					ref={ref}
-					className={`${stateStyles[state.type] ?? ''} ${className}`}
+					className={`${baseItemStyles} ${stateStyles[state.type] ?? ''} ${className}`}
 				>
 					{children}
 				</div>
@@ -178,9 +178,7 @@ export function SortableItem({
 					<DropIndicator edge={state.closestEdge} gap={`${gap}px`} />
 				) : null}
 			</div>
-			{state.type === 'preview'
-				? createPortal(<PreviewContent />, state.container)
-				: null}
+			{state.type === 'preview' ? createPortal(<PreviewContent />, state.container) : null}
 		</>
 	);
 }
