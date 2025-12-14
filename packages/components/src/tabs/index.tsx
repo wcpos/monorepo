@@ -62,8 +62,12 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 		const currentContainerWidth = containerWidthRef.current;
 		const currentTotalWidth = totalWidthRef.current;
 
+		// Tab x positions are relative to TabsPrimitive.List, but scroll position is relative
+		// to ScrollView content which includes horizontal padding
+		const adjustedX = x + LIST_PADDING;
+
 		// Calculate target scroll position to center the tab
-		const targetScrollX = x - currentContainerWidth / 2 + width / 2;
+		const targetScrollX = adjustedX - currentContainerWidth / 2 + width / 2;
 
 		// Ensure we don't scroll beyond bounds
 		const maxScrollX = Math.max(0, currentTotalWidth - currentContainerWidth);
@@ -138,7 +142,7 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 				ref={scrollRef}
 				horizontal
 				showsHorizontalScrollIndicator={false}
-				className="scrollbar-hide flex-1"
+				className={cn('flex-1', Platform.OS === 'web' && 'scrollbar-hide')}
 				contentContainerStyle={{ paddingHorizontal: LIST_PADDING }}
 				scrollEventThrottle={16}
 				onContentSizeChange={handleContentSizeChange}
