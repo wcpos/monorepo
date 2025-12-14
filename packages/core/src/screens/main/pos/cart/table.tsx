@@ -108,6 +108,7 @@ export const CartTable = () => {
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
 	const rowRefs = React.useRef<Map<string, React.RefObject<View>>>(new Map());
+	const rowLayouts = React.useRef<Map<string, { y: number; height: number }>>(new Map());
 	const scrollViewRef = React.useRef<ScrollView>(null);
 	const { currentOrder } = useCurrentOrder();
 
@@ -218,27 +219,13 @@ export const CartTable = () => {
 			},
 			rowRefs,
 			newRowUUIDs,
+			rowLayouts,
 			scrollToRow: (uuid: string) => {
-				const rowRef = rowRefs.current.get(uuid);
+				const layout = rowLayouts.current.get(uuid);
 				const scrollView = scrollViewRef.current;
 
-				if (rowRef && scrollView) {
-					rowRef.measureLayout(
-						scrollView,
-						(x, y, width, height) => {
-							scrollView.measure((scrollX, scrollY, scrollWidth, scrollHeight) => {
-								const isRowAboveView = y < scrollY;
-								const isRowBelowView = y + height > scrollY + scrollHeight;
-
-								if (isRowAboveView || isRowBelowView) {
-									scrollView.scrollTo({ y, animated: true });
-								}
-							});
-						},
-						(error) => {
-							console.error('Measure layout failed', error);
-						}
-					);
+				if (layout && scrollView) {
+					scrollView.scrollTo({ y: layout.y, animated: true });
 				}
 			},
 		},
@@ -285,6 +272,10 @@ export const CartTable = () => {
 								index={index}
 								table={table}
 								row={row}
+								onLayout={(e) => {
+									const { y, height } = e.nativeEvent.layout;
+									rowLayouts.current.set(row.id, { y, height });
+								}}
 							>
 								{row.getVisibleCells().map((cell) => {
 									const meta = cell.column.columnDef.meta;
