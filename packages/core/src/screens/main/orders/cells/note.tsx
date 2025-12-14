@@ -22,7 +22,7 @@ export const Note = ({ row }: CellContext<{ document: OrderDocument }, 'customer
 	}
 
 	return (
-		<Tooltip delayDuration={150}>
+		<Tooltip delayDuration={150} showOnNative>
 			<TooltipTrigger asChild>
 				<IconButton name="messageLines" />
 			</TooltipTrigger>

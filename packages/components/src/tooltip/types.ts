@@ -1,4 +1,23 @@
+import type * as TooltipPrimitive from '@rn-primitives/tooltip';
 import type { ForceMountable, PressableRef } from '@rn-primitives/types';
+
+interface TooltipProps {
+	children: React.ReactNode;
+	/**
+	 * On native, tooltips are disabled by default (just passes through children).
+	 * Set to true to enable press-to-show tooltip behavior on native.
+	 * @default false
+	 */
+	showOnNative?: boolean;
+}
+
+interface TooltipTriggerProps extends Omit<TooltipPrimitive.TriggerProps, 'ref'> {
+	children: React.ReactNode;
+}
+
+interface TooltipContentProps extends Omit<TooltipPrimitive.ContentProps, 'ref'> {
+	portalHost?: string;
+}
 
 interface TooltipRootProps {
 	onOpenChange?: (open: boolean) => void;
@@ -39,4 +58,12 @@ interface TooltipTriggerRef extends PressableRef {
 	close: () => void;
 }
 
-export type { TooltipOverlayProps, TooltipPortalProps, TooltipRootProps, TooltipTriggerRef };
+export type {
+	TooltipProps,
+	TooltipTriggerProps,
+	TooltipContentProps,
+	TooltipOverlayProps,
+	TooltipPortalProps,
+	TooltipRootProps,
+	TooltipTriggerRef,
+};
