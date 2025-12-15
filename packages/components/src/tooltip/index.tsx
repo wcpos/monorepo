@@ -8,7 +8,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
-import type { TooltipProps, TooltipContentProps, TooltipTriggerProps } from './types';
+import type { TooltipContentProps, TooltipProps, TooltipTriggerProps } from './types';
 
 const TooltipContext = React.createContext<{ showOnNative: boolean }>({ showOnNative: false });
 

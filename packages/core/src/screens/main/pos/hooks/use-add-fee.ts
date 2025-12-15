@@ -49,18 +49,18 @@ export const useAddFee = () => {
 					meta_data,
 				});
 
-			await addItemToOrder('fee_lines', newFeeLine);
-		} catch (error) {
-			log.error(t('Error adding Fee to cart', { _tags: 'core' }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					feeName: data.name,
-					error: error instanceof Error ? error.message : String(error),
-				},
-			});
-		}
+				await addItemToOrder('fee_lines', newFeeLine);
+			} catch (error) {
+				log.error(t('Error adding Fee to cart', { _tags: 'core' }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						feeName: data.name,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			}
 		},
 		[calculateFeeLineTaxesAndTotals, addItemToOrder, t]
 	);

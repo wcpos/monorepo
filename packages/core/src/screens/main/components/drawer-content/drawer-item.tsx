@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { type StyleProp, type TextStyle, View, type ViewStyle } from 'react-native';
+import { type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { VStack } from '@wcpos/components/vstack';
 import Platform from '@wcpos/utils/platform';
 
 import type { DrawerNavigationOptions } from '@react-navigation/drawer';
@@ -78,7 +79,6 @@ const PermanentDrawerItem = ({ icon, label, focused, onPress, style }) => {
 		<Button
 			onPress={onPress}
 			size="xl"
-			style={style}
 			className={cn(
 				'h-12 rounded-none border-x-4 border-transparent bg-transparent px-3',
 				focused ? 'border-l-primary' : 'hover:bg-white/10'
@@ -91,18 +91,18 @@ const PermanentDrawerItem = ({ icon, label, focused, onPress, style }) => {
 	// Only wrap with tooltip on web
 	if (Platform.OS === 'web') {
 		return (
-			<Tooltip style={style}>
-				<TooltipTrigger asChild onPress={onPress}>
-					{button}
-				</TooltipTrigger>
-				<TooltipContent side="right">
-					<Text>{label}</Text>
-				</TooltipContent>
-			</Tooltip>
+			<VStack style={style}>
+				<Tooltip>
+					<TooltipTrigger asChild>{button}</TooltipTrigger>
+					<TooltipContent side="right">
+						<Text>{label}</Text>
+					</TooltipContent>
+				</Tooltip>
+			</VStack>
 		);
 	}
 
-	return button;
+	return React.cloneElement(button, { style });
 };
 
 // Standard drawer item with label (shown on smaller screens when drawer opens)
