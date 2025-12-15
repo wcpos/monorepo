@@ -44,32 +44,20 @@ export const OpenOrderTabs = () => {
 		>
 			<ScrollableTabsList className="bg-transparent p-0">
 				{openOrders.map(({ id, document }) => (
-					<TabsTrigger
-						key={id}
-						value={id}
-						// variant={order.uuid === currentOrder.uuid ? 'default' : 'secondary'}
-						// onPress={() => {
-						// 	setCurrentOrderID(order.uuid);
-						// }}
-						// disabled={order.uuid === currentOrder.uuid}
-					>
+					<TabsTrigger key={id} value={id}>
 						<CartTabTitle order={document} />
 					</TabsTrigger>
 				))}
-				<TabsTrigger
-					value="new"
-					asChild
-					// variant={currentOrder.isNew ? 'default' : 'secondary'}
-				>
-					<Tooltip>
-						<TooltipTrigger>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<TabsTrigger value="new">
 							<Icon name="plus" />
-						</TooltipTrigger>
-						<TooltipContent>
-							<Text>{t('Open new order', { _tags: 'core' })}</Text>
-						</TooltipContent>
-					</Tooltip>
-				</TabsTrigger>
+						</TabsTrigger>
+					</TooltipTrigger>
+					<TooltipContent>
+						<Text>{t('Open new order', { _tags: 'core' })}</Text>
+					</TooltipContent>
+				</Tooltip>
 			</ScrollableTabsList>
 		</Tabs>
 	);

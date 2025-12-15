@@ -53,7 +53,10 @@ export const CurrentOrderProvider = ({
 			// Run after setParams completes to override the query param URL
 			if (Platform.isWeb) {
 				requestAnimationFrame(() => {
-					const newPath = orderId ? `/cart/${orderId}` : '/cart';
+					// Get base path from homepage URL (e.g., '/foobar/' from 'https://wcpos.local/foobar/')
+					const homepage = (globalThis as any).initialProps?.homepage as string | undefined;
+					const basePath = homepage ? new URL(homepage).pathname.replace(/\/$/, '') : '';
+					const newPath = orderId ? `${basePath}/cart/${orderId}` : `${basePath}/cart`;
 					window.history.replaceState(null, '', newPath);
 				});
 			}
