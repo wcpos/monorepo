@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import { ResponseType, useAuthRequest } from 'expo-auth-session';
 
+import AppInfo from '@wcpos/utils/app-info';
+
 import { getRedirectUri } from './utils';
 
 import type { UseWcposAuthReturn, WcposAuthConfig, WcposAuthResult } from './types';
@@ -36,6 +38,9 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			redirectUri,
 			extraParams: {
 				redirect_uri: redirectUri,
+				platform: AppInfo.platform,
+				version: AppInfo.version,
+				build: AppInfo.buildNumber,
 				...config.extraParams,
 			},
 			scopes: [],
@@ -91,4 +96,3 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 		promptAsync: handlePromptAsync,
 	};
 }
-

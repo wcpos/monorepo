@@ -4,6 +4,7 @@
  */
 import * as React from 'react';
 
+import AppInfo from '@wcpos/utils/app-info';
 import log from '@wcpos/utils/logger';
 
 import { buildAuthUrl, generateState, getRedirectUri } from './utils';
@@ -33,6 +34,17 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 
 	const isReady = !!config.site;
 
+	// Merge app info with user-provided extraParams
+	const mergedExtraParams = React.useMemo(
+		() => ({
+			platform: AppInfo.platform,
+			version: AppInfo.version,
+			build: AppInfo.buildNumber,
+			...config.extraParams,
+		}),
+		[config.extraParams]
+	);
+
 	const promptAsync = React.useCallback(async (): Promise<WcposAuthResult | void> => {
 		if (!config.site) {
 			log.warn('Auth not ready - no site configured');
@@ -42,12 +54,12 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 		// Generate a fresh state for each auth request (CSRF protection)
 		const state = generateState();
 
-		// Build auth URL with state parameter
+		// Build auth URL with state parameter including platform/version info
 		const authUrl = buildAuthUrl(
 			config.site.wcpos_login_url,
 			redirectUri,
 			state,
-			config.extraParams
+			mergedExtraParams
 		);
 
 		log.debug('Triggering Electron auth flow via IPC', {
@@ -107,7 +119,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			setResponse(errorResult);
 			return errorResult;
 		}
-	}, [config.site, config.extraParams, redirectUri]);
+	}, [config.site, mergedExtraParams, redirectUri]);
 
 	return {
 		isReady,
@@ -115,4 +127,3 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 		promptAsync,
 	};
 }
-

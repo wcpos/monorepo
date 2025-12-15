@@ -17,6 +17,7 @@
   },
 	"peerDependencies": {
 		"expo-blob": "^0.1.0",
+		"expo-constants": "~18.0.10",
 		"expo-crypto": "~15.0.3",
 		"expo-localization": "~17.0.3",
 		"expo-router": "~6.0.13",

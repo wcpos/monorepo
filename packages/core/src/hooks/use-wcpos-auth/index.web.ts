@@ -16,6 +16,7 @@ import * as React from 'react';
 
 import { ResponseType, useAuthRequest } from 'expo-auth-session';
 
+import AppInfo from '@wcpos/utils/app-info';
 import log from '@wcpos/utils/logger';
 
 import { buildAuthUrl, generateState, getRedirectUri, parseAuthResult } from './utils';
@@ -81,6 +82,17 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 		[config.site]
 	);
 
+	// Merge app info with user-provided extraParams
+	const mergedExtraParams = React.useMemo(
+		() => ({
+			platform: AppInfo.platform,
+			version: AppInfo.version,
+			build: AppInfo.buildNumber,
+			...config.extraParams,
+		}),
+		[config.extraParams]
+	);
+
 	// Try expo-auth-session first (it handles popup/redirect internally)
 	const [request, response, expoPromptAsync] = useAuthRequest(
 		{
@@ -89,7 +101,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			redirectUri,
 			extraParams: {
 				redirect_uri: redirectUri,
-				...config.extraParams,
+				...mergedExtraParams,
 			},
 			scopes: [],
 			usePKCE: false,
@@ -185,7 +197,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 				config.site!.wcpos_login_url,
 				redirectUri,
 				state,
-				config.extraParams
+				mergedExtraParams
 			);
 			saveAuthState();
 			saveCsrfState(state);
@@ -232,7 +244,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			setAuthResult(errorResult);
 			return errorResult;
 		}
-	}, [request, config.site, config.extraParams, redirectUri, expoPromptAsync]);
+	}, [request, config.site, mergedExtraParams, redirectUri, expoPromptAsync]);
 
 	return {
 		isReady: !!request,
@@ -240,4 +252,3 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 		promptAsync,
 	};
 }
-
