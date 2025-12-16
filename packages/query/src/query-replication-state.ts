@@ -1,3 +1,4 @@
+import { isCancel } from 'axios';
 import intersection from 'lodash/intersection';
 import isEmpty from 'lodash/isEmpty';
 import { BehaviorSubject, interval, Observable, Subscription } from 'rxjs';
@@ -5,6 +6,19 @@ import { filter, startWith, switchMap } from 'rxjs/operators';
 
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
+/**
+ * Check if an error is a CanceledError (from axios or auth flow).
+ * CanceledError means authentication is being handled - don't show error toast.
+ */
+function isAuthCancelError(error: any): boolean {
+	return (
+		isCancel(error) ||
+		error?.name === 'CanceledError' ||
+		error?.code === 'ERR_CANCELED' ||
+		error?.message?.includes('attempting re-authentication')
+	);
+}
 
 import { DataFetcher } from './data-fetcher';
 import { SubscribableBase } from './subscribable-base';
@@ -173,6 +187,21 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 			await this.collectionReplication.bulkUpsertResponse(response);
 		} catch (error: any) {
+			// Check if this is a CanceledError from auth flow - don't show toast
+			if (isAuthCancelError(error)) {
+				log.debug('Request canceled (auth in progress), will retry when auth completes', {
+					context: {
+						endpoint: this.endpoint,
+					},
+				});
+				return;
+			}
+
+			// Check if app is sleeping (in background) - silent return
+			if (error.isSleeping) {
+				return;
+			}
+
 			// Error is already enriched with wpCode/wpMessage by httpClient
 			const message = error.wpMessage || error.message || 'Failed to sync query items';
 			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
@@ -182,6 +211,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 				saveToDb: true,
 				context: {
 					errorCode,
+					serverCode: error.wpServerCode,
 					endpoint: this.endpoint,
 					wpStatus: error.wpStatus,
 				},

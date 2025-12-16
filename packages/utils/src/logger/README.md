@@ -263,9 +263,10 @@ Error codes are:
 
 ### Cross-Platform URL Opening
 
-The logger uses `openExternalURL` utility to open documentation links:
-- **Web/Native**: Opens in browser via `Linking.openURL`
-- **Electron**: Opens in system browser (not in-app) via IPC + `shell.openExternal`
+The logger uses `openExternalURL` utility (`@wcpos/utils/open-external-url`) to open documentation links. Platform-specific implementations:
+- **Native** (`.ts`): Uses `expo-linking` to open URLs
+- **Web** (`.web.ts`): Uses `window.open(url, '_blank')` to open in new tab
+- **Electron** (`.electron.ts`): Uses IPC + `shell.openExternal` to open in system browser
 
 ## Error Code Reference
 
@@ -308,6 +309,69 @@ The logger uses `openExternalURL` utility to open documentation links:
 - `API04003` - MALFORMED_JSON_RESPONSE - Invalid JSON
 - `API04004` - MISSING_RESPONSE_DATA - Empty response
 - `API04005` - JSON_RECOVERY_ATTEMPTED - JSON recovery tried
+- `API04006` - RESOURCE_NOT_FOUND - Requested resource not found (404)
+
+### Server Error Code Mapping
+
+External server error codes (WordPress, WooCommerce, JWT Auth) are automatically mapped to internal codes using `mapToInternalCode()` from `@wcpos/hooks/use-http-client/parse-wp-error`.
+
+This provides:
+1. **Consistent codes** for users across different backends
+2. **Documentation links** pointing to our help pages
+3. **Original server codes** preserved in logs for debugging (as `serverCode`)
+
+#### WordPress REST API Mappings
+| Server Code | Maps To | Internal Code |
+|-------------|---------|---------------|
+| `rest_forbidden` | INSUFFICIENT_PERMISSIONS | `API02005` |
+| `rest_cannot_view` | USER_NOT_AUTHORIZED | `API02004` |
+| `rest_cannot_create/edit/delete` | INSUFFICIENT_PERMISSIONS | `API02005` |
+| `rest_no_route` | RESOURCE_NOT_FOUND | `API04006` |
+| `rest_invalid_param` | INVALID_PARAMETER_VALUE | `API03003` |
+| `rest_login_required` | AUTH_REQUIRED | `API02010` |
+
+#### WooCommerce REST API Mappings
+| Server Code | Maps To | Internal Code |
+|-------------|---------|---------------|
+| `woocommerce_rest_cannot_view` | USER_NOT_AUTHORIZED | `API02004` |
+| `woocommerce_rest_cannot_create/edit/delete` | INSUFFICIENT_PERMISSIONS | `API02005` |
+| `woocommerce_rest_authentication_error` | INVALID_CREDENTIALS | `API02001` |
+| `woocommerce_rest_invalid_id` | INVALID_PARAMETER_VALUE | `API03003` |
+
+#### JWT Auth Mappings
+| Server Code | Maps To | Internal Code |
+|-------------|---------|---------------|
+| `jwt_auth_invalid_token` | TOKEN_INVALID | `API02003` |
+| `jwt_auth_expired_token` | TOKEN_EXPIRED | `API02002` |
+| `jwt_auth_failed` | INVALID_CREDENTIALS | `API02001` |
+| `jwt_auth_no_auth_header` | AUTH_REQUIRED | `API02010` |
+
+#### HTTP Status Fallbacks
+When no specific server code is provided, the HTTP status code is used:
+| HTTP Status | Maps To | Internal Code |
+|-------------|---------|---------------|
+| 400 | INVALID_REQUEST_FORMAT | `API03001` |
+| 401 | AUTH_REQUIRED | `API02010` |
+| 403 | INSUFFICIENT_PERMISSIONS | `API02005` |
+| 404 | RESOURCE_NOT_FOUND | `API04006` |
+| 429 | RATE_LIMIT_EXCEEDED | `API03005` |
+| 5xx | SERVICE_UNAVAILABLE | `SY02002` |
+
+#### Usage Example
+
+```typescript
+import { parseWpError, mapToInternalCode } from '@wcpos/hooks/use-http-client/parse-wp-error';
+
+// Automatic mapping via parseWpError
+const wpError = parseWpError(response.data, 'Fallback message');
+// wpError.code = "API02004" (internal)
+// wpError.serverCode = "woocommerce_rest_cannot_view" (original)
+// wpError.message = "Sorry, you cannot list resources."
+
+// Direct mapping
+const internalCode = mapToInternalCode('jwt_auth_expired_token', 401);
+// Returns "API02002"
+```
 
 #### Plugin/WordPress Errors (API05xxx)
 - `API05001` - WOOCOMMERCE_API_DISABLED - WC API disabled

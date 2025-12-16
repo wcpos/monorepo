@@ -164,21 +164,25 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 	 */
 	const makeRequest = React.useCallback(async (config: AxiosRequestConfig) => {
 		// Pre-flight check: ensure request can proceed based on global state
-		const canProceed = requestStateManager.checkCanProceed();
+		const canProceed = requestStateManager.checkCanProceed() as any;
 		if (!canProceed.ok) {
 			// Create error with additional context
 			const error = new Error(canProceed.reason || 'Request blocked') as any;
 			error.errorCode = canProceed.errorCode;
 			error.isPreFlightBlocked = true;
+			error.isSleeping = canProceed.isSleeping || false;
 
-			log.debug('Request blocked by pre-flight check', {
-				context: {
-					errorCode: canProceed.errorCode,
-					reason: canProceed.reason,
-					url: config.url,
-					method: config.method,
-				},
-			});
+			// Only log if not sleeping - sleeping is expected behavior
+			if (!canProceed.isSleeping) {
+				log.debug('Request blocked by pre-flight check', {
+					context: {
+						errorCode: canProceed.errorCode,
+						reason: canProceed.reason,
+						url: config.url,
+						method: config.method,
+					},
+				});
+			}
 			throw error;
 		}
 
@@ -235,10 +239,12 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 						makeRequest
 					);
 
-					// If result is a response, return it
-					if (result && 'status' in result) {
-						return result as AxiosResponse;
-					}
+				// If result is a response (has both data and status properties), return it
+				// This distinguishes responses from AxiosErrors which have status but not data at top level
+				// Also check isAxiosError flag to be extra safe (AxiosErrors have this set to true)
+				if (result && 'data' in result && 'status' in result && !(result as any).isAxiosError) {
+					return result as AxiosResponse;
+				}
 
 					// Otherwise, it's still an error - use it as the new error
 					error = result as AxiosError;
@@ -266,7 +272,8 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 				const axiosError = error as AxiosError;
 				if (axiosError.response?.data) {
 					const wpError = parseWpError(axiosError.response.data, axiosError.message);
-					(error as any).wpCode = wpError.code;
+					(error as any).wpCode = wpError.code; // Internal code (APIxxxxx)
+					(error as any).wpServerCode = wpError.serverCode; // Original server code for debugging
 					(error as any).wpMessage = wpError.message;
 					(error as any).wpStatus = wpError.status;
 				}

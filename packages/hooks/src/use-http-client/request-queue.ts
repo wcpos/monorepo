@@ -3,6 +3,8 @@ import Bottleneck from 'bottleneck';
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import { requestStateManager } from './request-state-manager';
+
 /**
  * Global request queue shared across all HTTP client instances.
  * This ensures coordinated rate limiting and allows pause/resume functionality.
@@ -31,6 +33,32 @@ globalQueue.on('failed', async (error, jobInfo) => {
 			error: error instanceof Error ? error.message : String(error),
 			retryCount: jobInfo.retryCount,
 		},
+	});
+});
+
+/**
+ * Clear all pending requests from the queue.
+ * Used when waking from sleep to prevent stale request pile-up.
+ */
+const clearQueue = async (): Promise<void> => {
+	const queuedCount = globalQueue.queued();
+	if (queuedCount > 0) {
+		// Stop accepting new jobs temporarily
+		await globalQueue.stop({ dropWaitingJobs: true });
+
+		// Restart the queue
+		globalQueue.updateSettings({
+			maxConcurrent: 10,
+			highWater: 50,
+			strategy: Bottleneck.strategy.BLOCK,
+		});
+	}
+};
+
+// Register for wake events to clear stale requests
+requestStateManager.onWake(() => {
+	clearQueue().catch(() => {
+		// Silently ignore queue clearing errors
 	});
 });
 

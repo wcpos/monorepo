@@ -95,8 +95,89 @@ class RequestStateManager {
 	private authFailed = false;
 	private requestsPaused = false;
 
+	// Visibility/sleep coordination
+	private isSleeping = false;
+	private wakeCallbacks: Array<() => void> = [];
+	private visibilityCleanup: (() => void) | null = null;
+
 	// Private constructor for singleton pattern
-	private constructor() {}
+	private constructor() {
+		this.setupVisibilityListener();
+	}
+
+	/**
+	 * Set up visibility change listener for web/Electron.
+	 * When app goes to background, we mark as sleeping.
+	 * When app wakes, we clear stale state before allowing requests.
+	 */
+	private setupVisibilityListener(): void {
+		if (typeof document === 'undefined' || !document.addEventListener) {
+			return;
+		}
+
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'hidden') {
+				this.handleSleep();
+			} else if (document.visibilityState === 'visible') {
+				this.handleWake();
+			}
+		};
+
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+		this.visibilityCleanup = () => {
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+		};
+	}
+
+	/**
+	 * Called when app goes to background/sleep.
+	 * Marks the manager as sleeping to prevent request pile-up.
+	 */
+	private handleSleep(): void {
+		if (!this.isSleeping) {
+			this.isSleeping = true;
+		}
+	}
+
+	/**
+	 * Called when app wakes from background.
+	 * Clears any stale state and notifies listeners.
+	 */
+	private handleWake(): void {
+		if (this.isSleeping) {
+			this.isSleeping = false;
+
+			// Notify any registered wake callbacks (e.g., queue clearing)
+			for (const callback of this.wakeCallbacks) {
+				try {
+					callback();
+				} catch (e) {
+					// Silently ignore wake callback errors
+				}
+			}
+		}
+	}
+
+	/**
+	 * Register a callback to be called when app wakes from sleep.
+	 * Used by request queue to clear stale requests.
+	 *
+	 * @param callback - Function to call on wake
+	 * @returns Cleanup function to unregister the callback
+	 */
+	onWake(callback: () => void): () => void {
+		this.wakeCallbacks.push(callback);
+		return () => {
+			this.wakeCallbacks = this.wakeCallbacks.filter((cb) => cb !== callback);
+		};
+	}
+
+	/**
+	 * Check if app is currently sleeping (in background).
+	 */
+	isAppSleeping(): boolean {
+		return this.isSleeping;
+	}
 
 	/**
 	 * Get the singleton instance
@@ -119,13 +200,26 @@ class RequestStateManager {
 	 * the request cannot succeed.
 	 *
 	 * Order of checks:
-	 * 1. Offline - No point trying if there's no network
-	 * 2. Auth Failed - No point trying if we need re-authentication
-	 * 3. Paused - System is in recovery mode
+	 * 1. Sleeping - App is in background, don't queue more requests
+	 * 2. Offline - No point trying if there's no network
+	 * 3. Auth Failed - No point trying if we need re-authentication
+	 * 4. Paused - System is in recovery mode
 	 *
 	 * @returns Object with `ok` boolean and optional error details
 	 */
 	checkCanProceed(): CanProceedResult {
+		// Don't queue new requests while app is sleeping
+		// This prevents pile-up during sleep
+		if (this.isSleeping) {
+			return {
+				ok: false,
+				reason: 'App is in background',
+				errorCode: ERROR_CODES.SERVICE_UNAVAILABLE,
+				// Special flag so callers can handle this silently
+				isSleeping: true,
+			} as CanProceedResult & { isSleeping: boolean };
+		}
+
 		if (this.offline) {
 			return {
 				ok: false,

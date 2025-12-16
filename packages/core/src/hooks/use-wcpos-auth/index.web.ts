@@ -182,16 +182,24 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 
 	const promptAsync = React.useCallback(async (): Promise<WcposAuthResult | void> => {
 		if (!request || !config.site) {
-			log.warn('Auth not ready');
+			log.warn('[WEB_AUTH] Auth not ready', {
+				context: { hasRequest: !!request, hasSite: !!config.site },
+			});
 			return;
 		}
 
-		log.debug('Triggering web auth flow');
+		log.debug('[WEB_AUTH] Triggering web auth flow', {
+			context: {
+				loginUrl: config.site.wcpos_login_url,
+				redirectUri,
+			},
+		});
 
 		/**
 		 * Helper to perform fallback redirect with state
 		 */
 		const doFallbackRedirect = () => {
+			log.debug('[WEB_AUTH] Performing fallback redirect');
 			const state = generateState();
 			const authUrl = buildAuthUrl(
 				config.site!.wcpos_login_url,
@@ -201,12 +209,21 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			);
 			saveAuthState();
 			saveCsrfState(state);
+			log.debug('[WEB_AUTH] Redirecting to auth URL', { context: { authUrl } });
 			window.location.href = authUrl;
 		};
 
 		try {
+			log.debug('[WEB_AUTH] Calling expoPromptAsync...');
 			// Try expo-auth-session first
 			const result = await expoPromptAsync();
+
+			log.debug('[WEB_AUTH] expoPromptAsync returned', {
+				context: {
+					resultType: result?.type,
+					hasParams: !!result?.params,
+				},
+			});
 
 			if (result?.type === 'success') {
 				return {
@@ -218,7 +235,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			// If we get here without success and didn't get an explicit error,
 			// the popup was likely blocked. Fall back to redirect.
 			if (!result || result.type === 'dismiss') {
-				log.debug('Popup may have been blocked, falling back to redirect');
+				log.debug('[WEB_AUTH] Popup may have been blocked or dismissed, falling back to redirect');
 				doFallbackRedirect();
 				// This won't return - page will navigate away
 			}
@@ -226,16 +243,19 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			return;
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : String(err);
+			log.debug('[WEB_AUTH] expoPromptAsync threw error', {
+				context: { error: errorMessage },
+			});
 
 			// Check if this is a popup blocked error
 			if (errorMessage.includes('Popup window was blocked') || errorMessage.includes('blocked')) {
-				log.debug('Popup blocked, falling back to redirect');
+				log.debug('[WEB_AUTH] Popup blocked, falling back to redirect');
 				doFallbackRedirect();
 				// This won't return - page will navigate away
 				return;
 			}
 
-			log.error('Auth failed', { context: { error: errorMessage } });
+			log.error('[WEB_AUTH] Auth failed', { context: { error: errorMessage } });
 
 			const errorResult: WcposAuthResult = {
 				type: 'error',

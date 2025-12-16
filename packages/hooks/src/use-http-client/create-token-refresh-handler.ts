@@ -107,6 +107,8 @@ interface TokenRefreshConfig {
 	site: {
 		/** Base URL for WCPOS REST API (e.g., 'https://example.com/wp-json/wcpos/v1/') */
 		wcpos_api_url?: string;
+		/** Base URL for WordPress REST API - fallback for constructing wcpos_api_url */
+		wp_api_url?: string;
 		/** If true, JWT is sent as query param instead of header */
 		use_jwt_as_param?: boolean;
 		/** Site URL for logging */
@@ -182,10 +184,15 @@ export const createTokenRefreshHandler = ({
 			const latestDoc = wpUser.getLatest();
 			const currentRefreshToken = latestDoc?.refresh_token;
 
-			if (!site.wcpos_api_url || !currentRefreshToken) {
+			// Construct API URL with fallback (wcpos_api_url may not be set on web after wake)
+			const apiUrl = site.wcpos_api_url || (site.wp_api_url ? `${site.wp_api_url}wcpos/v1/` : null);
+
+			if (!apiUrl || !currentRefreshToken) {
 				log.debug('Skipping token refresh - missing required data', {
 					context: {
-						hasApiUrl: !!site.wcpos_api_url,
+						hasWcposApiUrl: !!site.wcpos_api_url,
+						hasWpApiUrl: !!site.wp_api_url,
+						hasApiUrl: !!apiUrl,
 						hasRefreshToken: !!currentRefreshToken,
 					},
 				});
@@ -264,23 +271,25 @@ export const createTokenRefreshHandler = ({
 					// Pause queue to prevent other requests from using stale token
 					pauseQueue();
 
-				try {
-					// Use fresh HTTP client to avoid circular error handling
-					const httpClient = getHttpClient();
+					try {
+						// Use fresh HTTP client to avoid circular error handling
+						const httpClient = getHttpClient();
 
-					log.debug('Attempting token refresh', {
-						context: {
-							userId: wpUser.id,
-							hasRefreshToken: !!currentRefreshToken,
-							refreshTokenPreview: currentRefreshToken ? `${currentRefreshToken.substring(0, 20)}...` : 'none',
-						},
-					});
+						log.debug('Attempting token refresh', {
+							context: {
+								userId: wpUser.id,
+								hasRefreshToken: !!currentRefreshToken,
+								refreshTokenPreview: currentRefreshToken
+									? `${currentRefreshToken.substring(0, 20)}...`
+									: 'none',
+							},
+						});
 
-					const refreshResponse = await httpClient.post(
-						`${site.wcpos_api_url}auth/refresh`,
-						{ refresh_token: currentRefreshToken },
-						{ headers: { 'X-WCPOS': '1' } }
-					);
+						const refreshResponse = await httpClient.post(
+							`${apiUrl}auth/refresh`,
+							{ refresh_token: currentRefreshToken },
+							{ headers: { 'X-WCPOS': '1' } }
+						);
 
 						const refreshData: TokenRefreshResponse = refreshResponse.data;
 						const { access_token, expires_at } = refreshData;

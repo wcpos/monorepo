@@ -3,6 +3,7 @@ import isEmpty from 'lodash/isEmpty';
 import { BehaviorSubject, combineLatest, interval, Observable } from 'rxjs';
 import { distinctUntilChanged, filter, map, startWith, switchMap } from 'rxjs/operators';
 
+import { parseWpError } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import log from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -131,16 +132,38 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 		// On web, browser tabs throttle timers when in background.
 		// Check for updates when the tab becomes visible again.
+		// IMPORTANT: We debounce this to prevent all collections from triggering
+		// sync simultaneously when waking from sleep.
 		if (typeof document !== 'undefined' && document.addEventListener) {
+			let wakeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 			const handleVisibilityChange = () => {
 				if (
 					document.visibilityState === 'visible' &&
 					!this.subjects.paused.getValue() &&
 					!this.subjects.active.getValue()
 				) {
-					this.run().catch(() => {
-						// Errors are already logged in run() and its sub-methods
-					});
+					// Clear any existing debounce timer
+					if (wakeDebounceTimer) {
+						clearTimeout(wakeDebounceTimer);
+					}
+
+					// Debounce by a random amount (0-2s) to stagger collection syncs
+					// This prevents all collections from hitting the server at once
+					const delay = Math.random() * 2000;
+					wakeDebounceTimer = setTimeout(() => {
+						wakeDebounceTimer = null;
+						// Only run if still visible and not already syncing
+						if (
+							document.visibilityState === 'visible' &&
+							!this.subjects.paused.getValue() &&
+							!this.subjects.active.getValue()
+						) {
+							this.run().catch(() => {
+								// Errors are already logged in run() and its sub-methods
+							});
+						}
+					}, delay);
 				}
 			};
 
@@ -148,7 +171,12 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 			// Store cleanup function - will be called on cancel via SubscribableBase
 			this.addSub('visibility', {
-				unsubscribe: () => document.removeEventListener('visibilitychange', handleVisibilityChange),
+				unsubscribe: () => {
+					document.removeEventListener('visibilitychange', handleVisibilityChange);
+					if (wakeDebounceTimer) {
+						clearTimeout(wakeDebounceTimer);
+					}
+				},
 			});
 		}
 
@@ -224,16 +252,18 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		try {
 			const response = await this.dataFetcher.fetchAllRemoteIds();
 			if (!Array.isArray(response?.data)) {
-				// Server returned 200 but with unexpected data format
-				const errorCode = response?.data?.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
-				const errorMessage = response?.data?.message || 'Invalid response fetching remote state';
+				// Server returned 200 but with unexpected data format (e.g., WP error object, HTML, etc.)
+				const wpError = parseWpError(response?.data, 'Invalid response fetching remote state');
+				const errorCode = wpError.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
 
-				log.error(errorMessage, {
+				log.error(wpError.message, {
 					showToast: true,
 					saveToDb: true,
 					context: {
 						errorCode,
+						serverCode: wpError.serverCode,
 						endpoint: this.endpoint,
+						wpStatus: wpError.status,
 					},
 				});
 				return;
@@ -265,6 +295,13 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				return;
 			}
 
+			// Check if app is sleeping (in background) - silent return, no error
+			if (error.isSleeping) {
+				// App is in background, request was blocked intentionally
+				// Polling will resume when app wakes
+				return;
+			}
+
 			// Error is already enriched with wpCode/wpMessage by httpClient
 			const message = error.wpMessage || error.message || 'Failed to fetch remote state';
 			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
@@ -274,6 +311,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				saveToDb: true,
 				context: {
 					errorCode,
+					serverCode: error.wpServerCode,
 					endpoint: this.endpoint,
 					wpStatus: error.wpStatus,
 				},
@@ -298,15 +336,17 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				const response = await this.dataFetcher.fetchRecentRemoteUpdates(modifiedAfter);
 				if (!Array.isArray(response?.data)) {
 					// Server returned 200 but with unexpected data format
-					const errorCode = response?.data?.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
-					const errorMessage = response?.data?.message || 'Invalid response checking updates';
+					const wpError = parseWpError(response?.data, 'Invalid response checking updates');
+					const errorCode = wpError.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
 
-					log.error(errorMessage, {
+					log.error(wpError.message, {
 						showToast: true,
 						saveToDb: true,
 						context: {
 							errorCode,
+							serverCode: wpError.serverCode,
 							endpoint: this.endpoint,
+							wpStatus: wpError.status,
 						},
 					});
 					return;
@@ -337,6 +377,11 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 					return;
 				}
 
+				// Check if app is sleeping (in background) - silent return
+				if (error.isSleeping) {
+					return;
+				}
+
 				// Error is already enriched with wpCode/wpMessage by httpClient
 				const message = error.wpMessage || error.message || 'Failed to check for updates';
 				const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
@@ -346,6 +391,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 					saveToDb: true,
 					context: {
 						errorCode,
+						serverCode: error.wpServerCode,
 						endpoint: this.endpoint,
 						wpStatus: error.wpStatus,
 					},
@@ -424,6 +470,11 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				return;
 			}
 
+			// Check if app is sleeping (in background) - silent return
+			if (error.isSleeping) {
+				return;
+			}
+
 			// Error is already enriched with wpCode/wpMessage by httpClient
 			const message = error.wpMessage || error.message || 'Failed to sync remote items';
 			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
@@ -433,6 +484,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				saveToDb: true,
 				context: {
 					errorCode,
+					serverCode: error.wpServerCode,
 					endpoint: this.endpoint,
 					wpStatus: error.wpStatus,
 				},
@@ -448,15 +500,17 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	public async bulkUpsertResponse(response: any) {
 		if (!Array.isArray(response?.data)) {
 			// Server returned 200 but with unexpected data format
-			const errorCode = response?.data?.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
-			const errorMessage = response?.data?.message || 'Invalid response from server';
+			const wpError = parseWpError(response?.data, 'Invalid response from server');
+			const errorCode = wpError.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
 
-			log.error(errorMessage, {
+			log.error(wpError.message, {
 				showToast: true,
 				saveToDb: true,
 				context: {
 					errorCode,
+					serverCode: wpError.serverCode,
 					endpoint: this.endpoint,
+					wpStatus: wpError.status,
 				},
 			});
 			return;
@@ -523,6 +577,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				saveToDb: true,
 				context: {
 					errorCode,
+					serverCode: error.wpServerCode,
 					endpoint: this.endpoint,
 					documentId: doc.id,
 					wpStatus: error.wpStatus,
@@ -564,6 +619,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				saveToDb: true,
 				context: {
 					errorCode,
+					serverCode: error.wpServerCode,
 					endpoint: this.endpoint,
 					wpStatus: error.wpStatus,
 				},

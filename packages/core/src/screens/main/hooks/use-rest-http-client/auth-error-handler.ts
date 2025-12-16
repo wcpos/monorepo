@@ -108,19 +108,27 @@ export const useAuthErrorHandler = (
 
 	React.useEffect(() => {
 		if (shouldTriggerAuth) {
-			log.debug('Triggering OAuth authentication flow');
-			setShouldTriggerAuth(false);
-			promptAsync().catch((authError) => {
-				log.warn('Authentication failed - please try again', {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.AUTH_REQUIRED,
-						siteName: site.name,
-						error: authError instanceof Error ? authError.message : String(authError),
-					},
-				});
+			log.debug('[AUTH_HANDLER] shouldTriggerAuth is true, calling promptAsync', {
+				context: { siteName: site.name },
 			});
+			setShouldTriggerAuth(false);
+			promptAsync()
+				.then((result) => {
+					log.debug('[AUTH_HANDLER] promptAsync resolved', {
+						context: { resultType: (result as any)?.type },
+					});
+				})
+				.catch((authError) => {
+					log.warn('[AUTH_HANDLER] promptAsync rejected - Authentication failed', {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.AUTH_REQUIRED,
+							siteName: site.name,
+							error: authError instanceof Error ? authError.message : String(authError),
+						},
+					});
+				});
 		}
 	}, [shouldTriggerAuth, promptAsync, site.name]);
 
