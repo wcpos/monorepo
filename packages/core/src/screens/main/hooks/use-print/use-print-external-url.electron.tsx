@@ -2,11 +2,9 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import type { UseReactToPrintOptions } from './types';
+import log from '@wcpos/utils/logger';
 
-interface UsePrintExternalURLOptions extends UseReactToPrintOptions {
-	externalURL: string;
-}
+import type { UsePrintExternalURLOptions } from './types';
 
 export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 	const { externalURL, onBeforePrint, onAfterPrint, onPrintError } = options;
@@ -49,7 +47,7 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 				}
 			});
 		} else {
-			console.error('ipcRenderer not available');
+			log.error('ipcRenderer not available');
 		}
 	}, [externalURL, onBeforePrint, onAfterPrint, onPrintError]);
 

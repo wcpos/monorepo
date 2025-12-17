@@ -4,16 +4,19 @@ import * as Print from 'expo-print';
 
 import log from '@wcpos/utils/logger';
 
-import type { UsePrintExternalURLOptions } from './types';
+import type { UsePrintOptions } from './use-print.types';
 
-export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
+/**
+ * Native implementation of usePrint hook using expo-print.
+ * Prints HTML content on iOS/Android.
+ */
+export const usePrint = (options: UsePrintOptions) => {
+	const { html, onBeforePrint, onAfterPrint, onPrintError } = options;
 	const [isPrinting, setIsPrinting] = React.useState(false);
 
 	const print = React.useCallback(async () => {
-		const { externalURL, onBeforePrint, onAfterPrint, onPrintError } = options;
-
-		if (!externalURL) {
-			log.warn('No external URL provided to print');
+		if (!html) {
+			log.warn('No HTML content provided to print');
 			return;
 		}
 
@@ -26,13 +29,6 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 				await beforePrintResult;
 			}
 
-			// Fetch HTML content from the URL
-			const response = await fetch(externalURL);
-			if (!response.ok) {
-				throw new Error(`Failed to fetch receipt: ${response.status} ${response.statusText}`);
-			}
-			const html = await response.text();
-
 			// Print using expo-print
 			await Print.printAsync({ html });
 
@@ -44,7 +40,7 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 		} finally {
 			setIsPrinting(false);
 		}
-	}, [options]);
+	}, [html, onBeforePrint, onAfterPrint, onPrintError]);
 
 	return { print, isPrinting };
-}
+};

@@ -2,7 +2,9 @@ import * as React from 'react';
 
 import { useReactToPrint } from 'react-to-print';
 
-import type { UseReactToPrintOptions } from 'react-to-print';
+import log from '@wcpos/utils/logger';
+
+import type { UsePrintOptions } from './use-print.types';
 
 const DEFAULT_PAGE_STYLE = `
     @page {
@@ -21,42 +23,47 @@ const DEFAULT_PAGE_STYLE = `
 `;
 
 /**
- *
+ * Web implementation of usePrint hook using react-to-print.
+ * Prints DOM content via browser print dialog.
  */
-export const usePrint = (options: UseReactToPrintOptions) => {
+export const usePrint = (options: UsePrintOptions) => {
+	const { contentRef, pageStyle, onBeforePrint, onAfterPrint, onPrintError } = options;
 	const [isPrinting, setIsPrinting] = React.useState(false);
-	const promiseResolveRef = React.useRef(null);
+	const promiseResolveRef = React.useRef<(() => void) | null>(null);
 
-	/**
-	 *
-	 */
+	// Needed for react-to-print: resolves the Promise when isPrinting becomes true
 	React.useEffect(() => {
 		if (isPrinting && promiseResolveRef.current) {
-			// Resolves the Promise, letting `react-to-print` know that the DOM updates are completed
 			promiseResolveRef.current();
 		}
 	}, [isPrinting]);
 
-	/**
-	 *
-	 */
 	const print = useReactToPrint({
-		pageStyle: DEFAULT_PAGE_STYLE,
+		contentRef,
+		pageStyle: pageStyle || DEFAULT_PAGE_STYLE,
 		onPrintError: (errorLocation, error) => {
-			console.error(`Error in ${errorLocation}:`, error);
+			log.error(`Print error in ${errorLocation}`, { context: { error } });
+			onPrintError?.(errorLocation, error);
 		},
 		onBeforePrint: () => {
-			return new Promise((resolve) => {
+			return new Promise<void>((resolve) => {
 				promiseResolveRef.current = resolve;
 				setIsPrinting(true);
+				// Call user's onBeforePrint if provided
+				const result = onBeforePrint?.();
+				if (result instanceof Promise) {
+					result.then(resolve).catch(() => resolve());
+				} else {
+					resolve();
+				}
 			});
 		},
 		onAfterPrint: () => {
 			// Reset the Promise resolve so we can print again
 			promiseResolveRef.current = null;
 			setIsPrinting(false);
+			onAfterPrint?.();
 		},
-		...options,
 	});
 
 	return { print, isPrinting };
