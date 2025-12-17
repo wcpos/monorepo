@@ -36,6 +36,7 @@ import { UISettingsDialog } from '../../components/ui-settings';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 import { TextCell } from '../../components/text-cell';
+import { COGS } from './cells/cogs';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -47,6 +48,7 @@ const cells = {
 		price: Price,
 		sku: SKU,
 		stock_quantity: StockQuantity,
+		cost_of_goods_sold: COGS,
 	},
 	variable: {
 		actions: VariableActions,
@@ -55,6 +57,7 @@ const cells = {
 		price: VariableProductPrice,
 		stock_quantity: StockQuantity,
 		sku: SKU,
+		cost_of_goods_sold: COGS,
 	},
 };
 
@@ -65,6 +68,7 @@ const variationCells = {
 	stock_quantity: StockQuantity,
 	price: Price,
 	sku: SKU,
+	cost_of_goods_sold: COGS,
 };
 
 /**

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { RxDocument } from 'rxdb';
+import { isRxDocument, RxDocument } from 'rxdb';
 
 import type {
 	CustomerDocument,
@@ -28,8 +28,8 @@ interface Props {
 /**
  * This is a temporary hack. When new docs are created in RxDB, it should fill out the root fields?
  */
-function generateEmptyJSON(schema) {
-	const result = {};
+function generateEmptyJSON(schema: any): Record<string, any> {
+	const result: Record<string, any> = {};
 
 	if (schema.type === 'object' && schema.properties) {
 		for (const key in schema.properties) {
@@ -65,8 +65,13 @@ function generateEmptyJSON(schema) {
 }
 
 /**
- * @FIXME - This sucks, we need a better to mutate local, then queue up a remote create/update
- * And we need to handle the case where the remote create/update fails, and we need to retry
+ * Hook for creating and updating documents with optimistic local updates and server sync.
+ *
+ * Flow:
+ * 1. Apply changes locally (optimistic update)
+ * 2. Send to server
+ * 3. Server response becomes source of truth (overwrites local)
+ * 4. On error: rollback local changes (patch) or remove local doc (create)
  */
 export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const manager = useQueryManager();
@@ -75,10 +80,10 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const { localPatch } = useLocalMutation();
 
 	/**
-	 *
+	 * Handle mutation errors with appropriate error codes
 	 */
 	const handleError = React.useCallback(
-		(error: Error | any) => {
+		(error: Error | any, context?: Record<string, unknown>) => {
 			let errorCode: string = ERROR_CODES.TRANSACTION_FAILED;
 			let message = error.message || String(error);
 
@@ -111,6 +116,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					collectionName,
 					endpoint,
 					operation: 'mutation',
+					...context,
 				},
 			});
 		},
@@ -118,7 +124,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	);
 
 	/**
-	 *
+	 * Handle successful mutations
 	 */
 	const handleSuccess = React.useCallback(
 		(doc: RxDocument) => {
@@ -136,11 +142,32 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	);
 
 	/**
+	 * Patch an existing document.
 	 *
+	 * 1. Save original values for rollback
+	 * 2. Apply changes locally (optimistic)
+	 * 3. Send to server
+	 * 4. Server response overwrites local (source of truth)
+	 * 5. On error: rollback to original values
 	 */
 	const patch = React.useCallback(
 		async ({ document, data }: { document: Document; data: Record<string, unknown> }) => {
-			const { document: doc } = await localPatch({ document, data });
+			// Save original values for potential rollback
+			const originalValues: Record<string, unknown> = {};
+			for (const key of Object.keys(data)) {
+				const rootKey = key.split('.')[0];
+				if (!(rootKey in originalValues)) {
+					originalValues[rootKey] = (document as any)[rootKey];
+				}
+			}
+
+			// Apply optimistic local update
+			const result = await localPatch({ document, data });
+			if (!result) {
+				return; // localPatch already handles/logs errors
+			}
+
+			const { document: doc, changes } = result;
 
 			try {
 				const replicationState = manager.registerCollectionReplication({
@@ -152,35 +179,60 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					throw new Error('replicationState not found');
 				}
 
-				// TODO: Fix replication method call - remotePatch may not exist
-				// const updatedDoc = await replicationState.remotePatch(doc, changes);
-				// For now, just use the local document
-				handleSuccess(doc);
-				return doc;
+				// Send to server - server response becomes source of truth
+				const updatedDoc = await replicationState.remotePatch(doc, changes);
 
-				// if (isRxDocument(updatedDoc)) {
-				// 	handleSuccess(updatedDoc);
-				// 	return updatedDoc;
-				// } else {
-				// 	handleError(
-				// 		new Error(t('{title} not updated', { _tags: 'core', title: collectionLabel }))
-				// 	);
-				// }
+				if (isRxDocument(updatedDoc)) {
+					handleSuccess(updatedDoc);
+					return updatedDoc;
+				} else {
+					// Server returned an error or invalid response - rollback local changes
+					await doc.getLatest().incrementalPatch(originalValues);
+					handleError(
+						new Error(t('{title} not updated', { _tags: 'core', title: collectionLabel })),
+						{ documentId: doc.id }
+					);
+				}
 			} catch (error) {
-				handleError(error);
+				// Rollback local changes on error
+				try {
+					await doc.getLatest().incrementalPatch(originalValues);
+				} catch (rollbackError) {
+					log.debug('Failed to rollback local changes', {
+						context: { documentId: doc.id, error: String(rollbackError) },
+					});
+				}
+				handleError(error, { documentId: doc.id });
 			}
 		},
-		[collection, collectionName, endpoint, handleError, handleSuccess, localPatch, manager]
+		[
+			collection,
+			collectionLabel,
+			collectionName,
+			endpoint,
+			handleError,
+			handleSuccess,
+			localPatch,
+			manager,
+			t,
+		]
 	);
 
 	/**
+	 * Create a new document.
 	 *
+	 * 1. Create locally with generated fields
+	 * 2. Send to server
+	 * 3. Server response overwrites local (source of truth - includes server-generated ID)
+	 * 4. On error: remove local document
 	 */
 	const create = React.useCallback(
 		async ({ data }: { data: Record<string, unknown> }) => {
+			let localDoc: RxDocument | null = null;
+
 			try {
-				// create local document
-				const emptyJSON: any = generateEmptyJSON(collection.schema.jsonSchema);
+				// Create local document with empty fields and provided data
+				const emptyJSON = generateEmptyJSON(collection.schema.jsonSchema);
 				const hasCreatedDate = get(collection, 'schema.jsonSchema.properties.date_created_gmt');
 				const hasModifiedDate = get(collection, 'schema.jsonSchema.properties.date_modified_gmt');
 
@@ -190,7 +242,8 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 						emptyJSON.date_modified_gmt = emptyJSON.date_created_gmt;
 					}
 				}
-				const doc = await collection.insert({ ...emptyJSON, ...data });
+
+				localDoc = await collection.insert({ ...emptyJSON, ...data });
 
 				const replicationState = manager.registerCollectionReplication({
 					collection,
@@ -201,26 +254,34 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					throw new Error('replicationState not found');
 				}
 
-				// TODO: Fix replication method call - remoteCreate may not exist
-				// const updatedDoc = await replicationState.remoteCreate(doc.toJSON());
-				// For now, just use the local document
-				handleSuccess(doc);
-				return doc;
+				// Send to server - server response becomes source of truth (includes real ID)
+				const serverDoc = await replicationState.remoteCreate(localDoc.toJSON());
 
-				// if (isRxDocument(updatedDoc)) {
-				// 	handleSuccess(updatedDoc);
-				// 	return updatedDoc;
-				// } else {
-				// 	doc.getLatest().remove();
-				// 	handleError(
-				// 		new Error(t('{title} not created', { _tags: 'core', title: collectionLabel }))
-				// 	);
-				// }
+				if (isRxDocument(serverDoc)) {
+					handleSuccess(serverDoc);
+					return serverDoc;
+				} else {
+					// Server returned an error or invalid response - remove local document
+					await localDoc.getLatest().remove();
+					handleError(
+						new Error(t('{title} not created', { _tags: 'core', title: collectionLabel }))
+					);
+				}
 			} catch (error) {
+				// Remove local document on error
+				if (localDoc) {
+					try {
+						await localDoc.getLatest().remove();
+					} catch (removeError) {
+						log.debug('Failed to remove local document after create error', {
+							context: { error: String(removeError) },
+						});
+					}
+				}
 				handleError(error);
 			}
 		},
-		[collection, collectionName, endpoint, handleError, handleSuccess, manager]
+		[collection, collectionLabel, collectionName, endpoint, handleError, handleSuccess, manager, t]
 	);
 
 	return { patch, create };

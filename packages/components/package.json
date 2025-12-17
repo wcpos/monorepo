@@ -75,7 +75,7 @@
     "uniwind": "^1.0.0",
     "react-native-resizable-panels": "^0.0.3",
     "sonner": "^2.0.7",
-    "sonner-native": "^0.21.0",
+    "sonner-native": "^0.22.0",
     "tailwind-merge": "^3.4.0"
   }
 }

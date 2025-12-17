@@ -121,7 +121,9 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 					</DropdownMenuItem>
 					{orderHasID && (
 						<>
-							<DropdownMenuItem onPress={() => router.push({ pathname: `/receipt/${order.uuid}` })}>
+							<DropdownMenuItem
+								onPress={() => router.push({ pathname: `/orders/receipt/${order.uuid}` })}
+							>
 								<Icon name="receipt" />
 								<Text>{t('Receipt', { _tags: 'core' })}</Text>
 							</DropdownMenuItem>

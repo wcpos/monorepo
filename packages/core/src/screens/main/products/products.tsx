@@ -43,6 +43,7 @@ import { useUISettings } from '../contexts/ui-settings';
 import { useMutation } from '../hooks/mutations/use-mutation';
 import { TextCell } from '../components/text-cell';
 import { ProductBrands } from '../components/product/brands';
+import { COGS } from './cells/cogs';
 
 import type { ExpandedState } from '@tanstack/react-table';
 
@@ -64,6 +65,7 @@ const cells = {
 		categories: ProductCategories,
 		tags: ProductTags,
 		brands: ProductBrands,
+		cost_of_goods_sold: COGS,
 	},
 	variable: {
 		actions: Actions,
@@ -80,6 +82,7 @@ const cells = {
 		categories: ProductCategories,
 		tags: ProductTags,
 		brands: ProductBrands,
+		cost_of_goods_sold: COGS,
 	},
 };
 
@@ -98,6 +101,7 @@ const variationCells = {
 	categories: () => {},
 	tags: () => {},
 	brands: () => {},
+	cost_of_goods_sold: COGS,
 };
 
 /**

@@ -86,6 +86,16 @@ export const ordersLiteral = {
 		total: {
 			type: 'string',
 		},
+		cost_of_goods_sold: {
+			description: 'Cost of goods sold.',
+			type: 'object',
+			properties: {
+				total_value: {
+					description: 'The cumulative cost (read-only).',
+					type: 'number',
+				},
+			},
+		},
 		sortable_total: {
 			// Stored as number (value * 1,000,000) to support all currency decimal places
 			// Using number type to avoid 32-bit integer overflow for large order totals
@@ -274,6 +284,16 @@ export const ordersLiteral = {
 					price: {
 						description: 'Product price.',
 						type: 'number',
+					},
+					cost_of_goods_sold: {
+						description: 'Cost of goods sold.',
+						type: 'object',
+						properties: {
+							value: {
+								description: 'The specified cost value (read-only).',
+								type: 'number',
+							},
+						},
 					},
 					quantity: {
 						description: 'Quantity ordered.',

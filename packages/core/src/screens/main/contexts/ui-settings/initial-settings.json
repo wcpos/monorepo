@@ -71,7 +71,8 @@
       {
         "key": "cost_of_goods_sold",
         "show": false,
-        "align": "right"
+        "align": "right",
+        "disableSort": true
       },
       {
         "key": "price",
@@ -257,7 +258,8 @@
       {
         "key": "cost_of_goods_sold",
         "show": false,
-        "align": "right"
+        "align": "right",
+        "disableSort": true
       },
       {
         "key": "price",
