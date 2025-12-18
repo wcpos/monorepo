@@ -147,15 +147,29 @@ export const useRestHttpClient = (endpoint = '') => {
 	 * IMPORTANT: Reads JWT fresh from wpCredentials.access_token at request time,
 	 * not from a captured closure. This ensures that even if Query holds a stale
 	 * httpClient reference, it will always use the CURRENT token.
+	 *
+	 * If a token was just refreshed, we prefer the in-memory token from
+	 * requestStateManager over the database value to avoid race conditions
+	 * where RxDB hasn't fully persisted the new token yet.
 	 */
 	const request = React.useCallback(
 		async (reqConfig: RequestConfig = {}) => {
 			// Online status is now checked by the request state manager pre-flight check
 			// No need to manually check here - requests will be blocked automatically
 
-			// Read JWT fresh at request time (not from React state)
-			// This ensures we always use the latest token, even if httpClient reference is stale
-			const jwt = wpCredentials.access_token;
+			// Prefer freshly refreshed token (in-memory) over database value
+			// This avoids race conditions where RxDB hasn't persisted the new token yet
+			const refreshedToken = requestStateManager.getRefreshedToken();
+			const jwt = refreshedToken || wpCredentials.access_token;
+
+			if (refreshedToken) {
+				log.debug('Using in-memory refreshed token (RxDB may not have persisted yet)', {
+					context: {
+						endpoint,
+						url: reqConfig.url,
+					},
+				});
+			}
 
 			const shouldUseJwtAsParam = get(
 				window,

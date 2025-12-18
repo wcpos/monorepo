@@ -288,14 +288,27 @@ class RequestStateManager {
 	 */
 	async startTokenRefresh(refreshFn: () => Promise<string>): Promise<void> {
 		// If refresh is already in progress, return the existing promise
-		if (this.tokenRefreshPromise) {
-			log.debug('Token refresh already in progress, awaiting existing operation');
-			return this.tokenRefreshPromise;
+		// Check BOTH flags to be safe against race conditions
+		if (this.tokenRefreshPromise || this.isRefreshing) {
+			log.debug('Token refresh already in progress, awaiting existing operation', {
+				context: {
+					hasPromise: !!this.tokenRefreshPromise,
+					isRefreshing: this.isRefreshing,
+				},
+			});
+			// If we have a promise, await it; otherwise just return (edge case)
+			if (this.tokenRefreshPromise) {
+				return this.tokenRefreshPromise;
+			}
+			return;
 		}
 
-		log.debug('Starting coordinated token refresh');
+		// Set the flag FIRST before any async operations
+		// This prevents race conditions where multiple handlers check simultaneously
 		this.isRefreshing = true;
 		this.refreshedToken = null;
+
+		log.debug('Starting coordinated token refresh (lock acquired)');
 
 		// Create and store the promise so other callers can await it
 		this.tokenRefreshPromise = refreshFn()
@@ -360,6 +373,19 @@ class RequestStateManager {
 	 */
 	getRefreshedToken(): string | null {
 		return this.refreshedToken;
+	}
+
+	/**
+	 * Set the refreshed token directly.
+	 *
+	 * This is used by OAuth login to immediately make the new token available
+	 * to pending requests, without waiting for RxDB to persist.
+	 *
+	 * @param token - The new access token from OAuth login
+	 */
+	setRefreshedToken(token: string): void {
+		log.debug('Setting refreshed token directly (from OAuth login)');
+		this.refreshedToken = token;
 	}
 
 	/**

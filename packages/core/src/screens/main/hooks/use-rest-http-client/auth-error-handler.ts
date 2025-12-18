@@ -181,7 +181,13 @@ export const useAuthErrorHandler = (
 				// 1. Save tokens to database
 				await handleLoginSuccess({ params: response.params } as any);
 
-				// 2. Clear authFailed AFTER tokens are saved
+				// 2. Set the new token in memory for immediate use
+				// This avoids the race condition where RxDB hasn't persisted yet
+				if (response.params?.access_token) {
+					requestStateManager.setRefreshedToken(response.params.access_token);
+				}
+
+				// 3. Clear authFailed AFTER tokens are saved
 				// This allows pending requests to proceed with new token
 				requestStateManager.setAuthFailed(false);
 

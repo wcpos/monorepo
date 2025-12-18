@@ -201,64 +201,11 @@ export const createTokenRefreshHandler = ({
 			}
 
 			// ================================================================
-			// CASE 1: Refresh already in progress - wait for it
+			// Attempt token refresh (startTokenRefresh handles locking)
+			// If another refresh is in progress, we'll wait for it automatically
 			// ================================================================
 
-			if (requestStateManager.isTokenRefreshing()) {
-				log.debug('Token refresh already in progress, awaiting completion', {
-					context: {
-						userId: wpUser.id,
-						originalUrl: originalConfig.url,
-					},
-				});
-
-				try {
-					await requestStateManager.awaitTokenRefresh();
-					const freshToken = requestStateManager.getRefreshedToken();
-
-					if (!freshToken) {
-						log.error('Token refresh completed but no token available', {
-							saveToDb: true,
-							context: {
-								errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
-								userId: wpUser.id,
-								originalUrl: originalConfig.url,
-							},
-						});
-						throw error;
-					}
-
-					log.debug('Token refresh completed, retrying with fresh token', {
-						context: {
-							userId: wpUser.id,
-							originalUrl: originalConfig.url,
-						},
-					});
-
-					// Retry with the token that was refreshed by the first request
-					return await retryWithNewToken(
-						originalConfig,
-						freshToken,
-						site.use_jwt_as_param,
-						retryRequest
-					);
-				} catch (refreshError) {
-					log.debug('Token refresh failed while waiting for completion', {
-						context: {
-							userId: wpUser.id,
-							originalUrl: originalConfig.url,
-							error: refreshError instanceof Error ? refreshError.message : String(refreshError),
-						},
-					});
-					throw error;
-				}
-			}
-
-			// ================================================================
-			// CASE 2: First 401 - start the refresh
-			// ================================================================
-
-			log.debug('Access token expired, starting token refresh', {
+			log.debug('Access token expired, attempting token refresh', {
 				context: {
 					userId: wpUser.id,
 					siteUrl: site.url,
@@ -267,6 +214,9 @@ export const createTokenRefreshHandler = ({
 			});
 
 			try {
+				// startTokenRefresh() handles locking internally:
+				// - If no refresh in progress: acquires lock, performs refresh
+				// - If refresh in progress: waits for existing refresh to complete
 				await requestStateManager.startTokenRefresh(async () => {
 					// Pause queue to prevent other requests from using stale token
 					pauseQueue();
