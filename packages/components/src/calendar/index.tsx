@@ -2,7 +2,8 @@ import React from 'react';
 import { Platform } from 'react-native';
 
 import { format } from 'date-fns';
-import { CalendarProps, LocaleConfig, Calendar as RNCalendar } from 'react-native-calendars';
+import { CalendarProps, Calendar as RNCalendar } from 'react-native-calendars';
+import { useCSSVariable } from 'uniwind';
 
 import { Icon } from '../icon';
 import { updateLocaleConfig } from './locales';
@@ -19,6 +20,14 @@ interface Props extends CalendarProps {
 }
 
 export const Calendar = ({ dateRange, onDateRangeChange, locale, ...props }: Props) => {
+	// Theme colors via CSS variables
+	const primaryColor = String(useCSSVariable('--color-primary'));
+	const primaryForegroundColor = String(useCSSVariable('--color-primary-foreground'));
+	const cardColor = String(useCSSVariable('--color-card'));
+	const foregroundColor = String(useCSSVariable('--color-foreground'));
+	const mutedForegroundColor = String(useCSSVariable('--color-muted-foreground'));
+	const borderColor = String(useCSSVariable('--color-border'));
+
 	// Update locale configuration when language changes
 	React.useEffect(() => {
 		updateLocaleConfig(locale);
@@ -53,14 +62,14 @@ export const Calendar = ({ dateRange, onDateRangeChange, locale, ...props }: Pro
 		result[format(effectiveRange.from, 'yyyy-MM-dd')] = {
 			startingDay: true,
 			selected: true,
-			selectedColor: '#117FBF',
+			selectedColor: primaryColor,
 		};
 
 		// Mark the end date
 		result[format(effectiveRange.to, 'yyyy-MM-dd')] = {
 			endingDay: true,
 			selected: true,
-			selectedColor: '#117FBF',
+			selectedColor: primaryColor,
 		};
 
 		// Mark days in between
@@ -70,13 +79,13 @@ export const Calendar = ({ dateRange, onDateRangeChange, locale, ...props }: Pro
 			if (currentDate < effectiveRange.to) {
 				result[format(currentDate, 'yyyy-MM-dd')] = {
 					selected: true,
-					selectedColor: '#117FBF',
+					selectedColor: primaryColor,
 				};
 			}
 		}
 
 		return result;
-	}, [dateRange, props.maxDate]);
+	}, [dateRange, props.maxDate, primaryColor]);
 
 	const handleDayPress = (day: { dateString: string }) => {
 		if (!onDateRangeChange || !dateRange) return;
@@ -111,21 +120,21 @@ export const Calendar = ({ dateRange, onDateRangeChange, locale, ...props }: Pro
 				return <Icon name={direction === 'left' ? 'chevronLeft' : 'chevronRight'} />;
 			}}
 			theme={{
-				backgroundColor: '#ffffff',
-				calendarBackground: '#ffffff',
-				textSectionTitleColor: '#b6c1cd',
-				textSectionTitleDisabledColor: '#d9e1e8',
-				selectedDayBackgroundColor: '#117FBF',
-				selectedDayTextColor: '#ffffff',
-				todayTextColor: '#117FBF',
-				dayTextColor: '#243b53',
-				textDisabledColor: '#d9e1e8',
-				dotColor: '#117FBF',
-				selectedDotColor: '#ffffff',
-				arrowColor: '#117FBF',
-				disabledArrowColor: '#d9e1e8',
-				monthTextColor: '#243b53',
-				indicatorColor: 'blue',
+				backgroundColor: cardColor,
+				calendarBackground: cardColor,
+				textSectionTitleColor: mutedForegroundColor,
+				textSectionTitleDisabledColor: borderColor,
+				selectedDayBackgroundColor: primaryColor,
+				selectedDayTextColor: primaryForegroundColor,
+				todayTextColor: primaryColor,
+				dayTextColor: foregroundColor,
+				textDisabledColor: borderColor,
+				dotColor: primaryColor,
+				selectedDotColor: primaryForegroundColor,
+				arrowColor: primaryColor,
+				disabledArrowColor: borderColor,
+				monthTextColor: foregroundColor,
+				indicatorColor: primaryColor,
 				textDayFontFamily:
 					'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
 				textMonthFontFamily:

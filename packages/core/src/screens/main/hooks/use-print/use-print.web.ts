@@ -12,12 +12,18 @@ const DEFAULT_PAGE_STYLE = `
         margin: 0;
     }
     @media print {
-				html, body { height: 100%; }
+        html, body { height: 100%; }
         body {
             /* Tell browsers to print background colors */
             color-adjust: exact; /* Firefox. This is an older version of "print-color-adjust" */
             print-color-adjust: exact; /* Firefox/Safari */
             -webkit-print-color-adjust: exact; /* Chrome/Safari/Edge/Opera */
+        }
+        /* Force print-friendly black text on white background regardless of theme */
+        * {
+            background-color: white !important;
+            color: black !important;
+            border-color: #999 !important;
         }
     }
 `;
