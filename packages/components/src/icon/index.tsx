@@ -5,6 +5,8 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import get from 'lodash/get';
 import { useCSSVariable } from 'uniwind';
 
+import Platform from '@wcpos/utils/platform';
+
 import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
@@ -78,7 +80,7 @@ export type IconProps = VariantProps<typeof iconVariants> & {
 /**
  *
  */
-export const Icon = ({
+export function Icon({
 	name,
 	variant = 'default',
 	size,
@@ -87,7 +89,7 @@ export const Icon = ({
 	fill,
 	pointerEvents,
 	...props
-}: IconProps) => {
+}: IconProps) {
 	const Svg = get(Svgs, name, Svgs.circleExclamation) as React.FC<SvgProps>;
 	const textClass = React.useContext(TextClassContext);
 
@@ -110,19 +112,20 @@ export const Icon = ({
 
 	/**
 	 * Put the iconVariants after the inherited textClass
-	 * Using useCSSVariable to get the actual theme color for SVG fill
+	 * On web, use currentColor to inherit from CSS (enables hover state changes)
+	 * On native, use resolved CSS variable value
 	 */
+	const svgColor = fill || (Platform.isWeb || Platform.isElectron ? 'currentColor' : resolvedColor);
+
 	return (
 		<View className={combinedClassName} pointerEvents={pointerEvents} {...props}>
 			<Svg
 				width="100%"
 				height="100%"
-				fill={fill || resolvedColor}
-				color={fill || resolvedColor}
+				fill={svgColor}
+				color={svgColor}
 				pointerEvents={pointerEvents}
 			/>
 		</View>
 	);
-};
-
-Icon.displayName = 'Icon';
+}

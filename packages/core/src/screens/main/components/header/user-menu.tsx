@@ -141,7 +141,7 @@ export const UserMenu = () => {
 					</DropdownMenuItem>
 				)}
 				<DropdownMenuItem onPress={logout} variant="destructive">
-					<Icon name="arrowRightFromBracket" className="fill-destructive" />
+					<Icon name="arrowRightFromBracket" />
 					<Text>{t('Logout', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
