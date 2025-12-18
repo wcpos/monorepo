@@ -1,11 +1,4 @@
-import * as React from 'react';
+import { withProAccess } from '@wcpos/core/screens/main/components/pro-guard';
+import { CustomersScreen } from '@wcpos/core/screens/main/customers';
 
-import { ProGuard } from '@wcpos/core/screens/main/components/pro-guard';
-
-const CustomersScreen = React.lazy(() =>
-	import('@wcpos/core/screens/main/customers').then((m) => ({ default: m.CustomersScreen }))
-);
-
-export default function CustomersPage() {
-	return <ProGuard page="customers" component={CustomersScreen} />;
-}
+export default withProAccess(CustomersScreen, 'customers');
