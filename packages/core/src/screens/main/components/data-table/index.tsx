@@ -25,7 +25,7 @@ import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
 
-import type { ColumnDef, HeaderContext, SortingState } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 
 interface Props {
 	id: UISettingID;
@@ -69,7 +69,7 @@ function DataTable<TData>({
 	ListFooterComponent,
 	TableFooterComponent,
 }: Props) {
-	const { uiSettings, getUILabel } = useUISettings(id);
+	const { uiSettings, getUILabel, patchUI } = useUISettings(id);
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const t = useT();
 	const result = useObservableSuspense(query.resource);
@@ -95,11 +95,10 @@ function DataTable<TData>({
 	 */
 	const handleSortingChange = React.useCallback(
 		({ sortBy, sortDirection }) => {
-			console.log('sorting', sortBy, sortDirection);
-			// sorting.current = { sortBy, sortDirection };
+			patchUI({ sortBy, sortDirection });
 			query.sort([{ [sortBy]: sortDirection }]).exec();
 		},
-		[query]
+		[patchUI, query]
 	);
 
 	const table = useReactTableWrapper({

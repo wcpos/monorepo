@@ -15,8 +15,8 @@ interface Props extends HeaderContext<any, any> {
  *
  */
 export const DataTableHeader = ({ column, table }: Props) => {
-	const disableSort = column.columnDef.meta?.disableSort;
-	const { sortBy, sortDirection } = table.getState().sorting?.current || {};
+	const canSort = column.getCanSort();
+	const { sortBy, sortDirection } = table.getState().sorting[0] || {};
 
 	/**
 	 * @NOTE - this is a bit of a hack, but we want the price and total columns to sort on
@@ -27,7 +27,7 @@ export const DataTableHeader = ({ column, table }: Props) => {
 			? sortBy === `sortable_${column.id}`
 			: sortBy === column.id;
 
-	if (disableSort) {
+	if (!canSort) {
 		return (
 			<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
 				{column.columnDef.header}
