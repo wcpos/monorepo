@@ -142,6 +142,9 @@ function List<T>({
 		...parentProps,
 	} as React.ComponentProps<typeof Parent>;
 
+	// Calculate total size including footer space
+	const totalSize = rowVirtualizer.getTotalSize();
+
 	return (
 		<Parent {...wrapperProps}>
 			{rowVirtualizer.getVirtualItems().map((vItem) => {
@@ -159,8 +162,23 @@ function List<T>({
 					</ItemContext.Provider>
 				);
 			})}
-			{ListFooterComponent &&
-				(React.isValidElement(ListFooterComponent) ? ListFooterComponent : <ListFooterComponent />)}
+			{ListFooterComponent && (
+				<View
+					style={{
+						position: 'absolute',
+						top: 0,
+						left: 0,
+						width: '100%',
+						transform: `translateY(${totalSize}px)`,
+					}}
+				>
+					{React.isValidElement(ListFooterComponent) ? (
+						ListFooterComponent
+					) : (
+						<ListFooterComponent />
+					)}
+				</View>
+			)}
 		</Parent>
 	);
 }
