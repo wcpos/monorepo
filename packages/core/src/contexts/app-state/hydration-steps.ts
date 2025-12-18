@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 
 import { createFastStoreDB, createStoreDB, createUserDB, isRxDocument } from '@wcpos/database';
 import type { UserDatabase } from '@wcpos/database';
+import log from '@wcpos/utils/logger';
 import Platform from '@wcpos/utils/platform';
 
 import { initialProps } from './initial-props';
@@ -20,6 +21,107 @@ async function generateHashId(dataObject: any): Promise<string> {
 
 	// Return the first 10 characters of the hash
 	return hash.substring(0, 10);
+}
+
+/**
+ * Test authorization with Bearer token in header
+ */
+async function testHeaderAuth(wcposApiUrl: string, token: string): Promise<boolean> {
+	try {
+		const response = await fetch(`${wcposApiUrl}auth/test`, {
+			method: 'GET',
+			headers: {
+				'X-WCPOS': '1',
+				Authorization: `Bearer ${token}`,
+			},
+		});
+
+		if (!response.ok) {
+			return false;
+		}
+
+		const data = await response.json();
+		return data && data.status === 'success';
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Test authorization with token as query parameter
+ */
+async function testParamAuth(wcposApiUrl: string, token: string): Promise<boolean> {
+	try {
+		const url = new URL(`${wcposApiUrl}auth/test`);
+		url.searchParams.set('authorization', `Bearer ${token}`);
+
+		const response = await fetch(url.toString(), {
+			method: 'GET',
+			headers: {
+				'X-WCPOS': '1',
+			},
+		});
+
+		if (!response.ok) {
+			return false;
+		}
+
+		const data = await response.json();
+		return data && data.status === 'success';
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Test authorization methods for a site
+ * This is important because some servers block Authorization headers for security reasons
+ */
+async function testAuthorizationMethod(
+	wcposApiUrl: string,
+	accessToken: string
+): Promise<{ useJwtAsParam: boolean } | null> {
+	try {
+		// Test both methods in parallel
+		const [headerSupported, paramSupported] = await Promise.all([
+			testHeaderAuth(wcposApiUrl, accessToken),
+			testParamAuth(wcposApiUrl, accessToken),
+		]);
+
+		log.debug('Authorization method test results', {
+			context: {
+				headerSupported,
+				paramSupported,
+				wcposApiUrl,
+			},
+		});
+
+		// Determine the best method to use
+		if (headerSupported) {
+			// Headers work, prefer headers for security
+			return { useJwtAsParam: false };
+		} else if (paramSupported) {
+			// Only params work - this usually means server is blocking Authorization headers
+			log.warn('Server does not support Authorization headers, using query parameters', {
+				context: { wcposApiUrl },
+			});
+			return { useJwtAsParam: true };
+		} else {
+			// Neither work - log but don't fail hydration
+			log.warn('Authorization test failed for both methods', {
+				context: { wcposApiUrl },
+			});
+			return null;
+		}
+	} catch (err) {
+		log.warn('Authorization method test error', {
+			context: {
+				wcposApiUrl,
+				error: err instanceof Error ? err.message : String(err),
+			},
+		});
+		return null;
+	}
 }
 
 /**
@@ -210,12 +312,52 @@ const processInitialPropsStep: HydrationStep = {
 };
 
 /**
- * Step 3: Hydrate user session from current app state
+ * Step 3: Test authorization method (web only)
+ * Some servers block Authorization headers, so we need to test if query parameters work instead
+ */
+const testAuthorizationStep: HydrationStep = {
+	name: 'TEST_AUTHORIZATION',
+	message: 'Testing authorization...',
+	progressIncrement: 10,
+	shouldExecute: (context) => Platform.isWeb && !!context.initialProps,
+	execute: async (context) => {
+		if (!context.initialProps || !context.userDB) {
+			return {};
+		}
+
+		const { initialProps, userDB } = context;
+		const wcposApiUrl = initialProps.site?.wcpos_api_url;
+		const accessToken = initialProps.wp_credentials?.access_token;
+
+		if (!wcposApiUrl || !accessToken) {
+			log.debug('Skipping authorization test - missing wcpos_api_url or access_token');
+			return {};
+		}
+
+		const result = await testAuthorizationMethod(wcposApiUrl, accessToken);
+
+		if (result && result.useJwtAsParam) {
+			// Update the site document to use JWT as query parameter
+			const siteDoc = await userDB.sites.findOne(initialProps.site.uuid).exec();
+			if (siteDoc) {
+				await siteDoc.incrementalPatch({ use_jwt_as_param: true });
+				log.info('Site configured to use JWT as query parameter', {
+					context: { siteId: initialProps.site.uuid },
+				});
+			}
+		}
+
+		return {};
+	},
+};
+
+/**
+ * Step 4: Hydrate user session from current app state
  */
 const hydrateUserSessionStep: HydrationStep = {
 	name: 'HYDRATE_USER_SESSION',
 	message: 'Loading user session...',
-	progressIncrement: 60,
+	progressIncrement: 50,
 	execute: async (context) => {
 		const current = await context.appState.get('current');
 		return await hydrateUserSession(context.userDB, current || {});
@@ -223,10 +365,11 @@ const hydrateUserSessionStep: HydrationStep = {
 };
 
 /**
- * All hydration steps in execution order - DUMMY VERSION FOR TESTING
+ * All hydration steps in execution order
  */
 export const hydrationSteps: HydrationStep[] = [
 	initializeUserDBStep,
 	processInitialPropsStep,
+	testAuthorizationStep,
 	hydrateUserSessionStep,
 ];
