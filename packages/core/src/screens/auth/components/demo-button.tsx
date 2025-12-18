@@ -67,8 +67,8 @@ export function DemoButton() {
 
 		try {
 			// Step 1: Connect to demo site
-			// const site = await onConnect('https://demo.wcpos.com');
-			const site = await onConnect('https://wcposdev.wpengine.com');
+			const site = await onConnect('https://demo.wcpos.com');
+			// const site = await onConnect('https://wcposdev.wpengine.com');
 
 			if (!site) {
 				throw new Error('Could not connect to demo site');
