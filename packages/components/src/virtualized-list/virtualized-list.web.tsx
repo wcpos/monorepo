@@ -159,9 +159,8 @@ function List<T>({
 					</ItemContext.Provider>
 				);
 			})}
-			{ListFooterComponent && (
-				React.isValidElement(ListFooterComponent) ? ListFooterComponent : <ListFooterComponent />
-			)}
+			{ListFooterComponent &&
+				(React.isValidElement(ListFooterComponent) ? ListFooterComponent : <ListFooterComponent />)}
 		</Parent>
 	);
 }
