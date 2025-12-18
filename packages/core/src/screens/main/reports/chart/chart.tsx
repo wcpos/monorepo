@@ -1,204 +1,310 @@
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS, useSharedValue } from 'react-native-reanimated';
 import { Circle, RoundedRect, Text, useFont } from '@shopify/react-native-skia';
-import * as Haptics from 'expo-haptics';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useCSSVariable } from 'uniwind';
 import { CartesianChart, StackedBar } from 'victory-native';
 
-import { findClosestPoint } from './findClosestPoint';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { useLocalDate } from '../../../../hooks/use-local-date';
 import { useReports } from '../context';
 import { aggregateData } from './utils';
 
-type DataPoint = {
-	date: string;
-	total: number;
-	total_tax: number;
+import type { AggregatedDataPoint } from './utils';
+
+// Chart data type for victory-native - must have index signature
+type ChartDataPoint = AggregatedDataPoint & { [key: string]: unknown };
+
+// Point with position info from victory-native
+type PointWithPosition = {
+	x: number;
+	xValue: string;
+	y: number;
+	yValue: number;
 };
 
+// Tooltip dimensions
+const TOOLTIP_WIDTH = 160;
+const TOOLTIP_HEIGHT = 70;
+const TOOLTIP_PADDING = 10;
+const TOOLTIP_MARGIN = 12;
+
+// Tooltip state type
 type TooltipState = {
 	visible: boolean;
+	pointIndex: number;
 	x: number;
-	y: number;
-	point?: DataPoint;
+	totalY: number;
+	taxY: number;
 };
 
 export default function SkiaChart() {
-	const { selectedOrders } = useReports();
+	const { selectedOrders, dateRange } = useReports();
 	const { format } = useCurrencyFormat();
+	const { dateFnsLocale, formatDate } = useLocalDate();
 	const font = useFont(require('@wcpos/main/assets/fonts/Inter-Medium.ttf'), 12);
 
-	const data = React.useMemo<DataPoint[]>(() => aggregateData(selectedOrders), [selectedOrders]);
-	const dataSV = useSharedValue<DataPoint[]>(data);
+	// Theme colors
+	const popoverColor = String(useCSSVariable('--color-popover'));
+	const popoverForegroundColor = String(useCSSVariable('--color-popover-foreground'));
+	const primaryColor = String(useCSSVariable('--color-primary'));
+	const mutedForegroundColor = String(useCSSVariable('--color-muted-foreground'));
+	const borderColor = String(useCSSVariable('--color-border'));
+
+	const data = React.useMemo<ChartDataPoint[]>(
+		() => aggregateData(selectedOrders, dateRange, dateFnsLocale) as ChartDataPoint[],
+		[selectedOrders, dateRange, dateFnsLocale]
+	);
 	const maxTotal = Math.max(...data.map((d) => d.total + d.total_tax), 0);
-	const maxTotalSV = useSharedValue<number>(maxTotal);
 
-	React.useEffect(() => {
-		dataSV.value = data;
-		maxTotalSV.value = Math.max(...data.map((d) => d.total + d.total_tax), 0);
-	}, [data, dataSV, maxTotalSV]);
+	// Tooltip state - managed in React state for simplicity
+	const [tooltip, setTooltip] = React.useState<TooltipState>({
+		visible: false,
+		pointIndex: -1,
+		x: 0,
+		totalY: 0,
+		taxY: 0,
+	});
 
-	// React state for tooltip
-	const [tooltip, setTooltip] = React.useState<TooltipState>({ visible: false, x: 0, y: 0 });
+	// Store points ref to access in gesture handlers
+	const pointsRef = React.useRef<{
+		total: PointWithPosition[];
+		total_tax: PointWithPosition[];
+	} | null>(null);
 
-	// SharedValues for gesture calculation
-	const ox = useSharedValue<number[]>([]);
-	const chartBounds = useSharedValue<{ top: number; bottom: number } | null>(null);
-	const previousIdx = useSharedValue<number | null>(null);
+	// Find closest point index based on x position
+	const findClosestPointIndex = React.useCallback((touchX: number): number => {
+		const points = pointsRef.current?.total;
+		if (!points || points.length === 0) return -1;
 
-	// JS callback to update React state
-	const showTooltip = React.useCallback((x: number, y: number, point: DataPoint) => {
-		setTooltip({ visible: true, x, y, point });
+		let closestIdx = 0;
+		let closestDist = Math.abs(points[0].x - touchX);
+
+		for (let i = 1; i < points.length; i++) {
+			const dist = Math.abs(points[i].x - touchX);
+			if (dist < closestDist) {
+				closestDist = dist;
+				closestIdx = i;
+			}
+		}
+		return closestIdx;
 	}, []);
 
+	// Show tooltip at position
+	const showTooltip = React.useCallback(
+		(touchX: number) => {
+			const idx = findClosestPointIndex(touchX);
+			if (idx < 0) return;
+
+			const totalPoints = pointsRef.current?.total;
+			const taxPoints = pointsRef.current?.total_tax;
+			if (!totalPoints || !taxPoints) return;
+
+			setTooltip({
+				visible: true,
+				pointIndex: idx,
+				x: totalPoints[idx].x,
+				totalY: totalPoints[idx].y,
+				taxY: taxPoints[idx].y,
+			});
+		},
+		[findClosestPointIndex]
+	);
+
+	// Hide tooltip
 	const hideTooltip = React.useCallback(() => {
-		setTooltip((ts) => ({ ...ts, visible: false }));
-		previousIdx.value = null;
-	}, [previousIdx]);
+		setTooltip((prev) => ({ ...prev, visible: false }));
+	}, []);
 
-	// Worklet: find index, compute pos and data, then call JS
-	const handleSelect = (eventX: number) => {
-		'worklet';
-		const idx = findClosestPoint(ox.value, eventX);
-		if (idx === null || !chartBounds.value) return;
+	// Platform-specific gestures
+	const isWeb = Platform.OS === 'web';
 
-		// Only call showTooltip if idx has changed
-		if (idx !== previousIdx.value) {
-			previousIdx.value = idx;
+	// Web: hover gesture
+	const hoverGesture = Gesture.Hover()
+		.onBegin((e) => showTooltip(e.x))
+		.onUpdate((e) => showTooltip(e.x))
+		.onEnd(() => hideTooltip())
+		.runOnJS(true);
 
-			const pt = dataSV.value[idx];
-			const height = chartBounds.value.bottom - chartBounds.value.top;
-			const total = pt.total + pt.total_tax;
-			const yPos = chartBounds.value.bottom - (total / maxTotalSV.value) * height;
-			const xPos = ox.value[idx];
+	// Native: long press + pan for precise tracking
+	// Long press activates tooltip on touch, pan tracks movement
+	const longPressGesture = Gesture.LongPress()
+		.minDuration(100)
+		.onStart((e) => showTooltip(e.x))
+		.onEnd(() => hideTooltip())
+		.runOnJS(true);
 
-			runOnJS(showTooltip)(xPos, yPos, pt);
-		}
-	};
+	const panGesture = Gesture.Pan()
+		.minDistance(0)
+		.onUpdate((e) => showTooltip(e.x))
+		.runOnJS(true);
 
-	React.useEffect(() => {
-		if (tooltip.visible && Platform.OS !== 'web') {
-			Haptics.selectionAsync();
-		}
-	}, [tooltip.visible]);
+	// Combine: long press to activate, pan to track movement
+	const nativeGesture = Gesture.Simultaneous(longPressGesture, panGesture);
 
-	const tap = Gesture.Tap()
-		.onBegin((e) => {
-			handleSelect(e.x);
-		})
-		.onFinalize(() => {
-			runOnJS(hideTooltip)();
-		});
+	const gesture = isWeb ? hoverGesture : nativeGesture;
 
-	const hover = Gesture.Hover()
-		.onBegin((e) => handleSelect(e.x))
-		.onUpdate((e) => handleSelect(e.x))
-		.onEnd(() => runOnJS(hideTooltip)());
-
-	const combined = Gesture.Simultaneous(tap, hover);
+	// Calculate smart tick count based on data length
+	// Show all labels when possible, only reduce for very large data sets
+	const tickCount = React.useMemo(() => {
+		const len = data.length;
+		if (len <= 12) return len; // Show all for up to 12 points
+		if (len <= 24) return 8; // 8 ticks for up to 24 points (e.g., hourly)
+		if (len <= 31) return 10; // 10 ticks for monthly data
+		return Math.min(12, Math.ceil(len / 4)); // More ticks for larger datasets
+	}, [data.length]);
 
 	return (
-		<GestureDetector gesture={combined}>
-			<CartesianChart
-				data={data}
-				xKey="date"
-				yKeys={['total', 'total_tax']}
-				domainPadding={{ left: 100, right: 100, top: 20 }}
-				customGestures={combined}
-				xAxis={{
-					font,
-					lineColor: '#E5E7EB',
-					labelColor: 'rgb(36, 59, 83)',
-					formatXLabel: (v) => (typeof v === 'string' ? v : ''),
-				}}
-				yAxis={[
-					{
-						yKeys: ['total', 'total_tax'],
+		<GestureDetector gesture={gesture}>
+			<View collapsable={false} style={{ flex: 1 }}>
+				<CartesianChart
+					data={data}
+					xKey="label"
+					yKeys={['total', 'total_tax']}
+					domainPadding={{ left: 70, right: 70, top: 30 }}
+					xAxis={{
 						font,
-						lineColor: '#E5E7EB',
-						labelColor: 'rgb(36, 59, 83)',
-						domain: [0, Math.max(maxTotal, 10)],
-						formatYLabel: format,
-					},
-				]}
-			>
-				{({ points, chartBounds: bounds, xTicks, xScale }) => {
-					// keep shared values up to date
-					ox.value = xTicks.map((t) => xScale(t)!);
-					chartBounds.value = { top: bounds.top, bottom: bounds.bottom };
+						lineColor: borderColor,
+						labelColor: mutedForegroundColor,
+						tickCount,
+					}}
+					yAxis={[
+						{
+							yKeys: ['total', 'total_tax'],
+							font,
+							lineColor: borderColor,
+							labelColor: mutedForegroundColor,
+							domain: [0, Math.max(maxTotal, 10)],
+							formatYLabel: format,
+						},
+					]}
+				>
+					{({ points, chartBounds }) => {
+						// Store points for gesture handler access
+						pointsRef.current = points as any;
 
-					return (
-						<>
-							<StackedBar
-								chartBounds={bounds}
-								points={[points.total, points.total_tax]}
-								colors={['#FADB5F', '#F7C948']}
-								animate={{ type: 'spring' }}
-								barOptions={({ isTop }) => ({
-									roundedCorners: isTop ? { topLeft: 5, topRight: 5 } : undefined,
-								})}
-							/>
-							{tooltip.visible && tooltip.point && (
-								<ToolTip
-									x={tooltip.x}
-									y={tooltip.y}
-									point={tooltip.point}
-									format={format}
-									font={font}
+						return (
+							<>
+								<StackedBar
+									chartBounds={chartBounds}
+									points={[points.total, points.total_tax]}
+									colors={[primaryColor, `${primaryColor}99`]}
+									animate={{ type: 'spring' }}
+									barWidth={Math.min(50, (chartBounds.right - chartBounds.left) / data.length - 10)}
+									barOptions={({ isTop }) => ({
+										roundedCorners: isTop ? { topLeft: 5, topRight: 5 } : undefined,
+									})}
 								/>
-							)}
-						</>
-					);
-				}}
-			</CartesianChart>
+								{tooltip.visible && tooltip.pointIndex >= 0 && (
+									<ToolTip
+										tooltip={tooltip}
+										point={data[tooltip.pointIndex]}
+										chartBounds={chartBounds}
+										formatCurrency={format}
+										formatDate={formatDate}
+										font={font}
+										bgColor={popoverColor}
+										textColor={popoverForegroundColor}
+										accentColor={primaryColor}
+									/>
+								)}
+							</>
+						);
+					}}
+				</CartesianChart>
+			</View>
 		</GestureDetector>
 	);
 }
 
 function ToolTip({
-	x,
-	y,
+	tooltip,
 	point,
-	format,
+	chartBounds,
+	formatCurrency,
+	formatDate,
 	font,
+	bgColor,
+	textColor,
+	accentColor,
 }: {
-	x: number;
-	y: number;
-	point: DataPoint;
-	format: (v: number) => string;
+	tooltip: TooltipState;
+	point: ChartDataPoint;
+	chartBounds: { top: number; bottom: number; left: number; right: number };
+	formatCurrency: (v: number) => string;
+	formatDate: (date: Date, formatString: string) => string;
 	font: any;
+	bgColor: string;
+	textColor: string;
+	accentColor: string;
 }) {
-	const W = 140,
-		H = 60,
-		P = 8;
+	const { x, totalY, taxY } = tooltip;
+
+	// Calculate the y position for the TOP of the stacked bar
+	// totalY = position where the "total" segment ends
+	// taxY = position where "total_tax" value would be if plotted independently
+	// For stacked bar: tax segment height in pixels = chartBounds.bottom - taxY
+	// Top of stack = totalY - taxHeight
+	const taxHeight = chartBounds.bottom - taxY;
+	const y = totalY - taxHeight;
+
+	// Calculate tooltip position to keep it on screen
+	const spaceAbove = y - chartBounds.top;
+	const tooltipAbove = spaceAbove >= TOOLTIP_HEIGHT + TOOLTIP_MARGIN;
+	const tooltipY = tooltipAbove ? y - TOOLTIP_HEIGHT - TOOLTIP_MARGIN : y + TOOLTIP_MARGIN;
+
+	// Horizontal position - centered on x, but constrained to chart bounds
+	let tooltipX = x - TOOLTIP_WIDTH / 2;
+	const minX = chartBounds.left + TOOLTIP_PADDING;
+	const maxX = chartBounds.right - TOOLTIP_WIDTH - TOOLTIP_PADDING;
+	tooltipX = Math.max(minX, Math.min(maxX, tooltipX));
+
+	// Determine if we're showing time (for hourly data)
+	const showTime = point.key.includes(' ');
+
+	// Format date using date-fns with locale
+	const tooltipDate = showTime
+		? formatDate(point.dateObj, 'EEE d MMM, HH:mm')
+		: formatDate(point.dateObj, 'EEE d MMM yyyy');
+
 	return (
 		<>
+			{/* Background */}
 			<RoundedRect
-				x={x - W / 2}
-				y={y - H - 15}
-				width={W}
-				height={H}
+				x={tooltipX}
+				y={tooltipY}
+				width={TOOLTIP_WIDTH}
+				height={TOOLTIP_HEIGHT}
 				r={8}
-				color="rgba(0,0,0,0.8)"
+				color={bgColor}
 			/>
-			<Text x={x - W / 2 + P} y={y - H - 15 + P + 12} text={point.date} font={font} color="white" />
+			{/* Date */}
 			<Text
-				x={x - W / 2 + P}
-				y={y - H - 15 + P + 28}
-				text={`Total: ${format(point.total)}`}
+				x={tooltipX + TOOLTIP_PADDING}
+				y={tooltipY + TOOLTIP_PADDING + 12}
+				text={tooltipDate}
 				font={font}
-				color="white"
+				color={textColor}
 			/>
+			{/* Total */}
 			<Text
-				x={x - W / 2 + P}
-				y={y - H - 15 + P + 44}
-				text={`Tax: ${format(point.total_tax)}`}
+				x={tooltipX + TOOLTIP_PADDING}
+				y={tooltipY + TOOLTIP_PADDING + 30}
+				text={`Total: ${formatCurrency(point.total)}`}
 				font={font}
-				color="white"
+				color={textColor}
 			/>
-			<Circle cx={x} cy={y} r={4} color="rgba(0,0,0,0.8)" />
+			{/* Tax */}
+			<Text
+				x={tooltipX + TOOLTIP_PADDING}
+				y={tooltipY + TOOLTIP_PADDING + 48}
+				text={`Tax: ${formatCurrency(point.total_tax)}`}
+				font={font}
+				color={textColor}
+			/>
+			{/* Indicator dot at the top of the stacked bar */}
+			<Circle cx={x} cy={y} r={5} color={accentColor} />
 		</>
 	);
 }

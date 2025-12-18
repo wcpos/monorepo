@@ -22,4 +22,7 @@ module.exports = {
 			tsconfig: 'tsconfig.json',
 		},
 	},
+	moduleNameMapper: {
+		'^expo-localization$': '<rootDir>/jest/__mocks__/expo-localization.js',
+	},
 };
