@@ -3,7 +3,6 @@ import * as React from 'react';
 import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { useTheme } from '@wcpos/core/contexts/theme';
-import AppInfo from '@wcpos/utils/app-info';
 
 /**
  *
@@ -18,7 +17,7 @@ const Version = () => {
 				screenSize === 'lg' && 'px-0 text-center'
 			)}
 		>
-			{screenSize === 'lg' ? `v ${AppInfo.version}` : `Version ${AppInfo.version}`}
+			{screenSize === 'lg' ? `v 1.8.1` : `Version 1.8.1`}
 		</Text>
 	);
 };

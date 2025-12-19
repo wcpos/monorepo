@@ -12,7 +12,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		name: 'WCPOS',
 		slug: 'wcpos',
 		owner: 'wcpos',
-		version: '1.8.0', // manual user-facing version
+		version: '1.8.1', // manual user-facing version
 
 		orientation: 'default',
 		icon: './assets/images/icon.png',

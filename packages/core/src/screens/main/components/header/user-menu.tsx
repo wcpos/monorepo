@@ -25,6 +25,8 @@ import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import Platform from '@wcpos/utils/platform';
+import { clearAllDB } from '@wcpos/database';
+import log from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
@@ -79,6 +81,19 @@ export const UserMenu = () => {
 		() => new ObservableResource(wpCredentials.populate$('stores'), (val) => !!val),
 		[wpCredentials]
 	);
+
+	const handleReset = async () => {
+		// Clear databases to ensure clean start
+		try {
+			const result = await clearAllDB();
+			log.info(result.message);
+		} catch (err) {
+			log.error('Failed to clear database:', err);
+		}
+
+		// Reload the app to reinitialize everything
+		window.location.reload();
+	};
 
 	return (
 		<DropdownMenu>
@@ -135,10 +150,17 @@ export const UserMenu = () => {
 					</>
 				)}
 				{Platform.isWeb && (
-					<DropdownMenuItem onPress={() => Linking.openURL(`${site.home}/wp-admin`)}>
-						<Icon name="wordpress" />
-						<Text>{t('WordPress Admin', { _tags: 'core' })}</Text>
-					</DropdownMenuItem>
+					<>
+						<DropdownMenuItem onPress={handleReset} variant="destructive">
+							<Icon name="trash" />
+							<Text>{t('Clear All Local Data', { _tags: 'core' })}</Text>
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem onPress={() => Linking.openURL(`${site.home}/wp-admin`)}>
+							<Icon name="wordpress" />
+							<Text>{t('WordPress Admin', { _tags: 'core' })}</Text>
+						</DropdownMenuItem>
+					</>
 				)}
 				<DropdownMenuItem onPress={logout} variant="destructive">
 					<Icon name="arrowRightFromBracket" />

@@ -15,7 +15,7 @@ export interface AppInfo {
 	userAgent: string;
 }
 
-const version = Constants.expoConfig?.version ?? '0.0.0';
+const version = '1.8.1';
 
 const AppInfo: AppInfo = {
 	version,
