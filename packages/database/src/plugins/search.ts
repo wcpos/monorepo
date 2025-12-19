@@ -2,6 +2,8 @@ import get from 'lodash/get';
 import { RxPlugin } from 'rxdb';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
+import log from '@wcpos/utils/logger';
+
 /**
  * A search plugin for RxDB that supports dynamic locale changes.
  */
@@ -45,8 +47,9 @@ export const searchPlugin: RxPlugin = {
 
 				// Create the promise and store it in _searchPromises
 				const searchPromise = (async () => {
-					try {
-						const searchInstance = await addFulltextSearch({
+					// Helper to create the search instance
+					const createSearchInstance = async () => {
+						return await addFulltextSearch({
 							identifier: `${this.name}-search-${locale}`,
 							collection: this,
 							docToString: (doc) => {
@@ -62,16 +65,44 @@ export const searchPlugin: RxPlugin = {
 								language: locale,
 							},
 						});
+					};
 
-						// Store the search instance in the map once created
+					try {
+						const searchInstance = await createSearchInstance();
 						this._searchInstances.set(locale, searchInstance);
-
-						// Remove the promise from the _searchPromises map
 						this._searchPromises.delete(locale);
-
 						return searchInstance;
-					} catch (error) {
-						console.error('Error initializing FlexSearch instance:', error);
+					} catch (error: any) {
+						// Check for schema mismatch (DB6) or collection already exists (DB3)
+						const isSchemaConflict = error?.code === 'DB6' || error?.code === 'DB3';
+
+						if (isSchemaConflict) {
+							log.warn('FlexSearch schema conflict detected, attempting recovery...', {
+								context: { collection: this.name, locale, errorCode: error?.code },
+							});
+
+							// Remove the stale flexsearch collection
+							const flexsearchName = `${this.name}-search-${locale}_flexsearch`;
+							const staleCollection = this.database.collections[flexsearchName];
+							if (staleCollection) {
+								await staleCollection.remove();
+							}
+
+							// Retry once with fresh collection
+							try {
+								const searchInstance = await createSearchInstance();
+								this._searchInstances.set(locale, searchInstance);
+								this._searchPromises.delete(locale);
+								log.info('FlexSearch recovery successful');
+								return searchInstance;
+							} catch (retryError) {
+								log.error('FlexSearch recovery failed', { context: { error: retryError } });
+								this._searchPromises.delete(locale);
+								throw retryError;
+							}
+						}
+
+						log.error('Error initializing FlexSearch instance:', { context: { error } });
 						this._searchPromises.delete(locale);
 						throw error;
 					}
