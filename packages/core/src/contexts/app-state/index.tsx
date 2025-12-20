@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import type { StoreDocument } from '@wcpos/database';
 import Platform from '@wcpos/utils/platform';
+import log from '@wcpos/utils/logger';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
 import { hydrateUserSession } from './hydration-steps';
@@ -89,7 +90,7 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 		async (store: StoreDocument) => {
 			const current = await state.appState.get('current');
 			const newState = { ...current, storeID: store.localID };
-			await state.appState.set('current', newState);
+			await state.appState.set('current', () => newState);
 
 			const sessionData = await hydrateUserSession(state.userDB, newState);
 

@@ -53,7 +53,7 @@ export const createStoreDB = async (id: string) => {
 		const db = await createRxDatabase<StoreCollections>({
 			name,
 			allowSlowCount: true,
-			ignoreDuplicate: !!__DEV__,
+			ignoreDuplicate: true, // Allow returning existing DB when switching back to a store
 			...defaultConfig,
 		});
 		const collections = await db?.addCollections(storeCollections);
@@ -81,7 +81,7 @@ export const createFastStoreDB = async (id: string) => {
 		const db = await createRxDatabase<SyncCollections>({
 			name,
 			allowSlowCount: true,
-			ignoreDuplicate: !!__DEV__,
+			ignoreDuplicate: true, // Allow returning existing DB when switching back to a store
 			...fastStorageConfig,
 		});
 		const collections = await db?.addCollections(syncCollections);
