@@ -97,7 +97,7 @@ class RequestStateManager {
 
 	// Visibility/sleep coordination
 	private isSleeping = false;
-	private wakeCallbacks: Array<() => void> = [];
+	private wakeCallbacks: (() => void)[] = [];
 	private visibilityCleanup: (() => void) | null = null;
 
 	// Private constructor for singleton pattern

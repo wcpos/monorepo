@@ -11,6 +11,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { errorSubject, useAuthErrorHandler } from './auth-error-handler';
+import { createRefreshHttpClient } from './refresh-http-client';
 
 /**
  *
@@ -72,32 +73,18 @@ export const useRestHttpClient = (endpoint = '') => {
 	 */
 
 	/**
-	 * Create a fresh HTTP client for token refresh requests
-	 * This avoids circular error handling during token refresh
+	 * Create a fresh HTTP client for token refresh requests.
+	 * This avoids circular error handling during token refresh.
+	 *
+	 * Note: This is platform-specific:
+	 * - Web/Native: Uses fetch() directly
+	 * - Electron: Uses IPC to main process (required because renderer is sandboxed)
+	 *
+	 * @see refresh-http-client.ts - Default implementation
+	 * @see refresh-http-client.electron.ts - Electron implementation
 	 */
 	const getHttpClient = React.useCallback(() => {
-		return {
-			post: async (url: string, data: any, config: any = {}) => {
-				const response = await fetch(url, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						...config.headers,
-					},
-					body: JSON.stringify(data),
-				});
-
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-				}
-
-				return {
-					data: await response.json(),
-					status: response.status,
-					statusText: response.statusText,
-				};
-			},
-		};
+		return createRefreshHttpClient();
 	}, []);
 
 	/**
