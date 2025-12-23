@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { isSameDay, isToday, isYesterday } from 'date-fns';
+import { endOfDay, isSameDay, isToday, isYesterday, startOfDay } from 'date-fns';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -75,10 +75,13 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 
 			const { from, to } = range;
 
+			// Ensure we capture the full day range in local time
+			// from: start of day (00:00:00 local) → converted to UTC
+			// to: end of day (23:59:59 local) → converted to UTC
 			query
 				.where('date_created_gmt')
-				.gte(convertLocalDateToUTCString(from))
-				.lte(convertLocalDateToUTCString(to))
+				.gte(convertLocalDateToUTCString(startOfDay(from)))
+				.lte(convertLocalDateToUTCString(endOfDay(to)))
 				.exec();
 
 			if (triggerRef.current) {
