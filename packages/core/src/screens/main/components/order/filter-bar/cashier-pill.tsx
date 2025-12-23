@@ -1,19 +1,18 @@
 import * as React from 'react';
 
-import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	Combobox,
 	ComboboxContent,
-	ComboboxEmpty,
 	ComboboxInput,
 	ComboboxTrigger,
 } from '@wcpos/components/combobox';
 import { Suspense } from '@wcpos/components/suspense';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query, useQuery } from '@wcpos/query';
+import log from '@wcpos/utils/logger';
 
 import { useT } from '../../../../../contexts/translations';
 import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
@@ -62,21 +61,16 @@ const CashierSearch = () => {
 	 *
 	 */
 	return (
-		<Combobox shouldFilter={false} className="min-w-64">
+		<>
 			<ComboboxInput
 				placeholder={t('Search Cashiers', { _tags: 'core' })}
 				value={search}
-				onValueChange={onSearch}
+				onChangeText={onSearch}
 			/>
 			<Suspense>
-				<CustomerList
-					query={query}
-					ListEmptyComponent={
-						<ComboboxEmpty>{t('No cashiers found', { _tags: 'core' })}</ComboboxEmpty>
-					}
-				/>
+				<CustomerList query={query} withGuest={false} />
 			</Suspense>
-		</Combobox>
+		</>
 	);
 };
 
@@ -103,6 +97,7 @@ export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) =>
 	return (
 		<Combobox
 			onValueChange={({ value }) => {
+				log.debug('value', value);
 				query
 					.removeElemMatch('meta_data', { key: '_pos_user' }) // clear any previous value
 					.where('meta_data')
