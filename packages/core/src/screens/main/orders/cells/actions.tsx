@@ -76,7 +76,9 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 		}
 
 		await localPatch({ document: order, data: { status: 'pos-open', meta_data } });
-		router.push({ pathname: '/cart', params: { orderID: order.uuid } });
+		router.push({
+			pathname: '/cart' + (order.uuid ? `/${order.uuid}` : ''),
+		});
 	}, [localPatch, router, order, store.id, wpCredentials.id]);
 
 	/**
