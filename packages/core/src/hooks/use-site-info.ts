@@ -51,10 +51,10 @@ export const useSiteInfo = ({ site }: Props) => {
 					data.license;
 				if (hasValidData) {
 					site.incrementalPatch({
-						wp_version: data?.wp_version,
-						wc_version: data?.wc_version,
-						wcpos_version: data?.wcpos_version,
-						wcpos_pro_version: data?.wcpos_pro_version,
+						wp_version: data?.wp_version ?? '',
+						wc_version: data?.wc_version ?? '',
+						wcpos_version: data?.wcpos_version ?? '',
+						wcpos_pro_version: data?.wcpos_pro_version ?? '',
 						license: data?.license || {},
 					});
 				}

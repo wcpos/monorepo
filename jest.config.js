@@ -3,7 +3,7 @@ module.exports = {
 	projects: [
 		'<rootDir>/packages/core',
 		'<rootDir>/packages/components',
-		// '<rootDir>/packages/database', // TODO: fix missing jest.config.base.js
+		'<rootDir>/packages/database',
 		// '<rootDir>/packages/query', // Uses ESM export syntax
 	],
 };

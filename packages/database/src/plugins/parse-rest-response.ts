@@ -10,7 +10,32 @@ import type { RxCollection, RxJsonSchema, RxPlugin } from 'rxdb';
 type ExtendedRxJsonSchema<T> = RxJsonSchema<T> & {
 	ref?: string;
 	items?: RxJsonSchema<any>;
+	default?: any;
 };
+
+/**
+ * Returns a type-safe default value based on the schema type.
+ * Used when a property is missing from incoming data and has no schema default.
+ */
+export function getDefaultForType(schema: ExtendedRxJsonSchema<any>): any {
+	switch (schema.type) {
+		case 'string':
+			return '';
+		case 'number':
+		case 'integer':
+			return 0;
+		case 'boolean':
+			return false;
+		case 'array':
+			return [];
+		case 'object':
+			return {};
+		case 'null':
+			return null;
+		default:
+			return undefined;
+	}
+}
 
 /**
  *
@@ -109,9 +134,14 @@ export function coerceData(
 		 */
 		if (schema.type === 'object') {
 			const coercedData: Record<string, any> = {};
+			// Ensure data is at least an empty object for safe property access
+			const safeData = data != null && typeof data === 'object' ? data : {};
+
 			for (const prop in schema.properties) {
 				/** Special case for rxdb internals */
 				if (prop.startsWith('_')) continue;
+
+				const propSchema = schema.properties[prop] as ExtendedRxJsonSchema<any>;
 
 				/** Special case for extracting uuid from meta_data */
 				if (prop === 'uuid' && Array.isArray(json.meta_data)) {
@@ -120,14 +150,13 @@ export function coerceData(
 					continue;
 				}
 
-				if ((data || {}).hasOwnProperty(prop)) {
-					coercedData[prop] = traverse(
-						schema.properties[prop] as ExtendedRxJsonSchema<any>,
-						data[prop],
-						schema
-					);
-				} else if (schema.properties[prop].hasOwnProperty('default')) {
-					coercedData[prop] = cloneDeep(schema.properties[prop].default);
+				if (Object.prototype.hasOwnProperty.call(safeData, prop)) {
+					coercedData[prop] = traverse(propSchema, safeData[prop], schema);
+				} else if (Object.prototype.hasOwnProperty.call(propSchema, 'default')) {
+					coercedData[prop] = cloneDeep(propSchema.default);
+				} else {
+					// Type-safe fallback: provide a default based on schema type
+					coercedData[prop] = getDefaultForType(propSchema);
 				}
 			}
 			return coercedData;
@@ -161,7 +190,7 @@ export function parseRestResponse(this: RxCollection, json: Record<string, any>)
 	// NOTE: in the audit we sometimes set _deleted to true, we don't want to prune/coerce that
 	if (isPlainObject(json) && json._deleted !== true) {
 		pruneProperties(schema, json); // mutates json
-		return coerceData(schema, json, collection); // return json
+		return coerceData(schema, json, collection);
 	}
 	return json;
 }

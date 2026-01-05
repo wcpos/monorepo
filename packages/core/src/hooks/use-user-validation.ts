@@ -58,6 +58,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				id: userId,
 				refresh_token: refreshToken,
 				incrementalPatch: wpUser.incrementalPatch.bind(wpUser),
+				getLatest: wpUser.getLatest.bind(wpUser),
 			},
 			getHttpClient: () => baseHttpClient,
 		});
@@ -99,183 +100,183 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			validationInProgress.current = true;
 			lastValidationKey.current = validationKey;
 
-		// Reset state
-		setIsLoading(true);
-		setError(null);
+			// Reset state
+			setIsLoading(true);
+			setError(null);
 
-		/**
-		 * Fetch user data from server (HTTP operation)
-		 */
-		const fetchUserData = async () => {
-			try {
-				// Build the endpoint URL
-				const endpoint = `${apiUrl}cashier/${userId}`;
+			/**
+			 * Fetch user data from server (HTTP operation)
+			 */
+			const fetchUserData = async () => {
+				try {
+					// Build the endpoint URL
+					const endpoint = `${apiUrl}cashier/${userId}`;
 
-				// Prepare request config
-				const requestConfig: any = {
-					params: { wcpos: 1 },
-					headers: {
-						'X-WCPOS': '1',
-					},
-				};
+					// Prepare request config
+					const requestConfig: any = {
+						params: { wcpos: 1 },
+						headers: {
+							'X-WCPOS': '1',
+						},
+					};
 
-				// Handle authentication based on site configuration
-				if (useJwtAsParam) {
-					// Use JWT as query parameter
-					requestConfig.params.authorization = `Bearer ${accessToken}`;
-				} else {
-					// Use JWT as Authorization header
-					requestConfig.headers.Authorization = `Bearer ${accessToken}`;
-				}
+					// Handle authentication based on site configuration
+					if (useJwtAsParam) {
+						// Use JWT as query parameter
+						requestConfig.params.authorization = `Bearer ${accessToken}`;
+					} else {
+						// Use JWT as Authorization header
+						requestConfig.headers.Authorization = `Bearer ${accessToken}`;
+					}
 
-				log.debug('Validating user credentials', {
-					context: {
-						userId,
-						siteUrl,
-						useJwtAsParam,
-					},
-				});
+					log.debug('Validating user credentials', {
+						context: {
+							userId,
+							siteUrl,
+							useJwtAsParam,
+						},
+					});
 
-				const response = await httpClient.get(endpoint, requestConfig);
+					const response = await httpClient.get(endpoint, requestConfig);
 
-				// Check if response is successful
-				if (!response || response.status < 200 || response.status >= 300) {
-					const errorMsg = `Invalid response status: ${response?.status}`;
-					log.error('User validation failed', {
+					// Check if response is successful
+					if (!response || response.status < 200 || response.status >= 300) {
+						const errorMsg = `Invalid response status: ${response?.status}`;
+						log.error('User validation failed', {
+							context: {
+								errorCode: ERROR_CODES.CONNECTION_REFUSED,
+								status: response?.status,
+								statusText: response?.statusText,
+								userId,
+								siteUrl,
+							},
+						});
+						throw new Error(errorMsg);
+					}
+
+					const data = get(response, 'data', {});
+
+					// Check if data exists and has expected structure
+					if (!data || typeof data !== 'object') {
+						const errorMsg = 'Invalid response data';
+						log.error('User validation response contains no valid data', {
+							context: {
+								errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+								userId,
+								siteUrl,
+								hasData: !!data,
+							},
+						});
+						throw new Error(errorMsg);
+					}
+
+					// Sanity check: verify that the response ID matches the expected user ID
+					if (data.id !== undefined && data.id !== userId) {
+						const errorMsg = `User ID mismatch: expected ${userId}, got ${data.id}`;
+						log.error('User validation failed - ID mismatch', {
+							context: {
+								errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+								expectedUserId: userId,
+								receivedUserId: data.id,
+								siteUrl,
+							},
+						});
+						throw new Error(errorMsg);
+					}
+
+					return data;
+				} catch (error: any) {
+					// Extract the WooCommerce/WordPress error message from the response
+					const serverMessage = extractErrorMessage(
+						error?.response?.data,
+						'Failed to fetch user data from server'
+					);
+					log.error(serverMessage, {
 						context: {
 							errorCode: ERROR_CODES.CONNECTION_REFUSED,
-							status: response?.status,
-							statusText: response?.statusText,
+							error: error instanceof Error ? error.message : String(error),
 							userId,
 							siteUrl,
 						},
 					});
-					throw new Error(errorMsg);
+					throw error;
 				}
+			};
 
-				const data = get(response, 'data', {});
+			/**
+			 * Update user data in local database (DB operation)
+			 */
+			const updateUserInDB = async (data: any) => {
+				try {
+					// Update user fields directly with response data
+					const updateData: any = {};
+					const fieldsToUpdate = [
+						'avatar_url',
+						'display_name',
+						'email',
+						'first_name',
+						'last_access',
+						'last_name',
+						'nice_name',
+						'username',
+					];
 
-				// Check if data exists and has expected structure
-				if (!data || typeof data !== 'object') {
-					const errorMsg = 'Invalid response data';
-					log.error('User validation response contains no valid data', {
-						context: {
-							errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
-							userId,
-							siteUrl,
-							hasData: !!data,
-						},
+					fieldsToUpdate.forEach((field) => {
+						if (data[field] !== undefined) {
+							updateData[field] = data[field];
+						}
 					});
-					throw new Error(errorMsg);
-				}
 
-				// Sanity check: verify that the response ID matches the expected user ID
-				if (data.id !== undefined && data.id !== userId) {
-					const errorMsg = `User ID mismatch: expected ${userId}, got ${data.id}`;
-					log.error('User validation failed - ID mismatch', {
-						context: {
-							errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
-							expectedUserId: userId,
-							receivedUserId: data.id,
-							siteUrl,
-						},
-					});
-					throw new Error(errorMsg);
-				}
-
-				return data;
-			} catch (error: any) {
-				// Extract the WooCommerce/WordPress error message from the response
-				const serverMessage = extractErrorMessage(
-					error?.response?.data,
-					'Failed to fetch user data from server'
-				);
-				log.error(serverMessage, {
-					context: {
-						errorCode: ERROR_CODES.CONNECTION_REFUSED,
-						error: error instanceof Error ? error.message : String(error),
-						userId,
-						siteUrl,
-					},
-				});
-				throw error;
-			}
-		};
-
-		/**
-		 * Update user data in local database (DB operation)
-		 */
-		const updateUserInDB = async (data: any) => {
-			try {
-				// Update user fields directly with response data
-				const updateData: any = {};
-				const fieldsToUpdate = [
-					'avatar_url',
-					'display_name',
-					'email',
-					'first_name',
-					'last_access',
-					'last_name',
-					'nice_name',
-					'username',
-				];
-
-				fieldsToUpdate.forEach((field) => {
-					if (data[field] !== undefined) {
-						updateData[field] = data[field];
+					// Update user data if we have fields to update
+					if (Object.keys(updateData).length > 0) {
+						await wpUser.incrementalPatch(updateData);
+						log.debug('User data updated successfully', {
+							context: {
+								userId,
+								updatedFields: Object.keys(updateData),
+							},
+						});
 					}
-				});
 
-				// Update user data if we have fields to update
-				if (Object.keys(updateData).length > 0) {
-					await wpUser.incrementalPatch(updateData);
-					log.debug('User data updated successfully', {
+					// Merge stores if present in response
+					if (data.stores && Array.isArray(data.stores)) {
+						await mergeStoresWithResponse({
+							userDB,
+							wpUser,
+							remoteStores: data.stores,
+							user: { uuid: user.uuid },
+							siteID: site.uuid,
+						});
+					}
+				} catch (error) {
+					const errorMsg = error instanceof Error ? error.message : String(error);
+					log.error('Failed to update user in local database', {
 						context: {
+							errorCode: ERROR_CODES.TRANSACTION_FAILED,
+							error: errorMsg,
 							userId,
-							updatedFields: Object.keys(updateData),
 						},
 					});
+					throw error;
 				}
+			};
 
-				// Merge stores if present in response
-				if (data.stores && Array.isArray(data.stores)) {
-					await mergeStoresWithResponse({
-						userDB,
-						wpUser,
-						remoteStores: data.stores,
-						user: { uuid: user.uuid },
-						siteID: site.uuid,
-					});
-				}
+			try {
+				// Fetch user data from server
+				const data = await fetchUserData();
+
+				// Update local database with fetched data
+				await updateUserInDB(data);
+
+				setIsValid(true);
 			} catch (error) {
 				const errorMsg = error instanceof Error ? error.message : String(error);
-				log.error('Failed to update user in local database', {
-					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
-						error: errorMsg,
-						userId,
-					},
-				});
-				throw error;
+				setError(errorMsg);
+				setIsValid(false);
+			} finally {
+				validationInProgress.current = false;
+				setIsLoading(false);
 			}
-		};
-
-		try {
-			// Fetch user data from server
-			const data = await fetchUserData();
-			
-			// Update local database with fetched data
-			await updateUserInDB(data);
-
-			setIsValid(true);
-		} catch (error) {
-			const errorMsg = error instanceof Error ? error.message : String(error);
-			setError(errorMsg);
-			setIsValid(false);
-		} finally {
-			validationInProgress.current = false;
-			setIsLoading(false);
-		}
 		};
 
 		validateUser();
