@@ -33,7 +33,8 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 				}
 
 				// If not, fetch and store it
-				const response = await get(imageUrl, { responseType: 'arraybuffer' });
+				// wcposHeaders: false prevents X-WCPOS header which triggers CORS preflight on external URLs
+				const response = await get(imageUrl, { responseType: 'arraybuffer', wcposHeaders: false });
 
 				if (!response || response.status !== 200) {
 					throw new Error(`Failed to fetch image: ${response?.status} ${response?.statusText}`);

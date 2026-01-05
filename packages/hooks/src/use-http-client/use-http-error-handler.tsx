@@ -18,14 +18,14 @@ const useHttpErrorHandler = () => {
 
 	/**
 	 * Handle HTTP error responses and show appropriate messages to users
-	 * 
+	 *
 	 * WordPress/WooCommerce returns errors in this format:
 	 * {
 	 *   "code": "woocommerce_rest_cannot_view",
 	 *   "message": "Sorry, you cannot view this resource.",
 	 *   "data": { "status": 401 }
 	 * }
-	 * 
+	 *
 	 * We prioritize showing the server's message to users when available.
 	 */
 	const errorResponseHandler = React.useCallback((res: AxiosResponse) => {
@@ -79,7 +79,12 @@ const useHttpErrorHandler = () => {
 			case 504:
 				log.error(extractErrorMessage(res.data, `Server unavailable (${res.status})`), {
 					showToast: true,
-					context: { errorCode: ERROR_CODES.CONNECTION_TIMEOUT, endpoint, status: res.status, wpErrorCode },
+					context: {
+						errorCode: ERROR_CODES.CONNECTION_TIMEOUT,
+						endpoint,
+						status: res.status,
+						wpErrorCode,
+					},
 				});
 				break;
 			default:

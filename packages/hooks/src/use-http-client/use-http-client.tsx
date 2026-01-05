@@ -205,7 +205,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 
 		const processedConfig = { ...config };
 
-		if (processedConfig.method?.toLowerCase() !== 'head') {
+		if (processedConfig.method?.toLowerCase() !== 'head' && processedConfig.wcposHeaders !== false) {
 			set(processedConfig, ['headers', 'X-WCPOS'], 1);
 		}
 
