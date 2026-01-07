@@ -55,14 +55,14 @@ function AppStack() {
 							contentStyle: { backgroundColor: 'transparent' },
 						}}
 					/>
-					<Stack.Screen
+					{/* <Stack.Screen
 						name="(modals)/login"
 						options={{
 							presentation: 'containedTransparentModal',
 							animation: 'fade',
 							contentStyle: { backgroundColor: 'transparent' },
 						}}
-					/>
+					/> */}
 				</Stack>
 				{/**
 				 * We need to have a PortalHost inside the UISettingsProvider

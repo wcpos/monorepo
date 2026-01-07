@@ -24,7 +24,7 @@ export default function AuthLayout() {
 	 * Status bar style for auth screens:
 	 * - Light theme: dark icons (background is light)
 	 * - Dark themes: light icons (background is dark)
-	 * 
+	 *
 	 * This is handled by react-native-edge-to-edge which is the recommended
 	 * approach for Expo SDK 54+ edge-to-edge displays.
 	 */
@@ -35,14 +35,14 @@ export default function AuthLayout() {
 			<SystemBars style={statusBarStyle} />
 			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}>
 				<Stack.Screen name="connect" />
-				<Stack.Screen
+				{/* <Stack.Screen
 					name="(modals)/login"
 					options={{
 						presentation: 'containedTransparentModal',
 						animation: 'fade',
 						contentStyle: { backgroundColor: 'transparent' },
 					}}
-				/>
+				/> */}
 			</Stack>
 			<ErrorBoundary>
 				<PortalHost />

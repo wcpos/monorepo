@@ -42,6 +42,9 @@
   },
   "submit": {
     "production": {
+      "android": {
+        "track": "beta"
+      },
       "ios": {
         "appleId": "paul@kilbot.com.au",
         "ascAppId": "6742204061",
