@@ -1,0 +1,60 @@
+---
+description: WCPOS Main Application context
+globs:
+alwaysApply: true
+---
+
+# WCPOS Main Application (Monorepo)
+
+## What This Is
+
+The main WooCommerce POS application - a React Native cross-platform app that runs on:
+- **Web**: via Expo (wcpos.expo.app)
+- **Desktop**: via Electron
+- **Mobile**: iOS and Android via Expo
+
+## System Context
+
+See `wcpos-infra/ARCHITECTURE.md` for backend services this app connects to.
+
+The app connects to:
+- Customer's WooCommerce store (via REST API + woocommerce-pos plugin)
+- `license.wcpos.com` (Keygen) for license validation
+- `store-api.wcpos.com` (Medusa) for subscriptions (Pro users)
+
+## Tech Stack
+
+- **Framework**: React Native + Expo
+- **State**: (check codebase for state management)
+- **Styling**: (check codebase)
+- **Monorepo**: (Turborepo, Nx, or Yarn workspaces - check package.json)
+
+## Structure
+
+Typical monorepo structure:
+```
+monorepo-v2/
+├── apps/
+│   ├── web/        # Expo web app
+│   ├── mobile/     # Expo native app
+│   └── desktop/    # Electron wrapper
+├── packages/
+│   ├── core/       # Shared business logic
+│   ├── ui/         # Shared components
+│   └── ...
+└── package.json
+```
+
+## Development
+
+Check `package.json` for scripts. Typically:
+```bash
+pnpm install        # Install deps
+pnpm dev            # Start dev server
+pnpm build          # Production build
+```
+
+## Related Projects
+
+- `woocommerce-pos` - WordPress plugin that provides the REST API
+- `wcpos-infra` - Backend services (licensing, subscriptions)

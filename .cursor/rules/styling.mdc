@@ -1,0 +1,40 @@
+---
+description: Theming and styling with Uniwind (NativeWind) and Tailwind CSS v4
+globs: "**/*.tsx, **/global.css"
+alwaysApply: false
+---
+
+# Styling & Theming (Uniwind/NativeWind)
+
+This project uses **Uniwind** with Tailwind CSS v4. Theme variables are defined in `apps/main/global.css` using OKLCH color space.
+
+## 1. Semantic Color Classes
+Always prefer semantic classes over hardcoded colors to ensure theme compatibility.
+
+| Class | Purpose |
+|-------|---------|
+| `bg-background` | Main app background |
+| `bg-card` | Card/elevated surfaces |
+| `bg-sidebar` | Navigation sidebar |
+| `bg-muted` | Muted elements/buttons |
+| `bg-table-header` | Data table headers |
+
+## 2. Theme Switching & Native Issues
+- **Theme Logic**: Use `Uniwind.setTheme('name')` or the `useUniwind()` hook.
+- **⚠️ Native Bug**: Some components don't update styles on theme switch due to CSS variable lag. 
+- **Verification**: If styles look "stuck," use `log.debug` to verify the current theme state.
+- **Best Practice**: Prefer `className` over inline styles.
+
+## 3. Status Bar (react-native-edge-to-edge)
+Match the status bar to the background context:
+```typescript
+import { SystemBars } from 'react-native-edge-to-edge';
+
+const { theme } = useUniwind();
+const style = theme === 'light' ? 'dark' : 'light';
+<SystemBars style={style} />
+```
+
+## 4. Typography (rem-based)
+Base: Web = 14px, Native = 16px. Use rem-based classes for proportional scaling:
+- `text-xs`, `text-sm`, `text-base`, `text-lg`.

@@ -1,0 +1,50 @@
+---
+description: React, TypeScript, and Logging conventions for WooCommerce POS
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# React & TypeScript Conventions
+
+## 1. Import Style & Hooks
+- **Namespace Imports**: Always use namespace imports for React hooks (e.g., `React.useState`).
+- **Hook Usage**: Access hooks via the React namespace rather than destructuring imports.
+
+**✅ Good**
+```typescript
+const [items, setItems] = React.useState([]);
+const ref = React.useRef(null);
+```
+
+**❌ Avoid**
+```typescript
+import { useState, useRef } from 'react';
+```
+
+## 2. The "useEffect" Rule of Merit
+`useEffect` is a last resort. Before using it, verify:
+- **Derived State**: Can this be calculated during render?
+- **Event Handlers**: Can this be triggered by a user action?
+- **External Stores**: Use specialized patterns (React Query, RxJS).
+- **Justification**: If used, you MUST add a comment explaining WHY it is necessary.
+
+## 3. Logging Protocol
+- **NO console.log**: Use the logger library exclusively.
+- **Library**: `import log from '@wcpos/utils/logger'`
+- **Methods**: `log.debug()`, `log.info()`, `log.warn()`, `log.error()`, `log.success()`.
+
+## 4. TypeScript & Architecture
+- **No 'any'**: Use strict types and generics.
+- **Platform Files**: Respect `.web.ts`, `.electron.ts`, and `.ts` (Native) resolution.
+
+## 5. Logger Quick Reference
+```typescript
+import log from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
+log.debug('Debug msg', { context: { data } });
+log.error('Error msg', { 
+  showToast: true, 
+  context: { errorCode: ERROR_CODES.TRANSACTION_FAILED } 
+});
+```
