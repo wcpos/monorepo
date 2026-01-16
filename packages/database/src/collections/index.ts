@@ -8,6 +8,7 @@ import { customersLiteral } from './schemas/customers';
 // import { gatewaysLiteral } from './schemas/gateways';
 // import { logsLiteral } from './schemas/logs';
 import { logsLiteral } from './schemas/logs';
+import { notificationsLiteral } from './schemas/notifications';
 import { ordersLiteral } from './schemas/orders';
 import { productsLiteral } from './schemas/products';
 import { sitesLiteral } from './schemas/sites';
@@ -400,6 +401,19 @@ const logs: RxCollectionCreator<LogDocumentType> = {
 	},
 };
 
+/**
+ * Notifications
+ */
+const notificationSchema: RxJsonSchema<NotificationDocumentType> = notificationsLiteral;
+type NotificationDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof notificationsLiteral
+>;
+export type NotificationDocument = RxDocument<NotificationDocumentType>;
+export type NotificationCollection = RxCollection<NotificationDocumentType>;
+const notifications: RxCollectionCreator<NotificationDocumentType> = {
+	schema: notificationSchema,
+};
+
 export type UserCollections = {
 	users: UserCollection;
 	sites: SiteCollection;
@@ -419,6 +433,7 @@ export type StoreCollections = {
 	'products/tags': ProductTagCollection;
 	'products/brands': ProductBrandCollection;
 	logs: LogCollection;
+	notifications: NotificationCollection;
 };
 
 export type SyncCollections = {
@@ -461,6 +476,7 @@ export const storeCollections = {
 	'products/tags': tags, // NOTE: WC REST API uses 'products/tags' endpoint
 	'products/brands': brands, // NOTE: WC REST API uses 'products/brands' endpoint
 	logs,
+	notifications,
 };
 
 // @NOTE: sync collection should have corresponding collections in storeCollections

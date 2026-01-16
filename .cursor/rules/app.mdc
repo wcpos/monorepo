@@ -54,6 +54,24 @@ pnpm dev            # Start dev server
 pnpm build          # Production build
 ```
 
+## Git Workflow
+
+**All code changes must be done on feature branches.** Direct commits to `main` are not allowed.
+
+```bash
+# Create feature branch
+git checkout -b feature/my-change
+
+# Make changes, then commit
+git add .
+git commit -m "feat: description of change"
+
+# Push and create PR
+git push -u origin feature/my-change
+```
+
+**Why**: Commits to `main` may trigger automatic deployments. Feature branches allow for code review and CI checks before merging.
+
 ## Related Projects
 
 - `woocommerce-pos` - WordPress plugin that provides the REST API
