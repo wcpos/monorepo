@@ -3,4 +3,6 @@ node_modules
 .vscode
 .DS_Store
 .turbo
+# Ignore .cursor except rules (needed for AI agents)
 .cursor
+!.cursor/rules
