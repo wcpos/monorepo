@@ -13,6 +13,7 @@ export const notificationsLiteral = {
 		subscriberId: {
 			description: 'Subscriber ID in format: {site.domain}:{store.id}:{wpCredentials.uuid}',
 			type: 'string',
+			maxLength: 320, // domain (253) + store.id (20) + uuid (36) + separators
 		},
 		title: {
 			description: 'Notification title',
@@ -35,6 +36,7 @@ export const notificationsLiteral = {
 		status: {
 			description: 'Notification read status',
 			type: 'string',
+			maxLength: 16, // 'archived' is longest at 8 chars
 			enum: ['unread', 'read', 'archived'],
 			default: 'unread',
 		},
