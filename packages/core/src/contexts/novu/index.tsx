@@ -8,12 +8,13 @@ import {
 } from '../../services/novu/subscriber';
 
 /**
- * Novu configuration
+ * Novu configuration - hardcoded since these are public values
+ * pointing to our self-hosted Novu instance
  */
 const NOVU_CONFIG = {
-	applicationIdentifier: process.env.EXPO_PUBLIC_NOVU_APP_ID || '',
-	backendUrl: process.env.EXPO_PUBLIC_NOVU_API_URL || 'https://api.notifications.wcpos.com',
-	socketUrl: process.env.EXPO_PUBLIC_NOVU_SOCKET_URL || 'wss://ws.notifications.wcpos.com',
+	applicationIdentifier: 'wcpos-notifications',
+	backendUrl: 'https://api.notifications.wcpos.com',
+	socketUrl: 'wss://ws.notifications.wcpos.com',
 };
 
 export interface NovuContextValue {
@@ -65,7 +66,7 @@ export function NovuProvider({ children }: NovuProviderProps) {
 			subscriberId,
 			subscriberMetadata,
 			config: NOVU_CONFIG,
-			isConfigured: !!NOVU_CONFIG.applicationIdentifier,
+			isConfigured: true,
 		};
 	}, [site, store, wpCredentials]);
 
