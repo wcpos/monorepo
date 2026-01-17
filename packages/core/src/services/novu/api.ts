@@ -23,13 +23,14 @@ export interface NovuNotification {
 }
 
 /**
- * Novu session response
+ * Novu session response - wrapped in data object
  */
 interface SessionResponse {
-	token: string;
-	profile: {
-		_id: string;
-		subscriberId: string;
+	data: {
+		token: string;
+		totalUnreadCount?: number;
+		removeNovuBranding?: boolean;
+		applicationIdentifier?: string;
 	};
 }
 
@@ -120,30 +121,55 @@ export class NovuApiClient {
 		this.isInitializing = true;
 
 		try {
+			const requestBody = {
+				applicationIdentifier: NOVU_APP_ID,
+				subscriberId: this.subscriberId,
+				// Include subscriber data for creation/update
+				firstName: this.metadata.domain,
+				data: this.metadata,
+			};
+
+			log.debug('Novu session request', {
+				context: { url: `${NOVU_API_URL}/v1/inbox/session`, body: requestBody },
+			});
+
 			const response = await fetch(`${NOVU_API_URL}/v1/inbox/session`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 				},
-				body: JSON.stringify({
-					applicationIdentifier: NOVU_APP_ID,
-					subscriberId: this.subscriberId,
-					// Include subscriber data for creation/update
-					firstName: this.metadata.domain,
-					data: this.metadata,
-				}),
+				body: JSON.stringify(requestBody),
+			});
+
+			const responseText = await response.text();
+			log.debug('Novu session response', {
+				context: { status: response.status, body: responseText.substring(0, 500) },
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text();
 				log.error('Failed to initialize Novu session', {
-					context: { status: response.status, error: errorText },
+					context: { status: response.status, error: responseText },
 				});
 				return false;
 			}
 
-			const data: SessionResponse = await response.json();
-			this.setCachedToken(data.token);
+			const data: SessionResponse = JSON.parse(responseText);
+			const token = data.data?.token;
+
+			log.debug('Novu session token received', {
+				context: {
+					tokenLength: token?.length,
+					tokenPrefix: token?.substring(0, 20),
+					totalUnreadCount: data.data?.totalUnreadCount,
+				},
+			});
+
+			if (!token) {
+				log.error('Novu session response missing token', { context: { data } });
+				return false;
+			}
+
+			this.setCachedToken(token);
 
 			log.info('Novu session initialized', {
 				context: { subscriberId: this.subscriberId },
@@ -164,10 +190,14 @@ export class NovuApiClient {
 	 * Fetch notifications from Novu.
 	 */
 	async fetchNotifications(limit = 50, retryCount = 0): Promise<NovuNotification[]> {
+		log.debug('fetchNotifications called', { context: { retryCount, limit } });
+
 		const token = this.getCachedToken();
 		if (!token) {
+			log.debug('No cached token, initializing session');
 			const initialized = await this.initializeSession();
 			if (!initialized) {
+				log.error('Session initialization failed, cannot fetch notifications');
 				return [];
 			}
 		}
@@ -178,21 +208,33 @@ export class NovuApiClient {
 			return [];
 		}
 
+		log.debug('Fetching notifications with token', {
+			context: { tokenPrefix: currentToken.substring(0, 20), tokenLength: currentToken.length },
+		});
+
 		try {
-			const response = await fetch(
-				`${NOVU_API_URL}/v1/inbox/notifications?limit=${limit}`,
-				{
-					method: 'GET',
-					headers: {
-						'Content-Type': 'application/json',
-						Authorization: `Bearer ${currentToken}`,
-					},
-				}
-			);
+			const url = `${NOVU_API_URL}/v1/inbox/notifications?limit=${limit}`;
+			const response = await fetch(url, {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${currentToken}`,
+				},
+			});
+
+			const responseText = await response.text();
+			log.debug('Fetch notifications response', {
+				context: {
+					status: response.status,
+					bodyLength: responseText.length,
+					bodyPreview: responseText.substring(0, 300),
+				},
+			});
 
 			if (!response.ok) {
 				// Token might be expired, try to reinitialize (max 1 retry)
 				if (response.status === 401 && retryCount < 1) {
+					log.debug('Got 401, clearing token and retrying');
 					this.clearCachedToken();
 					const initialized = await this.initializeSession();
 					if (initialized) {
@@ -200,15 +242,34 @@ export class NovuApiClient {
 					}
 				}
 
-				const errorText = await response.text();
 				log.error('Failed to fetch Novu notifications', {
-					context: { status: response.status, error: errorText },
+					context: { status: response.status, error: responseText },
 				});
 				return [];
 			}
 
-			const data: NotificationsFeedResponse = await response.json();
-			return data.data || [];
+			const rawData = JSON.parse(responseText);
+			log.debug('Novu notifications raw response structure', {
+				context: { keys: Object.keys(rawData), hasData: 'data' in rawData },
+			});
+
+			// Novu Inbox API wraps response in { data: { notifications: [...] } } or { data: [...] }
+			let notifications: NovuNotification[] = [];
+			if (Array.isArray(rawData.data)) {
+				notifications = rawData.data;
+			} else if (rawData.data?.notifications && Array.isArray(rawData.data.notifications)) {
+				notifications = rawData.data.notifications;
+			} else if (rawData.notifications && Array.isArray(rawData.notifications)) {
+				notifications = rawData.notifications;
+			}
+
+			log.info('Novu fetched notifications successfully', {
+				context: {
+					count: notifications.length,
+					firstNotificationKeys: notifications[0] ? Object.keys(notifications[0]) : [],
+				},
+			});
+			return notifications;
 		} catch (error) {
 			log.error('Error fetching Novu notifications', {
 				context: { error: error instanceof Error ? error.message : String(error) },

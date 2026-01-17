@@ -126,22 +126,50 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			if (!notificationsCollection || !subscriberId) return;
 
 			for (const notification of novuNotifications) {
+				// Log the raw notification to see actual structure
+				log.debug('Novu notification raw data', {
+					context: { notification: JSON.stringify(notification).substring(0, 500) },
+				});
+
+				// Novu uses different ID fields in different API versions
+				const notificationId =
+					(notification as Record<string, unknown>).id ||
+					notification._id ||
+					(notification as Record<string, unknown>)._notificationId;
+
+				if (!notificationId) {
+					log.error('Novu notification missing ID', {
+						context: { keys: Object.keys(notification) },
+					});
+					continue;
+				}
+
 				try {
+					// Map Novu fields to our schema
+					// Novu uses isRead/isSeen, we use read/seen booleans
+					const isRead =
+						(notification as Record<string, unknown>).isRead ?? notification.read ?? false;
+					const isSeen =
+						(notification as Record<string, unknown>).isSeen ?? notification.seen ?? false;
+
 					// Upsert notification to RxDB
 					await notificationsCollection.upsert({
-						id: notification._id,
+						id: String(notificationId),
 						subscriberId,
 						title: notification.subject || '',
 						body: notification.body || '',
-						status: notification.read ? 'read' : 'unread',
-						seen: notification.seen,
+						status: isRead ? 'read' : 'unread',
+						seen: isSeen,
 						createdAt: new Date(notification.createdAt).getTime(),
-						payload: notification.payload,
+						payload: notification.payload || {}, // Must be object, not undefined
 						channel: notification.channel || 'in_app',
 					});
+					log.debug('Novu notification synced to RxDB', {
+						context: { id: notificationId },
+					});
 				} catch (error) {
-					log.error('Failed to sync notification to RxDB', {
-						context: { notificationId: notification._id, error },
+					log.error('Novu: Failed to sync notification to RxDB', {
+						context: { notificationId, error },
 					});
 				}
 			}
@@ -196,6 +224,29 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			initStartedRef.current = false;
 		};
 	}, [subscriberId]);
+
+	// Poll for new notifications every 30 seconds
+	React.useEffect(() => {
+		if (!isInitialized || !isConfigured) {
+			return;
+		}
+
+		const pollInterval = setInterval(async () => {
+			const apiClient = apiClientRef.current;
+			if (!apiClient) return;
+
+			try {
+				const novuNotifications = await apiClient.fetchNotifications();
+				await syncToRxDB(novuNotifications);
+			} catch (error) {
+				log.error('Novu: Failed to poll notifications', {
+					context: { error: error instanceof Error ? error.message : String(error) },
+				});
+			}
+		}, 30000); // 30 seconds
+
+		return () => clearInterval(pollInterval);
+	}, [isInitialized, isConfigured, syncToRxDB]);
 
 	// Mark a single notification as read (both Novu and RxDB)
 	const markAsRead = React.useCallback(
