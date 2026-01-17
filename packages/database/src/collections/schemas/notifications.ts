@@ -46,9 +46,11 @@ export const notificationsLiteral = {
 			default: false,
 		},
 		createdAt: {
-			description: 'Timestamp when the notification was created',
+			description: 'Timestamp when the notification was created (ms since epoch)',
 			type: 'integer',
 			multipleOf: 1,
+			minimum: 0,
+			maximum: 32503680000000, // Year 3000 in milliseconds
 		},
 	},
 	indexes: ['subscriberId', 'status', 'createdAt'],
