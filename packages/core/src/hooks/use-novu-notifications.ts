@@ -59,13 +59,20 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 	const [isLoading, setIsLoading] = React.useState(false);
 	const [isInitialized, setIsInitialized] = React.useState(false);
 
-	// Create Novu API client
-	const apiClient = React.useMemo(() => {
-		if (!subscriberId || !subscriberMetadata) {
-			return null;
+	// Use ref to track if we've started initialization (prevents duplicate calls)
+	const initStartedRef = React.useRef(false);
+
+	// Create Novu API client - use ref to keep stable reference
+	const apiClientRef = React.useRef<NovuApiClient | null>(null);
+
+	// Only create a new client when subscriberId changes (not metadata)
+	React.useEffect(() => {
+		if (subscriberId && subscriberMetadata) {
+			apiClientRef.current = new NovuApiClient(subscriberId, subscriberMetadata);
+		} else {
+			apiClientRef.current = null;
 		}
-		return new NovuApiClient(subscriberId, subscriberMetadata);
-	}, [subscriberId, subscriberMetadata]);
+	}, [subscriberId]); // Only depend on subscriberId, not the whole metadata object
 
 	// Get notifications collection
 	const notificationsCollection = storeDB?.notifications as NotificationCollection | undefined;
@@ -146,6 +153,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 	 * Initialize Novu session and fetch notifications
 	 */
 	const initialize = React.useCallback(async () => {
+		const apiClient = apiClientRef.current;
 		if (!apiClient || !isConfigured) {
 			return;
 		}
@@ -172,14 +180,22 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		} finally {
 			setIsLoading(false);
 		}
-	}, [apiClient, isConfigured, syncToRxDB]);
+	}, [isConfigured, syncToRxDB]);
 
-	// Initialize on mount
+	// Initialize on mount - only once per subscriberId
 	React.useEffect(() => {
-		if (apiClient && isConfigured && !isInitialized) {
+		if (subscriberId && isConfigured && !initStartedRef.current) {
+			initStartedRef.current = true;
 			initialize();
 		}
-	}, [apiClient, isConfigured, isInitialized, initialize]);
+	}, [subscriberId, isConfigured, initialize]);
+
+	// Reset init state when subscriberId changes
+	React.useEffect(() => {
+		return () => {
+			initStartedRef.current = false;
+		};
+	}, [subscriberId]);
 
 	// Mark a single notification as read (both Novu and RxDB)
 	const markAsRead = React.useCallback(
@@ -188,6 +204,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 
 			try {
 				// Update Novu
+				const apiClient = apiClientRef.current;
 				if (apiClient) {
 					await apiClient.markAsRead(notificationId);
 				}
@@ -201,7 +218,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				log.error('Failed to mark notification as read', { context: { error } });
 			}
 		},
-		[notificationsCollection, apiClient]
+		[notificationsCollection]
 	);
 
 	// Mark all notifications as read (both Novu and RxDB)
@@ -210,6 +227,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 
 		try {
 			// Update Novu
+			const apiClient = apiClientRef.current;
 			if (apiClient) {
 				await apiClient.markAllAsRead();
 			}
@@ -228,7 +246,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		} catch (error) {
 			log.error('Failed to mark all notifications as read', { context: { error } });
 		}
-	}, [notificationsCollection, subscriberId, apiClient]);
+	}, [notificationsCollection, subscriberId]);
 
 	// Mark a single notification as seen (both Novu and RxDB)
 	const markAsSeen = React.useCallback(
@@ -237,6 +255,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 
 			try {
 				// Update Novu
+				const apiClient = apiClientRef.current;
 				if (apiClient) {
 					await apiClient.markAsSeen(notificationId);
 				}
@@ -250,7 +269,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				log.error('Failed to mark notification as seen', { context: { error } });
 			}
 		},
-		[notificationsCollection, apiClient]
+		[notificationsCollection]
 	);
 
 	// Mark all notifications as seen (both Novu and RxDB)
@@ -259,6 +278,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 
 		try {
 			// Update Novu
+			const apiClient = apiClientRef.current;
 			if (apiClient) {
 				await apiClient.markAllAsSeen();
 			}
@@ -277,10 +297,11 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		} catch (error) {
 			log.error('Failed to mark all notifications as seen', { context: { error } });
 		}
-	}, [notificationsCollection, subscriberId, apiClient]);
+	}, [notificationsCollection, subscriberId]);
 
 	// Refresh notifications from Novu server
 	const refresh = React.useCallback(async () => {
+		const apiClient = apiClientRef.current;
 		if (!apiClient || !isConfigured) {
 			log.warn('Novu not configured, skipping refresh');
 			return;
@@ -298,7 +319,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		} finally {
 			setIsLoading(false);
 		}
-	}, [apiClient, isConfigured, syncToRxDB]);
+	}, [isConfigured, syncToRxDB]);
 
 	return {
 		notifications,

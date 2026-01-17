@@ -45,16 +45,24 @@ interface NotificationsFeedResponse {
 }
 
 /**
+ * Session token cache - persists across NovuApiClient instances
+ * Key: subscriberId, Value: { token, expiresAt }
+ */
+const sessionCache = new Map<string, { token: string; expiresAt: number }>();
+
+/**
  * NovuApiClient handles all communication with the Novu API.
  *
  * Flow:
  * 1. Initialize session (identifies/creates subscriber, returns JWT token)
  * 2. Use token for subsequent API calls (fetch notifications, mark as read, etc.)
+ *
+ * Session tokens are cached globally to survive component re-renders.
  */
 export class NovuApiClient {
 	private subscriberId: string;
 	private metadata: NovuSubscriberMetadata;
-	private sessionToken: string | null = null;
+	private isInitializing = false;
 
 	constructor(subscriberId: string, metadata: NovuSubscriberMetadata) {
 		this.subscriberId = subscriberId;
@@ -62,10 +70,55 @@ export class NovuApiClient {
 	}
 
 	/**
+	 * Get cached session token if valid
+	 */
+	private getCachedToken(): string | null {
+		const cached = sessionCache.get(this.subscriberId);
+		if (cached && cached.expiresAt > Date.now()) {
+			return cached.token;
+		}
+		return null;
+	}
+
+	/**
+	 * Cache session token (expires in 1 hour to be safe, Novu tokens usually last longer)
+	 */
+	private setCachedToken(token: string): void {
+		sessionCache.set(this.subscriberId, {
+			token,
+			expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour
+		});
+	}
+
+	/**
+	 * Clear cached token
+	 */
+	private clearCachedToken(): void {
+		sessionCache.delete(this.subscriberId);
+	}
+
+	/**
 	 * Initialize session with Novu.
 	 * This identifies/creates the subscriber and returns a session token.
+	 *
+	 * Uses caching and prevents concurrent initialization calls.
 	 */
 	async initializeSession(): Promise<boolean> {
+		// Check cache first
+		const cachedToken = this.getCachedToken();
+		if (cachedToken) {
+			log.debug('Using cached Novu session token');
+			return true;
+		}
+
+		// Prevent concurrent initialization
+		if (this.isInitializing) {
+			log.debug('Novu session initialization already in progress');
+			return false;
+		}
+
+		this.isInitializing = true;
+
 		try {
 			const response = await fetch(`${NOVU_API_URL}/v1/inbox/session`, {
 				method: 'POST',
@@ -90,7 +143,7 @@ export class NovuApiClient {
 			}
 
 			const data: SessionResponse = await response.json();
-			this.sessionToken = data.token;
+			this.setCachedToken(data.token);
 
 			log.info('Novu session initialized', {
 				context: { subscriberId: this.subscriberId },
@@ -102,18 +155,27 @@ export class NovuApiClient {
 				context: { error: error instanceof Error ? error.message : String(error) },
 			});
 			return false;
+		} finally {
+			this.isInitializing = false;
 		}
 	}
 
 	/**
 	 * Fetch notifications from Novu.
 	 */
-	async fetchNotifications(limit = 50): Promise<NovuNotification[]> {
-		if (!this.sessionToken) {
+	async fetchNotifications(limit = 50, retryCount = 0): Promise<NovuNotification[]> {
+		const token = this.getCachedToken();
+		if (!token) {
 			const initialized = await this.initializeSession();
 			if (!initialized) {
 				return [];
 			}
+		}
+
+		const currentToken = this.getCachedToken();
+		if (!currentToken) {
+			log.error('No Novu session token available after initialization');
+			return [];
 		}
 
 		try {
@@ -123,18 +185,18 @@ export class NovuApiClient {
 					method: 'GET',
 					headers: {
 						'Content-Type': 'application/json',
-						Authorization: `Bearer ${this.sessionToken}`,
+						Authorization: `Bearer ${currentToken}`,
 					},
 				}
 			);
 
 			if (!response.ok) {
-				// Token might be expired, try to reinitialize
-				if (response.status === 401) {
-					this.sessionToken = null;
+				// Token might be expired, try to reinitialize (max 1 retry)
+				if (response.status === 401 && retryCount < 1) {
+					this.clearCachedToken();
 					const initialized = await this.initializeSession();
 					if (initialized) {
-						return this.fetchNotifications(limit);
+						return this.fetchNotifications(limit, retryCount + 1);
 					}
 				}
 
@@ -159,7 +221,8 @@ export class NovuApiClient {
 	 * Mark a notification as read.
 	 */
 	async markAsRead(notificationId: string): Promise<boolean> {
-		if (!this.sessionToken) {
+		const token = this.getCachedToken();
+		if (!token) {
 			return false;
 		}
 
@@ -170,7 +233,7 @@ export class NovuApiClient {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
-						Authorization: `Bearer ${this.sessionToken}`,
+						Authorization: `Bearer ${token}`,
 					},
 				}
 			);
@@ -188,7 +251,8 @@ export class NovuApiClient {
 	 * Mark all notifications as read.
 	 */
 	async markAllAsRead(): Promise<boolean> {
-		if (!this.sessionToken) {
+		const token = this.getCachedToken();
+		if (!token) {
 			return false;
 		}
 
@@ -197,7 +261,7 @@ export class NovuApiClient {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					Authorization: `Bearer ${this.sessionToken}`,
+					Authorization: `Bearer ${token}`,
 				},
 			});
 
@@ -214,7 +278,8 @@ export class NovuApiClient {
 	 * Mark a notification as seen.
 	 */
 	async markAsSeen(notificationId: string): Promise<boolean> {
-		if (!this.sessionToken) {
+		const token = this.getCachedToken();
+		if (!token) {
 			return false;
 		}
 
@@ -225,7 +290,7 @@ export class NovuApiClient {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
-						Authorization: `Bearer ${this.sessionToken}`,
+						Authorization: `Bearer ${token}`,
 					},
 				}
 			);
@@ -243,7 +308,8 @@ export class NovuApiClient {
 	 * Mark all notifications as seen.
 	 */
 	async markAllAsSeen(): Promise<boolean> {
-		if (!this.sessionToken) {
+		const token = this.getCachedToken();
+		if (!token) {
 			return false;
 		}
 
@@ -252,7 +318,7 @@ export class NovuApiClient {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					Authorization: `Bearer ${this.sessionToken}`,
+					Authorization: `Bearer ${token}`,
 				},
 			});
 
@@ -269,7 +335,8 @@ export class NovuApiClient {
 	 * Get unread count.
 	 */
 	async getUnreadCount(): Promise<number> {
-		if (!this.sessionToken) {
+		const token = this.getCachedToken();
+		if (!token) {
 			return 0;
 		}
 
@@ -278,7 +345,7 @@ export class NovuApiClient {
 				method: 'GET',
 				headers: {
 					'Content-Type': 'application/json',
-					Authorization: `Bearer ${this.sessionToken}`,
+					Authorization: `Bearer ${token}`,
 				},
 			});
 
