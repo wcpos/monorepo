@@ -6,30 +6,27 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/utils';
 import { Text } from '../text';
 
-const badgeVariants = cva(
-	'items-center justify-center rounded-full',
-	{
-		variants: {
-			variant: {
-				default: 'bg-primary',
-				destructive: 'bg-destructive',
-				secondary: 'bg-secondary',
-				success: 'bg-success',
-				warning: 'bg-warning',
-				muted: 'bg-muted',
-			},
-			size: {
-				default: 'min-w-5 h-5 px-1.5',
-				sm: 'min-w-4 h-4 px-1',
-				lg: 'min-w-6 h-6 px-2',
-			},
+const badgeVariants = cva('items-center justify-center rounded-full', {
+	variants: {
+		variant: {
+			default: 'bg-primary',
+			destructive: 'bg-destructive',
+			secondary: 'bg-secondary',
+			success: 'bg-success',
+			warning: 'bg-warning',
+			muted: 'bg-muted',
 		},
-		defaultVariants: {
-			variant: 'default',
-			size: 'default',
+		size: {
+			default: 'h-5 min-w-5 px-1.5',
+			sm: 'h-4 min-w-4 px-1',
+			lg: 'h-6 min-w-6 px-2',
 		},
-	}
-);
+	},
+	defaultVariants: {
+		variant: 'default',
+		size: 'default',
+	},
+});
 
 const badgeTextVariants = cva('font-semibold', {
 	variants: {
@@ -91,12 +88,7 @@ export function Badge({
 
 	// Dot mode - just show a small indicator
 	if (dot) {
-		return (
-			<View
-				className={cn('h-2.5 w-2.5 rounded-full bg-destructive', className)}
-				{...props}
-			/>
-		);
+		return <View className={cn('bg-destructive h-2.5 w-2.5 rounded-full', className)} {...props} />;
 	}
 
 	const displayCount = count && count > max ? `${max}+` : String(count);

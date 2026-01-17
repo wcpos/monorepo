@@ -7,7 +7,14 @@ import log from '@wcpos/utils/logger';
 
 import { useAppState } from '../contexts/app-state';
 import { useNovu } from '../contexts/novu';
-import { NovuApiClient, type NovuNotification } from '../services/novu/api';
+import {
+	getNovuClient,
+	fetchNotifications,
+	subscribeToNovuEvents,
+	markAsRead as novuMarkAsRead,
+	markAllAsRead as novuMarkAllAsRead,
+	type NovuNotification,
+} from '../services/novu/client';
 
 import type { NotificationCollection } from '@wcpos/database';
 
@@ -30,49 +37,30 @@ export interface UseNovuNotificationsResult {
 	unseenCount: number;
 	/** Whether notifications are loading */
 	isLoading: boolean;
-	/** Whether the Novu session is initialized */
-	isInitialized: boolean;
+	/** Whether the Novu client is connected */
+	isConnected: boolean;
 	/** Mark a notification as read */
 	markAsRead: (notificationId: string) => Promise<void>;
 	/** Mark all notifications as read */
 	markAllAsRead: () => Promise<void>;
-	/** Mark a notification as seen */
-	markAsSeen: (notificationId: string) => Promise<void>;
-	/** Mark all notifications as seen */
-	markAllAsSeen: () => Promise<void>;
 	/** Refresh notifications from server */
 	refresh: () => Promise<void>;
 }
 
 /**
- * Hook to manage Novu notifications with local RxDB storage.
+ * Hook to manage Novu notifications with local RxDB storage and real-time WebSocket updates.
  *
  * This hook:
- * - Initializes Novu session on mount (registers/identifies subscriber)
- * - Fetches notifications from Novu API
+ * - Initializes Novu SDK client with WebSocket connection
+ * - Listens for real-time notification events
  * - Syncs notifications to local RxDB for offline access
- * - Provides methods to mark as read/seen (updates both Novu and RxDB)
+ * - Provides methods to mark as read (updates both Novu and RxDB)
  */
 export function useNovuNotifications(): UseNovuNotificationsResult {
 	const { storeDB } = useAppState();
 	const { subscriberId, subscriberMetadata, isConfigured } = useNovu();
 	const [isLoading, setIsLoading] = React.useState(false);
-	const [isInitialized, setIsInitialized] = React.useState(false);
-
-	// Use ref to track if we've started initialization (prevents duplicate calls)
-	const initStartedRef = React.useRef(false);
-
-	// Create Novu API client - use ref to keep stable reference
-	const apiClientRef = React.useRef<NovuApiClient | null>(null);
-
-	// Only create a new client when subscriberId changes (not metadata)
-	React.useEffect(() => {
-		if (subscriberId && subscriberMetadata) {
-			apiClientRef.current = new NovuApiClient(subscriberId, subscriberMetadata);
-		} else {
-			apiClientRef.current = null;
-		}
-	}, [subscriberId]); // Only depend on subscriberId, not the whole metadata object
+	const [isConnected, setIsConnected] = React.useState(false);
 
 	// Get notifications collection
 	const notificationsCollection = storeDB?.notifications as NotificationCollection | undefined;
@@ -107,7 +95,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 
 	const notifications = useObservableState(notifications$, []);
 
-	// Calculate counts
+	// Calculate counts from local data
 	const unreadCount = React.useMemo(
 		() => notifications.filter((n) => n.status === 'unread').length,
 		[notifications]
@@ -119,134 +107,104 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 	);
 
 	/**
-	 * Sync notifications from Novu to RxDB
+	 * Sync a single notification to RxDB
 	 */
-	const syncToRxDB = React.useCallback(
-		async (novuNotifications: NovuNotification[]) => {
+	const syncNotificationToRxDB = React.useCallback(
+		async (notification: NovuNotification) => {
 			if (!notificationsCollection || !subscriberId) return;
 
-			for (const notification of novuNotifications) {
-				// Log the raw notification to see actual structure
-				log.debug('Novu notification raw data', {
-					context: { notification: JSON.stringify(notification).substring(0, 500) },
+			const notificationId = notification.id;
+			if (!notificationId) {
+				log.error('Novu: Notification missing ID', {
+					context: { keys: Object.keys(notification) },
 				});
+				return;
+			}
 
-				// Novu uses different ID fields in different API versions
-				const notificationId =
-					(notification as Record<string, unknown>).id ||
-					notification._id ||
-					(notification as Record<string, unknown>)._notificationId;
-
-				if (!notificationId) {
-					log.error('Novu notification missing ID', {
-						context: { keys: Object.keys(notification) },
-					});
-					continue;
-				}
-
-				try {
-					// Map Novu fields to our schema
-					// Novu uses isRead/isSeen, we use read/seen booleans
-					const isRead =
-						(notification as Record<string, unknown>).isRead ?? notification.read ?? false;
-					const isSeen =
-						(notification as Record<string, unknown>).isSeen ?? notification.seen ?? false;
-
-					// Upsert notification to RxDB
-					await notificationsCollection.upsert({
-						id: String(notificationId),
-						subscriberId,
-						title: notification.subject || '',
-						body: notification.body || '',
-						status: isRead ? 'read' : 'unread',
-						seen: isSeen,
-						createdAt: new Date(notification.createdAt).getTime(),
-						payload: notification.payload || {}, // Must be object, not undefined
-						channel: notification.channel || 'in_app',
-					});
-					log.debug('Novu notification synced to RxDB', {
-						context: { id: notificationId },
-					});
-				} catch (error) {
-					log.error('Novu: Failed to sync notification to RxDB', {
-						context: { notificationId, error },
-					});
-				}
+			try {
+				await notificationsCollection.upsert({
+					id: String(notificationId),
+					subscriberId,
+					title: notification.subject || '',
+					body: notification.body || '',
+					status: notification.isRead ? 'read' : 'unread',
+					seen: notification.isSeen ?? false,
+					createdAt: new Date(notification.createdAt).getTime(),
+					payload: notification.payload || {},
+					channel: notification.channelType || 'in_app',
+				});
+				log.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
+			} catch (error) {
+				log.error('Novu: Failed to sync notification to RxDB', {
+					context: { notificationId, error },
+				});
 			}
 		},
 		[notificationsCollection, subscriberId]
 	);
 
 	/**
-	 * Initialize Novu session and fetch notifications
+	 * Sync multiple notifications to RxDB
 	 */
-	const initialize = React.useCallback(async () => {
-		const apiClient = apiClientRef.current;
-		if (!apiClient || !isConfigured) {
+	const syncToRxDB = React.useCallback(
+		async (novuNotifications: NovuNotification[]) => {
+			for (const notification of novuNotifications) {
+				await syncNotificationToRxDB(notification);
+			}
+		},
+		[syncNotificationToRxDB]
+	);
+
+	/**
+	 * Initialize Novu client and set up WebSocket listeners
+	 */
+	React.useEffect(() => {
+		if (!subscriberId || !subscriberMetadata || !isConfigured) {
 			return;
 		}
 
+		log.info('Novu: Setting up client and WebSocket listeners', {
+			context: { subscriberId },
+		});
+
+		// Initialize the Novu client (this creates the WebSocket connection)
+		getNovuClient(subscriberId, subscriberMetadata);
+		setIsConnected(true);
+
+		// Subscribe to real-time events
+		const unsubscribe = subscribeToNovuEvents({
+			onNotificationReceived: (notification) => {
+				log.info('Novu: New notification received via WebSocket!', {
+					context: { id: notification.id, subject: notification.subject },
+				});
+				syncNotificationToRxDB(notification);
+			},
+			onUnreadCountChanged: (count) => {
+				log.debug('Novu: Unread count updated via WebSocket', { context: { count } });
+				// The local RxDB query will update automatically when we sync
+			},
+		});
+
+		// Initial fetch of notifications
 		setIsLoading(true);
-		try {
-			// Initialize session (creates/updates subscriber)
-			const success = await apiClient.initializeSession();
-			if (success) {
-				setIsInitialized(true);
-
-				// Fetch and sync notifications
-				const novuNotifications = await apiClient.fetchNotifications();
-				await syncToRxDB(novuNotifications);
-
-				log.info('Novu notifications initialized', {
-					context: { count: novuNotifications.length },
+		fetchNotifications()
+			.then((notifications) => {
+				log.info('Novu: Initial notifications loaded', {
+					context: { count: notifications.length },
 				});
-			}
-		} catch (error) {
-			log.error('Failed to initialize Novu notifications', {
-				context: { error: error instanceof Error ? error.message : String(error) },
+				return syncToRxDB(notifications);
+			})
+			.finally(() => {
+				setIsLoading(false);
 			});
-		} finally {
-			setIsLoading(false);
-		}
-	}, [isConfigured, syncToRxDB]);
 
-	// Initialize on mount - only once per subscriberId
-	React.useEffect(() => {
-		if (subscriberId && isConfigured && !initStartedRef.current) {
-			initStartedRef.current = true;
-			initialize();
-		}
-	}, [subscriberId, isConfigured, initialize]);
-
-	// Reset init state when subscriberId changes
-	React.useEffect(() => {
+		// Cleanup on unmount or subscriber change
 		return () => {
-			initStartedRef.current = false;
+			log.debug('Novu: Cleaning up WebSocket listeners');
+			unsubscribe();
+			setIsConnected(false);
 		};
-	}, [subscriberId]);
-
-	// Poll for new notifications every 30 seconds
-	React.useEffect(() => {
-		if (!isInitialized || !isConfigured) {
-			return;
-		}
-
-		const pollInterval = setInterval(async () => {
-			const apiClient = apiClientRef.current;
-			if (!apiClient) return;
-
-			try {
-				const novuNotifications = await apiClient.fetchNotifications();
-				await syncToRxDB(novuNotifications);
-			} catch (error) {
-				log.error('Novu: Failed to poll notifications', {
-					context: { error: error instanceof Error ? error.message : String(error) },
-				});
-			}
-		}, 30000); // 30 seconds
-
-		return () => clearInterval(pollInterval);
-	}, [isInitialized, isConfigured, syncToRxDB]);
+	}, [subscriberId, subscriberMetadata, isConfigured, syncNotificationToRxDB, syncToRxDB]);
 
 	// Mark a single notification as read (both Novu and RxDB)
 	const markAsRead = React.useCallback(
@@ -254,19 +212,16 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			if (!notificationsCollection) return;
 
 			try {
-				// Update Novu
-				const apiClient = apiClientRef.current;
-				if (apiClient) {
-					await apiClient.markAsRead(notificationId);
-				}
-
-				// Update RxDB
+				// Update RxDB first for immediate UI feedback
 				const doc = await notificationsCollection.findOne(notificationId).exec();
 				if (doc) {
 					await doc.patch({ status: 'read', seen: true });
 				}
+
+				// Then update Novu
+				await novuMarkAsRead(notificationId);
 			} catch (error) {
-				log.error('Failed to mark notification as read', { context: { error } });
+				log.error('Novu: Failed to mark notification as read', { context: { error } });
 			}
 		},
 		[notificationsCollection]
@@ -277,13 +232,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		if (!notificationsCollection || !subscriberId) return;
 
 		try {
-			// Update Novu
-			const apiClient = apiClientRef.current;
-			if (apiClient) {
-				await apiClient.markAllAsRead();
-			}
-
-			// Update RxDB
+			// Update RxDB first
 			const unreadDocs = await notificationsCollection
 				.find({
 					selector: {
@@ -294,79 +243,30 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				.exec();
 
 			await Promise.all(unreadDocs.map((doc) => doc.patch({ status: 'read', seen: true })));
+
+			// Then update Novu
+			await novuMarkAllAsRead();
 		} catch (error) {
-			log.error('Failed to mark all notifications as read', { context: { error } });
-		}
-	}, [notificationsCollection, subscriberId]);
-
-	// Mark a single notification as seen (both Novu and RxDB)
-	const markAsSeen = React.useCallback(
-		async (notificationId: string) => {
-			if (!notificationsCollection) return;
-
-			try {
-				// Update Novu
-				const apiClient = apiClientRef.current;
-				if (apiClient) {
-					await apiClient.markAsSeen(notificationId);
-				}
-
-				// Update RxDB
-				const doc = await notificationsCollection.findOne(notificationId).exec();
-				if (doc && !doc.seen) {
-					await doc.patch({ seen: true });
-				}
-			} catch (error) {
-				log.error('Failed to mark notification as seen', { context: { error } });
-			}
-		},
-		[notificationsCollection]
-	);
-
-	// Mark all notifications as seen (both Novu and RxDB)
-	const markAllAsSeen = React.useCallback(async () => {
-		if (!notificationsCollection || !subscriberId) return;
-
-		try {
-			// Update Novu
-			const apiClient = apiClientRef.current;
-			if (apiClient) {
-				await apiClient.markAllAsSeen();
-			}
-
-			// Update RxDB
-			const unseenDocs = await notificationsCollection
-				.find({
-					selector: {
-						subscriberId,
-						seen: false,
-					},
-				})
-				.exec();
-
-			await Promise.all(unseenDocs.map((doc) => doc.patch({ seen: true })));
-		} catch (error) {
-			log.error('Failed to mark all notifications as seen', { context: { error } });
+			log.error('Novu: Failed to mark all notifications as read', { context: { error } });
 		}
 	}, [notificationsCollection, subscriberId]);
 
 	// Refresh notifications from Novu server
 	const refresh = React.useCallback(async () => {
-		const apiClient = apiClientRef.current;
-		if (!apiClient || !isConfigured) {
-			log.warn('Novu not configured, skipping refresh');
+		if (!isConfigured) {
+			log.warn('Novu: Not configured, skipping refresh');
 			return;
 		}
 
 		setIsLoading(true);
 		try {
-			const novuNotifications = await apiClient.fetchNotifications();
+			const novuNotifications = await fetchNotifications();
 			await syncToRxDB(novuNotifications);
-			log.info('Novu notifications refreshed', {
+			log.info('Novu: Notifications refreshed', {
 				context: { count: novuNotifications.length },
 			});
 		} catch (error) {
-			log.error('Failed to refresh notifications', { context: { error } });
+			log.error('Novu: Failed to refresh notifications', { context: { error } });
 		} finally {
 			setIsLoading(false);
 		}
@@ -377,11 +277,9 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		unreadCount,
 		unseenCount,
 		isLoading,
-		isInitialized,
+		isConnected,
 		markAsRead,
 		markAllAsRead,
-		markAsSeen,
-		markAllAsSeen,
 		refresh,
 	};
 }

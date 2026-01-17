@@ -33,6 +33,7 @@
 		"victory-native": "^41.20.2"
 	},
 	"dependencies": {
+		"@novu/js": "^2.0.0",
 		"@date-fns/tz": "^1.2.0",
 		"@date-fns/utc": "^2.1.0",
 		"@hookform/error-message": "^2.0.1",

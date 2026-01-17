@@ -6,17 +6,11 @@ import { formatDistanceToNow } from 'date-fns';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
-import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
-import { useNovuNotifications, type Notification } from '../../../../hooks/use-novu-notifications';
-
-interface NotificationPanelProps {
-	isOpen: boolean;
-	onClose: () => void;
-}
+import { type Notification, useNovuNotifications } from '../../../../hooks/use-novu-notifications';
 
 interface NotificationItemProps {
 	notification: Notification;
@@ -49,7 +43,7 @@ function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps)
 				{/* Unread indicator */}
 				<View className="pt-1.5">
 					{isUnread ? (
-						<View className="h-2 w-2 rounded-full bg-primary" />
+						<View className="bg-primary h-2 w-2 rounded-full" />
 					) : (
 						<View className="h-2 w-2" />
 					)}
@@ -63,9 +57,7 @@ function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps)
 					{notification.body && (
 						<Text className="text-muted-foreground text-xs">{notification.body}</Text>
 					)}
-					{timeAgo && (
-						<Text className="text-muted-foreground text-xs">{timeAgo}</Text>
-					)}
+					{timeAgo && <Text className="text-muted-foreground text-xs">{timeAgo}</Text>}
 				</VStack>
 			</HStack>
 		</Pressable>
@@ -81,76 +73,50 @@ function EmptyState() {
 	return (
 		<VStack className="items-center justify-center py-8">
 			<Icon name="bell" size="2xl" variant="muted" />
-			<Text className="text-muted-foreground mt-2">
-				{t('No notifications', { _tags: 'core' })}
-			</Text>
+			<Text className="text-muted-foreground mt-2">{t('No notifications', { _tags: 'core' })}</Text>
 		</VStack>
 	);
 }
 
 /**
- * NotificationPanel displays a list of notifications in a modal/popover.
+ * NotificationPanelContent displays a list of notifications inside a popover.
  */
-export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
+export function NotificationPanelContent() {
 	const t = useT();
-	const {
-		notifications,
-		unreadCount,
-		markAsRead,
-		markAllAsRead,
-		markAllAsSeen,
-	} = useNovuNotifications();
-
-	// Mark all as seen when panel opens
-	React.useEffect(() => {
-		if (isOpen) {
-			markAllAsSeen();
-		}
-	}, [isOpen, markAllAsSeen]);
+	const { notifications, unreadCount, markAsRead, markAllAsRead } = useNovuNotifications();
 
 	const handleMarkAllAsRead = React.useCallback(() => {
 		markAllAsRead();
 	}, [markAllAsRead]);
 
-	// Don't render if not open
-	if (!isOpen) {
-		return null;
-	}
-
 	return (
-		<Modal onClose={onClose}>
-			<ModalContent size="sm">
-				<ModalHeader>
-					<HStack className="flex-1 items-center justify-between">
-						<ModalTitle>{t('Notifications', { _tags: 'core' })}</ModalTitle>
-						{unreadCount > 0 && (
-							<Button variant="ghost" size="sm" onPress={handleMarkAllAsRead}>
-								<ButtonText className="text-xs">
-									{t('Mark all as read', { _tags: 'core' })}
-								</ButtonText>
-							</Button>
-						)}
-					</HStack>
-				</ModalHeader>
+		<VStack className="gap-0">
+			{/* Header */}
+			<HStack className="border-border items-center justify-between border-b px-3 py-2">
+				<Text className="text-sm font-semibold">{t('Notifications', { _tags: 'core' })}</Text>
+				{unreadCount > 0 && (
+					<Button variant="ghost" size="sm" onPress={handleMarkAllAsRead}>
+						<ButtonText className="text-xs">{t('Mark all as read', { _tags: 'core' })}</ButtonText>
+					</Button>
+				)}
+			</HStack>
 
-				<ModalBody>
-					{notifications.length === 0 ? (
-						<EmptyState />
-					) : (
-						<ScrollView className="max-h-80">
-							<VStack className="gap-1">
-								{notifications.map((notification) => (
-									<NotificationItem
-										key={notification.id}
-										notification={notification}
-										onMarkAsRead={markAsRead}
-									/>
-								))}
-							</VStack>
-						</ScrollView>
-					)}
-				</ModalBody>
-			</ModalContent>
-		</Modal>
+			{/* Content */}
+			{notifications.length === 0 ? (
+				<EmptyState />
+			) : (
+				<ScrollView className="max-h-80">
+					<VStack className="gap-1 p-1">
+						{notifications.map((notification) => (
+							<NotificationItem
+								key={notification.id}
+								notification={notification}
+								onMarkAsRead={markAsRead}
+							/>
+						))}
+					</VStack>
+				</ScrollView>
+			)}
+		</VStack>
 	);
 }

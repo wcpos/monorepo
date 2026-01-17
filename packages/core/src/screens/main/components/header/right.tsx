@@ -8,7 +8,7 @@ import { UserMenu } from './user-menu';
 
 const HeaderRight = () => {
 	return (
-		<HStack>
+		<HStack space="lg">
 			<Online />
 			<NotificationBell />
 			<UserMenu />
