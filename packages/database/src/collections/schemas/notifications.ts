@@ -48,6 +48,7 @@ export const notificationsLiteral = {
 		createdAt: {
 			description: 'Timestamp when the notification was created',
 			type: 'integer',
+			multipleOf: 1,
 		},
 	},
 	indexes: ['subscriberId', 'status', 'createdAt'],
