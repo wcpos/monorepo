@@ -12,7 +12,7 @@ import {
  * pointing to our self-hosted Novu instance
  */
 const NOVU_CONFIG = {
-	applicationIdentifier: 'wcpos-notifications',
+	applicationIdentifier: '64qzhASJJNnb',
 	backendUrl: 'https://api.notifications.wcpos.com',
 	socketUrl: 'wss://ws.notifications.wcpos.com',
 };

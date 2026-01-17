@@ -6,7 +6,7 @@ import type { NovuSubscriberMetadata } from './subscriber';
  * Novu API configuration
  */
 const NOVU_API_URL = 'https://api.notifications.wcpos.com';
-const NOVU_APP_ID = 'wcpos-notifications';
+const NOVU_APP_ID = '64qzhASJJNnb';
 
 /**
  * Novu notification from API response
