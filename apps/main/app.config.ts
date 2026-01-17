@@ -38,6 +38,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			infoPlist: {
 				...config.ios?.infoPlist,
 				ITSAppUsesNonExemptEncryption: false,
+				// Local network access for printer discovery
+				NSLocalNetworkUsageDescription:
+					'WCPOS needs local network access to discover and connect to receipt printers.',
+				// Bonjour services for printer discovery
+				NSBonjourServices: ['_ipp._tcp', '_ipps._tcp', '_pdl-datastream._tcp'],
 			},
 			jsEngine: 'hermes',
 		},
