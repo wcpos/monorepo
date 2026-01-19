@@ -1,17 +1,52 @@
-import { Novu } from '@novu/js';
+import { type Notification, Novu } from '@novu/js';
 
 import log from '@wcpos/utils/logger';
 
 import type { NovuSubscriberMetadata } from './subscriber';
 
 /**
+ * Production Application ID for Novu
+ * This is the default if no environment variable is set
+ */
+const PRODUCTION_APP_ID = 'Wu5i9hEUNMO2';
+
+/**
  * Novu configuration for our self-hosted instance
+ *
+ * Uses Production environment by default. Set environment variables
+ * to use Development environment for testing:
+ * - Expo: EXPO_PUBLIC_NOVU_APPLICATION_ID
+ * - Electron: NOVU_APPLICATION_ID
  */
 const NOVU_CONFIG = {
-	applicationIdentifier: '64qzhASJJNnb',
-	backendUrl: 'https://api.notifications.wcpos.com',
-	socketUrl: 'wss://ws.notifications.wcpos.com',
+	applicationIdentifier:
+		process.env.EXPO_PUBLIC_NOVU_APPLICATION_ID ||
+		process.env.NOVU_APPLICATION_ID ||
+		PRODUCTION_APP_ID,
+	apiUrl:
+		process.env.EXPO_PUBLIC_NOVU_API_URL ||
+		process.env.NOVU_API_URL ||
+		'https://api.notifications.wcpos.com',
+	socketUrl:
+		process.env.EXPO_PUBLIC_NOVU_SOCKET_URL ||
+		process.env.NOVU_SOCKET_URL ||
+		'wss://ws.notifications.wcpos.com',
 };
+
+/**
+ * Novu environment type - matches server-side definition
+ */
+export type NovuEnvironment = 'development' | 'production';
+
+/**
+ * Get the current Novu environment based on configuration
+ *
+ * If the application ID is the production default, we're in production.
+ * Any other application ID means we're in development.
+ */
+export function getNovuEnvironment(): NovuEnvironment {
+	return NOVU_CONFIG.applicationIdentifier === PRODUCTION_APP_ID ? 'production' : 'development';
+}
 
 /**
  * Singleton Novu client instance
@@ -21,18 +56,9 @@ let novuClient: Novu | null = null;
 let currentSubscriberId: string | null = null;
 
 /**
- * Novu notification from the SDK
+ * Re-export the Notification type from @novu/js for use in other modules
  */
-export interface NovuNotification {
-	id: string;
-	subject?: string;
-	body?: string;
-	isRead: boolean;
-	isSeen: boolean;
-	createdAt: string;
-	payload?: Record<string, unknown>;
-	channelType?: string;
-}
+export type NovuNotification = Notification;
 
 /**
  * Event handlers type
@@ -47,10 +73,7 @@ export interface NovuEventHandlers {
  * Initialize or get the Novu client
  * Creates a new client if subscriber changed or doesn't exist
  */
-export function getNovuClient(
-	subscriberId: string,
-	_metadata?: NovuSubscriberMetadata
-): Novu {
+export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMetadata): Novu {
 	// Return existing client if subscriber hasn't changed
 	if (novuClient && currentSubscriberId === subscriberId) {
 		return novuClient;
@@ -64,15 +87,40 @@ export function getNovuClient(
 	}
 
 	log.info('Novu: Initializing client with WebSocket', {
-		context: { subscriberId, socketUrl: NOVU_CONFIG.socketUrl },
+		context: {
+			subscriberId,
+			applicationIdentifier: NOVU_CONFIG.applicationIdentifier,
+			socketUrl: NOVU_CONFIG.socketUrl,
+		},
 	});
 
-	// Create new Novu client
+	// Log metadata at debug level to avoid exposing sensitive info like licenseKey
+	log.debug('Novu: Subscriber metadata', { context: { metadata } });
+
+	// Create new Novu client (v3 API)
+	// Note: backendUrl is deprecated in v3, use apiUrl instead
+	// Pass subscriber metadata via the subscriber.data field for targeting/analytics
 	novuClient = new Novu({
-		subscriberId,
 		applicationIdentifier: NOVU_CONFIG.applicationIdentifier,
-		backendUrl: NOVU_CONFIG.backendUrl,
+		apiUrl: NOVU_CONFIG.apiUrl,
 		socketUrl: NOVU_CONFIG.socketUrl,
+		subscriber: {
+			subscriberId,
+			locale: metadata?.locale,
+			// Custom metadata for targeting and analytics
+			data: metadata
+				? {
+						domain: metadata.domain,
+						storeId: metadata.storeId,
+						licenseKey: metadata.licenseKey,
+						licenseStatus: metadata.licenseStatus,
+						appVersion: metadata.appVersion,
+						platform: metadata.platform,
+						wcposVersion: metadata.wcposVersion,
+						wcposProVersion: metadata.wcposProVersion,
+					}
+				: undefined,
+		},
 	});
 
 	currentSubscriberId = subscriberId;
@@ -89,7 +137,7 @@ export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
 		return () => {};
 	}
 
-	const unsubscribers: Array<() => void> = [];
+	const unsubscribers: (() => void)[] = [];
 
 	if (handlers.onNotificationReceived) {
 		const handler = handlers.onNotificationReceived;
@@ -107,10 +155,12 @@ export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
 	if (handlers.onUnreadCountChanged) {
 		const handler = handlers.onUnreadCountChanged;
 		novuClient.on('notifications.unread_count_changed', (data) => {
+			// v3 API returns { result: { total: number, severity: Record<string, number> } }
+			const result = data.result as { total: number; severity: Record<string, number> };
 			log.debug('Novu: Unread count changed via WebSocket', {
-				context: { count: (data as { result?: number })?.result },
+				context: { count: result?.total },
 			});
-			handler((data.result as number) || 0);
+			handler(result?.total || 0);
 		});
 	}
 
@@ -131,7 +181,7 @@ export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
 }
 
 /**
- * Fetch notifications using the SDK
+ * Fetch notifications using the SDK (v3 API)
  */
 export async function fetchNotifications(limit = 50): Promise<NovuNotification[]> {
 	if (!novuClient) {
@@ -140,13 +190,20 @@ export async function fetchNotifications(limit = 50): Promise<NovuNotification[]
 	}
 
 	try {
-		const response = await novuClient.notifications.list({ limit });
+		const { data, error } = await novuClient.notifications.list({ limit });
+
+		if (error) {
+			log.error('Novu: Failed to fetch notifications', {
+				context: { error: error.message },
+			});
+			return [];
+		}
 
 		log.info('Novu: Fetched notifications', {
-			context: { count: response.data?.notifications?.length || 0 },
+			context: { count: data?.notifications?.length || 0 },
 		});
 
-		return (response.data?.notifications || []) as unknown as NovuNotification[];
+		return data?.notifications || [];
 	} catch (error) {
 		log.error('Novu: Failed to fetch notifications', {
 			context: { error: error instanceof Error ? error.message : String(error) },
@@ -156,13 +213,19 @@ export async function fetchNotifications(limit = 50): Promise<NovuNotification[]
 }
 
 /**
- * Mark notification as read
+ * Mark notification as read (v3 API)
  */
 export async function markAsRead(notificationId: string): Promise<boolean> {
 	if (!novuClient) return false;
 
 	try {
-		await novuClient.notifications.read({ notificationId });
+		const { error } = await novuClient.notifications.read({ notificationId });
+		if (error) {
+			log.error('Novu: Failed to mark as read', {
+				context: { notificationId, error: error.message },
+			});
+			return false;
+		}
 		return true;
 	} catch (error) {
 		log.error('Novu: Failed to mark as read', {
@@ -173,13 +236,19 @@ export async function markAsRead(notificationId: string): Promise<boolean> {
 }
 
 /**
- * Mark all notifications as read
+ * Mark all notifications as read (v3 API)
  */
 export async function markAllAsRead(): Promise<boolean> {
 	if (!novuClient) return false;
 
 	try {
-		await novuClient.notifications.readAll({});
+		const { error } = await novuClient.notifications.readAll();
+		if (error) {
+			log.error('Novu: Failed to mark all as read', {
+				context: { error: error.message },
+			});
+			return false;
+		}
 		return true;
 	} catch (error) {
 		log.error('Novu: Failed to mark all as read', {
@@ -190,15 +259,19 @@ export async function markAllAsRead(): Promise<boolean> {
 }
 
 /**
- * Mark notification as seen
+ * Mark notification as seen (v3 API)
  */
 export async function markAsSeen(notificationId: string): Promise<boolean> {
 	if (!novuClient) return false;
 
 	try {
-		// Novu SDK uses archive for seen in some versions
-		// Check the SDK docs for exact method
-		await novuClient.notifications.read({ notificationId });
+		const { error } = await novuClient.notifications.seen({ notificationId });
+		if (error) {
+			log.error('Novu: Failed to mark as seen', {
+				context: { notificationId, error: error.message },
+			});
+			return false;
+		}
 		return true;
 	} catch (error) {
 		log.error('Novu: Failed to mark as seen', {
@@ -209,13 +282,19 @@ export async function markAsSeen(notificationId: string): Promise<boolean> {
 }
 
 /**
- * Mark all notifications as seen
+ * Mark all notifications as seen (v3 API)
  */
 export async function markAllAsSeen(): Promise<boolean> {
 	if (!novuClient) return false;
 
 	try {
-		await novuClient.notifications.readAll({});
+		const { error } = await novuClient.notifications.seenAll();
+		if (error) {
+			log.error('Novu: Failed to mark all as seen', {
+				context: { error: error.message },
+			});
+			return false;
+		}
 		return true;
 	} catch (error) {
 		log.error('Novu: Failed to mark all as seen', {
@@ -226,14 +305,20 @@ export async function markAllAsSeen(): Promise<boolean> {
 }
 
 /**
- * Get unread count
+ * Get unread count (v3 API)
  */
 export async function getUnreadCount(): Promise<number> {
 	if (!novuClient) return 0;
 
 	try {
-		const response = await novuClient.notifications.count({ read: false });
-		return response.data?.count || 0;
+		const { data, error } = await novuClient.notifications.count({ read: false });
+		if (error) {
+			log.error('Novu: Failed to get unread count', {
+				context: { error: error.message },
+			});
+			return 0;
+		}
+		return data?.count || 0;
 	} catch (error) {
 		log.error('Novu: Failed to get unread count', {
 			context: { error: error instanceof Error ? error.message : String(error) },

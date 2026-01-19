@@ -1,5 +1,8 @@
 const path = require('path');
 
+// Load .env from monorepo root before Metro starts
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+
 const { getDefaultConfig } = require('expo/metro-config');
 const { FileStore } = require('metro-cache');
 const { withUniwindConfig } = require('uniwind/metro');

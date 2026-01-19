@@ -1,6 +1,9 @@
 import AppInfo from '@wcpos/utils/app-info';
-
+import { http } from '@wcpos/hooks/use-http-client';
+import log from '@wcpos/utils/logger';
 import type { SiteDocument, StoreDocument, WPCredentialsDocument } from '@wcpos/database';
+
+import { getNovuEnvironment, type NovuEnvironment } from './client';
 
 /**
  * Subscriber metadata sent to Novu for targeting and analytics
@@ -20,9 +23,12 @@ export interface NovuSubscriberMetadata {
 /**
  * Generates a unique subscriber ID for Novu notifications.
  *
- * Format: {site.domain}:{store.id}:{wpCredentials.uuid}
+ * Format: {site.domain}:{store.id}:{wpCredentials.uuid}:{platform}
  *
- * This uniquely identifies a user session at a specific store on a specific WooCommerce site.
+ * This uniquely identifies a user session at a specific store on a specific WooCommerce site
+ * AND platform. The platform is included because a user may be logged in from multiple
+ * platforms simultaneously (e.g., web and iOS), and each should have its own subscriber
+ * to avoid metadata conflicts.
  *
  * @param site - The WordPress site document
  * @param store - The store document
@@ -38,8 +44,9 @@ export function generateSubscriberId(
 	const domain = extractDomain(site.url || '');
 	const storeId = store.id || store.localID;
 	const userUuid = wpCredentials.uuid;
+	const platform = AppInfo.platform;
 
-	return `${domain}:${storeId}:${userUuid}`;
+	return `${domain}:${storeId}:${userUuid}:${platform}`;
 }
 
 /**
@@ -84,5 +91,76 @@ function extractDomain(url: string): string {
 	} catch {
 		// Fallback: remove protocol manually
 		return url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+	}
+}
+
+/**
+ * Sync subscriber metadata to the server.
+ *
+ * This calls the updates-server endpoint which then uses the Novu API
+ * to update the subscriber profile. This is done server-side to keep
+ * the NOVU_SECRET_KEY secure.
+ *
+ * Uses the platform-specific HTTP client:
+ * - Web/Native: Direct axios
+ * - Electron: IPC bridge to main process (avoids CORS/sandbox issues)
+ *
+ * The environment (development/production) is automatically determined
+ * based on the NOVU_APPLICATION_ID in use.
+ *
+ * @param subscriberId - The unique subscriber ID
+ * @param metadata - The subscriber metadata
+ * @returns Promise that resolves when sync is complete
+ */
+export async function syncSubscriberToServer(
+	subscriberId: string,
+	metadata: NovuSubscriberMetadata
+): Promise<{ success: boolean; error?: string }> {
+	const UPDATES_SERVER_URL =
+		process.env.EXPO_PUBLIC_UPDATES_SERVER_URL ||
+		process.env.UPDATES_SERVER_URL ||
+		'https://updates.wcpos.com';
+
+	// Get the environment from the client configuration
+	const environment = getNovuEnvironment();
+
+	try {
+		const response = await http.request({
+			method: 'POST',
+			url: `${UPDATES_SERVER_URL}/v1/subscriber/sync`,
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			data: {
+				subscriberId,
+				// Locale is a first-class Novu subscriber field, so send it at top level
+				locale: metadata.locale,
+				data: metadata,
+				// Tell the server which Novu environment to sync to
+				environment,
+			},
+		});
+
+		log.debug('Novu: Subscriber sync successful', {
+			context: { subscriberId, environment, status: response.status },
+		});
+
+		return { success: true };
+	} catch (error: any) {
+		const errorMessage = error?.response?.data?.message || error?.message || 'Network error';
+
+		log.warn('Novu: Subscriber sync failed', {
+			context: {
+				subscriberId,
+				environment,
+				error: errorMessage,
+				status: error?.response?.status,
+			},
+		});
+
+		return {
+			success: false,
+			error: errorMessage,
+		};
 	}
 }

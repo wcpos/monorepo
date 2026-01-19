@@ -62,6 +62,7 @@
     "victory-native": "^41.20.2"
   },
   "devDependencies": {
+    "dotenv": "^16.4.5",
     "@babel/core": "7.28.3",
     "@types/react": "^19.1.11",
     "expo-atlas": "^0.4.0",

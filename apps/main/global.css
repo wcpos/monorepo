@@ -8,6 +8,9 @@
 @source "../../packages/core/src/**/*.{ts,tsx}";
 
 @theme {
+  /* Special colors */
+  --color-transparent: transparent;
+
   /* Custom widths */
   --width-128: 32rem;
   --width-144: 36rem;

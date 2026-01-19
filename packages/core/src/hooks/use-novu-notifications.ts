@@ -4,19 +4,19 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/logger';
+import type { NotificationCollection } from '@wcpos/database';
 
 import { useAppState } from '../contexts/app-state';
 import { useNovu } from '../contexts/novu';
 import {
-	getNovuClient,
 	fetchNotifications,
-	subscribeToNovuEvents,
-	markAsRead as novuMarkAsRead,
+	getNovuClient,
 	markAllAsRead as novuMarkAllAsRead,
+	markAllAsSeen as novuMarkAllAsSeen,
+	markAsRead as novuMarkAsRead,
 	type NovuNotification,
+	subscribeToNovuEvents,
 } from '../services/novu/client';
-
-import type { NotificationCollection } from '@wcpos/database';
 
 export interface Notification {
 	id: string;
@@ -43,6 +43,8 @@ export interface UseNovuNotificationsResult {
 	markAsRead: (notificationId: string) => Promise<void>;
 	/** Mark all notifications as read */
 	markAllAsRead: () => Promise<void>;
+	/** Mark all notifications as seen (without marking as read) */
+	markAllAsSeen: () => Promise<void>;
 	/** Refresh notifications from server */
 	refresh: () => Promise<void>;
 }
@@ -107,7 +109,8 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 	);
 
 	/**
-	 * Sync a single notification to RxDB
+	 * Sync a single notification to RxDB (v3 API)
+	 * Note: v3 uses `data` instead of `payload` for custom data
 	 */
 	const syncNotificationToRxDB = React.useCallback(
 		async (notification: NovuNotification) => {
@@ -130,7 +133,8 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 					status: notification.isRead ? 'read' : 'unread',
 					seen: notification.isSeen ?? false,
 					createdAt: new Date(notification.createdAt).getTime(),
-					payload: notification.payload || {},
+					// v3 uses `data` instead of `payload`
+					payload: (notification.data as Record<string, unknown>) || {},
 					channel: notification.channelType || 'in_app',
 				});
 				log.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
@@ -251,6 +255,30 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		}
 	}, [notificationsCollection, subscriberId]);
 
+	// Mark all notifications as seen without marking as read (both Novu and RxDB)
+	const markAllAsSeen = React.useCallback(async () => {
+		if (!notificationsCollection || !subscriberId) return;
+
+		try {
+			// Update RxDB first - only set seen: true, don't change status
+			const unseenDocs = await notificationsCollection
+				.find({
+					selector: {
+						subscriberId,
+						seen: false,
+					},
+				})
+				.exec();
+
+			await Promise.all(unseenDocs.map((doc) => doc.patch({ seen: true })));
+
+			// Then update Novu
+			await novuMarkAllAsSeen();
+		} catch (error) {
+			log.error('Novu: Failed to mark all notifications as seen', { context: { error } });
+		}
+	}, [notificationsCollection, subscriberId]);
+
 	// Refresh notifications from Novu server
 	const refresh = React.useCallback(async () => {
 		if (!isConfigured) {
@@ -280,6 +308,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		isConnected,
 		markAsRead,
 		markAllAsRead,
+		markAllAsSeen,
 		refresh,
 	};
 }
