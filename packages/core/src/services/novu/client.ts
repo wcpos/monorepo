@@ -5,24 +5,54 @@ import log from '@wcpos/utils/logger';
 import type { NovuSubscriberMetadata } from './subscriber';
 
 /**
- * Production Application ID for Novu
- * This is the default if no environment variable is set
+ * Novu Application IDs for each environment
+ * These are from our self-hosted Novu instance
  */
-const PRODUCTION_APP_ID = 'Wu5i9hEUNMO2';
+const NOVU_APP_IDS = {
+	production: 'Wu5i9hEUNMO2',
+	development: '64qzhASJJNnb',
+} as const;
+
+/**
+ * Novu environment type - matches server-side definition
+ */
+export type NovuEnvironment = 'development' | 'production';
+
+/**
+ * Get the current Novu environment
+ *
+ * Auto-detects based on:
+ * - __DEV__ for Expo/React Native
+ * - NODE_ENV for Electron/Node
+ *
+ * Can be overridden with NOVU_ENV environment variable if needed.
+ */
+export function getNovuEnvironment(): NovuEnvironment {
+	// Allow explicit override via env var (for edge cases)
+	const override = process.env.EXPO_PUBLIC_NOVU_ENV || process.env.NOVU_ENV;
+	if (override === 'development' || override === 'production') {
+		return override;
+	}
+
+	// Auto-detect: __DEV__ is available in Expo/React Native
+	if (typeof __DEV__ !== 'undefined') {
+		return __DEV__ ? 'development' : 'production';
+	}
+
+	// Fallback for Electron/Node: check NODE_ENV
+	return process.env.NODE_ENV === 'development' ? 'development' : 'production';
+}
 
 /**
  * Novu configuration for our self-hosted instance
  *
- * Uses Production environment by default. Set environment variables
- * to use Development environment for testing:
- * - Expo: EXPO_PUBLIC_NOVU_APPLICATION_ID
- * - Electron: NOVU_APPLICATION_ID
+ * Environment is auto-detected based on __DEV__ (Expo) or NODE_ENV (Electron).
+ * No environment variables needed for normal workflow.
  */
 const NOVU_CONFIG = {
-	applicationIdentifier:
-		process.env.EXPO_PUBLIC_NOVU_APPLICATION_ID ||
-		process.env.NOVU_APPLICATION_ID ||
-		PRODUCTION_APP_ID,
+	get applicationIdentifier() {
+		return NOVU_APP_IDS[getNovuEnvironment()];
+	},
 	apiUrl:
 		process.env.EXPO_PUBLIC_NOVU_API_URL ||
 		process.env.NOVU_API_URL ||
@@ -32,21 +62,6 @@ const NOVU_CONFIG = {
 		process.env.NOVU_SOCKET_URL ||
 		'wss://ws.notifications.wcpos.com',
 };
-
-/**
- * Novu environment type - matches server-side definition
- */
-export type NovuEnvironment = 'development' | 'production';
-
-/**
- * Get the current Novu environment based on configuration
- *
- * If the application ID is the production default, we're in production.
- * Any other application ID means we're in development.
- */
-export function getNovuEnvironment(): NovuEnvironment {
-	return NOVU_CONFIG.applicationIdentifier === PRODUCTION_APP_ID ? 'production' : 'development';
-}
 
 /**
  * Singleton Novu client instance
