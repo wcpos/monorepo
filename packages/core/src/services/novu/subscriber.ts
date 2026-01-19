@@ -42,7 +42,8 @@ export function generateSubscriberId(
 ): string {
 	// Extract domain from site URL (remove protocol)
 	const domain = extractDomain(site.url || '');
-	const storeId = store.id || store.localID;
+	// Use nullish coalescing to preserve legitimate 0 values
+	const storeId = store.id ?? store.localID;
 	const userUuid = wpCredentials.uuid;
 	const platform = AppInfo.platform;
 
@@ -67,7 +68,8 @@ export function generateSubscriberMetadata(
 ): NovuSubscriberMetadata {
 	return {
 		domain: extractDomain(site.url || ''),
-		storeId: store.id || store.localID,
+		// Use nullish coalescing to preserve legitimate 0 values
+		storeId: store.id ?? store.localID,
 		licenseKey: site.license?.key,
 		licenseStatus: site.license?.status,
 		appVersion: AppInfo.version,

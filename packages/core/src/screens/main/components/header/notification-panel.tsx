@@ -105,7 +105,7 @@ export function NotificationPanelContent() {
 			{notifications.length === 0 ? (
 				<EmptyState />
 			) : (
-				<ScrollView className="max-h-80">
+				<ScrollView className="max-h-80 grow-0">
 					<VStack className="gap-1 p-1">
 						{notifications.map((notification) => (
 							<NotificationItem

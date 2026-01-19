@@ -148,13 +148,11 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 	);
 
 	/**
-	 * Sync multiple notifications to RxDB
+	 * Sync multiple notifications to RxDB (in parallel for performance)
 	 */
 	const syncToRxDB = React.useCallback(
 		async (novuNotifications: NovuNotification[]) => {
-			for (const notification of novuNotifications) {
-				await syncNotificationToRxDB(notification);
-			}
+			await Promise.all(novuNotifications.map((notification) => syncNotificationToRxDB(notification)));
 		},
 		[syncNotificationToRxDB]
 	);

@@ -97,7 +97,8 @@ export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMet
 	// Clean up existing client
 	if (novuClient) {
 		log.debug('Novu: Disconnecting previous client');
-		// The SDK handles cleanup internally
+		// Disconnect the WebSocket before releasing the reference
+		novuClient.socket.disconnect();
 		novuClient = null;
 	}
 
@@ -156,20 +157,20 @@ export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
 
 	if (handlers.onNotificationReceived) {
 		const handler = handlers.onNotificationReceived;
-		novuClient.on('notifications.notification_received', (data) => {
+		// on() returns an unsubscribe function - capture it for proper cleanup
+		const unsubscribe = novuClient.on('notifications.notification_received', (data) => {
 			log.debug('Novu: Notification received via WebSocket', {
 				context: { id: (data as { result?: { id?: string } })?.result?.id },
 			});
 			handler(data.result as unknown as NovuNotification);
 		});
-		unsubscribers.push(() => {
-			// SDK should handle cleanup, but we track it
-		});
+		unsubscribers.push(unsubscribe);
 	}
 
 	if (handlers.onUnreadCountChanged) {
 		const handler = handlers.onUnreadCountChanged;
-		novuClient.on('notifications.unread_count_changed', (data) => {
+		// on() returns an unsubscribe function - capture it for proper cleanup
+		const unsubscribe = novuClient.on('notifications.unread_count_changed', (data) => {
 			// v3 API returns { result: { total: number, severity: Record<string, number> } }
 			const result = data.result as { total: number; severity: Record<string, number> };
 			log.debug('Novu: Unread count changed via WebSocket', {
@@ -177,16 +178,19 @@ export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
 			});
 			handler(result?.total || 0);
 		});
+		unsubscribers.push(unsubscribe);
 	}
 
 	if (handlers.onUnseenCountChanged) {
 		const handler = handlers.onUnseenCountChanged;
-		novuClient.on('notifications.unseen_count_changed', (data) => {
+		// on() returns an unsubscribe function - capture it for proper cleanup
+		const unsubscribe = novuClient.on('notifications.unseen_count_changed', (data) => {
 			log.debug('Novu: Unseen count changed via WebSocket', {
 				context: { count: (data as { result?: number })?.result },
 			});
 			handler((data.result as number) || 0);
 		});
+		unsubscribers.push(unsubscribe);
 	}
 
 	// Return cleanup function
@@ -348,6 +352,8 @@ export async function getUnreadCount(): Promise<number> {
 export function disconnectNovuClient(): void {
 	if (novuClient) {
 		log.debug('Novu: Disconnecting client');
+		// Disconnect the WebSocket before releasing the reference
+		novuClient.socket.disconnect();
 		novuClient = null;
 		currentSubscriberId = null;
 	}

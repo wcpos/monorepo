@@ -26,7 +26,11 @@ export function NotificationBell() {
 	return (
 		<Popover open={isOpen} onOpenChange={handleOpenChange}>
 			<PopoverTrigger asChild>
-				<Pressable className="relative" accessibilityRole="button">
+				<Pressable
+					className="relative"
+					accessibilityRole="button"
+					accessibilityLabel="Notifications"
+				>
 					<Icon name="bell" className="text-sidebar-foreground" />
 					{unreadCount > 0 && (
 						<View className="absolute -top-1 -right-0.5">
