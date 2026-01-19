@@ -16,15 +16,15 @@ export function NotificationBell() {
 	const { unreadCount, markAllAsSeen } = useNovuNotifications();
 	const [isOpen, setIsOpen] = React.useState(false);
 
-	// Mark all as seen when popover opens
-	React.useEffect(() => {
-		if (isOpen) {
+	const handleOpenChange = (open: boolean) => {
+		setIsOpen(open);
+		if (open) {
 			markAllAsSeen();
 		}
-	}, [isOpen, markAllAsSeen]);
+	};
 
 	return (
-		<Popover open={isOpen} onOpenChange={setIsOpen}>
+		<Popover open={isOpen} onOpenChange={handleOpenChange}>
 			<PopoverTrigger asChild>
 				<Pressable className="relative" accessibilityRole="button">
 					<Icon name="bell" className="text-sidebar-foreground" />
