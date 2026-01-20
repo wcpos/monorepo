@@ -39,7 +39,7 @@ export function NotificationBell() {
 					)}
 				</Pressable>
 			</PopoverTrigger>
-			<PopoverContent side="bottom" align="center" className="w-80 p-0">
+			<PopoverContent side="bottom" align="center" className="max-h-96 w-80 p-0">
 				<NotificationPanelContent />
 			</PopoverContent>
 		</Popover>

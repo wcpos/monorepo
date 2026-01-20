@@ -8,6 +8,42 @@ import { useOnEndReached } from './utils/use-on-end-reached';
 
 import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } from './types';
 
+/**
+ * VirtualizedList - Web Implementation
+ *
+ * ## Sizing Behavior
+ *
+ * The List component automatically sets the Root's height based on actual content size.
+ * This enables proper sizing in containers that size-to-content (like Popovers).
+ *
+ * ### When to use className="flex-1" on Root:
+ * - Parent has EXPLICIT height (e.g., a card with h-[500px] or a flex container with defined size)
+ * - You want the list to fill available space and scroll within that constraint
+ *
+ * ### When NOT to use className="flex-1":
+ * - Parent sizes to content (e.g., PopoverContent, modals without explicit height)
+ * - You want the container to grow based on list content (up to parent's max-height)
+ *
+ * ### Why this matters:
+ * - `flex: 1 1 0%` (from flex-1) sets flex-basis: 0, meaning "start at zero height"
+ * - In a size-to-content parent, this causes the list to collapse
+ * - Without flex-1, the List's useLayoutEffect sets explicit height based on content
+ *
+ * @example
+ * // In a Popover (sizes to content) - NO flex-1
+ * <VirtualizedList.Root>
+ *   <VirtualizedList.List data={items} ... />
+ * </VirtualizedList.Root>
+ *
+ * @example
+ * // In a Card with explicit height - USE flex-1
+ * <Card className="h-[400px]">
+ *   <VirtualizedList.Root className="flex-1">
+ *     <VirtualizedList.List data={items} ... />
+ *   </VirtualizedList.Root>
+ * </Card>
+ */
+
 // Web-specific extended context that includes virtualizer data
 interface WebItemContext<T> extends BaseItemContext<T> {
 	rowVirtualizer: any;
@@ -24,13 +60,19 @@ function useVirtualWrapper(...args) {
 	return { ...useVirtualizer(...args) };
 }
 
+/**
+ * Root - The scroll container for virtualized content.
+ * Height is automatically set by List based on content size.
+ */
 function Root({ style, horizontal = false, ...props }: RootProps) {
 	const parentRef = React.useRef<HTMLDivElement>(null);
 	const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null);
 
-	React.useEffect(() => {
-		if (parentRef.current) {
-			setScrollElement(parentRef.current);
+	// Ref callback to set scrollElement - avoids useEffect
+	const setRef = React.useCallback((node: HTMLDivElement | null) => {
+		parentRef.current = node;
+		if (node) {
+			setScrollElement(node);
 		}
 	}, []);
 
@@ -47,7 +89,7 @@ function Root({ style, horizontal = false, ...props }: RootProps) {
 		<RootContext.Provider value={value}>
 			<View
 				{...props}
-				ref={parentRef}
+				ref={setRef}
 				style={[
 					{
 						overflow: 'auto',
@@ -82,7 +124,7 @@ function List<T>({
 	// extraData is used to force re-renders - we include it in a key or dependency
 	// to ensure items re-render when it changes
 	const extraDataKey = React.useMemo(() => JSON.stringify(extraData), [extraData]);
-	const { scrollElement, horizontal } = useRootContext();
+	const { ref: rootRef, scrollElement, horizontal } = useRootContext();
 
 	// set up virtualizer
 	const rowVirtualizer = useVirtualWrapper({
@@ -93,6 +135,20 @@ function List<T>({
 		estimateSize: () => estimatedItemSize,
 		...rest,
 	});
+
+	// Set Root's height based on actual content size
+	// useLayoutEffect ensures this happens before paint to avoid flash
+	const totalSize = rowVirtualizer.getTotalSize();
+	React.useLayoutEffect(() => {
+		if (rootRef.current && totalSize > 0) {
+			// Add parentProps padding to totalSize
+			const paddingStyle = (parentProps as any)?.style;
+			const padding = paddingStyle?.padding ?? 0;
+			const paddingVertical = padding * 2;
+			rootRef.current.style.height = `${totalSize + paddingVertical}px`;
+		}
+	}, [totalSize, rootRef, parentProps]);
+
 
 	// expose imperative methods
 	React.useImperativeHandle(
@@ -141,9 +197,6 @@ function List<T>({
 		style: { ...containerStyle, ...((parentProps as any)?.style || {}) },
 		...parentProps,
 	} as React.ComponentProps<typeof Parent>;
-
-	// Calculate total size including footer space
-	const totalSize = rowVirtualizer.getTotalSize();
 
 	return (
 		<Parent {...wrapperProps}>

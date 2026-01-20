@@ -1,16 +1,19 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-
-import { formatDistanceToNow } from 'date-fns';
+import { Pressable, View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { type Notification, useNovuNotifications } from '../../../../hooks/use-novu-notifications';
+import { useDateFormat } from '../../hooks/use-date-format';
+
+/** Estimated height of a notification item in pixels (includes padding, title, body, timestamp) */
+const ESTIMATED_ITEM_SIZE = 88;
 
 interface NotificationItemProps {
 	notification: Notification;
@@ -22,11 +25,8 @@ interface NotificationItemProps {
  */
 function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps) {
 	const isUnread = notification.status === 'unread';
-
-	const timeAgo = React.useMemo(() => {
-		if (!notification.createdAt) return '';
-		return formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true });
-	}, [notification.createdAt]);
+	// Use the i18n-aware date format hook (handles locale and auto-updates)
+	const timeAgo = useDateFormat(notification.createdAt || 0);
 
 	const handlePress = React.useCallback(() => {
 		if (isUnread) {
@@ -89,8 +89,17 @@ export function NotificationPanelContent() {
 		markAllAsRead();
 	}, [markAllAsRead]);
 
+	const renderNotificationItem = React.useCallback(
+		({ item }: { item: Notification }) => (
+			<VirtualizedList.Item>
+				<NotificationItem notification={item} onMarkAsRead={markAsRead} />
+			</VirtualizedList.Item>
+		),
+		[markAsRead]
+	);
+
 	return (
-		<VStack className="gap-0">
+		<>
 			{/* Header */}
 			<HStack className="border-border items-center justify-between border-b px-3 py-2">
 				<Text className="text-sm font-semibold">{t('Notifications', { _tags: 'core' })}</Text>
@@ -101,22 +110,20 @@ export function NotificationPanelContent() {
 				)}
 			</HStack>
 
-			{/* Content */}
+			{/* Content - structured like Combobox: VirtualizedList.Root directly in PopoverContent */}
 			{notifications.length === 0 ? (
 				<EmptyState />
 			) : (
-				<ScrollView className="max-h-80 grow-0">
-					<VStack className="gap-1 p-1">
-						{notifications.map((notification) => (
-							<NotificationItem
-								key={notification.id}
-								notification={notification}
-								onMarkAsRead={markAsRead}
-							/>
-						))}
-					</VStack>
-				</ScrollView>
+				<VirtualizedList.Root>
+					<VirtualizedList.List
+						data={notifications}
+						estimatedItemSize={ESTIMATED_ITEM_SIZE}
+						keyExtractor={(item) => item.id}
+						renderItem={renderNotificationItem}
+						parentProps={{ style: { padding: 4 } }}
+					/>
+				</VirtualizedList.Root>
 			)}
-		</VStack>
+		</>
 	);
 }
