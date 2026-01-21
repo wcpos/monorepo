@@ -1,6 +1,6 @@
 export const productsLiteral = {
 	title: 'WooCommerce Product schema',
-	version: 3,
+	version: 4,
 	description: 'WooCommerce Product schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -76,10 +76,12 @@ export const productsLiteral = {
 			type: 'string',
 		},
 		sortable_price: {
-			// Stored as integer (value * 1,000,000) to avoid floating-point precision issues
-			type: 'integer',
-			minimum: -2147483647,
-			maximum: 2147483647,
+			// Stored as number (value * 1,000,000) to support all currency decimal places
+			// Using number type to avoid 32-bit integer overflow for large prices
+			// Max ~9 billion in original currency (9,007,199,254,740,991 / 1,000,000)
+			type: 'number',
+			minimum: -9007199254740991,
+			maximum: 9007199254740991,
 			multipleOf: 1,
 		},
 		regular_price: {
@@ -179,7 +181,8 @@ export const productsLiteral = {
 		},
 		tax_status: {
 			default: 'taxable',
-			enum: ['taxable', 'shipping', 'none'],
+			// Empty string added to handle WooCommerce returning invalid/empty values
+			enum: ['taxable', 'shipping', 'none', ''],
 			type: 'string',
 		},
 		tax_class: {

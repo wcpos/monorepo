@@ -100,6 +100,7 @@ let novuClient: Novu | null = null;
 let currentSubscriberId: string | null = null;
 let socketConnectedPromise: Promise<void> | null = null;
 let socketConnectedResolve: (() => void) | null = null;
+let sessionListenerUnsubscribe: (() => void) | null = null;
 
 /**
  * Re-export the Notification type from @novu/js for use in other modules
@@ -128,6 +129,11 @@ export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMet
 	// Clean up existing client
 	if (novuClient) {
 		log.debug('Novu: Disconnecting previous client');
+		// Clean up session listener before disconnecting
+		if (sessionListenerUnsubscribe) {
+			sessionListenerUnsubscribe();
+			sessionListenerUnsubscribe = null;
+		}
 		// Disconnect the WebSocket before releasing the reference
 		novuClient.socket.disconnect();
 		novuClient = null;
@@ -166,7 +172,8 @@ export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMet
 	});
 
 	// Listen for session initialization event (this is when WebSocket is ready)
-	novuClient.on('session.initialize.resolved', () => {
+	// Capture the unsubscribe function for cleanup when subscriber changes
+	sessionListenerUnsubscribe = novuClient.on('session.initialize.resolved', () => {
 		log.debug('Novu: Session initialized (WebSocket ready)');
 		if (socketConnectedResolve) {
 			socketConnectedResolve();
@@ -453,6 +460,11 @@ export async function getUnreadCount(): Promise<number> {
 export function disconnectNovuClient(): void {
 	if (novuClient) {
 		log.debug('Novu: Disconnecting client');
+		// Clean up session listener before disconnecting
+		if (sessionListenerUnsubscribe) {
+			sessionListenerUnsubscribe();
+			sessionListenerUnsubscribe = null;
+		}
 		// Disconnect the WebSocket before releasing the reference
 		novuClient.socket.disconnect();
 		novuClient = null;

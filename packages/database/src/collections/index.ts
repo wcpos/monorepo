@@ -169,6 +169,10 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 		3(oldDoc) {
 			return oldDoc;
 		},
+		// v4: Changed sortable_price from integer to number to avoid 32-bit overflow for prices > $2,147
+		4(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
@@ -216,6 +220,10 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 		},
 		// v4: Removed multipleOf constraint from sortable_price (floating-point incompatibility)
 		4(oldDoc) {
+			return oldDoc;
+		},
+		// v5: Changed sortable_price from integer to number to avoid 32-bit overflow for prices > $2,147
+		5(oldDoc) {
 			return oldDoc;
 		},
 	},

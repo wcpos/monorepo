@@ -214,18 +214,24 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			const data = notification.data as { workflowId?: string } | undefined;
 			const workflowId = data?.workflowId ?? null;
 
-			try {
-				await notificationsCollection.upsert({
-					id: String(notificationId),
-					subscriberId,
-					title: notification.subject || '',
-					body: notification.body || '',
-					status: notification.isRead ? 'read' : 'unread',
-					seen: notification.isSeen ?? false,
-					createdAt: new Date(notification.createdAt).getTime(),
-					workflowId,
-					channel: notification.channelType || 'in_app',
-				});
+		try {
+			// Guard against invalid createdAt - Novu v3 types show createdAt as optional string
+			const createdAtMs = notification.createdAt
+				? new Date(notification.createdAt).getTime()
+				: Date.now();
+			const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
+
+			await notificationsCollection.upsert({
+				id: String(notificationId),
+				subscriberId,
+				title: notification.subject || '',
+				body: notification.body || '',
+				status: notification.isRead ? 'read' : 'unread',
+				seen: notification.isSeen ?? false,
+				createdAt: safeCreatedAt,
+				workflowId,
+				channel: notification.channelType || 'in_app',
+			});
 				log.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
 			} catch (error) {
 				log.error('Novu: Failed to sync notification to RxDB', {
@@ -335,6 +341,11 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 					context: { count: notifications.length },
 				});
 				return syncToRxDB(notifications);
+			})
+			.catch((error) => {
+				log.error('Novu: Failed to load initial notifications', {
+					context: { error: error instanceof Error ? error.message : String(error) },
+				});
 			})
 			.finally(() => {
 				setIsLoading(false);

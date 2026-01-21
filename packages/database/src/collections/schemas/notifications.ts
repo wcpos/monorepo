@@ -23,10 +23,10 @@ export const notificationsLiteral = {
 			description: 'Notification body/message',
 			type: 'string',
 		},
-		payload: {
-			description: 'Additional notification data',
-			type: 'object',
-			additionalProperties: true,
+		workflowId: {
+			description: 'Novu workflow identifier (e.g., welcome, plugin-update)',
+			type: ['string', 'null'],
+			maxLength: 64,
 		},
 		channel: {
 			description: 'Notification channel (in_app, push, etc.)',
