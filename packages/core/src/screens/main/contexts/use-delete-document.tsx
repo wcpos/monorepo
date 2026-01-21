@@ -21,35 +21,35 @@ const useDeleteDocument = () => {
 		async (id, collection, params) => {
 			let endpoint = collection.name;
 			try {
-			const { data } = await http.delete((endpoint += `/${id}`), { params });
-			if (data.id === id) {
-				log.success(t('Item deleted', { _tags: 'core' }), {
+				const { data } = await http.delete((endpoint += `/${id}`), { params });
+				if (data.id === id) {
+					log.success(t('Item deleted', { _tags: 'core' }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							documentId: id,
+							collectionName: collection.name,
+						},
+					});
+				}
+			} catch (err: any) {
+				// Extract the WooCommerce/WordPress error message from the response
+				const serverMessage = extractErrorMessage(
+					err?.response?.data,
+					t('Failed to delete from server', { _tags: 'core' })
+				);
+				log.error(serverMessage, {
 					showToast: true,
 					saveToDb: true,
 					context: {
+						errorCode: ERROR_CODES.CONNECTION_REFUSED,
 						documentId: id,
 						collectionName: collection.name,
+						endpoint,
+						error: err instanceof Error ? err.message : String(err),
 					},
 				});
 			}
-		} catch (err: any) {
-			// Extract the WooCommerce/WordPress error message from the response
-			const serverMessage = extractErrorMessage(
-				err?.response?.data,
-				t('Failed to delete from server', { _tags: 'core' })
-			);
-			log.error(serverMessage, {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.CONNECTION_REFUSED,
-					documentId: id,
-					collectionName: collection.name,
-					endpoint,
-					error: err instanceof Error ? err.message : String(err),
-				},
-			});
-		}
 		},
 		[http, t]
 	);

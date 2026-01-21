@@ -126,7 +126,7 @@ const mainTransport = (props: any) => {
 	const levelName = level.text as LogLevel;
 	const levelSeverity = LOG_LEVEL_SEVERITY[levelName] ?? 0;
 	const currentSeverity = LOG_LEVEL_SEVERITY[currentLogLevel];
-	
+
 	// Skip console logging if below current level (but still allow toast/db)
 	const shouldLogToConsole = levelSeverity >= currentSeverity;
 
