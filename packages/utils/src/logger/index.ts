@@ -202,7 +202,6 @@ const mainTransport = (props: any) => {
 
 	// 3. Save to database if available and requested
 	if (options.saveToDb && dbCollection) {
-		// Get error code from context
 		const errorCode = options.context?.errorCode || '';
 
 		dbCollection

@@ -8,6 +8,23 @@ import { useOnEndReached } from './utils/use-on-end-reached';
 
 import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } from './types';
 
+/**
+ * VirtualizedList - Web Implementation
+ *
+ * Uses @tanstack/react-virtual for efficient rendering of large lists.
+ * Items are measured dynamically - estimatedItemSize is just an initial hint.
+ *
+ * @example
+ * // Basic usage in a Popover or constrained container
+ * <VirtualizedList.Root className="flex-1">
+ *   <VirtualizedList.List
+ *     data={items}
+ *     estimatedItemSize={40}
+ *     renderItem={({ item }) => <VirtualizedList.Item>...</VirtualizedList.Item>}
+ *   />
+ * </VirtualizedList.Root>
+ */
+
 // Web-specific extended context that includes virtualizer data
 interface WebItemContext<T> extends BaseItemContext<T> {
 	rowVirtualizer: any;
@@ -24,13 +41,19 @@ function useVirtualWrapper(...args) {
 	return { ...useVirtualizer(...args) };
 }
 
+/**
+ * Root - The scroll container for virtualized content.
+ * Height is automatically set by List based on content size.
+ */
 function Root({ style, horizontal = false, ...props }: RootProps) {
 	const parentRef = React.useRef<HTMLDivElement>(null);
 	const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null);
 
-	React.useEffect(() => {
-		if (parentRef.current) {
-			setScrollElement(parentRef.current);
+	// Ref callback to set scrollElement - avoids useEffect
+	const setRef = React.useCallback((node: HTMLDivElement | null) => {
+		parentRef.current = node;
+		if (node) {
+			setScrollElement(node);
 		}
 	}, []);
 
@@ -47,7 +70,7 @@ function Root({ style, horizontal = false, ...props }: RootProps) {
 		<RootContext.Provider value={value}>
 			<View
 				{...props}
-				ref={parentRef}
+				ref={setRef}
 				style={[
 					{
 						overflow: 'auto',
@@ -82,7 +105,7 @@ function List<T>({
 	// extraData is used to force re-renders - we include it in a key or dependency
 	// to ensure items re-render when it changes
 	const extraDataKey = React.useMemo(() => JSON.stringify(extraData), [extraData]);
-	const { scrollElement, horizontal } = useRootContext();
+	const { ref: rootRef, scrollElement, horizontal } = useRootContext();
 
 	// set up virtualizer
 	const rowVirtualizer = useVirtualWrapper({
@@ -93,6 +116,20 @@ function List<T>({
 		estimateSize: () => estimatedItemSize,
 		...rest,
 	});
+
+	// Set Root's height based on actual content size
+	// useLayoutEffect ensures this happens before paint to avoid flash
+	const totalSize = rowVirtualizer.getTotalSize();
+	React.useLayoutEffect(() => {
+		if (rootRef.current && totalSize > 0) {
+			// Add parentProps padding to totalSize
+			const paddingStyle = (parentProps as any)?.style;
+			const padding = paddingStyle?.padding ?? 0;
+			const paddingVertical = padding * 2;
+			rootRef.current.style.height = `${totalSize + paddingVertical}px`;
+		}
+	}, [totalSize, rootRef, parentProps]);
+
 
 	// expose imperative methods
 	React.useImperativeHandle(
@@ -137,13 +174,11 @@ function List<T>({
 		display: 'block',
 	};
 
+	// Spread parentProps first, then override style to ensure containerStyle isn't lost
 	const wrapperProps = {
-		style: { ...containerStyle, ...((parentProps as any)?.style || {}) },
 		...parentProps,
+		style: { ...containerStyle, ...((parentProps as any)?.style || {}) },
 	} as React.ComponentProps<typeof Parent>;
-
-	// Calculate total size including footer space
-	const totalSize = rowVirtualizer.getTotalSize();
 
 	return (
 		<Parent {...wrapperProps}>

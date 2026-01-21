@@ -28,6 +28,32 @@ import { useState, useRef } from 'react';
 - **External Stores**: Use specialized patterns (React Query, RxJS).
 - **Justification**: If used, you MUST add a comment explaining WHY it is necessary.
 
+### Common Anti-Pattern: useEffect to React to State You Just Set
+**NEVER** use `useEffect` to perform side effects in response to state changes when you control when that state changes. Handle it directly in the event handler.
+
+**❌ Bad** - Using useEffect to react to state you control:
+```typescript
+const [isOpen, setIsOpen] = React.useState(false);
+React.useEffect(() => {
+  if (isOpen) {
+    doSomething(); // Anti-pattern: reacting to state change
+  }
+}, [isOpen]);
+return <Popover open={isOpen} onOpenChange={setIsOpen} />;
+```
+
+**✅ Good** - Handle side effects directly in the callback:
+```typescript
+const [isOpen, setIsOpen] = React.useState(false);
+const handleOpenChange = (open: boolean) => {
+  setIsOpen(open);
+  if (open) {
+    doSomething(); // Direct: action at the event source
+  }
+};
+return <Popover open={isOpen} onOpenChange={handleOpenChange} />;
+```
+
 ## 3. Logging Protocol
 - **NO console.log**: Use the logger library exclusively.
 - **Library**: `import log from '@wcpos/utils/logger'`

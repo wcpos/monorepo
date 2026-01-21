@@ -5,6 +5,7 @@ import { Suspense } from '@wcpos/components/suspense';
 
 import { Splash, SplashProgressProvider } from '../screens/splash';
 import { AppStateProvider } from './app-state';
+import { NovuProvider } from './novu';
 import { ThemeProvider } from './theme';
 import { TranslationProvider } from './translations';
 
@@ -24,6 +25,7 @@ export const HydrationProviders = ({ children }: HydrationProvidersProps) => {
 				 * 1. App state hydration (step by step with progress updates)
 				 * 2. Theme provider
 				 * 3. Translation provider
+				 * 4. Novu provider (for notifications)
 				 * Each step throws suspense, updates progress, then continues
 				 */
 				fallback={<Splash />}
@@ -31,7 +33,9 @@ export const HydrationProviders = ({ children }: HydrationProvidersProps) => {
 				<AppStateProvider>
 					<ErrorBoundary>
 						<ThemeProvider>
-							<TranslationProvider>{children}</TranslationProvider>
+							<TranslationProvider>
+								<NovuProvider>{children}</NovuProvider>
+							</TranslationProvider>
 						</ThemeProvider>
 					</ErrorBoundary>
 				</AppStateProvider>
