@@ -37,7 +37,7 @@ function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps)
 	return (
 		<Pressable
 			onPress={handlePress}
-			className={`rounded-md p-3 ${isUnread ? 'bg-accent/50' : 'bg-transparent'}`}
+			className={`mb-2 rounded-md px-2 py-1.5 ${isUnread ? 'bg-accent/50' : 'bg-transparent'}`}
 		>
 			<HStack className="items-start gap-3">
 				{/* Unread indicator */}
@@ -57,7 +57,7 @@ function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps)
 					{notification.body && (
 						<Text className="text-muted-foreground text-xs">{notification.body}</Text>
 					)}
-					{timeAgo && <Text className="text-muted-foreground text-xs">{timeAgo}</Text>}
+					{timeAgo && <Text className="text-muted-foreground/60 text-xs">{timeAgo}</Text>}
 				</VStack>
 			</HStack>
 		</Pressable>
@@ -110,17 +110,17 @@ export function NotificationPanelContent() {
 				)}
 			</HStack>
 
-			{/* Content - structured like Combobox: VirtualizedList.Root directly in PopoverContent */}
+			{/* Content */}
 			{notifications.length === 0 ? (
 				<EmptyState />
 			) : (
-				<VirtualizedList.Root>
+				<VirtualizedList.Root className="flex-1 p-2">
 					<VirtualizedList.List
 						data={notifications}
 						estimatedItemSize={ESTIMATED_ITEM_SIZE}
 						keyExtractor={(item) => item.id}
 						renderItem={renderNotificationItem}
-						parentProps={{ style: { padding: 4 } }}
+						style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0 }}
 					/>
 				</VirtualizedList.Root>
 			)}

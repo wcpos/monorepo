@@ -11,37 +11,18 @@ import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } 
 /**
  * VirtualizedList - Web Implementation
  *
- * ## Sizing Behavior
- *
- * The List component automatically sets the Root's height based on actual content size.
- * This enables proper sizing in containers that size-to-content (like Popovers).
- *
- * ### When to use className="flex-1" on Root:
- * - Parent has EXPLICIT height (e.g., a card with h-[500px] or a flex container with defined size)
- * - You want the list to fill available space and scroll within that constraint
- *
- * ### When NOT to use className="flex-1":
- * - Parent sizes to content (e.g., PopoverContent, modals without explicit height)
- * - You want the container to grow based on list content (up to parent's max-height)
- *
- * ### Why this matters:
- * - `flex: 1 1 0%` (from flex-1) sets flex-basis: 0, meaning "start at zero height"
- * - In a size-to-content parent, this causes the list to collapse
- * - Without flex-1, the List's useLayoutEffect sets explicit height based on content
+ * Uses @tanstack/react-virtual for efficient rendering of large lists.
+ * Items are measured dynamically - estimatedItemSize is just an initial hint.
  *
  * @example
- * // In a Popover (sizes to content) - NO flex-1
- * <VirtualizedList.Root>
- *   <VirtualizedList.List data={items} ... />
+ * // Basic usage in a Popover or constrained container
+ * <VirtualizedList.Root className="flex-1">
+ *   <VirtualizedList.List
+ *     data={items}
+ *     estimatedItemSize={40}
+ *     renderItem={({ item }) => <VirtualizedList.Item>...</VirtualizedList.Item>}
+ *   />
  * </VirtualizedList.Root>
- *
- * @example
- * // In a Card with explicit height - USE flex-1
- * <Card className="h-[400px]">
- *   <VirtualizedList.Root className="flex-1">
- *     <VirtualizedList.List data={items} ... />
- *   </VirtualizedList.Root>
- * </Card>
  */
 
 // Web-specific extended context that includes virtualizer data
@@ -193,9 +174,10 @@ function List<T>({
 		display: 'block',
 	};
 
+	// Spread parentProps first, then override style to ensure containerStyle isn't lost
 	const wrapperProps = {
-		style: { ...containerStyle, ...((parentProps as any)?.style || {}) },
 		...parentProps,
+		style: { ...containerStyle, ...((parentProps as any)?.style || {}) },
 	} as React.ComponentProps<typeof Parent>;
 
 	return (
