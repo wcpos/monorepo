@@ -2,6 +2,48 @@ import type { ProductDocument, ProductVariationDocument } from '@wcpos/database'
 
 import { parseAttributes } from './utils';
 
+/**
+ * PARSEATTRIBUTES TEST SUITE
+ * ==========================
+ *
+ * These tests document the expected behavior of parseAttributes.
+ *
+ * CORE FUNCTIONALITY:
+ * -------------------
+ * 1. Calculate `optionCounts` for each attribute option
+ *    - Count = number of variations that match if user selects that option
+ *    - Used to disable UI buttons for options with count=0
+ *
+ * 2. Auto-select attributes with only one viable option (count > 0)
+ *
+ * 3. Filter counts based on already-selected attributes
+ *
+ * KEY BEHAVIOR: "ANY OPTION" HANDLING
+ * -----------------------------------
+ * WooCommerce allows "Any X" variations where an attribute is not specified.
+ * In the database, this is represented by the attribute being ABSENT from
+ * the variation's attributes array.
+ *
+ * Matching logic:
+ * - A hit "matches" an option if it specifies that option OR doesn't specify the attribute
+ * - Counts represent raw hits that match (not expanded permutations)
+ *
+ * Example:
+ *   Attributes: Color [Red, Blue], Size [Small, Large]
+ *   Hits: [
+ *     { attributes: [{ Color: 'Red' }] },   // Size = "any"
+ *     { attributes: [{ Color: 'Blue' }] },  // Size = "any"
+ *   ]
+ *
+ *   Expected optionCounts:
+ *   - Color: { Red: 1, Blue: 1 }  // Each color has 1 matching hit
+ *   - Size: { Small: 2, Large: 2 }  // Both hits have "any" size, so both match each option
+ *
+ * ALGORITHM COMPLEXITY:
+ * ---------------------
+ * O(V * A * O) where V=variations, A=attributes, O=options - linear, not exponential.
+ */
+
 describe('parseAttributes', () => {
 	const attributes: ProductDocument['attributes'] = [
 		{
@@ -532,6 +574,7 @@ describe('parseAttributes', () => {
 		it('should calculate option counts and character counts correctly', () => {
 			const selectedAttributes = undefined;
 
+			// Two variations: Red (any size), Blue (any size)
 			const anyHits: { document: ProductVariationDocument }[] = [
 				{
 					document: {
@@ -547,6 +590,10 @@ describe('parseAttributes', () => {
 
 			const result = parseAttributes(attributes, selectedAttributes, anyHits);
 
+			// Counts represent raw hits that match each option (not expanded permutations)
+			// - Red: 1 hit (the Red variation)
+			// - Blue: 1 hit (the Blue variation)
+			// - Small/Large: 2 hits each (both variations have "any" for Size, so both match)
 			expect(result).toEqual([
 				{
 					attribute: {
@@ -556,9 +603,9 @@ describe('parseAttributes', () => {
 						visible: true,
 						variation: true,
 						options: ['Red', 'Blue'],
-						characterCount: 7, // 'Red'.length + 'Blue'.length = 7
+						characterCount: 7,
 					},
-					optionCounts: { Red: 2, Blue: 2 },
+					optionCounts: { Red: 1, Blue: 1 },
 					selected: undefined,
 				},
 				{
@@ -569,7 +616,7 @@ describe('parseAttributes', () => {
 						visible: true,
 						variation: true,
 						options: ['Small', 'Large'],
-						characterCount: 10, // 'Small'.length + 'Large'.length = 10
+						characterCount: 10,
 					},
 					optionCounts: { Small: 2, Large: 2 },
 					selected: undefined,
@@ -664,6 +711,135 @@ describe('parseAttributes', () => {
 					selected: undefined,
 				},
 			]);
+		});
+	});
+
+	/**
+	 * Performance tests for "any option" handling
+	 *
+	 * The direct matching approach is O(V * A * O) - linear complexity.
+	 * These tests verify that even extreme cases complete quickly.
+	 */
+	describe('performance with many "any option" attributes', () => {
+		it('should handle 5 attrs x 10 options efficiently', () => {
+			// Create 5 attributes, each with 10 options
+			// Old approach: 10^5 = 100,000 permutations (crash)
+			// New approach: 5 * 10 * 1 = 50 checks (fast)
+			const manyAttributes: ProductDocument['attributes'] = [];
+			for (let i = 1; i <= 5; i++) {
+				const options = [];
+				for (let j = 1; j <= 10; j++) {
+					options.push(`Option${j}`);
+				}
+				manyAttributes.push({
+					id: i,
+					name: `Attribute${i}`,
+					position: i - 1,
+					visible: true,
+					variation: true,
+					options,
+				});
+			}
+
+			// Single variation with NO attributes specified (all are "any option")
+			const anyOptionHits: { document: ProductVariationDocument }[] = [
+				{
+					document: {
+						attributes: [], // Empty = "any option" for ALL attributes
+					} as ProductVariationDocument,
+				},
+			];
+
+			const startTime = performance.now();
+			const result = parseAttributes(manyAttributes, undefined, anyOptionHits);
+			const endTime = performance.now();
+			const duration = endTime - startTime;
+
+			console.log(`[DEBUG_PERF] parseAttributes took ${duration}ms for 5 attrs x 10 options`);
+
+			expect(result).toHaveLength(5);
+			expect(duration).toBeLessThan(50);
+		});
+
+		it('should handle 8 attrs x 5 options efficiently', () => {
+			// Old approach: 5^8 = 390,625 permutations (crash)
+			// New approach: 8 * 5 * 1 = 40 checks (fast)
+			const attributes: ProductDocument['attributes'] = [];
+			for (let i = 1; i <= 8; i++) {
+				attributes.push({
+					id: i,
+					name: `Attr${i}`,
+					position: i - 1,
+					visible: true,
+					variation: true,
+					options: ['A', 'B', 'C', 'D', 'E'],
+				});
+			}
+
+			// Single variation with all "any option"
+			const hits: { document: ProductVariationDocument }[] = [
+				{
+					document: {
+						attributes: [],
+					} as ProductVariationDocument,
+				},
+			];
+
+			const startTime = performance.now();
+			const result = parseAttributes(attributes, undefined, hits);
+			const endTime = performance.now();
+			const duration = endTime - startTime;
+
+			console.log(`[DEBUG_PERF] 8 attrs x 5 options took ${duration}ms`);
+
+			expect(result).toHaveLength(8);
+			expect(duration).toBeLessThan(50);
+		});
+
+		it('should handle multiple hits each with partial "any option" attributes', () => {
+			// 4 attributes with 8 options each
+			// 3 hits, each missing 3 attributes = 8^3 = 512 permutations each = 1536 total
+			// This is still manageable but shows the growth pattern
+			const attributes: ProductDocument['attributes'] = [];
+			for (let i = 1; i <= 4; i++) {
+				attributes.push({
+					id: i,
+					name: `Attr${i}`,
+					position: i - 1,
+					visible: true,
+					variation: true,
+					options: ['O1', 'O2', 'O3', 'O4', 'O5', 'O6', 'O7', 'O8'],
+				});
+			}
+
+			const hits: { document: ProductVariationDocument }[] = [
+				{
+					document: {
+						attributes: [{ id: 1, name: 'Attr1', option: 'O1' }],
+					} as ProductVariationDocument,
+				},
+				{
+					document: {
+						attributes: [{ id: 2, name: 'Attr2', option: 'O2' }],
+					} as ProductVariationDocument,
+				},
+				{
+					document: {
+						attributes: [{ id: 3, name: 'Attr3', option: 'O3' }],
+					} as ProductVariationDocument,
+				},
+			];
+
+			const startTime = performance.now();
+			const result = parseAttributes(attributes, undefined, hits);
+			const endTime = performance.now();
+			const duration = endTime - startTime;
+
+			console.log(`[DEBUG_PERF] 4 attrs x 8 options, 3 hits took ${duration}ms`);
+
+			expect(result).toHaveLength(4);
+			// This case is still fast enough, but with more missing attrs it compounds
+			expect(duration).toBeLessThan(100);
 		});
 	});
 });
