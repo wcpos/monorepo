@@ -5,6 +5,35 @@ import log from '@wcpos/utils/logger';
 import type { NovuSubscriberMetadata } from './subscriber';
 
 /**
+ * Novu Client - WebSocket connection and real-time notifications
+ *
+ * ## Architecture Overview
+ *
+ * The Novu integration has two parts that must be coordinated:
+ *
+ * 1. **Client-side (this file)**: Novu JS SDK creates WebSocket connection for real-time
+ *    notifications. The SDK automatically creates/updates subscribers when initialized.
+ *
+ * 2. **Server-side (updates-server)**: Manages subscriber metadata and triggers workflows
+ *    like welcome notifications. The server owns the subscriber `data` field including
+ *    the `_welcomed` flag that prevents duplicate welcome messages.
+ *
+ * ## Critical Timing Requirement
+ *
+ * The Novu SDK establishes WebSocket connection ASYNCHRONOUSLY. If the server triggers
+ * a notification before the WebSocket is connected, it will be missed.
+ *
+ * Solution: Use `waitForNovuReady()` before any server operation that triggers notifications.
+ * This waits for the `session.initialize.resolved` event from the SDK.
+ *
+ * ## Why We Don't Pass `data` to the SDK
+ *
+ * The Novu JS SDK's subscriber config can accept a `data` field, but passing it will
+ * OVERWRITE whatever the server has set (including `_welcomed: true`). The server-side
+ * sync is the single source of truth for subscriber metadata.
+ */
+
+/**
  * Novu Application IDs for each environment
  * These are from our self-hosted Novu instance
  */
@@ -69,6 +98,8 @@ const NOVU_CONFIG = {
  */
 let novuClient: Novu | null = null;
 let currentSubscriberId: string | null = null;
+let socketConnectedPromise: Promise<void> | null = null;
+let socketConnectedResolve: (() => void) | null = null;
 
 /**
  * Re-export the Notification type from @novu/js for use in other modules
@@ -115,7 +146,9 @@ export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMet
 
 	// Create new Novu client (v3 API)
 	// Note: backendUrl is deprecated in v3, use apiUrl instead
-	// Pass subscriber metadata via the subscriber.data field for targeting/analytics
+	// IMPORTANT: Do NOT pass subscriber.data here - the server-side sync manages
+	// subscriber metadata including the _welcomed flag. If we pass data here,
+	// it overwrites the server's data and removes _welcomed.
 	novuClient = new Novu({
 		applicationIdentifier: NOVU_CONFIG.applicationIdentifier,
 		apiUrl: NOVU_CONFIG.apiUrl,
@@ -123,25 +156,82 @@ export function getNovuClient(subscriberId: string, metadata?: NovuSubscriberMet
 		subscriber: {
 			subscriberId,
 			locale: metadata?.locale,
-			// Custom metadata for targeting and analytics
-			data: metadata
-				? {
-						domain: metadata.domain,
-						storeId: metadata.storeId,
-						licenseKey: metadata.licenseKey,
-						licenseStatus: metadata.licenseStatus,
-						appVersion: metadata.appVersion,
-						platform: metadata.platform,
-						wcposVersion: metadata.wcposVersion,
-						wcposProVersion: metadata.wcposProVersion,
-					}
-				: undefined,
+			// Don't pass data - server sync handles all metadata
 		},
+	});
+
+	// Set up session ready promise - Novu SDK uses session.initialize.resolved event
+	socketConnectedPromise = new Promise<void>((resolve) => {
+		socketConnectedResolve = resolve;
+	});
+
+	// Listen for session initialization event (this is when WebSocket is ready)
+	novuClient.on('session.initialize.resolved', () => {
+		log.debug('Novu: Session initialized (WebSocket ready)');
+		if (socketConnectedResolve) {
+			socketConnectedResolve();
+			socketConnectedResolve = null;
+		}
 	});
 
 	currentSubscriberId = subscriberId;
 
 	return novuClient;
+}
+
+/**
+ * Wait for Novu SDK to be fully initialized and ready to receive notifications.
+ *
+ * The Novu JS SDK establishes a WebSocket connection asynchronously. This function
+ * waits for the `session.initialize.resolved` event which indicates the SDK is ready.
+ *
+ * IMPORTANT: Any operation that triggers server-side notifications (like welcome messages)
+ * should wait for this before proceeding, otherwise the notification may be sent before
+ * the WebSocket is connected and will be missed.
+ *
+ * @param timeoutMs - Maximum time to wait (default 5 seconds)
+ * @returns true if ready, false if timeout
+ */
+export async function waitForNovuReady(timeoutMs = 5000): Promise<boolean> {
+	if (!socketConnectedPromise) {
+		log.warn('Novu: No socket connection promise - client not initialized');
+		return false;
+	}
+
+	try {
+		await Promise.race([
+			socketConnectedPromise,
+			new Promise<void>((_, reject) =>
+				setTimeout(() => reject(new Error('Socket connection timeout')), timeoutMs)
+			),
+		]);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+// Global deduplication for WebSocket notifications
+// Prevents duplicate events from being processed regardless of how many subscribers exist
+const processedNotificationIds = new Set<string>();
+const MAX_PROCESSED_IDS = 100;
+
+function dedupeNotification(notificationId: string | undefined): boolean {
+	if (!notificationId) return false;
+	if (processedNotificationIds.has(notificationId)) {
+		log.debug('Novu: Skipping duplicate WebSocket notification', {
+			context: { id: notificationId },
+		});
+		return false; // Already processed
+	}
+	// Mark as processed
+	processedNotificationIds.add(notificationId);
+	// Keep set bounded
+	if (processedNotificationIds.size > MAX_PROCESSED_IDS) {
+		const firstId = processedNotificationIds.values().next().value;
+		if (firstId) processedNotificationIds.delete(firstId);
+	}
+	return true; // New notification
 }
 
 /**
@@ -159,10 +249,21 @@ export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
 		const handler = handlers.onNotificationReceived;
 		// on() returns an unsubscribe function - capture it for proper cleanup
 		const unsubscribe = novuClient.on('notifications.notification_received', (data) => {
-			log.debug('Novu: Notification received via WebSocket', {
-				context: { id: (data as { result?: { id?: string } })?.result?.id },
+			const notification = data.result as Record<string, unknown>;
+			const notificationId = notification?.id as string | undefined;
+
+			// Dedupe at source - only process each notification once globally
+			if (!dedupeNotification(notificationId)) {
+				return;
+			}
+
+			log.debug('Novu: WebSocket notification received', {
+				context: {
+					id: notificationId,
+					dataValue: JSON.stringify(notification?.data),
+				},
 			});
-			handler(data.result as unknown as NovuNotification);
+			handler(notification as unknown as NovuNotification);
 		});
 		unsubscribers.push(unsubscribe);
 	}

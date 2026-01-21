@@ -1,14 +1,11 @@
 import * as React from 'react';
 
-import log from '@wcpos/utils/logger';
-
 import { useAppState } from '../app-state';
 import { useLocale } from '../../hooks/use-locale';
 import {
 	generateSubscriberId,
 	generateSubscriberMetadata,
 	type NovuSubscriberMetadata,
-	syncSubscriberToServer,
 } from '../../services/novu/subscriber';
 
 /**
@@ -91,37 +88,6 @@ export function NovuProvider({ children }: NovuProviderProps) {
 		};
 	}, [site, store, wpCredentials, locale]);
 
-	/**
-	 * Sync subscriber metadata to the server when subscriber is configured.
-	 * This ensures the Novu subscriber profile is up-to-date with the latest
-	 * metadata (license status, versions, etc.) every time the app opens.
-	 */
-	React.useEffect(() => {
-		if (!value.isConfigured || !value.subscriberId || !value.subscriberMetadata) {
-			return;
-		}
-
-		log.debug('Novu: Syncing subscriber metadata to server', {
-			context: { subscriberId: value.subscriberId },
-		});
-
-		syncSubscriberToServer(value.subscriberId, value.subscriberMetadata)
-			.then((result) => {
-				if (result.success) {
-					log.info('Novu: Subscriber metadata synced successfully');
-				} else {
-					log.warn('Novu: Failed to sync subscriber metadata', {
-						context: { error: result.error },
-					});
-				}
-			})
-			.catch((error) => {
-				log.error('Novu: Error syncing subscriber metadata', {
-					context: { error: error instanceof Error ? error.message : String(error) },
-				});
-			});
-	}, [value.isConfigured, value.subscriberId, value.subscriberMetadata]);
-
 	return <NovuContext.Provider value={value}>{children}</NovuContext.Provider>;
 }
 
@@ -135,3 +101,6 @@ export function useNovu() {
 	}
 	return context;
 }
+
+// Re-export syncSubscriberToServer for use in useNovuNotifications
+export { syncSubscriberToServer } from '../../services/novu/subscriber';
