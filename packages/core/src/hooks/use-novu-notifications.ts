@@ -4,6 +4,7 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/logger';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 import type { NotificationCollection } from '@wcpos/database';
 
 import { useAppState } from '../contexts/app-state';
@@ -18,6 +19,50 @@ import {
 	subscribeToNovuEvents,
 } from '../services/novu/client';
 
+/**
+ * Notification payload schema - matches server-side payload structure.
+ *
+ * These options control how the notification is displayed and stored,
+ * using the same API as the logger for consistency.
+ */
+export interface NotificationPayload {
+	// Content (set in Novu workflow template via {{payload.subject}}, {{payload.body}})
+	subject?: string;
+	body?: string;
+
+	// Logger-compatible options
+	/** Show a toast notification when received (default: false) */
+	showToast?: boolean;
+	/** Save to the logs database for troubleshooting (default: false) */
+	saveToDb?: boolean;
+
+	// Toast customization (mirrors LoggerOptions.toast)
+	toast?: {
+		/** Secondary message shown below the title */
+		text2?: string;
+		/** Show close button on toast (default: true) */
+		dismissable?: boolean;
+		/** Action button configuration */
+		action?: {
+			/** Button label (e.g., "Update Now", "View", "Renew") */
+			label: string;
+			/** URL to open - can be internal route (/settings) or external (https://...) */
+			url?: string;
+		};
+	};
+
+	// Notification-specific metadata
+	/** Toast type/color: info (blue), success (green), warn (yellow), error (red) */
+	level?: 'info' | 'success' | 'warn' | 'error';
+	/** Category for filtering/grouping */
+	category?: 'update' | 'announcement' | 'alert' | 'system' | 'welcome';
+	/** ISO date string - notification should be hidden after this time */
+	expiresAt?: string;
+
+	// Additional custom data (extensible)
+	[key: string]: unknown;
+}
+
 export interface Notification {
 	id: string;
 	title: string;
@@ -25,7 +70,7 @@ export interface Notification {
 	status: 'unread' | 'read' | 'archived';
 	seen: boolean;
 	createdAt: number;
-	payload?: Record<string, unknown>;
+	payload?: NotificationPayload;
 }
 
 export interface UseNovuNotificationsResult {
@@ -109,11 +154,84 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 	);
 
 	/**
+	 * Handle action URL - navigates to internal routes or opens external URLs
+	 */
+	const handleActionUrl = React.useCallback((url: string) => {
+		if (!url) return;
+
+		// External URLs (http://, https://)
+		if (url.startsWith('http://') || url.startsWith('https://')) {
+			openExternalURL(url).catch((error) => {
+				log.error('Novu: Failed to open external URL', { context: { url, error } });
+			});
+			return;
+		}
+
+		// Internal routes - TODO: integrate with navigation when needed
+		// For now, just log - the app can implement navigation handling later
+		log.info('Novu: Internal navigation requested', { context: { url } });
+	}, []);
+
+	/**
+	 * Process notification payload options (showToast, saveToDb, etc.)
+	 * Uses the same API as the logger for consistency.
+	 */
+	const processNotificationPayload = React.useCallback(
+		(notification: NovuNotification, isNewNotification: boolean) => {
+			const payload = (notification.data as NotificationPayload) || {};
+			const title = notification.subject || payload.subject || '';
+			const body = notification.body || payload.body || '';
+
+			// Only show toast for NEW notifications (not on initial load/refresh)
+			if (isNewNotification && payload.showToast) {
+				const level = payload.level || 'info';
+
+				log[level](title, {
+					showToast: true,
+					saveToDb: payload.saveToDb,
+					context: {
+						notificationId: notification.id,
+						category: payload.category,
+					},
+					toast: {
+						text2: payload.toast?.text2 || body,
+						dismissable: payload.toast?.dismissable ?? true,
+						action: payload.toast?.action
+							? {
+									label: payload.toast.action.label,
+									onClick: () => {
+										if (payload.toast?.action?.url) {
+											handleActionUrl(payload.toast.action.url);
+										}
+									},
+								}
+							: undefined,
+					},
+				});
+			} else if (payload.saveToDb) {
+				// Save to logs DB without showing toast
+				log.info(title, {
+					saveToDb: true,
+					context: {
+						notificationId: notification.id,
+						body,
+						category: payload.category,
+					},
+				});
+			}
+		},
+		[handleActionUrl]
+	);
+
+	/**
 	 * Sync a single notification to RxDB (v3 API)
 	 * Note: v3 uses `data` instead of `payload` for custom data
+	 *
+	 * @param notification - The Novu notification object
+	 * @param isNewNotification - Whether this is a newly received notification (shows toast)
 	 */
 	const syncNotificationToRxDB = React.useCallback(
-		async (notification: NovuNotification) => {
+		async (notification: NovuNotification, isNewNotification = false) => {
 			if (!notificationsCollection || !subscriberId) return;
 
 			const notificationId = notification.id;
@@ -123,6 +241,9 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				});
 				return;
 			}
+
+			// Process payload options (toast, saveToDb) for new notifications
+			processNotificationPayload(notification, isNewNotification);
 
 			try {
 				await notificationsCollection.upsert({
@@ -134,7 +255,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 					seen: notification.isSeen ?? false,
 					createdAt: new Date(notification.createdAt).getTime(),
 					// v3 uses `data` instead of `payload`
-					payload: (notification.data as Record<string, unknown>) || {},
+					payload: (notification.data as NotificationPayload) || {},
 					channel: notification.channelType || 'in_app',
 				});
 				log.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
@@ -144,15 +265,19 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				});
 			}
 		},
-		[notificationsCollection, subscriberId]
+		[notificationsCollection, subscriberId, processNotificationPayload]
 	);
 
 	/**
 	 * Sync multiple notifications to RxDB (in parallel for performance)
+	 * Used for initial load and refresh - these are NOT new notifications, so no toast.
 	 */
 	const syncToRxDB = React.useCallback(
 		async (novuNotifications: NovuNotification[]) => {
-			await Promise.all(novuNotifications.map((notification) => syncNotificationToRxDB(notification)));
+			// Pass isNewNotification=false to avoid showing toasts for old notifications
+			await Promise.all(
+				novuNotifications.map((notification) => syncNotificationToRxDB(notification, false))
+			);
 		},
 		[syncNotificationToRxDB]
 	);
@@ -179,7 +304,8 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				log.info('Novu: New notification received via WebSocket!', {
 					context: { id: notification.id, subject: notification.subject },
 				});
-				syncNotificationToRxDB(notification);
+				// Pass isNewNotification=true to trigger toast if payload.showToast is set
+				syncNotificationToRxDB(notification, true);
 			},
 			onUnreadCountChanged: (count) => {
 				log.debug('Novu: Unread count updated via WebSocket', { context: { count } });
