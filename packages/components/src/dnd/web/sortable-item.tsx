@@ -61,7 +61,7 @@ export function SortableItem({
 	className = '',
 }: SortableItemProps) {
 	const ref = React.useRef<HTMLDivElement | null>(null);
-	const dragHandleRef = React.useRef<HTMLElement | null>(null);
+	const [dragHandle, setDragHandle] = React.useState<HTMLElement | null>(null);
 	const [state, setState] = React.useState<DragState>(idle);
 	const { listId, gap, axis, registerItem, getItemIndex } = useDndContext();
 
@@ -69,9 +69,9 @@ export function SortableItem({
 	const getItemIndexRef = React.useRef(getItemIndex);
 	getItemIndexRef.current = getItemIndex;
 
-	// Callback for drag handle registration
+	// Callback for drag handle registration - uses state so effect re-runs when handle changes
 	const registerDragHandle = React.useCallback((element: HTMLElement | null) => {
-		dragHandleRef.current = element;
+		setDragHandle(element);
 	}, []);
 
 	// Register this element with the context - required for drop target coordination
@@ -80,7 +80,17 @@ export function SortableItem({
 		return () => registerItem(id, null);
 	}, [id, registerItem]);
 
-	// Setup drag and drop behavior - required to attach pragmatic-drag-and-drop to DOM
+	/**
+	 * Setup drag and drop behavior - required to attach pragmatic-drag-and-drop to DOM.
+	 *
+	 * Architecture note: This effect re-runs when `dragHandle` changes (state-based).
+	 * When a DragHandle component mounts inside children, it calls registerDragHandle
+	 * which updates state, triggering this effect to re-initialize with the handle.
+	 *
+	 * The dragHandle element MUST be a DOM descendant of the draggable element for
+	 * pragmatic-drag-and-drop to work correctly. If you see containment warnings,
+	 * verify DragHandle is rendered inside SortableItem's children.
+	 */
 	React.useEffect(() => {
 		const element = ref.current;
 		invariant(element);
@@ -89,13 +99,22 @@ export function SortableItem({
 			return;
 		}
 
-		// Use drag handle if registered, otherwise the entire element is draggable
-		const dragHandle = dragHandleRef.current ?? undefined;
+		// Validate containment - dragHandle must be inside element
+		const validDragHandle =
+			dragHandle && element.contains(dragHandle) ? dragHandle : undefined;
+
+		if (dragHandle && !validDragHandle) {
+			console.warn(
+				'[SortableItem] DragHandle is not contained within the sortable item element. ' +
+					'Ensure DragHandle is rendered as a descendant of SortableItem children.'
+			);
+		}
 
 		return combine(
 			draggable({
 				element,
-				dragHandle,
+				// Use drag handle if registered and valid, otherwise entire element is draggable
+				dragHandle: validDragHandle,
 				getInitialData() {
 					// Get fresh index when drag starts
 					const index = getItemIndexRef.current(id);
@@ -172,8 +191,8 @@ export function SortableItem({
 				},
 			})
 		);
-		// Only depend on id, listId, axis, disabled - use ref for getItemIndex
-	}, [id, listId, axis, disabled]);
+		// Re-run when dragHandle changes so draggable is re-initialized with the handle
+	}, [id, listId, axis, disabled, dragHandle]);
 
 	// Default preview renders the children
 	const defaultPreview = React.useCallback(() => {
@@ -210,7 +229,23 @@ export function SortableItem({
 
 /**
  * Hook to get drag handle props for custom drag handles.
- * Returns a ref callback that should be attached to the drag handle element.
+ *
+ * Returns a ref callback that registers the element as the drag handle for the
+ * parent SortableItem. When the ref is attached, it triggers a state update in
+ * SortableItem which re-initializes the draggable binding with the handle.
+ *
+ * @example
+ * ```tsx
+ * function MyItem() {
+ *   const { dragHandleRef, dragHandleProps } = useDragHandle();
+ *   return (
+ *     <div>
+ *       <div ref={dragHandleRef} style={dragHandleProps.style}>⋮</div>
+ *       <span>Content</span>
+ *     </div>
+ *   );
+ * }
+ * ```
  */
 export function useDragHandle() {
 	const context = React.useContext(DragHandleContext);
@@ -235,6 +270,24 @@ export function useDragHandle() {
 /**
  * A component that marks its children as the drag handle for a SortableItem.
  * Only dragging from this element will initiate the drag operation.
+ *
+ * IMPORTANT: DragHandle must be rendered as a descendant of SortableItem's children.
+ * It uses React Context to register itself with the parent SortableItem.
+ *
+ * @example
+ * ```tsx
+ * <SortableList
+ *   items={items}
+ *   renderItem={(item) => (
+ *     <div>
+ *       <DragHandle className="cursor-grab">
+ *         <GripIcon />
+ *       </DragHandle>
+ *       <span>{item.name}</span>
+ *     </div>
+ *   )}
+ * />
+ * ```
  */
 export function DragHandle({
 	children,
