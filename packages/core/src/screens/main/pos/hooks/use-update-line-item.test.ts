@@ -1,4 +1,7 @@
-import { act, renderHook } from '@testing-library/react-hooks';
+/**
+ * @jest-environment jsdom
+ */
+import { act, renderHook } from '@testing-library/react';
 
 import { useUpdateLineItem } from './use-update-line-item';
 
