@@ -1,13 +1,5 @@
-import {
-	createContext,
-	type HTMLAttributes,
-	type ReactNode,
-	useCallback,
-	useContext,
-	useEffect,
-	useRef,
-	useState,
-} from 'react';
+import * as React from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 
 import { createPortal } from 'react-dom';
 import {
@@ -39,7 +31,7 @@ interface DragHandleContextValue {
 	registerDragHandle: (element: HTMLElement | null) => void;
 }
 
-const DragHandleContext = createContext<DragHandleContextValue | null>(null);
+const DragHandleContext = React.createContext<DragHandleContextValue | null>(null);
 
 /**
  * State styles applied based on drag state
@@ -67,27 +59,28 @@ export function SortableItem({
 	renderPreview,
 	className = '',
 }: SortableItemProps) {
-	const ref = useRef<HTMLDivElement | null>(null);
-	const dragHandleRef = useRef<HTMLElement | null>(null);
-	const [state, setState] = useState<DragState>(idle);
+	const ref = React.useRef<HTMLDivElement | null>(null);
+	const dragHandleRef = React.useRef<HTMLElement | null>(null);
+	const [state, setState] = React.useState<DragState>(idle);
 	const { listId, gap, axis, registerItem, getItemIndex } = useDndContext();
 
 	// Store getItemIndex in a ref to always get current index
-	const getItemIndexRef = useRef(getItemIndex);
+	const getItemIndexRef = React.useRef(getItemIndex);
 	getItemIndexRef.current = getItemIndex;
 
 	// Callback for drag handle registration
-	const registerDragHandle = useCallback((element: HTMLElement | null) => {
+	const registerDragHandle = React.useCallback((element: HTMLElement | null) => {
 		dragHandleRef.current = element;
 	}, []);
 
-	// Register this element with the context
-	useEffect(() => {
+	// Register this element with the context - required for drop target coordination
+	React.useEffect(() => {
 		registerItem(id, ref.current);
 		return () => registerItem(id, null);
 	}, [id, registerItem]);
 
-	useEffect(() => {
+	// Setup drag and drop behavior - required to attach pragmatic-drag-and-drop to DOM
+	React.useEffect(() => {
 		const element = ref.current;
 		invariant(element);
 
@@ -182,7 +175,7 @@ export function SortableItem({
 	}, [id, listId, axis, disabled]);
 
 	// Default preview renders the children
-	const defaultPreview = useCallback(() => {
+	const defaultPreview = React.useCallback(() => {
 		return (
 			<div className="border-border bg-card rounded border border-solid p-2 shadow-lg">
 				{children}
@@ -219,9 +212,9 @@ export function SortableItem({
  * Returns a ref callback that should be attached to the drag handle element.
  */
 export function useDragHandle() {
-	const context = useContext(DragHandleContext);
+	const context = React.useContext(DragHandleContext);
 
-	const dragHandleRef = useCallback(
+	const dragHandleRef = React.useCallback(
 		(element: HTMLElement | null) => {
 			if (context) {
 				context.registerDragHandle(element);
