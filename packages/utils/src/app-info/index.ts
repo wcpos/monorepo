@@ -2,13 +2,16 @@
  * Native (iOS/Android) implementation of AppInfo
  * Uses expo-constants to get version information from app.config.ts
  */
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+import Constants from 'expo-constants';
+
 export interface AppInfo {
-	/** Semantic version (e.g., '1.8.0') */
+	/** Cross-platform JS bundle version from Expo config (e.g., '1.8.1') */
 	version: string;
-	/** Build number (iOS) or version code (Android) */
+	/** Platform-specific version (build number for iOS, version code for Android) */
+	platformVersion: string;
+	/** Build number (iOS) or version code (Android) - alias for platformVersion */
 	buildNumber: string;
 	/** Platform identifier for server communication */
 	platform: 'ios' | 'android' | 'web' | 'electron';
@@ -17,16 +20,17 @@ export interface AppInfo {
 }
 
 const version = Constants.expoConfig?.version ?? '0.0.0';
-const buildNumber =
+const platformVersion =
 	Platform.OS === 'ios'
 		? (Constants.expoConfig?.ios?.buildNumber ?? '0')
 		: String(Constants.expoConfig?.android?.versionCode ?? 0);
 
 const AppInfo: AppInfo = {
 	version,
-	buildNumber,
+	platformVersion,
+	buildNumber: platformVersion, // Alias for backwards compatibility
 	platform: Platform.OS as 'ios' | 'android',
-	userAgent: `WCPOS/${version} (${Platform.OS}; build ${buildNumber})`,
+	userAgent: `WCPOS/${version} (${Platform.OS}; build ${platformVersion})`,
 };
 
 export default AppInfo;

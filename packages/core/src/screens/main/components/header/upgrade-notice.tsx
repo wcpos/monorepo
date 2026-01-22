@@ -29,14 +29,19 @@ export const UpgradeNotice = ({ setShowUpgrade }) => {
 		<HStack className="bg-attention">
 			<View className="grow justify-center p-0 pl-7">
 				<Text
-					className="mx-auto text-sm"
+					className="text-attention-foreground mx-auto text-sm"
 					variant="link"
 					onPress={() => Linking.openURL('https://wcpos.com/pro')}
 				>
 					{upgradeToProText}
 				</Text>
 			</View>
-			<IconButton name="xmark" size="sm" onPress={() => setShowUpgrade(false)} />
+			<IconButton
+				name="xmark"
+				size="sm"
+				className="text-attention-foreground"
+				onPress={() => setShowUpgrade(false)}
+			/>
 		</HStack>
 	);
 };

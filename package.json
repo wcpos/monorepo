@@ -30,6 +30,7 @@
       "expo": "54.0.32",
       "lightningcss": "1.30.1",
       "pnpm": "10.17.0",
+      "uniwind": "npm:uniwind-pro@beta",
       "react": "19.1.0",
       "react-dom": "19.1.0",
       "react-native": "0.81.5",
@@ -40,6 +41,7 @@
     },
     "onlyBuiltDependencies": [
       "@tailwindcss/oxide",
+      "@zowe/secrets-for-zowe-sdk",
       "better-sqlite3",
       "core-js",
       "eccrypto",
@@ -52,6 +54,7 @@
       "rxdb",
       "rxdb-premium",
       "secp256k1",
+      "uniwind-pro",
       "unrs-resolver"
     ],
     "ignoredBuiltDependencies": [

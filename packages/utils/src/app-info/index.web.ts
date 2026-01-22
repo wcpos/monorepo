@@ -1,13 +1,17 @@
 /**
  * Web implementation of AppInfo
- * Uses expo-constants to get version information from app.config.ts
+ * Gets version from EXPO_PUBLIC_APP_VERSION env var (set in app.config.ts)
+ *
+ * For web, platformVersion equals version since there's no separate
+ * platform-specific version (no App Store/Play Store release).
  */
-import Constants from 'expo-constants';
 
 export interface AppInfo {
-	/** Semantic version (e.g., '1.8.0') */
+	/** Cross-platform JS bundle version from Expo config (e.g., '1.8.1') */
 	version: string;
-	/** Build number - not applicable for web, defaults to '0' */
+	/** Platform-specific version - same as version for web */
+	platformVersion: string;
+	/** Build number - alias for platformVersion */
 	buildNumber: string;
 	/** Platform identifier for server communication */
 	platform: 'ios' | 'android' | 'web' | 'electron';
@@ -15,11 +19,12 @@ export interface AppInfo {
 	userAgent: string;
 }
 
-const version = '1.8.1';
+const version = process.env.EXPO_PUBLIC_APP_VERSION ?? '0.0.0';
 
 const AppInfo: AppInfo = {
 	version,
-	buildNumber: '0', // Web doesn't have build numbers
+	platformVersion: version, // Web has no separate platform version
+	buildNumber: version, // Alias for backwards compatibility
 	platform: 'web',
 	userAgent: `WCPOS/${version} (web)`,
 };

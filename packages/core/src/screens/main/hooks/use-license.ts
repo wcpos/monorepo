@@ -1,13 +1,12 @@
-import { useObservableEagerState } from 'observable-hooks';
-
-import { useAppState } from '../../../contexts/app-state';
+import { useAppInfo } from '../../../hooks/use-app-info';
 
 /**
+ * Hook to check Pro license status.
  *
+ * @deprecated Use `useAppInfo().license` instead for full license details
  */
 export const useLicense = () => {
-	const { site } = useAppState();
-	const license = useObservableEagerState(site.license$);
+	const { license } = useAppInfo();
 
-	return { isPro: !!license?.key };
+	return { isPro: license?.isPro ?? false };
 };

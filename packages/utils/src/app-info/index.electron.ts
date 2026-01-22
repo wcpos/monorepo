@@ -1,6 +1,8 @@
 /**
  * Electron implementation of AppInfo
- * Gets version from the Electron main process via preload script
+ *
+ * - version: The Expo JS bundle version (same as web/native)
+ * - platformVersion: The Electron app version from package.json
  */
 
 declare global {
@@ -13,9 +15,11 @@ declare global {
 }
 
 export interface AppInfo {
-	/** Semantic version (e.g., '1.8.0') */
+	/** Cross-platform JS bundle version from Expo config (e.g., '1.8.1') */
 	version: string;
-	/** Build number - same as version for Electron */
+	/** Electron app version from apps/electron/package.json */
+	platformVersion: string;
+	/** Build number - alias for platformVersion */
 	buildNumber: string;
 	/** Platform identifier for server communication */
 	platform: 'ios' | 'android' | 'web' | 'electron';
@@ -23,13 +27,17 @@ export interface AppInfo {
 	userAgent: string;
 }
 
-const version = window.electron?.version ?? '0.0.0';
+// Expo bundle version (injected at build time via app.config.ts)
+const version = process.env.EXPO_PUBLIC_APP_VERSION ?? '0.0.0';
+// Electron app version (from Electron's package.json via preload)
+const platformVersion = window.electron?.version ?? '0.0.0';
 
 const AppInfo: AppInfo = {
 	version,
-	buildNumber: version, // Electron uses same value for both
+	platformVersion,
+	buildNumber: platformVersion, // Alias for backwards compatibility
 	platform: 'electron',
-	userAgent: `WCPOS/${version} (electron)`,
+	userAgent: `WCPOS/${version} (electron ${platformVersion})`,
 };
 
 export default AppInfo;

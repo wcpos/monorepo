@@ -57,9 +57,9 @@ export const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
 					headerLeft={Left}
 					headerRight={Right}
 				/>
-				{/* 
-				 * Status bar uses 'light' style (white icons) because sidebar is always dark 
-				 * in all themes. This is handled by react-native-edge-to-edge which is 
+				{/*
+				 * Status bar uses 'light' style (white icons) because sidebar is always dark
+				 * in all themes. This is handled by react-native-edge-to-edge which is
 				 * the recommended approach for Expo SDK 54+ edge-to-edge displays.
 				 */}
 				<SystemBars style="light" />

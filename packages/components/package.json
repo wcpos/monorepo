@@ -72,7 +72,7 @@
     "react-hook-form": "^7.61.1",
     "react-native-calendars": "^1.1313.0",
     "react-native-keyboard-controller": "1.18.5",
-    "uniwind": "^1.0.0",
+    "uniwind": "npm:uniwind-pro@beta",
     "react-native-resizable-panels": "^0.0.3",
     "sonner": "^2.0.7",
     "sonner-native": "^0.23.0",

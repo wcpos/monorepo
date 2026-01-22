@@ -1,5 +1,7 @@
 import { ConfigContext, ExpoConfig } from 'expo/config';
 
+import packageJson from './package.json';
+
 export default ({ config }: ConfigContext): ExpoConfig => {
 	const easProfile = process.env.EAS_BUILD_PROFILE ?? 'production';
 
@@ -7,12 +9,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 	const isAdhoc = easProfile === 'adhoc';
 	const isProd = easProfile === 'production';
 
+	// Set env var for web builds (used by @wcpos/utils/app-info)
+	process.env.EXPO_PUBLIC_APP_VERSION = packageJson.version;
+
 	return {
 		...config,
 		name: 'WCPOS',
 		slug: 'wcpos',
 		owner: 'wcpos',
-		version: '1.8.1', // manual user-facing version
+		version: packageJson.version,
 
 		orientation: 'default',
 		icon: './assets/images/icon.png',

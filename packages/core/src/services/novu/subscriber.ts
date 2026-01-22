@@ -1,12 +1,21 @@
-import AppInfo from '@wcpos/utils/app-info';
+import type { SiteDocument, StoreDocument, WPCredentialsDocument } from '@wcpos/database';
 import { http } from '@wcpos/hooks/use-http-client';
 import log from '@wcpos/utils/logger';
-import type { SiteDocument, StoreDocument, WPCredentialsDocument } from '@wcpos/database';
 
-import { getNovuEnvironment, type NovuEnvironment } from './client';
+import { getNovuEnvironment } from './client';
+
+// Import static AppInfo for non-React code
+// For React components, use the useAppInfo() hook instead
+import { AppInfo } from '../../hooks/use-app-info';
 
 /**
- * Subscriber metadata sent to Novu for targeting and analytics
+ * Subscriber metadata sent to Novu for targeting and analytics.
+ *
+ * This combines:
+ * - Static app info (appVersion, platform) from AppInfo
+ * - Site-specific info (wcposVersion, license) from RxDB documents
+ *
+ * @see useAppInfo hook for React components needing this data
  */
 export interface NovuSubscriberMetadata {
 	domain: string;

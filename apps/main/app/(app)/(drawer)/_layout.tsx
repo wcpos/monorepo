@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { Drawer } from 'expo-router/drawer';
 import { useCSSVariable } from 'uniwind';
 
@@ -6,6 +8,7 @@ import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
 import { Header } from '@wcpos/core/screens/main/components/header';
+import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -21,11 +24,21 @@ export default function DrawerLayout() {
 	const sidebarBorderColor = useCSSVariable('--color-sidebar-border');
 	const backgroundColor = useCSSVariable('--color-background');
 
+	//
+	const { license } = useAppInfo();
+	const [showUpgrade, setShowUpgrade] = React.useState(!license?.isPro);
+
 	return (
 		<Drawer
 			screenOptions={{
 				header: (props) => {
-					return <Header {...props} showUpgrade={false} setShowUpgrade={() => {}} />;
+					return (
+						<Header
+							{...props}
+							showUpgrade={showUpgrade}
+							setShowUpgrade={() => setShowUpgrade(false)}
+						/>
+					);
 				},
 				drawerType: screenSize === 'lg' ? 'permanent' : 'front',
 				drawerStyle: {

@@ -17,6 +17,9 @@ inputs:
   rxdb-license-key:
     description: RXDB License Key
     required: false
+  uniwind-auth-token:
+    description: Uniwind auth token to authenticate with
+    required: false
 
 runs:
   using: "composite"
@@ -56,6 +59,8 @@ runs:
     #   shell: bash
 
     - name: 📦 Install dependencies
+      env:
+        UNIWIND_AUTH_TOKEN: ${{ inputs.uniwind-auth-token }}
       run: pnpm install --no-frozen-lockfile
       shell: bash
 

@@ -1,22 +1,19 @@
-import { useObservableEagerState } from 'observable-hooks';
-import semver from 'semver';
+import type { SiteDocument } from '@wcpos/database';
 
-import AppInfo from '@wcpos/utils/app-info';
+import { useAppInfo } from './use-app-info';
 
 interface Props {
-	site: import('@wcpos/database').SiteDocument;
+	site: SiteDocument;
 }
 
 /**
- * Check if the WooCommerce POS plugin version on the server meets the minimum requirement.
+ * Check if the WCPOS plugin version on the server meets the minimum requirement.
  * Uses the current app version as the minimum required plugin version.
+ *
+ * @deprecated Use `useAppInfo({ site }).compatibility` instead
  */
 export const useVersionCheck = ({ site }: Props) => {
-	const wcposVersion = useObservableEagerState(site.wcpos_version$);
-	const wcposVersionPass = semver.gte(
-		String(semver.coerce(wcposVersion || '0')),
-		AppInfo.version
-	);
+	const { compatibility } = useAppInfo({ site });
 
-	return { wcposVersionPass };
+	return { wcposVersionPass: compatibility?.wcposVersionPass ?? false };
 };
