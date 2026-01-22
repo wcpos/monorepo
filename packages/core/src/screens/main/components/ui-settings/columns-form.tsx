@@ -5,7 +5,7 @@ import { useFieldArray, useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Collapsible, CollapsibleContent } from '@wcpos/components/collapsible';
-import { type ReorderResult, SortableList } from '@wcpos/components/dnd';
+import { DragHandle, type ReorderResult, SortableList } from '@wcpos/components/dnd';
 import { FormField, FormSwitch } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
@@ -71,7 +71,9 @@ export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
 	const renderColumnItem = (column: (typeof fields)[number], columnIndex: number) => (
 		<VStack key={column.key} className="gap-0 rounded p-2 transition-shadow hover:shadow-md">
 			<HStack>
-				<Icon name="gripLinesVertical" size="xs" className="mr-2 cursor-grab" />
+				<DragHandle className="mr-2">
+					<Icon name="gripLinesVertical" size="xs" className="cursor-grab" />
+				</DragHandle>
 				<FormField
 					control={form.control}
 					name={`columns.${columnIndex}.show`}

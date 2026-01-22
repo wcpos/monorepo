@@ -1,4 +1,13 @@
-import { type HTMLAttributes, useCallback, useEffect, useRef, useState } from 'react';
+import {
+	createContext,
+	type HTMLAttributes,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useEffect,
+	useRef,
+	useState,
+} from 'react';
 
 import { createPortal } from 'react-dom';
 import {
@@ -22,6 +31,15 @@ import {
 	isSortableItemData,
 	type SortableItemProps,
 } from './types';
+
+/**
+ * Context for drag handle registration within a SortableItem
+ */
+interface DragHandleContextValue {
+	registerDragHandle: (element: HTMLElement | null) => void;
+}
+
+const DragHandleContext = createContext<DragHandleContextValue | null>(null);
 
 /**
  * State styles applied based on drag state
@@ -50,12 +68,18 @@ export function SortableItem({
 	className = '',
 }: SortableItemProps) {
 	const ref = useRef<HTMLDivElement | null>(null);
+	const dragHandleRef = useRef<HTMLElement | null>(null);
 	const [state, setState] = useState<DragState>(idle);
 	const { listId, gap, axis, registerItem, getItemIndex } = useDndContext();
 
 	// Store getItemIndex in a ref to always get current index
 	const getItemIndexRef = useRef(getItemIndex);
 	getItemIndexRef.current = getItemIndex;
+
+	// Callback for drag handle registration
+	const registerDragHandle = useCallback((element: HTMLElement | null) => {
+		dragHandleRef.current = element;
+	}, []);
 
 	// Register this element with the context
 	useEffect(() => {
@@ -71,9 +95,13 @@ export function SortableItem({
 			return;
 		}
 
+		// Use drag handle if registered, otherwise the entire element is draggable
+		const dragHandle = dragHandleRef.current ?? undefined;
+
 		return combine(
 			draggable({
 				element,
+				dragHandle,
 				getInitialData() {
 					// Get fresh index when drag starts
 					const index = getItemIndexRef.current(id);
@@ -164,8 +192,11 @@ export function SortableItem({
 
 	const PreviewContent = renderPreview ?? defaultPreview;
 
+	// Context value for drag handle registration
+	const dragHandleContextValue = { registerDragHandle };
+
 	return (
-		<>
+		<DragHandleContext.Provider value={dragHandleContextValue}>
 			<div className="relative m-0.5">
 				<div
 					data-sortable-id={id}
@@ -179,17 +210,50 @@ export function SortableItem({
 				) : null}
 			</div>
 			{state.type === 'preview' ? createPortal(<PreviewContent />, state.container) : null}
-		</>
+		</DragHandleContext.Provider>
 	);
 }
 
 /**
  * Hook to get drag handle props for custom drag handles.
+ * Returns a ref callback that should be attached to the drag handle element.
  */
 export function useDragHandle() {
+	const context = useContext(DragHandleContext);
+
+	const dragHandleRef = useCallback(
+		(element: HTMLElement | null) => {
+			if (context) {
+				context.registerDragHandle(element);
+			}
+		},
+		[context]
+	);
+
 	return {
+		dragHandleRef,
 		dragHandleProps: {
 			style: { cursor: 'grab' },
 		},
 	};
+}
+
+/**
+ * A component that marks its children as the drag handle for a SortableItem.
+ * Only dragging from this element will initiate the drag operation.
+ */
+export function DragHandle({
+	children,
+	className = '',
+}: {
+	children: ReactNode;
+	className?: string;
+}) {
+	const { dragHandleRef, dragHandleProps } = useDragHandle();
+
+	return (
+		<div ref={dragHandleRef} className={className} style={dragHandleProps.style}>
+			{children}
+		</div>
+	);
 }
