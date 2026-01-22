@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ViewStyle } from 'react-native';
-import type { SharedValue } from 'react-native-reanimated';
 
+import type { SharedValue } from 'react-native-reanimated';
 import type { ItemId, ListId, ReorderResult } from '../types/sortable';
 
 // Re-export shared types

@@ -1,18 +1,18 @@
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef } from 'react';
+import * as React from 'react';
 
 import type { ItemId, ListId, SortableContextValue } from './types';
 
 /**
  * Context for sortable list functionality
  */
-const SortableContext = createContext<SortableContextValue | null>(null);
+const SortableContext = React.createContext<SortableContextValue | null>(null);
 
 /**
  * Hook to access the sortable context
  * @throws Error if used outside of a SortableList
  */
 export function useDndContext(): SortableContextValue {
-	const context = useContext(SortableContext);
+	const context = React.useContext(SortableContext);
 	if (!context) {
 		throw new Error('useSortableContext must be used within a SortableList');
 	}
@@ -23,14 +23,14 @@ export function useDndContext(): SortableContextValue {
  * Hook to check if we're inside a sortable context (doesn't throw)
  */
 export function useMaybeDndContext(): SortableContextValue | null {
-	return useContext(SortableContext);
+	return React.useContext(SortableContext);
 }
 
 /**
  * Props for SortableContextProvider
  */
 interface SortableContextProviderProps {
-	children: ReactNode;
+	children: React.ReactNode;
 	listId: ListId;
 	gap: number;
 	axis: 'vertical' | 'horizontal';
@@ -51,14 +51,14 @@ export function DndContextProvider({
 	itemIds,
 }: SortableContextProviderProps) {
 	// Map to store element refs
-	const elementMapRef = useRef<Map<ItemId, HTMLElement>>(new Map());
+	const elementMapRef = React.useRef<Map<ItemId, HTMLElement>>(new Map());
 
 	// Store itemIds in a ref so getItemIndex callback stays stable
-	const itemIdsRef = useRef(itemIds);
+	const itemIdsRef = React.useRef(itemIds);
 	itemIdsRef.current = itemIds;
 
 	// These callbacks use refs internally so they never need to be recreated
-	const registerItem = useCallback((id: ItemId, element: HTMLElement | null) => {
+	const registerItem = React.useCallback((id: ItemId, element: HTMLElement | null) => {
 		if (element) {
 			elementMapRef.current.set(id, element);
 		} else {
@@ -66,16 +66,16 @@ export function DndContextProvider({
 		}
 	}, []);
 
-	const getItemElement = useCallback((id: ItemId) => {
+	const getItemElement = React.useCallback((id: ItemId) => {
 		return elementMapRef.current.get(id) ?? null;
 	}, []);
 
-	const getItemIndex = useCallback((id: ItemId) => {
+	const getItemIndex = React.useCallback((id: ItemId) => {
 		return itemIdsRef.current.indexOf(id);
 	}, []); // No dependencies - reads from ref
 
 	// Context value is stable - only changes if listId, gap, or axis change
-	const value = useMemo<SortableContextValue>(
+	const value = React.useMemo<SortableContextValue>(
 		() => ({
 			listId,
 			gap,

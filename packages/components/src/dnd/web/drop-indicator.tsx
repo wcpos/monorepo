@@ -1,4 +1,4 @@
-import type { CSSProperties, HTMLAttributes } from 'react';
+import * as React from 'react';
 
 import type { Edge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/types';
 
@@ -11,7 +11,7 @@ const edgeToOrientationMap: Record<Edge, Orientation> = {
 	right: 'vertical',
 };
 
-const orientationStyles: Record<Orientation, HTMLAttributes<HTMLElement>['className']> = {
+const orientationStyles: Record<Orientation, React.HTMLAttributes<HTMLElement>['className']> = {
 	horizontal: 'h-[2px] left-[4px] right-0 before:left-[-8px]',
 	vertical: 'w-[2px] top-[4px] bottom-0 before:top-[-8px]',
 };
@@ -25,7 +25,7 @@ export function DropIndicator({ edge, gap }: { edge: Edge; gap: string }) {
 	const lineOffset = `calc(-0.5 * (${gap} + ${strokeSize}px))`;
 	const orientation = edgeToOrientationMap[edge];
 
-	const edgeStyleMap: Record<Edge, CSSProperties> = {
+	const edgeStyleMap: Record<Edge, React.CSSProperties> = {
 		top: { top: lineOffset },
 		right: { right: lineOffset },
 		bottom: { bottom: lineOffset },

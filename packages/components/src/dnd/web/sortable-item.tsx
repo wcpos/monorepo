@@ -1,5 +1,4 @@
 import * as React from 'react';
-import type { HTMLAttributes, ReactNode } from 'react';
 
 import { createPortal } from 'react-dom';
 import {
@@ -36,7 +35,9 @@ const DragHandleContext = React.createContext<DragHandleContextValue | null>(nul
 /**
  * State styles applied based on drag state
  */
-const stateStyles: { [Key in DragState['type']]?: HTMLAttributes<HTMLDivElement>['className'] } = {
+const stateStyles: {
+	[Key in DragState['type']]?: React.HTMLAttributes<HTMLDivElement>['className'];
+} = {
 	dragging: 'opacity-70',
 };
 
@@ -239,7 +240,7 @@ export function DragHandle({
 	children,
 	className = '',
 }: {
-	children: ReactNode;
+	children: React.ReactNode;
 	className?: string;
 }) {
 	const { dragHandleRef, dragHandleProps } = useDragHandle();
