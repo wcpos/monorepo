@@ -41,8 +41,8 @@ runs:
         eas-version: ${{ inputs.eas-version }}
         token: ${{ inputs.expo-token }}
 
-    - name: 📦 Install jq
-      run: sudo apt-get install -y jq
+    - name: 📦 Install system dependencies
+      run: sudo apt-get install -y jq libsecret-1-dev
       shell: bash
 
     - name: 🏗 Add RXDB_LICENSE_KEY to package.json
