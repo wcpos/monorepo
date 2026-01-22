@@ -46,11 +46,14 @@ export default function SkiaChart() {
 	const font = useFont(require('@wcpos/main/assets/fonts/Inter-Medium.ttf'), 12);
 
 	// Theme colors
-	const popoverColor = String(useCSSVariable('--color-popover'));
-	const popoverForegroundColor = String(useCSSVariable('--color-popover-foreground'));
-	const primaryColor = String(useCSSVariable('--color-primary'));
-	const mutedForegroundColor = String(useCSSVariable('--color-muted-foreground'));
-	const borderColor = String(useCSSVariable('--color-border'));
+	const [popoverColor, popoverForegroundColor, primaryColor, mutedForegroundColor, borderColor] =
+		useCSSVariable([
+			'--color-popover',
+			'--color-popover-foreground',
+			'--color-primary',
+			'--color-muted-foreground',
+			'--color-border',
+		]).map(String);
 
 	const data = React.useMemo<ChartDataPoint[]>(
 		() => aggregateData(selectedOrders, dateRange, dateFnsLocale) as ChartDataPoint[],

@@ -20,9 +20,11 @@ export default function DrawerLayout() {
 	const t = useT();
 
 	// Get theme-aware colors for navigation
-	const sidebarColor = useCSSVariable('--color-sidebar');
-	const sidebarBorderColor = useCSSVariable('--color-sidebar-border');
-	const backgroundColor = useCSSVariable('--color-background');
+	const [sidebarColor, sidebarBorderColor, backgroundColor] = useCSSVariable([
+		'--color-sidebar',
+		'--color-sidebar-border',
+		'--color-background',
+	]) as string[];
 
 	//
 	const { license } = useAppInfo();

@@ -7,10 +7,12 @@
 @source "../../packages/components/src/**/*.{ts,tsx}";
 @source "../../packages/core/src/**/*.{ts,tsx}";
 
-@theme {
-  /* Special colors */
+@theme static {
+  /* Static colors - don't change between themes */
   --color-transparent: transparent;
+}
 
+@theme {
   /* Custom widths */
   --width-128: 32rem;
   --width-144: 36rem;

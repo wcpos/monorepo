@@ -33,10 +33,12 @@ interface PulseTableRowRef extends React.RefObject<Animated.View> {
 export const PulseTableRow = React.forwardRef<PulseTableRowRef, PulseTableRowProps>(
 	({ className, index = 0, onRemove = () => {}, ...props }, ref) => {
 		// Get theme-aware colors
-		const tableRowColor = useCSSVariable('--color-table-row');
-		const tableRowAltColor = useCSSVariable('--color-table-row-alt');
-		const successColor = useCSSVariable('--color-success');
-		const errorColor = useCSSVariable('--color-error');
+		const [tableRowColor, tableRowAltColor, successColor, errorColor] = useCSSVariable([
+			'--color-table-row',
+			'--color-table-row-alt',
+			'--color-success',
+			'--color-error',
+		]) as string[];
 
 		// Determine the base color based on row index
 		const baseColor = index % 2 === 0 ? tableRowColor : tableRowAltColor;

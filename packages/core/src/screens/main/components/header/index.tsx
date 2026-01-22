@@ -32,8 +32,10 @@ export const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
 	const storeName = useObservableState(store.name$, store.name);
 
 	// Get theme-aware colors - header uses sidebar color to match drawer
-	const sidebarColor = useCSSVariable('--color-sidebar');
-	const sidebarBorderColor = useCSSVariable('--color-sidebar-border');
+	const [sidebarColor, sidebarBorderColor] = useCSSVariable([
+		'--color-sidebar',
+		'--color-sidebar-border',
+	]) as string[];
 
 	/**
 	 *

@@ -68,8 +68,10 @@ function TableRow({
 }: SlottableViewProps & { index?: number }) {
 	const Component = asChild ? Slot.View : View;
 	// Use theme-aware colors for alternating rows
-	const tableRowColor = useCSSVariable('--color-table-row');
-	const tableRowAltColor = useCSSVariable('--color-table-row-alt');
+	const [tableRowColor, tableRowAltColor] = useCSSVariable([
+		'--color-table-row',
+		'--color-table-row-alt',
+	]) as string[];
 
 	return (
 		<Component

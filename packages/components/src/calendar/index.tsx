@@ -21,12 +21,21 @@ interface Props extends CalendarProps {
 
 export const Calendar = ({ dateRange, onDateRangeChange, locale, ...props }: Props) => {
 	// Theme colors via CSS variables
-	const primaryColor = String(useCSSVariable('--color-primary'));
-	const primaryForegroundColor = String(useCSSVariable('--color-primary-foreground'));
-	const cardColor = String(useCSSVariable('--color-card'));
-	const foregroundColor = String(useCSSVariable('--color-foreground'));
-	const mutedForegroundColor = String(useCSSVariable('--color-muted-foreground'));
-	const borderColor = String(useCSSVariable('--color-border'));
+	const [
+		primaryColor,
+		primaryForegroundColor,
+		cardColor,
+		foregroundColor,
+		mutedForegroundColor,
+		borderColor,
+	] = useCSSVariable([
+		'--color-primary',
+		'--color-primary-foreground',
+		'--color-card',
+		'--color-foreground',
+		'--color-muted-foreground',
+		'--color-border',
+	]).map(String);
 
 	// Update locale configuration when language changes
 	React.useEffect(() => {

@@ -26,11 +26,13 @@ export default function TabsLayout() {
 	const { bottom } = useSafeAreaInsets();
 
 	// Theme-aware colors for native tab bar styling
-	const backgroundColor = useCSSVariable('--color-background');
-	const cardColor = useCSSVariable('--color-card');
-	const primaryColor = useCSSVariable('--color-primary');
-	const mutedForeground = useCSSVariable('--color-muted-foreground');
-	const borderColor = useCSSVariable('--color-border');
+	const [backgroundColor, cardColor, primaryColor, mutedForeground, borderColor] = useCSSVariable([
+		'--color-background',
+		'--color-card',
+		'--color-primary',
+		'--color-muted-foreground',
+		'--color-border',
+	]) as string[];
 
 	const tabPressListener = React.useMemo(
 		() => ({
