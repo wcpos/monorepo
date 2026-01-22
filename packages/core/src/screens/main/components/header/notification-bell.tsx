@@ -27,7 +27,7 @@ export function NotificationBell() {
 		<Popover open={isOpen} onOpenChange={handleOpenChange}>
 			<PopoverTrigger asChild>
 				<Pressable
-					className="relative"
+					className="relative px-2"
 					accessibilityRole="button"
 					accessibilityLabel="Notifications"
 				>

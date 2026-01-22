@@ -98,7 +98,7 @@ export const UserMenu = () => {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button className="text-sidebar-foreground rounded-none bg-transparent px-0 pr-3 hover:bg-white/10">
+				<Button className="text-sidebar-foreground rounded-none bg-transparent px-2 hover:bg-white/10">
 					<HStack>
 						<Avatar
 							source={{ uri }}

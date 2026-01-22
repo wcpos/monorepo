@@ -79,7 +79,7 @@ export function Online() {
 
 	return (
 		<Tooltip>
-			<TooltipTrigger>
+			<TooltipTrigger className="px-2">
 				<Icon name="circle" variant={state.variant} />
 			</TooltipTrigger>
 			<TooltipContent side="bottom">
