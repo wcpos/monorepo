@@ -14,6 +14,9 @@
       },
       "env": {
         "EXPO_USE_FAST_RESOLVER": "true"
+      },
+      "android": {
+        "preInstall": "sudo apt-get update && sudo apt-get install -y libsecret-1-dev"
       }
     },
     "development": {
@@ -21,6 +24,7 @@
       "distribution": "internal",
       "developmentClient": true,
       "android": {
+        "preInstall": "sudo apt-get update && sudo apt-get install -y libsecret-1-dev",
         "buildType": "apk"
       },
       "ios": {
@@ -31,13 +35,17 @@
       "extends": "monorepo",
       "distribution": "store",
       "android": {
+        "preInstall": "sudo apt-get update && sudo apt-get install -y libsecret-1-dev",
         "buildType": "app-bundle"
       },
       "autoIncrement": true
     },
     "adhoc": {
       "extends": "monorepo",
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "preInstall": "sudo apt-get update && sudo apt-get install -y libsecret-1-dev"
+      }
     }
   },
   "submit": {
