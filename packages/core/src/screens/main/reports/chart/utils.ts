@@ -5,6 +5,7 @@ import {
 	eachDayOfInterval,
 	eachMonthOfInterval,
 	format,
+	isSameDay,
 	startOfDay,
 	startOfHour,
 	startOfMonth,
@@ -231,13 +232,13 @@ export const aggregateData = (
 	locale?: Locale
 ): AggregatedDataPoint[] => {
 	const { start: originalStart, end: originalEnd } = dateRange;
-	const diffInDays = differenceInDays(originalEnd, originalStart);
 
 	let effectiveStart = originalStart;
 	let effectiveEnd = originalEnd;
 
-	// For single-day reports, trim to order bounds
-	if (diffInDays <= 1) {
+	// For single-day reports, trim to order bounds and use minute-based intervals
+	// Use isSameDay for explicit calendar day comparison (avoids edge cases with time ranges)
+	if (isSameDay(originalStart, originalEnd)) {
 		const effectiveRange = getEffectiveDailyRange(dateRange, orders);
 		effectiveStart = effectiveRange.start;
 		effectiveEnd = effectiveRange.end;
