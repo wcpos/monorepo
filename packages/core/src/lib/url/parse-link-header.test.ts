@@ -80,8 +80,9 @@ describe('Parse Link Header', () => {
 	});
 
 	it('parsing an empty link header', () => {
-		expect(parse('')).toEqual({});
-		expect(parse()).toEqual({});
+		expect(parse('')).toBeNull();
+		expect(parse(undefined)).toBeNull();
+		expect(parse(null)).toBeNull();
 	});
 
 	it('parsing a proper link header with next and a link without rel', () => {
