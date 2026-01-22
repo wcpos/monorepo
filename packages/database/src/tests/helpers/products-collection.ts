@@ -1,4 +1,5 @@
-import { createRxDatabase, randomCouchString, RxCollection, RxStorage } from 'rxdb';
+import { createRxDatabase, RxCollection, RxStorage } from 'rxdb';
+import { randomToken } from 'rxdb/plugins/utils';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { generateProduct, productDefaultSchema } from './product-schemas';
@@ -11,7 +12,7 @@ export async function create(
 	storage: RxStorage<any, any> = getRxStorageMemory()
 ): Promise<RxCollection<typeof productDefaultSchema, object, object>> {
 	const db = await createRxDatabase<{ human: RxCollection<typeof productDefaultSchema> }>({
-		name: randomCouchString(10),
+		name: randomToken(10),
 		storage,
 		multiInstance,
 		eventReduce,

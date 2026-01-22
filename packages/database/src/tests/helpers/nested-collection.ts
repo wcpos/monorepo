@@ -1,7 +1,6 @@
-import { faker } from '@faker-js/faker';
-import { createRxDatabase, randomCouchString, RxCollection, RxStorage } from 'rxdb';
+import { createRxDatabase, RxCollection, RxStorage } from 'rxdb';
+import { randomToken } from 'rxdb/plugins/utils';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
-import { v4 as uuidv4 } from 'uuid';
 
 export const nestedDefaultSchema = {
 	title: 'nested schema',
@@ -28,11 +27,11 @@ export const nestedDefaultSchema = {
 		},
 	},
 	indexes: [],
-};
+} as const;
 
 export const generateNested = (
-	uuid: string = uuidv4(),
-	name: string = faker.word.interjection()
+	uuid: string = randomToken(36),
+	name: string = `nested-${randomToken(6)}`
 ) => {
 	return {
 		uuid,
@@ -40,26 +39,27 @@ export const generateNested = (
 	};
 };
 
+/**
+ * Generate a unique database name
+ */
+function generateUniqueDbName(baseName: string): string {
+	return `${baseName}_${Date.now()}`;
+}
+
 export async function create(
 	size: number = 20,
 	collectionName: string = 'nested',
-	multiInstance: boolean = true,
-	eventReduce: boolean = true,
 	storage: RxStorage<any, any> = getRxStorageMemory()
-): Promise<RxCollection<typeof nestedDefaultSchema, object, object>> {
-	const db = await createRxDatabase<{ human: RxCollection<typeof nestedDefaultSchema> }>({
-		name: randomCouchString(10),
+): Promise<RxCollection<any, object, object>> {
+	const db = await createRxDatabase({
+		name: generateUniqueDbName('nesteddb'),
 		storage,
-		multiInstance,
-		eventReduce,
-		ignoreDuplicate: true,
-		localDocuments: true,
+		allowSlowCount: true,
 	});
 
 	const collections = await db.addCollections({
 		[collectionName]: {
 			schema: nestedDefaultSchema,
-			localDocuments: false,
 		},
 	});
 
