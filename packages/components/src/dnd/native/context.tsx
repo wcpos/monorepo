@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { runOnUI, useSharedValue } from 'react-native-reanimated';
+import { useSharedValue } from 'react-native-reanimated';
+import { scheduleOnUI } from 'react-native-worklets';
 
 import type {
 	ItemId,
@@ -81,29 +82,29 @@ export function SortableContextProvider<T>({
 	getItemIdRef.current = getItemId;
 	onOrderChangeRef.current = onOrderChange;
 
-	// Initialize positions when items change
+	// Initialize positions when items change - syncs item order to UI thread
 	React.useEffect(() => {
 		const newPositions: PositionsRecord = {};
 		items.forEach((item, index) => {
 			const id = getItemId(item);
 			newPositions[id] = index;
 		});
-		// Use runOnUI to ensure positions are available on UI thread
-		runOnUI(() => {
+		// Schedule update on UI thread where gesture worklets read it
+		const updatePositions = (newPos: PositionsRecord) => {
 			'worklet';
-			positions.value = newPositions;
-		})();
+			positions.value = newPos;
+		};
+		scheduleOnUI(updatePositions, newPositions);
 	}, [items, getItemId, positions]);
 
 	// Register item layout (called from JS thread, updates on UI thread)
 	const registerItem = React.useCallback(
 		(id: ItemId, layout: ItemLayout) => {
-			// Use runOnUI to ensure the shared value update happens on the UI thread
-			// where the gesture worklets will read it
-			runOnUI(() => {
+			const addLayout = (itemId: ItemId, itemLayout: ItemLayout) => {
 				'worklet';
-				layouts.value = { ...layouts.value, [id]: layout };
-			})();
+				layouts.value = { ...layouts.value, [itemId]: itemLayout };
+			};
+			scheduleOnUI(addLayout, id, layout);
 		},
 		[layouts]
 	);
@@ -111,11 +112,12 @@ export function SortableContextProvider<T>({
 	// Unregister item layout (called from JS thread, updates on UI thread)
 	const unregisterItem = React.useCallback(
 		(id: ItemId) => {
-			runOnUI(() => {
+			const removeLayout = (itemId: ItemId) => {
 				'worklet';
-				const { [id]: _, ...rest } = layouts.value;
+				const { [itemId]: _, ...rest } = layouts.value;
 				layouts.value = rest;
-			})();
+			};
+			scheduleOnUI(removeLayout, id);
 		},
 		[layouts]
 	);

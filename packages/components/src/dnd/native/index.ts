@@ -6,7 +6,7 @@
  */
 
 export { SortableList, SortableListWithGestureHandler, reorder } from './sortable-list';
-export { SortableItem } from './sortable-item';
+export { SortableItem, DragHandle, useDragHandle } from './sortable-item';
 export { useSortableContext, useMaybeSortableContext } from './context';
 export type {
 	ItemId,

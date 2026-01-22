@@ -64,7 +64,7 @@ export type {
 // =============================================================================
 
 export { SortableList, reorder } from './web/sortable-list';
-export { SortableItem, useDragHandle } from './web/sortable-item';
+export { SortableItem, useDragHandle, DragHandle } from './web/sortable-item';
 export { DropIndicator } from './web/drop-indicator';
 
 // =============================================================================

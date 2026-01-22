@@ -12,6 +12,8 @@ export {
 	SortableList,
 	SortableListWithGestureHandler,
 	SortableItem,
+	DragHandle,
+	useDragHandle,
 	useSortableContext,
 	useMaybeSortableContext,
 	reorder,
@@ -27,11 +29,3 @@ export type {
 	SortableContextValue,
 	ItemLayout,
 } from './native';
-
-/**
- * useDragHandle - For custom drag handles
- * In React Native, the entire SortableItem is draggable by default.
- */
-export function useDragHandle() {
-	return { dragHandleProps: {} };
-}

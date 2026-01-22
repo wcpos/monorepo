@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import * as React from 'react';
 
 /**
  * Shared types for sortable list components (used by both web and native)
@@ -55,7 +55,7 @@ export interface SortableListProps<T> {
 	/**
 	 * Render function for each item
 	 */
-	renderItem: (item: T, index: number) => ReactNode;
+	renderItem: (item: T, index: number) => React.ReactNode;
 
 	/**
 	 * Callback fired when the order of items changes.
@@ -99,7 +99,7 @@ export interface SortableItemProps {
 	/**
 	 * The content to render (your draggable component)
 	 */
-	children: ReactNode;
+	children: React.ReactNode;
 
 	/**
 	 * Whether this item is currently disabled for dragging
@@ -110,7 +110,7 @@ export interface SortableItemProps {
 	/**
 	 * Custom drag preview render function
 	 */
-	renderPreview?: () => ReactNode;
+	renderPreview?: () => React.ReactNode;
 
 	/**
 	 * Additional CSS class name

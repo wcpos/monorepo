@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react';
+import * as React from 'react';
 
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
@@ -24,9 +24,9 @@ function SortableListInner<T>({
 	showFlash = true,
 }: SortableListProps<T>) {
 	// Use refs to avoid stale closures in the monitor callback
-	const itemsRef = useRef(items);
-	const getItemIdRef = useRef(getItemId);
-	const onOrderChangeRef = useRef(onOrderChange);
+	const itemsRef = React.useRef(items);
+	const getItemIdRef = React.useRef(getItemId);
+	const onOrderChangeRef = React.useRef(onOrderChange);
 
 	// Keep refs up to date (no state changes, just ref updates)
 	itemsRef.current = items;
@@ -35,10 +35,10 @@ function SortableListInner<T>({
 
 	// Compute itemIds once per render for the context
 	const itemIds = items.map(getItemId);
-	const itemIdsRef = useRef(itemIds);
+	const itemIdsRef = React.useRef(itemIds);
 	itemIdsRef.current = itemIds;
 
-	useEffect(() => {
+	React.useEffect(() => {
 		const cleanup = monitorForElements({
 			canMonitor({ source }) {
 				if (!isSortableItemData(source.data)) {
@@ -134,7 +134,7 @@ function SortableListInner<T>({
 }
 
 // Export memoized version to prevent unnecessary re-renders from parent
-export const SortableList = memo(SortableListInner) as typeof SortableListInner;
+export const SortableList = React.memo(SortableListInner) as typeof SortableListInner;
 
 /**
  * Utility function to reorder an array based on drag result.

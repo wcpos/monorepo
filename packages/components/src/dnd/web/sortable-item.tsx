@@ -1,4 +1,4 @@
-import { type HTMLAttributes, useCallback, useEffect, useRef, useState } from 'react';
+import * as React from 'react';
 
 import { createPortal } from 'react-dom';
 import {
@@ -24,9 +24,20 @@ import {
 } from './types';
 
 /**
+ * Context for drag handle registration within a SortableItem
+ */
+interface DragHandleContextValue {
+	registerDragHandle: (element: HTMLElement | null) => void;
+}
+
+const DragHandleContext = React.createContext<DragHandleContextValue | null>(null);
+
+/**
  * State styles applied based on drag state
  */
-const stateStyles: { [Key in DragState['type']]?: HTMLAttributes<HTMLDivElement>['className'] } = {
+const stateStyles: {
+	[Key in DragState['type']]?: React.HTMLAttributes<HTMLDivElement>['className'];
+} = {
 	dragging: 'opacity-70',
 };
 
@@ -49,21 +60,38 @@ export function SortableItem({
 	renderPreview,
 	className = '',
 }: SortableItemProps) {
-	const ref = useRef<HTMLDivElement | null>(null);
-	const [state, setState] = useState<DragState>(idle);
+	const ref = React.useRef<HTMLDivElement | null>(null);
+	const [dragHandle, setDragHandle] = React.useState<HTMLElement | null>(null);
+	const [state, setState] = React.useState<DragState>(idle);
 	const { listId, gap, axis, registerItem, getItemIndex } = useDndContext();
 
 	// Store getItemIndex in a ref to always get current index
-	const getItemIndexRef = useRef(getItemIndex);
+	const getItemIndexRef = React.useRef(getItemIndex);
 	getItemIndexRef.current = getItemIndex;
 
-	// Register this element with the context
-	useEffect(() => {
+	// Callback for drag handle registration - uses state so effect re-runs when handle changes
+	const registerDragHandle = React.useCallback((element: HTMLElement | null) => {
+		setDragHandle(element);
+	}, []);
+
+	// Register this element with the context - required for drop target coordination
+	React.useEffect(() => {
 		registerItem(id, ref.current);
 		return () => registerItem(id, null);
 	}, [id, registerItem]);
 
-	useEffect(() => {
+	/**
+	 * Setup drag and drop behavior - required to attach pragmatic-drag-and-drop to DOM.
+	 *
+	 * Architecture note: This effect re-runs when `dragHandle` changes (state-based).
+	 * When a DragHandle component mounts inside children, it calls registerDragHandle
+	 * which updates state, triggering this effect to re-initialize with the handle.
+	 *
+	 * The dragHandle element MUST be a DOM descendant of the draggable element for
+	 * pragmatic-drag-and-drop to work correctly. If you see containment warnings,
+	 * verify DragHandle is rendered inside SortableItem's children.
+	 */
+	React.useEffect(() => {
 		const element = ref.current;
 		invariant(element);
 
@@ -71,9 +99,22 @@ export function SortableItem({
 			return;
 		}
 
+		// Validate containment - dragHandle must be inside element
+		const validDragHandle =
+			dragHandle && element.contains(dragHandle) ? dragHandle : undefined;
+
+		if (dragHandle && !validDragHandle) {
+			console.warn(
+				'[SortableItem] DragHandle is not contained within the sortable item element. ' +
+					'Ensure DragHandle is rendered as a descendant of SortableItem children.'
+			);
+		}
+
 		return combine(
 			draggable({
 				element,
+				// Use drag handle if registered and valid, otherwise entire element is draggable
+				dragHandle: validDragHandle,
 				getInitialData() {
 					// Get fresh index when drag starts
 					const index = getItemIndexRef.current(id);
@@ -150,11 +191,11 @@ export function SortableItem({
 				},
 			})
 		);
-		// Only depend on id, listId, axis, disabled - use ref for getItemIndex
-	}, [id, listId, axis, disabled]);
+		// Re-run when dragHandle changes so draggable is re-initialized with the handle
+	}, [id, listId, axis, disabled, dragHandle]);
 
 	// Default preview renders the children
-	const defaultPreview = useCallback(() => {
+	const defaultPreview = React.useCallback(() => {
 		return (
 			<div className="border-border bg-card rounded border border-solid p-2 shadow-lg">
 				{children}
@@ -164,8 +205,11 @@ export function SortableItem({
 
 	const PreviewContent = renderPreview ?? defaultPreview;
 
+	// Context value for drag handle registration
+	const dragHandleContextValue = { registerDragHandle };
+
 	return (
-		<>
+		<DragHandleContext.Provider value={dragHandleContextValue}>
 			<div className="relative m-0.5">
 				<div
 					data-sortable-id={id}
@@ -179,17 +223,84 @@ export function SortableItem({
 				) : null}
 			</div>
 			{state.type === 'preview' ? createPortal(<PreviewContent />, state.container) : null}
-		</>
+		</DragHandleContext.Provider>
 	);
 }
 
 /**
  * Hook to get drag handle props for custom drag handles.
+ *
+ * Returns a ref callback that registers the element as the drag handle for the
+ * parent SortableItem. When the ref is attached, it triggers a state update in
+ * SortableItem which re-initializes the draggable binding with the handle.
+ *
+ * @example
+ * ```tsx
+ * function MyItem() {
+ *   const { dragHandleRef, dragHandleProps } = useDragHandle();
+ *   return (
+ *     <div>
+ *       <div ref={dragHandleRef} style={dragHandleProps.style}>⋮</div>
+ *       <span>Content</span>
+ *     </div>
+ *   );
+ * }
+ * ```
  */
 export function useDragHandle() {
+	const context = React.useContext(DragHandleContext);
+
+	const dragHandleRef = React.useCallback(
+		(element: HTMLElement | null) => {
+			if (context) {
+				context.registerDragHandle(element);
+			}
+		},
+		[context]
+	);
+
 	return {
+		dragHandleRef,
 		dragHandleProps: {
 			style: { cursor: 'grab' },
 		},
 	};
+}
+
+/**
+ * A component that marks its children as the drag handle for a SortableItem.
+ * Only dragging from this element will initiate the drag operation.
+ *
+ * IMPORTANT: DragHandle must be rendered as a descendant of SortableItem's children.
+ * It uses React Context to register itself with the parent SortableItem.
+ *
+ * @example
+ * ```tsx
+ * <SortableList
+ *   items={items}
+ *   renderItem={(item) => (
+ *     <div>
+ *       <DragHandle className="cursor-grab">
+ *         <GripIcon />
+ *       </DragHandle>
+ *       <span>{item.name}</span>
+ *     </div>
+ *   )}
+ * />
+ * ```
+ */
+export function DragHandle({
+	children,
+	className = '',
+}: {
+	children: React.ReactNode;
+	className?: string;
+}) {
+	const { dragHandleRef, dragHandleProps } = useDragHandle();
+
+	return (
+		<div ref={dragHandleRef} className={className} style={dragHandleProps.style}>
+			{children}
+		</div>
+	);
 }

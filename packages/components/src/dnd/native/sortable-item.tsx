@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { type LayoutChangeEvent, View, type ViewStyle } from 'react-native';
 
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, type PanGesture } from 'react-native-gesture-handler';
 import Animated, {
 	useAnimatedReaction,
 	useAnimatedStyle,
@@ -18,6 +18,16 @@ import { useSortableContext } from './context';
 import { DropIndicator } from './drop-indicator';
 
 import type { ItemLayout, SortableItemProps } from './types';
+
+/**
+ * Context for providing the pan gesture to DragHandle components
+ */
+interface DragHandleContextValue {
+	panGesture: PanGesture;
+	setHasDragHandle: (value: boolean) => void;
+}
+
+const DragHandleContext = React.createContext<DragHandleContextValue | null>(null);
 
 /**
  * Spring configuration for smooth animations
@@ -44,6 +54,9 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 		unregisterItem,
 		handleOrderChange,
 	} = useSortableContext();
+
+	// Track if a drag handle is being used (set by DragHandle component)
+	const [hasDragHandle, setHasDragHandle] = React.useState(false);
 
 	// Animation values
 	const translateX = useSharedValue(0);
@@ -336,14 +349,81 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 		};
 	});
 
-	return (
-		<View style={{ position: 'relative' }}>
-			<GestureDetector gesture={panGesture}>
-				<Animated.View style={[baseStyle, style, animatedStyle]} onLayout={handleLayout}>
-					{children}
-				</Animated.View>
-			</GestureDetector>
-			{indicatorEdge ? <DropIndicator edge={indicatorEdge} gap={gap} /> : null}
-		</View>
+	// Context value for drag handle
+	const dragHandleContextValue = React.useMemo(
+		() => ({ panGesture, setHasDragHandle }),
+		[panGesture]
 	);
+
+	// Content to render (with or without GestureDetector)
+	const content = (
+		<Animated.View style={[baseStyle, style, animatedStyle]} onLayout={handleLayout}>
+			{children}
+		</Animated.View>
+	);
+
+	return (
+		<DragHandleContext.Provider value={dragHandleContextValue}>
+			<View style={{ position: 'relative' }}>
+				{hasDragHandle ? content : <GestureDetector gesture={panGesture}>{content}</GestureDetector>}
+				{indicatorEdge ? <DropIndicator edge={indicatorEdge} gap={gap} /> : null}
+			</View>
+		</DragHandleContext.Provider>
+	);
+}
+
+/**
+ * A component that marks its children as the drag handle for a SortableItem.
+ * Only dragging from this element will initiate the drag operation.
+ */
+export function DragHandle({
+	children,
+	style,
+	className,
+}: {
+	children: React.ReactNode;
+	style?: ViewStyle;
+	className?: string;
+}) {
+	const context = React.useContext(DragHandleContext);
+
+	// Mark that a drag handle is being used
+	React.useEffect(() => {
+		if (context) {
+			context.setHasDragHandle(true);
+		}
+		return () => {
+			if (context) {
+				context.setHasDragHandle(false);
+			}
+		};
+	}, [context]);
+
+	if (!context) {
+		// If not inside a SortableItem, just render children
+		return (
+			<View style={style} className={className}>
+				{children}
+			</View>
+		);
+	}
+
+	return (
+		<GestureDetector gesture={context.panGesture}>
+			<View style={style} className={className}>
+				{children}
+			</View>
+		</GestureDetector>
+	);
+}
+
+/**
+ * Hook to get drag handle props for custom drag handles (native version).
+ * On native, just returns empty props as the DragHandle component handles everything.
+ */
+export function useDragHandle() {
+	return {
+		dragHandleRef: undefined,
+		dragHandleProps: {},
+	};
 }
