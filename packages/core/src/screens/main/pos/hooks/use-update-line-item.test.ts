@@ -52,7 +52,7 @@ jest.mock('../contexts/current-order', () => ({
 							meta_data: [
 								{ key: '_woocommerce_pos_uuid', value: '23e108ca-63a7-469a-ad12-ed72e0d04be3' },
 								{
-									key: '_pos_data',
+									key: '_woocommerce_pos_data',
 									value: JSON.stringify({ price: 10, regular_price: 10, tax_status: 'taxable' }),
 								},
 							],
@@ -101,7 +101,7 @@ jest.mock('./use-calculate-line-item-tax-and-totals', () => ({
 jest.mock('./use-line-item-data', () => ({
 	useLineItemData: () => ({
 		getLineItemData: jest.fn().mockImplementation((lineItem) => {
-			const posDataMeta = lineItem.meta_data?.find((m: any) => m.key === '_pos_data');
+			const posDataMeta = lineItem.meta_data?.find((m: any) => m.key === '_woocommerce_pos_data');
 			if (posDataMeta) {
 				return JSON.parse(posDataMeta.value);
 			}
