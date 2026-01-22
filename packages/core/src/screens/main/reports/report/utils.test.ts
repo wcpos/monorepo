@@ -61,46 +61,47 @@ describe('calculateTotals', () => {
 	] as OrderDocument[];
 
 	it('calculates the total correctly', () => {
-		const result = calculateTotals(mockOrders);
+		const result = calculateTotals({ orders: mockOrders });
 		expect(result.total).toBe(450); // 100 + 200 + 150
 	});
 
 	it('calculates the discount total correctly', () => {
-		const result = calculateTotals(mockOrders);
+		const result = calculateTotals({ orders: mockOrders });
 		expect(result.discountTotal).toBe(15); // 5 + 10 + 0
 	});
 
 	it('calculates the total tax correctly', () => {
-		const result = calculateTotals(mockOrders);
+		const result = calculateTotals({ orders: mockOrders });
 		expect(result.totalTax).toBe(45); // 10 + 20 + 15
 	});
 
 	it('calculates the total items sold correctly', () => {
-		const result = calculateTotals(mockOrders);
+		const result = calculateTotals({ orders: mockOrders });
 		expect(result.totalItemsSold).toBe(11); // 2+3+1+1+4
 	});
 
 	it('categorizes unpaid and unknown payment methods correctly', () => {
-		const result = calculateTotals(mockOrders);
+		const result = calculateTotals({ orders: mockOrders });
+		// Note: order.total already includes tax in WooCommerce
 		expect(result.paymentMethodsArray).toContainEqual({
 			payment_method: 'credit_card',
 			payment_method_title: 'Credit Card',
-			total: 110, // 100 + 10
+			total: 100,
 		});
 		expect(result.paymentMethodsArray).toContainEqual({
 			payment_method: 'unpaid',
 			payment_method_title: '',
-			total: 220, // 200 + 20
+			total: 200,
 		});
 		expect(result.paymentMethodsArray).toContainEqual({
 			payment_method: 'unknown',
 			payment_method_title: '',
-			total: 165, // 150 + 15
+			total: 150,
 		});
 	});
 
 	it('calculates tax totals correctly', () => {
-		const result = calculateTotals(mockOrders);
+		const result = calculateTotals({ orders: mockOrders });
 		expect(result.taxTotalsArray).toContainEqual({
 			rate_id: 1,
 			label: 'VAT',
@@ -114,21 +115,22 @@ describe('calculateTotals', () => {
 	});
 
 	it('calculates shipping totals correctly', () => {
-		const result = calculateTotals(mockOrders);
+		const result = calculateTotals({ orders: mockOrders });
+		// Note: shipping total = shipping.total + shipping.total_tax for each line
 		expect(result.shippingTotalsArray).toContainEqual({
 			method_id: 'flat_rate',
-			total: 25, // 15 + 10
+			total: 27.5, // (15+1.5) + (10+1) = 16.5 + 11
 			total_tax: 2.5, // 1.5 + 1
 		});
 		expect(result.shippingTotalsArray).toContainEqual({
 			method_id: 'express',
-			total: 25,
+			total: 27.5, // 25 + 2.5
 			total_tax: 2.5,
 		});
 	});
 
 	it('calculates cashier and store totals correctly', () => {
-		const result = calculateTotals(mockOrders);
+		const result = calculateTotals({ orders: mockOrders });
 		expect(result.userStoreArray).toContainEqual({
 			cashierId: 'cashier_1',
 			storeId: 'store_1',

@@ -26,7 +26,7 @@ type PointWithPosition = {
 
 // Tooltip dimensions
 const TOOLTIP_WIDTH = 160;
-const TOOLTIP_HEIGHT = 70;
+const TOOLTIP_HEIGHT = 88;
 const TOOLTIP_PADDING = 10;
 const TOOLTIP_MARGIN = 12;
 
@@ -56,7 +56,8 @@ export default function SkiaChart() {
 		() => aggregateData(selectedOrders, dateRange, dateFnsLocale) as ChartDataPoint[],
 		[selectedOrders, dateRange, dateFnsLocale]
 	);
-	const maxTotal = Math.max(...data.map((d) => d.total + d.total_tax), 0);
+	// Max is subtotal + tax = total (the actual order total)
+	const maxTotal = Math.max(...data.map((d) => d.total), 0);
 
 	// Tooltip state - managed in React state for simplicity
 	const [tooltip, setTooltip] = React.useState<TooltipState>({
@@ -69,13 +70,13 @@ export default function SkiaChart() {
 
 	// Store points ref to access in gesture handlers
 	const pointsRef = React.useRef<{
-		total: PointWithPosition[];
+		subtotal: PointWithPosition[];
 		total_tax: PointWithPosition[];
 	} | null>(null);
 
 	// Find closest point index based on x position
 	const findClosestPointIndex = React.useCallback((touchX: number): number => {
-		const points = pointsRef.current?.total;
+		const points = pointsRef.current?.subtotal;
 		if (!points || points.length === 0) return -1;
 
 		let closestIdx = 0;
@@ -97,15 +98,15 @@ export default function SkiaChart() {
 			const idx = findClosestPointIndex(touchX);
 			if (idx < 0) return;
 
-			const totalPoints = pointsRef.current?.total;
+			const subtotalPoints = pointsRef.current?.subtotal;
 			const taxPoints = pointsRef.current?.total_tax;
-			if (!totalPoints || !taxPoints) return;
+			if (!subtotalPoints || !taxPoints) return;
 
 			setTooltip({
 				visible: true,
 				pointIndex: idx,
-				x: totalPoints[idx].x,
-				totalY: totalPoints[idx].y,
+				x: subtotalPoints[idx].x,
+				totalY: subtotalPoints[idx].y,
 				taxY: taxPoints[idx].y,
 			});
 		},
@@ -145,14 +146,14 @@ export default function SkiaChart() {
 
 	const gesture = isWeb ? hoverGesture : nativeGesture;
 
-	// Calculate smart tick count based on data length
-	// Show all labels when possible, only reduce for very large data sets
+	// Calculate tick count based on data length
+	// Limit to actual data length to prevent victory-native from interpolating beyond our data
 	const tickCount = React.useMemo(() => {
 		const len = data.length;
-		if (len <= 12) return len; // Show all for up to 12 points
-		if (len <= 24) return 8; // 8 ticks for up to 24 points (e.g., hourly)
-		if (len <= 31) return 10; // 10 ticks for monthly data
-		return Math.min(12, Math.ceil(len / 4)); // More ticks for larger datasets
+		if (len <= 12) return len;
+		if (len <= 24) return Math.min(len, 8);
+		if (len <= 31) return Math.min(len, 10);
+		return Math.min(len, 12);
 	}, [data.length]);
 
 	return (
@@ -161,17 +162,18 @@ export default function SkiaChart() {
 				<CartesianChart
 					data={data}
 					xKey="label"
-					yKeys={['total', 'total_tax']}
+					yKeys={['subtotal', 'total_tax']}
 					domainPadding={{ left: 70, right: 70, top: 30 }}
 					xAxis={{
 						font,
 						lineColor: borderColor,
 						labelColor: mutedForegroundColor,
 						tickCount,
+						formatXLabel: (label) => label ?? '',
 					}}
 					yAxis={[
 						{
-							yKeys: ['total', 'total_tax'],
+							yKeys: ['subtotal', 'total_tax'],
 							font,
 							lineColor: borderColor,
 							labelColor: mutedForegroundColor,
@@ -188,7 +190,7 @@ export default function SkiaChart() {
 							<>
 								<StackedBar
 									chartBounds={chartBounds}
-									points={[points.total, points.total_tax]}
+									points={[points.subtotal, points.total_tax]}
 									colors={[primaryColor, `${primaryColor}99`]}
 									animate={{ type: 'spring' }}
 									barWidth={Math.min(50, (chartBounds.right - chartBounds.left) / data.length - 10)}
@@ -300,6 +302,14 @@ function ToolTip({
 				x={tooltipX + TOOLTIP_PADDING}
 				y={tooltipY + TOOLTIP_PADDING + 48}
 				text={`Tax: ${formatCurrency(point.total_tax)}`}
+				font={font}
+				color={textColor}
+			/>
+			{/* Order count */}
+			<Text
+				x={tooltipX + TOOLTIP_PADDING}
+				y={tooltipY + TOOLTIP_PADDING + 66}
+				text={`Orders: ${point.order_count}`}
 				font={font}
 				color={textColor}
 			/>
