@@ -24,5 +24,7 @@ module.exports = {
 	},
 	moduleNameMapper: {
 		'^expo-localization$': '<rootDir>/jest/__mocks__/expo-localization.js',
+		'^@wcpos/utils/(.*)$': '<rootDir>/../utils/src/$1',
+		'^@wcpos/database$': '<rootDir>/../database/src',
 	},
 };
