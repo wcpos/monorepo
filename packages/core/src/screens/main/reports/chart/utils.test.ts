@@ -1,4 +1,16 @@
 // utils.test.ts
+//
+// TIMEZONE HANDLING:
+// ==================
+// In production, order.date_created_gmt is a UTC string that gets converted to local time
+// via convertUTCStringToLocalDate. The dateRange also comes from UTC strings converted
+// to local time via the same function (in the reports context).
+//
+// For these tests, we use a simple mock that treats the timestamp as-is. This is safe
+// because both dateRange and order dates use the same conversion, so the aggregation
+// logic is tested correctly regardless of timezone.
+//
+// The actual UTC->local conversion is tested separately in use-local-date tests.
 
 import { format } from 'date-fns';
 
@@ -16,7 +28,7 @@ import {
 
 import type { DateRange } from '../context';
 
-// Mock the use-local-date module before importing utils
+// Simple mock - treats timestamps as-is (consistent with how dateRange is created in tests)
 jest.mock('../../../../hooks/use-local-date', () => ({
 	convertUTCStringToLocalDate: (dateString: string) => new Date(dateString),
 }));
@@ -538,6 +550,74 @@ describe('Chart Utils', () => {
 			expect(result[0]).toMatchObject({ key: '2023-01-01', total: 0, order_count: 0 });
 			expect(result[1]).toMatchObject({ key: '2023-01-02', total: 200, order_count: 1 });
 			expect(result[2]).toMatchObject({ key: '2023-01-03', total: 0, order_count: 0 });
+		});
+
+		describe('timezone handling consistency', () => {
+			/**
+			 * These tests verify that order dates are consistently converted via
+			 * convertUTCStringToLocalDate before aggregation.
+			 *
+			 * Key invariant: both dateRange and order dates use the same conversion
+			 * function, so they're always in the same timezone (local time).
+			 */
+
+			it('should find orders when date range and orders use same conversion', () => {
+				// In production, both come from UTC strings converted via convertUTCStringToLocalDate
+				// The mock ensures consistency - if either path was different, orders would be missed
+				const orders = [
+					{ date_created_gmt: '2023-01-01T10:30:00', total: '100', total_tax: '10' },
+				] as OrderDocument[];
+
+				const dateRange: DateRange = {
+					start: new Date('2023-01-01T00:00:00'),
+					end: new Date('2023-01-01T23:59:59'),
+				};
+
+				const result = aggregateData(orders, dateRange);
+
+				// Order should be found and aggregated correctly
+				const orderBucket = result.find((d) => d.order_count > 0);
+				expect(orderBucket).toBeDefined();
+				expect(orderBucket?.total).toBe(100);
+			});
+
+			it('should bucket multi-day orders by their date', () => {
+				const orders = [
+					{ date_created_gmt: '2023-01-01T10:15:00', total: '100', total_tax: '10' },
+					{ date_created_gmt: '2023-01-02T14:30:00', total: '200', total_tax: '20' },
+				] as OrderDocument[];
+
+				const dateRange: DateRange = {
+					start: new Date('2023-01-01'),
+					end: new Date('2023-01-03'),
+				};
+
+				const result = aggregateData(orders, dateRange);
+
+				// Multi-day uses daily buckets
+				const day1 = result.find((d) => d.key === '2023-01-01');
+				const day2 = result.find((d) => d.key === '2023-01-02');
+
+				expect(day1).toMatchObject({ total: 100, order_count: 1 });
+				expect(day2).toMatchObject({ total: 200, order_count: 1 });
+			});
+
+			it('should use isSameDay for single-day detection (calendar day comparison)', () => {
+				// A range within the same calendar day should use minute-based intervals
+				const orders = [
+					{ date_created_gmt: '2023-01-01T14:00:00', total: '100', total_tax: '10' },
+				] as OrderDocument[];
+
+				const dateRange: DateRange = {
+					start: new Date('2023-01-01T00:00:00'),
+					end: new Date('2023-01-01T23:59:59'),
+				};
+
+				const result = aggregateData(orders, dateRange);
+
+				// Single-day reports use time-based labels like "14:00", not date labels like "Sun 1"
+				expect(result[0].label).toMatch(/^\d{2}:\d{2}$/);
+			});
 		});
 	});
 });

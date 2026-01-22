@@ -194,10 +194,11 @@ const populatePlugin: RxPlugin = {
 
 			/** */
 			proto.populateResource = function (this: RxDocument, key: string) {
-				if (!this[key + 'Resource']) {
-					this[key + 'Resource'] = new ObservableResource(this.populate$(key));
+				const self = this as any;
+				if (!self[key + 'Resource']) {
+					self[key + 'Resource'] = new ObservableResource(self.populate$(key));
 				}
-				return this[key + 'Resource'];
+				return self[key + 'Resource'];
 			};
 		},
 	},

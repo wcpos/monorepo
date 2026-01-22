@@ -310,21 +310,22 @@ export function updatePosDataMeta(item: CartLine, newData: any): CartLine {
  * Extract and parse POS metadata from the line item.
  */
 export const parsePosData = (item: CartLine) => {
+	const posDataString = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
+	if (!posDataString) {
+		return null;
+	}
 	try {
-		const posData = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
-		if (posData) {
-			return JSON.parse(posData);
-		}
+		return JSON.parse(posDataString);
 	} catch (error) {
 		log.error('Error parsing posData', {
 			context: {
 				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
-				posData,
+				posData: posDataString,
 				error: error instanceof Error ? error.message : String(error),
 			},
 		});
+		return null;
 	}
-	return null;
 };
 
 /**

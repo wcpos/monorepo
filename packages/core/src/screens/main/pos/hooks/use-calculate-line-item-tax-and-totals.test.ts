@@ -1,4 +1,7 @@
-import { act, renderHook } from '@testing-library/react-hooks';
+/**
+ * @jest-environment jsdom
+ */
+import { act, renderHook } from '@testing-library/react';
 
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useLineItemData } from './use-line-item-data';

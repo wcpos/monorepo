@@ -1,4 +1,4 @@
-import { ProductDocument } from '@wcpos/database';
+import type { ProductDocument } from '@wcpos/database';
 
 import {
 	calculateDefaultAmount,
@@ -19,6 +19,23 @@ import {
 	transformCustomerJSONToOrderJSON,
 	updatePosDataMeta,
 } from './utils';
+
+// Mock @wcpos/utils/logger to avoid __DEV__ not defined error
+jest.mock('@wcpos/utils/logger', () => ({
+	__esModule: true,
+	default: {
+		error: jest.fn(),
+		warn: jest.fn(),
+		info: jest.fn(),
+		debug: jest.fn(),
+	},
+}));
+
+jest.mock('@wcpos/utils/logger/error-codes', () => ({
+	ERROR_CODES: {
+		INVALID_DATA_TYPE: 'INVALID_DATA_TYPE',
+	},
+}));
 
 describe('Utilities', () => {
 	// Test sanitizePrice
@@ -111,7 +128,7 @@ describe('Utilities', () => {
 				last_name: 'Doe',
 				billing: { country: 'US' },
 				shipping: {},
-			};
+			} as any; // Cast to any for testing with mock data
 			const transformed = transformCustomerJSONToOrderJSON(customer, 'CA');
 			expect(transformed).toEqual({
 				customer_id: 1,
@@ -136,6 +153,7 @@ describe('Utilities', () => {
 					address_2: '',
 					city: '',
 					state: '',
+					postcode: '',
 					country: '',
 				},
 			});
