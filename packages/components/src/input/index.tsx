@@ -136,9 +136,11 @@ function InputField({
 	}
 
 	/**
-	 * @FIXME - for some reason, I can never get autoFocus to work on the RNTextInput
-	 * It's possible that other components are stealing the focus, eg: popover for combobox and number input
-	 * For now, we'll just do a delay
+	 * Workaround for autoFocus not working reliably on RNTextInput.
+	 * Other components (popover, combobox) may steal focus, so we delay the focus call.
+	 * Empty dependency array is intentional - run once on mount only.
+	 *
+	 * @FIXME - Investigate root cause of autoFocus not working and remove this workaround.
 	 */
 	React.useEffect(
 		() => {
@@ -149,9 +151,7 @@ function InputField({
 			}, 50);
 			return () => clearTimeout(timer);
 		},
-		[
-			// run once on mount
-		]
+		[] // Intentionally empty - run once on mount
 	);
 
 	return (

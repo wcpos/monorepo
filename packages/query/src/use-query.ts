@@ -27,7 +27,8 @@ export const useQuery = (queryOptions: QueryOptions) => {
 	);
 
 	/**
-	 *
+	 * Cleanup query replications when the component unmounts.
+	 * Legitimate useEffect for resource cleanup with external query manager.
 	 */
 	React.useEffect(() => {
 		return () => {

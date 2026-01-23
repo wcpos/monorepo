@@ -21,6 +21,23 @@ function isTextValue(value: unknown): boolean {
 	return typeof value === 'string';
 }
 
+/**
+ * Hook to handle form field changes and persist them.
+ *
+ * Best practice: Use `values` prop in useForm instead of `defaultValues` + useEffect reset:
+ * ```typescript
+ * const form = useForm({
+ *   values: formData,  // Reactive - auto-updates when formData changes
+ *   resolver: zodResolver(schema),
+ * });
+ * useFormChangeHandler({ form, onChange: handleChange });
+ * ```
+ *
+ * This hook:
+ * - Debounces text input changes to avoid saving on every keystroke
+ * - Ignores programmatic changes (reset, setValue on entire form)
+ * - Only fires onChange for user-initiated field changes
+ */
 export function useFormChangeHandler<T extends FieldValues>({
 	form,
 	onChange,
@@ -38,14 +55,24 @@ export function useFormChangeHandler<T extends FieldValues>({
 		[onChange, debounceMs]
 	);
 
-	// Cleanup debounce on unmount
+	/**
+	 * Cleanup debounced function on unmount to prevent memory leaks.
+	 * This is a legitimate useEffect for resource cleanup.
+	 */
 	React.useEffect(() => {
 		return () => {
 			debouncedOnChange.cancel();
 		};
 	}, [debouncedOnChange]);
 
-	// Intercept form.reset to track when we're resetting from external data
+	/**
+	 * Intercept form.reset to track when we're resetting from external data.
+	 * This prevents firing onChange when:
+	 * - `values` prop changes (RHF internally calls reset)
+	 * - Manual reset() calls (e.g., clearing form on dialog close)
+	 *
+	 * This is a legitimate useEffect for synchronizing with an external system (RHF).
+	 */
 	React.useEffect(() => {
 		const originalReset = form.reset;
 		form.reset = (...args) => {
@@ -63,6 +90,10 @@ export function useFormChangeHandler<T extends FieldValues>({
 		};
 	}, [form]);
 
+	/**
+	 * Subscribe to form field changes and persist them.
+	 * This is a legitimate useEffect for subscribing to an external store (RHF watch).
+	 */
 	React.useEffect(() => {
 		const subscription = form.watch((values, { name, type }) => {
 			// Skip if we're resetting from external data

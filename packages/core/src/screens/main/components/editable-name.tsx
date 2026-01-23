@@ -1,11 +1,14 @@
 import * as React from 'react';
 
+import { useControllableState } from '@rn-primitives/hooks';
+
 import { Button, ButtonText } from '@wcpos/components/button';
 import type { InputProps } from '@wcpos/components/input';
 import { Textarea } from '@wcpos/components/textarea';
 
 /**
- *
+ * An editable name field that displays as a button and switches to a textarea on click.
+ * Uses useControllableState to support both controlled and uncontrolled usage patterns.
  */
 export const EditableName = ({
 	value: valueProp,
@@ -14,21 +17,17 @@ export const EditableName = ({
 	...props
 }: InputProps) => {
 	const [editing, setEditing] = React.useState(false);
-	const [value, setValue] = React.useState(valueProp || defaultValue || '');
+	const [value, setValue] = useControllableState<string>({
+		prop: valueProp,
+		defaultProp: defaultValue ?? '',
+	});
 
 	/**
-	 * Update value if prop changes
-	 */
-	React.useEffect(() => {
-		setValue(valueProp);
-	}, [valueProp]);
-
-	/**
-	 *
+	 * Submit the edited value and exit editing mode
 	 */
 	const handleSubmit = React.useCallback(() => {
 		setEditing(false);
-		onChangeText && onChangeText(value);
+		onChangeText?.(value ?? '');
 	}, [onChangeText, value]);
 
 	/**

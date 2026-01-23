@@ -47,7 +47,9 @@ export const AddNewCustomer = () => {
 	});
 
 	/**
-	 * If the dialog is closed, reset the form. This clears any errors.
+	 * Clear the form when dialog closes.
+	 * This is a legitimate useEffect for cleaning up form state on modal close,
+	 * NOT for syncing external data (which should use `values` prop instead).
 	 */
 	React.useEffect(() => {
 		if (!open) {

@@ -84,8 +84,9 @@ function Textarea({
 	);
 
 	/**
-	 * Effect to reset the height of the TextInput to `minHeight` when the value is empty.
-	 * This ensures the TextInput shrinks back to its minimum height when all text is deleted.
+	 * Reset textarea height when value is cleared.
+	 * Necessary because onContentSizeChange doesn't fire for empty content.
+	 * This is a legitimate useEffect for syncing with an external animation value (Reanimated).
 	 */
 	React.useEffect(() => {
 		if (props.value?.length === 0) {
