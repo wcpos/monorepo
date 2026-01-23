@@ -79,6 +79,10 @@ export const Loader = ({ className, variant = 'default', size, ...props }: Loade
 	// Use Uniwind's useCSSVariable hook to get the actual theme color
 	const resolvedColor = useCSSVariable(cssVariable);
 
+	/**
+	 * Initialize the rotation animation on mount.
+	 * Legitimate useEffect for starting an external animation (Reanimated).
+	 */
 	React.useEffect(() => {
 		rotation.value = withRepeat(
 			withTiming(360, {

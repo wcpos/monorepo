@@ -107,11 +107,12 @@ export const EditOrderForm = ({ order }: Props) => {
 	);
 
 	/**
-	 *
+	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
+	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema),
-		defaultValues: { ...formData },
+		values: formData,
 	});
 
 	/**
@@ -158,13 +159,6 @@ export const EditOrderForm = ({ order }: Props) => {
 	 * Form submission handlers that include validation
 	 */
 	const onSave = form.handleSubmit(handleSaveToServer);
-
-	/**
-	 * Track formData changes and reset form
-	 */
-	React.useEffect(() => {
-		form.reset({ ...formData });
-	}, [formData, form]);
 
 	/**
 	 * Fetch customer record and update form fields.

@@ -96,7 +96,8 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	}, [wpAPIURL]);
 
 	/**
-	 * Handle browser online/offline events
+	 * Subscribe to browser online/offline events.
+	 * This is a legitimate useEffect for subscribing to external browser APIs.
 	 */
 	React.useEffect(() => {
 		if (typeof window === 'undefined') return;
@@ -120,8 +121,9 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	}, [checkConnectivity]);
 
 	/**
-	 * Re-check connectivity when the page becomes visible
-	 * This is crucial for wake-from-sleep scenarios
+	 * Re-check connectivity when the page becomes visible.
+	 * This is crucial for wake-from-sleep scenarios.
+	 * Legitimate useEffect for subscribing to document.visibilitychange event.
 	 */
 	React.useEffect(() => {
 		if (typeof document === 'undefined') return;
@@ -142,8 +144,9 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	}, [checkConnectivity]);
 
 	/**
-	 * Periodic reachability check (every 30 seconds when online)
-	 * This catches cases where the website becomes unavailable while we're online
+	 * Periodic reachability check (every 30 seconds when online).
+	 * This catches cases where the website becomes unavailable while we're online.
+	 * Legitimate useEffect for setting up an interval timer.
 	 */
 	React.useEffect(() => {
 		if (status === 'offline') {
@@ -162,7 +165,8 @@ export function OnlineStatusProvider({ children, wpAPIURL }: Props) {
 	}, [status, checkConnectivity]);
 
 	/**
-	 * Initial check on mount
+	 * Initial connectivity check on mount.
+	 * Legitimate useEffect for fetching initial data on mount.
 	 */
 	React.useEffect(() => {
 		checkConnectivity();

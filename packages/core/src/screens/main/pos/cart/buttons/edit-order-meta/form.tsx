@@ -41,21 +41,13 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 	const { onOpenChange } = useRootContext();
 
 	/**
-	 *
+	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
+	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema),
-		defaultValues: {
-			...formData,
-		},
+		values: formData,
 	});
-
-	/**
-	 * Track formData changes and reset form
-	 */
-	React.useEffect(() => {
-		form.reset({ ...formData });
-	}, [formData, form]);
 
 	/**
 	 * Save to local db

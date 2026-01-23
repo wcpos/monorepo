@@ -85,17 +85,16 @@ export const TaxSettings = () => {
 	);
 
 	/**
-	 *
+	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
+	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema),
-		defaultValues: {
-			...formData,
-		},
+		values: formData,
 	});
 
 	/**
-	 *
+	 * Handle form changes and persist to store
 	 */
 	const handleChange = React.useCallback(
 		async (data) => {
@@ -108,13 +107,6 @@ export const TaxSettings = () => {
 	);
 
 	useFormChangeHandler({ form, onChange: handleChange });
-
-	/**
-	 * Track formData changes and reset form
-	 */
-	React.useEffect(() => {
-		form.reset({ ...formData });
-	}, [formData, form]);
 
 	/**
 	 * Restore server settings

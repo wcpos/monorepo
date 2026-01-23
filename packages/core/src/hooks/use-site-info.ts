@@ -9,26 +9,51 @@ interface Props {
 	site: import('@wcpos/database').SiteDocument;
 }
 
-/**
- * Hook to fetch and update site information
- */
-export const useSiteInfo = ({ site }: Props) => {
-	const http = useHttpClient();
+interface SiteInfoResult {
+	isLoading: boolean;
+	error: string | null;
+}
 
+/**
+ * Hook to fetch and update site information.
+ * Fetches WP/WC/WCPOS version info from the site's REST API and updates the local site document.
+ */
+export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
+	const http = useHttpClient();
+	const [isLoading, setIsLoading] = React.useState(false);
+	const [error, setError] = React.useState<string | null>(null);
+
+	// Use stable values to prevent unnecessary re-fetches
+	const wpApiUrl = site.wp_api_url;
+	const siteUrl = site.url;
+
+	/**
+	 * Fetch site info on mount and when site URL changes.
+	 * This is a legitimate useEffect for fetching external data on mount.
+	 */
 	React.useEffect(() => {
 		const fetchSiteInfo = async () => {
+			if (!wpApiUrl) {
+				return;
+			}
+
+			setIsLoading(true);
+			setError(null);
+
 			try {
-				const response = await http.get(site.wp_api_url, { params: { wcpos: 1 } });
+				const response = await http.get(wpApiUrl, { params: { wcpos: 1 } });
 
 				// Check if response is successful
 				if (!response || response.status < 200 || response.status >= 300) {
+					const errorMsg = `Invalid response status: ${response?.status}`;
 					log.error('Failed to fetch site info: Invalid response status', {
 						context: {
 							status: response?.status,
 							statusText: response?.statusText,
-							siteUrl: site.url,
+							siteUrl,
 						},
 					});
+					setError(errorMsg);
 					return;
 				}
 
@@ -37,7 +62,7 @@ export const useSiteInfo = ({ site }: Props) => {
 				// Check if data exists and has expected structure
 				if (!data || typeof data !== 'object') {
 					log.debug('Site info response contains no valid data', {
-						context: { siteUrl: site.url, hasData: !!data },
+						context: { siteUrl, hasData: !!data },
 					});
 					return;
 				}
@@ -50,7 +75,7 @@ export const useSiteInfo = ({ site }: Props) => {
 					data.wcpos_pro_version ||
 					data.license;
 				if (hasValidData) {
-					site.incrementalPatch({
+					await site.incrementalPatch({
 						wp_version: data?.wp_version ?? '',
 						wc_version: data?.wc_version ?? '',
 						wcpos_version: data?.wcpos_version ?? '',
@@ -58,16 +83,22 @@ export const useSiteInfo = ({ site }: Props) => {
 						license: data?.license || {},
 					});
 				}
-			} catch (error) {
+			} catch (err) {
+				const errorMsg = err instanceof Error ? err.message : String(err);
 				log.error('Failed to fetch site info', {
 					context: {
-						error: error instanceof Error ? error.message : String(error),
-						siteUrl: site.url,
+						error: errorMsg,
+						siteUrl,
 					},
 				});
+				setError(errorMsg);
+			} finally {
+				setIsLoading(false);
 			}
 		};
 
 		fetchSiteInfo();
-	}, [http, site]);
+	}, [http, wpApiUrl, siteUrl, site]);
+
+	return { isLoading, error };
 };

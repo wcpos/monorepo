@@ -53,22 +53,13 @@ export const EditCartCustomerForm = () => {
 	const [loading, setLoading] = React.useState(false);
 
 	/**
-	 *
+	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
+	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema),
-		defaultValues: {
-			billing,
-			shipping,
-		},
+		values: { billing, shipping },
 	});
-
-	/**
-	 * Track formData changes and reset form
-	 */
-	React.useEffect(() => {
-		form.reset({ billing, shipping });
-	}, [billing, shipping, form]);
 
 	/**
 	 *

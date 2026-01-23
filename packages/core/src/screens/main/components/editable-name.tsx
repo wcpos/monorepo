@@ -5,7 +5,10 @@ import type { InputProps } from '@wcpos/components/input';
 import { Textarea } from '@wcpos/components/textarea';
 
 /**
+ * An editable name field that displays as a button and switches to a textarea on click.
  *
+ * This component maintains internal editing state separate from the controlled value.
+ * The parent's onChangeText is only called on submit (blur/enter), not on every keystroke.
  */
 export const EditableName = ({
 	value: valueProp,
@@ -14,22 +17,27 @@ export const EditableName = ({
 	...props
 }: InputProps) => {
 	const [editing, setEditing] = React.useState(false);
-	const [value, setValue] = React.useState(valueProp || defaultValue || '');
+	// Internal editing value - separate from controlled prop
+	const [editValue, setEditValue] = React.useState(valueProp ?? defaultValue ?? '');
 
 	/**
-	 * Update value if prop changes
+	 * Sync internal value when prop changes externally (e.g., server update).
+	 * Only sync when NOT editing to avoid overwriting user's in-progress edits.
+	 * This is a legitimate useEffect for syncing with an external data source.
 	 */
 	React.useEffect(() => {
-		setValue(valueProp);
-	}, [valueProp]);
+		if (!editing && valueProp !== undefined) {
+			setEditValue(valueProp);
+		}
+	}, [valueProp, editing]);
 
 	/**
-	 *
+	 * Submit the edited value and exit editing mode
 	 */
 	const handleSubmit = React.useCallback(() => {
 		setEditing(false);
-		onChangeText && onChangeText(value);
-	}, [onChangeText, value]);
+		onChangeText?.(editValue ?? '');
+	}, [onChangeText, editValue]);
 
 	/**
 	 *
@@ -37,8 +45,8 @@ export const EditableName = ({
 	if (editing) {
 		return (
 			<Textarea
-				value={value}
-				onChangeText={setValue}
+				value={editValue}
+				onChangeText={setEditValue}
 				autoFocus
 				onBlur={handleSubmit}
 				onSubmitEditing={handleSubmit}
@@ -54,7 +62,7 @@ export const EditableName = ({
 	return (
 		<Button variant="outline" className="max-w-full items-start" onPress={() => setEditing(true)}>
 			<ButtonText className="font-bold" numberOfLines={1} decodeHtml>
-				{value}
+				{editValue}
 			</ButtonText>
 		</Button>
 	);

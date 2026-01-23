@@ -105,17 +105,17 @@ export const GeneralSettings = () => {
 	const http = useRestHttpClient();
 
 	/**
-	 *
+	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
+	 * This makes the form reactive to external data changes (react-hook-form best practice).
+	 * Also fixes the double-reset issue on first load.
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema),
-		defaultValues: {
-			...formData,
-		},
+		values: formData,
 	});
 
 	/**
-	 *
+	 * Handle form changes and persist to store
 	 */
 	const handleChange = React.useCallback(
 		async (data) => {
@@ -128,15 +128,6 @@ export const GeneralSettings = () => {
 	);
 
 	useFormChangeHandler({ form, onChange: handleChange });
-
-	/**
-	 * Track formData changes and reset form
-	 *
-	 * @FIXME: this unnecessarily resets twice on first load
-	 */
-	React.useEffect(() => {
-		form.reset({ ...formData });
-	}, [formData, form]);
 
 	/**
 	 * Toggle customer select
