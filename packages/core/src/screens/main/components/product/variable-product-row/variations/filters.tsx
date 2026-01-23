@@ -10,6 +10,7 @@ import type { ProductDocument, ProductVariationCollection } from '@wcpos/databas
 import type { Query } from '@wcpos/query';
 
 import { VariationSelect } from '../../variation-select';
+import { useVariationRow } from '../context';
 
 import type { Row } from '@tanstack/react-table';
 
@@ -23,6 +24,7 @@ interface Props {
  */
 export const VariationsFilterBar = ({ row, query }: Props) => {
 	const parent = row.original.document;
+	const { rowId, setRowExpanded } = useVariationRow();
 
 	/**
 	 * We need to trigger a re-render when the selected attributes change.
@@ -66,7 +68,11 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 						);
 					})}
 			</HStack>
-			<IconButton size="sm" name="chevronUp" onPress={() => row.toggleExpanded()} />
+			<IconButton
+				size="sm"
+				name="chevronUp"
+				onPress={() => setRowExpanded?.(rowId, false)}
+			/>
 		</HStack>
 	);
 };

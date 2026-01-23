@@ -2,7 +2,8 @@ import React from 'react';
 import { View } from 'react-native';
 
 import * as SplashScreen from 'expo-splash-screen';
-import { runOnJS, useDerivedValue } from 'react-native-reanimated';
+import { useDerivedValue } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { Logo } from '@wcpos/components/logo';
 import { Progress } from '@wcpos/components/progress';
@@ -28,7 +29,7 @@ export function Splash() {
 	// Use derived value to automatically hide splash when progress starts
 	useDerivedValue(() => {
 		if (progress.value > 0) {
-			runOnJS(hideSplash)();
+			scheduleOnRN(hideSplash);
 		}
 	}, [progress.value, hideSplash]);
 

@@ -3,6 +3,8 @@ import * as React from 'react';
 interface VariationRowContextType {
 	queryParams: Record<string, any>;
 	updateQueryParams: (key: string, value: any) => void;
+	rowId: string;
+	setRowExpanded?: (rowId: string, expanded: boolean) => void;
 }
 
 /**
@@ -22,18 +24,24 @@ export const useVariationRow = () => {
 	return context;
 };
 
+interface VariationRowProviderProps {
+	row: any;
+	setRowExpanded?: (rowId: string, expanded: boolean) => void;
+	children: React.ReactNode;
+}
+
 /**
  *
  */
-export const VariationRowProvider = ({ row, children }) => {
+export const VariationRowProvider = ({ row, setRowExpanded, children }: VariationRowProviderProps) => {
 	const [queryParams, setQueryParams] = React.useState({});
 
-	const updateQueryParams = (key, value) => {
+	const updateQueryParams = (key: string, value: any) => {
 		setQueryParams((prev) => ({ ...prev, [key]: value }));
 	};
 
 	return (
-		<VariationRowContext.Provider value={{ queryParams, updateQueryParams }}>
+		<VariationRowContext.Provider value={{ queryParams, updateQueryParams, rowId: row.id, setRowExpanded }}>
 			{children}
 		</VariationRowContext.Provider>
 	);

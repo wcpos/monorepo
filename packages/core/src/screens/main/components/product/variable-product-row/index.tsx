@@ -3,12 +3,12 @@ import { ScrollView } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 import Animated, {
-	runOnJS,
 	useAnimatedStyle,
 	useDerivedValue,
 	useSharedValue,
 	withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { map } from 'rxjs/operators';
 import { flexRender } from '@tanstack/react-table';
 
@@ -38,7 +38,7 @@ export function VariableProductRow({ item, index, table }) {
 	const derivedHeight = useDerivedValue(() => {
 		// Handle mounting when expanding
 		if (isExpanded && !shouldRender) {
-			runOnJS(setShouldRender)(true);
+			scheduleOnRN(setShouldRender, true);
 		}
 
 		// Handle height animation
@@ -50,7 +50,7 @@ export function VariableProductRow({ item, index, table }) {
 			(isFinished) => {
 				// Handle unmounting after collapsing
 				if (!isExpanded && isFinished) {
-					runOnJS(setShouldRender)(false);
+					scheduleOnRN(setShouldRender, false);
 				}
 			}
 		);
@@ -62,11 +62,16 @@ export function VariableProductRow({ item, index, table }) {
 	}));
 
 	/**
+	 * Get setRowExpanded from table meta to bypass TanStack's buggy updater function
+	 */
+	const setRowExpanded = table.options.meta?.setRowExpanded;
+
+	/**
 	 * Render the row and the animated Variations component
 	 */
 	return (
 		<VirtualizedList.Item>
-			<VariationRowProvider row={item}>
+			<VariationRowProvider row={item} setRowExpanded={setRowExpanded}>
 				<TableRow index={index}>
 					{item.getVisibleCells().map((cell) => {
 						return (

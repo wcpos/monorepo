@@ -59,11 +59,17 @@ export const ProductAttributes = ({ row, table }) => {
 	const t = useT();
 
 	/**
+	 * Use setRowExpanded from table meta to bypass TanStack's buggy updater function
+	 * which has a minification bug with computed property destructuring
+	 */
+	const setRowExpanded = table.options.meta?.setRowExpanded;
+
+	/**
 	 *
 	 */
 	const handleSelect = React.useCallback(
 		(attribute, option) => {
-			row.toggleExpanded(true);
+			setRowExpanded?.(row.id, true);
 
 			if (manager.hasQuery(['variations', { parentID: product.id }])) {
 				const query = manager.getQuery(['variations', { parentID: product.id }]);
@@ -87,7 +93,7 @@ export const ProductAttributes = ({ row, table }) => {
 				});
 			}
 		},
-		[manager, product.id, row, updateQueryParams]
+		[manager, product.id, row.id, setRowExpanded, updateQueryParams]
 	);
 
 	/**
@@ -97,7 +103,7 @@ export const ProductAttributes = ({ row, table }) => {
 	 */
 	const handleExpand = React.useCallback(() => {
 		if (isExpanded) {
-			row.toggleExpanded(false);
+			setRowExpanded?.(row.id, false);
 			return;
 		}
 		if (row.original.childrenSearchCount > 0) {
@@ -110,8 +116,17 @@ export const ProductAttributes = ({ row, table }) => {
 				updateQueryParams('attribute', null);
 			}
 		}
-		row.toggleExpanded();
-	}, [manager, product.id, row, updateQueryParams, isExpanded]);
+		setRowExpanded?.(row.id, true);
+	}, [
+		manager,
+		product.id,
+		row.id,
+		row.original.childrenSearchCount,
+		row.original.parentSearchTerm,
+		setRowExpanded,
+		updateQueryParams,
+		isExpanded,
+	]);
 
 	/**
 	 * Expand text string

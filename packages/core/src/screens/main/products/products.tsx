@@ -2,6 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 
 import get from 'lodash/get';
+import omit from 'lodash/omit';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useObservableRef } from 'observable-hooks';
 import { getExpandedRowModel } from '@tanstack/react-table';
@@ -192,6 +193,22 @@ export function Products() {
 	/**
 	 * Table config
 	 */
+	/**
+	 * Helper to set expanded state directly, bypassing TanStack's updater function
+	 * which has a minification bug with computed property destructuring.
+	 * Uses lodash/omit which doesn't have this issue.
+	 */
+	const setRowExpanded = React.useCallback(
+		(rowId: string, expanded: boolean) => {
+			if (expanded) {
+				expandedRef.current = { ...expandedRef.current, [rowId]: true };
+			} else {
+				expandedRef.current = omit(expandedRef.current, rowId);
+			}
+		},
+		[expandedRef]
+	);
+
 	const tableConfig = React.useMemo(
 		() => ({
 			getExpandedRowModel: getExpandedRowModel(),
@@ -203,6 +220,7 @@ export function Products() {
 			meta: {
 				expandedRef,
 				expanded$,
+				setRowExpanded,
 				onChange: ({ document, changes }) => {
 					if (document.type === 'variation') {
 						variationsPatch({ document, data: changes });
@@ -213,7 +231,7 @@ export function Products() {
 				variationRenderCell,
 			},
 		}),
-		[expandedRef, expanded$, productsPatch, variationsPatch]
+		[expandedRef, expanded$, setRowExpanded, productsPatch, variationsPatch]
 	);
 
 	/**
