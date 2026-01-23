@@ -2,6 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 
 import get from 'lodash/get';
+import omit from 'lodash/omit';
 import { useObservableEagerState, useObservableRef } from 'observable-hooks';
 import { getExpandedRowModel } from '@tanstack/react-table';
 
@@ -166,6 +167,22 @@ export const POSProducts = ({ isColumn = false }) => {
 	}, [query, showOutOfStock]);
 
 	/**
+	 * Helper to set expanded state directly, bypassing TanStack's updater function
+	 * which has a minification bug with computed property destructuring.
+	 * Uses lodash/omit which doesn't have this issue.
+	 */
+	const setRowExpanded = React.useCallback(
+		(rowId: string, expanded: boolean) => {
+			if (expanded) {
+				expandedRef.current = { ...expandedRef.current, [rowId]: true };
+			} else {
+				expandedRef.current = omit(expandedRef.current, rowId);
+			}
+		},
+		[expandedRef]
+	);
+
+	/**
 	 * Table config
 	 */
 	const tableConfig = React.useMemo(
@@ -179,10 +196,11 @@ export const POSProducts = ({ isColumn = false }) => {
 			meta: {
 				expandedRef,
 				expanded$,
+				setRowExpanded,
 				variationRenderCell,
 			},
 		}),
-		[expandedRef, expanded$]
+		[expandedRef, expanded$, setRowExpanded]
 	);
 
 	/**

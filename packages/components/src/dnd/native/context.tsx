@@ -114,8 +114,12 @@ export function SortableContextProvider<T>({
 		(id: ItemId) => {
 			const removeLayout = (itemId: ItemId) => {
 				'worklet';
-				const { [itemId]: _, ...rest } = layouts.value;
-				layouts.value = rest;
+				// Use delete instead of computed property destructuring due to minification bugs
+				// with the pattern: const { [itemId]: _, ...rest } = obj
+				// Note: Can't use lodash/omit in worklets, so using inline delete
+				const newLayouts = { ...layouts.value };
+				delete newLayouts[itemId];
+				layouts.value = newLayouts;
 			};
 			scheduleOnUI(removeLayout, id);
 		},

@@ -4,12 +4,12 @@ import { useAugmentedRef } from '@rn-primitives/hooks';
 import { Row, Table } from '@tanstack/react-table';
 import Animated, {
 	cancelAnimation,
-	runOnJS,
 	useAnimatedStyle,
 	useSharedValue,
 	withSequence,
 	withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { useCSSVariable } from 'uniwind';
 
 import { cn } from '../lib/utils';
@@ -69,7 +69,7 @@ export const PulseTableRow = React.forwardRef<PulseTableRowRef, PulseTableRowPro
 						withTiming(baseColor, { duration: 400 }, (finished) => {
 							'worklet';
 							if (finished && callback) {
-								runOnJS(callback)();
+								scheduleOnRN(callback);
 							}
 						})
 					);
@@ -80,7 +80,7 @@ export const PulseTableRow = React.forwardRef<PulseTableRowRef, PulseTableRowPro
 					backgroundColor.value = withTiming(errorColor, { duration: 400 }, (finished) => {
 						'worklet';
 						if (finished && callback) {
-							runOnJS(callback)();
+							scheduleOnRN(callback);
 						}
 					});
 				},
