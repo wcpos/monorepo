@@ -25,6 +25,11 @@ interface CurrentOrderContextProviderProps {
 
 /**
  * Provider the active order by uuid, or a new order
+ *
+ * Uses internal state as the source of truth for current order, not route params.
+ * This ensures the order state is shared across all tabs/views (e.g., when adding
+ * a product from the Products tab in small screen mode, the Cart tab will see
+ * the newly created order).
  */
 export const CurrentOrderProvider = ({
 	children,
@@ -33,20 +38,41 @@ export const CurrentOrderProvider = ({
 }: CurrentOrderContextProviderProps) => {
 	const { newOrder } = useNewOrder();
 	const openOrders = useObservableSuspense(resource);
+	const router = useRouter();
 
-	let currentOrder = openOrders.find((order) => order.id === currentOrderUUID)?.document;
+	// Internal state is the source of truth, initialized from route param
+	const [internalOrderId, setInternalOrderId] = React.useState<string | undefined>(
+		currentOrderUUID
+	);
+
+	// Sync from route param to internal state ONLY when route param has a value
+	// (e.g., user navigates directly to /cart/uuid or clicks browser back)
+	// Do NOT sync when currentOrderUUID is undefined - this happens when switching
+	// to the Cart tab which doesn't have orderId in its URL
+	React.useEffect(() => {
+		// Only sync if route param has an actual value (explicit navigation to an order)
+		// Ignore undefined - internal state is the source of truth
+		if (currentOrderUUID !== undefined) {
+			setInternalOrderId(currentOrderUUID);
+		}
+	}, [currentOrderUUID]);
+
+	// Determine current order from internal state
+	let currentOrder = openOrders.find((order) => order.id === internalOrderId)?.document;
 	if (!currentOrder) {
 		currentOrder = newOrder;
 	}
-	const router = useRouter();
 
 	/**
 	 * Update the current order without causing a full navigation/remount.
-	 * On web, we manually update the URL to keep nice URLs like /cart/uuid
+	 * Updates internal state immediately (source of truth) and syncs to URL.
 	 */
 	const setCurrentOrderID = React.useCallback(
 		(orderId: string) => {
-			// Use setParams to avoid remounting the screen
+			// Update internal state immediately - this is the source of truth
+			setInternalOrderId(orderId || undefined);
+
+			// Also sync to URL for bookmarking/refresh/history purposes
 			router.setParams({ orderId: orderId || undefined });
 
 			// On web, update the browser URL for nice URLs

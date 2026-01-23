@@ -103,10 +103,19 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 
 	const handleLayout = React.useCallback(
 		(event: { nativeEvent: { layout: { width: number } } }) => {
+			const prevWidth = containerWidthRef.current;
 			containerWidthRef.current = event.nativeEvent.layout.width;
 			updateScrollable();
+
+			// Re-scroll to active tab when container width changes (e.g., window resize)
+			if (prevWidth !== 0 && prevWidth !== containerWidthRef.current && value) {
+				// Small delay to let layout settle
+				setTimeout(() => {
+					scrollToActiveTab(value);
+				}, 50);
+			}
 		},
-		[updateScrollable]
+		[updateScrollable, value, scrollToActiveTab]
 	);
 
 	const currentIndex = childrenArray.findIndex(
