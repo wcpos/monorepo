@@ -1,0 +1,3 @@
+Opravy chýb a vylepšenia výkonu.
+
+Úplné poznámky k vydaniu: https://github.com/wcpos/monorepo/releases/latest

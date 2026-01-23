@@ -1,0 +1,3 @@
+Virheenkorjauksia ja suorituskyvyn parannuksia.
+
+Täydelliset julkaisutiedot: https://github.com/wcpos/monorepo/releases/latest

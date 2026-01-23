@@ -1,0 +1,3 @@
+錯誤修復和效能改進。
+
+完整版本說明: https://github.com/wcpos/monorepo/releases/latest

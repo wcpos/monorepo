@@ -1,0 +1,3 @@
+Correzioni di bug e miglioramenti delle prestazioni.
+
+Note di rilascio complete: https://github.com/wcpos/monorepo/releases/latest

@@ -1,0 +1,3 @@
+Feilrettinger og ytelsesforbedringer.
+
+Fullstendige utgivelsesnotater: https://github.com/wcpos/monorepo/releases/latest

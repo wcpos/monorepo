@@ -1,0 +1,3 @@
+バグ修正とパフォーマンスの改善。
+
+完全なリリースノート: https://github.com/wcpos/monorepo/releases/latest

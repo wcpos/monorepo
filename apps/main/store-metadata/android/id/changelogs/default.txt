@@ -1,0 +1,3 @@
+Perbaikan bug dan peningkatan performa.
+
+Catatan rilis lengkap: https://github.com/wcpos/monorepo/releases/latest

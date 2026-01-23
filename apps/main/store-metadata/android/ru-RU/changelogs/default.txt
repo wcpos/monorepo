@@ -1,0 +1,3 @@
+Исправления ошибок и улучшения производительности.
+
+Полные примечания к выпуску: https://github.com/wcpos/monorepo/releases/latest

@@ -1,0 +1,3 @@
+תיקוני באגים ושיפורי ביצועים.
+
+הערות שחרור מלאות: https://github.com/wcpos/monorepo/releases/latest

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaInsetsContext, SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import { Uniwind, useUniwind } from 'uniwind';
 
@@ -27,18 +27,18 @@ export const unstable_settings = {
 /**
  * Forwards safe area insets to Uniwind for p-safe, m-safe, etc. utilities
  */
-function UniwindInsetSync() {
-	const insets = React.useContext(SafeAreaInsetsContext);
+// function UniwindInsetSync() {
+// 	const insets = React.useContext(SafeAreaInsetsContext);
 
-	// Sync insets to Uniwind when they change
-	React.useEffect(() => {
-		if (insets) {
-			Uniwind.updateInsets(insets);
-		}
-	}, [insets]);
+// 	// Sync insets to Uniwind when they change
+// 	React.useEffect(() => {
+// 		if (insets) {
+// 			Uniwind.updateInsets(insets);
+// 		}
+// 	}, [insets]);
 
-	return null;
-}
+// 	return null;
+// }
 
 /**
  * Restores the saved theme from the store document on app startup.
@@ -108,7 +108,6 @@ export default function RootLayout() {
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<SafeAreaProvider style={{ overflow: 'hidden' }}>
-				<UniwindInsetSync />
 				<GestureHandlerRootView style={{ flex: 1 }}>
 					<KeyboardProvider>
 						<HydrationProviders>

@@ -1,0 +1,3 @@
+Remedieri de erori și îmbunătățiri de performanță.
+
+Note de lansare complete: https://github.com/wcpos/monorepo/releases/latest

@@ -1,0 +1,3 @@
+Sửa lỗi và cải thiện hiệu suất.
+
+Ghi chú phát hành đầy đủ: https://github.com/wcpos/monorepo/releases/latest

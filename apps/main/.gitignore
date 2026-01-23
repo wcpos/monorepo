@@ -10,8 +10,8 @@ build/
 web-build/
 electron-build/
 expo-env.d.ts
-ios/
-android/
+/ios/
+/android/
 
 # Native
 *.orig.*

@@ -1,0 +1,3 @@
+बग फिक्स और प्रदर्शन सुधार।
+
+पूर्ण रिलीज़ नोट्स: https://github.com/wcpos/monorepo/releases/latest
