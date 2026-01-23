@@ -48,16 +48,16 @@ export const OpenOrderTabs = () => {
 						<CartTabTitle order={document} />
 					</TabsTrigger>
 				))}
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<TabsTrigger value="new">
+				<TabsTrigger value="new">
+					<Tooltip>
+						<TooltipTrigger>
 							<Icon name="plus" />
-						</TabsTrigger>
-					</TooltipTrigger>
-					<TooltipContent>
-						<Text>{t('Open new order', { _tags: 'core' })}</Text>
-					</TooltipContent>
-				</Tooltip>
+						</TooltipTrigger>
+						<TooltipContent>
+							<Text>{t('Open new order', { _tags: 'core' })}</Text>
+						</TooltipContent>
+					</Tooltip>
+				</TabsTrigger>
 			</ScrollableTabsList>
 		</Tabs>
 	);
