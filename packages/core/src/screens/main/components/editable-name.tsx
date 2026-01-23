@@ -46,7 +46,7 @@ export const EditableName = ({
 		return (
 			<Textarea
 				value={editValue}
-				onChangeText={handleChangeText}
+				onChangeText={setEditValue}
 				autoFocus
 				onBlur={handleSubmit}
 				onSubmitEditing={handleSubmit}
