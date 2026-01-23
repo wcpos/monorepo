@@ -77,12 +77,15 @@ export function useFormChangeHandler<T extends FieldValues>({
 		const originalReset = form.reset;
 		form.reset = (...args) => {
 			isResettingRef.current = true;
-			const result = originalReset.apply(form, args);
-			// Reset the flag after a microtask to ensure watch has fired
-			queueMicrotask(() => {
-				isResettingRef.current = false;
-			});
-			return result;
+			try {
+				return originalReset.apply(form, args);
+			} finally {
+				// Reset the flag after a microtask to ensure watch has fired
+				// Using finally ensures flag is cleared even if reset throws
+				queueMicrotask(() => {
+					isResettingRef.current = false;
+				});
+			}
 		};
 
 		return () => {

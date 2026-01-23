@@ -20,6 +20,8 @@ import { HStack } from '@wcpos/components/hstack';
 import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
 
+import log from '@wcpos/utils/logger';
+
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
@@ -131,7 +133,9 @@ export const TaxSettings = () => {
 				},
 			});
 		} catch (error) {
-			console.error(error);
+			log.error('Failed to restore server settings', {
+				context: { error: error instanceof Error ? error.message : String(error) },
+			});
 		} finally {
 			setLoading(false);
 		}
