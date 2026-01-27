@@ -21,10 +21,12 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
+
+const authLogger = getLogger(['wcpos', 'auth', 'user']);
 import { useT } from '../../../contexts/translations';
 import { useUserValidation } from '../../../hooks/use-user-validation';
 
@@ -46,7 +48,7 @@ export const WpUser = ({ site, wpUser }: Props) => {
 	const handleLogin = React.useCallback(
 		async (storeID: string) => {
 			if (!storeID) {
-				log.error(t('No store selected', { _tags: 'core' }), {
+				authLogger.error(t('No store selected', { _tags: 'core' }), {
 					showToast: true,
 					context: {
 						errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS,

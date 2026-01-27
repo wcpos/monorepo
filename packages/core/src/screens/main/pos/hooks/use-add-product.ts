@@ -7,8 +7,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
-
-const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
@@ -19,6 +17,8 @@ import {
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useCurrentOrder } from '../contexts/current-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
@@ -103,7 +103,15 @@ export const useAddProduct = () => {
 				});
 			}
 		},
-		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t, orderLogger]
+		[
+			currentOrder,
+			updateLineItem,
+			metaDataKeys,
+			calculateLineItemTaxesAndTotals,
+			addItemToOrder,
+			t,
+			orderLogger,
+		]
 	);
 
 	return { addProduct };

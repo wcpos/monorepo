@@ -2,10 +2,12 @@ import * as React from 'react';
 
 import { router } from 'expo-router';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
+
+const authLogger = getLogger(['wcpos', 'auth', 'login']);
 
 interface LoginResponse {
 	params: {
@@ -34,13 +36,12 @@ export const useLoginHandler = (
 	const { userDB } = useAppState();
 	const [isProcessing, setIsProcessing] = React.useState(false);
 	const [error, setError] = React.useState<string | null>(null);
-	// Logger available as 'log'
 
 	const handleLoginSuccess = React.useCallback(
 		async (response: LoginResponse): Promise<void> => {
 			// Guard: site must be available
 			if (!site) {
-				log.debug('Login handler called but site is not yet available, skipping');
+				authLogger.debug('Login handler called but site is not yet available, skipping');
 				return;
 			}
 
@@ -48,7 +49,7 @@ export const useLoginHandler = (
 			setError(null);
 
 			try {
-				log.debug('Processing login success response', {
+				authLogger.debug('Processing login success response', {
 					context: { response },
 				});
 
@@ -56,7 +57,7 @@ export const useLoginHandler = (
 
 				// Validate required response parameters
 				if (!params.uuid || !params.access_token || !params.refresh_token) {
-					log.error('Invalid login response - missing required parameters', {
+					authLogger.error('Invalid login response - missing required parameters', {
 						showToast: true,
 						context: {
 							errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS,
@@ -103,11 +104,11 @@ export const useLoginHandler = (
 						date_modified_gmt: credentialsData.date_modified_gmt,
 					});
 
-					log.debug(`Updated credentials for ${credentialsData.display_name}`);
+					authLogger.debug(`Updated credentials for ${credentialsData.display_name}`);
 				} else {
 					// Create new credentials
 					await userDB.wp_credentials.insert(credentialsData);
-					log.debug(`Created credentials for ${credentialsData.display_name}`);
+					authLogger.debug(`Created credentials for ${credentialsData.display_name}`);
 				}
 
 				// Link credentials to site if not already linked
@@ -116,10 +117,10 @@ export const useLoginHandler = (
 					await site.getLatest().incrementalPatch({
 						wp_credentials: [...siteCredentials, credentialsData.uuid],
 					});
-					log.debug(`Linked ${credentialsData.display_name} to ${site.name}`);
+					authLogger.debug(`Linked ${credentialsData.display_name} to ${site.name}`);
 				}
 
-				log.info(`Login successful: ${credentialsData.display_name} at ${site.name}`);
+				authLogger.info(`Login successful: ${credentialsData.display_name} at ${site.name}`);
 
 				// Navigate back on success (only if we can go back)
 				if (router.canGoBack()) {
@@ -152,7 +153,7 @@ export const useLoginHandler = (
 					}
 				}
 
-				log.error(`Failed to save WordPress credentials: ${errorMessage}`, {
+				authLogger.error(`Failed to save WordPress credentials: ${errorMessage}`, {
 					showToast: true,
 					context: {
 						errorCode,

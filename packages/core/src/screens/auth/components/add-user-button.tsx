@@ -3,9 +3,11 @@ import React from 'react';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
+
+const authLogger = getLogger(['wcpos', 'auth', 'user']);
 import { useLoginHandler } from '../hooks/use-login-handler';
 
 interface Props {
@@ -28,11 +30,11 @@ export function AddUserButton({ site }: Props) {
 		}
 
 		if (response.type === 'success') {
-			log.debug(`Login successful for site: ${site.name}`);
+			authLogger.debug(`Login successful for site: ${site.name}`);
 			processedResponseRef.current = responseKey;
 			handleLoginSuccess({ params: response.params } as any);
 		} else if (response.type === 'error') {
-			log.error(`Login failed: ${response.error}`, {
+			authLogger.error(`Login failed: ${response.error}`, {
 				showToast: true,
 				context: {
 					siteName: site.name,

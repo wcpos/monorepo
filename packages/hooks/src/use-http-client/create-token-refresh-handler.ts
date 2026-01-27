@@ -70,10 +70,12 @@
  * @see README.md - Full architecture documentation
  */
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { pauseQueue, resumeQueue } from './request-queue';
+
+const tokenLogger = getLogger(['wcpos', 'auth', 'token']);
 import { requestStateManager } from './request-state-manager';
 
 import type { AxiosRequestConfig } from 'axios';
@@ -188,7 +190,7 @@ export const createTokenRefreshHandler = ({
 			const apiUrl = site.wcpos_api_url || (site.wp_api_url ? `${site.wp_api_url}wcpos/v1/` : null);
 
 			if (!apiUrl || !currentRefreshToken) {
-				log.debug('Skipping token refresh - missing required data', {
+				tokenLogger.debug('Skipping token refresh - missing required data', {
 					context: {
 						hasWcposApiUrl: !!site.wcpos_api_url,
 						hasWpApiUrl: !!site.wp_api_url,
@@ -205,7 +207,7 @@ export const createTokenRefreshHandler = ({
 			// If another refresh is in progress, we'll wait for it automatically
 			// ================================================================
 
-			log.debug('Access token expired, attempting token refresh', {
+			tokenLogger.debug('Access token expired, attempting token refresh', {
 				context: {
 					userId: wpUser.id,
 					siteUrl: site.url,
@@ -225,7 +227,7 @@ export const createTokenRefreshHandler = ({
 						// Use fresh HTTP client to avoid circular error handling
 						const httpClient = getHttpClient();
 
-						log.debug('Attempting token refresh', {
+						tokenLogger.debug('Attempting token refresh', {
 							context: {
 								userId: wpUser.id,
 								hasRefreshToken: !!currentRefreshToken,
@@ -244,7 +246,7 @@ export const createTokenRefreshHandler = ({
 						const refreshData: TokenRefreshResponse = refreshResponse.data;
 						const { access_token, expires_at } = refreshData;
 
-						log.debug('Token refresh response received', {
+						tokenLogger.debug('Token refresh response received', {
 							context: {
 								userId: wpUser.id,
 								responseStatus: refreshResponse.status,
@@ -254,7 +256,7 @@ export const createTokenRefreshHandler = ({
 						});
 
 						if (!access_token) {
-							log.warn('Session refresh failed - please log in again', {
+							tokenLogger.warn('Session refresh failed - please log in again', {
 								showToast: true,
 								saveToDb: true,
 								context: {
@@ -266,7 +268,7 @@ export const createTokenRefreshHandler = ({
 							throw new Error('REFRESH_TOKEN_INVALID');
 						}
 
-						log.debug('Token refresh successful', {
+						tokenLogger.debug('Token refresh successful', {
 							context: {
 								userId: wpUser.id,
 								hasNewToken: !!access_token,
@@ -290,7 +292,7 @@ export const createTokenRefreshHandler = ({
 				const freshToken = requestStateManager.getRefreshedToken();
 
 				if (!freshToken) {
-					log.warn('Token refresh completed but no token available', {
+					tokenLogger.warn('Token refresh completed but no token available', {
 						saveToDb: true,
 						context: {
 							errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,
@@ -301,7 +303,7 @@ export const createTokenRefreshHandler = ({
 					throw error;
 				}
 
-				log.debug('Retrying request after successful token refresh', {
+				tokenLogger.debug('Retrying request after successful token refresh', {
 					context: {
 						userId: wpUser.id,
 						originalUrl: originalConfig.url,
@@ -382,7 +384,7 @@ function handleRefreshError(
 		[400, 401, 403, 404].includes((refreshError as any)?.response?.status);
 
 	if (isRefreshTokenInvalid) {
-		log.warn('Your session has expired - please log in again', {
+		tokenLogger.warn('Your session has expired - please log in again', {
 			showToast: true,
 			saveToDb: true,
 			context: {
@@ -399,12 +401,12 @@ function handleRefreshError(
 		originalError.isRefreshTokenInvalid = true;
 		originalError.refreshTokenInvalid = true;
 
-		log.debug('Refresh token invalid - triggering OAuth fallback handler');
+		tokenLogger.debug('Refresh token invalid - triggering OAuth fallback handler');
 		throw originalError;
 	}
 
 	// Transient error - log and re-throw
-	log.warn('Unable to refresh session', {
+	tokenLogger.warn('Unable to refresh session', {
 		saveToDb: true,
 		context: {
 			errorCode: ERROR_CODES.TOKEN_REFRESH_FAILED,

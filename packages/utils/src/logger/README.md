@@ -5,6 +5,7 @@ A progressive enhancement logger for WooCommerce POS that supports console loggi
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Namespace Convention](#namespace-convention)
 - [Hierarchical Categories](#hierarchical-categories)
 - [Explicit Contexts](#explicit-contexts)
 - [Lazy Evaluation](#lazy-evaluation)
@@ -72,6 +73,125 @@ setToast(Toast.show);
 const { storeDB } = useAppState();
 setDatabase(storeDB.collections.logs);
 ```
+
+## Namespace Convention
+
+All loggers should use the `getLogger()` factory with hierarchical namespaces. This is inspired by [LogTape](https://logtape.org/), a modern logging library with battle-tested patterns.
+
+### Why Namespaces?
+
+1. **Filtering**: Easily filter logs by domain in the Logs UI (e.g., show only `wcpos.sync.*` logs)
+2. **Log Levels per Domain**: Future support for different log levels per namespace (e.g., `wcpos.http` at debug, `wcpos.ui` at warn)
+3. **Remote Logging**: Route specific namespaces to external services (e.g., send `wcpos.auth.*` to security monitoring)
+4. **Debugging**: Quickly identify which part of the app generated a log
+5. **Consistency**: Standard naming across the entire codebase
+
+### Standard Namespaces
+
+```
+wcpos
+├── app                    # App initialization, state, hydration
+│   ├── state              # App state management
+│   ├── hydration          # Startup/hydration steps
+│   ├── validation         # User/site validation
+│   └── translations       # i18n loading
+├── auth                   # Authentication & authorization
+│   ├── login              # Login/logout flows
+│   ├── oauth              # OAuth popup/redirect handling
+│   ├── token              # Token refresh, expiry
+│   ├── site               # Site connection/discovery
+│   └── discovery          # API endpoint discovery
+├── pos                    # Point of Sale
+│   ├── cart               # Cart operations
+│   │   ├── product        # Add/remove products
+│   │   ├── customer       # Customer assignment
+│   │   ├── fee            # Fee line items
+│   │   ├── shipping       # Shipping line items
+│   │   └── void           # Order void/restore
+│   └── checkout           # Checkout flow
+│       ├── init           # Checkout started
+│       └── payment        # Payment processing
+├── sync                   # Data synchronization
+│   ├── state              # Sync state updates
+│   ├── collection         # Collection replication
+│   ├── query              # Query replication
+│   ├── push               # Push to server
+│   ├── pull               # Pull from server
+│   └── delete             # Delete operations
+├── db                     # Database operations
+│   ├── create             # DB creation
+│   ├── clear              # DB clearing
+│   ├── adapter            # Storage adapters
+│   └── parse              # Response parsing
+├── http                   # HTTP client & API
+│   ├── client             # Request handling
+│   ├── error              # Error parsing
+│   ├── queue              # Request queue
+│   └── rest               # REST API client
+├── mutations              # Document CRUD
+│   ├── document           # Generic mutations
+│   ├── local              # Local optimistic updates
+│   ├── product            # Product edits
+│   ├── customer           # Customer edits
+│   └── order              # Order edits
+├── query                  # Query management
+│   ├── state              # Query execution
+│   └── manager            # Query registration
+├── ui                     # User interface
+│   ├── menu               # Menu interactions
+│   ├── settings           # Settings UI
+│   ├── filter             # Filter operations
+│   └── dnd                # Drag and drop
+├── barcode                # Barcode scanning
+│   ├── detection          # Scanner detection
+│   ├── product            # Product lookup
+│   └── pos                # POS barcode handling
+├── print                  # Print operations
+│   ├── native             # Native printing
+│   ├── web                # Web printing
+│   └── external           # External URL printing
+└── notifications          # Push notifications
+    └── novu               # Novu integration
+```
+
+### Usage Pattern
+
+```typescript
+// At the top of your file, create a domain logger
+import { getLogger } from '@wcpos/utils/logger';
+
+const authLogger = getLogger(['wcpos', 'auth', 'login']);
+
+// Inside your component/hook, optionally bind context
+const loginLogger = authLogger.with({ userId: user.id });
+
+// Use the logger
+loginLogger.info('Login successful', { saveToDb: true });
+loginLogger.error('Login failed', { 
+  showToast: true, 
+  saveToDb: true,
+  context: { errorCode: ERROR_CODES.INVALID_CREDENTIALS }
+});
+```
+
+### Migration from `log` to `getLogger()`
+
+**Before (deprecated):**
+```typescript
+import log from '@wcpos/utils/logger';
+
+log.info('User logged in', { context: { userId: 123 } });
+```
+
+**After (preferred):**
+```typescript
+import { getLogger } from '@wcpos/utils/logger';
+
+const authLogger = getLogger(['wcpos', 'auth', 'login']);
+authLogger.info('User logged in', { context: { userId: 123 } });
+```
+
+The default `log` export still works but should only be used for quick debugging. All production logging should use namespaced loggers.
 
 ## Hierarchical Categories
 

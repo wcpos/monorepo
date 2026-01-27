@@ -3,26 +3,34 @@ import * as React from 'react';
 import { CellContext } from '@tanstack/react-table';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import type { Query } from '@wcpos/query';
 
 type LogDocument = import('@wcpos/database').LogDocument;
 
-const variantMap = {
+const variantMap: Record<string, string> = {
 	error: 'ghost-error',
 	warn: 'ghost-warning',
 	info: 'ghost-secondary',
-	debug: 'ghost-success',
+	debug: 'ghost-muted',
+	success: 'ghost-success',
+	audit: 'ghost-info',
 };
 
 /**
  *
- * @param param0
- * @returns
  */
-export const Level = ({ row }: CellContext<{ document: LogDocument }, 'level'>) => {
+export const Level = ({ row, table }: CellContext<{ document: LogDocument }, 'level'>) => {
 	const log = row.original.document;
+	const query = table.options.meta?.query as Query<any> | undefined;
+
+	const handlePress = React.useCallback(() => {
+		if (query) {
+			query.where('level').in([log.level]).exec();
+		}
+	}, [query, log.level]);
 
 	return (
-		<ButtonPill variant={variantMap[log.level]} size="xs">
+		<ButtonPill variant={variantMap[log.level]} size="xs" onPress={handlePress}>
 			<ButtonText>{log.level}</ButtonText>
 		</ButtonPill>
 	);

@@ -55,9 +55,11 @@ import * as React from 'react';
 import { CanceledError } from 'axios';
 import { BehaviorSubject } from 'rxjs';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type { HttpErrorHandler } from '@wcpos/hooks/use-http-client';
+
+const authLogger = getLogger(['wcpos', 'auth', 'error']);
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 
 import { useWcposAuth } from '../../../../hooks/use-wcpos-auth';
@@ -108,18 +110,18 @@ export const useAuthErrorHandler = (
 
 	React.useEffect(() => {
 		if (shouldTriggerAuth) {
-			log.debug('[AUTH_HANDLER] shouldTriggerAuth is true, calling promptAsync', {
+			authLogger.debug('[AUTH_HANDLER] shouldTriggerAuth is true, calling promptAsync', {
 				context: { siteName: site.name },
 			});
 			setShouldTriggerAuth(false);
 			promptAsync()
 				.then((result) => {
-					log.debug('[AUTH_HANDLER] promptAsync resolved', {
+					authLogger.debug('[AUTH_HANDLER] promptAsync resolved', {
 						context: { resultType: (result as any)?.type },
 					});
 				})
 				.catch((authError) => {
-					log.warn('[AUTH_HANDLER] promptAsync rejected - Authentication failed', {
+					authLogger.warn('[AUTH_HANDLER] promptAsync rejected - Authentication failed', {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -160,7 +162,7 @@ export const useAuthErrorHandler = (
 				const expectedUserId = wpCredentials.id;
 
 				if (returnedUserId && expectedUserId && String(returnedUserId) !== String(expectedUserId)) {
-					log.error('Security: Logged in as different user than expected', {
+					authLogger.error('Security: Logged in as different user than expected', {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -191,7 +193,7 @@ export const useAuthErrorHandler = (
 				// This allows pending requests to proceed with new token
 				requestStateManager.setAuthFailed(false);
 
-				log.success('Successfully logged in', {
+				authLogger.success('Successfully logged in', {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -200,7 +202,7 @@ export const useAuthErrorHandler = (
 					},
 				});
 			} catch (error) {
-				log.error('Failed to save login credentials', {
+				authLogger.error('Failed to save login credentials', {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -217,7 +219,7 @@ export const useAuthErrorHandler = (
 		} else if (response.type === 'error') {
 			// OAuth returned an error (e.g., invalid credentials)
 			// authFailed stays true - user needs to try again
-			log.warn('Login failed - please check your credentials', {
+			authLogger.warn('Login failed - please check your credentials', {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -235,7 +237,7 @@ export const useAuthErrorHandler = (
 			// User intentionally closed the auth window
 			// authFailed stays true - prevents background request spam
 			// User must click [Login] or interact with UI to retry
-			log.warn('Login cancelled', {
+			authLogger.warn('Login cancelled', {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -274,7 +276,7 @@ export const useAuthErrorHandler = (
 					(error as any).refreshTokenInvalid ||
 					(error instanceof Error && error.message === 'REFRESH_TOKEN_INVALID');
 
-				log.debug('Fallback auth handler canHandle check', {
+				authLogger.debug('Fallback auth handler canHandle check', {
 					context: {
 						canHandle,
 						errorStatus: error.response?.status,
@@ -297,7 +299,7 @@ export const useAuthErrorHandler = (
 			handle: async (context) => {
 				const { error } = context;
 
-				log.debug('Fallback auth handler triggered', {
+				authLogger.debug('Fallback auth handler triggered', {
 					context: {
 						errorMessage: error instanceof Error ? error.message : String(error),
 						errorStatus: (error as any)?.response?.status,
@@ -314,14 +316,14 @@ export const useAuthErrorHandler = (
 
 				if (isRefreshTokenInvalid) {
 					// Session expired - immediate OAuth is appropriate
-					log.debug('Refresh token is invalid, launching OAuth flow');
+					authLogger.debug('Refresh token is invalid, launching OAuth flow');
 					setShouldTriggerAuth(true);
 				} else if ((error as any).errorCode === ERROR_CODES.AUTH_REQUIRED) {
 					// Pre-flight block (user may have cancelled previously)
 					// Show toast with [Login] button instead of auto-launching
 					// This prevents OAuth window spam if user keeps dismissing
-					log.debug('Auth required (pre-flight blocked), showing toast');
-					log.warn('Please log in to continue', {
+					authLogger.debug('Auth required (pre-flight blocked), showing toast');
+					authLogger.warn('Please log in to continue', {
 						showToast: true,
 						saveToDb: true,
 						toast: {
@@ -337,7 +339,7 @@ export const useAuthErrorHandler = (
 					});
 				} else {
 					// Unknown auth failure - try OAuth
-					log.debug('Token refresh failed, attempting OAuth flow');
+					authLogger.debug('Token refresh failed, attempting OAuth flow');
 					setShouldTriggerAuth(true);
 				}
 
