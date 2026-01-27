@@ -1,3 +1,4 @@
+import isEqual from 'lodash/isEqual';
 import { RxChangeEvent, RxCollection, RxPlugin } from 'rxdb';
 import { Subscription } from 'rxjs';
 
@@ -57,8 +58,8 @@ function calculateChanges(
 		const beforeVal = before?.[key];
 		const afterVal = after?.[key];
 
-		// Use JSON comparison for deep equality
-		if (JSON.stringify(beforeVal) !== JSON.stringify(afterVal)) {
+		// Use lodash isEqual for deep equality (ignores key order)
+		if (!isEqual(beforeVal, afterVal)) {
 			changes[key] = { old: beforeVal, new: afterVal };
 		}
 	}

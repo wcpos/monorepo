@@ -153,6 +153,58 @@ describe('audit-log plugin', () => {
 				meta: { old: { key: 'value1' }, new: { key: 'value2' } },
 			});
 		});
+
+		it('should ignore object key order differences', () => {
+			// Same values, different key order - should NOT be detected as a change
+			const before = {
+				shipping: {
+					first_name: '',
+					last_name: '',
+					company: '',
+					address_1: '',
+					address_2: '',
+					city: '',
+					state: '',
+					country: '',
+					postcode: '',
+					phone: '',
+				},
+			};
+			const after = {
+				shipping: {
+					address_1: '',
+					address_2: '',
+					city: '',
+					company: '',
+					country: '',
+					first_name: '',
+					last_name: '',
+					phone: '',
+					postcode: '',
+					state: '',
+				},
+			};
+			const changes = calculateChanges(before, after, []);
+
+			expect(changes).toBeNull();
+		});
+
+		it('should detect actual nested object changes regardless of key order', () => {
+			const before = {
+				shipping: { first_name: 'John', last_name: 'Doe' },
+			};
+			const after = {
+				shipping: { last_name: 'Doe', first_name: 'Jane' }, // Different order, actual change
+			};
+			const changes = calculateChanges(before, after, []);
+
+			expect(changes).toEqual({
+				shipping: {
+					old: { first_name: 'John', last_name: 'Doe' },
+					new: { last_name: 'Doe', first_name: 'Jane' },
+				},
+			});
+		});
 	});
 
 	describe('getDocumentIdentifier', () => {
