@@ -22,8 +22,12 @@ describe('QueryProvider', () => {
 	});
 
 	afterEach(async () => {
-		await storeDatabase.destroy();
-		await syncDatabase.destroy();
+		if (storeDatabase && !storeDatabase.destroyed) {
+			await storeDatabase.remove();
+		}
+		if (syncDatabase && !syncDatabase.destroyed) {
+			await syncDatabase.remove();
+		}
 		cleanup();
 		jest.clearAllMocks();
 	});

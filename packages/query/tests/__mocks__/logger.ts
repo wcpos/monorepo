@@ -1,6 +1,22 @@
-module.exports = {
-  error: jest.fn(),
-  warn: jest.fn(),
-  info: jest.fn(),
-  debug: jest.fn(),
+const mockLogger = {
+	error: jest.fn(),
+	warn: jest.fn(),
+	info: jest.fn(),
+	debug: jest.fn(),
 };
+
+export const getLogger = jest.fn(() => mockLogger);
+
+export const ERROR_CODES = {
+	INVALID_REQUEST_FORMAT: 'INVALID_REQUEST_FORMAT',
+	INVALID_CONFIGURATION: 'INVALID_CONFIGURATION',
+	RECORD_NOT_FOUND: 'RECORD_NOT_FOUND',
+	INSERT_FAILED: 'INSERT_FAILED',
+	DB_UPSERT_FAILED: 'DB_UPSERT_FAILED',
+	DB_REMOVE_MISMATCH: 'DB_REMOVE_MISMATCH',
+	DUPLICATE_RECORD: 'DUPLICATE_RECORD',
+	SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+	INVALID_RESPONSE_FORMAT: 'INVALID_RESPONSE_FORMAT',
+};
+
+export default mockLogger;

@@ -16,9 +16,13 @@ describe('CollectionReplicationState', () => {
 		jest.clearAllMocks();
 	});
 
-	afterEach(() => {
-		storeDatabase.remove();
-		syncDatabase.remove();
+	afterEach(async () => {
+		if (storeDatabase && !storeDatabase.destroyed) {
+			await storeDatabase.remove();
+		}
+		if (syncDatabase && !syncDatabase.destroyed) {
+			await syncDatabase.remove();
+		}
 		httpClientMock.__resetMockResponses();
 	});
 

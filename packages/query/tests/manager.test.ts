@@ -18,9 +18,15 @@ describe('Manager', () => {
 	});
 
 	afterEach(async () => {
-		await storeDatabase.destroy();
-		await syncDatabase.destroy();
-		manager.cancel();
+		if (manager) {
+			manager.cancel();
+		}
+		if (storeDatabase && !storeDatabase.destroyed) {
+			await storeDatabase.remove();
+		}
+		if (syncDatabase && !syncDatabase.destroyed) {
+			await syncDatabase.remove();
+		}
 		jest.clearAllMocks();
 	});
 

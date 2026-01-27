@@ -83,3 +83,11 @@ function resolveResponse(method: HttpMethod, url: string, config?: AxiosRequestC
 }
 
 export { httpClientMock };
+
+// Mock for @wcpos/hooks/use-http-client/parse-wp-error
+export const parseWpError = jest.fn((data: any, fallbackMessage: string) => ({
+	message: fallbackMessage,
+	code: null,
+	serverCode: null,
+	status: null,
+}));

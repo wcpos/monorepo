@@ -19,8 +19,12 @@ describe('SyncStateManager', () => {
 	});
 
 	afterEach(async () => {
-		await storeDB.remove();
-		await syncDB.remove();
+		if (storeDB && !storeDB.destroyed) {
+			await storeDB.remove();
+		}
+		if (syncDB && !syncDB.destroyed) {
+			await syncDB.remove();
+		}
 		jest.clearAllMocks();
 	});
 

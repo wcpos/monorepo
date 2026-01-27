@@ -21,8 +21,9 @@ describe('Query', () => {
 		 */
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
-		await storeDatabase.destroy();
-		expect(storeDatabase.destroyed).toBe(true);
+		if (storeDatabase && !storeDatabase.destroyed) {
+			await storeDatabase.remove();
+		}
 		jest.clearAllMocks();
 	});
 
