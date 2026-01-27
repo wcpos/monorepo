@@ -74,12 +74,12 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { pauseQueue, resumeQueue } from './request-queue';
-
-const tokenLogger = getLogger(['wcpos', 'auth', 'token']);
 import { requestStateManager } from './request-state-manager';
 
 import type { AxiosRequestConfig } from 'axios';
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
+
+const tokenLogger = getLogger(['wcpos', 'auth', 'token']);
 
 /**
  * RxDB document interface for WordPress credentials.

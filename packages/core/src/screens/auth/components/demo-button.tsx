@@ -6,11 +6,11 @@ import { Loader } from '@wcpos/components/loader';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
-
-const authLogger = getLogger(['wcpos', 'auth', 'demo']);
 import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
 import { useLoginHandler } from '../hooks/use-login-handler';
 import useSiteConnect from '../hooks/use-site-connect';
+
+const authLogger = getLogger(['wcpos', 'auth', 'demo']);
 
 export function DemoButton() {
 	const { onConnect, loading: siteConnectLoading } = useSiteConnect();

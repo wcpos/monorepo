@@ -17,8 +17,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
-
-const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
 import { FormErrors } from '../../components/form-errors';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
@@ -27,6 +25,8 @@ import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCollection } from '../../hooks/use-collection';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 
 /**
  *

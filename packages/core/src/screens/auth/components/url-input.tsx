@@ -11,9 +11,9 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
+import useSiteConnect from '../hooks/use-site-connect';
 
 const siteLogger = getLogger(['wcpos', 'auth', 'site']);
-import useSiteConnect from '../hooks/use-site-connect';
 
 export function UrlInput() {
 	const { onConnect, loading, error } = useSiteConnect();

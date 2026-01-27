@@ -25,10 +25,10 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
-
-const authLogger = getLogger(['wcpos', 'auth', 'user']);
 import { useT } from '../../../contexts/translations';
 import { useUserValidation } from '../../../hooks/use-user-validation';
+
+const authLogger = getLogger(['wcpos', 'auth', 'user']);
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;

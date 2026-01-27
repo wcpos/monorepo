@@ -58,14 +58,14 @@ import { BehaviorSubject } from 'rxjs';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type { HttpErrorHandler } from '@wcpos/hooks/use-http-client';
-
-const authLogger = getLogger(['wcpos', 'auth', 'error']);
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 
 import { useWcposAuth } from '../../../../hooks/use-wcpos-auth';
 import { useLoginHandler } from '../../../auth/hooks/use-login-handler';
 
 import type { Site, WPCredentials } from './types';
+
+const authLogger = getLogger(['wcpos', 'auth', 'error']);
 
 /**
  * RxJS subject for error events.

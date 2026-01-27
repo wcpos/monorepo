@@ -6,9 +6,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
+import { useLoginHandler } from '../hooks/use-login-handler';
 
 const authLogger = getLogger(['wcpos', 'auth', 'user']);
-import { useLoginHandler } from '../hooks/use-login-handler';
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;

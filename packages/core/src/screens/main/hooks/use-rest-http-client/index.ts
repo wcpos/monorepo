@@ -10,10 +10,10 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../../contexts/app-state';
-
-const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 import { errorSubject, useAuthErrorHandler } from './auth-error-handler';
 import { createRefreshHttpClient } from './refresh-http-client';
+
+const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 
 /**
  *

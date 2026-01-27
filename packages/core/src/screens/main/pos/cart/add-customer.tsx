@@ -20,13 +20,13 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
-
-const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 
 /**
  *
@@ -66,39 +66,39 @@ export const AddNewCustomer = () => {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-			const savedDoc = await create({ data });
-			if (isRxDocument(savedDoc)) {
-				cartLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+				const savedDoc = await create({ data });
+				if (isRxDocument(savedDoc)) {
+					cartLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							customerId: savedDoc.id,
+							customerName: format(savedDoc),
+						},
+					});
+					if (currentOrder) {
+						const json = savedDoc.toJSON();
+						await localPatch({
+							document: currentOrder,
+							data: {
+								customer_id: json.id,
+								billing: json.billing,
+								shipping: json.shipping,
+							},
+						});
+						setOpen(false);
+					}
+				}
+			} catch (error) {
+				cartLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						customerId: savedDoc.id,
-						customerName: format(savedDoc),
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						error: error instanceof Error ? error.message : String(error),
 					},
 				});
-				if (currentOrder) {
-					const json = savedDoc.toJSON();
-					await localPatch({
-						document: currentOrder,
-						data: {
-							customer_id: json.id,
-							billing: json.billing,
-							shipping: json.shipping,
-						},
-					});
-					setOpen(false);
-				}
-			}
-		} catch (error) {
-			cartLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					error: error instanceof Error ? error.message : String(error),
-				},
-			});
-		} finally {
+			} finally {
 				setLoading(false);
 			}
 		},
