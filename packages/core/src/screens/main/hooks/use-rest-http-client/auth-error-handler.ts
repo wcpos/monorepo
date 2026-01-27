@@ -110,18 +110,18 @@ export const useAuthErrorHandler = (
 
 	React.useEffect(() => {
 		if (shouldTriggerAuth) {
-			authLogger.debug('[AUTH_HANDLER] shouldTriggerAuth is true, calling promptAsync', {
+			authLogger.debug('shouldTriggerAuth is true, calling promptAsync', {
 				context: { siteName: site.name },
 			});
 			setShouldTriggerAuth(false);
 			promptAsync()
 				.then((result) => {
-					authLogger.debug('[AUTH_HANDLER] promptAsync resolved', {
+					authLogger.debug('promptAsync resolved', {
 						context: { resultType: (result as any)?.type },
 					});
 				})
 				.catch((authError) => {
-					authLogger.warn('[AUTH_HANDLER] promptAsync rejected - Authentication failed', {
+					authLogger.warn('promptAsync rejected - Authentication failed', {
 						showToast: true,
 						saveToDb: true,
 						context: {

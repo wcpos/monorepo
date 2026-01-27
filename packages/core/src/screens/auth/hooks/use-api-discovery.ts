@@ -166,7 +166,9 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			// Check WCPOS version (should be >= 1.8.0 for proper auth endpoints)
 			const wcposVersion = data.wcpos_version || data.wcpos_pro_version;
 			if (wcposVersion && !semver.gte(wcposVersion, '1.8.0')) {
-				discoveryLogger.warn(`WCPOS version ${wcposVersion} may not support all features (recommend 1.8.0+)`);
+				discoveryLogger.warn(
+					`WCPOS version ${wcposVersion} may not support all features (recommend 1.8.0+)`
+				);
 			}
 		},
 		[t]
