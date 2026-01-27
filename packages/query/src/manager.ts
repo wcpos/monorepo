@@ -151,6 +151,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		if (!this.queryStates.has(key)) {
 			const collection = this.getCollection(collectionName);
 			if (collection) {
+				queryLogger.debug('Registering new query', {
+					context: { key, collectionName, endpoint, greedy, infiniteScroll },
+				});
+
 				const queryState = new Query<typeof collection>({
 					id: key,
 					collection,
@@ -255,6 +259,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	async deregisterQuery(key: string): Promise<void> {
 		const query = this.queryStates.get(key);
 		if (query) {
+			queryLogger.debug('Deregistering query', {
+				context: { key, collection: query.collection.name },
+			});
+
 			this.queryStates.delete(key);
 			this.activeCollectionReplications.delete(key);
 			this.activeQueryReplications.delete(key);
@@ -269,6 +277,25 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 * Returns a Promise that resolves when all cancellations are complete.
 	 */
 	async onCollectionReset(collection): Promise<void> {
+		// Count affected items for logging
+		let queryCount = 0;
+		let replicationCount = 0;
+
+		this.queryStates.forEach((q) => {
+			if (q.collection.name === collection.name) queryCount++;
+		});
+		this.replicationStates.forEach((r) => {
+			if (r.collection.name === collection.name) replicationCount++;
+		});
+
+		queryLogger.debug('Collection reset - cancelling operations', {
+			context: {
+				collection: collection.name,
+				queries: queryCount,
+				replications: replicationCount,
+			},
+		});
+
 		const cancelPromises: Promise<void>[] = [];
 
 		// cancel all replication states for the collection
@@ -286,6 +313,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		});
 
 		await Promise.all(cancelPromises);
+
+		queryLogger.debug('Collection reset complete', {
+			context: { collection: collection.name },
+		});
 	}
 
 	/**
@@ -481,6 +512,13 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 * @returns Promise that resolves when all cleanup is complete
 	 */
 	async cancel(): Promise<void> {
+		queryLogger.debug('Manager cancelling', {
+			context: {
+				queries: this.queryStates.size,
+				replications: this.replicationStates.size,
+			},
+		});
+
 		// Cancel base class first (aborts controller, unsubscribes)
 		await super.cancel();
 
@@ -498,5 +536,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 		// Wait for all to complete
 		await Promise.all([...queryPromises, ...replicationPromises]);
+
+		queryLogger.debug('Manager cancelled');
 	}
 }

@@ -3,7 +3,11 @@ import union from 'lodash/union';
 import { combineLatest, from, Observable } from 'rxjs';
 import { map, startWith, switchMap } from 'rxjs/operators';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { Query } from './query-state';
+
+const relationalLogger = getLogger(['wcpos', 'query', 'relational']);
 
 import type { QueryConfig } from './query-state';
 import type { RxCollection, RxDocument } from 'rxdb';
@@ -94,6 +98,9 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 	 * Clear relational search state and filters
 	 */
 	private clearRelationalSearch(): void {
+		relationalLogger.debug('Clearing relational search', {
+			context: { id: this.id, collection: this.collection.name },
+		});
 		this.currentRxQuery.other.relationalSearch = null;
 		this.removeWhere(this.primaryKey).exec();
 		this.cancelSub('relational-search');
@@ -103,6 +110,10 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 	 * Start relational search by combining parent and child results
 	 */
 	private startRelationalSearch(searchTerm: string): void {
+		relationalLogger.debug('Starting relational search', {
+			context: { id: this.id, searchTerm },
+		});
+
 		this.addSub(
 			'relational-search',
 			combineLatest([
@@ -124,6 +135,17 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 	): void {
 		const { parentUUIDs: childMatchUUIDs, countsByParent } = childMatchResult;
 		const allMatchingUUIDs = union(directMatchUUIDs, childMatchUUIDs);
+
+		relationalLogger.debug('Relational search results', {
+			context: {
+				id: this.id,
+				searchTerm,
+				directMatches: directMatchUUIDs.length,
+				childMatches: childMatchUUIDs.length,
+				totalMatches: allMatchingUUIDs.length,
+				parentsWithChildren: Object.keys(countsByParent).length,
+			},
+		});
 
 		// Don't reset pagination when updating search results
 		this.where(this.primaryKey).in(allMatchingUUIDs, false);
