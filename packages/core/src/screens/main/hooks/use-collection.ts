@@ -12,38 +12,36 @@ import { useT } from '../../../contexts/translations';
 export type CollectionKey = keyof typeof storeCollections;
 
 /**
- * A helper method to get the latest collection, ie:
+ * Hook to get a collection reference that auto-updates when the collection is reset.
+ *
+ * @example
  * const { collection } = useCollection('products');
  *
- * Note: the reset$ will emit each time a collection is reset
- * This is a custom rxdb plugin
+ * How it works:
+ * - Returns the current collection from storeDB
+ * - Subscribes to `storeDB.reset$` (from reset-collection plugin)
+ * - When collection is reset (via swapCollection or direct remove),
+ *   this hook automatically receives the new collection reference
  *
- * This allows us to do a 'clear and sync' and update components
- * that are using the collection.
- *
- * @TODO - rxdb has a new RxCollection.onRemove hook that could be used to re-add the collection
+ * Collection reset flow:
+ * 1. swapCollection() cancels all queries/replications for the collection
+ * 2. collection.remove() is called (instant, regardless of record count)
+ * 3. reset-collection plugin re-creates the collection and emits on reset$
+ * 4. This hook receives the new collection and triggers re-render
+ * 5. useQuery/useRelationalQuery hooks also subscribe to reset$ and re-register
  */
 export const useCollection = <K extends CollectionKey>(
 	key: K
 ): { collection: StoreCollections[K]; collectionLabel: string } => {
 	const t = useT();
 	const { storeDB } = useAppState();
-	// const collection = storeDB.collections[key];
 
 	/**
-	 * @FIXME - The way collections and queries are handled needs to be rethought,
-	 * it's not enough to just set the collection in state, we need to think about all the
-	 * subscriptions and queries that are using the collection.
+	 * Subscribe to reset$ to get the new collection reference when reset.
+	 * Initial value is the current collection from storeDB.
 	 */
 	const collection = useObservableState(
-		storeDB.reset$.pipe(
-			filter((collection) => collection.name === key)
-			// /**
-			//  * DebounceTime is a bit of a hack, we need to give useReplicationQuery
-			//  * time to re-add both collections before we try to access them
-			//  */
-			// debounceTime(100)
-		),
+		storeDB.reset$.pipe(filter((collection) => collection.name === key)),
 		storeDB.collections[key]
 	);
 
