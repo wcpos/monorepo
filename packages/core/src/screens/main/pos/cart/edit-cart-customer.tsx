@@ -13,10 +13,12 @@ import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
 import { FormErrors } from '../../components/form-errors';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
@@ -82,7 +84,7 @@ export const EditCartCustomerForm = () => {
 		await handleSaveToOrder(data);
 		const customer = await customerCollection.findOne({ selector: { id: customerID } }).exec();
 		if (!customer) {
-			log.error(t('No customer found', { _tags: 'core' }), {
+			cartLogger.error(t('No customer found', { _tags: 'core' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -102,7 +104,7 @@ export const EditCartCustomerForm = () => {
 				},
 			});
 			if (isRxDocument(savedDoc)) {
-				log.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+				cartLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -113,7 +115,7 @@ export const EditCartCustomerForm = () => {
 			}
 			onOpenChange(false);
 		} catch (error) {
-			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			cartLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {

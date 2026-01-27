@@ -1,7 +1,9 @@
 import toNumber from 'lodash/toNumber';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
+const posLogger = getLogger(['wcpos', 'pos', 'utils']);
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -28,7 +30,7 @@ export const sanitizePrice = (price?: string) => (price && price !== '' ? String
  */
 export const getUuidFromLineItemMetaData = (metaData: CartLine['meta_data']) => {
 	if (!Array.isArray(metaData)) {
-		log.error('metaData is not an array', {
+		posLogger.error('metaData is not an array', {
 			context: {
 				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
 				metaData,
@@ -47,7 +49,7 @@ export const getUuidFromLineItemMetaData = (metaData: CartLine['meta_data']) => 
  */
 export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
 	if (!Array.isArray(metaData)) {
-		log.error('metaData is not an array', {
+		posLogger.error('metaData is not an array', {
 			context: {
 				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
 				metaData,
@@ -64,7 +66,7 @@ export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
  */
 export const getMetaDataValueByKey = (metaData: CartLine['meta_data'], key: string) => {
 	if (!Array.isArray(metaData)) {
-		log.error('metaData is not an array', {
+		posLogger.error('metaData is not an array', {
 			context: {
 				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
 				metaData,
@@ -105,7 +107,7 @@ export const findByProductVariationID = (
 	variationId = 0
 ) => {
 	if (!Array.isArray(lineItems)) {
-		log.error('lineItems is not an array', {
+		posLogger.error('lineItems is not an array', {
 			context: {
 				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
 				lineItems,
@@ -317,7 +319,7 @@ export const parsePosData = (item: CartLine) => {
 	try {
 		return JSON.parse(posDataString);
 	} catch (error) {
-		log.error('Error parsing posData', {
+		posLogger.error('Error parsing posData', {
 			context: {
 				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
 				posData: posDataString,

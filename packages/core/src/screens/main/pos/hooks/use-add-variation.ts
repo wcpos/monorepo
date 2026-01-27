@@ -2,10 +2,12 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'variation']);
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
@@ -74,7 +76,7 @@ export const useAddVariation = () => {
 
 		// returned success should be the updated order
 		if (success) {
-			log.success(t('{name} added to cart', { _tags: 'core', name: parent.name }), {
+			cartLogger.success(t('{name} added to cart', { _tags: 'core', name: parent.name }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -85,7 +87,7 @@ export const useAddVariation = () => {
 				},
 			});
 		} else {
-			log.error(t('Error adding {name} to cart', { _tags: 'core', name: parent.name }), {
+			cartLogger.error(t('Error adding {name} to cart', { _tags: 'core', name: parent.name }), {
 				showToast: true,
 				saveToDb: true,
 				context: {

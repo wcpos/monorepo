@@ -4,10 +4,12 @@ import { View } from 'react-native';
 import { isRxDocument } from 'rxdb';
 
 import { Button } from '@wcpos/components/button';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
 import usePushDocument from '../../../contexts/use-push-document';
 import { useCurrentOrder } from '../../contexts/current-order';
 
@@ -31,7 +33,7 @@ export const SaveButton = () => {
 				 * TODO; move this geenric sanckbar to the pushDocument hook
 				 */
 				if (isRxDocument(savedDoc)) {
-					log.success(t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }), {
+					cartLogger.success(t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -42,7 +44,7 @@ export const SaveButton = () => {
 				}
 			});
 		} catch (error) {
-			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			cartLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {

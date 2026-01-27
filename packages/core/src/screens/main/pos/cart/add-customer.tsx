@@ -16,10 +16,12 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
@@ -66,7 +68,7 @@ export const AddNewCustomer = () => {
 			try {
 			const savedDoc = await create({ data });
 			if (isRxDocument(savedDoc)) {
-				log.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+				cartLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -88,7 +90,7 @@ export const AddNewCustomer = () => {
 				}
 			}
 		} catch (error) {
-			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			cartLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
