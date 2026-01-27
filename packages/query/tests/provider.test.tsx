@@ -80,12 +80,13 @@ describe('QueryProvider', () => {
 		);
 	});
 
-	it('should have initial values for query.params$ and query.result$', (done) => {
+	it('should have initial values for query.rxQuery$ and query.result$', (done) => {
 		const TestComponent = () => {
 			const query = useQuery({ queryKeys: ['myQuery'], collectionName: 'products' });
 
-			query.params$.subscribe((params) => {
-				expect(params).toEqual({});
+			// Query has rxQuery$ and result$, not params$
+			query.rxQuery$.subscribe((rxQuery) => {
+				expect(rxQuery).toBeDefined();
 			});
 
 			query.result$.subscribe((result) => {

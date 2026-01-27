@@ -8,6 +8,7 @@ import {
 } from 'rxdb';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { Subject } from 'rxjs';
 
 import { RxDBGenerateIdPlugin } from './generate-id';
 import { parseRestResponsePlugin } from './parse-rest-response';
@@ -99,6 +100,10 @@ export async function createStoreDatabase(): Promise<RxDatabase> {
 	});
 
 	const collections = await db.addCollections({ products, variations, logs });
+
+	// Add mock reset$ observable for tests that use the reset collection plugin
+	// This simulates the behavior of the reset-collection plugin
+	(db as any).reset$ = new Subject<RxCollection>();
 
 	return db;
 }
