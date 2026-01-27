@@ -29,3 +29,6 @@ jobs:
 
       - name: 🧪 Run tests
         run: pnpm jest --ci --passWithNoTests
+
+      - name: 🧪 Run query tests
+        run: cd packages/query && npx jest --config jest.config.cjs --ci

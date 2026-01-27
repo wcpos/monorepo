@@ -1,22 +1,20 @@
 const TEST_REGEX = '(/__tests__/.*|(\\.|/)(test|spec))\\.(tsx?|ts?)$';
 
-export default {
+module.exports = {
 	roots: ['<rootDir>/tests'],
 	displayName: '@wcpos/query',
 	preset: 'ts-jest',
-	setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+	setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
 	maxWorkers: 1, // Run tests serially to avoid database name conflicts
 	transform: {
 		'^.+\\.(ts|tsx)$': [
 			'ts-jest',
 			{
 				tsconfig: 'tsconfig.json',
-			},
-		],
-		'^.+\\.js$': [
-			'ts-jest',
-			{
-				tsconfig: 'tsconfig.json',
+				// Disable type checking - just transpile
+				// This avoids path resolution issues when running from monorepo root
+				// Type checking is handled by tsc and the IDE
+				isolatedModules: true,
 			},
 		],
 	},
@@ -25,7 +23,6 @@ export default {
 	collectCoverage: true,
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(tsx?|ts?)$'],
 	verbose: true,
-	transformIgnorePatterns: ['node_modules/(?!(uuid)/)'],
 	testEnvironment: 'jsdom',
 	moduleNameMapper: {
 		'^@wcpos/utils/src/logger$': '<rootDir>/tests/__mocks__/logger.ts',

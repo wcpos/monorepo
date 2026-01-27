@@ -1,6 +1,6 @@
 // Polyfill TextEncoder/TextDecoder for RxDB in jsdom environment
-import { TextEncoder, TextDecoder } from 'util';
-import { webcrypto } from 'crypto';
+const { TextEncoder, TextDecoder } = require('util');
+const { webcrypto } = require('crypto');
 
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
