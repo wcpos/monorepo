@@ -2,9 +2,11 @@ import * as React from 'react';
 
 import set from 'lodash/set';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import http from './http';
+
+const httpLogger = getLogger(['wcpos', 'http', 'client']);
 import { parseWpError } from './parse-wp-error';
 import { scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
@@ -37,7 +39,7 @@ const processErrorHandlers = async (
 	const maxRetries = 3;
 
 	for (const handler of sortedHandlers) {
-		log.debug(`Processing error with handler: ${handler.name}`, {
+		httpLogger.debug(`Processing error with handler: ${handler.name}`, {
 			context: {
 				handlerName: handler.name,
 				handlerPriority: handler.priority,
@@ -47,7 +49,7 @@ const processErrorHandlers = async (
 		});
 
 		if (!handler.canHandle(error)) {
-			log.debug(`Handler ${handler.name} cannot handle this error, skipping`);
+			httpLogger.debug(`Handler ${handler.name} cannot handle this error, skipping`);
 			continue;
 		}
 
@@ -69,7 +71,7 @@ const processErrorHandlers = async (
 
 			// If handler returned a response, it successfully resolved the error
 			if (result) {
-				log.debug(`Error handled successfully by ${handler.name}`, {
+				httpLogger.debug(`Error handled successfully by ${handler.name}`, {
 					context: {
 						status: error.response?.status,
 						handlerName: handler.name,
@@ -81,7 +83,7 @@ const processErrorHandlers = async (
 
 			// If handler intercepts but didn't return a response, it failed
 			if (handler.intercepts) {
-				log.debug(`Intercepting handler ${handler.name} failed`, {
+				httpLogger.debug(`Intercepting handler ${handler.name} failed`, {
 					context: {
 						status: error.response?.status,
 						handlerName: handler.name,
@@ -90,7 +92,7 @@ const processErrorHandlers = async (
 				break;
 			}
 		} catch (handlerError) {
-			log.error(`Error handler ${handler.name} threw an error`, {
+			httpLogger.error(`Error handler ${handler.name} threw an error`, {
 				context: {
 					error: handlerError instanceof Error ? handlerError.message : String(handlerError),
 					originalStatus: error.response?.status,
@@ -106,7 +108,7 @@ const processErrorHandlers = async (
 				handlerError === error &&
 				(error as any).isRefreshTokenInvalid
 			) {
-				log.debug(
+				httpLogger.debug(
 					`Token refresh handler failed with invalid refresh token, continuing chain to fallback handler`
 				);
 				continue; // Continue to next handler instead of breaking
@@ -114,11 +116,11 @@ const processErrorHandlers = async (
 
 			// If this handler intercepts, stop the chain
 			if (handler.intercepts) {
-				log.debug(`Handler ${handler.name} intercepts and failed, stopping error chain`);
+				httpLogger.debug(`Handler ${handler.name} intercepts and failed, stopping error chain`);
 				// Return the handler error instead of the original error so we can propagate substitutions (e.g. CanceledError)
 				return handlerError as any;
 			} else {
-				log.debug(`Handler ${handler.name} failed but does not intercept, continuing chain`);
+				httpLogger.debug(`Handler ${handler.name} failed but does not intercept, continuing chain`);
 			}
 		}
 	}
@@ -174,7 +176,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 
 			// Only log if not sleeping - sleeping is expected behavior
 			if (!canProceed.isSleeping) {
-				log.debug('Request blocked by pre-flight check', {
+				httpLogger.debug('Request blocked by pre-flight check', {
 					context: {
 						errorCode: canProceed.errorCode,
 						reason: canProceed.reason,
@@ -188,14 +190,14 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 
 		// If token refresh is in progress, wait for it to complete
 		if (requestStateManager.isTokenRefreshing()) {
-			log.debug('Token refresh in progress, waiting before making request', {
+			httpLogger.debug('Token refresh in progress, waiting before making request', {
 				context: {
 					url: config.url,
 					method: config.method,
 				},
 			});
 			await requestStateManager.awaitTokenRefresh();
-			log.debug('Token refresh completed, proceeding with request', {
+			httpLogger.debug('Token refresh completed, proceeding with request', {
 				context: {
 					url: config.url,
 					method: config.method,
@@ -251,7 +253,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 				}
 
 				if (http.isCancel(error)) {
-					log.debug('Request canceled (auth in progress)', {
+					httpLogger.debug('Request canceled (auth in progress)', {
 						context: {
 							message: error.message,
 						},
@@ -278,7 +280,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 					(error as any).wpStatus = wpError.status;
 				}
 
-				log.debug(error);
+				httpLogger.debug(error);
 				throw error;
 			}
 		},

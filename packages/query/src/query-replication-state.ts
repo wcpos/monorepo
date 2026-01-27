@@ -4,8 +4,12 @@ import isEmpty from 'lodash/isEmpty';
 import { BehaviorSubject, interval, Observable, Subscription } from 'rxjs';
 import { filter, startWith, switchMap } from 'rxjs/operators';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
+import { DataFetcher } from './data-fetcher';
+
+const syncLogger = getLogger(['wcpos', 'sync', 'query']);
 
 /**
  * Check if an error is a CanceledError (from axios or auth flow).
@@ -19,8 +23,6 @@ function isAuthCancelError(error: any): boolean {
 		error?.message?.includes('attempting re-authentication')
 	);
 }
-
-import { DataFetcher } from './data-fetcher';
 import { SubscribableBase } from './subscribable-base';
 import { getParamValueFromEndpoint } from './utils';
 
@@ -189,7 +191,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		} catch (error: any) {
 			// Check if this is a CanceledError from auth flow - don't show toast
 			if (isAuthCancelError(error)) {
-				log.debug('Request canceled (auth in progress), will retry when auth completes', {
+				syncLogger.debug('Request canceled (auth in progress), will retry when auth completes', {
 					context: {
 						endpoint: this.endpoint,
 					},
@@ -206,7 +208,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 			const message = error.wpMessage || error.message || 'Failed to sync query items';
 			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
 
-			log.error(message, {
+			syncLogger.error(message, {
 				showToast: true,
 				saveToDb: true,
 				context: {

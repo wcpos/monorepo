@@ -1,9 +1,11 @@
 import { createRxDatabase, removeRxDatabase } from 'rxdb';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { defaultConfig } from './adapters/default';
+
+const dbLogger = getLogger(['wcpos', 'db', 'create']);
 import { ephemeralStorageConfig } from './adapters/ephemeral';
 import { fastStorageConfig } from './adapters/fast';
 import {
@@ -31,7 +33,7 @@ export const createUserDB = async () => {
 		const collections = await db?.addCollections(userCollections);
 		return db;
 	} catch (error) {
-		log.error('Failed to create user database', {
+		dbLogger.error('Failed to create user database', {
 			showToast: true,
 			saveToDb: true,
 			context: {
@@ -59,7 +61,7 @@ export const createStoreDB = async (id: string) => {
 		const collections = await db?.addCollections(storeCollections);
 		return db;
 	} catch (error) {
-		log.error('Failed to create store database', {
+		dbLogger.error('Failed to create store database', {
 			showToast: true,
 			saveToDb: true,
 			context: {
@@ -87,7 +89,7 @@ export const createFastStoreDB = async (id: string) => {
 		const collections = await db?.addCollections(syncCollections);
 		return db;
 	} catch (error) {
-		log.error('Failed to create fast store database', {
+		dbLogger.error('Failed to create fast store database', {
 			showToast: true,
 			saveToDb: true,
 			context: {
@@ -120,7 +122,7 @@ export const createTemporaryDB = async () => {
 
 		return db;
 	} catch (error) {
-		log.error('Failed to create temporary database', {
+		dbLogger.error('Failed to create temporary database', {
 			showToast: true,
 			saveToDb: true,
 			context: {

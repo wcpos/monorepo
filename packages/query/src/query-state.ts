@@ -9,10 +9,12 @@ import { ObservableResource } from 'observable-hooks';
 import { BehaviorSubject, from, ReplaySubject } from 'rxjs';
 import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { SubscribableBase } from './subscribable-base';
+
+const queryLogger = getLogger(['wcpos', 'query', 'state']);
 
 import type {
 	MangoQuery,
@@ -199,7 +201,7 @@ export class Query<T extends RxCollection>
 	 */
 	loadMore() {
 		if (!this.infiniteScroll) {
-			log.error('loadMore() called but infiniteScroll is not enabled', {
+			queryLogger.error('loadMore() called but infiniteScroll is not enabled', {
 				showToast: true,
 				saveToDb: true,
 				context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, queryId: this.id },
