@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { filter, map, startWith } from 'rxjs/operators';
+import { filter, map } from 'rxjs/operators';
 
 import { useQueryManager } from './provider';
 
@@ -34,23 +34,31 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 	}, [manager, parentOptions, childOptions]);
 
 	/**
-	 * Create the observable that re-registers queries on collection reset.
-	 * useMemo ensures we re-subscribe when manager changes (e.g., store switch).
+	 * Register queries immediately when manager changes.
+	 * This handles store switches - new manager = new query registration.
+	 */
+	const initialQueries = React.useMemo(() => registerQueries(), [registerQueries]);
+
+	/**
+	 * Subscribe to collection resets to re-register queries.
+	 * useMemo ensures we subscribe to the current manager's reset$.
 	 */
 	const reset$ = React.useMemo(
 		() =>
 			manager.localDB.reset$.pipe(
 				filter((collection) => collection.name === parentOptions.collectionName),
-				map(() => registerQueries()),
-				startWith(registerQueries())
+				map(() => registerQueries())
 			),
 		[manager, parentOptions.collectionName, registerQueries]
 	);
 
 	/**
-	 * Subscribe to the observable and get current queries.
+	 * Use initialQueries as the default value, update when reset$ emits.
 	 */
-	const { parentQuery, childQuery, parentLookupQuery } = useObservableState(reset$);
+	const { parentQuery, childQuery, parentLookupQuery } = useObservableState(
+		reset$,
+		initialQueries
+	);
 
 	/**
 	 *
