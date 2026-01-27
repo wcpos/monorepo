@@ -104,7 +104,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 		(event: LayoutChangeEvent) => {
 			const { x, y, width, height } = event.nativeEvent.layout;
 			const layout: ItemLayout = { x, y, width, height };
-			uiLogger.debug(`[DND] handleLayout for ${id}`, { context: { layout } });
+			uiLogger.debug(`handleLayout for ${id}`, { context: { layout } });
 			registerItem(id, layout);
 		},
 		[id, registerItem]
@@ -125,7 +125,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 	// Debug logging function (called from worklet via scheduleOnRN)
 	const logDragStart = React.useCallback(
 		(itemId: string, index: number, positionsSnapshot: Record<string, number>) => {
-			uiLogger.debug(`[DND] Drag started for ${itemId}`, {
+			uiLogger.debug(`Drag started for ${itemId}`, {
 				context: { index, positions: positionsSnapshot },
 			});
 		},
@@ -142,7 +142,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 			offset: number,
 			newTarget: number
 		) => {
-			uiLogger.debug(`[DND] Drag update`, {
+			uiLogger.debug(`Drag update`, {
 				context: { from, to, translationY, hasLayout, itemSize, offset, newTarget },
 			});
 		},
@@ -150,7 +150,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 	);
 
 	const logDragEnd = React.useCallback((from: number, to: number) => {
-		uiLogger.debug(`[DND] Drag ended`, { context: { from, to } });
+		uiLogger.debug(`Drag ended`, { context: { from, to } });
 	}, []);
 
 	// Pan gesture for dragging
