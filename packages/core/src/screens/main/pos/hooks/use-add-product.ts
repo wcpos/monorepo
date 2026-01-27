@@ -3,10 +3,12 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { isRxDocument } from '@wcpos/database';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
@@ -32,6 +34,16 @@ export const useAddProduct = () => {
 	const t = useT();
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
+
+	// Create order-specific logger
+	const orderLogger = React.useMemo(
+		() =>
+			cartLogger.with({
+				orderId: currentOrder.uuid,
+				orderNumber: currentOrder.number,
+			}),
+		[currentOrder.uuid, currentOrder.number]
+	);
 
 	/**
 	 * Add product to order, or increment quantity if already in order
@@ -71,29 +83,27 @@ export const useAddProduct = () => {
 
 			// returned success should be the updated order
 			if (success) {
-				log.success(t('{name} added to cart', { _tags: 'core', name: product.name }), {
+				orderLogger.success(t('{name} added to cart', { _tags: 'core', name: product.name }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
 						productId: product.id,
 						productName: product.name,
-						orderId: currentOrder.id,
 					},
 				});
 			} else {
-				log.error(t('Error adding {name} to cart', { _tags: 'core', name: product.name }), {
+				orderLogger.error(t('Error adding {name} to cart', { _tags: 'core', name: product.name }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						productId: product.id,
 						productName: product.name,
-						orderId: currentOrder.id,
 					},
 				});
 			}
 		},
-		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]
+		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t, orderLogger]
 	);
 
 	return { addProduct };

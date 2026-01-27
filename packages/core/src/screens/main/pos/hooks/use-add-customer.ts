@@ -65,6 +65,7 @@ export const useAddCustomer = () => {
 
 			// Log customer assignment
 			orderLogger.info(t('Customer assigned: {customerName}', { _tags: 'core', customerName }), {
+				saveToDb: true,
 				context: {
 					customerId: data.id,
 					customerEmail: data.email,
