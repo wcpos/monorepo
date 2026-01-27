@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { filter, map } from 'rxjs/operators';
+import { filter, map, startWith } from 'rxjs/operators';
 
 import { useQueryManager } from './provider';
 
@@ -18,13 +18,22 @@ export interface QueryOptions {
 
 export const useQuery = (queryOptions: QueryOptions) => {
 	const manager = useQueryManager();
-	const query = useObservableState(
-		manager.localDB.reset$.pipe(
-			filter((collection) => collection.name === queryOptions.collectionName),
-			map(() => manager.registerQuery(queryOptions))
-		),
-		manager.registerQuery(queryOptions)
+
+	/**
+	 * Create the observable that re-registers queries on collection reset.
+	 * useMemo ensures we re-subscribe when manager changes (e.g., store switch).
+	 */
+	const reset$ = React.useMemo(
+		() =>
+			manager.localDB.reset$.pipe(
+				filter((collection) => collection.name === queryOptions.collectionName),
+				map(() => manager.registerQuery(queryOptions)),
+				startWith(manager.registerQuery(queryOptions))
+			),
+		[manager, queryOptions]
 	);
+
+	const query = useObservableState(reset$);
 
 	/**
 	 * Cleanup query replications when the component unmounts.
