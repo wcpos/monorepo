@@ -10,10 +10,12 @@ import type {
 	ProductDocument,
 	ProductVariationDocument,
 } from '@wcpos/database';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
+
+const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 type Document = OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument;
@@ -85,7 +87,7 @@ export const useLocalMutation = () => {
 				message = 'rxdb ' + error.code;
 				errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
 			}
-			log.error(t('There was an error: {message}', { _tags: 'core', message }), {
+			mutationLogger.error(t('There was an error: {message}', { _tags: 'core', message }), {
 				showToast: true,
 				saveToDb: true,
 				context: {

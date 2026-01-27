@@ -1,7 +1,9 @@
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
+
+const dbLogger = getLogger(['wcpos', 'db', 'delete']);
 
 const deleteDBPlugin: RxPlugin = {
 	name: 'delete-db',
@@ -49,7 +51,7 @@ const deleteDBPlugin: RxPlugin = {
 				if (storage?.name === 'indexeddb') {
 					const DBDeleteRequest = window.indexedDB.deleteDatabase(databaseName);
 					DBDeleteRequest.onerror = (event) => {
-						log.error('Error deleting database', {
+						dbLogger.error('Error deleting database', {
 							saveToDb: true,
 							context: {
 								errorCode: ERROR_CODES.TRANSACTION_FAILED,
@@ -58,7 +60,7 @@ const deleteDBPlugin: RxPlugin = {
 						});
 					};
 					DBDeleteRequest.onsuccess = (event) => {
-						log.info('Database deleted successfully', {
+						dbLogger.info('Database deleted successfully', {
 							context: { databaseName },
 						});
 					};

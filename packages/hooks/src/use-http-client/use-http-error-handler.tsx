@@ -3,10 +3,12 @@ import * as React from 'react';
 import { isCancel } from 'axios';
 import get from 'lodash/get';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { extractErrorMessage, extractWpErrorCode } from './parse-wp-error';
+
+const httpLogger = getLogger(['wcpos', 'http', 'error']);
 
 type AxiosResponse = import('axios').AxiosResponse;
 
@@ -14,8 +16,6 @@ type AxiosResponse = import('axios').AxiosResponse;
  *
  */
 const useHttpErrorHandler = () => {
-	// Logger is available as 'log'
-
 	/**
 	 * Handle HTTP error responses and show appropriate messages to users
 	 *
@@ -39,37 +39,37 @@ const useHttpErrorHandler = () => {
 		switch (res.status) {
 			case 0:
 				// SSL certificate error or invalid domain
-				log.error(extractErrorMessage(res.data, 'SSL certificate error'), {
+				httpLogger.error(extractErrorMessage(res.data, 'SSL certificate error'), {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.SSL_CERTIFICATE_ERROR, endpoint, wpErrorCode },
 				});
 				break;
 			case 400:
-				log.error(extractErrorMessage(res.data, 'Bad request'), {
+				httpLogger.error(extractErrorMessage(res.data, 'Bad request'), {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.INVALID_REQUEST_FORMAT, endpoint, wpErrorCode },
 				});
 				break;
 			case 401:
-				log.error(extractErrorMessage(res.data, 'Authentication failed'), {
+				httpLogger.error(extractErrorMessage(res.data, 'Authentication failed'), {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.INVALID_CREDENTIALS, endpoint, wpErrorCode },
 				});
 				break;
 			case 403:
-				log.error(extractErrorMessage(res.data, 'Access forbidden'), {
+				httpLogger.error(extractErrorMessage(res.data, 'Access forbidden'), {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.INSUFFICIENT_PERMISSIONS, endpoint, wpErrorCode },
 				});
 				break;
 			case 404:
-				log.error(extractErrorMessage(res.data, 'Resource not found'), {
+				httpLogger.error(extractErrorMessage(res.data, 'Resource not found'), {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.PLUGIN_NOT_FOUND, endpoint, wpErrorCode },
 				});
 				break;
 			case 500:
-				log.error(extractErrorMessage(res.data, 'Internal server error'), {
+				httpLogger.error(extractErrorMessage(res.data, 'Internal server error'), {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.CONNECTION_REFUSED, endpoint, wpErrorCode },
 				});
@@ -77,7 +77,7 @@ const useHttpErrorHandler = () => {
 			case 502:
 			case 503:
 			case 504:
-				log.error(extractErrorMessage(res.data, `Server unavailable (${res.status})`), {
+				httpLogger.error(extractErrorMessage(res.data, `Server unavailable (${res.status})`), {
 					showToast: true,
 					context: {
 						errorCode: ERROR_CODES.CONNECTION_TIMEOUT,
@@ -88,7 +88,7 @@ const useHttpErrorHandler = () => {
 				});
 				break;
 			default:
-				log.error(extractErrorMessage(res.data, `Unexpected response (${res.status})`), {
+				httpLogger.error(extractErrorMessage(res.data, `Unexpected response (${res.status})`), {
 					showToast: true,
 					context: {
 						errorCode: ERROR_CODES.UNEXPECTED_RESPONSE_CODE,
@@ -115,7 +115,7 @@ const useHttpErrorHandler = () => {
 				errorResponseHandler(response);
 			} else if (request) {
 				// client never received a response, or request never left
-				log.error(`Server unavailable: ${endpoint}`, {
+				httpLogger.error(`Server unavailable: ${endpoint}`, {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.CONNECTION_REFUSED, endpoint },
 				});
@@ -125,7 +125,7 @@ const useHttpErrorHandler = () => {
 			} else {
 				// anything else - network error, DNS failure, etc.
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				log.error(`Network error: ${errorMessage}`, {
+				httpLogger.error(`Network error: ${errorMessage}`, {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.NETWORK_UNREACHABLE, endpoint },
 				});

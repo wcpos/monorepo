@@ -10,10 +10,12 @@ import type {
 	ProductVariationDocument,
 } from '@wcpos/database';
 import { useQueryManager } from '@wcpos/query';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useLocalMutation } from './use-local-mutation';
+
+const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { CollectionKey, useCollection } from '../use-collection';
@@ -108,7 +110,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				}
 			}
 
-			log.error(message, {
+			mutationLogger.error(message, {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -128,7 +130,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	 */
 	const handleSuccess = React.useCallback(
 		(doc: RxDocument) => {
-			log.success(t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }), {
+			mutationLogger.success(t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -198,7 +200,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				try {
 					await doc.getLatest().incrementalPatch(originalValues);
 				} catch (rollbackError) {
-					log.debug('Failed to rollback local changes', {
+					mutationLogger.debug('Failed to rollback local changes', {
 						context: { documentId: doc.id, error: String(rollbackError) },
 					});
 				}
@@ -273,7 +275,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					try {
 						await localDoc.getLatest().remove();
 					} catch (removeError) {
-						log.debug('Failed to remove local document after create error', {
+						mutationLogger.debug('Failed to remove local document after create error', {
 							context: { error: String(removeError) },
 						});
 					}

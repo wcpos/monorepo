@@ -1,10 +1,12 @@
 import { Directory } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { closeAllDatabases, dbCache } from './adapters/default';
+
+const dbLogger = getLogger(['wcpos', 'db', 'clear']);
 
 export interface ClearDBResult {
 	success: boolean;
@@ -28,11 +30,11 @@ export interface ClearDBResult {
  */
 export const clearAllDB = async (): Promise<ClearDBResult> => {
 	try {
-		log.debug('Starting to clear all SQLite databases');
+		dbLogger.debug('Starting to clear all SQLite databases');
 
 		// Step 1: Close all open database connections first
 		// Databases must be closed before they can be deleted
-		log.debug(`Closing ${dbCache.size} cached database connections`);
+		dbLogger.debug(`Closing ${dbCache.size} cached database connections`);
 		await closeAllDatabases();
 
 		let deletedCount = 0;
@@ -43,14 +45,14 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 
 		for (const dbName of knownDatabases) {
 			try {
-				log.debug(`Attempting to delete known database: ${dbName}`);
+				dbLogger.debug(`Attempting to delete known database: ${dbName}`);
 				await SQLite.deleteDatabaseAsync(dbName);
 				deletedCount++;
-				log.debug(`Successfully deleted database: ${dbName}`);
+				dbLogger.debug(`Successfully deleted database: ${dbName}`);
 			} catch (error) {
 				// Database might not exist, which is fine
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				log.debug(
+				dbLogger.debug(
 					`Could not delete database ${dbName}: ${errorMessage || 'Database does not exist'}`
 				);
 			}
@@ -60,14 +62,14 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 		// This handles the dynamic store_v2_{id} and fast_store_v3_{id} databases
 		try {
 			const databaseDirectory = SQLite.defaultDatabaseDirectory;
-			log.debug(`Checking database directory: ${databaseDirectory}`);
+			dbLogger.debug(`Checking database directory: ${databaseDirectory}`);
 
 			const directory = new Directory(databaseDirectory);
 
 			if (directory.exists) {
 				const contents = await directory.list();
 				const fileNames = contents.map((item) => item.name);
-				log.debug(`Found ${fileNames.length} files in database directory`);
+				dbLogger.debug(`Found ${fileNames.length} files in database directory`);
 
 				// Filter for files that look like our app's databases
 				const appDatabaseFiles = fileNames.filter((file) => {
@@ -84,7 +86,7 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 					);
 				});
 
-				log.debug(
+				dbLogger.debug(
 					`Found ${appDatabaseFiles.length} app database files: ${JSON.stringify(appDatabaseFiles)}`
 				);
 
@@ -96,21 +98,21 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 					}
 
 					try {
-						log.debug(`Attempting to delete discovered database: ${fileName}`);
+						dbLogger.debug(`Attempting to delete discovered database: ${fileName}`);
 						await SQLite.deleteDatabaseAsync(fileName);
 						deletedCount++;
-						log.debug(`Successfully deleted database: ${fileName}`);
+						dbLogger.debug(`Successfully deleted database: ${fileName}`);
 					} catch (error) {
 						const errorMessage = error instanceof Error ? error.message : String(error);
-						log.debug(`Could not delete database ${fileName}: ${errorMessage}`);
+						dbLogger.debug(`Could not delete database ${fileName}: ${errorMessage}`);
 					}
 				}
 			} else {
-				log.debug('Database directory does not exist (no databases have been created yet)');
+				dbLogger.debug('Database directory does not exist (no databases have been created yet)');
 			}
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			log.debug(`Could not access database directory: ${errorMessage}`);
+			dbLogger.debug(`Could not access database directory: ${errorMessage}`);
 			// This is not a fatal error, we can still report success for known databases
 		}
 
@@ -119,7 +121,7 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 				? `Successfully cleared ${deletedCount} databases`
 				: 'No databases found to clear (this might mean the app is already in a clean state)';
 
-		log.info(message);
+		dbLogger.info(message);
 
 		return {
 			success: true,
@@ -127,7 +129,7 @@ export const clearAllDB = async (): Promise<ClearDBResult> => {
 			databasesDeleted: deletedCount,
 		};
 	} catch (error) {
-		log.error('Failed to clear databases', {
+		dbLogger.error('Failed to clear databases', {
 			showToast: true,
 			saveToDb: true,
 			context: {

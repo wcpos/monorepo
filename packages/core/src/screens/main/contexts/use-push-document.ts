@@ -4,10 +4,12 @@ import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
+
+const syncLogger = getLogger(['wcpos', 'sync', 'push']);
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 type RxDocument = import('rxdb').RxDocument;
@@ -29,7 +31,7 @@ const usePushDocument = () => {
 				const json = latestDoc.toJSON();
 				return { json, latestDoc };
 			} catch (err) {
-				log.error(t('Failed to prepare document data: {error}', { _tags: 'core', error: err.message }), {
+				syncLogger.error(t('Failed to prepare document data: {error}', { _tags: 'core', error: err.message }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -69,7 +71,7 @@ const usePushDocument = () => {
 					err?.response?.data,
 					t('Failed to send to server', { _tags: 'core' })
 				);
-				log.error(serverMessage, {
+				syncLogger.error(serverMessage, {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -103,7 +105,7 @@ const usePushDocument = () => {
 				
 				return latestDoc.incrementalPatch(parsedData);
 			} catch (err) {
-				log.error(t('Failed to update local document: {error}', { _tags: 'core', error: err.message }), {
+				syncLogger.error(t('Failed to update local document: {error}', { _tags: 'core', error: err.message }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
