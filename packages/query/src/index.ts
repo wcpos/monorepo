@@ -6,6 +6,7 @@ export { useLocalQuery } from './use-local-query';
 export { useRelationalQuery } from './use-relational-query';
 export { useReplicationState } from './use-replication-state';
 export { swapCollection, swapCollections } from './collection-swap';
+export { yieldToEventLoop, processInChunks, chunkedIterator } from './yield';
 // export { QueryDevtools } from './devtools';
 export type { RelationalQuery } from './relational-query-state';
 export type { Query, QueryHooks, QueryResult };
