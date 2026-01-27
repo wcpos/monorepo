@@ -36,22 +36,6 @@ describe('Manager', () => {
 			expect(manager.stringify(queryKey)).toBe(JSON.stringify(queryKey));
 		});
 
-		// TODO: Manager.error$ doesn't exist in current implementation
-		// Errors are logged via queryLogger.error() but not emitted to a Subject
-		// This test should be updated when error$ is added to Manager
-		it.skip('should handle serialization errors', (done) => {
-			const circularObj = {};
-			circularObj['self'] = circularObj;
-
-			manager.error$.subscribe((error) => {
-				expect(error).toBeInstanceOf(Error);
-				expect(error.message).toContain('Failed to serialize query key');
-				done();
-			});
-
-			manager.stringify([circularObj]);
-		});
-
 		it('should return true if query exists', () => {
 			const queryKeys = ['testQuery'];
 			manager.registerQuery({
@@ -70,17 +54,6 @@ describe('Manager', () => {
 			expect(manager.getCollection('products')).toBeDefined();
 		});
 
-		// TODO: Manager.error$ doesn't exist in current implementation
-		it.skip('should handle non-existent collections', (done) => {
-			manager.error$.subscribe((error) => {
-				expect(error).toBeInstanceOf(Error);
-				expect(error.message).toContain('Collection with name');
-				done();
-			});
-
-			manager.getCollection('nonExistentCollection');
-		});
-
 		it('should retrieve an existing query', () => {
 			const queryKeys = ['existingQuery'];
 			manager.registerQuery({
@@ -89,17 +62,6 @@ describe('Manager', () => {
 				initialParams: {},
 			});
 			expect(manager.getQuery(queryKeys)).toBeDefined();
-		});
-
-		// TODO: Manager.error$ doesn't exist in current implementation
-		it.skip('should handle non-existent queries', (done) => {
-			manager.error$.subscribe((error) => {
-				expect(error).toBeInstanceOf(Error);
-				expect(error.message).toContain('Query with key');
-				done();
-			});
-
-			manager.getQuery(['nonExistentQuery']);
 		});
 
 		it('should deregister a query', () => {

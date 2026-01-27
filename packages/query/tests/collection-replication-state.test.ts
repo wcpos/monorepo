@@ -107,10 +107,7 @@ describe('CollectionReplicationState', () => {
 		expect(spy).toHaveBeenCalledWith(3);
 	});
 
-	// TODO: This test fails because the HTTP mock requires exact param matching,
-	// but the actual code sends additional params (status, headers) that the mock doesn't expect.
-	// Need to either update the mock to support partial matching or update test with all params.
-	it.skip('will request the first page of records on the first sync', async () => {
+	it('will request the first page of records on the first sync', async () => {
 		const data = [{ id: 1 }, { id: 2 }, { id: 3 }];
 		httpClientMock.__setMockResponse('get', 'products', data, {
 			params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
@@ -148,8 +145,7 @@ describe('CollectionReplicationState', () => {
 		expect(sync.map((doc) => doc.status)).toEqual(['SYNCED', 'SYNCED', 'PULL_NEW']);
 	});
 
-	// TODO: Same issue as above - HTTP mock requires exact param matching
-	it.skip('marks items SYNCED', async () => {
+	it('marks items SYNCED', async () => {
 		const data = [
 			{ id: 1, date_modified_gmt: '2024-10-17T17:54:59' },
 			{ id: 2, date_modified_gmt: '2024-10-17T17:54:59' },
