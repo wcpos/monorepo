@@ -58,14 +58,27 @@ export class SubscribableBase {
 	 * - things we subscribe to in this class, also
 	 * - complete the subjects accessible from this class
 	 * - abort any pending async operations
+	 *
+	 * @returns Promise that resolves when cleanup is complete
 	 */
-	cancel() {
-		// Abort any pending async operations first
+	async cancel(): Promise<void> {
+		if (this.isCanceled) {
+			return; // Already canceled, avoid double cleanup
+		}
+
+		// Mark as canceled first to prevent new operations
+		this.isCanceled = true;
+
+		// Abort any pending async operations
 		this.abortController.abort();
 
+		// Unsubscribe all subscriptions
 		Object.values(this.subs).forEach((sub) => sub.unsubscribe());
+
+		// Complete all subjects
 		Object.values(this.subjects).forEach((subject) => subject.complete());
-		this.isCanceled = true;
+
+		// Signal cancellation to observers
 		this.cancelSubject.next();
 		this.cancelSubject.complete();
 	}

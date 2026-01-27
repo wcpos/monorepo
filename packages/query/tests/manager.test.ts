@@ -19,7 +19,7 @@ describe('Manager', () => {
 
 	afterEach(async () => {
 		if (manager) {
-			manager.cancel();
+			await manager.cancel();
 		}
 		if (storeDatabase && !storeDatabase.destroyed) {
 			await storeDatabase.remove();
@@ -113,9 +113,9 @@ describe('Manager', () => {
 			expect(manager.hasQuery(['queryToRemove'])).toBe(false);
 		});
 
-		it('should cancel all queries and subscriptions', () => {
+		it('should cancel all queries and subscriptions', async () => {
 			// Setup and trigger the cancel method
-			manager.cancel();
+			await manager.cancel();
 			expect(manager.isCanceled).toBe(true);
 			// Assertions for subscription cancellations and query cancellations
 		});

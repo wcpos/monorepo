@@ -111,9 +111,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.setupSubscriptions();
 	}
 
-	cancel() {
+	async cancel(): Promise<void> {
 		this.subjects.total.next(0);
-		super.cancel();
+		await super.cancel();
 	}
 
 	private setupSubscriptions() {

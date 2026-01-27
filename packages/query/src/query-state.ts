@@ -171,7 +171,7 @@ export class Query<T extends RxCollection>
 		}
 	}
 
-	cancel() {
+	async cancel(): Promise<void> {
 		this.subjects.result.next({
 			elapsed: 0,
 			searchActive: false,
@@ -179,7 +179,7 @@ export class Query<T extends RxCollection>
 			hits: [],
 		});
 		this.resource.destroy();
-		super.cancel();
+		await super.cancel();
 	}
 
 	/**

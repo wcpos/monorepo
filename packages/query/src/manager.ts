@@ -467,15 +467,27 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 * Make sure we clean up subscriptions:
 	 * - things we subscribe to in this class, also
 	 * - complete the observables accessible from this class
-	 * - cancel all queries
+	 * - cancel all queries and replications
+	 *
+	 * @returns Promise that resolves when all cleanup is complete
 	 */
-	cancel() {
-		super.cancel();
+	async cancel(): Promise<void> {
+		// Cancel base class first (aborts controller, unsubscribes)
+		await super.cancel();
 
-		// Cancel all queries
-		this.queryStates.forEach((query) => query.cancel());
+		// Cancel all queries in parallel
+		const queryPromises: Promise<void>[] = [];
+		this.queryStates.forEach((query) => {
+			queryPromises.push(query.cancel());
+		});
 
-		// Cancel all replications
-		this.replicationStates.forEach((replication) => replication.cancel());
+		// Cancel all replications in parallel
+		const replicationPromises: Promise<void>[] = [];
+		this.replicationStates.forEach((replication) => {
+			replicationPromises.push(replication.cancel());
+		});
+
+		// Wait for all to complete
+		await Promise.all([...queryPromises, ...replicationPromises]);
 	}
 }

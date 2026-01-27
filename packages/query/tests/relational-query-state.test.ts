@@ -92,9 +92,9 @@ describe('RelationalQuery', () => {
 			);
 
 			// Cleanup
-			relationalQuery.cancel();
-			childQuery.cancel();
-			parentLookupQuery.cancel();
+			await relationalQuery.cancel();
+			await childQuery.cancel();
+			await parentLookupQuery.cancel();
 		});
 
 		it('should initialize with all parent records when no search is active', async () => {
@@ -142,9 +142,9 @@ describe('RelationalQuery', () => {
 				})
 			);
 
-			relationalQuery.cancel();
-			childQuery.cancel();
-			parentLookupQuery.cancel();
+			await relationalQuery.cancel();
+			await childQuery.cancel();
+			await parentLookupQuery.cancel();
 		});
 
 		it('should clear search and return all results when search term is empty', async () => {
@@ -196,9 +196,9 @@ describe('RelationalQuery', () => {
 				})
 			);
 
-			relationalQuery.cancel();
-			childQuery.cancel();
-			parentLookupQuery.cancel();
+			await relationalQuery.cancel();
+			await childQuery.cancel();
+			await parentLookupQuery.cancel();
 		});
 	});
 
@@ -228,12 +228,10 @@ describe('RelationalQuery', () => {
 			);
 
 			// Cancel should not throw
-			expect(() => {
-				relationalQuery.cancel();
-			}).not.toThrow();
+			await expect(relationalQuery.cancel()).resolves.not.toThrow();
 
-			childQuery.cancel();
-			parentLookupQuery.cancel();
+			await childQuery.cancel();
+			await parentLookupQuery.cancel();
 		});
 
 		it('should inherit query builder methods from parent Query class', async () => {
@@ -265,9 +263,9 @@ describe('RelationalQuery', () => {
 			expect(typeof relationalQuery.sort).toBe('function');
 			expect(typeof relationalQuery.search).toBe('function');
 
-			relationalQuery.cancel();
-			childQuery.cancel();
-			parentLookupQuery.cancel();
+			await relationalQuery.cancel();
+			await childQuery.cancel();
+			await parentLookupQuery.cancel();
 		});
 	});
 });

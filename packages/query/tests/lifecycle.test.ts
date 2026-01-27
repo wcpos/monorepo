@@ -69,7 +69,7 @@ describe('Lifecycle Management', () => {
 	});
 
 	describe('Manager Cleanup', () => {
-		it('should cancel all queries when manager is cancelled', () => {
+		it('should cancel all queries when manager is cancelled', async () => {
 			const manager = Manager.getInstance(storeDatabase1, syncDatabase, httpClientMock);
 
 			// Register some queries
@@ -90,30 +90,33 @@ describe('Lifecycle Management', () => {
 			const cancelSpy1 = jest.spyOn(query1!, 'cancel');
 			const cancelSpy2 = jest.spyOn(query2!, 'cancel');
 
-			manager.cancel();
+			await manager.cancel();
 
 			expect(cancelSpy1).toHaveBeenCalled();
 			expect(cancelSpy2).toHaveBeenCalled();
 		});
 
-		it('should complete cancel$ observable when cancelled', (done) => {
+		it('should complete cancel$ observable when cancelled', async () => {
 			const manager = Manager.getInstance(storeDatabase1, syncDatabase, httpClientMock);
 
-			manager.cancel$.subscribe({
-				complete: () => {
-					done();
-				},
+			const completePromise = new Promise<void>((resolve) => {
+				manager.cancel$.subscribe({
+					complete: () => {
+						resolve();
+					},
+				});
 			});
 
-			manager.cancel();
+			await manager.cancel();
+			await completePromise;
 		});
 
-		it('should set isCanceled flag when cancelled', () => {
+		it('should set isCanceled flag when cancelled', async () => {
 			const manager = Manager.getInstance(storeDatabase1, syncDatabase, httpClientMock);
 
 			expect(manager.isCanceled).toBe(false);
 
-			manager.cancel();
+			await manager.cancel();
 
 			expect(manager.isCanceled).toBe(true);
 		});
@@ -195,24 +198,27 @@ describe('Lifecycle Management', () => {
 	});
 
 	describe('Query Cancellation', () => {
-		it('should complete all subjects when query is cancelled', (done) => {
+		it('should complete all subjects when query is cancelled', async () => {
 			const query = new Query({
 				id: 'test-query',
 				collection: storeDatabase1.collections.products,
 				initialParams: {},
 			});
 
-			query.cancel$.subscribe({
-				complete: () => {
-					expect(query.isCanceled).toBe(true);
-					done();
-				},
+			const completePromise = new Promise<void>((resolve) => {
+				query.cancel$.subscribe({
+					complete: () => {
+						expect(query.isCanceled).toBe(true);
+						resolve();
+					},
+				});
 			});
 
-			query.cancel();
+			await query.cancel();
+			await completePromise;
 		});
 
-		it('should unsubscribe all internal subscriptions when cancelled', () => {
+		it('should unsubscribe all internal subscriptions when cancelled', async () => {
 			const query = new Query({
 				id: 'test-query',
 				collection: storeDatabase1.collections.products,
@@ -225,7 +231,7 @@ describe('Lifecycle Management', () => {
 
 			expect(query.subs['test']).toBeDefined();
 
-			query.cancel();
+			await query.cancel();
 
 			// After cancel, subscriptions should be unsubscribed
 			expect(testSub.closed).toBe(true);
@@ -294,7 +300,7 @@ describe('Lifecycle Management', () => {
 			expect(query.isAborted).toBe(false);
 		});
 
-		it('should abort signal when cancelled', () => {
+		it('should abort signal when cancelled', async () => {
 			const query = new Query({
 				id: 'test-query',
 				collection: storeDatabase1.collections.products,
@@ -303,23 +309,23 @@ describe('Lifecycle Management', () => {
 
 			expect(query.isAborted).toBe(false);
 
-			query.cancel();
+			await query.cancel();
 
 			expect(query.isAborted).toBe(true);
 			expect(query.signal.aborted).toBe(true);
 		});
 
-		it('should abort manager signal when cancelled', () => {
+		it('should abort manager signal when cancelled', async () => {
 			const manager = Manager.getInstance(storeDatabase1, syncDatabase, httpClientMock);
 
 			expect(manager.isAborted).toBe(false);
 
-			manager.cancel();
+			await manager.cancel();
 
 			expect(manager.isAborted).toBe(true);
 		});
 
-		it('should abort all queries when manager is cancelled', () => {
+		it('should abort all queries when manager is cancelled', async () => {
 			const manager = Manager.getInstance(storeDatabase1, syncDatabase, httpClientMock);
 
 			const query1 = manager.registerQuery({
@@ -336,7 +342,7 @@ describe('Lifecycle Management', () => {
 			expect(query1!.isAborted).toBe(false);
 			expect(query2!.isAborted).toBe(false);
 
-			manager.cancel();
+			await manager.cancel();
 
 			expect(query1!.isAborted).toBe(true);
 			expect(query2!.isAborted).toBe(true);
