@@ -2,7 +2,7 @@ import { addRxPlugin, createRxDatabase, RxCollection, RxDatabase } from 'rxdb';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
-import { RxDBAuditLogPlugin, calculateChanges, getDocumentIdentifier } from './audit-log';
+import { calculateChanges, getDocumentIdentifier, RxDBAuditLogPlugin } from './audit-log';
 import { RxDBGenerateIdPlugin } from './generate-id';
 
 // Mock uuid to avoid ESM issues
@@ -167,7 +167,10 @@ describe('audit-log plugin', () => {
 		});
 
 		it('should return email for customers', () => {
-			const identifier = getDocumentIdentifier('customers', { email: 'test@example.com', uuid: '123' });
+			const identifier = getDocumentIdentifier('customers', {
+				email: 'test@example.com',
+				uuid: '123',
+			});
 			expect(identifier).toBe('test@example.com');
 		});
 
@@ -293,7 +296,9 @@ describe('audit-log plugin', () => {
 			expect(finalCount).toBe(initialCount + 1);
 
 			// Verify no AUDIT log was created for the logs collection
-			const auditLogs = await logsCollection.find({ selector: { code: { $regex: '^AUDIT_' } } }).exec();
+			const auditLogs = await logsCollection
+				.find({ selector: { code: { $regex: '^AUDIT_' } } })
+				.exec();
 			const logsCollectionAudit = auditLogs.find((log) => log.context?.collection === 'logs');
 			expect(logsCollectionAudit).toBeUndefined();
 		});
