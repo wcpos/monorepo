@@ -7,9 +7,9 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
+import { parseLinkHeader } from '../../../lib/url';
 
 const discoveryLogger = getLogger(['wcpos', 'auth', 'discovery']);
-import { parseLinkHeader } from '../../../lib/url';
 
 export type UrlDiscoveryStatus = 'idle' | 'discovering' | 'success' | 'error';
 

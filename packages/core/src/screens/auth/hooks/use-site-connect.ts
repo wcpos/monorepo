@@ -4,12 +4,12 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
-
-const siteLogger = getLogger(['wcpos', 'auth', 'site']);
 import { useT } from '../../../contexts/translations';
 import { useApiDiscovery } from './use-api-discovery';
 import { useAuthTesting } from './use-auth-testing';
 import { useUrlDiscovery } from './use-url-discovery';
+
+const siteLogger = getLogger(['wcpos', 'auth', 'site']);
 
 type SiteDocument = import('@wcpos/database').SiteDocument;
 

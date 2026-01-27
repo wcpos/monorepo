@@ -30,7 +30,7 @@ export const SaveButton = () => {
 		try {
 			await pushDocument(currentOrder).then((savedDoc) => {
 				/**
-				 * TODO; move this geenric sanckbar to the pushDocument hook
+				 * TODO; move this generic sanckbar to the pushDocument hook
 				 */
 				if (isRxDocument(savedDoc)) {
 					cartLogger.success(
