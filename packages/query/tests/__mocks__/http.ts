@@ -17,6 +17,8 @@ interface HttpClientMock {
 		options?: { params?: any; data?: any }
 	) => void;
 	__resetMockResponses: () => void;
+	__enableVerbose: () => void;
+	__disableVerbose: () => void;
 }
 
 type HttpMethod = 'get' | 'post' | 'put' | 'delete';
@@ -24,6 +26,38 @@ type HttpMethod = 'get' | 'post' | 'put' | 'delete';
 const mockResponses: Record<HttpMethod, Record<string, Record<string, any>>> = {
 	get: {},
 	post: {},
+	put: {},
+	delete: {},
+};
+
+/**
+ * Whether to log warnings for unmocked requests.
+ * Disabled by default to reduce test noise.
+ */
+let verboseMode = false;
+
+/**
+ * Default responses for common sync endpoints.
+ * These prevent "No mock response" errors for tests that don't care about sync.
+ * Tests that need specific responses can still use __setMockResponse to override.
+ */
+const defaultResponses: Record<HttpMethod, Record<string, any>> = {
+	get: {
+		// fetchAllRemoteIds - return empty array (no remote records)
+		products: [],
+		variations: [],
+		orders: [],
+		customers: [],
+		'products/categories': [],
+		'products/tags': [],
+	},
+	post: {
+		// fetchRemoteByIDs - return empty array (no records to fetch)
+		products: [],
+		variations: [],
+		orders: [],
+		customers: [],
+	},
 	put: {},
 	delete: {},
 };
@@ -57,6 +91,12 @@ const httpClientMock: HttpClientMock = {
 		Object.keys(mockResponses).forEach((method) => {
 			mockResponses[method as HttpMethod] = {};
 		});
+	},
+	__enableVerbose: () => {
+		verboseMode = true;
+	},
+	__disableVerbose: () => {
+		verboseMode = false;
 	},
 };
 
@@ -130,12 +170,20 @@ function resolveResponse(method: HttpMethod, url: string, config?: AxiosRequestC
 
 	if (mockResponse !== undefined) {
 		return Promise.resolve({ data: mockResponse });
-	} else {
-		// No mock response found
-		const key = getMockKey(url, params, data);
-		console.error(`No mock response for ${method.toUpperCase()} ${key}`);
-		return Promise.reject(new Error(`No mock response for ${method.toUpperCase()} ${key}`));
 	}
+
+	// Check for default response (for common sync endpoints)
+	const defaultResponse = defaultResponses[method]?.[url];
+	if (defaultResponse !== undefined) {
+		return Promise.resolve({ data: defaultResponse });
+	}
+
+	// No mock response found
+	const key = getMockKey(url, params, data);
+	if (verboseMode) {
+		console.warn(`No mock response for ${method.toUpperCase()} ${key}`);
+	}
+	return Promise.reject(new Error(`No mock response for ${method.toUpperCase()} ${key}`));
 }
 
 export { httpClientMock };
