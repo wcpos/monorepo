@@ -5,9 +5,11 @@
 import * as React from 'react';
 
 import AppInfo from '@wcpos/utils/app-info';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { buildAuthUrl, generateState, getRedirectUri } from './utils';
+
+const oauthLogger = getLogger(['wcpos', 'auth', 'oauth']);
 
 import type { UseWcposAuthReturn, WcposAuthConfig, WcposAuthResult } from './types';
 
@@ -47,7 +49,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 
 	const promptAsync = React.useCallback(async (): Promise<WcposAuthResult | void> => {
 		if (!config.site) {
-			log.warn('Auth not ready - no site configured');
+			oauthLogger.warn('Auth not ready - no site configured');
 			return;
 		}
 
@@ -62,7 +64,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			mergedExtraParams
 		);
 
-		log.debug('Triggering Electron auth flow via IPC', {
+		oauthLogger.debug('Triggering Electron auth flow via IPC', {
 			context: { authUrl, redirectUri, state: state.substring(0, 8) + '...' },
 		});
 
@@ -73,7 +75,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 				state, // Pass state to main process for validation
 			})) as IpcAuthResult;
 
-			log.debug('Auth IPC result received', {
+			oauthLogger.debug('Auth IPC result received', {
 				context: { type: result.type },
 			});
 
@@ -81,7 +83,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			if (result.type === 'success' && result.params) {
 				const returnedState = result.params.state;
 				if (returnedState !== state) {
-					log.error('State parameter mismatch - possible CSRF attack', {
+					oauthLogger.error('State parameter mismatch - possible CSRF attack', {
 						context: {
 							expected: state.substring(0, 8) + '...',
 							received: returnedState?.substring(0, 8) + '...',
@@ -107,7 +109,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			setResponse(authResult);
 			return authResult;
 		} catch (err) {
-			log.error('Auth IPC failed', {
+			oauthLogger.error('Auth IPC failed', {
 				context: { error: err instanceof Error ? err.message : String(err) },
 			});
 

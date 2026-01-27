@@ -6,12 +6,14 @@ import merge from 'lodash/merge';
 import useHttpClient, { RequestConfig, requestStateManager } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { errorSubject, useAuthErrorHandler } from './auth-error-handler';
 import { createRefreshHttpClient } from './refresh-http-client';
+
+const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 
 /**
  *
@@ -23,7 +25,7 @@ function extractValidJSON(responseString) {
 	const indexOfJsonStart = responseString.search(/[{[]/);
 
 	if (indexOfJsonStart === -1) {
-		log.error('Server returned invalid response - no JSON found', {
+		httpLogger.error('Server returned invalid response - no JSON found', {
 			saveToDb: true,
 			context: {
 				errorCode: ERROR_CODES.MALFORMED_JSON_RESPONSE,
@@ -45,7 +47,7 @@ function extractValidJSON(responseString) {
 		}
 	}
 
-	log.error('Unable to parse server response', {
+	httpLogger.error('Unable to parse server response', {
 		saveToDb: true,
 		context: {
 			errorCode: ERROR_CODES.MALFORMED_JSON_RESPONSE,
@@ -150,7 +152,7 @@ export const useRestHttpClient = (endpoint = '') => {
 			const jwt = refreshedToken || wpCredentials.access_token;
 
 			if (refreshedToken) {
-				log.debug('Using in-memory refreshed token (RxDB may not have persisted yet)', {
+				httpLogger.debug('Using in-memory refreshed token (RxDB may not have persisted yet)', {
 					context: {
 						endpoint,
 						url: reqConfig.url,
@@ -198,7 +200,7 @@ export const useRestHttpClient = (endpoint = '') => {
 				 * eg: rando WordPress plugin echo's out a bunch of HTML before the JSON
 				 */
 				if (typeof response?.data === 'string') {
-					log.warn('Server returned text instead of JSON - attempting recovery', {
+					httpLogger.warn('Server returned text instead of JSON - attempting recovery', {
 						saveToDb: true,
 						context: {
 							errorCode: ERROR_CODES.JSON_RECOVERY_ATTEMPTED,
@@ -210,7 +212,7 @@ export const useRestHttpClient = (endpoint = '') => {
 					response.data = extractValidJSON(response?.data);
 
 					if (response.data) {
-						log.debug('Successfully recovered valid JSON from response');
+						httpLogger.debug('Successfully recovered valid JSON from response');
 					}
 				}
 				return response;

@@ -1,5 +1,11 @@
 /**
  * Simple logger that works immediately and can be enhanced progressively
+ *
+ * Features:
+ * - Hierarchical categories: getLogger(['wcpos', 'pos', 'cart'])
+ * - Explicit contexts: logger.with({ orderId: '123' })
+ * - Lazy evaluation: logger.debug(() => expensiveComputation())
+ * - Toast notifications and database persistence
  */
 import { logger } from 'react-native-logs';
 
@@ -20,6 +26,17 @@ export interface LoggerOptions {
 		};
 	};
 }
+
+/**
+ * Lazy message type - either a string or a function that returns a string
+ * Use functions for expensive computations that should only run if the log level is enabled
+ */
+export type LazyMessage = string | (() => string);
+
+/**
+ * Lazy context type - either an object or a function that returns an object
+ */
+export type LazyContext = Record<string, any> | (() => Record<string, any>);
 
 // Extended logger interface with custom options support
 export interface ExtendedLogger {
@@ -298,6 +315,192 @@ if (typeof window !== 'undefined') {
 		error: log.error,
 		success: log.success,
 	};
+}
+
+/**
+ * ============================================================================
+ * HIERARCHICAL CATEGORY LOGGER
+ * ============================================================================
+ *
+ * Create loggers with hierarchical categories for better organization:
+ *
+ * @example
+ * ```typescript
+ * const posLogger = getLogger(['wcpos', 'pos']);
+ * const cartLogger = posLogger.getChild('cart');
+ *
+ * // With bound context
+ * const orderLogger = cartLogger.with({ orderId: '123' });
+ * orderLogger.info('Item added'); // Includes category and orderId automatically
+ * ```
+ */
+
+/**
+ * Resolve a lazy value (function or direct value)
+ */
+function resolveLazy<T>(value: T | (() => T)): T {
+	return typeof value === 'function' ? (value as () => T)() : value;
+}
+
+/**
+ * Check if the given log level should be logged based on current level
+ */
+function shouldLog(level: LogLevel): boolean {
+	const levelSeverity = LOG_LEVEL_SEVERITY[level] ?? 0;
+	const currentSeverity = LOG_LEVEL_SEVERITY[currentLogLevel];
+	return levelSeverity >= currentSeverity;
+}
+
+/**
+ * Category-based logger with hierarchical organization
+ *
+ * @example
+ * ```typescript
+ * const logger = getLogger(['wcpos', 'pos', 'cart']);
+ * logger.info('Item added to cart');
+ * // Output: "10:30:45 | INFO : Item added to cart | Context: {"category":"wcpos.pos.cart"}"
+ * ```
+ */
+export class CategoryLogger {
+	constructor(
+		protected category: string[],
+		protected boundContext: Record<string, any> = {}
+	) {}
+
+	/**
+	 * Create a child logger with additional category segments
+	 *
+	 * @example
+	 * ```typescript
+	 * const posLogger = getLogger(['wcpos', 'pos']);
+	 * const cartLogger = posLogger.getChild('cart');
+	 * const checkoutLogger = posLogger.getChild(['checkout', 'payment']);
+	 * ```
+	 */
+	getChild(subcategory: string | string[]): CategoryLogger {
+		const sub = Array.isArray(subcategory) ? subcategory : [subcategory];
+		return new CategoryLogger([...this.category, ...sub], this.boundContext);
+	}
+
+	/**
+	 * Create a new logger with bound context that persists across all log calls
+	 *
+	 * @example
+	 * ```typescript
+	 * const orderLogger = logger.with({ orderId: '123', customerId: '456' });
+	 * orderLogger.info('Processing'); // orderId and customerId automatically included
+	 * orderLogger.info('Complete');   // Same context, no need to repeat
+	 * ```
+	 */
+	with(context: Record<string, any>): CategoryLogger {
+		return new CategoryLogger(this.category, {
+			...this.boundContext,
+			...context,
+		});
+	}
+
+	/**
+	 * Get the category as a dot-separated string
+	 */
+	getCategoryString(): string {
+		return this.category.join('.');
+	}
+
+	/**
+	 * Build the final options object with category and bound context
+	 */
+	protected buildOptions(options?: LoggerOptions): LoggerOptions {
+		return {
+			...options,
+			context: {
+				category: this.getCategoryString(),
+				...this.boundContext,
+				...options?.context,
+			},
+		};
+	}
+
+	/**
+	 * Debug level log - for development details, hidden in production by default
+	 *
+	 * Supports lazy evaluation:
+	 * @example
+	 * ```typescript
+	 * // Eager - always computed
+	 * logger.debug('Cart state', { context: { items: cart.items } });
+	 *
+	 * // Lazy - only computed if debug level is enabled
+	 * logger.debug(() => `Cart state: ${JSON.stringify(cart.getFullState())}`);
+	 * ```
+	 */
+	debug(message: LazyMessage, options?: LoggerOptions): void {
+		// Only resolve lazy message if we're actually going to log
+		if (!shouldLog('debug') && !options?.showToast && !options?.saveToDb) {
+			return;
+		}
+		const resolvedMessage = resolveLazy(message);
+		log.debug(resolvedMessage, this.buildOptions(options));
+	}
+
+	/**
+	 * Info level log - meaningful state changes worth tracking
+	 */
+	info(message: LazyMessage, options?: LoggerOptions): void {
+		const resolvedMessage = resolveLazy(message);
+		log.info(resolvedMessage, this.buildOptions(options));
+	}
+
+	/**
+	 * Warning level log - potential issues that don't block functionality
+	 */
+	warn(message: LazyMessage, options?: LoggerOptions): void {
+		const resolvedMessage = resolveLazy(message);
+		log.warn(resolvedMessage, this.buildOptions(options));
+	}
+
+	/**
+	 * Error level log - failures that need attention
+	 */
+	error(message: LazyMessage, options?: LoggerOptions): void {
+		const resolvedMessage = resolveLazy(message);
+		log.error(resolvedMessage, this.buildOptions(options));
+	}
+
+	/**
+	 * Success level log - successful user actions
+	 */
+	success(message: LazyMessage, options?: LoggerOptions): void {
+		const resolvedMessage = resolveLazy(message);
+		log.success(resolvedMessage, this.buildOptions(options));
+	}
+}
+
+/**
+ * Factory function to create a category-based logger
+ *
+ * @param category - Array of category segments (e.g., ['wcpos', 'pos', 'cart'])
+ * @returns CategoryLogger instance
+ *
+ * @example
+ * ```typescript
+ * // Create a logger for the POS cart module
+ * const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+ *
+ * // Log with automatic category context
+ * cartLogger.info('Product added', { context: { productId: '123' } });
+ *
+ * // Create a child logger for checkout
+ * const checkoutLogger = cartLogger.getChild('checkout');
+ *
+ * // Create a logger with bound context for a specific order
+ * const orderLogger = cartLogger.with({ orderId: order.uuid });
+ * orderLogger.info('Line item added');
+ * orderLogger.info('Discount applied');
+ * orderLogger.success('Order saved', { showToast: true });
+ * ```
+ */
+export function getLogger(category: string[]): CategoryLogger {
+	return new CategoryLogger(category);
 }
 
 export default log;

@@ -5,13 +5,15 @@ import { useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { Button } from '@wcpos/components/button';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
 import usePushDocument from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useCurrentOrder } from '../../contexts/current-order';
+
+const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
 
 /**
  *
@@ -30,28 +32,41 @@ export const PayButton = () => {
 	 */
 	const handlePay = React.useCallback(async () => {
 		setLoading(true);
+		const orderLogger = checkoutLogger.with({
+			orderId: currentOrder.uuid,
+			orderNumber: currentOrder.number,
+		});
+
 		try {
 			await pushDocument(currentOrder).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
+					// Log checkout started
+					orderLogger.info(t('Checkout started', { _tags: 'core' }), {
+						saveToDb: true,
+						context: {
+							total,
+							lineItemCount: currentOrder.line_items?.length || 0,
+						},
+					});
+
 					router.push({
 						pathname: `(modals)/cart/${currentOrder.uuid}/checkout`,
 					});
 				}
 			});
 		} catch (error) {
-			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			orderLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					orderId: currentOrder.id,
 					error: error instanceof Error ? error.message : String(error),
 				},
 			});
 		} finally {
 			setLoading(false);
 		}
-	}, [pushDocument, currentOrder, router, t]);
+	}, [pushDocument, currentOrder, router, t, total]);
 
 	/**
 	 *

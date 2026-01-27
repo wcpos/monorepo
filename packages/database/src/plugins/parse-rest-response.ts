@@ -3,9 +3,11 @@ import difference from 'lodash/difference';
 import isPlainObject from 'lodash/isPlainObject';
 import unset from 'lodash/unset';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import type { RxCollection, RxJsonSchema, RxPlugin } from 'rxdb';
+
+const dbLogger = getLogger(['wcpos', 'db', 'parse']);
 
 type ExtendedRxJsonSchema<T> = RxJsonSchema<T> & {
 	ref?: string;
@@ -77,7 +79,7 @@ export function pruneProperties(schema: ExtendedRxJsonSchema<any>, json: Record<
 	const topLevelFields = Object.keys(schema.properties);
 	const omitProperties = difference(Object.keys(json), topLevelFields);
 	if (omitProperties.length > 0) {
-		log.debug('the following properties are being omitted', { context: { omitProperties } });
+		dbLogger.debug('the following properties are being omitted', { context: { omitProperties } });
 		omitProperties.forEach((prop: string) => {
 			unset(json, prop);
 		});

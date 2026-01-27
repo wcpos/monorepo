@@ -2,9 +2,11 @@ import * as React from 'react';
 
 import type { StoreDocument } from '@wcpos/database';
 import Platform from '@wcpos/utils/platform';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
+
+const appLogger = getLogger(['wcpos', 'app', 'state']);
 import { hydrateUserSession } from './hydration-steps';
 
 import type { HydrationContext } from './hydration-steps';

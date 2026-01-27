@@ -3,12 +3,14 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 
 import { Button } from '@wcpos/components/button';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
 import useDeleteDocument from '../../../contexts/use-delete-document';
 import { useCurrentOrder } from '../../contexts/current-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
 
 /**
  *
@@ -25,19 +27,19 @@ export const VoidButton = () => {
 	const undoRemove = React.useCallback(
 		async (orderJson) => {
 			try {
-			await currentOrder.collection.insert(orderJson);
-			router.setParams({ orderID: orderJson.uuid });
-		} catch (err) {
-			log.error('Failed to restore order', {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					orderId: orderJson.uuid,
-					error: err instanceof Error ? err.message : String(err),
-				},
-			});
-		}
+				await currentOrder.collection.insert(orderJson);
+				router.setParams({ orderID: orderJson.uuid });
+			} catch (err) {
+				cartLogger.error('Failed to restore order', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						orderId: orderJson.uuid,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
+			}
 		},
 		[router, currentOrder.collection]
 	);
@@ -52,7 +54,7 @@ export const VoidButton = () => {
 			deleteDocument(latest.id, latest.collection);
 		}
 		latest.remove();
-		log.success(t('Order removed', { _tags: 'core' }), {
+		cartLogger.success(t('Order removed', { _tags: 'core' }), {
 			showToast: true,
 			saveToDb: true,
 			toast: {

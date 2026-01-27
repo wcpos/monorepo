@@ -3,8 +3,10 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
+
+const novuLogger = getLogger(['wcpos', 'notifications', 'novu']);
 import type { NotificationCollection } from '@wcpos/database';
 
 import { useAppState } from '../contexts/app-state';
@@ -120,14 +122,14 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		// External URLs (http://, https://)
 		if (url.startsWith('http://') || url.startsWith('https://')) {
 			openExternalURL(url).catch((error) => {
-				log.error('Novu: Failed to open external URL', { context: { url, error } });
+				novuLogger.error('Novu: Failed to open external URL', { context: { url, error } });
 			});
 			return;
 		}
 
 		// Internal routes - TODO: integrate with navigation when needed
 		// For now, just log - the app can implement navigation handling later
-		log.info('Novu: Internal navigation requested', { context: { url } });
+		novuLogger.info('Novu: Internal navigation requested', { context: { url } });
 	}, []);
 
 	/**
@@ -180,7 +182,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				});
 			} else if (behavior.saveToDb) {
 				// Save to logs DB without showing toast
-				log.info(title, {
+				novuLogger.info(title, {
 					saveToDb: true,
 					context: body ? { body } : undefined,
 				});
@@ -201,7 +203,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 
 			const notificationId = notification.id;
 			if (!notificationId) {
-				log.error('Novu: Notification missing ID', {
+				novuLogger.error('Novu: Notification missing ID', {
 					context: { keys: Object.keys(notification) },
 				});
 				return;
@@ -232,9 +234,9 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 					workflowId,
 					channel: notification.channelType || 'in_app',
 				});
-				log.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
+				novuLogger.debug('Novu: Notification synced to RxDB', { context: { id: notificationId } });
 			} catch (error) {
-				log.error('Novu: Failed to sync notification to RxDB', {
+				novuLogger.error('Novu: Failed to sync notification to RxDB', {
 					context: { notificationId, error },
 				});
 			}
@@ -270,7 +272,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			return;
 		}
 
-		log.info('Novu: Setting up client and WebSocket listeners', {
+		novuLogger.info('Novu: Setting up client and WebSocket listeners', {
 			context: { subscriberId },
 		});
 
@@ -282,7 +284,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		const unsubscribe = subscribeToNovuEvents({
 			onNotificationReceived: (notification) => {
 				const data = notification.data as { workflowId?: string } | undefined;
-				log.info('Novu: Processing notification from WebSocket', {
+				novuLogger.info('Novu: Processing notification from WebSocket', {
 					context: {
 						id: notification.id,
 						subject: notification.subject,
@@ -293,7 +295,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				syncNotificationToRxDB(notification, true);
 			},
 			onUnreadCountChanged: (count) => {
-				log.debug('Novu: Unread count updated via WebSocket', { context: { count } });
+				novuLogger.debug('Novu: Unread count updated via WebSocket', { context: { count } });
 				// The local RxDB query will update automatically when we sync
 			},
 		});
@@ -309,15 +311,15 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			// This ensures welcome notifications can be received in real-time
 			waitForNovuReady(5000).then((connected) => {
 				if (!connected) {
-					log.warn('Novu: Socket connection timeout, syncing anyway');
+					novuLogger.warn('Novu: Socket connection timeout, syncing anyway');
 				}
 
 				syncSubscriberToServer(subscriberId, subscriberMetadata)
 					.then((result) => {
 						if (result.success) {
-							log.info('Novu: Subscriber metadata synced successfully');
+							novuLogger.info('Novu: Subscriber metadata synced successfully');
 						} else {
-							log.warn('Novu: Failed to sync subscriber metadata', {
+							novuLogger.warn('Novu: Failed to sync subscriber metadata', {
 								context: { error: result.error },
 							});
 							// Reset on failure so we can retry
@@ -325,7 +327,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 						}
 					})
 					.catch((error) => {
-						log.error('Novu: Error syncing subscriber metadata', {
+						novuLogger.error('Novu: Error syncing subscriber metadata', {
 							context: { error: error instanceof Error ? error.message : String(error) },
 						});
 						syncedSubscriberRef.current = null;
@@ -337,13 +339,13 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		setIsLoading(true);
 		fetchNotifications()
 			.then((notifications) => {
-				log.info('Novu: Initial notifications loaded', {
+				novuLogger.info('Novu: Initial notifications loaded', {
 					context: { count: notifications.length },
 				});
 				return syncToRxDB(notifications);
 			})
 			.catch((error) => {
-				log.error('Novu: Failed to load initial notifications', {
+				novuLogger.error('Novu: Failed to load initial notifications', {
 					context: { error: error instanceof Error ? error.message : String(error) },
 				});
 			})
@@ -353,7 +355,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 
 		// Cleanup on unmount or subscriber change
 		return () => {
-			log.debug('Novu: Cleaning up WebSocket listeners');
+			novuLogger.debug('Novu: Cleaning up WebSocket listeners');
 			unsubscribe();
 			setIsConnected(false);
 		};
@@ -374,7 +376,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				// Then update Novu
 				await novuMarkAsRead(notificationId);
 			} catch (error) {
-				log.error('Novu: Failed to mark notification as read', { context: { error } });
+				novuLogger.error('Novu: Failed to mark notification as read', { context: { error } });
 			}
 		},
 		[notificationsCollection]
@@ -400,7 +402,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			// Then update Novu
 			await novuMarkAllAsRead();
 		} catch (error) {
-			log.error('Novu: Failed to mark all notifications as read', { context: { error } });
+			novuLogger.error('Novu: Failed to mark all notifications as read', { context: { error } });
 		}
 	}, [notificationsCollection, subscriberId]);
 
@@ -424,14 +426,14 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			// Then update Novu
 			await novuMarkAllAsSeen();
 		} catch (error) {
-			log.error('Novu: Failed to mark all notifications as seen', { context: { error } });
+			novuLogger.error('Novu: Failed to mark all notifications as seen', { context: { error } });
 		}
 	}, [notificationsCollection, subscriberId]);
 
 	// Refresh notifications from Novu server
 	const refresh = React.useCallback(async () => {
 		if (!isConfigured) {
-			log.warn('Novu: Not configured, skipping refresh');
+			novuLogger.warn('Novu: Not configured, skipping refresh');
 			return;
 		}
 
@@ -439,11 +441,11 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		try {
 			const novuNotifications = await fetchNotifications();
 			await syncToRxDB(novuNotifications);
-			log.info('Novu: Notifications refreshed', {
+			novuLogger.info('Novu: Notifications refreshed', {
 				context: { count: novuNotifications.length },
 			});
 		} catch (error) {
-			log.error('Novu: Failed to refresh notifications', { context: { error } });
+			novuLogger.error('Novu: Failed to refresh notifications', { context: { error } });
 		} finally {
 			setIsLoading(false);
 		}

@@ -4,10 +4,12 @@ import { useObservableState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { PriceWithTax } from './price-with-tax';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'product']);
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -18,7 +20,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
  */
 function getVariablePrices(metaData) {
 	if (!metaData) {
-		log.error('metaData is not defined', {
+		uiLogger.error('metaData is not defined', {
 			context: {
 				errorCode: ERROR_CODES.MISSING_REQUIRED_FIELD,
 			},
@@ -29,7 +31,7 @@ function getVariablePrices(metaData) {
 	const metaDataEntry = metaData.find((m) => m.key === '_woocommerce_pos_variable_prices');
 
 	if (!metaDataEntry) {
-		log.error("No '_woocommerce_pos_variable_prices' key found in metaData", {
+		uiLogger.error("No '_woocommerce_pos_variable_prices' key found in metaData", {
 			context: {
 				errorCode: ERROR_CODES.MISSING_REQUIRED_FIELD,
 			},
@@ -41,7 +43,7 @@ function getVariablePrices(metaData) {
 		const variablePrices = JSON.parse(metaDataEntry.value);
 		return variablePrices;
 	} catch (error) {
-		log.error("Unable to parse '_woocommerce_pos_variable_prices' value into JSON", {
+		uiLogger.error("Unable to parse '_woocommerce_pos_variable_prices' value into JSON", {
 			context: {
 				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
 				value: metaDataEntry.value,

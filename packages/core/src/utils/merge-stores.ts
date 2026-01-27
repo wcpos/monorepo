@@ -1,7 +1,9 @@
 import * as Crypto from 'expo-crypto';
 
 import type { StoreDocument, UserDatabase, WPCredentialsDocument } from '@wcpos/database';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
+
+const appLogger = getLogger(['wcpos', 'app', 'stores']);
 
 /**
  * Generate a unique localID for stores
@@ -73,7 +75,7 @@ export async function mergeStoresWithResponse({
 		if (storesToRemove.length > 0) {
 			const storeIdsToRemove = storesToRemove.map((store) => store.localID);
 			await userDB.stores.bulkRemove(storeIdsToRemove);
-			log.debug('Removed stores no longer in response', {
+			appLogger.debug('Removed stores no longer in response', {
 				context: {
 					removedStoreIds: storesToRemove.map((store) => store.id),
 					removedLocalIDs: storeIdsToRemove,
@@ -84,7 +86,7 @@ export async function mergeStoresWithResponse({
 		// Upsert stores from the response (this handles both new and existing stores)
 		if (remoteStoresWithLocalID.length > 0) {
 			await userDB.stores.bulkInsert(remoteStoresWithLocalID); // will not overwrite existing data
-			log.debug('Upserted stores from response', {
+			appLogger.debug('Upserted stores from response', {
 				context: {
 					storeIds: remoteStoresWithLocalID.map((store) => store.id),
 					localIDs: remoteStoresWithLocalID.map((store) => store.localID),
@@ -98,7 +100,7 @@ export async function mergeStoresWithResponse({
 			stores: newStoreLocalIDs,
 		});
 
-		log.debug('Successfully merged stores with response', {
+		appLogger.debug('Successfully merged stores with response', {
 			context: {
 				totalRemoteStores: remoteStores.length,
 				removedStores: storesToRemove.length,
@@ -109,7 +111,7 @@ export async function mergeStoresWithResponse({
 		return newStoreLocalIDs;
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
-		log.error('Failed to merge stores with response', {
+		appLogger.error('Failed to merge stores with response', {
 			context: {
 				error: errorMsg,
 				wpUserUuid: wpUser.uuid,

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -8,6 +8,8 @@ import { useT } from '../../../contexts/translations';
 import { useApiDiscovery } from './use-api-discovery';
 import { useAuthTesting } from './use-auth-testing';
 import { useUrlDiscovery } from './use-url-discovery';
+
+const siteLogger = getLogger(['wcpos', 'auth', 'site']);
 
 type SiteDocument = import('@wcpos/database').SiteDocument;
 
@@ -89,7 +91,6 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 	const [progress, setProgress] = React.useState<SiteConnectProgress | null>(null);
 	const [error, setError] = React.useState<string | null>(null);
 	const t = useT();
-	// Logger available as 'log'
 
 	// Individual discovery hooks
 	const urlDiscovery = useUrlDiscovery();
@@ -144,13 +145,13 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 				if (existingSite) {
 					// Update existing site
 					await existingSite.incrementalPatch(parsedData);
-					log.debug(`Updated site: ${siteData.name}`);
+					siteLogger.debug(`Updated site: ${siteData.name}`);
 					return existingSite.getLatest();
 				} else {
 					// Add new site to user's sites list
 					await user.incrementalUpdate({ $push: { sites: parsedData } });
 					const newSite = await (userDB.sites as any).findOneFix(siteData.uuid).exec();
-					log.debug(`Added new site: ${siteData.name}`);
+					siteLogger.debug(`Added new site: ${siteData.name}`);
 					return newSite;
 				}
 			} catch (err) {
@@ -176,7 +177,7 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 					}
 				}
 
-				log.error(`Failed to save site data: ${err.message}`, {
+				siteLogger.error(`Failed to save site data: ${err.message}`, {
 					showToast: true,
 					context: {
 						errorCode,
@@ -197,7 +198,7 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 		async (url: string): Promise<SiteDocument | null> => {
 			if (!url || url.trim() === '') {
 				const errorMsg = t('URL is required', { _tags: 'core' });
-				log.error(errorMsg, {
+				siteLogger.error(errorMsg, {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
 				});
@@ -261,7 +262,7 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 					message: t('Site connected successfully!', { _tags: 'core' }),
 				});
 
-				log.info(`Site connected: ${savedSite.name}`);
+				siteLogger.info(`Site connected: ${savedSite.name}`);
 
 				return savedSite;
 			} catch (err) {

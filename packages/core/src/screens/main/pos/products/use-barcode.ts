@@ -1,9 +1,11 @@
 import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
+
+const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
 import { useUISettings } from '../../contexts/ui-settings';
 import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
 import { useCollection } from '../../hooks/use-collection';
@@ -36,7 +38,7 @@ export const useBarcode = (
 		const results = await barcodeSearch(barcode);
 
 		if (results.length === 0 || results.length > 1) {
-			log.error(text1, {
+			barcodeLogger.error(text1, {
 				showToast: true,
 				saveToDb: true,
 				toast: {
@@ -59,7 +61,7 @@ export const useBarcode = (
 		 * TODO: what if product is out of stock?
 		 */
 		if (!showOutOfStock && product.stock_status !== 'instock') {
-			log.warn(text1, {
+			barcodeLogger.warn(text1, {
 				showToast: true,
 				toast: {
 					text2: t('{name} out of stock', { name: product.name, _tags: 'core' }),
@@ -109,7 +111,7 @@ export const useBarcode = (
 		/**
 		 * Show success message
 		 */
-		log.success(text1, {
+		barcodeLogger.success(text1, {
 			showToast: true,
 			saveToDb: true,
 			toast: {

@@ -12,9 +12,11 @@ import {
 import { Suspense } from '@wcpos/components/suspense';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query, useQuery } from '@wcpos/query';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../../contexts/translations';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'filter']);
 import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
 
@@ -97,7 +99,7 @@ export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) =>
 	return (
 		<Combobox
 			onValueChange={({ value }) => {
-				log.debug('value', value);
+				uiLogger.debug('value', value);
 				query
 					.removeElemMatch('meta_data', { key: '_pos_user' }) // clear any previous value
 					.where('meta_data')

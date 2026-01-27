@@ -5,6 +5,10 @@ A progressive enhancement logger for WooCommerce POS that supports console loggi
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Namespace Convention](#namespace-convention)
+- [Hierarchical Categories](#hierarchical-categories)
+- [Explicit Contexts](#explicit-contexts)
+- [Lazy Evaluation](#lazy-evaluation)
 - [Runtime Log Level Control](#runtime-log-level-control)
 - [API Reference](#api-reference)
 - [Toast Options](#toast-options)
@@ -69,6 +73,211 @@ setToast(Toast.show);
 const { storeDB } = useAppState();
 setDatabase(storeDB.collections.logs);
 ```
+
+## Namespace Convention
+
+All loggers should use the `getLogger()` factory with hierarchical namespaces. This is inspired by [LogTape](https://logtape.org/), a modern logging library with battle-tested patterns.
+
+### Why Namespaces?
+
+1. **Filtering**: Easily filter logs by domain in the Logs UI (e.g., show only `wcpos.sync.*` logs)
+2. **Log Levels per Domain**: Future support for different log levels per namespace (e.g., `wcpos.http` at debug, `wcpos.ui` at warn)
+3. **Remote Logging**: Route specific namespaces to external services (e.g., send `wcpos.auth.*` to security monitoring)
+4. **Debugging**: Quickly identify which part of the app generated a log
+5. **Consistency**: Standard naming across the entire codebase
+
+### Standard Namespaces
+
+```
+wcpos
+├── app                    # App initialization, state, hydration
+│   ├── state              # App state management
+│   ├── hydration          # Startup/hydration steps
+│   ├── validation         # User/site validation
+│   └── translations       # i18n loading
+├── auth                   # Authentication & authorization
+│   ├── login              # Login/logout flows
+│   ├── oauth              # OAuth popup/redirect handling
+│   ├── token              # Token refresh, expiry
+│   ├── site               # Site connection/discovery
+│   └── discovery          # API endpoint discovery
+├── pos                    # Point of Sale
+│   ├── cart               # Cart operations
+│   │   ├── product        # Add/remove products
+│   │   ├── customer       # Customer assignment
+│   │   ├── fee            # Fee line items
+│   │   ├── shipping       # Shipping line items
+│   │   └── void           # Order void/restore
+│   └── checkout           # Checkout flow
+│       ├── init           # Checkout started
+│       └── payment        # Payment processing
+├── sync                   # Data synchronization
+│   ├── state              # Sync state updates
+│   ├── collection         # Collection replication
+│   ├── query              # Query replication
+│   ├── push               # Push to server
+│   ├── pull               # Pull from server
+│   └── delete             # Delete operations
+├── db                     # Database operations
+│   ├── create             # DB creation
+│   ├── clear              # DB clearing
+│   ├── adapter            # Storage adapters
+│   └── parse              # Response parsing
+├── http                   # HTTP client & API
+│   ├── client             # Request handling
+│   ├── error              # Error parsing
+│   ├── queue              # Request queue
+│   └── rest               # REST API client
+├── mutations              # Document CRUD
+│   ├── document           # Generic mutations
+│   ├── local              # Local optimistic updates
+│   ├── product            # Product edits
+│   ├── customer           # Customer edits
+│   └── order              # Order edits
+├── query                  # Query management
+│   ├── state              # Query execution
+│   └── manager            # Query registration
+├── ui                     # User interface
+│   ├── menu               # Menu interactions
+│   ├── settings           # Settings UI
+│   ├── filter             # Filter operations
+│   └── dnd                # Drag and drop
+├── barcode                # Barcode scanning
+│   ├── detection          # Scanner detection
+│   ├── product            # Product lookup
+│   └── pos                # POS barcode handling
+├── print                  # Print operations
+│   ├── native             # Native printing
+│   ├── web                # Web printing
+│   └── external           # External URL printing
+└── notifications          # Push notifications
+    └── novu               # Novu integration
+```
+
+### Usage Pattern
+
+```typescript
+// At the top of your file, create a domain logger
+import { getLogger } from '@wcpos/utils/logger';
+
+const authLogger = getLogger(['wcpos', 'auth', 'login']);
+
+// Inside your component/hook, optionally bind context
+const loginLogger = authLogger.with({ userId: user.id });
+
+// Use the logger
+loginLogger.info('Login successful', { saveToDb: true });
+loginLogger.error('Login failed', { 
+  showToast: true, 
+  saveToDb: true,
+  context: { errorCode: ERROR_CODES.INVALID_CREDENTIALS }
+});
+```
+
+### Migration from `log` to `getLogger()`
+
+**Before (deprecated):**
+```typescript
+import log from '@wcpos/utils/logger';
+
+log.info('User logged in', { context: { userId: 123 } });
+```
+
+**After (preferred):**
+```typescript
+import { getLogger } from '@wcpos/utils/logger';
+
+const authLogger = getLogger(['wcpos', 'auth', 'login']);
+authLogger.info('User logged in', { context: { userId: 123 } });
+```
+
+The default `log` export still works but should only be used for quick debugging. All production logging should use namespaced loggers.
+
+## Hierarchical Categories
+
+For better log organization, use `getLogger()` to create category-based loggers:
+
+```typescript
+import { getLogger } from '@wcpos/utils/logger';
+
+// Create a logger for the POS cart module
+const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+
+// Logs will include category: "wcpos.pos.cart"
+cartLogger.info('Product added', { context: { productId: '123' } });
+
+// Create child loggers for sub-modules
+const checkoutLogger = cartLogger.getChild('checkout');
+checkoutLogger.info('Checkout started'); // category: "wcpos.pos.cart.checkout"
+
+// Or create deeply nested children
+const paymentLogger = cartLogger.getChild(['checkout', 'payment']);
+paymentLogger.info('Payment processing'); // category: "wcpos.pos.cart.checkout.payment"
+```
+
+### Benefits
+
+- **Filtering**: Filter logs by category in the Logs UI
+- **Organization**: Group related logs together
+- **Inheritance**: Child loggers inherit parent category
+
+## Explicit Contexts
+
+Bind context to a logger so it persists across all log calls:
+
+```typescript
+import { getLogger } from '@wcpos/utils/logger';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+
+// Create a logger with bound context for a specific order
+const orderLogger = cartLogger.with({ orderUUID: order.uuid, orderID: order.id, orderNumber: order.number });
+
+// All logs from this logger automatically include orderId and orderNumber
+orderLogger.info('Line item added', { context: { productId: '123' } });
+orderLogger.info('Discount applied', { context: { discountAmount: 10.00 } });
+orderLogger.info('Customer changed', { context: { customerId: '456' } });
+orderLogger.success('Order saved', { showToast: true });
+
+// You can chain .with() to add more context
+const lineItemLogger = orderLogger.with({ lineItemId: 'abc' });
+lineItemLogger.debug('Calculating tax');
+lineItemLogger.debug('Tax calculated', { context: { taxAmount: 5.50 } });
+```
+
+### Benefits
+
+- **DRY**: No need to repeat orderId in every log call
+- **Consistency**: All related logs have the same context
+- **Debugging**: Easy to filter logs for a specific order/customer/etc.
+
+## Lazy Evaluation
+
+For expensive computations, use a function to defer evaluation until the log is actually needed:
+
+```typescript
+import { getLogger } from '@wcpos/utils/logger';
+
+const logger = getLogger(['wcpos', 'pos']);
+
+// EAGER - always computed, even if debug is disabled in production
+logger.debug('Cart state', { context: { items: JSON.stringify(cart.items) } });
+
+// LAZY - only computed if debug level is enabled
+logger.debug(() => `Cart state: ${JSON.stringify(cart.getFullState())}`);
+
+// Useful for expensive operations
+logger.debug(() => {
+  const stats = calculateDetailedStats(); // expensive!
+  return `Performance stats: ${JSON.stringify(stats)}`;
+});
+```
+
+### When to Use Lazy Evaluation
+
+- Debug logs with complex object serialization
+- Logs that involve database queries or API calls
+- Any computation that shouldn't run in production
 
 ## Runtime Log Level Control
 

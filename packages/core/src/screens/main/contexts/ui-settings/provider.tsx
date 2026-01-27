@@ -4,9 +4,11 @@ import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useUILabel } from './use-ui-label';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 import {
 	mergeWithInitalValues,
 	patchState,
@@ -78,7 +80,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 			// Add timeout detection for potential hangs
 			const addStatePromise = storeDB.addState(`${id}_v2`);
 			const timeoutId = setTimeout(() => {
-				log.warn(`storeDB.addState('${id}_v2') is taking longer than 5 seconds - possible hang`);
+				uiLogger.warn(`storeDB.addState('${id}_v2') is taking longer than 5 seconds - possible hang`);
 			}, 5000);
 
 			const observable$ = from(addStatePromise).pipe(
@@ -88,7 +90,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 						await mergeWithInitalValues(id, state as UISettingState<UISettingID>);
 						return state as UISettingState<T>;
 					} catch (error) {
-						log.error(`Failed to merge initial values for ${id}`, {
+						uiLogger.error(`Failed to merge initial values for ${id}`, {
 							context: { error: String(error) },
 						});
 						throw error;

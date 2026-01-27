@@ -14,7 +14,7 @@ import { Context } from './cells/context';
 import { Date } from './cells/date';
 import { Level } from './cells/level';
 import { Code } from './cells/code';
-import { FilterBar } from './filter-bar';
+import { FilterBar, DEFAULT_LOG_LEVELS } from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
@@ -58,6 +58,9 @@ export function LogsScreen() {
 		collectionName: 'logs',
 		initialParams: {
 			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
+			selector: {
+				level: { $in: DEFAULT_LOG_LEVELS },
+			},
 		},
 		infiniteScroll: true,
 	});

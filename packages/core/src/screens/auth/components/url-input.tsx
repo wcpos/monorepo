@@ -7,11 +7,13 @@ import { HStack } from '@wcpos/components/hstack';
 import { Input } from '@wcpos/components/input';
 import { Label } from '@wcpos/components/label';
 import { VStack } from '@wcpos/components/vstack';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 import useSiteConnect from '../hooks/use-site-connect';
+
+const siteLogger = getLogger(['wcpos', 'auth', 'site']);
 
 export function UrlInput() {
 	const { onConnect, loading, error } = useSiteConnect();
@@ -25,7 +27,7 @@ export function UrlInput() {
 	 */
 	React.useEffect(() => {
 		if (error) {
-			log.error(t('{message}', { _tags: 'core', message: error || 'Error' }), {
+			siteLogger.error(t('{message}', { _tags: 'core', message: error || 'Error' }), {
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.INVALID_URL_FORMAT,

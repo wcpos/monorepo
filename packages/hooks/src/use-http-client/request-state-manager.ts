@@ -63,8 +63,10 @@
  * @see README.md - Full architecture documentation
  */
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
+const httpLogger = getLogger(['wcpos', 'http', 'state']);
 
 /**
  * Result of pre-flight check
@@ -237,7 +239,7 @@ class RequestStateManager {
 		}
 
 		if (this.requestsPaused) {
-			log.debug('Request blocked: Requests paused for recovery');
+			httpLogger.debug('Request blocked: Requests paused for recovery');
 			return {
 				ok: false,
 				reason: 'System is recovering - please wait',
@@ -290,7 +292,7 @@ class RequestStateManager {
 		// If refresh is already in progress, return the existing promise
 		// Check BOTH flags to be safe against race conditions
 		if (this.tokenRefreshPromise || this.isRefreshing) {
-			log.debug('Token refresh already in progress, awaiting existing operation', {
+			httpLogger.debug('Token refresh already in progress, awaiting existing operation', {
 				context: {
 					hasPromise: !!this.tokenRefreshPromise,
 					isRefreshing: this.isRefreshing,
@@ -308,19 +310,19 @@ class RequestStateManager {
 		this.isRefreshing = true;
 		this.refreshedToken = null;
 
-		log.debug('Starting coordinated token refresh (lock acquired)');
+		httpLogger.debug('Starting coordinated token refresh (lock acquired)');
 
 		// Create and store the promise so other callers can await it
 		this.tokenRefreshPromise = refreshFn()
 			.then((newToken) => {
-				log.debug('Token refresh completed successfully');
+				httpLogger.debug('Token refresh completed successfully');
 				this.refreshedToken = newToken;
 				this.isRefreshing = false;
 				this.authFailed = false; // Clear auth failed on successful refresh
 				this.tokenRefreshPromise = null;
 			})
 			.catch((error) => {
-				log.debug('Token refresh operation failed', {
+				httpLogger.debug('Token refresh operation failed', {
 					context: {
 						error: error instanceof Error ? error.message : String(error),
 					},
@@ -345,16 +347,16 @@ class RequestStateManager {
 	 */
 	async awaitTokenRefresh(): Promise<void> {
 		if (!this.tokenRefreshPromise) {
-			log.debug('No token refresh in progress, nothing to await');
+			httpLogger.debug('No token refresh in progress, nothing to await');
 			return;
 		}
 
-		log.debug('Awaiting in-progress token refresh');
+		httpLogger.debug('Awaiting in-progress token refresh');
 		try {
 			await this.tokenRefreshPromise;
-			log.debug('Token refresh completed, request can proceed');
+			httpLogger.debug('Token refresh completed, request can proceed');
 		} catch (error) {
-			log.debug('Token refresh failed while awaiting', {
+			httpLogger.debug('Token refresh failed while awaiting', {
 				context: {
 					error: error instanceof Error ? error.message : String(error),
 				},
@@ -384,7 +386,7 @@ class RequestStateManager {
 	 * @param token - The new access token from OAuth login
 	 */
 	setRefreshedToken(token: string): void {
-		log.debug('Setting refreshed token directly (from OAuth login)');
+		httpLogger.debug('Setting refreshed token directly (from OAuth login)');
 		this.refreshedToken = token;
 	}
 
@@ -412,7 +414,7 @@ class RequestStateManager {
 	 */
 	pauseRequests(): void {
 		if (!this.requestsPaused) {
-			log.debug('Pausing all requests via state manager');
+			httpLogger.debug('Pausing all requests via state manager');
 			this.requestsPaused = true;
 		}
 	}
@@ -422,7 +424,7 @@ class RequestStateManager {
 	 */
 	resumeRequests(): void {
 		if (this.requestsPaused) {
-			log.debug('Resuming all requests via state manager');
+			httpLogger.debug('Resuming all requests via state manager');
 			this.requestsPaused = false;
 		}
 	}
@@ -439,9 +441,9 @@ class RequestStateManager {
 		if (this.offline !== isOffline) {
 			this.offline = isOffline;
 			if (isOffline) {
-				log.debug('Device is now offline - requests will be blocked');
+				httpLogger.debug('Device is now offline - requests will be blocked');
 			} else {
-				log.debug('Device is back online - requests can proceed');
+				httpLogger.debug('Device is back online - requests can proceed');
 			}
 		}
 	}
@@ -466,9 +468,9 @@ class RequestStateManager {
 		if (this.authFailed !== failed) {
 			this.authFailed = failed;
 			if (failed) {
-				log.debug('Authentication failed - requests will be blocked until re-auth');
+				httpLogger.debug('Authentication failed - requests will be blocked until re-auth');
 			} else {
-				log.debug('Authentication restored - requests can proceed');
+				httpLogger.debug('Authentication restored - requests can proceed');
 			}
 		}
 	}
@@ -511,7 +513,7 @@ class RequestStateManager {
 	 * - Recovery from stuck states
 	 */
 	reset(): void {
-		log.debug('Resetting request state manager');
+		httpLogger.debug('Resetting request state manager');
 		this.tokenRefreshPromise = null;
 		this.isRefreshing = false;
 		this.refreshedToken = null;

@@ -9,10 +9,12 @@ import * as z from 'zod';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Modal, ModalBody, ModalContent, ModalHeader, ModalTitle } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
+
+const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
 import { CustomerForm, customerFormSchema } from '../components/customer/customer-form';
 import { useMutation } from '../hooks/mutations/use-mutation';
 import useCustomerNameFormat from '../hooks/use-customer-name-format';
@@ -44,7 +46,7 @@ export const AddCustomerScreen = () => {
 			try {
 			const savedDoc = await create({ data });
 			if (isRxDocument(savedDoc)) {
-				log.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+				mutationLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -54,7 +56,7 @@ export const AddCustomerScreen = () => {
 				});
 			}
 		} catch (error) {
-			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {

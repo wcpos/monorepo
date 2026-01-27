@@ -1,11 +1,14 @@
 import * as React from 'react';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
 import { useT } from '../../../../contexts/translations';
+import { useCurrentOrder } from '../contexts/current-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
 interface FeeData {
 	name: string;
@@ -24,6 +27,18 @@ export const useAddFee = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const t = useT();
 	const { calculateFeeLineTaxesAndTotals } = useCalculateFeeLineTaxAndTotals();
+	const { currentOrder } = useCurrentOrder();
+
+	// Create order-specific logger
+	const orderLogger = React.useMemo(
+		() =>
+			cartLogger.with({
+				orderUUID: currentOrder.uuid,
+				orderID: currentOrder.id,
+				orderNumber: currentOrder.number,
+			}),
+		[currentOrder.uuid, currentOrder.id, currentOrder.number]
+	);
 
 	/**
 	 * NOTE: be careful not to mutate the data object passed in, especially the meta_data array.
@@ -50,8 +65,18 @@ export const useAddFee = () => {
 				});
 
 				await addItemToOrder('fee_lines', newFeeLine);
+
+				// Log fee added success
+				orderLogger.info(t('Fee added: {feeName}', { _tags: 'core', feeName: data.name }), {
+					context: {
+						feeName: data.name,
+						amount: data.amount,
+						isPercent: data.percent,
+						total: newFeeLine.total,
+					},
+				});
 			} catch (error) {
-				log.error(t('Error adding Fee to cart', { _tags: 'core' }), {
+				orderLogger.error(t('Error adding Fee to cart', { _tags: 'core' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -62,7 +87,7 @@ export const useAddFee = () => {
 				});
 			}
 		},
-		[calculateFeeLineTaxesAndTotals, addItemToOrder, t]
+		[calculateFeeLineTaxesAndTotals, addItemToOrder, t, orderLogger]
 	);
 
 	return { addFee };

@@ -1,10 +1,12 @@
 import { wrappedValidateZSchemaStorage } from 'rxdb/plugins/validate-z-schema';
 import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import type { SQLiteQueryWithParams } from 'rxdb-premium/plugins/storage-sqlite';
+
+const dbLogger = getLogger(['wcpos', 'db', 'adapter']);
 
 // Default timeout for IPC calls (30 seconds)
 const IPC_TIMEOUT = 30000;
@@ -64,7 +66,7 @@ export const storage = getRxStorageSQLite({
 				}
 				return result;
 			} catch (error: any) {
-				log.error('Failed to open SQLite database', {
+				dbLogger.error('Failed to open SQLite database', {
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.CONNECTION_FAILED,
@@ -90,7 +92,7 @@ export const storage = getRxStorageSQLite({
 				return result;
 			} catch (error: any) {
 				const isTimeout = error.message?.includes('timed out');
-				log.error(isTimeout ? 'SQLite query timed out' : 'Failed to execute SQLite query', {
+				dbLogger.error(isTimeout ? 'SQLite query timed out' : 'Failed to execute SQLite query', {
 					saveToDb: true,
 					context: {
 						errorCode: isTimeout ? ERROR_CODES.QUERY_TIMEOUT : ERROR_CODES.QUERY_SYNTAX_ERROR,
@@ -113,7 +115,7 @@ export const storage = getRxStorageSQLite({
 				return db;
 			} catch (error: any) {
 				const isTimeout = error.message?.includes('timed out');
-				log.error(isTimeout ? 'SQLite command timed out' : 'Failed to run SQLite command', {
+				dbLogger.error(isTimeout ? 'SQLite command timed out' : 'Failed to run SQLite command', {
 					saveToDb: true,
 					context: {
 						errorCode: isTimeout ? ERROR_CODES.QUERY_TIMEOUT : ERROR_CODES.QUERY_SYNTAX_ERROR,
@@ -143,7 +145,7 @@ export const storage = getRxStorageSQLite({
 				});
 				return db;
 			} catch (error: any) {
-				log.error('Failed to set SQLite pragma', {
+				dbLogger.error('Failed to set SQLite pragma', {
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.QUERY_SYNTAX_ERROR,
@@ -165,7 +167,7 @@ export const storage = getRxStorageSQLite({
 				});
 				return result; // Return the result from the close IPC call
 			} catch (error: any) {
-				log.error('Failed to close SQLite database', {
+				dbLogger.error('Failed to close SQLite database', {
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.CONNECTION_FAILED,

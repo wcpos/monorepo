@@ -3,11 +3,13 @@ import * as React from 'react';
 import get from 'lodash/get';
 
 import useHttpClient from '@wcpos/hooks/use-http-client';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 import { parseLinkHeader } from '../../../lib/url';
+
+const discoveryLogger = getLogger(['wcpos', 'auth', 'discovery']);
 
 export type UrlDiscoveryStatus = 'idle' | 'discovering' | 'success' | 'error';
 
@@ -28,7 +30,6 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	const [wpApiUrl, setWpApiUrl] = React.useState<string | null>(null);
 	const http = useHttpClient();
 	const t = useT();
-	// Logger available as 'log'
 
 	/**
 	 * Clean and normalize the input URL
@@ -102,7 +103,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 		async (url: string): Promise<string | null> => {
 			if (!url || url.trim() === '') {
 				const errorMsg = t('URL is required', { _tags: 'core' });
-				log.error(errorMsg, {
+				discoveryLogger.error(errorMsg, {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
 				});
@@ -131,7 +132,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 
 				setWpApiUrl(discoveredUrl);
 				setStatus('success');
-				log.debug(`WordPress API URL discovered: ${discoveredUrl}`);
+				discoveryLogger.debug(`WordPress API URL discovered: ${discoveredUrl}`);
 				return discoveredUrl;
 			} catch {
 				const errorMessage = t('Failed to discover WordPress API', { _tags: 'core' });

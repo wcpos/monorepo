@@ -17,10 +17,12 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
+
+const mutationLogger = getLogger(['wcpos', 'mutations', 'variation']);
 import { CurrencyInput } from '../../../components/currency-input';
 import { FormErrors } from '../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../components/meta-data-form';
@@ -98,7 +100,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 				});
 			await pushDocument(variation).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
-					log.success(t('{name} saved', { _tags: 'core', name: variation.name }), {
+					mutationLogger.success(t('{name} saved', { _tags: 'core', name: variation.name }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -109,7 +111,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 				}
 			});
 		} catch (error) {
-			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {

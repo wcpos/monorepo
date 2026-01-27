@@ -1,7 +1,9 @@
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import type { StoreCollection, SyncCollection } from '@wcpos/database';
+
+const syncLogger = getLogger(['wcpos', 'sync', 'state']);
 import type { RxDocument } from 'rxdb';
 
 interface ServerRecord {
@@ -91,7 +93,7 @@ export class SyncStateManager {
 						await doc.remove();
 					}
 
-					log.warn(`Removed ${docsToRemove.length} duplicate documents with ID: ${id}`, {
+					syncLogger.warn(`Removed ${docsToRemove.length} duplicate documents with ID: ${id}`, {
 						saveToDb: true,
 						context: {
 							errorCode: ERROR_CODES.DUPLICATE_RECORD,
@@ -240,7 +242,7 @@ export class SyncStateManager {
 		if (localDocs.size === 0) {
 			const result = await this.collection.bulkInsert(response);
 			if (result.success.length > 0) {
-			log.info(`Synced new ${this.collection.name}`, {
+			syncLogger.info(`Synced new ${this.collection.name}`, {
 				saveToDb: true,
 				context: { ids: result.success.map((doc: any) => doc.id) },
 			});
@@ -253,7 +255,7 @@ export class SyncStateManager {
 				await this.syncCollection.bulkUpsert(synced);
 
 				if (result.error.length > 0) {
-					log.error('Error inserting documents', {
+					syncLogger.error('Error inserting documents', {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -280,13 +282,13 @@ export class SyncStateManager {
 		}
 
 		if (skipped.length > 0) {
-			log.debug('Skipped older documents', { context: { skipped } });
+			syncLogger.debug('Skipped older documents', { context: { skipped } });
 		}
 
 		if (responseMap.size > 0) {
 			const result = await this.collection.bulkUpsert(Array.from(responseMap.values()));
 			if (result.success.length > 0) {
-			log.info(`Synced ${this.collection.name}`, {
+			syncLogger.info(`Synced ${this.collection.name}`, {
 				saveToDb: true,
 				context: { ids: result.success.map((doc: any) => doc.id) },
 			});
@@ -299,7 +301,7 @@ export class SyncStateManager {
 				await this.syncCollection.bulkUpsert(synced);
 
 				if (result.error.length > 0) {
-					log.error('Error upserting documents', {
+					syncLogger.error('Error upserting documents', {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -333,14 +335,14 @@ export class SyncStateManager {
 			const ids = removed.map((doc) => doc.id);
 			const result = await this.collection.find({ selector: { id: { $in: ids } } }).remove();
 
-		log.info(`Removed ${this.collection.name}`, {
+		syncLogger.info(`Removed ${this.collection.name}`, {
 			saveToDb: true,
 			context: { ids },
 		});
 
 			// removed from sync should match removed from local DB, this should never happen
 			if (result.length !== removed.length) {
-				log.warn('Mismatch between removed from sync and local DB', {
+				syncLogger.warn('Mismatch between removed from sync and local DB', {
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.DB_REMOVE_MISMATCH,

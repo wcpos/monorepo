@@ -4,10 +4,12 @@ import { BehaviorSubject, combineLatest, interval, Observable } from 'rxjs';
 import { distinctUntilChanged, filter, map, startWith, switchMap } from 'rxjs/operators';
 
 import { parseWpError } from '@wcpos/hooks/use-http-client/parse-wp-error';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { DataFetcher } from './data-fetcher';
+
+const syncLogger = getLogger(['wcpos', 'sync', 'collection']);
 import { SubscribableBase } from './subscribable-base';
 import { SyncStateManager } from './sync-state';
 
@@ -256,7 +258,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				const wpError = parseWpError(response?.data, 'Invalid response fetching remote state');
 				const errorCode = wpError.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
 
-				log.error(wpError.message, {
+				syncLogger.error(wpError.message, {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -269,7 +271,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				return;
 			}
 
-			log.info(`Fetched all IDs for ${this.endpoint}`, {
+			syncLogger.info(`Fetched all IDs for ${this.endpoint}`, {
 				saveToDb: true,
 				context: {
 					total: response.headers?.['x-wp-total'] ?? 'unknown',
@@ -285,7 +287,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} catch (error: any) {
 			// Check if this is a CanceledError from auth flow - don't show toast
 			if (isAuthCancelError(error)) {
-				log.debug('Request canceled (auth in progress), will retry when auth completes', {
+				syncLogger.debug('Request canceled (auth in progress), will retry when auth completes', {
 					context: {
 						endpoint: this.endpoint,
 					},
@@ -306,7 +308,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			const message = error.wpMessage || error.message || 'Failed to fetch remote state';
 			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
 
-			log.error(message, {
+			syncLogger.error(message, {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -339,7 +341,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 					const wpError = parseWpError(response?.data, 'Invalid response checking updates');
 					const errorCode = wpError.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
 
-					log.error(wpError.message, {
+					syncLogger.error(wpError.message, {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -352,7 +354,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 					return;
 				}
 
-			log.info(`Checked for updates: ${this.endpoint}`, {
+			syncLogger.info(`Checked for updates: ${this.endpoint}`, {
 				saveToDb: true,
 				context: {
 					total: response.headers?.['x-wp-total'] ?? 'unknown',
@@ -369,7 +371,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			} catch (error: any) {
 				// Check if this is a CanceledError from auth flow - don't show toast
 				if (isAuthCancelError(error)) {
-					log.debug('Request canceled (auth in progress), will retry when auth completes', {
+					syncLogger.debug('Request canceled (auth in progress), will retry when auth completes', {
 						context: {
 							endpoint: this.endpoint,
 						},
@@ -386,7 +388,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				const message = error.wpMessage || error.message || 'Failed to check for updates';
 				const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
 
-				log.error(message, {
+				syncLogger.error(message, {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -462,7 +464,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} catch (error: any) {
 			// Check if this is a CanceledError from auth flow - don't show toast
 			if (isAuthCancelError(error)) {
-				log.debug('Request canceled (auth in progress), will retry when auth completes', {
+				syncLogger.debug('Request canceled (auth in progress), will retry when auth completes', {
 					context: {
 						endpoint: this.endpoint,
 					},
@@ -479,7 +481,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			const message = error.wpMessage || error.message || 'Failed to sync remote items';
 			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
 
-			log.error(message, {
+			syncLogger.error(message, {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -503,7 +505,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			const wpError = parseWpError(response?.data, 'Invalid response from server');
 			const errorCode = wpError.code || ERROR_CODES.INVALID_RESPONSE_FORMAT;
 
-			log.error(wpError.message, {
+			syncLogger.error(wpError.message, {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -559,7 +561,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} catch (error: any) {
 			// Check if this is a CanceledError from auth flow - don't show toast
 			if (isAuthCancelError(error)) {
-				log.debug('Request canceled (auth in progress)', {
+				syncLogger.debug('Request canceled (auth in progress)', {
 					context: {
 						endpoint: this.endpoint,
 						documentId: doc.id,
@@ -572,7 +574,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			const message = error.wpMessage || error.message || 'Failed to update item';
 			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
 
-			log.error(message, {
+			syncLogger.error(message, {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -602,7 +604,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} catch (error: any) {
 			// Check if this is a CanceledError from auth flow - don't show toast
 			if (isAuthCancelError(error)) {
-				log.debug('Request canceled (auth in progress)', {
+				syncLogger.debug('Request canceled (auth in progress)', {
 					context: {
 						endpoint: this.endpoint,
 					},
@@ -614,7 +616,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			const message = error.wpMessage || error.message || 'Failed to create item';
 			const errorCode = error.wpCode || error.errorCode || ERROR_CODES.SERVICE_UNAVAILABLE;
 
-			log.error(message, {
+			syncLogger.error(message, {
 				showToast: true,
 				saveToDb: true,
 				context: {

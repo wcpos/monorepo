@@ -2,9 +2,11 @@ import * as React from 'react';
 
 import * as Print from 'expo-print';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import type { UsePrintExternalURLOptions } from './types';
+
+const printLogger = getLogger(['wcpos', 'print', 'external']);
 
 export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 	const [isPrinting, setIsPrinting] = React.useState(false);
@@ -13,7 +15,7 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 		const { externalURL, onBeforePrint, onAfterPrint, onPrintError } = options;
 
 		if (!externalURL) {
-			log.warn('No external URL provided to print');
+			printLogger.warn('No external URL provided to print');
 			return;
 		}
 
@@ -39,7 +41,7 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 			// Call onAfterPrint if provided
 			onAfterPrint?.();
 		} catch (error) {
-			log.error('Print error', { context: { error } });
+			printLogger.error('Print error', { context: { error } });
 			onPrintError?.('print', error as Error);
 		} finally {
 			setIsPrinting(false);

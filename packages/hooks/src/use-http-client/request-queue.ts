@@ -1,9 +1,11 @@
 import Bottleneck from 'bottleneck';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { requestStateManager } from './request-state-manager';
+
+const httpLogger = getLogger(['wcpos', 'http', 'queue']);
 
 /**
  * Global request queue shared across all HTTP client instances.
@@ -16,7 +18,7 @@ const globalQueue = new Bottleneck({
 });
 
 globalQueue.on('error', (error) => {
-	log.error('Too many requests queued - please wait', {
+	httpLogger.error('Too many requests queued - please wait', {
 		showToast: true,
 		saveToDb: true,
 		context: {
@@ -28,7 +30,7 @@ globalQueue.on('error', (error) => {
 
 globalQueue.on('failed', async (error, jobInfo) => {
 	// Debug only - individual request failures are handled by error handlers
-	log.debug('Request failed in queue', {
+	httpLogger.debug('Request failed in queue', {
 		context: {
 			error: error instanceof Error ? error.message : String(error),
 			retryCount: jobInfo.retryCount,
@@ -77,7 +79,7 @@ export const scheduleRequest = <T>(fn: () => Promise<T>): Promise<T> => {
  */
 export const pauseQueue = (): void => {
 	// Intentionally empty - pre-flight checks handle request blocking
-	log.debug('Request coordination active (via state manager, not queue pause)');
+	httpLogger.debug('Request coordination active (via state manager, not queue pause)');
 };
 
 /**
@@ -87,7 +89,7 @@ export const pauseQueue = (): void => {
  */
 export const resumeQueue = (): void => {
 	// Intentionally empty - pre-flight checks handle request unblocking
-	log.debug('Request coordination complete (via state manager)');
+	httpLogger.debug('Request coordination complete (via state manager)');
 };
 
 /**

@@ -26,7 +26,9 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import Platform from '@wcpos/utils/platform';
 import { clearAllDB } from '@wcpos/database';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
@@ -86,9 +88,9 @@ export const UserMenu = () => {
 		// Clear databases to ensure clean start
 		try {
 			const result = await clearAllDB();
-			log.info(result.message);
+			uiLogger.info(result.message);
 		} catch (err) {
-			log.error('Failed to clear database:', err);
+			uiLogger.error('Failed to clear database:', err);
 		}
 
 		// Reload the app to reinitialize everything

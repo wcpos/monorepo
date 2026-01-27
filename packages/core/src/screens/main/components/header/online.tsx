@@ -4,10 +4,12 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import type { OnlineStatus } from '@wcpos/hooks/use-online-status';
 
 import { useT } from '../../../../contexts/translations';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'header']);
 
 type OnlineState = {
 	variant: 'success' | 'warning' | 'error';
@@ -64,13 +66,13 @@ export function Online() {
 
 		switch (status) {
 			case 'offline':
-				log.error(t('Device went offline', { _tags: 'core' }), logConfig);
+				uiLogger.error(t('Device went offline', { _tags: 'core' }), logConfig);
 				break;
 			case 'online-website-unavailable':
-				log.error(t('Website is unreachable', { _tags: 'core' }), logConfig);
+				uiLogger.error(t('Website is unreachable', { _tags: 'core' }), logConfig);
 				break;
 			case 'online-website-available':
-				log.success(t('Connection restored', { _tags: 'core' }), logConfig);
+				uiLogger.success(t('Connection restored', { _tags: 'core' }), logConfig);
 				break;
 		}
 

@@ -5,10 +5,12 @@ import { useFocusEffect } from 'expo-router';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
 import { filter } from 'rxjs/operators';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../../contexts/app-state';
+
+const barcodeLogger = getLogger(['wcpos', 'barcode', 'detection']);
 import { useT } from '../../../../contexts/translations';
 
 export const useBarcodeDetection = (
@@ -45,7 +47,7 @@ export const useBarcodeDetection = (
 					if (barcode.length >= minLength) {
 						return true;
 					}
-					log.warn(t('Barcode scanned: {barcode}', { barcode, _tags: 'core' }), {
+					barcodeLogger.warn(t('Barcode scanned: {barcode}', { barcode, _tags: 'core' }), {
 						showToast: true,
 						toast: {
 							text2: t('Barcode must be at least {minLength} characters long', {

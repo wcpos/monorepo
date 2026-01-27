@@ -4,62 +4,120 @@ import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { HStack } from '@wcpos/components/hstack';
-import { Query } from '@wcpos/query';
+import type { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectPrimitiveTrigger,
-} from '@wcpos/components/select';
+	DropdownMenu,
+	DropdownMenuTrigger,
+	DropdownMenuContent,
+	DropdownMenuCheckboxItem,
+} from '@wcpos/components/dropdown-menu';
+import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 
 const items = [
-	{ value: 'info', label: 'Info' },
-	{ value: 'warning', label: 'Warning' },
 	{ value: 'error', label: 'Error' },
+	{ value: 'warn', label: 'Warning' },
+	{ value: 'info', label: 'Info' },
+	{ value: 'success', label: 'Success' },
+	{ value: 'audit', label: 'Audit' },
 ];
 
+const MAX_LABEL_LENGTH = 24;
+
+export const DEFAULT_LOG_LEVELS = ['error', 'warn', 'info', 'success'];
+
 export function FilterBar({ query }: { query: Query<any> }) {
-	const selected = useObservableEagerState(
+	const selector = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getSelector('level')))
 	);
 	const t = useT();
-	const isActive = !!selected;
 
 	/**
-	 * NOTE: if value changes from { value: 'example', label: 'example' } to undefined,
-	 * it won't clear the previous value, so we need to make sure we return { value: '', label: '' }
+	 * Extract selected values from the selector
+	 * The selector can be:
+	 * - undefined (no filter)
+	 * - { $in: ['info', 'error'] } (multi-select)
+	 * - 'info' (single value, from clicking a pill)
 	 */
-	const value = React.useMemo(() => {
-		const val = items.find((item) => item.value === selected);
-		return val ? val : { value: '', label: '' };
-	}, [selected]);
+	const selectedValues = React.useMemo(() => {
+		if (!selector) return [];
+		if (typeof selector === 'string') return [selector];
+		if (selector.$in) return selector.$in as string[];
+		return [];
+	}, [selector]);
+
+	const isActive = selectedValues.length > 0;
+
+	/**
+	 * Toggle a level in the filter
+	 */
+	const handleToggle = React.useCallback(
+		(value: string) => {
+			const newValues = selectedValues.includes(value)
+				? selectedValues.filter((v) => v !== value)
+				: [...selectedValues, value];
+
+			if (newValues.length === 0) {
+				query.removeWhere('level').exec();
+			} else {
+				query.where('level').in(newValues).exec();
+			}
+		},
+		[query, selectedValues]
+	);
+
+	/**
+	 * Get display label for the pill
+	 * Shows comma-separated level names, truncated if too long
+	 */
+	const displayLabel = React.useMemo(() => {
+		if (selectedValues.length === 0) {
+			return t('Log Level', { _tags: 'core' });
+		}
+
+		// Get labels in the order they appear in items array
+		const labels = items
+			.filter((item) => selectedValues.includes(item.value))
+			.map((item) => item.label);
+
+		const fullLabel = labels.join(', ');
+
+		if (fullLabel.length <= MAX_LABEL_LENGTH) {
+			return fullLabel;
+		}
+
+		// Truncate and add ellipsis
+		return fullLabel.slice(0, MAX_LABEL_LENGTH - 1) + '…';
+	}, [selectedValues, t]);
 
 	return (
 		<HStack className="w-full flex-wrap">
-			<Select
-				value={value}
-				onValueChange={({ value }) => query.where('level').equals(value).exec()}
-			>
-				<SelectPrimitiveTrigger asChild>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
 					<ButtonPill
 						size="xs"
-						leftIcon="folder"
+						leftIcon="tags"
 						variant={isActive ? undefined : 'muted'}
 						removable={isActive}
 						onRemove={() => query.removeWhere('level').exec()}
 					>
-						<ButtonText decodeHtml>{value?.label || t('Log Level', { _tags: 'core' })}</ButtonText>
+						<ButtonText>{displayLabel}</ButtonText>
 					</ButtonPill>
-				</SelectPrimitiveTrigger>
-				<SelectContent>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent>
 					{items.map((item) => (
-						<SelectItem key={item.label} label={item.label} value={item.value} />
+						<DropdownMenuCheckboxItem
+							key={item.value}
+							checked={selectedValues.includes(item.value)}
+							onCheckedChange={() => handleToggle(item.value)}
+						>
+							<Text>{item.label}</Text>
+						</DropdownMenuCheckboxItem>
 					))}
-				</SelectContent>
-			</Select>
+				</DropdownMenuContent>
+			</DropdownMenu>
 		</HStack>
 	);
 }

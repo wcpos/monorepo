@@ -1,10 +1,12 @@
 import cloneDeep from 'lodash/cloneDeep';
 import forEach from 'lodash/forEach';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { CollectionReplicationState } from './collection-replication-state';
+
+const queryLogger = getLogger(['wcpos', 'query', 'manager']);
 import allHooks from './hooks';
 import { QueryReplicationState } from './query-replication-state';
 import { Query } from './query-state';
@@ -117,7 +119,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		try {
 			return JSON.stringify(params);
 		} catch (error) {
-			log.error(`Failed to serialize query key: ${error}`, {
+			queryLogger.error(`Failed to serialize query key: ${error}`, {
 				showToast: true,
 				saveToDb: true,
 				context: { errorCode: ERROR_CODES.INVALID_REQUEST_FORMAT },
@@ -212,7 +214,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 	getCollection(collectionName: string) {
 		if (!this.localDB.collections[collectionName]) {
-			log.error(`Collection with name: ${collectionName} not found.`, {
+			queryLogger.error(`Collection with name: ${collectionName} not found.`, {
 				showToast: true,
 				saveToDb: true,
 				context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, collectionName },
@@ -223,7 +225,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 	getSyncCollection(collectionName: string) {
 		if (!this.fastLocalDB.collections[collectionName]) {
-			log.error(`Sync collection with name: ${collectionName} not found.`, {
+			queryLogger.error(`Sync collection with name: ${collectionName} not found.`, {
 				showToast: true,
 				saveToDb: true,
 				context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, collectionName },
@@ -237,7 +239,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		const query = this.queryStates.get(key);
 
 		if (!query) {
-			log.error(`Query with key: ${key} not found.`, {
+			queryLogger.error(`Query with key: ${key} not found.`, {
 				showToast: true,
 				saveToDb: true,
 				context: { errorCode: ERROR_CODES.RECORD_NOT_FOUND, queryKey: key },

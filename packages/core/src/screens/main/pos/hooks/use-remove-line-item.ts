@@ -1,8 +1,10 @@
 import * as React from 'react';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
@@ -100,7 +102,7 @@ export const useRemoveLineItem = () => {
 			});
 
 			if (itemToRestore) {
-				log.success(
+				cartLogger.success(
 					t('{name} removed from cart', {
 						name: itemToRestore?.name || itemToRestore?.method_title,
 						_tags: 'core',

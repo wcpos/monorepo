@@ -3,12 +3,14 @@ import * as React from 'react';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
 import { Loader } from '@wcpos/components/loader';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
 import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
 import { useLoginHandler } from '../hooks/use-login-handler';
 import useSiteConnect from '../hooks/use-site-connect';
+
+const authLogger = getLogger(['wcpos', 'auth', 'demo']);
 
 export function DemoButton() {
 	const { onConnect, loading: siteConnectLoading } = useSiteConnect();
@@ -44,12 +46,12 @@ export function DemoButton() {
 		}
 
 		if (response.type === 'success') {
-			log.debug('Demo login successful');
+			authLogger.debug('Demo login successful');
 			processedResponseRef.current = responseKey;
 			setAuthCompleted(true);
 			handleLoginSuccess({ params: response.params } as any);
 		} else if (response.type === 'error') {
-			log.error(`Demo login failed: ${response.error}`, {
+			authLogger.error(`Demo login failed: ${response.error}`, {
 				showToast: true,
 				context: { response },
 			});
@@ -74,12 +76,12 @@ export function DemoButton() {
 				throw new Error('Could not connect to demo site');
 			}
 
-			log.debug('Demo site connected successfully');
+			authLogger.debug('Demo site connected successfully');
 			setConnectedSite(site);
 		} catch (err) {
 			// Don't show toast here - specific error messages are already displayed
 			// by the hooks (use-url-discovery, use-api-discovery, use-auth-testing)
-			log.error(`Demo connection failed: ${err.message}`);
+			authLogger.error(`Demo connection failed: ${err.message}`);
 		}
 	};
 
@@ -91,7 +93,7 @@ export function DemoButton() {
 		}
 
 		if (connectedSite && isReady && !isProcessing && !authCompleted) {
-			log.debug('Triggering OAuth flow for demo site');
+			authLogger.debug('Triggering OAuth flow for demo site');
 			authTriggeredRef.current = true; // Set immediately before async call
 			promptAsync();
 		}

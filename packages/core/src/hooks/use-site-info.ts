@@ -3,7 +3,9 @@ import * as React from 'react';
 import get from 'lodash/get';
 
 import useHttpClient from '@wcpos/hooks/use-http-client';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
+
+const appLogger = getLogger(['wcpos', 'app', 'site']);
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
@@ -46,7 +48,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 				// Check if response is successful
 				if (!response || response.status < 200 || response.status >= 300) {
 					const errorMsg = `Invalid response status: ${response?.status}`;
-					log.error('Failed to fetch site info: Invalid response status', {
+					appLogger.error('Failed to fetch site info: Invalid response status', {
 						context: {
 							status: response?.status,
 							statusText: response?.statusText,
@@ -61,7 +63,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 
 				// Check if data exists and has expected structure
 				if (!data || typeof data !== 'object') {
-					log.debug('Site info response contains no valid data', {
+					appLogger.debug('Site info response contains no valid data', {
 						context: { siteUrl, hasData: !!data },
 					});
 					return;
@@ -85,7 +87,7 @@ export const useSiteInfo = ({ site }: Props): SiteInfoResult => {
 				}
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);
-				log.error('Failed to fetch site info', {
+				appLogger.error('Failed to fetch site info', {
 					context: {
 						error: errorMsg,
 						siteUrl,

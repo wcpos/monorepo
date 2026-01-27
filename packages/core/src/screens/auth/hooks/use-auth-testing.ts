@@ -1,10 +1,12 @@
 import * as React from 'react';
 
 import useHttpClient from '@wcpos/hooks/use-http-client';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
+
+const authTestLogger = getLogger(['wcpos', 'auth', 'testing']);
 
 export type AuthTestingStatus = 'idle' | 'testing' | 'success' | 'error';
 
@@ -34,7 +36,6 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 	const [testResult, setTestResult] = React.useState<AuthTestResult | null>(null);
 	const http = useHttpClient();
 	const t = useT();
-	// Logger available as 'log'
 
 	/**
 	 * Test authorization with Bearer token in header
@@ -159,7 +160,7 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 					err.message || t('Failed to test authorization methods', { _tags: 'core' });
 				setError(errorMessage);
 				setStatus('error');
-				log.error(`Authorization testing failed: ${errorMessage}`, {
+				authTestLogger.error(`Authorization testing failed: ${errorMessage}`, {
 					showToast: true,
 					context: {
 						errorCode: ERROR_CODES.INVALID_CONFIGURATION,

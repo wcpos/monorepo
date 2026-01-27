@@ -20,10 +20,12 @@ import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
+
+const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
 import { CurrencySelect } from '../../components/currency-select';
 import { CustomerSelect } from '../../components/customer-select';
@@ -128,7 +130,7 @@ export const EditOrderForm = ({ order }: Props) => {
 				});
 			await pushDocument(order).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
-					log.success(t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }), {
+					mutationLogger.success(t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -139,7 +141,7 @@ export const EditOrderForm = ({ order }: Props) => {
 				}
 			});
 		} catch (error) {
-			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -200,7 +202,7 @@ export const EditOrderForm = ({ order }: Props) => {
 
 				form.setValue('customer_id', customerId);
 			} catch (error) {
-				log.error('Error fetching customer', {
+				mutationLogger.error('Error fetching customer', {
 					context: {
 						errorCode: ERROR_CODES.RECORD_NOT_FOUND,
 						customerId,
