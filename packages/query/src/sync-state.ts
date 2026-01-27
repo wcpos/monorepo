@@ -178,8 +178,8 @@ export class SyncStateManager {
 		if (newRecords.length > 0) {
 			// Process new records in small chunks with yielding to keep UI responsive
 			// Smaller chunks = more yields = smoother UI, but slightly slower overall
-			// 100 records per chunk keeps each write under ~10ms
-			const newRecordChunkSize = 100;
+			// 500 is a good balance for IndexedDB writes
+			const newRecordChunkSize = 500;
 			const totalChunks = Math.ceil(newRecords.length / newRecordChunkSize);
 
 			for (let i = 0; i < newRecords.length; i += newRecordChunkSize) {
