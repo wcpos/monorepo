@@ -49,6 +49,8 @@ export const resetToInitialValues = async (id: UISettingID, state: UISettingStat
  *
  * Note: RxState doesn't allow null values in ops (schema requires v to be present).
  * We skip null/undefined values to avoid VD2 validation errors.
+ *
+ * Also handles graceful failure when database is closed during store switch (COL21 error).
  */
 export const patchState = async <T extends UISettingID>(
 	state: UISettingState<T>,
@@ -65,13 +67,23 @@ export const patchState = async <T extends UISettingID>(
 		const path = key.split('.');
 		const root = path.shift();
 		const typedKey = root as keyof UISettingSchema<T>;
-		await state.set(typedKey, (old) => {
-			if (path.length > 0) {
-				return set(old, path, value);
-			} else {
-				return value;
+
+		try {
+			await state.set(typedKey, (old) => {
+				if (path.length > 0) {
+					return set(old, path, value);
+				} else {
+					return value;
+				}
+			});
+		} catch (error: any) {
+			// Ignore COL21 (collection removed) errors - happens during store switch
+			// when database is closed but React components still try to write
+			if (error?.code === 'COL21') {
+				return state;
 			}
-		});
+			throw error;
+		}
 	}
 	return state;
 };
