@@ -280,4 +280,66 @@ describe('Lifecycle Management', () => {
 		// - Query re-registration when collection resets
 		// - Replication state handling on collection reset
 	});
+
+	describe('AbortController', () => {
+		it('should have signal property on query', () => {
+			const query = new Query({
+				id: 'test-query',
+				collection: storeDatabase1.collections.products,
+				initialParams: {},
+			});
+
+			expect(query.signal).toBeDefined();
+			expect(query.signal).toBeInstanceOf(AbortSignal);
+			expect(query.isAborted).toBe(false);
+		});
+
+		it('should abort signal when cancelled', () => {
+			const query = new Query({
+				id: 'test-query',
+				collection: storeDatabase1.collections.products,
+				initialParams: {},
+			});
+
+			expect(query.isAborted).toBe(false);
+
+			query.cancel();
+
+			expect(query.isAborted).toBe(true);
+			expect(query.signal.aborted).toBe(true);
+		});
+
+		it('should abort manager signal when cancelled', () => {
+			const manager = Manager.getInstance(storeDatabase1, syncDatabase, httpClientMock);
+
+			expect(manager.isAborted).toBe(false);
+
+			manager.cancel();
+
+			expect(manager.isAborted).toBe(true);
+		});
+
+		it('should abort all queries when manager is cancelled', () => {
+			const manager = Manager.getInstance(storeDatabase1, syncDatabase, httpClientMock);
+
+			const query1 = manager.registerQuery({
+				queryKeys: ['abort-test-1'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+			const query2 = manager.registerQuery({
+				queryKeys: ['abort-test-2'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+
+			expect(query1!.isAborted).toBe(false);
+			expect(query2!.isAborted).toBe(false);
+
+			manager.cancel();
+
+			expect(query1!.isAborted).toBe(true);
+			expect(query2!.isAborted).toBe(true);
+		});
+	});
 });

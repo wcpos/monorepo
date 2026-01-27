@@ -252,7 +252,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.subjects.active.next(true);
 
 		try {
-			const response = await this.dataFetcher.fetchAllRemoteIds();
+			const response = await this.dataFetcher.fetchAllRemoteIds(this.signal);
 			if (!Array.isArray(response?.data)) {
 				// Server returned 200 but with unexpected data format (e.g., WP error object, HTML, etc.)
 				const wpError = parseWpError(response?.data, 'Invalid response fetching remote state');
@@ -335,7 +335,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			this.subjects.active.next(true);
 
 			try {
-				const response = await this.dataFetcher.fetchRecentRemoteUpdates(modifiedAfter);
+				const response = await this.dataFetcher.fetchRecentRemoteUpdates(modifiedAfter, this.signal);
 				if (!Array.isArray(response?.data)) {
 					// Server returned 200 but with unexpected data format
 					const wpError = parseWpError(response?.data, 'Invalid response checking updates');
@@ -456,9 +456,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		try {
 			let response;
 			if (exclude && exclude.length < include.length) {
-				response = await this.dataFetcher.fetchRemoteByIDs({ exclude }, params);
+				response = await this.dataFetcher.fetchRemoteByIDs({ exclude }, params, this.signal);
 			} else {
-				response = await this.dataFetcher.fetchRemoteByIDs({ include }, params);
+				response = await this.dataFetcher.fetchRemoteByIDs({ include }, params, this.signal);
 			}
 			await this.bulkUpsertResponse(response);
 		} catch (error: any) {
@@ -547,7 +547,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 
 			// @TODO - I should use the link property to get the endpoint
-			const response = await this.dataFetcher.remotePatch(doc, data);
+			const response = await this.dataFetcher.remotePatch(doc, data, this.signal);
 
 			if (!response?.data) {
 				throw new Error('Invalid response data for remote patch');
@@ -590,7 +590,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 	remoteCreate = async (data: any) => {
 		try {
-			const response = await this.dataFetcher.remoteCreate(data);
+			const response = await this.dataFetcher.remoteCreate(data, this.signal);
 
 			if (!response?.data) {
 				throw new Error('Invalid response data for remote create');
