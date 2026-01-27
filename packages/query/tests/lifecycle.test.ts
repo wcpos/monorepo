@@ -281,10 +281,62 @@ describe('Lifecycle Management', () => {
 			expect((storeDatabase1 as any).reset$).toBeDefined();
 		});
 
-		// TODO: Once Manager's reset$ subscription is re-enabled (Phase 2),
-		// add tests for:
-		// - Query re-registration when collection resets
-		// - Replication state handling on collection reset
+		it('should call onCollectionReset when collection.onRemove fires', async () => {
+			const manager = Manager.getInstance(storeDatabase1, syncDatabase, httpClientMock);
+
+			// Register a query to trigger collection replication setup
+			const query = manager.registerQuery({
+				queryKeys: ['reset-test'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+
+			expect(query).toBeDefined();
+			expect(manager.hasQuery(['reset-test'])).toBe(true);
+
+			// Spy on onCollectionReset
+			const resetSpy = jest.spyOn(manager, 'onCollectionReset');
+
+			// Trigger collection remove (simulates collection reset)
+			const collection = storeDatabase1.collections.products;
+			const onRemoveHandlers = collection.onRemove;
+			expect(onRemoveHandlers.length).toBeGreaterThan(0);
+
+			// Call the onRemove handler manually (simulating what RxDB does)
+			for (const handler of onRemoveHandlers) {
+				await handler();
+			}
+
+			// onCollectionReset should have been called
+			expect(resetSpy).toHaveBeenCalledWith(collection);
+		});
+
+		it('should deregister queries for collection when reset', () => {
+			const manager = Manager.getInstance(storeDatabase1, syncDatabase, httpClientMock);
+
+			// Register queries for products
+			manager.registerQuery({
+				queryKeys: ['product-query-1'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+			manager.registerQuery({
+				queryKeys: ['product-query-2'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+
+			expect(manager.hasQuery(['product-query-1'])).toBe(true);
+			expect(manager.hasQuery(['product-query-2'])).toBe(true);
+
+			// Manually call onCollectionReset
+			const collection = storeDatabase1.collections.products;
+			manager.onCollectionReset(collection);
+
+			// Queries should be deregistered
+			expect(manager.hasQuery(['product-query-1'])).toBe(false);
+			expect(manager.hasQuery(['product-query-2'])).toBe(false);
+		});
 	});
 
 	describe('AbortController', () => {

@@ -76,11 +76,14 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		this.activeQueryReplications = new Registry();
 
 		/**
-		 * Subscribe to localDB to detect if collection is reset
-		 * We need to fire the Query State clean up as early as possible, ie: collection.onDestroy,
-		 * we can't wait for reset because the collection emits as it's being removed
+		 * Collection reset handling:
+		 * - Cleanup is handled via collection.onRemove (see registerCollectionReplication)
+		 * - Re-registration is handled by React hooks (useQuery, useRelationalQuery) subscribing to reset$
+		 *
+		 * Note: We previously considered subscribing to reset$ here, but it's redundant because:
+		 * 1. collection.onRemove fires first and calls onCollectionReset() for cleanup
+		 * 2. React hooks subscribe to reset$ to re-register queries when collections are recreated
 		 */
-		//this.addSub('localDB', this.localDB.reset$.subscribe(this.onCollectionReset.bind(this)));
 
 		/**
 		 * Subscribe to localDB to detect if db is destroyed
