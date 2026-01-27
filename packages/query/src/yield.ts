@@ -2,7 +2,12 @@
  * Yields execution to allow the event loop to process other tasks.
  *
  * This prevents UI blocking when processing large datasets.
- * Uses requestAnimationFrame when available (browser), falls back to setTimeout.
+ * Uses the best available yielding mechanism:
+ * 1. scheduler.yield() - Modern browsers (Chrome 115+), specifically designed for this
+ * 2. setTimeout(0) - Fallback, allows pending events and renders to process
+ *
+ * Note: We don't use requestAnimationFrame because it only fires once per frame
+ * (~16ms at 60fps), which is too slow for data processing yielding.
  *
  * Usage:
  * ```ts
@@ -13,19 +18,15 @@
  * ```
  */
 export function yieldToEventLoop(): Promise<void> {
-	return new Promise((resolve) => {
-		if (typeof requestAnimationFrame !== 'undefined') {
-			// Browser environment - yield before next frame
-			requestAnimationFrame(() => resolve());
-		} else {
-			// Node.js or environments without rAF - use setImmediate or setTimeout
-			if (typeof setImmediate !== 'undefined') {
-				setImmediate(resolve);
-			} else {
-				setTimeout(resolve, 0);
-			}
-		}
-	});
+	// Use scheduler.yield() if available (modern browsers)
+	// This is the best option for yielding during data processing
+	if (typeof scheduler !== 'undefined' && typeof scheduler.yield === 'function') {
+		return scheduler.yield();
+	}
+
+	// Fallback: setTimeout(0) allows the browser to process events and renders
+	// This is better than setImmediate (Node.js only) or requestAnimationFrame (too slow)
+	return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 /**

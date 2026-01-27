@@ -176,15 +176,31 @@ export class SyncStateManager {
 			}));
 
 		if (newRecords.length > 0) {
-			// Process new records in chunks with yielding for very large sets
-			const newRecordChunkSize = 5000;
+			// Process new records in small chunks with yielding to keep UI responsive
+			// Smaller chunks = more yields = smoother UI, but slightly slower overall
+			// 500 is a good balance for IndexedDB writes
+			const newRecordChunkSize = 500;
+			const totalChunks = Math.ceil(newRecords.length / newRecordChunkSize);
+
 			for (let i = 0; i < newRecords.length; i += newRecordChunkSize) {
 				const chunk = newRecords.slice(i, i + newRecordChunkSize);
 				await this.syncCollection.bulkUpsert(chunk);
 
-				// Yield between chunks
-				if (i + newRecordChunkSize < newRecords.length) {
-					await yieldToEventLoop();
+				// Yield after every chunk to keep UI responsive
+				await yieldToEventLoop();
+
+				// Log progress for large sets
+				if (newRecords.length > 5000) {
+					const chunkNum = Math.floor(i / newRecordChunkSize) + 1;
+					if (chunkNum % 10 === 0 || chunkNum === totalChunks) {
+						syncLogger.debug(`Audit progress: ${chunkNum}/${totalChunks} chunks`, {
+							context: {
+								endpoint: this.endpoint,
+								processed: Math.min(i + newRecordChunkSize, newRecords.length),
+								total: newRecords.length,
+							},
+						});
+					}
 				}
 			}
 		}
