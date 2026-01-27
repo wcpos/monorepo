@@ -22,7 +22,10 @@ interface AuditLogOptions {
 }
 
 const DEFAULT_EXCLUDE_COLLECTIONS = ['logs', 'sync', 'notifications'];
-const EXCLUDE_COLLECTION_PATTERNS = [/flexsearch$/]; // Exclude flexsearch index collections
+const EXCLUDE_COLLECTION_PATTERNS = [
+	/flexsearch$/, // Exclude flexsearch index collections
+	/^rx-state/, // Exclude RxDB internal state collections
+];
 const DEFAULT_EXCLUDE_FIELDS = [
 	'_rev',
 	'_deleted',
