@@ -32,10 +32,11 @@ export const useAddCustomer = () => {
 	const orderLogger = React.useMemo(
 		() =>
 			cartLogger.with({
-				orderId: currentOrder.uuid,
+				orderUUID: currentOrder.uuid,
+				orderID: currentOrder.id,
 				orderNumber: currentOrder.number,
 			}),
-		[currentOrder.uuid, currentOrder.number]
+		[currentOrder.uuid, currentOrder.id, currentOrder.number]
 	);
 
 	/**
@@ -64,7 +65,7 @@ export const useAddCustomer = () => {
 			});
 
 			// Log customer assignment
-			orderLogger.info(t('Customer assigned: {customerName}', { _tags: 'core', customerName }), {
+			orderLogger.success(t('Customer assigned: {customerName}', { _tags: 'core', customerName }), {
 				saveToDb: true,
 				context: {
 					customerId: data.id,

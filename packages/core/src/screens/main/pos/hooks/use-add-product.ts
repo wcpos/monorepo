@@ -39,10 +39,11 @@ export const useAddProduct = () => {
 	const orderLogger = React.useMemo(
 		() =>
 			cartLogger.with({
-				orderId: currentOrder.uuid,
+				orderUUID: currentOrder.uuid,
+				orderID: currentOrder.id,
 				orderNumber: currentOrder.number,
 			}),
-		[currentOrder.uuid, currentOrder.number]
+		[currentOrder.uuid, currentOrder.id, currentOrder.number]
 	);
 
 	/**

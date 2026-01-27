@@ -231,7 +231,7 @@ import { getLogger } from '@wcpos/utils/logger';
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
 // Create a logger with bound context for a specific order
-const orderLogger = cartLogger.with({ orderId: order.uuid, orderNumber: order.number });
+const orderLogger = cartLogger.with({ orderUUID: order.uuid, orderID: order.id, orderNumber: order.number });
 
 // All logs from this logger automatically include orderId and orderNumber
 orderLogger.info('Line item added', { context: { productId: '123' } });
