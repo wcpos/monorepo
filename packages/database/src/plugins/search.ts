@@ -1,143 +1,447 @@
 import get from 'lodash/get';
-import { RxPlugin } from 'rxdb';
+import type { RxCollection, RxPlugin } from 'rxdb';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
+import { getLogger } from '@wcpos/utils/logger';
+import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
+// Import types
+import type { FlexSearchInstance } from '../types.d';
+
+const searchLogger = getLogger(['wcpos', 'db', 'search']);
+
 /**
- * A search plugin for RxDB that supports dynamic locale changes.
+ * Maximum number of locale-specific search instances to keep in memory.
+ * Older locales are evicted when this limit is exceeded (LRU strategy).
+ */
+const MAX_CACHED_LOCALES = 3;
+
+/**
+ * Normalize locale to 2-character code.
+ */
+function normalizeLocale(locale: string): string {
+	return locale.slice(0, 2).toLowerCase();
+}
+
+/**
+ * Update LRU tracking - move locale to end (most recently used).
+ */
+function touchLRU(collection: RxCollection, locale: string): void {
+	if (!collection._localeLRU) {
+		collection._localeLRU = [];
+	}
+
+	// Remove if exists
+	const index = collection._localeLRU.indexOf(locale);
+	if (index > -1) {
+		collection._localeLRU.splice(index, 1);
+	}
+
+	// Add to end (most recently used)
+	collection._localeLRU.push(locale);
+}
+
+/**
+ * Evict least recently used locale if over limit.
+ */
+async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
+	if (!collection._localeLRU || !collection._searchInstances) {
+		return;
+	}
+
+	while (
+		collection._localeLRU.length > MAX_CACHED_LOCALES &&
+		collection._searchInstances.size > MAX_CACHED_LOCALES
+	) {
+		const oldestLocale = collection._localeLRU.shift();
+		if (oldestLocale && collection._searchInstances.has(oldestLocale)) {
+			searchLogger.debug('Evicting LRU search instance', {
+				context: { collection: collection.name, locale: oldestLocale },
+			});
+
+			const instance = collection._searchInstances.get(oldestLocale);
+			collection._searchInstances.delete(oldestLocale);
+
+			// Destroy the search collection
+			if (instance?.collection && typeof instance.collection.destroy === 'function') {
+				try {
+					await instance.collection.destroy();
+				} catch (error: any) {
+					searchLogger.warn('Failed to destroy evicted search instance', {
+						context: {
+							collection: collection.name,
+							locale: oldestLocale,
+							error: error.message,
+						},
+					});
+				}
+			}
+		}
+	}
+}
+
+/**
+ * Create a new FlexSearch instance for a collection and locale.
+ */
+async function createSearchInstance(
+	collection: RxCollection,
+	locale: string
+): Promise<FlexSearchInstance> {
+	const searchFields = collection.options?.searchFields;
+
+	searchLogger.debug('Creating search instance', {
+		context: {
+			collection: collection.name,
+			locale,
+			fields: searchFields,
+		},
+	});
+
+	const searchInstance = await addFulltextSearch({
+		identifier: `${collection.name}-search-${locale}`,
+		collection,
+		docToString: (doc: any) => {
+			// Fields can be nested, so we use lodash get to access them
+			return searchFields.map((field: string) => get(doc, field) || '').join(' ');
+		},
+		initialization: 'lazy',
+		indexOptions: {
+			preset: 'performance',
+			tokenize: 'forward',
+			language: locale,
+		},
+	});
+
+	searchLogger.debug('Search instance created successfully', {
+		context: { collection: collection.name, locale },
+	});
+
+	return searchInstance as FlexSearchInstance;
+}
+
+/**
+ * Attempt to destroy a corrupted search collection by name.
+ * Used for recovery when FlexSearch schema has changed.
+ */
+async function destroySearchCollection(
+	collection: RxCollection,
+	locale: string
+): Promise<boolean> {
+	const searchCollectionName = `${collection.name}-search-${locale}-flexsearch`;
+	const database = collection.database;
+
+	searchLogger.debug('Attempting to destroy search collection', {
+		context: { searchCollection: searchCollectionName },
+	});
+
+	try {
+		// Check if the collection exists in the database
+		const searchCollection = database.collections[searchCollectionName];
+		if (searchCollection) {
+			await searchCollection.remove();
+			searchLogger.info('Destroyed corrupted search collection', {
+				context: { searchCollection: searchCollectionName },
+			});
+			return true;
+		}
+	} catch (error: any) {
+		searchLogger.warn('Could not destroy search collection via database', {
+			context: { searchCollection: searchCollectionName, error: error.message },
+		});
+	}
+
+	return false;
+}
+
+/**
+ * Search Plugin for RxDB
+ *
+ * Provides full-text search capabilities using FlexSearch with:
+ * - Per-locale search instances (different tokenization rules)
+ * - LRU cache to limit memory usage (max 3 locales)
+ * - Error recovery with automatic recreation on failure
+ * - Lazy initialization
+ *
+ * Usage:
+ * ```typescript
+ * // Initialize search for a locale
+ * const searchInstance = await collection.initSearch('en');
+ *
+ * // Or set locale and search
+ * await collection.setLocale('en');
+ * const results = await collection.search('blue shirt');
+ *
+ * // Recovery: recreate corrupted search index
+ * await collection.recreateSearch('en');
+ * ```
  */
 export const searchPlugin: RxPlugin = {
 	name: 'search',
 	rxdb: true,
 	prototypes: {
-		RxCollection(proto) {
+		RxCollection(proto: any) {
 			/**
 			 * Initializes or retrieves a FlexSearch instance for a given locale.
-			 * @param {string} locale - The locale for which to initialize or retrieve the search instance.
-			 * @returns {Promise<any>} - The FlexSearch instance for the specified locale.
+			 * Uses LRU caching to limit memory usage.
+			 *
+			 * @param locale - The locale for search (e.g., 'en', 'de', 'zh')
+			 * @returns The FlexSearch instance, or null if no searchFields configured
 			 */
-			proto.initSearch = async function (locale = 'en') {
-				if (!Array.isArray(this.options.searchFields)) {
-					return null; // Return null if searchFields is not defined
+			proto.initSearch = async function (locale = 'en'): Promise<FlexSearchInstance | null> {
+				// Check if collection has searchFields configured
+				if (!Array.isArray(this.options?.searchFields)) {
+					return null;
 				}
 
-				// Take the first 2 chars of the locale
-				locale = locale.slice(0, 2);
+				locale = normalizeLocale(locale);
 
-				// Initialize the _searchInstances map if it doesn't exist
+				// Initialize maps if needed
 				if (!this._searchInstances) {
-					this._searchInstances = new Map();
+					this._searchInstances = new Map<string, FlexSearchInstance>();
 				}
-
-				// Initialize the _searchPromises map if it doesn't exist (to cache pending promises)
 				if (!this._searchPromises) {
-					this._searchPromises = new Map();
+					this._searchPromises = new Map<string, Promise<FlexSearchInstance>>();
 				}
 
-				// If a search instance for the locale already exists, return it
+				// Return existing instance
 				if (this._searchInstances.has(locale)) {
-					return this._searchInstances.get(locale);
+					touchLRU(this, locale);
+					return this._searchInstances.get(locale)!;
 				}
 
-				// If a search instance promise is pending for the locale, await it and return the result
+				// Return pending promise if initialization is in progress
 				if (this._searchPromises.has(locale)) {
-					return this._searchPromises.get(locale);
+					return this._searchPromises.get(locale)!;
 				}
 
-				// Create the promise and store it in _searchPromises
-				const searchPromise = (async () => {
+				// Create initialization promise
+				const searchPromise = (async (): Promise<FlexSearchInstance> => {
 					try {
-						const searchInstance = await addFulltextSearch({
-							identifier: `${this.name}-search-${locale}`,
-							collection: this,
-							docToString: (doc) => {
-								/**
-								 * @NOTE - fields can be nested, so we use lodash get to access them
-								 */
-								return this.options.searchFields.map((field) => get(doc, field) || '').join(' ');
-							},
-							initialization: 'lazy',
-							indexOptions: {
-								preset: 'performance',
-								tokenize: 'forward',
-								language: locale,
+						const searchInstance = await createSearchInstance(this, locale);
+
+						// Store instance and update LRU
+						this._searchInstances.set(locale, searchInstance);
+						this._searchPromises.delete(locale);
+						touchLRU(this, locale);
+
+						// Evict old instances if over limit
+						await evictLRUIfNeeded(this);
+
+						return searchInstance;
+					} catch (error: any) {
+						this._searchPromises.delete(locale);
+
+						searchLogger.error('Failed to initialize search', {
+							showToast: false,
+							saveToDb: true,
+							context: {
+								errorCode: ERROR_CODES.INVALID_CONFIGURATION,
+								collection: this.name,
+								locale,
+								error: error.message,
 							},
 						});
 
-						// Store the search instance in the map once created
-						this._searchInstances.set(locale, searchInstance);
+						// Attempt recovery: destroy corrupted collection and retry once
+						searchLogger.info('Attempting search recovery', {
+							context: { collection: this.name, locale },
+						});
 
-						// Remove the promise from the _searchPromises map
-						this._searchPromises.delete(locale);
+						const destroyed = await destroySearchCollection(this, locale);
+						if (destroyed) {
+							try {
+								const searchInstance = await createSearchInstance(this, locale);
+								this._searchInstances.set(locale, searchInstance);
+								touchLRU(this, locale);
+								await evictLRUIfNeeded(this);
 
-						return searchInstance;
-					} catch (error) {
-						console.error('Error initializing FlexSearch instance:', error);
-						this._searchPromises.delete(locale);
+								searchLogger.info('Search recovery successful', {
+									context: { collection: this.name, locale },
+								});
+
+								return searchInstance;
+							} catch (retryError: any) {
+								searchLogger.error('Search recovery failed', {
+									showToast: true,
+									saveToDb: true,
+									context: {
+										errorCode: ERROR_CODES.SERVICE_UNAVAILABLE,
+										collection: this.name,
+										locale,
+										error: retryError.message,
+									},
+								});
+							}
+						}
+
 						throw error;
 					}
 				})();
 
-				// Register the cleanup function with onDestroy
+				// Store promise for deduplication
+				this._searchPromises.set(locale, searchPromise);
+
+				// Register cleanup handler (once per collection)
 				if (!this._cleanupRegistered) {
 					this._cleanupRegistered = true;
 
 					this.onClose.push(async () => {
+						searchLogger.debug('Cleaning up search instances', {
+							context: {
+								collection: this.name,
+								locales: this._searchInstances ? Array.from(this._searchInstances.keys()) : [],
+							},
+						});
+
+						// Destroy all search instances
 						if (this._searchInstances) {
-							for (const [locale, searchInstance] of this._searchInstances.entries()) {
-								// Destroy the search instance's collection if it exists
-								if (
-									searchInstance.collection &&
-									typeof searchInstance.collection.destroy === 'function'
-								) {
-									await searchInstance.collection.destroy();
+							for (const [loc, searchInstance] of this._searchInstances.entries()) {
+								if (searchInstance.collection && typeof searchInstance.collection.destroy === 'function') {
+									try {
+										await searchInstance.collection.destroy();
+									} catch (error: any) {
+										searchLogger.warn('Error destroying search instance on cleanup', {
+											context: {
+												collection: this.name,
+												locale: loc,
+												error: error.message,
+											},
+										});
+									}
 								}
-								// Remove the search instance from the map
-								this._searchInstances.delete(locale);
 							}
+							this._searchInstances.clear();
 						}
 
-						// Clear any pending search promises
+						// Clear pending promises
 						if (this._searchPromises) {
 							this._searchPromises.clear();
 						}
+
+						// Clear LRU tracking
+						if (this._localeLRU) {
+							this._localeLRU = [];
+						}
 					});
 				}
-
-				// Store the promise in the _searchPromises map
-				this._searchPromises.set(locale, searchPromise);
 
 				return searchPromise;
 			};
 
 			/**
 			 * Sets the active locale for searching.
-			 * Initializes the search instance for the new locale if not already done.
-			 * @param {string} locale - The new locale to set.
-			 * @returns {Promise<any>} - The FlexSearch instance for the new locale.
+			 * Initializes the search instance if not already done.
+			 *
+			 * @param locale - The locale to set as active
+			 * @returns The FlexSearch instance for the locale
 			 */
-			proto.setLocale = async function (locale) {
+			proto.setLocale = async function (locale: string): Promise<FlexSearchInstance | null> {
 				const searchInstance = await this.initSearch(locale);
-				this._activeLocale = locale;
+				this._activeLocale = normalizeLocale(locale);
 				return searchInstance;
 			};
 
 			/**
 			 * Performs a search using the active locale's FlexSearch instance.
-			 * @param {string} query - The search query.
-			 * @returns {Promise<Array>} - The search results.
+			 *
+			 * @param query - The search query
+			 * @returns Array of matching document primary keys
+			 * @throws If setLocale() hasn't been called
 			 */
-			proto.search = async function (query) {
+			proto.search = async function (query: string): Promise<string[]> {
 				if (!this._activeLocale) {
 					throw new Error('Search locale not initialized. Call setLocale(locale) first.');
 				}
 
-				const searchInstance = this._searchInstances.get(this._activeLocale);
+				const searchInstance = this._searchInstances?.get(this._activeLocale);
 				if (!searchInstance) {
 					throw new Error(`Search instance for locale '${this._activeLocale}' is not initialized.`);
 				}
 
-				// Perform the search using the FlexSearch instance
-				return await searchInstance.search(query);
+				return searchInstance.search(query);
+			};
+
+			/**
+			 * Recreate the search index for a locale.
+			 * Destroys the existing search collection and creates a fresh one.
+			 * Useful for recovering from schema migration issues.
+			 *
+			 * @param locale - The locale to recreate (defaults to active locale)
+			 * @returns The new FlexSearch instance
+			 */
+			proto.recreateSearch = async function (locale?: string): Promise<FlexSearchInstance | null> {
+				// Check if collection has searchFields configured
+				if (!Array.isArray(this.options?.searchFields)) {
+					return null;
+				}
+
+				locale = normalizeLocale(locale || this._activeLocale || 'en');
+
+				searchLogger.info('Recreating search index', {
+					context: { collection: this.name, locale },
+				});
+
+				// Remove existing instance from cache
+				if (this._searchInstances?.has(locale)) {
+					const oldInstance = this._searchInstances.get(locale);
+					this._searchInstances.delete(locale);
+
+					// Destroy the old search collection
+					if (oldInstance?.collection && typeof oldInstance.collection.destroy === 'function') {
+						try {
+							await oldInstance.collection.destroy();
+						} catch (error: any) {
+							searchLogger.warn('Error destroying old search instance', {
+								context: { collection: this.name, locale, error: error.message },
+							});
+						}
+					}
+				}
+
+				// Also try to destroy any orphaned search collection
+				await destroySearchCollection(this, locale);
+
+				// Remove from LRU tracking
+				if (this._localeLRU) {
+					const index = this._localeLRU.indexOf(locale);
+					if (index > -1) {
+						this._localeLRU.splice(index, 1);
+					}
+				}
+
+				// Clear any pending promise
+				this._searchPromises?.delete(locale);
+
+				// Create fresh instance
+				try {
+					const searchInstance = await createSearchInstance(this, locale);
+
+					// Store and track
+					if (!this._searchInstances) {
+						this._searchInstances = new Map();
+					}
+					this._searchInstances.set(locale, searchInstance);
+					touchLRU(this, locale);
+					await evictLRUIfNeeded(this);
+
+					searchLogger.info('Search index recreated successfully', {
+						context: { collection: this.name, locale },
+					});
+
+					return searchInstance;
+				} catch (error: any) {
+					searchLogger.error('Failed to recreate search index', {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.SERVICE_UNAVAILABLE,
+							collection: this.name,
+							locale,
+							error: error.message,
+						},
+					});
+					throw error;
+				}
 			};
 		},
 	},
