@@ -3,10 +3,12 @@ import * as React from 'react';
 import { createNativeInstance, TxNative } from '@transifex/native';
 import { useObservableEagerState } from 'observable-hooks';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import CustomCache from './cache';
+
+const appLogger = getLogger(['wcpos', 'app', 'translations']);
 import { useLocale } from '../../hooks/use-locale';
 import { useAppState } from '../app-state';
 
@@ -60,7 +62,7 @@ export const TranslationProvider = ({ children }) => {
 			try {
 				await txInstance.fetchTranslations(locale);
 			} catch (error) {
-				log.error('Error fetching translations', {
+				appLogger.error('Error fetching translations', {
 					context: {
 						errorCode: ERROR_CODES.CONNECTION_REFUSED,
 						locale,

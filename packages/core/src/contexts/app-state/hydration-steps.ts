@@ -2,10 +2,12 @@ import * as Crypto from 'expo-crypto';
 
 import { createFastStoreDB, createStoreDB, createUserDB, isRxDocument } from '@wcpos/database';
 import type { UserDatabase } from '@wcpos/database';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import Platform from '@wcpos/utils/platform';
 
 import { initialProps } from './initial-props';
+
+const appLogger = getLogger(['wcpos', 'app', 'hydration']);
 
 /**
  * Generate a unique id for stores
@@ -88,7 +90,7 @@ async function testAuthorizationMethod(
 			testParamAuth(wcposApiUrl, accessToken),
 		]);
 
-		log.debug('Authorization method test results', {
+		appLogger.debug('Authorization method test results', {
 			context: {
 				headerSupported,
 				paramSupported,
@@ -102,19 +104,19 @@ async function testAuthorizationMethod(
 			return { useJwtAsParam: false };
 		} else if (paramSupported) {
 			// Only params work - this usually means server is blocking Authorization headers
-			log.warn('Server does not support Authorization headers, using query parameters', {
+			appLogger.warn('Server does not support Authorization headers, using query parameters', {
 				context: { wcposApiUrl },
 			});
 			return { useJwtAsParam: true };
 		} else {
 			// Neither work - log but don't fail hydration
-			log.warn('Authorization test failed for both methods', {
+			appLogger.warn('Authorization test failed for both methods', {
 				context: { wcposApiUrl },
 			});
 			return null;
 		}
 	} catch (err) {
-		log.warn('Authorization method test error', {
+		appLogger.warn('Authorization method test error', {
 			context: {
 				wcposApiUrl,
 				error: err instanceof Error ? err.message : String(err),
@@ -330,7 +332,7 @@ const testAuthorizationStep: HydrationStep = {
 		const accessToken = initialProps.wp_credentials?.access_token;
 
 		if (!wcposApiUrl || !accessToken) {
-			log.debug('Skipping authorization test - missing wcpos_api_url or access_token');
+			appLogger.debug('Skipping authorization test - missing wcpos_api_url or access_token');
 			return {};
 		}
 
@@ -341,7 +343,7 @@ const testAuthorizationStep: HydrationStep = {
 			const siteDoc = await userDB.sites.findOne(initialProps.site.uuid).exec();
 			if (siteDoc) {
 				await siteDoc.incrementalPatch({ use_jwt_as_param: true });
-				log.info('Site configured to use JWT as query parameter', {
+				appLogger.info('Site configured to use JWT as query parameter', {
 					context: { siteId: initialProps.site.uuid },
 				});
 			}

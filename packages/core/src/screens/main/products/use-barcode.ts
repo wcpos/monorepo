@@ -1,9 +1,11 @@
 import { useSubscription } from 'observable-hooks';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
+
+const barcodeLogger = getLogger(['wcpos', 'barcode', 'product']);
 import { useBarcodeDetection, useBarcodeSearch } from '../hooks/barcodes';
 
 import type { QuerySearchInput } from '../components/query-search-input';
@@ -38,7 +40,7 @@ export const useBarcode = (
 		}
 
 		if (isError) {
-			log.error(text1, {
+			barcodeLogger.error(text1, {
 				showToast: true,
 				saveToDb: true,
 				toast: {
@@ -51,7 +53,7 @@ export const useBarcode = (
 				},
 			});
 		} else {
-			log.info(text1, {
+			barcodeLogger.info(text1, {
 				showToast: true,
 				toast: {
 					text2,

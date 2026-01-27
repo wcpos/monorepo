@@ -2,9 +2,11 @@ import * as React from 'react';
 
 import * as Print from 'expo-print';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import type { UsePrintOptions } from './use-print.types';
+
+const printLogger = getLogger(['wcpos', 'print', 'native']);
 
 /**
  * Native implementation of usePrint hook using expo-print.
@@ -16,7 +18,7 @@ export const usePrint = (options: UsePrintOptions) => {
 
 	const print = React.useCallback(async () => {
 		if (!html) {
-			log.warn('No HTML content provided to print');
+			printLogger.warn('No HTML content provided to print');
 			return;
 		}
 
@@ -35,7 +37,7 @@ export const usePrint = (options: UsePrintOptions) => {
 			// Call onAfterPrint if provided
 			onAfterPrint?.();
 		} catch (error) {
-			log.error('Print error', { context: { error } });
+			printLogger.error('Print error', { context: { error } });
 			onPrintError?.('print', error as Error);
 		} finally {
 			setIsPrinting(false);

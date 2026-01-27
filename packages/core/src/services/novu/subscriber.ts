@@ -1,8 +1,10 @@
 import type { SiteDocument, StoreDocument, WPCredentialsDocument } from '@wcpos/database';
 import { http } from '@wcpos/hooks/use-http-client';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { getNovuEnvironment } from './client';
+
+const novuLogger = getLogger(['wcpos', 'notifications', 'novu']);
 
 // Import static AppInfo for non-React code
 // For React components, use the useAppInfo() hook instead
@@ -152,7 +154,7 @@ export async function syncSubscriberToServer(
 			},
 		});
 
-		log.debug('Novu: Subscriber sync successful', {
+		novuLogger.debug('Novu: Subscriber sync successful', {
 			context: { subscriberId, environment, status: response.status },
 		});
 
@@ -160,7 +162,7 @@ export async function syncSubscriberToServer(
 	} catch (error: any) {
 		const errorMessage = error?.response?.data?.message || error?.message || 'Network error';
 
-		log.warn('Novu: Subscriber sync failed', {
+		novuLogger.warn('Novu: Subscriber sync failed', {
 			context: {
 				subscriberId,
 				environment,

@@ -2,9 +2,11 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import type { UsePrintExternalURLOptions } from './types';
+
+const printLogger = getLogger(['wcpos', 'print', 'external']);
 
 export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 	const { externalURL, onBeforePrint, onAfterPrint, onPrintError } = options;
@@ -47,7 +49,7 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 				}
 			});
 		} else {
-			log.error('ipcRenderer not available');
+			printLogger.error('ipcRenderer not available');
 		}
 	}, [externalURL, onBeforePrint, onAfterPrint, onPrintError]);
 

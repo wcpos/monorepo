@@ -2,9 +2,11 @@ import * as React from 'react';
 
 import { useReactToPrint } from 'react-to-print';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import type { UsePrintOptions } from './use-print.types';
+
+const printLogger = getLogger(['wcpos', 'print', 'web']);
 
 const DEFAULT_PAGE_STYLE = `
     @page {
@@ -30,7 +32,7 @@ const DEFAULT_PAGE_STYLE = `
 
 /**
  * Web implementation of usePrint hook using react-to-print.
- * Prints DOM content via browser print dialog.
+ * Prints DOM content via browser print diaprintLogger.
  */
 export const usePrint = (options: UsePrintOptions) => {
 	const { contentRef, pageStyle, onBeforePrint, onAfterPrint, onPrintError } = options;
@@ -48,7 +50,7 @@ export const usePrint = (options: UsePrintOptions) => {
 		contentRef,
 		pageStyle: pageStyle || DEFAULT_PAGE_STYLE,
 		onPrintError: (errorLocation, error) => {
-			log.error(`Print error in ${errorLocation}`, { context: { error } });
+			printLogger.error(`Print error in ${errorLocation}`, { context: { error } });
 			onPrintError?.(errorLocation, error);
 		},
 		onBeforePrint: () => {
