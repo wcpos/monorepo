@@ -22,6 +22,7 @@ interface AuditLogOptions {
 }
 
 const DEFAULT_EXCLUDE_COLLECTIONS = ['logs', 'sync', 'notifications'];
+const EXCLUDE_COLLECTION_PATTERNS = [/flexsearch$/]; // Exclude flexsearch index collections
 const DEFAULT_EXCLUDE_FIELDS = [
 	'_rev',
 	'_deleted',
@@ -201,8 +202,13 @@ export const RxDBAuditLogPlugin: RxPlugin = {
 	hooks: {
 		createRxCollection: {
 			after({ collection }) {
-				// Skip excluded collections
+				// Skip excluded collections by exact name
 				if (DEFAULT_EXCLUDE_COLLECTIONS.includes(collection.name)) {
+					return;
+				}
+
+				// Skip excluded collections by pattern (e.g., flexsearch index collections)
+				if (EXCLUDE_COLLECTION_PATTERNS.some((pattern) => pattern.test(collection.name))) {
 					return;
 				}
 
@@ -224,4 +230,9 @@ export const RxDBAuditLogPlugin: RxPlugin = {
 export default RxDBAuditLogPlugin;
 
 // Export for testing
-export { calculateChanges, getDocumentIdentifier, DEFAULT_EXCLUDE_COLLECTIONS };
+export {
+	calculateChanges,
+	getDocumentIdentifier,
+	DEFAULT_EXCLUDE_COLLECTIONS,
+	EXCLUDE_COLLECTION_PATTERNS,
+};

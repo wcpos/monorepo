@@ -302,6 +302,53 @@ describe('audit-log plugin', () => {
 			const logsCollectionAudit = auditLogs.find((log) => log.context?.collection === 'logs');
 			expect(logsCollectionAudit).toBeUndefined();
 		});
+
+		it('should not log changes to flexsearch collections', async () => {
+			// Create a flexsearch-like collection (simulating logs-search-en_flexsearch)
+			const flexsearchSchema = {
+				title: 'flexsearch schema',
+				version: 0,
+				primaryKey: 'id',
+				type: 'object',
+				properties: {
+					id: { type: 'string', maxLength: 100 },
+					content: { type: 'string' },
+				},
+			} as const;
+
+			await db.addCollections({
+				'logs-search-en_flexsearch': { schema: flexsearchSchema },
+			});
+
+			const flexsearchCollection = db.collections['logs-search-en_flexsearch'];
+
+			// Get initial audit log count
+			const initialAuditLogs = await logsCollection
+				.find({ selector: { code: { $regex: '^AUDIT_' } } })
+				.exec();
+			const initialCount = initialAuditLogs.length;
+
+			// Insert into flexsearch collection
+			await flexsearchCollection.insert({
+				id: 'flexsearch-doc-1',
+				content: 'test content',
+			});
+
+			// Wait a bit
+			await waitFor(100);
+
+			// Verify no AUDIT log was created for the flexsearch collection
+			const finalAuditLogs = await logsCollection
+				.find({ selector: { code: { $regex: '^AUDIT_' } } })
+				.exec();
+			const flexsearchAudit = finalAuditLogs.find(
+				(log) => log.context?.collection === 'logs-search-en_flexsearch'
+			);
+			expect(flexsearchAudit).toBeUndefined();
+
+			// Count should not have increased due to flexsearch insert
+			expect(finalAuditLogs.length).toBe(initialCount);
+		});
 	});
 
 	describe('bulk operations', () => {
