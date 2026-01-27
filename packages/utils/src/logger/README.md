@@ -5,6 +5,9 @@ A progressive enhancement logger for WooCommerce POS that supports console loggi
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Hierarchical Categories](#hierarchical-categories)
+- [Explicit Contexts](#explicit-contexts)
+- [Lazy Evaluation](#lazy-evaluation)
 - [Runtime Log Level Control](#runtime-log-level-control)
 - [API Reference](#api-reference)
 - [Toast Options](#toast-options)
@@ -69,6 +72,92 @@ setToast(Toast.show);
 const { storeDB } = useAppState();
 setDatabase(storeDB.collections.logs);
 ```
+
+## Hierarchical Categories
+
+For better log organization, use `getLogger()` to create category-based loggers:
+
+```typescript
+import { getLogger } from '@wcpos/utils/logger';
+
+// Create a logger for the POS cart module
+const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+
+// Logs will include category: "wcpos.pos.cart"
+cartLogger.info('Product added', { context: { productId: '123' } });
+
+// Create child loggers for sub-modules
+const checkoutLogger = cartLogger.getChild('checkout');
+checkoutLogger.info('Checkout started'); // category: "wcpos.pos.cart.checkout"
+
+// Or create deeply nested children
+const paymentLogger = cartLogger.getChild(['checkout', 'payment']);
+paymentLogger.info('Payment processing'); // category: "wcpos.pos.cart.checkout.payment"
+```
+
+### Benefits
+
+- **Filtering**: Filter logs by category in the Logs UI
+- **Organization**: Group related logs together
+- **Inheritance**: Child loggers inherit parent category
+
+## Explicit Contexts
+
+Bind context to a logger so it persists across all log calls:
+
+```typescript
+import { getLogger } from '@wcpos/utils/logger';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+
+// Create a logger with bound context for a specific order
+const orderLogger = cartLogger.with({ orderId: order.uuid, orderNumber: order.number });
+
+// All logs from this logger automatically include orderId and orderNumber
+orderLogger.info('Line item added', { context: { productId: '123' } });
+orderLogger.info('Discount applied', { context: { discountAmount: 10.00 } });
+orderLogger.info('Customer changed', { context: { customerId: '456' } });
+orderLogger.success('Order saved', { showToast: true });
+
+// You can chain .with() to add more context
+const lineItemLogger = orderLogger.with({ lineItemId: 'abc' });
+lineItemLogger.debug('Calculating tax');
+lineItemLogger.debug('Tax calculated', { context: { taxAmount: 5.50 } });
+```
+
+### Benefits
+
+- **DRY**: No need to repeat orderId in every log call
+- **Consistency**: All related logs have the same context
+- **Debugging**: Easy to filter logs for a specific order/customer/etc.
+
+## Lazy Evaluation
+
+For expensive computations, use a function to defer evaluation until the log is actually needed:
+
+```typescript
+import { getLogger } from '@wcpos/utils/logger';
+
+const logger = getLogger(['wcpos', 'pos']);
+
+// EAGER - always computed, even if debug is disabled in production
+logger.debug('Cart state', { context: { items: JSON.stringify(cart.items) } });
+
+// LAZY - only computed if debug level is enabled
+logger.debug(() => `Cart state: ${JSON.stringify(cart.getFullState())}`);
+
+// Useful for expensive operations
+logger.debug(() => {
+  const stats = calculateDetailedStats(); // expensive!
+  return `Performance stats: ${JSON.stringify(stats)}`;
+});
+```
+
+### When to Use Lazy Evaluation
+
+- Debug logs with complex object serialization
+- Logs that involve database queries or API calls
+- Any computation that shouldn't run in production
 
 ## Runtime Log Level Control
 

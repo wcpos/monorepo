@@ -11,6 +11,7 @@ import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
 import { disableVersionCheck, setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
+import { RxDBAuditLogPlugin } from './audit-log';
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
 import middlewaresPlugin from './middlewares';
@@ -61,3 +62,4 @@ addRxPlugin(parseRestResponsePlugin);
 addRxPlugin(resetCollectionPlugin);
 addRxPlugin(searchPlugin);
 addRxPlugin(middlewaresPlugin);
+addRxPlugin(RxDBAuditLogPlugin); // should run last to capture all changes

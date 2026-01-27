@@ -7,12 +7,15 @@ import { map } from 'rxjs/operators';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../../../contexts/app-state';
+import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
+
+const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -34,6 +37,17 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 	const jwt = useObservableState(wpCredentials.access_token$, wpCredentials.access_token);
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
+	const t = useT();
+
+	// Create a logger with order context
+	const orderLogger = React.useMemo(
+		() =>
+			paymentLogger.with({
+				orderId: order.uuid,
+				orderNumber: order.number,
+			}),
+		[order.uuid, order.number]
+	);
 
 	/**
 	 *
@@ -66,6 +80,25 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 					const parsedData = latest.collection.parseRestResponse(payload);
 					const success = await latest.incrementalPatch(parsedData);
 					if (success) {
+						// Log payment completed successfully
+						orderLogger.success(
+							t('Payment completed for order #{orderNumber}', {
+								_tags: 'core',
+								orderNumber: payload.number || order.number,
+							}),
+							{
+								showToast: true,
+								saveToDb: true,
+								context: {
+									total: payload.total,
+									paymentMethod: payload.payment_method,
+									paymentMethodTitle: payload.payment_method_title,
+									transactionId: payload.transaction_id,
+									status: payload.status,
+								},
+							}
+						);
+
 						if (uiSettings.autoShowReceipt) {
 							router.replace({
 								pathname: `/(modals)/cart/receipt/${order.uuid}`,
@@ -75,23 +108,22 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 								pathname: `cart`,
 							});
 						}
+					}
+				} catch (err) {
+					orderLogger.error(err?.message || 'Payment processing error', {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
+							error: err instanceof Error ? err.message : String(err),
+						},
+					});
+				} finally {
+					setLoading(false);
 				}
-			} catch (err) {
-				log.error(err?.message || 'Payment processing error', {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
-						orderId: order.id,
-						error: err instanceof Error ? err.message : String(err),
-					},
-				});
-			} finally {
-				setLoading(false);
-			}
 			}
 		},
-		[router, order, stockAdjustment, uiSettings.autoShowReceipt, setLoading]
+		[router, order, stockAdjustment, uiSettings.autoShowReceipt, setLoading, orderLogger, t]
 	);
 
 	/**
@@ -110,21 +142,20 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 				<WebView
 					src={paymentURLWithToken}
 					onLoad={onWebViewLoaded}
-				onMessage={(event) => {
-					if (event?.data?.payload?.data) {
-						log.error(event?.data?.payload?.message || 'Payment error', {
-							showToast: true,
-							saveToDb: true,
-							context: {
-								errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
-								orderId: order.id,
-								payloadData: event?.data?.payload?.data,
-							},
-						});
-					} else {
-						handlePaymentReceived(event);
-					}
-				}}
+					onMessage={(event) => {
+						if (event?.data?.payload?.data) {
+							orderLogger.error(event?.data?.payload?.message || 'Payment error', {
+								showToast: true,
+								saveToDb: true,
+								context: {
+									errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
+									payloadData: event?.data?.payload?.data,
+								},
+							});
+						} else {
+							handlePaymentReceived(event);
+						}
+					}}
 					className="h-full flex-1"
 					{...props}
 				/>
