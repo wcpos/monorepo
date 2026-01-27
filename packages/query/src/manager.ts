@@ -252,34 +252,40 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		return query;
 	}
 
-	deregisterQuery(key: string): void {
+	async deregisterQuery(key: string): Promise<void> {
 		const query = this.queryStates.get(key);
 		if (query) {
 			this.queryStates.delete(key);
 			this.activeCollectionReplications.delete(key);
 			this.activeQueryReplications.delete(key);
 
-			query.cancel();
+			await query.cancel();
 		}
 	}
 
 	/**
-	 *
+	 * Called when a collection is reset/removed.
+	 * Deregisters and cancels all queries and replications for the collection.
+	 * Returns a Promise that resolves when all cancellations are complete.
 	 */
-	onCollectionReset(collection) {
+	async onCollectionReset(collection): Promise<void> {
+		const cancelPromises: Promise<void>[] = [];
+
 		// cancel all replication states for the collection
 		this.replicationStates.forEach((replication, endpoint) => {
 			if (replication.collection.name === collection.name) {
-				this.deregisterReplication(endpoint);
+				cancelPromises.push(this.deregisterReplication(endpoint));
 			}
 		});
 
 		// cancel all query states for the collection
 		this.queryStates.forEach((query, key) => {
 			if (query.collection.name === collection.name) {
-				this.deregisterQuery(key);
+				cancelPromises.push(this.deregisterQuery(key));
 			}
 		});
+
+		await Promise.all(cancelPromises);
 	}
 
 	/**
@@ -383,13 +389,13 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	}
 
 	/**
-	 *
+	 * Deregister and cancel a replication state.
 	 */
-	deregisterReplication(endpoint: string) {
+	async deregisterReplication(endpoint: string): Promise<void> {
 		const replicationState = this.replicationStates.get(endpoint);
 		if (replicationState) {
 			this.replicationStates.delete(endpoint);
-			replicationState.cancel();
+			await replicationState.cancel();
 		}
 	}
 

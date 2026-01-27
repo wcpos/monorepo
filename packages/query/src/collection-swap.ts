@@ -144,6 +144,7 @@ function validateResetObservable(storeDB: RxDatabase): void {
 /**
  * Cancel all queries and replications for a collection.
  * This calls onCollectionReset which deregisters and cancels everything.
+ * Awaits completion of all cancellations.
  */
 async function cancelCollectionOperations(
 	manager: Manager<any>,
@@ -153,10 +154,8 @@ async function cancelCollectionOperations(
 	if (collection) {
 		// onCollectionReset deregisters queries and replications for the collection
 		// Each query/replication's cancel() will abort its AbortController
-		manager.onCollectionReset(collection);
-
-		// Give a small delay for abort signals to propagate
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		// Await completion to ensure all cancellations are finished
+		await manager.onCollectionReset(collection);
 	}
 }
 

@@ -101,6 +101,16 @@ describe('Yield Utilities', () => {
 
 			expect(indices).toEqual([0, 1, 2]);
 		});
+
+		it('should throw RangeError for chunkSize <= 0', async () => {
+			await expect(processInChunks([1, 2, 3], async () => {}, 0)).rejects.toThrow(RangeError);
+			await expect(processInChunks([1, 2, 3], async () => {}, -1)).rejects.toThrow(RangeError);
+		});
+
+		it('should throw RangeError for non-finite chunkSize', async () => {
+			await expect(processInChunks([1, 2, 3], async () => {}, NaN)).rejects.toThrow(RangeError);
+			await expect(processInChunks([1, 2, 3], async () => {}, Infinity)).rejects.toThrow(RangeError);
+		});
 	});
 
 	describe('chunkedIterator', () => {
@@ -160,6 +170,22 @@ describe('Yield Utilities', () => {
 			}
 
 			expect(results).toEqual([{ chunk: [1], isLast: true }]);
+		});
+
+		it('should throw RangeError for chunkSize <= 0', async () => {
+			const iterator = chunkedIterator([1, 2, 3], 0);
+			await expect(iterator.next()).rejects.toThrow(RangeError);
+
+			const iterator2 = chunkedIterator([1, 2, 3], -1);
+			await expect(iterator2.next()).rejects.toThrow(RangeError);
+		});
+
+		it('should throw RangeError for non-finite chunkSize', async () => {
+			const iterator = chunkedIterator([1, 2, 3], NaN);
+			await expect(iterator.next()).rejects.toThrow(RangeError);
+
+			const iterator2 = chunkedIterator([1, 2, 3], Infinity);
+			await expect(iterator2.next()).rejects.toThrow(RangeError);
 		});
 	});
 

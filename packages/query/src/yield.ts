@@ -54,6 +54,11 @@ export async function processInChunks<T>(
 	chunkSize: number = 1000,
 	onProgress?: (progress: { processed: number; total: number; percent: number }) => void
 ): Promise<void> {
+	// Guard against invalid chunkSize to prevent infinite loops
+	if (!Number.isFinite(chunkSize) || chunkSize <= 0) {
+		throw new RangeError('chunkSize must be a positive number');
+	}
+
 	const total = items.length;
 
 	for (let i = 0; i < total; i += chunkSize) {
@@ -96,6 +101,11 @@ export async function* chunkedIterator<T>(
 	items: T[],
 	chunkSize: number = 1000
 ): AsyncGenerator<{ chunk: T[]; index: number; isLast: boolean }> {
+	// Guard against invalid chunkSize to prevent infinite loops
+	if (!Number.isFinite(chunkSize) || chunkSize <= 0) {
+		throw new RangeError('chunkSize must be a positive number');
+	}
+
 	const total = items.length;
 
 	for (let i = 0; i < total; i += chunkSize) {

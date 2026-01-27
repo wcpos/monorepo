@@ -120,22 +120,26 @@ describe('Performance', () => {
 				endpoint: 'products',
 			});
 
-			let yieldCount = 0;
-			const originalYield = global.setTimeout;
-
 			// Count how many times we yield (setTimeout/setImmediate calls)
+			// yieldToEventLoop uses setImmediate in Node.js, setTimeout as fallback
 			const timeoutSpy = jest.spyOn(global, 'setTimeout');
+			const immediateSpy =
+				typeof setImmediate !== 'undefined' ? jest.spyOn(global, 'setImmediate') : undefined;
 
 			await syncStateManager.processFullAudit(serverRecords);
 
 			// Should have yielded multiple times (once per batch)
 			// With 10k records and 1000 batch size, expect ~10 yields
-			const yieldCalls = timeoutSpy.mock.calls.filter(
+			const timeoutYields = timeoutSpy.mock.calls.filter(
 				(call) => call[1] === 0 || call[1] === undefined
 			);
-			expect(yieldCalls.length).toBeGreaterThan(5);
+			const immediateYields = immediateSpy?.mock.calls ?? [];
+			const totalYields = timeoutYields.length + immediateYields.length;
+
+			expect(totalYields).toBeGreaterThan(5);
 
 			timeoutSpy.mockRestore();
+			immediateSpy?.mockRestore();
 		});
 	});
 
