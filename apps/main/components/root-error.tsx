@@ -4,9 +4,11 @@ import { NativeModules, Platform, ScrollView, StyleSheet, Text, TouchableOpacity
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { clearAllDB } from '@wcpos/database';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import type { FallbackProps } from 'react-error-boundary';
+
+const appLogger = getLogger(['wcpos', 'app', 'error']);
 
 /**
  * Reload the app - handles web and native platforms
@@ -68,9 +70,9 @@ export const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 		// Clear databases to ensure clean start
 		try {
 			const result = await clearAllDB();
-			log.info(result.message);
+			appLogger.info(result.message);
 		} catch (err) {
-			log.error('Failed to clear database:', err);
+			appLogger.error('Failed to clear database:', err);
 		}
 
 		// Reload the app to reinitialize everything

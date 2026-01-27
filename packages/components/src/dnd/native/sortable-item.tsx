@@ -12,9 +12,11 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 import * as Haptics from 'expo-haptics';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useSortableContext } from './context';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'dnd']);
 import { DropIndicator } from './drop-indicator';
 
 import type { ItemLayout, SortableItemProps } from './types';
@@ -102,7 +104,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 		(event: LayoutChangeEvent) => {
 			const { x, y, width, height } = event.nativeEvent.layout;
 			const layout: ItemLayout = { x, y, width, height };
-			log.debug(`[DND] handleLayout for ${id}`, { context: { layout } });
+			uiLogger.debug(`[DND] handleLayout for ${id}`, { context: { layout } });
 			registerItem(id, layout);
 		},
 		[id, registerItem]
@@ -123,7 +125,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 	// Debug logging function (called from worklet via scheduleOnRN)
 	const logDragStart = React.useCallback(
 		(itemId: string, index: number, positionsSnapshot: Record<string, number>) => {
-			log.debug(`[DND] Drag started for ${itemId}`, {
+			uiLogger.debug(`[DND] Drag started for ${itemId}`, {
 				context: { index, positions: positionsSnapshot },
 			});
 		},
@@ -140,7 +142,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 			offset: number,
 			newTarget: number
 		) => {
-			log.debug(`[DND] Drag update`, {
+			uiLogger.debug(`[DND] Drag update`, {
 				context: { from, to, translationY, hasLayout, itemSize, offset, newTarget },
 			});
 		},
@@ -148,7 +150,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 	);
 
 	const logDragEnd = React.useCallback((from: number, to: number) => {
-		log.debug(`[DND] Drag ended`, { context: { from, to } });
+		uiLogger.debug(`[DND] Drag ended`, { context: { from, to } });
 	}, []);
 
 	// Pan gesture for dragging

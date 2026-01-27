@@ -1,6 +1,8 @@
 import * as React from 'react';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
+
+const debugLogger = getLogger(['wcpos', 'debug']);
 
 function useWhyDidYouUpdate(name: string, props: any) {
 	// Get a mutable ref object where we can store props ...
@@ -29,7 +31,7 @@ function useWhyDidYouUpdate(name: string, props: any) {
 			});
 			// If changesObj not empty then output to console
 			if (Object.keys(changesObj).length) {
-				log.debug('[why-did-you-update]', name, changesObj);
+				debugLogger.debug('[why-did-you-update]', name, changesObj);
 			}
 		}
 		// Finally update previousProps with current props for next hook call

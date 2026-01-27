@@ -5,10 +5,12 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import useHttpClient, { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../contexts/app-state';
+
+const appLogger = getLogger(['wcpos', 'app', 'validation']);
 import { mergeStoresWithResponse } from '../utils/merge-stores';
 
 interface Props {
@@ -84,7 +86,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 
 		// Only validate if we have the required data
 		if (!apiUrl || !userId || !accessToken) {
-			log.debug('Skipping user validation - missing required data', {
+			appLogger.debug('Skipping user validation - missing required data', {
 				context: {
 					hasApiUrl: !!apiUrl,
 					hasUserId: !!userId,
@@ -129,7 +131,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						requestConfig.headers.Authorization = `Bearer ${accessToken}`;
 					}
 
-					log.debug('Validating user credentials', {
+					appLogger.debug('Validating user credentials', {
 						context: {
 							userId,
 							siteUrl,
@@ -142,7 +144,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					// Check if response is successful
 					if (!response || response.status < 200 || response.status >= 300) {
 						const errorMsg = `Invalid response status: ${response?.status}`;
-						log.error('User validation failed', {
+						appLogger.error('User validation failed', {
 							context: {
 								errorCode: ERROR_CODES.CONNECTION_REFUSED,
 								status: response?.status,
@@ -159,7 +161,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					// Check if data exists and has expected structure
 					if (!data || typeof data !== 'object') {
 						const errorMsg = 'Invalid response data';
-						log.error('User validation response contains no valid data', {
+						appLogger.error('User validation response contains no valid data', {
 							context: {
 								errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
 								userId,
@@ -173,7 +175,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					// Sanity check: verify that the response ID matches the expected user ID
 					if (data.id !== undefined && data.id !== userId) {
 						const errorMsg = `User ID mismatch: expected ${userId}, got ${data.id}`;
-						log.error('User validation failed - ID mismatch', {
+						appLogger.error('User validation failed - ID mismatch', {
 							context: {
 								errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
 								expectedUserId: userId,
@@ -191,7 +193,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						error?.response?.data,
 						'Failed to fetch user data from server'
 					);
-					log.error(serverMessage, {
+					appLogger.error(serverMessage, {
 						context: {
 							errorCode: ERROR_CODES.CONNECTION_REFUSED,
 							error: error instanceof Error ? error.message : String(error),
@@ -230,7 +232,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					// Update user data if we have fields to update
 					if (Object.keys(updateData).length > 0) {
 						await wpUser.incrementalPatch(updateData);
-						log.debug('User data updated successfully', {
+						appLogger.debug('User data updated successfully', {
 							context: {
 								userId,
 								updatedFields: Object.keys(updateData),
@@ -250,7 +252,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					}
 				} catch (error) {
 					const errorMsg = error instanceof Error ? error.message : String(error);
-					log.error('Failed to update user in local database', {
+					appLogger.error('Failed to update user in local database', {
 						context: {
 							errorCode: ERROR_CODES.TRANSACTION_FAILED,
 							error: errorMsg,

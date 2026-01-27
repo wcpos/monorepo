@@ -6,10 +6,12 @@ import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
+
+const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
 import usePushDocument from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -56,7 +58,7 @@ export const EditCustomerForm = ({ customer }: Props) => {
 				});
 			await pushDocument(customer).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
-					log.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+					mutationLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -67,7 +69,7 @@ export const EditCustomerForm = ({ customer }: Props) => {
 				}
 			});
 		} catch (error) {
-			log.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {

@@ -8,10 +8,12 @@ import * as z from 'zod';
 import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/form';
 import { VStack } from '@wcpos/components/vstack';
-import log from '@wcpos/utils/logger';
+import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
+
+const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 import { FormErrors } from '../components/form-errors';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
@@ -46,7 +48,7 @@ export const EmailForm = ({ order }: Props) => {
 				save_to: saveEmail ? 'billing' : '',
 			});
 			if (data && data.success) {
-				log.success(t('Email sent', { _tags: 'core' }), {
+				httpLogger.success(t('Email sent', { _tags: 'core' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -56,7 +58,7 @@ export const EmailForm = ({ order }: Props) => {
 				});
 			}
 		} catch (error) {
-			log.error('Failed to send receipt email', {
+			httpLogger.error('Failed to send receipt email', {
 				showToast: true,
 				saveToDb: true,
 				context: {
