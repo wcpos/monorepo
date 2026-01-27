@@ -75,26 +75,6 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 			return;
 		}
 
-		// Close databases before logout to flush any pending RxState writes
-		if (state.storeDB) {
-			try {
-				await state.storeDB.close();
-			} catch (err) {
-				appLogger.warn('Error closing storeDB during logout', {
-					context: { error: err instanceof Error ? err.message : String(err) },
-				});
-			}
-		}
-		if (state.fastStoreDB) {
-			try {
-				await state.fastStoreDB.close();
-			} catch (err) {
-				appLogger.warn('Error closing fastStoreDB during logout', {
-					context: { error: err instanceof Error ? err.message : String(err) },
-				});
-			}
-		}
-
 		// Native logout
 		await state.appState.set('current', () => null);
 
@@ -106,31 +86,10 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 			fastStoreDB: undefined,
 			extraData: undefined,
 		});
-	}, [state.appState, state.storeDB, state.fastStoreDB, updateAppState]);
+	}, [state.appState, updateAppState]);
 
 	const switchStore = React.useCallback(
 		async (store: StoreDocument) => {
-			// Close old databases before switching to flush any pending RxState writes
-			// This prevents "RxState WRITE QUEUE ERROR" when switching stores
-			if (state.storeDB) {
-				try {
-					await state.storeDB.close();
-				} catch (err) {
-					appLogger.warn('Error closing storeDB during switch', {
-						context: { error: err instanceof Error ? err.message : String(err) },
-					});
-				}
-			}
-			if (state.fastStoreDB) {
-				try {
-					await state.fastStoreDB.close();
-				} catch (err) {
-					appLogger.warn('Error closing fastStoreDB during switch', {
-						context: { error: err instanceof Error ? err.message : String(err) },
-					});
-				}
-			}
-
 			const current = await state.appState.get('current');
 			const newState = { ...current, storeID: store.localID };
 			await state.appState.set('current', () => newState);
@@ -139,7 +98,7 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 
 			updateAppState(sessionData);
 		},
-		[state.appState, state.storeDB, state.fastStoreDB, state.userDB, updateAppState]
+		[state.appState, state.userDB, updateAppState]
 	);
 
 	const value = React.useMemo(() => {
