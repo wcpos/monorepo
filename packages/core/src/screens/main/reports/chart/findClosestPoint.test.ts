@@ -141,8 +141,8 @@ describe('findClosestPoint', () => {
 		it('should work with floating point numbers', () => {
 			const arr = [0.1, 0.5, 1.0, 1.5, 2.0];
 
-			// 0.3 is equidistant (0.2) from 0.1 and 0.5
-			expect(findClosestPoint(arr, 0.3)).toBe(0); // Binary search may return left in ties
+			// 0.75 is equidistant (0.25) from 0.5 and 1.0 - tie goes to higher index
+			expect(findClosestPoint(arr, 0.75)).toBe(2);
 			// 0.31 is closer to 0.5 (0.19) than 0.1 (0.21)
 			expect(findClosestPoint(arr, 0.31)).toBe(1);
 			// 0.29 is closer to 0.1 (0.19) than 0.5 (0.21)

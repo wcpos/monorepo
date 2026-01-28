@@ -121,11 +121,11 @@ describe('findOneFixPlugin', () => {
 			mockCollection = Object.create(proto);
 		});
 
-		it('should handle query with empty arrays', () => {
+		it('should handle query with empty arrays', async () => {
 			// isEmpty([]) returns true, so this should return null
 			const result = mockCollection.findOneFix([]);
 
-			expect(result.exec()).resolves.toBeNull();
+			await expect(result.exec()).resolves.toBeNull();
 			expect(originalFindOne).not.toHaveBeenCalled();
 		});
 
@@ -149,11 +149,11 @@ describe('findOneFixPlugin', () => {
 			expect(originalFindOne).not.toHaveBeenCalled();
 		});
 
-		it('should delegate for query with false value', () => {
+		it('should return null for query with false value', async () => {
 			// isEmpty(false) returns true, so this returns null
 			const result = mockCollection.findOneFix(false);
 
-			expect(result.exec()).resolves.toBeNull();
+			await expect(result.exec()).resolves.toBeNull();
 		});
 
 		it('should delegate for non-empty string queries', () => {

@@ -1,5 +1,23 @@
 import middlewaresPlugin from './middlewares';
 
+// Type for mock collection used in tests
+interface MockMiddlewareCollection {
+	options?: {
+		middlewares?: Record<string, { handle: jest.Mock; parallel: boolean }>;
+	};
+	preInsert: jest.Mock;
+	preSave: jest.Mock;
+	preRemove: jest.Mock;
+	postInsert: jest.Mock;
+	postSave: jest.Mock;
+	postRemove: jest.Mock;
+}
+
+// Type for hook function argument
+interface HookArg {
+	collection: MockMiddlewareCollection;
+}
+
 describe('middlewaresPlugin', () => {
 	describe('plugin metadata', () => {
 		it('should have correct plugin name', () => {
@@ -19,7 +37,7 @@ describe('middlewaresPlugin', () => {
 	});
 
 	describe('createRxCollection hook', () => {
-		let mockCollection: any;
+		let mockCollection: MockMiddlewareCollection;
 
 		beforeEach(() => {
 			mockCollection = {
@@ -46,7 +64,7 @@ describe('middlewaresPlugin', () => {
 			};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as any);
+			hookFn?.({ collection: mockCollection } as HookArg);
 
 			expect(mockCollection.preInsert).toHaveBeenCalledWith(preInsertHandler, false);
 		});
@@ -67,7 +85,7 @@ describe('middlewaresPlugin', () => {
 			};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as any);
+			hookFn?.({ collection: mockCollection } as HookArg);
 
 			expect(mockCollection.preInsert).toHaveBeenCalledWith(preInsertHandler, false);
 			expect(mockCollection.preSave).toHaveBeenCalledWith(preSaveHandler, true);
@@ -84,7 +102,7 @@ describe('middlewaresPlugin', () => {
 			};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as any);
+			hookFn?.({ collection: mockCollection } as HookArg);
 
 			expect(mockCollection.postInsert).toHaveBeenCalledWith(handler, true);
 		});
@@ -131,7 +149,7 @@ describe('middlewaresPlugin', () => {
 			});
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as any);
+			hookFn?.({ collection: mockCollection } as HookArg);
 
 			hookTypes.forEach((hookType) => {
 				expect(mockCollection[hookType]).toHaveBeenCalledWith(handlers[hookType], false);
@@ -141,52 +159,56 @@ describe('middlewaresPlugin', () => {
 
 	describe('real-world middleware scenarios', () => {
 		it('should support sortable_price middleware pattern', () => {
-			const mockCollection: any = {
+			const mockCollection: MockMiddlewareCollection = {
 				options: {
 					middlewares: {
 						preInsert: {
-							handle: (doc: any) => {
+							handle: jest.fn((doc: { price?: string; sortable_price?: number }) => {
 								doc.sortable_price = Math.round(parseFloat(doc.price || '0') * 1000000);
 								return doc;
-							},
+							}),
 							parallel: false,
 						},
 						preSave: {
-							handle: (doc: any) => {
+							handle: jest.fn((doc: { price?: string; sortable_price?: number }) => {
 								doc.sortable_price = Math.round(parseFloat(doc.price || '0') * 1000000);
 								return doc;
-							},
+							}),
 							parallel: false,
 						},
 					},
 				},
 				preInsert: jest.fn(),
 				preSave: jest.fn(),
+				preRemove: jest.fn(),
+				postInsert: jest.fn(),
+				postSave: jest.fn(),
+				postRemove: jest.fn(),
 			};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as any);
+			hookFn?.({ collection: mockCollection } as HookArg);
 
 			// Verify middlewares were registered
 			expect(mockCollection.preInsert).toHaveBeenCalled();
 			expect(mockCollection.preSave).toHaveBeenCalled();
 
 			// Test the actual handler function
-			const preInsertHandler = mockCollection.preInsert.mock.calls[0][0];
-			const doc = { price: '9.99' };
+			const preInsertHandler = mockCollection.preInsert.mock.calls[0][0] as (doc: { price?: string; sortable_price?: number }) => void;
+			const doc = { price: '9.99' } as { price?: string; sortable_price?: number };
 			preInsertHandler(doc);
 
 			expect(doc.sortable_price).toBe(9990000);
 		});
 
 		it('should support async middleware handlers', async () => {
-			const asyncHandler = jest.fn(async (doc: any) => {
+			const asyncHandler = jest.fn(async (doc: { processed?: boolean }) => {
 				await new Promise((resolve) => setTimeout(resolve, 10));
 				doc.processed = true;
 				return doc;
 			});
 
-			const mockCollection: any = {
+			const mockCollection: MockMiddlewareCollection = {
 				options: {
 					middlewares: {
 						preInsert: {
@@ -196,10 +218,15 @@ describe('middlewaresPlugin', () => {
 					},
 				},
 				preInsert: jest.fn(),
+				preSave: jest.fn(),
+				preRemove: jest.fn(),
+				postInsert: jest.fn(),
+				postSave: jest.fn(),
+				postRemove: jest.fn(),
 			};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as any);
+			hookFn?.({ collection: mockCollection } as HookArg);
 
 			expect(mockCollection.preInsert).toHaveBeenCalledWith(asyncHandler, false);
 		});

@@ -2,13 +2,13 @@
  * @jest-environment node
  */
 import { extractNameFromJSON } from './helpers';
-import type { JSON } from './helpers';
+import type { JSON as CustomerJSON } from './helpers';
 
 describe('use-customer-name-format helpers', () => {
 	describe('extractNameFromJSON', () => {
 		describe('primary name extraction (first_name + last_name)', () => {
 			it('should return full name when both first and last name are present', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					first_name: 'John',
 					last_name: 'Doe',
 				};
@@ -16,21 +16,21 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should return first name only when last name is missing', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					first_name: 'John',
 				};
 				expect(extractNameFromJSON(json)).toBe('John');
 			});
 
 			it('should return last name only when first name is missing', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					last_name: 'Doe',
 				};
 				expect(extractNameFromJSON(json)).toBe('Doe');
 			});
 
 			it('should trim whitespace from names', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					first_name: '  John  ',
 					last_name: '  Doe  ',
 				};
@@ -40,7 +40,7 @@ describe('use-customer-name-format helpers', () => {
 
 		describe('billing fallback', () => {
 			it('should fall back to billing name when primary name is empty', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					billing: {
 						first_name: 'Jane',
 						last_name: 'Smith',
@@ -50,7 +50,7 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should fall back to billing first name only', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					billing: {
 						first_name: 'Jane',
 					},
@@ -59,7 +59,7 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should fall back to billing last name only', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					billing: {
 						last_name: 'Smith',
 					},
@@ -68,7 +68,7 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should prefer primary name over billing', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					first_name: 'John',
 					last_name: 'Doe',
 					billing: {
@@ -82,7 +82,7 @@ describe('use-customer-name-format helpers', () => {
 
 		describe('shipping fallback', () => {
 			it('should fall back to shipping name when billing is also empty', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					shipping: {
 						first_name: 'Bob',
 						last_name: 'Wilson',
@@ -92,7 +92,7 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should prefer billing over shipping', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					billing: {
 						first_name: 'Jane',
 						last_name: 'Smith',
@@ -108,14 +108,14 @@ describe('use-customer-name-format helpers', () => {
 
 		describe('username fallback', () => {
 			it('should fall back to username when names are empty', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					username: 'johndoe',
 				};
 				expect(extractNameFromJSON(json)).toBe('johndoe');
 			});
 
 			it('should fall back to billing username when primary username is empty', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					billing: {
 						username: 'billinguser',
 					},
@@ -124,7 +124,7 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should prefer primary username over billing username', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					username: 'primaryuser',
 					billing: {
 						username: 'billinguser',
@@ -136,14 +136,14 @@ describe('use-customer-name-format helpers', () => {
 
 		describe('email fallback', () => {
 			it('should fall back to email when all other fields are empty', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					email: 'john@example.com',
 				};
 				expect(extractNameFromJSON(json)).toBe('john@example.com');
 			});
 
 			it('should fall back to billing email when primary email is empty', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					billing: {
 						email: 'billing@example.com',
 					},
@@ -152,7 +152,7 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should prefer primary email over billing email', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					email: 'primary@example.com',
 					billing: {
 						email: 'billing@example.com',
@@ -164,12 +164,12 @@ describe('use-customer-name-format helpers', () => {
 
 		describe('empty/missing values', () => {
 			it('should return empty string when all fields are empty', () => {
-				const json: JSON = {};
+				const json: CustomerJSON = {};
 				expect(extractNameFromJSON(json)).toBe('');
 			});
 
 			it('should return empty string when all fields are whitespace', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					first_name: '   ',
 					last_name: '   ',
 					username: '   ',
@@ -179,7 +179,7 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should handle undefined nested objects', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					billing: undefined,
 					shipping: undefined,
 				};
@@ -187,7 +187,7 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should skip empty strings and continue to next fallback', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					first_name: '',
 					last_name: '',
 					billing: {
@@ -205,7 +205,7 @@ describe('use-customer-name-format helpers', () => {
 
 		describe('real-world scenarios', () => {
 			it('should handle a typical WooCommerce customer object', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					id: 123,
 					customer_id: 456,
 					first_name: 'John',
@@ -226,7 +226,7 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should handle a guest customer (no names, only email)', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					id: 0,
 					billing: {
 						email: 'guest@example.com',
@@ -236,7 +236,7 @@ describe('use-customer-name-format helpers', () => {
 			});
 
 			it('should handle an order object with customer data', () => {
-				const json: JSON = {
+				const json: CustomerJSON = {
 					customer_id: 789,
 					billing: {
 						first_name: 'Jane',

@@ -94,7 +94,7 @@ describe('perf utilities', () => {
 
 			const elapsed = timeEnd(start, 'delayedOperation');
 
-			// Should be at least 10ms, with some tolerance for system variance
+			// Should be around 10ms, allowing 5ms lower bound for system variance
 			expect(elapsed).toBeGreaterThanOrEqual(5);
 			expect(elapsed).toBeLessThan(100); // Sanity check upper bound
 		});

@@ -1,19 +1,5 @@
 import { CategoryLogger, getLogger, setToast, setDatabase } from './index';
 
-// Mock console.log to avoid noise in tests
-const originalConsoleLog = console.log;
-const originalConsoleError = console.error;
-
-beforeAll(() => {
-	console.log = jest.fn();
-	console.error = jest.fn();
-});
-
-afterAll(() => {
-	console.log = originalConsoleLog;
-	console.error = originalConsoleError;
-});
-
 describe('logger/index', () => {
 	describe('getLogger', () => {
 		it('should create a CategoryLogger with the given category', () => {

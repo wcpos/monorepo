@@ -80,16 +80,18 @@ describe('use-merged-ref/assign-ref', () => {
 		describe('with invalid ref types', () => {
 			it('should handle undefined gracefully', () => {
 				// TypeScript would normally prevent this, but testing runtime behavior
+				const undefinedRef = undefined as unknown as React.Ref<unknown>;
 				expect(() => {
-					assignRef(undefined as any, 'value');
+					assignRef(undefinedRef, 'value');
 				}).not.toThrow();
 			});
 
 			it('should not modify object without current property', () => {
 				const notARef = { something: 'else' };
+				const invalidRef = notARef as unknown as React.Ref<unknown>;
 
 				expect(() => {
-					assignRef(notARef as any, 'value');
+					assignRef(invalidRef, 'value');
 				}).not.toThrow();
 
 				expect(notARef).not.toHaveProperty('current');

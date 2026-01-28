@@ -51,10 +51,11 @@ describe('Utilities', () => {
 		});
 
 		it('should return undefined and log error if metaData is not an array', () => {
-			expect(getUuidFromLineItemMetaData(null as any)).toBeUndefined();
-			expect(getUuidFromLineItemMetaData(undefined as any)).toBeUndefined();
-			expect(getUuidFromLineItemMetaData('string' as any)).toBeUndefined();
-			expect(getUuidFromLineItemMetaData({} as any)).toBeUndefined();
+			// Testing runtime behavior with invalid inputs (would be caught at compile time)
+			expect(getUuidFromLineItemMetaData(null as unknown as Array<{ key: string; value: string }>)).toBeUndefined();
+			expect(getUuidFromLineItemMetaData(undefined as unknown as Array<{ key: string; value: string }>)).toBeUndefined();
+			expect(getUuidFromLineItemMetaData('string' as unknown as Array<{ key: string; value: string }>)).toBeUndefined();
+			expect(getUuidFromLineItemMetaData({} as unknown as Array<{ key: string; value: string }>)).toBeUndefined();
 		});
 	});
 
@@ -71,9 +72,10 @@ describe('Utilities', () => {
 		});
 
 		it('should return undefined and log error if metaData is not an array', () => {
-			expect(getTaxStatusFromMetaData(null as any)).toBeUndefined();
-			expect(getTaxStatusFromMetaData(undefined as any)).toBeUndefined();
-			expect(getTaxStatusFromMetaData({} as any)).toBeUndefined();
+			// Testing runtime behavior with invalid inputs
+			expect(getTaxStatusFromMetaData(null as unknown as Array<{ key: string; value: string }>)).toBeUndefined();
+			expect(getTaxStatusFromMetaData(undefined as unknown as Array<{ key: string; value: string }>)).toBeUndefined();
+			expect(getTaxStatusFromMetaData({} as unknown as Array<{ key: string; value: string }>)).toBeUndefined();
 		});
 
 		it('should return shipping tax status when present', () => {
@@ -95,9 +97,10 @@ describe('Utilities', () => {
 		});
 
 		it('should return undefined and log error if metaData is not an array', () => {
-			expect(getMetaDataValueByKey(null as any, 'key')).toBeUndefined();
-			expect(getMetaDataValueByKey(undefined as any, 'key')).toBeUndefined();
-			expect(getMetaDataValueByKey({} as any, 'key')).toBeUndefined();
+			// Testing runtime behavior with invalid inputs
+			expect(getMetaDataValueByKey(null as unknown as Array<{ key: string; value: string }>, 'key')).toBeUndefined();
+			expect(getMetaDataValueByKey(undefined as unknown as Array<{ key: string; value: string }>, 'key')).toBeUndefined();
+			expect(getMetaDataValueByKey({} as unknown as Array<{ key: string; value: string }>, 'key')).toBeUndefined();
 		});
 	});
 
@@ -110,7 +113,7 @@ describe('Utilities', () => {
 
 		it('should return undefined if item has no meta_data', () => {
 			const item = { meta_data: undefined };
-			expect(getUuidFromLineItem(item as any)).toBeUndefined();
+			expect(getUuidFromLineItem(item as { meta_data?: Array<{ key: string; value: string }> })).toBeUndefined();
 		});
 	});
 
@@ -143,19 +146,21 @@ describe('Utilities', () => {
 		});
 
 		it('should return undefined and log error if lineItems is not an array', () => {
-			expect(findByProductVariationID(null as any, 1, 0)).toBeUndefined();
-			expect(findByProductVariationID(undefined as any, 1, 0)).toBeUndefined();
-			expect(findByProductVariationID({} as any, 1, 0)).toBeUndefined();
+			type LineItemArray = Array<{ product_id: number; variation_id: number }>;
+			// Testing runtime behavior with invalid inputs
+			expect(findByProductVariationID(null as unknown as LineItemArray, 1, 0)).toBeUndefined();
+			expect(findByProductVariationID(undefined as unknown as LineItemArray, 1, 0)).toBeUndefined();
+			expect(findByProductVariationID({} as unknown as LineItemArray, 1, 0)).toBeUndefined();
 		});
 
 		it('should match items with undefined variation_id as 0', () => {
 			const lineItems = [
-				{ product_id: 1, variation_id: undefined },
+				{ product_id: 1, variation_id: undefined as number | undefined },
 				{ product_id: 1, variation_id: 2 },
 			];
 			// When searching for variationId=0, items with undefined variation_id should match
 			// because (undefined ?? 0) === 0
-			expect(findByProductVariationID(lineItems as any, 1, 0)).toEqual([lineItems[0]]);
+			expect(findByProductVariationID(lineItems as Array<{ product_id: number; variation_id: number }>, 1, 0)).toEqual([lineItems[0]]);
 		});
 
 		it('should return multiple matching items', () => {
@@ -178,7 +183,7 @@ describe('Utilities', () => {
 				last_name: 'Doe',
 				billing: { country: 'US' },
 				shipping: {},
-			} as any; // Cast to any for testing with mock data
+			} as Parameters<typeof transformCustomerJSONToOrderJSON>[0];
 			const transformed = transformCustomerJSONToOrderJSON(customer, 'CA');
 			expect(transformed).toEqual({
 				customer_id: 1,
@@ -338,7 +343,7 @@ describe('Utilities', () => {
 				{ id: 1, name: 'Color', option: 'Red' },
 				{ id: 2, name: 'Size', option: 'Large' },
 			],
-		} as any;
+		} as Parameters<typeof convertVariationToLineItemWithoutTax>[0];
 
 		it('should convert a variation to a line item format', () => {
 			const lineItem = convertVariationToLineItemWithoutTax(variation, parentProduct);

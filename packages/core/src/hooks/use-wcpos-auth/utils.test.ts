@@ -212,7 +212,7 @@ describe('use-wcpos-auth utils', () => {
 				const result = parseAuthResult(url);
 
 				expect(result.type).toBe('error');
-				// Empty hash has no params, so should be "missing required"
+				expect(result.error).toBe('No auth parameters found in URL');
 			});
 		});
 
