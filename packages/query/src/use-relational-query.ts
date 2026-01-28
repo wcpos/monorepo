@@ -11,26 +11,51 @@ import type { QueryOptions } from './use-query';
 
 const logger = getLogger(['wcpos', 'query', 'useRelationalQuery']);
 
+/**
+ * Create a stable identity key from query options.
+ */
+function getQueryIdentityKey(options: QueryOptions): string {
+	return JSON.stringify({
+		collectionName: options.collectionName,
+		queryKeys: options.queryKeys,
+		locale: options.locale,
+		endpoint: options.endpoint,
+	});
+}
+
 export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: QueryOptions) => {
 	const manager = useQueryManager();
+
+	// Stable identity keys
+	const parentIdentityKey = getQueryIdentityKey(parentOptions);
+	const childIdentityKey = getQueryIdentityKey(childOptions);
+
+	// Store options in refs for access in callbacks without adding to deps
+	const parentOptionsRef = React.useRef(parentOptions);
+	const childOptionsRef = React.useRef(childOptions);
+	parentOptionsRef.current = parentOptions;
+	childOptionsRef.current = childOptions;
 
 	/**
 	 * Helper function to register all necessary queries.
 	 */
 	const registerQueries = React.useCallback(() => {
+		const parent = parentOptionsRef.current;
+		const child = childOptionsRef.current;
+
 		logger.debug('Registering relational queries', {
 			context: {
-				parentCollection: parentOptions.collectionName,
-				childCollection: childOptions.collectionName,
+				parentCollection: parent.collectionName,
+				childCollection: child.collectionName,
 			},
 		});
 
 		try {
-			const childQuery = manager.registerQuery(childOptions);
+			const childQuery = manager.registerQuery(child);
 
 			const parentLookupQuery = manager.registerQuery({
-				...parentOptions,
-				queryKeys: [...parentOptions.queryKeys, 'parentLookup'],
+				...parent,
+				queryKeys: [...parent.queryKeys, 'parentLookup'],
 				initialParams: {
 					selector: {
 						id: { $in: [] },
@@ -39,11 +64,7 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 				infiniteScroll: false,
 			});
 
-			const parentQuery = manager.registerRelationalQuery(
-				parentOptions,
-				childQuery,
-				parentLookupQuery
-			);
+			const parentQuery = manager.registerRelationalQuery(parent, childQuery, parentLookupQuery);
 
 			return { childQuery, parentLookupQuery, parentQuery };
 		} catch (error: any) {
@@ -54,34 +75,31 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 			});
 			throw error;
 		}
-	}, [manager, parentOptions, childOptions]);
+	}, [manager, parentIdentityKey, childIdentityKey]);
 
 	/**
-	 * Register queries immediately when manager changes.
-	 * This is used as the starting value for the observable stream.
+	 * Register queries immediately when manager or identity changes.
 	 */
 	const initialQueries = React.useMemo(() => registerQueries(), [registerQueries]);
 
 	/**
 	 * Observable that emits queries:
-	 * 1. Immediately emits initialQueries via startWith (handles manager changes)
+	 * 1. Immediately emits initialQueries via startWith
 	 * 2. Re-emits when collection is reset via reset$
-	 *
-	 * startWith ensures we always get the current queries even before reset$ emits.
 	 */
 	const queries$ = React.useMemo(
 		() =>
 			manager.localDB.reset$.pipe(
-				filter((collection) => collection.name === parentOptions.collectionName),
+				filter((collection) => collection.name === parentOptionsRef.current.collectionName),
 				map(() => {
 					logger.debug('Re-registering relational queries after collection reset', {
-						context: { collectionName: parentOptions.collectionName },
+						context: { collectionName: parentOptionsRef.current.collectionName },
 					});
 					return registerQueries();
 				}),
 				startWith(initialQueries)
 			),
-		[manager, parentOptions.collectionName, registerQueries, initialQueries]
+		[manager, parentIdentityKey, registerQueries, initialQueries]
 	);
 
 	/**

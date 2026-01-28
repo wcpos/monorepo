@@ -20,55 +20,65 @@ export interface QueryOptions {
 	endpoint?: string;
 }
 
+/**
+ * Create a stable identity key from query options.
+ * This determines when a query should be re-registered.
+ *
+ * Includes: collectionName, queryKeys, locale, endpoint
+ * Excludes: initialParams (changed via setParams), hooks (callbacks)
+ */
+function getQueryIdentityKey(options: QueryOptions): string {
+	return JSON.stringify({
+		collectionName: options.collectionName,
+		queryKeys: options.queryKeys,
+		locale: options.locale,
+		endpoint: options.endpoint,
+	});
+}
+
 export const useQuery = (queryOptions: QueryOptions) => {
 	const manager = useQueryManager();
 
-	// Create stable key for dependencies to prevent re-registration on every render
-	// when callers pass inline objects
-	const queryKeyString = React.useMemo(
-		() => JSON.stringify(queryOptions.queryKeys),
-		[queryOptions.queryKeys]
-	);
+	// Stable identity key - changes only when query identity changes
+	const identityKey = getQueryIdentityKey(queryOptions);
+
+	// Store queryOptions in a ref so useMemo callbacks have access to current value
+	// without adding queryOptions to dependency array
+	const queryOptionsRef = React.useRef(queryOptions);
+	queryOptionsRef.current = queryOptions;
 
 	/**
-	 * Register query immediately when manager changes.
-	 * This handles store switches - new manager = new query registration.
-	 *
-	 * Uses stable primitives as dependencies to prevent re-registration when
-	 * callers pass inline queryOptions objects.
+	 * Register query immediately when manager or identity changes.
+	 * This handles store switches and query key changes.
 	 */
 	const initialQuery = React.useMemo(() => {
 		logger.debug('Registering query', {
 			context: {
-				collectionName: queryOptions.collectionName,
-				queryKeys: queryOptions.queryKeys,
+				collectionName: queryOptionsRef.current.collectionName,
+				queryKeys: queryOptionsRef.current.queryKeys,
 			},
 		});
-		return manager.registerQuery(queryOptions);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [manager, queryOptions.collectionName, queryKeyString]);
+		return manager.registerQuery(queryOptionsRef.current);
+	}, [manager, identityKey]);
 
 	/**
 	 * Observable that emits queries:
 	 * 1. Immediately emits initialQuery via startWith (handles manager changes)
 	 * 2. Re-emits when collection is reset via reset$
-	 *
-	 * startWith ensures we always get the current query even before reset$ emits.
 	 */
 	const query$ = React.useMemo(
 		() =>
 			manager.localDB.reset$.pipe(
-				filter((collection) => collection.name === queryOptions.collectionName),
+				filter((collection) => collection.name === queryOptionsRef.current.collectionName),
 				map(() => {
 					logger.debug('Re-registering query after collection reset', {
-						context: { collectionName: queryOptions.collectionName },
+						context: { collectionName: queryOptionsRef.current.collectionName },
 					});
-					return manager.registerQuery(queryOptions);
+					return manager.registerQuery(queryOptionsRef.current);
 				}),
 				startWith(initialQuery)
 			),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[manager, queryOptions.collectionName, queryKeyString, initialQuery]
+		[manager, identityKey, initialQuery]
 	);
 
 	/**

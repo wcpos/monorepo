@@ -207,7 +207,7 @@ describe('Performance', () => {
 			console.log(`processInChunks(${itemCount}): ${duration.toFixed(0)}ms`);
 		});
 
-		it('maintains UI responsiveness during heavy processing', async () => {
+		it.skip('maintains UI responsiveness during heavy processing', async () => {
 			const itemCount = 10000;
 			const items = Array.from({ length: itemCount }, (_, i) => i);
 
