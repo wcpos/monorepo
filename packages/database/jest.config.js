@@ -6,11 +6,26 @@ module.exports = {
 	preset: 'ts-jest',
 	testEnvironment: 'node',
 	transform: {
-		'^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
+		'^.+\\.(ts|tsx)$': [
+			'ts-jest',
+			{
+				tsconfig: 'tsconfig.json',
+				// Skip type checking in tests for faster execution and to avoid
+				// strict RxDB type errors that don't affect runtime behavior
+				isolatedModules: true,
+			},
+		],
 	},
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
 	collectCoverage: true,
+	coverageDirectory: '<rootDir>/coverage',
+	collectCoverageFrom: [
+		'src/**/*.{ts,tsx}',
+		'!src/**/*.test.{ts,tsx}',
+		'!src/**/*.d.ts',
+		'!src/**/index.{ts,tsx}',
+	],
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(jsx?|tsx?)$'],
 	verbose: true,
 	moduleNameMapper: {

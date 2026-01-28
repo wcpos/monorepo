@@ -11,7 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  unit-tests:
+    name: 🧪 Unit Tests
     runs-on: ubuntu-latest
     steps:
       - name: 🏗 Setup repository
@@ -27,16 +28,185 @@ jobs:
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
-      - name: 🧪 Run tests (core, components, database)
-        id: core_tests
-        run: pnpm jest --ci --passWithNoTests
-        continue-on-error: true  # TODO: Fix @wcpos/core logger mock issue
-
-      - name: 🧪 Run query tests
-        run: cd packages/query && npx jest --config jest.config.cjs --ci
-
-      - name: ❌ Fail if core tests failed
-        if: steps.core_tests.outcome == 'failure'
+      - name: 🧪 Run tests for each package
         run: |
-          echo "Core tests failed. Please fix the issues before merging."
-          exit 1
+          # Track failures but continue to generate coverage for all packages
+          failed=0
+          
+          # Run tests for each package separately to get individual coverage
+          for pkg in core components database hooks utils; do
+            echo "::group::Testing @wcpos/$pkg"
+            cd packages/$pkg
+            if [ -f "jest.config.js" ]; then
+              npx jest --ci --passWithNoTests --coverage --coverageReporters=json-summary --coverageReporters=text || failed=1
+            fi
+            cd ../..
+            echo "::endgroup::"
+          done
+          
+          # Run query package separately (uses .cjs config)
+          echo "::group::Testing @wcpos/query"
+          cd packages/query
+          npx jest --config jest.config.cjs --ci --coverage --coverageReporters=json-summary --coverageReporters=text || failed=1
+          cd ../..
+          echo "::endgroup::"
+          
+          # Fail the step if any tests failed
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::One or more package tests failed"
+            exit 1
+          fi
+
+      - name: 📊 Generate coverage summary
+        if: always()
+        run: |
+          echo "## 📊 Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | Statements | Branches | Functions | Lines |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|------------|----------|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          
+          for pkg in core components database hooks utils query; do
+            file="packages/$pkg/coverage/coverage-summary.json"
+            if [ -f "$file" ]; then
+              statements=$(jq -r '.total.statements.pct // 0' "$file")
+              branches=$(jq -r '.total.branches.pct // 0' "$file")
+              functions=$(jq -r '.total.functions.pct // 0' "$file")
+              lines=$(jq -r '.total.lines.pct // 0' "$file")
+              echo "| @wcpos/$pkg | ${statements}% | ${branches}% | ${functions}% | ${lines}% |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| @wcpos/$pkg | - | - | - | - |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+      - name: 📤 Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: packages/*/coverage/
+          retention-days: 7
+
+      - name: 💬 Comment coverage on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            const packages = ['core', 'components', 'database', 'hooks', 'utils', 'query'];
+            let coverageRows = [];
+            let totalStatements = 0;
+            let totalBranches = 0;
+            let totalFunctions = 0;
+            let totalLines = 0;
+            let packageCount = 0;
+            
+            const getEmoji = (pct) => {
+              if (pct === null || pct === undefined || pct === '-') return '⚪';
+              return pct >= 80 ? '🟢' : pct >= 60 ? '🟡' : '🔴';
+            };
+            
+            for (const pkg of packages) {
+              const coveragePath = `packages/${pkg}/coverage/coverage-summary.json`;
+              try {
+                if (fs.existsSync(coveragePath)) {
+                  const data = JSON.parse(fs.readFileSync(coveragePath, 'utf8'));
+                  const total = data.total || {};
+                  const statements = total.statements?.pct ?? 0;
+                  const branches = total.branches?.pct ?? 0;
+                  const functions = total.functions?.pct ?? 0;
+                  const lines = total.lines?.pct ?? 0;
+                  
+                  coverageRows.push([
+                    '|',
+                    `@wcpos/${pkg}`,
+                    '|',
+                    `${getEmoji(statements)} ${statements.toFixed(1)}%`,
+                    '|',
+                    `${getEmoji(branches)} ${branches.toFixed(1)}%`,
+                    '|',
+                    `${getEmoji(functions)} ${functions.toFixed(1)}%`,
+                    '|',
+                    `${getEmoji(lines)} ${lines.toFixed(1)}%`,
+                    '|'
+                  ].join(' '));
+                  
+                  totalStatements += statements;
+                  totalBranches += branches;
+                  totalFunctions += functions;
+                  totalLines += lines;
+                  packageCount++;
+                } else {
+                  coverageRows.push(`| @wcpos/${pkg} | ⚪ No tests | ⚪ - | ⚪ - | ⚪ - |`);
+                }
+              } catch (e) {
+                console.log(`Error reading coverage for ${pkg}: ${e.message}`);
+                coverageRows.push(`| @wcpos/${pkg} | ⚪ Error | ⚪ - | ⚪ - | ⚪ - |`);
+              }
+            }
+            
+            // Calculate averages
+            let avgRow = '| **Average** | ⚪ - | ⚪ - | ⚪ - | ⚪ - |';
+            if (packageCount > 0) {
+              const avgStatements = (totalStatements / packageCount).toFixed(1);
+              const avgBranches = (totalBranches / packageCount).toFixed(1);
+              const avgFunctions = (totalFunctions / packageCount).toFixed(1);
+              const avgLines = (totalLines / packageCount).toFixed(1);
+              avgRow = [
+                '|',
+                '**Average**',
+                '|',
+                `${getEmoji(avgStatements)} **${avgStatements}%**`,
+                '|',
+                `${getEmoji(avgBranches)} **${avgBranches}%**`,
+                '|',
+                `${getEmoji(avgFunctions)} **${avgFunctions}%**`,
+                '|',
+                `${getEmoji(avgLines)} **${avgLines}%**`,
+                '|'
+              ].join(' ');
+            }
+            
+            const tableHeader = '| Package | Statements | Branches | Functions | Lines |\n|---------|------------|----------|-----------|-------|';
+            const legend = '<details>\n<summary>Coverage Legend</summary>\n\n- 🟢 Good (≥80%)\n- 🟡 Moderate (60-79%)\n- 🔴 Needs improvement (<60%)\n- ⚪ No coverage data\n\n</details>';
+            
+            const body = [
+              '## 📊 Test Coverage Report',
+              '',
+              tableHeader,
+              coverageRows.join('\n'),
+              avgRow,
+              '',
+              legend,
+              '',
+              '---',
+              `<sub>🤖 Updated by GitHub Actions • [View full report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>`
+            ].join('\n');
+
+            // Find and update existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existingComment = comments.find(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.includes('Test Coverage Report')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }

@@ -8,7 +8,7 @@
         "outputs": []
       },
       "test": {
-        "dependsOn": ["build"],
+        "cache": false,
         "inputs": ["**/*.{ts,tsx,js,jsx}"]
       },
       "build": {

@@ -4,6 +4,8 @@ module.exports = {
 		'<rootDir>/packages/core',
 		'<rootDir>/packages/components',
 		'<rootDir>/packages/database',
+		'<rootDir>/packages/hooks',
+		'<rootDir>/packages/utils',
 		// Note: @wcpos/query has its own tsconfig with different paths
 		// Run its tests separately: cd packages/query && npx jest
 	],

@@ -29,6 +29,6 @@
 		"jest": "^30.1.0",
 		"jest-environment-jsdom": "^30.0.5",
 		"rxjs-marbles": "^7.0.1",
-		"ts-jest": "^29.2.5"
+		"ts-jest": "^29.4.6"
 	}
 }

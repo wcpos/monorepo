@@ -10,23 +10,7 @@ jest.mock('uuid', () => ({
 	v4: jest.fn(() => 'mock-uuid-v4'),
 }));
 
-// Mock @wcpos/utils/logger
-jest.mock('@wcpos/utils/logger', () => ({
-	__esModule: true,
-	default: {
-		error: jest.fn(),
-		warn: jest.fn(),
-		info: jest.fn(),
-		debug: jest.fn(),
-	},
-}));
-
-// Mock @wcpos/utils/logger/error-codes
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		INVALID_DATA_TYPE: 'INVALID_DATA_TYPE',
-	},
-}));
+// Logger mocks are provided by moduleNameMapper in jest.config.js
 
 // Mock the localPatch function
 const mockLocalPatch = jest.fn();

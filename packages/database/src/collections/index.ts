@@ -1,5 +1,3 @@
-import isNaN from 'lodash/isNaN';
-import toNumber from 'lodash/toNumber';
 import { ExtractDocumentTypeFromTypedRxJsonSchema, RxJsonSchema } from 'rxdb';
 
 import { brandsLiteral } from './schemas/brands';
@@ -19,24 +17,9 @@ import { taxRatesLiteral } from './schemas/tax-rates';
 import { usersLiteral } from './schemas/users';
 import { variationsLiteral } from './schemas/variations';
 import { wpCredentialsLiteral } from './schemas/wp-credientials';
+import { toSortableInteger } from './utils';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
-
-/**
- * Convert a decimal value to a sortable integer for RxDB indexing.
- *
- * RxDB requires `multipleOf` for indexed number fields, but floating-point
- * values like 2137.3 can't be exactly represented in IEEE 754, causing
- * `multipleOf: 0.000001` validation to fail.
- *
- * Solution: Store as integer (value * 1,000,000) with multipleOf: 1.
- * This preserves 6 decimal places of precision as an exact integer.
- */
-const toSortableInteger = (value: any): number => {
-	const num = toNumber(value);
-	if (isNaN(num)) return 0;
-	return Math.round(num * 1000000);
-};
 
 /**
  * Global Users

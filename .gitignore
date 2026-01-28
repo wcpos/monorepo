@@ -3,6 +3,16 @@ node_modules
 .vscode
 .DS_Store
 .turbo
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# Coverage
+coverage/
+**/coverage/
+
 # Ignore .cursor except rules (needed for AI agents)
 .cursor
 !.cursor/rules
