@@ -67,17 +67,18 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 			// Get logout URL from global initialProps if available
 			const initialProps = (globalThis as any).initialProps;
 			if (initialProps?.logout_url) {
+				// WordPress embedded mode - redirect to WordPress logout URL
 				window.location.href = initialProps.logout_url;
-			} else {
-				// Fallback to reloading the page
-				window.location.reload();
+				return;
 			}
-			return;
+			// Standalone web mode - clear session like native does (don't just reload)
+			// Fall through to native logout logic below
 		}
 
-		// Native logout
+		// Clear session state in database
 		await state.appState.set('current', () => null);
 
+		// Clear React state
 		updateAppState({
 			site: undefined,
 			wpCredentials: undefined,
