@@ -168,21 +168,20 @@ jobs:
               e2eStatus = '🚫 Cancelled';
             }
             
-            const body = `## 🚀 Deployment Summary
+            const tableRows = [
+              '| Item | Status |',
+              '|------|--------|',
+              `| **Preview URL** | ${deployUrl ? '[' + deployUrl + '](' + deployUrl + ')' : '❌ Failed to deploy'} |`,
+              `| **E2E Tests** | ${e2eStatus} |`,
+              '| **Commit** | `' + sha + '` |'
+            ].join('\n');
             
-| Item | Status |
-|------|--------|
-| **Preview URL** | ${deployUrl ? `[${deployUrl}](${deployUrl})` : '❌ Failed to deploy'} |
-| **E2E Tests** | ${e2eStatus} |
-| **Commit** | \`${sha}\` |
-
-${deployUrl ? `### 🔗 Quick Links
-- [Preview App](${deployUrl})
-- [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})` : ''}
-${e2eDetails}
-
----
-<sub>🤖 Updated by GitHub Actions</sub>`;
+            let quickLinks = '';
+            if (deployUrl) {
+              quickLinks = `\n\n### 🔗 Quick Links\n- [Preview App](${deployUrl})\n- [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            }
+            
+            const body = `## 🚀 Deployment Summary\n\n${tableRows}${quickLinks}${e2eDetails}\n\n---\n<sub>🤖 Updated by GitHub Actions</sub>`;
 
             // Find and update existing comment
             const { data: comments } = await github.rest.issues.listComments({

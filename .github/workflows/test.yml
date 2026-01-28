@@ -142,24 +142,25 @@ jobs:
             
             const getEmoji = (pct) => pct >= 80 ? '🟢' : pct >= 60 ? '🟡' : '🔴';
             
-            const body = `## 📊 Test Coverage Report
+            const tableHeader = [
+              '| Package | Statements | Branches | Functions | Lines |',
+              '|---------|------------|----------|-----------|-------|'
+            ].join('\n');
             
-| Package | Statements | Branches | Functions | Lines |
-|---------|------------|----------|-----------|-------|
-${coverageRows.join('\n')}
-| **Average** | ${getEmoji(avgStatements)} **${avgStatements}%** | ${getEmoji(avgBranches)} **${avgBranches}%** | ${getEmoji(avgFunctions)} **${avgFunctions}%** | ${getEmoji(avgLines)} **${avgLines}%** |
-
-<details>
-<summary>Coverage Legend</summary>
-
-- 🟢 Good (≥80%)
-- 🟡 Moderate (60-79%)
-- 🔴 Needs improvement (<60%)
-
-</details>
-
----
-<sub>🤖 Updated by GitHub Actions • [View full report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>`;
+            const avgRow = `| **Average** | ${getEmoji(avgStatements)} **${avgStatements}%** | ${getEmoji(avgBranches)} **${avgBranches}%** | ${getEmoji(avgFunctions)} **${avgFunctions}%** | ${getEmoji(avgLines)} **${avgLines}%** |`;
+            
+            const legend = [
+              '<details>',
+              '<summary>Coverage Legend</summary>',
+              '',
+              '- 🟢 Good (≥80%)',
+              '- 🟡 Moderate (60-79%)',
+              '- 🔴 Needs improvement (<60%)',
+              '',
+              '</details>'
+            ].join('\n');
+            
+            const body = `## 📊 Test Coverage Report\n\n${tableHeader}\n${coverageRows.join('\n')}\n${avgRow}\n\n${legend}\n\n---\n<sub>🤖 Updated by GitHub Actions • [View full report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>`;
 
             // Find and update existing comment
             const { data: comments } = await github.rest.issues.listComments({
