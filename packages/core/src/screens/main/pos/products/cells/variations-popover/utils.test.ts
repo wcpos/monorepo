@@ -755,7 +755,6 @@ describe('parseAttributes', () => {
 			const endTime = performance.now();
 			const duration = endTime - startTime;
 
-			console.log(`[DEBUG_PERF] parseAttributes took ${duration}ms for 5 attrs x 10 options`);
 
 			expect(result).toHaveLength(5);
 			expect(duration).toBeLessThan(50);
@@ -790,7 +789,6 @@ describe('parseAttributes', () => {
 			const endTime = performance.now();
 			const duration = endTime - startTime;
 
-			console.log(`[DEBUG_PERF] 8 attrs x 5 options took ${duration}ms`);
 
 			expect(result).toHaveLength(8);
 			expect(duration).toBeLessThan(50);
@@ -835,7 +833,6 @@ describe('parseAttributes', () => {
 			const endTime = performance.now();
 			const duration = endTime - startTime;
 
-			console.log(`[DEBUG_PERF] 4 attrs x 8 options, 3 hits took ${duration}ms`);
 
 			expect(result).toHaveLength(4);
 			// This case is still fast enough, but with more missing attrs it compounds

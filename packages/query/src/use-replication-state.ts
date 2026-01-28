@@ -4,14 +4,10 @@ import { useObservable } from 'observable-hooks';
 import { combineLatest, of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import { getLogger } from '@wcpos/utils/logger';
-
 import { useQueryManager } from './provider';
 
 import type { RegisterQueryConfig } from './manager';
 import type { Query } from './query-state';
-
-const logger = getLogger(['wcpos', 'query', 'useReplicationState']);
 
 function getQueryID(query: string | RegisterQueryConfig['queryKeys'] | Query<any>) {
 	if (typeof query === 'string') {
@@ -39,32 +35,14 @@ export const useReplicationState = (
 	 * Get the collection replication state, refreshing when counter changes
 	 */
 	const collectionReplication = React.useMemo(() => {
-		const repl = manager.activeCollectionReplications.get(queryID);
-		logger.debug('[DEBUG_REPL] useMemo getting collectionReplication', {
-			context: {
-				queryID,
-				refreshCounter,
-				hasReplication: !!repl,
-				endpoint: repl?.endpoint,
-			},
-		});
-		return repl;
+		return manager.activeCollectionReplications.get(queryID);
 	}, [manager, queryID, refreshCounter]);
 
 	/**
 	 * Get the query replication state, refreshing when counter changes
 	 */
 	const queryReplication = React.useMemo(() => {
-		const repl = manager.activeQueryReplications.get(queryID);
-		logger.debug('[DEBUG_REPL] useMemo getting queryReplication', {
-			context: {
-				queryID,
-				refreshCounter,
-				hasReplication: !!repl,
-				endpoint: repl?.endpoint,
-			},
-		});
-		return repl;
+		return manager.activeQueryReplications.get(queryID);
 	}, [manager, queryID, refreshCounter]);
 
 	/**
@@ -77,18 +55,6 @@ export const useReplicationState = (
 		const currentReplication = manager.activeCollectionReplications.get(queryID);
 		const isStale = currentReplication && currentReplication !== collectionReplication;
 
-		logger.debug('[DEBUG_REPL] useEffect mount check', {
-			context: {
-				queryID,
-				refreshCounter,
-				hasCurrentInManager: !!currentReplication,
-				hasCachedReplication: !!collectionReplication,
-				isStale,
-				currentEndpoint: currentReplication?.endpoint,
-				cachedEndpoint: collectionReplication?.endpoint,
-			},
-		});
-
 		if (isStale) {
 			setRefreshCounter((c) => c + 1);
 		}
@@ -96,9 +62,6 @@ export const useReplicationState = (
 		// Subscribe to add$ for future changes
 		const sub = manager.activeCollectionReplications.add$.subscribe((id) => {
 			if (id === queryID) {
-				logger.debug('[DEBUG_REPL] add$ fired, incrementing refreshCounter', {
-					context: { queryID },
-				});
 				setRefreshCounter((c) => c + 1);
 			}
 		});
@@ -112,27 +75,10 @@ export const useReplicationState = (
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(([collectionReplication, queryReplication]) => {
-					logger.debug('[DEBUG_ACTIVE] switchMap triggered', {
-						context: {
-							queryID,
-							hasCollectionReplication: !!collectionReplication,
-							hasQueryReplication: !!queryReplication,
-							hasCollectionActive$: !!collectionReplication?.active$,
-							hasQueryActive$: !!queryReplication?.active$,
-						},
-					});
 					return combineLatest(
 						collectionReplication?.active$ || of(false),
 						queryReplication?.active$ || of(false)
-					).pipe(
-						map(([collectionActive, queryActive]) => {
-							const isActive = collectionActive || queryActive;
-							logger.debug('[DEBUG_ACTIVE] active$ emitting', {
-								context: { queryID, collectionActive, queryActive, isActive },
-							});
-							return isActive;
-						})
-					);
+					).pipe(map(([collectionActive, queryActive]) => collectionActive || queryActive));
 				})
 			),
 		[collectionReplication, queryReplication]

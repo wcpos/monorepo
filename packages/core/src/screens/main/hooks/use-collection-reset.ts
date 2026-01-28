@@ -45,9 +45,6 @@ async function waitForReplication(
 		await new Promise((resolve) => setTimeout(resolve, interval));
 	}
 
-	logger.warn('waitForReplication: timed out waiting for replication', {
-		context: { collectionName, timeout },
-	});
 	return false;
 }
 
@@ -106,11 +103,6 @@ export const useCollectionReset = (key: CollectionKey) => {
 		logger.debug('clearAndSync: starting', { context: { key } });
 
 		const results = await clear();
-		logger.debug('clearAndSync: swap results', {
-			context: {
-				results: results.map((r) => ({ success: r.success, collectionName: r.collectionName })),
-			},
-		});
 
 		// Trigger sync on manager's replications
 		for (const result of results) {
@@ -124,16 +116,9 @@ export const useCollectionReset = (key: CollectionKey) => {
 					});
 				}
 
-				logger.debug('clearAndSync: looking for replication in manager', {
-					context: { collectionName: result.collectionName, replicationReady },
-				});
-
 				// Find and run replications from the manager's replicationStates
 				manager.replicationStates.forEach((replication, endpoint) => {
 					if ((replication as any)?.collection?.name === result.collectionName) {
-						logger.debug('clearAndSync: triggering sync on manager replication', {
-							context: { collectionName: result.collectionName, endpoint },
-						});
 						replication.run({ force: true });
 					}
 				});

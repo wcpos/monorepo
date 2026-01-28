@@ -26,14 +26,8 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 		});
 
 		try {
-			logger.debug('Registering childQuery', {
-				context: { collection: childOptions.collectionName },
-			});
 			const childQuery = manager.registerQuery(childOptions);
 
-			logger.debug('Registering parentLookupQuery', {
-				context: { collection: parentOptions.collectionName },
-			});
 			const parentLookupQuery = manager.registerQuery({
 				...parentOptions,
 				queryKeys: [...parentOptions.queryKeys, 'parentLookup'],
@@ -45,22 +39,11 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 				infiniteScroll: false,
 			});
 
-			logger.debug('Registering parentQuery (relational)', {
-				context: { collection: parentOptions.collectionName },
-			});
 			const parentQuery = manager.registerRelationalQuery(
 				parentOptions,
 				childQuery,
 				parentLookupQuery
 			);
-
-			logger.debug('All queries registered', {
-				context: {
-					childQuery: !!childQuery,
-					parentLookupQuery: !!parentLookupQuery,
-					parentQuery: !!parentQuery,
-				},
-			});
 
 			return { childQuery, parentLookupQuery, parentQuery };
 		} catch (error: any) {
@@ -89,16 +72,7 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 	const queries$ = React.useMemo(
 		() =>
 			manager.localDB.reset$.pipe(
-				filter((collection) => {
-					logger.debug('useRelationalQuery: reset$ received', {
-						context: {
-							receivedCollection: collection.name,
-							filteringFor: parentOptions.collectionName,
-							matches: collection.name === parentOptions.collectionName,
-						},
-					});
-					return collection.name === parentOptions.collectionName;
-				}),
+				filter((collection) => collection.name === parentOptions.collectionName),
 				map(() => {
 					logger.debug('Re-registering relational queries after collection reset', {
 						context: { collectionName: parentOptions.collectionName },
@@ -118,20 +92,6 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 		queries$,
 		initialQueries
 	);
-
-	// Diagnostic: log on EVERY render
-	const db = manager.localDB as any;
-	const currentCollection = db.collections?.[parentOptions.collectionName];
-	logger.debug('useRelationalQuery: render', {
-		context: {
-			parentCollection: parentOptions.collectionName,
-			hasParentQuery: !!parentQuery,
-			parentQueryId: parentQuery?.id,
-			isSameCollection: parentQuery ? currentCollection === parentQuery.collection : 'n/a',
-			queryCollectionDestroyed: parentQuery ? (parentQuery.collection as any)?.destroyed : 'n/a',
-			currentCollectionExists: !!currentCollection,
-		},
-	});
 
 	/**
 	 * Cleanup: pause replications when component unmounts
