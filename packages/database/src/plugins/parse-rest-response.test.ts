@@ -643,6 +643,208 @@ describe('coerceData', () => {
 	});
 });
 
+describe('pruneProperties - meta_data filtering', () => {
+	const schema = {
+		version: 1,
+		type: 'object',
+		primaryKey: 'id',
+		properties: {
+			id: { type: 'integer' },
+			meta_data: { type: 'array' },
+		},
+	};
+
+	it('should filter out private meta_data keys starting with underscore', () => {
+		const data = {
+			id: 1,
+			meta_data: [
+				{ key: 'public_key', value: 'keep this' },
+				{ key: '_private_key', value: 'remove this' },
+				{ key: '_alg_wc_cog_cost', value: 'remove this too' },
+			],
+		};
+
+		pruneProperties(schema, data);
+
+		expect(data.meta_data).toEqual([{ key: 'public_key', value: 'keep this' }]);
+	});
+
+	it('should keep meta_data starting with _woocommerce_pos', () => {
+		const data = {
+			id: 1,
+			meta_data: [
+				{ key: '_woocommerce_pos_uuid', value: 'uuid-value' },
+				{ key: '_woocommerce_pos_other', value: 'other-value' },
+				{ key: '_private_key', value: 'remove this' },
+			],
+		};
+
+		pruneProperties(schema, data);
+
+		expect(data.meta_data).toEqual([
+			{ key: '_woocommerce_pos_uuid', value: 'uuid-value' },
+			{ key: '_woocommerce_pos_other', value: 'other-value' },
+		]);
+	});
+
+	it('should keep meta_data starting with _pos', () => {
+		const data = {
+			id: 1,
+			meta_data: [
+				{ key: '_pos_custom_field', value: 'keep this' },
+				{ key: '_other_private', value: 'remove this' },
+			],
+		};
+
+		pruneProperties(schema, data);
+
+		expect(data.meta_data).toEqual([{ key: '_pos_custom_field', value: 'keep this' }]);
+	});
+
+	it('should handle empty meta_data array', () => {
+		const data = {
+			id: 1,
+			meta_data: [],
+		};
+
+		pruneProperties(schema, data);
+
+		expect(data.meta_data).toEqual([]);
+	});
+
+	it('should not modify data without meta_data', () => {
+		const data = {
+			id: 1,
+		};
+
+		pruneProperties(schema, data);
+
+		expect(data).toEqual({ id: 1 });
+	});
+});
+
+describe('coerceData - special cases', () => {
+	it('should convert plain objects to JSON string when schema expects string', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				stringProp: { type: 'string' },
+			},
+		};
+		const data = {
+			stringProp: { nested: 'object', with: 'values' },
+		};
+
+		const coercedData = coerceData(schema, data);
+
+		expect(coercedData.stringProp).toBe('{"nested":"object","with":"values"}');
+	});
+
+	it('should skip properties starting with underscore (rxdb internals)', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				_rev: { type: 'string' },
+				_deleted: { type: 'boolean' },
+				name: { type: 'string' },
+			},
+		};
+		const data = {
+			_rev: '1-abc',
+			_deleted: false,
+			name: 'Test',
+		};
+
+		const coercedData = coerceData(schema, data);
+
+		// Internal properties should be skipped
+		expect(coercedData._rev).toBeUndefined();
+		expect(coercedData._deleted).toBeUndefined();
+		expect(coercedData.name).toBe('Test');
+	});
+
+	it('should extract uuid from meta_data', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'uuid',
+			properties: {
+				uuid: { type: 'string' },
+				name: { type: 'string' },
+				meta_data: { type: 'array', items: { type: 'object' } },
+			},
+		};
+		const data = {
+			name: 'Test Product',
+			meta_data: [
+				{ key: '_woocommerce_pos_uuid', value: 'extracted-uuid-123' },
+				{ key: 'other_meta', value: 'other value' },
+			],
+		};
+
+		const coercedData = coerceData(schema, data);
+
+		expect(coercedData.uuid).toBe('extracted-uuid-123');
+	});
+
+	it('should not extract uuid if meta_data does not contain it', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'uuid',
+			properties: {
+				uuid: { type: 'string' },
+				meta_data: { type: 'array', items: { type: 'object' } },
+			},
+		};
+		const data = {
+			meta_data: [{ key: 'other_meta', value: 'other value' }],
+		};
+
+		const coercedData = coerceData(schema, data);
+
+		// When uuid is not found in meta_data, the code continues without setting uuid
+		// This leaves it undefined (the uuid extraction is a special case that skips normal processing)
+		expect(coercedData.uuid).toBeUndefined();
+	});
+
+	it('should handle boolean string "true"', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				isActive: { type: 'boolean' },
+			},
+		};
+		const data = { isActive: 'true' };
+
+		const coercedData = coerceData(schema, data);
+
+		expect(coercedData.isActive).toBe(true);
+	});
+
+	it('should handle boolean string "false"', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				isActive: { type: 'boolean' },
+			},
+		};
+		const data = { isActive: 'false' };
+
+		const coercedData = coerceData(schema, data);
+
+		expect(coercedData.isActive).toBe(false);
+	});
+});
+
 // describe('parseRestResponse', () => {
 // 	it('should parse nested data', () => {
 // 		const ordersCollection = {
