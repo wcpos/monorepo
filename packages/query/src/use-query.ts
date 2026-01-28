@@ -23,9 +23,19 @@ export interface QueryOptions {
 export const useQuery = (queryOptions: QueryOptions) => {
 	const manager = useQueryManager();
 
+	// Create stable key for dependencies to prevent re-registration on every render
+	// when callers pass inline objects
+	const queryKeyString = React.useMemo(
+		() => JSON.stringify(queryOptions.queryKeys),
+		[queryOptions.queryKeys]
+	);
+
 	/**
 	 * Register query immediately when manager changes.
 	 * This handles store switches - new manager = new query registration.
+	 *
+	 * Uses stable primitives as dependencies to prevent re-registration when
+	 * callers pass inline queryOptions objects.
 	 */
 	const initialQuery = React.useMemo(() => {
 		logger.debug('Registering query', {
@@ -35,7 +45,8 @@ export const useQuery = (queryOptions: QueryOptions) => {
 			},
 		});
 		return manager.registerQuery(queryOptions);
-	}, [manager, queryOptions]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [manager, queryOptions.collectionName, queryKeyString]);
 
 	/**
 	 * Observable that emits queries:
@@ -56,7 +67,8 @@ export const useQuery = (queryOptions: QueryOptions) => {
 				}),
 				startWith(initialQuery)
 			),
-		[manager, queryOptions, initialQuery]
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[manager, queryOptions.collectionName, queryKeyString, initialQuery]
 	);
 
 	/**

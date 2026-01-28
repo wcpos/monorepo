@@ -463,6 +463,7 @@ export const searchPlugin: RxPlugin = {
 					throw new Error(`Search instance for locale '${this._activeLocale}' is not initialized.`);
 				}
 
+				touchLRU(this, this._activeLocale);
 				return searchInstance.search(query);
 			};
 

@@ -11,6 +11,47 @@ import type { CollectionKey } from './use-collection';
 const logger = getLogger(['wcpos', 'hooks', 'useCollectionReset']);
 
 /**
+ * Wait for a replication to be registered for a collection.
+ * Polls the manager's replicationStates until found or timeout.
+ *
+ * @param manager - The query manager instance
+ * @param collectionName - The collection name to wait for
+ * @param timeout - Maximum time to wait in ms (default: 5000)
+ * @param interval - Polling interval in ms (default: 50)
+ * @returns true if replication found, false if timed out
+ */
+async function waitForReplication(
+	manager: ReturnType<typeof useQueryManager>,
+	collectionName: string,
+	timeout = 5000,
+	interval = 50
+): Promise<boolean> {
+	const startTime = Date.now();
+
+	while (Date.now() - startTime < timeout) {
+		// Check if any replication exists for this collection
+		let found = false;
+		manager.replicationStates.forEach((replication) => {
+			if ((replication as any)?.collection?.name === collectionName) {
+				found = true;
+			}
+		});
+
+		if (found) {
+			return true;
+		}
+
+		// Wait before next check
+		await new Promise((resolve) => setTimeout(resolve, interval));
+	}
+
+	logger.warn('waitForReplication: timed out waiting for replication', {
+		context: { collectionName, timeout },
+	});
+	return false;
+}
+
+/**
  * Hook for safely resetting (clearing) a collection.
  *
  * Uses swapCollection which:
@@ -71,15 +112,20 @@ export const useCollectionReset = (key: CollectionKey) => {
 			},
 		});
 
-		// Wait for queries to re-register and replications to be created
-		// This gives time for reset$ to propagate and queries to be recreated
-		await new Promise((resolve) => setTimeout(resolve, 500));
-
 		// Trigger sync on manager's replications
 		for (const result of results) {
 			if (result.success && result.collectionName) {
+				// Wait for the replication to be registered (with timeout)
+				const replicationReady = await waitForReplication(manager, result.collectionName);
+
+				if (!replicationReady) {
+					logger.warn('clearAndSync: proceeding without confirmed replication', {
+						context: { collectionName: result.collectionName },
+					});
+				}
+
 				logger.debug('clearAndSync: looking for replication in manager', {
-					context: { collectionName: result.collectionName },
+					context: { collectionName: result.collectionName, replicationReady },
 				});
 
 				// Find and run replications from the manager's replicationStates
