@@ -97,21 +97,16 @@ jobs:
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@v4
-
-      - name: 🏗 Setup Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          fetch-depth: 0
+          submodules: false
 
-      - name: 📦 Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
         with:
-          version: 10.17.0
-
-      - name: 📦 Install dependencies
-        run: pnpm install --frozen-lockfile
-        env:
-          UNIWIND_AUTH_TOKEN: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
       - name: 🎭 Install Playwright browsers
         run: cd apps/main && npx playwright install --with-deps chromium
