@@ -59,12 +59,13 @@ jobs:
           OUTPUT=$(eas deploy --export-dir ./build --non-interactive --json 2>&1 || true)
           echo "EAS output: $OUTPUT"
 
-          # Extract URL from JSON output
-          URL=$(echo "$OUTPUT" | jq -r '.url // empty' 2>/dev/null || echo "")
+          # Extract URL from JSON output (filter only lines that look like JSON)
+          URL=$(echo "$OUTPUT" | grep -E '^\{' -A 100 | jq -r '.url // empty' 2>/dev/null || echo "")
 
           # If no URL in JSON, try to parse from text output
           if [ -z "$URL" ]; then
-            URL=$(echo "$OUTPUT" | grep -oE 'https://[a-zA-Z0-9.-]+\.expo\.app[^ ]*' | head -1 || echo "")
+            # Match URL and strip any trailing quotes or whitespace
+            URL=$(echo "$OUTPUT" | grep -oE 'https://wcpos[a-zA-Z0-9._-]+\.expo\.app' | head -1 | tr -d '"' || echo "")
           fi
 
           echo "Deployment URL: $URL"
