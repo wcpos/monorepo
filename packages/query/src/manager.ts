@@ -5,8 +5,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { CollectionReplicationState } from './collection-replication-state';
-
-const queryLogger = getLogger(['wcpos', 'query', 'manager']);
 import allHooks from './hooks';
 import { QueryReplicationState } from './query-replication-state';
 import { Query } from './query-state';
@@ -17,6 +15,8 @@ import { buildEndpointWithParams } from './utils';
 
 import type { QueryParams } from './query-state';
 import type { RxCollection, RxDatabase } from 'rxdb';
+
+const queryLogger = getLogger(['wcpos', 'query', 'manager']);
 
 /**
  *
