@@ -171,15 +171,20 @@ export class Query<T extends RxCollection>
 		}
 	}
 
-	cancel() {
+	async cancel(): Promise<void> {
+		queryLogger.debug('Query cancelling', {
+			context: { id: this.id, collection: this.collection.name },
+		});
+
 		this.subjects.result.next({
 			elapsed: 0,
 			searchActive: false,
 			count: 0,
 			hits: [],
 		});
+		this.debouncedSearch.cancel();
 		this.resource.destroy();
-		super.cancel();
+		await super.cancel();
 	}
 
 	/**
@@ -472,12 +477,19 @@ export class Query<T extends RxCollection>
 	public search(searchTerm: string) {
 		// If the search term is empty, remove the uuid filter and unsubscribe from the search
 		if (isEmpty(searchTerm)) {
+			queryLogger.debug('Search cleared', {
+				context: { id: this.id, collection: this.collection.name },
+			});
 			this.cancelSub('search');
 			this.removeWhere(this.primaryKey);
 			this.currentRxQuery.other.search = null;
 			this.exec();
 			return;
 		}
+
+		queryLogger.debug('Search started', {
+			context: { id: this.id, collection: this.collection.name, searchTerm },
+		});
 
 		this.resetPagination();
 

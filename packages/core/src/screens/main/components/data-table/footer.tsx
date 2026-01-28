@@ -21,7 +21,7 @@ interface Props {
  */
 export function DataTableFooter({ children, query, count }: Props) {
 	const { sync, active$, total$ } = useReplicationState(query);
-	const { clear } = useCollectionReset(query.collection.name);
+	const { clearAndSync } = useCollectionReset(query.collection.name);
 	const loading = useObservableState(active$, false);
 	const total = useObservableState(total$, 0);
 	const t = useT();
@@ -33,7 +33,7 @@ export function DataTableFooter({ children, query, count }: Props) {
 				<Text className="text-xs">
 					{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
 				</Text>
-				<SyncButton sync={sync} clear={clear} active={loading} />
+				<SyncButton sync={sync} clearAndSync={clearAndSync} active={loading} />
 			</HStack>
 		</HStack>
 	);

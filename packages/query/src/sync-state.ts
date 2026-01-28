@@ -1,6 +1,8 @@
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import { yieldToEventLoop } from './yield';
+
 import type { StoreCollection, SyncCollection } from '@wcpos/database';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'state']);
@@ -38,17 +40,25 @@ export class SyncStateManager {
 	}
 
 	/**
-	 * Takes a full audit reponse from the server and updates the sync state accordingly.
+	 * Takes a full audit response from the server and updates the sync state accordingly.
+	 *
+	 * For large datasets (100k+ records), this method yields to the event loop
+	 * between batches to prevent UI blocking.
 	 */
 	public async processFullAudit(serverState: ServerRecord[]) {
 		const batchSize = 1000;
 		let skip = 0;
 		let hasMore = true;
+		let batchCount = 0;
 
 		// Create a map of the server state for quick lookup
 		const serverStateMap = new Map(serverState.map((record) => [record.id, record]));
 		// Keep track of processed IDs
 		const processedIds = new Set<number>();
+
+		syncLogger.debug(`Starting full audit: ${serverState.length} server records`, {
+			context: { endpoint: this.endpoint, serverRecords: serverState.length },
+		});
 
 		while (hasMore) {
 			let result = await this.collection
@@ -149,6 +159,11 @@ export class SyncStateManager {
 
 			await this.syncCollection.bulkUpsert(updates);
 			skip += batchSize;
+			batchCount++;
+
+			// Yield to event loop every batch to prevent UI blocking
+			// This is especially important for large datasets (100k+ records)
+			await yieldToEventLoop();
 		}
 
 		// Handle server records that don't exist locally
@@ -161,8 +176,43 @@ export class SyncStateManager {
 			}));
 
 		if (newRecords.length > 0) {
-			await this.syncCollection.bulkUpsert(newRecords);
+			// Process new records in small chunks with yielding to keep UI responsive
+			// Smaller chunks = more yields = smoother UI, but slightly slower overall
+			// 500 is a good balance for IndexedDB writes
+			const newRecordChunkSize = 500;
+			const totalChunks = Math.ceil(newRecords.length / newRecordChunkSize);
+
+			for (let i = 0; i < newRecords.length; i += newRecordChunkSize) {
+				const chunk = newRecords.slice(i, i + newRecordChunkSize);
+				await this.syncCollection.bulkUpsert(chunk);
+
+				// Yield after every chunk to keep UI responsive
+				await yieldToEventLoop();
+
+				// Log progress for large sets
+				if (newRecords.length > 5000) {
+					const chunkNum = Math.floor(i / newRecordChunkSize) + 1;
+					if (chunkNum % 10 === 0 || chunkNum === totalChunks) {
+						syncLogger.debug(`Audit progress: ${chunkNum}/${totalChunks} chunks`, {
+							context: {
+								endpoint: this.endpoint,
+								processed: Math.min(i + newRecordChunkSize, newRecords.length),
+								total: newRecords.length,
+							},
+						});
+					}
+				}
+			}
 		}
+
+		syncLogger.debug(`Full audit complete: ${batchCount} batches, ${processedIds.size} processed`, {
+			context: {
+				endpoint: this.endpoint,
+				batches: batchCount,
+				processed: processedIds.size,
+				newRecords: newRecords.length,
+			},
+		});
 	}
 
 	/**

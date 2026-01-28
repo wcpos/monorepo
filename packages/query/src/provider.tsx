@@ -1,8 +1,12 @@
 import * as React from 'react';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { Manager } from './manager';
 
 import type { RxDatabase } from 'rxdb';
+
+const logger = getLogger(['wcpos', 'query', 'provider']);
 
 const QueryContext = React.createContext<Manager<RxDatabase> | undefined>(undefined);
 
@@ -25,6 +29,9 @@ export const QueryProvider = <T extends RxDatabase>({
 	locale,
 }: QueryProviderProps<T>) => {
 	const manager = React.useMemo(() => {
+		logger.debug('Creating/getting manager', {
+			context: { localDBName: localDB?.name },
+		});
 		return Manager.getInstance<T>(localDB, fastLocalDB, http, locale);
 	}, [localDB, fastLocalDB, http, locale]);
 

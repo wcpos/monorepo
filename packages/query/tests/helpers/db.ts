@@ -6,9 +6,9 @@ import {
 	ExtractDocumentTypeFromTypedRxJsonSchema,
 	RxJsonSchema,
 } from 'rxdb';
-// import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { Subject } from 'rxjs';
 
 import { RxDBGenerateIdPlugin } from './generate-id';
 import { parseRestResponsePlugin } from './parse-rest-response';
@@ -20,7 +20,6 @@ import { searchPlugin } from './search';
 
 import type { RxCollectionCreator, RxCollection, RxDocument } from 'rxdb';
 
-// addRxPlugin(RxDBDevModePlugin);
 addRxPlugin(RxDBGenerateIdPlugin);
 addRxPlugin(parseRestResponsePlugin);
 addRxPlugin(searchPlugin);
@@ -80,9 +79,14 @@ const logs: RxCollectionCreator<LogDocumentType> = { schema: logSchema };
 
 /**
  * Generate a unique database name
+ * Uses crypto for truly unique names that won't conflict with destroyed databases
  */
 function generateUniqueDbName(baseName: string): string {
-	return `${baseName}_${Date.now()}`;
+	// Use a combination of timestamp + high-resolution timer + random for uniqueness
+	const timestamp = Date.now();
+	const hrTime = typeof performance !== 'undefined' ? Math.floor(performance.now() * 1000) : 0;
+	const random = Math.random().toString(36).substring(2, 10);
+	return `${baseName}_${timestamp}_${hrTime}_${random}`;
 }
 
 /**
@@ -92,11 +96,14 @@ export async function createStoreDatabase(): Promise<RxDatabase> {
 	const db = await createRxDatabase({
 		name: generateUniqueDbName('storedb'),
 		storage: getRxStorageMemory(),
-		// ignoreDuplicate: true,
 		allowSlowCount: true,
 	});
 
 	const collections = await db.addCollections({ products, variations, logs });
+
+	// Add mock reset$ observable for tests that use the reset collection plugin
+	// This simulates the behavior of the reset-collection plugin
+	(db as any).reset$ = new Subject<RxCollection>();
 
 	return db;
 }
@@ -108,7 +115,6 @@ export async function createSyncDatabase(): Promise<RxDatabase> {
 	const db = await createRxDatabase({
 		name: generateUniqueDbName('syncdb'),
 		storage: getRxStorageMemory(),
-		// ignoreDuplicate: true,
 		allowSlowCount: true,
 	});
 

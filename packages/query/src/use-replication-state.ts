@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { useObservable, useObservableState } from 'observable-hooks';
+import { useObservable } from 'observable-hooks';
 import { combineLatest, of } from 'rxjs';
-import { filter, map, switchMap } from 'rxjs/operators';
+import { map, switchMap } from 'rxjs/operators';
 
 import { useQueryManager } from './provider';
 
@@ -28,31 +28,45 @@ export const useReplicationState = (
 	const queryID = getQueryID(query);
 	const manager = useQueryManager();
 
-	/**
-	 * Get the collection replication state for the query
-	 */
-	const collectionReplication = useObservableState(
-		manager.activeCollectionReplications.add$.pipe(
-			filter((id) => id === queryID),
-			map(() => {
-				return manager.activeCollectionReplications.get(queryID);
-			})
-		),
-		manager.activeCollectionReplications.get(queryID)
-	);
+	// Force re-fetch counter - incremented when we detect stale replication
+	const [refreshCounter, setRefreshCounter] = React.useState(0);
 
 	/**
-	 * Get the query replication state for the query
+	 * Get the collection replication state, refreshing when counter changes
 	 */
-	const queryReplication = useObservableState(
-		manager.activeQueryReplications.add$.pipe(
-			filter((id) => id === queryID),
-			map(() => {
-				return manager.activeQueryReplications.get(queryID);
-			})
-		),
-		manager.activeQueryReplications.get(queryID)
-	);
+	const collectionReplication = React.useMemo(() => {
+		return manager.activeCollectionReplications.get(queryID);
+	}, [manager, queryID, refreshCounter]);
+
+	/**
+	 * Get the query replication state, refreshing when counter changes
+	 */
+	const queryReplication = React.useMemo(() => {
+		return manager.activeQueryReplications.get(queryID);
+	}, [manager, queryID, refreshCounter]);
+
+	/**
+	 * Listen for replication changes and refresh.
+	 * Handles both add$ signals and mount-time stale detection for Suspense.
+	 */
+	React.useEffect(() => {
+		// Check on mount: if manager has a different replication than what we cached,
+		// we need to refresh (handles Suspense race condition)
+		const currentReplication = manager.activeCollectionReplications.get(queryID);
+		const isStale = currentReplication && currentReplication !== collectionReplication;
+
+		if (isStale) {
+			setRefreshCounter((c) => c + 1);
+		}
+
+		// Subscribe to add$ for future changes
+		const sub = manager.activeCollectionReplications.add$.subscribe((id) => {
+			if (id === queryID) {
+				setRefreshCounter((c) => c + 1);
+			}
+		});
+		return () => sub.unsubscribe();
+	}, [manager, queryID, collectionReplication, refreshCounter]);
 
 	/**
 	 * Combine the active$ observables of collectionReplication and queryReplication
@@ -61,33 +75,27 @@ export const useReplicationState = (
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(([collectionReplication, queryReplication]) => {
-					// Combine the active$ observables of collectionReplication and queryReplication
 					return combineLatest(
 						collectionReplication?.active$ || of(false),
 						queryReplication?.active$ || of(false)
-					).pipe(
-						map(([collectionActive, queryActive]) => {
-							// Return true if either collection or query is active
-							return collectionActive || queryActive;
-						})
-					);
+					).pipe(map(([collectionActive, queryActive]) => collectionActive || queryActive));
 				})
 			),
 		[collectionReplication, queryReplication]
 	);
 
 	/**
-	 *
+	 * Trigger a manual sync of both collection and query replications
 	 */
 	const sync = React.useCallback(async () => {
-		await collectionReplication.run({ force: true });
-		await queryReplication.run({ force: true });
+		await collectionReplication?.run({ force: true });
+		await queryReplication?.run({ force: true });
 	}, [collectionReplication, queryReplication]);
 
 	return {
 		active$,
 		sync,
-		total$: collectionReplication.total$,
+		total$: collectionReplication?.total$,
 		collectionReplication,
 		queryReplication,
 	};

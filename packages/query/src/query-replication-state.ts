@@ -176,9 +176,9 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 				response = { data: [] };
 			} else {
 				if (exclude?.length < include?.length) {
-					response = await this.dataFetcher.fetchRemoteByIDs({ exclude });
+					response = await this.dataFetcher.fetchRemoteByIDs({ exclude }, {}, this.signal);
 				} else {
-					response = await this.dataFetcher.fetchRemoteByIDs({ include });
+					response = await this.dataFetcher.fetchRemoteByIDs({ include }, {}, this.signal);
 				}
 			}
 

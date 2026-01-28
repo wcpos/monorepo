@@ -1,5 +1,8 @@
 import { RxCollection, RxPlugin } from 'rxdb';
-import { v4 as uuidv4 } from 'uuid';
+
+// Use Node's built-in crypto.randomUUID() instead of uuid package
+// This avoids ESM transform issues in Jest
+const uuidv4 = () => crypto.randomUUID();
 
 /**
  * Generate a UUID if the primary key is not set

@@ -8,10 +8,10 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { DataFetcher } from './data-fetcher';
-
-const syncLogger = getLogger(['wcpos', 'sync', 'collection']);
 import { SubscribableBase } from './subscribable-base';
 import { SyncStateManager } from './sync-state';
+
+const syncLogger = getLogger(['wcpos', 'sync', 'collection']);
 
 /**
  * Check if an error is a CanceledError (from axios or auth flow).
@@ -111,9 +111,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.setupSubscriptions();
 	}
 
-	cancel() {
+	async cancel(): Promise<void> {
 		this.subjects.total.next(0);
-		super.cancel();
+		await super.cancel();
 	}
 
 	private setupSubscriptions() {
@@ -201,6 +201,14 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 		const totalCount$ = combineLatest([remoteCount$, newLocalCount$]).pipe(
 			map(([remoteCount, newLocalCount]) => {
+				syncLogger.debug('totalCount$ computed', {
+					context: {
+						endpoint: this.endpoint,
+						remoteCount,
+						newLocalCount,
+						total: remoteCount + newLocalCount,
+					},
+				});
 				return remoteCount + newLocalCount;
 			}),
 			startWith(0)
@@ -252,7 +260,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.subjects.active.next(true);
 
 		try {
-			const response = await this.dataFetcher.fetchAllRemoteIds();
+			const response = await this.dataFetcher.fetchAllRemoteIds(this.signal);
 			if (!Array.isArray(response?.data)) {
 				// Server returned 200 but with unexpected data format (e.g., WP error object, HTML, etc.)
 				const wpError = parseWpError(response?.data, 'Invalid response fetching remote state');
@@ -335,7 +343,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			this.subjects.active.next(true);
 
 			try {
-				const response = await this.dataFetcher.fetchRecentRemoteUpdates(modifiedAfter);
+				const response = await this.dataFetcher.fetchRecentRemoteUpdates(
+					modifiedAfter,
+					this.signal
+				);
 				if (!Array.isArray(response?.data)) {
 					// Server returned 200 but with unexpected data format
 					const wpError = parseWpError(response?.data, 'Invalid response checking updates');
@@ -354,14 +365,14 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 					return;
 				}
 
-			syncLogger.info(`Checked for updates: ${this.endpoint}`, {
-				saveToDb: true,
-				context: {
-					total: response.headers?.['x-wp-total'] ?? 'unknown',
-					execution_time: response.headers?.['x-execution-time'] ?? 'unknown',
-					server_load: response.headers?.['x-server-load'] ?? 'unknown',
-				},
-			});
+				syncLogger.info(`Checked for updates: ${this.endpoint}`, {
+					saveToDb: true,
+					context: {
+						total: response.headers?.['x-wp-total'] ?? 'unknown',
+						execution_time: response.headers?.['x-execution-time'] ?? 'unknown',
+						server_load: response.headers?.['x-server-load'] ?? 'unknown',
+					},
+				});
 
 				if (!isEmpty(response.data)) {
 					await this.syncStateManager.processModifiedAfter(response.data);
@@ -456,9 +467,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		try {
 			let response;
 			if (exclude && exclude.length < include.length) {
-				response = await this.dataFetcher.fetchRemoteByIDs({ exclude }, params);
+				response = await this.dataFetcher.fetchRemoteByIDs({ exclude }, params, this.signal);
 			} else {
-				response = await this.dataFetcher.fetchRemoteByIDs({ include }, params);
+				response = await this.dataFetcher.fetchRemoteByIDs({ include }, params, this.signal);
 			}
 			await this.bulkUpsertResponse(response);
 		} catch (error: any) {
@@ -547,7 +558,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 
 			// @TODO - I should use the link property to get the endpoint
-			const response = await this.dataFetcher.remotePatch(doc, data);
+			const response = await this.dataFetcher.remotePatch(doc, data, this.signal);
 
 			if (!response?.data) {
 				throw new Error('Invalid response data for remote patch');
@@ -590,7 +601,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 	remoteCreate = async (data: any) => {
 		try {
-			const response = await this.dataFetcher.remoteCreate(data);
+			const response = await this.dataFetcher.remoteCreate(data, this.signal);
 
 			if (!response?.data) {
 				throw new Error('Invalid response data for remote create');

@@ -27,5 +27,16 @@ jobs:
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
-      - name: 🧪 Run tests
+      - name: 🧪 Run tests (core, components, database)
+        id: core_tests
         run: pnpm jest --ci --passWithNoTests
+        continue-on-error: true  # TODO: Fix @wcpos/core logger mock issue
+
+      - name: 🧪 Run query tests
+        run: cd packages/query && npx jest --config jest.config.cjs --ci
+
+      - name: ❌ Fail if core tests failed
+        if: steps.core_tests.outcome == 'failure'
+        run: |
+          echo "Core tests failed. Please fix the issues before merging."
+          exit 1

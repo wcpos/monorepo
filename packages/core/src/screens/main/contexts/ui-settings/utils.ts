@@ -46,20 +46,30 @@ export const resetToInitialValues = async (id: UISettingID, state: UISettingStat
 
 /**
  * This is a bit of a mess, because setting nested values from the Form component is tricky
+ *
+ * Note: RxState doesn't allow null values in ops (schema requires v to be present).
+ * We skip null/undefined values to avoid VD2 validation errors.
  */
 export const patchState = async <T extends UISettingID>(
 	state: UISettingState<T>,
 	data: Partial<UISettingSchema<T>>
 ) => {
 	for (const key of Object.keys(data)) {
+		const value = data[key];
+
+		// Skip null/undefined values - RxState schema doesn't allow them
+		if (value === null || value === undefined) {
+			continue;
+		}
+
 		const path = key.split('.');
 		const root = path.shift();
 		const typedKey = root as keyof UISettingSchema<T>;
 		await state.set(typedKey, (old) => {
 			if (path.length > 0) {
-				return set(old, path, data[key]);
+				return set(old, path, value);
 			} else {
-				return data[key];
+				return value;
 			}
 		});
 	}

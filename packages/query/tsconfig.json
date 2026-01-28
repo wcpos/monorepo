@@ -1,0 +1,25 @@
+{
+	"compilerOptions": {
+		"target": "ES2020",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"lib": ["ES2020", "DOM", "DOM.Iterable"],
+		"jsx": "react-jsx",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"noEmit": true,
+		"isolatedModules": true,
+		"baseUrl": ".",
+		"paths": {
+			"@wcpos/utils/*": ["../utils/src/*"],
+			"@wcpos/database": ["../database/src/index"],
+			"@wcpos/database/*": ["../database/src/*"],
+			"@wcpos/hooks/*": ["../hooks/src/*"]
+		}
+	},
+	"include": ["src/**/*", "tests/**/*"],
+	"exclude": ["node_modules", "dist"]
+}
