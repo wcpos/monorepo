@@ -182,6 +182,7 @@ export class Query<T extends RxCollection>
 			count: 0,
 			hits: [],
 		});
+		this.debouncedSearch.cancel();
 		this.resource.destroy();
 		await super.cancel();
 	}

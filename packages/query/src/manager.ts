@@ -88,7 +88,11 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		/**
 		 * Subscribe to localDB to detect if db is destroyed
 		 */
-		this.localDB.onClose.push(() => this.cancel());
+		this.localDB.onClose.push(() => {
+			void this.cancel().catch((error) =>
+				queryLogger.error('Manager cancel on db close failed', { context: { error } })
+			);
+		});
 	}
 
 	public static getInstance<TDatabase extends RxDatabase>(
@@ -110,7 +114,9 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 		// If instance exists but dependencies have changed, cancel the existing instance
 		if (Manager.instance) {
-			Manager.instance.cancel();
+			void Manager.instance.cancel().catch((error) =>
+				queryLogger.error('Previous Manager instance cancel failed', { context: { error } })
+			);
 		}
 
 		// Create a new instance
@@ -169,7 +175,11 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				queryLogger.debug('registerQuery: existing query has stale collection, removing and re-creating', {
 					context: { key, collectionName },
 				});
-				this.queryStates.delete(key);
+				void this.deregisterQuery(key).catch((error) =>
+					queryLogger.error('Failed to deregister stale query', {
+						context: { key, collectionName, error },
+					})
+				);
 				// Fall through to create new query
 			} else {
 				return existingQuery;
@@ -247,7 +257,11 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				queryLogger.debug('registerRelationalQuery: existing query has stale collection, removing and re-creating', {
 					context: { key, collectionName },
 				});
-				this.queryStates.delete(key);
+				void this.deregisterQuery(key).catch((error) =>
+					queryLogger.error('Failed to deregister stale relational query', {
+						context: { key, collectionName, error },
+					})
+				);
 				// Fall through to create new query
 			} else {
 				return existingQuery;
