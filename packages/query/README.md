@@ -291,3 +291,120 @@ Processing 100k+ records synchronously blocks the UI. Yielding between chunks al
 - `yieldToEventLoop()` - Yield to event loop
 - `processInChunks(items, processor, size)` - Process array in chunks
 - `chunkedIterator(items, size)` - Async generator for chunks
+
+## Future Architecture: State Machine & Offline Support
+
+> **TODO**: This section describes planned architecture improvements for offline support.
+
+### Current Limitation
+
+The query/replication lifecycle is currently **implicit** - states and transitions are spread across Manager, Query, and hooks without a central definition. This works for online-only operation but becomes problematic for offline support.
+
+### Proposed: Explicit State Machine
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                       Query Lifecycle States                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   ┌──────┐    REGISTER    ┌────────────┐    SUBSCRIBE   ┌────────┐  │
+│   │ idle │ ──────────────▶│  paused    │ ─────────────▶ │ active │  │
+│   └──────┘                └────────────┘                └────────┘  │
+│                                 │  ▲                        │       │
+│                                 │  │ UNSUBSCRIBE            │       │
+│                                 │  └─────────────────────────       │
+│                                 │                                   │
+│                           CANCEL│                                   │
+│                                 ▼                                   │
+│                          ┌────────────┐                             │
+│                          │ cancelled  │                             │
+│                          └────────────┘                             │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+For offline support, we'd extend this with:
+
+```typescript
+type QueryState = 
+  | 'idle'
+  | 'registering'
+  | 'active'           // Online, syncing normally
+  | 'paused'           // No subscribers
+  | 'offline'          // Network unavailable
+  | 'queued'           // Has pending mutations to sync
+  | 'syncing'          // Pushing queued changes
+  | 'cancelling'
+  | 'cancelled';
+
+type QueryEvent = 
+  | { type: 'REGISTER' }
+  | { type: 'SUBSCRIBE' }
+  | { type: 'UNSUBSCRIBE' }
+  | { type: 'NETWORK_OFFLINE' }
+  | { type: 'NETWORK_ONLINE' }
+  | { type: 'MUTATION_QUEUED'; payload: MutationPayload }
+  | { type: 'SYNC_COMPLETE' }
+  | { type: 'SYNC_ERROR'; error: Error }
+  | { type: 'COLLECTION_RESET' }
+  | { type: 'CANCEL' };
+```
+
+### Offline Support Requirements
+
+1. **Detect network status** - Listen to `navigator.onLine` and connection events
+2. **Queue mutations** - Store create/update/delete operations locally when offline
+3. **Sync on reconnect** - Push queued mutations when network returns
+4. **Conflict resolution** - Handle cases where server data changed while offline
+5. **UI feedback** - Show sync status, pending changes count, last sync time
+
+### Order Creation Flow (Offline-Capable)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      Order Creation Flow                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  User creates order                                                  │
+│         │                                                            │
+│         ▼                                                            │
+│  ┌─────────────────┐                                                 │
+│  │ Save to RxDB    │ ◀─── Always succeeds (local-first)              │
+│  │ (local)         │                                                 │
+│  └────────┬────────┘                                                 │
+│           │                                                          │
+│           ▼                                                          │
+│  ┌─────────────────┐     Online?     ┌─────────────────┐            │
+│  │ Check network   │ ───────────────▶│ Push to server  │            │
+│  │ status          │                  │ immediately     │            │
+│  └────────┬────────┘                  └─────────────────┘            │
+│           │                                                          │
+│           │ Offline                                                  │
+│           ▼                                                          │
+│  ┌─────────────────┐                                                 │
+│  │ Queue mutation  │ ◀─── Store in sync queue collection             │
+│  │ for later sync  │                                                 │
+│  └────────┬────────┘                                                 │
+│           │                                                          │
+│           │ Network restored                                         │
+│           ▼                                                          │
+│  ┌─────────────────┐                                                 │
+│  │ Process queue   │ ◀─── FIFO, retry with backoff                   │
+│  │ (oldest first)  │                                                 │
+│  └─────────────────┘                                                 │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Implementation Considerations
+
+- **XState** - Battle-tested state machine library, good DevTools
+- **Sync queue collection** - New RxDB collection to persist pending mutations
+- **Optimistic UI** - Show local changes immediately, reconcile after sync
+- **Idempotency** - Server endpoints must handle duplicate requests gracefully
+
+### References
+
+- [XState Documentation](https://xstate.js.org/)
+- [Local-First Software](https://www.inkandswitch.com/local-first/)
+- [RxDB Offline Replication](https://rxdb.info/replication.html)
