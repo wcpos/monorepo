@@ -1,13 +1,14 @@
 const TEST_REGEX = '(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|js?|tsx?|ts?)$';
 
 module.exports = {
-	displayName: '@wcpos/components',
+	displayName: '@wcpos/utils',
 	preset: 'ts-jest',
+	testEnvironment: 'node',
 	transform: {
 		'^.+\\.(ts|tsx)$': [
 			'ts-jest',
 			{
-				diagnostics: false,
+				tsconfig: 'tsconfig.json',
 				isolatedModules: true,
 			},
 		],
@@ -17,4 +18,7 @@ module.exports = {
 	collectCoverage: true,
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(jsx?|tsx?)$'],
 	verbose: true,
+	globals: {
+		__DEV__: true,
+	},
 };

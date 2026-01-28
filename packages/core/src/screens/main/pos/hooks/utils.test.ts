@@ -1,3 +1,6 @@
+/**
+ * @jest-environment node
+ */
 import type { ProductDocument } from '@wcpos/database';
 
 import {
@@ -20,22 +23,7 @@ import {
 	updatePosDataMeta,
 } from './utils';
 
-// Mock @wcpos/utils/logger to avoid __DEV__ not defined error
-jest.mock('@wcpos/utils/logger', () => ({
-	__esModule: true,
-	default: {
-		error: jest.fn(),
-		warn: jest.fn(),
-		info: jest.fn(),
-		debug: jest.fn(),
-	},
-}));
-
-jest.mock('@wcpos/utils/logger/error-codes', () => ({
-	ERROR_CODES: {
-		INVALID_DATA_TYPE: 'INVALID_DATA_TYPE',
-	},
-}));
+// Logger mocks are provided by moduleNameMapper in jest.config.js
 
 describe('Utilities', () => {
 	// Test sanitizePrice
