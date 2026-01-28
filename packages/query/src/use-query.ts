@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { filter, map } from 'rxjs/operators';
+import { filter, map, startWith } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -9,7 +9,7 @@ import { useQueryManager } from './provider';
 
 import type { QueryHooks, QueryParams } from './query-state';
 
-const queryHookLogger = getLogger(['wcpos', 'query', 'useQuery']);
+const logger = getLogger(['wcpos', 'query', 'useQuery']);
 
 export interface QueryOptions {
 	queryKeys: (string | number | object)[];
@@ -23,58 +23,50 @@ export interface QueryOptions {
 export const useQuery = (queryOptions: QueryOptions) => {
 	const manager = useQueryManager();
 
-	// Debug: Log when manager changes
-	React.useEffect(() => {
-		queryHookLogger.debug('useQuery: manager reference', {
-			context: {
-				collectionName: queryOptions.collectionName,
-				queryKeys: JSON.stringify(queryOptions.queryKeys),
-				managerLocalDBName: manager.localDB?.name,
-			},
-		});
-	}, [manager, queryOptions.collectionName, queryOptions.queryKeys]);
-
 	/**
 	 * Register query immediately when manager changes.
 	 * This handles store switches - new manager = new query registration.
 	 */
 	const initialQuery = React.useMemo(() => {
-		queryHookLogger.debug('useQuery: registering query (useMemo)', {
+		logger.debug('Registering query', {
 			context: {
 				collectionName: queryOptions.collectionName,
-				queryKeys: JSON.stringify(queryOptions.queryKeys),
-				managerLocalDBName: manager.localDB?.name,
+				queryKeys: queryOptions.queryKeys,
 			},
 		});
 		return manager.registerQuery(queryOptions);
 	}, [manager, queryOptions]);
 
 	/**
-	 * Subscribe to collection resets to re-register query.
-	 * useMemo ensures we subscribe to the current manager's reset$.
+	 * Observable that emits queries:
+	 * 1. Immediately emits initialQuery via startWith (handles manager changes)
+	 * 2. Re-emits when collection is reset via reset$
+	 *
+	 * startWith ensures we always get the current query even before reset$ emits.
 	 */
-	const reset$ = React.useMemo(
+	const query$ = React.useMemo(
 		() =>
 			manager.localDB.reset$.pipe(
 				filter((collection) => collection.name === queryOptions.collectionName),
 				map(() => {
-					queryHookLogger.debug('useQuery: re-registering after reset$', {
+					logger.debug('Re-registering query after collection reset', {
 						context: { collectionName: queryOptions.collectionName },
 					});
 					return manager.registerQuery(queryOptions);
-				})
+				}),
+				startWith(initialQuery)
 			),
-		[manager, queryOptions]
+		[manager, queryOptions, initialQuery]
 	);
 
 	/**
-	 * Use initialQuery as the default value, update when reset$ emits.
+	 * Subscribe to query$ - will immediately emit initialQuery,
+	 * then update if collection is reset.
 	 */
-	const query = useObservableState(reset$, initialQuery);
+	const query = useObservableState(query$, initialQuery);
 
 	/**
 	 * Cleanup query replications when the component unmounts.
-	 * Legitimate useEffect for resource cleanup with external query manager.
 	 */
 	React.useEffect(() => {
 		return () => {

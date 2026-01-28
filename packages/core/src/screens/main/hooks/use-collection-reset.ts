@@ -2,10 +2,13 @@ import * as React from 'react';
 
 import { swapCollection, swapCollections, useQueryManager } from '@wcpos/query';
 import type { CollectionSwapResult } from '@wcpos/query';
+import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../contexts/app-state';
 
 import type { CollectionKey } from './use-collection';
+
+const logger = getLogger(['wcpos', 'hooks', 'useCollectionReset']);
 
 /**
  * Hook for safely resetting (clearing) a collection.
@@ -52,5 +55,47 @@ export const useCollectionReset = (key: CollectionKey) => {
 		return [result];
 	}, [fastStoreDB, key, manager, storeDB]);
 
-	return { clear };
+	/**
+	 * Clear the collection and then trigger a fresh sync.
+	 *
+	 * After swap, waits for queries to re-register then triggers sync
+	 * on the manager's replications (which are connected to the UI).
+	 */
+	const clearAndSync = React.useCallback(async (): Promise<void> => {
+		logger.debug('clearAndSync: starting', { context: { key } });
+
+		const results = await clear();
+		logger.debug('clearAndSync: swap results', {
+			context: {
+				results: results.map((r) => ({ success: r.success, collectionName: r.collectionName })),
+			},
+		});
+
+		// Wait for queries to re-register and replications to be created
+		// This gives time for reset$ to propagate and queries to be recreated
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
+		// Trigger sync on manager's replications
+		for (const result of results) {
+			if (result.success && result.collectionName) {
+				logger.debug('clearAndSync: looking for replication in manager', {
+					context: { collectionName: result.collectionName },
+				});
+
+				// Find and run replications from the manager's replicationStates
+				manager.replicationStates.forEach((replication, endpoint) => {
+					if ((replication as any)?.collection?.name === result.collectionName) {
+						logger.debug('clearAndSync: triggering sync on manager replication', {
+							context: { collectionName: result.collectionName, endpoint },
+						});
+						replication.run({ force: true });
+					}
+				});
+			}
+		}
+
+		logger.debug('clearAndSync: complete', { context: { key } });
+	}, [clear, key, manager]);
+
+	return { clear, clearAndSync };
 };

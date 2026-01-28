@@ -1,4 +1,4 @@
-import type { RxDatabase } from 'rxdb';
+import type { RxDatabase, RxCollection } from 'rxdb';
 import { Subject } from 'rxjs';
 
 import { httpClientMock } from './__mocks__/http';
@@ -9,18 +9,53 @@ import { swapCollection, swapCollections } from '../src/collection-swap';
 // Mock the logger module
 jest.mock('@wcpos/utils/src/logger');
 
+// Schemas for re-adding collections
+const storeSchema = {
+	title: 'products',
+	version: 0,
+	primaryKey: 'uuid',
+	type: 'object' as const,
+	properties: {
+		uuid: { type: 'string' as const, maxLength: 36 },
+		id: { type: 'integer' as const },
+	},
+};
+
+const syncSchema = {
+	title: 'products',
+	version: 0,
+	primaryKey: 'uuid',
+	type: 'object' as const,
+	properties: {
+		uuid: { type: 'string' as const, maxLength: 36 },
+		id: { type: 'integer' as const },
+		status: { type: 'string' as const },
+		endpoint: { type: 'string' as const },
+	},
+};
+
+const variationsStoreSchema = { ...storeSchema, title: 'variations' };
+const variationsSyncSchema = { ...syncSchema, title: 'variations' };
+
 describe('Collection Swap', () => {
 	let storeDatabase: RxDatabase;
 	let syncDatabase: RxDatabase;
 	let manager: Manager<any>;
+	let mockReset$: Subject<RxCollection>;
 
 	beforeEach(async () => {
 		storeDatabase = await createStoreDatabase();
 		syncDatabase = await createSyncDatabase();
 		manager = Manager.getInstance(storeDatabase, syncDatabase, httpClientMock);
+
+		// Add mock reset$ observable (required by swapCollection for validation)
+		mockReset$ = new Subject<RxCollection>();
+		(storeDatabase as any).reset$ = mockReset$.asObservable();
+		(syncDatabase as any).reset$ = mockReset$.asObservable();
 	});
 
 	afterEach(async () => {
+		mockReset$.complete();
 		if (manager) {
 			await manager.cancel();
 		}
@@ -35,12 +70,28 @@ describe('Collection Swap', () => {
 
 	describe('swapCollection', () => {
 		it('should return success result with duration', async () => {
-			// Mock reset$ to emit immediately
-			const mockReset$ = new Subject();
-			(storeDatabase as any).reset$ = mockReset$.asObservable();
+			// Poll and re-add collections as they are removed
+			let stopPolling = false;
+			const pollAndReAdd = async () => {
+				while (!stopPolling) {
+					await new Promise((resolve) => setTimeout(resolve, 10));
+					if (!storeDatabase.destroyed && !storeDatabase.collections.products) {
+						try {
+							await storeDatabase.addCollections({ products: { schema: storeSchema } });
+						} catch (e) { /* ignore */ }
+					}
+					if (!syncDatabase.destroyed && !syncDatabase.collections.products) {
+						try {
+							await syncDatabase.addCollections({ products: { schema: syncSchema } });
+						} catch (e) { /* ignore */ }
+					}
+				}
+			};
 
-			// Start swap (will wait for reset$)
-			const swapPromise = swapCollection({
+			// Start polling in background
+			const pollingPromise = pollAndReAdd();
+
+			const result = await swapCollection({
 				manager,
 				collectionName: 'products',
 				storeDB: storeDatabase,
@@ -48,26 +99,36 @@ describe('Collection Swap', () => {
 				timeout: 5000,
 			});
 
-			// Simulate reset signal from reset-collection plugin
-			// In real scenario, this is emitted by postCloseRxCollection hook
-			setTimeout(() => {
-				mockReset$.next({ name: 'products' });
-			}, 100);
-
-			const result = await swapPromise;
+			stopPolling = true;
+			await pollingPromise;
 
 			expect(result.success).toBe(true);
 			expect(result.duration).toBeGreaterThan(0);
 			expect(result.error).toBeUndefined();
 		});
 
-		it('should call onCollectionReset to cancel operations', async () => {
-			const mockReset$ = new Subject();
-			(storeDatabase as any).reset$ = mockReset$.asObservable();
+		it('should cancel operations for the collection', async () => {
+			// Register a query first
+			manager.registerQuery({
+				queryKeys: ['cancel-test'],
+				collectionName: 'products',
+				initialParams: {},
+			});
 
-			const resetSpy = jest.spyOn(manager, 'onCollectionReset');
+			expect(manager.hasQuery(['cancel-test'])).toBe(true);
 
-			const swapPromise = swapCollection({
+			// Start re-add process
+			const reAddPromise = (async () => {
+				await new Promise((resolve) => setTimeout(resolve, 20));
+				if (!storeDatabase.collections.products && !storeDatabase.destroyed) {
+					await storeDatabase.addCollections({ products: { schema: storeSchema } });
+				}
+				if (!syncDatabase.collections.products && !syncDatabase.destroyed) {
+					await syncDatabase.addCollections({ products: { schema: syncSchema } });
+				}
+			})();
+
+			const result = await swapCollection({
 				manager,
 				collectionName: 'products',
 				storeDB: storeDatabase,
@@ -75,20 +136,15 @@ describe('Collection Swap', () => {
 				timeout: 5000,
 			});
 
-			setTimeout(() => {
-				mockReset$.next({ name: 'products' });
-			}, 100);
+			await reAddPromise;
 
-			await swapPromise;
-
-			expect(resetSpy).toHaveBeenCalled();
+			expect(result.success).toBe(true);
+			// Query should be deregistered after swap
+			expect(manager.hasQuery(['cancel-test'])).toBe(false);
 		});
 
-		it('should timeout if reset$ does not emit', async () => {
-			// Mock reset$ that never emits
-			const mockReset$ = new Subject();
-			(storeDatabase as any).reset$ = mockReset$.asObservable();
-
+		it('should timeout if collection is not re-added', async () => {
+			// Don't re-add collections, so swap will timeout
 			const result = await swapCollection({
 				manager,
 				collectionName: 'products',
@@ -102,49 +158,70 @@ describe('Collection Swap', () => {
 		});
 
 		it('should handle missing reset$ observable', async () => {
-			// Temporarily remove reset$ to simulate missing plugin
-			const originalReset$ = (storeDatabase as any).reset$;
+			// Remove reset$ to simulate missing plugin
 			(storeDatabase as any).reset$ = undefined;
 
-			try {
-				const result = await swapCollection({
-					manager,
-					collectionName: 'products',
-					storeDB: storeDatabase,
-					fastStoreDB: syncDatabase,
-				});
+			const result = await swapCollection({
+				manager,
+				collectionName: 'products',
+				storeDB: storeDatabase,
+				fastStoreDB: syncDatabase,
+			});
 
-				expect(result.success).toBe(false);
-				expect(result.error).toContain('reset$');
-			} finally {
-				// Restore reset$ for cleanup
-				(storeDatabase as any).reset$ = originalReset$;
-			}
+			expect(result.success).toBe(false);
+			expect(result.error).toContain('reset$');
 		});
 	});
 
 	describe('swapCollections', () => {
-		it('should swap multiple collections', async () => {
-			const mockReset$ = new Subject();
-			(storeDatabase as any).reset$ = mockReset$.asObservable();
+		it('should swap multiple collections sequentially', async () => {
+			// Poll and re-add collections as they are removed
+			// This simulates the reset-collection plugin behavior
+			let stopPolling = false;
+			const pollAndReAdd = async () => {
+				while (!stopPolling) {
+					await new Promise((resolve) => setTimeout(resolve, 10));
+					
+					// Check and re-add variations
+					if (!storeDatabase.destroyed && !storeDatabase.collections.variations) {
+						try {
+							await storeDatabase.addCollections({ variations: { schema: variationsStoreSchema } });
+						} catch (e) { /* ignore */ }
+					}
+					if (!syncDatabase.destroyed && !syncDatabase.collections.variations) {
+						try {
+							await syncDatabase.addCollections({ variations: { schema: variationsSyncSchema } });
+						} catch (e) { /* ignore */ }
+					}
+					
+					// Check and re-add products
+					if (!storeDatabase.destroyed && !storeDatabase.collections.products) {
+						try {
+							await storeDatabase.addCollections({ products: { schema: storeSchema } });
+						} catch (e) { /* ignore */ }
+					}
+					if (!syncDatabase.destroyed && !syncDatabase.collections.products) {
+						try {
+							await syncDatabase.addCollections({ products: { schema: syncSchema } });
+						} catch (e) { /* ignore */ }
+					}
+				}
+			};
 
-			const swapPromise = swapCollections({
+			// Start the polling in background
+			const pollingPromise = pollAndReAdd();
+
+			const results = await swapCollections({
 				manager,
-				collectionNames: ['products', 'variations'],
+				collectionNames: ['variations', 'products'],
 				storeDB: storeDatabase,
 				fastStoreDB: syncDatabase,
 				timeout: 5000,
 			});
 
-			// Emit reset signals for each collection
-			setTimeout(() => {
-				mockReset$.next({ name: 'products' });
-			}, 100);
-			setTimeout(() => {
-				mockReset$.next({ name: 'variations' });
-			}, 200);
-
-			const results = await swapPromise;
+			// Stop polling after swap completes
+			stopPolling = true;
+			await pollingPromise;
 
 			expect(results).toHaveLength(2);
 			expect(results[0].success).toBe(true);
@@ -152,32 +229,23 @@ describe('Collection Swap', () => {
 		});
 
 		it('should stop on first failure', async () => {
-			// Temporarily remove reset$ to cause failure
-			const originalReset$ = (storeDatabase as any).reset$;
+			// Remove reset$ to cause validation failure
 			(storeDatabase as any).reset$ = undefined;
 
-			try {
-				const results = await swapCollections({
-					manager,
-					collectionNames: ['products', 'variations'],
-					storeDB: storeDatabase,
-					fastStoreDB: syncDatabase,
-				});
+			const results = await swapCollections({
+				manager,
+				collectionNames: ['products', 'variations'],
+				storeDB: storeDatabase,
+				fastStoreDB: syncDatabase,
+			});
 
-				expect(results).toHaveLength(1);
-				expect(results[0].success).toBe(false);
-			} finally {
-				// Restore reset$ for cleanup
-				(storeDatabase as any).reset$ = originalReset$;
-			}
+			expect(results).toHaveLength(1);
+			expect(results[0].success).toBe(false);
 		});
 	});
 
 	describe('Integration with Manager', () => {
 		it('should deregister queries when swapping', async () => {
-			const mockReset$ = new Subject();
-			(storeDatabase as any).reset$ = mockReset$.asObservable();
-
 			// Register a query
 			manager.registerQuery({
 				queryKeys: ['swap-test-query'],
@@ -187,7 +255,18 @@ describe('Collection Swap', () => {
 
 			expect(manager.hasQuery(['swap-test-query'])).toBe(true);
 
-			const swapPromise = swapCollection({
+			// Start re-add process
+			const reAddPromise = (async () => {
+				await new Promise((resolve) => setTimeout(resolve, 20));
+				if (!storeDatabase.collections.products && !storeDatabase.destroyed) {
+					await storeDatabase.addCollections({ products: { schema: storeSchema } });
+				}
+				if (!syncDatabase.collections.products && !syncDatabase.destroyed) {
+					await syncDatabase.addCollections({ products: { schema: syncSchema } });
+				}
+			})();
+
+			const result = await swapCollection({
 				manager,
 				collectionName: 'products',
 				storeDB: storeDatabase,
@@ -195,14 +274,41 @@ describe('Collection Swap', () => {
 				timeout: 5000,
 			});
 
-			setTimeout(() => {
-				mockReset$.next({ name: 'products' });
-			}, 100);
+			await reAddPromise;
 
-			await swapPromise;
-
+			expect(result.success).toBe(true);
 			// Query should be deregistered after swap
 			expect(manager.hasQuery(['swap-test-query'])).toBe(false);
+		});
+
+		it('should return new collection instance after swap', async () => {
+			const originalCollection = storeDatabase.collections.products;
+
+			// Start re-add process
+			const reAddPromise = (async () => {
+				await new Promise((resolve) => setTimeout(resolve, 20));
+				if (!storeDatabase.collections.products && !storeDatabase.destroyed) {
+					await storeDatabase.addCollections({ products: { schema: storeSchema } });
+				}
+				if (!syncDatabase.collections.products && !syncDatabase.destroyed) {
+					await syncDatabase.addCollections({ products: { schema: syncSchema } });
+				}
+			})();
+
+			const result = await swapCollection({
+				manager,
+				collectionName: 'products',
+				storeDB: storeDatabase,
+				fastStoreDB: syncDatabase,
+				timeout: 5000,
+			});
+
+			await reAddPromise;
+
+			expect(result.success).toBe(true);
+			expect(result.collection).toBeDefined();
+			// The returned collection should be different from the original
+			expect(result.collection).not.toBe(originalCollection);
 		});
 	});
 });

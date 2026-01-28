@@ -82,12 +82,17 @@ async function evictLRUIfNeeded(collection: RxCollection): Promise<void> {
 
 /**
  * Create a new FlexSearch instance for a collection and locale.
+ * If a FlexSearch collection already exists (e.g., after main collection reset),
+ * it will be destroyed first to avoid DB3 "collection already exists" error.
  */
 async function createSearchInstance(
 	collection: RxCollection,
 	locale: string
 ): Promise<FlexSearchInstance> {
 	const searchFields = collection.options?.searchFields;
+	// FlexSearch appends _flexsearch to the identifier (note: underscore, not hyphen)
+	const searchCollectionName = `${collection.name}-search-${locale}_flexsearch`;
+	const database = collection.database;
 
 	searchLogger.debug('Creating search instance', {
 		context: {
@@ -96,6 +101,24 @@ async function createSearchInstance(
 			fields: searchFields,
 		},
 	});
+
+	// Check if FlexSearch collection already exists (can happen after main collection reset)
+	// If so, remove it first to avoid DB3 error
+	if (database.collections[searchCollectionName]) {
+		searchLogger.debug('FlexSearch collection already exists, removing first', {
+			context: { searchCollection: searchCollectionName },
+		});
+		try {
+			await database.collections[searchCollectionName].remove();
+		} catch (removeError: any) {
+			searchLogger.warn('Failed to remove existing FlexSearch collection', {
+				context: {
+					searchCollection: searchCollectionName,
+					error: removeError.message,
+				},
+			});
+		}
+	}
 
 	const searchInstance = await addFulltextSearch({
 		identifier: `${collection.name}-search-${locale}`,
@@ -127,7 +150,8 @@ async function destroySearchCollection(
 	collection: RxCollection,
 	locale: string
 ): Promise<boolean> {
-	const searchCollectionName = `${collection.name}-search-${locale}-flexsearch`;
+	// FlexSearch appends _flexsearch to the identifier (note: underscore, not hyphen)
+	const searchCollectionName = `${collection.name}-search-${locale}_flexsearch`;
 	const database = collection.database;
 
 	searchLogger.debug('Attempting to destroy search collection', {
@@ -286,19 +310,97 @@ export const searchPlugin: RxPlugin = {
 					this._cleanupRegistered = true;
 
 					this.onClose.push(async () => {
+						// Skip cleanup if this collection instance is already destroyed
+						// This can happen during collection swap where the old collection's
+						// onClose fires after the new collection is already in use
+						const isDestroyed = (this as any).destroyed;
+						
 						searchLogger.debug('Cleaning up search instances', {
 							context: {
 								collection: this.name,
 								locales: this._searchInstances ? Array.from(this._searchInstances.keys()) : [],
+								isCollectionDestroyed: isDestroyed,
 							},
 						});
+						
+						if (isDestroyed) {
+							searchLogger.debug('Skipping search cleanup - collection already destroyed', {
+								context: { collection: this.name },
+							});
+							// Just clear the references, don't try to destroy anything
+							this._searchInstances?.clear();
+							this._searchPromises?.clear();
+							if (this._localeLRU) {
+								this._localeLRU = [];
+							}
+							return;
+						}
 
 						// Destroy all search instances
+						// NOTE: We only destroy FlexSearch collections (ending in _flexsearch)
+						// to avoid accidentally destroying other collections
 						if (this._searchInstances) {
 							for (const [loc, searchInstance] of this._searchInstances.entries()) {
+								// Diagnostic: what does searchInstance actually contain?
+								const collectionKeys = searchInstance?.collection ? Object.keys(searchInstance.collection) : [];
+								const collectionProto = searchInstance?.collection ? Object.getOwnPropertyNames(Object.getPrototypeOf(searchInstance.collection)) : [];
+								searchLogger.debug('Inspecting search instance for cleanup', {
+									context: {
+										mainCollection: this.name,
+										locale: loc,
+										hasSearchInstance: !!searchInstance,
+										hasCollection: !!searchInstance?.collection,
+										collectionName: searchInstance?.collection?.name || 'none',
+										hasDestroyFn: typeof searchInstance?.collection?.destroy === 'function',
+										collectionType: searchInstance?.collection?.constructor?.name || 'unknown',
+										collectionKeys: collectionKeys.slice(0, 10),
+										protoMethods: collectionProto.slice(0, 10),
+									},
+								});
+								
 								if (searchInstance.collection && typeof searchInstance.collection.destroy === 'function') {
+									// Log what we're about to destroy
+									const searchCollectionName = searchInstance.collection?.name || 'unknown';
+									const searchCollectionDb = searchInstance.collection?.database?.name || 'unknown';
+									const isFlexSearchCollection = searchCollectionName.endsWith('_flexsearch');
+									const isAlreadyDestroyed = (searchInstance.collection as any)?.destroyed;
+									
+									searchLogger.debug('About to destroy search instance collection', {
+										context: {
+											mainCollection: this.name,
+											locale: loc,
+											searchCollectionName,
+											searchCollectionDb,
+											isFlexSearchCollection,
+											isAlreadyDestroyed,
+										},
+									});
+									
+									// Only destroy if it's a FlexSearch collection and not already destroyed
+									if (!isFlexSearchCollection) {
+										searchLogger.warn('Skipping non-FlexSearch collection destruction', {
+											context: {
+												mainCollection: this.name,
+												locale: loc,
+												searchCollectionName,
+												expectedPattern: `${this.name}-search-${loc}_flexsearch`,
+											},
+										});
+										continue;
+									}
+									
+									if (isAlreadyDestroyed) {
+										searchLogger.debug('Skipping already-destroyed FlexSearch collection', {
+											context: { mainCollection: this.name, locale: loc },
+										});
+										continue;
+									}
+									
 									try {
 										await searchInstance.collection.destroy();
+										searchLogger.debug('Search instance collection destroyed', {
+											context: { mainCollection: this.name, locale: loc },
+										});
 									} catch (error: any) {
 										searchLogger.warn('Error destroying search instance on cleanup', {
 											context: {
@@ -311,6 +413,9 @@ export const searchPlugin: RxPlugin = {
 								}
 							}
 							this._searchInstances.clear();
+							searchLogger.debug('Search instances map cleared', {
+								context: { collection: this.name },
+							});
 						}
 
 						// Clear pending promises

@@ -2,6 +2,7 @@ import { firstValueFrom, race, timer } from 'rxjs';
 import { filter, map, take } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
+import { emitCollectionReset, swappingCollections } from '@wcpos/database/plugins/reset-collection';
 
 import type { Manager } from './manager';
 import type { RxCollection, RxDatabase } from 'rxdb';
@@ -31,6 +32,8 @@ export interface CollectionSwapResult {
 	success: boolean;
 	/** Time taken in milliseconds */
 	duration: number;
+	/** Name of the collection that was swapped */
+	collectionName: string;
 	/** New collection instance (if successful) */
 	collection?: RxCollection;
 	/** Error message (if failed) */
@@ -80,23 +83,43 @@ export async function swapCollection(config: CollectionSwapConfig): Promise<Coll
 			context: { collectionName },
 		});
 
-		// Step 1: Validate that reset$ is available
+		// Step 1: Validate that reset$ is available on both databases
 		validateResetObservable(storeDB);
+		validateResetObservable(fastStoreDB);
 
-		// Step 2: Cancel all queries and replications for this collection
+		// Step 2: Mark collection as being swapped
+		// This suppresses reset$ emissions from the plugin during swap
+		swappingCollections.add(collectionName);
+		swapLogger.debug('Added to swappingCollections', { context: { collectionName } });
+
+		// Step 3: Cancel all queries and replications for this collection
 		// This triggers AbortController.abort() for in-flight requests
 		await cancelCollectionOperations(manager, collectionName);
 
-		// Step 3: Set up listener for reset$ before removing
-		// The reset-collection plugin will emit after re-adding the collection
-		const resetPromise = waitForReset(storeDB, collectionName, timeout);
-
 		// Step 4: Remove collections (sync first, then store)
-		// Removing sync collection first prevents sync operations during store removal
+		// The reset-collection plugin will re-add them but NOT emit reset$ (suppressed)
 		await removeCollections(storeDB, fastStoreDB, collectionName);
 
-		// Step 5: Wait for the collection to be re-added
-		const newCollection = await resetPromise;
+		// Step 5: Wait for collections to be re-added by polling
+		await waitForCollectionToExist(storeDB, collectionName, timeout);
+		await waitForCollectionToExist(fastStoreDB, collectionName, timeout);
+
+		// Step 6: Wait for phantom removals to settle
+		// There's an unknown trigger causing extra postCloseRxCollection events during store removal
+		// This delay lets those complete before we emit
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		
+		// Step 7: Get the LATEST collection reference after phantom removals settle
+		const finalStoreCollection = await waitForCollectionToExist(storeDB, collectionName, timeout);
+		
+		// Step 8: Remove from swappingCollections BEFORE emitting
+		swappingCollections.delete(collectionName);
+		swapLogger.debug('Removed from swappingCollections', { context: { collectionName } });
+
+		// Step 9: Emit reset$ for STORE collection only (this triggers query re-registration)
+		// We only need to emit for store since that's what queries use
+		emitCollectionReset(finalStoreCollection, storeDB.name);
+		swapLogger.debug('Emitted reset$ for store collection', { context: { collectionName } });
 
 		const duration = performance.now() - startTime;
 
@@ -107,10 +130,14 @@ export async function swapCollection(config: CollectionSwapConfig): Promise<Coll
 		return {
 			success: true,
 			duration,
-			collection: newCollection,
+			collection: finalStoreCollection,
+			collectionName,
 		};
 	} catch (error: any) {
 		const duration = performance.now() - startTime;
+
+		// Make sure to remove from swappingCollections on error
+		swappingCollections.delete(collectionName);
 
 		swapLogger.error(`Collection swap failed: ${collectionName}`, {
 			showToast: true,
@@ -126,6 +153,7 @@ export async function swapCollection(config: CollectionSwapConfig): Promise<Coll
 			success: false,
 			duration,
 			error: error.message,
+			collectionName,
 		};
 	}
 }
@@ -159,34 +187,47 @@ async function cancelCollectionOperations(
 	}
 }
 
+// Track removal calls for debugging
+const removalCallCounts: Record<string, number> = {};
+
 /**
  * Remove both store and sync collections for a given collection name.
  * Removes sync first to prevent sync operations during store removal.
+ *
+ * Note: If you need to remove related collections (e.g., products + variations),
+ * use swapCollections() with both collection names rather than relying on
+ * special handling here. This avoids double-removal issues.
  */
 async function removeCollections(
 	storeDB: RxDatabase,
 	fastStoreDB: RxDatabase,
 	collectionName: string
 ): Promise<void> {
-	// Special case: products have associated variations
-	if (collectionName === 'products') {
-		// Remove variations first (child collection)
-		if (fastStoreDB.collections['variations']) {
-			await fastStoreDB.collections['variations'].remove();
-		}
-		if (storeDB.collections['variations']) {
-			await storeDB.collections['variations'].remove();
-		}
-	}
+	// Track removal calls
+	removalCallCounts[collectionName] = (removalCallCounts[collectionName] || 0) + 1;
+	const callNumber = removalCallCounts[collectionName];
+
+	swapLogger.debug(`removeCollections called (call #${callNumber})`, {
+		context: {
+			collectionName,
+			callNumber,
+			hasSyncCollection: !!fastStoreDB.collections[collectionName],
+			hasStoreCollection: !!storeDB.collections[collectionName],
+		},
+	});
 
 	// Remove sync collection first (prevents sync during removal)
 	if (fastStoreDB.collections[collectionName]) {
+		swapLogger.debug('Removing sync collection', { context: { collectionName } });
 		await fastStoreDB.collections[collectionName].remove();
+		swapLogger.debug('Sync collection removed', { context: { collectionName } });
 	}
 
 	// Remove store collection
 	if (storeDB.collections[collectionName]) {
+		swapLogger.debug('Removing store collection', { context: { collectionName } });
 		await storeDB.collections[collectionName].remove();
+		swapLogger.debug('Store collection removed', { context: { collectionName } });
 	}
 }
 
@@ -216,6 +257,29 @@ function waitForReset(
 	);
 
 	return firstValueFrom(race(resetSignal$, timeoutSignal$));
+}
+
+/**
+ * Wait for a collection to exist in the database by polling.
+ * Used when reset$ emissions are suppressed during swap operations.
+ */
+async function waitForCollectionToExist(
+	database: RxDatabase,
+	collectionName: string,
+	timeout: number
+): Promise<RxCollection> {
+	const startTime = Date.now();
+	const pollInterval = 10; // Check every 10ms
+
+	while (Date.now() - startTime < timeout) {
+		const collection = database.collections[collectionName];
+		if (collection && !(collection as any).destroyed) {
+			return collection;
+		}
+		await new Promise((resolve) => setTimeout(resolve, pollInterval));
+	}
+
+	throw new Error(`Timeout waiting for collection to exist: ${collectionName} in ${database.name}`);
 }
 
 /**

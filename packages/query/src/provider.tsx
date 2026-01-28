@@ -6,7 +6,7 @@ import { Manager } from './manager';
 
 import type { RxDatabase } from 'rxdb';
 
-const providerLogger = getLogger(['wcpos', 'query', 'provider']);
+const logger = getLogger(['wcpos', 'query', 'provider']);
 
 const QueryContext = React.createContext<Manager<RxDatabase> | undefined>(undefined);
 
@@ -28,21 +28,9 @@ export const QueryProvider = <T extends RxDatabase>({
 	children,
 	locale,
 }: QueryProviderProps<T>) => {
-	// Debug: Log when props change
-	React.useEffect(() => {
-		providerLogger.debug('QueryProvider: localDB changed', {
-			context: {
-				localDBName: localDB?.name,
-				fastLocalDBName: fastLocalDB?.name,
-			},
-		});
-	}, [localDB, fastLocalDB]);
-
 	const manager = React.useMemo(() => {
-		providerLogger.debug('QueryProvider: creating/getting manager (useMemo)', {
-			context: {
-				localDBName: localDB?.name,
-			},
+		logger.debug('Creating/getting manager', {
+			context: { localDBName: localDB?.name },
 		});
 		return Manager.getInstance<T>(localDB, fastLocalDB, http, locale);
 	}, [localDB, fastLocalDB, http, locale]);

@@ -1,12 +1,6 @@
 import * as React from 'react';
 
 import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuTrigger,
-} from '@wcpos/components/context-menu';
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -15,33 +9,21 @@ import {
 } from '@wcpos/components/dropdown-menu';
 import { Icon } from '@wcpos/components/icon';
 import { IconButton } from '@wcpos/components/icon-button';
-import { Loader } from '@wcpos/components/loader';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
 import { useT } from '../../../contexts/translations';
 
 interface SyncButtonProps {
-	sync: () => Promise<null>;
-	clear: () => Promise<null>;
+	sync: () => Promise<void>;
+	clearAndSync: () => Promise<void>;
 	active: boolean;
 }
 
-const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
+const SyncButton = ({ sync, clearAndSync, active }: SyncButtonProps) => {
 	const t = useT();
 	const triggerRef = React.useRef(null);
 
-	/**
-	 *
-	 */
-	const handleClearAndSync = React.useCallback(async () => {
-		await clear();
-		// await sync(); // this sync function is going to be stale after clear
-	}, [clear]);
-
-	/**
-	 *
-	 */
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger ref={triggerRef} />
@@ -69,7 +51,7 @@ const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 					<Text>{t('Sync', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
-				<DropdownMenuItem variant="destructive" onPress={handleClearAndSync}>
+				<DropdownMenuItem variant="destructive" onPress={clearAndSync}>
 					<Icon name="trash" />
 					<Text>{t('Clear and Refresh', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>

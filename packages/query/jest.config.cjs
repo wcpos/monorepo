@@ -30,5 +30,6 @@ module.exports = {
 		'^@wcpos/utils/logger/error-codes$': '<rootDir>/tests/__mocks__/logger.ts',
 		'^@wcpos/hooks/use-http-client/parse-wp-error$': '<rootDir>/tests/__mocks__/http.ts',
 		'^@wcpos/database$': '<rootDir>/tests/helpers/db.ts',
+		'^@wcpos/database/plugins/reset-collection$': '<rootDir>/tests/__mocks__/reset-collection.ts',
 	},
 };
