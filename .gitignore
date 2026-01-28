@@ -9,6 +9,10 @@ node_modules
 /playwright-report/
 /playwright/.cache/
 
+# Coverage
+coverage/
+**/coverage/
+
 # Ignore .cursor except rules (needed for AI agents)
 .cursor
 !.cursor/rules

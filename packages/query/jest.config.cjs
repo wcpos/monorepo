@@ -21,6 +21,7 @@ module.exports = {
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'json', 'node', 'js', 'jsx'],
 	collectCoverage: true,
+	coverageDirectory: '<rootDir>/coverage',
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(tsx?|ts?)$'],
 	verbose: true,
 	testEnvironment: 'jsdom',

@@ -15,6 +15,7 @@ module.exports = {
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
 	collectCoverage: true,
+	coverageDirectory: '<rootDir>/coverage',
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(jsx?|tsx?)$'],
 	verbose: true,
 };

@@ -11,6 +11,10 @@ on:
         options:
           - preview
           - production
+      skip_e2e:
+        description: Skip E2E tests
+        type: boolean
+        default: false
   push:
     branches: [main]
   pull_request:
@@ -21,10 +25,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  EXPO_USE_FAST_RESOLVER: true # Use the faster Metro resolver in SDK 51
+  EXPO_USE_FAST_RESOLVER: true
 
 jobs:
-  main:
+  deploy:
+    name: 🚀 Deploy
     runs-on: ubuntu-latest
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
@@ -50,30 +55,23 @@ jobs:
         working-directory: apps/main
         run: pnpm expo export --platform web --output-dir ./build
 
-      - name: 🚀 Deploy apps/main preview
+      - name: 🚀 Deploy preview
         id: deploy-preview
-        if: ${{ github.event_name == 'pull_request' || github.event.inputs.target == 'preview' }}
+        if: github.event_name == 'pull_request' || github.event.inputs.target == 'preview'
         working-directory: apps/main
         run: |
-          # Deploy and capture output (--non-interactive required with --json)
           OUTPUT=$(eas deploy --export-dir ./build --non-interactive --json 2>&1 || true)
           echo "EAS output: $OUTPUT"
-
-          # Extract URL from JSON output (filter only lines that look like JSON)
           URL=$(echo "$OUTPUT" | grep -E '^\{' -A 100 | jq -r '.url // empty' 2>/dev/null || echo "")
-
-          # If no URL in JSON, try to parse from text output
           if [ -z "$URL" ]; then
-            # Match URL and strip any trailing quotes or whitespace
             URL=$(echo "$OUTPUT" | grep -oE 'https://wcpos[a-zA-Z0-9._-]+\.expo\.app' | head -1 | tr -d '"' || echo "")
           fi
-
           echo "Deployment URL: $URL"
           echo "preview_url=$URL" >> $GITHUB_OUTPUT
 
-      - name: 🚀 Deploy apps/main production
+      - name: 🚀 Deploy production
         id: deploy-production
-        if: ${{ (github.event_name == 'push' && github.ref_name == 'main') || github.event.inputs.target == 'production' }}
+        if: (github.event_name == 'push' && github.ref_name == 'main') || github.event.inputs.target == 'production'
         working-directory: apps/main
         run: |
           eas deploy --export-dir ./build --production
@@ -90,32 +88,105 @@ jobs:
             echo "is_production=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: 💾 Save deployment info
-        run: |
-          echo "${{ steps.get-url.outputs.url }}" > deployment-url.txt
-        continue-on-error: true
+  e2e:
+    name: 🎭 E2E Tests
+    needs: deploy
+    if: |
+      needs.deploy.outputs.deployment_url != '' &&
+      github.event.inputs.skip_e2e != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@v4
 
-      - name: 📤 Upload deployment info
-        uses: actions/upload-artifact@v4
+      - name: 🏗 Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          name: deployment-info
-          path: deployment-url.txt
-          retention-days: 1
-        continue-on-error: true
+          node-version: '20'
 
-      - name: 💬 Comment on PR with deployment URL
-        if: github.event_name == 'pull_request' && steps.deploy-preview.outputs.preview_url != ''
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.0
+
+      - name: 📦 Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          UNIWIND_AUTH_TOKEN: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+
+      - name: 🎭 Install Playwright browsers
+        run: cd apps/main && npx playwright install --with-deps chromium
+
+      - name: 🧪 Run E2E tests
+        id: e2e-tests
+        run: cd apps/main && npx playwright test
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
+          CI: true
+
+      - name: 📊 Upload test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: apps/main/playwright-report/
+          retention-days: 30
+
+      - name: 📸 Upload screenshots on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-screenshots-${{ github.sha }}
+          path: apps/main/test-results/
+          retention-days: 7
+
+  comment:
+    name: 💬 PR Comment
+    needs: [deploy, e2e]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 💬 Comment on PR
         uses: actions/github-script@v7
         with:
           script: |
-            const url = '${{ steps.deploy-preview.outputs.preview_url }}';
-            const body = `## 🚀 Preview Deployment
+            const deployUrl = '${{ needs.deploy.outputs.deployment_url }}';
+            const isProduction = '${{ needs.deploy.outputs.is_production }}' === 'true';
+            const e2eResult = '${{ needs.e2e.result }}';
+            const sha = '${{ github.sha }}'.substring(0, 7);
+            
+            let e2eStatus = '⏳ Pending';
+            let e2eDetails = '';
+            
+            if (e2eResult === 'success') {
+              e2eStatus = '✅ Passed';
+            } else if (e2eResult === 'failure') {
+              e2eStatus = '❌ Failed';
+              e2eDetails = `\n\n[View test report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            } else if (e2eResult === 'skipped') {
+              e2eStatus = '⏭️ Skipped';
+            } else if (e2eResult === 'cancelled') {
+              e2eStatus = '🚫 Cancelled';
+            }
+            
+            const body = `## 🚀 Deployment Summary
+            
+| Item | Status |
+|------|--------|
+| **Preview URL** | ${deployUrl ? `[${deployUrl}](${deployUrl})` : '❌ Failed to deploy'} |
+| **E2E Tests** | ${e2eStatus} |
+| **Commit** | \`${sha}\` |
 
-            Your changes have been deployed to: ${url}
+${deployUrl ? `### 🔗 Quick Links
+- [Preview App](${deployUrl})
+- [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})` : ''}
+${e2eDetails}
 
-            This preview will be tested by the E2E test suite.`;
+---
+<sub>🤖 Updated by GitHub Actions</sub>`;
 
-            // Find existing comment to update
+            // Find and update existing comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -124,7 +195,7 @@ jobs:
 
             const existingComment = comments.find(c =>
               c.user.login === 'github-actions[bot]' &&
-              c.body.includes('Preview Deployment')
+              c.body.includes('Deployment Summary')
             );
 
             if (existingComment) {

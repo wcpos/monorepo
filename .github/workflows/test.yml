@@ -11,7 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  unit-tests:
+    name: 🧪 Unit Tests
     runs-on: ubuntu-latest
     steps:
       - name: 🏗 Setup repository
@@ -27,8 +28,163 @@ jobs:
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
-      - name: 🧪 Run tests (core, components, database)
-        run: pnpm jest --ci --passWithNoTests
+      - name: 🧪 Run unit tests (all packages)
+        run: |
+          # Run main packages via root Jest config
+          pnpm jest --ci --passWithNoTests --coverage --coverageReporters=json-summary --coverageReporters=text
+          
+      - name: 🧪 Run query package tests
+        id: query-tests
+        run: |
+          cd packages/query
+          npx jest --config jest.config.cjs --ci --coverage --coverageReporters=json-summary --coverageReporters=text
 
-      - name: 🧪 Run query tests
-        run: cd packages/query && npx jest --config jest.config.cjs --ci
+      - name: 📊 Generate coverage summary
+        id: coverage
+        if: always()
+        run: |
+          echo "## 📊 Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Function to extract coverage from json-summary
+          extract_coverage() {
+            local file=$1
+            local name=$2
+            if [ -f "$file" ]; then
+              local lines=$(jq -r '.total.lines.pct // 0' "$file")
+              local branches=$(jq -r '.total.branches.pct // 0' "$file")
+              local functions=$(jq -r '.total.functions.pct // 0' "$file")
+              local statements=$(jq -r '.total.statements.pct // 0' "$file")
+              echo "| $name | ${statements}% | ${branches}% | ${functions}% | ${lines}% |"
+            fi
+          }
+          
+          echo "| Package | Statements | Branches | Functions | Lines |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|------------|----------|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Extract coverage from each package
+          for pkg in core components database hooks utils; do
+            if [ -f "packages/$pkg/coverage/coverage-summary.json" ]; then
+              extract_coverage "packages/$pkg/coverage/coverage-summary.json" "@wcpos/$pkg" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          if [ -f "packages/query/coverage/coverage-summary.json" ]; then
+            extract_coverage "packages/query/coverage/coverage-summary.json" "@wcpos/query" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Save coverage data for PR comment
+          echo "coverage_generated=true" >> $GITHUB_OUTPUT
+
+      - name: 📤 Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: |
+            packages/*/coverage/
+          retention-days: 7
+
+      - name: 💬 Comment coverage on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read coverage summaries
+            const packages = ['core', 'components', 'database', 'hooks', 'utils', 'query'];
+            let coverageRows = [];
+            let totalStatements = 0;
+            let totalBranches = 0;
+            let totalFunctions = 0;
+            let totalLines = 0;
+            let packageCount = 0;
+            
+            for (const pkg of packages) {
+              const coveragePath = `packages/${pkg}/coverage/coverage-summary.json`;
+              try {
+                if (fs.existsSync(coveragePath)) {
+                  const data = JSON.parse(fs.readFileSync(coveragePath, 'utf8'));
+                  const total = data.total || {};
+                  const statements = total.statements?.pct || 0;
+                  const branches = total.branches?.pct || 0;
+                  const functions = total.functions?.pct || 0;
+                  const lines = total.lines?.pct || 0;
+                  
+                  // Color coding based on coverage
+                  const getEmoji = (pct) => pct >= 80 ? '🟢' : pct >= 60 ? '🟡' : '🔴';
+                  
+                  coverageRows.push(`| @wcpos/${pkg} | ${getEmoji(statements)} ${statements}% | ${getEmoji(branches)} ${branches}% | ${getEmoji(functions)} ${functions}% | ${getEmoji(lines)} ${lines}% |`);
+                  
+                  totalStatements += statements;
+                  totalBranches += branches;
+                  totalFunctions += functions;
+                  totalLines += lines;
+                  packageCount++;
+                }
+              } catch (e) {
+                console.log(`Could not read coverage for ${pkg}: ${e.message}`);
+              }
+            }
+            
+            if (packageCount === 0) {
+              console.log('No coverage data found');
+              return;
+            }
+            
+            // Calculate averages
+            const avgStatements = (totalStatements / packageCount).toFixed(1);
+            const avgBranches = (totalBranches / packageCount).toFixed(1);
+            const avgFunctions = (totalFunctions / packageCount).toFixed(1);
+            const avgLines = (totalLines / packageCount).toFixed(1);
+            
+            const getEmoji = (pct) => pct >= 80 ? '🟢' : pct >= 60 ? '🟡' : '🔴';
+            
+            const body = `## 📊 Test Coverage Report
+            
+| Package | Statements | Branches | Functions | Lines |
+|---------|------------|----------|-----------|-------|
+${coverageRows.join('\n')}
+| **Average** | ${getEmoji(avgStatements)} **${avgStatements}%** | ${getEmoji(avgBranches)} **${avgBranches}%** | ${getEmoji(avgFunctions)} **${avgFunctions}%** | ${getEmoji(avgLines)} **${avgLines}%** |
+
+<details>
+<summary>Coverage Legend</summary>
+
+- 🟢 Good (≥80%)
+- 🟡 Moderate (60-79%)
+- 🔴 Needs improvement (<60%)
+
+</details>
+
+---
+<sub>🤖 Updated by GitHub Actions • [View full report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>`;
+
+            // Find and update existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existingComment = comments.find(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.includes('Test Coverage Report')
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
