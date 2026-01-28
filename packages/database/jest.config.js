@@ -20,6 +20,12 @@ module.exports = {
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
 	collectCoverage: true,
 	coverageDirectory: '<rootDir>/coverage',
+	collectCoverageFrom: [
+		'src/**/*.{ts,tsx}',
+		'!src/**/*.test.{ts,tsx}',
+		'!src/**/*.d.ts',
+		'!src/**/index.{ts,tsx}',
+	],
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(jsx?|tsx?)$'],
 	verbose: true,
 	moduleNameMapper: {

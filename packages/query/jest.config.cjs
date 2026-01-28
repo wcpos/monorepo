@@ -22,6 +22,12 @@ module.exports = {
 	moduleFileExtensions: ['ts', 'tsx', 'json', 'node', 'js', 'jsx'],
 	collectCoverage: true,
 	coverageDirectory: '<rootDir>/coverage',
+	collectCoverageFrom: [
+		'src/**/*.{ts,tsx}',
+		'!src/**/*.test.{ts,tsx}',
+		'!src/**/*.d.ts',
+		'!src/**/index.{ts,tsx}',
+	],
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(tsx?|ts?)$'],
 	verbose: true,
 	testEnvironment: 'jsdom',
