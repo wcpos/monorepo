@@ -619,7 +619,7 @@ importers:
         specifier: 15.12.1
         version: 15.12.1(react-native@0.81.5(@babel/core@7.28.6)(@types/react@19.2.10)(react@19.1.0))(react@19.1.0)
       ts-jest:
-        specifier: ^29.2.5
+        specifier: ^29.4.6
         version: 29.4.6(@babel/core@7.28.6)(@jest/transform@30.2.0)(@jest/types@30.2.0)(babel-jest@30.2.0(@babel/core@7.28.6))(jest-util@30.2.0)(jest@30.2.0(@types/node@25.0.10)(ts-node@10.9.2(@types/node@25.0.10)(typescript@5.8.3)))(typescript@5.8.3)
       victory-native:
         specifier: ^41.20.2
@@ -668,7 +668,7 @@ importers:
         specifier: ^30.1.0
         version: 30.2.0(@types/node@25.0.10)(ts-node@10.9.2(@types/node@25.0.10)(typescript@5.8.3))
       ts-jest:
-        specifier: ^29.2.5
+        specifier: ^29.4.6
         version: 29.4.6(@babel/core@7.28.6)(@jest/transform@30.2.0)(@jest/types@30.2.0)(babel-jest@30.2.0(@babel/core@7.28.6))(jest-util@30.2.0)(jest@30.2.0(@types/node@25.0.10)(ts-node@10.9.2(@types/node@25.0.10)(typescript@5.8.3)))(typescript@5.8.3)
 
   packages/eslint:
@@ -757,7 +757,7 @@ importers:
         specifier: ~19.1.0
         version: 19.1.5(react@19.1.0)
       ts-jest:
-        specifier: ^29.2.5
+        specifier: ^29.4.6
         version: 29.4.6(@babel/core@7.28.6)(@jest/transform@30.2.0)(@jest/types@30.2.0)(babel-jest@30.2.0(@babel/core@7.28.6))(jest-util@30.2.0)(jest@30.2.0(@types/node@25.0.10)(ts-node@10.9.2(@types/node@25.0.10)(typescript@5.8.3)))(typescript@5.8.3)
 
   packages/query:
@@ -797,7 +797,7 @@ importers:
         specifier: ^7.0.1
         version: 7.0.1(rxjs@7.8.2)
       ts-jest:
-        specifier: ^29.2.5
+        specifier: ^29.4.6
         version: 29.4.6(@babel/core@7.28.6)(@jest/transform@30.2.0)(@jest/types@30.2.0)(babel-jest@30.2.0(@babel/core@7.28.6))(jest-util@30.2.0)(jest@30.2.0(@types/node@25.0.10)(ts-node@10.9.2(@types/node@25.0.10)(typescript@5.8.3)))(typescript@5.8.3)
 
   packages/utils:
@@ -825,7 +825,7 @@ importers:
         specifier: ^30.1.0
         version: 30.2.0(@types/node@25.0.10)(ts-node@10.9.2(@types/node@25.0.10)(typescript@5.8.3))
       ts-jest:
-        specifier: ^29.2.5
+        specifier: ^29.4.6
         version: 29.4.6(@babel/core@7.28.6)(@jest/transform@30.2.0)(@jest/types@30.2.0)(babel-jest@30.2.0(@babel/core@7.28.6))(jest-util@30.2.0)(jest@30.2.0(@types/node@25.0.10)(ts-node@10.9.2(@types/node@25.0.10)(typescript@5.8.3)))(typescript@5.8.3)
 
 packages:
@@ -10846,6 +10846,7 @@ packages:
   tar@7.5.6:
     resolution: {integrity: sha512-xqUeu2JAIJpXyvskvU3uvQW8PAmHrtXp2KDuMJwQqW8Sqq0CaZBAQ+dKS3RBXVhU4wC5NjAdKrmh84241gO9cA==}
     engines: {node: '>=18'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
 
   temp-dir@2.0.0:
     resolution: {integrity: sha512-aoBAniQmmwtcKp/7BzsH8Cxzv8OL736p7v1ihGb5e9DJ9kTwGWHrQrVB5+lfVDzfGrdRzXch+ig7LHaY1JTOrg==}

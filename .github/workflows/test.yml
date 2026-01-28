@@ -30,12 +30,15 @@ jobs:
 
       - name: 🧪 Run tests for each package
         run: |
+          # Track failures but continue to generate coverage for all packages
+          failed=0
+          
           # Run tests for each package separately to get individual coverage
           for pkg in core components database hooks utils; do
             echo "::group::Testing @wcpos/$pkg"
             cd packages/$pkg
             if [ -f "jest.config.js" ]; then
-              npx jest --ci --passWithNoTests --coverage --coverageReporters=json-summary --coverageReporters=text || true
+              npx jest --ci --passWithNoTests --coverage --coverageReporters=json-summary --coverageReporters=text || failed=1
             fi
             cd ../..
             echo "::endgroup::"
@@ -44,9 +47,15 @@ jobs:
           # Run query package separately (uses .cjs config)
           echo "::group::Testing @wcpos/query"
           cd packages/query
-          npx jest --config jest.config.cjs --ci --coverage --coverageReporters=json-summary --coverageReporters=text || true
+          npx jest --config jest.config.cjs --ci --coverage --coverageReporters=json-summary --coverageReporters=text || failed=1
           cd ../..
           echo "::endgroup::"
+          
+          # Fail the step if any tests failed
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::One or more package tests failed"
+            exit 1
+          fi
 
       - name: 📊 Generate coverage summary
         if: always()

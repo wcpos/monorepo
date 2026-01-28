@@ -107,8 +107,8 @@ test.describe('Authentication', () => {
 			.isVisible({ timeout: 10000 })
 			.catch(() => false);
 
-		// Either still authenticated or back on auth (both are valid states)
-		expect(page.url()).toBeDefined();
+		// Assert that we're still authenticated after reload
+		expect(stillAuthenticated).toBeTruthy();
 	});
 });
 

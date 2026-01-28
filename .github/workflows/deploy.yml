@@ -60,12 +60,30 @@ jobs:
         if: github.event_name == 'pull_request' || github.event.inputs.target == 'preview'
         working-directory: apps/main
         run: |
-          OUTPUT=$(eas deploy --export-dir ./build --non-interactive --json 2>&1 || true)
+          # Deploy and capture output
+          set +e
+          OUTPUT=$(eas deploy --export-dir ./build --non-interactive --json 2>&1)
+          EXIT_CODE=$?
+          set -e
+          
           echo "EAS output: $OUTPUT"
+          
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "::warning::EAS deploy exited with code $EXIT_CODE"
+          fi
+          
+          # Extract URL from JSON output
           URL=$(echo "$OUTPUT" | grep -E '^\{' -A 100 | jq -r '.url // empty' 2>/dev/null || echo "")
           if [ -z "$URL" ]; then
             URL=$(echo "$OUTPUT" | grep -oE 'https://wcpos[a-zA-Z0-9._-]+\.expo\.app' | head -1 | tr -d '"' || echo "")
           fi
+          
+          # Fail if deployment failed AND no URL was extracted
+          if [ $EXIT_CODE -ne 0 ] && [ -z "$URL" ]; then
+            echo "::error::Deployment failed and no URL was extracted"
+            exit 1
+          fi
+          
           echo "Deployment URL: $URL"
           echo "preview_url=$URL" >> $GITHUB_OUTPUT
 

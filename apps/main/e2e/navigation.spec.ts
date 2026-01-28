@@ -56,7 +56,7 @@ test.describe('Error Handling', () => {
 
 		// Should either redirect to home or show a not found message
 		await expect(
-			page.locator('body').or(page.locator('text=Not Found, text=404'))
+			page.locator('body').or(page.locator('text=/Not Found|404/'))
 		).toBeVisible();
 	});
 });
