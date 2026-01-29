@@ -208,7 +208,7 @@ const initializeUserDBStep: HydrationStep = {
 			appState,
 			translationsState,
 			user,
-			initialProps, // we just pass this through for now
+			initialProps, // null in standalone mode, populated in WordPress embedded mode
 			// @TODO - start setting locale data here
 			timestamp: new Date().toISOString(),
 		};
@@ -218,13 +218,14 @@ const initializeUserDBStep: HydrationStep = {
 };
 
 /**
- * Step 2: Process initial props (web only)
+ * Step 2: Process initial props (web only, WordPress embedded mode)
+ * This step is skipped in standalone mode where initialProps is null
  */
 const processInitialPropsStep: HydrationStep = {
 	name: 'PROCESS_INITIAL_PROPS',
 	message: 'Processing initial props...',
 	progressIncrement: 20,
-	shouldExecute: (context) => Platform.isWeb && !!context.initialProps,
+	shouldExecute: (context) => Platform.isWeb && !!context.initialProps?.site,
 	execute: async (context) => {
 		if (!context.initialProps || !context.userDB || !context.appState || !context.user) {
 			throw new Error('Missing required context for initial props processing');
@@ -314,14 +315,15 @@ const processInitialPropsStep: HydrationStep = {
 };
 
 /**
- * Step 3: Test authorization method (web only)
+ * Step 3: Test authorization method (web only, WordPress embedded mode)
  * Some servers block Authorization headers, so we need to test if query parameters work instead
+ * This step is skipped in standalone mode where initialProps is null
  */
 const testAuthorizationStep: HydrationStep = {
 	name: 'TEST_AUTHORIZATION',
 	message: 'Testing authorization...',
 	progressIncrement: 10,
-	shouldExecute: (context) => Platform.isWeb && !!context.initialProps,
+	shouldExecute: (context) => Platform.isWeb && !!context.initialProps?.site,
 	execute: async (context) => {
 		if (!context.initialProps || !context.userDB) {
 			return {};

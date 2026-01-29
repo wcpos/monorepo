@@ -5,13 +5,13 @@ import set from 'lodash/set';
 import { getLogger } from '@wcpos/utils/logger';
 
 import http from './http';
-
-const httpLogger = getLogger(['wcpos', 'http', 'client']);
 import { parseWpError } from './parse-wp-error';
 import { scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';
 
 import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
+
+const httpLogger = getLogger(['wcpos', 'http', 'client']);
 
 type AxiosRequestConfig = import('axios').AxiosRequestConfig;
 type AxiosError = import('axios').AxiosError;
@@ -207,7 +207,10 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 
 		const processedConfig = { ...config };
 
-		if (processedConfig.method?.toLowerCase() !== 'head' && processedConfig.wcposHeaders !== false) {
+		if (
+			processedConfig.method?.toLowerCase() !== 'head' &&
+			processedConfig.wcposHeaders !== false
+		) {
 			set(processedConfig, ['headers', 'X-WCPOS'], 1);
 		}
 
@@ -241,12 +244,12 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 						makeRequest
 					);
 
-				// If result is a response (has both data and status properties), return it
-				// This distinguishes responses from AxiosErrors which have status but not data at top level
-				// Also check isAxiosError flag to be extra safe (AxiosErrors have this set to true)
-				if (result && 'data' in result && 'status' in result && !(result as any).isAxiosError) {
-					return result as AxiosResponse;
-				}
+					// If result is a response (has both data and status properties), return it
+					// This distinguishes responses from AxiosErrors which have status but not data at top level
+					// Also check isAxiosError flag to be extra safe (AxiosErrors have this set to true)
+					if (result && 'data' in result && 'status' in result && !(result as any).isAxiosError) {
+						return result as AxiosResponse;
+					}
 
 					// Otherwise, it's still an error - use it as the new error
 					error = result as AxiosError;

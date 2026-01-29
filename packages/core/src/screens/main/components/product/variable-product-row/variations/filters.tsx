@@ -68,11 +68,7 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 						);
 					})}
 			</HStack>
-			<IconButton
-				size="sm"
-				name="chevronUp"
-				onPress={() => setRowExpanded?.(rowId, false)}
-			/>
+			<IconButton size="sm" name="chevronUp" onPress={() => setRowExpanded?.(rowId, false)} />
 		</HStack>
 	);
 };

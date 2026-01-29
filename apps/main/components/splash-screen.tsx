@@ -31,7 +31,7 @@ export const Splash = ({ progress = 0, message }: { progress?: number; message?:
 			<VStack className="w-48 items-center justify-center">
 				<View className="h-10 w-full" />
 				<Logo width={120} height={120} />
-				{message && <Text className="text-center text-sm text-muted-foreground">{message}</Text>}
+				{message && <Text className="text-muted-foreground text-center text-sm">{message}</Text>}
 				<View className="h-10 w-full">
 					<Progress value={progress} />
 				</View>

@@ -755,7 +755,6 @@ describe('parseAttributes', () => {
 			const endTime = performance.now();
 			const duration = endTime - startTime;
 
-
 			expect(result).toHaveLength(5);
 			expect(duration).toBeLessThan(50);
 		});
@@ -788,7 +787,6 @@ describe('parseAttributes', () => {
 			const result = parseAttributes(attributes, undefined, hits);
 			const endTime = performance.now();
 			const duration = endTime - startTime;
-
 
 			expect(result).toHaveLength(8);
 			expect(duration).toBeLessThan(50);
@@ -832,7 +830,6 @@ describe('parseAttributes', () => {
 			const result = parseAttributes(attributes, undefined, hits);
 			const endTime = performance.now();
 			const duration = endTime - startTime;
-
 
 			expect(result).toHaveLength(4);
 			// This case is still fast enough, but with more missing attrs it compounds

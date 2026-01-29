@@ -21,8 +21,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
-
-const mutationLogger = getLogger(['wcpos', 'mutations', 'product']);
 import { CurrencyInput } from '../../../components/currency-input';
 import { FormErrors } from '../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../components/meta-data-form';
@@ -32,6 +30,8 @@ import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
 import usePushDocument from '../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
+
+const mutationLogger = getLogger(['wcpos', 'mutations', 'product']);
 
 const schema = z.object({
 	name: z.string(),
@@ -102,29 +102,29 @@ export const EditProductForm = ({ product }: Props) => {
 					document: product,
 					data,
 				});
-			await pushDocument(product).then((savedDoc) => {
-				if (isRxDocument(savedDoc)) {
-					mutationLogger.success(t('{name} saved', { _tags: 'core', name: product.name }), {
-						showToast: true,
-						saveToDb: true,
-						context: {
-							productId: savedDoc.id,
-							productName: product.name,
-						},
-					});
-				}
-			});
-		} catch (error) {
-			mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					productId: product.id,
-					error: error instanceof Error ? error.message : String(error),
-				},
-			});
-		} finally {
+				await pushDocument(product).then((savedDoc) => {
+					if (isRxDocument(savedDoc)) {
+						mutationLogger.success(t('{name} saved', { _tags: 'core', name: product.name }), {
+							showToast: true,
+							saveToDb: true,
+							context: {
+								productId: savedDoc.id,
+								productName: product.name,
+							},
+						});
+					}
+				});
+			} catch (error) {
+				mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						productId: product.id,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			} finally {
 				setLoading(false);
 			}
 		},

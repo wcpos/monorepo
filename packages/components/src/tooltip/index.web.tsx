@@ -7,18 +7,13 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
-import type { TooltipProps, TooltipContentProps, TooltipTriggerProps } from './types';
+import type { TooltipContentProps, TooltipProps, TooltipTriggerProps } from './types';
 
 function Tooltip({ children }: TooltipProps) {
 	return <TooltipPrimitive.Root>{children}</TooltipPrimitive.Root>;
 }
 
-function TooltipContent({
-	className,
-	sideOffset = 4,
-	portalHost,
-	...props
-}: TooltipContentProps) {
+function TooltipContent({ className, sideOffset = 4, portalHost, ...props }: TooltipContentProps) {
 	return (
 		<TooltipPrimitive.Portal hostName={portalHost}>
 			<TooltipPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>

@@ -4,11 +4,11 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
-
-const barcodeLogger = getLogger(['wcpos', 'barcode', 'product']);
 import { useBarcodeDetection, useBarcodeSearch } from '../hooks/barcodes';
 
 import type { QuerySearchInput } from '../components/query-search-input';
+
+const barcodeLogger = getLogger(['wcpos', 'barcode', 'product']);
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;

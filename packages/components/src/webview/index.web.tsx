@@ -99,7 +99,7 @@ function WebView({
 				{...props}
 			/>
 			{loading && (
-				<View className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
+				<View className="bg-opacity-75 absolute inset-0 flex items-center justify-center bg-white">
 					<Loader />
 				</View>
 			)}

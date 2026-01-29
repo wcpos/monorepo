@@ -1,4 +1,4 @@
-import { toSortableInteger, fromSortableInteger } from './utils';
+import { fromSortableInteger, toSortableInteger } from './utils';
 
 describe('toSortableInteger', () => {
 	describe('basic conversions', () => {
@@ -7,7 +7,7 @@ describe('toSortableInteger', () => {
 		});
 
 		it('should convert a number directly', () => {
-			expect(toSortableInteger(10.50)).toBe(10500000);
+			expect(toSortableInteger(10.5)).toBe(10500000);
 		});
 
 		it('should convert an integer', () => {

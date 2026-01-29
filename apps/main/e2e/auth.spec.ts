@@ -11,19 +11,21 @@ test.describe('Authentication', () => {
 	test.beforeEach(async ({ page }) => {
 		// Navigate to the app - should show auth screen
 		await page.goto('/');
+		// Wait for hydration to complete - splash screen disappears when app is ready
+		// The app shows either the auth screen (URL input) or main app (if already logged in)
+		await expect(
+			page.locator('input[type="url"], button:has-text("Connect"), [data-testid="pos-screen"]')
+		).toBeVisible({ timeout: 60000 });
 	});
 
 	test('should display the connect screen', async ({ page }) => {
-		// Wait for the auth screen to load
-		await page.waitForLoadState('domcontentloaded');
-
-		// Should see URL input field or connect prompt
+		// Auth screen elements should now be visible after beforeEach wait
 		const hasUrlInput = await page
-			.locator('[data-testid="store-url-input"], input[placeholder*="URL"]')
+			.locator('input[type="url"], [data-testid="store-url-input"]')
 			.isVisible()
 			.catch(() => false);
 		const hasConnectText = await page
-			.locator('text=Connect')
+			.locator('button:has-text("Connect")')
 			.isVisible()
 			.catch(() => false);
 

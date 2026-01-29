@@ -14,4 +14,3 @@ export const ERROR_CODE_DOCS_BASE_URL = 'https://docs.wcpos.com/error-codes';
 export const getErrorCodeDocURL = (errorCode: string): string => {
 	return `${ERROR_CODE_DOCS_BASE_URL}/${errorCode}`;
 };
-

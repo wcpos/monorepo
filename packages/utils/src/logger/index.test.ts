@@ -1,4 +1,4 @@
-import { CategoryLogger, getLogger, setToast, setDatabase } from './index';
+import { CategoryLogger, getLogger, setDatabase, setToast } from './index';
 
 describe('logger/index', () => {
 	describe('getLogger', () => {

@@ -7,10 +7,10 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import CustomCache from './cache';
-
-const appLogger = getLogger(['wcpos', 'app', 'translations']);
 import { useLocale } from '../../hooks/use-locale';
 import { useAppState } from '../app-state';
+
+const appLogger = getLogger(['wcpos', 'app', 'translations']);
 
 export const TranslationContext = React.createContext<TxNative['translate']>(null);
 

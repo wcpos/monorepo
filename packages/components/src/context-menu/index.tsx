@@ -23,7 +23,7 @@ const ContextMenuSubTrigger = React.forwardRef<
 	// const Icon = Platform.OS === 'web' ? ChevronRight : open ? ChevronUp : ChevronDown;
 	return (
 		<TextClassContext.Provider
-			value={cn('text-primary select-none text-sm', open && 'native:text-accent-foreground')}
+			value={cn('text-primary text-sm select-none', open && 'native:text-accent-foreground')}
 		>
 			<ContextMenuPrimitive.SubTrigger
 				ref={ref}
@@ -134,7 +134,7 @@ const ContextMenuCheckboxItem = React.forwardRef<
 	<ContextMenuPrimitive.CheckboxItem
 		ref={ref}
 		className={cn(
-			'web:cursor-default web:group native:py-2 web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
+			'web:cursor-default web:group native:py-2 web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
 			props.disabled && 'web:pointer-events-none opacity-50',
 			className
 		)}
@@ -158,7 +158,7 @@ const ContextMenuRadioItem = React.forwardRef<
 	<ContextMenuPrimitive.RadioItem
 		ref={ref}
 		className={cn(
-			'web:cursor-default web:group native:py-2 web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pl-8 pr-2',
+			'web:cursor-default web:group native:py-2 web:outline-none web:focus:bg-accent active:bg-accent relative flex flex-row items-center rounded-sm py-1.5 pr-2 pl-8',
 			props.disabled && 'web:pointer-events-none opacity-50',
 			className
 		)}

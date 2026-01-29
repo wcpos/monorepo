@@ -130,7 +130,6 @@ function List<T>({
 		}
 	}, [totalSize, rootRef, parentProps]);
 
-
 	// expose imperative methods
 	React.useImperativeHandle(
 		ref,

@@ -5,8 +5,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { CollectionReplicationState } from './collection-replication-state';
-
-const queryLogger = getLogger(['wcpos', 'query', 'manager']);
 import allHooks from './hooks';
 import { QueryReplicationState } from './query-replication-state';
 import { Query } from './query-state';
@@ -17,6 +15,8 @@ import { buildEndpointWithParams } from './utils';
 
 import type { QueryParams } from './query-state';
 import type { RxCollection, RxDatabase } from 'rxdb';
+
+const queryLogger = getLogger(['wcpos', 'query', 'manager']);
 
 /**
  *
@@ -114,9 +114,11 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 		// If instance exists but dependencies have changed, cancel the existing instance
 		if (Manager.instance) {
-			void Manager.instance.cancel().catch((error) =>
-				queryLogger.error('Previous Manager instance cancel failed', { context: { error } })
-			);
+			void Manager.instance
+				.cancel()
+				.catch((error) =>
+					queryLogger.error('Previous Manager instance cancel failed', { context: { error } })
+				);
 		}
 
 		// Create a new instance
@@ -172,9 +174,12 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 			// If the existing query's collection is destroyed or different, we need a new query
 			if (isCollectionDestroyed || !isSameCollection) {
-				queryLogger.debug('registerQuery: existing query has stale collection, removing and re-creating', {
-					context: { key, collectionName },
-				});
+				queryLogger.debug(
+					'registerQuery: existing query has stale collection, removing and re-creating',
+					{
+						context: { key, collectionName },
+					}
+				);
 				void this.deregisterQuery(key).catch((error) =>
 					queryLogger.error('Failed to deregister stale query', {
 						context: { key, collectionName, error },
@@ -187,12 +192,16 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		const collection = this.getCollection(collectionName);
-		
+
 		if (!collection) {
 			queryLogger.error('registerQuery: collection not found, cannot register', {
 				showToast: false,
 				saveToDb: false,
-				context: { key, collectionName, availableCollections: Object.keys(this.localDB.collections) },
+				context: {
+					key,
+					collectionName,
+					availableCollections: Object.keys(this.localDB.collections),
+				},
 			});
 			return undefined;
 		}
@@ -254,9 +263,12 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 			// If the existing query's collection is destroyed or different, we need a new query
 			if (isCollectionDestroyed || !isSameCollection) {
-				queryLogger.debug('registerRelationalQuery: existing query has stale collection, removing and re-creating', {
-					context: { key, collectionName },
-				});
+				queryLogger.debug(
+					'registerRelationalQuery: existing query has stale collection, removing and re-creating',
+					{
+						context: { key, collectionName },
+					}
+				);
 				void this.deregisterQuery(key).catch((error) =>
 					queryLogger.error('Failed to deregister stale relational query', {
 						context: { key, collectionName, error },
@@ -269,12 +281,16 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		const collection = this.getCollection(collectionName);
-		
+
 		if (!collection) {
 			queryLogger.error('registerRelationalQuery: collection not found, cannot register', {
 				showToast: false,
 				saveToDb: false,
-				context: { key, collectionName, availableCollections: Object.keys(this.localDB.collections) },
+				context: {
+					key,
+					collectionName,
+					availableCollections: Object.keys(this.localDB.collections),
+				},
 			});
 			return undefined;
 		}
@@ -366,7 +382,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		let queryCount = 0;
 		let replicationCount = 0;
 		const collectionDestroyed = (collection as any)?.destroyed;
-		
+
 		// Get the current collection from the database for comparison
 		const currentCollection = this.localDB.collections[collection.name];
 		const isSameAsCurrent = collection === currentCollection;
@@ -380,7 +396,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 		// Capture stack trace for debugging
 		const stackTrace = new Error().stack;
-		
+
 		queryLogger.debug('Collection reset - cancelling operations', {
 			context: {
 				collection: collection.name,
@@ -592,7 +608,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 */
 	ensureReplicationsForCollection(collectionName: string): void {
 		const syncCollection = this.getSyncCollection(collectionName);
-		
+
 		// Log all queries in queryStates for debugging
 		const allQueries: string[] = [];
 		this.queryStates.forEach((q, key) => {

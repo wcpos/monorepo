@@ -24,8 +24,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
-
-const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
 import { CurrencySelect } from '../../components/currency-select';
 import { CustomerSelect } from '../../components/customer-select';
@@ -38,6 +36,8 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCollection } from '../../hooks/use-collection';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
+
+const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
 
 interface Props {
 	order: import('@wcpos/database').OrderDocument;
@@ -128,29 +128,32 @@ export const EditOrderForm = ({ order }: Props) => {
 					document: order,
 					data,
 				});
-			await pushDocument(order).then((savedDoc) => {
-				if (isRxDocument(savedDoc)) {
-					mutationLogger.success(t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }), {
-						showToast: true,
-						saveToDb: true,
-						context: {
-							orderId: savedDoc.id,
-							orderNumber: savedDoc.number,
-						},
-					});
-				}
-			});
-		} catch (error) {
-			mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					orderId: order.id,
-					error: error instanceof Error ? error.message : String(error),
-				},
-			});
-		} finally {
+				await pushDocument(order).then((savedDoc) => {
+					if (isRxDocument(savedDoc)) {
+						mutationLogger.success(
+							t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
+							{
+								showToast: true,
+								saveToDb: true,
+								context: {
+									orderId: savedDoc.id,
+									orderNumber: savedDoc.number,
+								},
+							}
+						);
+					}
+				});
+			} catch (error) {
+				mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						orderId: order.id,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			} finally {
 				setLoading(false);
 			}
 		},

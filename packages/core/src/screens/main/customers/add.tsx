@@ -13,11 +13,11 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
-
-const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
 import { CustomerForm, customerFormSchema } from '../components/customer/customer-form';
 import { useMutation } from '../hooks/mutations/use-mutation';
 import useCustomerNameFormat from '../hooks/use-customer-name-format';
+
+const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
 
 /**
  *
@@ -44,27 +44,27 @@ export const AddCustomerScreen = () => {
 		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
-			const savedDoc = await create({ data });
-			if (isRxDocument(savedDoc)) {
-				mutationLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+				const savedDoc = await create({ data });
+				if (isRxDocument(savedDoc)) {
+					mutationLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							customerId: savedDoc.id,
+							customerName: format(savedDoc),
+						},
+					});
+				}
+			} catch (error) {
+				mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						customerId: savedDoc.id,
-						customerName: format(savedDoc),
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						error: error instanceof Error ? error.message : String(error),
 					},
 				});
-			}
-		} catch (error) {
-			mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					error: error instanceof Error ? error.message : String(error),
-				},
-			});
-		} finally {
+			} finally {
 				setLoading(false);
 			}
 		},

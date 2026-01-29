@@ -1,5 +1,13 @@
 import * as React from 'react';
-import { NativeModules, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+	NativeModules,
+	Platform,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TouchableOpacity,
+	View,
+} from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 

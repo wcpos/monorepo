@@ -7,9 +7,9 @@ import { map } from 'rxjs/operators';
 import type { OrderCollection, OrderDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 
-import type { RowSelectionState } from '@tanstack/react-table';
-
 import { convertUTCStringToLocalDate } from '../../../hooks/use-local-date';
+
+import type { RowSelectionState } from '@tanstack/react-table';
 
 export interface DateRange {
 	start: Date;

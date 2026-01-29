@@ -1,4 +1,4 @@
-import { of, firstValueFrom } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 
 import { findOneFixPlugin } from './find-one-fix';
 

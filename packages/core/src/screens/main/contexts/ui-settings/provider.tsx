@@ -7,8 +7,6 @@ import { switchMap } from 'rxjs/operators';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useUILabel } from './use-ui-label';
-
-const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 import {
 	mergeWithInitalValues,
 	patchState,
@@ -18,6 +16,8 @@ import {
 	UISettingState,
 } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 
 interface UISettingsProviderProps {
 	children: React.ReactNode;
@@ -80,7 +80,9 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 			// Add timeout detection for potential hangs
 			const addStatePromise = storeDB.addState(`${id}_v2`);
 			const timeoutId = setTimeout(() => {
-				uiLogger.warn(`storeDB.addState('${id}_v2') is taking longer than 5 seconds - possible hang`);
+				uiLogger.warn(
+					`storeDB.addState('${id}_v2') is taking longer than 5 seconds - possible hang`
+				);
 			}, 5000);
 
 			const observable$ = from(addStatePromise).pipe(

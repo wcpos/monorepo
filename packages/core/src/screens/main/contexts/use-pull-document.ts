@@ -8,9 +8,9 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'pull']);
-import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 type RxDocument = import('rxdb').RxDocument;
 type RxCollection = import('rxdb').RxCollection;
@@ -64,16 +64,19 @@ const usePullDocument = () => {
 				const success = await collection.upsert(parsedData);
 				return success;
 			} catch (err) {
-				syncLogger.error(t('Failed to save to local database: {error}', { _tags: 'core', error: err.message }), {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
-						documentId: id,
-						collectionName: collection.name,
-						error: err instanceof Error ? err.message : String(err),
-					},
-				});
+				syncLogger.error(
+					t('Failed to save to local database: {error}', { _tags: 'core', error: err.message }),
+					{
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.TRANSACTION_FAILED,
+							documentId: id,
+							collectionName: collection.name,
+							error: err instanceof Error ? err.message : String(err),
+						},
+					}
+				);
 				throw err;
 			}
 		},

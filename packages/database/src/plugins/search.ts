@@ -1,9 +1,10 @@
 import get from 'lodash/get';
-import type { RxCollection, RxPlugin } from 'rxdb';
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+
+import type { RxCollection, RxPlugin } from 'rxdb';
 
 // Import types
 import type { FlexSearchInstance } from '../types.d';
@@ -146,10 +147,7 @@ async function createSearchInstance(
  * Attempt to destroy a corrupted search collection by name.
  * Used for recovery when FlexSearch schema has changed.
  */
-async function destroySearchCollection(
-	collection: RxCollection,
-	locale: string
-): Promise<boolean> {
+async function destroySearchCollection(collection: RxCollection, locale: string): Promise<boolean> {
 	// FlexSearch appends _flexsearch to the identifier (note: underscore, not hyphen)
 	const searchCollectionName = `${collection.name}-search-${locale}_flexsearch`;
 	const database = collection.database;
@@ -314,7 +312,7 @@ export const searchPlugin: RxPlugin = {
 						// This can happen during collection swap where the old collection's
 						// onClose fires after the new collection is already in use
 						const isDestroyed = (this as any).destroyed;
-						
+
 						searchLogger.debug('Cleaning up search instances', {
 							context: {
 								collection: this.name,
@@ -322,7 +320,7 @@ export const searchPlugin: RxPlugin = {
 								isCollectionDestroyed: isDestroyed,
 							},
 						});
-						
+
 						if (isDestroyed) {
 							searchLogger.debug('Skipping search cleanup - collection already destroyed', {
 								context: { collection: this.name },
@@ -342,8 +340,12 @@ export const searchPlugin: RxPlugin = {
 						if (this._searchInstances) {
 							for (const [loc, searchInstance] of this._searchInstances.entries()) {
 								// Diagnostic: what does searchInstance actually contain?
-								const collectionKeys = searchInstance?.collection ? Object.keys(searchInstance.collection) : [];
-								const collectionProto = searchInstance?.collection ? Object.getOwnPropertyNames(Object.getPrototypeOf(searchInstance.collection)) : [];
+								const collectionKeys = searchInstance?.collection
+									? Object.keys(searchInstance.collection)
+									: [];
+								const collectionProto = searchInstance?.collection
+									? Object.getOwnPropertyNames(Object.getPrototypeOf(searchInstance.collection))
+									: [];
 								searchLogger.debug('Inspecting search instance for cleanup', {
 									context: {
 										mainCollection: this.name,
@@ -357,14 +359,17 @@ export const searchPlugin: RxPlugin = {
 										protoMethods: collectionProto.slice(0, 10),
 									},
 								});
-								
-								if (searchInstance.collection && typeof searchInstance.collection.destroy === 'function') {
+
+								if (
+									searchInstance.collection &&
+									typeof searchInstance.collection.destroy === 'function'
+								) {
 									// Log what we're about to destroy
 									const searchCollectionName = searchInstance.collection?.name || 'unknown';
 									const searchCollectionDb = searchInstance.collection?.database?.name || 'unknown';
 									const isFlexSearchCollection = searchCollectionName.endsWith('_flexsearch');
 									const isAlreadyDestroyed = (searchInstance.collection as any)?.destroyed;
-									
+
 									searchLogger.debug('About to destroy search instance collection', {
 										context: {
 											mainCollection: this.name,
@@ -375,7 +380,7 @@ export const searchPlugin: RxPlugin = {
 											isAlreadyDestroyed,
 										},
 									});
-									
+
 									// Only destroy if it's a FlexSearch collection and not already destroyed
 									if (!isFlexSearchCollection) {
 										searchLogger.warn('Skipping non-FlexSearch collection destruction', {
@@ -388,14 +393,14 @@ export const searchPlugin: RxPlugin = {
 										});
 										continue;
 									}
-									
+
 									if (isAlreadyDestroyed) {
 										searchLogger.debug('Skipping already-destroyed FlexSearch collection', {
 											context: { mainCollection: this.name, locale: loc },
 										});
 										continue;
 									}
-									
+
 									try {
 										await searchInstance.collection.destroy();
 										searchLogger.debug('Search instance collection destroyed', {

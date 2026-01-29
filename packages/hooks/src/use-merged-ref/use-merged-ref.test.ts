@@ -2,7 +2,8 @@
  * @jest-environment jsdom
  */
 import * as React from 'react';
-import { renderHook, act } from '@testing-library/react';
+
+import { act, renderHook } from '@testing-library/react';
 
 import { mergeRefs, useMergedRef } from './use-merged-ref';
 
@@ -66,7 +67,9 @@ describe('use-merged-ref', () => {
 
 		it('should pass null to all refs when unmounting', () => {
 			const ref1 = jest.fn();
-			const ref2: React.MutableRefObject<HTMLDivElement | null> = { current: document.createElement('div') };
+			const ref2: React.MutableRefObject<HTMLDivElement | null> = {
+				current: document.createElement('div'),
+			};
 
 			const merged = mergeRefs(ref1, ref2);
 
@@ -112,7 +115,10 @@ describe('use-merged-ref', () => {
 			const objectRef: React.MutableRefObject<HTMLDivElement | null> = { current: null };
 
 			const { result } = renderHook(() =>
-				useMergedRef(setValue as React.Dispatch<React.SetStateAction<HTMLDivElement | null>>, objectRef)
+				useMergedRef(
+					setValue as React.Dispatch<React.SetStateAction<HTMLDivElement | null>>,
+					objectRef
+				)
 			);
 
 			const element = document.createElement('div');

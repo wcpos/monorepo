@@ -45,4 +45,3 @@ export interface UseWcposAuthReturn {
 	/** Trigger the auth flow */
 	promptAsync: () => Promise<WcposAuthResult | void>;
 }
-

@@ -14,7 +14,7 @@ import { Context } from './cells/context';
 import { Date } from './cells/date';
 import { Level } from './cells/level';
 import { Code } from './cells/code';
-import { FilterBar, DEFAULT_LOG_LEVELS } from './filter-bar';
+import { DEFAULT_LOG_LEVELS, FilterBar } from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';

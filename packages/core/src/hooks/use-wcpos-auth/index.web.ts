@@ -21,14 +21,22 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { buildAuthUrl, generateState, getRedirectUri, parseAuthResult } from './utils';
 
-const oauthLogger = getLogger(['wcpos', 'auth', 'oauth']);
-
 import type { UseWcposAuthReturn, WcposAuthConfig, WcposAuthResult } from './types';
+
+const oauthLogger = getLogger(['wcpos', 'auth', 'oauth']);
 
 export type { WcposAuthConfig, WcposAuthResult, UseWcposAuthReturn } from './types';
 
 const AUTH_STATE_KEY = 'wcpos_auth_state';
 const AUTH_CSRF_STATE_KEY = 'wcpos_auth_csrf_state';
+
+/**
+ * Navigate to URL - extracted to avoid React Compiler warning about
+ * writing to variables outside the component
+ */
+function navigateToUrl(url: string): void {
+	window.location.href = url;
+}
 
 interface SavedAuthState {
 	returnPath: string;
@@ -212,7 +220,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			saveAuthState();
 			saveCsrfState(state);
 			oauthLogger.debug('Redirecting to auth URL', { context: { authUrl } });
-			window.location.href = authUrl;
+			navigateToUrl(authUrl);
 		};
 
 		try {

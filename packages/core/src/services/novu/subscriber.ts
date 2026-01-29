@@ -4,11 +4,11 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { getNovuEnvironment } from './client';
 
-const novuLogger = getLogger(['wcpos', 'notifications', 'novu']);
-
 // Import static AppInfo for non-React code
 // For React components, use the useAppInfo() hook instead
 import { AppInfo } from '../../hooks/use-app-info';
+
+const novuLogger = getLogger(['wcpos', 'notifications', 'novu']);
 
 /**
  * Subscriber metadata sent to Novu for targeting and analytics.

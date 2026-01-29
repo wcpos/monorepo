@@ -30,7 +30,9 @@ export const VariableProductImage = ({
 	 */
 	const setRowExpanded = table.options.meta?.setRowExpanded;
 	const isExpanded = useObservableEagerState(
-		table.options.meta?.expanded$?.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id]))
+		table.options.meta?.expanded$?.pipe(
+			map((expanded: Record<string, boolean>) => !!expanded[row.id])
+		)
 	);
 
 	const handlePress = React.useCallback(() => {

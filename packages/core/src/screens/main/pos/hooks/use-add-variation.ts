@@ -6,8 +6,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
-
-const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'variation']);
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
@@ -18,6 +16,8 @@ import {
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useCurrentOrder } from '../contexts/current-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'variation']);
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -74,31 +74,31 @@ export const useAddVariation = () => {
 				success = await addItemToOrder('line_items', newLineItem);
 			}
 
-		// returned success should be the updated order
-		if (success) {
-			cartLogger.success(t('{name} added to cart', { _tags: 'core', name: parent.name }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					variationId: variation.id,
-					productId: parent.id,
-					productName: parent.name,
-					orderId: currentOrder.id,
-				},
-			});
-		} else {
-			cartLogger.error(t('Error adding {name} to cart', { _tags: 'core', name: parent.name }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					variationId: variation.id,
-					productId: parent.id,
-					productName: parent.name,
-					orderId: currentOrder.id,
-				},
-			});
-		}
+			// returned success should be the updated order
+			if (success) {
+				cartLogger.success(t('{name} added to cart', { _tags: 'core', name: parent.name }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						variationId: variation.id,
+						productId: parent.id,
+						productName: parent.name,
+						orderId: currentOrder.id,
+					},
+				});
+			} else {
+				cartLogger.error(t('Error adding {name} to cart', { _tags: 'core', name: parent.name }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						variationId: variation.id,
+						productId: parent.id,
+						productName: parent.name,
+						orderId: currentOrder.id,
+					},
+				});
+			}
 		},
 		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]
 	);

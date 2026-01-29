@@ -8,6 +8,8 @@
  */
 
 // Mock the FlexSearch plugin
+import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
+
 const mockSearchInstance = {
 	collection: {
 		destroy: jest.fn().mockResolvedValue(undefined),
@@ -56,8 +58,6 @@ jest.mock('@wcpos/utils/logger/error-codes', () => ({
 		SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
 	},
 }));
-
-import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 describe('search plugin', () => {
 	beforeEach(() => {

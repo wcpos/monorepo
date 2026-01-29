@@ -15,10 +15,10 @@ import { Query, useQuery } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../../contexts/translations';
-
-const uiLogger = getLogger(['wcpos', 'ui', 'filter']);
 import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'filter']);
 
 interface CashierPillProps {
 	query: Query<CustomerCollection>;

@@ -112,4 +112,3 @@ export function parseAuthResult(url: string): WcposAuthResult {
 		};
 	}
 }
-

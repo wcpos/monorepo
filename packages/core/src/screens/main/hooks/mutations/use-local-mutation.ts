@@ -14,9 +14,9 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
+import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
-import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 type Document = OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument;
 
@@ -79,25 +79,25 @@ export const useLocalMutation = () => {
 					return old;
 				});
 
-			return { changes, document: doc };
-		} catch (error) {
-			let message = error.message;
-			let errorCode = ERROR_CODES.TRANSACTION_FAILED;
-			if (error?.rxdb) {
-				message = 'rxdb ' + error.code;
-				errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+				return { changes, document: doc };
+			} catch (error) {
+				let message = error.message;
+				let errorCode = ERROR_CODES.TRANSACTION_FAILED;
+				if (error?.rxdb) {
+					message = 'rxdb ' + error.code;
+					errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
+				}
+				mutationLogger.error(t('There was an error: {message}', { _tags: 'core', message }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode,
+						documentId: document.id,
+						collectionName: document.collection?.name,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
 			}
-			mutationLogger.error(t('There was an error: {message}', { _tags: 'core', message }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode,
-					documentId: document.id,
-					collectionName: document.collection?.name,
-					error: error instanceof Error ? error.message : String(error),
-				},
-			});
-		}
 		},
 		[t]
 	);

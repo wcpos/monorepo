@@ -8,9 +8,9 @@ import type { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
 	DropdownMenu,
-	DropdownMenuTrigger,
-	DropdownMenuContent,
 	DropdownMenuCheckboxItem,
+	DropdownMenuContent,
+	DropdownMenuTrigger,
 } from '@wcpos/components/dropdown-menu';
 import { Text } from '@wcpos/components/text';
 
