@@ -75,6 +75,7 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 			});
 			throw error;
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- identity keys trigger re-registration when query identity changes
 	}, [manager, parentIdentityKey, childIdentityKey]);
 
 	/**
@@ -99,6 +100,7 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 				}),
 				startWith(initialQueries)
 			),
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- parentIdentityKey triggers re-registration when query identity changes
 		[manager, parentIdentityKey, registerQueries, initialQueries]
 	);
 

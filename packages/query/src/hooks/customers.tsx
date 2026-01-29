@@ -1,27 +1,3 @@
-type CustomerDocument = import('@wcpos/database/src').CustomerDocument;
-
-interface APIQueryParams {
-	context?: 'view' | 'edit';
-	page?: number;
-	per_page?: number;
-	search?: string;
-	exclude?: number[];
-	include?: number[];
-	offset?: number;
-	order?: 'asc' | 'desc';
-	orderby?: 'id' | 'include' | 'name' | 'registered_date';
-	email?: string;
-	role?:
-		| 'all'
-		| 'administrator'
-		| 'editor'
-		| 'author'
-		| 'contributor'
-		| 'subscriber'
-		| 'customer'
-		| 'shop_manager';
-}
-
 /**
  *
  */

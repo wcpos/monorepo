@@ -146,7 +146,8 @@ function InputField({
 			}, 50);
 			return () => clearTimeout(timer);
 		},
-		[] // Intentionally empty - run once on mount
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally empty - run once on mount
+		[]
 	);
 
 	return (
