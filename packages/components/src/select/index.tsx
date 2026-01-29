@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import * as SelectPrimitive from '@rn-primitives/select';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import { Trigger as SelectPrimitiveTrigger, Value as SelectPrimitiveValue } from './trigger';
 import { Button } from '../button';

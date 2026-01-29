@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, View, ViewProps } from 'react-native';
+import { View, ViewProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import Animated, {

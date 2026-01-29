@@ -4,7 +4,7 @@ import get from 'lodash/get';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import Table, { CellRenderer, TableProps } from '@wcpos/components/table';
+import Table, { CellRenderer } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 
 import { Actions } from '../cells/actions';
@@ -13,7 +13,6 @@ import { ShippingPrice } from '../cells/shipping-price';
 import { ShippingTitle } from '../cells/shipping-title';
 
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
-type RenderItem = TableProps<ShippingLine>['renderItem'];
 
 const cells = {
 	actions: Actions,

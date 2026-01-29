@@ -101,7 +101,7 @@ function safeStringify(obj: any, maxLength = 10000): string {
 			return result.substring(0, maxLength) + '... [truncated]';
 		}
 		return result;
-	} catch (e) {
+	} catch {
 		return '[Unable to stringify]';
 	}
 }

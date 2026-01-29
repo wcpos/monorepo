@@ -3,7 +3,7 @@ import * as React from 'react';
 import isNil from 'lodash/isNil';
 import get from 'lodash/get';
 
-import Text from '../text';
+import { Text } from '../text';
 import {
 	applyThousandSeparator,
 	limitToScale,

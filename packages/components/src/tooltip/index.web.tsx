@@ -7,7 +7,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
-import type { TooltipContentProps, TooltipProps, TooltipTriggerProps } from './types';
+import type { TooltipContentProps, TooltipProps } from './types';
 
 function Tooltip({ children }: TooltipProps) {
 	return <TooltipPrimitive.Root>{children}</TooltipPrimitive.Root>;

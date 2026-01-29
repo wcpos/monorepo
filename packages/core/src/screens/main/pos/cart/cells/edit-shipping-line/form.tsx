@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import toNumber from 'lodash/toNumber';
-import toString from 'lodash/toString';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 

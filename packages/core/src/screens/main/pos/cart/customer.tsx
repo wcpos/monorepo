@@ -17,8 +17,6 @@ import { useT } from '../../../../contexts/translations';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
 /**
  *
  */

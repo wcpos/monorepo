@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { filter, tap } from 'rxjs/operators';
+import { filter } from 'rxjs/operators';
 
 import { storeCollections } from '@wcpos/database';
 import type { StoreCollections } from '@wcpos/database';

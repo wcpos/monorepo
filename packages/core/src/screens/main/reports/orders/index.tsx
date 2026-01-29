@@ -1,8 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
 
-import get from 'lodash/get';
-
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';

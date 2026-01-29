@@ -6,7 +6,6 @@ import { useObservableCallback, useObservableEagerState } from 'observable-hooks
 import { filter } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';

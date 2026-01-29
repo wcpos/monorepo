@@ -54,7 +54,7 @@ function parseLink(link: string) {
 		info = { ...qry, ...info };
 		info.url = linkUrl;
 		return info;
-	} catch (e) {
+	} catch {
 		return null;
 	}
 }

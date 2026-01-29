@@ -1,5 +1,3 @@
-import * as React from 'react';
-
 import { decode } from 'html-entities';
 import {
 	ObservableResource,

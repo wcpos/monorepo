@@ -9,8 +9,6 @@ import { CartTabTitle } from './tab-title';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrder } from '../contexts/current-order';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
 /**
  *
  */

@@ -11,7 +11,7 @@ export const FormatList = ({ array }: FormatListProps) => {
 		<>
 			{array?.map((item, index) => {
 				if (typeof item === 'string') {
-					return <Text>{item}, </Text>;
+					return <Text key={index}>{item}, </Text>;
 				}
 				return item;
 			})}

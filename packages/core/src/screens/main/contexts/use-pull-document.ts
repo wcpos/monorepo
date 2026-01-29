@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { isRxDocument } from 'rxdb';
 
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { getLogger } from '@wcpos/utils/logger';
@@ -12,7 +11,6 @@ import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'pull']);
 
-type RxDocument = import('rxdb').RxDocument;
 type RxCollection = import('rxdb').RxCollection;
 
 /**

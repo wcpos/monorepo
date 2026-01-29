@@ -23,7 +23,7 @@ export const TranslationContext = React.createContext<TxNative['translate']>(nul
  * - load the translations from local storage (if any)
  */
 export const TranslationProvider = ({ children }) => {
-	const { translationsState, ...rest } = useAppState();
+	const { translationsState } = useAppState();
 	const { locale } = useLocale();
 	const translations = useObservableEagerState(translationsState.get$(locale));
 

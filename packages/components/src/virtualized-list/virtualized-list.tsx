@@ -5,7 +5,7 @@ import { FlashList } from '@shopify/flash-list';
 
 import { ItemContext, RootContext, useItemContext, useRootContext } from './utils/contexts';
 
-import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } from './types';
+import type { ItemContext as BaseItemContext, ListProps, RootProps } from './types';
 
 function Root(props: RootProps) {
 	return (

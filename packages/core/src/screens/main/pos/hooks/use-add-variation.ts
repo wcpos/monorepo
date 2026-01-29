@@ -19,7 +19,6 @@ import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'variation']);
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 interface MetaData {

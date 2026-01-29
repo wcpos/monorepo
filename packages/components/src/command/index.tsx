@@ -102,7 +102,7 @@ const CommandGroup = React.forwardRef<View, CommandGroupProps>(({ children, ...p
 ));
 CommandGroup.displayName = 'CommandGroup';
 
-interface CommandSeparatorProps extends React.ComponentPropsWithoutRef<typeof View> {}
+type CommandSeparatorProps = React.ComponentPropsWithoutRef<typeof View>;
 
 const CommandSeparator = React.forwardRef<View, CommandSeparatorProps>((props, ref) => (
 	<View ref={ref} style={[{ height: 1, backgroundColor: '#e5e7eb' }]} {...props} />

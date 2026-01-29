@@ -4,7 +4,7 @@ import get from 'lodash/get';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import Table, { CellRenderer, TableProps } from '@wcpos/components/table';
+import Table, { CellRenderer } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 
 import { Actions } from '../cells/actions';
@@ -16,7 +16,6 @@ import { RegularPrice } from '../cells/regular_price';
 import { Subtotal } from '../cells/subtotal';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
-type RenderItem = TableProps<LineItem>['renderItem'];
 
 const cells = {
 	actions: Actions,
