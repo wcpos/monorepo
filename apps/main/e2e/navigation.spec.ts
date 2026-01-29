@@ -11,13 +11,20 @@ test.describe('Navigation', () => {
 	test.beforeEach(async ({ page }) => {
 		// Navigate to the app
 		await page.goto('/');
+		// Wait for hydration to complete - splash screen disappears when app is ready
+		await expect(
+			page.locator('input[type="url"], button:has-text("Connect"), [data-testid="pos-screen"]')
+		).toBeVisible({ timeout: 60000 });
 	});
 
 	test('should show auth screen when not connected', async ({ page }) => {
-		// Should see the connect/auth screen
-		await expect(
-			page.locator('[data-testid="store-url-input"], input[placeholder*="URL"], text="Connect"')
-		).toBeVisible({ timeout: 30000 });
+		// Should see the connect/auth screen (already waited in beforeEach)
+		const hasUrlInput = await page.locator('input[type="url"]').isVisible().catch(() => false);
+		const hasConnectButton = await page
+			.locator('button:has-text("Connect")')
+			.isVisible()
+			.catch(() => false);
+		expect(hasUrlInput || hasConnectButton).toBeTruthy();
 	});
 
 	test('should have proper page title', async ({ page }) => {
@@ -64,6 +71,10 @@ test.describe('Error Handling', () => {
 test.describe('Accessibility', () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto('/');
+		// Wait for hydration to complete
+		await expect(
+			page.locator('input[type="url"], button:has-text("Connect"), [data-testid="pos-screen"]')
+		).toBeVisible({ timeout: 60000 });
 	});
 
 	test('should have accessible focus indicators', async ({ page }) => {
