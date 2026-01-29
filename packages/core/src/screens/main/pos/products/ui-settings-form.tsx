@@ -46,12 +46,17 @@ export const UISettingsForm = () => {
 	});
 
 	/**
-	 * Handle reset button
+	 * Handle reset button - set handler in effect to avoid mutating ref during render
 	 */
-	buttonPressHandlerRef.current = React.useCallback(async () => {
+	const handleReset = React.useCallback(async () => {
 		await resetUI();
 		form.reset(uiSettings.get());
 	}, [resetUI, form, uiSettings]);
+
+	// eslint-disable-next-line react-compiler/react-compiler -- intentional ref mutation in effect
+	React.useEffect(() => {
+		buttonPressHandlerRef.current = handleReset;
+	}, [buttonPressHandlerRef, handleReset]);
 
 	/**
 	 * Form is the source of truth during editing.

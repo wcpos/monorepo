@@ -37,12 +37,18 @@ export const UISettingsForm = () => {
 
 	/**
 	 * Handle reset button - reset form and RxDB to initial values
+	 * Set handler in effect to avoid mutating ref during render
 	 */
-	buttonPressHandlerRef.current = React.useCallback(async () => {
+	const handleReset = React.useCallback(async () => {
 		await resetUI();
 		// After reset, get fresh data and reset the form
 		form.reset(uiSettings.get());
 	}, [resetUI, form, uiSettings]);
+
+	// eslint-disable-next-line react-compiler/react-compiler -- intentional ref mutation in effect
+	React.useEffect(() => {
+		buttonPressHandlerRef.current = handleReset;
+	}, [buttonPressHandlerRef, handleReset]);
 
 	/**
 	 * Handle form changes and patch UI

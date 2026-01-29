@@ -33,16 +33,23 @@ export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
 
 	/**
 	 * Use pulse effect for new rows
+	 * Move to effect to avoid mutating props during render
 	 */
 	const isNew = table.options.meta.newRowUUIDs.includes(uuid);
-	if (isNew) {
-		const rowRef = table.options.meta.rowRefs.current.get(uuid);
-		if (rowRef && rowRef?.pulseAdd) {
-			rowRef.pulseAdd(() => {
-				table.options.meta.newRowUUIDs = table.options.meta.newRowUUIDs.filter((id) => id !== uuid);
-			});
+
+	// eslint-disable-next-line react-compiler/react-compiler -- table.options.meta is table config, safe to update in effect
+	React.useEffect(() => {
+		if (isNew) {
+			const rowRef = table.options.meta.rowRefs.current.get(uuid);
+			if (rowRef && rowRef?.pulseAdd) {
+				rowRef.pulseAdd(() => {
+					// Create new array instead of mutating
+					const currentUUIDs = table.options.meta.newRowUUIDs;
+					table.options.meta.newRowUUIDs = currentUUIDs.filter((id) => id !== uuid);
+				});
+			}
 		}
-	}
+	}, [isNew, table.options.meta, uuid]);
 
 	/**
 	 *

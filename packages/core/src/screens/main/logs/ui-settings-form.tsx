@@ -26,7 +26,12 @@ export const UISettingsForm = () => {
 	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('logs');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
 	const { buttonPressHandlerRef } = useDialogContext();
-	buttonPressHandlerRef.current = resetUI;
+
+	// Set reset handler in effect - buttonPressHandlerRef is a mutable ref from context
+	// eslint-disable-next-line react-compiler/react-compiler -- intentional ref mutation in effect
+	React.useEffect(() => {
+		buttonPressHandlerRef.current = resetUI;
+	}, [buttonPressHandlerRef, resetUI]);
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
