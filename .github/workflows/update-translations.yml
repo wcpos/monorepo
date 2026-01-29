@@ -1,0 +1,33 @@
+name: Update Translation Strings
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/**/*.ts'
+      - 'apps/**/*.tsx'
+      - 'packages/**/*.ts'
+      - 'packages/**/*.tsx'
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.TRANSLATION_APP_ID }}
+          private-key: ${{ secrets.TRANSLATION_APP_PRIVATE_KEY }}
+          owner: wcpos
+          repositories: translations
+
+      - name: Trigger translations repo extraction
+        run: |
+          gh workflow run extract-js.yml \
+            --repo wcpos/translations \
+            --field ref="${{ github.sha }}"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
