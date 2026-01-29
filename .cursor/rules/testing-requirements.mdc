@@ -1,42 +1,54 @@
 ---
-description: Require tests when making code changes
+description: Require linting and tests when making code changes
 alwaysApply: true
 ---
 
-# Testing Requirements
+# Pre-Commit Requirements
 
-When making code changes, you must also add appropriate tests.
+Before committing changes, you MUST run linting and tests.
+
+## Linting (ESLint + Prettier)
+
+Run linting with auto-fix on changed files:
+
+```bash
+pnpm lint:fix
+```
+
+Or for specific packages:
+
+```bash
+cd packages/core && npx eslint --fix src/path/to/changed/file.ts
+```
+
+The project uses `@wcpos/eslint-config` with:
+- Prettier (tabs, single quotes, trailing commas)
+- Import ordering (react first, then external, then @wcpos/*)
+- React Compiler rules
 
 ## Unit Tests (Jest)
 
 Add `*.test.ts` files colocated with the code for:
 - Utility functions and helpers
 - Business logic (tax calculations, order totals, etc.)
-- Data transformations
-- Hooks with complex logic
+- Data transformations and hooks with complex logic
 
-```typescript
-// packages/core/src/utils/format.ts
-export function formatPrice(value: number): string { ... }
-
-// packages/core/src/utils/format.test.ts
-describe('formatPrice', () => {
-  it('formats positive numbers', () => { ... });
-});
-```
-
-Run: `pnpm test` or `pnpm jest <path>`
+Run: `pnpm test` or `cd packages/<pkg> && npx jest <path>`
 
 ## E2E Tests (Playwright)
 
 Add `*.spec.ts` files in `apps/main/e2e/` for:
 - New user-facing features
 - Critical user flows (auth, checkout, navigation)
-- Changes that affect multiple screens
 
-## When to Skip
+## Pre-Commit Checklist
 
-Skip tests only when:
-- Change is purely cosmetic (CSS/styling only)
+1. Run `pnpm lint:fix` to auto-fix linting issues
+2. Run `pnpm test` to verify no regressions
+3. If lint errors remain, fix them manually before committing
+
+## When to Skip Tests
+
+- Purely cosmetic changes (CSS/styling only)
 - Documentation or comments only
 - User explicitly requests no tests
