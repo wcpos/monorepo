@@ -16,8 +16,8 @@
     "build:electron": "ELECTRON=true expo export --output-dir ./electron-build --platform=web",
     "eas-build-pre-install": "[ \"$EAS_BUILD_PLATFORM\" = \"android\" ] && sudo apt-get update && sudo apt-get install -y libsecret-1-dev || true",
     "eas-build-post-install": "pnpm run -w build:main",
-    "lint": "eslint app components hooks --ext .js,.jsx,.ts,.tsx",
-    "lint:fix": "eslint app components hooks --ext .js,.jsx,.ts,.tsx --fix"
+    "lint": "eslint app components --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint app components --ext .js,.jsx,.ts,.tsx --fix"
   },
   "jest": {
     "preset": "jest-expo"

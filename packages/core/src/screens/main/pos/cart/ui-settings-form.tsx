@@ -38,7 +38,7 @@ export const UISettingsForm = () => {
 	const { buttonPressHandlerRef } = useDialogContext();
 
 	// Set reset handler in effect - buttonPressHandlerRef is a mutable ref from context
-	// eslint-disable-next-line react-compiler/react-compiler -- intentional ref mutation in effect
+
 	React.useEffect(() => {
 		buttonPressHandlerRef.current = resetUI;
 	}, [buttonPressHandlerRef, resetUI]);

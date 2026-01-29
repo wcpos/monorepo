@@ -3,6 +3,8 @@ import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
 import reactCompiler from 'eslint-plugin-react-compiler';
 
 export default [
+	// Global ignores - git submodules manage their own linting
+	{ ignores: ['apps/electron/**', 'apps/web/**'] },
 	eslintPluginPrettierRecommended,
 	...expoConfig,
 	{
