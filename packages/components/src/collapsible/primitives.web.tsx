@@ -36,6 +36,7 @@ function Root({
 			const augRef = augmentedRef.current as unknown as HTMLDivElement;
 			augRef.dataset.state = open ? 'open' : 'closed';
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- augmentedRef is a stable ref
 	}, [open]);
 
 	React.useLayoutEffect(() => {
@@ -47,6 +48,7 @@ function Root({
 				augRef.dataset.disabled = undefined;
 			}
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- augmentedRef is a stable ref
 	}, [disabled]);
 
 	const Component = asChild ? Slot.View : View;
@@ -95,6 +97,7 @@ function Trigger({
 			const augRef = augmentedRef.current as unknown as HTMLButtonElement;
 			augRef.dataset.state = open ? 'open' : 'closed';
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- augmentedRef is a stable ref
 	}, [open]);
 
 	React.useLayoutEffect(() => {
@@ -108,6 +111,7 @@ function Trigger({
 				augRef.dataset.disabled = undefined;
 			}
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- augmentedRef is a stable ref
 	}, [disabled]);
 
 	function onPress(ev: GestureResponderEvent) {
@@ -143,6 +147,7 @@ function Content({
 			const augRef = augmentedRef.current as unknown as HTMLDivElement;
 			augRef.dataset.state = open ? 'open' : 'closed';
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- augmentedRef is a stable ref
 	}, [open]);
 
 	const Component = asChild ? Slot.View : View;

@@ -36,6 +36,7 @@ export const useReplicationState = (
 	 */
 	const collectionReplication = React.useMemo(() => {
 		return manager.activeCollectionReplications.get(queryID);
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- refreshCounter is a cache buster to force re-fetch from Map
 	}, [manager, queryID, refreshCounter]);
 
 	/**
@@ -43,6 +44,7 @@ export const useReplicationState = (
 	 */
 	const queryReplication = React.useMemo(() => {
 		return manager.activeQueryReplications.get(queryID);
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- refreshCounter is a cache buster to force re-fetch from Map
 	}, [manager, queryID, refreshCounter]);
 
 	/**

@@ -73,7 +73,7 @@ export const TranslationProvider = ({ children }) => {
 		};
 
 		fetchTranslations();
-	}, [locale]);
+	}, [locale, txInstance]);
 
 	/**
 	 *

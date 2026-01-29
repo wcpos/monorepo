@@ -52,9 +52,8 @@ const Display = React.forwardRef<RNTextInput, InputProps>(
 				}, 50);
 				return () => clearTimeout(timer);
 			},
-			[
-				// run once on mount
-			]
+			// eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally empty - run once on mount
+			[]
 		);
 
 		return (

@@ -1,19 +1,4 @@
-import isEmpty from 'lodash/isEmpty';
-
-import { filterTaxRates } from './tax-rates.helpers';
-
-type TaxRateDocument = import('@wcpos/database/src').TaxRateDocument;
 type QueryHooks = import('@wcpos/query').QueryHooks;
-
-interface APIQueryParams {
-	context?: 'view' | 'edit';
-	page?: number;
-	per_page?: number;
-	offset?: number;
-	order?: 'asc' | 'desc';
-	orderby?: 'id' | 'order' | 'priority';
-	class?: string;
-}
 
 /**
  * This is a hack!
