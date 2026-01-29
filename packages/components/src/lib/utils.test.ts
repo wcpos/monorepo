@@ -1,10 +1,10 @@
 // Mock react-native primitives hooks to avoid ESM issues
+import { cn, getFlexAlign, getTailwindJustifyClass } from './utils';
+
 jest.mock('@rn-primitives/hooks', () => ({
 	useAugmentedRef: jest.fn(),
 	useControllableState: jest.fn(),
 }));
-
-import { cn, getTailwindJustifyClass, getFlexAlign } from './utils';
 
 describe('lib/utils', () => {
 	describe('cn', () => {

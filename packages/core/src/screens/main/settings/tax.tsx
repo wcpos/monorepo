@@ -19,12 +19,9 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { ModalClose, ModalFooter } from '@wcpos/components/modal';
 import { VStack } from '@wcpos/components/vstack';
-
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useAppState } from '../../../contexts/app-state';
-
-const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 import { useT } from '../../../contexts/translations';
 import { FormErrors } from '../components/form-errors';
 import { InclExclRadioGroup } from '../components/incl-excl-tax-radio-group';
@@ -34,6 +31,8 @@ import { TaxDisplayRadioGroup } from '../components/tax-display-radio-group';
 import { YesNoRadioGroup } from '../components/yes-no-radio-group';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'settings']);
 
 const formSchema = z.object({
 	calc_taxes: z.enum(['yes', 'no']),

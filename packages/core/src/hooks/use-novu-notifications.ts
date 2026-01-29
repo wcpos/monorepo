@@ -5,8 +5,6 @@ import { map } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { openExternalURL } from '@wcpos/utils/open-external-url';
-
-const novuLogger = getLogger(['wcpos', 'notifications', 'novu']);
 import type { NotificationCollection } from '@wcpos/database';
 
 import { useAppState } from '../contexts/app-state';
@@ -22,6 +20,8 @@ import {
 	waitForNovuReady,
 } from '../services/novu/client';
 import { getNotificationBehavior } from '../services/novu/notification-behaviors';
+
+const novuLogger = getLogger(['wcpos', 'notifications', 'novu']);
 
 export interface Notification {
 	id: string;

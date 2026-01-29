@@ -3,10 +3,10 @@ import * as React from 'react';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../contexts/translations';
-
-const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
+
+const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 
 type Line = 'line_items' | 'fee_lines' | 'shipping_lines';
 type LineItem =

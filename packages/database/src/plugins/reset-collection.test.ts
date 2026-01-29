@@ -1,4 +1,4 @@
-import { Subject, firstValueFrom, filter, timeout } from 'rxjs';
+import { filter, firstValueFrom, Subject, timeout } from 'rxjs';
 
 /**
  * Tests for reset-collection plugin logic.
@@ -165,9 +165,7 @@ describe('reset-collection plugin', () => {
 			const resetSubject = new Subject<any>();
 			const reset$ = resetSubject.asObservable();
 
-			const resetPromise = firstValueFrom(
-				reset$.pipe(filter((col) => col.name === 'products'))
-			);
+			const resetPromise = firstValueFrom(reset$.pipe(filter((col) => col.name === 'products')));
 
 			// Emit after a short delay
 			setTimeout(() => {

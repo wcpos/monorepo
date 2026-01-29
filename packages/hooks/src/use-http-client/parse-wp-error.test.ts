@@ -1,11 +1,11 @@
 import {
-	isWpErrorResponse,
-	mapToInternalCode,
-	parseWpError,
 	extractErrorMessage,
 	extractWpErrorCode,
-	WpErrorResponse,
+	isWpErrorResponse,
+	mapToInternalCode,
 	ParsedWpError,
+	parseWpError,
+	WpErrorResponse,
 } from './parse-wp-error';
 
 describe('parse-wp-error', () => {
@@ -200,7 +200,9 @@ describe('parse-wp-error', () => {
 		it('should extract message from generic error object', () => {
 			expect(extractErrorMessage({ message: 'Generic message' }, fallback)).toBe('Generic message');
 			expect(extractErrorMessage({ error: 'Error field' }, fallback)).toBe('Error field');
-			expect(extractErrorMessage({ error_description: 'OAuth error' }, fallback)).toBe('OAuth error');
+			expect(extractErrorMessage({ error_description: 'OAuth error' }, fallback)).toBe(
+				'OAuth error'
+			);
 		});
 
 		it('should extract first validation error', () => {

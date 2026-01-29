@@ -1,11 +1,9 @@
-import { fullFormats, fastFormats, formatNames } from './formats';
+import { fastFormats, formatNames, fullFormats } from './formats';
 
 describe('ajv-formats', () => {
 	describe('date format', () => {
 		const dateValidate =
-			typeof fullFormats.date === 'object'
-				? (fullFormats.date as any).validate
-				: fullFormats.date;
+			typeof fullFormats.date === 'object' ? (fullFormats.date as any).validate : fullFormats.date;
 
 		it('should validate correct dates', () => {
 			expect(dateValidate('2024-01-15')).toBe(true);
@@ -44,9 +42,7 @@ describe('ajv-formats', () => {
 
 	describe('time format', () => {
 		const timeValidate =
-			typeof fullFormats.time === 'object'
-				? (fullFormats.time as any).validate
-				: fullFormats.time;
+			typeof fullFormats.time === 'object' ? (fullFormats.time as any).validate : fullFormats.time;
 
 		it('should validate correct times with timezone', () => {
 			expect(timeValidate('12:30:45Z')).toBe(true);

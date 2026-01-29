@@ -135,7 +135,14 @@ describe('middlewaresPlugin', () => {
 
 		it('should support all hook types', () => {
 			// All the RxDB hook types that could be used
-			const hookTypes = ['preInsert', 'preSave', 'preRemove', 'postInsert', 'postSave', 'postRemove'];
+			const hookTypes = [
+				'preInsert',
+				'preSave',
+				'preRemove',
+				'postInsert',
+				'postSave',
+				'postRemove',
+			];
 
 			const handlers: Record<string, jest.Mock> = {};
 			mockCollection.options.middlewares = {};
@@ -194,7 +201,10 @@ describe('middlewaresPlugin', () => {
 			expect(mockCollection.preSave).toHaveBeenCalled();
 
 			// Test the actual handler function
-			const preInsertHandler = mockCollection.preInsert.mock.calls[0][0] as (doc: { price?: string; sortable_price?: number }) => void;
+			const preInsertHandler = mockCollection.preInsert.mock.calls[0][0] as (doc: {
+				price?: string;
+				sortable_price?: number;
+			}) => void;
 			const doc = { price: '9.99' } as { price?: string; sortable_price?: number };
 			preInsertHandler(doc);
 

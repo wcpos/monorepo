@@ -4,8 +4,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { defaultConfig } from './adapters/default';
-
-const dbLogger = getLogger(['wcpos', 'db', 'create']);
 import { ephemeralStorageConfig } from './adapters/ephemeral';
 import { fastStorageConfig } from './adapters/fast';
 import {
@@ -18,6 +16,8 @@ import {
 	UserCollections,
 	userCollections,
 } from './collections';
+
+const dbLogger = getLogger(['wcpos', 'db', 'create']);
 
 /**
  * Creates the User database

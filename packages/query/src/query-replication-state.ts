@@ -8,6 +8,11 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { DataFetcher } from './data-fetcher';
+import { SubscribableBase } from './subscribable-base';
+import { getParamValueFromEndpoint } from './utils';
+
+import type { CollectionReplicationState } from './collection-replication-state';
+import type { RxCollection } from 'rxdb';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'query']);
 
@@ -23,11 +28,6 @@ function isAuthCancelError(error: any): boolean {
 		error?.message?.includes('attempting re-authentication')
 	);
 }
-import { SubscribableBase } from './subscribable-base';
-import { getParamValueFromEndpoint } from './utils';
-
-import type { CollectionReplicationState } from './collection-replication-state';
-import type { RxCollection } from 'rxdb';
 
 interface QueryReplicationConfig<T extends RxCollection> {
 	collection: T;

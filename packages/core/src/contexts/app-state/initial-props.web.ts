@@ -11,7 +11,7 @@
 interface InitialProps {
 	site: Record<string, unknown>;
 	wp_credentials: Record<string, unknown>;
-	stores: Array<Record<string, unknown>>;
+	stores: Record<string, unknown>[];
 	logout_url?: string;
 	[key: string]: unknown;
 }

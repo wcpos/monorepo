@@ -102,8 +102,7 @@ describe('use-wcpos-auth utils', () => {
 			});
 
 			it('should handle missing optional fields with defaults', () => {
-				const url =
-					'https://app/callback?access_token=abc&refresh_token=def&uuid=uid&expires_at=0';
+				const url = 'https://app/callback?access_token=abc&refresh_token=def&uuid=uid&expires_at=0';
 
 				const result = parseAuthResult(url);
 
@@ -157,8 +156,7 @@ describe('use-wcpos-auth utils', () => {
 			});
 
 			it('should handle error in hash fragment', () => {
-				const url =
-					'https://app/callback#error=server_error&error_description=Internal%20error';
+				const url = 'https://app/callback#error=server_error&error_description=Internal%20error';
 
 				const result = parseAuthResult(url);
 

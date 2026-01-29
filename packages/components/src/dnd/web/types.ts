@@ -5,6 +5,8 @@
  */
 
 // Re-export shared types (except DragState which has web-specific additions)
+import type { ItemId, ListId } from '../types/sortable';
+
 export type {
 	ItemId,
 	ListId,
@@ -13,8 +15,6 @@ export type {
 	SortableItemProps,
 	SortableContextValue,
 } from '../types/sortable';
-
-import type { ItemId, ListId } from '../types/sortable';
 
 /**
  * Drag state for web (includes 'preview' state for custom drag previews)

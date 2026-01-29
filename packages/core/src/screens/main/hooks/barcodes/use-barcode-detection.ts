@@ -9,9 +9,9 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../../contexts/app-state';
+import { useT } from '../../../../contexts/translations';
 
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'detection']);
-import { useT } from '../../../../contexts/translations';
 
 export const useBarcodeDetection = (
 	callback = (barcode: string) => {}

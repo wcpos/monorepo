@@ -9,9 +9,9 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { buildAuthUrl, generateState, getRedirectUri } from './utils';
 
-const oauthLogger = getLogger(['wcpos', 'auth', 'oauth']);
-
 import type { UseWcposAuthReturn, WcposAuthConfig, WcposAuthResult } from './types';
+
+const oauthLogger = getLogger(['wcpos', 'auth', 'oauth']);
 
 export type { WcposAuthConfig, WcposAuthResult, UseWcposAuthReturn } from './types';
 

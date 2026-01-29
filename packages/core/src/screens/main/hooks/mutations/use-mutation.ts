@@ -14,11 +14,11 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useLocalMutation } from './use-local-mutation';
-
-const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 import { useT } from '../../../../contexts/translations';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { CollectionKey, useCollection } from '../use-collection';
+
+const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 
 type Document = OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument;
 
@@ -130,15 +130,18 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	 */
 	const handleSuccess = React.useCallback(
 		(doc: RxDocument) => {
-			mutationLogger.success(t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					documentId: doc.id,
-					collectionName,
-					collectionLabel,
-				},
-			});
+			mutationLogger.success(
+				t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }),
+				{
+					showToast: true,
+					saveToDb: true,
+					context: {
+						documentId: doc.id,
+						collectionName,
+						collectionLabel,
+					},
+				}
+			);
 		},
 		[collectionLabel, collectionName, t]
 	);

@@ -14,8 +14,6 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { SubscribableBase } from './subscribable-base';
 
-const queryLogger = getLogger(['wcpos', 'query', 'state']);
-
 import type {
 	MangoQuery,
 	MangoQuerySelector,
@@ -24,6 +22,8 @@ import type {
 	RxDocument,
 	RxQuery,
 } from 'rxdb';
+
+const queryLogger = getLogger(['wcpos', 'query', 'state']);
 
 type DocumentType<C> = C extends RxCollection<infer D> ? RxDocument<D, object> : never;
 

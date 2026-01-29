@@ -12,10 +12,10 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
-
-const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 import { FormErrors } from '../components/form-errors';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+
+const httpLogger = getLogger(['wcpos', 'http', 'rest']);
 
 const formSchema = z.object({
 	email: z.string().email(),
@@ -43,32 +43,32 @@ export const EmailForm = ({ order }: Props) => {
 		async ({ email, saveEmail }) => {
 			try {
 				setLoading(true);
-			const { data } = await http.post(`/orders/${orderID}/email`, {
-				email,
-				save_to: saveEmail ? 'billing' : '',
-			});
-			if (data && data.success) {
-				httpLogger.success(t('Email sent', { _tags: 'core' }), {
+				const { data } = await http.post(`/orders/${orderID}/email`, {
+					email,
+					save_to: saveEmail ? 'billing' : '',
+				});
+				if (data && data.success) {
+					httpLogger.success(t('Email sent', { _tags: 'core' }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							orderId: orderID,
+							email,
+						},
+					});
+				}
+			} catch (error) {
+				httpLogger.error('Failed to send receipt email', {
 					showToast: true,
 					saveToDb: true,
 					context: {
+						errorCode: ERROR_CODES.CONNECTION_REFUSED,
 						orderId: orderID,
 						email,
+						error: error instanceof Error ? error.message : String(error),
 					},
 				});
-			}
-		} catch (error) {
-			httpLogger.error('Failed to send receipt email', {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.CONNECTION_REFUSED,
-					orderId: orderID,
-					email,
-					error: error instanceof Error ? error.message : String(error),
-				},
-			});
-		} finally {
+			} finally {
 				setLoading(false);
 			}
 		},

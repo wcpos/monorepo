@@ -1,11 +1,11 @@
 // Mock the react-hotkeys-hook module to avoid ESM issues
+import { getKeyFromEvent, isAlphaNumeric, RNKeyboardEvent } from './index';
+
 jest.mock('react-hotkeys-hook', () => ({
 	useHotkeys: jest.fn(),
 	useHotkeysContext: jest.fn(),
 	useRecordHotkeys: jest.fn(),
 }));
-
-import { isAlphaNumeric, getKeyFromEvent, RNKeyboardEvent } from './index';
 
 describe('use-hotkeys/index', () => {
 	describe('isAlphaNumeric', () => {

@@ -7,10 +7,10 @@ import { getLogger } from '@wcpos/utils/logger';
 
 import { Query } from './query-state';
 
-const relationalLogger = getLogger(['wcpos', 'query', 'relational']);
-
 import type { QueryConfig } from './query-state';
 import type { RxCollection, RxDocument } from 'rxdb';
+
+const relationalLogger = getLogger(['wcpos', 'query', 'relational']);
 
 type DocumentType<C> = C extends RxCollection<infer D> ? RxDocument<D, object> : never;
 
@@ -240,8 +240,6 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 		this.parentLookupQuery.where('id').in(parentIds).exec();
 
 		// Stream lookup results
-		return this.parentLookupQuery.result$.pipe(
-			map((results) => results.hits.map(({ id }) => id))
-		);
+		return this.parentLookupQuery.result$.pipe(map((results) => results.hits.map(({ id }) => id)));
 	}
 }

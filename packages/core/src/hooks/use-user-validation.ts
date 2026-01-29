@@ -9,9 +9,9 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../contexts/app-state';
+import { mergeStoresWithResponse } from '../utils/merge-stores';
 
 const appLogger = getLogger(['wcpos', 'app', 'validation']);
-import { mergeStoresWithResponse } from '../utils/merge-stores';
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;

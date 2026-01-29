@@ -46,11 +46,7 @@ export function FormSwitch({
 					{...props}
 				/>
 				{!!label && (
-					<FormLabel
-						className="grow"
-						nativeID={formItemNativeID}
-						onPress={handleOnLabelPress}
-					>
+					<FormLabel className="grow" nativeID={formItemNativeID} onPress={handleOnLabelPress}>
 						{label}
 					</FormLabel>
 				)}

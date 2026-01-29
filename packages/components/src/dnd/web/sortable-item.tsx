@@ -100,8 +100,7 @@ export function SortableItem({
 		}
 
 		// Validate containment - dragHandle must be inside element
-		const validDragHandle =
-			dragHandle && element.contains(dragHandle) ? dragHandle : undefined;
+		const validDragHandle = dragHandle && element.contains(dragHandle) ? dragHandle : undefined;
 
 		if (dragHandle && !validDragHandle) {
 			console.warn(

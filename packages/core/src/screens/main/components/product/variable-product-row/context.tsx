@@ -33,7 +33,11 @@ interface VariationRowProviderProps {
 /**
  *
  */
-export const VariationRowProvider = ({ row, setRowExpanded, children }: VariationRowProviderProps) => {
+export const VariationRowProvider = ({
+	row,
+	setRowExpanded,
+	children,
+}: VariationRowProviderProps) => {
 	const [queryParams, setQueryParams] = React.useState({});
 
 	const updateQueryParams = (key: string, value: any) => {
@@ -41,7 +45,9 @@ export const VariationRowProvider = ({ row, setRowExpanded, children }: Variatio
 	};
 
 	return (
-		<VariationRowContext.Provider value={{ queryParams, updateQueryParams, rowId: row.id, setRowExpanded }}>
+		<VariationRowContext.Provider
+			value={{ queryParams, updateQueryParams, rowId: row.id, setRowExpanded }}
+		>
 			{children}
 		</VariationRowContext.Provider>
 	);

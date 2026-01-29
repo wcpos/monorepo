@@ -167,7 +167,9 @@ describe('tax-rates.helpers', () => {
 			});
 
 			it('should match any city in the list', () => {
-				const rates = [createTaxRate({ id: 1, cities: ['Los Angeles', 'San Diego', 'San Francisco'] })];
+				const rates = [
+					createTaxRate({ id: 1, cities: ['Los Angeles', 'San Diego', 'San Francisco'] }),
+				];
 				expect(filterTaxRates(rates, '', '', '', 'San Diego')).toHaveLength(1);
 				expect(filterTaxRates(rates, '', '', '', 'Chicago')).toHaveLength(0);
 			});

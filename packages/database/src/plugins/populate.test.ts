@@ -24,7 +24,6 @@ beforeAll(() => {
 });
 
 describe('populatePlugin', () => {
-
 	it('adds a custom upsertRefs method to the Collection prototype', async () => {
 		const nestedCollection = (await create(1)) as NestedCollection;
 		expect(typeof nestedCollection.upsertRefs).toBe('function');

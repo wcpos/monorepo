@@ -47,7 +47,8 @@ describe('useCalculateShippingLineTaxAndTotals', () => {
 		};
 
 		act(() => {
-			const calculatedShippingLine = result.current.calculateShippingLineTaxesAndTotals(shippingLine);
+			const calculatedShippingLine =
+				result.current.calculateShippingLineTaxesAndTotals(shippingLine);
 
 			expect(calculatedShippingLine.total).toBe('10');
 			expect(calculatedShippingLine.total_tax).toBe('2');
@@ -86,7 +87,8 @@ describe('useCalculateShippingLineTaxAndTotals', () => {
 		};
 
 		act(() => {
-			const calculatedShippingLine = result.current.calculateShippingLineTaxesAndTotals(shippingLine);
+			const calculatedShippingLine =
+				result.current.calculateShippingLineTaxesAndTotals(shippingLine);
 
 			// 12 includes tax, so total = 12 - 2 = 10
 			expect(calculatedShippingLine.total).toBe('10');
@@ -120,7 +122,8 @@ describe('useCalculateShippingLineTaxAndTotals', () => {
 		};
 
 		act(() => {
-			const calculatedShippingLine = result.current.calculateShippingLineTaxesAndTotals(shippingLine);
+			const calculatedShippingLine =
+				result.current.calculateShippingLineTaxesAndTotals(shippingLine);
 
 			expect(calculatedShippingLine.total).toBe('0');
 			expect(calculatedShippingLine.total_tax).toBe('0');
@@ -150,7 +153,8 @@ describe('useCalculateShippingLineTaxAndTotals', () => {
 		};
 
 		act(() => {
-			const calculatedShippingLine = result.current.calculateShippingLineTaxesAndTotals(shippingLine);
+			const calculatedShippingLine =
+				result.current.calculateShippingLineTaxesAndTotals(shippingLine);
 
 			expect(calculatedShippingLine.total).toBe('10');
 			expect(calculatedShippingLine.total_tax).toBe('0');
@@ -187,7 +191,8 @@ describe('useCalculateShippingLineTaxAndTotals', () => {
 		};
 
 		act(() => {
-			const calculatedShippingLine = result.current.calculateShippingLineTaxesAndTotals(shippingLine);
+			const calculatedShippingLine =
+				result.current.calculateShippingLineTaxesAndTotals(shippingLine);
 
 			expect(calculatedShippingLine.total).toBe('100');
 			expect(calculatedShippingLine.total_tax).toBe('15');
@@ -225,7 +230,8 @@ describe('useCalculateShippingLineTaxAndTotals', () => {
 		};
 
 		act(() => {
-			const calculatedShippingLine = result.current.calculateShippingLineTaxesAndTotals(shippingLine);
+			const calculatedShippingLine =
+				result.current.calculateShippingLineTaxesAndTotals(shippingLine);
 
 			expect(calculatedShippingLine.method_id).toBe('flat_rate');
 			expect(calculatedShippingLine.method_title).toBe('Flat Rate');
@@ -259,7 +265,8 @@ describe('useCalculateShippingLineTaxAndTotals', () => {
 		};
 
 		act(() => {
-			const calculatedShippingLine = result.current.calculateShippingLineTaxesAndTotals(shippingLine);
+			const calculatedShippingLine =
+				result.current.calculateShippingLineTaxesAndTotals(shippingLine);
 
 			expect(calculatedShippingLine.total).toBe('9.99');
 			expect(calculatedShippingLine.total_tax).toBe('1.998');

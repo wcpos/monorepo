@@ -4,8 +4,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
-
-const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
 import { useUISettings } from '../../contexts/ui-settings';
 import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
 import { useCollection } from '../../hooks/use-collection';
@@ -13,6 +11,8 @@ import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 
 import type { QuerySearchInput } from '../../components/query-search-input';
+
+const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;

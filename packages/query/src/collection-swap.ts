@@ -108,10 +108,10 @@ export async function swapCollection(config: CollectionSwapConfig): Promise<Coll
 		// There's an unknown trigger causing extra postCloseRxCollection events during store removal
 		// This delay lets those complete before we emit
 		await new Promise((resolve) => setTimeout(resolve, 50));
-		
+
 		// Step 7: Get the LATEST collection reference after phantom removals settle
 		const finalStoreCollection = await waitForCollectionToExist(storeDB, collectionName, timeout);
-		
+
 		// Step 8: Remove from swappingCollections BEFORE emitting
 		swappingCollections.delete(collectionName);
 		swapLogger.debug('Removed from swappingCollections', { context: { collectionName } });

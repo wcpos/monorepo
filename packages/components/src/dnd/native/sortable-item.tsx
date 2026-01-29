@@ -15,11 +15,11 @@ import * as Haptics from 'expo-haptics';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useSortableContext } from './context';
-
-const uiLogger = getLogger(['wcpos', 'ui', 'dnd']);
 import { DropIndicator } from './drop-indicator';
 
 import type { ItemLayout, SortableItemProps } from './types';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'dnd']);
 
 /**
  * Context for providing the pan gesture to DragHandle components
@@ -75,7 +75,9 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 	const startY = useSharedValue(0);
 
 	// Track drop indicator state
-	const [indicatorEdge, setIndicatorEdge] = React.useState<'top' | 'bottom' | 'left' | 'right' | null>(null);
+	const [indicatorEdge, setIndicatorEdge] = React.useState<
+		'top' | 'bottom' | 'left' | 'right' | null
+	>(null);
 
 	// Determine if this item should show the drop indicator
 	useDerivedValue(() => {
@@ -92,7 +94,8 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 
 		// Show indicator on the item at the target position
 		if (myIndex === to) {
-			const edge = axis === 'vertical' ? (from < to ? 'bottom' : 'top') : from < to ? 'right' : 'left';
+			const edge =
+				axis === 'vertical' ? (from < to ? 'bottom' : 'top') : from < to ? 'right' : 'left';
 			scheduleOnRN(setIndicatorEdge, edge);
 		} else {
 			scheduleOnRN(setIndicatorEdge, null);
@@ -367,7 +370,11 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 	return (
 		<DragHandleContext.Provider value={dragHandleContextValue}>
 			<View style={{ position: 'relative' }}>
-				{hasDragHandle ? content : <GestureDetector gesture={panGesture}>{content}</GestureDetector>}
+				{hasDragHandle ? (
+					content
+				) : (
+					<GestureDetector gesture={panGesture}>{content}</GestureDetector>
+				)}
 				{indicatorEdge ? <DropIndicator edge={indicatorEdge} gap={gap} /> : null}
 			</View>
 		</DragHandleContext.Provider>

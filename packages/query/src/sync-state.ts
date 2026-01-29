@@ -1,12 +1,12 @@
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import type { StoreCollection, SyncCollection } from '@wcpos/database';
 
 import { yieldToEventLoop } from './yield';
 
-import type { StoreCollection, SyncCollection } from '@wcpos/database';
+import type { RxDocument } from 'rxdb';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'state']);
-import type { RxDocument } from 'rxdb';
 
 interface ServerRecord {
 	id: number;
@@ -292,10 +292,10 @@ export class SyncStateManager {
 		if (localDocs.size === 0) {
 			const result = await this.collection.bulkInsert(response);
 			if (result.success.length > 0) {
-			syncLogger.info(`Synced new ${this.collection.name}`, {
-				saveToDb: true,
-				context: { ids: result.success.map((doc: any) => doc.id) },
-			});
+				syncLogger.info(`Synced new ${this.collection.name}`, {
+					saveToDb: true,
+					context: { ids: result.success.map((doc: any) => doc.id) },
+				});
 
 				const synced = result.success.map((doc: any) => ({
 					id: doc.id,
@@ -338,10 +338,10 @@ export class SyncStateManager {
 		if (responseMap.size > 0) {
 			const result = await this.collection.bulkUpsert(Array.from(responseMap.values()));
 			if (result.success.length > 0) {
-			syncLogger.info(`Synced ${this.collection.name}`, {
-				saveToDb: true,
-				context: { ids: result.success.map((doc: any) => doc.id) },
-			});
+				syncLogger.info(`Synced ${this.collection.name}`, {
+					saveToDb: true,
+					context: { ids: result.success.map((doc: any) => doc.id) },
+				});
 
 				const synced = result.success.map((doc: any) => ({
 					id: doc.id,
@@ -385,10 +385,10 @@ export class SyncStateManager {
 			const ids = removed.map((doc) => doc.id);
 			const result = await this.collection.find({ selector: { id: { $in: ids } } }).remove();
 
-		syncLogger.info(`Removed ${this.collection.name}`, {
-			saveToDb: true,
-			context: { ids },
-		});
+			syncLogger.info(`Removed ${this.collection.name}`, {
+				saveToDb: true,
+				context: { ids },
+			});
 
 			// removed from sync should match removed from local DB, this should never happen
 			if (result.length !== removed.length) {

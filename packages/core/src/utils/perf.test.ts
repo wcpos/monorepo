@@ -1,4 +1,4 @@
-import { timeStart, timeEnd } from './perf';
+import { timeEnd, timeStart } from './perf';
 
 // Mock the logger
 jest.mock('@wcpos/utils/logger', () => ({

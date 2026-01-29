@@ -13,26 +13,26 @@ interface ReportData {
 	totalTax: string;
 	netSales: string;
 	discountTotal: string;
-	paymentMethodsArray: Array<{
+	paymentMethodsArray: {
 		payment_method: string;
 		payment_method_title: string;
 		total: string;
-	}>;
-	taxTotalsArray: Array<{
+	}[];
+	taxTotalsArray: {
 		rate_id: number;
 		label: string;
 		total: string;
-	}>;
-	shippingTotalsArray: Array<{
+	}[];
+	shippingTotalsArray: {
 		method_id: string;
 		total: string;
-	}>;
-	userStoreArray: Array<{
+	}[];
+	userStoreArray: {
 		cashierId: string;
 		storeId: string;
 		totalOrders: number;
 		totalAmount: string;
-	}>;
+	}[];
 	totalItemsSold: string;
 	averageOrderValue: string;
 	// Translation function results

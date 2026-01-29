@@ -5,9 +5,9 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'delete']);
-import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 type RxCollection = import('rxdb').RxCollection;
 

@@ -175,7 +175,7 @@ export const Report = () => {
 	});
 
 	return (
-		<View className="h-full p-2 pl-0 pt-0">
+		<View className="h-full p-2 pt-0 pl-0">
 			<Card className="flex-1">
 				<CardHeader className="bg-card-header p-2">
 					<HStack>

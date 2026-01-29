@@ -251,12 +251,7 @@ describe('Chart Utils', () => {
 			const endDate = new Date(2023, 0, 1, 12, 0);
 			const dates = generateAllDates(startDate, endDate, 'minutes', 30);
 			// Uses < condition, so endpoint is excluded
-			expect(dates.map((d) => format(d, 'HH:mm'))).toEqual([
-				'10:00',
-				'10:30',
-				'11:00',
-				'11:30',
-			]);
+			expect(dates.map((d) => format(d, 'HH:mm'))).toEqual(['10:00', '10:30', '11:00', '11:30']);
 		});
 
 		it('should generate 60-minute (hourly) intervals', () => {
@@ -264,12 +259,7 @@ describe('Chart Utils', () => {
 			const endDate = new Date(2023, 0, 1, 14, 0);
 			const dates = generateAllDates(startDate, endDate, 'minutes', 60);
 			// Uses < condition, so endpoint is excluded
-			expect(dates.map((d) => format(d, 'HH:mm'))).toEqual([
-				'10:00',
-				'11:00',
-				'12:00',
-				'13:00',
-			]);
+			expect(dates.map((d) => format(d, 'HH:mm'))).toEqual(['10:00', '11:00', '12:00', '13:00']);
 		});
 
 		it('should generate 120-minute (2 hour) intervals', () => {
@@ -277,12 +267,7 @@ describe('Chart Utils', () => {
 			const endDate = new Date(2023, 0, 1, 8, 0);
 			const dates = generateAllDates(startDate, endDate, 'minutes', 120);
 			// Uses < condition, so endpoint is excluded
-			expect(dates.map((d) => format(d, 'HH:mm'))).toEqual([
-				'00:00',
-				'02:00',
-				'04:00',
-				'06:00',
-			]);
+			expect(dates.map((d) => format(d, 'HH:mm'))).toEqual(['00:00', '02:00', '04:00', '06:00']);
 		});
 	});
 

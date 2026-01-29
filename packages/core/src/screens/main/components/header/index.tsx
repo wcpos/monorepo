@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
+import { type LayoutChangeEvent, View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 import { SystemBars } from 'react-native-edge-to-edge';

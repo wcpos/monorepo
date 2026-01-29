@@ -1,4 +1,3 @@
-import type { RxCollection, RxPlugin } from 'rxdb';
 import { Subject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -10,6 +9,8 @@ import {
 	SyncCollections,
 	syncCollections,
 } from '../collections';
+
+import type { RxCollection, RxPlugin } from 'rxdb';
 
 // Import types to augment RxDatabase
 import '../types.d';
@@ -122,7 +123,7 @@ export const resetCollectionPlugin: RxPlugin = {
 			after: async (collection) => {
 				const database = collection.database;
 				const collectionName = collection.name;
-				
+
 				// Capture stack trace immediately to debug what triggers removal
 				const triggerStack = new Error().stack;
 				resetLogger.debug('postCloseRxCollection triggered', {
@@ -150,7 +151,7 @@ export const resetCollectionPlugin: RxPlugin = {
 					});
 					return;
 				}
-				
+
 				resetLogger.debug('Setting pending re-addition flag', {
 					context: { reAddKey, pendingCount: pendingReAdditions.size },
 				});
@@ -160,20 +161,21 @@ export const resetCollectionPlugin: RxPlugin = {
 				const key = `${database.name}:${collectionName}`;
 				removalCounts[key] = (removalCounts[key] || 0) + 1;
 				const removalNumber = removalCounts[key];
-				
+
 				// Capture stack trace to debug double-removal issues
 				const stackTrace = new Error().stack;
-				
+
 				// Check if this is a stale collection reference being closed
 				// If a DIFFERENT collection instance already exists, this is likely a stale
 				// reference from a previous swap, and we shouldn't re-add
 				const existingCollection = database.collections[collectionName];
 				const isStaleReference = existingCollection && existingCollection !== collection;
-				const collectionAlreadyExists = !!existingCollection && !(existingCollection as any).destroyed;
-				
+				const collectionAlreadyExists =
+					!!existingCollection && !(existingCollection as any).destroyed;
+
 				resetLogger.debug('Re-adding collection after removal', {
-					context: { 
-						collection: collectionName, 
+					context: {
+						collection: collectionName,
 						database: database.name,
 						removalNumber,
 						collectionRef: (collection as any)._instanceId || 'unknown',
@@ -217,7 +219,7 @@ export const resetCollectionPlugin: RxPlugin = {
 						}
 
 						const cols = await database.addCollections({ [collectionName]: schema });
-						
+
 						// Only emit on reset$ if NOT being swapped by swapCollections
 						// (swapCollections handles emission after swap completes)
 						if (!swappingCollections.has(collectionName)) {
@@ -245,7 +247,7 @@ export const resetCollectionPlugin: RxPlugin = {
 						}
 
 						const cols = await database.addCollections({ [collectionName]: schema });
-						
+
 						// Only emit on reset$ if NOT being swapped by swapCollections
 						// (swapCollections handles emission after swap completes)
 						if (!swappingCollections.has(collectionName)) {

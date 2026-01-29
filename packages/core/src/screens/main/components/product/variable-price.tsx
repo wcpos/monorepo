@@ -9,9 +9,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { PriceWithTax } from './price-with-tax';
 
-const uiLogger = getLogger(['wcpos', 'ui', 'product']);
-
 import type { CellContext } from '@tanstack/react-table';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'product']);
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

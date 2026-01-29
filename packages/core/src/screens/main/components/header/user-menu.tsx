@@ -28,12 +28,12 @@ import Platform from '@wcpos/utils/platform';
 import { clearAllDB } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 
-const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
-
 import { useAppState } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
 import { useT } from '../../../../contexts/translations';
 import { useImageAttachment } from '../../hooks/use-image-attachment';
+
+const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
 
 type StoreDocument = import('@wcpos/database').StoreDocument;
 

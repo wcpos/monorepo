@@ -2,16 +2,21 @@ import * as React from 'react';
 
 import type { StoreDocument } from '@wcpos/database';
 import Platform from '@wcpos/utils/platform';
-import { getLogger } from '@wcpos/utils/logger';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
-
-const appLogger = getLogger(['wcpos', 'app', 'state']);
 import { hydrateUserSession } from './hydration-steps';
 
 import type { HydrationContext } from './hydration-steps';
 
 export const AppStateContext = React.createContext<any | undefined>(undefined);
+
+/**
+ * Navigate to URL - extracted to avoid React Compiler warning about
+ * writing to variables outside the component
+ */
+function navigateToUrl(url: string): void {
+	window.location.href = url;
+}
 
 /**
  *
@@ -68,7 +73,7 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 			const initialProps = (globalThis as any).initialProps;
 			if (initialProps?.logout_url) {
 				// WordPress embedded mode - redirect to WordPress logout URL
-				window.location.href = initialProps.logout_url;
+				navigateToUrl(initialProps.logout_url);
 				return;
 			}
 			// Standalone web mode - clear session like native does (don't just reload)

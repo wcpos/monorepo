@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { extractNameFromJSON } from './helpers';
+
 import type { JSON as CustomerJSON } from './helpers';
 
 describe('use-customer-name-format helpers', () => {
