@@ -7,7 +7,7 @@ import * as Slot from '@rn-primitives/slot';
 
 import { cn } from '../lib/utils';
 
-import type { PressableRef, SlottablePressableProps } from '@rn-primitives/types';
+import type { SlottablePressableProps } from '@rn-primitives/types';
 
 interface LabelRootProps {
 	children: React.ReactNode;

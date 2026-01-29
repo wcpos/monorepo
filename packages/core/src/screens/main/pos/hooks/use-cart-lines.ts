@@ -8,9 +8,7 @@ import { useUpdateFeeLine } from './use-update-fee-line';
 import { getUuidFromLineItem } from './utils';
 import { useCurrentOrder } from '../contexts/current-order';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
-type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 
 /**
  * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.

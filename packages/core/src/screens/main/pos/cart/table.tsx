@@ -1,21 +1,13 @@
 import * as React from 'react';
 import { ScrollView, View } from 'react-native';
 
-import {
-	Column,
-	ColumnDef,
-	flexRender,
-	getCoreRowModel,
-	useReactTable,
-} from '@tanstack/react-table';
+import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import find from 'lodash/find';
 import get from 'lodash/get';
-import isEqual from 'lodash/isEqual';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { cn, getFlexAlign } from '@wcpos/components/lib/utils';
-import { Suspense } from '@wcpos/components/suspense';
+import { getFlexAlign } from '@wcpos/components/lib/utils';
 import {
 	PulseTableRow,
 	Table,
@@ -39,7 +31,6 @@ import { RegularPrice } from './cells/regular_price';
 import { ShippingPrice } from './cells/shipping-price';
 import { ShippingTitle } from './cells/shipping-title';
 import { Subtotal } from './cells/subtotal';
-import EmptyTableRow from '../../components/empty-table-row';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';

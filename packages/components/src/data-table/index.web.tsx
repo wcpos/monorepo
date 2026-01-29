@@ -1,12 +1,5 @@
 import * as React from 'react';
-import {
-	LayoutChangeEvent,
-	NativeScrollEvent,
-	NativeSyntheticEvent,
-	RefreshControl,
-	ScrollView,
-	View,
-} from 'react-native';
+import { NativeScrollEvent, NativeSyntheticEvent, RefreshControl, ScrollView, View } from 'react-native';
 
 import {
 	ColumnDef,
@@ -117,11 +110,6 @@ const DataTable = <TData, TValue>({
 	);
 
 	const context = React.useMemo(() => ({ table, ...extraContext }), [table, extraContext]);
-
-	const extraDataWithTimestamp = React.useMemo(
-		() => ({ ...(extraData || {}), timestamp: Date.now() }),
-		[extraData, columns]
-	);
 
 	const scrollRef = React.useRef<ScrollView>(null);
 	const scrollPositionRef = React.useRef(0);

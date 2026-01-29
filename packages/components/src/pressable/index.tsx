@@ -36,3 +36,5 @@ export const Pressable = React.forwardRef<View, PressableProps>((props, ref) => 
 
 	return <RNPressable style={resolvedStyle} ref={ref} {...rest} />;
 });
+
+Pressable.displayName = 'Pressable';

@@ -1,10 +1,5 @@
 import * as React from 'react';
-import {
-	Platform,
-	TextInput as RNTextInput,
-	TextInputProps as RNTextInputProps,
-	View,
-} from 'react-native';
+import { TextInput as RNTextInput, TextInputProps as RNTextInputProps, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 

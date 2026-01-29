@@ -12,14 +12,13 @@ import {
 	ComboboxList,
 	ComboboxTrigger,
 	ComboboxValue,
-	useComboboxRootContext,
 } from '@wcpos/components/combobox';
 import type { ComboboxRootProps } from '@wcpos/components/combobox';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { CustomerCollection, CustomerDocument } from '@wcpos/database';
+import { CustomerDocument } from '@wcpos/database';
 import { useQuery } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';

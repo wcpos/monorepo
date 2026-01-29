@@ -45,7 +45,6 @@ export async function mergeStoresWithResponse({
 	try {
 		// Get current stores populated from wpUser
 		const currentStores: StoreDocument[] = await wpUser.populate('stores');
-		const currentStoreMap = new Map(currentStores.map((store) => [store.id, store]));
 
 		// Generate localIDs for remote stores and prepare for upsert
 		const remoteStoresWithLocalID = await Promise.all(
@@ -64,8 +63,7 @@ export async function mergeStoresWithResponse({
 			})
 		);
 
-		// Create maps for easier lookup
-		const remoteStoreMap = new Map(remoteStoresWithLocalID.map((store) => [store.id, store]));
+		// Create set for easier lookup
 		const remoteStoreIds = new Set(remoteStores.map((store) => store.id));
 
 		// Find stores to remove (exist locally but not in remote response)

@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { useFormContext } from 'react-hook-form';
 
-import type { FormItemProps } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Label } from '@wcpos/components/label';
 import { RadioGroup, RadioGroupItem } from '@wcpos/components/radio-group';

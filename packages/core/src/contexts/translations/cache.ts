@@ -1,5 +1,3 @@
-import { isRxDocument } from 'rxdb';
-
 /**
  * Custom cache for translations
  */

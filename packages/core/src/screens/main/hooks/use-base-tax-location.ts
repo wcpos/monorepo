@@ -1,5 +1,3 @@
-import * as React from 'react';
-
 import { useObservableEagerState } from 'observable-hooks';
 
 import { useAppState } from '../../../contexts/app-state';

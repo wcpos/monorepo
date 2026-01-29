@@ -7,8 +7,6 @@ import map from 'lodash/map';
 import replace from 'lodash/replace';
 import some from 'lodash/some';
 import sortBy from 'lodash/sortBy';
-import uniq from 'lodash/uniq';
-
 type TaxRate = import('@wcpos/database').TaxRateDocument;
 
 /**

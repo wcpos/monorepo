@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { StyleProp, ViewProps } from 'react-native';
 
 import Svg, { Circle, G, Line, Path, SvgProps } from 'react-native-svg';
 

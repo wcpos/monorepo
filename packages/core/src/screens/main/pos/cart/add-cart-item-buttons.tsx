@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import { useRouter } from 'expo-router';
-
-import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -18,7 +15,6 @@ import { useT } from '../../../../contexts/translations';
  */
 export const AddCartItemButtons = () => {
 	const t = useT();
-	const router = useRouter();
 	/**
 	 *
 	 */

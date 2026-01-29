@@ -68,7 +68,7 @@ const StoreSubMenu = ({ storesResource, switchStore, currentStoreID }: StoreSubM
  * @TODO - remove hardcoded screensize
  */
 export const UserMenu = () => {
-	const { wpCredentials, isWebApp, site, store, logout, switchStore } = useAppState();
+	const { wpCredentials, site, store, logout, switchStore } = useAppState();
 	const router = useRouter();
 	const { screenSize } = useTheme();
 	const avatarUrl = useObservableEagerState(wpCredentials?.avatar_url$);

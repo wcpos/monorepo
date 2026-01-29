@@ -20,14 +20,6 @@ import { Input, InputProps } from '../input';
 import { Text } from '../text';
 import { VStack } from '../vstack';
 
-const iconMap: Record<string, IconName> = {
-	'%': 'percent',
-	'+': 'plus',
-	'-': 'minus',
-	'*': 'xmark',
-	'÷': 'divide',
-};
-
 const Display = React.forwardRef<RNTextInput, InputProps>(
 	({ selection, onSelectionChange, ...props }, ref) => {
 		const inputRef = React.useRef<RNTextInput>(null);
@@ -241,7 +233,9 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 						</View>
 					)}
 				</HStack>
-			</VStack>
-		);
+		</VStack>
+	);
 	}
 );
+
+Numpad.displayName = 'Numpad';

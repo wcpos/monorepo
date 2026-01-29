@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { use } from 'react';
 
 import { type HydrationContext, hydrationSteps } from './hydration-steps';

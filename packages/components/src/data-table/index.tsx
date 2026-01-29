@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ActivityIndicator, LayoutChangeEvent, RefreshControl } from 'react-native';
+import { LayoutChangeEvent, RefreshControl } from 'react-native';
 
 import { FlashList } from '@shopify/flash-list';
 import {
@@ -13,12 +13,7 @@ import {
 } from '@tanstack/react-table';
 import { useFocusEffect } from 'expo-router';
 import { useObservableRef } from 'observable-hooks';
-import Animated, {
-	FadeInUp,
-	FadeOutUp,
-	useAnimatedStyle,
-	useSharedValue,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DataTableRow } from './row';

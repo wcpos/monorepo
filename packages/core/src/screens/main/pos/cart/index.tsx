@@ -1,11 +1,10 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Button, ButtonGroup, ButtonGroupSeparator } from '@wcpos/components/button';
+import { ButtonGroupSeparator } from '@wcpos/components/button';
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
 

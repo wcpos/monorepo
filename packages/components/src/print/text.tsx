@@ -6,8 +6,6 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
 
-type TextUnderline = '1dot-thick' | '2dot-thick' | 'none';
-
 const textVariants = cva('web:select-text text-card-foreground font-mono', {
 	variants: {
 		size: {
