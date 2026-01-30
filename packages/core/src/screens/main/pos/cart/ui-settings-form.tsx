@@ -35,13 +35,11 @@ export const schema = z.object({
 export const UISettingsForm = () => {
 	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings('pos-cart');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
-	const { buttonPressHandlerRef } = useDialogContext();
+	const { setButtonPressHandler } = useDialogContext();
 
-	// useEffect is needed to assign resetUI to the mutable ref post-mount, avoiding
-	// ref mutation during render and keeping the dialog handler in sync with the component lifecycle.
 	React.useEffect(() => {
-		buttonPressHandlerRef.current = resetUI;
-	}, [buttonPressHandlerRef, resetUI]);
+		setButtonPressHandler(resetUI);
+	}, [setButtonPressHandler, resetUI]);
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.

@@ -35,6 +35,10 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 	const t = useT();
 	const isActive = !!selected;
 	const options = attribute?.options || [];
+	const data = React.useMemo(
+		() => options.map((option) => ({ value: option, label: option })),
+		[options]
+	);
 
 	/**
 	 * Select for short list of options
@@ -66,11 +70,6 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 			</Select>
 		);
 	}
-
-	const data = React.useMemo(
-		() => options.map((option) => ({ value: option, label: option })),
-		[options]
-	);
 
 	/**
 	 * Combobox for longer list of options

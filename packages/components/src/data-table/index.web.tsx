@@ -1,5 +1,11 @@
 import * as React from 'react';
-import { NativeScrollEvent, NativeSyntheticEvent, RefreshControl, ScrollView, View } from 'react-native';
+import {
+	NativeScrollEvent,
+	NativeSyntheticEvent,
+	RefreshControl,
+	ScrollView,
+	View,
+} from 'react-native';
 
 import {
 	ColumnDef,
@@ -14,6 +20,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useObservableRef } from 'observable-hooks';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { setRefValue } from '../lib/set-ref-value';
 import { DataTableRow } from './row';
 import { getFlexAlign } from '../lib/utils';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table';
@@ -78,7 +85,7 @@ const DataTable = <TData, TValue>({
 		getExpandedRowModel: getExpandedRowModel(),
 		onExpandedChange: (updater) => {
 			const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
-			expandedRef.current = value;
+			setRefValue(expandedRef, value);
 		},
 		getRowCanExpand: (row) => row.original.document.type === 'variable',
 		meta: {
@@ -128,15 +135,14 @@ const DataTable = <TData, TValue>({
 				: undefined,
 		overscan: 5,
 		// debug: true,
+		shouldAdjustScrollPositionOnItemSizeChange: (item, delta, instance) => {
+			const scrollOffset = instance.getScrollOffset();
+			const viewportEnd = scrollOffset + instance.options.size;
+
+			// Only adjust if the item's size change affects the viewport
+			return item.start < viewportEnd && item.end > scrollOffset;
+		},
 	});
-
-	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, context) => {
-		const scrollOffset = context.getScrollOffset();
-		const viewportEnd = scrollOffset + context.options.size;
-
-		// Only adjust if the item's size change affects the viewport
-		return item.start < viewportEnd && item.end > scrollOffset;
-	};
 
 	/**
 	 * Handler to detect when the scroll is near the bottom

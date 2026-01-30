@@ -2,6 +2,21 @@ import * as React from 'react';
 import type { SuspenseProps } from 'react';
 import { Text } from 'react-native';
 
+interface FallbackWrapperProps {
+	fallback: React.ReactNode;
+	onMount: () => void;
+	onUnmount: () => void;
+}
+
+const FallbackWrapper = ({ fallback, onMount, onUnmount }: FallbackWrapperProps) => {
+	React.useEffect(() => {
+		onMount();
+		return onUnmount;
+	}, [onMount, onUnmount]);
+
+	return fallback || <Text>Loading ...</Text>;
+};
+
 export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 	const renderCount = React.useRef(0);
 	const [isFallback, setIsFallback] = React.useState(false);
@@ -33,7 +48,6 @@ export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 		if (isFallback) {
 			fallbackStartTime.current = performance.now();
 			console.info('Suspense is in fallback state. Children:', childNames);
-			// console.trace('Suspense fallback stack trace:');
 		} else {
 			if (fallbackStartTime.current) {
 				const duration = Math.round(performance.now() - fallbackStartTime.current);
@@ -43,15 +57,16 @@ export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 		}
 	}, [isFallback, childNames]);
 
-	// Wrapper component to detect when fallback is rendered
-	const FallbackWrapper = () => {
-		React.useEffect(() => {
-			setIsFallback(true);
-			return () => setIsFallback(false);
-		}, []);
+	const handleMount = React.useCallback(() => setIsFallback(true), []);
+	const handleUnmount = React.useCallback(() => setIsFallback(false), []);
 
-		return fallback || <Text>Loading ...</Text>;
-	};
-
-	return <React.Suspense fallback={<FallbackWrapper />}>{children}</React.Suspense>;
+	return (
+		<React.Suspense
+			fallback={
+				<FallbackWrapper fallback={fallback} onMount={handleMount} onUnmount={handleUnmount} />
+			}
+		>
+			{children}
+		</React.Suspense>
+	);
 };

@@ -19,7 +19,7 @@ import { columnsFormSchema, UISettingsColumnsForm } from './columns-form';
 import { useT } from '../../../../contexts/translations';
 
 interface DialogContextProps {
-	buttonPressHandlerRef: React.MutableRefObject<(() => void) | null>;
+	setButtonPressHandler: (handler: (() => void) | null) => void;
 }
 
 const DialogContext = React.createContext<DialogContextProps | undefined>(undefined);
@@ -43,16 +43,19 @@ interface Props {
 const UISettingsDialog = ({ title, children }: Props) => {
 	const [openDialog, setOpenDialog] = React.useState(false);
 	const t = useT();
-	const buttonPressHandlerRef = React.useRef<() => void>(() => {});
+	const buttonPressHandlerRef = React.useRef<(() => void) | null>(null);
 
-	/**
-	 *
-	 */
+	const setButtonPressHandler = React.useCallback((handler: (() => void) | null) => {
+		buttonPressHandlerRef.current = handler;
+	}, []);
+
 	const handleButtonPress = () => {
 		if (buttonPressHandlerRef.current) {
 			buttonPressHandlerRef.current();
 		}
 	};
+
+	const contextValue = React.useMemo(() => ({ setButtonPressHandler }), [setButtonPressHandler]);
 
 	return (
 		<ErrorBoundary>
@@ -70,9 +73,7 @@ const UISettingsDialog = ({ title, children }: Props) => {
 						<DialogTitle>{title}</DialogTitle>
 					</DialogHeader>
 					<DialogBody>
-						<DialogContext.Provider value={{ buttonPressHandlerRef }}>
-							{children}
-						</DialogContext.Provider>
+						<DialogContext.Provider value={contextValue}>{children}</DialogContext.Provider>
 					</DialogBody>
 					<DialogFooter>
 						<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>

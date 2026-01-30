@@ -137,7 +137,6 @@ const DataTable = <TData, TValue>({
 	 */
 	const extraDataWithTimestamp = React.useMemo(
 		() => ({ ...(extraData || {}), timestamp: Date.now() }),
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- columns is intentional to force FlashList re-render when columns change
 		[extraData, columns]
 	);
 

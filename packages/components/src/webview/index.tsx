@@ -49,10 +49,10 @@ function WebView({ ref, src, onMessage, ...props }: WebViewProps) {
 						// We can't modify nativeEvent directly, so we pass the parsed data separately
 						// The component using this WebView can access parsedData from its onMessage handler
 						onMessage?.({ ...nativeEvent, data: parsedData });
-				} catch {
-					// If it's not valid JSON, just pass the original event
-					onMessage?.(event);
-				}
+					} catch {
+						// If it's not valid JSON, just pass the original event
+						onMessage?.(event);
+					}
 				} else {
 					// Pass the original event if no parsing was needed
 					onMessage?.(event);

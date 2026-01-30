@@ -13,6 +13,18 @@ import type {
 } from '@rn-primitives/types';
 import type { CollapsibleContentProps, CollapsibleRootProps, RootContext } from './types';
 
+/**
+ * Helper to mutate DOM dataset properties outside component scope
+ * so the react-compiler doesn't flag them as return-value mutations.
+ */
+function setDataset(el: HTMLElement, key: string, value: string | undefined) {
+	el.dataset[key] = value;
+}
+
+function setElementType(el: HTMLButtonElement, type: string) {
+	el.type = type;
+}
+
 const CollapsibleContext = React.createContext<RootContext | null>(null);
 
 function Root({
@@ -33,23 +45,20 @@ function Root({
 
 	React.useLayoutEffect(() => {
 		if (augmentedRef.current) {
-			const augRef = augmentedRef.current as unknown as HTMLDivElement;
-			augRef.dataset.state = open ? 'open' : 'closed';
+			setDataset(
+				augmentedRef.current as unknown as HTMLDivElement,
+				'state',
+				open ? 'open' : 'closed'
+			);
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- augmentedRef is a stable ref
-	}, [open]);
+	}, [open, augmentedRef]);
 
 	React.useLayoutEffect(() => {
 		if (augmentedRef.current) {
-			const augRef = augmentedRef.current as unknown as HTMLDivElement;
-			if (disabled) {
-				augRef.dataset.disabled = 'true';
-			} else {
-				augRef.dataset.disabled = undefined;
-			}
+			const el = augmentedRef.current as unknown as HTMLDivElement;
+			setDataset(el, 'disabled', disabled ? 'true' : undefined);
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- augmentedRef is a stable ref
-	}, [disabled]);
+	}, [disabled, augmentedRef]);
 
 	const Component = asChild ? Slot.View : View;
 	return (
@@ -94,25 +103,21 @@ function Trigger({
 
 	React.useLayoutEffect(() => {
 		if (augmentedRef.current) {
-			const augRef = augmentedRef.current as unknown as HTMLButtonElement;
-			augRef.dataset.state = open ? 'open' : 'closed';
+			setDataset(
+				augmentedRef.current as unknown as HTMLButtonElement,
+				'state',
+				open ? 'open' : 'closed'
+			);
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- augmentedRef is a stable ref
-	}, [open]);
+	}, [open, augmentedRef]);
 
 	React.useLayoutEffect(() => {
 		if (augmentedRef.current) {
-			const augRef = augmentedRef.current as unknown as HTMLButtonElement;
-			augRef.type = 'button';
-
-			if (disabled) {
-				augRef.dataset.disabled = 'true';
-			} else {
-				augRef.dataset.disabled = undefined;
-			}
+			const el = augmentedRef.current as unknown as HTMLButtonElement;
+			setElementType(el, 'button');
+			setDataset(el, 'disabled', disabled ? 'true' : undefined);
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- augmentedRef is a stable ref
-	}, [disabled]);
+	}, [disabled, augmentedRef]);
 
 	function onPress(ev: GestureResponderEvent) {
 		onPressProp?.(ev);
@@ -144,11 +149,13 @@ function Content({
 
 	React.useLayoutEffect(() => {
 		if (augmentedRef.current) {
-			const augRef = augmentedRef.current as unknown as HTMLDivElement;
-			augRef.dataset.state = open ? 'open' : 'closed';
+			setDataset(
+				augmentedRef.current as unknown as HTMLDivElement,
+				'state',
+				open ? 'open' : 'closed'
+			);
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- augmentedRef is a stable ref
-	}, [open]);
+	}, [open, augmentedRef]);
 
 	const Component = asChild ? Slot.View : View;
 	return (

@@ -59,7 +59,6 @@ export const useQuery = (queryOptions: QueryOptions) => {
 			},
 		});
 		return manager.registerQuery(queryOptionsRef.current);
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- identityKey triggers re-registration when query identity changes
 	}, [manager, identityKey]);
 
 	/**
@@ -79,7 +78,6 @@ export const useQuery = (queryOptions: QueryOptions) => {
 				}),
 				startWith(initialQuery)
 			),
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- identityKey triggers re-registration when query identity changes
 		[manager, identityKey, initialQuery]
 	);
 

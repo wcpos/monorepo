@@ -137,18 +137,14 @@ function InputField({
 	 *
 	 * @FIXME - Investigate root cause of autoFocus not working and remove this workaround.
 	 */
-	React.useEffect(
-		() => {
-			const timer = setTimeout(() => {
-				if (props.autoFocus && inputRef.current) {
-					inputRef.current?.focus();
-				}
-			}, 50);
-			return () => clearTimeout(timer);
-		},
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally empty - run once on mount
-		[]
-	);
+	React.useEffect(() => {
+		const timer = setTimeout(() => {
+			if (props.autoFocus && inputRef.current) {
+				inputRef.current?.focus();
+			}
+		}, 50);
+		return () => clearTimeout(timer);
+	}, [props.autoFocus]);
 
 	return (
 		<RNTextInput
