@@ -129,14 +129,17 @@ export const FormatNumber = ({
 	/**
 	 *
 	 */
-	const getMaskAtIndex = React.useCallback((index: number) => {
-		const { mask = ' ' } = props;
-		if (typeof mask === 'string') {
-			return mask;
-		}
+	const getMaskAtIndex = React.useCallback(
+		(index: number) => {
+			const { mask = ' ' } = props;
+			if (typeof mask === 'string') {
+				return mask;
+			}
 
-		return mask[index] || ' ';
-	}, [props.mask]);
+			return mask[index] || ' ';
+		},
+		[props.mask]
+	);
 
 	/**
 	 *
