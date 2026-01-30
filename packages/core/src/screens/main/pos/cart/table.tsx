@@ -205,8 +205,8 @@ export const CartTable = () => {
 		getRowId: (line) => line.uuid,
 		// debugTable: true,
 		meta: {
-			onChange: (data: any) => {
-				console.log('onChange called without handler', data);
+			onChange: (data: unknown) => {
+				// fallback handler — should be overridden by the parent
 			},
 			rowRefs,
 			newRowUUIDs,

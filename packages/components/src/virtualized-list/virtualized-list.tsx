@@ -80,9 +80,7 @@ function List<T>({
 	);
 }
 
-function Item({ children }) {
-	// const { item, index } = useItemContext();
-
+function Item({ children }: { children: React.ReactNode }) {
 	return <>{children}</>;
 }
 
