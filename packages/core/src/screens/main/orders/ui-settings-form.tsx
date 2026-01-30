@@ -25,13 +25,11 @@ export const schema = z.object({
 export const UISettingsForm = () => {
 	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings('orders');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
-	const { buttonPressHandlerRef } = useDialogContext();
+	const { setButtonPressHandler } = useDialogContext();
 
-	// Set reset handler in effect - buttonPressHandlerRef is a mutable ref from context
-	// eslint-disable-next-line react-compiler/react-compiler -- intentional ref mutation in effect
 	React.useEffect(() => {
-		buttonPressHandlerRef.current = resetUI;
-	}, [buttonPressHandlerRef, resetUI]);
+		setButtonPressHandler(resetUI);
+	}, [setButtonPressHandler, resetUI]);
 
 	/**
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.

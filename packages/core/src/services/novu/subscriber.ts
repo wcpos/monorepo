@@ -3,9 +3,7 @@ import { http } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { getNovuEnvironment } from './client';
-
-// Import static AppInfo for non-React code
-// For React components, use the useAppInfo() hook instead
+// Static AppInfo for non-React code (for React components, use useAppInfo() hook)
 import { AppInfo } from '../../hooks/use-app-info';
 
 const novuLogger = getLogger(['wcpos', 'notifications', 'novu']);

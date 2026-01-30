@@ -282,7 +282,6 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		};
 
 		validateUser();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		httpClient,
 		apiUrl,
@@ -290,7 +289,7 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		siteUrl,
 		userId,
 		accessToken,
-		wpUser.incrementalPatch,
+		wpUser,
 		userDB,
 		user,
 		site.uuid,

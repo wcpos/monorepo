@@ -122,17 +122,21 @@ export const CartTable = () => {
 	}, [line_items, fee_lines, shipping_lines]);
 
 	/**
-	 * Compute new UUIDs whenever `data` or `currentOrder.uuid` changes.
+	 * Track new row UUIDs as state so they can be removed without prop mutation.
 	 */
-	const newRowUUIDs = React.useMemo(() => {
+	const [newRowUUIDs, setNewRowUUIDs] = React.useState<string[]>([]);
+
+	React.useEffect(() => {
 		if (!currentOrderRef?.current.uuid) {
-			return [];
+			setNewRowUUIDs([]);
+			return;
 		}
 
 		if (currentOrderRef.current.uuid !== prevOrderRef?.current?.uuid) {
 			prevOrderRef.current = currentOrderRef.current;
 			prevDataRef.current = data;
-			return [];
+			setNewRowUUIDs([]);
+			return;
 		}
 
 		const detectedNewUUIDs = data.reduce<string[]>((acc, newItem) => {
@@ -152,10 +156,13 @@ export const CartTable = () => {
 
 		if (detectedNewUUIDs.length > 0) {
 			prevDataRef.current = data;
+			setNewRowUUIDs(detectedNewUUIDs);
 		}
-
-		return detectedNewUUIDs;
 	}, [data]);
+
+	const removeNewRowUUID = React.useCallback((uuid: string) => {
+		setNewRowUUIDs((prev) => prev.filter((id) => id !== uuid));
+	}, []);
 
 	/**
 	 *
@@ -210,6 +217,7 @@ export const CartTable = () => {
 			},
 			rowRefs,
 			newRowUUIDs,
+			removeNewRowUUID,
 			rowLayouts,
 			scrollToRow: (uuid: string) => {
 				const layout = rowLayouts.current.get(uuid);

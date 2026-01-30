@@ -5,8 +5,6 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import type { RxCollection, RxPlugin } from 'rxdb';
-
-// Import types
 import type { FlexSearchInstance } from '../types.d';
 
 const searchLogger = getLogger(['wcpos', 'db', 'search']);

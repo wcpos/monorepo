@@ -5,6 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { useObservableRef, useObservableState } from 'observable-hooks';
 import { filter, map, switchMap } from 'rxjs/operators';
 
+import { setRefValue } from '@wcpos/components/lib/set-ref-value';
 import { useHeartbeatObservable } from '@wcpos/hooks/use-heartbeat';
 
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../hooks/use-local-date';
@@ -49,14 +50,14 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 	/**
 	 * We will turn off the heartbeat if the screen is not visible
 	 */
-	// eslint-disable-next-line react-compiler/react-compiler -- visibleRef is a mutable ref from useObservableRef
+
 	useFocusEffect(
 		React.useCallback(() => {
-			visibleRef.current = true;
+			setRefValue(visibleRef, true);
 			return () => {
-				visibleRef.current = false;
+				setRefValue(visibleRef, false);
 			};
-		}, [])
+		}, [visibleRef])
 	);
 
 	/**

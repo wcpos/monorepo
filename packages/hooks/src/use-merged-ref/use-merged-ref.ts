@@ -11,5 +11,5 @@ export function mergeRefs<T = any>(...refs: Ref<T>[]) {
 }
 
 export function useMergedRef<T = any>(...refs: Ref<T>[]) {
-	return React.useCallback(mergeRefs(...refs), refs);
+	return mergeRefs(...refs);
 }

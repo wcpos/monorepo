@@ -42,19 +42,15 @@ const Display = React.forwardRef<RNTextInput, InputProps>(
 		 * @FIXME - the autofocus doesn't seem to work, perhaps it's not on the screen yet?
 		 * - so we use a timer to focus after a short delay
 		 */
-		React.useEffect(
-			() => {
-				const timer = setTimeout(() => {
-					if (inputRef.current) {
-						inputRef.current?.focus();
-						inputRef.current?.setSelectionRange(0, props.value?.length || 100);
-					}
-				}, 50);
-				return () => clearTimeout(timer);
-			},
-			// eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally empty - run once on mount
-			[]
-		);
+		React.useEffect(() => {
+			const timer = setTimeout(() => {
+				if (inputRef.current) {
+					inputRef.current?.focus();
+					inputRef.current?.setSelectionRange(0, props.value?.length || 100);
+				}
+			}, 50);
+			return () => clearTimeout(timer);
+		}, [props.value?.length]);
 
 		return (
 			<Input.Root {...props}>
@@ -232,8 +228,8 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 						</View>
 					)}
 				</HStack>
-		</VStack>
-	);
+			</VStack>
+		);
 	}
 );
 

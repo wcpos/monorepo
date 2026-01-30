@@ -34,7 +34,7 @@ export const UISettingsForm = () => {
 	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('pos-products');
 	// Get initial data once - don't subscribe to changes while editing
 	const initialData = React.useMemo(() => uiSettings.get(), [uiSettings]);
-	const { buttonPressHandlerRef } = useDialogContext();
+	const { setButtonPressHandler } = useDialogContext();
 	const t = useT();
 
 	/**
@@ -53,10 +53,9 @@ export const UISettingsForm = () => {
 		form.reset(uiSettings.get());
 	}, [resetUI, form, uiSettings]);
 
-	// eslint-disable-next-line react-compiler/react-compiler -- intentional ref mutation in effect
 	React.useEffect(() => {
-		buttonPressHandlerRef.current = handleReset;
-	}, [buttonPressHandlerRef, handleReset]);
+		setButtonPressHandler(handleReset);
+	}, [setButtonPressHandler, handleReset]);
 
 	/**
 	 * Form is the source of truth during editing.
