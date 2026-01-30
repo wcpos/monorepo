@@ -32,8 +32,11 @@ export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
 	}, [removeLineItem, table.options.meta.rowRefs, type, uuid]);
 
 	/**
-	 * Use pulse effect for new rows
-	 * Move to effect to avoid mutating props during render
+	 * Use pulse effect for new rows.
+	 *
+	 * useEffect is needed here because rowRef.pulseAdd() runs its callback after
+	 * the ~800ms animation completes. Cleanup of table.options.meta.newRowUUIDs
+	 * must happen at that point, which the row-add event handler has no hook for.
 	 */
 	const isNew = table.options.meta.newRowUUIDs.includes(uuid);
 
