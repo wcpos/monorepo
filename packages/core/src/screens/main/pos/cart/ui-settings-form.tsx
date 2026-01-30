@@ -37,8 +37,8 @@ export const UISettingsForm = () => {
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
 	const { buttonPressHandlerRef } = useDialogContext();
 
-	// Set reset handler in effect - buttonPressHandlerRef is a mutable ref from context
-	// eslint-disable-next-line react-compiler/react-compiler -- intentional ref mutation in effect
+	// useEffect is needed to assign resetUI to the mutable ref post-mount, avoiding
+	// ref mutation during render and keeping the dialog handler in sync with the component lifecycle.
 	React.useEffect(() => {
 		buttonPressHandlerRef.current = resetUI;
 	}, [buttonPressHandlerRef, resetUI]);

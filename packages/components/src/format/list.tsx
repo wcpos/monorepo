@@ -13,7 +13,7 @@ export const FormatList = ({ array }: FormatListProps) => {
 				if (typeof item === 'string') {
 					return <Text key={index}>{item}, </Text>;
 				}
-				return item;
+				return <React.Fragment key={index}>{item}</React.Fragment>;
 			})}
 		</>
 	);

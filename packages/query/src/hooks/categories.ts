@@ -1,6 +1,3 @@
-/**
- *
- */
 const filterApiQueryParams = (params: Record<string, unknown>) => {
 	return params;
 };

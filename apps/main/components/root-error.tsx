@@ -92,7 +92,7 @@ export const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 			<ScrollView>
 				<View style={styles.content}>
 					<Text style={styles.title}>Oops!</Text>
-					<Text style={styles.subtitle}>There&apos;s an error</Text>
+					<Text style={styles.subtitle}>There's an error</Text>
 					<Text style={styles.error}>{error.toString()}</Text>
 					<TouchableOpacity style={styles.button} onPress={handleReset}>
 						<Text style={styles.buttonText}>Try again</Text>

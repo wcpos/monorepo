@@ -55,7 +55,7 @@ const StoreSubMenu = ({ storesResource, switchStore, currentStoreID }: StoreSubM
 				<DropdownMenuItem
 					key={store.localID}
 					onPress={() => switchStore(store)}
-					disabled={store.localId === currentStoreID}
+					disabled={store.localID === currentStoreID}
 				>
 					<Text>{store.name}</Text>
 				</DropdownMenuItem>
