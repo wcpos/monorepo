@@ -49,6 +49,7 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 	/**
 	 * We will turn off the heartbeat if the screen is not visible
 	 */
+	// eslint-disable-next-line react-compiler/react-compiler -- visibleRef is a mutable ref from useObservableRef
 	useFocusEffect(
 		React.useCallback(() => {
 			visibleRef.current = true;

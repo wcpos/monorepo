@@ -198,6 +198,7 @@ export function Products() {
 	 * which has a minification bug with computed property destructuring.
 	 * Uses lodash/omit which doesn't have this issue.
 	 */
+	/* eslint-disable react-compiler/react-compiler -- expandedRef is a mutable ref from useObservableRef */
 	const setRowExpanded = React.useCallback(
 		(rowId: string, expanded: boolean) => {
 			if (expanded) {
@@ -233,6 +234,7 @@ export function Products() {
 		}),
 		[expandedRef, expanded$, setRowExpanded, productsPatch, variationsPatch]
 	);
+	/* eslint-enable react-compiler/react-compiler */
 
 	/**
 	 *
