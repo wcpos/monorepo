@@ -53,29 +53,73 @@ jobs:
         run: |
           # Track failures but continue to generate coverage for all packages
           failed=0
-          
+
           # Run tests for each package separately to get individual coverage
           for pkg in core components database hooks utils; do
             echo "::group::Testing @wcpos/$pkg"
             cd packages/$pkg
             if [ -f "jest.config.js" ]; then
-              npx jest --ci --passWithNoTests --coverage --coverageReporters=json-summary --coverageReporters=text || failed=1
+              npx jest --ci --passWithNoTests --coverage --coverageReporters=json-summary --coverageReporters=text --json --outputFile=test-results.json || failed=1
             fi
             cd ../..
             echo "::endgroup::"
           done
-          
+
           # Run query package separately (uses .cjs config)
           echo "::group::Testing @wcpos/query"
           cd packages/query
-          npx jest --config jest.config.cjs --ci --coverage --coverageReporters=json-summary --coverageReporters=text || failed=1
+          npx jest --config jest.config.cjs --ci --coverage --coverageReporters=json-summary --coverageReporters=text --json --outputFile=test-results.json || failed=1
           cd ../..
           echo "::endgroup::"
-          
+
           # Fail the step if any tests failed
           if [ "$failed" -ne 0 ]; then
             echo "::error::One or more package tests failed"
             exit 1
+          fi
+
+      - name: 📊 Generate test failure summary
+        if: always()
+        run: |
+          # Collect test failures from JSON results
+          has_failures=false
+          failure_md=""
+
+          for pkg in core components database hooks utils query; do
+            file="packages/$pkg/test-results.json"
+            if [ -f "$file" ]; then
+              pkg_failures=$(node -e "
+                const r = require('./$file');
+                const failed = r.testResults.filter(t => t.status === 'failed');
+                for (const f of failed) {
+                  for (const a of (f.assertionResults || []).filter(a => a.status === 'failed')) {
+                    const title = [...a.ancestorTitles, a.title].join(' > ');
+                    const msg = (a.failureMessages || []).join('\n').substring(0, 500);
+                    console.log('### \`@wcpos/$pkg\`: ' + title);
+                    console.log('\`\`\`');
+                    console.log(msg);
+                    console.log('\`\`\`');
+                    console.log('');
+                  }
+                }
+              " 2>/dev/null || true)
+
+              if [ -n "$pkg_failures" ]; then
+                has_failures=true
+                failure_md="$failure_md$pkg_failures"
+              fi
+            fi
+          done
+
+          if [ "$has_failures" = true ]; then
+            echo "## ❌ Test Failures" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "$failure_md" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Save for PR comment step
+            mkdir -p /tmp/test-summary
+            echo "$failure_md" > /tmp/test-summary/failures.md
           fi
 
       - name: 📊 Generate coverage summary
@@ -85,7 +129,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Package | Statements | Branches | Functions | Lines |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|------------|----------|-----------|-------|" >> $GITHUB_STEP_SUMMARY
-          
+
           for pkg in core components database hooks utils query; do
             file="packages/$pkg/coverage/coverage-summary.json"
             if [ -f "$file" ]; then
@@ -191,7 +235,22 @@ jobs:
             const tableHeader = '| Package | Statements | Branches | Functions | Lines |\n|---------|------------|----------|-----------|-------|';
             const legend = '<details>\n<summary>Coverage Legend</summary>\n\n- 🟢 Good (≥80%)\n- 🟡 Moderate (60-79%)\n- 🔴 Needs improvement (<60%)\n- ⚪ No coverage data\n\n</details>';
             
+            // Read test failure summary if it exists
+            let failureSection = '';
+            const failurePath = '/tmp/test-summary/failures.md';
+            try {
+              if (fs.existsSync(failurePath)) {
+                const failures = fs.readFileSync(failurePath, 'utf8').trim();
+                if (failures) {
+                  failureSection = '## ❌ Test Failures\n\n' + failures + '\n\n';
+                }
+              }
+            } catch (e) {
+              console.log(`Error reading failures: ${e.message}`);
+            }
+
             const body = [
+              failureSection,
               '## 📊 Test Coverage Report',
               '',
               tableHeader,
@@ -202,7 +261,7 @@ jobs:
               '',
               '---',
               `<sub>🤖 Updated by GitHub Actions • [View full report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>`
-            ].join('\n');
+            ].filter(Boolean).join('\n');
 
             // Find and update existing comment
             const { data: comments } = await github.rest.issues.listComments({
