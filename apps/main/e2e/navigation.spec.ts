@@ -17,7 +17,7 @@ test.describe('Unauthenticated Navigation', () => {
 		// Wait for the app to finish loading, then check for connect screen or 404
 		await expect(
 			page.getByRole('button', { name: 'Connect' }).or(page.getByText(/doesn't exist/i))
-		).toBeVisible({ timeout: 120_000 });
+		).toBeVisible({ timeout: 60_000 });
 	});
 });
 

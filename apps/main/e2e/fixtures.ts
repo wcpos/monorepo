@@ -1,6 +1,8 @@
 import { test as base, expect, type Page } from '@playwright/test';
 
-const STORE_URL = process.env.E2E_STORE_URL || 'https://dev-free.wcpos.com';
+export const STORE_URL = process.env.E2E_STORE_URL || 'https://dev-free.wcpos.com';
+const E2E_USERNAME = process.env.E2E_USERNAME || 'demo';
+const E2E_PASSWORD = process.env.E2E_PASSWORD || 'demo';
 
 /**
  * Authenticate the current page with the test store via OAuth.
@@ -81,10 +83,10 @@ export async function authenticateWithStore(page: Page) {
 	const passwordInput = loginPage.locator('#user_pass, #wcpos-user-pass');
 
 	if (await usernameInput.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
-		await usernameInput.first().fill('demo');
+		await usernameInput.first().fill(E2E_USERNAME);
 	}
 	if (await passwordInput.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
-		await passwordInput.first().fill('demo');
+		await passwordInput.first().fill(E2E_PASSWORD);
 	}
 
 	// Submit login form

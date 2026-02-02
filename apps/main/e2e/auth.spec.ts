@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
-
-const STORE_URL = process.env.E2E_STORE_URL || 'https://dev-free.wcpos.com';
+import { STORE_URL } from './fixtures';
 
 /**
  * Authentication tests for the connect screen (unauthenticated).
@@ -31,9 +30,7 @@ test.describe('Connect Screen', () => {
 		await page.getByRole('button', { name: 'Connect' }).click();
 
 		// After trying to connect, the store card should NOT appear
-		// (no "Logged in users:" text), meaning the connection failed
-		await page.waitForTimeout(15_000);
-		await expect(page.getByText('Logged in users:')).not.toBeVisible();
+		await expect(page.getByText('Logged in users:')).not.toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should connect to store and show site card', async ({ page }) => {
