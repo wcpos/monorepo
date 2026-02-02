@@ -1,7 +1,7 @@
 import { isCancel } from 'axios';
 import intersection from 'lodash/intersection';
 import isEmpty from 'lodash/isEmpty';
-import { BehaviorSubject, interval, Observable, Subscription } from 'rxjs';
+import { BehaviorSubject, interval, Observable } from 'rxjs';
 import { filter, startWith, switchMap } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';

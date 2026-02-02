@@ -3,7 +3,6 @@ import {
 	extractWpErrorCode,
 	isWpErrorResponse,
 	mapToInternalCode,
-	ParsedWpError,
 	parseWpError,
 	WpErrorResponse,
 } from './parse-wp-error';

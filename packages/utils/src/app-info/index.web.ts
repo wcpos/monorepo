@@ -6,7 +6,7 @@
  * platform-specific version (no App Store/Play Store release).
  */
 
-export interface AppInfo {
+interface AppInfo {
 	/** Cross-platform JS bundle version from Expo config (e.g., '1.8.1') */
 	version: string;
 	/** Platform-specific version - same as version for web */
@@ -21,6 +21,7 @@ export interface AppInfo {
 
 const version = process.env.EXPO_PUBLIC_APP_VERSION ?? '0.0.0';
 
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 const AppInfo: AppInfo = {
 	version,
 	platformVersion: version, // Web has no separate platform version

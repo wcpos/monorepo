@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import Button from '../button';
-
 type WebViewProps = {
 	src: string;
 	title?: string;

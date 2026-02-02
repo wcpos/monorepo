@@ -10,21 +10,10 @@
 // Mock the FlexSearch plugin
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
-const mockSearchInstance = {
-	collection: {
-		destroy: jest.fn().mockResolvedValue(undefined),
-		remove: jest.fn().mockResolvedValue(undefined),
-	},
-	search: jest.fn().mockResolvedValue(['uuid-1', 'uuid-2']),
-};
-
-let addFulltextSearchCallCount = 0;
 let shouldFailOnCreate = false;
 
 jest.mock('rxdb-premium/plugins/flexsearch', () => ({
 	addFulltextSearch: jest.fn().mockImplementation(async (config) => {
-		addFulltextSearchCallCount++;
-
 		if (shouldFailOnCreate) {
 			shouldFailOnCreate = false; // Only fail once for recovery tests
 			throw new Error('FlexSearch schema mismatch');
@@ -62,7 +51,6 @@ jest.mock('@wcpos/utils/logger/error-codes', () => ({
 describe('search plugin', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		addFulltextSearchCallCount = 0;
 		shouldFailOnCreate = false;
 	});
 
@@ -393,7 +381,7 @@ describe('search plugin', () => {
 			const lru = ['en'];
 
 			// Remove from instances
-			const oldInstance = instances.get('en');
+			instances.get('en');
 			instances.delete('en');
 
 			// Remove from LRU

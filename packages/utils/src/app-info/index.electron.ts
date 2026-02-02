@@ -14,7 +14,7 @@ declare global {
 	}
 }
 
-export interface AppInfo {
+interface AppInfo {
 	/** Cross-platform JS bundle version from Expo config (e.g., '1.8.1') */
 	version: string;
 	/** Electron app version from apps/electron/package.json */
@@ -32,6 +32,7 @@ const version = process.env.EXPO_PUBLIC_APP_VERSION ?? '0.0.0';
 // Electron app version (from Electron's package.json via preload)
 const platformVersion = window.electron?.version ?? '0.0.0';
 
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 const AppInfo: AppInfo = {
 	version,
 	platformVersion,

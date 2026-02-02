@@ -50,7 +50,9 @@ describe('mergeStoresWithResponse', () => {
 		});
 
 		expect(userDB.stores.bulkInsert).toHaveBeenCalledWith(
-			expect.arrayContaining([expect.objectContaining({ id: 1, name: 'Store 1', localID: expect.any(String) })])
+			expect.arrayContaining([
+				expect.objectContaining({ id: 1, name: 'Store 1', localID: expect.any(String) }),
+			])
 		);
 		expect(wpUser.incrementalPatch).toHaveBeenCalledWith({
 			stores: expect.arrayContaining([expect.any(String)]),

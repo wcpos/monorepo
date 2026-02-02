@@ -153,7 +153,7 @@ class RequestStateManager {
 			for (const callback of this.wakeCallbacks) {
 				try {
 					callback();
-				} catch (e) {
+				} catch {
 					// Silently ignore wake callback errors
 				}
 			}

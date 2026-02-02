@@ -93,7 +93,7 @@ function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<any> {
 					// Test the connection with a simple query
 					await cachedDb.getAllAsync('SELECT 1');
 					return cachedDb;
-				} catch (error) {
+				} catch {
 					// Connection is invalid, remove it from cache
 					console.warn(`Invalid cached connection for ${databaseName}, creating new one`);
 					dbCache.delete(databaseName);

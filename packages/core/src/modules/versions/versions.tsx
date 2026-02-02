@@ -2,9 +2,7 @@ import * as React from 'react';
 
 import { Text } from '@wcpos/components/text';
 
-interface Props {}
-
-const Versions: React.FC<Props> = () => {
+const Versions: React.FC = () => {
 	return <Text>React:{React.version}</Text>;
 };
 
