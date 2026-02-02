@@ -1,5 +1,11 @@
-import { test, expect } from '@playwright/test';
-import { STORE_URL } from './fixtures';
+import { test, expect, type TestInfo } from '@playwright/test';
+import type { WcposTestOptions } from '../playwright.config';
+
+function getStoreUrl(testInfo: TestInfo): string {
+	if (process.env.E2E_STORE_URL) return process.env.E2E_STORE_URL;
+	const opts = testInfo.project.use as WcposTestOptions;
+	return opts.storeUrl || 'https://dev-free.wcpos.com';
+}
 
 /**
  * Unauthenticated tests: connect screen and basic navigation.
@@ -34,10 +40,11 @@ test.describe('Connect Screen', () => {
 		await expect(page.getByText('Logged in users:')).not.toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should connect to store and show site card', async ({ page }) => {
+	test('should connect to store and show site card', async ({ page }, testInfo) => {
+		const storeUrl = getStoreUrl(testInfo);
 		const urlInput = page.getByRole('textbox', { name: /Enter the URL/i });
 		await urlInput.click();
-		await urlInput.fill(STORE_URL);
+		await urlInput.fill(storeUrl);
 		await page.waitForTimeout(1_000);
 
 		const connectButton = page.getByRole('button', { name: 'Connect' });

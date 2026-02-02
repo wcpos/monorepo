@@ -1,8 +1,25 @@
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
+import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
-export const STORE_URL = process.env.E2E_STORE_URL || 'https://dev-free.wcpos.com';
 const E2E_USERNAME = process.env.E2E_USERNAME || 'demo';
 const E2E_PASSWORD = process.env.E2E_PASSWORD || 'demo';
+
+/**
+ * Get the store URL from the project config, with env var override.
+ */
+function getStoreUrl(testInfo: TestInfo): string {
+	if (process.env.E2E_STORE_URL) return process.env.E2E_STORE_URL;
+	const opts = testInfo.project.use as WcposTestOptions;
+	return opts.storeUrl || 'https://dev-free.wcpos.com';
+}
+
+/**
+ * Get the store variant from the project config.
+ */
+export function getStoreVariant(testInfo: TestInfo): StoreVariant {
+	const opts = testInfo.project.use as WcposTestOptions;
+	return opts.storeVariant || 'free';
+}
 
 /**
  * Authenticate the current page with the test store via OAuth.
@@ -14,7 +31,8 @@ const E2E_PASSWORD = process.env.E2E_PASSWORD || 'demo';
  * 3. Capture the callback redirect URL
  * 4. Send a postMessage to the main page to simulate the popup's callback
  */
-export async function authenticateWithStore(page: Page) {
+export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
+	const storeUrl = getStoreUrl(testInfo);
 	const context = page.context();
 
 	// Intercept window.open: capture the URL, return fake window to prevent
@@ -39,7 +57,7 @@ export async function authenticateWithStore(page: Page) {
 	// Type the store URL and connect
 	const urlInput = page.getByRole('textbox', { name: /Enter the URL/i });
 	await urlInput.click();
-	await urlInput.fill(STORE_URL);
+	await urlInput.fill(storeUrl);
 	await page.waitForTimeout(1_000);
 
 	const connectButton = page.getByRole('button', { name: 'Connect' });
@@ -159,8 +177,8 @@ export async function authenticateWithStore(page: Page) {
  * data in IndexedDB (RxDB), which Playwright's storageState cannot capture.
  */
 export const authenticatedTest = base.extend<{ posPage: Page }>({
-	posPage: async ({ page }, use) => {
-		await authenticateWithStore(page);
+	posPage: async ({ page }, use, testInfo) => {
+		await authenticateWithStore(page, testInfo);
 		await use(page);
 	},
 });
