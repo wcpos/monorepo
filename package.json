@@ -30,7 +30,7 @@
   "packageManager": "pnpm@10.17.0",
   "pnpm": {
     "overrides": {
-      "expo": "54.0.32",
+      "expo": "54.0.33",
       "lightningcss": "1.30.1",
       "pnpm": "10.17.0",
       "uniwind": "npm:uniwind-pro@beta",
@@ -66,7 +66,7 @@
     ]
   },
   "devDependencies": {
-    "glob": "^11.0.0"
+    "glob": "^13.0.0"
   },
   "dependencies": {
     "turbo": "^2.5.0",
