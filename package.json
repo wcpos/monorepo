@@ -24,7 +24,8 @@
     "query": "pnpm --filter @wcpos/query",
     "utils": "pnpm --filter @wcpos/utils",
     "preinstall": "pnpm ignored-builds || true",
-    "expo:install": "pnpm --filter main exec expo install"
+    "expo:install": "pnpm --filter main exec expo install",
+    "extract:translations": "node scripts/extract-js-strings.js"
   },
   "packageManager": "pnpm@10.17.0",
   "pnpm": {
@@ -63,6 +64,9 @@
       "@firebase/util",
       "electron-winstaller"
     ]
+  },
+  "devDependencies": {
+    "glob": "^11.0.0"
   },
   "dependencies": {
     "turbo": "^2.5.0",
