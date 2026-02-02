@@ -8,7 +8,7 @@ const posLogger = getLogger(['wcpos', 'pos', 'utils']);
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
-type CartLine = LineItem | FeeLine | ShippingLine;
+export type CartLine = LineItem | FeeLine | ShippingLine;
 type TaxStatus = 'taxable' | 'none';
 
 /**
