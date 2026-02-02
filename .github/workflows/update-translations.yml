@@ -40,12 +40,18 @@ jobs:
             exit 0
           fi
 
+          # Save translation files before wiping the working tree
+          cp -r .translations /tmp/translations-out
+
           git checkout --orphan translations-source
           git rm -rf .
-          cp .translations/*.json .
+          cp /tmp/translations-out/*.json .
           git add .
           git commit -m "translation source strings from ${{ github.sha }}"
           git push -f origin translations-source
+
+          # Restore original checkout so composite action post-cleanup can find action.yml
+          git checkout ${{ github.sha }} -- .github
 
       - name: Generate GitHub App token
         id: app-token
