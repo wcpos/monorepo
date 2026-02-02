@@ -28,31 +28,31 @@ export const TaxRateTable = ({ rates }: TaxRateTableProps) => {
 			<TableHeader>
 				<TableRow>
 					<TableHead>
-						<Text>{t('Country code', { _tags: 'core ' })}</Text>
+						<Text>{t('Country code')}</Text>
 					</TableHead>
 					<TableHead>
-						<Text>{t('State code', { _tags: 'core ' })}</Text>
+						<Text>{t('State code')}</Text>
 					</TableHead>
 					<TableHead>
-						<Text>{t('Postcode', { _tags: 'core ' })}</Text>
+						<Text>{t('Postcode')}</Text>
 					</TableHead>
 					<TableHead>
-						<Text>{t('City', { _tags: 'core ' })}</Text>
+						<Text>{t('City')}</Text>
 					</TableHead>
 					<TableHead>
-						<Text>{t('Rate %', { _tags: 'core ' })}</Text>
+						<Text>{t('Rate %')}</Text>
 					</TableHead>
 					<TableHead>
-						<Text>{t('Tax name', { _tags: 'core ' })}</Text>
+						<Text>{t('Tax name')}</Text>
 					</TableHead>
 					<TableHead className="w-12">
-						<Text>{t('Priority', { _tags: 'core ' })}</Text>
+						<Text>{t('Priority')}</Text>
 					</TableHead>
 					<TableHead className="w-12">
-						<Text>{t('Compound', { _tags: 'core ' })}</Text>
+						<Text>{t('Compound')}</Text>
 					</TableHead>
 					<TableHead className="w-12">
-						<Text>{t('Shipping', { _tags: 'core ' })}</Text>
+						<Text>{t('Shipping')}</Text>
 					</TableHead>
 				</TableRow>
 			</TableHeader>

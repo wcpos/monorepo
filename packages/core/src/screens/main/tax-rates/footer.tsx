@@ -23,7 +23,7 @@ export const TaxRatesFooter = ({ count, query }) => {
 	return (
 		<HStack className="p-2 gap-0 border-border border-t bg-muted justify-end">
 			<Text className="text-xs">
-				{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
+				{t('Showing {count} of {total}', { count, total })}
 			</Text>
 			<SyncButton sync={sync} clear={clear} active={active} />
 		</HStack>

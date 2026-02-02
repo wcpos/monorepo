@@ -122,7 +122,7 @@ export const NumberInput = React.forwardRef<React.ElementRef<typeof Button>, Num
 							formatDisplay={(value) => formatDisplay(value)}
 						/>
 						<HStack className="justify-end">
-							<Button onPress={handleSubmit}>{t('Done', { _tags: 'core' })}</Button>
+							<Button onPress={handleSubmit}>{t('Done')}</Button>
 						</HStack>
 					</VStack>
 				</PopoverContent>

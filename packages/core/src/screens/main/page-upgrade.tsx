@@ -25,46 +25,35 @@ export const PageUpgrade = ({
 			case 'products':
 				return {
 					imageURL: 'https://wcpos.com/products-upgrade.png',
-					title: t('Upgrade to Pro', { _tags: 'core' }),
+					title: t('Upgrade to Pro'),
 					description: t(
-						'Adjust product prices and quantities by upgrading to WooCommerce POS Pro',
-						{
-							_tags: 'core',
-						}
+						'Adjust product prices and quantities by upgrading to WooCommerce POS Pro'
 					),
 					demoURL: 'https://demo.wcpos.com/pos/products',
 				};
 			case 'orders':
 				return {
 					imageURL: 'https://wcpos.com/orders-upgrade.png',
-					title: t('Upgrade to Pro', { _tags: 'core' }),
+					title: t('Upgrade to Pro'),
 					description: t(
-						'Re-open and print receipts for older orders by upgrading to WooCommerce POS Pro',
-						{
-							_tags: 'core',
-						}
+						'Re-open and print receipts for older orders by upgrading to WooCommerce POS Pro'
 					),
 					demoURL: 'https://demo.wcpos.com/pos/orders',
 				};
 			case 'customers':
 				return {
 					imageURL: 'https://wcpos.com/customers-upgrade.png',
-					title: t('Upgrade to Pro', { _tags: 'core' }),
+					title: t('Upgrade to Pro'),
 					description: t(
-						'Add new customers and edit existing customers by upgrading to WooCommerce POS Pro',
-						{
-							_tags: 'core',
-						}
+						'Add new customers and edit existing customers by upgrading to WooCommerce POS Pro'
 					),
 					demoURL: 'https://demo.wcpos.com/pos/customers',
 				};
 			case 'reports':
 				return {
 					imageURL: 'https://wcpos.com/reports-upgrade.png',
-					title: t('Upgrade to Pro', { _tags: 'core' }),
-					description: t('Unlock End of Day Reports by upgrading to WooCommerce POS Pro', {
-						_tags: 'core',
-					}),
+					title: t('Upgrade to Pro'),
+					description: t('Unlock End of Day Reports by upgrading to WooCommerce POS Pro'),
 					demoURL: 'https://demo.wcpos.com/pos/reports',
 				};
 			default:
@@ -91,10 +80,10 @@ export const PageUpgrade = ({
 					<Text className="text-center sm:text-left">{description}</Text>
 					<HStack className="space-x-2 justify-center sm:justify-start">
 						<Button variant="secondary" onPress={() => Linking.openURL(demoURL)}>
-							{t('View Demo', { _tags: 'core' })}
+							{t('View Demo')}
 						</Button>
 						<Button onPress={() => Linking.openURL('https://wcpos.com/pro')}>
-							{t('Upgrade to Pro', { _tags: 'core' })}
+							{t('Upgrade to Pro')}
 						</Button>
 					</HStack>
 				</VStack>

@@ -205,16 +205,16 @@ const Products = () => {
 								<QuerySearchInput
 									ref={querySearchInputRef}
 									query={query}
-									placeholder={t('Search Products', { _tags: 'core' })}
+									placeholder={t('Search Products')}
 									className="flex-1"
 								/>
 							</ErrorBoundary>
 							{/* <Icon
 						name="plus"
 						onPress={() => navigation.navigate('AddProduct')}
-						tooltip={t('Add new customer', { _tags: 'core' })}
+						tooltip={t('Add new customer')}
 					/> */}
-							<UISettingsDialog title={t('Product Settings', { _tags: 'core' })}>
+							<UISettingsDialog title={t('Product Settings')}>
 								<UISettingsForm />
 							</UISettingsDialog>
 						</HStack>
@@ -231,7 +231,7 @@ const Products = () => {
 								query={query}
 								renderCell={renderCell}
 								renderItem={renderItem}
-								noDataMessage={t('No products found', { _tags: 'core' })}
+								noDataMessage={t('No products found')}
 								estimatedItemSize={100}
 								extraContext={context}
 								TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}

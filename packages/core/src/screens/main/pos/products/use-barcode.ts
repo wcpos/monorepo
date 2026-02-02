@@ -31,13 +31,13 @@ export const useBarcode = (
 	 *
 	 */
 	useSubscription(barcode$, async (barcode) => {
-		const text1 = t('Barcode scanned: {barcode}', { barcode, _tags: 'core' });
+		const text1 = t('Barcode scanned: {barcode}', { barcode });
 		const results = await barcodeSearch(barcode);
 
 		if (results.length === 0 || results.length > 1) {
 			Toast.show({
 				text1,
-				text2: t('{count} products found locally', { count: results.length, _tags: 'core' }),
+				text2: t('{count} products found locally', { count: results.length }),
 				type: 'error',
 			});
 			productQuery.search(barcode);
@@ -53,7 +53,7 @@ export const useBarcode = (
 		if (!showOutOfStock && product.stock_status !== 'instock') {
 			Toast.show({
 				text1,
-				text2: t('{name} out of stock', { name: product.name, _tags: 'core' }),
+				text2: t('{name} out of stock', { name: product.name }),
 				type: 'error',
 			});
 			return;
@@ -96,7 +96,7 @@ export const useBarcode = (
 		 */
 		Toast.show({
 			text1,
-			text2: t('{name} added to cart', { name: product.name, _tags: 'core' }),
+			text2: t('{name} added to cart', { name: product.name }),
 			type: 'success',
 		});
 

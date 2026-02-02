@@ -54,7 +54,7 @@ export const useAddFee = () => {
 				log.error(error);
 				Toast.show({
 					type: 'error',
-					text1: t('Error adding Fee to cart', { _tags: 'core' }),
+					text1: t('Error adding Fee to cart'),
 				});
 			}
 		},

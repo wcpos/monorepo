@@ -46,7 +46,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 			if (!storeID) {
 				Toast.show({
 					type: 'error',
-					text1: t('No store selected', { _tags: 'core' }),
+					text1: t('No store selected'),
 				});
 			}
 			login({
@@ -110,19 +110,18 @@ const WpUser = ({ site, wpUser }: Props) => {
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{t('Remove {name}', { name: wpUser.display_name, _tags: 'core' })}
+							{t('Remove {name}', { name: wpUser.display_name })}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
 							{t(
-								'Are you sure you want to remove this user? Removing a user from the POS will not effect any data on the server.',
-								{ _tags: 'core' }
+								'Are you sure you want to remove this user? Removing a user from the POS will not effect any data on the server.'
 							)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
 						<AlertDialogAction variant="destructive" onPress={handleRemoveWpUser}>
-							{t('Remove', { _tags: 'core' })}
+							{t('Remove')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

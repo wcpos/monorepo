@@ -35,7 +35,7 @@ export const Quantity = ({ row, column }: CellContext<Props, 'quantity'>) => {
 			/>
 			{column.columnDef.meta.show('split') && item.quantity > 1 && (
 				<Text variant="link" className="text-sm text-primary" onPress={() => splitLineItem(uuid)}>
-					{t('Split', { _tags: 'core', _context: 'Split quantity' })}
+					{t('Split', { _context: 'Split quantity' })}
 				</Text>
 			)}
 		</VStack>

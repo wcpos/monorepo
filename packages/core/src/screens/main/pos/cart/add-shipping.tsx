@@ -74,7 +74,7 @@ export const AddShipping = () => {
 			const { method_title, method_id, amount, tax_status, tax_class, prices_include_tax } = data;
 
 			addShipping({
-				method_title: isEmpty(method_title) ? t('Shipping', { _tags: 'core' }) : method_title,
+				method_title: isEmpty(method_title) ? t('Shipping') : method_title,
 				method_id: isEmpty(method_id) ? 'local_pickup' : method_id,
 				amount: isEmpty(amount) ? '0' : amount,
 				tax_status,
@@ -100,8 +100,8 @@ export const AddShipping = () => {
 							name="method_title"
 							render={({ field }) => (
 								<FormInput
-									label={t('Shipping Method Title', { _tags: 'core' })}
-									placeholder={t('Shipping', { _tags: 'core' })}
+									label={t('Shipping Method Title')}
+									placeholder={t('Shipping')}
 									{...field}
 								/>
 							)}
@@ -112,7 +112,7 @@ export const AddShipping = () => {
 							render={({ field }) => (
 								<FormSelect
 									customComponent={ShippingMethodSelect}
-									label={t('Shipping Method', { _tags: 'core' })}
+									label={t('Shipping Method')}
 									{...field}
 								/>
 							)}
@@ -123,7 +123,7 @@ export const AddShipping = () => {
 							render={({ field }) => (
 								<FormInput
 									customComponent={CurrencyInput}
-									label={t('Amount', { _tags: 'core' })}
+									label={t('Amount')}
 									{...field}
 								/>
 							)}
@@ -133,7 +133,7 @@ export const AddShipping = () => {
 								control={form.control}
 								name="prices_include_tax"
 								render={({ field }) => (
-									<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
+									<FormSwitch label={t('Amount Includes Tax')} {...field} />
 								)}
 							/>
 						</View>
@@ -142,7 +142,7 @@ export const AddShipping = () => {
 							name="tax_class"
 							render={({ field }) => (
 								<FormSelect
-									label={t('Tax Class', { _tags: 'core' })}
+									label={t('Tax Class')}
 									customComponent={TaxClassSelect}
 									{...field}
 								/>
@@ -153,7 +153,7 @@ export const AddShipping = () => {
 							name="tax_status"
 							render={({ field }) => (
 								<FormRadioGroup
-									label={t('Tax Status', { _tags: 'core' })}
+									label={t('Tax Status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -162,9 +162,9 @@ export const AddShipping = () => {
 					</View>
 				</VStack>
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
+					<DialogClose>{t('Cancel')}</DialogClose>
 					<DialogAction onPress={form.handleSubmit(handleAdd)}>
-						{t('Add to Cart', { _tags: 'core' })}
+						{t('Add to Cart')}
 					</DialogAction>
 				</DialogFooter>
 			</VStack>

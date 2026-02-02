@@ -58,8 +58,8 @@ export const TagPill = ({ query, resource, selectedID }: Props) => {
 				>
 					<ButtonText decodeHtml>
 						{isActive
-							? tag?.name || t('ID: {id}', { id: selectedID, _tags: 'core' })
-							: t('Tag', { _tags: 'core' })}
+							? tag?.name || t('ID: {id}', { id: selectedID })
+							: t('Tag')}
 					</ButtonText>
 				</ButtonPill>
 			</ComboboxTriggerPrimitive>

@@ -60,7 +60,7 @@ export const Logs = () => {
 			<Card className="flex-1">
 				<CardHeader className="p-2 bg-input">
 					<HStack className="justify-end">
-						<UISettingsDialog title={t('Logs Settings', { _tags: 'core' })}>
+						<UISettingsDialog title={t('Logs Settings')}>
 							<UISettingsForm />
 						</UISettingsDialog>
 					</HStack>
@@ -72,7 +72,7 @@ export const Logs = () => {
 								id="logs"
 								query={query}
 								renderCell={renderCell}
-								noDataMessage={t('No logs found', { _tags: 'core' })}
+								noDataMessage={t('No logs found')}
 								estimatedItemSize={100}
 								TableFooterComponent={TableFooter}
 								keyExtractor={(row) => row.original.document.logId}

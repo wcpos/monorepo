@@ -26,7 +26,7 @@ const CheckoutTitle = ({ order }: CheckoutTitleProps) => {
 
 	return (
 		<Text className="text-lg font-bold text-center">
-			{t('Amount to Pay', { _tags: 'core' })}
+			{t('Amount to Pay')}
 			{`: ${format(total || 0)}`}
 		</Text>
 	);

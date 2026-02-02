@@ -100,7 +100,7 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 		if (!customer) {
 			Toast.show({
 				type: 'error',
-				text1: t('No customer found', { _tags: 'core' }),
+				text1: t('No customer found'),
 			});
 		}
 		setLoading(true);
@@ -115,13 +115,13 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 			if (isRxDocument(savedDoc)) {
 				Toast.show({
 					type: 'success',
-					text1: t('{name} saved', { _tags: 'core', name: format(savedDoc) }),
+					text1: t('{name} saved', { name: format(savedDoc) }),
 				});
 			}
 		} catch (error) {
 			Toast.show({
 				type: 'error',
-				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+				text1: t('{message}', { message: error.message || 'Error' }),
 			});
 		} finally {
 			setLoading(false);
@@ -145,7 +145,7 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 				<FormErrors />
 				<Collapsible defaultOpen={true}>
 					<CollapsibleTrigger>
-						<Text>{t('Billing Address', { _tags: 'core' })}</Text>
+						<Text>{t('Billing Address')}</Text>
 					</CollapsibleTrigger>
 					<CollapsibleContent>
 						<BillingAddressForm />
@@ -154,14 +154,14 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 				<Collapsible>
 					<HStack>
 						<CollapsibleTrigger>
-							<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
+							<Text>{t('Shipping Address')}</Text>
 						</CollapsibleTrigger>
 					</HStack>
 					<CollapsibleContent>
 						<VStack className="gap-4">
 							<Button variant="muted" onPress={handleCopyBillingToShipping}>
 								<ButtonText>
-									{t('Copy billing address to shipping address', { _tags: 'core' })}
+									{t('Copy billing address to shipping address')}
 								</ButtonText>
 							</Button>
 							<ShippingAddressForm />
@@ -169,7 +169,7 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 					</CollapsibleContent>
 				</Collapsible>
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
+					<DialogClose>{t('Close')}</DialogClose>
 					{customerID !== 0 && (
 						<DialogAction
 							onPress={async () => {
@@ -178,7 +178,7 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 							}}
 							loading={loading}
 						>
-							{t('Save to Order & Customer', { _tags: 'core' })}
+							{t('Save to Order & Customer')}
 						</DialogAction>
 					)}
 					<DialogAction
@@ -187,7 +187,7 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 							onOpenChange(false);
 						}}
 					>
-						{t('Save to Order', { _tags: 'core' })}
+						{t('Save to Order')}
 					</DialogAction>
 				</DialogFooter>
 			</VStack>

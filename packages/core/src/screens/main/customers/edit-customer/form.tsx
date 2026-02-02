@@ -57,14 +57,14 @@ export const EditCustomerForm = ({ customer }: Props) => {
 					if (isRxDocument(savedDoc)) {
 						Toast.show({
 							type: 'success',
-							text1: t('{name} saved', { _tags: 'core', name: format(savedDoc) }),
+							text1: t('{name} saved', { name: format(savedDoc) }),
 						});
 					}
 				});
 			} catch (error) {
 				Toast.show({
 					type: 'error',
-					text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+					text1: t('{message}', { message: error.message || 'Error' }),
 				});
 			} finally {
 				setLoading(false);

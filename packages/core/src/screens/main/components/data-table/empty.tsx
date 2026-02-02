@@ -14,7 +14,7 @@ export const ListEmptyComponent = ({ message }: Props) => {
 
 	return (
 		<TableRow className="justify-center p-2">
-			<Text>{message ? message : t('No results found', { _tags: 'core' })}</Text>
+			<Text>{message ? message : t('No results found')}</Text>
 		</TableRow>
 	);
 };

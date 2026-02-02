@@ -44,7 +44,7 @@ export const _StateSelect = React.forwardRef<React.ElementRef<typeof Select>, an
 				onValueChange={onValueChange}
 			>
 				<SelectTrigger>
-					<SelectValue placeholder={t('Select State', { _tags: 'core' })} />
+					<SelectValue placeholder={t('Select State')} />
 				</SelectTrigger>
 				<SelectContent>
 					{options.map((option) => (

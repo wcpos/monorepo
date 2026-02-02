@@ -35,21 +35,21 @@ export const Report = () => {
 			<Card className="flex-1">
 				<CardHeader className="p-2 bg-input">
 					<HStack>
-						<Text className="text-lg">{t('Report', { _tags: 'core' })}</Text>
+						<Text className="text-lg">{t('Report')}</Text>
 						<Select
 							defaultValue={{
 								value: 'default',
-								label: t('Default (Offline)', { _tags: 'core' }),
+								label: t('Default (Offline)'),
 							}}
 						>
 							<SelectTrigger>
 								<SelectValue
-									placeholder={t('Select report template', { _tags: 'core' })}
+									placeholder={t('Select report template')}
 								></SelectValue>
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem label={t('Default (Offline)', { _tags: 'core' })} value="default">
-									{t('Default (Offline)', { _tags: 'core' })}
+								<SelectItem label={t('Default (Offline)')} value="default">
+									{t('Default (Offline)')}
 								</SelectItem>
 							</SelectContent>
 						</Select>
@@ -64,7 +64,7 @@ export const Report = () => {
 				</CardContent>
 				<CardFooter className="p-2 border-border border-t bg-muted justify-end">
 					<Button onPress={handlePrint}>
-						<ButtonText>{t('Print', { _tags: 'core' })}</ButtonText>
+						<ButtonText>{t('Print')}</ButtonText>
 					</Button>
 				</CardFooter>
 			</Card>

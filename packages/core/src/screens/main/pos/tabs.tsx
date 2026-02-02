@@ -50,7 +50,7 @@ const POSTabs = () => {
 							activeTab === 'products' ? 'text-primary' : 'text-muted-foreground'
 						)}
 					>
-						{t('Products', { _tags: 'core' })}
+						{t('Products')}
 					</Text>
 				</Button>
 				<Button variant="ghost" onPress={() => setActiveTab('cart')} className="flex-1 h-11">
@@ -64,7 +64,7 @@ const POSTabs = () => {
 							activeTab === 'cart' ? 'text-primary' : 'text-muted-foreground'
 						)}
 					>
-						{t('Cart', { _tags: 'core' })}
+						{t('Cart')}
 					</Text>
 				</Button>
 			</HStack>

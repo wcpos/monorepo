@@ -24,10 +24,10 @@ export const EditShippingLine = ({ uuid, item, onClose }: Props) => {
 		<Tabs value={value} onValueChange={setValue}>
 			<TabsList className="flex-row w-full">
 				<TabsTrigger value="form" className="flex-1">
-					<Text>{t('Form', { _tags: 'core' })}</Text>
+					<Text>{t('Form')}</Text>
 				</TabsTrigger>
 				<TabsTrigger value="json" className="flex-1">
-					<Text>{t('JSON', { _tags: 'core' })}</Text>
+					<Text>{t('JSON')}</Text>
 				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="form">

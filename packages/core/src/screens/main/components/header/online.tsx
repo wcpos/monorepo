@@ -20,18 +20,18 @@ const Online = () => {
 		if (!isConnected) {
 			return {
 				type: 'destructive',
-				tooltip: t('No internet connection', { _tags: 'core' }),
+				tooltip: t('No internet connection'),
 			};
 		}
 		if (!isInternetReachable) {
 			return {
 				type: 'warning',
-				tooltip: t('Site not reachable', { _tags: 'core' }),
+				tooltip: t('Site not reachable'),
 			};
 		}
 		return {
 			type: 'success',
-			tooltip: t('Online', { _tags: 'core' }),
+			tooltip: t('Online'),
 		};
 	}, [isConnected, isInternetReachable, t]);
 

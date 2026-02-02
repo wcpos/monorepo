@@ -50,11 +50,11 @@ export const CustomerSearch = ({ withGuest = false }: { withGuest?: boolean }) =
 	return (
 		<ComboboxSearch shouldFilter={false} className="min-w-64">
 			<ComboboxInput
-				placeholder={t('Search Customers', { _tags: 'core' })}
+				placeholder={t('Search Customers')}
 				value={search}
 				onValueChange={onSearch}
 			/>
-			<ComboboxEmpty>{t('No customers found', { _tags: 'core' })}</ComboboxEmpty>
+			<ComboboxEmpty>{t('No customers found')}</ComboboxEmpty>
 			<Suspense>
 				<CustomerList query={query} withGuest={withGuest} />
 			</Suspense>

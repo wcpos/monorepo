@@ -110,7 +110,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 					control={form.control}
 					name="method_title"
 					render={({ field }) => (
-						<FormInput label={t('Shipping Method Title', { _tags: 'core' })} {...field} />
+						<FormInput label={t('Shipping Method Title')} {...field} />
 					)}
 				/>
 				<View className="grid grid-cols-2 gap-4">
@@ -119,7 +119,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						name="method_id"
 						render={({ field }) => (
 							<FormSelect
-								label={t('Shipping Method', { _tags: 'core' })}
+								label={t('Shipping Method')}
 								customComponent={ShippingMethodSelect}
 								{...field}
 							/>
@@ -129,7 +129,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						control={form.control}
 						name="instance_id"
 						render={({ field }) => (
-							<FormInput label={t('Instance ID', { _tags: 'core' })} {...field} />
+							<FormInput label={t('Instance ID')} {...field} />
 						)}
 					/>
 					<FormField
@@ -138,7 +138,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						render={({ field }) => (
 							<FormInput
 								customComponent={CurrencyInput}
-								label={t('Amount', { _tags: 'core' })}
+								label={t('Amount')}
 								type="numeric"
 								{...field}
 							/>
@@ -149,7 +149,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 							control={form.control}
 							name="prices_include_tax"
 							render={({ field }) => (
-								<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
+								<FormSwitch label={t('Amount Includes Tax')} {...field} />
 							)}
 						/>
 					</View>
@@ -158,7 +158,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						name="tax_class"
 						render={({ field }) => (
 							<FormSelect
-								label={t('Tax Class', { _tags: 'core' })}
+								label={t('Tax Class')}
 								customComponent={TaxClassSelect}
 								{...field}
 							/>
@@ -169,7 +169,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						name="tax_status"
 						render={({ field }) => (
 							<FormRadioGroup
-								label={t('Tax Status', { _tags: 'core' })}
+								label={t('Tax Status')}
 								customComponent={TaxStatusRadioGroup}
 								{...field}
 							/>
@@ -178,9 +178,9 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 				</View>
 				<MetaDataForm />
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
+					<DialogClose>{t('Close')}</DialogClose>
 					<DialogAction onPress={form.handleSubmit(handleSave)}>
-						{t('Save', { _tags: 'core' })}
+						{t('Save')}
 					</DialogAction>
 				</DialogFooter>
 			</VStack>

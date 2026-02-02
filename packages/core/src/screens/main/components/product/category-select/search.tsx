@@ -51,11 +51,11 @@ export const CategorySearch = () => {
 	return (
 		<ComboboxSearch shouldFilter={false} className="min-w-64">
 			<ComboboxInput
-				placeholder={t('Search Categories', { _tags: 'core' })}
+				placeholder={t('Search Categories')}
 				value={search}
 				onValueChange={onSearch}
 			/>
-			<ComboboxEmpty>{t('No category found', { _tags: 'core' })}</ComboboxEmpty>
+			<ComboboxEmpty>{t('No category found')}</ComboboxEmpty>
 			<Suspense>
 				<CategoryList query={query} />
 			</Suspense>

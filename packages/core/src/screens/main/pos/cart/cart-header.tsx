@@ -73,13 +73,13 @@ export const CartHeader = () => {
 	return (
 		<HStack>
 			<HStack className="flex-wrap flex-1">
-				<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
+				<Text className="font-bold">{t('Customer')}:</Text>
 				<ErrorBoundary>
 					{showCustomerSelect ? (
 						<Combobox onValueChange={handleSelectCustomer} onOpenChange={delayedCloseHandler}>
 							<ComboboxTriggerPrimitive ref={triggerRef} asChild>
 								<ButtonPill size="xs" leftIcon="user" variant="muted">
-									<ButtonText>{t('Select Customer', { _tags: 'core' })}</ButtonText>
+									<ButtonText>{t('Select Customer')}</ButtonText>
 								</ButtonPill>
 							</ComboboxTriggerPrimitive>
 							<ComboboxContent>
@@ -99,11 +99,11 @@ export const CartHeader = () => {
 						<IconButton disabled name="userPlus" />
 					</TooltipTrigger>
 					<TooltipContent>
-						<Text>{t('Upgrade to Pro', { _tags: 'core' })}</Text>
+						<Text>{t('Upgrade to Pro')}</Text>
 					</TooltipContent>
 				</Tooltip>
 			)}
-			<UISettingsDialog title={t('Cart Settings', { _tags: 'core' })}>
+			<UISettingsDialog title={t('Cart Settings')}>
 				<UISettingsForm />
 			</UISettingsDialog>
 		</HStack>

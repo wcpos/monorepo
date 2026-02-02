@@ -22,17 +22,17 @@ export const useBarcode = (
 	 *
 	 */
 	useSubscription(barcode$, async (barcode) => {
-		const text1 = t('Barcode scanned: {barcode}', { barcode, _tags: 'core' });
+		const text1 = t('Barcode scanned: {barcode}', { barcode });
 		const results = await barcodeSearch(barcode);
 		let text2;
 		let type = 'info';
 
 		if (results.length === 1) {
-			text2 = t('1 product found locally', { _tags: 'core' });
+			text2 = t('1 product found locally');
 		}
 
 		if (results.length === 0 || results.length > 1) {
-			text2 = t('{count} products found locally', { count: results.length, _tags: 'core' });
+			text2 = t('{count} products found locally', { count: results.length });
 			type = 'error';
 		}
 

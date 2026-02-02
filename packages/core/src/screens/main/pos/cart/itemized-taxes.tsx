@@ -16,7 +16,7 @@ const ItemizedTaxes = ({ taxLines = [], taxDisplayCart }) => {
 
 	return (
 		<HStack>
-			<Text>{t('Taxes', { _tags: 'core' })}:</Text>
+			<Text>{t('Taxes')}:</Text>
 			<VStack space="xs" className="flex-1">
 				{taxLines.map((tax) => {
 					// tax_total and shipping_tax_total are separate, but we will display together

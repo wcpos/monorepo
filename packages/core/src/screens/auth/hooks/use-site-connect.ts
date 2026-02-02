@@ -53,18 +53,18 @@ const useSiteConnect = () => {
 			 * I have seen cases where the data is not complete, the wp-json index can be 50kb for some sites
 			 */
 			if (!data || typeof data !== 'object') {
-				throw Error(t('Bad API response', { _tags: 'core' }));
+				throw Error(t('Bad API response'));
 			}
 
 			const namespaces = get(data, 'namespaces');
 			if (!namespaces) {
-				throw Error(t('WordPress API not found', { _tags: 'core' }));
+				throw Error(t('WordPress API not found'));
 			}
 			if (!namespaces.includes(wcNamespace)) {
-				throw Error(t('WooCommerce API not found', { _tags: 'core' }));
+				throw Error(t('WooCommerce API not found'));
 			}
 			if (!namespaces.includes(wcposNamespace)) {
-				throw Error(t('WooCommerce POS API not found', { _tags: 'core' }));
+				throw Error(t('WooCommerce POS API not found'));
 			}
 			return {
 				...data,
@@ -88,7 +88,7 @@ const useSiteConnect = () => {
 			const urlWithoutProtocol = url.replace(/^.*:\/{2,}|\s|\/+$/g, '') || '';
 			const response = await http.head(`${protocol}://${urlWithoutProtocol}`);
 			if (!response) {
-				throw Error(t('URL not found', { _tags: 'core' }));
+				throw Error(t('URL not found'));
 			}
 			const link = get(response, ['headers', 'link']);
 			if (!link) {
@@ -98,7 +98,7 @@ const useSiteConnect = () => {
 				 * For CORS requests only a few headers are allowed by default.
 				 *  Access-Control-Expose-Headers: Link is needed on the server side to get the link header
 				 */
-				throw Error(t('Link header is not exposed', { _tags: 'core' }));
+				throw Error(t('Link header is not exposed'));
 			}
 
 			// Parse the link header
@@ -119,7 +119,7 @@ const useSiteConnect = () => {
 			try {
 				const wpApiUrl = await getWPAPIUrl(url);
 				if (!wpApiUrl) {
-					throw Error(t('Site does not seem to be a WordPress site', { _tags: 'core' }));
+					throw Error(t('Site does not seem to be a WordPress site'));
 				}
 
 				const siteData = await getSiteData(wpApiUrl);

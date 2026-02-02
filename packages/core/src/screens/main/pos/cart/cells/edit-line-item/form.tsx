@@ -101,13 +101,13 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 				<FormField
 					control={form.control}
 					name="name"
-					render={({ field }) => <FormInput label={t('Name', { _tags: 'core' })} {...field} />}
+					render={({ field }) => <FormInput label={t('Name')} {...field} />}
 				/>
 				<View className="grid grid-cols-2 gap-4">
 					<FormField
 						control={form.control}
 						name="sku"
-						render={({ field }) => <FormInput label={t('SKU', { _tags: 'core' })} {...field} />}
+						render={({ field }) => <FormInput label={t('SKU')} {...field} />}
 					/>
 					<FormField
 						control={form.control}
@@ -115,7 +115,7 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 						render={({ field }) => (
 							<FormInput
 								customComponent={NumberInput}
-								label={t('Quantity', { _tags: 'core' })}
+								label={t('Quantity')}
 								type="numeric"
 								{...field}
 							/>
@@ -127,7 +127,7 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 						render={({ field }) => (
 							<FormInput
 								customComponent={CurrencyInput}
-								label={t('Price', { _tags: 'core' })}
+								label={t('Price')}
 								type="numeric"
 								{...field}
 							/>
@@ -139,7 +139,7 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 						render={({ field }) => (
 							<FormInput
 								customComponent={CurrencyInput}
-								label={t('Regular Price', { _tags: 'core' })}
+								label={t('Regular Price')}
 								type="numeric"
 								{...field}
 							/>
@@ -150,7 +150,7 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 						name="tax_class"
 						render={({ field }) => (
 							<FormSelect
-								label={t('Tax Class', { _tags: 'core' })}
+								label={t('Tax Class')}
 								customComponent={TaxClassSelect}
 								{...field}
 							/>
@@ -161,7 +161,7 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 						name="tax_status"
 						render={({ field }) => (
 							<FormRadioGroup
-								label={t('Tax Status', { _tags: 'core' })}
+								label={t('Tax Status')}
 								customComponent={TaxStatusRadioGroup}
 								{...field}
 							/>
@@ -170,9 +170,9 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 				</View>
 				<MetaDataForm withDisplayValues />
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
+					<DialogClose>{t('Close')}</DialogClose>
 					<DialogAction onPress={form.handleSubmit(handleSave)}>
-						{t('Save', { _tags: 'core' })}
+						{t('Save')}
 					</DialogAction>
 				</DialogFooter>
 			</VStack>

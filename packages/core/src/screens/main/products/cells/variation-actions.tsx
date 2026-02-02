@@ -77,7 +77,7 @@ export const VariationActions = ({
 						}
 					>
 						<Icon name="penToSquare" />
-						<Text>{t('Edit', { _tags: 'core' })}</Text>
+						<Text>{t('Edit')}</Text>
 					</DropdownMenuItem>
 					{variation.id && (
 						<DropdownMenuItem
@@ -90,7 +90,7 @@ export const VariationActions = ({
 							}}
 						>
 							<Icon name="arrowRotateRight" />
-							<Text>{t('Sync', { _tags: 'core' })}</Text>
+							<Text>{t('Sync')}</Text>
 						</DropdownMenuItem>
 					)}
 					<DropdownMenuSeparator />
@@ -99,7 +99,7 @@ export const VariationActions = ({
 							name="trash"
 							className="fill-destructive web:group-focus:fill-accent-foreground"
 						/>
-						<Text>{t('Delete', { _tags: 'core' })}</Text>
+						<Text>{t('Delete')}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -108,8 +108,7 @@ export const VariationActions = ({
 					<AlertDialogHeader>
 						<AlertDialogTitle>
 							{t('Delete {product}', {
-								_tags: 'core',
-								product: `${parent.name} - ${variation.name}`,
+																product: `${parent.name} - ${variation.name}`,
 							})}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
@@ -119,9 +118,9 @@ export const VariationActions = ({
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
 						<AlertDialogAction variant="destructive" onPress={handleDelete}>
-							{t('Delete', { _tags: 'core' })}
+							{t('Delete')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

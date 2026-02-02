@@ -23,7 +23,7 @@ export const CustomerSelectItem = ({ customer }: CustomerSelectItemProps) => {
 					source="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
 					recyclingKey="guest"
 				/>
-				<Text className="flex-1">{t('Guest', { _tags: 'core' })}</Text>
+				<Text className="flex-1">{t('Guest')}</Text>
 			</HStack>
 		);
 	} else {

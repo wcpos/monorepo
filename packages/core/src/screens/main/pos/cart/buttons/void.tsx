@@ -46,10 +46,10 @@ export const VoidButton = () => {
 		latest.remove();
 		Toast.show({
 			type: 'success',
-			text1: t('Order removed', { _tags: 'core' }),
+			text1: t('Order removed'),
 			props: {
 				dismissable: true,
-				action: { label: t('Undo', { _tags: 'core' }), action: () => undoRemove(orderJson) },
+				action: { label: t('Undo'), action: () => undoRemove(orderJson) },
 			},
 		});
 	}, [currentOrder, t, deleteDocument, undoRemove]);
@@ -64,7 +64,7 @@ export const VoidButton = () => {
 			variant="destructive"
 			className="rounded-t-none rounded-br-none flex-1"
 		>
-			{t('Void', { _tags: 'core' })}
+			{t('Void')}
 		</Button>
 	);
 };

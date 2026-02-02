@@ -1,12 +1,6 @@
-import * as React from 'react';
-
-import { TranslationContext } from './provider';
+import { useTranslation } from 'react-i18next';
 
 export const useT = () => {
-	const context = React.useContext(TranslationContext);
-	if (!context) {
-		throw new Error(`useT must be called within TranslationContext`);
-	}
-
-	return context;
+	const { t } = useTranslation();
+	return t;
 };

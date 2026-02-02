@@ -51,7 +51,7 @@ export const Login = () => {
 		<Modal>
 			<ModalContent>
 				<ModalHeader>
-					<ModalTitle>{t('Login', { _tags: 'core' })}</ModalTitle>
+					<ModalTitle>{t('Login')}</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
 					<WebView

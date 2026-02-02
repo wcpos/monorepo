@@ -22,7 +22,7 @@ export const CategorySelect = ({ onValueChange }) => {
 	return (
 		<Combobox onValueChange={onValueChange}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('Select Category', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select Category')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
 				<CategorySearch />

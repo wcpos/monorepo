@@ -104,12 +104,11 @@ export const useRemoveLineItem = () => {
 					type: 'success',
 					text1: t('{name} removed from cart', {
 						name: itemToRestore?.name || itemToRestore?.method_title,
-						_tags: 'core',
-					}),
+											}),
 					props: {
 						dismissable: true,
 						action: {
-							label: t('Undo', { _tags: 'core' }),
+							label: t('Undo'),
 							action: () => undoRemove(uuid, type, itemToRestore),
 						},
 					},

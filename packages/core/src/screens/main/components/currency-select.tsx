@@ -53,12 +53,12 @@ const _CurrencySelect = React.forwardRef<
 	return (
 		<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('Select Currency', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select Currency')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
 				<ComboboxSearch>
-					<ComboboxInput placeholder={t('Search Currencies', { _tags: 'core' })} />
-					<ComboboxEmpty>{t('No currency found', { _tags: 'core' })}</ComboboxEmpty>
+					<ComboboxInput placeholder={t('Search Currencies')} />
+					<ComboboxEmpty>{t('No currency found')}</ComboboxEmpty>
 					<ComboboxList>
 						{options.map((option) => (
 							<ComboboxItem key={option.value} value={option.value} label={option.label} />

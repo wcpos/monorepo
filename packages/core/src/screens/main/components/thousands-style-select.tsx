@@ -60,7 +60,7 @@ export const ThousandsStyleSelect = React.forwardRef<
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
 				}}
 			>
-				<SelectValue placeholder={t('Select thousands style', { _tags: 'core' })} />
+				<SelectValue placeholder={t('Select thousands style')} />
 			</SelectTrigger>
 			<SelectContent style={{ width: selectTriggerWidth }}>
 				<SelectGroup>

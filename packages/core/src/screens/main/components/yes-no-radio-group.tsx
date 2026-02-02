@@ -24,8 +24,8 @@ export const YesNoRadioGroup = React.forwardRef<
 	return (
 		<RadioGroup ref={ref} {...props}>
 			{[
-				{ label: t('Yes', { _tags: 'core' }), value: 'yes' },
-				{ label: t('No', { _tags: 'core' }), value: 'no' },
+				{ label: t('Yes'), value: 'yes' },
+				{ label: t('No'), value: 'no' },
 			].map((option) => {
 				return (
 					<HStack key={option.value}>

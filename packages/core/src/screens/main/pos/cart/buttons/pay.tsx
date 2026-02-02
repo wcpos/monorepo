@@ -38,7 +38,7 @@ export const PayButton = () => {
 		} catch (error) {
 			Toast.show({
 				type: 'error',
-				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+				text1: t('{message}', { message: error.message || 'Error' }),
 			});
 		} finally {
 			setLoading(false);
@@ -58,8 +58,7 @@ export const PayButton = () => {
 		>
 			{t('Checkout {order_total}', {
 				order_total: format(parseFloat(total) || 0),
-				_tags: 'core',
-			})}
+							})}
 		</Button>
 	);
 };

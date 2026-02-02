@@ -84,15 +84,15 @@ export const ZReport = () => {
 			<Text bold>
 				{storeName} (ID: {store.id})
 			</Text>
-			<Text>{`${t('Report Generated', { _tags: 'core' })}: ${reportGenerated}`}</Text>
-			<Text>{`${t('Report Period Start', { _tags: 'core' })}: ${reportPeriod.from}`}</Text>
-			<Text>{`${t('Report Period End', { _tags: 'core' })}: ${reportPeriod.to}`}</Text>
-			<Text>{`${t('Cashier', { _tags: 'core' })}: ${formatName(wpCredentials)} (ID: ${wpCredentials.id})`}</Text>
+			<Text>{`${t('Report Generated')}: ${reportGenerated}`}</Text>
+			<Text>{`${t('Report Period Start')}: ${reportPeriod.from}`}</Text>
+			<Text>{`${t('Report Period End')}: ${reportPeriod.to}`}</Text>
+			<Text>{`${t('Cashier')}: ${formatName(wpCredentials)} (ID: ${wpCredentials.id})`}</Text>
 			<Br />
 
 			<Line />
 			<Text uppercase align="center">
-				{t('Sales Summary', { _tags: 'core' })}
+				{t('Sales Summary')}
 			</Text>
 			<Line />
 			<Row>
@@ -121,15 +121,15 @@ export const ZReport = () => {
 
 			<Line />
 			<Text uppercase align="center">
-				{t('Payment Methods', { _tags: 'core' })}
+				{t('Payment Methods')}
 			</Text>
 			<Line />
 			{paymentMethodsArray.map(({ payment_method, payment_method_title, total }) => {
 				let label = payment_method_title;
 				if (payment_method === 'unpaid') {
-					label = t('UNPAID', { _tags: 'core' });
+					label = t('UNPAID');
 				} else if (payment_method === 'unknown') {
-					label = t('Unknown', { _tags: 'core' });
+					label = t('Unknown');
 				}
 				return (
 					<Row key={payment_method}>
@@ -142,7 +142,7 @@ export const ZReport = () => {
 
 			<Line />
 			<Text uppercase align="center">
-				{t('Taxes', { _tags: 'core' })}
+				{t('Taxes')}
 			</Text>
 			<Line />
 			{taxTotalsArray.map(({ rate_id, label, total }) => (
@@ -157,7 +157,7 @@ export const ZReport = () => {
 				<>
 					<Line />
 					<Text uppercase align="center">
-						{t('Shipping', { _tags: 'core' })}
+						{t('Shipping')}
 					</Text>
 					<Line />
 					{shippingTotalsArray.map(({ method_id, total, total_tax }) => (
@@ -174,12 +174,12 @@ export const ZReport = () => {
 				<>
 					<Line />
 					<Text uppercase align="center">
-						{t('Cashier/Store Totals', { _tags: 'core' })}
+						{t('Cashier/Store Totals')}
 					</Text>
 					<Line />
 					{userStoreArray.map(({ cashierId, storeId, totalOrders, totalAmount }) => (
 						<Row key={`${cashierId}-${storeId}`}>
-							<Text className="flex-1">{`${t('Cashier ID', { _tags: 'core' })}: ${cashierId} - ${t('Store ID', { _tags: 'core' })}: ${storeId}`}</Text>
+							<Text className="flex-1">{`${t('Cashier ID')}: ${cashierId} - ${t('Store ID')}: ${storeId}`}</Text>
 							<Text align="right">{totalOrders}</Text>
 							<Text align="right">{formatCurrency(totalAmount)}</Text>
 						</Row>
@@ -190,7 +190,7 @@ export const ZReport = () => {
 
 			<Line />
 			<Text uppercase align="center">
-				{t('Additional Info', { _tags: 'core' })}
+				{t('Additional Info')}
 			</Text>
 			<Line />
 			<Row>

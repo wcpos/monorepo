@@ -51,12 +51,12 @@ const _CountryCombobox = React.forwardRef<React.ElementRef<typeof Combobox>, any
 		return (
 			<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange} {...props}>
 				<ComboboxTrigger disabled={disabled}>
-					<ComboboxValue placeholder={t('Select Country', { _tags: 'core' })} />
+					<ComboboxValue placeholder={t('Select Country')} />
 				</ComboboxTrigger>
 				<ComboboxContent>
 					<ComboboxSearch>
-						<ComboboxInput placeholder={t('Search Countries', { _tags: 'core' })} />
-						<ComboboxEmpty>{t('No country found', { _tags: 'core' })}</ComboboxEmpty>
+						<ComboboxInput placeholder={t('Search Countries')} />
+						<ComboboxEmpty>{t('No country found')}</ComboboxEmpty>
 						<ComboboxList>
 							{options.map((option) => (
 								<ComboboxItem key={option.value} value={option.value} label={option.label} />

@@ -90,8 +90,8 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 			</ComboboxTriggerPrimitive>
 			<ComboboxContent>
 				<ComboboxSearch>
-					<ComboboxInput placeholder={t('Search Variations', { _tags: 'core' })} />
-					<ComboboxEmpty>{t('No variation found', { _tags: 'core' })}</ComboboxEmpty>
+					<ComboboxInput placeholder={t('Search Variations')} />
+					<ComboboxEmpty>{t('No variation found')}</ComboboxEmpty>
 					<ComboboxList>
 						{options.map((option, index) => {
 							return (

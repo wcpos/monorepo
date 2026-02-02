@@ -73,7 +73,7 @@ export const useAddProduct = () => {
 			if (success) {
 				Toast.show({
 					type: 'success',
-					text1: t('{name} added to cart', { _tags: 'core', name: product.name }),
+					text1: t('{name} added to cart', { name: product.name }),
 				});
 			} else {
 				log.error('Error adding product to order', {
@@ -81,7 +81,7 @@ export const useAddProduct = () => {
 				});
 				Toast.show({
 					type: 'error',
-					text1: t('Error adding {name} to cart', { _tags: 'core', name: product.name }),
+					text1: t('Error adding {name} to cart', { name: product.name }),
 				});
 			}
 		},

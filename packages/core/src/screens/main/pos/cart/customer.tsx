@@ -53,7 +53,7 @@ export const Customer = ({
 			</DialogTrigger>
 			<DialogContent size="lg">
 				<DialogHeader>
-					<DialogTitle>{t('Edit Customer Address', { _tags: 'core' })}</DialogTitle>
+					<DialogTitle>{t('Edit Customer Address')}</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
 					<EditCartCustomerForm />

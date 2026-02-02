@@ -40,7 +40,7 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 				}
 			>
 				<SelectTrigger>
-					<SelectValue placeholder={t('Select an option', { _tags: 'core' })} />
+					<SelectValue placeholder={t('Select an option')} />
 				</SelectTrigger>
 				<SelectContent>
 					{options.map((option) => (
@@ -62,12 +62,12 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 			}
 		>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('Select an option', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select an option')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
 				<ComboboxSearch>
-					<ComboboxInput placeholder={t('Search Variations', { _tags: 'core' })} />
-					<ComboboxEmpty>{t('No variation found', { _tags: 'core' })}</ComboboxEmpty>
+					<ComboboxInput placeholder={t('Search Variations')} />
+					<ComboboxEmpty>{t('No variation found')}</ComboboxEmpty>
 					<ComboboxList>
 						{options.map((option) => {
 							return (

@@ -51,11 +51,11 @@ export const TagSearch = () => {
 	return (
 		<ComboboxSearch shouldFilter={false} className="min-w-64">
 			<ComboboxInput
-				placeholder={t('Search Tags', { _tags: 'core' })}
+				placeholder={t('Search Tags')}
 				value={search}
 				onValueChange={onSearch}
 			/>
-			<ComboboxEmpty>{t('No tag found', { _tags: 'core' })}</ComboboxEmpty>
+			<ComboboxEmpty>{t('No tag found')}</ComboboxEmpty>
 			<Suspense>
 				<TagList query={query} />
 			</Suspense>

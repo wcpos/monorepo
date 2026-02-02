@@ -55,7 +55,7 @@ const CustomerPill = ({ query, resource, customerID }: CustomerPillProps) => {
 					onRemove={() => query.removeWhere('customer_id').exec()}
 				>
 					<ButtonText>
-						{customer ? format(customer) : t('Select Customer', { _tags: 'core' })}
+						{customer ? format(customer) : t('Select Customer')}
 					</ButtonText>
 				</ButtonPill>
 			</ComboboxTriggerPrimitive>

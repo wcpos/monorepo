@@ -24,7 +24,7 @@ export default function UrlInput() {
 		if (error) {
 			Toast.show({
 				type: 'error',
-				text1: t('{message}', { _tags: 'core', message: error || 'Error' }),
+				text1: t('{message}', { message: error || 'Error' }),
 			});
 		}
 	}, [error, t]);
@@ -35,7 +35,7 @@ export default function UrlInput() {
 	return (
 		<VStack>
 			<Label nativeID="woo-store">
-				{t('Enter the URL of your WooCommerce store', { _tags: 'core' }) + ':'}
+				{t('Enter the URL of your WooCommerce store') + ':'}
 			</Label>
 			<HStack>
 				<Input
@@ -53,7 +53,7 @@ export default function UrlInput() {
 					className="flex-1"
 				/>
 				<Button onPress={() => onConnect(url)} disabled={isEmpty(url)} loading={loading}>
-					<ButtonText>{t('Connect', { _tags: 'core' })}</ButtonText>
+					<ButtonText>{t('Connect')}</ButtonText>
 				</Button>
 			</HStack>
 		</VStack>

@@ -86,7 +86,7 @@ export const useLocalMutation = () => {
 				}
 				Toast.show({
 					type: 'error',
-					text1: t('There was an error: {message}', { _tags: 'core', message }),
+					text1: t('There was an error: {message}', { message }),
 				});
 			}
 		},

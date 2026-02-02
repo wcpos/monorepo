@@ -93,14 +93,14 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 	// 				if (isRxDocument(savedDoc)) {
 	// 					Toast.show({
 	// 						type: 'success',
-	// 						text1: t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
+	// 						text1: t('Order #{number} saved', { number: savedDoc.number }),
 	// 					});
 	// 				}
 	// 			});
 	// 		} catch (error) {
 	// 			Toast.show({
 	// 				type: 'error',
-	// 				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+	// 				text1: t('{message}', { message: error.message || 'Error' }),
 	// 			});
 	// 		} finally {
 	// 			setLoading(false);
@@ -122,7 +122,7 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 							control={form.control}
 							name="number"
 							render={({ field }) => (
-								<FormInput label={t('Order Number', { _tags: 'core' })} {...field} />
+								<FormInput label={t('Order Number')} {...field} />
 							)}
 						/> */}
 						<FormField
@@ -131,7 +131,7 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 							render={({ field }) => (
 								<FormCombobox
 									customComponent={CurrencySelect}
-									label={t('Currency', { _tags: 'core' })}
+									label={t('Currency')}
 									{...field}
 								/>
 							)}
@@ -141,7 +141,7 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 							name="currency_symbol"
 							render={({ field }) => (
 								<FormInput
-									label={t('Currency Symbol', { _tags: 'core' })}
+									label={t('Currency Symbol')}
 									placeholder="0"
 									{...field}
 								/>
@@ -151,16 +151,16 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 							control={form.control}
 							name="transaction_id"
 							render={({ field }) => (
-								<FormInput label={t('Transaction ID', { _tags: 'core' })} {...field} />
+								<FormInput label={t('Transaction ID')} {...field} />
 							)}
 						/>
 					</View>
 					<MetaDataForm />
 				</VStack>
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
+					<DialogClose>{t('Cancel')}</DialogClose>
 					<DialogAction onPress={form.handleSubmit(handleSave)}>
-						{t('Save', { _tags: 'core' })}
+						{t('Save')}
 					</DialogAction>
 				</DialogFooter>
 			</VStack>

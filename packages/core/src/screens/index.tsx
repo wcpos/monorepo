@@ -147,9 +147,9 @@ const RootNavigator = () => {
 				 */
 				formatter: (options, route) => {
 					if (!store) {
-						return t('WooCommerce POS', { _tags: 'core' });
+						return t('WooCommerce POS');
 					}
-					return `${t('POS', { _tags: 'core' })} - ${storeName}`;
+					return `${t('POS')} - ${storeName}`;
 				},
 			}}
 			// onStateChange={(state) => {

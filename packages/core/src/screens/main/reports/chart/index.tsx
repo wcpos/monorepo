@@ -59,7 +59,7 @@ export const Chart = () => {
 				<YAxis
 					yAxisId="total"
 					label={{
-						value: t('Total ({currency})', { currency, _tags: 'core' }),
+						value: t('Total ({currency})', { currency }),
 						angle: -90,
 						position: 'insideLeft',
 						fontFamily: 'sans-serif',
@@ -76,7 +76,7 @@ export const Chart = () => {
 					yAxisId="orders"
 					orientation="right"
 					label={{
-						value: t('Orders', { _tags: 'core' }),
+						value: t('Orders'),
 						angle: 90,
 						position: 'insideRight',
 						fontFamily: 'sans-serif',

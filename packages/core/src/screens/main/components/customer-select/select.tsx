@@ -29,7 +29,7 @@ export const CustomerSelect = React.forwardRef<
 	return (
 		<Combobox value={value} onValueChange={onValueChange} {...props}>
 			<ComboboxTrigger disabled={disabled}>
-				<ComboboxValue placeholder={t('Select Customer', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select Customer')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
 				<CustomerSearch withGuest={withGuest} />

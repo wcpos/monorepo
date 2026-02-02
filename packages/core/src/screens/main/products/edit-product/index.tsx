@@ -33,7 +33,7 @@ export const EditProduct = ({ resource }: Props) => {
 			<Modal>
 				<ModalContent size="lg">
 					<ModalHeader>
-						<ModalTitle>{t('No product found', { _tags: 'core' })}</ModalTitle>
+						<ModalTitle>{t('No product found')}</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
 			</Modal>
@@ -44,16 +44,16 @@ export const EditProduct = ({ resource }: Props) => {
 		<Modal>
 			<ModalContent size="lg">
 				<ModalHeader>
-					<ModalTitle>{t('Edit {name}', { name: product.name, _tags: 'core' })}</ModalTitle>
+					<ModalTitle>{t('Edit {name}', { name: product.name })}</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>
 						<TabsList className="flex-row w-full">
 							<TabsTrigger value="form" className="flex-1">
-								<Text>{t('Form', { _tags: 'core' })}</Text>
+								<Text>{t('Form')}</Text>
 							</TabsTrigger>
 							<TabsTrigger value="json" className="flex-1">
-								<Text>{t('JSON', { _tags: 'core' })}</Text>
+								<Text>{t('JSON')}</Text>
 							</TabsTrigger>
 						</TabsList>
 						<TabsContent value="form">

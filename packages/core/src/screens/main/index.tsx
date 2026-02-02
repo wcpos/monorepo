@@ -94,8 +94,8 @@ const DrawerNavigator = ({ navigation }) => {
 			<Drawer.Screen
 				name="POSStack"
 				options={{
-					title: t('POS', { _tags: 'core' }),
-					drawerLabel: t('POS', { _tags: 'core' }),
+					title: t('POS'),
+					drawerLabel: t('POS'),
 					drawerIcon: ({ focused }) => (
 						<Icon size="xl" name="cashRegister" className={focused && 'text-primary'} />
 					),
@@ -112,8 +112,8 @@ const DrawerNavigator = ({ navigation }) => {
 			<Drawer.Screen
 				name="ProductsStack"
 				options={{
-					title: t('Products', { _tags: 'core' }),
-					drawerLabel: t('Products', { _tags: 'core' }),
+					title: t('Products'),
+					drawerLabel: t('Products'),
 					drawerIcon: ({ focused }) => (
 						<Icon size="xl" name="gifts" className={focused && 'text-primary'} />
 					),
@@ -134,8 +134,8 @@ const DrawerNavigator = ({ navigation }) => {
 			<Drawer.Screen
 				name="OrdersStack"
 				options={{
-					title: t('Orders', { _tags: 'core' }),
-					drawerLabel: t('Orders', { _tags: 'core' }),
+					title: t('Orders'),
+					drawerLabel: t('Orders'),
 					drawerIcon: ({ focused }) => (
 						<Icon size="xl" name="receipt" className={focused && 'text-primary'} />
 					),
@@ -156,8 +156,8 @@ const DrawerNavigator = ({ navigation }) => {
 			<Drawer.Screen
 				name="CustomersStack"
 				options={{
-					title: t('Customers', { _tags: 'core' }),
-					drawerLabel: t('Customers', { _tags: 'core' }),
+					title: t('Customers'),
+					drawerLabel: t('Customers'),
 					drawerIcon: ({ focused }) => (
 						<Icon size="xl" name="users" className={focused && 'text-primary'} />
 					),
@@ -178,8 +178,8 @@ const DrawerNavigator = ({ navigation }) => {
 			<Drawer.Screen
 				name="ReportsStack"
 				options={{
-					title: t('Reports', { _tags: 'core' }),
-					drawerLabel: t('Reports', { _tags: 'core' }),
+					title: t('Reports'),
+					drawerLabel: t('Reports'),
 					drawerIcon: ({ focused }) => (
 						<Icon size="xl" name="chartMixedUpCircleDollar" className={focused && 'text-primary'} />
 					),
@@ -200,8 +200,8 @@ const DrawerNavigator = ({ navigation }) => {
 			<Drawer.Screen
 				name="LogsStack"
 				options={{
-					title: t('Logs', { _tags: 'core' }),
-					drawerLabel: t('Logs', { _tags: 'core' }),
+					title: t('Logs'),
+					drawerLabel: t('Logs'),
 					drawerIcon: ({ focused }) => (
 						<Icon size="xl" name="heartPulse" className={focused && 'text-primary'} />
 					),
@@ -219,8 +219,8 @@ const DrawerNavigator = ({ navigation }) => {
 			<Drawer.Screen
 				name="SupportStack"
 				options={{
-					title: t('Support', { _tags: 'core' }),
-					drawerLabel: t('Support', { _tags: 'core' }),
+					title: t('Support'),
+					drawerLabel: t('Support'),
 					drawerIcon: ({ focused }) => (
 						<Icon size="xl" name="commentQuestion" className={focused && 'text-primary'} />
 					),

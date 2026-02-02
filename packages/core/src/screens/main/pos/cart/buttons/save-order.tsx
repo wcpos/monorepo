@@ -32,14 +32,14 @@ export const SaveButton = () => {
 				if (isRxDocument(savedDoc)) {
 					Toast.show({
 						type: 'success',
-						text1: t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
+						text1: t('Order #{number} saved', { number: savedDoc.number }),
 					});
 				}
 			});
 		} catch (error) {
 			Toast.show({
 				type: 'error',
-				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+				text1: t('{message}', { message: error.message || 'Error' }),
 			});
 		} finally {
 			setLoading(false);
@@ -52,7 +52,7 @@ export const SaveButton = () => {
 	return (
 		<View>
 			<Button variant="outline" onPress={handleSave} loading={loading} disabled={loading}>
-				{t('Save to Server', { _tags: 'core' })}
+				{t('Save to Server')}
 			</Button>
 		</View>
 	);

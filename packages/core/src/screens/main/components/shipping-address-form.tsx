@@ -43,38 +43,38 @@ export const ShippingAddressForm = () => {
 			<FormField
 				control={control}
 				name="shipping.first_name"
-				render={({ field }) => <FormInput label={t('First Name', { _tags: 'core' })} {...field} />}
+				render={({ field }) => <FormInput label={t('First Name')} {...field} />}
 			/>
 			<FormField
 				control={control}
 				name="shipping.last_name"
-				render={({ field }) => <FormInput label={t('Last Name', { _tags: 'core' })} {...field} />}
+				render={({ field }) => <FormInput label={t('Last Name')} {...field} />}
 			/>
 			<View className="col-span-2">
 				<FormField
 					control={control}
 					name="shipping.company"
-					render={({ field }) => <FormInput label={t('Company', { _tags: 'core' })} {...field} />}
+					render={({ field }) => <FormInput label={t('Company')} {...field} />}
 				/>
 			</View>
 			<View className="col-span-2">
 				<FormField
 					control={control}
 					name="shipping.address_1"
-					render={({ field }) => <FormInput label={t('Address 1', { _tags: 'core' })} {...field} />}
+					render={({ field }) => <FormInput label={t('Address 1')} {...field} />}
 				/>
 			</View>
 			<View className="col-span-2">
 				<FormField
 					control={control}
 					name="shipping.address_2"
-					render={({ field }) => <FormInput label={t('Address 2', { _tags: 'core' })} {...field} />}
+					render={({ field }) => <FormInput label={t('Address 2')} {...field} />}
 				/>
 			</View>
 			<FormField
 				control={control}
 				name="shipping.city"
-				render={({ field }) => <FormInput label={t('City', { _tags: 'core' })} {...field} />}
+				render={({ field }) => <FormInput label={t('City')} {...field} />}
 			/>
 			<FormField
 				control={control}
@@ -82,7 +82,7 @@ export const ShippingAddressForm = () => {
 				render={({ field }) => (
 					<FormInput
 						customComponent={StateFormInput}
-						label={t('State', { _tags: 'core' })}
+						label={t('State')}
 						{...field}
 						countryCode={countryCode}
 					/>
@@ -94,7 +94,7 @@ export const ShippingAddressForm = () => {
 				render={({ field }) => (
 					<FormCombobox
 						customComponent={CountryCombobox}
-						label={t('Country', { _tags: 'core' })}
+						label={t('Country')}
 						{...field}
 					/>
 				)}
@@ -102,7 +102,7 @@ export const ShippingAddressForm = () => {
 			<FormField
 				control={control}
 				name="shipping.postcode"
-				render={({ field }) => <FormInput label={t('Postcode', { _tags: 'core' })} {...field} />}
+				render={({ field }) => <FormInput label={t('Postcode')} {...field} />}
 			/>
 		</View>
 	);

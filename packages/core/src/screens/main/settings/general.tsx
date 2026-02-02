@@ -194,7 +194,7 @@ export const GeneralSettings = () => {
 							control={form.control}
 							name="name"
 							render={({ field }) => (
-								<FormInput label={t('Store Name', { _tags: 'core' })} {...field} />
+								<FormInput label={t('Store Name')} {...field} />
 							)}
 						/>
 					</View>
@@ -202,14 +202,14 @@ export const GeneralSettings = () => {
 						control={form.control}
 						name="store_city"
 						render={({ field }) => (
-							<FormInput label={t('Store Base City', { _tags: 'core' })} {...field} disabled />
+							<FormInput label={t('Store Base City')} {...field} disabled />
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="store_postcode"
 						render={({ field }) => (
-							<FormInput label={t('Store Base Postcode', { _tags: 'core' })} {...field} disabled />
+							<FormInput label={t('Store Base Postcode')} {...field} disabled />
 						)}
 					/>
 					<FormField
@@ -217,7 +217,7 @@ export const GeneralSettings = () => {
 						render={({ field }) => (
 							<FormInput
 								customComponent={StateFormInput}
-								label={t('Store Base State', { _tags: 'core' })}
+								label={t('Store Base State')}
 								{...field}
 								countryCode={countryCode}
 								disabled
@@ -229,7 +229,7 @@ export const GeneralSettings = () => {
 						render={({ field }) => (
 							<FormCombobox
 								customComponent={CountryCombobox}
-								label={t('Store Base Country', { _tags: 'core' })}
+								label={t('Store Base Country')}
 								{...field}
 								disabled
 							/>
@@ -241,7 +241,7 @@ export const GeneralSettings = () => {
 						render={({ field }) => (
 							<FormSelect
 								customComponent={LanguageSelect}
-								label={t('Language', { _tags: 'core' })}
+								label={t('Language')}
 								{...field}
 							/>
 						)}
@@ -253,7 +253,7 @@ export const GeneralSettings = () => {
 							render={({ field }) => (
 								<FormCombobox
 									customComponent={CustomerSelect}
-									label={t('Default Customer', { _tags: 'core' })}
+									label={t('Default Customer')}
 									withGuest
 									{...field}
 									// override value with defaultCustomer
@@ -267,7 +267,7 @@ export const GeneralSettings = () => {
 							name="default_customer_is_cashier"
 							render={({ field }) => (
 								<FormSwitch
-									label={t('Default Customer is cashier', { _tags: 'core' })}
+									label={t('Default Customer is cashier')}
 									{...field}
 								/>
 							)}
@@ -279,7 +279,7 @@ export const GeneralSettings = () => {
 						render={({ field }) => (
 							<FormCombobox
 								customComponent={CurrencySelect}
-								label={t('Currency', { _tags: 'core' })}
+								label={t('Currency')}
 								{...field}
 							/>
 						)}
@@ -290,7 +290,7 @@ export const GeneralSettings = () => {
 						render={({ field }) => (
 							<FormSelect
 								customComponent={CurrencyPositionSelect}
-								label={t('Currency Position', { _tags: 'core' })}
+								label={t('Currency Position')}
 								{...field}
 							/>
 						)}
@@ -299,7 +299,7 @@ export const GeneralSettings = () => {
 						control={form.control}
 						name="price_decimal_sep"
 						render={({ field }) => (
-							<FormInput label={t('Decimal Separator', { _tags: 'core' })} {...field} />
+							<FormInput label={t('Decimal Separator')} {...field} />
 						)}
 					/>
 					<FormField
@@ -307,7 +307,7 @@ export const GeneralSettings = () => {
 						name="price_num_decimals"
 						render={({ field }) => (
 							<FormInput
-								label={t('Number of Decimals', { _tags: 'core' })}
+								label={t('Number of Decimals')}
 								type="numeric"
 								{...field}
 							/>
@@ -317,7 +317,7 @@ export const GeneralSettings = () => {
 						control={form.control}
 						name="price_thousand_sep"
 						render={({ field }) => (
-							<FormInput label={t('Thousand Separator', { _tags: 'core' })} {...field} />
+							<FormInput label={t('Thousand Separator')} {...field} />
 						)}
 					/>
 					<FormField
@@ -325,7 +325,7 @@ export const GeneralSettings = () => {
 						name="thousands_group_style"
 						render={({ field }) => (
 							<FormSelect
-								label={t('Thousands Group Style', { _tags: 'core' })}
+								label={t('Thousands Group Style')}
 								customComponent={ThousandsStyleSelect}
 								{...field}
 							/>
@@ -334,9 +334,9 @@ export const GeneralSettings = () => {
 				</View>
 				<ModalFooter className="px-0">
 					<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
-						{t('Restore server settings', { _tags: 'core' })}
+						{t('Restore server settings')}
 					</Button>
-					<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
+					<ModalClose>{t('Close')}</ModalClose>
 				</ModalFooter>
 			</VStack>
 		</Form>

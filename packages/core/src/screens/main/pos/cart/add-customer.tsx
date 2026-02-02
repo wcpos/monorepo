@@ -65,7 +65,7 @@ export const AddNewCustomer = () => {
 				if (isRxDocument(savedDoc)) {
 					Toast.show({
 						type: 'success',
-						text1: t('{name} saved', { _tags: 'core', name: format(savedDoc) }),
+						text1: t('{name} saved', { name: format(savedDoc) }),
 					});
 					if (currentOrder) {
 						const json = savedDoc.toJSON();
@@ -83,7 +83,7 @@ export const AddNewCustomer = () => {
 			} catch (error) {
 				Toast.show({
 					type: 'error',
-					text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+					text1: t('{message}', { message: error.message || 'Error' }),
 				});
 			} finally {
 				setLoading(false);
@@ -100,12 +100,12 @@ export const AddNewCustomer = () => {
 						<IconButton name="userPlus" />
 					</TooltipTrigger>
 					<TooltipContent>
-						<Text>{t('Add new customer', { _tags: 'core' })}</Text>
+						<Text>{t('Add new customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
 				<DialogContent size="lg">
 					<DialogHeader>
-						<DialogTitle>{t('Add new customer', { _tags: 'core' })}</DialogTitle>
+						<DialogTitle>{t('Add new customer')}</DialogTitle>
 					</DialogHeader>
 					<DialogBody>
 						<CustomerForm

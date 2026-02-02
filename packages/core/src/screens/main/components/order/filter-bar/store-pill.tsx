@@ -61,11 +61,11 @@ export const StorePill = ({ resource, query }: Props) => {
 		} else {
 			switch (selected) {
 				case 'woocommerce-pos':
-					return { value: 'woocommerce-pos', label: t('POS', { _tags: 'core' }) };
+					return { value: 'woocommerce-pos', label: t('POS') };
 				case 'checkout':
-					return { value: 'checkout', label: t('Online Store', { _tags: 'core' }) };
+					return { value: 'checkout', label: t('Online Store') };
 				case 'admin':
-					return { value: 'admin', label: t('WP Admin', { _tags: 'core' }) };
+					return { value: 'admin', label: t('WP Admin') };
 			}
 		}
 	}, [selected, stores, t]);
@@ -122,27 +122,27 @@ export const StorePill = ({ resource, query }: Props) => {
 					removable={isActive}
 					onRemove={handleRemove}
 				>
-					<ButtonText>{value?.label || t('Created via', { _tags: 'core' })}</ButtonText>
+					<ButtonText>{value?.label || t('Created via')}</ButtonText>
 				</ButtonPill>
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				<SelectGroup>
-					<SelectLabel>{t('Created via', { _tags: 'core' })}</SelectLabel>
-					<SelectItem value="woocommerce-pos" label={t('POS', { _tags: 'core' })}>
-						{t('POS', { _tags: 'core' })}
+					<SelectLabel>{t('Created via')}</SelectLabel>
+					<SelectItem value="woocommerce-pos" label={t('POS')}>
+						{t('POS')}
 					</SelectItem>
-					<SelectItem value="checkout" label={t('Online Store', { _tags: 'core' })}>
-						{t('Online Store', { _tags: 'core' })}
+					<SelectItem value="checkout" label={t('Online Store')}>
+						{t('Online Store')}
 					</SelectItem>
-					<SelectItem value="admin" label={t('WP Admin', { _tags: 'core' })}>
-						{t('WP Admin', { _tags: 'core' })}
+					<SelectItem value="admin" label={t('WP Admin')}>
+						{t('WP Admin')}
 					</SelectItem>
 				</SelectGroup>
 				{showStores && (
 					<>
 						<SelectSeparator />
 						<SelectGroup>
-							<SelectLabel>{t('Store', { _tags: 'core' })}</SelectLabel>
+							<SelectLabel>{t('Store')}</SelectLabel>
 							{(stores || []).map((store) => {
 								return (
 									<SelectItem key={store.id} value={store.id} label={store.name}>

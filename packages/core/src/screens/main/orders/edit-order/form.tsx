@@ -72,7 +72,7 @@ export const EditOrderForm = ({ order }: Props) => {
 	const guestCustomer = useGuestCustomer();
 
 	if (!order) {
-		throw new Error(t('Order not found', { _tags: 'core' }));
+		throw new Error(t('Order not found'));
 	}
 
 	/**
@@ -124,14 +124,14 @@ export const EditOrderForm = ({ order }: Props) => {
 					if (isRxDocument(savedDoc)) {
 						Toast.show({
 							type: 'success',
-							text1: t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
+							text1: t('Order #{number} saved', { number: savedDoc.number }),
 						});
 					}
 				});
 			} catch (error) {
 				Toast.show({
 					type: 'error',
-					text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+					text1: t('{message}', { message: error.message || 'Error' }),
 				});
 			} finally {
 				setLoading(false);
@@ -176,7 +176,7 @@ export const EditOrderForm = ({ order }: Props) => {
 				}
 
 				if (!customer) {
-					throw new Error(t('Customer not found', { _tags: 'core' }));
+					throw new Error(t('Customer not found'));
 				}
 
 				/**
@@ -245,7 +245,7 @@ export const EditOrderForm = ({ order }: Props) => {
 						name="status"
 						render={({ field }) => (
 							<FormSelect
-								label={t('Status', { _tags: 'core' })}
+								label={t('Status')}
 								customComponent={OrderStatusSelect}
 								{...field}
 							/>
@@ -255,7 +255,7 @@ export const EditOrderForm = ({ order }: Props) => {
 						control={form.control}
 						name="parent_id"
 						render={({ field }) => (
-							<FormInput label={t('Parent ID', { _tags: 'core' })} {...field} />
+							<FormInput label={t('Parent ID')} {...field} />
 						)}
 					/>
 					<FormField
@@ -264,7 +264,7 @@ export const EditOrderForm = ({ order }: Props) => {
 						render={({ field }) => (
 							<FormCombobox
 								customComponent={CustomerSelect}
-								label={t('Customer', { _tags: 'core' })}
+								label={t('Customer')}
 								withGuest
 								{...field}
 								// override value with defaultCustomer
@@ -279,13 +279,13 @@ export const EditOrderForm = ({ order }: Props) => {
 						control={form.control}
 						name="customer_note"
 						render={({ field }) => (
-							<FormTextarea label={t('Customer Note', { _tags: 'core' })} {...field} />
+							<FormTextarea label={t('Customer Note')} {...field} />
 						)}
 					/>
 					<View className="col-span-2">
 						<Collapsible>
 							<CollapsibleTrigger>
-								<Text>{t('Billing Address', { _tags: 'core' })}</Text>
+								<Text>{t('Billing Address')}</Text>
 							</CollapsibleTrigger>
 							<CollapsibleContent>
 								<BillingAddressForm />
@@ -295,7 +295,7 @@ export const EditOrderForm = ({ order }: Props) => {
 					<View className="col-span-2">
 						<Collapsible>
 							<CollapsibleTrigger>
-								<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
+								<Text>{t('Shipping Address')}</Text>
 							</CollapsibleTrigger>
 							<CollapsibleContent>
 								<ShippingAddressForm />
@@ -306,14 +306,14 @@ export const EditOrderForm = ({ order }: Props) => {
 						control={form.control}
 						name="payment_method"
 						render={({ field }) => (
-							<FormInput label={t('Payment Method ID', { _tags: 'core' })} {...field} />
+							<FormInput label={t('Payment Method ID')} {...field} />
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="payment_method_title"
 						render={({ field }) => (
-							<FormInput label={t('Payment Method Title', { _tags: 'core' })} {...field} />
+							<FormInput label={t('Payment Method Title')} {...field} />
 						)}
 					/>
 					<FormField
@@ -322,7 +322,7 @@ export const EditOrderForm = ({ order }: Props) => {
 						render={({ field }) => (
 							<FormSelect
 								customComponent={CurrencySelect}
-								label={t('Currency', { _tags: 'core' })}
+								label={t('Currency')}
 								{...field}
 							/>
 						)}
@@ -331,7 +331,7 @@ export const EditOrderForm = ({ order }: Props) => {
 						control={form.control}
 						name="transaction_id"
 						render={({ field }) => (
-							<FormInput label={t('Transaction ID', { _tags: 'core' })} {...field} />
+							<FormInput label={t('Transaction ID')} {...field} />
 						)}
 					/>
 					<View className="col-span-2">
@@ -339,9 +339,9 @@ export const EditOrderForm = ({ order }: Props) => {
 					</View>
 				</View>
 				<ModalFooter className="px-0">
-					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
+					<ModalClose>{t('Cancel')}</ModalClose>
 					<ModalAction loading={loading} onPress={form.handleSubmit(handleSaveToServer)}>
-						{t('Save', { _tags: 'core' })}
+						{t('Save')}
 					</ModalAction>
 				</ModalFooter>
 			</VStack>

@@ -46,11 +46,10 @@ export const useBarcodeDetection = (
 					}
 					Toast.show({
 						type: 'error',
-						text1: t('Barcode scanned: {barcode}', { barcode, _tags: 'core' }),
+						text1: t('Barcode scanned: {barcode}', { barcode }),
 						text2: t('Barcode must be at least {minLength} characters long', {
 							minLength,
-							_tags: 'core',
-						}),
+													}),
 					});
 				}
 				return false;

@@ -52,7 +52,7 @@ export const ShippingMethodSelect = React.forwardRef<
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
 				}}
 			>
-				<SelectValue placeholder={t('Select Shipping Method', { _tags: 'core' })} />
+				<SelectValue placeholder={t('Select Shipping Method')} />
 			</SelectTrigger>
 			<SelectContent style={{ width: selectTriggerWidth }}>
 				<SelectGroup>

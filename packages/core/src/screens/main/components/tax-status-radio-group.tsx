@@ -24,8 +24,8 @@ export const TaxStatusRadioGroup = React.forwardRef<
 	return (
 		<RadioGroup ref={ref} {...props}>
 			{[
-				{ label: t('Taxable', { _tags: 'core' }), value: 'taxable' },
-				{ label: t('None', { _tags: 'core' }), value: 'none' },
+				{ label: t('Taxable'), value: 'taxable' },
+				{ label: t('None'), value: 'none' },
 			].map((option) => {
 				return (
 					<HStack key={option.value}>

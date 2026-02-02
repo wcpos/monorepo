@@ -87,7 +87,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 			}
 			Toast.show({
 				type: 'error',
-				text1: t('There was an error: {message}', { _tags: 'core', message }),
+				text1: t('There was an error: {message}', { message }),
 			});
 		},
 		[t]
@@ -100,7 +100,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 		(doc: RxDocument) => {
 			Toast.show({
 				type: 'success',
-				text1: t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }),
+				text1: t('{title} #{id} saved', { id: doc.id, title: collectionLabel }),
 			});
 		},
 		[collectionLabel, t]
@@ -129,7 +129,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					return updatedDoc;
 				} else {
 					handleError(
-						new Error(t('{title} not updated', { _tags: 'core', title: collectionLabel }))
+						new Error(t('{title} not updated', { title: collectionLabel }))
 					);
 				}
 			} catch (error) {
@@ -186,7 +186,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				} else {
 					doc.getLatest().remove();
 					handleError(
-						new Error(t('{title} not created', { _tags: 'core', title: collectionLabel }))
+						new Error(t('{title} not created', { title: collectionLabel }))
 					);
 				}
 			} catch (error) {

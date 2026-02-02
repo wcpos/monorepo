@@ -25,8 +25,8 @@ export const InclExclRadioGroup = React.forwardRef<
 	return (
 		<RadioGroup ref={ref} {...props}>
 			{[
-				{ label: t('Including tax', { _tags: 'core' }), value: 'incl' },
-				{ label: t('Excluding tax', { _tags: 'core' }), value: 'excl' },
+				{ label: t('Including tax'), value: 'incl' },
+				{ label: t('Excluding tax'), value: 'excl' },
 			].map((option) => {
 				return (
 					<HStack key={option.value}>

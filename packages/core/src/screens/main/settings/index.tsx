@@ -30,18 +30,18 @@ export const SettingsTabs = () => {
 	const tabs = [
 		{
 			value: 'general',
-			label: t('General Settings', { _tags: 'core' }),
+			label: t('General Settings'),
 			component: <GeneralSettings />,
 		},
-		{ value: 'tax', label: t('Tax Settings', { _tags: 'core' }), component: <TaxSettings /> },
+		{ value: 'tax', label: t('Tax Settings'), component: <TaxSettings /> },
 		{
 			value: 'barcode',
-			label: t('Barcode Scanning', { _tags: 'core' }),
+			label: t('Barcode Scanning'),
 			component: <BarcodeScanning />,
 		},
 		{
 			value: 'shortcuts',
-			label: t('Keyboard Shortcuts', { _tags: 'core' }),
+			label: t('Keyboard Shortcuts'),
 			component: <KeyboardShortcuts />,
 		},
 	];
@@ -50,7 +50,7 @@ export const SettingsTabs = () => {
 		<Modal>
 			<ModalContent size="xl">
 				<ModalHeader>
-					<ModalTitle>{t('Settings', { _tags: 'core' })}</ModalTitle>
+					<ModalTitle>{t('Settings')}</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>

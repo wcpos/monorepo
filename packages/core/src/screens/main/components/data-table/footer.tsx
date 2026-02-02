@@ -31,7 +31,7 @@ export const DataTableFooter = ({ children }: Props) => {
 			<HStack className="justify-start flex-1 [&>*]:flex-1">{children}</HStack>
 			<HStack className="justify-end gap-0">
 				<Text className="text-xs">
-					{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
+					{t('Showing {count} of {total}', { count, total })}
 				</Text>
 				<SyncButton sync={sync} clear={clear} active={loading} />
 			</HStack>

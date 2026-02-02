@@ -46,7 +46,7 @@ export const EmailForm = ({ order }: Props) => {
 				if (data && data.success) {
 					Toast.show({
 						type: 'success',
-						text1: t('Email sent', { _tags: 'core' }),
+						text1: t('Email sent'),
 					});
 				}
 			} catch (error) {
@@ -80,7 +80,7 @@ export const EmailForm = ({ order }: Props) => {
 						control={form.control}
 						name="email"
 						render={({ field }) => (
-							<FormInput label={t('Email Address', { _tags: 'core' })} {...field} />
+							<FormInput label={t('Email Address')} {...field} />
 						)}
 					/>
 					<FormField
@@ -88,7 +88,7 @@ export const EmailForm = ({ order }: Props) => {
 						name="saveEmail"
 						render={({ field }) => (
 							<FormSwitch
-								label={t('Save email to Billing Address', { _tags: 'core' })}
+								label={t('Save email to Billing Address')}
 								{...field}
 							/>
 						)}
@@ -96,9 +96,9 @@ export const EmailForm = ({ order }: Props) => {
 				</VStack>
 			</Form>
 			<DialogFooter className="px-0">
-				<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
+				<DialogClose>{t('Cancel')}</DialogClose>
 				<DialogAction onPress={form.handleSubmit(handleSendEmail)} loading={loading}>
-					{t('Send', { _tags: 'core' })}
+					{t('Send')}
 				</DialogAction>
 			</DialogFooter>
 		</VStack>

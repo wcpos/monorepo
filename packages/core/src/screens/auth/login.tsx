@@ -72,7 +72,7 @@ const Login = ({ route }) => {
 		<Modal>
 			<ModalContent>
 				<ModalHeader>
-					<ModalTitle>{t('Login', { _tags: 'core' })}</ModalTitle>
+					<ModalTitle>{t('Login')}</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
 					<WebView
@@ -105,7 +105,7 @@ const Login = ({ route }) => {
 // 	 *
 // 	 */
 // 	return (
-// 		<ModalLayout title={t('Login', { _tags: 'core' })}>
+// 		<ModalLayout title={t('Login')}>
 // 			<Suspense>
 // 				<Login resource={resource} />
 // 			</Suspense>

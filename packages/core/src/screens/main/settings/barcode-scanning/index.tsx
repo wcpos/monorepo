@@ -14,10 +14,10 @@ export const BarcodeScanning = () => {
 	return (
 		<VStack className="gap-4">
 			<BarcodeSettings />
-			<Text className="text-md font-bold">{t('Barcode Scanning Test', { _tags: 'core' })}</Text>
+			<Text className="text-md font-bold">{t('Barcode Scanning Test')}</Text>
 			<BarcodeDisplay />
 			<ModalFooter className="px-0">
-				<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
+				<ModalClose>{t('Close')}</ModalClose>
 			</ModalFooter>
 		</VStack>
 	);

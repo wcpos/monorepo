@@ -53,21 +53,21 @@ export const useCollection = <K extends CollectionKey>(
 	const collectionLabel = React.useMemo(() => {
 		switch (key) {
 			case 'products':
-				return t('Product', { _tags: 'core' });
+				return t('Product');
 			case 'variations':
-				return t('Variation', { _tags: 'core' });
+				return t('Variation');
 			case 'customers':
-				return t('Customer', { _tags: 'core' });
+				return t('Customer');
 			case 'orders':
-				return t('Order', { _tags: 'core' });
+				return t('Order');
 			case 'taxes':
-				return t('Tax', { _tags: 'core' });
+				return t('Tax');
 			case 'products/categories':
-				return t('Category', { _tags: 'core' });
+				return t('Category');
 			case 'products/tags':
-				return t('Tag', { _tags: 'core' });
+				return t('Tag');
 			default:
-				return t('Document', { _tags: 'core' });
+				return t('Document');
 		}
 	}, [t, key]);
 

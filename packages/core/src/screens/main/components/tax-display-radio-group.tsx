@@ -25,8 +25,8 @@ export const TaxDisplayRadioGroup = React.forwardRef<
 	return (
 		<RadioGroup ref={ref} {...props}>
 			{[
-				{ label: t('As a single total', { _tags: 'core' }), value: 'single' },
-				{ label: t('Itemized', { _tags: 'core' }), value: 'itemized' },
+				{ label: t('As a single total'), value: 'single' },
+				{ label: t('Itemized'), value: 'itemized' },
 			].map((option) => {
 				return (
 					<HStack key={option.value}>

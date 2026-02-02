@@ -24,14 +24,14 @@ const useDeleteDocument = () => {
 				if (data.id === id) {
 					Toast.show({
 						type: 'success',
-						text1: t('Item deleted', { _tags: 'core' }),
+						text1: t('Item deleted'),
 					});
 				}
 			} catch (err) {
 				log.error(err);
 				Toast.show({
 					type: 'error',
-					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
+					text1: t('There was an error: {error}', { error: err.message }),
 				});
 			}
 		},

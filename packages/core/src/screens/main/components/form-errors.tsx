@@ -47,7 +47,7 @@ export const FormErrors = () => {
 
 	return (
 		<View>
-			<Text className="text-error">{t('Please fix the following errors:', { _tags: 'core' })}</Text>
+			<Text className="text-error">{t('Please fix the following errors:')}</Text>
 			{errorMessages.map((error, index) => (
 				<Text className="text-error" key={index}>
 					{'\u2022'} {error.path}: {error.message}

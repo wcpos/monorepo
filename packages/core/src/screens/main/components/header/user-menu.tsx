@@ -97,18 +97,18 @@ export const UserMenu = () => {
 			<DropdownMenuContent>
 				<DropdownMenuItem onPress={() => navigation.navigate('Settings')}>
 					<Icon name="gear" />
-					<Text>{t('Settings', { _tags: 'core' })}</Text>
+					<Text>{t('Settings')}</Text>
 				</DropdownMenuItem>
 				<DropdownMenuItem onPress={() => navigation.navigate('SupportStack')}>
 					<Icon name="commentQuestion" />
-					<Text>{t('Support', { _tags: 'core' })}</Text>
+					<Text>{t('Support')}</Text>
 				</DropdownMenuItem>
 				{isWebApp && (
 					<DropdownMenuItem
 						onPress={() => Linking.openURL('https://github.com/wcpos/electron/releases')}
 					>
 						<Icon name="download" />
-						<Text>{t('Desktop App', { _tags: 'core' })}</Text>
+						<Text>{t('Desktop App')}</Text>
 					</DropdownMenuItem>
 				)}
 				<DropdownMenuSeparator />
@@ -117,7 +117,7 @@ export const UserMenu = () => {
 						<DropdownMenuSub>
 							<DropdownMenuSubTrigger>
 								<Icon name="rightLeft" />
-								<Text>{t('Switch Store', { _tags: 'core' })}</Text>
+								<Text>{t('Switch Store')}</Text>
 							</DropdownMenuSubTrigger>
 							<DropdownMenuSubContent>
 								<StoreSubMenu
@@ -133,12 +133,12 @@ export const UserMenu = () => {
 				{isWebApp && (
 					<DropdownMenuItem onPress={() => Linking.openURL(`${site.home}/wp-admin`)}>
 						<Icon name="wordpress" />
-						<Text>{t('WordPress Admin', { _tags: 'core' })}</Text>
+						<Text>{t('WordPress Admin')}</Text>
 					</DropdownMenuItem>
 				)}
 				<DropdownMenuItem onPress={logout} variant="destructive">
 					<Icon name="arrowRightFromBracket" className="fill-destructive" />
-					<Text>{t('Logout', { _tags: 'core' })}</Text>
+					<Text>{t('Logout')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>

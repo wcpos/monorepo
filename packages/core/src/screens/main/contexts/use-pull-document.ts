@@ -37,7 +37,7 @@ const usePullDocument = () => {
 					const success = await collection.upsert(parsedData);
 					// if (isRxDocument(success)) {
 					// 	addSnackbar({
-					// 		message: t('Item synced', { _tags: 'core' }),
+					// 		message: t('Item synced'),
 					// 	});
 					// }
 					return success;
@@ -46,7 +46,7 @@ const usePullDocument = () => {
 				log.error(err);
 				Toast.show({
 					type: 'error',
-					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
+					text1: t('There was an error: {error}', { error: err.message }),
 				});
 			}
 		},

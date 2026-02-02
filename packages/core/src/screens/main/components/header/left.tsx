@@ -50,7 +50,7 @@ const HeaderLeft = () => {
 			className="px-3 rounded-none bg-transparent hover:bg-white/10"
 			leftIcon="bars"
 		>
-			<ButtonText>{t('Menu', { _tags: 'core' })}</ButtonText>
+			<ButtonText>{t('Menu')}</ButtonText>
 		</Button>
 	);
 };

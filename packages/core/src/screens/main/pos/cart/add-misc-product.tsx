@@ -60,7 +60,7 @@ export const AddMiscProduct = () => {
 			const { name, price, sku, tax_status, tax_class } = data;
 			addProduct({
 				id: 0,
-				name: isEmpty(name) ? t('Product', { _tags: 'core' }) : name,
+				name: isEmpty(name) ? t('Product') : name,
 				price: isEmpty(price) ? '0' : price,
 				sku,
 				regular_price: isEmpty(price) ? '0' : price,
@@ -85,8 +85,8 @@ export const AddMiscProduct = () => {
 						name="name"
 						render={({ field }) => (
 							<FormInput
-								label={t('Name', { _tags: 'core' })}
-								placeholder={t('Product', { _tags: 'core' })}
+								label={t('Name')}
+								placeholder={t('Product')}
 								{...field}
 							/>
 						)}
@@ -94,7 +94,7 @@ export const AddMiscProduct = () => {
 					<FormField
 						control={form.control}
 						name="sku"
-						render={({ field }) => <FormInput label={t('SKU', { _tags: 'core' })} {...field} />}
+						render={({ field }) => <FormInput label={t('SKU')} {...field} />}
 					/>
 					<FormField
 						control={form.control}
@@ -102,7 +102,7 @@ export const AddMiscProduct = () => {
 						render={({ field }) => (
 							<FormInput
 								customComponent={CurrencyInput}
-								label={t('Price', { _tags: 'core' })}
+								label={t('Price')}
 								placeholder="0"
 								{...field}
 							/>
@@ -115,7 +115,7 @@ export const AddMiscProduct = () => {
 							render={({ field }) => (
 								<FormSelect
 									customComponent={TaxClassSelect}
-									label={t('Tax Class', { _tags: 'core' })}
+									label={t('Tax Class')}
 									{...field}
 								/>
 							)}
@@ -125,7 +125,7 @@ export const AddMiscProduct = () => {
 							name="tax_status"
 							render={({ field }) => (
 								<FormRadioGroup
-									label={t('Tax Status', { _tags: 'core' })}
+									label={t('Tax Status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -134,9 +134,9 @@ export const AddMiscProduct = () => {
 					</View>
 				</VStack>
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
+					<DialogClose>{t('Cancel')}</DialogClose>
 					<DialogAction onPress={form.handleSubmit(handleAdd)}>
-						{t('Add to Cart', { _tags: 'core' })}
+						{t('Add to Cart')}
 					</DialogAction>
 				</DialogFooter>
 			</VStack>

@@ -120,7 +120,7 @@ export const Site = ({ user, site, idx }: Props) => {
 						/>
 					</TooltipTrigger>
 					<TooltipContent>
-						<Text>{t('Remove site', { _tags: 'core' })}</Text>
+						<Text>{t('Remove site')}</Text>
 					</TooltipContent>
 				</Tooltip>
 			</HStack>
@@ -128,15 +128,15 @@ export const Site = ({ user, site, idx }: Props) => {
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>{t('Remove site', { _tags: 'core' })}</AlertDialogTitle>
+						<AlertDialogTitle>{t('Remove site')}</AlertDialogTitle>
 						<AlertDialogDescription>
-							{t('Remove store and associated users?', { _tags: 'core' })}
+							{t('Remove store and associated users?')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
 						<AlertDialogAction variant="destructive" onPress={handleRemoveSite}>
-							{t('Remove', { _tags: 'core' })}
+							{t('Remove')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

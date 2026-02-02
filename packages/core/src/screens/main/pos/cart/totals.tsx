@@ -74,14 +74,14 @@ export const Totals = () => {
 			{hasTotals ? (
 				<VStack className="p-2 border-border border-t bg-muted/40">
 					<HStack>
-						<Text className="grow">{t('Subtotal', { _tags: 'core' })}:</Text>
+						<Text className="grow">{t('Subtotal')}:</Text>
 						<Text>{format(displaySubtotal)}</Text>
 					</HStack>
 					{
 						// Discounts
 						hasDiscount && (
 							<HStack>
-								<Text className="grow">{t('Discount', { _tags: 'core' })}:</Text>
+								<Text className="grow">{t('Discount')}:</Text>
 								<Text>{format(-1 * displayDiscountTotal)}</Text>
 							</HStack>
 						)
@@ -90,7 +90,7 @@ export const Totals = () => {
 						// Fees
 						hasFee && (
 							<HStack>
-								<Text className="grow">{t('Fees', { _tags: 'core' })}:</Text>
+								<Text className="grow">{t('Fees')}:</Text>
 								<Text>{format(displayFeeTotal)}</Text>
 							</HStack>
 						)
@@ -99,7 +99,7 @@ export const Totals = () => {
 						// Shipping
 						hasShipping && (
 							<HStack>
-								<Text className="grow">{t('Shipping', { _tags: 'core' })}:</Text>
+								<Text className="grow">{t('Shipping')}:</Text>
 								<Text>{format(displayShippingTotal)}</Text>
 							</HStack>
 						)

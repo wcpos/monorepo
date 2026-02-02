@@ -48,48 +48,48 @@ export const BillingAddressForm = () => {
 			<FormField
 				control={control}
 				name="billing.first_name"
-				render={({ field }) => <FormInput label={t('First Name', { _tags: 'core' })} {...field} />}
+				render={({ field }) => <FormInput label={t('First Name')} {...field} />}
 			/>
 			<FormField
 				control={control}
 				name="billing.last_name"
-				render={({ field }) => <FormInput label={t('Last Name', { _tags: 'core' })} {...field} />}
+				render={({ field }) => <FormInput label={t('Last Name')} {...field} />}
 			/>
 			<FormField
 				control={control}
 				name="billing.email"
-				render={({ field }) => <FormInput label={t('Email', { _tags: 'core' })} {...field} />}
+				render={({ field }) => <FormInput label={t('Email')} {...field} />}
 			/>
 			<FormField
 				control={control}
 				name="billing.phone"
-				render={({ field }) => <FormInput label={t('Phone', { _tags: 'core' })} {...field} />}
+				render={({ field }) => <FormInput label={t('Phone')} {...field} />}
 			/>
 			<View className="col-span-2">
 				<FormField
 					control={control}
 					name="billing.company"
-					render={({ field }) => <FormInput label={t('Company', { _tags: 'core' })} {...field} />}
+					render={({ field }) => <FormInput label={t('Company')} {...field} />}
 				/>
 			</View>
 			<View className="col-span-2">
 				<FormField
 					control={control}
 					name="billing.address_1"
-					render={({ field }) => <FormInput label={t('Address 1', { _tags: 'core' })} {...field} />}
+					render={({ field }) => <FormInput label={t('Address 1')} {...field} />}
 				/>
 			</View>
 			<View className="col-span-2">
 				<FormField
 					control={control}
 					name="billing.address_2"
-					render={({ field }) => <FormInput label={t('Address 2', { _tags: 'core' })} {...field} />}
+					render={({ field }) => <FormInput label={t('Address 2')} {...field} />}
 				/>
 			</View>
 			<FormField
 				control={control}
 				name="billing.city"
-				render={({ field }) => <FormInput label={t('City', { _tags: 'core' })} {...field} />}
+				render={({ field }) => <FormInput label={t('City')} {...field} />}
 			/>
 			<FormField
 				control={control}
@@ -97,7 +97,7 @@ export const BillingAddressForm = () => {
 				render={({ field }) => (
 					<FormInput
 						customComponent={StateFormInput}
-						label={t('State', { _tags: 'core' })}
+						label={t('State')}
 						{...field}
 						countryCode={countryCode}
 					/>
@@ -109,7 +109,7 @@ export const BillingAddressForm = () => {
 				render={({ field }) => (
 					<FormCombobox
 						customComponent={CountryCombobox}
-						label={t('Country', { _tags: 'core' })}
+						label={t('Country')}
 						{...field}
 					/>
 				)}
@@ -117,7 +117,7 @@ export const BillingAddressForm = () => {
 			<FormField
 				control={control}
 				name="billing.postcode"
-				render={({ field }) => <FormInput label={t('Postcode', { _tags: 'core' })} {...field} />}
+				render={({ field }) => <FormInput label={t('Postcode')} {...field} />}
 			/>
 		</View>
 	);

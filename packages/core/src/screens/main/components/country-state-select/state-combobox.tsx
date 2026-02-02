@@ -52,12 +52,12 @@ const _StateCombobox = React.forwardRef<React.ElementRef<typeof Combobox>, any>(
 				{...props}
 			>
 				<ComboboxTrigger disabled={disabled}>
-					<ComboboxValue placeholder={t('Select State', { _tags: 'core' })} />
+					<ComboboxValue placeholder={t('Select State')} />
 				</ComboboxTrigger>
 				<ComboboxContent>
 					<ComboboxSearch>
-						<ComboboxInput placeholder={t('Search States', { _tags: 'core' })} />
-						<ComboboxEmpty>{t('No state found', { _tags: 'core' })}</ComboboxEmpty>
+						<ComboboxInput placeholder={t('Search States')} />
+						<ComboboxEmpty>{t('No state found')}</ComboboxEmpty>
 						<ComboboxList>
 							{options.map((option) => (
 								<ComboboxItem key={option.value} value={option.value} label={option.label} />

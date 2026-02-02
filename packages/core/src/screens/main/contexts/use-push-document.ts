@@ -68,7 +68,7 @@ const usePushDocument = () => {
 				log.error(err);
 				Toast.show({
 					type: 'error',
-					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
+					text1: t('There was an error: {error}', { error: err.message }),
 				});
 			}
 		},

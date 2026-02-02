@@ -19,14 +19,14 @@ export const TaxBasedOn = () => {
 	/**
 	 *
 	 */
-	let taxBasedOnSetting = t('Shop base address', { _tags: 'core' });
+	let taxBasedOnSetting = t('Shop base address');
 	if (taxBasedOn === 'billing') {
-		taxBasedOnSetting = t('Customer billing address', { _tags: 'core' });
+		taxBasedOnSetting = t('Customer billing address');
 	}
 	if (taxBasedOn === 'shipping') {
-		taxBasedOnSetting = t('Customer shipping address', { _tags: 'core' });
+		taxBasedOnSetting = t('Customer shipping address');
 	}
-	const taxBasedOnLabel = `${t('Tax based on', { _tags: 'core' })}: ${taxBasedOnSetting}`;
+	const taxBasedOnLabel = `${t('Tax based on')}: ${taxBasedOnSetting}`;
 
 	return (
 		<HoverCard>

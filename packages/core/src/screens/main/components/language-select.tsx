@@ -59,12 +59,12 @@ export const LanguageSelect = React.forwardRef<
 	return (
 		<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('Select Language', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select Language')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
 				<ComboboxSearch>
-					<ComboboxInput placeholder={t('Search Languages', { _tags: 'core' })} />
-					<ComboboxEmpty>{t('No language found', { _tags: 'core' })}</ComboboxEmpty>
+					<ComboboxInput placeholder={t('Search Languages')} />
+					<ComboboxEmpty>{t('No language found')}</ComboboxEmpty>
 					<ComboboxList>
 						{options.map((option) => (
 							<ComboboxItem key={option.value} value={option.value} label={option.label} />
