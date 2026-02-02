@@ -5,7 +5,7 @@ import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fi
  * Reports page (pro-only).
  */
 test.describe('Reports Page (Pro)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Reports page requires Pro');
 	});
@@ -46,11 +46,8 @@ test.describe('Reports Page (Pro)', () => {
 	test('should show print button', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
 		const screen = page.getByTestId('screen-reports');
-		await page.waitForTimeout(5_000);
 
-		const printButton = screen.getByRole('button', { name: /print/i });
-		const isVisible = await printButton.isVisible({ timeout: 10_000 }).catch(() => false);
-		expect(typeof isVisible).toBe('boolean');
+		await expect(screen.getByRole('button', { name: /print/i })).toBeVisible({ timeout: 15_000 });
 	});
 });
 
@@ -58,7 +55,7 @@ test.describe('Reports Page (Pro)', () => {
  * Free users should see upgrade page.
  */
 test.describe('Reports Page (Free)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});

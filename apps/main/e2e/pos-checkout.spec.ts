@@ -83,42 +83,31 @@ test.describe('POS Cart - Fees', () => {
 		await addFirstProductToCart(page);
 
 		await clickCartActionButton(page, 'Add Fee');
-		await page.waitForTimeout(1_000);
 
-		// Dialog should open with "Add Fee" title
 		const addToCartButton = page.getByRole('button', { name: 'Add to Cart' });
-		if (await addToCartButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
-			await addToCartButton.click();
-			await page.waitForTimeout(1_000);
-		}
+		await expect(addToCartButton).toBeVisible({ timeout: 5_000 });
+		await addToCartButton.click();
+		await expect(page.getByRole('button', { name: /Checkout/ })).toBeVisible({ timeout: 5_000 });
 	});
 
 	test('should add shipping to the cart', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 
 		await clickCartActionButton(page, 'Add Shipping');
-		await page.waitForTimeout(1_000);
 
 		const addToCartButton = page.getByRole('button', { name: 'Add to Cart' });
-		if (await addToCartButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
-			await addToCartButton.click();
-			await page.waitForTimeout(1_000);
-		}
+		await expect(addToCartButton).toBeVisible({ timeout: 5_000 });
+		await addToCartButton.click();
+		await expect(page.getByRole('button', { name: /Checkout/ })).toBeVisible({ timeout: 5_000 });
 	});
 
 	test('should add a miscellaneous product', async ({ posPage: page }) => {
 		await clickCartActionButton(page, 'Add Miscellaneous Product');
-		await page.waitForTimeout(1_000);
 
 		const addToCartButton = page.getByRole('button', { name: 'Add to Cart' });
-		if (await addToCartButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
-			await addToCartButton.click();
-			await page.waitForTimeout(1_000);
-
-			await expect(page.getByRole('button', { name: /Checkout/ })).toBeVisible({
-				timeout: 5_000,
-			});
-		}
+		await expect(addToCartButton).toBeVisible({ timeout: 5_000 });
+		await addToCartButton.click();
+		await expect(page.getByRole('button', { name: /Checkout/ })).toBeVisible({ timeout: 5_000 });
 	});
 });
 
@@ -135,27 +124,22 @@ test.describe('POS Cart - Order Actions', () => {
 		await addFirstProductToCart(page);
 
 		await page.getByRole('button', { name: 'Order Note' }).click();
-		await page.waitForTimeout(1_000);
 
-		// Dialog should open with textarea
 		const textarea = page.locator('textarea').first();
-		if (await textarea.isVisible({ timeout: 5_000 }).catch(() => false)) {
-			await textarea.fill('Test order note from e2e');
-			const addNoteButton = page.getByRole('button', { name: /Add Note/i });
-			if (await addNoteButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
-				await addNoteButton.click();
-			}
-		}
+		await expect(textarea).toBeVisible({ timeout: 5_000 });
+		await textarea.fill('Test order note from e2e');
+
+		const addNoteButton = page.getByRole('button', { name: /Add Note/i });
+		await expect(addNoteButton).toBeVisible({ timeout: 3_000 });
+		await addNoteButton.click();
 	});
 
 	test('should open order meta dialog', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 
 		await page.getByRole('button', { name: 'Order Meta' }).click();
-		await page.waitForTimeout(1_000);
 
-		// Dialog should open showing order meta information
-		await expect(page.getByText(/meta|order/i).first()).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 });
 	});
 });
 
@@ -166,15 +150,12 @@ test.describe('POS Cart - Multiple Orders', () => {
 		const newOrderButton = page.getByRole('button', { name: /new order/i }).or(
 			page.locator('button').filter({ hasText: '+' })
 		);
+		await expect(newOrderButton.first()).toBeVisible({ timeout: 5_000 });
+		await newOrderButton.first().click();
 
-		if (await newOrderButton.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
-			await newOrderButton.first().click();
-			await page.waitForTimeout(1_000);
-
-			await expect(page.getByRole('button', { name: /Checkout/ })).not.toBeVisible({
-				timeout: 5_000,
-			});
-		}
+		await expect(page.getByRole('button', { name: /Checkout/ })).not.toBeVisible({
+			timeout: 5_000,
+		});
 	});
 });
 

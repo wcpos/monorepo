@@ -1,11 +1,5 @@
-import { test, expect, type TestInfo } from '@playwright/test';
-import type { WcposTestOptions } from '../playwright.config';
-
-function getStoreUrl(testInfo: TestInfo): string {
-	if (process.env.E2E_STORE_URL) return process.env.E2E_STORE_URL;
-	const opts = testInfo.project.use as WcposTestOptions;
-	return opts.storeUrl || 'https://dev-free.wcpos.com';
-}
+import { test, expect } from '@playwright/test';
+import { getStoreUrl } from './fixtures';
 
 test.describe('Connect Screen', () => {
 	test.beforeEach(async ({ page }) => {

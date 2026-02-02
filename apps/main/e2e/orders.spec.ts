@@ -13,7 +13,7 @@ async function navigateToOrders(page: Page) {
  * Orders page (pro-only).
  */
 test.describe('Orders Page (Pro)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Orders page requires Pro');
 	});
@@ -75,15 +75,16 @@ test.describe('Orders Page (Pro)', () => {
 			.isVisible({ timeout: 15_000 })
 			.catch(() => false);
 
-		if (hasOrders) {
-			const ellipsis = screen.getByRole('button', { name: /more|actions|menu/i }).first();
-			if (await ellipsis.isVisible({ timeout: 5_000 }).catch(() => false)) {
-				await ellipsis.click();
-				await expect(
-					page.getByText('Edit').or(page.getByText('Re-open')).or(page.getByText('Delete'))
-				).toBeVisible({ timeout: 5_000 });
-			}
+		if (!hasOrders) {
+			test.skip(true, 'No orders available to test actions menu');
 		}
+
+		const ellipsis = screen.getByRole('button', { name: /more|actions|menu/i }).first();
+		await expect(ellipsis).toBeVisible({ timeout: 5_000 });
+		await ellipsis.click();
+		await expect(
+			page.getByText('Edit').or(page.getByText('Re-open')).or(page.getByText('Delete'))
+		).toBeVisible({ timeout: 5_000 });
 	});
 });
 
@@ -91,7 +92,7 @@ test.describe('Orders Page (Pro)', () => {
  * Free users should see upgrade page.
  */
 test.describe('Orders Page (Free)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});

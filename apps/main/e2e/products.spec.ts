@@ -99,7 +99,7 @@ test.describe('Products in POS', () => {
  * Products page (pro-only drawer page with inline editing).
  */
 test.describe('Products Page (Pro)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Products page requires Pro');
 	});
@@ -142,16 +142,13 @@ test.describe('Products Page (Pro)', () => {
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
-		// Look for ellipsis icon buttons in the product table
 		const ellipsis = screen.getByRole('button', { name: /more|actions|menu/i }).first();
+		await expect(ellipsis).toBeVisible({ timeout: 5_000 });
+		await ellipsis.click();
 
-		if (await ellipsis.isVisible({ timeout: 5_000 }).catch(() => false)) {
-			await ellipsis.click();
-			// Should show Edit, Sync, Delete options
-			await expect(
-				page.getByText('Edit').or(page.getByText('Sync')).or(page.getByText('Delete'))
-			).toBeVisible({ timeout: 5_000 });
-		}
+		await expect(
+			page.getByText('Edit').or(page.getByText('Sync')).or(page.getByText('Delete'))
+		).toBeVisible({ timeout: 5_000 });
 	});
 });
 
@@ -159,7 +156,7 @@ test.describe('Products Page (Pro)', () => {
  * Free users should see the upgrade page when navigating to Products.
  */
 test.describe('Products Page (Free)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});

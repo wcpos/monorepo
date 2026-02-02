@@ -7,7 +7,7 @@ const E2E_PASSWORD = process.env.E2E_PASSWORD || 'demo';
 /**
  * Get the store URL from the project config, with env var override.
  */
-function getStoreUrl(testInfo: TestInfo): string {
+export function getStoreUrl(testInfo: TestInfo): string {
 	if (process.env.E2E_STORE_URL) return process.env.E2E_STORE_URL;
 	const opts = testInfo.project.use as WcposTestOptions;
 	return opts.storeUrl || 'https://dev-free.wcpos.com';

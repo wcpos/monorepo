@@ -14,22 +14,14 @@ test.describe('Customers in POS', () => {
 	});
 
 	test('should open customer search', async ({ posPage: page }) => {
-		// Click on the "Select Customer" or customer pill to open search
 		const selectCustomer = page.getByRole('button', { name: /Select Customer/i }).or(
 			page.getByText('Guest')
 		);
+		await expect(selectCustomer.first()).toBeVisible({ timeout: 5_000 });
+		await selectCustomer.first().click();
 
-		if (await selectCustomer.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
-			await selectCustomer.first().click();
-			await page.waitForTimeout(500);
-
-			// Customer search combobox should open
-			const searchInput = page.getByPlaceholder('Search Customers');
-			const isVisible = await searchInput.isVisible({ timeout: 5_000 }).catch(() => false);
-			if (isVisible) {
-				await expect(searchInput).toBeVisible();
-			}
-		}
+		const searchInput = page.getByPlaceholder('Search Customers');
+		await expect(searchInput).toBeVisible({ timeout: 5_000 });
 	});
 });
 
@@ -37,7 +29,7 @@ test.describe('Customers in POS', () => {
  * Pro: create a new customer from the POS cart.
  */
 test.describe('Add Customer from Cart (Pro)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Adding customers from cart requires Pro');
 	});
@@ -70,7 +62,7 @@ test.describe('Add Customer from Cart (Pro)', () => {
  * Free: add customer button should be disabled.
  */
 test.describe('Add Customer from Cart (Free)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Only for free stores');
 	});
@@ -86,7 +78,7 @@ test.describe('Add Customer from Cart (Free)', () => {
  * Customers page (pro-only drawer page).
  */
 test.describe('Customers Page (Pro)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Customers page requires Pro');
 	});
@@ -150,7 +142,7 @@ test.describe('Customers Page (Pro)', () => {
  * Free users should see upgrade page.
  */
 test.describe('Customers Page (Free)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});
