@@ -155,14 +155,12 @@ export async function authenticateWithStore(page: Page) {
 /**
  * Extended test fixture that provides an authenticated POS page.
  *
- * StorageState is pre-loaded by the setup project, so we just need to
- * navigate and wait for the app to hydrate and sync products.
+ * Runs the full OAuth flow per test because the app stores all session
+ * data in IndexedDB (RxDB), which Playwright's storageState cannot capture.
  */
 export const authenticatedTest = base.extend<{ posPage: Page }>({
 	posPage: async ({ page }, use) => {
-		await page.goto('/');
-		await expect(page.getByPlaceholder('Search Products')).toBeVisible({ timeout: 60_000 });
-		await expect(page.getByText(/Showing [1-9]\d* of \d+/)).toBeVisible({ timeout: 120_000 });
+		await authenticateWithStore(page);
 		await use(page);
 	},
 });
