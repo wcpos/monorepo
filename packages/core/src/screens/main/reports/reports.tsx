@@ -24,7 +24,7 @@ export const Reports = () => {
 	 *
 	 */
 	return (
-		<VStack className="h-full" style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}>
+		<VStack testID="screen-reports" className="h-full" style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}>
 			<ErrorBoundary>
 				<FilterBar />
 			</ErrorBoundary>

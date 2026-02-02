@@ -12,14 +12,14 @@ test.describe('Reports Page (Pro)', () => {
 
 	test('should navigate to Reports page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
+		const screen = page.getByTestId('screen-reports');
 
-		// Reports page should show filter pills or the orders table
-		const hasContent = await page
+		const hasContent = await screen
 			.getByText(/No orders found|Showing \d+ of \d+/)
 			.first()
 			.isVisible({ timeout: 30_000 })
 			.catch(() => false);
-		const hasSearch = await page
+		const hasSearch = await screen
 			.getByPlaceholder('Search Orders')
 			.isVisible({ timeout: 5_000 })
 			.catch(() => false);
@@ -29,28 +29,27 @@ test.describe('Reports Page (Pro)', () => {
 
 	test('should show filter pills', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
+		const screen = page.getByTestId('screen-reports');
 		await page.waitForTimeout(5_000);
 
-		// Reports page has filter pills like the orders page
-		await expect(page.getByText('Status').first()).toBeVisible({ timeout: 10_000 });
+		await expect(screen.getByText('Status').first()).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should show report summary section', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
+		const screen = page.getByTestId('screen-reports');
 		await page.waitForTimeout(5_000);
 
-		// Report section should show "Report" heading or summary data
-		await expect(page.getByText('Report').first()).toBeVisible({ timeout: 10_000 });
+		await expect(screen.getByText('Report').first()).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should show print button', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
+		const screen = page.getByTestId('screen-reports');
 		await page.waitForTimeout(5_000);
 
-		// Print button should be visible in the report section
-		const printButton = page.getByRole('button', { name: /print/i });
+		const printButton = screen.getByRole('button', { name: /print/i });
 		const isVisible = await printButton.isVisible({ timeout: 10_000 }).catch(() => false);
-		// Print button may only show when there's data to print
 		expect(typeof isVisible).toBe('boolean');
 	});
 });

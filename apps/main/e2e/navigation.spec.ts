@@ -44,7 +44,7 @@ authenticatedTest.describe('Drawer Navigation', () => {
 		'should navigate to Logs page',
 		async ({ posPage: page }) => {
 			await navigateToPage(page, 'logs');
-			await expect(page.getByPlaceholder('Search Logs')).toBeVisible({ timeout: 30_000 });
+			await expect(page.getByTestId('screen-logs').getByPlaceholder('Search Logs')).toBeVisible({ timeout: 30_000 });
 		}
 	);
 
@@ -52,8 +52,7 @@ authenticatedTest.describe('Drawer Navigation', () => {
 		'should navigate to Support page',
 		async ({ posPage: page }) => {
 			await navigateToPage(page, 'support');
-			// Support page embeds a Discord widget iframe
-			await expect(page.locator('iframe').first()).toBeVisible({
+			await expect(page.getByTestId('screen-support').locator('iframe').first()).toBeVisible({
 				timeout: 30_000,
 			});
 		}
@@ -63,10 +62,10 @@ authenticatedTest.describe('Drawer Navigation', () => {
 		'should navigate to a page and back to POS',
 		async ({ posPage: page }) => {
 			await navigateToPage(page, 'logs');
-			await expect(page.getByPlaceholder('Search Logs')).toBeVisible({ timeout: 30_000 });
+			await expect(page.getByTestId('screen-logs').getByPlaceholder('Search Logs')).toBeVisible({ timeout: 30_000 });
 
 			await navigateToPage(page, 'pos');
-			await expect(page.getByPlaceholder('Search Products')).toBeVisible({ timeout: 30_000 });
+			await expect(page.getByTestId('screen-pos').getByPlaceholder('Search Products')).toBeVisible({ timeout: 30_000 });
 		}
 	);
 });

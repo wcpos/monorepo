@@ -106,42 +106,44 @@ test.describe('Products Page (Pro)', () => {
 
 	test('should navigate to Products page and see product table', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		await expect(page.getByPlaceholder('Search Products')).toBeVisible({ timeout: 30_000 });
-		await expect(page.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByPlaceholder('Search Products')).toBeVisible({ timeout: 30_000 });
+		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 	});
 
 	test('should show stock and price columns on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		await expect(page.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
-		await expect(page.getByRole('columnheader', { name: 'Stock' })).toBeVisible();
-		await expect(page.getByRole('columnheader', { name: 'Price' })).toBeVisible();
+		await expect(screen.getByRole('columnheader', { name: 'Stock' })).toBeVisible();
+		await expect(screen.getByRole('columnheader', { name: 'Price' })).toBeVisible();
 	});
 
 	test('should search products on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		await expect(page.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
-		const searchInput = page.getByPlaceholder('Search Products');
+		const searchInput = screen.getByPlaceholder('Search Products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
 
-		const hasResults = await page
+		const hasResults = await screen
 			.getByText(/Showing [1-9]\d* of \d+/)
 			.isVisible()
 			.catch(() => false);
-		const noResults = await page.getByText('No products found').isVisible().catch(() => false);
+		const noResults = await screen.getByText('No products found').isVisible().catch(() => false);
 		expect(hasResults || noResults).toBeTruthy();
 	});
 
 	test('should show product actions menu', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		await expect(page.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
-		// Click the first ellipsis actions menu
-		const actionsButton = page.locator('[data-testid="actions-menu"], button').filter({ hasText: '' }).first();
 		// Look for ellipsis icon buttons in the product table
-		const ellipsis = page.getByRole('button', { name: /more|actions|menu/i }).first();
+		const ellipsis = screen.getByRole('button', { name: /more|actions|menu/i }).first();
 
 		if (await ellipsis.isVisible({ timeout: 5_000 }).catch(() => false)) {
 			await ellipsis.click();

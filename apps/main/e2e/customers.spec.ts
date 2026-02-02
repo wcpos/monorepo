@@ -93,18 +93,20 @@ test.describe('Customers Page (Pro)', () => {
 
 	test('should navigate to Customers page and see customer list', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
-		await expect(page.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
+		const screen = page.getByTestId('screen-customers');
+		await expect(screen.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show customer data or empty state', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
-		await page.waitForTimeout(5_000);
+		const screen = page.getByTestId('screen-customers');
+		await expect(screen.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
 
-		const hasCustomers = await page
+		const hasCustomers = await screen
 			.getByText(/Showing \d+ of \d+/)
 			.isVisible({ timeout: 10_000 })
 			.catch(() => false);
-		const noCustomers = await page
+		const noCustomers = await screen
 			.getByText('No customers found')
 			.isVisible({ timeout: 5_000 })
 			.catch(() => false);
@@ -113,17 +115,18 @@ test.describe('Customers Page (Pro)', () => {
 
 	test('should search customers', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
-		await expect(page.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
+		const screen = page.getByTestId('screen-customers');
+		await expect(screen.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
 
-		const searchInput = page.getByPlaceholder('Search Customers');
+		const searchInput = screen.getByPlaceholder('Search Customers');
 		await searchInput.fill('admin');
 		await page.waitForTimeout(1_500);
 
-		const hasResults = await page
+		const hasResults = await screen
 			.getByText(/Showing [1-9]\d* of \d+/)
 			.isVisible()
 			.catch(() => false);
-		const noResults = await page
+		const noResults = await screen
 			.getByText('No customers found')
 			.isVisible()
 			.catch(() => false);
@@ -132,11 +135,12 @@ test.describe('Customers Page (Pro)', () => {
 
 	test('should have add customer button on Customers page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
-		await expect(page.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
+		const screen = page.getByTestId('screen-customers');
+		await expect(screen.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
 
 		// The "+" add customer button should be in the header area
-		const addButton = page.getByRole('button', { name: /add.*customer/i }).or(
-			page.getByRole('link', { name: /add.*customer/i })
+		const addButton = screen.getByRole('button', { name: /add.*customer/i }).or(
+			screen.getByRole('link', { name: /add.*customer/i })
 		);
 		await expect(addButton.first()).toBeVisible({ timeout: 5_000 });
 	});

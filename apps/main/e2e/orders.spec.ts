@@ -4,7 +4,9 @@ import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fi
 /** Helper to navigate to Orders page and wait for load */
 async function navigateToOrders(page: Page) {
 	await navigateToPage(page, 'orders');
-	await expect(page.getByPlaceholder('Search Orders')).toBeVisible({ timeout: 30_000 });
+	const screen = page.getByTestId('screen-orders');
+	await expect(screen.getByPlaceholder('Search Orders')).toBeVisible({ timeout: 30_000 });
+	return screen;
 }
 
 /**
@@ -21,20 +23,20 @@ test.describe('Orders Page (Pro)', () => {
 	});
 
 	test('should show order columns', async ({ posPage: page }) => {
-		await navigateToOrders(page);
+		const screen = await navigateToOrders(page);
 
-		await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
-		await expect(page.getByRole('columnheader', { name: 'Total' })).toBeVisible();
+		await expect(screen.getByRole('columnheader', { name: 'Status' })).toBeVisible();
+		await expect(screen.getByRole('columnheader', { name: 'Total' })).toBeVisible();
 	});
 
 	test('should show orders or empty state', async ({ posPage: page }) => {
-		await navigateToOrders(page);
+		const screen = await navigateToOrders(page);
 
-		const hasOrders = await page
+		const hasOrders = await screen
 			.getByText(/Showing \d+ of \d+/)
 			.isVisible({ timeout: 10_000 })
 			.catch(() => false);
-		const noOrders = await page
+		const noOrders = await screen
 			.getByText('No orders found')
 			.isVisible({ timeout: 5_000 })
 			.catch(() => false);
@@ -42,17 +44,17 @@ test.describe('Orders Page (Pro)', () => {
 	});
 
 	test('should search orders', async ({ posPage: page }) => {
-		await navigateToOrders(page);
+		const screen = await navigateToOrders(page);
 
-		const searchInput = page.getByPlaceholder('Search Orders');
+		const searchInput = screen.getByPlaceholder('Search Orders');
 		await searchInput.fill('123');
 		await page.waitForTimeout(1_500);
 
-		const hasResults = await page
+		const hasResults = await screen
 			.getByText(/Showing \d+ of \d+/)
 			.isVisible()
 			.catch(() => false);
-		const noResults = await page
+		const noResults = await screen
 			.getByText('No orders found')
 			.isVisible()
 			.catch(() => false);
@@ -60,24 +62,21 @@ test.describe('Orders Page (Pro)', () => {
 	});
 
 	test('should show filter pills', async ({ posPage: page }) => {
-		await navigateToOrders(page);
+		const screen = await navigateToOrders(page);
 
-		// Orders page has filter pills for Status, Customer, Cashier, etc.
-		await expect(page.getByText('Status').first()).toBeVisible({ timeout: 5_000 });
+		await expect(screen.getByText('Status').first()).toBeVisible({ timeout: 5_000 });
 	});
 
 	test('should show order actions menu', async ({ posPage: page }) => {
-		await navigateToOrders(page);
+		const screen = await navigateToOrders(page);
 
-		// Wait for orders to load
-		const hasOrders = await page
+		const hasOrders = await screen
 			.getByText(/Showing [1-9]\d* of \d+/)
 			.isVisible({ timeout: 15_000 })
 			.catch(() => false);
 
 		if (hasOrders) {
-			// Click the first ellipsis actions menu
-			const ellipsis = page.getByRole('button', { name: /more|actions|menu/i }).first();
+			const ellipsis = screen.getByRole('button', { name: /more|actions|menu/i }).first();
 			if (await ellipsis.isVisible({ timeout: 5_000 }).catch(() => false)) {
 				await ellipsis.click();
 				await expect(
