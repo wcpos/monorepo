@@ -18,18 +18,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
         with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: pnpm install --filter . --frozen-lockfile=false
-        env:
-          UNIWIND_AUTH_TOKEN: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
       - name: Extract translation strings
         run: node scripts/extract-js-strings.js
