@@ -93,9 +93,14 @@ export async function authenticateWithStore(page: Page) {
 	await expect(logInButton.first()).toBeVisible({ timeout: 15_000 });
 	await logInButton.first().click();
 
-	// After login, the page redirects back to localhost with auth tokens
+	// After login, the page redirects back with auth tokens.
+	// Locally this goes to localhost; in CI it redirects to the Expo deployment URL.
+	const appOrigin = new URL(page.url()).origin;
 	await loginPage.waitForURL(
-		(url) => url.hostname === 'localhost' || url.hostname === '127.0.0.1',
+		(url) =>
+			url.hostname === 'localhost' ||
+			url.hostname === '127.0.0.1' ||
+			url.origin === appOrigin,
 		{ timeout: 60_000 }
 	);
 
@@ -149,11 +154,15 @@ export async function authenticateWithStore(page: Page) {
 
 /**
  * Extended test fixture that provides an authenticated POS page.
- * Use `authenticatedTest` instead of `test` for tests that need a logged-in session.
+ *
+ * StorageState is pre-loaded by the setup project, so we just need to
+ * navigate and wait for the app to hydrate and sync products.
  */
 export const authenticatedTest = base.extend<{ posPage: Page }>({
 	posPage: async ({ page }, use) => {
-		await authenticateWithStore(page);
+		await page.goto('/');
+		await expect(page.getByPlaceholder('Search Products')).toBeVisible({ timeout: 60_000 });
+		await expect(page.getByText(/Showing [1-9]\d* of \d+/)).toBeVisible({ timeout: 120_000 });
 		await use(page);
 	},
 });
