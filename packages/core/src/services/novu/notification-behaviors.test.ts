@@ -84,8 +84,15 @@ describe('notification-behaviors', () => {
 				expect(behavior.level).toBe('error');
 			});
 
-			it('should set warning defaults for warning severity', () => {
+			it('should preserve explicit showToast:false with warning severity', () => {
+				// 'welcome' has showToast: false explicitly, ?? doesn't override it
 				const behavior = getNotificationBehavior('welcome', 'warning');
+				expect(behavior.showToast).toBe(false);
+				expect(behavior.level).toBe('warn');
+			});
+
+			it('should default showToast to true for unknown workflow with warning severity', () => {
+				const behavior = getNotificationBehavior('unknown-workflow', 'warning');
 				expect(behavior.showToast).toBe(true);
 				expect(behavior.level).toBe('warn');
 			});
