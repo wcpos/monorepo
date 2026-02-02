@@ -1,6 +1,3 @@
-import { firstValueFrom, race, timer } from 'rxjs';
-import { filter, map, take } from 'rxjs/operators';
-
 import { getLogger } from '@wcpos/utils/logger';
 import { emitCollectionReset, swappingCollections } from '@wcpos/database/plugins/reset-collection';
 
@@ -229,34 +226,6 @@ async function removeCollections(
 		await storeDB.collections[collectionName].remove();
 		swapLogger.debug('Store collection removed', { context: { collectionName } });
 	}
-}
-
-/**
- * Wait for the reset$ signal indicating the collection has been re-added.
- * The reset-collection plugin handles re-addition automatically.
- *
- * Note: Caller must validate reset$ exists before calling this function.
- */
-function waitForReset(
-	storeDB: RxDatabase,
-	collectionName: string,
-	timeout: number
-): Promise<RxCollection> {
-	const reset$ = (storeDB as any).reset$;
-
-	const resetSignal$ = reset$.pipe(
-		filter((collection: RxCollection) => collection.name === collectionName),
-		take(1),
-		map((collection: RxCollection) => collection)
-	);
-
-	const timeoutSignal$ = timer(timeout).pipe(
-		map(() => {
-			throw new Error(`Timeout waiting for collection reset: ${collectionName}`);
-		})
-	);
-
-	return firstValueFrom(race(resetSignal$, timeoutSignal$));
 }
 
 /**

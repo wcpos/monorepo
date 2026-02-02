@@ -111,7 +111,7 @@ describe('use-merged-ref', () => {
 		});
 
 		it('should handle useState setter as ref', () => {
-			const [value, setValue] = [null as HTMLDivElement | null, jest.fn()];
+			const [, setValue] = [null as HTMLDivElement | null, jest.fn()];
 			const objectRef: React.MutableRefObject<HTMLDivElement | null> = { current: null };
 
 			const { result } = renderHook(() =>

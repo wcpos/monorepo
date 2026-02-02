@@ -1,4 +1,4 @@
-import { createRxDatabase, removeRxDatabase } from 'rxdb';
+import { createRxDatabase } from 'rxdb';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
@@ -30,7 +30,7 @@ export const createUserDB = async () => {
 			ignoreDuplicate: !!__DEV__,
 			...defaultConfig,
 		});
-		const collections = await db?.addCollections(userCollections);
+		await db?.addCollections(userCollections);
 		return db;
 	} catch (error) {
 		dbLogger.error('Failed to create user database', {
@@ -58,7 +58,7 @@ export const createStoreDB = async (id: string) => {
 			ignoreDuplicate: true, // Allow returning existing DB when switching back to a store
 			...defaultConfig,
 		});
-		const collections = await db?.addCollections(storeCollections);
+		await db?.addCollections(storeCollections);
 		return db;
 	} catch (error) {
 		dbLogger.error('Failed to create store database', {
@@ -86,7 +86,7 @@ export const createFastStoreDB = async (id: string) => {
 			ignoreDuplicate: true, // Allow returning existing DB when switching back to a store
 			...fastStorageConfig,
 		});
-		const collections = await db?.addCollections(syncCollections);
+		await db?.addCollections(syncCollections);
 		return db;
 	} catch (error) {
 		dbLogger.error('Failed to create fast store database', {

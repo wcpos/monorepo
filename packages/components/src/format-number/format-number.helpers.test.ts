@@ -1,10 +1,10 @@
 import {
-	limitToScale,
-	toNumericString,
-	getThousandsGroupRegex,
 	applyThousandSeparator,
-	splitDecimal,
+	getThousandsGroupRegex,
+	limitToScale,
 	roundToPrecision,
+	splitDecimal,
+	toNumericString,
 } from './format-number.helpers';
 
 describe('format-number helpers', () => {

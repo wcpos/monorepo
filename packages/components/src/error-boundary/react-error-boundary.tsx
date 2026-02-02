@@ -21,9 +21,9 @@ interface ErrorBoundaryPropsWithComponent {
 	fallbackRender?: never;
 }
 
-declare function FallbackRender(
+type FallbackRender = (
 	props: FallbackProps
-): React.ReactElement<unknown, string | React.FunctionComponent | typeof React.Component> | null;
+) => React.ReactElement<unknown, string | React.FunctionComponent | typeof React.Component> | null;
 
 interface ErrorBoundaryPropsWithRender {
 	onResetKeysChange?: (
@@ -35,7 +35,7 @@ interface ErrorBoundaryPropsWithRender {
 	resetKeys?: unknown[];
 	fallback?: never;
 	FallbackComponent?: never;
-	fallbackRender: typeof FallbackRender;
+	fallbackRender: FallbackRender;
 }
 
 interface ErrorBoundaryPropsWithFallback {

@@ -1,26 +1,14 @@
-import forEach from 'lodash/forEach';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
-import isInteger from 'lodash/isInteger';
 import isPlainObject from 'lodash/isPlainObject';
 import map from 'lodash/map';
 import pickBy from 'lodash/pickBy';
 import uniq from 'lodash/uniq';
 import { ObservableResource } from 'observable-hooks';
 import { isRxCollection, RxCollection, RxDocument, RxPlugin } from 'rxdb';
-import { combineLatest, forkJoin } from 'rxjs';
-import {
-	distinctUntilChanged,
-	filter,
-	mergeMap,
-	pluck,
-	map as rxMap,
-	startWith,
-	switchMap,
-	tap,
-	toArray,
-} from 'rxjs/operators';
+import { combineLatest } from 'rxjs';
+import { distinctUntilChanged, map as rxMap, startWith, switchMap } from 'rxjs/operators';
 
 /**
  * Get children props from the schema

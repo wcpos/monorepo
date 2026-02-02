@@ -1,5 +1,5 @@
 import type { Observable } from 'rxjs';
-import type { RxCollection, RxDatabase } from 'rxdb';
+import type { RxCollection } from 'rxdb';
 
 /**
  * FlexSearch instance returned by rxdb-premium/plugins/flexsearch

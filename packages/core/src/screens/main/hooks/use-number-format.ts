@@ -7,7 +7,7 @@ import { NumericFormatProps, numericFormatter } from 'react-number-format';
 
 import { useAppState } from '../../../contexts/app-state';
 
-export interface NumberFormatOptions extends NumericFormatProps {}
+export type NumberFormatOptions = NumericFormatProps;
 
 /**
  * Custom hook to format numbers based on application state and provided options.

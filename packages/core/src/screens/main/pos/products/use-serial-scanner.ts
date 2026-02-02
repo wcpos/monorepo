@@ -95,7 +95,7 @@ export const useWebSerialBarcodeScanner = (options = {}) => {
 
 			// Set up a reader to read data
 			const textDecoder = new TextDecoderStream();
-			const readableStreamClosed = portToOpen.readable.pipeTo(textDecoder.writable);
+			portToOpen.readable.pipeTo(textDecoder.writable);
 			const reader = textDecoder.readable.getReader();
 			readerRef.current = reader;
 

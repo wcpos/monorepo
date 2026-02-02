@@ -34,7 +34,7 @@ import { Subtotal } from './cells/subtotal';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
-import { getUuidFromLineItem } from '../hooks/utils';
+import { CartLine, getUuidFromLineItem } from '../hooks/utils';
 import { SKU } from './cells/sku';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];

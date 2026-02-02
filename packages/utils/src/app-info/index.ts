@@ -6,7 +6,7 @@ import { Platform } from 'react-native';
 
 import Constants from 'expo-constants';
 
-export interface AppInfo {
+interface AppInfo {
 	/** Cross-platform JS bundle version from Expo config (e.g., '1.8.1') */
 	version: string;
 	/** Platform-specific version (build number for iOS, version code for Android) */
@@ -25,6 +25,7 @@ const platformVersion =
 		? (Constants.expoConfig?.ios?.buildNumber ?? '0')
 		: String(Constants.expoConfig?.android?.versionCode ?? 0);
 
+// eslint-disable-next-line @typescript-eslint/no-redeclare
 const AppInfo: AppInfo = {
 	version,
 	platformVersion,

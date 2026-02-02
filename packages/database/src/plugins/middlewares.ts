@@ -1,7 +1,6 @@
 import forEach from 'lodash/forEach';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
-type RxCollection = import('rxdb/dist/types').RxCollection;
 
 const middlewaresPlugin: RxPlugin = {
 	name: 'middleswares',

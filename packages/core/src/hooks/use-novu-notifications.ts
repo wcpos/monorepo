@@ -158,7 +158,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 
 			if (behavior.showToast) {
 				const level = behavior.level || 'info';
-				log[level](title, {
+				novuLogger[level](title, {
 					showToast: true,
 					saveToDb: behavior.saveToDb,
 					// Use body as context object so it's useful when saved to DB

@@ -37,7 +37,7 @@ async function checkWebsiteReachability(url: string): Promise<boolean> {
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-		const response = await fetch(url, {
+		await fetch(url, {
 			method: 'HEAD',
 			mode: 'no-cors', // Avoid CORS issues for reachability check
 			cache: 'no-store',

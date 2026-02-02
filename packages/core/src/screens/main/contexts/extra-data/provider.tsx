@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useAppState } from '../../../../contexts/app-state';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
-interface ExtraDataContextProps {}
+type ExtraDataContextProps = Record<string, never>;
 
 export const ExtraDataContext = React.createContext<ExtraDataContextProps>(null);
 
