@@ -11,6 +11,13 @@ export function mergeRefs<T = any>(...refs: Ref<T>[]) {
 }
 
 export function useMergedRef<T = any>(...refs: Ref<T>[]) {
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	return React.useCallback(mergeRefs(...refs), refs);
+	const stableRefs = React.useRef(refs);
+	stableRefs.current = refs;
+
+	return React.useMemo(
+		() => (node: T | null) => {
+			stableRefs.current.forEach((ref) => assignRef(ref, node));
+		},
+		[stableRefs]
+	);
 }
