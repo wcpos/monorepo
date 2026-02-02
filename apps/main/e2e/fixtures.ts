@@ -93,9 +93,14 @@ export async function authenticateWithStore(page: Page) {
 	await expect(logInButton.first()).toBeVisible({ timeout: 15_000 });
 	await logInButton.first().click();
 
-	// After login, the page redirects back to localhost with auth tokens
+	// After login, the page redirects back with auth tokens.
+	// Locally this goes to localhost; in CI it redirects to the Expo deployment URL.
+	const appOrigin = new URL(page.url()).origin;
 	await loginPage.waitForURL(
-		(url) => url.hostname === 'localhost' || url.hostname === '127.0.0.1',
+		(url) =>
+			url.hostname === 'localhost' ||
+			url.hostname === '127.0.0.1' ||
+			url.origin === appOrigin,
 		{ timeout: 60_000 }
 	);
 
