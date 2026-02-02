@@ -3,6 +3,7 @@ node_modules
 .vscode
 .DS_Store
 .turbo
+.translations
 
 # Playwright
 /test-results/
