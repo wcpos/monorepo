@@ -28,6 +28,8 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --filter . --frozen-lockfile=false
+        env:
+          UNIWIND_AUTH_TOKEN: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
       - name: Extract translation strings
         run: node scripts/extract-js-strings.js
