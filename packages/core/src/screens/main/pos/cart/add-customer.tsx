@@ -110,7 +110,7 @@ export const AddNewCustomer = () => {
 			<Dialog open={open} onOpenChange={setOpen}>
 				<Tooltip>
 					<TooltipTrigger asChild onPress={() => setOpen(true)}>
-						<IconButton name="userPlus" />
+						<IconButton testID="add-customer-button" name="userPlus" />
 					</TooltipTrigger>
 					<TooltipContent>
 						<Text>{t('Add new customer', { _tags: 'core' })}</Text>

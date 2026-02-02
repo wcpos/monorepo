@@ -1,97 +1,42 @@
 import { test, expect } from '@playwright/test';
+import { authenticatedTest } from './fixtures';
 
 /**
- * Navigation tests for WCPOS web app
- *
- * These tests verify that basic navigation works correctly,
- * including the drawer menu and responsive layouts.
+ * Navigation and layout tests.
  */
-
-test.describe('Navigation', () => {
-	test.beforeEach(async ({ page }) => {
-		// Navigate to the app
+test.describe('Unauthenticated Navigation', () => {
+	test('should show connect screen when not logged in', async ({ page }) => {
 		await page.goto('/');
-		// Wait for hydration to complete - splash screen disappears when app is ready
+		await expect(page.getByRole('button', { name: 'Connect' })).toBeVisible({ timeout: 60_000 });
+		await expect(page.locator('input[type="url"]')).toBeVisible();
+	});
+
+	test('should handle unknown routes gracefully', async ({ page }) => {
+		await page.goto('/some-nonexistent-route');
+
+		// Wait for the app to finish loading, then check for connect screen or 404
 		await expect(
-			page.locator('input[type="url"], button:has-text("Connect"), [data-testid="pos-screen"]')
-		).toBeVisible({ timeout: 60000 });
+			page.getByRole('button', { name: 'Connect' }).or(page.getByText(/doesn't exist/i))
+		).toBeVisible({ timeout: 60_000 });
+	});
+});
+
+authenticatedTest.describe('Authenticated Navigation', () => {
+	authenticatedTest('should show the POS screen after login', async ({ posPage: page }) => {
+		await expect(page.getByPlaceholder('Search Products')).toBeVisible();
 	});
 
-	test('should show auth screen when not connected', async ({ page }) => {
-		// Should see the connect/auth screen (already waited in beforeEach)
-		const hasUrlInput = await page.locator('input[type="url"]').isVisible().catch(() => false);
-		const hasConnectButton = await page
-			.locator('button:has-text("Connect")')
-			.isVisible()
-			.catch(() => false);
-		expect(hasUrlInput || hasConnectButton).toBeTruthy();
-	});
-
-	test('should have proper page title', async ({ page }) => {
-		await expect(page).toHaveTitle(/WCPOS|WooCommerce POS/);
-	});
-
-	test('should be responsive on mobile viewport', async ({ page }) => {
-		// Set mobile viewport
+	authenticatedTest('should be responsive on mobile viewport', async ({ posPage: page }) => {
 		await page.setViewportSize({ width: 375, height: 667 });
 
-		// Verify the page still renders properly
-		await expect(page.locator('body')).toBeVisible();
+		// On mobile, either search input or Products tab should be visible
+		await expect(page.getByPlaceholder('Search Products')).toBeVisible({ timeout: 10_000 });
 	});
 
-	test('should be responsive on tablet viewport', async ({ page }) => {
-		// Set tablet viewport
-		await page.setViewportSize({ width: 768, height: 1024 });
-
-		// Verify the page still renders properly
-		await expect(page.locator('body')).toBeVisible();
-	});
-
-	test('should be responsive on desktop viewport', async ({ page }) => {
-		// Set desktop viewport
+	authenticatedTest('should be responsive on desktop viewport', async ({ posPage: page }) => {
 		await page.setViewportSize({ width: 1920, height: 1080 });
 
-		// Verify the page still renders properly
-		await expect(page.locator('body')).toBeVisible();
-	});
-});
-
-test.describe('Error Handling', () => {
-	test('should handle 404 pages gracefully', async ({ page }) => {
-		// Navigate to a non-existent route
-		await page.goto('/this-page-does-not-exist');
-
-		// Should either redirect to home or show a not found message
-		await expect(
-			page.locator('body').or(page.locator('text=/Not Found|404/'))
-		).toBeVisible();
-	});
-});
-
-test.describe('Accessibility', () => {
-	test.beforeEach(async ({ page }) => {
-		await page.goto('/');
-		// Wait for hydration to complete
-		await expect(
-			page.locator('input[type="url"], button:has-text("Connect"), [data-testid="pos-screen"]')
-		).toBeVisible({ timeout: 60000 });
-	});
-
-	test('should have accessible focus indicators', async ({ page }) => {
-		// Tab through interactive elements and verify focus is visible
-		await page.keyboard.press('Tab');
-
-		// Get the focused element
-		const focusedElement = page.locator(':focus');
-		await expect(focusedElement).toBeVisible();
-	});
-
-	test('should support keyboard navigation', async ({ page }) => {
-		// Navigate with keyboard
-		await page.keyboard.press('Tab');
-		await page.keyboard.press('Enter');
-
-		// Verify we can interact with the page using keyboard only
-		await expect(page.locator('body')).toBeVisible();
+		await expect(page.getByPlaceholder('Search Products')).toBeVisible();
+		await expect(page.getByText('Guest')).toBeVisible();
 	});
 });

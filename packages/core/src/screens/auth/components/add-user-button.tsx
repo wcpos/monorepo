@@ -49,6 +49,7 @@ export function AddUserButton({ site }: Props) {
 		<Tooltip>
 			<TooltipTrigger asChild>
 				<IconButton
+					testID="add-user-button"
 					name="circlePlus"
 					size="xl"
 					disabled={!isReady || isProcessing}

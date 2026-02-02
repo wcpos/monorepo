@@ -35,6 +35,9 @@ export interface NumberInputProps {
 
 	/**  */
 	formatOptions?: NumberFormatOptions;
+
+	/**  */
+	testID?: string;
 }
 
 /**
@@ -47,6 +50,7 @@ export const NumberInput = ({
 	placement = 'bottom',
 	className,
 	formatOptions,
+	testID,
 	...props
 }: NumberInputProps) => {
 	const { store } = useAppState();
@@ -97,6 +101,7 @@ export const NumberInput = ({
 		<Popover>
 			<PopoverTrigger ref={triggerRef} asChild>
 				<Button
+					testID={testID}
 					variant="outline"
 					disabled={disabled}
 					className={cn('min-w-10 items-start', className)}
