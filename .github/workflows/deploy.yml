@@ -22,7 +22,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   EXPO_USE_FAST_RESOLVER: true
@@ -107,11 +107,16 @@ jobs:
           fi
 
   e2e:
-    name: 🎭 E2E Tests
+    name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     needs: deploy
     if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3]
+        shardTotal: [3]
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@v4
@@ -129,12 +134,60 @@ jobs:
       - name: 🎭 Install Playwright browsers
         run: cd apps/main && npx playwright install --with-deps chromium
 
-      - name: 🧪 Run E2E tests
+      - name: 🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
         id: e2e-tests
-        run: cd apps/main && npx playwright test --reporter=html,json
+        run: cd apps/main && npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
         env:
           BASE_URL: ${{ needs.deploy.outputs.deployment_url }}
           CI: true
+
+      - name: 📊 Upload blob report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blob-report-${{ matrix.shardIndex }}
+          path: apps/main/blob-report/
+          retention-days: 7
+
+      - name: 📸 Upload screenshots on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-screenshots-${{ matrix.shardIndex }}-${{ github.sha }}
+          path: apps/main/test-results/
+          retention-days: 7
+
+  e2e-report:
+    name: 📊 Merge E2E Reports
+    needs: [deploy, e2e]
+    if: always() && needs.e2e.result != 'skipped'
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ needs.e2e.result }}
+    steps:
+      - name: 🏗 Setup repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+
+      - name: 📥 Download blob reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: blob-report-*
+          path: apps/main/all-blob-reports
+          merge-multiple: true
+
+      - name: 📊 Merge reports
+        run: cd apps/main && npx playwright merge-reports --reporter=html,json ./all-blob-reports
+        env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results.json
 
       - name: 📊 Generate test summary
@@ -143,15 +196,14 @@ jobs:
           cd apps/main
           echo "## 🎭 E2E Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ -f "test-results.json" ]; then
-            # Parse test results
             total=$(jq '.stats.expected + .stats.unexpected + .stats.flaky + .stats.skipped' test-results.json)
             passed=$(jq '.stats.expected' test-results.json)
             failed=$(jq '.stats.unexpected' test-results.json)
             skipped=$(jq '.stats.skipped' test-results.json)
             duration=$(jq '.stats.duration / 1000 | floor' test-results.json)
-            
+
             echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
             echo "| ✅ Passed | $passed |" >> $GITHUB_STEP_SUMMARY
@@ -159,8 +211,7 @@ jobs:
             echo "| ⏭️ Skipped | $skipped |" >> $GITHUB_STEP_SUMMARY
             echo "| ⏱️ Duration | ${duration}s |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            
-            # List failed tests with error messages
+
             if [ "$failed" -gt 0 ]; then
               echo "### ❌ Failed Tests" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
@@ -171,11 +222,11 @@ jobs:
           else
             echo "⚠️ No test results file found" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📎 [View full HTML report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
 
-      - name: 📊 Upload test report
+      - name: 📊 Upload merged report
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -185,17 +236,9 @@ jobs:
             apps/main/test-results.json
           retention-days: 30
 
-      - name: 📸 Upload screenshots on failure
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-screenshots-${{ github.sha }}
-          path: apps/main/test-results/
-          retention-days: 7
-
   comment:
     name: 💬 PR Comment
-    needs: [deploy, e2e]
+    needs: [deploy, e2e, e2e-report]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -217,22 +260,22 @@ jobs:
             const e2eResult = '${{ needs.e2e.result }}';
             const sha = '${{ github.sha }}'.substring(0, 7);
             const runId = '${{ github.run_id }}';
-            
+
             let e2eStatus = '⏳ Pending';
             let e2eDetails = '';
-            
+
             if (e2eResult === 'success') {
               e2eStatus = '✅ Passed';
             } else if (e2eResult === 'failure') {
               e2eStatus = '❌ Failed';
-              
+
               // Try to parse test results for failure details
               try {
                 const resultsPath = 'test-artifacts/test-results.json';
                 if (fs.existsSync(resultsPath)) {
                   const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
                   const failures = [];
-                  
+
                   // Extract failed test names
                   for (const suite of results.suites || []) {
                     for (const innerSuite of suite.suites || []) {
@@ -244,7 +287,7 @@ jobs:
                       }
                     }
                   }
-                  
+
                   if (failures.length > 0) {
                     e2eDetails = `\n\n### ❌ Failed Tests\n${failures.slice(0, 5).join('\n')}`;
                     if (failures.length > 5) {
@@ -255,7 +298,7 @@ jobs:
               } catch (e) {
                 console.log('Could not parse test results:', e.message);
               }
-              
+
               e2eDetails += `\n\n📊 [View detailed test report](https://github.com/${{ github.repository }}/actions/runs/${runId})`;
               e2eDetails += `\n📸 [Download failure screenshots](https://github.com/${{ github.repository }}/actions/runs/${runId}#artifacts)`;
             } else if (e2eResult === 'skipped') {
@@ -263,7 +306,7 @@ jobs:
             } else if (e2eResult === 'cancelled') {
               e2eStatus = '🚫 Cancelled';
             }
-            
+
             const tableRows = [
               '| Item | Status |',
               '|------|--------|',
@@ -271,12 +314,12 @@ jobs:
               `| **E2E Tests** | ${e2eStatus} |`,
               '| **Commit** | \`${sha}\` |`
             ].join('\n');
-            
+
             let quickLinks = '';
             if (deployUrl) {
               quickLinks = `\n\n### 🔗 Quick Links\n- [Preview App](${deployUrl})\n- [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${runId})`;
             }
-            
+
             const body = `## 🚀 Deployment Summary\n\n${tableRows}${quickLinks}${e2eDetails}\n\n---\n<sub>🤖 Updated by GitHub Actions</sub>`;
 
             // Find and update existing comment
