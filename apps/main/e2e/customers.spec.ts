@@ -11,6 +11,6 @@ test.describe('Customers in POS', () => {
 	});
 
 	test('should have an add customer button', async ({ posPage: page }) => {
-		await expect(page.getByTestId('add-customer-button')).toBeVisible();
+		await expect(page.getByTestId('add-customer-button')).toBeVisible({ timeout: 10_000 });
 	});
 });

@@ -28,7 +28,7 @@ test.describe('POS Cart', () => {
 		await quantityButton.click();
 
 		// Numpad popover opens - clear and type new value, then confirm
-		const numpad = page.locator('[role="dialog"], [data-radix-popper-content-wrapper]');
+		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 		await expect(numpad).toBeVisible({ timeout: 5_000 });
 		await page.keyboard.type('3');
 		await page.getByRole('button', { name: 'Done' }).click();
