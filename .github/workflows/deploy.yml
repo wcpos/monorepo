@@ -303,7 +303,7 @@ jobs:
               '|------|--------|',
               `| **Preview URL** | ${deployUrl ? '[' + deployUrl + '](' + deployUrl + ')' : '❌ Failed to deploy'} |`,
               `| **E2E Tests** | ${e2eStatus} |`,
-              '| **Commit** | \`${sha}\` |`
+              '| **Commit** | \`${sha}\` |'
             ].join('\n');
 
             let quickLinks = '';
