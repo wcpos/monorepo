@@ -10,6 +10,12 @@ on:
       - 'packages/**/*.ts'
       - 'packages/**/*.tsx'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Push even if strings have not changed'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   extract-and-dispatch:
@@ -67,6 +73,7 @@ jobs:
           gh api repos/wcpos/translations/dispatches \
             -f event_type=update-js-strings \
             -f "client_payload[repo_name]=monorepo" \
-            -f "client_payload[ref]=translations-source"
+            -f "client_payload[ref]=translations-source" \
+            -f "client_payload[force]=${{ inputs.force || 'false' }}"
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
