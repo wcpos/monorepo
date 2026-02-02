@@ -26,14 +26,10 @@ test.describe('POS Cart', () => {
 		await addFirstProductToCart(page);
 
 		const quantityInput = page.locator('[aria-labelledby="cart-table"] input').first();
-
-		if (await quantityInput.isVisible().catch(() => false)) {
-			await quantityInput.fill('3');
-			await quantityInput.press('Enter');
-			await page.waitForTimeout(500);
-
-			await expect(quantityInput).toHaveValue('3');
-		}
+		await expect(quantityInput).toBeVisible({ timeout: 5_000 });
+		await quantityInput.fill('3');
+		await quantityInput.press('Enter');
+		await expect(quantityInput).toHaveValue('3');
 	});
 
 	test('should add multiple different products', async ({ posPage: page }) => {
@@ -71,10 +67,7 @@ test.describe('POS Checkout', () => {
 		await page.getByRole('button', { name: /Process Payment/ }).click();
 
 		await expect(
-			page
-				.getByText(/receipt|complete|success/i)
-				.or(page.getByText('Guest'))
-				.first()
+			page.getByText(/receipt|complete|success/i).first()
 		).toBeVisible({ timeout: 30_000 });
 	});
 });
