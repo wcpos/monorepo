@@ -30,6 +30,7 @@ export const Quantity = ({ row, column }: CellContext<Props, 'quantity'>) => {
 	return (
 		<VStack className="items-center justify-center gap-1">
 			<NumberInput
+				testID="cart-quantity-input"
 				value={item.quantity}
 				onChangeText={(quantity) => updateLineItem(uuid, { quantity })}
 			/>

@@ -19,6 +19,7 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 	 */
 	return (
 		<IconButton
+			testID="add-to-cart-button"
 			name="circlePlus"
 			variant="success"
 			size="4xl"

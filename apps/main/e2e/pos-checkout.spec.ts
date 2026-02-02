@@ -3,9 +3,7 @@ import { authenticatedTest as test } from './fixtures';
 
 /** Helper to add the first simple product to the cart */
 async function addFirstProductToCart(page: import('@playwright/test').Page) {
-	const firstRow = page.getByRole('row').filter({ hasText: /\d+[,.]?\d*\s*\$/ }).first();
-	const addButton = firstRow.getByRole('button').last();
-	await addButton.click();
+	await page.getByTestId('add-to-cart-button').first().click();
 	await expect(page.getByRole('button', { name: /Checkout/ })).toBeVisible({ timeout: 10_000 });
 }
 
@@ -25,20 +23,25 @@ test.describe('POS Cart', () => {
 	test('should update quantity in cart', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 
-		const quantityInput = page.locator('[aria-labelledby="cart-table"] input').first();
-		await expect(quantityInput).toBeVisible({ timeout: 5_000 });
-		await quantityInput.fill('3');
-		await quantityInput.press('Enter');
-		await expect(quantityInput).toHaveValue('3');
+		const quantityButton = page.getByTestId('cart-quantity-input').first();
+		await expect(quantityButton).toBeVisible({ timeout: 5_000 });
+		await quantityButton.click();
+
+		// Numpad popover opens - clear and type new value, then confirm
+		const numpad = page.locator('[role="dialog"], [data-radix-popper-content-wrapper]');
+		await expect(numpad).toBeVisible({ timeout: 5_000 });
+		await page.keyboard.type('3');
+		await page.getByRole('button', { name: 'Done' }).click();
+		await page.waitForTimeout(500);
 	});
 
 	test('should add multiple different products', async ({ posPage: page }) => {
-		const productRows = page.getByRole('row').filter({ hasText: /\d+[,.]?\d*\s*\$/ });
+		const addButtons = page.getByTestId('add-to-cart-button');
 
-		await productRows.nth(0).getByRole('button').last().click();
+		await addButtons.nth(0).click();
 		await page.waitForTimeout(500);
 
-		await productRows.nth(1).getByRole('button').last().click();
+		await addButtons.nth(1).click();
 		await page.waitForTimeout(500);
 
 		await expect(page.getByRole('button', { name: /Checkout/ })).toBeVisible();

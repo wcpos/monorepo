@@ -11,11 +11,6 @@ test.describe('Customers in POS', () => {
 	});
 
 	test('should have an add customer button', async ({ posPage: page }) => {
-		const addCustomerBtn = page
-			.locator('button')
-			.filter({ has: page.locator('svg') })
-			.filter({ hasNotText: /Connect|Enter Demo|Search|Checkout/ });
-
-		expect(await addCustomerBtn.count()).toBeGreaterThan(0);
+		await expect(page.getByTestId('add-customer-button')).toBeVisible();
 	});
 });

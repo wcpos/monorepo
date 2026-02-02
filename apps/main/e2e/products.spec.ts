@@ -38,11 +38,7 @@ test.describe('Products', () => {
 	});
 
 	test('should add a product to the cart', async ({ posPage: page }) => {
-		// Click the action button (last button) in the first product row
-		const firstRow = page.getByRole('row').filter({ hasText: /\d+[,.]?\d*\s*\$/ }).first();
-		const addButton = firstRow.getByRole('button').last();
-		await addButton.click();
-
+		await page.getByTestId('add-to-cart-button').first().click();
 		await expect(page.getByRole('button', { name: /Checkout/ })).toBeVisible({ timeout: 10_000 });
 	});
 });

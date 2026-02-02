@@ -50,10 +50,7 @@ export async function authenticateWithStore(page: Page) {
 	await expect(page.getByText('Logged in users:')).toBeVisible({ timeout: 60_000 });
 
 	// Click the + button to trigger OAuth
-	const addUserButton = page
-		.locator('svg path[d*="256 512a256"]')
-		.first()
-		.locator('xpath=ancestor::button');
+	const addUserButton = page.getByTestId('add-user-button');
 	await addUserButton.click();
 
 	// Wait for the auth URL to be captured
