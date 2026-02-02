@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import { authenticatedTest, getStoreVariant } from './fixtures';
+import { authenticatedTest, navigateToPage } from './fixtures';
 
 authenticatedTest.describe('Authenticated Navigation', () => {
 	authenticatedTest('should show the POS screen after login', async ({ posPage: page }) => {
@@ -20,21 +20,30 @@ authenticatedTest.describe('Authenticated Navigation', () => {
 
 authenticatedTest.describe('Drawer Navigation', () => {
 	authenticatedTest(
-		'should show all drawer items on desktop',
+		'should have all sidebar navigation buttons',
 		async ({ posPage: page }) => {
-			await page.setViewportSize({ width: 1920, height: 1080 });
-			await page.waitForTimeout(500);
+			// On lg screens the drawer shows icon-only buttons; verify the correct count exists
+			const allButtons = page.locator('button');
+			const count = await allButtons.count();
+			const sidebarButtons: any[] = [];
 
-			for (const label of ['POS', 'Products', 'Orders', 'Customers', 'Reports', 'Logs', 'Support']) {
-				await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
+			for (let i = 0; i < count; i++) {
+				const btn = allButtons.nth(i);
+				const box = await btn.boundingBox();
+				if (box && box.x < 60 && box.width < 60) {
+					sidebarButtons.push(btn);
+				}
 			}
+
+			// Should have at least 7 sidebar buttons (POS, Products, Orders, Customers, Reports, Logs, Support)
+			expect(sidebarButtons.length).toBeGreaterThanOrEqual(7);
 		}
 	);
 
 	authenticatedTest(
 		'should navigate to Logs page',
 		async ({ posPage: page }) => {
-			await page.getByText('Logs', { exact: true }).click();
+			await navigateToPage(page, 'logs');
 			await expect(page.getByPlaceholder('Search Logs')).toBeVisible({ timeout: 30_000 });
 		}
 	);
@@ -42,9 +51,9 @@ authenticatedTest.describe('Drawer Navigation', () => {
 	authenticatedTest(
 		'should navigate to Support page',
 		async ({ posPage: page }) => {
-			await page.getByText('Support', { exact: true }).click();
-			// Support page should render some content (Discord link or similar)
-			await expect(page.getByText(/support|discord|community/i).first()).toBeVisible({
+			await navigateToPage(page, 'support');
+			// Support page embeds a Discord widget iframe
+			await expect(page.locator('iframe').first()).toBeVisible({
 				timeout: 30_000,
 			});
 		}
@@ -53,25 +62,10 @@ authenticatedTest.describe('Drawer Navigation', () => {
 	authenticatedTest(
 		'should navigate to a page and back to POS',
 		async ({ posPage: page }) => {
-			await page.getByText('Logs', { exact: true }).click();
+			await navigateToPage(page, 'logs');
 			await expect(page.getByPlaceholder('Search Logs')).toBeVisible({ timeout: 30_000 });
 
-			await page.getByText('POS', { exact: true }).click();
-			await expect(page.getByPlaceholder('Search Products')).toBeVisible({ timeout: 30_000 });
-		}
-	);
-
-	authenticatedTest(
-		'should highlight active drawer item',
-		async ({ posPage: page }) => {
-			// POS should be the active item after login - verify it has visual distinction
-			// The active item gets text-primary class; we just check the POS link is present
-			// and that navigating changes the active item
-			await page.getByText('Logs', { exact: true }).click();
-			await expect(page.getByPlaceholder('Search Logs')).toBeVisible({ timeout: 30_000 });
-
-			// Navigate back and verify POS content loads
-			await page.getByText('POS', { exact: true }).click();
+			await navigateToPage(page, 'pos');
 			await expect(page.getByPlaceholder('Search Products')).toBeVisible({ timeout: 30_000 });
 		}
 	);

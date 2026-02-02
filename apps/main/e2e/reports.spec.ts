@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import { authenticatedTest as test, getStoreVariant } from './fixtures';
+import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
 
 /**
  * Reports page (pro-only).
@@ -11,7 +11,7 @@ test.describe('Reports Page (Pro)', () => {
 	});
 
 	test('should navigate to Reports page', async ({ posPage: page }) => {
-		await page.getByText('Reports', { exact: true }).click();
+		await navigateToPage(page, 'reports');
 
 		// Reports page should show filter pills or the orders table
 		const hasContent = await page
@@ -28,7 +28,7 @@ test.describe('Reports Page (Pro)', () => {
 	});
 
 	test('should show filter pills', async ({ posPage: page }) => {
-		await page.getByText('Reports', { exact: true }).click();
+		await navigateToPage(page, 'reports');
 		await page.waitForTimeout(5_000);
 
 		// Reports page has filter pills like the orders page
@@ -36,7 +36,7 @@ test.describe('Reports Page (Pro)', () => {
 	});
 
 	test('should show report summary section', async ({ posPage: page }) => {
-		await page.getByText('Reports', { exact: true }).click();
+		await navigateToPage(page, 'reports');
 		await page.waitForTimeout(5_000);
 
 		// Report section should show "Report" heading or summary data
@@ -44,7 +44,7 @@ test.describe('Reports Page (Pro)', () => {
 	});
 
 	test('should show print button', async ({ posPage: page }) => {
-		await page.getByText('Reports', { exact: true }).click();
+		await navigateToPage(page, 'reports');
 		await page.waitForTimeout(5_000);
 
 		// Print button should be visible in the report section
@@ -65,13 +65,13 @@ test.describe('Reports Page (Free)', () => {
 	});
 
 	test('should show upgrade page on Reports', async ({ posPage: page }) => {
-		await page.getByText('Reports', { exact: true }).click();
-		await expect(page.getByText('Upgrade to Pro')).toBeVisible({ timeout: 30_000 });
+		await navigateToPage(page, 'reports');
+		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button', async ({ posPage: page }) => {
-		await page.getByText('Reports', { exact: true }).click();
-		await expect(page.getByText('Upgrade to Pro')).toBeVisible({ timeout: 30_000 });
+		await navigateToPage(page, 'reports');
+		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByRole('button', { name: 'View Demo' })).toBeVisible();
 	});
 });

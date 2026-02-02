@@ -1,9 +1,9 @@
 import { expect, type Page } from '@playwright/test';
-import { authenticatedTest as test, getStoreVariant } from './fixtures';
+import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
 
 /** Helper to navigate to Orders page and wait for load */
 async function navigateToOrders(page: Page) {
-	await page.getByText('Orders', { exact: true }).click();
+	await navigateToPage(page, 'orders');
 	await expect(page.getByPlaceholder('Search Orders')).toBeVisible({ timeout: 30_000 });
 }
 
@@ -98,13 +98,13 @@ test.describe('Orders Page (Free)', () => {
 	});
 
 	test('should show upgrade page on Orders', async ({ posPage: page }) => {
-		await page.getByText('Orders', { exact: true }).click();
-		await expect(page.getByText('Upgrade to Pro')).toBeVisible({ timeout: 30_000 });
+		await navigateToPage(page, 'orders');
+		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button', async ({ posPage: page }) => {
-		await page.getByText('Orders', { exact: true }).click();
-		await expect(page.getByText('Upgrade to Pro')).toBeVisible({ timeout: 30_000 });
+		await navigateToPage(page, 'orders');
+		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByRole('button', { name: 'View Demo' })).toBeVisible();
 	});
 });

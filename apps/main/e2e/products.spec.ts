@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import { authenticatedTest as test, getStoreVariant } from './fixtures';
+import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
 
 /**
  * Product browsing and search in the POS panel (both free and pro).
@@ -105,13 +105,13 @@ test.describe('Products Page (Pro)', () => {
 	});
 
 	test('should navigate to Products page and see product table', async ({ posPage: page }) => {
-		await page.getByText('Products', { exact: true }).click();
+		await navigateToPage(page, 'products');
 		await expect(page.getByPlaceholder('Search Products')).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 	});
 
 	test('should show stock and price columns on Products page', async ({ posPage: page }) => {
-		await page.getByText('Products', { exact: true }).click();
+		await navigateToPage(page, 'products');
 		await expect(page.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
 		await expect(page.getByRole('columnheader', { name: 'Stock' })).toBeVisible();
@@ -119,7 +119,7 @@ test.describe('Products Page (Pro)', () => {
 	});
 
 	test('should search products on Products page', async ({ posPage: page }) => {
-		await page.getByText('Products', { exact: true }).click();
+		await navigateToPage(page, 'products');
 		await expect(page.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
 		const searchInput = page.getByPlaceholder('Search Products');
@@ -135,7 +135,7 @@ test.describe('Products Page (Pro)', () => {
 	});
 
 	test('should show product actions menu', async ({ posPage: page }) => {
-		await page.getByText('Products', { exact: true }).click();
+		await navigateToPage(page, 'products');
 		await expect(page.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
 		// Click the first ellipsis actions menu
@@ -163,13 +163,13 @@ test.describe('Products Page (Free)', () => {
 	});
 
 	test('should show upgrade page on Products', async ({ posPage: page }) => {
-		await page.getByText('Products', { exact: true }).click();
-		await expect(page.getByText('Upgrade to Pro')).toBeVisible({ timeout: 30_000 });
+		await navigateToPage(page, 'products');
+		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button on upgrade page', async ({ posPage: page }) => {
-		await page.getByText('Products', { exact: true }).click();
-		await expect(page.getByText('Upgrade to Pro')).toBeVisible({ timeout: 30_000 });
+		await navigateToPage(page, 'products');
+		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByRole('button', { name: 'View Demo' })).toBeVisible();
 	});
 });

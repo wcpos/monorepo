@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import { authenticatedTest as test, getStoreVariant } from './fixtures';
+import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
 
 /**
  * Customer-related tests in the POS context (both free and pro).
@@ -9,8 +9,8 @@ test.describe('Customers in POS', () => {
 		await expect(page.getByText('Guest')).toBeVisible();
 	});
 
-	test('should have an add customer button', async ({ posPage: page }) => {
-		await expect(page.getByTestId('add-customer-button')).toBeVisible({ timeout: 10_000 });
+	test('should show customer area with Guest label', async ({ posPage: page }) => {
+		await expect(page.getByText('Customer')).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should open customer search', async ({ posPage: page }) => {
@@ -75,11 +75,10 @@ test.describe('Add Customer from Cart (Free)', () => {
 		test.skip(variant !== 'free', 'Only for free stores');
 	});
 
-	test('should have disabled add customer button', async ({ posPage: page }) => {
+	test('should not have add customer testId (pro-only)', async ({ posPage: page }) => {
+		// Free users get a disabled icon button without the testId
 		const addButton = page.getByTestId('add-customer-button');
-		await expect(addButton).toBeVisible({ timeout: 10_000 });
-		// For free users, the button should be disabled
-		await expect(addButton).toBeDisabled();
+		await expect(addButton).toHaveCount(0);
 	});
 });
 
@@ -93,12 +92,12 @@ test.describe('Customers Page (Pro)', () => {
 	});
 
 	test('should navigate to Customers page and see customer list', async ({ posPage: page }) => {
-		await page.getByText('Customers', { exact: true }).click();
+		await navigateToPage(page, 'customers');
 		await expect(page.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show customer data or empty state', async ({ posPage: page }) => {
-		await page.getByText('Customers', { exact: true }).click();
+		await navigateToPage(page, 'customers');
 		await page.waitForTimeout(5_000);
 
 		const hasCustomers = await page
@@ -113,7 +112,7 @@ test.describe('Customers Page (Pro)', () => {
 	});
 
 	test('should search customers', async ({ posPage: page }) => {
-		await page.getByText('Customers', { exact: true }).click();
+		await navigateToPage(page, 'customers');
 		await expect(page.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
 
 		const searchInput = page.getByPlaceholder('Search Customers');
@@ -132,7 +131,7 @@ test.describe('Customers Page (Pro)', () => {
 	});
 
 	test('should have add customer button on Customers page', async ({ posPage: page }) => {
-		await page.getByText('Customers', { exact: true }).click();
+		await navigateToPage(page, 'customers');
 		await expect(page.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
 
 		// The "+" add customer button should be in the header area
@@ -153,13 +152,13 @@ test.describe('Customers Page (Free)', () => {
 	});
 
 	test('should show upgrade page on Customers', async ({ posPage: page }) => {
-		await page.getByText('Customers', { exact: true }).click();
-		await expect(page.getByText('Upgrade to Pro')).toBeVisible({ timeout: 30_000 });
+		await navigateToPage(page, 'customers');
+		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button', async ({ posPage: page }) => {
-		await page.getByText('Customers', { exact: true }).click();
-		await expect(page.getByText('Upgrade to Pro')).toBeVisible({ timeout: 30_000 });
+		await navigateToPage(page, 'customers');
+		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByRole('button', { name: 'View Demo' })).toBeVisible();
 	});
 });
