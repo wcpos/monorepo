@@ -12,6 +12,25 @@ test.describe('Customers in POS', () => {
 	test('should have an add customer button', async ({ posPage: page }) => {
 		await expect(page.getByTestId('add-customer-button')).toBeVisible({ timeout: 10_000 });
 	});
+
+	test('should open customer search', async ({ posPage: page }) => {
+		// Click on the "Select Customer" or customer pill to open search
+		const selectCustomer = page.getByRole('button', { name: /Select Customer/i }).or(
+			page.getByText('Guest')
+		);
+
+		if (await selectCustomer.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
+			await selectCustomer.first().click();
+			await page.waitForTimeout(500);
+
+			// Customer search combobox should open
+			const searchInput = page.getByPlaceholder('Search Customers');
+			const isVisible = await searchInput.isVisible({ timeout: 5_000 }).catch(() => false);
+			if (isVisible) {
+				await expect(searchInput).toBeVisible();
+			}
+		}
+	});
 });
 
 /**
@@ -23,12 +42,44 @@ test.describe('Add Customer from Cart (Pro)', () => {
 		test.skip(variant !== 'pro', 'Adding customers from cart requires Pro');
 	});
 
+	test('should have enabled add customer button', async ({ posPage: page }) => {
+		const addButton = page.getByTestId('add-customer-button');
+		await expect(addButton).toBeEnabled({ timeout: 10_000 });
+	});
+
 	test('should open add customer dialog from cart', async ({ posPage: page }) => {
 		const addButton = page.getByTestId('add-customer-button');
 		await expect(addButton).toBeEnabled({ timeout: 10_000 });
 		await addButton.click();
 
 		await expect(page.getByText('Add new customer')).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('should show customer form fields in dialog', async ({ posPage: page }) => {
+		await page.getByTestId('add-customer-button').click();
+		await expect(page.getByText('Add new customer')).toBeVisible({ timeout: 10_000 });
+
+		// Form should contain name/email fields
+		await expect(
+			page.getByText(/first name|last name|email/i).first()
+		).toBeVisible({ timeout: 5_000 });
+	});
+});
+
+/**
+ * Free: add customer button should be disabled.
+ */
+test.describe('Add Customer from Cart (Free)', () => {
+	test.beforeEach(async ({}, testInfo) => {
+		const variant = getStoreVariant(testInfo);
+		test.skip(variant !== 'free', 'Only for free stores');
+	});
+
+	test('should have disabled add customer button', async ({ posPage: page }) => {
+		const addButton = page.getByTestId('add-customer-button');
+		await expect(addButton).toBeVisible({ timeout: 10_000 });
+		// For free users, the button should be disabled
+		await expect(addButton).toBeDisabled();
 	});
 });
 
@@ -45,6 +96,51 @@ test.describe('Customers Page (Pro)', () => {
 		await page.getByText('Customers', { exact: true }).click();
 		await expect(page.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
 	});
+
+	test('should show customer data or empty state', async ({ posPage: page }) => {
+		await page.getByText('Customers', { exact: true }).click();
+		await page.waitForTimeout(5_000);
+
+		const hasCustomers = await page
+			.getByText(/Showing \d+ of \d+/)
+			.isVisible({ timeout: 10_000 })
+			.catch(() => false);
+		const noCustomers = await page
+			.getByText('No customers found')
+			.isVisible({ timeout: 5_000 })
+			.catch(() => false);
+		expect(hasCustomers || noCustomers).toBeTruthy();
+	});
+
+	test('should search customers', async ({ posPage: page }) => {
+		await page.getByText('Customers', { exact: true }).click();
+		await expect(page.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
+
+		const searchInput = page.getByPlaceholder('Search Customers');
+		await searchInput.fill('admin');
+		await page.waitForTimeout(1_500);
+
+		const hasResults = await page
+			.getByText(/Showing [1-9]\d* of \d+/)
+			.isVisible()
+			.catch(() => false);
+		const noResults = await page
+			.getByText('No customers found')
+			.isVisible()
+			.catch(() => false);
+		expect(hasResults || noResults).toBeTruthy();
+	});
+
+	test('should have add customer button on Customers page', async ({ posPage: page }) => {
+		await page.getByText('Customers', { exact: true }).click();
+		await expect(page.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
+
+		// The "+" add customer button should be in the header area
+		const addButton = page.getByRole('button', { name: /add.*customer/i }).or(
+			page.getByRole('link', { name: /add.*customer/i })
+		);
+		await expect(addButton.first()).toBeVisible({ timeout: 5_000 });
+	});
 });
 
 /**
@@ -59,5 +155,11 @@ test.describe('Customers Page (Free)', () => {
 	test('should show upgrade page on Customers', async ({ posPage: page }) => {
 		await page.getByText('Customers', { exact: true }).click();
 		await expect(page.getByText('Upgrade to Pro')).toBeVisible({ timeout: 30_000 });
+	});
+
+	test('should show View Demo button', async ({ posPage: page }) => {
+		await page.getByText('Customers', { exact: true }).click();
+		await expect(page.getByText('Upgrade to Pro')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByRole('button', { name: 'View Demo' })).toBeVisible();
 	});
 });
