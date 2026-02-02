@@ -165,35 +165,26 @@ jobs:
     outputs:
       result: ${{ needs.e2e.result }}
     steps:
-      - name: 🏗 Setup repository
-        uses: actions/checkout@v4
+      - name: 🏗 Setup Node
+        uses: actions/setup-node@v4
         with:
-          fetch-depth: 0
-          submodules: false
-
-      - name: 🏗 Setup monorepo
-        uses: ./.github/actions/setup-monorepo
-        with:
-          expo-token: ${{ secrets.EXPO_TOKEN }}
-          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
-          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+          node-version: 20.x
 
       - name: 📥 Download blob reports
         uses: actions/download-artifact@v4
         with:
           pattern: blob-report-*
-          path: apps/main/all-blob-reports
+          path: all-blob-reports
           merge-multiple: true
 
       - name: 📊 Merge reports
-        run: cd apps/main && npx playwright merge-reports --reporter=html,json ./all-blob-reports
+        run: npx playwright merge-reports --reporter=html,json ./all-blob-reports
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results.json
 
       - name: 📊 Generate test summary
         if: always()
         run: |
-          cd apps/main
           echo "## 🎭 E2E Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
@@ -232,8 +223,8 @@ jobs:
         with:
           name: playwright-report-${{ github.sha }}
           path: |
-            apps/main/playwright-report/
-            apps/main/test-results.json
+            playwright-report/
+            test-results.json
           retention-days: 30
 
   comment:
