@@ -22,7 +22,7 @@ export const CartTabTitle = ({ order }: Props) => {
 
 	return (
 		<Text>
-			{t('Cart {order_total}', { order_total: format(parseFloat(total) || 0), _tags: 'core' })}
+			{t('Cart {order_total}', { order_total: format(parseFloat(total) || 0) })}
 		</Text>
 	);
 };

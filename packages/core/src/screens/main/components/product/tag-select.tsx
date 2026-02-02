@@ -43,7 +43,7 @@ const TagList = ({ query }) => {
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
-			ListEmptyComponent={<ComboboxEmpty>{t('No tag found', { _tags: 'core' })}</ComboboxEmpty>}
+			ListEmptyComponent={<ComboboxEmpty>{t('No tag found')}</ComboboxEmpty>}
 		/>
 	);
 };
@@ -92,7 +92,7 @@ export const TagSearch = () => {
 	return (
 		<>
 			<ComboboxInput
-				placeholder={t('Search Tags', { _tags: 'core' })}
+				placeholder={t('Search Tags')}
 				value={search}
 				onChangeText={onSearch}
 			/>
@@ -115,7 +115,7 @@ export const TagSelect = ({ onValueChange }) => {
 	return (
 		<Combobox onValueChange={onValueChange}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('Select Tag', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select Tag')} />
 			</ComboboxTrigger>
 			<ComboboxContent className="min-w-64">
 				<TagSearch />

@@ -76,10 +76,10 @@ export function LogsScreen() {
 						<HStack>
 							<QuerySearchInput
 								query={query}
-								placeholder={t('Search Logs', { _tags: 'core' })}
+								placeholder={t('Search Logs')}
 								className="flex-1"
 							/>
-							<UISettingsDialog title={t('Logs Settings', { _tags: 'core' })}>
+							<UISettingsDialog title={t('Logs Settings')}>
 								<UISettingsForm />
 							</UISettingsDialog>
 						</HStack>
@@ -95,7 +95,7 @@ export function LogsScreen() {
 								id="logs"
 								query={query}
 								renderCell={renderCell}
-								noDataMessage={t('No logs found', { _tags: 'core' })}
+								noDataMessage={t('No logs found')}
 								estimatedItemSize={100}
 								keyExtractor={(row) => row.original.document.logId}
 								ListFooterComponent={() => {}}

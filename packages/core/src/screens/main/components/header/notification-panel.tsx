@@ -73,7 +73,7 @@ function EmptyState() {
 	return (
 		<VStack className="items-center justify-center py-8">
 			<Icon name="bell" size="2xl" variant="muted" />
-			<Text className="text-muted-foreground mt-2">{t('No notifications', { _tags: 'core' })}</Text>
+			<Text className="text-muted-foreground mt-2">{t('No notifications')}</Text>
 		</VStack>
 	);
 }
@@ -102,10 +102,10 @@ export function NotificationPanelContent() {
 		<>
 			{/* Header */}
 			<HStack className="border-border items-center justify-between border-b px-3 py-2">
-				<Text className="text-sm font-semibold">{t('Notifications', { _tags: 'core' })}</Text>
+				<Text className="text-sm font-semibold">{t('Notifications')}</Text>
 				{unreadCount > 0 && (
 					<Button variant="ghost" size="sm" onPress={handleMarkAllAsRead}>
-						<ButtonText className="text-xs">{t('Mark all as read', { _tags: 'core' })}</ButtonText>
+						<ButtonText className="text-xs">{t('Mark all as read')}</ButtonText>
 					</Button>
 				)}
 			</HStack>

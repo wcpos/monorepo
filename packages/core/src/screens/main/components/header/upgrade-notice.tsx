@@ -15,12 +15,12 @@ export const UpgradeNotice = ({ setShowUpgrade }) => {
 	 */
 	const upgradeToProText = React.useMemo(() => {
 		const texts = [
-			t('Upgrade to Pro for More Features!', { _tags: 'core' }),
-			t('Enjoy More with Pro – Upgrade Today!', { _tags: 'core' }),
-			t('Go Pro and Enjoy Exclusive Benefits – Upgrade Now!', { _tags: 'core' }),
-			t('Support Our Development – Upgrade to Pro!', { _tags: 'core' }),
-			t('Support Our Work – Go Pro Today!', { _tags: 'core' }),
-			t('Support Future Updates – Get Pro Now!', { _tags: 'core' }),
+			t('Upgrade to Pro for More Features!'),
+			t('Enjoy More with Pro – Upgrade Today!'),
+			t('Go Pro and Enjoy Exclusive Benefits – Upgrade Now!'),
+			t('Support Our Development – Upgrade to Pro!'),
+			t('Support Our Work – Go Pro Today!'),
+			t('Support Future Updates – Get Pro Now!'),
 		];
 		return texts[Math.floor(Math.random() * texts.length)];
 	}, [t]);

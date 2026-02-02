@@ -50,10 +50,10 @@ const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Com
 	return (
 		<Combobox value={{ ...value, label }} {...props}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('Select Currency', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select Currency')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxInput placeholder={t('Search Currencies', { _tags: 'core' })} />
+				<ComboboxInput placeholder={t('Search Currencies')} />
 				<ComboboxList
 					data={options}
 					renderItem={({ item }) => (
@@ -63,7 +63,7 @@ const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Com
 					)}
 					estimatedItemSize={44}
 					ListEmptyComponent={
-						<ComboboxEmpty>{t('No currency found', { _tags: 'core' })}</ComboboxEmpty>
+						<ComboboxEmpty>{t('No currency found')}</ComboboxEmpty>
 					}
 				/>
 			</ComboboxContent>

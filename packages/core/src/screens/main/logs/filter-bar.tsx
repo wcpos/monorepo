@@ -74,7 +74,7 @@ export function FilterBar({ query }: { query: Query<any> }) {
 	 */
 	const displayLabel = React.useMemo(() => {
 		if (selectedValues.length === 0) {
-			return t('Log Level', { _tags: 'core' });
+			return t('Log Level');
 		}
 
 		// Get labels in the order they appear in items array

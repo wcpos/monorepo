@@ -54,8 +54,8 @@ export function BrandsPill({ query, resource, selectedID }: Props) {
 				>
 					<ButtonText decodeHtml>
 						{isActive
-							? brand?.name || t('ID: {id}', { id: selectedID, _tags: 'core' })
-							: t('Brand', { _tags: 'core' })}
+							? brand?.name || t('ID: {id}', { id: selectedID })
+							: t('Brand')}
 					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>

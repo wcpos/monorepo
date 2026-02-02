@@ -48,7 +48,7 @@ export const WpUser = ({ site, wpUser }: Props) => {
 	const handleLogin = React.useCallback(
 		async (storeID: string) => {
 			if (!storeID) {
-				authLogger.error(t('No store selected', { _tags: 'core' }), {
+				authLogger.error(t('No store selected'), {
 					showToast: true,
 					context: {
 						errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS,
@@ -125,19 +125,18 @@ export const WpUser = ({ site, wpUser }: Props) => {
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{t('Remove {name}', { name: wpUser.display_name, _tags: 'core' })}
+							{t('Remove {name}', { name: wpUser.display_name })}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
 							{t(
-								'Are you sure you want to remove this user? Removing a user from the POS will not effect any data on the server.',
-								{ _tags: 'core' }
+								'Are you sure you want to remove this user? Removing a user from the POS will not effect any data on the server.'
 							)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
 						<AlertDialogAction onPress={handleRemoveWpUser}>
-							{t('Remove', { _tags: 'core' })}
+							{t('Remove')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

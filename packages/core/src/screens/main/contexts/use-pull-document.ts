@@ -34,7 +34,7 @@ const usePullDocument = () => {
 				// Extract the WooCommerce/WordPress error message from the response
 				const serverMessage = extractErrorMessage(
 					err?.response?.data,
-					t('Failed to fetch from server', { _tags: 'core' })
+					t('Failed to fetch from server')
 				);
 				syncLogger.error(serverMessage, {
 					showToast: true,
@@ -63,7 +63,7 @@ const usePullDocument = () => {
 				return success;
 			} catch (err) {
 				syncLogger.error(
-					t('Failed to save to local database: {error}', { _tags: 'core', error: err.message }),
+					t('Failed to save to local database: {error}', {error: err.message }),
 					{
 						showToast: true,
 						saveToDb: true,

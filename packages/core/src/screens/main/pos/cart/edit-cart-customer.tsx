@@ -84,7 +84,7 @@ export const EditCartCustomerForm = () => {
 		await handleSaveToOrder(data);
 		const customer = await customerCollection.findOne({ selector: { id: customerID } }).exec();
 		if (!customer) {
-			cartLogger.error(t('No customer found', { _tags: 'core' }), {
+			cartLogger.error(t('No customer found'), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -104,7 +104,7 @@ export const EditCartCustomerForm = () => {
 				},
 			});
 			if (isRxDocument(savedDoc)) {
-				cartLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+				cartLogger.success(t('{name} saved', {name: format(savedDoc) }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -115,7 +115,7 @@ export const EditCartCustomerForm = () => {
 			}
 			onOpenChange(false);
 		} catch (error) {
-			cartLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			cartLogger.error(t('{message}', {message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -152,7 +152,7 @@ export const EditCartCustomerForm = () => {
 				<FormErrors />
 				<Collapsible defaultOpen={true}>
 					<CollapsibleTrigger>
-						<Text>{t('Billing Address', { _tags: 'core' })}</Text>
+						<Text>{t('Billing Address')}</Text>
 					</CollapsibleTrigger>
 					<CollapsibleContent>
 						<BillingAddressForm />
@@ -161,14 +161,14 @@ export const EditCartCustomerForm = () => {
 				<Collapsible>
 					<HStack>
 						<CollapsibleTrigger>
-							<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
+							<Text>{t('Shipping Address')}</Text>
 						</CollapsibleTrigger>
 					</HStack>
 					<CollapsibleContent>
 						<VStack className="gap-4">
 							<Button variant="muted" onPress={handleCopyBillingToShipping}>
 								<ButtonText>
-									{t('Copy billing address to shipping address', { _tags: 'core' })}
+									{t('Copy billing address to shipping address')}
 								</ButtonText>
 							</Button>
 							<ShippingAddressForm />
@@ -176,14 +176,14 @@ export const EditCartCustomerForm = () => {
 					</CollapsibleContent>
 				</Collapsible>
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
+					<DialogClose>{t('Close')}</DialogClose>
 					{customerID !== 0 && (
 						<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
-							{t('Save to Order & Customer', { _tags: 'core' })}
+							{t('Save to Order & Customer')}
 						</DialogAction>
 					)}
 					<DialogAction onPress={onSaveToOrder} loading={loading}>
-						{t('Save to Order', { _tags: 'core' })}
+						{t('Save to Order')}
 					</DialogAction>
 				</DialogFooter>
 			</VStack>

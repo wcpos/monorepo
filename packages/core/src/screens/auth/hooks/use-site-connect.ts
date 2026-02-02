@@ -185,7 +185,7 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 					},
 				});
 
-				throw new Error(t('Failed to save site data', { _tags: 'core' }));
+				throw new Error(t('Failed to save site data'));
 			}
 		},
 		[user, userDB.sites, t]
@@ -197,7 +197,7 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 	const onConnect = React.useCallback(
 		async (url: string): Promise<SiteDocument | null> => {
 			if (!url || url.trim() === '') {
-				const errorMsg = t('URL is required', { _tags: 'core' });
+				const errorMsg = t('URL is required');
 				siteLogger.error(errorMsg, {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
@@ -212,29 +212,29 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 
 			try {
 				// Step 1: Discover WordPress API URL
-				updateProgress(1, t('Discovering WordPress API...', { _tags: 'core' }));
+				updateProgress(1, t('Discovering WordPress API...'));
 				setStatus('discovering-url');
 
 				const wpApiUrl = await urlDiscovery.discoverWpApiUrl(url);
 				if (!wpApiUrl) {
 					throw new Error(
-						urlDiscovery.error || t('Failed to discover WordPress API', { _tags: 'core' })
+						urlDiscovery.error || t('Failed to discover WordPress API')
 					);
 				}
 
 				// Step 2: Discover and validate API endpoints
-				updateProgress(2, t('Validating API endpoints...', { _tags: 'core' }));
+				updateProgress(2, t('Validating API endpoints...'));
 				setStatus('discovering-api');
 
 				const apiResult = await apiDiscovery.discoverApiEndpoints(wpApiUrl);
 				if (!apiResult) {
 					throw new Error(
-						apiDiscovery.error || t('Failed to discover API endpoints', { _tags: 'core' })
+						apiDiscovery.error || t('Failed to discover API endpoints')
 					);
 				}
 
 				// Step 3: Test authorization methods
-				updateProgress(3, t('Testing authorization methods...', { _tags: 'core' }));
+				updateProgress(3, t('Testing authorization methods...'));
 				setStatus('testing-auth');
 
 				const authResult = await authTesting.testAuthorizationMethod(
@@ -242,31 +242,31 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 				);
 				if (!authResult) {
 					throw new Error(
-						authTesting.error || t('Failed to test authorization methods', { _tags: 'core' })
+						authTesting.error || t('Failed to test authorization methods')
 					);
 				}
 
 				// Step 4: Save to database
-				updateProgress(4, t('Saving site configuration...', { _tags: 'core' }));
+				updateProgress(4, t('Saving site configuration...'));
 				setStatus('saving');
 
 				const savedSite = await saveSiteData(apiResult.siteData, apiResult.endpoints, authResult);
 				if (!savedSite) {
-					throw new Error(t('Failed to save site configuration', { _tags: 'core' }));
+					throw new Error(t('Failed to save site configuration'));
 				}
 
 				setStatus('success');
 				setProgress({
 					step: 4,
 					totalSteps: 4,
-					message: t('Site connected successfully!', { _tags: 'core' }),
+					message: t('Site connected successfully!'),
 				});
 
 				siteLogger.info(`Site connected: ${savedSite.name}`);
 
 				return savedSite;
 			} catch (err) {
-				const errorMessage = err.message || t('Failed to connect to site', { _tags: 'core' });
+				const errorMessage = err.message || t('Failed to connect to site');
 				setError(errorMessage);
 				setStatus('error');
 				return null;

@@ -134,22 +134,20 @@ export const ProductAttributes = ({ row, table }) => {
 	const expandText = React.useMemo(() => {
 		let text = '';
 		if (isExpanded) {
-			text += t('Collapse', { _tags: 'core' });
+			text += t('Collapse');
 		} else {
-			text += t('Expand', { _tags: 'core' });
+			text += t('Expand');
 		}
 		if (row.original.childrenSearchCount === 1) {
 			text += ' - ';
 			text += t('1 variation found for {term}', {
 				term: row.original.parentSearchTerm,
-				_tags: 'core',
 			});
 		} else if (row.original.childrenSearchCount > 0) {
 			text += ' - ';
 			text += t('{count} variations found for {term}', {
 				count: row.original.childrenSearchCount,
 				term: row.original.parentSearchTerm,
-				_tags: 'core',
 			});
 		}
 		return text;

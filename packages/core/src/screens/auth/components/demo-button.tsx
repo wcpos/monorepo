@@ -115,7 +115,7 @@ export function DemoButton() {
 				)
 			}
 		>
-			<ButtonText>{t('Enter Demo Store', { _tags: 'core' })}</ButtonText>
+			<ButtonText>{t('Enter Demo Store')}</ButtonText>
 		</Button>
 	);
 }

@@ -83,7 +83,6 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 						// Log payment completed successfully
 						orderLogger.success(
 							t('Payment completed for order #{orderNumber}', {
-								_tags: 'core',
 								orderNumber: payload.number || order.number,
 							}),
 							{

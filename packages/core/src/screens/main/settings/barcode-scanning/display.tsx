@@ -34,11 +34,11 @@ export const BarcodeDisplay = () => {
 	return (
 		<VStack>
 			<VStack space="sm">
-				<Label nativeID="keypress-event">{t('Keypress Event', { _tags: 'core' })}</Label>
+				<Label nativeID="keypress-event">{t('Keypress Event')}</Label>
 				<Input className="bg-accent font-mono" value={allKeys} editable={false} aria-disabled />
 			</VStack>
 			<VStack space="sm">
-				<Label nativeID="detected-barcode">{t('Detected Barcode', { _tags: 'core' })}</Label>
+				<Label nativeID="detected-barcode">{t('Detected Barcode')}</Label>
 				<Input className="bg-accent font-mono" value={barcode} editable={false} aria-disabled />
 			</VStack>
 		</VStack>

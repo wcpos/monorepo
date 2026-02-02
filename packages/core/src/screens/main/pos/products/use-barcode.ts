@@ -34,7 +34,7 @@ export const useBarcode = (
 	 *
 	 */
 	useSubscription(barcode$, async (barcode) => {
-		const text1 = t('Barcode scanned: {barcode}', { barcode, _tags: 'core' });
+		const text1 = t('Barcode scanned: {barcode}', { barcode });
 		const results = await barcodeSearch(barcode);
 
 		if (results.length === 0 || results.length > 1) {
@@ -42,7 +42,7 @@ export const useBarcode = (
 				showToast: true,
 				saveToDb: true,
 				toast: {
-					text2: t('{count} products found locally', { count: results.length, _tags: 'core' }),
+					text2: t('{count} products found locally', { count: results.length }),
 				},
 				context: {
 					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
@@ -64,7 +64,7 @@ export const useBarcode = (
 			barcodeLogger.warn(text1, {
 				showToast: true,
 				toast: {
-					text2: t('{name} out of stock', { name: product.name, _tags: 'core' }),
+					text2: t('{name} out of stock', { name: product.name }),
 				},
 				context: {
 					barcode,
@@ -115,7 +115,7 @@ export const useBarcode = (
 			showToast: true,
 			saveToDb: true,
 			toast: {
-				text2: t('{name} added to cart', { name: product.name, _tags: 'core' }),
+				text2: t('{name} added to cart', { name: product.name }),
 			},
 			context: {
 				barcode,

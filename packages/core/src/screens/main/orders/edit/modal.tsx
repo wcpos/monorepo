@@ -26,7 +26,7 @@ export const EditOrderModal = ({ resource }: Props) => {
 				<ModalContent size="lg">
 					<ModalHeader>
 						<ModalTitle>
-							<Text>{t('No order found', { _tags: 'core' })}</Text>
+							<Text>{t('No order found')}</Text>
 						</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
@@ -41,8 +41,8 @@ export const EditOrderModal = ({ resource }: Props) => {
 					<ModalTitle>
 						<Text>
 							{order.id
-								? t('Edit Order #{number}', { number: order.id, _tags: 'core' })
-								: t('Edit Order', { _tags: 'core' })}
+								? t('Edit Order #{number}', { number: order.id })
+								: t('Edit Order')}
 						</Text>
 					</ModalTitle>
 				</ModalHeader>
@@ -50,10 +50,10 @@ export const EditOrderModal = ({ resource }: Props) => {
 					<Tabs value={value} onValueChange={setValue}>
 						<TabsList className="w-full flex-row">
 							<TabsTrigger value="form" className="flex-1">
-								<Text>{t('Form', { _tags: 'core' })}</Text>
+								<Text>{t('Form')}</Text>
 							</TabsTrigger>
 							<TabsTrigger value="json" className="flex-1">
-								<Text>{t('JSON', { _tags: 'core' })}</Text>
+								<Text>{t('JSON')}</Text>
 							</TabsTrigger>
 						</TabsList>
 						<TabsContent value="form">

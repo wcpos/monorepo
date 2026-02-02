@@ -32,7 +32,7 @@ const FeaturedPill = ({ query }: Props) => {
 			removable={isActive}
 			onRemove={() => query.removeWhere('featured').exec()}
 		>
-			<ButtonText>{t('Featured', { _tags: 'core' })}</ButtonText>
+			<ButtonText>{t('Featured')}</ButtonText>
 		</ButtonPill>
 	);
 };

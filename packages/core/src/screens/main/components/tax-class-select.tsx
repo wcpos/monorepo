@@ -52,7 +52,7 @@ export const TaxClassSelect = ({ value, ...props }: React.ComponentProps<typeof 
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
 				}}
 			>
-				<SelectValue placeholder={t('Select Tax Class', { _tags: 'core' })} />
+				<SelectValue placeholder={t('Select Tax Class')} />
 			</SelectTrigger>
 			<SelectContent style={{ width: selectTriggerWidth }}>
 				<SelectGroup>

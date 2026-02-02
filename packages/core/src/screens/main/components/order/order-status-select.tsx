@@ -25,7 +25,7 @@ export const OrderStatusSelect = ({ value, ...props }: React.ComponentProps<type
 			<SelectTrigger>
 				<SelectValue
 					className="text-foreground text-sm"
-					placeholder={t('Select Status', { _tags: 'core' })}
+					placeholder={t('Select Status')}
 				/>
 			</SelectTrigger>
 			<SelectContent>

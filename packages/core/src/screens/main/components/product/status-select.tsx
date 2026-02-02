@@ -24,10 +24,10 @@ export const ProductStatusSelect = ({ value, ...props }: React.ComponentProps<ty
 	 */
 	const options = React.useMemo(
 		() => [
-			{ label: t('Draft', { _tags: 'core' }), value: 'draft' },
-			{ label: t('Pending', { _tags: 'core' }), value: 'pending' },
-			{ label: t('Private', { _tags: 'core' }), value: 'private' },
-			{ label: t('Publish', { _tags: 'core' }), value: 'publish' },
+			{ label: t('Draft'), value: 'draft' },
+			{ label: t('Pending'), value: 'pending' },
+			{ label: t('Private'), value: 'private' },
+			{ label: t('Publish'), value: 'publish' },
 		],
 		[t]
 	);
@@ -47,7 +47,7 @@ export const ProductStatusSelect = ({ value, ...props }: React.ComponentProps<ty
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
 				}}
 			>
-				<SelectValue placeholder={t('Select Status', { _tags: 'core' })} />
+				<SelectValue placeholder={t('Select Status')} />
 			</SelectTrigger>
 			<SelectContent style={{ width: selectTriggerWidth }}>
 				<SelectGroup>

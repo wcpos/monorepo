@@ -80,7 +80,7 @@ export const Receipt = ({ resource }: Props) => {
 				<ModalContent size="lg">
 					<ModalHeader>
 						<ModalTitle>
-							<Text>{t('No order found', { _tags: 'core' })}</Text>
+							<Text>{t('No order found')}</Text>
 						</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
@@ -96,7 +96,7 @@ export const Receipt = ({ resource }: Props) => {
 			<ModalContent size="xl" className="h-full">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('Receipt', { _tags: 'core' })}</Text>
+						<Text>{t('Receipt')}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
@@ -105,14 +105,14 @@ export const Receipt = ({ resource }: Props) => {
 					</ErrorBoundary>
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
+					<ModalClose>{t('Close')}</ModalClose>
 					<Dialog>
 						<DialogTrigger asChild>
-							<ModalAction>{t('Email Receipt', { _tags: 'core' })}</ModalAction>
+							<ModalAction>{t('Email Receipt')}</ModalAction>
 						</DialogTrigger>
 						<DialogContent>
 							<DialogHeader>
-								<DialogTitle>{t('Email Receipt', { _tags: 'core' })}</DialogTitle>
+								<DialogTitle>{t('Email Receipt')}</DialogTitle>
 							</DialogHeader>
 							<DialogBody>
 								<EmailForm order={order} />
@@ -120,7 +120,7 @@ export const Receipt = ({ resource }: Props) => {
 						</DialogContent>
 					</Dialog>
 					<ModalAction onPress={() => print()} loading={isPrinting}>
-						{t('Print Receipt', { _tags: 'core' })}
+						{t('Print Receipt')}
 					</ModalAction>
 				</ModalFooter>
 			</ModalContent>

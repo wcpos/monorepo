@@ -86,14 +86,14 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 	// 				if (isRxDocument(savedDoc)) {
 	// 					Toast.show({
 	// 						type: 'success',
-	// 						text1: t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
+	// 						text1: t('Order #{number} saved', {number: savedDoc.number }),
 	// 					});
 	// 				}
 	// 			});
 	// 		} catch (error) {
 	// 			Toast.show({
 	// 				type: 'error',
-	// 				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+	// 				text1: t('{message}', {message: error.message || 'Error' }),
 	// 			});
 	// 		} finally {
 	// 			setLoading(false);
@@ -117,7 +117,7 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 							<View className="flex-1">
 								<FormCombobox
 									customComponent={CurrencySelect}
-									label={t('Currency', { _tags: 'core' })}
+									label={t('Currency')}
 									{...field}
 								/>
 							</View>
@@ -128,15 +128,15 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 						name="transaction_id"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Transaction ID', { _tags: 'core' })} {...field} />
+								<FormInput label={t('Transaction ID')} {...field} />
 							</View>
 						)}
 					/>
 				</HStack>
 				<MetaDataForm />
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
-					<DialogAction onPress={onSave}>{t('Save', { _tags: 'core' })}</DialogAction>
+					<DialogClose>{t('Cancel')}</DialogClose>
+					<DialogAction onPress={onSave}>{t('Save')}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

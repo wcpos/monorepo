@@ -42,18 +42,18 @@ const SyncButton = ({ sync, clearAndSync, active }: SyncButtonProps) => {
 					/>
 				</TooltipTrigger>
 				<TooltipContent>
-					<Text>{t('Press to sync, long press for more options', { _tags: 'core' })}</Text>
+					<Text>{t('Press to sync, long press for more options')}</Text>
 				</TooltipContent>
 			</Tooltip>
 			<DropdownMenuContent side="top" align="end">
 				<DropdownMenuItem onPress={sync}>
 					<Icon name="arrowRotateRight" />
-					<Text>{t('Sync', { _tags: 'core' })}</Text>
+					<Text>{t('Sync')}</Text>
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem variant="destructive" onPress={clearAndSync}>
 					<Icon name="trash" />
-					<Text>{t('Clear and Refresh', { _tags: 'core' })}</Text>
+					<Text>{t('Clear and Refresh')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>

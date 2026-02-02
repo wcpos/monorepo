@@ -68,7 +68,7 @@ export const useAddShipping = () => {
 
 				// Log shipping added success
 				orderLogger.info(
-					t('Shipping added: {methodTitle}', { _tags: 'core', methodTitle: data.method_title }),
+					t('Shipping added: {methodTitle}', {methodTitle: data.method_title }),
 					{
 						context: {
 							methodTitle: data.method_title,
@@ -79,7 +79,7 @@ export const useAddShipping = () => {
 					}
 				);
 			} catch (error) {
-				orderLogger.error(t('Error adding Shipping to cart', { _tags: 'core' }), {
+				orderLogger.error(t('Error adding Shipping to cart'), {
 					showToast: true,
 					saveToDb: true,
 					context: {

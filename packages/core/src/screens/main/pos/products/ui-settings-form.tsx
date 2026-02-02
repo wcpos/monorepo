@@ -83,7 +83,6 @@ export const UISettingsForm = () => {
 							<FormInput
 								label={getUILabel('metaDataKeys')}
 								description={t('A list of product meta keys that should be copied to the cart', {
-									_tags: 'core',
 								})}
 								{...field}
 							/>

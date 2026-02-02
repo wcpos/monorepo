@@ -28,7 +28,7 @@ export const EditCustomer = ({ resource }: Props) => {
 				<ModalContent size="lg">
 					<ModalHeader>
 						<ModalTitle>
-							<Text>{t('No customer found', { _tags: 'core' })}</Text>
+							<Text>{t('No customer found')}</Text>
 						</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
@@ -41,17 +41,17 @@ export const EditCustomer = ({ resource }: Props) => {
 			<ModalContent size="lg">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('Edit {name}', { name: format(customer), _tags: 'core' })}</Text>
+						<Text>{t('Edit {name}', { name: format(customer) })}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>
 						<TabsList className="w-full flex-row">
 							<TabsTrigger value="form" className="flex-1">
-								<Text>{t('Form', { _tags: 'core' })}</Text>
+								<Text>{t('Form')}</Text>
 							</TabsTrigger>
 							<TabsTrigger value="json" className="flex-1">
-								<Text>{t('JSON', { _tags: 'core' })}</Text>
+								<Text>{t('JSON')}</Text>
 							</TabsTrigger>
 						</TabsList>
 						<TabsContent value="form">

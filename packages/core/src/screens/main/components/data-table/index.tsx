@@ -166,7 +166,7 @@ function DataTable<TData>({
 					ListEmptyComponent={() => (
 						<TableRow className="justify-center p-2">
 							<Text>
-								{noDataMessage ? noDataMessage : t('No results found', { _tags: 'core' })}
+								{noDataMessage ? noDataMessage : t('No results found')}
 							</Text>
 						</TableRow>
 					)}

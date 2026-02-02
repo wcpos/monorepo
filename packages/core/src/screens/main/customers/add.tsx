@@ -46,7 +46,7 @@ export const AddCustomerScreen = () => {
 			try {
 				const savedDoc = await create({ data });
 				if (isRxDocument(savedDoc)) {
-					mutationLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+					mutationLogger.success(t('{name} saved', {name: format(savedDoc) }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -56,7 +56,7 @@ export const AddCustomerScreen = () => {
 					});
 				}
 			} catch (error) {
-				mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				mutationLogger.error(t('{message}', {message: error.message || 'Error' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -79,7 +79,7 @@ export const AddCustomerScreen = () => {
 			<ModalContent size="lg">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('Add Customer', { _tags: 'core' })}</Text>
+						<Text>{t('Add Customer')}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>

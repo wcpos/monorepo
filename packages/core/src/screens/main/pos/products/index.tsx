@@ -219,12 +219,12 @@ export const POSProducts = ({ isColumn = false }) => {
 									<QuerySearchInput
 										ref={querySearchInputRef}
 										query={query}
-										placeholder={t('Search Products', { _tags: 'core' })}
+										placeholder={t('Search Products')}
 										className="flex-1"
 										onKeyPress={onKeyPress}
 									/>
 								</ErrorBoundary>
-								<UISettingsDialog title={t('Product Settings', { _tags: 'core' })}>
+								<UISettingsDialog title={t('Product Settings')}>
 									<UISettingsForm />
 								</UISettingsDialog>
 							</HStack>
@@ -242,7 +242,7 @@ export const POSProducts = ({ isColumn = false }) => {
 								query={query}
 								renderItem={renderItem}
 								renderCell={renderCell}
-								noDataMessage={t('No products found', { _tags: 'core' })}
+								noDataMessage={t('No products found')}
 								estimatedItemSize={100}
 								TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
 								getItemType={(row) => row.original.document.type}

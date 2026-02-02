@@ -34,7 +34,7 @@ export const SaveButton = () => {
 				 */
 				if (isRxDocument(savedDoc)) {
 					cartLogger.success(
-						t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
+						t('Order #{number} saved', {number: savedDoc.number }),
 						{
 							showToast: true,
 							saveToDb: true,
@@ -47,7 +47,7 @@ export const SaveButton = () => {
 				}
 			});
 		} catch (error) {
-			cartLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			cartLogger.error(t('{message}', {message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -67,7 +67,7 @@ export const SaveButton = () => {
 	return (
 		<View>
 			<Button variant="outline" onPress={handleSave} loading={loading} disabled={loading}>
-				{t('Save to Server', { _tags: 'core' })}
+				{t('Save to Server')}
 			</Button>
 		</View>
 	);

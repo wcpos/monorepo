@@ -47,21 +47,21 @@ export const DisplayCurrentTaxRates = ({
 	return (
 		<VStack space="md">
 			<VStack>
-				<Text className="font-bold">{t('Calculate tax based on', { _tags: 'core' })}:</Text>
+				<Text className="font-bold">{t('Calculate tax based on')}:</Text>
 				<Table>
 					<TableHeader>
 						<TableRow>
 							<TableHead>
-								<Text>{t('Country', { _tags: 'core' })}</Text>
+								<Text>{t('Country')}</Text>
 							</TableHead>
 							<TableHead>
-								<Text>{t('State', { _tags: 'core' })}</Text>
+								<Text>{t('State')}</Text>
 							</TableHead>
 							<TableHead>
-								<Text>{t('City', { _tags: 'core' })}</Text>
+								<Text>{t('City')}</Text>
 							</TableHead>
 							<TableHead>
-								<Text>{t('Postcode', { _tags: 'core' })}</Text>
+								<Text>{t('Postcode')}</Text>
 							</TableHead>
 						</TableRow>
 					</TableHeader>
@@ -84,19 +84,19 @@ export const DisplayCurrentTaxRates = ({
 				</Table>
 			</VStack>
 			<VStack>
-				<Text className="font-bold">{t('Matched rates', { _tags: 'core' })}:</Text>
+				<Text className="font-bold">{t('Matched rates')}:</Text>
 				{Array.isArray(rates) && rates.length > 0 ? (
 					<Table>
 						<TableHeader>
 							<TableRow>
 								<TableHead>
-									<Text>{t('Name', { _tags: 'core' })}</Text>
+									<Text>{t('Name')}</Text>
 								</TableHead>
 								<TableHead>
-									<Text>{t('Rate', { _tags: 'core' })}</Text>
+									<Text>{t('Rate')}</Text>
 								</TableHead>
 								<TableHead>
-									<Text>{t('Class', { _tags: 'core' })}</Text>
+									<Text>{t('Class')}</Text>
 								</TableHead>
 							</TableRow>
 						</TableHeader>
@@ -119,7 +119,7 @@ export const DisplayCurrentTaxRates = ({
 				) : (
 					<HStack space="xs">
 						<Icon variant="error" name="triangleExclamation" />
-						<Text className="text-error text-sm">{t('No rates matched', { _tags: 'core' })}</Text>
+						<Text className="text-error text-sm">{t('No rates matched')}</Text>
 					</HStack>
 				)}
 			</VStack>
@@ -130,7 +130,7 @@ export const DisplayCurrentTaxRates = ({
 						router.push('/(app)/(modals)/tax-rates');
 					}}
 				>
-					<ButtonText>{t('View all tax rates', { _tags: 'core' })}</ButtonText>
+					<ButtonText>{t('View all tax rates')}</ButtonText>
 				</Button>
 			</View>
 		</VStack>

@@ -65,7 +65,7 @@ const CashierSearch = () => {
 	return (
 		<>
 			<ComboboxInput
-				placeholder={t('Search Cashiers', { _tags: 'core' })}
+				placeholder={t('Search Cashiers')}
 				value={search}
 				onChangeText={onSearch}
 			/>
@@ -116,7 +116,7 @@ export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) =>
 					onRemove={() => query.removeElemMatch('meta_data', { key: '_pos_user' }).exec()}
 				>
 					<ButtonText>
-						{cashier ? format(cashier) : t('Select Cashier', { _tags: 'core' })}
+						{cashier ? format(cashier) : t('Select Cashier')}
 					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>

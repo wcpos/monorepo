@@ -107,10 +107,10 @@ export function OrdersScreen() {
 						<HStack>
 							<QuerySearchInput
 								query={query}
-								placeholder={t('Search Orders', { _tags: 'core' })}
+								placeholder={t('Search Orders')}
 								className="flex-1"
 							/>
-							<UISettingsDialog title={t('Order Settings', { _tags: 'core' })}>
+							<UISettingsDialog title={t('Order Settings')}>
 								<UISettingsForm />
 							</UISettingsDialog>
 						</HStack>
@@ -126,7 +126,7 @@ export function OrdersScreen() {
 								id="orders"
 								query={query}
 								renderCell={renderCell}
-								noDataMessage={t('No orders found', { _tags: 'core' })}
+								noDataMessage={t('No orders found')}
 								estimatedItemSize={100}
 							/>
 						</Suspense>

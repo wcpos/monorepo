@@ -76,9 +76,9 @@ const UISettingsDialog = ({ title, children }: Props) => {
 						<DialogContext.Provider value={contextValue}>{children}</DialogContext.Provider>
 					</DialogBody>
 					<DialogFooter>
-						<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
+						<DialogClose>{t('Close')}</DialogClose>
 						<DialogAction variant="destructive" onPress={handleButtonPress}>
-							{t('Restore Default Settings', { _tags: 'core' })}
+							{t('Restore Default Settings')}
 						</DialogAction>
 					</DialogFooter>
 				</DialogContent>

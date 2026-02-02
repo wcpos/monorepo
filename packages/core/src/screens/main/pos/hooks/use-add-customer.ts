@@ -54,7 +54,7 @@ export const useAddCustomer = () => {
 			// Get customer display name
 			const customerName =
 				data.id === 0
-					? t('Guest', { _tags: 'core' })
+					? t('Guest')
 					: `${data.first_name || ''} ${data.last_name || ''}`.trim() ||
 						data.email ||
 						`#${data.id}`;
@@ -65,7 +65,7 @@ export const useAddCustomer = () => {
 			});
 
 			// Log customer assignment
-			orderLogger.success(t('Customer assigned: {customerName}', { _tags: 'core', customerName }), {
+			orderLogger.success(t('Customer assigned: {customerName}', {customerName }), {
 				saveToDb: true,
 				context: {
 					customerId: data.id,

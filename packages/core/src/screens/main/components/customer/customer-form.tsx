@@ -86,7 +86,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="first_name"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('First Name', { _tags: 'core' })} {...field} />
+								<FormInput label={t('First Name')} {...field} />
 							</View>
 						)}
 					/>
@@ -95,7 +95,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="last_name"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Last Name', { _tags: 'core' })} {...field} />
+								<FormInput label={t('Last Name')} {...field} />
 							</View>
 						)}
 					/>
@@ -106,7 +106,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="email"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Email', { _tags: 'core' })} {...field} />
+								<FormInput label={t('Email')} {...field} />
 							</View>
 						)}
 					/>
@@ -115,7 +115,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="role"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Role', { _tags: 'core' })} {...field} editable={false} />
+								<FormInput label={t('Role')} {...field} editable={false} />
 							</View>
 						)}
 					/>
@@ -127,7 +127,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormInput
-									label={t('Username', { _tags: 'core' })}
+									label={t('Username')}
 									{...field}
 									editable={!hasUsername}
 								/>
@@ -139,14 +139,14 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="password"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Password', { _tags: 'core' })} {...field} />
+								<FormInput label={t('Password')} {...field} />
 							</View>
 						)}
 					/>
 				</HStack>
 				<Collapsible>
 					<CollapsibleTrigger>
-						<Text>{t('Billing Address', { _tags: 'core' })}</Text>
+						<Text>{t('Billing Address')}</Text>
 					</CollapsibleTrigger>
 					<CollapsibleContent>
 						<BillingAddressForm />
@@ -155,14 +155,14 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 				<Collapsible>
 					<HStack>
 						<CollapsibleTrigger>
-							<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
+							<Text>{t('Shipping Address')}</Text>
 						</CollapsibleTrigger>
 					</HStack>
 					<CollapsibleContent>
 						<VStack className="gap-4">
 							<Button variant="muted" onPress={handleCopyBillingToShipping}>
 								<ButtonText>
-									{t('Copy billing address to shipping address', { _tags: 'core' })}
+									{t('Copy billing address to shipping address')}
 								</ButtonText>
 							</Button>
 							<ShippingAddressForm />
@@ -173,7 +173,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 				{/** TODO: move the buttons to the parent component */}
 				<HStack className="justify-end">
 					<Button variant="outline" onPress={onClose}>
-						<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
+						<ButtonText>{t('Close')}</ButtonText>
 					</Button>
 					<Button loading={loading} onPress={onSave}>
 						<ButtonText>{t('Save')}</ButtonText>

@@ -50,40 +50,40 @@ function AboutDialogContent() {
 	return (
 		<>
 			<DialogHeader>
-				<DialogTitle>{t('About WCPOS', { _tags: 'core' })}</DialogTitle>
+				<DialogTitle>{t('About WCPOS')}</DialogTitle>
 			</DialogHeader>
 			<DialogBody>
 				<VStack space="md">
 					{/* App Info Section */}
 					<VStack space="xs">
 						<Text className="text-muted-foreground text-xs font-semibold uppercase">
-							{t('Application', { _tags: 'core' })}
+							{t('Application')}
 						</Text>
-						<InfoRow label={t('App Version', { _tags: 'core' })} value={appVersion} />
+						<InfoRow label={t('App Version')} value={appVersion} />
 						<InfoRow
-							label={t('{platform} Version', { _tags: 'core', platform: platformLabels[platform] })}
+							label={t('{platform} Version', {platform: platformLabels[platform] })}
 							value={platformVersion !== appVersion ? platformVersion : undefined}
 						/>
-						<InfoRow label={t('Platform', { _tags: 'core' })} value={platformLabels[platform]} />
+						<InfoRow label={t('Platform')} value={platformLabels[platform]} />
 					</VStack>
 
 					{/* Server Info Section (if connected) */}
 					{site && (
 						<VStack space="xs">
 							<Text className="text-muted-foreground text-xs font-semibold uppercase">
-								{t('Server', { _tags: 'core' })}
+								{t('Server')}
 							</Text>
 							{/* Show Pro version if present, otherwise show free version */}
 							{site.wcposProVersion ? (
 								<InfoRow
-									label={t('WCPOS Pro Plugin', { _tags: 'core' })}
+									label={t('WCPOS Pro Plugin')}
 									value={site.wcposProVersion}
 								/>
 							) : (
-								<InfoRow label={t('WCPOS Plugin', { _tags: 'core' })} value={site.wcposVersion} />
+								<InfoRow label={t('WCPOS Plugin')} value={site.wcposVersion} />
 							)}
-							<InfoRow label={t('WooCommerce', { _tags: 'core' })} value={site.wcVersion} />
-							<InfoRow label={t('WordPress', { _tags: 'core' })} value={site.wpVersion} />
+							<InfoRow label={t('WooCommerce')} value={site.wcVersion} />
+							<InfoRow label={t('WordPress')} value={site.wpVersion} />
 						</VStack>
 					)}
 
@@ -91,11 +91,11 @@ function AboutDialogContent() {
 					{license && (
 						<VStack space="xs">
 							<Text className="text-muted-foreground text-xs font-semibold uppercase">
-								{t('License', { _tags: 'core' })}
+								{t('License')}
 							</Text>
 							<InfoRow
-								label={t('Status', { _tags: 'core' })}
-								value={license.isPro ? t('Pro', { _tags: 'core' }) : t('Free', { _tags: 'core' })}
+								label={t('Status')}
+								value={license.isPro ? t('Pro') : t('Free')}
 							/>
 						</VStack>
 					)}
@@ -105,7 +105,7 @@ function AboutDialogContent() {
 				<Button variant="outline" onPress={() => Linking.openURL('https://updates.wcpos.com')}>
 					<HStack>
 						<Icon name="globe" size="sm" />
-						<Text>{t('Release Notes', { _tags: 'core' })}</Text>
+						<Text>{t('Release Notes')}</Text>
 					</HStack>
 				</Button>
 			</DialogFooter>

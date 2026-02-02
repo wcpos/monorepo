@@ -1,102 +1,108 @@
 import * as React from 'react';
 
-import { createNativeInstance, TxNative } from '@transifex/native';
+import i18next from 'i18next';
+import { I18nextProvider, initReactI18next, useTranslation } from 'react-i18next';
 import { useObservableEagerState } from 'observable-hooks';
+import { of } from 'rxjs';
 
-import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
-
-import CustomCache from './cache';
 import { useLocale } from '../../hooks/use-locale';
 import { useAppState } from '../app-state';
 
-const appLogger = getLogger(['wcpos', 'app', 'translations']);
-
-export const TranslationContext = React.createContext<TxNative['translate']>(null);
-
 /**
- * This is a stripped down version of the TransifexProvider
- *
- * Languages don't change that often so using context and state seems like overkill.
- * Instead, we'll render the whole app and keep the translation as a pure function.
- *
- * - load the translations from local storage (if any)
+ * Custom i18next backend that loads translations from jsDelivr CDN
+ * and caches them in RxDB via the app's translationsState.
  */
-export const TranslationProvider = ({ children }) => {
-	const { translationsState } = useAppState();
-	const { locale } = useLocale();
-	const translations = useObservableEagerState(translationsState.get$(locale));
+class RxDBBackend {
+	static type = 'backend' as const;
+	type = 'backend' as const;
 
-	/**
-	 *
-	 */
-	const txInstance = React.useMemo(() => {
-		return createNativeInstance({
-			token: '1/09853773ef9cda3be96c8c451857172f26927c0f',
-			cache: new CustomCache(translationsState),
-			filterTags: 'core',
+	private translationsState: any;
+	private version: string;
+
+	init(_services: any, backendOptions: any) {
+		this.translationsState = backendOptions.translationsState;
+		this.version = backendOptions.version || '0.0.0';
+	}
+
+	read(language: string, namespace: string, callback: (err: any, data?: any) => void) {
+		// Return cached translations immediately if available
+		const cached = this.translationsState?.[language];
+		if (cached) {
+			callback(null, cached);
+		} else {
+			callback(null);
+		}
+
+		// Fetch fresh translations from jsDelivr in the background
+		const url = `https://cdn.jsdelivr.net/gh/wcpos/translations@v${this.version}/translations/js/${language}/${namespace}.json`;
+		fetch(url)
+			.then((response) => {
+				if (!response.ok) return;
+				return response.json();
+			})
+			.then((data) => {
+				if (data && Object.keys(data).length > 0) {
+					const current = this.translationsState?.[language];
+					if (JSON.stringify(current) !== JSON.stringify(data)) {
+						this.translationsState?.set(language, () => data);
+					}
+					i18next.addResourceBundle(language, namespace, data, true, true);
+				}
+			})
+			.catch(() => {});
+	}
+}
+
+export const TranslationProvider = ({ children }: { children: React.ReactNode }) => {
+	const { translationsState, site } = useAppState();
+	const { locale } = useLocale();
+	const wcposVersion = useObservableEagerState(site?.wcpos_version$ ?? of(''));
+
+	const i18nInstance = React.useMemo(() => {
+		const instance = i18next.createInstance();
+		instance.use(initReactI18next).use(RxDBBackend).init({
+			lng: locale,
+			fallbackLng: false,
+			ns: ['core'],
+			defaultNS: 'core',
+			keySeparator: false,
+			nsSeparator: false,
+			interpolation: {
+				escapeValue: false,
+				prefix: '{',
+				suffix: '}',
+			},
+			backend: {
+				translationsState,
+				version: wcposVersion,
+			},
 		});
+		return instance;
 	}, [translationsState]);
 
 	/**
-	 * If we have translations, manually update the cache
+	 * When the WCPOS version becomes available (fetched via useSiteInfo),
+	 * reload translations so the backend can fetch from the correct CDN URL.
 	 */
-	if (translations) {
-		txInstance.cache.update(
-			locale,
-			translations,
-			// special case to manually update the CustomCache
-			true
-		);
-	}
-
-	/**
-	 * txInstance.setCurrentLocale will trigger a fetch, then update the locale
-	 * we don't want to wait for the fetch to complete before rendering the app
-	 * so we'll manually update the locale, then trigger the fetch
-	 */
-	txInstance.currentLocale = locale;
-
 	React.useEffect(() => {
-		const fetchTranslations = async () => {
-			try {
-				await txInstance.fetchTranslations(locale);
-			} catch (error) {
-				appLogger.error('Error fetching translations', {
-					context: {
-						errorCode: ERROR_CODES.CONNECTION_REFUSED,
-						locale,
-						error: error instanceof Error ? error.message : String(error),
-					},
-				});
-			}
-		};
-
-		fetchTranslations();
-	}, [locale, txInstance]);
+		if (wcposVersion && locale) {
+			i18nInstance.reloadResources(locale, 'core');
+		}
+	}, [wcposVersion, i18nInstance]);
 
 	/**
-	 *
+	 * Handle locale changes.
 	 */
-	return (
-		<TranslationContext.Provider
-			/**
-			 * Bit of a hack to force re-render when locale changes
-			 * or the translations are updated
-			 */
-			key={locale}
-			value={txInstance.translate.bind(txInstance)}
-		>
-			{children}
-		</TranslationContext.Provider>
-	);
+	React.useEffect(() => {
+		if (i18nInstance.language !== locale) {
+			i18nInstance.changeLanguage(locale);
+		}
+	}, [locale, i18nInstance]);
+
+	return <I18nextProvider i18n={i18nInstance}>{children}</I18nextProvider>;
 };
 
 export const useT = () => {
-	const context = React.useContext(TranslationContext);
-	if (!context) {
-		throw new Error(`useT must be called within TranslationContext`);
-	}
-
-	return context;
+	const { t } = useTranslation();
+	return t;
 };

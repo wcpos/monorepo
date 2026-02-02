@@ -82,7 +82,7 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 						}
 					>
 						<Icon name="penToSquare" />
-						<Text>{t('Edit', { _tags: 'core' })}</Text>
+						<Text>{t('Edit')}</Text>
 					</DropdownMenuItem>
 					{customer.id && (
 						<DropdownMenuItem
@@ -93,7 +93,7 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 							}}
 						>
 							<Icon name="arrowRotateRight" />
-							<Text>{t('Sync', { _tags: 'core' })}</Text>
+							<Text>{t('Sync')}</Text>
 						</DropdownMenuItem>
 					)}
 					<DropdownMenuSeparator />
@@ -102,7 +102,7 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 							name="trash"
 							className="fill-destructive web:group-focus:fill-accent-foreground"
 						/>
-						<Text>{t('Delete', { _tags: 'core' })}</Text>
+						<Text>{t('Delete')}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -111,7 +111,6 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 					<AlertDialogHeader>
 						<AlertDialogTitle>
 							{t('Delete {name}', {
-								_tags: 'core',
 								name: format(customer),
 							})}
 						</AlertDialogTitle>
@@ -121,7 +120,6 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 									{t(
 										'Are you sure you want to delete this user? Deleting a user is permanent, there is no Trash for WordPress users.',
 										{
-											_tags: 'core',
 										}
 									)}
 								</Text>
@@ -133,16 +131,16 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 											setForce(!force);
 										}}
 									>
-										{t('Confirm', { _tags: 'core' })}
+										{t('Confirm')}
 									</Label>
 								</HStack>
 							</VStack>
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
 						<AlertDialogAction variant="destructive" disabled={!force} onPress={handleDelete}>
-							{t('Delete', { _tags: 'core' })}
+							{t('Delete')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

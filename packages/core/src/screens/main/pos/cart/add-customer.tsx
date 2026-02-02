@@ -68,7 +68,7 @@ export const AddNewCustomer = () => {
 			try {
 				const savedDoc = await create({ data });
 				if (isRxDocument(savedDoc)) {
-					cartLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+					cartLogger.success(t('{name} saved', {name: format(savedDoc) }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -90,7 +90,7 @@ export const AddNewCustomer = () => {
 					}
 				}
 			} catch (error) {
-				cartLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				cartLogger.error(t('{message}', {message: error.message || 'Error' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -113,12 +113,12 @@ export const AddNewCustomer = () => {
 						<IconButton testID="add-customer-button" name="userPlus" />
 					</TooltipTrigger>
 					<TooltipContent>
-						<Text>{t('Add new customer', { _tags: 'core' })}</Text>
+						<Text>{t('Add new customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
 				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
-						<DialogTitle>{t('Add new customer', { _tags: 'core' })}</DialogTitle>
+						<DialogTitle>{t('Add new customer')}</DialogTitle>
 					</DialogHeader>
 					<DialogBody>
 						<CustomerForm

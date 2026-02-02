@@ -89,7 +89,7 @@ export const BarcodeSettings = () => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormInput
-									label={t('Barcode Average Time Input Threshold (ms)', { _tags: 'core' })}
+									label={t('Barcode Average Time Input Threshold (ms)')}
 									type="numeric"
 									{...field}
 								/>
@@ -102,7 +102,7 @@ export const BarcodeSettings = () => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormInput
-									label={t('Barcode Minimum Length', { _tags: 'core' })}
+									label={t('Barcode Minimum Length')}
 									type="numeric"
 									{...field}
 								/>
@@ -116,7 +116,7 @@ export const BarcodeSettings = () => {
 						name="barcode_scanning_prefix"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Barcode Scanner Prefix', { _tags: 'core' })} {...field} />
+								<FormInput label={t('Barcode Scanner Prefix')} {...field} />
 							</View>
 						)}
 					/>
@@ -125,7 +125,7 @@ export const BarcodeSettings = () => {
 						name="barcode_scanning_suffix"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Barcode Scanner Suffix', { _tags: 'core' })} {...field} />
+								<FormInput label={t('Barcode Scanner Suffix')} {...field} />
 							</View>
 						)}
 					/>

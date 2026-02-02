@@ -32,7 +32,7 @@ const OnSalePill = ({ query }: Props) => {
 			removable={isActive}
 			onRemove={() => query.removeWhere('on_sale').exec()}
 		>
-			<ButtonText>{t('On Sale', { _tags: 'core' })}</ButtonText>
+			<ButtonText>{t('On Sale')}</ButtonText>
 		</ButtonPill>
 	);
 };
