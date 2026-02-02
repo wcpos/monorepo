@@ -1,14 +1,31 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
+ * Custom test options passed to each project.
+ */
+export type StoreVariant = 'free' | 'pro';
+
+export interface WcposTestOptions {
+	storeVariant: StoreVariant;
+	storeUrl: string;
+}
+
+const FREE_STORE_URL = 'https://dev-free.wcpos.com';
+const PRO_STORE_URL = 'https://dev-pro.wcpos.com';
+
+/**
  * Playwright configuration for WCPOS E2E tests
  *
  * Run tests against:
  * - Local dev server: npx playwright test
  * - Preview deployment: BASE_URL=https://preview-xxx.expo.app npx playwright test
  * - Production: BASE_URL=https://wcpos.expo.app npx playwright test
+ *
+ * Run a single variant:
+ * - npx playwright test --project=free-authenticated
+ * - npx playwright test --project=pro-authenticated
  */
-export default defineConfig({
+export default defineConfig<WcposTestOptions>({
 	testDir: './e2e',
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
@@ -33,15 +50,43 @@ export default defineConfig({
 	},
 
 	projects: [
+		// Free store
 		{
-			name: 'unauthenticated',
+			name: 'free-unauthenticated',
 			testMatch: /auth\.spec\.ts/,
-			use: { ...devices['Desktop Chrome'] },
+			use: {
+				...devices['Desktop Chrome'],
+				storeVariant: 'free',
+				storeUrl: FREE_STORE_URL,
+			},
 		},
 		{
-			name: 'authenticated',
+			name: 'free-authenticated',
 			testIgnore: /auth\.spec\.ts/,
-			use: { ...devices['Desktop Chrome'] },
+			use: {
+				...devices['Desktop Chrome'],
+				storeVariant: 'free',
+				storeUrl: FREE_STORE_URL,
+			},
+		},
+		// Pro store
+		{
+			name: 'pro-unauthenticated',
+			testMatch: /auth\.spec\.ts/,
+			use: {
+				...devices['Desktop Chrome'],
+				storeVariant: 'pro',
+				storeUrl: PRO_STORE_URL,
+			},
+		},
+		{
+			name: 'pro-authenticated',
+			testIgnore: /auth\.spec\.ts/,
+			use: {
+				...devices['Desktop Chrome'],
+				storeVariant: 'pro',
+				storeUrl: PRO_STORE_URL,
+			},
 		},
 	],
 

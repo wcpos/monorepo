@@ -49,7 +49,7 @@ export default function TabsLayout() {
 	// This handles the case when user resizes from small to large screen
 	if (screenSize !== 'sm') {
 		return (
-			<View style={{ flex: 1, paddingBottom: bottom }}>
+			<View testID="screen-pos" style={{ flex: 1, paddingBottom: bottom }}>
 				<PanelGroup
 					onLayout={([productsWidth, cartWidth]) => patchUI({ width: productsWidth })}
 					direction="horizontal"

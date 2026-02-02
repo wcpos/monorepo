@@ -100,7 +100,7 @@ export function OrdersScreen() {
 	 *
 	 */
 	return (
-		<View className="h-full p-2" style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}>
+		<View testID="screen-orders" className="h-full p-2" style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}>
 			<Card className="flex-1">
 				<CardHeader className="bg-card-header p-2">
 					<VStack>

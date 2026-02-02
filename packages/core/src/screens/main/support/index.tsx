@@ -47,6 +47,7 @@ export const Support = () => {
 
 	return (
 		<View
+			testID="screen-support"
 			className="h-full w-full p-2"
 			onLayout={handleLayout}
 			style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}

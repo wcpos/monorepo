@@ -1,10 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { STORE_URL } from './fixtures';
+import { getStoreUrl } from './fixtures';
 
-/**
- * Unauthenticated tests: connect screen and basic navigation.
- * These run without the setup project (no storageState).
- */
 test.describe('Connect Screen', () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto('/');
@@ -30,14 +26,14 @@ test.describe('Connect Screen', () => {
 		await page.locator('input[type="url"]').fill('https://example.com');
 		await page.getByRole('button', { name: 'Connect' }).click();
 
-		// After trying to connect, the store card should NOT appear
 		await expect(page.getByText('Logged in users:')).not.toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should connect to store and show site card', async ({ page }) => {
+	test('should connect to store and show site card', async ({ page }, testInfo) => {
+		const storeUrl = getStoreUrl(testInfo);
 		const urlInput = page.getByRole('textbox', { name: /Enter the URL/i });
 		await urlInput.click();
-		await urlInput.fill(STORE_URL);
+		await urlInput.fill(storeUrl);
 		await page.waitForTimeout(1_000);
 
 		const connectButton = page.getByRole('button', { name: 'Connect' });
@@ -45,6 +41,18 @@ test.describe('Connect Screen', () => {
 		await connectButton.click();
 
 		await expect(page.getByText('Logged in users:')).toBeVisible({ timeout: 30_000 });
+	});
+
+	test('should show add user button after store discovery', async ({ page }, testInfo) => {
+		const storeUrl = getStoreUrl(testInfo);
+		const urlInput = page.getByRole('textbox', { name: /Enter the URL/i });
+		await urlInput.click();
+		await urlInput.fill(storeUrl);
+		await page.waitForTimeout(1_000);
+
+		await page.getByRole('button', { name: 'Connect' }).click();
+		await expect(page.getByText('Logged in users:')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('add-user-button')).toBeVisible();
 	});
 });
 
@@ -58,7 +66,6 @@ test.describe('Unauthenticated Navigation', () => {
 	test('should handle unknown routes gracefully', async ({ page }) => {
 		await page.goto('/some-nonexistent-route');
 
-		// Wait for the app to finish loading, then check for connect screen or 404
 		await expect(
 			page.getByRole('button', { name: 'Connect' }).or(page.getByText(/doesn't exist/i))
 		).toBeVisible({ timeout: 60_000 });
