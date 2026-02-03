@@ -142,18 +142,22 @@ test.describe('Products Page (Pro)', () => {
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
-		// The actions button is an IconButton with ellipsisVertical icon - no accessible name
-		// Find buttons in the table area (should be in each row)
-		const tableButtons = screen.locator('table [role="button"], [role="row"] [role="button"]');
-		await expect(tableButtons.first()).toBeVisible({ timeout: 15_000 });
+		// Find a data row by looking for rows that contain "Manage" (stock toggle label)
+		const dataRow = screen.locator('[role="row"]').filter({ hasText: 'Manage' }).first();
+		await expect(dataRow).toBeVisible({ timeout: 15_000 });
 
-		// Click the first action button (ellipsis menu)
-		await tableButtons.first().click();
+		// The ellipsis button is the last pressable element in the row
+		// All IconButtons in wcpos render as Pressable with role="button"
+		const rowButtons = dataRow.locator('[role="button"]');
+		const count = await rowButtons.count();
+
+		// Click the last button (the ellipsis/actions button)
+		if (count > 0) {
+			await rowButtons.nth(count - 1).click();
+		}
 
 		// Menu should show Edit, Sync, or Delete options
-		await expect(
-			page.getByText('Edit').or(page.getByText('Sync')).or(page.getByText('Delete'))
-		).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByText('Edit').first()).toBeVisible({ timeout: 15_000 });
 	});
 });
 
