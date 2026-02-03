@@ -85,8 +85,8 @@ test.describe('Orders Page (Pro)', () => {
 			test.skip(true, 'No orders available to test actions menu');
 		}
 
-		// Find a data row that contains order status
-		const dataRow = screen.locator('[role="row"]').filter({ hasText: /completed|processing|pending/i }).first();
+		// Find the first data row in the table body
+		const dataRow = screen.locator('[role="rowgroup"] [role="row"]').first();
 		await expect(dataRow).toBeVisible({ timeout: 15_000 });
 
 		// The ellipsis button is the last pressable element in the row

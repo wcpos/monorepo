@@ -67,6 +67,7 @@ export const TranslationProvider = ({ children }: { children: React.ReactNode })
 			.use(RxDBBackend)
 			.init({
 				lng: locale,
+				// Keys are raw English strings, so the key itself is the fallback
 				fallbackLng: false,
 				ns: ['core'],
 				defaultNS: 'core',

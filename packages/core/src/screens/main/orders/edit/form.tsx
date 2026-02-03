@@ -203,6 +203,7 @@ export const EditOrderForm = ({ order }: Props) => {
 
 				form.setValue('customer_id', customerId);
 			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error);
 				mutationLogger.error('Error fetching customer', {
 					context: {
 						errorCode: ERROR_CODES.RECORD_NOT_FOUND,
