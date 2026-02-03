@@ -25,8 +25,8 @@ test.describe('Orders Page (Pro)', () => {
 	test('should show order columns', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
-		await expect(screen.getByRole('columnheader', { name: 'Status' })).toBeVisible();
-		await expect(screen.getByRole('columnheader', { name: 'Total' })).toBeVisible();
+		await expect(screen.getByRole('columnheader', { name: 'Status', exact: true })).toBeVisible({ timeout: 15_000 });
+		await expect(screen.getByRole('columnheader', { name: 'Total', exact: true })).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show orders or empty state', async ({ posPage: page }) => {

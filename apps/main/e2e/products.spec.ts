@@ -116,8 +116,8 @@ test.describe('Products Page (Pro)', () => {
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
-		await expect(screen.getByRole('columnheader', { name: 'Stock' })).toBeVisible();
-		await expect(screen.getByRole('columnheader', { name: 'Price' })).toBeVisible();
+		await expect(screen.getByRole('columnheader', { name: 'Stock', exact: true })).toBeVisible();
+		await expect(screen.getByRole('columnheader', { name: 'Price', exact: true })).toBeVisible();
 	});
 
 	test('should search products on Products page', async ({ posPage: page }) => {
