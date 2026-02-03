@@ -53,9 +53,7 @@ export const TagPill = ({ query, resource, selectedID }: Props) => {
 					onRemove={() => query.where('tags').removeElemMatch('tags', { id: tag?.id }).exec()}
 				>
 					<ButtonText decodeHtml>
-						{isActive
-							? tag?.name || t('ID: {id}', { id: selectedID, _tags: 'core' })
-							: t('Tag', { _tags: 'core' })}
+						{isActive ? tag?.name || t('ID: {id}', { id: selectedID }) : t('Tag')}
 					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>

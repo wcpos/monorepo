@@ -34,7 +34,7 @@ export const ShippingTitle = ({ row }: CellContext<Props, 'name'>) => {
 					onChangeText={(method_title) => updateShippingLine(uuid, { method_title })}
 				/>
 			</View>
-			<EditCartItemButton title={t('Edit {name}', { _tags: 'core', name: item.method_title })}>
+			<EditCartItemButton title={t('Edit {name}', { name: item.method_title })}>
 				<EditShippingLine uuid={uuid} item={item} />
 			</EditCartItemButton>
 		</HStack>

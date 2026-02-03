@@ -43,7 +43,7 @@ function BrandList({ query }) {
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
-			ListEmptyComponent={<ComboboxEmpty>{t('No brand found', { _tags: 'core' })}</ComboboxEmpty>}
+			ListEmptyComponent={<ComboboxEmpty>{t('No brand found')}</ComboboxEmpty>}
 		/>
 	);
 }
@@ -91,11 +91,7 @@ export function BrandSearch() {
 	 */
 	return (
 		<>
-			<ComboboxInput
-				placeholder={t('Search Brands', { _tags: 'core' })}
-				value={search}
-				onChangeText={onSearch}
-			/>
+			<ComboboxInput placeholder={t('Search Brands')} value={search} onChangeText={onSearch} />
 			<Suspense>
 				<BrandList query={query} />
 			</Suspense>
@@ -115,7 +111,7 @@ export function BrandSelect({ onValueChange }) {
 	return (
 		<Combobox onValueChange={onValueChange}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('Select Brand', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select Brand')} />
 			</ComboboxTrigger>
 			<ComboboxContent className="min-w-64">
 				<BrandSearch />

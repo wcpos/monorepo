@@ -70,7 +70,7 @@ export const AddShipping = () => {
 			const { method_title, method_id, amount, tax_status, tax_class, prices_include_tax } = data;
 
 			addShipping({
-				method_title: isEmpty(method_title) ? t('Shipping', { _tags: 'core' }) : method_title,
+				method_title: isEmpty(method_title) ? t('Shipping') : method_title,
 				method_id: isEmpty(method_id) ? 'local_pickup' : method_id,
 				amount: isEmpty(amount) ? '0' : amount,
 				tax_status,
@@ -101,8 +101,8 @@ export const AddShipping = () => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormInput
-									label={t('Shipping Method Title', { _tags: 'core' })}
-									placeholder={t('Shipping', { _tags: 'core' })}
+									label={t('Shipping Method Title')}
+									placeholder={t('Shipping')}
 									{...field}
 								/>
 							</View>
@@ -115,7 +115,7 @@ export const AddShipping = () => {
 							<View className="flex-1">
 								<FormSelect
 									customComponent={ShippingMethodSelect}
-									label={t('Shipping Method', { _tags: 'core' })}
+									label={t('Shipping Method')}
 									{...field}
 								/>
 							</View>
@@ -128,11 +128,7 @@ export const AddShipping = () => {
 						name="amount"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('Amount', { _tags: 'core' })}
-									{...field}
-								/>
+								<FormInput customComponent={CurrencyInput} label={t('Amount')} {...field} />
 							</View>
 						)}
 					/>
@@ -140,9 +136,7 @@ export const AddShipping = () => {
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
-							render={({ field }) => (
-								<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
-							)}
+							render={({ field }) => <FormSwitch label={t('Amount Includes Tax')} {...field} />}
 						/>
 					</View>
 				</HStack>
@@ -152,11 +146,7 @@ export const AddShipping = () => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									label={t('Tax Class', { _tags: 'core' })}
-									customComponent={TaxClassSelect}
-									{...field}
-								/>
+								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
 							</View>
 						)}
 					/>
@@ -166,7 +156,7 @@ export const AddShipping = () => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormRadioGroup
-									label={t('Tax Status', { _tags: 'core' })}
+									label={t('Tax Status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -175,8 +165,8 @@ export const AddShipping = () => {
 					/>
 				</HStack>
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
-					<DialogAction onPress={onAdd}>{t('Add to Cart', { _tags: 'core' })}</DialogAction>
+					<DialogClose>{t('Cancel')}</DialogClose>
+					<DialogAction onPress={onAdd}>{t('Add to Cart')}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

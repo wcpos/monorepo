@@ -35,7 +35,7 @@ export const Receipt = ({ row }: CellContext<{ document: OrderDocument }, any>) 
 				/>
 			</TooltipTrigger>
 			<TooltipContent>
-				<Text>{t('Receipt', { _tags: 'core' })}</Text>
+				<Text>{t('Receipt')}</Text>
 			</TooltipContent>
 		</Tooltip>
 	);

@@ -37,7 +37,7 @@ export const Cashier = ({ table, row }: CellContext<{ document: OrderDocument },
 	React.useEffect(() => {
 		async function fetchUser(id) {
 			if (!id) {
-				setCashierName(t('Unknown', { _tags: 'core' }));
+				setCashierName(t('Unknown'));
 				return;
 			}
 			const user = await collection.findOne({ selector: { id } }).exec();

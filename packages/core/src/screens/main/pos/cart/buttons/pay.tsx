@@ -41,7 +41,7 @@ export const PayButton = () => {
 			await pushDocument(currentOrder).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
 					// Log checkout started
-					orderLogger.info(t('Checkout started', { _tags: 'core' }), {
+					orderLogger.info(t('Checkout started'), {
 						saveToDb: true,
 						context: {
 							total,
@@ -55,12 +55,13 @@ export const PayButton = () => {
 				}
 			});
 		} catch (error) {
-			orderLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			orderLogger.error(t('Checkout failed'), {
 				showToast: true,
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					error: error instanceof Error ? error.message : String(error),
+					error: errorMessage,
 				},
 			});
 		} finally {
@@ -81,7 +82,6 @@ export const PayButton = () => {
 		>
 			{t('Checkout {order_total}', {
 				order_total: format(parseFloat(total) || 0),
-				_tags: 'core',
 			})}
 		</Button>
 	);

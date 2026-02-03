@@ -110,7 +110,7 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 	const testAuthorizationMethod = React.useCallback(
 		async (wcposApiUrl: string, accessToken?: string): Promise<AuthTestResult | null> => {
 			if (!wcposApiUrl || wcposApiUrl.trim() === '') {
-				setError(t('WCPOS API URL is required', { _tags: 'core' }));
+				setError(t('WCPOS API URL is required'));
 				return null;
 			}
 
@@ -142,7 +142,7 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 					useJwtAsParam = true;
 				} else {
 					// Neither work - this is an error condition
-					throw new Error(t('Server does not support any authorization method', { _tags: 'core' }));
+					throw new Error(t('Server does not support any authorization method'));
 				}
 
 				const result: AuthTestResult = {
@@ -156,8 +156,7 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 
 				return result;
 			} catch (err) {
-				const errorMessage =
-					err.message || t('Failed to test authorization methods', { _tags: 'core' });
+				const errorMessage = err.message || t('Failed to test authorization methods');
 				setError(errorMessage);
 				setStatus('error');
 				authTestLogger.error(`Authorization testing failed: ${errorMessage}`, {

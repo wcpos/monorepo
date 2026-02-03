@@ -78,12 +78,8 @@ export function LogsScreen() {
 				<CardHeader className="bg-card-header p-2">
 					<VStack>
 						<HStack>
-							<QuerySearchInput
-								query={query}
-								placeholder={t('Search Logs', { _tags: 'core' })}
-								className="flex-1"
-							/>
-							<UISettingsDialog title={t('Logs Settings', { _tags: 'core' })}>
+							<QuerySearchInput query={query} placeholder={t('Search Logs')} className="flex-1" />
+							<UISettingsDialog title={t('Logs Settings')}>
 								<UISettingsForm />
 							</UISettingsDialog>
 						</HStack>
@@ -99,7 +95,7 @@ export function LogsScreen() {
 								id="logs"
 								query={query}
 								renderCell={renderCell}
-								noDataMessage={t('No logs found', { _tags: 'core' })}
+								noDataMessage={t('No logs found')}
 								estimatedItemSize={100}
 								keyExtractor={(row) => row.original.document.logId}
 								ListFooterComponent={() => {}}

@@ -42,10 +42,10 @@ export const EditOrderMeta = ({ order }: Props) => {
 		<Tabs value={value} onValueChange={setValue}>
 			<TabsList className="w-full flex-row">
 				<TabsTrigger value="form" className="flex-1">
-					<Text>{t('Form', { _tags: 'core' })}</Text>
+					<Text>{t('Form')}</Text>
 				</TabsTrigger>
 				<TabsTrigger value="json" className="flex-1">
-					<Text>{t('JSON', { _tags: 'core' })}</Text>
+					<Text>{t('JSON')}</Text>
 				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="form">

@@ -149,7 +149,7 @@ export const TaxSettings = () => {
 		<VStack>
 			<View className="flex-row">
 				<Button variant="muted" onPress={() => router.push('/(app)/(modals)/tax-rates')}>
-					<ButtonText>{t('View all tax rates', { _tags: 'core' })}</ButtonText>
+					<ButtonText>{t('View all tax rates')}</ButtonText>
 				</Button>
 			</View>
 			<Form {...form}>
@@ -163,7 +163,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={YesNoRadioGroup}
-										label={t('Enable taxes', { _tags: 'core' })}
+										label={t('Enable taxes')}
 										{...field}
 									/>
 								</View>
@@ -176,7 +176,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={YesNoRadioGroup}
-										label={t('Prices entered with tax', { _tags: 'core' })}
+										label={t('Prices entered with tax')}
 										{...field}
 									/>
 								</View>
@@ -191,7 +191,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormSelect
 										customComponent={TaxBasedOnSelect}
-										label={t('Calculate tax based on', { _tags: 'core' })}
+										label={t('Calculate tax based on')}
 										{...field}
 									/>
 								</View>
@@ -204,7 +204,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormSelect
 										customComponent={TaxClassSelect}
-										label={t('Shipping tax class', { _tags: 'core' })}
+										label={t('Shipping tax class')}
 										{...field}
 									/>
 								</View>
@@ -219,7 +219,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={TaxDisplayRadioGroup}
-										label={t('Display tax totals', { _tags: 'core' })}
+										label={t('Display tax totals')}
 										{...field}
 									/>
 								</View>
@@ -232,7 +232,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={YesNoRadioGroup}
-										label={t('Round tax at subtotal level', { _tags: 'core' })}
+										label={t('Round tax at subtotal level')}
 										{...field}
 									/>
 								</View>
@@ -247,7 +247,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={InclExclRadioGroup}
-										label={t('Display prices in the shop', { _tags: 'core' })}
+										label={t('Display prices in the shop')}
 										{...field}
 									/>
 								</View>
@@ -260,7 +260,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={InclExclRadioGroup}
-										label={t('Display prices during cart and checkout', { _tags: 'core' })}
+										label={t('Display prices during cart and checkout')}
 										{...field}
 									/>
 								</View>
@@ -273,7 +273,7 @@ export const TaxSettings = () => {
 							name="price_display_suffix"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormInput label={t('Price display suffix', { _tags: 'core' })} {...field} />
+									<FormInput label={t('Price display suffix')} {...field} />
 								</View>
 							)}
 						/>
@@ -281,9 +281,9 @@ export const TaxSettings = () => {
 					</HStack>
 					<ModalFooter className="px-0">
 						<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
-							{t('Restore server settings', { _tags: 'core' })}
+							{t('Restore server settings')}
 						</Button>
-						<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
+						<ModalClose>{t('Close')}</ModalClose>
 					</ModalFooter>
 				</VStack>
 			</Form>

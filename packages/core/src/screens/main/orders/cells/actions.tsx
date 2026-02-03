@@ -115,11 +115,11 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 						}
 					>
 						<Icon name="penToSquare" />
-						<Text>{t('Edit', { _tags: 'core' })}</Text>
+						<Text>{t('Edit')}</Text>
 					</DropdownMenuItem>
 					<DropdownMenuItem onPress={handleOpen}>
 						<Icon name="cartShopping" />
-						<Text>{t('Re-open', { _tags: 'core' })}</Text>
+						<Text>{t('Re-open')}</Text>
 					</DropdownMenuItem>
 					{orderHasID && (
 						<>
@@ -127,11 +127,11 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 								onPress={() => router.push({ pathname: `/orders/receipt/${order.uuid}` })}
 							>
 								<Icon name="receipt" />
-								<Text>{t('Receipt', { _tags: 'core' })}</Text>
+								<Text>{t('Receipt')}</Text>
 							</DropdownMenuItem>
 							<DropdownMenuItem onPress={() => pullDocument(order.id, order.collection)}>
 								<Icon name="arrowRotateRight" />
-								<Text>{t('Sync', { _tags: 'core' })}</Text>
+								<Text>{t('Sync')}</Text>
 							</DropdownMenuItem>
 						</>
 					)}
@@ -141,7 +141,7 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 							name="trash"
 							className="fill-destructive web:group-focus:fill-accent-foreground"
 						/>
-						<Text>{t('Delete', { _tags: 'core' })}</Text>
+						<Text>{t('Delete')}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -151,7 +151,6 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 						<AlertDialogTitle>
 							{order.id
 								? t('Delete order {id}', {
-										_tags: 'core',
 										id: order.id,
 									})
 								: t('Delete order')}
@@ -162,15 +161,14 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 										'Are you sure you want to delete this order? Deleted orders will be placed in the Trash on the server.'
 									)
 								: t(
-										'Are you sure you want to delete this order? This order has not been saved to the server, it will be deleted permanently.',
-										{ _tags: 'core' }
+										'Are you sure you want to delete this order? This order has not been saved to the server, it will be deleted permanently.'
 									)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
 						<AlertDialogAction variant="destructive" onPress={handleDelete}>
-							{t('Delete', { _tags: 'core' })}
+							{t('Delete')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

@@ -55,9 +55,7 @@ export const CategoryPill = ({ query, resource, selectedID }: Props) => {
 					}
 				>
 					<ButtonText decodeHtml>
-						{isActive
-							? category?.name || t('ID: {id}', { id: selectedID, _tags: 'core' })
-							: t('Category', { _tags: 'core' })}
+						{isActive ? category?.name || t('ID: {id}', { id: selectedID }) : t('Category')}
 					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>

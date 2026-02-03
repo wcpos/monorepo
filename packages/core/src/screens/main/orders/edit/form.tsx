@@ -71,7 +71,7 @@ export const EditOrderForm = ({ order }: Props) => {
 	const guestCustomer = useGuestCustomer();
 
 	if (!order) {
-		throw new Error(t('Order not found', { _tags: 'core' }));
+		throw new Error(t('Order not found'));
 	}
 
 	/**
@@ -130,27 +130,25 @@ export const EditOrderForm = ({ order }: Props) => {
 				});
 				await pushDocument(order).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(
-							t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
-							{
-								showToast: true,
-								saveToDb: true,
-								context: {
-									orderId: savedDoc.id,
-									orderNumber: savedDoc.number,
-								},
-							}
-						);
+						mutationLogger.success(t('Order #{number} saved', { number: savedDoc.number }), {
+							showToast: true,
+							saveToDb: true,
+							context: {
+								orderId: savedDoc.id,
+								orderNumber: savedDoc.number,
+							},
+						});
 					}
 				});
 			} catch (error) {
-				mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				mutationLogger.error(t('Failed to save order'), {
 					showToast: true,
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						orderId: order.id,
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMessage,
 					},
 				});
 			} finally {
@@ -186,7 +184,7 @@ export const EditOrderForm = ({ order }: Props) => {
 				}
 
 				if (!customer) {
-					throw new Error(t('Customer not found', { _tags: 'core' }));
+					throw new Error(t('Customer not found'));
 				}
 
 				/**
@@ -205,11 +203,12 @@ export const EditOrderForm = ({ order }: Props) => {
 
 				form.setValue('customer_id', customerId);
 			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error);
 				mutationLogger.error('Error fetching customer', {
 					context: {
 						errorCode: ERROR_CODES.RECORD_NOT_FOUND,
 						customerId,
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMessage,
 					},
 				});
 			}
@@ -262,11 +261,7 @@ export const EditOrderForm = ({ order }: Props) => {
 							name="status"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormSelect
-										label={t('Status', { _tags: 'core' })}
-										customComponent={OrderStatusSelect}
-										{...field}
-									/>
+									<FormSelect label={t('Status')} customComponent={OrderStatusSelect} {...field} />
 								</View>
 							)}
 						/>
@@ -275,7 +270,7 @@ export const EditOrderForm = ({ order }: Props) => {
 							name="parent_id"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormInput label={t('Parent ID', { _tags: 'core' })} {...field} />
+									<FormInput label={t('Parent ID')} {...field} />
 								</View>
 							)}
 						/>
@@ -288,7 +283,7 @@ export const EditOrderForm = ({ order }: Props) => {
 								<View className="flex-1">
 									<FormCombobox
 										customComponent={CustomerSelect}
-										label={t('Customer', { _tags: 'core' })}
+										label={t('Customer')}
 										withGuest
 										{...field}
 										// override value with defaultCustomer
@@ -305,14 +300,14 @@ export const EditOrderForm = ({ order }: Props) => {
 							name="customer_note"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormTextarea label={t('Customer Note', { _tags: 'core' })} {...field} />
+									<FormTextarea label={t('Customer Note')} {...field} />
 								</View>
 							)}
 						/>
 					</HStack>
 					<Collapsible>
 						<CollapsibleTrigger>
-							<Text>{t('Billing Address', { _tags: 'core' })}</Text>
+							<Text>{t('Billing Address')}</Text>
 						</CollapsibleTrigger>
 						<CollapsibleContent>
 							<BillingAddressForm />
@@ -320,7 +315,7 @@ export const EditOrderForm = ({ order }: Props) => {
 					</Collapsible>
 					<Collapsible>
 						<CollapsibleTrigger>
-							<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
+							<Text>{t('Shipping Address')}</Text>
 						</CollapsibleTrigger>
 						<CollapsibleContent>
 							<ShippingAddressForm />
@@ -332,7 +327,7 @@ export const EditOrderForm = ({ order }: Props) => {
 							name="payment_method"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormInput label={t('Payment Method ID', { _tags: 'core' })} {...field} />
+									<FormInput label={t('Payment Method ID')} {...field} />
 								</View>
 							)}
 						/>
@@ -341,7 +336,7 @@ export const EditOrderForm = ({ order }: Props) => {
 							name="payment_method_title"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormInput label={t('Payment Method Title', { _tags: 'core' })} {...field} />
+									<FormInput label={t('Payment Method Title')} {...field} />
 								</View>
 							)}
 						/>
@@ -352,11 +347,7 @@ export const EditOrderForm = ({ order }: Props) => {
 							name="currency"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormSelect
-										customComponent={CurrencySelect}
-										label={t('Currency', { _tags: 'core' })}
-										{...field}
-									/>
+									<FormSelect customComponent={CurrencySelect} label={t('Currency')} {...field} />
 								</View>
 							)}
 						/>
@@ -365,7 +356,7 @@ export const EditOrderForm = ({ order }: Props) => {
 							name="transaction_id"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormInput label={t('Transaction ID', { _tags: 'core' })} {...field} />
+									<FormInput label={t('Transaction ID')} {...field} />
 								</View>
 							)}
 						/>
@@ -373,9 +364,9 @@ export const EditOrderForm = ({ order }: Props) => {
 					<MetaDataForm name="meta_data" />
 				</VStack>
 				<ModalFooter className="px-0">
-					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
+					<ModalClose>{t('Cancel')}</ModalClose>
 					<ModalAction loading={loading} onPress={onSave}>
-						{t('Save', { _tags: 'core' })}
+						{t('Save')}
 					</ModalAction>
 				</ModalFooter>
 			</VStack>

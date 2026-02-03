@@ -24,16 +24,16 @@ export function useCustomerNameFormat() {
 			const customerID = json.id ?? json.customer_id;
 
 			if (customerID === 0) {
-				return t('Guest', { _tags: 'core' });
+				return t('Guest');
 			}
 
 			// fall back to ID
 			if (customerID) {
-				return t('ID: {id}', { id: customerID, _tags: 'core' });
+				return t('ID: {id}', { id: customerID });
 			}
 
 			// this should never happen
-			return t('unknown', { _tags: 'core' });
+			return t('unknown');
 		},
 		[t]
 	);

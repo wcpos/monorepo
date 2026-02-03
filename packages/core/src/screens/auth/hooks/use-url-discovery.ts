@@ -49,7 +49,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				const response = await http.head(normalizedUrl);
 
 				if (!response) {
-					throw new Error(t('URL not found', { _tags: 'core' }));
+					throw new Error(t('URL not found'));
 				}
 
 				const link = get(response, ['headers', 'link']);
@@ -102,7 +102,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	const discoverWpApiUrl = React.useCallback(
 		async (url: string): Promise<string | null> => {
 			if (!url || url.trim() === '') {
-				const errorMsg = t('URL is required', { _tags: 'core' });
+				const errorMsg = t('URL is required');
 				discoveryLogger.error(errorMsg, {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
@@ -127,15 +127,16 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				}
 
 				if (!discoveredUrl) {
-					throw new Error(t('Site does not seem to be a WordPress site', { _tags: 'core' }));
+					throw new Error(t('Site does not seem to be a WordPress site'));
 				}
 
 				setWpApiUrl(discoveredUrl);
 				setStatus('success');
 				discoveryLogger.debug(`WordPress API URL discovered: ${discoveredUrl}`);
 				return discoveredUrl;
-			} catch {
-				const errorMessage = t('Failed to discover WordPress API', { _tags: 'core' });
+			} catch (err) {
+				const errorMessage =
+					err instanceof Error ? err.message : t('Failed to discover WordPress API');
 				setError(errorMessage);
 				setStatus('error');
 				return null;

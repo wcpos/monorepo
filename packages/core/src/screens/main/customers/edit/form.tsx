@@ -58,7 +58,7 @@ export const EditCustomerForm = ({ customer }: Props) => {
 				});
 				await pushDocument(customer).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('{name} saved', { _tags: 'core', name: format(savedDoc) }), {
+						mutationLogger.success(t('{name} saved', { name: format(savedDoc) }), {
 							showToast: true,
 							saveToDb: true,
 							context: {
@@ -69,13 +69,14 @@ export const EditCustomerForm = ({ customer }: Props) => {
 					}
 				});
 			} catch (error) {
-				mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				mutationLogger.error(t('Failed to save customer'), {
 					showToast: true,
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						customerId: customer.id,
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMessage,
 					},
 				});
 			} finally {

@@ -40,7 +40,7 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 				}
 			>
 				<SelectTrigger>
-					<SelectValue placeholder={t('Select an option', { _tags: 'core' })} />
+					<SelectValue placeholder={t('Select an option')} />
 				</SelectTrigger>
 				<SelectContent>
 					{options.map((option) => (
@@ -69,10 +69,10 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 			}
 		>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('Select an option', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select an option')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxInput placeholder={t('Search Variations', { _tags: 'core' })} />
+				<ComboboxInput placeholder={t('Search Variations')} />
 				<ComboboxList
 					data={data}
 					renderItem={({ item }) => (
@@ -81,9 +81,7 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
-					ListEmptyComponent={
-						<ComboboxEmpty>{t('No variation found', { _tags: 'core' })}</ComboboxEmpty>
-					}
+					ListEmptyComponent={<ComboboxEmpty>{t('No variation found')}</ComboboxEmpty>}
 				/>
 			</ComboboxContent>
 		</Combobox>

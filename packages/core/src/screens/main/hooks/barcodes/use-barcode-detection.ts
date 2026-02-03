@@ -46,12 +46,11 @@ export const useBarcodeDetection = (
 					if (barcode.length >= minLength) {
 						return true;
 					}
-					barcodeLogger.warn(t('Barcode scanned: {barcode}', { barcode, _tags: 'core' }), {
+					barcodeLogger.warn(t('Barcode scanned: {barcode}', { barcode }), {
 						showToast: true,
 						toast: {
 							text2: t('Barcode must be at least {minLength} characters long', {
 								minLength,
-								_tags: 'core',
 							}),
 						},
 						context: {

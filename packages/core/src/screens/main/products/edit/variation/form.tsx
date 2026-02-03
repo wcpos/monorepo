@@ -60,7 +60,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 	const { localPatch } = useLocalMutation();
 
 	if (!variation) {
-		throw new Error(t('Variation not found', { _tags: 'core' }));
+		throw new Error('Variation not found');
 	}
 
 	/**
@@ -100,7 +100,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 				});
 				await pushDocument(variation).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('{name} saved', { _tags: 'core', name: variation.name }), {
+						mutationLogger.success(t('{name} saved', { name: variation.name }), {
 							showToast: true,
 							saveToDb: true,
 							context: {
@@ -111,13 +111,14 @@ export const EditVariationForm = ({ variation }: Props) => {
 					}
 				});
 			} catch (error) {
-				mutationLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				mutationLogger.error(t('Failed to save variation'), {
 					showToast: true,
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						variationId: variation.id,
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMessage,
 					},
 				});
 			} finally {
@@ -145,7 +146,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="sku"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('SKU', { _tags: 'core' })} {...field} />
+								<FormInput label={t('SKU')} {...field} />
 							</View>
 						)}
 					/>
@@ -154,7 +155,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="barcode"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Barcode', { _tags: 'core' })} {...field} />
+								<FormInput label={t('Barcode')} {...field} />
 							</View>
 						)}
 					/>
@@ -165,11 +166,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="regular_price"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('Regular Price', { _tags: 'core' })}
-									{...field}
-								/>
+								<FormInput customComponent={CurrencyInput} label={t('Regular Price')} {...field} />
 							</View>
 						)}
 					/>
@@ -178,11 +175,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="sale_price"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('Sale Price', { _tags: 'core' })}
-									{...field}
-								/>
+								<FormInput customComponent={CurrencyInput} label={t('Sale Price')} {...field} />
 							</View>
 						)}
 					/>
@@ -193,11 +186,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="status"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									label={t('Status', { _tags: 'core' })}
-									customComponent={ProductStatusSelect}
-									{...field}
-								/>
+								<FormSelect label={t('Status')} customComponent={ProductStatusSelect} {...field} />
 							</View>
 						)}
 					/>
@@ -209,7 +198,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 								<FormInput
 									customComponent={NumberInput}
 									type="numeric"
-									label={t('Stock Quantity', { _tags: 'core' })}
+									label={t('Stock Quantity')}
 									{...field}
 								/>
 							)}
@@ -217,9 +206,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						<FormField
 							control={form.control}
 							name="manage_stock"
-							render={({ field }) => (
-								<FormSwitch label={t('Manage Stock', { _tags: 'core' })} {...field} />
-							)}
+							render={({ field }) => <FormSwitch label={t('Manage Stock')} {...field} />}
 						/>
 					</VStack>
 				</HStack>
@@ -229,11 +216,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									label={t('Tax Class', { _tags: 'core' })}
-									customComponent={TaxClassSelect}
-									{...field}
-								/>
+								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
 							</View>
 						)}
 					/>
@@ -243,7 +226,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormRadioGroup
-									label={t('Tax Status', { _tags: 'core' })}
+									label={t('Tax Status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -253,7 +236,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 				</HStack>
 				<MetaDataForm />
 				<ModalFooter className="px-0">
-					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
+					<ModalClose>{t('Cancel')}</ModalClose>
 					<ModalAction loading={loading} onPress={onSave}>
 						{t('Save')}
 					</ModalAction>

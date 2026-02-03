@@ -25,7 +25,7 @@ export const WPUsers = ({ site }: WpUserProps) => {
 
 	return (
 		<VStack space="xs">
-			<Text className="text-sm">{t('Logged in users', { _tags: 'core' })}:</Text>
+			<Text className="text-sm">{t('Logged in users')}:</Text>
 			<HStack>
 				{wpCreds.map((wpCred) => (
 					<ErrorBoundary key={wpCred.uuid}>

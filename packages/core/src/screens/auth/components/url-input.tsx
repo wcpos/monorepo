@@ -27,7 +27,7 @@ export function UrlInput() {
 	 */
 	React.useEffect(() => {
 		if (error) {
-			siteLogger.error(t('{message}', { _tags: 'core', message: error || 'Error' }), {
+			siteLogger.error(error || t('Error'), {
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.INVALID_URL_FORMAT,
@@ -42,9 +42,7 @@ export function UrlInput() {
 	 */
 	return (
 		<VStack>
-			<Label nativeID="woo-store">
-				{t('Enter the URL of your WooCommerce store', { _tags: 'core' }) + ':'}
-			</Label>
+			<Label nativeID="woo-store">{t('Enter the URL of your WooCommerce store') + ':'}</Label>
 			<HStack>
 				<Input
 					aria-labelledby="woo-store"
@@ -62,7 +60,7 @@ export function UrlInput() {
 					autoCorrect={false}
 				/>
 				<Button onPress={() => onConnect(url)} disabled={isEmpty(url)} loading={loading}>
-					<ButtonText>{t('Connect', { _tags: 'core' })}</ButtonText>
+					<ButtonText>{t('Connect')}</ButtonText>
 				</Button>
 			</HStack>
 		</VStack>

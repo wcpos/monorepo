@@ -21,23 +21,23 @@ export const AddCartItemButtons = () => {
 	return (
 		<VStack className="gap-1 p-2">
 			{/* <Button variant="outline" onPress={() => router.push('(modals)/cart/add-misc-product')}>
-				<Text>{t('Add Miscellaneous Product', { _tags: 'core' })}</Text>
+				<Text>{t('Add Miscellaneous Product')}</Text>
 			</Button> */}
 			<HStack>
-				<Text className="flex-1">{t('Add Miscellaneous Product', { _tags: 'core' })}</Text>
-				<AddCartItemButton title={t('Add Miscellaneous Product', { _tags: 'core' })}>
+				<Text className="flex-1">{t('Add Miscellaneous Product')}</Text>
+				<AddCartItemButton title={t('Add Miscellaneous Product')}>
 					<AddMiscProduct />
 				</AddCartItemButton>
 			</HStack>
 			<HStack>
-				<Text className="flex-1">{t('Add Fee', { _tags: 'core' })}</Text>
-				<AddCartItemButton title={t('Add Fee', { _tags: 'core' })}>
+				<Text className="flex-1">{t('Add Fee')}</Text>
+				<AddCartItemButton title={t('Add Fee')}>
 					<AddFee />
 				</AddCartItemButton>
 			</HStack>
 			<HStack>
-				<Text className="flex-1">{t('Add Shipping', { _tags: 'core' })}</Text>
-				<AddCartItemButton title={t('Add Shipping', { _tags: 'core' })}>
+				<Text className="flex-1">{t('Add Shipping')}</Text>
+				<AddCartItemButton title={t('Add Shipping')}>
 					<AddShipping />
 				</AddCartItemButton>
 			</HStack>

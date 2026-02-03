@@ -119,27 +119,27 @@ export const Report = () => {
 			totalItemsSold: formatNumber(totalItemsSold),
 			averageOrderValue: formatCurrency(averageOrderValue),
 			t: {
-				reportGenerated: t('Report Generated', { _tags: 'core' }),
-				reportPeriodStart: t('Report Period Start', { _tags: 'core' }),
-				reportPeriodEnd: t('Report Period End', { _tags: 'core' }),
-				cashier: t('Cashier', { _tags: 'core' }),
-				salesSummary: t('Sales Summary', { _tags: 'core' }),
-				totalOrders: t('Total Orders', { _tags: 'core' }),
-				totalNetSales: t('Total Net Sales', { _tags: 'core' }),
-				totalTaxCollected: t('Total Tax Collected', { _tags: 'core' }),
-				totalSales: t('Total Sales', { _tags: 'core' }),
-				totalDiscounts: t('Total Discounts', { _tags: 'core' }),
-				paymentMethods: t('Payment Methods', { _tags: 'core' }),
-				unpaid: t('UNPAID', { _tags: 'core' }),
-				unknown: t('Unknown', { _tags: 'core' }),
-				taxes: t('Taxes', { _tags: 'core' }),
-				shipping: t('Shipping', { _tags: 'core' }),
-				cashierStoreTotals: t('Cashier/Store Totals', { _tags: 'core' }),
-				cashierId: t('Cashier ID', { _tags: 'core' }),
-				storeId: t('Store ID', { _tags: 'core' }),
-				additionalInfo: t('Additional Info', { _tags: 'core' }),
-				itemsSold: t('Items Sold', { _tags: 'core' }),
-				averageOrderValue: t('Average Order Value', { _tags: 'core' }),
+				reportGenerated: t('Report Generated'),
+				reportPeriodStart: t('Report Period Start'),
+				reportPeriodEnd: t('Report Period End'),
+				cashier: t('Cashier'),
+				salesSummary: t('Sales Summary'),
+				totalOrders: t('Total Orders'),
+				totalNetSales: t('Total Net Sales'),
+				totalTaxCollected: t('Total Tax Collected'),
+				totalSales: t('Total Sales'),
+				totalDiscounts: t('Total Discounts'),
+				paymentMethods: t('Payment Methods'),
+				unpaid: t('UNPAID'),
+				unknown: t('Unknown'),
+				taxes: t('Taxes'),
+				shipping: t('Shipping'),
+				cashierStoreTotals: t('Cashier/Store Totals'),
+				cashierId: t('Cashier ID'),
+				storeId: t('Store ID'),
+				additionalInfo: t('Additional Info'),
+				itemsSold: t('Items Sold'),
+				averageOrderValue: t('Average Order Value'),
 			},
 		});
 	}, [
@@ -179,18 +179,18 @@ export const Report = () => {
 			<Card className="flex-1">
 				<CardHeader className="bg-card-header p-2">
 					<HStack>
-						<Text className="text-lg">{t('Report', { _tags: 'core' })}</Text>
+						<Text className="text-lg">{t('Report')}</Text>
 						<Select
 							value={{
 								value: 'default',
-								label: t('Default (Offline)', { _tags: 'core' }),
+								label: t('Default (Offline)'),
 							}}
 						>
 							<SelectTrigger>
-								<SelectValue placeholder={t('Select report template', { _tags: 'core' })} />
+								<SelectValue placeholder={t('Select report template')} />
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem label={t('Default (Offline)', { _tags: 'core' })} value="default" />
+								<SelectItem label={t('Default (Offline)')} value="default" />
 							</SelectContent>
 						</Select>
 					</HStack>
@@ -204,7 +204,7 @@ export const Report = () => {
 				</CardContent>
 				<CardFooter className="border-border bg-footer justify-end border-t p-2">
 					<Button onPress={print} loading={isPrinting}>
-						<ButtonText>{t('Print', { _tags: 'core' })}</ButtonText>
+						<ButtonText>{t('Print')}</ButtonText>
 					</Button>
 				</CardFooter>
 			</Card>

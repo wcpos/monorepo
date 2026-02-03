@@ -40,7 +40,7 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 	 */
 	const label = React.useMemo(() => {
 		if (!isActive) {
-			return t('Date Range', { _tags: 'core' });
+			return t('Date Range');
 		}
 
 		// date_created_gmt in WC REST API is in UTC, but without the 'Z',
@@ -51,10 +51,10 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 		// check if to and from are the same day
 		if (isSameDay(from, to)) {
 			if (isToday(from)) {
-				return t('Today', { _tags: 'core' });
+				return t('Today');
 			}
 			if (isYesterday(from)) {
-				return t('Yesterday', { _tags: 'core' });
+				return t('Yesterday');
 			}
 		}
 

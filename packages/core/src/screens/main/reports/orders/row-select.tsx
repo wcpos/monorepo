@@ -26,9 +26,7 @@ export const TableRowSelect = ({ row, table }: CellContext<OrderDocument, boolea
 				</View>
 			</TooltipTrigger>
 			<TooltipContent side="right">
-				<Text>
-					{row.getIsSelected() ? t('Exclude', { _tags: 'core' }) : t('Include', { _tags: 'core' })}
-				</Text>
+				<Text>{row.getIsSelected() ? t('Exclude') : t('Include')}</Text>
 			</TooltipContent>
 		</Tooltip>
 	);

@@ -155,7 +155,7 @@ export const Orders = () => {
 			<Card className="flex-1">
 				<CardHeader className="bg-card-header p-2">
 					<HStack className="justify-end">
-						<UISettingsDialog title={t('Orders Settings', { _tags: 'core' })}>
+						<UISettingsDialog title={t('Orders Settings')}>
 							<UISettingsForm />
 						</UISettingsDialog>
 					</HStack>
@@ -168,7 +168,7 @@ export const Orders = () => {
 								query={query}
 								renderCell={renderCell}
 								renderHeader={renderHeader}
-								noDataMessage={t('No orders found', { _tags: 'core' })}
+								noDataMessage={t('No orders found')}
 								estimatedItemSize={100}
 								tableState={{ rowSelection: selectionState }}
 								tableConfig={tableConfig}

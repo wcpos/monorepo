@@ -33,27 +33,25 @@ export const SaveButton = () => {
 				 * TODO; move this generic sanckbar to the pushDocument hook
 				 */
 				if (isRxDocument(savedDoc)) {
-					cartLogger.success(
-						t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
-						{
-							showToast: true,
-							saveToDb: true,
-							context: {
-								orderId: savedDoc.id,
-								orderNumber: savedDoc.number,
-							},
-						}
-					);
+					cartLogger.success(t('Order #{number} saved', { number: savedDoc.number }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							orderId: savedDoc.id,
+							orderNumber: savedDoc.number,
+						},
+					});
 				}
 			});
 		} catch (error) {
-			cartLogger.error(t('{message}', { _tags: 'core', message: error.message || 'Error' }), {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			cartLogger.error(t('Failed to save order'), {
 				showToast: true,
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.TRANSACTION_FAILED,
 					orderId: currentOrder.id,
-					error: error instanceof Error ? error.message : String(error),
+					error: errorMessage,
 				},
 			});
 		} finally {
@@ -67,7 +65,7 @@ export const SaveButton = () => {
 	return (
 		<View>
 			<Button variant="outline" onPress={handleSave} loading={loading} disabled={loading}>
-				{t('Save to Server', { _tags: 'core' })}
+				{t('Save to Server')}
 			</Button>
 		</View>
 	);

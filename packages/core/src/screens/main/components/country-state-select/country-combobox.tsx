@@ -54,10 +54,10 @@ const CountryComboboxBase = ({
 	return (
 		<Combobox value={{ ...value, label }} {...props}>
 			<ComboboxTrigger disabled={disabled}>
-				<ComboboxValue placeholder={t('Select Country', { _tags: 'core' })} />
+				<ComboboxValue placeholder={t('Select Country')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxInput placeholder={t('Search Countries', { _tags: 'core' })} />
+				<ComboboxInput placeholder={t('Search Countries')} />
 				<ComboboxList
 					data={options}
 					renderItem={({ item }) => (
@@ -66,9 +66,7 @@ const CountryComboboxBase = ({
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
-					ListEmptyComponent={
-						<ComboboxEmpty>{t('No country found', { _tags: 'core' })}</ComboboxEmpty>
-					}
+					ListEmptyComponent={<ComboboxEmpty>{t('No country found')}</ComboboxEmpty>}
 				/>
 			</ComboboxContent>
 		</Combobox>

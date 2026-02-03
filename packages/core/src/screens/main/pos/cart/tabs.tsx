@@ -52,7 +52,7 @@ export const OpenOrderTabs = () => {
 							<Icon name="plus" />
 						</TooltipTrigger>
 						<TooltipContent>
-							<Text>{t('Open new order', { _tags: 'core' })}</Text>
+							<Text>{t('Open new order')}</Text>
 						</TooltipContent>
 					</Tooltip>
 				</TabsTrigger>

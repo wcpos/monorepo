@@ -120,7 +120,7 @@ export const NumberInput = ({
 						formatDisplay={(value) => formatDisplay(value)}
 					/>
 					<HStack className="justify-end">
-						<Button onPress={handleSubmit}>{t('Done', { _tags: 'core' })}</Button>
+						<Button onPress={handleSubmit}>{t('Done')}</Button>
 					</HStack>
 				</VStack>
 			</PopoverContent>

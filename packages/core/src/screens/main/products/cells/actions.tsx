@@ -71,7 +71,7 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 						}}
 					>
 						<Icon name="penToSquare" />
-						<Text>{t('Edit', { _tags: 'core' })}</Text>
+						<Text>{t('Edit')}</Text>
 					</DropdownMenuItem>
 					{product.id && (
 						<DropdownMenuItem
@@ -82,7 +82,7 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 							}}
 						>
 							<Icon name="arrowRotateRight" />
-							<Text>{t('Sync', { _tags: 'core' })}</Text>
+							<Text>{t('Sync')}</Text>
 						</DropdownMenuItem>
 					)}
 					<DropdownMenuSeparator />
@@ -91,16 +91,14 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 							name="trash"
 							className="fill-destructive web:group-focus:fill-accent-foreground"
 						/>
-						<Text>{t('Delete', { _tags: 'core' })}</Text>
+						<Text>{t('Delete')}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>
-							{t('Delete {product}', { _tags: 'core', product: product.name })}
-						</AlertDialogTitle>
+						<AlertDialogTitle>{t('Delete {product}', { product: product.name })}</AlertDialogTitle>
 						<AlertDialogDescription>
 							{t(
 								'Are you sure you want to delete this product? Deleted products will be placed in the Trash on the server.'
@@ -108,9 +106,9 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
 						<AlertDialogAction variant="destructive" onPress={handleDelete}>
-							{t('Delete', { _tags: 'core' })}
+							{t('Delete')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

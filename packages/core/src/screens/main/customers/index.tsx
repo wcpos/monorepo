@@ -80,7 +80,7 @@ export function CustomersScreen() {
 					<HStack className="p-2">
 						<QuerySearchInput
 							query={query}
-							placeholder={t('Search Customers', { _tags: 'core' })}
+							placeholder={t('Search Customers')}
 							className="flex-1"
 						/>
 						<Tooltip>
@@ -91,10 +91,10 @@ export function CustomersScreen() {
 								/>
 							</TooltipTrigger>
 							<TooltipContent>
-								<Text>{t('Add new customer', { _tags: 'core' })}</Text>
+								<Text>{t('Add new customer')}</Text>
 							</TooltipContent>
 						</Tooltip>
-						<UISettingsDialog title={t('Customer Settings', { _tags: 'core' })}>
+						<UISettingsDialog title={t('Customer Settings')}>
 							<UISettingsForm />
 						</UISettingsDialog>
 					</HStack>
@@ -106,7 +106,7 @@ export function CustomersScreen() {
 								id="customers"
 								query={query}
 								renderCell={renderCell}
-								noDataMessage={t('No customers found', { _tags: 'core' })}
+								noDataMessage={t('No customers found')}
 								estimatedItemSize={100}
 							/>
 						</Suspense>

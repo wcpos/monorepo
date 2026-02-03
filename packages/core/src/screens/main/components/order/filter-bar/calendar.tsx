@@ -46,18 +46,18 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 	const dateRanges = React.useMemo(() => {
 		return [
 			{
-				label: t('Today', { _tags: 'core' }),
+				label: t('Today'),
 				range: { from: startOfDay(today), to: endOfDay(today) },
 				action: () => setDate({ from: startOfDay(today), to: endOfDay(today) }),
 			},
 			{
-				label: t('Yesterday', { _tags: 'core' }),
+				label: t('Yesterday'),
 				range: { from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) },
 				action: () =>
 					setDate({ from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) }),
 			},
 			{
-				label: t('This Week', { _tags: 'core' }),
+				label: t('This Week'),
 				range: {
 					from: startOfWeek(today, { weekStartsOn: 1 }),
 					to: endOfWeek(today, { weekStartsOn: 1 }),
@@ -69,7 +69,7 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 					}),
 			},
 			{
-				label: t('Last Week', { _tags: 'core' }),
+				label: t('Last Week'),
 				range: {
 					from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
 					to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
@@ -81,7 +81,7 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 					}),
 			},
 			{
-				label: t('This Month', { _tags: 'core' }),
+				label: t('This Month'),
 				range: {
 					from: startOfMonth(today),
 					to: endOfMonth(today),
@@ -89,7 +89,7 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 				action: () => setDate({ from: startOfMonth(today), to: endOfMonth(today) }),
 			},
 			{
-				label: t('Last Month', { _tags: 'core' }),
+				label: t('Last Month'),
 				range: {
 					from: startOfMonth(subMonths(today, 1)),
 					to: endOfMonth(subMonths(today, 1)),
@@ -139,7 +139,7 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 			</HStack>
 			<HStack className="justify-end">
 				<Button onPress={() => onSelect(date)}>
-					<ButtonText>{t('Done', { _tags: 'core' })}</ButtonText>
+					<ButtonText>{t('Done')}</ButtonText>
 				</Button>
 			</HStack>
 		</VStack>

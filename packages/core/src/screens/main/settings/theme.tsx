@@ -38,37 +38,37 @@ export const ThemeSettings = () => {
 					name: 'system',
 					labelKey: 'System',
 					icon: 'circleHalfStroke',
-					descriptionKey: t('Follow your device settings', { _tags: 'core' }),
+					descriptionKey: 'Follow your device settings',
 				},
 				{
 					name: 'light',
 					labelKey: 'Light',
 					icon: 'sunBright',
-					descriptionKey: t('Clean and bright', { _tags: 'core' }),
+					descriptionKey: 'Clean and bright',
 				},
 				{
 					name: 'dark',
 					labelKey: 'Dark',
 					icon: 'moon',
-					descriptionKey: t('Easy on the eyes', { _tags: 'core' }),
+					descriptionKey: 'Easy on the eyes',
 				},
 				{
 					name: 'ocean',
 					labelKey: 'Ocean',
 					icon: 'water',
-					descriptionKey: t('Cool blues and teals', { _tags: 'core' }),
+					descriptionKey: 'Cool blues and teals',
 				},
 				{
 					name: 'sunset',
 					labelKey: 'Sunset',
 					icon: 'sunHaze',
-					descriptionKey: t('Warm oranges and purples', { _tags: 'core' }),
+					descriptionKey: 'Warm oranges and purples',
 				},
 				{
 					name: 'monochrome',
 					labelKey: 'Monochrome',
 					icon: 'circleHalf',
-					descriptionKey: t('High contrast grayscale', { _tags: 'core' }),
+					descriptionKey: 'High contrast grayscale',
 				},
 			],
 			[t]
@@ -100,11 +100,9 @@ export const ThemeSettings = () => {
 		<VStack className="gap-6">
 			{/* Appearance Section */}
 			<VStack className="gap-3">
-				<Label className="text-base font-medium">{t('Appearance', { _tags: 'core' })}</Label>
+				<Label className="text-base font-medium">{t('Appearance')}</Label>
 				<Text className="text-muted-foreground text-sm">
-					{t('Choose a theme for the app. Custom themes provide different color schemes.', {
-						_tags: 'core',
-					})}
+					{t('Choose a theme for the app. Custom themes provide different color schemes.')}
 				</Text>
 
 				<VStack className="gap-3 pt-2">
@@ -130,10 +128,10 @@ export const ThemeSettings = () => {
 										activeTheme === option.name ? 'text-primary' : 'text-foreground'
 									}`}
 								>
-									{t(option.labelKey, { _tags: 'core' })}
+									{t(option.labelKey)}
 								</Text>
 								<Text className="text-muted-foreground text-center text-xs" numberOfLines={2}>
-									{t(option.descriptionKey, { _tags: 'core' })}
+									{t(option.descriptionKey)}
 								</Text>
 							</Pressable>
 						))}
@@ -160,10 +158,10 @@ export const ThemeSettings = () => {
 										activeTheme === option.name ? 'text-primary' : 'text-foreground'
 									}`}
 								>
-									{t(option.labelKey, { _tags: 'core' })}
+									{t(option.labelKey)}
 								</Text>
 								<Text className="text-muted-foreground text-center text-xs" numberOfLines={2}>
-									{t(option.descriptionKey, { _tags: 'core' })}
+									{t(option.descriptionKey)}
 								</Text>
 							</Pressable>
 						))}
@@ -172,15 +170,13 @@ export const ThemeSettings = () => {
 
 				{/* Current theme status */}
 				<Text className="text-muted-foreground text-xs">
-					{hasAdaptiveThemes
-						? t('Following system theme', { _tags: 'core' })
-						: t('Current theme: {theme}', { _tags: 'core', theme })}
+					{hasAdaptiveThemes ? t('Following system theme') : t('Current theme: {theme}', { theme })}
 				</Text>
 			</VStack>
 
 			{/* Footer */}
 			<ModalFooter className="px-0">
-				<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
+				<ModalClose>{t('Close')}</ModalClose>
 			</ModalFooter>
 		</VStack>
 	);

@@ -14,7 +14,7 @@ const EmptyTableRow = ({ message }: EmptyTableRowProps) => {
 
 	return (
 		<View className="p-2">
-			<Text>{message || t('No results found', { _tags: 'core' })}</Text>
+			<Text>{message || t('No results found')}</Text>
 		</View>
 	);
 };

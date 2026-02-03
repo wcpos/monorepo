@@ -20,9 +20,5 @@ export const CartTabTitle = ({ order }: Props) => {
 	const { format } = useCurrencyFormat({ currencySymbol });
 	const t = useT();
 
-	return (
-		<Text>
-			{t('Cart {order_total}', { order_total: format(parseFloat(total) || 0), _tags: 'core' })}
-		</Text>
-	);
+	return <Text>{t('Cart {order_total}', { order_total: format(parseFloat(total) || 0) })}</Text>;
 };

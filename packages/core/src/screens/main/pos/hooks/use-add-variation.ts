@@ -75,7 +75,7 @@ export const useAddVariation = () => {
 
 			// returned success should be the updated order
 			if (success) {
-				cartLogger.success(t('{name} added to cart', { _tags: 'core', name: parent.name }), {
+				cartLogger.success(t('{name} added to cart', { name: parent.name }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -86,7 +86,7 @@ export const useAddVariation = () => {
 					},
 				});
 			} else {
-				cartLogger.error(t('Error adding {name} to cart', { _tags: 'core', name: parent.name }), {
+				cartLogger.error(t('Error adding {name} to cart', { name: parent.name }), {
 					showToast: true,
 					saveToDb: true,
 					context: {

@@ -27,10 +27,10 @@ export const CurrencyPositionSelect = ({
 	 */
 	const options = React.useMemo(() => {
 		return [
-			{ value: 'left', label: t('Left', { _tags: 'core' }) },
-			{ value: 'right', label: t('Right', { _tags: 'core' }) },
-			{ value: 'left_space', label: t('Left with space', { _tags: 'core' }) },
-			{ value: 'right_space', label: t('Right with space', { _tags: 'core' }) },
+			{ value: 'left', label: t('Left') },
+			{ value: 'right', label: t('Right') },
+			{ value: 'left_space', label: t('Left with space') },
+			{ value: 'right_space', label: t('Right with space') },
 		];
 	}, [t]);
 
@@ -49,7 +49,7 @@ export const CurrencyPositionSelect = ({
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
 				}}
 			>
-				<SelectValue placeholder={t('Select a currency position', { _tags: 'core' })} />
+				<SelectValue placeholder={t('Select a currency position')} />
 			</SelectTrigger>
 			<SelectContent style={{ width: selectTriggerWidth }}>
 				<SelectGroup>
