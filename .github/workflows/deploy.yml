@@ -267,11 +267,21 @@ jobs:
           name: playwright-report-${{ github.sha }}
           path: test-artifacts
 
+      - name: 📥 Download all screenshot artifacts
+        if: needs.e2e.result == 'failure'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: playwright-screenshots-*
+          path: all-screenshots
+          merge-multiple: true
+
       - name: 💬 Comment on PR
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             const deployUrl = '${{ needs.deploy.outputs.deployment_url }}';
             const isProduction = '${{ needs.deploy.outputs.is_production }}' === 'true';
             const e2eResult = '${{ needs.e2e.result }}';
@@ -293,31 +303,144 @@ jobs:
                   const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
                   const failures = [];
 
-                  // Extract failed test names
-                  for (const suite of results.suites || []) {
-                    for (const innerSuite of suite.suites || []) {
-                      for (const spec of innerSuite.specs || []) {
+                  // Recursively find all failed specs
+                  function findFailures(suites, filePath = '') {
+                    for (const suite of suites || []) {
+                      const currentPath = filePath || suite.file || '';
+
+                      // Check specs in this suite
+                      for (const spec of suite.specs || []) {
                         if (!spec.ok) {
-                          const errorMsg = spec.tests?.[0]?.results?.[0]?.error?.message?.split('\n')[0] || 'Unknown error';
-                          failures.push(`- \`${spec.title}\`: ${errorMsg}`);
+                          const test = spec.tests?.[0];
+                          const result = test?.results?.[0];
+                          const error = result?.error;
+
+                          // Get the project name (free/pro, authenticated/unauthenticated)
+                          const projectName = test?.projectName || 'unknown';
+
+                          // Extract meaningful error info
+                          let errorSummary = 'Unknown error';
+                          if (error?.message) {
+                            // Get the assertion failure line
+                            const lines = error.message.split('\n');
+                            const assertionLine = lines.find(l =>
+                              l.includes('expect(') ||
+                              l.includes('Expected:') ||
+                              l.includes('Received:') ||
+                              l.includes('Locator:') ||
+                              l.includes('Timeout')
+                            ) || lines[0];
+                            errorSummary = assertionLine.trim().substring(0, 150);
+                          }
+
+                          // Get the file name without full path
+                          const fileName = currentPath.split('/').pop() || 'unknown';
+
+                          failures.push({
+                            title: spec.title,
+                            file: fileName,
+                            project: projectName,
+                            error: errorSummary,
+                            fullError: error?.message?.substring(0, 500) || ''
+                          });
                         }
+                      }
+
+                      // Recurse into nested suites
+                      if (suite.suites) {
+                        findFailures(suite.suites, currentPath);
                       }
                     }
                   }
 
+                  findFailures(results.suites);
+
                   if (failures.length > 0) {
-                    e2eDetails = `\n\n### ❌ Failed Tests\n${failures.slice(0, 5).join('\n')}`;
-                    if (failures.length > 5) {
-                      e2eDetails += `\n- _...and ${failures.length - 5} more_`;
+                    // Group failures by file
+                    const byFile = {};
+                    for (const f of failures) {
+                      if (!byFile[f.file]) byFile[f.file] = [];
+                      byFile[f.file].push(f);
                     }
+
+                    e2eDetails = `\n\n### ❌ Failed Tests (${failures.length} total)\n\n`;
+
+                    // Show first 8 failures with details
+                    let shown = 0;
+                    for (const [file, fileFailures] of Object.entries(byFile)) {
+                      if (shown >= 8) break;
+
+                      e2eDetails += `**${file}**\n`;
+                      for (const f of fileFailures.slice(0, 3)) {
+                        if (shown >= 8) break;
+                        e2eDetails += `- \`[${f.project}]\` ${f.title}\n`;
+                        e2eDetails += `  > ${f.error}\n`;
+                        shown++;
+                      }
+                      if (fileFailures.length > 3) {
+                        e2eDetails += `  _...and ${fileFailures.length - 3} more in this file_\n`;
+                      }
+                      e2eDetails += '\n';
+                    }
+
+                    if (failures.length > 8) {
+                      e2eDetails += `\n_...and ${failures.length - 8} more failures_\n`;
+                    }
+
+                    // Add a collapsible section with full error details
+                    e2eDetails += `\n<details>\n<summary>📋 Full error details (first 5)</summary>\n\n`;
+                    for (const f of failures.slice(0, 5)) {
+                      e2eDetails += `#### ${f.file} - ${f.title}\n`;
+                      e2eDetails += `**Project:** \`${f.project}\`\n\n`;
+                      e2eDetails += '```\n' + (f.fullError || 'No error details') + '\n```\n\n';
+                    }
+                    e2eDetails += `</details>\n`;
                   }
                 }
               } catch (e) {
                 console.log('Could not parse test results:', e.message);
+                e2eDetails += `\n\n_Could not parse test results: ${e.message}_\n`;
               }
 
-              e2eDetails += `\n\n📊 [View detailed test report](https://github.com/${{ github.repository }}/actions/runs/${runId})`;
-              e2eDetails += `\n📸 [Download failure screenshots](https://github.com/${{ github.repository }}/actions/runs/${runId}#artifacts)`;
+              // List available screenshots
+              try {
+                if (fs.existsSync('all-screenshots')) {
+                  const screenshots = [];
+                  function findScreenshots(dir) {
+                    const items = fs.readdirSync(dir);
+                    for (const item of items) {
+                      const fullPath = path.join(dir, item);
+                      if (fs.statSync(fullPath).isDirectory()) {
+                        findScreenshots(fullPath);
+                      } else if (item.endsWith('.png')) {
+                        screenshots.push(fullPath);
+                      }
+                    }
+                  }
+                  findScreenshots('all-screenshots');
+
+                  if (screenshots.length > 0) {
+                    e2eDetails += `\n### 📸 Screenshots (${screenshots.length} captured)\n`;
+                    e2eDetails += `Screenshots are available in the [workflow artifacts](https://github.com/${{ github.repository }}/actions/runs/${runId}#artifacts).\n\n`;
+                    e2eDetails += `<details>\n<summary>Screenshot files</summary>\n\n`;
+                    for (const s of screenshots.slice(0, 20)) {
+                      const name = s.replace('all-screenshots/', '');
+                      e2eDetails += `- \`${name}\`\n`;
+                    }
+                    if (screenshots.length > 20) {
+                      e2eDetails += `- _...and ${screenshots.length - 20} more_\n`;
+                    }
+                    e2eDetails += `</details>\n`;
+                  }
+                }
+              } catch (e) {
+                console.log('Could not list screenshots:', e.message);
+              }
+
+              e2eDetails += `\n### 🔗 Debug Links\n`;
+              e2eDetails += `- 📊 [View HTML test report](https://github.com/${{ github.repository }}/actions/runs/${runId}) (download \`playwright-report-*\` artifact)\n`;
+              e2eDetails += `- 📸 [Download screenshots](https://github.com/${{ github.repository }}/actions/runs/${runId}#artifacts)\n`;
+              e2eDetails += `- 🎬 Videos are included in screenshot artifacts for failed tests\n`;
             } else if (e2eResult === 'skipped') {
               e2eStatus = '⏭️ Skipped';
             } else if (e2eResult === 'cancelled') {
