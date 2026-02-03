@@ -1,6 +1,13 @@
 import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
+/**
+ * NOTE: Playwright requires object destructuring for the first argument in test callbacks.
+ * Use `async ({}, testInfo) =>` NOT `async (_, testInfo) =>`.
+ * Biome's noEmptyPattern rule doesn't apply here - Playwright enforces this syntax.
+ * CodeRabbit incorrectly suggested using `_` which breaks all tests.
+ */
+
 const E2E_USERNAME = process.env.E2E_USERNAME || 'demo';
 const E2E_PASSWORD = process.env.E2E_PASSWORD || 'demo';
 

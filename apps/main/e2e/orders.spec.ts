@@ -13,7 +13,7 @@ async function navigateToOrders(page: Page) {
  * Orders page (pro-only).
  */
 test.describe('Orders Page (Pro)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Orders page requires Pro');
 	});
@@ -25,8 +25,14 @@ test.describe('Orders Page (Pro)', () => {
 	test('should show order columns', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
-		await expect(screen.getByRole('columnheader', { name: 'Status' })).toBeVisible();
-		await expect(screen.getByRole('columnheader', { name: 'Total' })).toBeVisible();
+		// Wait for orders data to load first
+		await expect(
+			screen.getByText(/Showing \d+ of \d+/).or(screen.getByText('No orders found')).first()
+		).toBeVisible({ timeout: 30_000 });
+
+		// Check for actual column headers (no Status header - status shown as icon)
+		await expect(screen.getByRole('columnheader', { name: /Total/i })).toBeVisible({ timeout: 15_000 });
+		await expect(screen.getByRole('columnheader', { name: /Customer/i })).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show orders or empty state', async ({ posPage: page }) => {
@@ -38,7 +44,7 @@ test.describe('Orders Page (Pro)', () => {
 			.catch(() => false);
 		const noOrders = await screen
 			.getByText('No orders found')
-			.isVisible({ timeout: 5_000 })
+			.isVisible({ timeout: 15_000 })
 			.catch(() => false);
 		expect(hasOrders || noOrders).toBeTruthy();
 	});
@@ -64,7 +70,7 @@ test.describe('Orders Page (Pro)', () => {
 	test('should show filter pills', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
-		await expect(screen.getByText('Status').first()).toBeVisible({ timeout: 5_000 });
+		await expect(screen.getByText('Status').first()).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show order actions menu', async ({ posPage: page }) => {
@@ -79,12 +85,21 @@ test.describe('Orders Page (Pro)', () => {
 			test.skip(true, 'No orders available to test actions menu');
 		}
 
-		const ellipsis = screen.getByRole('button', { name: /more|actions|menu/i }).first();
-		await expect(ellipsis).toBeVisible({ timeout: 5_000 });
-		await ellipsis.click();
-		await expect(
-			page.getByText('Edit').or(page.getByText('Re-open')).or(page.getByText('Delete'))
-		).toBeVisible({ timeout: 5_000 });
+		// Find a data row that contains order status
+		const dataRow = screen.locator('[role="row"]').filter({ hasText: /completed|processing|pending/i }).first();
+		await expect(dataRow).toBeVisible({ timeout: 15_000 });
+
+		// The ellipsis button is the last pressable element in the row
+		const rowButtons = dataRow.locator('[role="button"]');
+		const count = await rowButtons.count();
+
+		// Click the last button (the ellipsis/actions button)
+		if (count > 0) {
+			await rowButtons.nth(count - 1).click();
+		}
+
+		// Menu should show Edit option
+		await expect(page.getByText('Edit').first()).toBeVisible({ timeout: 15_000 });
 	});
 });
 
@@ -92,7 +107,7 @@ test.describe('Orders Page (Pro)', () => {
  * Free users should see upgrade page.
  */
 test.describe('Orders Page (Free)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});

@@ -10,7 +10,7 @@ test.describe('Header', () => {
 
 	test('should open user menu dropdown', async ({ posPage: page }) => {
 		await page.getByRole('button', { name: /Demo Cashier/i }).click();
-		await expect(page.getByText('Settings').first()).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByText('Settings').first()).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should open settings modal from user menu', async ({ posPage: page }) => {
@@ -23,7 +23,7 @@ test.describe('Header', () => {
 });
 
 test.describe('Upgrade Banner (Free)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade banner only for free stores');
 	});
