@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import i18next from 'i18next';
+import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next, useTranslation } from 'react-i18next';
 import { useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
@@ -61,7 +61,7 @@ export const TranslationProvider = ({ children }: { children: React.ReactNode })
 	const wcposVersion = useObservableEagerState(site?.wcpos_version$ ?? of(''));
 
 	const i18nInstance = React.useMemo(() => {
-		const instance = i18next.createInstance();
+		const instance = createInstance();
 		instance
 			.use(initReactI18next)
 			.use(RxDBBackend)
@@ -83,7 +83,7 @@ export const TranslationProvider = ({ children }: { children: React.ReactNode })
 				},
 			});
 		return instance;
-	}, [translationsState, wcposVersion]);
+	}, [locale, translationsState, wcposVersion]);
 
 	/**
 	 * When the WCPOS version becomes available (fetched via useSiteInfo),
@@ -93,7 +93,7 @@ export const TranslationProvider = ({ children }: { children: React.ReactNode })
 		if (wcposVersion && locale) {
 			i18nInstance.reloadResources(locale, 'core');
 		}
-	}, [wcposVersion, i18nInstance]);
+	}, [wcposVersion, locale, i18nInstance]);
 
 	/**
 	 * Handle locale changes.
