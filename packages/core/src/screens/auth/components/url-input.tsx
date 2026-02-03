@@ -27,7 +27,7 @@ export function UrlInput() {
 	 */
 	React.useEffect(() => {
 		if (error) {
-			siteLogger.error(t('{message}', { message: error || 'Error' }), {
+			siteLogger.error(error || t('Error'), {
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.INVALID_URL_FORMAT,

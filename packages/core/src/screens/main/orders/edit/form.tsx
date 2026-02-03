@@ -141,13 +141,14 @@ export const EditOrderForm = ({ order }: Props) => {
 					}
 				});
 			} catch (error) {
-				mutationLogger.error(t('{message}', { message: error.message || 'Error' }), {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				mutationLogger.error(t('Failed to save order'), {
 					showToast: true,
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						orderId: order.id,
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMessage,
 					},
 				});
 			} finally {
@@ -206,7 +207,7 @@ export const EditOrderForm = ({ order }: Props) => {
 					context: {
 						errorCode: ERROR_CODES.RECORD_NOT_FOUND,
 						customerId,
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMessage,
 					},
 				});
 			}

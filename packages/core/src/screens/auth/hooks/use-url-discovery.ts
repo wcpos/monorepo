@@ -134,8 +134,9 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				setStatus('success');
 				discoveryLogger.debug(`WordPress API URL discovered: ${discoveredUrl}`);
 				return discoveredUrl;
-			} catch {
-				const errorMessage = t('Failed to discover WordPress API');
+			} catch (err) {
+				const errorMessage =
+					err instanceof Error ? err.message : t('Failed to discover WordPress API');
 				setError(errorMessage);
 				setStatus('error');
 				return null;

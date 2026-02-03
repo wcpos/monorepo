@@ -56,12 +56,13 @@ export const AddCustomerScreen = () => {
 					});
 				}
 			} catch (error) {
-				mutationLogger.error(t('{message}', { message: error.message || 'Error' }), {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				mutationLogger.error(t('Failed to save customer'), {
 					showToast: true,
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.TRANSACTION_FAILED,
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMessage,
 					},
 				});
 			} finally {

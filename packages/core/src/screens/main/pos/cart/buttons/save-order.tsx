@@ -44,13 +44,14 @@ export const SaveButton = () => {
 				}
 			});
 		} catch (error) {
-			cartLogger.error(t('{message}', { message: error.message || 'Error' }), {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			cartLogger.error(t('Failed to save order'), {
 				showToast: true,
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.TRANSACTION_FAILED,
 					orderId: currentOrder.id,
-					error: error instanceof Error ? error.message : String(error),
+					error: errorMessage,
 				},
 			});
 		} finally {

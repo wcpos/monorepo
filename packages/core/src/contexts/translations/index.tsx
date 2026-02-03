@@ -81,7 +81,7 @@ export const TranslationProvider = ({ children }: { children: React.ReactNode })
 				},
 			});
 		return instance;
-	}, [translationsState]);
+	}, [translationsState, wcposVersion]);
 
 	/**
 	 * When the WCPOS version becomes available (fetched via useSiteInfo),

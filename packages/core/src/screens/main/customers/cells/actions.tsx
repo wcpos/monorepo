@@ -118,9 +118,7 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 							<VStack>
 								<Text className="text-destructive">
 									{t(
-										'Are you sure you want to delete this user? Deleting a user is permanent, there is no Trash for WordPress users.',
-										{}
-									)}
+										'Are you sure you want to delete this user? Deleting a user is permanent, there is no Trash for WordPress users.')}
 								</Text>
 								<HStack>
 									<Checkbox aria-labelledby="confirm" onCheckedChange={setForce} checked={force} />

@@ -11,6 +11,13 @@ import { useT } from '../../../contexts/translations';
 
 const discoveryLogger = getLogger(['wcpos', 'auth', 'discovery']);
 
+class ApiDiscoveryError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'ApiDiscoveryError';
+	}
+}
+
 export type ApiDiscoveryStatus = 'idle' | 'discovering' | 'success' | 'error';
 
 interface WpJsonResponse {
@@ -94,7 +101,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 						showToast: true,
 						context: { errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT, wpApiUrl },
 					});
-					throw new Error(t('Bad API response'));
+					throw new ApiDiscoveryError(t('Bad API response'));
 				}
 
 				const namespaces = get(data, 'namespaces');
@@ -106,7 +113,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 							wpApiUrl,
 						},
 					});
-					throw new Error(t('WordPress API not found'));
+					throw new ApiDiscoveryError(t('WordPress API not found'));
 				}
 
 				discoveryLogger.debug(
@@ -115,10 +122,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 				return data;
 			} catch (error) {
 				// If it's already one of our logged errors, re-throw
-				if (
-					error.message.includes('Bad API response') ||
-					error.message.includes('WordPress API not found')
-				) {
+				if (error instanceof ApiDiscoveryError) {
 					throw error;
 				}
 
@@ -210,7 +214,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					context: { errorCode: ERROR_CODES.INVALID_URL_FORMAT },
 				});
 				throw new Error(
-					t('WCPOS login URL is invalid. Please ensure WCPOS plugin is properly configured', {})
+					t('WCPOS login URL is invalid. Please ensure WCPOS plugin is properly configured')
 				);
 			}
 

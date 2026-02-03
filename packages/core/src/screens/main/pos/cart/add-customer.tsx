@@ -90,12 +90,13 @@ export const AddNewCustomer = () => {
 					}
 				}
 			} catch (error) {
-				cartLogger.error(t('{message}', { message: error.message || 'Error' }), {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				cartLogger.error(t('Failed to save customer'), {
 					showToast: true,
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.TRANSACTION_FAILED,
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMessage,
 					},
 				});
 			} finally {

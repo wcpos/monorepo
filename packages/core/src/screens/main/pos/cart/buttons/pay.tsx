@@ -55,12 +55,13 @@ export const PayButton = () => {
 				}
 			});
 		} catch (error) {
-			orderLogger.error(t('{message}', { message: error.message || 'Error' }), {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			orderLogger.error(t('Checkout failed'), {
 				showToast: true,
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					error: error instanceof Error ? error.message : String(error),
+					error: errorMessage,
 				},
 			});
 		} finally {

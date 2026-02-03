@@ -38,37 +38,37 @@ export const ThemeSettings = () => {
 					name: 'system',
 					labelKey: 'System',
 					icon: 'circleHalfStroke',
-					descriptionKey: t('Follow your device settings'),
+					descriptionKey: 'Follow your device settings',
 				},
 				{
 					name: 'light',
 					labelKey: 'Light',
 					icon: 'sunBright',
-					descriptionKey: t('Clean and bright'),
+					descriptionKey: 'Clean and bright',
 				},
 				{
 					name: 'dark',
 					labelKey: 'Dark',
 					icon: 'moon',
-					descriptionKey: t('Easy on the eyes'),
+					descriptionKey: 'Easy on the eyes',
 				},
 				{
 					name: 'ocean',
 					labelKey: 'Ocean',
 					icon: 'water',
-					descriptionKey: t('Cool blues and teals'),
+					descriptionKey: 'Cool blues and teals',
 				},
 				{
 					name: 'sunset',
 					labelKey: 'Sunset',
 					icon: 'sunHaze',
-					descriptionKey: t('Warm oranges and purples'),
+					descriptionKey: 'Warm oranges and purples',
 				},
 				{
 					name: 'monochrome',
 					labelKey: 'Monochrome',
 					icon: 'circleHalf',
-					descriptionKey: t('High contrast grayscale'),
+					descriptionKey: 'High contrast grayscale',
 				},
 			],
 			[t]
@@ -102,7 +102,7 @@ export const ThemeSettings = () => {
 			<VStack className="gap-3">
 				<Label className="text-base font-medium">{t('Appearance')}</Label>
 				<Text className="text-muted-foreground text-sm">
-					{t('Choose a theme for the app. Custom themes provide different color schemes.', {})}
+					{t('Choose a theme for the app. Custom themes provide different color schemes.')}
 				</Text>
 
 				<VStack className="gap-3 pt-2">

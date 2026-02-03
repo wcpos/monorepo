@@ -60,7 +60,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 	const { localPatch } = useLocalMutation();
 
 	if (!variation) {
-		throw new Error(t('Variation not found'));
+		throw new Error('Variation not found');
 	}
 
 	/**
@@ -111,13 +111,14 @@ export const EditVariationForm = ({ variation }: Props) => {
 					}
 				});
 			} catch (error) {
-				mutationLogger.error(t('{message}', { message: error.message || 'Error' }), {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				mutationLogger.error(t('Failed to save variation'), {
 					showToast: true,
 					saveToDb: true,
 					context: {
 						errorCode: ERROR_CODES.TRANSACTION_FAILED,
 						variationId: variation.id,
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMessage,
 					},
 				});
 			} finally {

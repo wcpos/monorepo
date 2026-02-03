@@ -127,7 +127,7 @@ export const WpUser = ({ site, wpUser }: Props) => {
 						<AlertDialogTitle>{t('Remove {name}', { name: wpUser.display_name })}</AlertDialogTitle>
 						<AlertDialogDescription>
 							{t(
-								'Are you sure you want to remove this user? Removing a user from the POS will not effect any data on the server.'
+								'Are you sure you want to remove this user? Removing a user from the POS will not affect any data on the server.'
 							)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>

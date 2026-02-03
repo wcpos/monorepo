@@ -27,8 +27,7 @@ export const PageUpgrade = ({
 					imageURL: 'https://wcpos.com/products-upgrade.png',
 					title: t('Upgrade to Pro'),
 					description: t(
-						'Adjust product prices and quantities by upgrading to WooCommerce POS Pro',
-						{}
+						'Adjust product prices and quantities by upgrading to WooCommerce POS Pro'
 					),
 					demoURL: 'https://demo.wcpos.com/pos/products',
 				};
@@ -37,8 +36,7 @@ export const PageUpgrade = ({
 					imageURL: 'https://wcpos.com/orders-upgrade.png',
 					title: t('Upgrade to Pro'),
 					description: t(
-						'Re-open and print receipts for older orders by upgrading to WooCommerce POS Pro',
-						{}
+						'Re-open and print receipts for older orders by upgrading to WooCommerce POS Pro'
 					),
 					demoURL: 'https://demo.wcpos.com/pos/orders',
 				};
@@ -47,8 +45,7 @@ export const PageUpgrade = ({
 					imageURL: 'https://wcpos.com/customers-upgrade.png',
 					title: t('Upgrade to Pro'),
 					description: t(
-						'Add new customers and edit existing customers by upgrading to WooCommerce POS Pro',
-						{}
+						'Add new customers and edit existing customers by upgrading to WooCommerce POS Pro'
 					),
 					demoURL: 'https://demo.wcpos.com/pos/customers',
 				};
@@ -56,7 +53,7 @@ export const PageUpgrade = ({
 				return {
 					imageURL: 'https://wcpos.com/reports-upgrade.png',
 					title: t('Upgrade to Pro'),
-					description: t('Unlock End of Day Reports by upgrading to WooCommerce POS Pro', {}),
+					description: t('Unlock End of Day Reports by upgrading to WooCommerce POS Pro'),
 					demoURL: 'https://demo.wcpos.com/pos/reports',
 				};
 			default:

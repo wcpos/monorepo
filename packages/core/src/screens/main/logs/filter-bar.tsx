@@ -16,14 +16,6 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 
-const items = [
-	{ value: 'error', label: 'Error' },
-	{ value: 'warn', label: 'Warning' },
-	{ value: 'info', label: 'Info' },
-	{ value: 'success', label: 'Success' },
-	{ value: 'audit', label: 'Audit' },
-];
-
 const MAX_LABEL_LENGTH = 24;
 
 export const DEFAULT_LOG_LEVELS = ['error', 'warn', 'info', 'success'];
@@ -33,6 +25,17 @@ export function FilterBar({ query }: { query: Query<any> }) {
 		query.rxQuery$.pipe(map(() => query.getSelector('level')))
 	);
 	const t = useT();
+
+	const items = React.useMemo(
+		() => [
+			{ value: 'error', label: t('Error') },
+			{ value: 'warn', label: t('Warning') },
+			{ value: 'info', label: t('Info') },
+			{ value: 'success', label: t('Success') },
+			{ value: 'audit', label: t('Audit') },
+		],
+		[t]
+	);
 
 	/**
 	 * Extract selected values from the selector
@@ -90,7 +93,7 @@ export function FilterBar({ query }: { query: Query<any> }) {
 
 		// Truncate and add ellipsis
 		return fullLabel.slice(0, MAX_LABEL_LENGTH - 1) + '…';
-	}, [selectedValues, t]);
+	}, [items, selectedValues, t]);
 
 	return (
 		<HStack className="w-full flex-wrap">
