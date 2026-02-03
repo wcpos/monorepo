@@ -147,28 +147,17 @@ test.describe('POS Cart - Multiple Orders', () => {
 	test('should create a new order via tab', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 
-		// Look for new order button - various possible selectors
-		// The button is usually near the cart/order tabs at the bottom
-		const newOrderButton = page.getByRole('button', { name: /new order|add order|\+/i }).or(
-			page.getByTestId('new-order-button')
+		// The new order button is a TabsTrigger with a plus icon
+		// It's a tab element with value="new" containing an Icon with name="plus"
+		// The tooltip text is "Open new order"
+		const newOrderTab = page.getByRole('tab').filter({ has: page.locator('svg') }).last().or(
+			page.locator('[role="tab"]').filter({ hasText: '+' })
 		).or(
-			page.getByLabel(/new order|add order/i)
-		).or(
-			// Look for a button near the Cart button that could be for adding orders
-			page.locator('button:has-text("Cart")').locator('..').locator('button').last()
+			page.locator('[data-state]').filter({ has: page.locator('[name="plus"]') })
 		);
 
-		// Check if the button exists and is clickable
-		const isVisible = await newOrderButton.first().isVisible({ timeout: 10_000 }).catch(() => false);
-
-		if (!isVisible) {
-			// If no explicit new order button, this feature may not be available
-			// Skip the test rather than fail
-			test.skip(true, 'New order button not found - feature may not be available in this version');
-			return;
-		}
-
-		await newOrderButton.first().click();
+		await expect(newOrderTab).toBeVisible({ timeout: 15_000 });
+		await newOrderTab.click();
 
 		// Wait for cart transition animation
 		await page.waitForTimeout(1_000);

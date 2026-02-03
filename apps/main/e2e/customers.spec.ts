@@ -13,23 +13,17 @@ test.describe('Customers in POS', () => {
 		await expect(page.getByText('Customer')).toBeVisible({ timeout: 10_000 });
 	});
 
-	test('should open customer details when clicking Guest', async ({ posPage: page }) => {
-		// Find the Guest button/chip in the customer area
+	test('should open customer address dialog when clicking Guest', async ({ posPage: page }) => {
+		// Find and click the Guest button/chip - this opens the address editor
 		const guestButton = page.getByText('Guest').first();
 		await expect(guestButton).toBeVisible({ timeout: 15_000 });
 		await guestButton.click();
 
-		// Wait for dialog animation
-		await page.waitForTimeout(500);
-
-		// Clicking Guest opens the customer address/edit dialog
-		// Look for the dialog content - either address form or customer details
-		const hasAddressDialog = await page.getByText(/Edit Customer Address|Billing Address|First Name/i).first().isVisible({ timeout: 10_000 }).catch(() => false);
-		const hasCustomerSearch = await page.getByPlaceholder('Search Customers').isVisible({ timeout: 5_000 }).catch(() => false);
-
-		// Either behavior is acceptable - address dialog or search
-		expect(hasAddressDialog || hasCustomerSearch).toBeTruthy();
+		// Should open the Edit Customer Address dialog
+		await expect(page.getByText('Edit Customer Address')).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByText('Billing Address')).toBeVisible({ timeout: 10_000 });
 	});
+
 });
 
 /**
@@ -137,21 +131,15 @@ test.describe('Customers Page (Pro)', () => {
 		const screen = page.getByTestId('screen-customers');
 		await expect(screen.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
 
-		// The add customer button could have various names/labels
-		const addButton = screen.getByRole('button', { name: /add.*customer|new.*customer|\+/i }).or(
-			screen.getByRole('link', { name: /add.*customer|new.*customer/i })
+		// The add customer button is typically an IconButton with userPlus icon or similar
+		// Look for buttons with add/plus semantics in the header area
+		const addButton = screen.getByRole('button', { name: /add|new|plus/i }).or(
+			screen.locator('button:has(svg[name="plus"]), button:has(svg[name="userPlus"])')
 		).or(
-			screen.getByTestId('add-customer-button')
-		).or(
-			screen.getByLabel(/add|new/i)
+			screen.locator('[aria-label*="add" i]')
 		);
 
-		// Check if any add button exists
-		const isVisible = await addButton.first().isVisible({ timeout: 15_000 }).catch(() => false);
-		// This test should pass if we can find any add button, or skip if feature doesn't exist
-		if (!isVisible) {
-			test.skip(true, 'Add customer button not found on Customers page');
-		}
+		await expect(addButton.first()).toBeVisible({ timeout: 15_000 });
 	});
 });
 
