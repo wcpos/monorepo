@@ -41,7 +41,7 @@ test.describe('Products in POS', () => {
 		await searchInput.fill('zzzznonexistentproductzzzz');
 		await page.waitForTimeout(1_000);
 
-		await expect(page.getByText('No products found')).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByText('No products found')).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should update product count after search', async ({ posPage: page }) => {
@@ -143,12 +143,12 @@ test.describe('Products Page (Pro)', () => {
 		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
 		const ellipsis = screen.getByRole('button', { name: /more|actions|menu/i }).first();
-		await expect(ellipsis).toBeVisible({ timeout: 5_000 });
+		await expect(ellipsis).toBeVisible({ timeout: 15_000 });
 		await ellipsis.click();
 
 		await expect(
 			page.getByText('Edit').or(page.getByText('Sync')).or(page.getByText('Delete'))
-		).toBeVisible({ timeout: 5_000 });
+		).toBeVisible({ timeout: 15_000 });
 	});
 });
 

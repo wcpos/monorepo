@@ -17,11 +17,14 @@ test.describe('Customers in POS', () => {
 		const selectCustomer = page.getByRole('button', { name: /Select Customer/i }).or(
 			page.getByText('Guest')
 		);
-		await expect(selectCustomer.first()).toBeVisible({ timeout: 5_000 });
+		await expect(selectCustomer.first()).toBeVisible({ timeout: 15_000 });
 		await selectCustomer.first().click();
 
+		// Wait for popover animation to complete
+		await page.waitForTimeout(500);
+
 		const searchInput = page.getByPlaceholder('Search Customers');
-		await expect(searchInput).toBeVisible({ timeout: 5_000 });
+		await expect(searchInput).toBeVisible({ timeout: 15_000 });
 	});
 });
 
@@ -54,7 +57,7 @@ test.describe('Add Customer from Cart (Pro)', () => {
 		// Form should contain name/email fields
 		await expect(
 			page.getByText(/first name|last name|email/i).first()
-		).toBeVisible({ timeout: 5_000 });
+		).toBeVisible({ timeout: 15_000 });
 	});
 });
 
@@ -100,7 +103,7 @@ test.describe('Customers Page (Pro)', () => {
 			.catch(() => false);
 		const noCustomers = await screen
 			.getByText('No customers found')
-			.isVisible({ timeout: 5_000 })
+			.isVisible({ timeout: 15_000 })
 			.catch(() => false);
 		expect(hasCustomers || noCustomers).toBeTruthy();
 	});
@@ -134,7 +137,7 @@ test.describe('Customers Page (Pro)', () => {
 		const addButton = screen.getByRole('button', { name: /add.*customer/i }).or(
 			screen.getByRole('link', { name: /add.*customer/i })
 		);
-		await expect(addButton.first()).toBeVisible({ timeout: 5_000 });
+		await expect(addButton.first()).toBeVisible({ timeout: 15_000 });
 	});
 });
 

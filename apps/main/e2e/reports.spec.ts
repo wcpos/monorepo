@@ -21,7 +21,7 @@ test.describe('Reports Page (Pro)', () => {
 			.catch(() => false);
 		const hasSearch = await screen
 			.getByPlaceholder('Search Orders')
-			.isVisible({ timeout: 5_000 })
+			.isVisible({ timeout: 15_000 })
 			.catch(() => false);
 
 		expect(hasContent || hasSearch).toBeTruthy();

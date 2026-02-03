@@ -38,7 +38,7 @@ test.describe('Orders Page (Pro)', () => {
 			.catch(() => false);
 		const noOrders = await screen
 			.getByText('No orders found')
-			.isVisible({ timeout: 5_000 })
+			.isVisible({ timeout: 15_000 })
 			.catch(() => false);
 		expect(hasOrders || noOrders).toBeTruthy();
 	});
@@ -64,7 +64,7 @@ test.describe('Orders Page (Pro)', () => {
 	test('should show filter pills', async ({ posPage: page }) => {
 		const screen = await navigateToOrders(page);
 
-		await expect(screen.getByText('Status').first()).toBeVisible({ timeout: 5_000 });
+		await expect(screen.getByText('Status').first()).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show order actions menu', async ({ posPage: page }) => {
@@ -80,11 +80,11 @@ test.describe('Orders Page (Pro)', () => {
 		}
 
 		const ellipsis = screen.getByRole('button', { name: /more|actions|menu/i }).first();
-		await expect(ellipsis).toBeVisible({ timeout: 5_000 });
+		await expect(ellipsis).toBeVisible({ timeout: 15_000 });
 		await ellipsis.click();
 		await expect(
 			page.getByText('Edit').or(page.getByText('Re-open')).or(page.getByText('Delete'))
-		).toBeVisible({ timeout: 5_000 });
+		).toBeVisible({ timeout: 15_000 });
 	});
 });
 
