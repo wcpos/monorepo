@@ -134,6 +134,32 @@ jobs:
       - name: 🎭 Install Playwright browsers
         run: cd apps/main && npx playwright install --with-deps chromium
 
+      - name: 🏥 Health check deployment
+        run: |
+          URL="${{ needs.deploy.outputs.deployment_url }}"
+          echo "Checking deployment at: $URL"
+
+          for i in {1..30}; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            echo "Attempt $i: HTTP $HTTP_CODE"
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              # Verify the response contains expected app content
+              BODY=$(curl -s "$URL")
+              if echo "$BODY" | grep -q "WooCommerce POS\|wcpos\|expo"; then
+                echo "✅ Deployment is healthy and serving the app"
+                exit 0
+              else
+                echo "⚠️ Got 200 but content doesn't look like the app, retrying..."
+              fi
+            fi
+
+            sleep 10
+          done
+
+          echo "❌ Deployment health check failed after 30 attempts"
+          exit 1
+
       - name: 🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
         id: e2e-tests
         run: cd apps/main && npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
@@ -233,6 +259,9 @@ jobs:
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      - name: 🏗 Checkout (for gh CLI)
+        uses: actions/checkout@v4
+
       - name: 📥 Download test results
         if: needs.e2e.result == 'failure'
         uses: actions/download-artifact@v4
@@ -241,11 +270,86 @@ jobs:
           name: playwright-report-${{ github.sha }}
           path: test-artifacts
 
+      - name: 📥 Download all screenshot artifacts
+        if: needs.e2e.result == 'failure'
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: playwright-screenshots-*
+          path: all-screenshots
+          merge-multiple: true
+
+      - name: 📤 Upload screenshots for embedding
+        id: upload-screenshots
+        if: needs.e2e.result == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find screenshot files
+          if [ ! -d "all-screenshots" ]; then
+            echo "screenshot_data=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          SCREENSHOTS=$(find all-screenshots -name "*.png" -type f | head -6)
+          if [ -z "$SCREENSHOTS" ]; then
+            echo "screenshot_data=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Create a tag for this PR's screenshots
+          TAG="e2e-screenshots-pr${{ github.event.pull_request.number }}-${{ github.sha }}"
+
+          # Delete existing release if it exists (from previous runs)
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          git push origin --delete "$TAG" 2>/dev/null || true
+
+          # Create a new release
+          gh release create "$TAG" \
+            --title "E2E Screenshots - PR #${{ github.event.pull_request.number }}" \
+            --notes "Automated screenshots from E2E test failures. This release will be cleaned up automatically." \
+            --prerelease
+
+          # Upload screenshots and collect URLs with test context
+          DATA=""
+          INDEX=1
+          for FILE in $SCREENSHOTS; do
+            # Get the parent directory name which contains test info
+            PARENT_DIR=$(basename "$(dirname "$FILE")")
+            BASENAME=$(basename "$FILE")
+
+            # Extract test name from parent dir (format: testfile-TestSuite-testname-project)
+            # Convert dashes and underscores to spaces for readability
+            TEST_NAME=$(echo "$PARENT_DIR" | sed 's/-retry[0-9]*$//' | sed 's/---/ - /g' | sed 's/-/ /g' | sed 's/_/ /g')
+
+            # Create unique filename with index and copy file (gh release upload uses original filename)
+            SAFE_NAME="screenshot-${INDEX}.png"
+            cp "$FILE" "/tmp/$SAFE_NAME"
+
+            gh release upload "$TAG" "/tmp/$SAFE_NAME" --clobber
+
+            # Construct the download URL
+            URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${SAFE_NAME}"
+
+            # Store both URL and test name (pipe-separated)
+            DATA="${DATA}${TEST_NAME}|${URL}\n"
+
+            echo "Uploaded: $SAFE_NAME ($TEST_NAME)"
+            INDEX=$((INDEX + 1))
+          done
+
+          # Output data for use in comment
+          echo "screenshot_data<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$DATA" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "release_tag=$TAG" >> $GITHUB_OUTPUT
+
       - name: 💬 Comment on PR
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             const deployUrl = '${{ needs.deploy.outputs.deployment_url }}';
             const isProduction = '${{ needs.deploy.outputs.is_production }}' === 'true';
             const e2eResult = '${{ needs.e2e.result }}';
@@ -267,31 +371,160 @@ jobs:
                   const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
                   const failures = [];
 
-                  // Extract failed test names
-                  for (const suite of results.suites || []) {
-                    for (const innerSuite of suite.suites || []) {
-                      for (const spec of innerSuite.specs || []) {
+                  // Recursively find all failed specs
+                  function findFailures(suites, filePath = '') {
+                    for (const suite of suites || []) {
+                      const currentPath = filePath || suite.file || '';
+
+                      // Check specs in this suite
+                      for (const spec of suite.specs || []) {
                         if (!spec.ok) {
-                          const errorMsg = spec.tests?.[0]?.results?.[0]?.error?.message?.split('\n')[0] || 'Unknown error';
-                          failures.push(`- \`${spec.title}\`: ${errorMsg}`);
+                          const test = spec.tests?.[0];
+                          const result = test?.results?.[0];
+                          const error = result?.error;
+
+                          // Get the project name (free/pro, authenticated/unauthenticated)
+                          const projectName = test?.projectName || 'unknown';
+
+                          // Extract meaningful error info
+                          let errorSummary = 'Unknown error';
+                          if (error?.message) {
+                            // Get the assertion failure line
+                            const lines = error.message.split('\n');
+                            const assertionLine = lines.find(l =>
+                              l.includes('expect(') ||
+                              l.includes('Expected:') ||
+                              l.includes('Received:') ||
+                              l.includes('Locator:') ||
+                              l.includes('Timeout')
+                            ) || lines[0];
+                            errorSummary = assertionLine.trim().substring(0, 150);
+                          }
+
+                          // Get the file name without full path
+                          const fileName = currentPath.split('/').pop() || 'unknown';
+
+                          failures.push({
+                            title: spec.title,
+                            file: fileName,
+                            project: projectName,
+                            error: errorSummary,
+                            fullError: error?.message?.substring(0, 500) || ''
+                          });
                         }
+                      }
+
+                      // Recurse into nested suites
+                      if (suite.suites) {
+                        findFailures(suite.suites, currentPath);
                       }
                     }
                   }
 
+                  findFailures(results.suites);
+
                   if (failures.length > 0) {
-                    e2eDetails = `\n\n### ❌ Failed Tests\n${failures.slice(0, 5).join('\n')}`;
-                    if (failures.length > 5) {
-                      e2eDetails += `\n- _...and ${failures.length - 5} more_`;
+                    // Group failures by file
+                    const byFile = {};
+                    for (const f of failures) {
+                      if (!byFile[f.file]) byFile[f.file] = [];
+                      byFile[f.file].push(f);
                     }
+
+                    e2eDetails = `\n\n### ❌ Failed Tests (${failures.length} total)\n\n`;
+
+                    // Show first 8 failures with details
+                    let shown = 0;
+                    for (const [file, fileFailures] of Object.entries(byFile)) {
+                      if (shown >= 8) break;
+
+                      e2eDetails += `**${file}**\n`;
+                      for (const f of fileFailures.slice(0, 3)) {
+                        if (shown >= 8) break;
+                        e2eDetails += `- \`[${f.project}]\` ${f.title}\n`;
+                        e2eDetails += `  > ${f.error}\n`;
+                        shown++;
+                      }
+                      if (fileFailures.length > 3) {
+                        e2eDetails += `  _...and ${fileFailures.length - 3} more in this file_\n`;
+                      }
+                      e2eDetails += '\n';
+                    }
+
+                    if (failures.length > 8) {
+                      e2eDetails += `\n_...and ${failures.length - 8} more failures_\n`;
+                    }
+
+                    // Add a collapsible section with full error details
+                    e2eDetails += `\n<details>\n<summary>📋 Full error details (first 5)</summary>\n\n`;
+                    for (const f of failures.slice(0, 5)) {
+                      e2eDetails += `#### ${f.file} - ${f.title}\n`;
+                      e2eDetails += `**Project:** \`${f.project}\`\n\n`;
+                      e2eDetails += '```\n' + (f.fullError || 'No error details') + '\n```\n\n';
+                    }
+                    e2eDetails += `</details>\n`;
                   }
                 }
               } catch (e) {
                 console.log('Could not parse test results:', e.message);
+                e2eDetails += `\n\n_Could not parse test results: ${e.message}_\n`;
               }
 
-              e2eDetails += `\n\n📊 [View detailed test report](https://github.com/${{ github.repository }}/actions/runs/${runId})`;
-              e2eDetails += `\n📸 [Download failure screenshots](https://github.com/${{ github.repository }}/actions/runs/${runId}#artifacts)`;
+              // Embed uploaded screenshots with test context
+              const screenshotData = `${{ steps.upload-screenshots.outputs.screenshot_data }}`.trim().split('\n').filter(s => s && s.includes('|'));
+
+              if (screenshotData.length > 0) {
+                e2eDetails += `\n### 📸 Failure Screenshots\n\n`;
+                for (const line of screenshotData) {
+                  const [testName, url] = line.split('|');
+                  if (testName && url) {
+                    // Truncate long test names but show the key parts
+                    const displayName = testName.length > 80 ? testName.substring(0, 77) + '...' : testName;
+                    e2eDetails += `<details>\n<summary>📷 ${displayName}</summary>\n\n`;
+                    e2eDetails += `![${displayName}](${url})\n\n`;
+                    e2eDetails += `</details>\n\n`;
+                  }
+                }
+              }
+
+              // List additional screenshots if there are more
+              try {
+                if (fs.existsSync('all-screenshots')) {
+                  const allScreenshots = [];
+                  function findScreenshots(dir) {
+                    const items = fs.readdirSync(dir);
+                    for (const item of items) {
+                      const fullPath = path.join(dir, item);
+                      if (fs.statSync(fullPath).isDirectory()) {
+                        findScreenshots(fullPath);
+                      } else if (item.endsWith('.png')) {
+                        allScreenshots.push(fullPath);
+                      }
+                    }
+                  }
+                  findScreenshots('all-screenshots');
+
+                  if (allScreenshots.length > screenshotUrls.length) {
+                    e2eDetails += `<details>\n<summary>📁 All screenshot files (${allScreenshots.length} total)</summary>\n\n`;
+                    for (const s of allScreenshots.slice(0, 30)) {
+                      const name = s.replace('all-screenshots/', '');
+                      e2eDetails += `- \`${name}\`\n`;
+                    }
+                    if (allScreenshots.length > 30) {
+                      e2eDetails += `- _...and ${allScreenshots.length - 30} more_\n`;
+                    }
+                    e2eDetails += `\n[Download all from artifacts](https://github.com/${{ github.repository }}/actions/runs/${runId}#artifacts)\n`;
+                    e2eDetails += `</details>\n`;
+                  }
+                }
+              } catch (e) {
+                console.log('Could not list screenshots:', e.message);
+              }
+
+              e2eDetails += `\n### 🔗 Debug Links\n`;
+              e2eDetails += `- 📊 [View HTML test report](https://github.com/${{ github.repository }}/actions/runs/${runId}) (download \`playwright-report-*\` artifact)\n`;
+              e2eDetails += `- 📸 [Download screenshots](https://github.com/${{ github.repository }}/actions/runs/${runId}#artifacts)\n`;
+              e2eDetails += `- 🎬 Videos are included in screenshot artifacts for failed tests\n`;
             } else if (e2eResult === 'skipped') {
               e2eStatus = '⏭️ Skipped';
             } else if (e2eResult === 'cancelled') {

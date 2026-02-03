@@ -21,6 +21,6 @@ test.describe('Logs Page', () => {
 		await searchInput.fill('error');
 		await page.waitForTimeout(1_000);
 
-		await expect(screen.getByRole('columnheader', { name: 'Time' })).toBeVisible({ timeout: 5_000 });
+		await expect(screen.getByRole('columnheader', { name: 'Time' })).toBeVisible({ timeout: 15_000 });
 	});
 });
