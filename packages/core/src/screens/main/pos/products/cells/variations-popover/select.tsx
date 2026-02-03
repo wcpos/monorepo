@@ -81,9 +81,7 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
-					ListEmptyComponent={
-						<ComboboxEmpty>{t('No variation found')}</ComboboxEmpty>
-					}
+					ListEmptyComponent={<ComboboxEmpty>{t('No variation found')}</ComboboxEmpty>}
 				/>
 			</ComboboxContent>
 		</Combobox>

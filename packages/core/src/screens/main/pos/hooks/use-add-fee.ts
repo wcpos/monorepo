@@ -67,7 +67,7 @@ export const useAddFee = () => {
 				await addItemToOrder('fee_lines', newFeeLine);
 
 				// Log fee added success
-				orderLogger.info(t('Fee added: {feeName}', {feeName: data.name }), {
+				orderLogger.info(t('Fee added: {feeName}', { feeName: data.name }), {
 					context: {
 						feeName: data.name,
 						amount: data.amount,

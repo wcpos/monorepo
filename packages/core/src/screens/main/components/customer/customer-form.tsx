@@ -126,11 +126,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="username"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									label={t('Username')}
-									{...field}
-									editable={!hasUsername}
-								/>
+								<FormInput label={t('Username')} {...field} editable={!hasUsername} />
 							</View>
 						)}
 					/>
@@ -161,9 +157,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 					<CollapsibleContent>
 						<VStack className="gap-4">
 							<Button variant="muted" onPress={handleCopyBillingToShipping}>
-								<ButtonText>
-									{t('Copy billing address to shipping address')}
-								</ButtonText>
+								<ButtonText>{t('Copy billing address to shipping address')}</ButtonText>
 							</Button>
 							<ShippingAddressForm />
 						</VStack>

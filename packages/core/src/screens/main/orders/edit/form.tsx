@@ -130,21 +130,18 @@ export const EditOrderForm = ({ order }: Props) => {
 				});
 				await pushDocument(order).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(
-							t('Order #{number} saved', {number: savedDoc.number }),
-							{
-								showToast: true,
-								saveToDb: true,
-								context: {
-									orderId: savedDoc.id,
-									orderNumber: savedDoc.number,
-								},
-							}
-						);
+						mutationLogger.success(t('Order #{number} saved', { number: savedDoc.number }), {
+							showToast: true,
+							saveToDb: true,
+							context: {
+								orderId: savedDoc.id,
+								orderNumber: savedDoc.number,
+							},
+						});
 					}
 				});
 			} catch (error) {
-				mutationLogger.error(t('{message}', {message: error.message || 'Error' }), {
+				mutationLogger.error(t('{message}', { message: error.message || 'Error' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -262,11 +259,7 @@ export const EditOrderForm = ({ order }: Props) => {
 							name="status"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormSelect
-										label={t('Status')}
-										customComponent={OrderStatusSelect}
-										{...field}
-									/>
+									<FormSelect label={t('Status')} customComponent={OrderStatusSelect} {...field} />
 								</View>
 							)}
 						/>
@@ -352,11 +345,7 @@ export const EditOrderForm = ({ order }: Props) => {
 							name="currency"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormSelect
-										customComponent={CurrencySelect}
-										label={t('Currency')}
-										{...field}
-									/>
+									<FormSelect customComponent={CurrencySelect} label={t('Currency')} {...field} />
 								</View>
 							)}
 						/>

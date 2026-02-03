@@ -128,11 +128,7 @@ export const AddShipping = () => {
 						name="amount"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('Amount')}
-									{...field}
-								/>
+								<FormInput customComponent={CurrencyInput} label={t('Amount')} {...field} />
 							</View>
 						)}
 					/>
@@ -140,9 +136,7 @@ export const AddShipping = () => {
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
-							render={({ field }) => (
-								<FormSwitch label={t('Amount Includes Tax')} {...field} />
-							)}
+							render={({ field }) => <FormSwitch label={t('Amount Includes Tax')} {...field} />}
 						/>
 					</View>
 				</HStack>
@@ -152,11 +146,7 @@ export const AddShipping = () => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									label={t('Tax Class')}
-									customComponent={TaxClassSelect}
-									{...field}
-								/>
+								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
 							</View>
 						)}
 					/>

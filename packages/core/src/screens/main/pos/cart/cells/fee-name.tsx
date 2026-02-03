@@ -51,7 +51,7 @@ export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
 				<View className="flex-1">
 					<EditableName value={item.name} onChangeText={(name) => updateFeeLine(uuid, { name })} />
 				</View>
-				<EditCartItemButton title={t('Edit {name}', {name: item.name })}>
+				<EditCartItemButton title={t('Edit {name}', { name: item.name })}>
 					<EditFeeLine uuid={uuid} item={item} />
 				</EditCartItemButton>
 			</HStack>

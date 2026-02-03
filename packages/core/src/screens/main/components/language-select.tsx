@@ -68,9 +68,7 @@ export const LanguageSelect = ({ value, ...props }: React.ComponentProps<typeof 
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
-					ListEmptyComponent={
-						<ComboboxEmpty>{t('No language found')}</ComboboxEmpty>
-					}
+					ListEmptyComponent={<ComboboxEmpty>{t('No language found')}</ComboboxEmpty>}
 				/>
 			</ComboboxContent>
 		</Combobox>

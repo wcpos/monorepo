@@ -55,7 +55,7 @@ export const PayButton = () => {
 				}
 			});
 		} catch (error) {
-			orderLogger.error(t('{message}', {message: error.message || 'Error' }), {
+			orderLogger.error(t('{message}', { message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {

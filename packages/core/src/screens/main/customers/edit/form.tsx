@@ -58,7 +58,7 @@ export const EditCustomerForm = ({ customer }: Props) => {
 				});
 				await pushDocument(customer).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('{name} saved', {name: format(savedDoc) }), {
+						mutationLogger.success(t('{name} saved', { name: format(savedDoc) }), {
 							showToast: true,
 							saveToDb: true,
 							context: {
@@ -69,7 +69,7 @@ export const EditCustomerForm = ({ customer }: Props) => {
 					}
 				});
 			} catch (error) {
-				mutationLogger.error(t('{message}', {message: error.message || 'Error' }), {
+				mutationLogger.error(t('{message}', { message: error.message || 'Error' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {

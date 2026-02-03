@@ -62,19 +62,16 @@ const usePullDocument = () => {
 				const success = await collection.upsert(parsedData);
 				return success;
 			} catch (err) {
-				syncLogger.error(
-					t('Failed to save to local database: {error}', {error: err.message }),
-					{
-						showToast: true,
-						saveToDb: true,
-						context: {
-							errorCode: ERROR_CODES.TRANSACTION_FAILED,
-							documentId: id,
-							collectionName: collection.name,
-							error: err instanceof Error ? err.message : String(err),
-						},
-					}
-				);
+				syncLogger.error(t('Failed to save to local database: {error}', { error: err.message }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						documentId: id,
+						collectionName: collection.name,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
 				throw err;
 			}
 		},

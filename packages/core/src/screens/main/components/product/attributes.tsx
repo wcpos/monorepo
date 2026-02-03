@@ -138,14 +138,9 @@ export const ProductAttributes = ({ row, table }) => {
 		} else {
 			text += t('Expand');
 		}
-		if (row.original.childrenSearchCount === 1) {
+		if (row.original.childrenSearchCount > 0) {
 			text += ' - ';
-			text += t('1 variation found for {term}', {
-				term: row.original.parentSearchTerm,
-			});
-		} else if (row.original.childrenSearchCount > 0) {
-			text += ' - ';
-			text += t('{count} variations found for {term}', {
+			text += t('variation_found_for_term', {
 				count: row.original.childrenSearchCount,
 				term: row.original.parentSearchTerm,
 			});

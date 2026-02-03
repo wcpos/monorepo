@@ -84,11 +84,7 @@ export const AddMiscProduct = () => {
 					control={form.control}
 					name="name"
 					render={({ field }) => (
-						<FormInput
-							label={t('Name')}
-							placeholder={t('Product')}
-							{...field}
-						/>
+						<FormInput label={t('Name')} placeholder={t('Product')} {...field} />
 					)}
 				/>
 				<HStack className="gap-4">
@@ -122,11 +118,7 @@ export const AddMiscProduct = () => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									customComponent={TaxClassSelect}
-									label={t('Tax Class')}
-									{...field}
-								/>
+								<FormSelect customComponent={TaxClassSelect} label={t('Tax Class')} {...field} />
 							</View>
 						)}
 					/>

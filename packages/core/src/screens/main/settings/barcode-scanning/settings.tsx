@@ -101,11 +101,7 @@ export const BarcodeSettings = () => {
 						name="barcode_scanning_min_chars"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									label={t('Barcode Minimum Length')}
-									type="numeric"
-									{...field}
-								/>
+								<FormInput label={t('Barcode Minimum Length')} type="numeric" {...field} />
 							</View>
 						)}
 					/>

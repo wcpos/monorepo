@@ -87,7 +87,7 @@ export const useLocalMutation = () => {
 					message = 'rxdb ' + error.code;
 					errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
 				}
-				mutationLogger.error(t('There was an error: {message}', {message }), {
+				mutationLogger.error(t('There was an error: {message}', { message }), {
 					showToast: true,
 					saveToDb: true,
 					context: {

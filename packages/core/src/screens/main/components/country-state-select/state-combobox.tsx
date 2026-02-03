@@ -65,9 +65,7 @@ const StateComboboxBase = ({
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
-					ListEmptyComponent={
-						<ComboboxEmpty>{t('No state found')}</ComboboxEmpty>
-					}
+					ListEmptyComponent={<ComboboxEmpty>{t('No state found')}</ComboboxEmpty>}
 				/>
 			</ComboboxContent>
 		</Combobox>

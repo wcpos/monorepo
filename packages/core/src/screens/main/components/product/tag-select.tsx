@@ -91,11 +91,7 @@ export const TagSearch = () => {
 	 */
 	return (
 		<>
-			<ComboboxInput
-				placeholder={t('Search Tags')}
-				value={search}
-				onChangeText={onSearch}
-			/>
+			<ComboboxInput placeholder={t('Search Tags')} value={search} onChangeText={onSearch} />
 			<Suspense>
 				<TagList query={query} />
 			</Suspense>

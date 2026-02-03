@@ -91,11 +91,7 @@ export function BrandSearch() {
 	 */
 	return (
 		<>
-			<ComboboxInput
-				placeholder={t('Search Brands')}
-				value={search}
-				onChangeText={onSearch}
-			/>
+			<ComboboxInput placeholder={t('Search Brands')} value={search} onChangeText={onSearch} />
 			<Suspense>
 				<BrandList query={query} />
 			</Suspense>

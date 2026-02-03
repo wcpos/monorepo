@@ -85,11 +85,7 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 	 */
 	return (
 		<>
-			<ComboboxInput
-				placeholder={t('Search Customers')}
-				value={search}
-				onChangeText={onSearch}
-			/>
+			<ComboboxInput placeholder={t('Search Customers')} value={search} onChangeText={onSearch} />
 			<Suspense>
 				<CustomerList query={query} withGuest={withGuest} />
 			</Suspense>
@@ -127,9 +123,7 @@ export function CustomerList({ query, withGuest }: { query: any; withGuest: bool
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
-			ListEmptyComponent={
-				<ComboboxEmpty>{t('No customers found')}</ComboboxEmpty>
-			}
+			ListEmptyComponent={<ComboboxEmpty>{t('No customers found')}</ComboboxEmpty>}
 		/>
 	);
 }

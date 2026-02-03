@@ -69,26 +69,20 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 									<FormField
 										control={control}
 										name={`${name}.${index}.id`}
-										render={({ field }) => (
-											<FormInput label={t('ID')} {...field} readOnly />
-										)}
+										render={({ field }) => <FormInput label={t('ID')} {...field} readOnly />}
 									/>
 								</View>
 								<VStack className="flex-1 flex-col p-2">
 									<FormField
 										control={control}
 										name={`${name}.${index}.key`}
-										render={({ field }) => (
-											<FormInput label={t('Key')} {...field} />
-										)}
+										render={({ field }) => <FormInput label={t('Key')} {...field} />}
 									/>
 									{withDisplayValues && (
 										<FormField
 											control={control}
 											name={`${name}.${index}.display_key`}
-											render={({ field }) => (
-												<FormInput label={t('Display Key')} {...field} />
-											)}
+											render={({ field }) => <FormInput label={t('Display Key')} {...field} />}
 										/>
 									)}
 								</VStack>
@@ -96,17 +90,13 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 									<FormField
 										control={control}
 										name={`${name}.${index}.value`}
-										render={({ field }) => (
-											<FormInput label={t('Value')} {...field} />
-										)}
+										render={({ field }) => <FormInput label={t('Value')} {...field} />}
 									/>
 									{withDisplayValues && (
 										<FormField
 											control={control}
 											name={`${name}.${index}.display_value`}
-											render={({ field }) => (
-												<FormInput label={t('Display Value')} {...field} />
-											)}
+											render={({ field }) => <FormInput label={t('Display Value')} {...field} />}
 										/>
 									)}
 								</VStack>

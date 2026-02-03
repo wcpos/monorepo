@@ -66,9 +66,7 @@ const CountryComboboxBase = ({
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
-					ListEmptyComponent={
-						<ComboboxEmpty>{t('No country found')}</ComboboxEmpty>
-					}
+					ListEmptyComponent={<ComboboxEmpty>{t('No country found')}</ComboboxEmpty>}
 				/>
 			</ComboboxContent>
 		</Combobox>

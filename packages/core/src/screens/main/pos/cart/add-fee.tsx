@@ -110,11 +110,7 @@ export const AddFee = () => {
 					control={form.control}
 					name="name"
 					render={({ field }) => (
-						<FormInput
-							label={t('Fee Name')}
-							placeholder={t('Fee')}
-							{...field}
-						/>
+						<FormInput label={t('Fee Name')} placeholder={t('Fee')} {...field} />
 					)}
 				/>
 				<HStack className="gap-4">
@@ -125,11 +121,7 @@ export const AddFee = () => {
 							<View className="flex-1">
 								<FormInput
 									customComponent={togglePercentage ? NumberInput : CurrencyInput}
-									label={
-										togglePercentage
-											? t('Percent')
-											: t('Amount')
-									}
+									label={togglePercentage ? t('Percent') : t('Amount')}
 									{...field}
 								/>
 							</View>
@@ -146,9 +138,7 @@ export const AddFee = () => {
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
-							render={({ field }) => (
-								<FormSwitch label={t('Amount Includes Tax')} {...field} />
-							)}
+							render={({ field }) => <FormSwitch label={t('Amount Includes Tax')} {...field} />}
 						/>
 					</VStack>
 				</HStack>
@@ -158,11 +148,7 @@ export const AddFee = () => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									customComponent={TaxClassSelect}
-									label={t('Tax Class')}
-									{...field}
-								/>
+								<FormSelect customComponent={TaxClassSelect} label={t('Tax Class')} {...field} />
 							</View>
 						)}
 					/>

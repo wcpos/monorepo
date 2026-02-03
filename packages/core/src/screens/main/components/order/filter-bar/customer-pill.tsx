@@ -50,9 +50,7 @@ const CustomerPill = ({ query, resource, customerID }: CustomerPillProps) => {
 					removable={!!customer}
 					onRemove={() => query.removeWhere('customer_id').exec()}
 				>
-					<ButtonText>
-						{customer ? format(customer) : t('Select Customer')}
-					</ButtonText>
+					<ButtonText>{customer ? format(customer) : t('Select Customer')}</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>
 			<ComboboxContent>

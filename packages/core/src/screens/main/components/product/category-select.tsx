@@ -43,9 +43,7 @@ const CategoryList = ({ query }) => {
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
-			ListEmptyComponent={
-				<ComboboxEmpty>{t('No category found')}</ComboboxEmpty>
-			}
+			ListEmptyComponent={<ComboboxEmpty>{t('No category found')}</ComboboxEmpty>}
 		/>
 	);
 };
@@ -93,11 +91,7 @@ export const CategorySearch = () => {
 	 */
 	return (
 		<>
-			<ComboboxInput
-				placeholder={t('Search Categories')}
-				value={search}
-				onChangeText={onSearch}
-			/>
+			<ComboboxInput placeholder={t('Search Categories')} value={search} onChangeText={onSearch} />
 			<Suspense>
 				<CategoryList query={query} />
 			</Suspense>

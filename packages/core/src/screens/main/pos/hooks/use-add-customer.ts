@@ -65,7 +65,7 @@ export const useAddCustomer = () => {
 			});
 
 			// Log customer assignment
-			orderLogger.success(t('Customer assigned: {customerName}', {customerName }), {
+			orderLogger.success(t('Customer assigned: {customerName}', { customerName }), {
 				saveToDb: true,
 				context: {
 					customerId: data.id,

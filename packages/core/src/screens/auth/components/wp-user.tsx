@@ -124,9 +124,7 @@ export const WpUser = ({ site, wpUser }: Props) => {
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>
-							{t('Remove {name}', { name: wpUser.display_name })}
-						</AlertDialogTitle>
+						<AlertDialogTitle>{t('Remove {name}', { name: wpUser.display_name })}</AlertDialogTitle>
 						<AlertDialogDescription>
 							{t(
 								'Are you sure you want to remove this user? Removing a user from the POS will not effect any data on the server.'
@@ -135,9 +133,7 @@ export const WpUser = ({ site, wpUser }: Props) => {
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
-						<AlertDialogAction onPress={handleRemoveWpUser}>
-							{t('Remove')}
-						</AlertDialogAction>
+						<AlertDialogAction onPress={handleRemoveWpUser}>{t('Remove')}</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>

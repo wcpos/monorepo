@@ -30,12 +30,8 @@ export const useBarcode = (
 		let text2;
 		let isError = false;
 
-		if (results.length === 1) {
-			text2 = t('1 product found locally');
-		}
-
-		if (results.length === 0 || results.length > 1) {
-			text2 = t('{count} products found locally', { count: results.length });
+		text2 = t('product_found_locally', { count: results.length });
+		if (results.length !== 1) {
 			isError = true;
 		}
 

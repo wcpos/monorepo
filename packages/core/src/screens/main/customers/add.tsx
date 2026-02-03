@@ -46,7 +46,7 @@ export const AddCustomerScreen = () => {
 			try {
 				const savedDoc = await create({ data });
 				if (isRxDocument(savedDoc)) {
-					mutationLogger.success(t('{name} saved', {name: format(savedDoc) }), {
+					mutationLogger.success(t('{name} saved', { name: format(savedDoc) }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -56,7 +56,7 @@ export const AddCustomerScreen = () => {
 					});
 				}
 			} catch (error) {
-				mutationLogger.error(t('{message}', {message: error.message || 'Error' }), {
+				mutationLogger.error(t('{message}', { message: error.message || 'Error' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {

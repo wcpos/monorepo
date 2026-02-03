@@ -33,21 +33,18 @@ export const SaveButton = () => {
 				 * TODO; move this generic sanckbar to the pushDocument hook
 				 */
 				if (isRxDocument(savedDoc)) {
-					cartLogger.success(
-						t('Order #{number} saved', {number: savedDoc.number }),
-						{
-							showToast: true,
-							saveToDb: true,
-							context: {
-								orderId: savedDoc.id,
-								orderNumber: savedDoc.number,
-							},
-						}
-					);
+					cartLogger.success(t('Order #{number} saved', { number: savedDoc.number }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							orderId: savedDoc.id,
+							orderNumber: savedDoc.number,
+						},
+					});
 				}
 			});
 		} catch (error) {
-			cartLogger.error(t('{message}', {message: error.message || 'Error' }), {
+			cartLogger.error(t('{message}', { message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {

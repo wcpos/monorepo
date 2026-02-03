@@ -104,7 +104,7 @@ export const EditProductForm = ({ product }: Props) => {
 				});
 				await pushDocument(product).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('{name} saved', {name: product.name }), {
+						mutationLogger.success(t('{name} saved', { name: product.name }), {
 							showToast: true,
 							saveToDb: true,
 							context: {
@@ -115,7 +115,7 @@ export const EditProductForm = ({ product }: Props) => {
 					}
 				});
 			} catch (error) {
-				mutationLogger.error(t('{message}', {message: error.message || 'Error' }), {
+				mutationLogger.error(t('{message}', { message: error.message || 'Error' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -174,11 +174,7 @@ export const EditProductForm = ({ product }: Props) => {
 						name="regular_price"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('Regular Price')}
-									{...field}
-								/>
+								<FormInput customComponent={CurrencyInput} label={t('Regular Price')} {...field} />
 							</View>
 						)}
 					/>
@@ -187,11 +183,7 @@ export const EditProductForm = ({ product }: Props) => {
 						name="sale_price"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('Sale Price')}
-									{...field}
-								/>
+								<FormInput customComponent={CurrencyInput} label={t('Sale Price')} {...field} />
 							</View>
 						)}
 					/>
@@ -253,11 +245,7 @@ export const EditProductForm = ({ product }: Props) => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									label={t('Tax Class')}
-									customComponent={TaxClassSelect}
-									{...field}
-								/>
+								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
 							</View>
 						)}
 					/>

@@ -62,9 +62,7 @@ const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Com
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
-					ListEmptyComponent={
-						<ComboboxEmpty>{t('No currency found')}</ComboboxEmpty>
-					}
+					ListEmptyComponent={<ComboboxEmpty>{t('No currency found')}</ComboboxEmpty>}
 				/>
 			</ComboboxContent>
 		</Combobox>

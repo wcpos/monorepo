@@ -40,9 +40,7 @@ export const EditOrderModal = ({ resource }: Props) => {
 				<ModalHeader>
 					<ModalTitle>
 						<Text>
-							{order.id
-								? t('Edit Order #{number}', { number: order.id })
-								: t('Edit Order')}
+							{order.id ? t('Edit Order #{number}', { number: order.id }) : t('Edit Order')}
 						</Text>
 					</ModalTitle>
 				</ModalHeader>

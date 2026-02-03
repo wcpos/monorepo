@@ -109,9 +109,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 				<FormField
 					control={form.control}
 					name="method_title"
-					render={({ field }) => (
-						<FormInput label={t('Shipping Method Title')} {...field} />
-					)}
+					render={({ field }) => <FormInput label={t('Shipping Method Title')} {...field} />}
 				/>
 				<HStack className="gap-4">
 					<FormField
@@ -156,9 +154,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
-							render={({ field }) => (
-								<FormSwitch label={t('Amount Includes Tax')} {...field} />
-							)}
+							render={({ field }) => <FormSwitch label={t('Amount Includes Tax')} {...field} />}
 						/>
 					</View>
 				</HStack>
@@ -168,11 +164,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									label={t('Tax Class')}
-									customComponent={TaxClassSelect}
-									{...field}
-								/>
+								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
 							</View>
 						)}
 					/>

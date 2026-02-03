@@ -183,9 +183,7 @@ export const GeneralSettings = () => {
 				<FormField
 					control={form.control}
 					name="name"
-					render={({ field }) => (
-						<FormInput label={t('Store Name')} {...field} />
-					)}
+					render={({ field }) => <FormInput label={t('Store Name')} {...field} />}
 				/>
 				<HStack className="gap-4">
 					<FormField
@@ -202,11 +200,7 @@ export const GeneralSettings = () => {
 						name="store_postcode"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									label={t('Store Base Postcode')}
-									{...field}
-									disabled
-								/>
+								<FormInput label={t('Store Base Postcode')} {...field} disabled />
 							</View>
 						)}
 					/>
@@ -246,11 +240,7 @@ export const GeneralSettings = () => {
 						name="locale"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									customComponent={LanguageSelect}
-									label={t('Language')}
-									{...field}
-								/>
+								<FormSelect customComponent={LanguageSelect} label={t('Language')} {...field} />
 							</View>
 						)}
 					/>
@@ -274,10 +264,7 @@ export const GeneralSettings = () => {
 							control={form.control}
 							name="default_customer_is_cashier"
 							render={({ field }) => (
-								<FormSwitch
-									label={t('Default Customer is cashier')}
-									{...field}
-								/>
+								<FormSwitch label={t('Default Customer is cashier')} {...field} />
 							)}
 						/>
 					</VStack>
@@ -288,11 +275,7 @@ export const GeneralSettings = () => {
 						name="currency"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormCombobox
-									customComponent={CurrencySelect}
-									label={t('Currency')}
-									{...field}
-								/>
+								<FormCombobox customComponent={CurrencySelect} label={t('Currency')} {...field} />
 							</View>
 						)}
 					/>
@@ -325,11 +308,7 @@ export const GeneralSettings = () => {
 						name="price_num_decimals"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									label={t('Number of Decimals')}
-									type="numeric"
-									{...field}
-								/>
+								<FormInput label={t('Number of Decimals')} type="numeric" {...field} />
 							</View>
 						)}
 					/>

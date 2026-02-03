@@ -17,9 +17,7 @@ export function LogsFooter({ query, count }: { query: Query<any>; count: number 
 		<HStack className="border-border bg-footer rounded-b-lg border-t p-2">
 			<HStack className="flex-1 justify-start *:flex-1"></HStack>
 			<HStack className="justify-end gap-0">
-				<Text className="text-xs">
-					{t('Showing {count} of {total}', { count, total })}
-				</Text>
+				<Text className="text-xs">{t('Showing {count} of {total}', { count, total })}</Text>
 			</HStack>
 		</HStack>
 	);

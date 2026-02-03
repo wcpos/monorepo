@@ -102,8 +102,7 @@ export const ThemeSettings = () => {
 			<VStack className="gap-3">
 				<Label className="text-base font-medium">{t('Appearance')}</Label>
 				<Text className="text-muted-foreground text-sm">
-					{t('Choose a theme for the app. Custom themes provide different color schemes.', {
-					})}
+					{t('Choose a theme for the app. Custom themes provide different color schemes.', {})}
 				</Text>
 
 				<VStack className="gap-3 pt-2">
@@ -171,9 +170,7 @@ export const ThemeSettings = () => {
 
 				{/* Current theme status */}
 				<Text className="text-muted-foreground text-xs">
-					{hasAdaptiveThemes
-						? t('Following system theme')
-						: t('Current theme: {theme}', {theme })}
+					{hasAdaptiveThemes ? t('Following system theme') : t('Current theme: {theme}', { theme })}
 				</Text>
 			</VStack>
 

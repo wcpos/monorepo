@@ -23,10 +23,7 @@ export const OrderStatusSelect = ({ value, ...props }: React.ComponentProps<type
 	return (
 		<Select value={{ ...value, label }} {...props}>
 			<SelectTrigger>
-				<SelectValue
-					className="text-foreground text-sm"
-					placeholder={t('Select Status')}
-				/>
+				<SelectValue className="text-foreground text-sm" placeholder={t('Select Status')} />
 			</SelectTrigger>
 			<SelectContent>
 				{items.map((item) => (

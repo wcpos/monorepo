@@ -31,19 +31,16 @@ const usePushDocument = () => {
 				const json = latestDoc.toJSON();
 				return { json, latestDoc };
 			} catch (err) {
-				syncLogger.error(
-					t('Failed to prepare document data: {error}', {error: err.message }),
-					{
-						showToast: true,
-						saveToDb: true,
-						context: {
-							errorCode: ERROR_CODES.TRANSACTION_FAILED,
-							documentId: doc.id,
-							collectionName: doc.collection.name,
-							error: err instanceof Error ? err.message : String(err),
-						},
-					}
-				);
+				syncLogger.error(t('Failed to prepare document data: {error}', { error: err.message }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						documentId: doc.id,
+						collectionName: doc.collection.name,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
 				throw err;
 			}
 		},
@@ -108,19 +105,16 @@ const usePushDocument = () => {
 
 				return latestDoc.incrementalPatch(parsedData);
 			} catch (err) {
-				syncLogger.error(
-					t('Failed to update local document: {error}', {error: err.message }),
-					{
-						showToast: true,
-						saveToDb: true,
-						context: {
-							errorCode: ERROR_CODES.TRANSACTION_FAILED,
-							documentId: latestDoc.id,
-							collectionName: latestDoc.collection.name,
-							error: err instanceof Error ? err.message : String(err),
-						},
-					}
-				);
+				syncLogger.error(t('Failed to update local document: {error}', { error: err.message }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						documentId: latestDoc.id,
+						collectionName: latestDoc.collection.name,
+						error: err instanceof Error ? err.message : String(err),
+					},
+				});
 				throw err;
 			}
 		},

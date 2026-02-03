@@ -61,7 +61,7 @@ function AboutDialogContent() {
 						</Text>
 						<InfoRow label={t('App Version')} value={appVersion} />
 						<InfoRow
-							label={t('{platform} Version', {platform: platformLabels[platform] })}
+							label={t('{platform} Version', { platform: platformLabels[platform] })}
 							value={platformVersion !== appVersion ? platformVersion : undefined}
 						/>
 						<InfoRow label={t('Platform')} value={platformLabels[platform]} />
@@ -75,10 +75,7 @@ function AboutDialogContent() {
 							</Text>
 							{/* Show Pro version if present, otherwise show free version */}
 							{site.wcposProVersion ? (
-								<InfoRow
-									label={t('WCPOS Pro Plugin')}
-									value={site.wcposProVersion}
-								/>
+								<InfoRow label={t('WCPOS Pro Plugin')} value={site.wcposProVersion} />
 							) : (
 								<InfoRow label={t('WCPOS Plugin')} value={site.wcposVersion} />
 							)}
@@ -93,10 +90,7 @@ function AboutDialogContent() {
 							<Text className="text-muted-foreground text-xs font-semibold uppercase">
 								{t('License')}
 							</Text>
-							<InfoRow
-								label={t('Status')}
-								value={license.isPro ? t('Pro') : t('Free')}
-							/>
+							<InfoRow label={t('Status')} value={license.isPro ? t('Pro') : t('Free')} />
 						</VStack>
 					)}
 				</VStack>

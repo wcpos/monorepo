@@ -210,8 +210,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					context: { errorCode: ERROR_CODES.INVALID_URL_FORMAT },
 				});
 				throw new Error(
-					t('WCPOS login URL is invalid. Please ensure WCPOS plugin is properly configured', {
-					})
+					t('WCPOS login URL is invalid. Please ensure WCPOS plugin is properly configured', {})
 				);
 			}
 
@@ -281,8 +280,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 				return { siteData: data, endpoints: apiEndpoints };
 			} catch (err) {
-				const errorMessage =
-					err.message || t('Failed to discover API endpoints');
+				const errorMessage = err.message || t('Failed to discover API endpoints');
 				setError(errorMessage);
 				setStatus('error');
 				return null;

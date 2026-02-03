@@ -60,23 +60,26 @@ export const TranslationProvider = ({ children }: { children: React.ReactNode })
 
 	const i18nInstance = React.useMemo(() => {
 		const instance = i18next.createInstance();
-		instance.use(initReactI18next).use(RxDBBackend).init({
-			lng: locale,
-			fallbackLng: false,
-			ns: ['core'],
-			defaultNS: 'core',
-			keySeparator: false,
-			nsSeparator: false,
-			interpolation: {
-				escapeValue: false,
-				prefix: '{',
-				suffix: '}',
-			},
-			backend: {
-				translationsState,
-				version: wcposVersion,
-			},
-		});
+		instance
+			.use(initReactI18next)
+			.use(RxDBBackend)
+			.init({
+				lng: locale,
+				fallbackLng: false,
+				ns: ['core'],
+				defaultNS: 'core',
+				keySeparator: false,
+				nsSeparator: false,
+				interpolation: {
+					escapeValue: false,
+					prefix: '{',
+					suffix: '}',
+				},
+				backend: {
+					translationsState,
+					version: wcposVersion,
+				},
+			});
 		return instance;
 	}, [translationsState]);
 

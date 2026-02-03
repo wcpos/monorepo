@@ -68,7 +68,7 @@ export const AddNewCustomer = () => {
 			try {
 				const savedDoc = await create({ data });
 				if (isRxDocument(savedDoc)) {
-					cartLogger.success(t('{name} saved', {name: format(savedDoc) }), {
+					cartLogger.success(t('{name} saved', { name: format(savedDoc) }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -90,7 +90,7 @@ export const AddNewCustomer = () => {
 					}
 				}
 			} catch (error) {
-				cartLogger.error(t('{message}', {message: error.message || 'Error' }), {
+				cartLogger.error(t('{message}', { message: error.message || 'Error' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {

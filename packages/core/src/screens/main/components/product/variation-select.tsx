@@ -102,9 +102,7 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 						</ComboboxItem>
 					)}
 					estimatedItemSize={20}
-					ListEmptyComponent={() => (
-						<ComboboxEmpty>{t('No variation found')}</ComboboxEmpty>
-					)}
+					ListEmptyComponent={() => <ComboboxEmpty>{t('No variation found')}</ComboboxEmpty>}
 				></ComboboxList>
 			</ComboboxContent>
 		</Combobox>

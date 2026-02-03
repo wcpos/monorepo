@@ -98,9 +98,7 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>
-							{t('Delete {product}', {product: product.name })}
-						</AlertDialogTitle>
+						<AlertDialogTitle>{t('Delete {product}', { product: product.name })}</AlertDialogTitle>
 						<AlertDialogDescription>
 							{t(
 								'Are you sure you want to delete this product? Deleted products will be placed in the Trash on the server.'

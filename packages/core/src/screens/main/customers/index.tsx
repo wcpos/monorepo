@@ -70,7 +70,11 @@ export function CustomersScreen() {
 	 *
 	 */
 	return (
-		<View testID="screen-customers" className="h-full p-2" style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}>
+		<View
+			testID="screen-customers"
+			className="h-full p-2"
+			style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}
+		>
 			<Card className="flex-1">
 				<CardHeader className="bg-card-header p-0">
 					<HStack className="p-2">

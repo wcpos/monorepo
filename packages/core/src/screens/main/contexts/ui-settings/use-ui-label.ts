@@ -38,8 +38,8 @@ export const useUILabel = () => {
 					autoShowReceipt: t('Automatically show receipt after checkout'),
 					autoPrintReceipt: t('Automatically print receipt after checkout'),
 					quickDiscounts: t('Quick Discounts'),
-					quantity: t('Qty', {_context: 'Short for quantity' }),
-					split: t('Split', {_context: 'Split quantity' }),
+					quantity: t('Qty', { _context: 'Short for quantity' }),
+					split: t('Split', { _context: 'Split quantity' }),
 					name: t('Name'),
 					sku: t('SKU'),
 					price: t('Price'),
@@ -131,7 +131,7 @@ export const useUILabel = () => {
 				},
 			};
 
-			return get(labels, [id, key], t('{item} label not found', {item: key }));
+			return get(labels, [id, key], t('{item} label not found', { item: key }));
 		},
 		[t]
 	);

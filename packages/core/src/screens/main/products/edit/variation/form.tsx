@@ -100,7 +100,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 				});
 				await pushDocument(variation).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('{name} saved', {name: variation.name }), {
+						mutationLogger.success(t('{name} saved', { name: variation.name }), {
 							showToast: true,
 							saveToDb: true,
 							context: {
@@ -111,7 +111,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 					}
 				});
 			} catch (error) {
-				mutationLogger.error(t('{message}', {message: error.message || 'Error' }), {
+				mutationLogger.error(t('{message}', { message: error.message || 'Error' }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -165,11 +165,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="regular_price"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('Regular Price')}
-									{...field}
-								/>
+								<FormInput customComponent={CurrencyInput} label={t('Regular Price')} {...field} />
 							</View>
 						)}
 					/>
@@ -178,11 +174,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="sale_price"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput
-									customComponent={CurrencyInput}
-									label={t('Sale Price')}
-									{...field}
-								/>
+								<FormInput customComponent={CurrencyInput} label={t('Sale Price')} {...field} />
 							</View>
 						)}
 					/>
@@ -193,11 +185,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="status"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									label={t('Status')}
-									customComponent={ProductStatusSelect}
-									{...field}
-								/>
+								<FormSelect label={t('Status')} customComponent={ProductStatusSelect} {...field} />
 							</View>
 						)}
 					/>
@@ -217,9 +205,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						<FormField
 							control={form.control}
 							name="manage_stock"
-							render={({ field }) => (
-								<FormSwitch label={t('Manage Stock')} {...field} />
-							)}
+							render={({ field }) => <FormSwitch label={t('Manage Stock')} {...field} />}
 						/>
 					</VStack>
 				</HStack>
@@ -229,11 +215,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect
-									label={t('Tax Class')}
-									customComponent={TaxClassSelect}
-									{...field}
-								/>
+								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
 							</View>
 						)}
 					/>

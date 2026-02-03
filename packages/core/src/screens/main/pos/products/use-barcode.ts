@@ -37,12 +37,12 @@ export const useBarcode = (
 		const text1 = t('Barcode scanned: {barcode}', { barcode });
 		const results = await barcodeSearch(barcode);
 
-		if (results.length === 0 || results.length > 1) {
+		if (results.length !== 1) {
 			barcodeLogger.error(text1, {
 				showToast: true,
 				saveToDb: true,
 				toast: {
-					text2: t('{count} products found locally', { count: results.length }),
+					text2: t('product_found_locally', { count: results.length }),
 				},
 				context: {
 					errorCode: ERROR_CODES.RECORD_NOT_FOUND,

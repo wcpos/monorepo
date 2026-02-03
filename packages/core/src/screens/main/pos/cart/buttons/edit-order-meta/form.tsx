@@ -115,11 +115,7 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 						name="currency"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormCombobox
-									customComponent={CurrencySelect}
-									label={t('Currency')}
-									{...field}
-								/>
+								<FormCombobox customComponent={CurrencySelect} label={t('Currency')} {...field} />
 							</View>
 						)}
 					/>

@@ -125,11 +125,7 @@ export const ShippingAddressForm = () => {
 					name="shipping.country"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormCombobox
-								customComponent={CountryCombobox}
-								label={t('Country')}
-								{...field}
-							/>
+							<FormCombobox customComponent={CountryCombobox} label={t('Country')} {...field} />
 						</View>
 					)}
 				/>

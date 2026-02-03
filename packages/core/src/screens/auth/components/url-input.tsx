@@ -27,7 +27,7 @@ export function UrlInput() {
 	 */
 	React.useEffect(() => {
 		if (error) {
-			siteLogger.error(t('{message}', {message: error || 'Error' }), {
+			siteLogger.error(t('{message}', { message: error || 'Error' }), {
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.INVALID_URL_FORMAT,
@@ -42,9 +42,7 @@ export function UrlInput() {
 	 */
 	return (
 		<VStack>
-			<Label nativeID="woo-store">
-				{t('Enter the URL of your WooCommerce store') + ':'}
-			</Label>
+			<Label nativeID="woo-store">{t('Enter the URL of your WooCommerce store') + ':'}</Label>
 			<HStack>
 				<Input
 					aria-labelledby="woo-store"

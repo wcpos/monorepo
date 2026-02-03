@@ -102,18 +102,13 @@ export const EmailForm = ({ order }: Props) => {
 					<FormField
 						control={form.control}
 						name="email"
-						render={({ field }) => (
-							<FormInput label={t('Email Address')} {...field} />
-						)}
+						render={({ field }) => <FormInput label={t('Email Address')} {...field} />}
 					/>
 					<FormField
 						control={form.control}
 						name="saveEmail"
 						render={({ field }) => (
-							<FormSwitch
-								label={t('Save email to Billing Address')}
-								{...field}
-							/>
+							<FormSwitch label={t('Save email to Billing Address')} {...field} />
 						)}
 					/>
 				</VStack>

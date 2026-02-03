@@ -217,9 +217,7 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 
 				const wpApiUrl = await urlDiscovery.discoverWpApiUrl(url);
 				if (!wpApiUrl) {
-					throw new Error(
-						urlDiscovery.error || t('Failed to discover WordPress API')
-					);
+					throw new Error(urlDiscovery.error || t('Failed to discover WordPress API'));
 				}
 
 				// Step 2: Discover and validate API endpoints
@@ -228,9 +226,7 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 
 				const apiResult = await apiDiscovery.discoverApiEndpoints(wpApiUrl);
 				if (!apiResult) {
-					throw new Error(
-						apiDiscovery.error || t('Failed to discover API endpoints')
-					);
+					throw new Error(apiDiscovery.error || t('Failed to discover API endpoints'));
 				}
 
 				// Step 3: Test authorization methods
@@ -241,9 +237,7 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 					apiResult.endpoints.wcpos_api_url
 				);
 				if (!authResult) {
-					throw new Error(
-						authTesting.error || t('Failed to test authorization methods')
-					);
+					throw new Error(authTesting.error || t('Failed to test authorization methods'));
 				}
 
 				// Step 4: Save to database

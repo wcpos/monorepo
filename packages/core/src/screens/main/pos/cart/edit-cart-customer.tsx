@@ -104,7 +104,7 @@ export const EditCartCustomerForm = () => {
 				},
 			});
 			if (isRxDocument(savedDoc)) {
-				cartLogger.success(t('{name} saved', {name: format(savedDoc) }), {
+				cartLogger.success(t('{name} saved', { name: format(savedDoc) }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -115,7 +115,7 @@ export const EditCartCustomerForm = () => {
 			}
 			onOpenChange(false);
 		} catch (error) {
-			cartLogger.error(t('{message}', {message: error.message || 'Error' }), {
+			cartLogger.error(t('{message}', { message: error.message || 'Error' }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -167,9 +167,7 @@ export const EditCartCustomerForm = () => {
 					<CollapsibleContent>
 						<VStack className="gap-4">
 							<Button variant="muted" onPress={handleCopyBillingToShipping}>
-								<ButtonText>
-									{t('Copy billing address to shipping address')}
-								</ButtonText>
+								<ButtonText>{t('Copy billing address to shipping address')}</ButtonText>
 							</Button>
 							<ShippingAddressForm />
 						</VStack>
