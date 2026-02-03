@@ -30,8 +30,9 @@ test.describe('Orders Page (Pro)', () => {
 			screen.getByText(/Showing \d+ of \d+/).or(screen.getByText('No orders found')).first()
 		).toBeVisible({ timeout: 30_000 });
 
-		await expect(screen.getByRole('columnheader', { name: 'Status', exact: true })).toBeVisible({ timeout: 15_000 });
-		await expect(screen.getByRole('columnheader', { name: 'Total', exact: true })).toBeVisible({ timeout: 15_000 });
+		// Check for actual column headers (no Status header - status shown as icon)
+		await expect(screen.getByRole('columnheader', { name: /Total/i })).toBeVisible({ timeout: 15_000 });
+		await expect(screen.getByRole('columnheader', { name: /Customer/i })).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show orders or empty state', async ({ posPage: page }) => {
