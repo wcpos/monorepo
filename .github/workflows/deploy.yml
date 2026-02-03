@@ -134,6 +134,32 @@ jobs:
       - name: 🎭 Install Playwright browsers
         run: cd apps/main && npx playwright install --with-deps chromium
 
+      - name: 🏥 Health check deployment
+        run: |
+          URL="${{ needs.deploy.outputs.deployment_url }}"
+          echo "Checking deployment at: $URL"
+
+          for i in {1..30}; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            echo "Attempt $i: HTTP $HTTP_CODE"
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              # Verify the response contains expected app content
+              BODY=$(curl -s "$URL")
+              if echo "$BODY" | grep -q "WooCommerce POS\|wcpos\|expo"; then
+                echo "✅ Deployment is healthy and serving the app"
+                exit 0
+              else
+                echo "⚠️ Got 200 but content doesn't look like the app, retrying..."
+              fi
+            fi
+
+            sleep 10
+          done
+
+          echo "❌ Deployment health check failed after 30 attempts"
+          exit 1
+
       - name: 🧪 Run E2E tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
         id: e2e-tests
         run: cd apps/main && npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
