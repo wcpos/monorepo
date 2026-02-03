@@ -13,7 +13,7 @@ async function navigateToOrders(page: Page) {
  * Orders page (pro-only).
  */
 test.describe('Orders Page (Pro)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Orders page requires Pro');
 	});
@@ -92,7 +92,7 @@ test.describe('Orders Page (Pro)', () => {
  * Free users should see upgrade page.
  */
 test.describe('Orders Page (Free)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});

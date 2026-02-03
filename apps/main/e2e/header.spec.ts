@@ -23,7 +23,7 @@ test.describe('Header', () => {
 });
 
 test.describe('Upgrade Banner (Free)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade banner only for free stores');
 	});
