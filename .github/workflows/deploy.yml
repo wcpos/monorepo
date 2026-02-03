@@ -322,10 +322,11 @@ jobs:
             # Convert dashes and underscores to spaces for readability
             TEST_NAME=$(echo "$PARENT_DIR" | sed 's/-retry[0-9]*$//' | sed 's/---/ - /g' | sed 's/-/ /g' | sed 's/_/ /g')
 
-            # Create unique filename with index
+            # Create unique filename with index and copy file (gh release upload uses original filename)
             SAFE_NAME="screenshot-${INDEX}.png"
+            cp "$FILE" "/tmp/$SAFE_NAME"
 
-            gh release upload "$TAG" "$FILE" --clobber --name "$SAFE_NAME"
+            gh release upload "$TAG" "/tmp/$SAFE_NAME" --clobber
 
             # Construct the download URL
             URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${SAFE_NAME}"

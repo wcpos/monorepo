@@ -27,7 +27,7 @@ test.describe('Orders Page (Pro)', () => {
 
 		// Wait for orders data to load first
 		await expect(
-			screen.getByText(/Showing \d+ of \d+/).or(screen.getByText('No orders found'))
+			screen.getByText(/Showing \d+ of \d+/).or(screen.getByText('No orders found')).first()
 		).toBeVisible({ timeout: 30_000 });
 
 		await expect(screen.getByRole('columnheader', { name: 'Status', exact: true })).toBeVisible({ timeout: 15_000 });
