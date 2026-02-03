@@ -30,16 +30,8 @@ test.describe('Orders Page (Pro)', () => {
 			screen.getByText(/Showing \d+ of \d+/).or(screen.getByText('No orders found'))
 		).toBeVisible({ timeout: 30_000 });
 
-		// Column headers - try role first, fall back to text
-		const statusColumn = screen.getByRole('columnheader', { name: 'Status', exact: true }).or(
-			screen.getByText('Status', { exact: true }).first()
-		);
-		const totalColumn = screen.getByRole('columnheader', { name: 'Total', exact: true }).or(
-			screen.getByText('Total', { exact: true }).first()
-		);
-
-		await expect(statusColumn).toBeVisible({ timeout: 15_000 });
-		await expect(totalColumn).toBeVisible({ timeout: 15_000 });
+		await expect(screen.getByRole('columnheader', { name: 'Status', exact: true })).toBeVisible({ timeout: 15_000 });
+		await expect(screen.getByRole('columnheader', { name: 'Total', exact: true })).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should show orders or empty state', async ({ posPage: page }) => {
