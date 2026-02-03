@@ -142,10 +142,15 @@ test.describe('Products Page (Pro)', () => {
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
 
-		const ellipsis = screen.getByRole('button', { name: /more|actions|menu/i }).first();
-		await expect(ellipsis).toBeVisible({ timeout: 15_000 });
-		await ellipsis.click();
+		// The actions button is an IconButton with ellipsisVertical icon - no accessible name
+		// Find buttons in the table area (should be in each row)
+		const tableButtons = screen.locator('table [role="button"], [role="row"] [role="button"]');
+		await expect(tableButtons.first()).toBeVisible({ timeout: 15_000 });
 
+		// Click the first action button (ellipsis menu)
+		await tableButtons.first().click();
+
+		// Menu should show Edit, Sync, or Delete options
 		await expect(
 			page.getByText('Edit').or(page.getByText('Sync')).or(page.getByText('Delete'))
 		).toBeVisible({ timeout: 15_000 });

@@ -79,9 +79,15 @@ test.describe('Orders Page (Pro)', () => {
 			test.skip(true, 'No orders available to test actions menu');
 		}
 
-		const ellipsis = screen.getByRole('button', { name: /more|actions|menu/i }).first();
-		await expect(ellipsis).toBeVisible({ timeout: 15_000 });
-		await ellipsis.click();
+		// The actions button is an IconButton with ellipsisVertical icon - no accessible name
+		// Find buttons in the table area (should be in each row)
+		const tableButtons = screen.locator('table [role="button"], [role="row"] [role="button"]');
+		await expect(tableButtons.first()).toBeVisible({ timeout: 15_000 });
+
+		// Click the first action button (ellipsis menu)
+		await tableButtons.first().click();
+
+		// Menu should show Edit, Re-open, or Delete options
 		await expect(
 			page.getByText('Edit').or(page.getByText('Re-open')).or(page.getByText('Delete'))
 		).toBeVisible({ timeout: 15_000 });
