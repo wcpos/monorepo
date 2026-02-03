@@ -18,8 +18,10 @@ class RxDBBackend {
 
 	private translationsState: any;
 	private version: string;
+	private services: any;
 
-	init(_services: any, backendOptions: any) {
+	init(services: any, backendOptions: any) {
+		this.services = services;
 		this.translationsState = backendOptions.translationsState;
 		this.version = backendOptions.version || '0.0.0';
 	}
@@ -46,7 +48,7 @@ class RxDBBackend {
 					if (JSON.stringify(current) !== JSON.stringify(data)) {
 						this.translationsState?.set(language, () => data);
 					}
-					i18next.addResourceBundle(language, namespace, data, true, true);
+					this.services.resourceStore.addResourceBundle(language, namespace, data, true, true);
 				}
 			})
 			.catch(() => {});

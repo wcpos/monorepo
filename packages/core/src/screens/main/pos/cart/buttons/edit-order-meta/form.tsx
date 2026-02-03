@@ -3,12 +3,10 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-// import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
 import { Form, FormCombobox, FormField, FormInput } from '@wcpos/components/form';
-// import { Toast } from '@wcpos/components/toast';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -16,7 +14,6 @@ import { useT } from '../../../../../../contexts/translations';
 import { CurrencySelect } from '../../../../components/currency-select';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
-// import usePushDocument from '../../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../../hooks/mutations/use-local-mutation';
 
 /**
@@ -35,9 +32,7 @@ const formSchema = z.object({
  */
 export const EditOrderMetaForm = ({ order, formData }) => {
 	const t = useT();
-	// const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
-	// const pushDocument = usePushDocument();
 	const { onOpenChange } = useRootContext();
 
 	/**
@@ -67,40 +62,6 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 	 * Form submission handlers that include validation
 	 */
 	const onSave = form.handleSubmit(handleSave);
-
-	/**
-	 * Save to server
-	 *
-	 * NOTE: There's an issue if we just patch the form changes, other changes such as customer or if the
-	 * order has been reopened will be lost. We need to push the whole order object.
-	 */
-	// const handleSaveToServer = React.useCallback(
-	// 	async (data) => {
-	// 		setLoading(true);
-	// 		try {
-	// 			await localPatch({
-	// 				document: order,
-	// 				data,
-	// 			});
-	// 			await pushDocument(order).then((savedDoc) => {
-	// 				if (isRxDocument(savedDoc)) {
-	// 					Toast.show({
-	// 						type: 'success',
-	// 						text1: t('Order #{number} saved', {number: savedDoc.number }),
-	// 					});
-	// 				}
-	// 			});
-	// 		} catch (error) {
-	// 			Toast.show({
-	// 				type: 'error',
-	// 				text1: t('{message}', {message: error.message || 'Error' }),
-	// 			});
-	// 		} finally {
-	// 			setLoading(false);
-	// 		}
-	// 	},
-	// 	[localPatch, order, pushDocument, t]
-	// );
 
 	/**
 	 *
