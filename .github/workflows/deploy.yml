@@ -287,13 +287,13 @@ jobs:
         run: |
           # Find screenshot files
           if [ ! -d "all-screenshots" ]; then
-            echo "screenshot_urls=" >> $GITHUB_OUTPUT
+            echo "screenshot_data=" >> $GITHUB_OUTPUT
             exit 0
           fi
 
           SCREENSHOTS=$(find all-screenshots -name "*.png" -type f | head -6)
           if [ -z "$SCREENSHOTS" ]; then
-            echo "screenshot_urls=" >> $GITHUB_OUTPUT
+            echo "screenshot_data=" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -310,25 +310,36 @@ jobs:
             --notes "Automated screenshots from E2E test failures. This release will be cleaned up automatically." \
             --prerelease
 
-          # Upload screenshots and collect URLs
-          URLS=""
+          # Upload screenshots and collect URLs with test context
+          DATA=""
+          INDEX=1
           for FILE in $SCREENSHOTS; do
+            # Get the parent directory name which contains test info
+            PARENT_DIR=$(basename "$(dirname "$FILE")")
             BASENAME=$(basename "$FILE")
-            # Sanitize filename for GitHub
-            SAFE_NAME=$(echo "$BASENAME" | sed 's/[^a-zA-Z0-9._-]/_/g')
 
-            gh release upload "$TAG" "$FILE" --clobber
+            # Extract test name from parent dir (format: testfile-TestSuite-testname-project)
+            # Convert dashes and underscores to spaces for readability
+            TEST_NAME=$(echo "$PARENT_DIR" | sed 's/-retry[0-9]*$//' | sed 's/---/ - /g' | sed 's/-/ /g' | sed 's/_/ /g')
+
+            # Create unique filename with index
+            SAFE_NAME="screenshot-${INDEX}.png"
+
+            gh release upload "$TAG" "$FILE" --clobber --name "$SAFE_NAME"
 
             # Construct the download URL
             URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${SAFE_NAME}"
-            URLS="${URLS}${URL}\n"
 
-            echo "Uploaded: $SAFE_NAME"
+            # Store both URL and test name (pipe-separated)
+            DATA="${DATA}${TEST_NAME}|${URL}\n"
+
+            echo "Uploaded: $SAFE_NAME ($TEST_NAME)"
+            INDEX=$((INDEX + 1))
           done
 
-          # Output URLs for use in comment
-          echo "screenshot_urls<<EOF" >> $GITHUB_OUTPUT
-          echo -e "$URLS" >> $GITHUB_OUTPUT
+          # Output data for use in comment
+          echo "screenshot_data<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$DATA" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "release_tag=$TAG" >> $GITHUB_OUTPUT
 
@@ -458,16 +469,19 @@ jobs:
                 e2eDetails += `\n\n_Could not parse test results: ${e.message}_\n`;
               }
 
-              // Embed uploaded screenshots
-              const screenshotUrls = `${{ steps.upload-screenshots.outputs.screenshot_urls }}`.trim().split('\n').filter(u => u);
+              // Embed uploaded screenshots with test context
+              const screenshotData = `${{ steps.upload-screenshots.outputs.screenshot_data }}`.trim().split('\n').filter(s => s && s.includes('|'));
 
-              if (screenshotUrls.length > 0) {
+              if (screenshotData.length > 0) {
                 e2eDetails += `\n### 📸 Failure Screenshots\n\n`;
-                for (const url of screenshotUrls) {
-                  if (url) {
-                    const filename = url.split('/').pop();
-                    e2eDetails += `**${filename}**\n\n`;
-                    e2eDetails += `![${filename}](${url})\n\n`;
+                for (const line of screenshotData) {
+                  const [testName, url] = line.split('|');
+                  if (testName && url) {
+                    // Truncate long test names but show the key parts
+                    const displayName = testName.length > 80 ? testName.substring(0, 77) + '...' : testName;
+                    e2eDetails += `<details>\n<summary>📷 ${displayName}</summary>\n\n`;
+                    e2eDetails += `![${displayName}](${url})\n\n`;
+                    e2eDetails += `</details>\n\n`;
                   }
                 }
               }
