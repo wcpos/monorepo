@@ -276,6 +276,59 @@ jobs:
           path: all-screenshots
           merge-multiple: true
 
+      - name: 📤 Upload screenshots for embedding
+        id: upload-screenshots
+        if: needs.e2e.result == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find screenshot files
+          if [ ! -d "all-screenshots" ]; then
+            echo "screenshot_urls=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          SCREENSHOTS=$(find all-screenshots -name "*.png" -type f | head -6)
+          if [ -z "$SCREENSHOTS" ]; then
+            echo "screenshot_urls=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Create a tag for this PR's screenshots
+          TAG="e2e-screenshots-pr${{ github.event.pull_request.number }}-${{ github.sha }}"
+
+          # Delete existing release if it exists (from previous runs)
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          git push origin --delete "$TAG" 2>/dev/null || true
+
+          # Create a new release
+          gh release create "$TAG" \
+            --title "E2E Screenshots - PR #${{ github.event.pull_request.number }}" \
+            --notes "Automated screenshots from E2E test failures. This release will be cleaned up automatically." \
+            --prerelease
+
+          # Upload screenshots and collect URLs
+          URLS=""
+          for FILE in $SCREENSHOTS; do
+            BASENAME=$(basename "$FILE")
+            # Sanitize filename for GitHub
+            SAFE_NAME=$(echo "$BASENAME" | sed 's/[^a-zA-Z0-9._-]/_/g')
+
+            gh release upload "$TAG" "$FILE" --clobber
+
+            # Construct the download URL
+            URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${SAFE_NAME}"
+            URLS="${URLS}${URL}\n"
+
+            echo "Uploaded: $SAFE_NAME"
+          done
+
+          # Output URLs for use in comment
+          echo "screenshot_urls<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$URLS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "release_tag=$TAG" >> $GITHUB_OUTPUT
+
       - name: 💬 Comment on PR
         uses: actions/github-script@v7
         with:
@@ -402,10 +455,24 @@ jobs:
                 e2eDetails += `\n\n_Could not parse test results: ${e.message}_\n`;
               }
 
-              // List available screenshots
+              // Embed uploaded screenshots
+              const screenshotUrls = `${{ steps.upload-screenshots.outputs.screenshot_urls }}`.trim().split('\n').filter(u => u);
+
+              if (screenshotUrls.length > 0) {
+                e2eDetails += `\n### 📸 Failure Screenshots\n\n`;
+                for (const url of screenshotUrls) {
+                  if (url) {
+                    const filename = url.split('/').pop();
+                    e2eDetails += `**${filename}**\n\n`;
+                    e2eDetails += `![${filename}](${url})\n\n`;
+                  }
+                }
+              }
+
+              // List additional screenshots if there are more
               try {
                 if (fs.existsSync('all-screenshots')) {
-                  const screenshots = [];
+                  const allScreenshots = [];
                   function findScreenshots(dir) {
                     const items = fs.readdirSync(dir);
                     for (const item of items) {
@@ -413,23 +480,22 @@ jobs:
                       if (fs.statSync(fullPath).isDirectory()) {
                         findScreenshots(fullPath);
                       } else if (item.endsWith('.png')) {
-                        screenshots.push(fullPath);
+                        allScreenshots.push(fullPath);
                       }
                     }
                   }
                   findScreenshots('all-screenshots');
 
-                  if (screenshots.length > 0) {
-                    e2eDetails += `\n### 📸 Screenshots (${screenshots.length} captured)\n`;
-                    e2eDetails += `Screenshots are available in the [workflow artifacts](https://github.com/${{ github.repository }}/actions/runs/${runId}#artifacts).\n\n`;
-                    e2eDetails += `<details>\n<summary>Screenshot files</summary>\n\n`;
-                    for (const s of screenshots.slice(0, 20)) {
+                  if (allScreenshots.length > screenshotUrls.length) {
+                    e2eDetails += `<details>\n<summary>📁 All screenshot files (${allScreenshots.length} total)</summary>\n\n`;
+                    for (const s of allScreenshots.slice(0, 30)) {
                       const name = s.replace('all-screenshots/', '');
                       e2eDetails += `- \`${name}\`\n`;
                     }
-                    if (screenshots.length > 20) {
-                      e2eDetails += `- _...and ${screenshots.length - 20} more_\n`;
+                    if (allScreenshots.length > 30) {
+                      e2eDetails += `- _...and ${allScreenshots.length - 30} more_\n`;
                     }
+                    e2eDetails += `\n[Download all from artifacts](https://github.com/${{ github.repository }}/actions/runs/${runId}#artifacts)\n`;
                     e2eDetails += `</details>\n`;
                   }
                 }
