@@ -259,6 +259,10 @@ jobs:
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      - name: 🏗 Checkout (for gh CLI)
+        if: needs.e2e.result == 'failure'
+        uses: actions/checkout@v4
+
       - name: 📥 Download test results
         if: needs.e2e.result == 'failure'
         uses: actions/download-artifact@v4
