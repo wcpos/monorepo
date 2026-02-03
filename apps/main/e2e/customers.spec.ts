@@ -29,7 +29,7 @@ test.describe('Customers in POS', () => {
  * Pro: create a new customer from the POS cart.
  */
 test.describe('Add Customer from Cart (Pro)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Adding customers from cart requires Pro');
 	});
@@ -62,7 +62,7 @@ test.describe('Add Customer from Cart (Pro)', () => {
  * Free: add customer button should be disabled.
  */
 test.describe('Add Customer from Cart (Free)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Only for free stores');
 	});
@@ -78,7 +78,7 @@ test.describe('Add Customer from Cart (Free)', () => {
  * Customers page (pro-only drawer page).
  */
 test.describe('Customers Page (Pro)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Customers page requires Pro');
 	});
@@ -142,7 +142,7 @@ test.describe('Customers Page (Pro)', () => {
  * Free users should see upgrade page.
  */
 test.describe('Customers Page (Free)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});

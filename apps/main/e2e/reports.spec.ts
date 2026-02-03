@@ -5,7 +5,7 @@ import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fi
  * Reports page (pro-only).
  */
 test.describe('Reports Page (Pro)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Reports page requires Pro');
 	});
@@ -55,7 +55,7 @@ test.describe('Reports Page (Pro)', () => {
  * Free users should see upgrade page.
  */
 test.describe('Reports Page (Free)', () => {
-	test.beforeEach(async (_, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});
