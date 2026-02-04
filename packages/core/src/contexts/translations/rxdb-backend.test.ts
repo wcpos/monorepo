@@ -1,17 +1,16 @@
-import { RxDBBackend } from './rxdb-backend';
+import { RxDBBackend, TRANSLATION_VERSION } from './rxdb-backend';
 
 // Mock global fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-function createBackend(options: { version?: string; translationsState?: any } = {}) {
+function createBackend(options: { translationsState?: any } = {}) {
 	const backend = new RxDBBackend();
 	const services = {
 		resourceStore: { addResourceBundle: jest.fn() },
 	};
 	backend.init(services, {
 		translationsState: options.translationsState ?? null,
-		version: options.version ?? '1.8.7',
 	});
 	return { backend, services };
 }
@@ -30,31 +29,18 @@ describe('RxDBBackend', () => {
 
 	describe('buildUrl', () => {
 		it('constructs the correct jsDelivr CDN URL with monorepo/ path', () => {
-			const { backend } = createBackend({ version: '1.8.7' });
+			const { backend } = createBackend();
 			const url = backend.buildUrl('fr_FR', 'core');
 			expect(url).toBe(
-				'https://cdn.jsdelivr.net/gh/wcpos/translations@v1.8.7/translations/js/fr_FR/monorepo/core.json'
+				`https://cdn.jsdelivr.net/gh/wcpos/translations@${TRANSLATION_VERSION}/translations/js/fr_FR/monorepo/core.json`
 			);
 		});
 
-		it('uses the version provided in backend options', () => {
-			const { backend } = createBackend({ version: '2.0.0' });
-			const url = backend.buildUrl('de_DE', 'core');
-			expect(url).toContain('@v2.0.0/');
-		});
-
-		it('falls back to version 0.0.0 when no version provided', () => {
-			const backend = new RxDBBackend();
-			backend.init({ resourceStore: { addResourceBundle: jest.fn() } }, {});
-			const url = backend.buildUrl('en', 'core');
-			expect(url).toContain('@v0.0.0/');
-		});
-
 		it('handles different namespaces', () => {
-			const { backend } = createBackend({ version: '1.8.7' });
+			const { backend } = createBackend();
 			const url = backend.buildUrl('ja', 'electron');
 			expect(url).toBe(
-				'https://cdn.jsdelivr.net/gh/wcpos/translations@v1.8.7/translations/js/ja/monorepo/electron.json'
+				`https://cdn.jsdelivr.net/gh/wcpos/translations@${TRANSLATION_VERSION}/translations/js/ja/monorepo/electron.json`
 			);
 		});
 	});
@@ -98,14 +84,14 @@ describe('RxDBBackend', () => {
 
 	describe('read — fetch behavior', () => {
 		it('fetches from the correct CDN URL', () => {
-			const { backend } = createBackend({ version: '1.8.7', translationsState: {} });
+			const { backend } = createBackend({ translationsState: {} });
 
 			mockFetch.mockResolvedValue({ ok: false });
 
 			backend.read('fr_FR', 'core', jest.fn());
 
 			expect(mockFetch).toHaveBeenCalledWith(
-				'https://cdn.jsdelivr.net/gh/wcpos/translations@v1.8.7/translations/js/fr_FR/monorepo/core.json'
+				`https://cdn.jsdelivr.net/gh/wcpos/translations@${TRANSLATION_VERSION}/translations/js/fr_FR/monorepo/core.json`
 			);
 		});
 

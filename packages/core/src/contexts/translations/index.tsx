@@ -2,17 +2,14 @@ import * as React from 'react';
 
 import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next, useTranslation } from 'react-i18next';
-import { useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
 
 import { RxDBBackend } from './rxdb-backend';
 import { useLocale } from '../../hooks/use-locale';
 import { useAppState } from '../app-state';
 
 export const TranslationProvider = ({ children }: { children: React.ReactNode }) => {
-	const { translationsState, site } = useAppState();
+	const { translationsState } = useAppState();
 	const { locale } = useLocale();
-	const wcposVersion = useObservableEagerState(site?.wcpos_version$ ?? of(''));
 
 	const i18nInstance = React.useMemo(() => {
 		const instance = createInstance();
@@ -34,21 +31,10 @@ export const TranslationProvider = ({ children }: { children: React.ReactNode })
 				},
 				backend: {
 					translationsState,
-					version: wcposVersion,
 				},
 			});
 		return instance;
-	}, [locale, translationsState, wcposVersion]);
-
-	/**
-	 * When the WCPOS version becomes available (fetched via useSiteInfo),
-	 * reload translations so the backend can fetch from the correct CDN URL.
-	 */
-	React.useEffect(() => {
-		if (wcposVersion && locale) {
-			i18nInstance.reloadResources(locale, 'core');
-		}
-	}, [wcposVersion, locale, i18nInstance]);
+	}, [locale, translationsState]);
 
 	/**
 	 * Handle locale changes.
