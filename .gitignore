@@ -4,6 +4,7 @@ node_modules
 .DS_Store
 .turbo
 .translations
+docs/
 
 # Playwright
 /test-results/

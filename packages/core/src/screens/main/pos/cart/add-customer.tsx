@@ -68,7 +68,7 @@ export const AddNewCustomer = () => {
 			try {
 				const savedDoc = await create({ data });
 				if (isRxDocument(savedDoc)) {
-					cartLogger.success(t('{name} saved', { name: format(savedDoc) }), {
+					cartLogger.success(t('common.saved', { name: format(savedDoc) }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -91,7 +91,7 @@ export const AddNewCustomer = () => {
 				}
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				cartLogger.error(t('Failed to save customer'), {
+				cartLogger.error(t('common.failed_to_save_customer'), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -114,12 +114,12 @@ export const AddNewCustomer = () => {
 						<IconButton testID="add-customer-button" name="userPlus" />
 					</TooltipTrigger>
 					<TooltipContent>
-						<Text>{t('Add new customer')}</Text>
+						<Text>{t('common.add_new_customer')}</Text>
 					</TooltipContent>
 				</Tooltip>
 				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
-						<DialogTitle>{t('Add new customer')}</DialogTitle>
+						<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
 					</DialogHeader>
 					<DialogBody>
 						<CustomerForm

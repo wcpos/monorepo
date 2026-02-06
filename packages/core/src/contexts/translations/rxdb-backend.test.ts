@@ -1,23 +1,29 @@
 import { RxDBBackend, TRANSLATION_VERSION } from './rxdb-backend';
 
-// Mock global fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 function createBackend(options: { translationsState?: any } = {}) {
 	const backend = new RxDBBackend();
-	const services = {
-		resourceStore: { addResourceBundle: jest.fn() },
-	};
-	backend.init(services, {
+	backend.init({}, {
 		translationsState: options.translationsState ?? null,
 	});
-	return { backend, services };
+	return backend;
 }
 
 beforeEach(() => {
 	mockFetch.mockReset();
 });
+
+function mockFetchResponse(data: Record<string, string> | null) {
+	if (data === null) {
+		return mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+	}
+	return mockFetch.mockResolvedValueOnce({
+		ok: true,
+		json: () => Promise.resolve(data),
+	});
+}
 
 describe('RxDBBackend', () => {
 	describe('static properties', () => {
@@ -28,167 +34,154 @@ describe('RxDBBackend', () => {
 	});
 
 	describe('buildUrl', () => {
-		it('constructs the correct jsDelivr CDN URL with monorepo/ path', () => {
-			const { backend } = createBackend();
-			const url = backend.buildUrl('fr_FR', 'core');
+		it('constructs the correct jsDelivr CDN URL', () => {
+			const backend = createBackend();
+			const url = backend.buildUrl('fr_CA', 'core');
 			expect(url).toBe(
-				`https://cdn.jsdelivr.net/gh/wcpos/translations@${TRANSLATION_VERSION}/translations/js/fr_FR/monorepo/core.json`
-			);
-		});
-
-		it('handles different namespaces', () => {
-			const { backend } = createBackend();
-			const url = backend.buildUrl('ja', 'electron');
-			expect(url).toBe(
-				`https://cdn.jsdelivr.net/gh/wcpos/translations@${TRANSLATION_VERSION}/translations/js/ja/monorepo/electron.json`
+				`https://cdn.jsdelivr.net/gh/wcpos/translations@${TRANSLATION_VERSION}/translations/js/fr_CA/monorepo/core.json`
 			);
 		});
 	});
 
 	describe('read — cache behavior', () => {
-		it('returns cached translations when available', () => {
-			const cached = { Hello: 'Bonjour', Goodbye: 'Au revoir' };
-			const translationsState = { fr_FR: cached };
-			const { backend } = createBackend({ translationsState });
-
-			mockFetch.mockResolvedValue({ ok: false });
+		it('returns cached translations immediately without fetching', () => {
+			const cached = { 'pos_cart.add_to_cart': 'Ajouter au panier' };
+			const backend = createBackend({ translationsState: { fr_CA: cached } });
 
 			const callback = jest.fn();
-			backend.read('fr_FR', 'core', callback);
+			backend.read('fr_CA', 'core', callback);
 
 			expect(callback).toHaveBeenCalledWith(null, cached);
-		});
-
-		it('calls callback with null (no data) when cache is empty', () => {
-			const { backend } = createBackend({ translationsState: {} });
-
-			mockFetch.mockResolvedValue({ ok: false });
-
-			const callback = jest.fn();
-			backend.read('fr_FR', 'core', callback);
-
-			expect(callback).toHaveBeenCalledWith(null);
-		});
-
-		it('calls callback with null when translationsState is null', () => {
-			const { backend } = createBackend({ translationsState: null });
-
-			mockFetch.mockResolvedValue({ ok: false });
-
-			const callback = jest.fn();
-			backend.read('fr_FR', 'core', callback);
-
-			expect(callback).toHaveBeenCalledWith(null);
+			expect(mockFetch).not.toHaveBeenCalled();
 		});
 	});
 
-	describe('read — fetch behavior', () => {
-		it('fetches from the correct CDN URL', () => {
-			const { backend } = createBackend({ translationsState: {} });
+	describe('read — regional locale fallback chain', () => {
+		it('uses exact locale (fr_CA) when CDN has it', async () => {
+			const frCAData = { 'common.cancel': 'Annuler (CA)' };
+			mockFetchResponse(frCAData);
 
-			mockFetch.mockResolvedValue({ ok: false });
-
-			backend.read('fr_FR', 'core', jest.fn());
-
-			expect(mockFetch).toHaveBeenCalledWith(
-				`https://cdn.jsdelivr.net/gh/wcpos/translations@${TRANSLATION_VERSION}/translations/js/fr_FR/monorepo/core.json`
-			);
-		});
-
-		it('updates cache and resource store when fetch returns new data', async () => {
-			const translationsState = {
-				set: jest.fn(),
-			};
-			const { backend, services } = createBackend({ translationsState });
-
-			const freshData = { Hello: 'Hola', Goodbye: 'Adiós' };
-			mockFetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(freshData),
-			});
-
-			backend.read('es_ES', 'core', jest.fn());
-
-			// Let the fetch promise chain resolve
-			await new Promise((r) => setTimeout(r, 0));
-
-			expect(translationsState.set).toHaveBeenCalledWith('es_ES', expect.any(Function));
-			expect(services.resourceStore.addResourceBundle).toHaveBeenCalledWith(
-				'es_ES',
-				'core',
-				freshData,
-				true,
-				true
-			);
-		});
-
-		it('skips cache update when fetched data matches current cache', async () => {
-			const data = { Hello: 'Bonjour' };
-			const translationsState = {
-				fr_FR: data,
-				set: jest.fn(),
-			};
-			const { backend, services } = createBackend({ translationsState });
-
-			mockFetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(data),
-			});
-
-			backend.read('fr_FR', 'core', jest.fn());
-
-			await new Promise((r) => setTimeout(r, 0));
-
-			expect(translationsState.set).not.toHaveBeenCalled();
-			// Resource store is still updated to ensure i18next has the data
-			expect(services.resourceStore.addResourceBundle).toHaveBeenCalled();
-		});
-
-		it('ignores empty translation responses', async () => {
 			const translationsState = { set: jest.fn() };
-			const { backend, services } = createBackend({ translationsState });
-
-			mockFetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve({}),
-			});
-
-			backend.read('fr_FR', 'core', jest.fn());
-
-			await new Promise((r) => setTimeout(r, 0));
-
-			expect(translationsState.set).not.toHaveBeenCalled();
-			expect(services.resourceStore.addResourceBundle).not.toHaveBeenCalled();
-		});
-
-		it('handles non-ok responses gracefully', async () => {
-			const translationsState = { set: jest.fn() };
-			const { backend, services } = createBackend({ translationsState });
-
-			mockFetch.mockResolvedValue({ ok: false, status: 404 });
-
-			backend.read('xx_XX', 'core', jest.fn());
-
-			await new Promise((r) => setTimeout(r, 0));
-
-			expect(translationsState.set).not.toHaveBeenCalled();
-			expect(services.resourceStore.addResourceBundle).not.toHaveBeenCalled();
-		});
-
-		it('handles fetch network errors gracefully', async () => {
-			const translationsState = { set: jest.fn() };
-			const { backend, services } = createBackend({ translationsState });
-
-			mockFetch.mockRejectedValue(new Error('Network error'));
+			const backend = createBackend({ translationsState });
 
 			const callback = jest.fn();
-			backend.read('fr_FR', 'core', callback);
+			backend.read('fr_CA', 'core', callback);
 
 			await new Promise((r) => setTimeout(r, 0));
 
-			// Should not throw, just silently fail
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(mockFetch).toHaveBeenCalledWith(
+				expect.stringContaining('/fr_CA/monorepo/core.json')
+			);
+			expect(callback).toHaveBeenCalledWith(null, frCAData);
+			expect(translationsState.set).toHaveBeenCalledWith('fr_CA', expect.any(Function));
+		});
+
+		it('falls back to base language (fr) when regional locale (fr_CA) is empty', async () => {
+			mockFetchResponse({}); // fr_CA returns empty
+			const frData = { 'common.cancel': 'Annuler' };
+			mockFetchResponse(frData); // fr returns data
+
+			const translationsState = { set: jest.fn() };
+			const backend = createBackend({ translationsState });
+
+			const callback = jest.fn();
+			backend.read('fr_CA', 'core', callback);
+
+			await new Promise((r) => setTimeout(r, 0));
+
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+			expect(mockFetch).toHaveBeenNthCalledWith(1,
+				expect.stringContaining('/fr_CA/monorepo/core.json')
+			);
+			expect(mockFetch).toHaveBeenNthCalledWith(2,
+				expect.stringContaining('/fr/monorepo/core.json')
+			);
+			expect(callback).toHaveBeenCalledWith(null, frData);
+			// Caches under original key so we don't re-fetch fr_CA next time
+			expect(translationsState.set).toHaveBeenCalledWith('fr_CA', expect.any(Function));
+		});
+
+		it('falls back to base language (fr) when regional locale (fr_CA) returns 404', async () => {
+			mockFetchResponse(null); // fr_CA 404
+			const frData = { 'common.cancel': 'Annuler' };
+			mockFetchResponse(frData); // fr returns data
+
+			const translationsState = { set: jest.fn() };
+			const backend = createBackend({ translationsState });
+
+			const callback = jest.fn();
+			backend.read('fr_CA', 'core', callback);
+
+			await new Promise((r) => setTimeout(r, 0));
+
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+			expect(callback).toHaveBeenCalledWith(null, frData);
+		});
+
+		it('returns empty when both regional and base language fail (triggers en fallback)', async () => {
+			mockFetchResponse(null); // fr_CA 404
+			mockFetchResponse(null); // fr 404
+
+			const translationsState = { set: jest.fn() };
+			const backend = createBackend({ translationsState });
+
+			const callback = jest.fn();
+			backend.read('fr_CA', 'core', callback);
+
+			await new Promise((r) => setTimeout(r, 0));
+
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+			// Returns empty object — i18next will use bundled en.json fallback
+			expect(callback).toHaveBeenCalledWith(null, {});
 			expect(translationsState.set).not.toHaveBeenCalled();
-			expect(services.resourceStore.addResourceBundle).not.toHaveBeenCalled();
+		});
+
+		it('returns empty without base fallback for non-regional locales (e.g. "xx")', async () => {
+			mockFetchResponse(null); // xx 404
+
+			const translationsState = { set: jest.fn() };
+			const backend = createBackend({ translationsState });
+
+			const callback = jest.fn();
+			backend.read('xx', 'core', callback);
+
+			await new Promise((r) => setTimeout(r, 0));
+
+			// No base language to try, only one fetch
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(callback).toHaveBeenCalledWith(null, {});
+		});
+	});
+
+	describe('read — error handling', () => {
+		it('returns empty on network error (triggers en fallback)', async () => {
+			mockFetch.mockRejectedValue(new Error('Network error'));
+
+			const translationsState = { set: jest.fn() };
+			const backend = createBackend({ translationsState });
+
+			const callback = jest.fn();
+			backend.read('fr_CA', 'core', callback);
+
+			await new Promise((r) => setTimeout(r, 0));
+
+			expect(callback).toHaveBeenCalledWith(null, {});
+			expect(translationsState.set).not.toHaveBeenCalled();
+		});
+
+		it('works when translationsState is null', async () => {
+			mockFetchResponse(null);
+
+			const backend = createBackend({ translationsState: null });
+
+			const callback = jest.fn();
+			backend.read('fr', 'core', callback);
+
+			await new Promise((r) => setTimeout(r, 0));
+
+			// Should not throw
+			expect(callback).toHaveBeenCalledWith(null, {});
 		});
 	});
 });

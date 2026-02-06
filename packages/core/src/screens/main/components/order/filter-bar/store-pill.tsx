@@ -61,11 +61,11 @@ export const StorePill = ({ resource, query }: Props) => {
 		} else {
 			switch (selected) {
 				case 'woocommerce-pos':
-					return { value: 'woocommerce-pos', label: t('POS') };
+					return { value: 'woocommerce-pos', label: t('common.pos') };
 				case 'checkout':
-					return { value: 'checkout', label: t('Online Store') };
+					return { value: 'checkout', label: t('common.online_store') };
 				case 'admin':
-					return { value: 'admin', label: t('WP Admin') };
+					return { value: 'admin', label: t('common.wp_admin') };
 			}
 		}
 	}, [selected, stores, t]);
@@ -122,27 +122,27 @@ export const StorePill = ({ resource, query }: Props) => {
 					removable={isActive}
 					onRemove={handleRemove}
 				>
-					<ButtonText>{value?.label || t('Created via')}</ButtonText>
+					<ButtonText>{value?.label || t('common.created_via_2')}</ButtonText>
 				</ButtonPill>
 			</SelectPrimitiveTrigger>
 			<SelectContent>
 				<SelectGroup>
-					<SelectLabel>{t('Created via')}</SelectLabel>
-					<SelectItem value="woocommerce-pos" label={t('POS')}>
-						{t('POS')}
+					<SelectLabel>{t('common.created_via_2')}</SelectLabel>
+					<SelectItem value="woocommerce-pos" label={t('common.pos')}>
+						{t('common.pos')}
 					</SelectItem>
-					<SelectItem value="checkout" label={t('Online Store')}>
-						{t('Online Store')}
+					<SelectItem value="checkout" label={t('common.online_store')}>
+						{t('common.online_store')}
 					</SelectItem>
-					<SelectItem value="admin" label={t('WP Admin')}>
-						{t('WP Admin')}
+					<SelectItem value="admin" label={t('common.wp_admin')}>
+						{t('common.wp_admin')}
 					</SelectItem>
 				</SelectGroup>
 				{showStores && (
 					<>
 						<SelectSeparator />
 						<SelectGroup>
-							<SelectLabel>{t('Store')}</SelectLabel>
+							<SelectLabel>{t('common.store')}</SelectLabel>
 							{(stores || []).map((store) => {
 								return (
 									<SelectItem key={store.id} value={store.id} label={store.name}>

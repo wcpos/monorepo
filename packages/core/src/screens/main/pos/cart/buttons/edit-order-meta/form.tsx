@@ -76,7 +76,11 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 						name="currency"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormCombobox customComponent={CurrencySelect} label={t('Currency')} {...field} />
+								<FormCombobox
+									customComponent={CurrencySelect}
+									label={t('common.currency')}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -85,15 +89,15 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 						name="transaction_id"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Transaction ID')} {...field} />
+								<FormInput label={t('common.transaction_id')} {...field} />
 							</View>
 						)}
 					/>
 				</HStack>
 				<MetaDataForm />
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Cancel')}</DialogClose>
-					<DialogAction onPress={onSave}>{t('Save')}</DialogAction>
+					<DialogClose>{t('common.cancel')}</DialogClose>
+					<DialogAction onPress={onSave}>{t('common.save')}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

@@ -130,7 +130,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	 */
 	const handleSuccess = React.useCallback(
 		(doc: RxDocument) => {
-			mutationLogger.success(t('{title} #{id} saved', { id: doc.id, title: collectionLabel }), {
+			mutationLogger.success(t('common.saved_2', { id: doc.id, title: collectionLabel }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -190,7 +190,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				} else {
 					// Server returned an error or invalid response - rollback local changes
 					await doc.getLatest().incrementalPatch(originalValues);
-					handleError(new Error(t('{title} not updated', { title: collectionLabel })), {
+					handleError(new Error(t('common.not_updated', { title: collectionLabel })), {
 						documentId: doc.id,
 					});
 				}
@@ -264,7 +264,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				} else {
 					// Server returned an error or invalid response - remove local document
 					await localDoc.getLatest().remove();
-					handleError(new Error(t('{title} not created', { title: collectionLabel })));
+					handleError(new Error(t('common.not_created', { title: collectionLabel })));
 				}
 			} catch (error) {
 				// Remove local document on error

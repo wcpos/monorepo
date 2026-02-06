@@ -83,7 +83,7 @@ export const useAddProduct = () => {
 
 			// returned success should be the updated order
 			if (success) {
-				orderLogger.success(t('{name} added to cart', { name: product.name }), {
+				orderLogger.success(t('common.added_to_cart', { name: product.name }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -92,7 +92,7 @@ export const useAddProduct = () => {
 					},
 				});
 			} else {
-				orderLogger.error(t('Error adding {name} to cart', { name: product.name }), {
+				orderLogger.error(t('pos.error_adding_to_cart', { name: product.name }), {
 					showToast: true,
 					saveToDb: true,
 					context: {

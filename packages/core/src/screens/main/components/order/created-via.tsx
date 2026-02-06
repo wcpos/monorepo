@@ -44,13 +44,13 @@ export const CreatedVia = ({ row }: CellContext<{ document: OrderDocument }, 'cr
 	const label = React.useMemo(() => {
 		switch (createdVia) {
 			case 'woocommerce-pos':
-				return t('POS Store');
+				return t('common.pos_store');
 			case 'admin':
-				return t('WP Admin');
+				return t('common.wp_admin');
 			case 'checkout':
-				return t('Online Store');
+				return t('common.online_store');
 			default:
-				return createdVia || t('Unknown');
+				return createdVia || t('common.unknown');
 		}
 	}, [createdVia, t]);
 

@@ -53,7 +53,7 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 	return (
 		<Collapsible>
 			<CollapsibleTrigger>
-				<Text>{t('Meta Data')}</Text>
+				<Text>{t('common.meta_data')}</Text>
 			</CollapsibleTrigger>
 			<CollapsibleContent>
 				<VStack>
@@ -69,20 +69,22 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 									<FormField
 										control={control}
 										name={`${name}.${index}.id`}
-										render={({ field }) => <FormInput label={t('ID')} {...field} readOnly />}
+										render={({ field }) => <FormInput label={t('common.id')} {...field} readOnly />}
 									/>
 								</View>
 								<VStack className="flex-1 flex-col p-2">
 									<FormField
 										control={control}
 										name={`${name}.${index}.key`}
-										render={({ field }) => <FormInput label={t('Key')} {...field} />}
+										render={({ field }) => <FormInput label={t('common.key')} {...field} />}
 									/>
 									{withDisplayValues && (
 										<FormField
 											control={control}
 											name={`${name}.${index}.display_key`}
-											render={({ field }) => <FormInput label={t('Display Key')} {...field} />}
+											render={({ field }) => (
+												<FormInput label={t('common.display_key')} {...field} />
+											)}
 										/>
 									)}
 								</VStack>
@@ -90,13 +92,15 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 									<FormField
 										control={control}
 										name={`${name}.${index}.value`}
-										render={({ field }) => <FormInput label={t('Value')} {...field} />}
+										render={({ field }) => <FormInput label={t('common.value')} {...field} />}
 									/>
 									{withDisplayValues && (
 										<FormField
 											control={control}
 											name={`${name}.${index}.display_value`}
-											render={({ field }) => <FormInput label={t('Display Value')} {...field} />}
+											render={({ field }) => (
+												<FormInput label={t('common.display_value')} {...field} />
+											)}
 										/>
 									)}
 								</VStack>
@@ -120,7 +124,7 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 											/>
 										</TooltipTrigger>
 										<TooltipContent>
-											<Text>{t('Remove item')}</Text>
+											<Text>{t('common.remove_item')}</Text>
 										</TooltipContent>
 									</Tooltip>
 								</View>
@@ -129,7 +133,7 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 					})}
 					<HStack>
 						<Button variant="outline" onPress={() => append({ key: '', value: '' })}>
-							<ButtonText>{t('Add meta data')}</ButtonText>
+							<ButtonText>{t('common.add_meta_data')}</ButtonText>
 						</Button>
 					</HStack>
 				</VStack>

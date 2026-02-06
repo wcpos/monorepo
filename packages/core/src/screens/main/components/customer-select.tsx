@@ -37,7 +37,7 @@ export function CustomerSelect({
 	return (
 		<Combobox {...props}>
 			<ComboboxTrigger disabled={disabled}>
-				<ComboboxValue placeholder={t('Select Customer')} />
+				<ComboboxValue placeholder={t('common.select_customer')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
 				<CustomerSearch withGuest={withGuest} />
@@ -85,7 +85,11 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 	 */
 	return (
 		<>
-			<ComboboxInput placeholder={t('Search Customers')} value={search} onChangeText={onSearch} />
+			<ComboboxInput
+				placeholder={t('common.search_customers')}
+				value={search}
+				onChangeText={onSearch}
+			/>
 			<Suspense>
 				<CustomerList query={query} withGuest={withGuest} />
 			</Suspense>
@@ -123,7 +127,7 @@ export function CustomerList({ query, withGuest }: { query: any; withGuest: bool
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
-			ListEmptyComponent={<ComboboxEmpty>{t('No customers found')}</ComboboxEmpty>}
+			ListEmptyComponent={<ComboboxEmpty>{t('common.no_customers_found')}</ComboboxEmpty>}
 		/>
 	);
 }
@@ -139,7 +143,7 @@ function CustomerSelectItem({ customer }: { customer: CustomerDocument }) {
 					source="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
 					recyclingKey="guest"
 				/>
-				<Text className="flex-1">{t('Guest')}</Text>
+				<Text className="flex-1">{t('common.guest')}</Text>
 			</HStack>
 		);
 	} else {

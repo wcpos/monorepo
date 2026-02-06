@@ -25,35 +25,29 @@ export const PageUpgrade = ({
 			case 'products':
 				return {
 					imageURL: 'https://wcpos.com/products-upgrade.png',
-					title: t('Upgrade to Pro'),
-					description: t(
-						'Adjust product prices and quantities by upgrading to WooCommerce POS Pro'
-					),
+					title: t('common.upgrade_to_pro'),
+					description: t('upgrade.adjust_product_prices_and_quantities_by'),
 					demoURL: 'https://demo.wcpos.com/pos/products',
 				};
 			case 'orders':
 				return {
 					imageURL: 'https://wcpos.com/orders-upgrade.png',
-					title: t('Upgrade to Pro'),
-					description: t(
-						'Re-open and print receipts for older orders by upgrading to WooCommerce POS Pro'
-					),
+					title: t('common.upgrade_to_pro'),
+					description: t('upgrade.re-open_and_print_receipts_for_older'),
 					demoURL: 'https://demo.wcpos.com/pos/orders',
 				};
 			case 'customers':
 				return {
 					imageURL: 'https://wcpos.com/customers-upgrade.png',
-					title: t('Upgrade to Pro'),
-					description: t(
-						'Add new customers and edit existing customers by upgrading to WooCommerce POS Pro'
-					),
+					title: t('common.upgrade_to_pro'),
+					description: t('upgrade.add_new_customers_and_edit_existing'),
 					demoURL: 'https://demo.wcpos.com/pos/customers',
 				};
 			case 'reports':
 				return {
 					imageURL: 'https://wcpos.com/reports-upgrade.png',
-					title: t('Upgrade to Pro'),
-					description: t('Unlock End of Day Reports by upgrading to WooCommerce POS Pro'),
+					title: t('common.upgrade_to_pro'),
+					description: t('upgrade.unlock_end_of_day_reports_by'),
 					demoURL: 'https://demo.wcpos.com/pos/reports',
 				};
 			default:
@@ -80,10 +74,10 @@ export const PageUpgrade = ({
 					<Text className="text-center sm:text-left">{description}</Text>
 					<HStack className="justify-center gap-2 sm:justify-start">
 						<Button variant="secondary" onPress={() => Linking.openURL(demoURL)}>
-							{t('View Demo')}
+							{t('upgrade.view_demo')}
 						</Button>
 						<Button onPress={() => Linking.openURL('https://wcpos.com/pro')}>
-							{t('Upgrade to Pro')}
+							{t('common.upgrade_to_pro')}
 						</Button>
 					</HStack>
 				</VStack>

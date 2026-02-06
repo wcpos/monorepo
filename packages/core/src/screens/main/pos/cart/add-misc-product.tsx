@@ -56,7 +56,7 @@ export const AddMiscProduct = () => {
 			const { name, price, sku, tax_status, tax_class } = data;
 			addProduct({
 				id: 0,
-				name: isEmpty(name) ? t('Product') : name,
+				name: isEmpty(name) ? t('common.product') : name,
 				price: isEmpty(price) ? '0' : price,
 				sku,
 				regular_price: isEmpty(price) ? '0' : price,
@@ -84,7 +84,7 @@ export const AddMiscProduct = () => {
 					control={form.control}
 					name="name"
 					render={({ field }) => (
-						<FormInput label={t('Name')} placeholder={t('Product')} {...field} />
+						<FormInput label={t('common.name')} placeholder={t('common.product')} {...field} />
 					)}
 				/>
 				<HStack className="gap-4">
@@ -93,7 +93,7 @@ export const AddMiscProduct = () => {
 						name="sku"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('SKU')} {...field} />
+								<FormInput label={t('common.sku')} {...field} />
 							</View>
 						)}
 					/>
@@ -104,7 +104,7 @@ export const AddMiscProduct = () => {
 							<View className="flex-1">
 								<FormInput
 									customComponent={CurrencyInput}
-									label={t('Price')}
+									label={t('common.price')}
 									placeholder="0"
 									{...field}
 								/>
@@ -118,7 +118,11 @@ export const AddMiscProduct = () => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect customComponent={TaxClassSelect} label={t('Tax Class')} {...field} />
+								<FormSelect
+									customComponent={TaxClassSelect}
+									label={t('common.tax_class')}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -128,7 +132,7 @@ export const AddMiscProduct = () => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormRadioGroup
-									label={t('Tax Status')}
+									label={t('common.tax_status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -137,8 +141,8 @@ export const AddMiscProduct = () => {
 					/>
 				</HStack>
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Cancel')}</DialogClose>
-					<DialogAction onPress={onAdd}>{t('Add to Cart')}</DialogAction>
+					<DialogClose>{t('common.cancel')}</DialogClose>
+					<DialogAction onPress={onAdd}>{t('common.add_to_cart')}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

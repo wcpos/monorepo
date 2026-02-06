@@ -70,7 +70,7 @@ export const AddShipping = () => {
 			const { method_title, method_id, amount, tax_status, tax_class, prices_include_tax } = data;
 
 			addShipping({
-				method_title: isEmpty(method_title) ? t('Shipping') : method_title,
+				method_title: isEmpty(method_title) ? t('common.shipping') : method_title,
 				method_id: isEmpty(method_id) ? 'local_pickup' : method_id,
 				amount: isEmpty(amount) ? '0' : amount,
 				tax_status,
@@ -101,8 +101,8 @@ export const AddShipping = () => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormInput
-									label={t('Shipping Method Title')}
-									placeholder={t('Shipping')}
+									label={t('pos_cart.shipping_method_title')}
+									placeholder={t('common.shipping')}
 									{...field}
 								/>
 							</View>
@@ -115,7 +115,7 @@ export const AddShipping = () => {
 							<View className="flex-1">
 								<FormSelect
 									customComponent={ShippingMethodSelect}
-									label={t('Shipping Method')}
+									label={t('pos_cart.shipping_method')}
 									{...field}
 								/>
 							</View>
@@ -128,7 +128,11 @@ export const AddShipping = () => {
 						name="amount"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput customComponent={CurrencyInput} label={t('Amount')} {...field} />
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('pos_cart.amount')}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -136,7 +140,9 @@ export const AddShipping = () => {
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
-							render={({ field }) => <FormSwitch label={t('Amount Includes Tax')} {...field} />}
+							render={({ field }) => (
+								<FormSwitch label={t('pos_cart.amount_includes_tax')} {...field} />
+							)}
 						/>
 					</View>
 				</HStack>
@@ -146,7 +152,11 @@ export const AddShipping = () => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
+								<FormSelect
+									label={t('common.tax_class')}
+									customComponent={TaxClassSelect}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -156,7 +166,7 @@ export const AddShipping = () => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormRadioGroup
-									label={t('Tax Status')}
+									label={t('common.tax_status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -165,8 +175,8 @@ export const AddShipping = () => {
 					/>
 				</HStack>
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Cancel')}</DialogClose>
-					<DialogAction onPress={onAdd}>{t('Add to Cart')}</DialogAction>
+					<DialogClose>{t('common.cancel')}</DialogClose>
+					<DialogAction onPress={onAdd}>{t('common.add_to_cart')}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

@@ -21,8 +21,8 @@ export const InclExclRadioGroup = (props: React.ComponentProps<typeof RadioGroup
 	return (
 		<RadioGroup {...props}>
 			{[
-				{ label: t('Including tax'), value: 'incl' },
-				{ label: t('Excluding tax'), value: 'excl' },
+				{ label: t('common.including_tax'), value: 'incl' },
+				{ label: t('common.excluding_tax'), value: 'excl' },
 			].map((option) => {
 				return (
 					<HStack key={option.value}>

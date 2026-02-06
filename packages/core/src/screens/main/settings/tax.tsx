@@ -149,7 +149,7 @@ export const TaxSettings = () => {
 		<VStack>
 			<View className="flex-row">
 				<Button variant="muted" onPress={() => router.push('/(app)/(modals)/tax-rates')}>
-					<ButtonText>{t('View all tax rates')}</ButtonText>
+					<ButtonText>{t('common.view_all_tax_rates')}</ButtonText>
 				</Button>
 			</View>
 			<Form {...form}>
@@ -163,7 +163,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={YesNoRadioGroup}
-										label={t('Enable taxes')}
+										label={t('settings.enable_taxes')}
 										{...field}
 									/>
 								</View>
@@ -176,7 +176,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={YesNoRadioGroup}
-										label={t('Prices entered with tax')}
+										label={t('settings.prices_entered_with_tax')}
 										{...field}
 									/>
 								</View>
@@ -191,7 +191,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormSelect
 										customComponent={TaxBasedOnSelect}
-										label={t('Calculate tax based on')}
+										label={t('common.calculate_tax_based_on')}
 										{...field}
 									/>
 								</View>
@@ -204,7 +204,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormSelect
 										customComponent={TaxClassSelect}
-										label={t('Shipping tax class')}
+										label={t('settings.shipping_tax_class')}
 										{...field}
 									/>
 								</View>
@@ -219,7 +219,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={TaxDisplayRadioGroup}
-										label={t('Display tax totals')}
+										label={t('settings.display_tax_totals')}
 										{...field}
 									/>
 								</View>
@@ -232,7 +232,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={YesNoRadioGroup}
-										label={t('Round tax at subtotal level')}
+										label={t('settings.round_tax_at_subtotal_level')}
 										{...field}
 									/>
 								</View>
@@ -247,7 +247,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={InclExclRadioGroup}
-										label={t('Display prices in the shop')}
+										label={t('settings.display_prices_in_the_shop')}
 										{...field}
 									/>
 								</View>
@@ -260,7 +260,7 @@ export const TaxSettings = () => {
 								<View className="flex-1">
 									<FormRadioGroup
 										customComponent={InclExclRadioGroup}
-										label={t('Display prices during cart and checkout')}
+										label={t('settings.display_prices_during_cart_and_checkout')}
 										{...field}
 									/>
 								</View>
@@ -273,7 +273,7 @@ export const TaxSettings = () => {
 							name="price_display_suffix"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormInput label={t('Price display suffix')} {...field} />
+									<FormInput label={t('settings.price_display_suffix')} {...field} />
 								</View>
 							)}
 						/>
@@ -281,9 +281,9 @@ export const TaxSettings = () => {
 					</HStack>
 					<ModalFooter className="px-0">
 						<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
-							{t('Restore server settings')}
+							{t('settings.restore_server_settings')}
 						</Button>
-						<ModalClose>{t('Close')}</ModalClose>
+						<ModalClose>{t('common.close')}</ModalClose>
 					</ModalFooter>
 				</VStack>
 			</Form>

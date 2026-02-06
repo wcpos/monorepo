@@ -50,37 +50,37 @@ function AboutDialogContent() {
 	return (
 		<>
 			<DialogHeader>
-				<DialogTitle>{t('About WCPOS')}</DialogTitle>
+				<DialogTitle>{t('common.about_wcpos')}</DialogTitle>
 			</DialogHeader>
 			<DialogBody>
 				<VStack space="md">
 					{/* App Info Section */}
 					<VStack space="xs">
 						<Text className="text-muted-foreground text-xs font-semibold uppercase">
-							{t('Application')}
+							{t('common.application')}
 						</Text>
-						<InfoRow label={t('App Version')} value={appVersion} />
+						<InfoRow label={t('common.app_version')} value={appVersion} />
 						<InfoRow
-							label={t('{platform} Version', { platform: platformLabels[platform] })}
+							label={t('common.version', { platform: platformLabels[platform] })}
 							value={platformVersion !== appVersion ? platformVersion : undefined}
 						/>
-						<InfoRow label={t('Platform')} value={platformLabels[platform]} />
+						<InfoRow label={t('common.platform')} value={platformLabels[platform]} />
 					</VStack>
 
 					{/* Server Info Section (if connected) */}
 					{site && (
 						<VStack space="xs">
 							<Text className="text-muted-foreground text-xs font-semibold uppercase">
-								{t('Server')}
+								{t('common.server')}
 							</Text>
 							{/* Show Pro version if present, otherwise show free version */}
 							{site.wcposProVersion ? (
-								<InfoRow label={t('WCPOS Pro Plugin')} value={site.wcposProVersion} />
+								<InfoRow label={t('common.wcpos_pro_plugin')} value={site.wcposProVersion} />
 							) : (
-								<InfoRow label={t('WCPOS Plugin')} value={site.wcposVersion} />
+								<InfoRow label={t('common.wcpos_plugin')} value={site.wcposVersion} />
 							)}
-							<InfoRow label={t('WooCommerce')} value={site.wcVersion} />
-							<InfoRow label={t('WordPress')} value={site.wpVersion} />
+							<InfoRow label={t('common.woocommerce')} value={site.wcVersion} />
+							<InfoRow label={t('common.wordpress')} value={site.wpVersion} />
 						</VStack>
 					)}
 
@@ -88,9 +88,12 @@ function AboutDialogContent() {
 					{license && (
 						<VStack space="xs">
 							<Text className="text-muted-foreground text-xs font-semibold uppercase">
-								{t('License')}
+								{t('common.license')}
 							</Text>
-							<InfoRow label={t('Status')} value={license.isPro ? t('Pro') : t('Free')} />
+							<InfoRow
+								label={t('common.status')}
+								value={license.isPro ? t('common.pro') : t('common.free')}
+							/>
 						</VStack>
 					)}
 				</VStack>
@@ -99,7 +102,7 @@ function AboutDialogContent() {
 				<Button variant="outline" onPress={() => Linking.openURL('https://updates.wcpos.com')}>
 					<HStack>
 						<Icon name="globe" size="sm" />
-						<Text>{t('Release Notes')}</Text>
+						<Text>{t('common.release_notes')}</Text>
 					</HStack>
 				</Button>
 			</DialogFooter>

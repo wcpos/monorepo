@@ -84,7 +84,7 @@ export const EditCartCustomerForm = () => {
 		await handleSaveToOrder(data);
 		const customer = await customerCollection.findOne({ selector: { id: customerID } }).exec();
 		if (!customer) {
-			cartLogger.error(t('No customer found'), {
+			cartLogger.error(t('common.no_customer_found'), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -104,7 +104,7 @@ export const EditCartCustomerForm = () => {
 				},
 			});
 			if (isRxDocument(savedDoc)) {
-				cartLogger.success(t('{name} saved', { name: format(savedDoc) }), {
+				cartLogger.success(t('common.saved', { name: format(savedDoc) }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -116,7 +116,7 @@ export const EditCartCustomerForm = () => {
 			onOpenChange(false);
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			cartLogger.error(t('Failed to save customer'), {
+			cartLogger.error(t('common.failed_to_save_customer'), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -153,7 +153,7 @@ export const EditCartCustomerForm = () => {
 				<FormErrors />
 				<Collapsible defaultOpen={true}>
 					<CollapsibleTrigger>
-						<Text>{t('Billing Address')}</Text>
+						<Text>{t('common.billing_address')}</Text>
 					</CollapsibleTrigger>
 					<CollapsibleContent>
 						<BillingAddressForm />
@@ -162,27 +162,27 @@ export const EditCartCustomerForm = () => {
 				<Collapsible>
 					<HStack>
 						<CollapsibleTrigger>
-							<Text>{t('Shipping Address')}</Text>
+							<Text>{t('common.shipping_address')}</Text>
 						</CollapsibleTrigger>
 					</HStack>
 					<CollapsibleContent>
 						<VStack className="gap-4">
 							<Button variant="muted" onPress={handleCopyBillingToShipping}>
-								<ButtonText>{t('Copy billing address to shipping address')}</ButtonText>
+								<ButtonText>{t('common.copy_billing_address_to_shipping_address')}</ButtonText>
 							</Button>
 							<ShippingAddressForm />
 						</VStack>
 					</CollapsibleContent>
 				</Collapsible>
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Close')}</DialogClose>
+					<DialogClose>{t('common.close')}</DialogClose>
 					{customerID !== 0 && (
 						<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
-							{t('Save to Order & Customer')}
+							{t('pos_cart.save_to_order_customer')}
 						</DialogAction>
 					)}
 					<DialogAction onPress={onSaveToOrder} loading={loading}>
-						{t('Save to Order')}
+						{t('pos_cart.save_to_order')}
 					</DialogAction>
 				</DialogFooter>
 			</VStack>

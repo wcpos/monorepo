@@ -25,7 +25,7 @@ const useDeleteDocument = () => {
 			try {
 				const { data } = await http.delete((endpoint += `/${id}`), { params });
 				if (data.id === id) {
-					syncLogger.success(t('Item deleted'), {
+					syncLogger.success(t('common.item_deleted'), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -38,7 +38,7 @@ const useDeleteDocument = () => {
 				// Extract the WooCommerce/WordPress error message from the response
 				const serverMessage = extractErrorMessage(
 					err?.response?.data,
-					t('Failed to delete from server')
+					t('common.failed_to_delete_from_server')
 				);
 				syncLogger.error(serverMessage, {
 					showToast: true,

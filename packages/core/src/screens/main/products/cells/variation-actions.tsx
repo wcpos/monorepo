@@ -76,7 +76,7 @@ export const VariationActions = ({
 						}
 					>
 						<Icon name="penToSquare" />
-						<Text>{t('Edit')}</Text>
+						<Text>{t('common.edit')}</Text>
 					</DropdownMenuItem>
 					{variation.id && (
 						<DropdownMenuItem
@@ -89,7 +89,7 @@ export const VariationActions = ({
 							}}
 						>
 							<Icon name="arrowRotateRight" />
-							<Text>{t('Sync')}</Text>
+							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
 					)}
 					<DropdownMenuSeparator />
@@ -98,7 +98,7 @@ export const VariationActions = ({
 							name="trash"
 							className="fill-destructive web:group-focus:fill-accent-foreground"
 						/>
-						<Text>{t('Delete')}</Text>
+						<Text>{t('common.delete')}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -106,20 +106,18 @@ export const VariationActions = ({
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{t('Delete {product}', {
+							{t('products.delete', {
 								product: `${parent.name} - ${variation.name}`,
 							})}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{t(
-								'Are you sure you want to delete this variation? Deleting a variation is permanent, there is no Trash for variations.'
-							)}
+							{t('products.are_you_sure_you_want_to_2')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
+						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
 						<AlertDialogAction variant="destructive" onPress={handleDelete}>
-							{t('Delete')}
+							{t('common.delete')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

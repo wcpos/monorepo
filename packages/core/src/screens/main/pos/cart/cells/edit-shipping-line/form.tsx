@@ -109,7 +109,9 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 				<FormField
 					control={form.control}
 					name="method_title"
-					render={({ field }) => <FormInput label={t('Shipping Method Title')} {...field} />}
+					render={({ field }) => (
+						<FormInput label={t('pos_cart.shipping_method_title')} {...field} />
+					)}
 				/>
 				<HStack className="gap-4">
 					<FormField
@@ -118,7 +120,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormSelect
-									label={t('Shipping Method')}
+									label={t('pos_cart.shipping_method')}
 									customComponent={ShippingMethodSelect}
 									{...field}
 								/>
@@ -130,7 +132,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						name="instance_id"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Instance ID')} {...field} />
+								<FormInput label={t('pos_cart.instance_id')} {...field} />
 							</View>
 						)}
 					/>
@@ -143,7 +145,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 							<View className="flex-1">
 								<FormInput
 									customComponent={CurrencyInput}
-									label={t('Amount')}
+									label={t('pos_cart.amount')}
 									type="numeric"
 									{...field}
 								/>
@@ -154,7 +156,9 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
-							render={({ field }) => <FormSwitch label={t('Amount Includes Tax')} {...field} />}
+							render={({ field }) => (
+								<FormSwitch label={t('pos_cart.amount_includes_tax')} {...field} />
+							)}
 						/>
 					</View>
 				</HStack>
@@ -164,7 +168,11 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
+								<FormSelect
+									label={t('common.tax_class')}
+									customComponent={TaxClassSelect}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -174,7 +182,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormRadioGroup
-									label={t('Tax Status')}
+									label={t('common.tax_status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -184,8 +192,8 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 				</HStack>
 				<MetaDataForm />
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Close')}</DialogClose>
-					<DialogAction onPress={onSave}>{t('Save')}</DialogAction>
+					<DialogClose>{t('common.close')}</DialogClose>
+					<DialogAction onPress={onSave}>{t('common.save')}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

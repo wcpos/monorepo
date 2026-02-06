@@ -101,7 +101,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 						showToast: true,
 						context: { errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT, wpApiUrl },
 					});
-					throw new ApiDiscoveryError(t('Bad API response'));
+					throw new ApiDiscoveryError(t('auth.bad_api_response'));
 				}
 
 				const namespaces = get(data, 'namespaces');
@@ -113,7 +113,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 							wpApiUrl,
 						},
 					});
-					throw new ApiDiscoveryError(t('WordPress API not found'));
+					throw new ApiDiscoveryError(t('auth.wordpress_api_not_found'));
 				}
 
 				discoveryLogger.debug(
@@ -155,7 +155,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.WOOCOMMERCE_API_DISABLED },
 				});
-				throw new Error(t('WooCommerce API not found'));
+				throw new Error(t('auth.woocommerce_api_not_found'));
 			}
 
 			// Check for WCPOS API
@@ -164,7 +164,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.PLUGIN_NOT_FOUND },
 				});
-				throw new Error(t('WooCommerce POS API not found'));
+				throw new Error(t('auth.woocommerce_pos_api_not_found'));
 			}
 
 			// Check WCPOS version (should be >= 1.8.0 for proper auth endpoints)
@@ -190,7 +190,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION },
 				});
-				throw new Error(t('Authentication configuration not found'));
+				throw new Error(t('auth.authentication_configuration_not_found'));
 			}
 
 			// Check for WCPOS auth endpoint (required for proper authentication)
@@ -200,11 +200,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.PLUGIN_NOT_FOUND },
 				});
-				throw new Error(
-					t(
-						'WCPOS authentication endpoint not found. Please ensure WCPOS plugin is version 1.8.0 or higher'
-					)
-				);
+				throw new Error(t('auth.wcpos_authentication_endpoint_not_found_please'));
 			}
 
 			const loginUrl = wcposAuth.endpoints.authorization;
@@ -213,9 +209,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.INVALID_URL_FORMAT },
 				});
-				throw new Error(
-					t('WCPOS login URL is invalid. Please ensure WCPOS plugin is properly configured')
-				);
+				throw new Error(t('auth.wcpos_login_url_is_invalid_please'));
 			}
 
 			return loginUrl;
@@ -249,7 +243,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 			wpApiUrl: string
 		): Promise<{ siteData: WpJsonResponse; endpoints: ApiEndpoints } | null> => {
 			if (!wpApiUrl || wpApiUrl.trim() === '') {
-				const errorMsg = t('WordPress API URL is required');
+				const errorMsg = t('auth.wordpress_api_url_is_required');
 				discoveryLogger.error(errorMsg, {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
@@ -284,7 +278,10 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 				return { siteData: data, endpoints: apiEndpoints };
 			} catch (err) {
-				const errorMessage = err.message || t('Failed to discover API endpoints');
+				const errorMessage =
+					err instanceof Error && err.message
+						? err.message
+						: t('auth.failed_to_discover_api_endpoints');
 				setError(errorMessage);
 				setStatus('error');
 				return null;

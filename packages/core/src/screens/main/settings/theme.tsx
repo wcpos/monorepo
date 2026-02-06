@@ -100,9 +100,9 @@ export const ThemeSettings = () => {
 		<VStack className="gap-6">
 			{/* Appearance Section */}
 			<VStack className="gap-3">
-				<Label className="text-base font-medium">{t('Appearance')}</Label>
+				<Label className="text-base font-medium">{t('settings.appearance')}</Label>
 				<Text className="text-muted-foreground text-sm">
-					{t('Choose a theme for the app. Custom themes provide different color schemes.')}
+					{t('settings.choose_a_theme_for_the_app')}
 				</Text>
 
 				<VStack className="gap-3 pt-2">
@@ -170,13 +170,15 @@ export const ThemeSettings = () => {
 
 				{/* Current theme status */}
 				<Text className="text-muted-foreground text-xs">
-					{hasAdaptiveThemes ? t('Following system theme') : t('Current theme: {theme}', { theme })}
+					{hasAdaptiveThemes
+						? t('settings.following_system_theme')
+						: t('settings.current_theme', { theme })}
 				</Text>
 			</VStack>
 
 			{/* Footer */}
 			<ModalFooter className="px-0">
-				<ModalClose>{t('Close')}</ModalClose>
+				<ModalClose>{t('common.close')}</ModalClose>
 			</ModalFooter>
 		</VStack>
 	);

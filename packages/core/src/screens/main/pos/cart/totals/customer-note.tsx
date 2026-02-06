@@ -61,7 +61,7 @@ export const CustomerNote = () => {
 					<Icon name="messageLines" className="fill-secondary-foreground" />
 				</TooltipTrigger>
 				<TooltipContent>
-					<Text>{t('Customer Note')}</Text>
+					<Text>{t('common.customer_note')}</Text>
 				</TooltipContent>
 			</Tooltip>
 			<View className="flex-1">

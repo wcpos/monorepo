@@ -49,7 +49,7 @@ export const ShippingMethodSelect = ({ value, ...props }: React.ComponentProps<t
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
 				}}
 			>
-				<SelectValue placeholder={t('Select Shipping Method')} />
+				<SelectValue placeholder={t('common.select_shipping_method')} />
 			</SelectTrigger>
 			<SelectContent style={{ width: selectTriggerWidth }}>
 				<SelectGroup>

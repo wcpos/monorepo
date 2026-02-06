@@ -53,7 +53,7 @@ export const BillingAddressForm = () => {
 					name="billing.first_name"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('First Name')} {...field} />
+							<FormInput label={t('common.first_name')} {...field} />
 						</View>
 					)}
 				/>
@@ -62,7 +62,7 @@ export const BillingAddressForm = () => {
 					name="billing.last_name"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('Last Name')} {...field} />
+							<FormInput label={t('common.last_name')} {...field} />
 						</View>
 					)}
 				/>
@@ -73,7 +73,7 @@ export const BillingAddressForm = () => {
 					name="billing.email"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('Email')} {...field} />
+							<FormInput label={t('common.email')} {...field} />
 						</View>
 					)}
 				/>
@@ -82,7 +82,7 @@ export const BillingAddressForm = () => {
 					name="billing.phone"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('Phone')} {...field} />
+							<FormInput label={t('common.phone')} {...field} />
 						</View>
 					)}
 				/>
@@ -90,17 +90,17 @@ export const BillingAddressForm = () => {
 			<FormField
 				control={control}
 				name="billing.company"
-				render={({ field }) => <FormInput label={t('Company')} {...field} />}
+				render={({ field }) => <FormInput label={t('common.company')} {...field} />}
 			/>
 			<FormField
 				control={control}
 				name="billing.address_1"
-				render={({ field }) => <FormInput label={t('Address 1')} {...field} />}
+				render={({ field }) => <FormInput label={t('common.address_1')} {...field} />}
 			/>
 			<FormField
 				control={control}
 				name="billing.address_2"
-				render={({ field }) => <FormInput label={t('Address 2')} {...field} />}
+				render={({ field }) => <FormInput label={t('common.address_2')} {...field} />}
 			/>
 			<HStack className="gap-4">
 				<FormField
@@ -108,7 +108,7 @@ export const BillingAddressForm = () => {
 					name="billing.city"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('City')} {...field} />
+							<FormInput label={t('common.city')} {...field} />
 						</View>
 					)}
 				/>
@@ -119,7 +119,7 @@ export const BillingAddressForm = () => {
 						<View className="flex-1">
 							<FormInput
 								customComponent={StateFormInput}
-								label={t('State')}
+								label={t('common.state')}
 								{...field}
 								countryCode={countryCode}
 							/>
@@ -133,7 +133,11 @@ export const BillingAddressForm = () => {
 					name="billing.country"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormCombobox customComponent={CountryCombobox} label={t('Country')} {...field} />
+							<FormCombobox
+								customComponent={CountryCombobox}
+								label={t('common.country')}
+								{...field}
+							/>
 						</View>
 					)}
 				/>
@@ -142,7 +146,7 @@ export const BillingAddressForm = () => {
 					name="billing.postcode"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('Postcode')} {...field} />
+							<FormInput label={t('common.postcode')} {...field} />
 						</View>
 					)}
 				/>

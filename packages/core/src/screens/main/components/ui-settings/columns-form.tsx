@@ -85,7 +85,7 @@ export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
 						variant="link"
 						className="text-muted-foreground text-sm leading-none"
 					>
-						{t('Display Options')}
+						{t('common.display_options')}
 						<Icon
 							name={openColumns[column.key] ? 'chevronUp' : 'chevronDown'}
 							size="xs"
@@ -122,7 +122,7 @@ export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
 	 */
 	return (
 		<VStack className="gap-0">
-			<Text className="font-semibold">{t('Columns')}</Text>
+			<Text className="font-semibold">{t('common.columns')}</Text>
 			<VStack className="gap-0">
 				<SortableList
 					listId="columns"

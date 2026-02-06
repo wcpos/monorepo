@@ -86,7 +86,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="first_name"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('First Name')} {...field} />
+								<FormInput label={t('common.first_name')} {...field} />
 							</View>
 						)}
 					/>
@@ -95,7 +95,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="last_name"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Last Name')} {...field} />
+								<FormInput label={t('common.last_name')} {...field} />
 							</View>
 						)}
 					/>
@@ -106,7 +106,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="email"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Email')} {...field} />
+								<FormInput label={t('common.email')} {...field} />
 							</View>
 						)}
 					/>
@@ -115,7 +115,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="role"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Role')} {...field} editable={false} />
+								<FormInput label={t('common.role')} {...field} editable={false} />
 							</View>
 						)}
 					/>
@@ -126,7 +126,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="username"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Username')} {...field} editable={!hasUsername} />
+								<FormInput label={t('common.username')} {...field} editable={!hasUsername} />
 							</View>
 						)}
 					/>
@@ -135,14 +135,14 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="password"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Password')} {...field} />
+								<FormInput label={t('common.password')} {...field} />
 							</View>
 						)}
 					/>
 				</HStack>
 				<Collapsible>
 					<CollapsibleTrigger>
-						<Text>{t('Billing Address')}</Text>
+						<Text>{t('common.billing_address')}</Text>
 					</CollapsibleTrigger>
 					<CollapsibleContent>
 						<BillingAddressForm />
@@ -151,13 +151,13 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 				<Collapsible>
 					<HStack>
 						<CollapsibleTrigger>
-							<Text>{t('Shipping Address')}</Text>
+							<Text>{t('common.shipping_address')}</Text>
 						</CollapsibleTrigger>
 					</HStack>
 					<CollapsibleContent>
 						<VStack className="gap-4">
 							<Button variant="muted" onPress={handleCopyBillingToShipping}>
-								<ButtonText>{t('Copy billing address to shipping address')}</ButtonText>
+								<ButtonText>{t('common.copy_billing_address_to_shipping_address')}</ButtonText>
 							</Button>
 							<ShippingAddressForm />
 						</VStack>
@@ -167,10 +167,10 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 				{/** TODO: move the buttons to the parent component */}
 				<HStack className="justify-end">
 					<Button variant="outline" onPress={onClose}>
-						<ButtonText>{t('Close')}</ButtonText>
+						<ButtonText>{t('common.close')}</ButtonText>
 					</Button>
 					<Button loading={loading} onPress={onSave}>
-						<ButtonText>{t('Save')}</ButtonText>
+						<ButtonText>{t('common.save')}</ButtonText>
 					</Button>
 				</HStack>
 			</VStack>

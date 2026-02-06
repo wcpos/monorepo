@@ -68,13 +68,13 @@ export const CartHeader = () => {
 	return (
 		<HStack>
 			<HStack className="flex-1 flex-wrap">
-				<Text className="font-bold">{t('Customer')}:</Text>
+				<Text className="font-bold">{t('common.customer')}:</Text>
 				<ErrorBoundary>
 					{showCustomerSelect ? (
 						<Combobox onValueChange={handleSelectCustomer} onOpenChange={delayedCloseHandler}>
 							<ComboboxTrigger ref={triggerRef} asChild>
 								<ButtonPill size="xs" leftIcon="user" variant="muted">
-									<ButtonText>{t('Select Customer')}</ButtonText>
+									<ButtonText>{t('common.select_customer')}</ButtonText>
 								</ButtonPill>
 							</ComboboxTrigger>
 							<ComboboxContent>
@@ -94,11 +94,11 @@ export const CartHeader = () => {
 						<IconButton disabled name="userPlus" />
 					</TooltipTrigger>
 					<TooltipContent>
-						<Text>{t('Upgrade to Pro')}</Text>
+						<Text>{t('common.upgrade_to_pro')}</Text>
 					</TooltipContent>
 				</Tooltip>
 			)}
-			<UISettingsDialog title={t('Cart Settings')}>
+			<UISettingsDialog title={t('pos_cart.cart_settings')}>
 				<UISettingsForm />
 			</UISettingsDialog>
 		</HStack>

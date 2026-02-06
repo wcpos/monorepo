@@ -118,18 +118,18 @@ export const UserMenu = () => {
 			<DropdownMenuContent align="end" side="bottom">
 				<DropdownMenuItem onPress={() => router.push('/(modals)/settings')}>
 					<Icon name="gear" />
-					<Text>{t('Settings')}</Text>
+					<Text>{t('common.settings')}</Text>
 				</DropdownMenuItem>
 				<DropdownMenuItem onPress={() => router.push('/support')}>
 					<Icon name="commentQuestion" />
-					<Text>{t('Support')}</Text>
+					<Text>{t('common.support')}</Text>
 				</DropdownMenuItem>
 				{Platform.isWeb && (
 					<DropdownMenuItem
 						onPress={() => Linking.openURL('https://github.com/wcpos/electron/releases')}
 					>
 						<Icon name="download" />
-						<Text>{t('Desktop App')}</Text>
+						<Text>{t('common.desktop_app')}</Text>
 					</DropdownMenuItem>
 				)}
 				<DropdownMenuSeparator />
@@ -138,7 +138,7 @@ export const UserMenu = () => {
 						<DropdownMenuSub>
 							<DropdownMenuSubTrigger>
 								<Icon name="rightLeft" />
-								<Text>{t('Switch Store')}</Text>
+								<Text>{t('common.switch_store')}</Text>
 							</DropdownMenuSubTrigger>
 							<DropdownMenuSubContent>
 								<StoreSubMenu
@@ -155,18 +155,18 @@ export const UserMenu = () => {
 					<>
 						<DropdownMenuItem onPress={handleReset} variant="destructive">
 							<Icon name="trash" />
-							<Text>{t('Clear All Local Data')}</Text>
+							<Text>{t('common.clear_all_local_data')}</Text>
 						</DropdownMenuItem>
 						<DropdownMenuSeparator />
 						<DropdownMenuItem onPress={() => Linking.openURL(`${site.home}/wp-admin`)}>
 							<Icon name="wordpress" />
-							<Text>{t('WordPress Admin')}</Text>
+							<Text>{t('common.wordpress_admin')}</Text>
 						</DropdownMenuItem>
 					</>
 				)}
 				<DropdownMenuItem onPress={logout} variant="destructive">
 					<Icon name="arrowRightFromBracket" />
-					<Text>{t('Logout')}</Text>
+					<Text>{t('common.logout')}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>

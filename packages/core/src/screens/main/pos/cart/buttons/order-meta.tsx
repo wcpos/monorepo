@@ -24,11 +24,11 @@ export const OrderMetaButton = () => {
 	return (
 		<Dialog>
 			<DialogTrigger asChild>
-				<Button variant="outline">{t('Order Meta')}</Button>
+				<Button variant="outline">{t('pos_cart.order_meta')}</Button>
 			</DialogTrigger>
 			<DialogContent size="lg" portalHost="pos">
 				<DialogHeader>
-					<DialogTitle>{t('Order Meta')}</DialogTitle>
+					<DialogTitle>{t('pos_cart.order_meta')}</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
 					<EditOrderMeta order={currentOrder} />

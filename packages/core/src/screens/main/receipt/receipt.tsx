@@ -80,7 +80,7 @@ export const Receipt = ({ resource }: Props) => {
 				<ModalContent size="lg">
 					<ModalHeader>
 						<ModalTitle>
-							<Text>{t('No order found')}</Text>
+							<Text>{t('common.no_order_found')}</Text>
 						</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
@@ -96,7 +96,7 @@ export const Receipt = ({ resource }: Props) => {
 			<ModalContent size="xl" className="h-full">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('Receipt')}</Text>
+						<Text>{t('common.receipt')}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
@@ -105,14 +105,14 @@ export const Receipt = ({ resource }: Props) => {
 					</ErrorBoundary>
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose>{t('Close')}</ModalClose>
+					<ModalClose>{t('common.close')}</ModalClose>
 					<Dialog>
 						<DialogTrigger asChild>
-							<ModalAction>{t('Email Receipt')}</ModalAction>
+							<ModalAction>{t('receipt.email_receipt')}</ModalAction>
 						</DialogTrigger>
 						<DialogContent>
 							<DialogHeader>
-								<DialogTitle>{t('Email Receipt')}</DialogTitle>
+								<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
 							</DialogHeader>
 							<DialogBody>
 								<EmailForm order={order} />
@@ -120,7 +120,7 @@ export const Receipt = ({ resource }: Props) => {
 						</DialogContent>
 					</Dialog>
 					<ModalAction onPress={() => print()} loading={isPrinting}>
-						{t('Print Receipt')}
+						{t('receipt.print_receipt')}
 					</ModalAction>
 				</ModalFooter>
 			</ModalContent>

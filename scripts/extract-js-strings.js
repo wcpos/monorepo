@@ -127,6 +127,20 @@ async function main() {
     }
   }
 
+  // Validate: warn if any key contains spaces (indicates missed symbolic-key migration)
+  let warnings = 0;
+  for (const [ns, strings] of Object.entries(byNamespace)) {
+    for (const key of Object.keys(strings)) {
+      if (/\s/.test(key)) {
+        console.warn(`  ⚠ ${ns}: key contains spaces (not a symbolic key): "${key}"`);
+        warnings++;
+      }
+    }
+  }
+  if (warnings > 0) {
+    console.warn(`\n${warnings} key(s) still use English strings instead of symbolic keys.\n`);
+  }
+
   // Write output files
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
 

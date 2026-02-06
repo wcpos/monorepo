@@ -76,7 +76,7 @@ export const AddFee = () => {
 				percent_of_cart_total_with_tax,
 			} = data;
 			addFee({
-				name: isEmpty(name) ? t('Fee') : name,
+				name: isEmpty(name) ? t('pos_cart.fee') : name,
 				amount,
 				tax_status,
 				tax_class: tax_class === 'standard' ? '' : tax_class,
@@ -110,7 +110,7 @@ export const AddFee = () => {
 					control={form.control}
 					name="name"
 					render={({ field }) => (
-						<FormInput label={t('Fee Name')} placeholder={t('Fee')} {...field} />
+						<FormInput label={t('pos_cart.fee_name')} placeholder={t('pos_cart.fee')} {...field} />
 					)}
 				/>
 				<HStack className="gap-4">
@@ -121,7 +121,7 @@ export const AddFee = () => {
 							<View className="flex-1">
 								<FormInput
 									customComponent={togglePercentage ? NumberInput : CurrencyInput}
-									label={togglePercentage ? t('Percent') : t('Amount')}
+									label={togglePercentage ? t('pos_cart.percent') : t('pos_cart.amount')}
 									{...field}
 								/>
 							</View>
@@ -132,13 +132,15 @@ export const AddFee = () => {
 							control={form.control}
 							name="percent"
 							render={({ field }) => (
-								<FormSwitch label={t('Percentage of Cart Total')} {...field} />
+								<FormSwitch label={t('pos_cart.percentage_of_cart_total')} {...field} />
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
-							render={({ field }) => <FormSwitch label={t('Amount Includes Tax')} {...field} />}
+							render={({ field }) => (
+								<FormSwitch label={t('pos_cart.amount_includes_tax')} {...field} />
+							)}
 						/>
 					</VStack>
 				</HStack>
@@ -148,7 +150,11 @@ export const AddFee = () => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect customComponent={TaxClassSelect} label={t('Tax Class')} {...field} />
+								<FormSelect
+									customComponent={TaxClassSelect}
+									label={t('common.tax_class')}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -158,7 +164,7 @@ export const AddFee = () => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormRadioGroup
-									label={t('Tax Status')}
+									label={t('common.tax_status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -167,8 +173,8 @@ export const AddFee = () => {
 					/>
 				</HStack>
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Cancel')}</DialogClose>
-					<DialogAction onPress={onAdd}>{t('Add to Cart')}</DialogAction>
+					<DialogClose>{t('common.cancel')}</DialogClose>
+					<DialogAction onPress={onAdd}>{t('common.add_to_cart')}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

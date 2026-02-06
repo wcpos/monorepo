@@ -93,7 +93,7 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 				</ButtonPill>
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxInput placeholder={t('Search Variations')} />
+				<ComboboxInput placeholder={t('common.search_variations')} />
 				<ComboboxList
 					data={data}
 					renderItem={({ item }) => (
@@ -102,7 +102,7 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 						</ComboboxItem>
 					)}
 					estimatedItemSize={20}
-					ListEmptyComponent={() => <ComboboxEmpty>{t('No variation found')}</ComboboxEmpty>}
+					ListEmptyComponent={() => <ComboboxEmpty>{t('common.no_variation_found')}</ComboboxEmpty>}
 				></ComboboxList>
 			</ComboboxContent>
 		</Combobox>

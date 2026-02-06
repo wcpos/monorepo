@@ -31,7 +31,7 @@ const usePushDocument = () => {
 				const json = latestDoc.toJSON();
 				return { json, latestDoc };
 			} catch (err) {
-				syncLogger.error(t('Failed to prepare document data: {error}', { error: err.message }), {
+				syncLogger.error(t('common.failed_to_prepare_document_data', { error: err.message }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -69,7 +69,7 @@ const usePushDocument = () => {
 				// Extract the WooCommerce/WordPress error message from the response
 				const serverMessage = extractErrorMessage(
 					err?.response?.data,
-					t('Failed to send to server')
+					t('common.failed_to_send_to_server')
 				);
 				syncLogger.error(serverMessage, {
 					showToast: true,
@@ -105,7 +105,7 @@ const usePushDocument = () => {
 
 				return latestDoc.incrementalPatch(parsedData);
 			} catch (err) {
-				syncLogger.error(t('Failed to update local document: {error}', { error: err.message }), {
+				syncLogger.error(t('common.failed_to_update_local_document', { error: err.message }), {
 					showToast: true,
 					saveToDb: true,
 					context: {

@@ -109,8 +109,12 @@ export function OrdersScreen() {
 				<CardHeader className="bg-card-header p-2">
 					<VStack>
 						<HStack>
-							<QuerySearchInput query={query} placeholder={t('Search Orders')} className="flex-1" />
-							<UISettingsDialog title={t('Order Settings')}>
+							<QuerySearchInput
+								query={query}
+								placeholder={t('orders.search_orders')}
+								className="flex-1"
+							/>
+							<UISettingsDialog title={t('orders.order_settings')}>
 								<UISettingsForm />
 							</UISettingsDialog>
 						</HStack>
@@ -126,7 +130,7 @@ export function OrdersScreen() {
 								id="orders"
 								query={query}
 								renderCell={renderCell}
-								noDataMessage={t('No orders found')}
+								noDataMessage={t('common.no_orders_found')}
 								estimatedItemSize={100}
 							/>
 						</Suspense>

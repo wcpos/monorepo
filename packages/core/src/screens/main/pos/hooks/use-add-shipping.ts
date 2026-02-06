@@ -67,7 +67,7 @@ export const useAddShipping = () => {
 				await addItemToOrder('shipping_lines', newShippingLine);
 
 				// Log shipping added success
-				orderLogger.info(t('Shipping added: {methodTitle}', { methodTitle: data.method_title }), {
+				orderLogger.info(t('pos.shipping_added', { methodTitle: data.method_title }), {
 					context: {
 						methodTitle: data.method_title,
 						methodId: data.method_id,
@@ -76,7 +76,7 @@ export const useAddShipping = () => {
 					},
 				});
 			} catch (error) {
-				orderLogger.error(t('Error adding Shipping to cart'), {
+				orderLogger.error(t('pos.error_adding_shipping_to_cart'), {
 					showToast: true,
 					saveToDb: true,
 					context: {

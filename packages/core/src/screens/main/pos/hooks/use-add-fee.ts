@@ -67,7 +67,7 @@ export const useAddFee = () => {
 				await addItemToOrder('fee_lines', newFeeLine);
 
 				// Log fee added success
-				orderLogger.info(t('Fee added: {feeName}', { feeName: data.name }), {
+				orderLogger.info(t('pos.fee_added', { feeName: data.name }), {
 					context: {
 						feeName: data.name,
 						amount: data.amount,
@@ -76,7 +76,7 @@ export const useAddFee = () => {
 					},
 				});
 			} catch (error) {
-				orderLogger.error(t('Error adding Fee to cart'), {
+				orderLogger.error(t('pos.error_adding_fee_to_cart'), {
 					showToast: true,
 					saveToDb: true,
 					context: {

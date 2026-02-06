@@ -62,7 +62,7 @@ export const EditProductForm = ({ product }: Props) => {
 	const { localPatch } = useLocalMutation();
 
 	if (!product) {
-		throw new Error(t('Product not found'));
+		throw new Error(t('products.product_not_found'));
 	}
 
 	/**
@@ -104,7 +104,7 @@ export const EditProductForm = ({ product }: Props) => {
 				});
 				await pushDocument(product).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('{name} saved', { name: product.name }), {
+						mutationLogger.success(t('common.saved', { name: product.name }), {
 							showToast: true,
 							saveToDb: true,
 							context: {
@@ -116,7 +116,7 @@ export const EditProductForm = ({ product }: Props) => {
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('Failed to save product'), {
+				mutationLogger.error(t('products.failed_to_save_product'), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -147,7 +147,7 @@ export const EditProductForm = ({ product }: Props) => {
 				<FormField
 					control={form.control}
 					name="name"
-					render={({ field }) => <FormInput label={t('Name')} {...field} />}
+					render={({ field }) => <FormInput label={t('common.name')} {...field} />}
 				/>
 				<HStack className="gap-4">
 					<FormField
@@ -155,7 +155,7 @@ export const EditProductForm = ({ product }: Props) => {
 						name="sku"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('SKU')} {...field} />
+								<FormInput label={t('common.sku')} {...field} />
 							</View>
 						)}
 					/>
@@ -164,7 +164,7 @@ export const EditProductForm = ({ product }: Props) => {
 						name="barcode"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Barcode')} {...field} />
+								<FormInput label={t('common.barcode')} {...field} />
 							</View>
 						)}
 					/>
@@ -175,7 +175,11 @@ export const EditProductForm = ({ product }: Props) => {
 						name="regular_price"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput customComponent={CurrencyInput} label={t('Regular Price')} {...field} />
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('common.regular_price')}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -184,7 +188,11 @@ export const EditProductForm = ({ product }: Props) => {
 						name="sale_price"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput customComponent={CurrencyInput} label={t('Sale Price')} {...field} />
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('common.sale_price')}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -197,7 +205,7 @@ export const EditProductForm = ({ product }: Props) => {
 							render={({ field }) => (
 								<View className="flex-1">
 									<FormSelect
-										label={t('Status')}
+										label={t('common.status')}
 										customComponent={ProductStatusSelect}
 										{...field}
 									/>
@@ -209,7 +217,7 @@ export const EditProductForm = ({ product }: Props) => {
 							name="featured"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormSwitch label={t('Featured')} {...field} />
+									<FormSwitch label={t('common.featured')} {...field} />
 								</View>
 							)}
 						/>
@@ -223,7 +231,7 @@ export const EditProductForm = ({ product }: Props) => {
 									<FormInput
 										customComponent={NumberInput}
 										type="numeric"
-										label={t('Stock Quantity')}
+										label={t('products.stock_quantity')}
 										{...field}
 									/>
 								</View>
@@ -234,7 +242,7 @@ export const EditProductForm = ({ product }: Props) => {
 							name="manage_stock"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormSwitch label={t('Manage Stock')} {...field} />
+									<FormSwitch label={t('products.manage_stock')} {...field} />
 								</View>
 							)}
 						/>
@@ -246,7 +254,11 @@ export const EditProductForm = ({ product }: Props) => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
+								<FormSelect
+									label={t('common.tax_class')}
+									customComponent={TaxClassSelect}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -256,7 +268,7 @@ export const EditProductForm = ({ product }: Props) => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormRadioGroup
-									label={t('Tax Status')}
+									label={t('common.tax_status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -266,9 +278,9 @@ export const EditProductForm = ({ product }: Props) => {
 				</HStack>
 				<MetaDataForm />
 				<ModalFooter className="px-0">
-					<ModalClose>{t('Cancel')}</ModalClose>
+					<ModalClose>{t('common.cancel')}</ModalClose>
 					<ModalAction loading={loading} onPress={onSave}>
-						{t('Save')}
+						{t('common.save')}
 					</ModalAction>
 				</ModalFooter>
 			</VStack>

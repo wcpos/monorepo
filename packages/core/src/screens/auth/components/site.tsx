@@ -88,7 +88,9 @@ export const Site = ({ user, site, idx }: Props) => {
 					) : (
 						<HStack>
 							<Icon name="triangleExclamation" className="fill-warning" />
-							<Text className="text-warning">{t('Please update your WooCommerce POS plugin')}</Text>
+							<Text className="text-warning">
+								{t('common.please_update_your_woocommerce_pos_plugin')}
+							</Text>
 						</HStack>
 					)}
 				</VStack>
@@ -102,7 +104,7 @@ export const Site = ({ user, site, idx }: Props) => {
 						/>
 					</TooltipTrigger>
 					<TooltipContent>
-						<Text>{t('Remove site')}</Text>
+						<Text>{t('auth.remove_site')}</Text>
 					</TooltipContent>
 				</Tooltip>
 			</HStack>
@@ -110,15 +112,15 @@ export const Site = ({ user, site, idx }: Props) => {
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>{t('Remove site')}</AlertDialogTitle>
+						<AlertDialogTitle>{t('auth.remove_site')}</AlertDialogTitle>
 						<AlertDialogDescription>
-							{t('Remove store and associated users?')}
+							{t('auth.remove_store_and_associated_users')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
+						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
 						<AlertDialogAction variant="destructive" onPress={handleRemoveSite}>
-							{t('Remove')}
+							{t('auth.remove')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

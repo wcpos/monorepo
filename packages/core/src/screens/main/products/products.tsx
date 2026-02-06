@@ -253,16 +253,16 @@ export function Products() {
 								<QuerySearchInput
 									ref={querySearchInputRef}
 									query={query}
-									placeholder={t('Search Products')}
+									placeholder={t('common.search_products')}
 									className="flex-1"
 								/>
 							</ErrorBoundary>
 							{/* <Icon
 						name="plus"
 						onPress={() => navigation.navigate('AddProduct')}
-						tooltip={t('Add new customer')}
+						tooltip={t('common.add_new_customer')}
 					/> */}
-							<UISettingsDialog title={t('Product Settings')}>
+							<UISettingsDialog title={t('common.product_settings')}>
 								<UISettingsForm />
 							</UISettingsDialog>
 						</HStack>
@@ -279,7 +279,7 @@ export function Products() {
 								query={query}
 								renderItem={renderItem}
 								renderCell={renderCell}
-								noDataMessage={t('No products found')}
+								noDataMessage={t('common.no_products_found')}
 								estimatedItemSize={100}
 								TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
 								getItemType={(row) => row.original.document.type}

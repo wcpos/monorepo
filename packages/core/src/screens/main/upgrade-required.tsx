@@ -21,11 +21,13 @@ export const UpgradeRequired = () => {
 			<VStack>
 				<HStack>
 					<Icon name="triangleExclamation" variant="destructive" />
-					<Text className="text-destructive">{t('Please update your WooCommerce POS plugin')}</Text>
+					<Text className="text-destructive">
+						{t('common.please_update_your_woocommerce_pos_plugin')}
+					</Text>
 				</HStack>
 				<View className="justify-center p-2">
 					<Button onPress={logout}>
-						<ButtonText>{t('Logout')}</ButtonText>
+						<ButtonText>{t('common.logout')}</ButtonText>
 					</Button>
 				</View>
 			</VStack>

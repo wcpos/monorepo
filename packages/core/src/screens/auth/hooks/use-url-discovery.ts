@@ -49,7 +49,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				const response = await http.head(normalizedUrl);
 
 				if (!response) {
-					throw new Error(t('URL not found'));
+					throw new Error(t('auth.url_not_found'));
 				}
 
 				const link = get(response, ['headers', 'link']);
@@ -102,7 +102,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	const discoverWpApiUrl = React.useCallback(
 		async (url: string): Promise<string | null> => {
 			if (!url || url.trim() === '') {
-				const errorMsg = t('URL is required');
+				const errorMsg = t('auth.url_is_required');
 				discoveryLogger.error(errorMsg, {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
@@ -127,7 +127,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				}
 
 				if (!discoveredUrl) {
-					throw new Error(t('Site does not seem to be a WordPress site'));
+					throw new Error(t('auth.site_does_not_seem_to_be'));
 				}
 
 				setWpApiUrl(discoveredUrl);
@@ -136,7 +136,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				return discoveredUrl;
 			} catch (err) {
 				const errorMessage =
-					err instanceof Error ? err.message : t('Failed to discover WordPress API');
+					err instanceof Error ? err.message : t('auth.failed_to_discover_wordpress_api');
 				setError(errorMessage);
 				setStatus('error');
 				return null;

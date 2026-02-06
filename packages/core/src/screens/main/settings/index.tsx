@@ -23,23 +23,23 @@ export const SettingsScreen = () => {
 	const tabs = [
 		{
 			value: 'general',
-			label: t('General Settings'),
+			label: t('settings.general_settings'),
 			component: <GeneralSettings />,
 		},
-		{ value: 'tax', label: t('Tax Settings'), component: <TaxSettings /> },
+		{ value: 'tax', label: t('settings.tax_settings'), component: <TaxSettings /> },
 		{
 			value: 'barcode',
-			label: t('Barcode Scanning'),
+			label: t('settings.barcode_scanning'),
 			component: <BarcodeScanning />,
 		},
 		{
 			value: 'shortcuts',
-			label: t('Keyboard Shortcuts'),
+			label: t('settings.keyboard_shortcuts'),
 			component: <KeyboardShortcuts />,
 		},
 		{
 			value: 'theme',
-			label: t('Theme'),
+			label: t('settings.theme'),
 			component: <ThemeSettings />,
 		},
 	];
@@ -48,7 +48,7 @@ export const SettingsScreen = () => {
 		<Modal>
 			<ModalContent size="2xl">
 				<ModalHeader>
-					<ModalTitle>{t('Settings')}</ModalTitle>
+					<ModalTitle>{t('common.settings')}</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>

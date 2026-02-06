@@ -17,7 +17,7 @@ export const useGuestCustomer = () => {
 		() => ({
 			id: 0,
 			billing: {
-				first_name: t('Guest'),
+				first_name: t('common.guest'),
 				last_name: '',
 				company: '',
 				address_1: '',
