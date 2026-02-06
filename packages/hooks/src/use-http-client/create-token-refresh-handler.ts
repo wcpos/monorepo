@@ -159,12 +159,16 @@ export const createTokenRefreshHandler = ({
 		intercepts: true, // Stops the error chain if successful
 
 		/**
-		 * Only handle 401 Unauthorized errors.
+		 * Handle 401 Unauthorized and 403 Forbidden errors.
+		 *
+		 * 403 can occur when an expired JWT causes the server to reset
+		 * the authenticated user, failing the capability check.
 		 *
 		 * Other errors (network, 5xx, etc.) pass through to other handlers.
 		 */
 		canHandle: (error) => {
-			return error.response?.status === 401;
+			const status = error.response?.status;
+			return status === 401 || status === 403;
 		},
 
 		/**
