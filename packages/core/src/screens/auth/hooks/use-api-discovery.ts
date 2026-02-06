@@ -278,7 +278,10 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 
 				return { siteData: data, endpoints: apiEndpoints };
 			} catch (err) {
-				const errorMessage = err.message || t('auth.failed_to_discover_api_endpoints');
+				const errorMessage =
+					err instanceof Error && err.message
+						? err.message
+						: t('auth.failed_to_discover_api_endpoints');
 				setError(errorMessage);
 				setStatus('error');
 				return null;
