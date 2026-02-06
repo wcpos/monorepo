@@ -260,7 +260,8 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 
 				return savedSite;
 			} catch (err) {
-				const errorMessage = err.message || t('auth.failed_to_connect_to_site');
+				const errorMessage =
+					err instanceof Error && err.message ? err.message : t('auth.failed_to_connect_to_site');
 				setError(errorMessage);
 				setStatus('error');
 				return null;
