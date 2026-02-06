@@ -124,6 +124,7 @@ async function main() {
 
   // Build output: look up English value for each extracted key
   let warnings = 0;
+  try { await fs.rmdir(OUTPUT_DIR, { recursive: true }); } catch (e) { if (e.code !== 'ENOENT') throw e; }
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
 
   for (const [ns, keys] of Object.entries(byNamespace)) {
