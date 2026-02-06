@@ -5,9 +5,12 @@ global.fetch = mockFetch;
 
 function createBackend(options: { translationsState?: any } = {}) {
 	const backend = new RxDBBackend();
-	backend.init({}, {
-		translationsState: options.translationsState ?? null,
-	});
+	backend.init(
+		{},
+		{
+			translationsState: options.translationsState ?? null,
+		}
+	);
 	return backend;
 }
 
@@ -70,9 +73,7 @@ describe('RxDBBackend', () => {
 			await new Promise((r) => setTimeout(r, 0));
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(mockFetch).toHaveBeenCalledWith(
-				expect.stringContaining('/fr_CA/monorepo/core.json')
-			);
+			expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/fr_CA/monorepo/core.json'));
 			expect(callback).toHaveBeenCalledWith(null, frCAData);
 			expect(translationsState.set).toHaveBeenCalledWith('fr_CA', expect.any(Function));
 		});
@@ -91,10 +92,12 @@ describe('RxDBBackend', () => {
 			await new Promise((r) => setTimeout(r, 0));
 
 			expect(mockFetch).toHaveBeenCalledTimes(2);
-			expect(mockFetch).toHaveBeenNthCalledWith(1,
+			expect(mockFetch).toHaveBeenNthCalledWith(
+				1,
 				expect.stringContaining('/fr_CA/monorepo/core.json')
 			);
-			expect(mockFetch).toHaveBeenNthCalledWith(2,
+			expect(mockFetch).toHaveBeenNthCalledWith(
+				2,
 				expect.stringContaining('/fr/monorepo/core.json')
 			);
 			expect(callback).toHaveBeenCalledWith(null, frData);
