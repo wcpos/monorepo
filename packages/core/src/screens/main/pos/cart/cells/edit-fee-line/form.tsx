@@ -114,7 +114,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 					control={form.control}
 					name="name"
 					render={({ field }) => (
-						<FormInput label={t('Fee Name')} placeholder={t('Fee')} {...field} />
+						<FormInput label={t('pos_cart.fee_name')} placeholder={t('pos_cart.fee')} {...field} />
 					)}
 				/>
 				<HStack className="gap-4">
@@ -125,7 +125,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 							<View className="flex-1">
 								<FormInput
 									customComponent={togglePercentage ? NumberInput : CurrencyInput}
-									label={togglePercentage ? t('Percent') : t('Amount')}
+									label={togglePercentage ? t('pos_cart.percent') : t('pos_cart.amount')}
 									type="numeric"
 									{...field}
 								/>
@@ -137,13 +137,15 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 							control={form.control}
 							name="percent"
 							render={({ field }) => (
-								<FormSwitch label={t('Percentage of Cart Total')} {...field} />
+								<FormSwitch label={t('pos_cart.percentage_of_cart_total')} {...field} />
 							)}
 						/>
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
-							render={({ field }) => <FormSwitch label={t('Amount Includes Tax')} {...field} />}
+							render={({ field }) => (
+								<FormSwitch label={t('pos_cart.amount_includes_tax')} {...field} />
+							)}
 						/>
 					</VStack>
 				</HStack>
@@ -153,7 +155,11 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
+								<FormSelect
+									label={t('common.tax_class')}
+									customComponent={TaxClassSelect}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -163,7 +169,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormRadioGroup
-									label={t('Tax Status')}
+									label={t('common.tax_status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -173,8 +179,8 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 				</HStack>
 				<MetaDataForm />
 				<DialogFooter className="px-0">
-					<DialogClose>{t('Close')}</DialogClose>
-					<DialogAction onPress={onSave}>{t('Save')}</DialogAction>
+					<DialogClose>{t('common.close')}</DialogClose>
+					<DialogAction onPress={onSave}>{t('common.save')}</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

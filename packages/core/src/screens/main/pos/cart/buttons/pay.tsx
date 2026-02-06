@@ -41,7 +41,7 @@ export const PayButton = () => {
 			await pushDocument(currentOrder).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
 					// Log checkout started
-					orderLogger.info(t('Checkout started'), {
+					orderLogger.info(t('pos_cart.checkout_started'), {
 						saveToDb: true,
 						context: {
 							total,
@@ -56,7 +56,7 @@ export const PayButton = () => {
 			});
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			orderLogger.error(t('Checkout failed'), {
+			orderLogger.error(t('pos_cart.checkout_failed'), {
 				showToast: true,
 				saveToDb: true,
 				context: {
@@ -80,7 +80,7 @@ export const PayButton = () => {
 			className="flex-3 rounded-t-none rounded-bl-none"
 			loading={loading}
 		>
-			{t('Checkout {order_total}', {
+			{t('pos_cart.checkout', {
 				order_total: format(parseFloat(total) || 0),
 			})}
 		</Button>

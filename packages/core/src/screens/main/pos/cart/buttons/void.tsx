@@ -54,13 +54,13 @@ export const VoidButton = () => {
 			deleteDocument(latest.id, latest.collection);
 		}
 		latest.remove();
-		cartLogger.success(t('Order removed'), {
+		cartLogger.success(t('pos_cart.order_removed'), {
 			showToast: true,
 			saveToDb: true,
 			toast: {
 				dismissable: true,
 				action: {
-					label: t('Undo'),
+					label: t('common.undo'),
 					onClick: () => undoRemove(orderJson),
 				},
 			},
@@ -81,7 +81,7 @@ export const VoidButton = () => {
 			variant="destructive"
 			className="flex-1 rounded-t-none rounded-br-none"
 		>
-			{t('Void')}
+			{t('pos_cart.void')}
 		</Button>
 	);
 };

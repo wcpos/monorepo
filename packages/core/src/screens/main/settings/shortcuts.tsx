@@ -17,13 +17,13 @@ export const KeyboardShortcuts = () => {
 	const t = useT();
 
 	const shortcuts = [
-		{ key: 'ctrl + shift + s', description: t('Settings') },
-		{ key: 'ctrl + shift + a', description: t('POS') },
-		{ key: 'ctrl + shift + p', description: t('Products') },
-		{ key: 'ctrl + shift + o', description: t('Orders') },
-		{ key: 'ctrl + shift + c', description: t('Customers') },
-		{ key: 'ctrl + shift + ?', description: t('Support') },
-		{ key: 'ctrl + shift + l', description: t('Logout') },
+		{ key: 'ctrl + shift + s', description: t('common.settings') },
+		{ key: 'ctrl + shift + a', description: t('common.pos') },
+		{ key: 'ctrl + shift + p', description: t('common.products') },
+		{ key: 'ctrl + shift + o', description: t('common.orders') },
+		{ key: 'ctrl + shift + c', description: t('common.customers') },
+		{ key: 'ctrl + shift + ?', description: t('common.support') },
+		{ key: 'ctrl + shift + l', description: t('common.logout') },
 	];
 
 	return (
@@ -32,10 +32,10 @@ export const KeyboardShortcuts = () => {
 				<TableHeader>
 					<TableRow>
 						<TableHead>
-							<Text>{t('Key Combination')}</Text>
+							<Text>{t('settings.key_combination')}</Text>
 						</TableHead>
 						<TableHead>
-							<Text>{t('Description')}</Text>
+							<Text>{t('settings.description')}</Text>
 						</TableHead>
 					</TableRow>
 				</TableHeader>
@@ -55,7 +55,7 @@ export const KeyboardShortcuts = () => {
 				</TableBody>
 			</Table>
 			<ModalFooter className="px-0">
-				<ModalClose>{t('Close')}</ModalClose>
+				<ModalClose>{t('common.close')}</ModalClose>
 			</ModalFooter>
 		</>
 	);

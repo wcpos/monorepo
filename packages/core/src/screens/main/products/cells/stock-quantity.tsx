@@ -38,7 +38,7 @@ export const StockQuantity = ({
 			</View>
 			<SwitchWithLabel
 				nativeID="manage_stock"
-				label={t('Manage')}
+				label={t('products.manage')}
 				checked={manageStock}
 				onCheckedChange={(manage_stock) =>
 					table.options.meta.onChange({ document: product, changes: { manage_stock } })

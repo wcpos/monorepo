@@ -115,7 +115,7 @@ export function DemoButton() {
 				)
 			}
 		>
-			<ButtonText>{t('Enter Demo Store')}</ButtonText>
+			<ButtonText>{t('auth.enter_demo_store')}</ButtonText>
 		</Button>
 	);
 }

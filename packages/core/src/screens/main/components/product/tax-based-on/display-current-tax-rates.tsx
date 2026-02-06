@@ -47,21 +47,21 @@ export const DisplayCurrentTaxRates = ({
 	return (
 		<VStack space="md">
 			<VStack>
-				<Text className="font-bold">{t('Calculate tax based on')}:</Text>
+				<Text className="font-bold">{t('common.calculate_tax_based_on')}:</Text>
 				<Table>
 					<TableHeader>
 						<TableRow>
 							<TableHead>
-								<Text>{t('Country')}</Text>
+								<Text>{t('common.country')}</Text>
 							</TableHead>
 							<TableHead>
-								<Text>{t('State')}</Text>
+								<Text>{t('common.state')}</Text>
 							</TableHead>
 							<TableHead>
-								<Text>{t('City')}</Text>
+								<Text>{t('common.city')}</Text>
 							</TableHead>
 							<TableHead>
-								<Text>{t('Postcode')}</Text>
+								<Text>{t('common.postcode')}</Text>
 							</TableHead>
 						</TableRow>
 					</TableHeader>
@@ -84,19 +84,19 @@ export const DisplayCurrentTaxRates = ({
 				</Table>
 			</VStack>
 			<VStack>
-				<Text className="font-bold">{t('Matched rates')}:</Text>
+				<Text className="font-bold">{t('common.matched_rates')}:</Text>
 				{Array.isArray(rates) && rates.length > 0 ? (
 					<Table>
 						<TableHeader>
 							<TableRow>
 								<TableHead>
-									<Text>{t('Name')}</Text>
+									<Text>{t('common.name')}</Text>
 								</TableHead>
 								<TableHead>
-									<Text>{t('Rate')}</Text>
+									<Text>{t('common.rate')}</Text>
 								</TableHead>
 								<TableHead>
-									<Text>{t('Class')}</Text>
+									<Text>{t('common.class')}</Text>
 								</TableHead>
 							</TableRow>
 						</TableHeader>
@@ -119,7 +119,7 @@ export const DisplayCurrentTaxRates = ({
 				) : (
 					<HStack space="xs">
 						<Icon variant="error" name="triangleExclamation" />
-						<Text className="text-error text-sm">{t('No rates matched')}</Text>
+						<Text className="text-error text-sm">{t('common.no_rates_matched')}</Text>
 					</HStack>
 				)}
 			</VStack>
@@ -130,7 +130,7 @@ export const DisplayCurrentTaxRates = ({
 						router.push('/(app)/(modals)/tax-rates');
 					}}
 				>
-					<ButtonText>{t('View all tax rates')}</ButtonText>
+					<ButtonText>{t('common.view_all_tax_rates')}</ButtonText>
 				</Button>
 			</View>
 		</VStack>

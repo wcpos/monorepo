@@ -27,7 +27,7 @@ export function UrlInput() {
 	 */
 	React.useEffect(() => {
 		if (error) {
-			siteLogger.error(error || t('Error'), {
+			siteLogger.error(error || t('common.error'), {
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.INVALID_URL_FORMAT,
@@ -42,7 +42,7 @@ export function UrlInput() {
 	 */
 	return (
 		<VStack>
-			<Label nativeID="woo-store">{t('Enter the URL of your WooCommerce store') + ':'}</Label>
+			<Label nativeID="woo-store">{t('auth.enter_the_url_of_your_woocommerce') + ':'}</Label>
 			<HStack>
 				<Input
 					aria-labelledby="woo-store"
@@ -60,7 +60,7 @@ export function UrlInput() {
 					autoCorrect={false}
 				/>
 				<Button onPress={() => onConnect(url)} disabled={isEmpty(url)} loading={loading}>
-					<ButtonText>{t('Connect')}</ButtonText>
+					<ButtonText>{t('auth.connect')}</ButtonText>
 				</Button>
 			</HStack>
 		</VStack>

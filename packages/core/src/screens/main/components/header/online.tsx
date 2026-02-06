@@ -26,22 +26,22 @@ export function Online() {
 			case 'offline':
 				return {
 					variant: 'error',
-					tooltip: t('No internet connection'),
+					tooltip: t('common.no_internet_connection'),
 				};
 			case 'online-website-unavailable':
 				return {
 					variant: 'warning',
-					tooltip: t('Site not reachable'),
+					tooltip: t('common.site_not_reachable'),
 				};
 			case 'online-website-available':
 				return {
 					variant: 'success',
-					tooltip: t('Online'),
+					tooltip: t('common.online'),
 				};
 			default:
 				return {
 					variant: 'error',
-					tooltip: t('Unknown connection status'),
+					tooltip: t('common.unknown_connection_status'),
 				};
 		}
 	}, [status, t]);
@@ -66,13 +66,13 @@ export function Online() {
 
 		switch (status) {
 			case 'offline':
-				uiLogger.error(t('Device went offline'), logConfig);
+				uiLogger.error(t('common.device_went_offline'), logConfig);
 				break;
 			case 'online-website-unavailable':
-				uiLogger.error(t('Website is unreachable'), logConfig);
+				uiLogger.error(t('common.website_is_unreachable'), logConfig);
 				break;
 			case 'online-website-available':
-				uiLogger.success(t('Connection restored'), logConfig);
+				uiLogger.success(t('common.connection_restored'), logConfig);
 				break;
 		}
 

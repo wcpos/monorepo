@@ -48,7 +48,7 @@ export const EmailForm = ({ order }: Props) => {
 					save_to: saveEmail ? 'billing' : '',
 				});
 				if (data && data.success) {
-					httpLogger.success(t('Email sent'), {
+					httpLogger.success(t('receipt.email_sent'), {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -102,21 +102,21 @@ export const EmailForm = ({ order }: Props) => {
 					<FormField
 						control={form.control}
 						name="email"
-						render={({ field }) => <FormInput label={t('Email Address')} {...field} />}
+						render={({ field }) => <FormInput label={t('receipt.email_address')} {...field} />}
 					/>
 					<FormField
 						control={form.control}
 						name="saveEmail"
 						render={({ field }) => (
-							<FormSwitch label={t('Save email to Billing Address')} {...field} />
+							<FormSwitch label={t('receipt.save_email_to_billing_address')} {...field} />
 						)}
 					/>
 				</VStack>
 			</Form>
 			<DialogFooter className="px-0">
-				<DialogClose>{t('Cancel')}</DialogClose>
+				<DialogClose>{t('common.cancel')}</DialogClose>
 				<DialogAction onPress={sendEmail} loading={loading}>
-					{t('Send')}
+					{t('receipt.send')}
 				</DialogAction>
 			</DialogFooter>
 		</VStack>

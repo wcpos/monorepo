@@ -24,7 +24,7 @@ const GroupedNames = ({ query }) => {
 	 */
 	return (
 		<HStack className="flex-wrap gap-0">
-			<Text className="text-muted-foreground text-xs">{`${t('Grouped')}: `}</Text>
+			<Text className="text-muted-foreground text-xs">{`${t('common.grouped')}: `}</Text>
 			<Text className="text-xs" decodeHtml>
 				{names.join(', ')}
 			</Text>

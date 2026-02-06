@@ -42,7 +42,7 @@ export const StateSelectBase = ({ value, ...props }: React.ComponentProps<typeof
 			{...props}
 		>
 			<SelectTrigger>
-				<SelectValue placeholder={t('Select State')} />
+				<SelectValue placeholder={t('common.select_state')} />
 			</SelectTrigger>
 			<SelectContent>
 				{options.map((option) => (

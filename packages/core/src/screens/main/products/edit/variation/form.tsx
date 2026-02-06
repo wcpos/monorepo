@@ -100,7 +100,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 				});
 				await pushDocument(variation).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('{name} saved', { name: variation.name }), {
+						mutationLogger.success(t('common.saved', { name: variation.name }), {
 							showToast: true,
 							saveToDb: true,
 							context: {
@@ -112,7 +112,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				mutationLogger.error(t('Failed to save variation'), {
+				mutationLogger.error(t('products.failed_to_save_variation'), {
 					showToast: true,
 					saveToDb: true,
 					context: {
@@ -146,7 +146,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="sku"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('SKU')} {...field} />
+								<FormInput label={t('common.sku')} {...field} />
 							</View>
 						)}
 					/>
@@ -155,7 +155,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="barcode"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Barcode')} {...field} />
+								<FormInput label={t('common.barcode')} {...field} />
 							</View>
 						)}
 					/>
@@ -166,7 +166,11 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="regular_price"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput customComponent={CurrencyInput} label={t('Regular Price')} {...field} />
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('common.regular_price')}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -175,7 +179,11 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="sale_price"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput customComponent={CurrencyInput} label={t('Sale Price')} {...field} />
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('common.sale_price')}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -186,7 +194,11 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="status"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect label={t('Status')} customComponent={ProductStatusSelect} {...field} />
+								<FormSelect
+									label={t('common.status')}
+									customComponent={ProductStatusSelect}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -198,7 +210,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 								<FormInput
 									customComponent={NumberInput}
 									type="numeric"
-									label={t('Stock Quantity')}
+									label={t('products.stock_quantity')}
 									{...field}
 								/>
 							)}
@@ -206,7 +218,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						<FormField
 							control={form.control}
 							name="manage_stock"
-							render={({ field }) => <FormSwitch label={t('Manage Stock')} {...field} />}
+							render={({ field }) => <FormSwitch label={t('products.manage_stock')} {...field} />}
 						/>
 					</VStack>
 				</HStack>
@@ -216,7 +228,11 @@ export const EditVariationForm = ({ variation }: Props) => {
 						name="tax_class"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect label={t('Tax Class')} customComponent={TaxClassSelect} {...field} />
+								<FormSelect
+									label={t('common.tax_class')}
+									customComponent={TaxClassSelect}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -226,7 +242,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormRadioGroup
-									label={t('Tax Status')}
+									label={t('common.tax_status')}
 									customComponent={TaxStatusRadioGroup}
 									{...field}
 								/>
@@ -236,9 +252,9 @@ export const EditVariationForm = ({ variation }: Props) => {
 				</HStack>
 				<MetaDataForm />
 				<ModalFooter className="px-0">
-					<ModalClose>{t('Cancel')}</ModalClose>
+					<ModalClose>{t('common.cancel')}</ModalClose>
 					<ModalAction loading={loading} onPress={onSave}>
-						{t('Save')}
+						{t('common.save')}
 					</ModalAction>
 				</ModalFooter>
 			</VStack>

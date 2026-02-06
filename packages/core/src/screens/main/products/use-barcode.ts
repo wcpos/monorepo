@@ -25,12 +25,12 @@ export const useBarcode = (
 	 *
 	 */
 	useSubscription(barcode$, async (barcode) => {
-		const text1 = t('Barcode scanned: {barcode}', { barcode });
+		const text1 = t('common.barcode_scanned', { barcode });
 		const results = await barcodeSearch(barcode);
 		let text2;
 		let isError = false;
 
-		text2 = t('product_found_locally', { count: results.length });
+		text2 = t('common.product_found_locally', { count: results.length });
 		if (results.length !== 1) {
 			isError = true;
 		}

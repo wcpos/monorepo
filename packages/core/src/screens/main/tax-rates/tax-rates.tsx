@@ -54,7 +54,7 @@ export const TaxRates = ({ query }: Props) => {
 			<ModalContent size="2xl">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('Tax Rates')}</Text>
+						<Text>{t('tax_rates.tax_rates')}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
@@ -75,7 +75,7 @@ export const TaxRates = ({ query }: Props) => {
 					<TaxRatesFooter count={rates.length} query={query} />
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose>{t('Close')}</ModalClose>
+					<ModalClose>{t('common.close')}</ModalClose>
 				</ModalFooter>
 			</ModalContent>
 		</Modal>

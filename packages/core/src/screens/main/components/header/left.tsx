@@ -56,7 +56,7 @@ const HeaderLeft = () => {
 		>
 			<HStack className="gap-2">
 				<Icon name="bars" className="text-sidebar-foreground" />
-				<ButtonText className="text-sidebar-foreground">{t('Menu')}</ButtonText>
+				<ButtonText className="text-sidebar-foreground">{t('common.menu')}</ButtonText>
 			</HStack>
 		</Button>
 	);

@@ -26,10 +26,10 @@ export const TaxBasedOnSelect = ({ value, ...props }: React.ComponentProps<typeo
 		() => [
 			{
 				value: 'shipping',
-				label: t('Customer shipping address'),
+				label: t('common.customer_shipping_address'),
 			},
-			{ value: 'billing', label: t('Customer billing address') },
-			{ value: 'base', label: t('Shop base address') },
+			{ value: 'billing', label: t('common.customer_billing_address') },
+			{ value: 'base', label: t('common.shop_base_address') },
 		],
 		[t]
 	);
@@ -49,7 +49,7 @@ export const TaxBasedOnSelect = ({ value, ...props }: React.ComponentProps<typeo
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
 				}}
 			>
-				<SelectValue placeholder={t('Select tax based on')} />
+				<SelectValue placeholder={t('common.select_tax_based_on')} />
 			</SelectTrigger>
 			<SelectContent style={{ width: selectTriggerWidth }}>
 				<SelectGroup>

@@ -36,7 +36,7 @@ export const StockQuantity = ({ row, className, withText = false }: Props) => {
 	if (withText) {
 		return (
 			<Text className={className}>
-				{t('{quantity} in stock', { quantity: format(stockQuantity) })}
+				{t('pos_products.in_stock', { quantity: format(stockQuantity) })}
 			</Text>
 		);
 	}

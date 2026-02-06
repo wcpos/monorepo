@@ -28,31 +28,31 @@ export const TaxRateTable = ({ rates }: TaxRateTableProps) => {
 			<TableHeader>
 				<TableRow>
 					<TableHead>
-						<Text>{t('Country code')}</Text>
+						<Text>{t('tax_rates.country_code')}</Text>
 					</TableHead>
 					<TableHead>
-						<Text>{t('State code')}</Text>
+						<Text>{t('tax_rates.state_code')}</Text>
 					</TableHead>
 					<TableHead>
-						<Text>{t('Postcode')}</Text>
+						<Text>{t('common.postcode')}</Text>
 					</TableHead>
 					<TableHead>
-						<Text>{t('City')}</Text>
+						<Text>{t('common.city')}</Text>
 					</TableHead>
 					<TableHead>
-						<Text>{t('Rate %')}</Text>
+						<Text>{t('tax_rates.rate')}</Text>
 					</TableHead>
 					<TableHead>
-						<Text>{t('Tax name')}</Text>
+						<Text>{t('tax_rates.tax_name')}</Text>
 					</TableHead>
 					<TableHead className="w-12">
-						<Text>{t('Priority')}</Text>
+						<Text>{t('tax_rates.priority')}</Text>
 					</TableHead>
 					<TableHead className="w-12">
-						<Text>{t('Compound')}</Text>
+						<Text>{t('tax_rates.compound')}</Text>
 					</TableHead>
 					<TableHead className="w-12">
-						<Text>{t('Shipping')}</Text>
+						<Text>{t('common.shipping')}</Text>
 					</TableHead>
 				</TableRow>
 			</TableHeader>

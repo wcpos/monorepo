@@ -21,8 +21,8 @@ export const YesNoRadioGroup = (props: React.ComponentProps<typeof RadioGroup>) 
 	return (
 		<RadioGroup {...props}>
 			{[
-				{ label: t('Yes'), value: 'yes' },
-				{ label: t('No'), value: 'no' },
+				{ label: t('common.yes'), value: 'yes' },
+				{ label: t('common.no'), value: 'no' },
 			].map((option) => {
 				return (
 					<HStack key={option.value}>

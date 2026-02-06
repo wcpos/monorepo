@@ -119,27 +119,27 @@ export const Report = () => {
 			totalItemsSold: formatNumber(totalItemsSold),
 			averageOrderValue: formatCurrency(averageOrderValue),
 			t: {
-				reportGenerated: t('Report Generated'),
-				reportPeriodStart: t('Report Period Start'),
-				reportPeriodEnd: t('Report Period End'),
-				cashier: t('Cashier'),
-				salesSummary: t('Sales Summary'),
-				totalOrders: t('Total Orders'),
-				totalNetSales: t('Total Net Sales'),
-				totalTaxCollected: t('Total Tax Collected'),
-				totalSales: t('Total Sales'),
-				totalDiscounts: t('Total Discounts'),
-				paymentMethods: t('Payment Methods'),
-				unpaid: t('UNPAID'),
-				unknown: t('Unknown'),
-				taxes: t('Taxes'),
-				shipping: t('Shipping'),
-				cashierStoreTotals: t('Cashier/Store Totals'),
-				cashierId: t('Cashier ID'),
-				storeId: t('Store ID'),
-				additionalInfo: t('Additional Info'),
-				itemsSold: t('Items Sold'),
-				averageOrderValue: t('Average Order Value'),
+				reportGenerated: t('reports.report_generated'),
+				reportPeriodStart: t('reports.report_period_start'),
+				reportPeriodEnd: t('reports.report_period_end'),
+				cashier: t('common.cashier'),
+				salesSummary: t('reports.sales_summary'),
+				totalOrders: t('reports.total_orders'),
+				totalNetSales: t('reports.total_net_sales'),
+				totalTaxCollected: t('reports.total_tax_collected'),
+				totalSales: t('reports.total_sales'),
+				totalDiscounts: t('reports.total_discounts'),
+				paymentMethods: t('reports.payment_methods'),
+				unpaid: t('reports.unpaid'),
+				unknown: t('common.unknown'),
+				taxes: t('common.taxes'),
+				shipping: t('common.shipping'),
+				cashierStoreTotals: t('reports.cashier_store_totals'),
+				cashierId: t('reports.cashier_id'),
+				storeId: t('reports.store_id'),
+				additionalInfo: t('reports.additional_info'),
+				itemsSold: t('reports.items_sold'),
+				averageOrderValue: t('reports.average_order_value'),
 			},
 		});
 	}, [
@@ -179,18 +179,18 @@ export const Report = () => {
 			<Card className="flex-1">
 				<CardHeader className="bg-card-header p-2">
 					<HStack>
-						<Text className="text-lg">{t('Report')}</Text>
+						<Text className="text-lg">{t('reports.report')}</Text>
 						<Select
 							value={{
 								value: 'default',
-								label: t('Default (Offline)'),
+								label: t('reports.default_offline'),
 							}}
 						>
 							<SelectTrigger>
-								<SelectValue placeholder={t('Select report template')} />
+								<SelectValue placeholder={t('reports.select_report_template')} />
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem label={t('Default (Offline)')} value="default" />
+								<SelectItem label={t('reports.default_offline')} value="default" />
 							</SelectContent>
 						</Select>
 					</HStack>
@@ -204,7 +204,7 @@ export const Report = () => {
 				</CardContent>
 				<CardFooter className="border-border bg-footer justify-end border-t p-2">
 					<Button onPress={print} loading={isPrinting}>
-						<ButtonText>{t('Print')}</ButtonText>
+						<ButtonText>{t('reports.print')}</ButtonText>
 					</Button>
 				</CardFooter>
 			</Card>

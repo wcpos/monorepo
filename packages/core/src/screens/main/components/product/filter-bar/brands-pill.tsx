@@ -53,7 +53,7 @@ export function BrandsPill({ query, resource, selectedID }: Props) {
 					onRemove={() => query.where('brands').removeElemMatch('brands', { id: brand?.id }).exec()}
 				>
 					<ButtonText decodeHtml>
-						{isActive ? brand?.name || t('ID: {id}', { id: selectedID }) : t('Brand')}
+						{isActive ? brand?.name || t('common.id_2', { id: selectedID }) : t('common.brand')}
 					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>

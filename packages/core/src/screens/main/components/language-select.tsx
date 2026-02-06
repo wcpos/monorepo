@@ -56,10 +56,10 @@ export const LanguageSelect = ({ value, ...props }: React.ComponentProps<typeof 
 	return (
 		<Combobox value={{ ...value, label }} {...props}>
 			<ComboboxTrigger>
-				<ComboboxValue placeholder={t('Select Language')} />
+				<ComboboxValue placeholder={t('common.select_language')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxInput placeholder={t('Search Languages')} />
+				<ComboboxInput placeholder={t('common.search_languages')} />
 				<ComboboxList
 					data={options}
 					renderItem={({ item }) => (
@@ -68,7 +68,7 @@ export const LanguageSelect = ({ value, ...props }: React.ComponentProps<typeof 
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
-					ListEmptyComponent={<ComboboxEmpty>{t('No language found')}</ComboboxEmpty>}
+					ListEmptyComponent={<ComboboxEmpty>{t('common.no_language_found')}</ComboboxEmpty>}
 				/>
 			</ComboboxContent>
 		</Combobox>

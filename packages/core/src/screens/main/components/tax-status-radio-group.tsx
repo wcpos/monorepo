@@ -21,8 +21,8 @@ export const TaxStatusRadioGroup = (props: React.ComponentProps<typeof RadioGrou
 	return (
 		<RadioGroup {...props}>
 			{[
-				{ label: t('Taxable'), value: 'taxable' },
-				{ label: t('None'), value: 'none' },
+				{ label: t('common.taxable'), value: 'taxable' },
+				{ label: t('common.none'), value: 'none' },
 			].map((option) => {
 				return (
 					<HStack key={option.value}>

@@ -49,7 +49,7 @@ export const ShippingAddressForm = () => {
 					name="shipping.first_name"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('First Name')} {...field} />
+							<FormInput label={t('common.first_name')} {...field} />
 						</View>
 					)}
 				/>
@@ -58,7 +58,7 @@ export const ShippingAddressForm = () => {
 					name="shipping.last_name"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('Last Name')} {...field} />
+							<FormInput label={t('common.last_name')} {...field} />
 						</View>
 					)}
 				/>
@@ -69,7 +69,7 @@ export const ShippingAddressForm = () => {
 					name="shipping.company"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('Company')} {...field} />
+							<FormInput label={t('common.company')} {...field} />
 						</View>
 					)}
 				/>
@@ -78,7 +78,7 @@ export const ShippingAddressForm = () => {
 					name="shipping.phone"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('Phone')} {...field} />
+							<FormInput label={t('common.phone')} {...field} />
 						</View>
 					)}
 				/>
@@ -86,13 +86,13 @@ export const ShippingAddressForm = () => {
 			<FormField
 				control={control}
 				name="shipping.address_1"
-				render={({ field }) => <FormInput label={t('Address 1')} {...field} />}
+				render={({ field }) => <FormInput label={t('common.address_1')} {...field} />}
 			/>
 
 			<FormField
 				control={control}
 				name="shipping.address_2"
-				render={({ field }) => <FormInput label={t('Address 2')} {...field} />}
+				render={({ field }) => <FormInput label={t('common.address_2')} {...field} />}
 			/>
 			<HStack className="gap-4">
 				<FormField
@@ -100,7 +100,7 @@ export const ShippingAddressForm = () => {
 					name="shipping.city"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('City')} {...field} />
+							<FormInput label={t('common.city')} {...field} />
 						</View>
 					)}
 				/>
@@ -111,7 +111,7 @@ export const ShippingAddressForm = () => {
 						<View className="flex-1">
 							<FormInput
 								customComponent={StateFormInput}
-								label={t('State')}
+								label={t('common.state')}
 								{...field}
 								countryCode={countryCode}
 							/>
@@ -125,7 +125,11 @@ export const ShippingAddressForm = () => {
 					name="shipping.country"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormCombobox customComponent={CountryCombobox} label={t('Country')} {...field} />
+							<FormCombobox
+								customComponent={CountryCombobox}
+								label={t('common.country')}
+								{...field}
+							/>
 						</View>
 					)}
 				/>
@@ -134,7 +138,7 @@ export const ShippingAddressForm = () => {
 					name="shipping.postcode"
 					render={({ field }) => (
 						<View className="flex-1">
-							<FormInput label={t('Postcode')} {...field} />
+							<FormInput label={t('common.postcode')} {...field} />
 						</View>
 					)}
 				/>

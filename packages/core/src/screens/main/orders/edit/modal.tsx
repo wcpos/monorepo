@@ -26,7 +26,7 @@ export const EditOrderModal = ({ resource }: Props) => {
 				<ModalContent size="lg">
 					<ModalHeader>
 						<ModalTitle>
-							<Text>{t('No order found')}</Text>
+							<Text>{t('common.no_order_found')}</Text>
 						</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
@@ -40,7 +40,7 @@ export const EditOrderModal = ({ resource }: Props) => {
 				<ModalHeader>
 					<ModalTitle>
 						<Text>
-							{order.id ? t('Edit Order #{number}', { number: order.id }) : t('Edit Order')}
+							{order.id ? t('orders.edit_order_2', { number: order.id }) : t('orders.edit_order')}
 						</Text>
 					</ModalTitle>
 				</ModalHeader>
@@ -48,10 +48,10 @@ export const EditOrderModal = ({ resource }: Props) => {
 					<Tabs value={value} onValueChange={setValue}>
 						<TabsList className="w-full flex-row">
 							<TabsTrigger value="form" className="flex-1">
-								<Text>{t('Form')}</Text>
+								<Text>{t('common.form')}</Text>
 							</TabsTrigger>
 							<TabsTrigger value="json" className="flex-1">
-								<Text>{t('JSON')}</Text>
+								<Text>{t('common.json')}</Text>
 							</TabsTrigger>
 						</TabsList>
 						<TabsContent value="form">

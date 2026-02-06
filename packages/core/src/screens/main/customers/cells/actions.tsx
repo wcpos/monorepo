@@ -82,7 +82,7 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 						}
 					>
 						<Icon name="penToSquare" />
-						<Text>{t('Edit')}</Text>
+						<Text>{t('common.edit')}</Text>
 					</DropdownMenuItem>
 					{customer.id && (
 						<DropdownMenuItem
@@ -93,7 +93,7 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 							}}
 						>
 							<Icon name="arrowRotateRight" />
-							<Text>{t('Sync')}</Text>
+							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
 					)}
 					<DropdownMenuSeparator />
@@ -102,7 +102,7 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 							name="trash"
 							className="fill-destructive web:group-focus:fill-accent-foreground"
 						/>
-						<Text>{t('Delete')}</Text>
+						<Text>{t('common.delete')}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -110,17 +110,13 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{t('Delete {name}', {
+							{t('customers.delete', {
 								name: format(customer),
 							})}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
 							<VStack>
-								<Text className="text-destructive">
-									{t(
-										'Are you sure you want to delete this user? Deleting a user is permanent, there is no Trash for WordPress users.'
-									)}
-								</Text>
+								<Text className="text-destructive">{t('customers.are_you_sure_you_want_to')}</Text>
 								<HStack>
 									<Checkbox aria-labelledby="confirm" onCheckedChange={setForce} checked={force} />
 									<Label
@@ -129,16 +125,16 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 											setForce(!force);
 										}}
 									>
-										{t('Confirm')}
+										{t('customers.confirm')}
 									</Label>
 								</HStack>
 							</VStack>
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
+						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
 						<AlertDialogAction variant="destructive" disabled={!force} onPress={handleDelete}>
-							{t('Delete')}
+							{t('common.delete')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
