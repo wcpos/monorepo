@@ -3,16 +3,14 @@
 /**
  * Extract translatable strings from the WCPOS monorepo.
  *
- * Parses t('...') calls and groups them by namespace based on file path:
- *   - apps/electron/ → electron
- *   - everything else → core
+ * Parses t('...') calls, groups them by namespace (electron vs core),
+ * then looks up the English value for each key from the locale files.
  *
- * Outputs one JSON file per namespace into .translations/.
+ * Outputs one JSON file per namespace into .translations/:
+ *   { "symbolic.key": "English value", ... }
  *
  * Usage:
  *   node scripts/extract-js-strings.js [path-to-monorepo]
- *
- * Default monorepo path: . (current working directory)
  */
 
 const fs = require('fs').promises;
@@ -22,8 +20,13 @@ const { glob } = require('glob');
 const MONOREPO_PATH = process.argv[2] || path.resolve(__dirname, '..');
 const OUTPUT_DIR = path.resolve(MONOREPO_PATH, '.translations');
 
-// Match t('string' or t("string" with optional second argument
-// Handles single quotes, double quotes, and backticks
+// Locale files that contain the English strings for each namespace
+const LOCALE_FILES = {
+  core: path.resolve(MONOREPO_PATH, 'packages/core/src/contexts/translations/locales/en/core.json'),
+  electron: path.resolve(MONOREPO_PATH, 'apps/electron/src/main/translations/locales/en/electron.json'),
+};
+
+// Match t('string') or t("string") with optional second argument
 const T_CALL_REGEX = /\bt\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*?)\1\s*(?:,\s*\{([^}]*)\})?\s*\)/g;
 const CONTEXT_REGEX = /_context:\s*['"`]([^'"`]+)['"`]/;
 
@@ -51,20 +54,33 @@ async function extractFromFile(filePath) {
     const contextMatch = options.match(CONTEXT_REGEX);
     const context = contextMatch ? contextMatch[1] : undefined;
     const namespace = getNamespace(filePath);
+    const key = context ? `${sourceString}_${context}` : sourceString;
 
-    strings.push({
-      string: sourceString,
-      namespace,
-      context,
-      file: path.relative(MONOREPO_PATH, filePath),
-    });
+    strings.push({ key, namespace });
   }
 
   return strings;
 }
 
+async function loadLocale(filePath) {
+  try {
+    const content = await fs.readFile(filePath, 'utf8');
+    return JSON.parse(content);
+  } catch (err) {
+    console.warn(`  Warning: could not load locale file ${filePath}: ${err.message}`);
+    return {};
+  }
+}
+
 async function main() {
   console.log(`Extracting strings from: ${MONOREPO_PATH}`);
+
+  // Load English locale files
+  const locales = {};
+  for (const [ns, localePath] of Object.entries(LOCALE_FILES)) {
+    locales[ns] = await loadLocale(localePath);
+    console.log(`  Loaded ${Object.keys(locales[ns]).length} English strings for "${ns}"`);
+  }
 
   // Find all TypeScript/JavaScript files in apps/ and packages/
   const patterns = [
@@ -92,71 +108,57 @@ async function main() {
     allFiles = allFiles.concat(files);
   }
 
-  console.log(`Found ${allFiles.length} source files to scan\n`);
+  console.log(`\nFound ${allFiles.length} source files to scan`);
 
-  // Extract strings from all files
-  const allStrings = [];
+  // Extract keys from all files
+  const byNamespace = {};
   for (const file of allFiles) {
     const strings = await extractFromFile(file);
-    if (strings.length > 0) {
-      allStrings.push(...strings);
-    }
-  }
-
-  console.log(`\nExtracted ${allStrings.length} translatable strings`);
-
-  // Group by namespace
-  const byNamespace = {};
-  for (const entry of allStrings) {
-    if (!byNamespace[entry.namespace]) {
-      byNamespace[entry.namespace] = {};
-    }
-
-    const key = entry.context ? `${entry.string}_${entry.context}` : entry.string;
-
-    if (!byNamespace[entry.namespace][key]) {
-      byNamespace[entry.namespace][key] = {
-        string: entry.string,
-        ...(entry.context && { context: entry.context }),
-        files: [],
-      };
-    }
-
-    if (!byNamespace[entry.namespace][key].files.includes(entry.file)) {
-      byNamespace[entry.namespace][key].files.push(entry.file);
-    }
-  }
-
-  // Validate: warn if any key contains spaces (indicates missed symbolic-key migration)
-  let warnings = 0;
-  for (const [ns, strings] of Object.entries(byNamespace)) {
-    for (const key of Object.keys(strings)) {
-      if (/\s/.test(key)) {
-        console.warn(`  ⚠ ${ns}: key contains spaces (not a symbolic key): "${key}"`);
-        warnings++;
+    for (const { key, namespace } of strings) {
+      if (!byNamespace[namespace]) {
+        byNamespace[namespace] = new Set();
       }
+      byNamespace[namespace].add(key);
     }
   }
-  if (warnings > 0) {
-    console.warn(`\n${warnings} key(s) still use English strings instead of symbolic keys.\n`);
-  }
 
-  // Write output files
+  // Build output: look up English value for each extracted key
+  let warnings = 0;
   await fs.mkdir(OUTPUT_DIR, { recursive: true });
 
-  for (const [ns, strings] of Object.entries(byNamespace)) {
-    const outputPath = path.join(OUTPUT_DIR, `${ns}.json`);
+  for (const [ns, keys] of Object.entries(byNamespace)) {
+    const locale = locales[ns] || {};
+    const output = {};
 
-    // Sort keys for stable output
-    const sorted = {};
-    for (const key of Object.keys(strings).sort()) {
-      sorted[key] = strings[key];
+    for (const key of [...keys].sort()) {
+      if (locale[key] !== undefined) {
+        output[key] = locale[key];
+      } else {
+        // Check for i18next plural suffixes (_one, _other, _zero, _two, _few, _many)
+        const pluralSuffixes = ['_zero', '_one', '_two', '_few', '_many', '_other'];
+        let foundPlural = false;
+        for (const suffix of pluralSuffixes) {
+          const pluralKey = `${key}${suffix}`;
+          if (locale[pluralKey] !== undefined) {
+            output[pluralKey] = locale[pluralKey];
+            foundPlural = true;
+          }
+        }
+        if (!foundPlural) {
+          console.warn(`  ⚠ ${ns}: key "${key}" not found in English locale file`);
+          warnings++;
+        }
+      }
     }
 
-    await fs.writeFile(outputPath, JSON.stringify(sorted, null, 2) + '\n');
+    const outputPath = path.join(OUTPUT_DIR, `${ns}.json`);
+    await fs.writeFile(outputPath, JSON.stringify(output, null, '\t') + '\n');
 
-    const uniqueCount = Object.keys(sorted).length;
-    console.log(`  ${ns}: ${uniqueCount} unique strings -> ${outputPath}`);
+    console.log(`  ${ns}: ${Object.keys(output).length} strings -> ${outputPath}`);
+  }
+
+  if (warnings > 0) {
+    console.warn(`\n${warnings} key(s) missing from English locale files.`);
   }
 
   console.log('\nDone.');

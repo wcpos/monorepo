@@ -63,8 +63,8 @@ export default function DrawerLayout() {
 			<Drawer.Screen
 				name="(pos)"
 				options={{
-					title: t('POS'),
-					drawerLabel: t('POS'),
+					title: t('common.pos'),
+					drawerLabel: t('common.pos'),
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
@@ -77,8 +77,8 @@ export default function DrawerLayout() {
 			<Drawer.Screen
 				name="products"
 				options={{
-					title: t('Products'),
-					drawerLabel: t('Products'),
+					title: t('common.products'),
+					drawerLabel: t('common.products'),
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
@@ -91,8 +91,8 @@ export default function DrawerLayout() {
 			<Drawer.Screen
 				name="orders"
 				options={{
-					title: t('Orders'),
-					drawerLabel: t('Orders'),
+					title: t('common.orders'),
+					drawerLabel: t('common.orders'),
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
@@ -105,8 +105,8 @@ export default function DrawerLayout() {
 			<Drawer.Screen
 				name="customers"
 				options={{
-					title: t('Customers'),
-					drawerLabel: t('Customers'),
+					title: t('common.customers'),
+					drawerLabel: t('common.customers'),
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
@@ -119,8 +119,8 @@ export default function DrawerLayout() {
 			<Drawer.Screen
 				name="reports"
 				options={{
-					title: t('Reports'),
-					drawerLabel: t('Reports'),
+					title: t('common.reports'),
+					drawerLabel: t('common.reports'),
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
@@ -133,8 +133,8 @@ export default function DrawerLayout() {
 			<Drawer.Screen
 				name="logs"
 				options={{
-					title: t('Logs'),
-					drawerLabel: t('Logs'),
+					title: t('common.logs'),
+					drawerLabel: t('common.logs'),
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
@@ -148,8 +148,8 @@ export default function DrawerLayout() {
 			<Drawer.Screen
 				name="support"
 				options={{
-					title: t('Support'),
-					drawerLabel: t('Support'),
+					title: t('common.support'),
+					drawerLabel: t('common.support'),
 					drawerIcon: ({ focused }) => (
 						<Icon
 							size="xl"
