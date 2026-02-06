@@ -131,24 +131,22 @@ async function main() {
     const locale = locales[ns] || {};
     const output = {};
 
+    const pluralSuffixes = ['_zero', '_one', '_two', '_few', '_many', '_other'];
     for (const key of [...keys].sort()) {
+      let foundPlural = false;
+      for (const suffix of pluralSuffixes) {
+        const pluralKey = `${key}${suffix}`;
+        if (locale[pluralKey] !== undefined) {
+          output[pluralKey] = locale[pluralKey];
+          foundPlural = true;
+        }
+      }
+
       if (locale[key] !== undefined) {
         output[key] = locale[key];
-      } else {
-        // Check for i18next plural suffixes (_one, _other, _zero, _two, _few, _many)
-        const pluralSuffixes = ['_zero', '_one', '_two', '_few', '_many', '_other'];
-        let foundPlural = false;
-        for (const suffix of pluralSuffixes) {
-          const pluralKey = `${key}${suffix}`;
-          if (locale[pluralKey] !== undefined) {
-            output[pluralKey] = locale[pluralKey];
-            foundPlural = true;
-          }
-        }
-        if (!foundPlural) {
-          console.warn(`  ⚠ ${ns}: key "${key}" not found in English locale file`);
-          warnings++;
-        }
+      } else if (!foundPlural) {
+        console.warn(`  ⚠ ${ns}: key "${key}" not found in English locale file`);
+        warnings++;
       }
     }
 
