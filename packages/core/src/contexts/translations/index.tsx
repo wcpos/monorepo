@@ -21,6 +21,7 @@ export const TranslationProvider = ({ children }: { children: React.ReactNode })
 				lng: locale,
 				fallbackLng: 'en',
 				load: 'currentOnly',
+				partialBundledLanguages: true,
 				ns: ['core'],
 				defaultNS: 'core',
 				resources: {
