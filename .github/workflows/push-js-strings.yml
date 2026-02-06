@@ -5,10 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'apps/**/*.ts'
-      - 'apps/**/*.tsx'
-      - 'packages/**/*.ts'
-      - 'packages/**/*.tsx'
+      - 'packages/core/src/contexts/translations/locales/en/core.json'
+      - 'apps/electron/src/main/translations/locales/en/electron.json'
   workflow_dispatch:
     inputs:
       force:
@@ -18,7 +16,7 @@ on:
         type: boolean
 
 jobs:
-  extract-and-dispatch:
+  push-and-dispatch:
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -26,28 +24,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🏗 Setup monorepo
-        uses: ./.github/actions/setup-monorepo
-        with:
-          expo-token: ${{ secrets.EXPO_TOKEN }}
-          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
-          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
-
-      - name: Extract translation strings
-        run: node scripts/extract-js-strings.js
-
       - name: Push to translations-source branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if [ -z "$(ls -A .translations/*.json 2>/dev/null)" ]; then
-            echo "No translation files found, skipping."
-            exit 0
-          fi
-
-          # Save translation files before wiping the working tree
-          cp -r .translations /tmp/translations-out
+          # Collect the English locale files
+          mkdir -p /tmp/translations-out
+          cp packages/core/src/contexts/translations/locales/en/core.json /tmp/translations-out/
+          cp apps/electron/src/main/translations/locales/en/electron.json /tmp/translations-out/
 
           git checkout --orphan translations-source
           git rm -rf .
