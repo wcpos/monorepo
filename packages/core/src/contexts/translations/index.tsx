@@ -4,6 +4,7 @@ import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next, useTranslation } from 'react-i18next';
 
 import { RxDBBackend } from './rxdb-backend';
+import en from './locales/en/core.json';
 import { useLocale } from '../../hooks/use-locale';
 import { useAppState } from '../app-state';
 
@@ -18,10 +19,13 @@ export const TranslationProvider = ({ children }: { children: React.ReactNode })
 			.use(RxDBBackend)
 			.init({
 				lng: locale,
-				// Keys are raw English strings, so the key itself is the fallback
-				fallbackLng: false,
+				fallbackLng: 'en',
+				load: 'currentOnly',
 				ns: ['core'],
 				defaultNS: 'core',
+				resources: {
+					en: { core: en },
+				},
 				keySeparator: false,
 				nsSeparator: false,
 				interpolation: {

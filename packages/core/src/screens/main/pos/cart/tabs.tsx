@@ -52,7 +52,7 @@ export const OpenOrderTabs = () => {
 							<Icon name="plus" />
 						</TooltipTrigger>
 						<TooltipContent>
-							<Text>{t('Open new order')}</Text>
+							<Text>{t('pos_cart.open_new_order')}</Text>
 						</TooltipContent>
 					</Tooltip>
 				</TabsTrigger>

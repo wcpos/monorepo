@@ -21,8 +21,8 @@ export const TaxDisplayRadioGroup = (props: React.ComponentProps<typeof RadioGro
 	return (
 		<RadioGroup {...props}>
 			{[
-				{ label: t('As a single total'), value: 'single' },
-				{ label: t('Itemized'), value: 'itemized' },
+				{ label: t('common.as_a_single_total'), value: 'single' },
+				{ label: t('common.itemized'), value: 'itemized' },
 			].map((option) => {
 				return (
 					<HStack key={option.value}>

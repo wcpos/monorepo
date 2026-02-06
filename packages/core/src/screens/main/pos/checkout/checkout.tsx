@@ -58,7 +58,7 @@ export const Checkout = ({ resource }: Props) => {
 				<ModalContent size="lg">
 					<ModalHeader>
 						<ModalTitle>
-							<Text>{t('No order found')}</Text>
+							<Text>{t('common.no_order_found')}</Text>
 						</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
@@ -75,7 +75,9 @@ export const Checkout = ({ resource }: Props) => {
 				<ModalHeader>
 					<ModalTitle>
 						<Text>
-							{orderNumber ? t('Checkout Order #{orderNumber}', { orderNumber }) : t('Checkout')}
+							{orderNumber
+								? t('pos_checkout.checkout_order', { orderNumber })
+								: t('pos_checkout.checkout')}
 						</Text>
 					</ModalTitle>
 				</ModalHeader>
@@ -86,9 +88,9 @@ export const Checkout = ({ resource }: Props) => {
 					</VStack>
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose>{t('Cancel')}</ModalClose>
+					<ModalClose>{t('common.cancel')}</ModalClose>
 					<ModalAction onPress={handleProcessPayment} loading={loading}>
-						{t('Process Payment')}
+						{t('pos_checkout.process_payment')}
 					</ModalAction>
 				</ModalFooter>
 			</ModalContent>

@@ -32,7 +32,7 @@ export const TableHeaderSelect = ({ table }: HeaderContext<OrderDocument, boolea
 				</View>
 			</TooltipTrigger>
 			<TooltipContent>
-				<Text>{t('Toggle selection')}</Text>
+				<Text>{t('reports.toggle_selection')}</Text>
 			</TooltipContent>
 		</Tooltip>
 	);

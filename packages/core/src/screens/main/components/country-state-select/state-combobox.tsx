@@ -53,10 +53,10 @@ const StateComboboxBase = ({
 			{...props}
 		>
 			<ComboboxTrigger disabled={disabled}>
-				<ComboboxValue placeholder={t('Select State')} />
+				<ComboboxValue placeholder={t('common.select_state')} />
 			</ComboboxTrigger>
 			<ComboboxContent>
-				<ComboboxInput placeholder={t('Search States')} />
+				<ComboboxInput placeholder={t('common.search_states')} />
 				<ComboboxList
 					data={options}
 					renderItem={({ item }) => (
@@ -65,7 +65,7 @@ const StateComboboxBase = ({
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
-					ListEmptyComponent={<ComboboxEmpty>{t('No state found')}</ComboboxEmpty>}
+					ListEmptyComponent={<ComboboxEmpty>{t('common.no_state_found')}</ComboboxEmpty>}
 				/>
 			</ComboboxContent>
 		</Combobox>

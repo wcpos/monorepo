@@ -165,7 +165,7 @@ function DataTable<TData>({
 					}}
 					ListEmptyComponent={() => (
 						<TableRow className="justify-center p-2">
-							<Text>{noDataMessage ? noDataMessage : t('No results found')}</Text>
+							<Text>{noDataMessage ? noDataMessage : t('common.no_results_found')}</Text>
 						</TableRow>
 					)}
 					ListFooterComponent={

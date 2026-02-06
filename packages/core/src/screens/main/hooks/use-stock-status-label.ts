@@ -14,20 +14,20 @@ export const useStockStatusLabel = () => {
 	const items = React.useMemo(
 		() => [
 			{
-				label: t('In Stock'),
+				label: t('common.in_stock'),
 				value: 'instock',
 			},
 			{
-				label: t('Out of Stock'),
+				label: t('common.out_of_stock'),
 				value: 'outofstock',
 			},
 			{
-				label: t('On Backorder'),
+				label: t('common.on_backorder'),
 				value: 'onbackorder',
 			},
 			// There is no low stock status in WC
 			// {
-			// 	label: t('Low Stock'),
+			// 	label: t('common.low_stock'),
 			// 	value: 'lowstock',
 			// },
 		],

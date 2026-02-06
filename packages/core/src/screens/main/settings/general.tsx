@@ -183,7 +183,7 @@ export const GeneralSettings = () => {
 				<FormField
 					control={form.control}
 					name="name"
-					render={({ field }) => <FormInput label={t('Store Name')} {...field} />}
+					render={({ field }) => <FormInput label={t('settings.store_name')} {...field} />}
 				/>
 				<HStack className="gap-4">
 					<FormField
@@ -191,7 +191,7 @@ export const GeneralSettings = () => {
 						name="store_city"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Store Base City')} {...field} disabled />
+								<FormInput label={t('settings.store_base_city')} {...field} disabled />
 							</View>
 						)}
 					/>
@@ -200,7 +200,7 @@ export const GeneralSettings = () => {
 						name="store_postcode"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Store Base Postcode')} {...field} disabled />
+								<FormInput label={t('settings.store_base_postcode')} {...field} disabled />
 							</View>
 						)}
 					/>
@@ -212,7 +212,7 @@ export const GeneralSettings = () => {
 							<View className="flex-1">
 								<FormInput
 									customComponent={StateFormInput}
-									label={t('Store Base State')}
+									label={t('settings.store_base_state')}
 									{...field}
 									countryCode={countryCode}
 									disabled
@@ -226,7 +226,7 @@ export const GeneralSettings = () => {
 							<View className="flex-1">
 								<FormCombobox
 									customComponent={CountryCombobox}
-									label={t('Store Base Country')}
+									label={t('settings.store_base_country')}
 									{...field}
 									disabled
 								/>
@@ -240,7 +240,11 @@ export const GeneralSettings = () => {
 						name="locale"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormSelect customComponent={LanguageSelect} label={t('Language')} {...field} />
+								<FormSelect
+									customComponent={LanguageSelect}
+									label={t('settings.language')}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -251,7 +255,7 @@ export const GeneralSettings = () => {
 							render={({ field }) => (
 								<FormCombobox
 									customComponent={CustomerSelect}
-									label={t('Default Customer')}
+									label={t('settings.default_customer')}
 									withGuest
 									{...field}
 									// override value with defaultCustomer
@@ -264,7 +268,7 @@ export const GeneralSettings = () => {
 							control={form.control}
 							name="default_customer_is_cashier"
 							render={({ field }) => (
-								<FormSwitch label={t('Default Customer is cashier')} {...field} />
+								<FormSwitch label={t('settings.default_customer_is_cashier')} {...field} />
 							)}
 						/>
 					</VStack>
@@ -275,7 +279,11 @@ export const GeneralSettings = () => {
 						name="currency"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormCombobox customComponent={CurrencySelect} label={t('Currency')} {...field} />
+								<FormCombobox
+									customComponent={CurrencySelect}
+									label={t('common.currency')}
+									{...field}
+								/>
 							</View>
 						)}
 					/>
@@ -286,7 +294,7 @@ export const GeneralSettings = () => {
 							<View className="flex-1">
 								<FormSelect
 									customComponent={CurrencyPositionSelect}
-									label={t('Currency Position')}
+									label={t('settings.currency_position')}
 									{...field}
 								/>
 							</View>
@@ -299,7 +307,7 @@ export const GeneralSettings = () => {
 						name="price_decimal_sep"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Decimal Separator')} {...field} />
+								<FormInput label={t('settings.decimal_separator')} {...field} />
 							</View>
 						)}
 					/>
@@ -308,7 +316,7 @@ export const GeneralSettings = () => {
 						name="price_num_decimals"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Number of Decimals')} type="numeric" {...field} />
+								<FormInput label={t('settings.number_of_decimals')} type="numeric" {...field} />
 							</View>
 						)}
 					/>
@@ -319,7 +327,7 @@ export const GeneralSettings = () => {
 						name="price_thousand_sep"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('Thousand Separator')} {...field} />
+								<FormInput label={t('settings.thousand_separator')} {...field} />
 							</View>
 						)}
 					/>
@@ -329,7 +337,7 @@ export const GeneralSettings = () => {
 						render={({ field }) => (
 							<View className="flex-1">
 								<FormSelect
-									label={t('Thousands Group Style')}
+									label={t('settings.thousands_group_style')}
 									customComponent={ThousandsStyleSelect}
 									{...field}
 								/>
@@ -339,9 +347,9 @@ export const GeneralSettings = () => {
 				</HStack>
 				<ModalFooter className="px-0">
 					<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
-						{t('Restore server settings')}
+						{t('settings.restore_server_settings')}
 					</Button>
-					<ModalClose>{t('Close')}</ModalClose>
+					<ModalClose>{t('common.close')}</ModalClose>
 				</ModalFooter>
 			</VStack>
 		</Form>

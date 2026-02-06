@@ -45,7 +45,7 @@ export const StatusPill = ({ query }: Props) => {
 					removable={isActive}
 					onRemove={() => query.removeWhere('status').exec()}
 				>
-					<ButtonText>{value?.label || t('Status')}</ButtonText>
+					<ButtonText>{value?.label || t('common.status')}</ButtonText>
 				</ButtonPill>
 			</SelectPrimitiveTrigger>
 			<SelectContent>

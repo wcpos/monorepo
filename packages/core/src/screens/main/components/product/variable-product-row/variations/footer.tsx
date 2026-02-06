@@ -42,7 +42,7 @@ export const VariationTableFooter = ({ query, parent, count }) => {
 
 	return (
 		<HStack space="xs" className="border-border bg-footer justify-end border-b p-2">
-			<Text className="text-xs">{t('Showing {count} of {total}', { count, total })}</Text>
+			<Text className="text-xs">{t('common.showing_of', { shown: count, total })}</Text>
 			<SyncButton sync={sync} clear={handleClearVariations} active={loading} />
 		</HStack>
 	);

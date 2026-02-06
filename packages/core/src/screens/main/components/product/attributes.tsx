@@ -134,13 +134,13 @@ export const ProductAttributes = ({ row, table }) => {
 	const expandText = React.useMemo(() => {
 		let text = '';
 		if (isExpanded) {
-			text += t('Collapse');
+			text += t('common.collapse');
 		} else {
-			text += t('Expand');
+			text += t('common.expand');
 		}
 		if (row.original.childrenSearchCount > 0) {
 			text += ' - ';
-			text += t('variation_found_for_term', {
+			text += t('common.variation_found_for_term', {
 				count: row.original.childrenSearchCount,
 				term: row.original.parentSearchTerm,
 			});

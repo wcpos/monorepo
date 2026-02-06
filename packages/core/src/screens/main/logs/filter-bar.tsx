@@ -28,11 +28,11 @@ export function FilterBar({ query }: { query: Query<any> }) {
 
 	const items = React.useMemo(
 		() => [
-			{ value: 'error', label: t('Error') },
-			{ value: 'warn', label: t('Warning') },
-			{ value: 'info', label: t('Info') },
-			{ value: 'success', label: t('Success') },
-			{ value: 'audit', label: t('Audit') },
+			{ value: 'error', label: t('common.error') },
+			{ value: 'warn', label: t('logs.warning') },
+			{ value: 'info', label: t('logs.info') },
+			{ value: 'success', label: t('logs.success') },
+			{ value: 'audit', label: t('logs.audit') },
 		],
 		[t]
 	);
@@ -77,7 +77,7 @@ export function FilterBar({ query }: { query: Query<any> }) {
 	 */
 	const displayLabel = React.useMemo(() => {
 		if (selectedValues.length === 0) {
-			return t('Log Level');
+			return t('logs.log_level');
 		}
 
 		// Get labels in the order they appear in items array

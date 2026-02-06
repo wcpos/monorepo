@@ -103,7 +103,7 @@ export const useRemoveLineItem = () => {
 
 			if (itemToRestore) {
 				cartLogger.success(
-					t('{name} removed from cart', {
+					t('pos.removed_from_cart', {
 						name: itemToRestore?.name || itemToRestore?.method_title,
 					}),
 					{
@@ -112,7 +112,7 @@ export const useRemoveLineItem = () => {
 						toast: {
 							dismissable: true,
 							action: {
-								label: t('Undo'),
+								label: t('common.undo'),
 								onClick: () => undoRemove(uuid, type, itemToRestore),
 							},
 						},

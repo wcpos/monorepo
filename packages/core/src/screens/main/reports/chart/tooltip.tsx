@@ -18,11 +18,11 @@ export const Tooltip = ({ active, payload, label }) => {
 		(value) => {
 			switch (value) {
 				case 'total':
-					return t('Total');
+					return t('common.total');
 				case 'total_tax':
-					return t('Total Tax');
+					return t('common.total_tax');
 				case 'order_count':
-					return t('Orders');
+					return t('common.orders');
 				default:
 					return value;
 			}

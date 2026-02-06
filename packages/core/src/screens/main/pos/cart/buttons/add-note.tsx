@@ -57,18 +57,18 @@ export const AddNoteButton = () => {
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
-				<Button variant="outline">{t('Order Note')}</Button>
+				<Button variant="outline">{t('pos_cart.order_note')}</Button>
 			</DialogTrigger>
 			<DialogContent portalHost="pos">
 				<DialogHeader>
-					<DialogTitle>{t('Order Note')}</DialogTitle>
+					<DialogTitle>{t('pos_cart.order_note')}</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
 					<Textarea autoFocus value={text} minHeight={80} onChangeText={onChangeText} />
 				</DialogBody>
 				<DialogFooter>
-					<DialogClose>{t('Cancel')}</DialogClose>
-					<DialogAction onPress={handleSave}>{t('Add Note')}</DialogAction>
+					<DialogClose>{t('common.cancel')}</DialogClose>
+					<DialogAction onPress={handleSave}>{t('pos_cart.add_note')}</DialogAction>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

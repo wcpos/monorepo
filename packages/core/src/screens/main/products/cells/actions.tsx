@@ -71,7 +71,7 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 						}}
 					>
 						<Icon name="penToSquare" />
-						<Text>{t('Edit')}</Text>
+						<Text>{t('common.edit')}</Text>
 					</DropdownMenuItem>
 					{product.id && (
 						<DropdownMenuItem
@@ -82,7 +82,7 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 							}}
 						>
 							<Icon name="arrowRotateRight" />
-							<Text>{t('Sync')}</Text>
+							<Text>{t('common.sync')}</Text>
 						</DropdownMenuItem>
 					)}
 					<DropdownMenuSeparator />
@@ -91,24 +91,22 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 							name="trash"
 							className="fill-destructive web:group-focus:fill-accent-foreground"
 						/>
-						<Text>{t('Delete')}</Text>
+						<Text>{t('common.delete')}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>{t('Delete {product}', { product: product.name })}</AlertDialogTitle>
+						<AlertDialogTitle>{t('products.delete', { product: product.name })}</AlertDialogTitle>
 						<AlertDialogDescription>
-							{t(
-								'Are you sure you want to delete this product? Deleted products will be placed in the Trash on the server.'
-							)}
+							{t('products.are_you_sure_you_want_to')}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
+						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
 						<AlertDialogAction variant="destructive" onPress={handleDelete}>
-							{t('Delete')}
+							{t('common.delete')}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

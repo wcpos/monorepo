@@ -106,7 +106,9 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 			))}
 			{selectedVariation && (
 				<Button onPress={handleAddToCart}>
-					<ButtonText>{t('Add to Cart') + ': ' + format(selectedVariation.price)}</ButtonText>
+					<ButtonText>
+						{t('common.add_to_cart') + ': ' + format(selectedVariation.price)}
+					</ButtonText>
 				</Button>
 			)}
 		</VStack>

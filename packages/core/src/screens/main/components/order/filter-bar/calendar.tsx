@@ -46,18 +46,18 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 	const dateRanges = React.useMemo(() => {
 		return [
 			{
-				label: t('Today'),
+				label: t('common.today'),
 				range: { from: startOfDay(today), to: endOfDay(today) },
 				action: () => setDate({ from: startOfDay(today), to: endOfDay(today) }),
 			},
 			{
-				label: t('Yesterday'),
+				label: t('common.yesterday'),
 				range: { from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) },
 				action: () =>
 					setDate({ from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) }),
 			},
 			{
-				label: t('This Week'),
+				label: t('common.this_week'),
 				range: {
 					from: startOfWeek(today, { weekStartsOn: 1 }),
 					to: endOfWeek(today, { weekStartsOn: 1 }),
@@ -69,7 +69,7 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 					}),
 			},
 			{
-				label: t('Last Week'),
+				label: t('common.last_week'),
 				range: {
 					from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
 					to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
@@ -81,7 +81,7 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 					}),
 			},
 			{
-				label: t('This Month'),
+				label: t('common.this_month'),
 				range: {
 					from: startOfMonth(today),
 					to: endOfMonth(today),
@@ -89,7 +89,7 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 				action: () => setDate({ from: startOfMonth(today), to: endOfMonth(today) }),
 			},
 			{
-				label: t('Last Month'),
+				label: t('common.last_month'),
 				range: {
 					from: startOfMonth(subMonths(today, 1)),
 					to: endOfMonth(subMonths(today, 1)),
@@ -139,7 +139,7 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 			</HStack>
 			<HStack className="justify-end">
 				<Button onPress={() => onSelect(date)}>
-					<ButtonText>{t('Done')}</ButtonText>
+					<ButtonText>{t('common.done')}</ButtonText>
 				</Button>
 			</HStack>
 		</VStack>
