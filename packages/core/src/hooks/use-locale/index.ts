@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { getLocales } from 'expo-localization';
-import { getLogger } from '@wcpos/utils/logger';
 import { useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
 
@@ -34,7 +33,6 @@ interface LocalesType {
 /**
  * Convert system locales to our Transifex locales
  */
-const log = getLogger(['wcpos', 'translations', 'locale']);
 const systemLocales = getLocales();
 const defaultLanguage: Language = {
 	locale: 'en',
@@ -46,13 +44,11 @@ const defaultLanguage: Language = {
 const systemLanguage: Language = systemLocales?.[0]
 	? (() => {
 			const { languageCode, languageTag } = systemLocales[0];
-			log.debug('[translations] System locale detection', { context: { languageCode, languageTag } });
-			const matched =
+			return (
 				(locales as LocalesType)[languageTag.toLowerCase()] ||
 				(languageCode && (locales as LocalesType)[languageCode]) ||
-				defaultLanguage;
-			log.debug('[translations] Matched system language', { context: { locale: matched.locale, name: matched.name } });
-			return matched;
+				defaultLanguage
+			);
 		})()
 	: defaultLanguage;
 
@@ -70,16 +66,13 @@ export const useLocale = () => {
 	const storeLocale = useObservableEagerState<string | null | undefined>(locale$ || of(null));
 
 	const language = React.useMemo(() => {
-		log.debug('[translations] Computing language', { context: { storeLocale, systemLanguageLocale: systemLanguage.locale } });
 		let lang: Language = systemLanguage;
 		if (storeLocale) {
 			const foundLang = Object.values(locales).find((l) => l.locale === storeLocale);
-			log.debug('[translations] Store locale lookup', { context: { storeLocale, found: !!foundLang, foundLocale: foundLang?.locale } });
 			if (foundLang) {
 				lang = foundLang;
 			}
 		}
-		log.debug('[translations] Resolved language', { context: { locale: lang.locale, name: lang.name } });
 		return lang;
 	}, [storeLocale]);
 
