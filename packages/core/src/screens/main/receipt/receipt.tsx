@@ -48,6 +48,7 @@ export const Receipt = ({ resource }: Props) => {
 		order.links$.pipe(map((links) => get(links, ['receipt', 0, 'href']))),
 		get(order, ['links', 'receipt', 0, 'href'])
 	);
+
 	const { print, isPrinting } = usePrintExternalURL({ externalURL: receiptURL });
 
 	/**

@@ -53,6 +53,7 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 	 *
 	 */
 	const paymentURLWithToken = React.useMemo(() => {
+		if (!paymentURL) return '';
 		// Append the JWT token as a query parameter to the payment URL
 		const url = new URL(paymentURL);
 		url.searchParams.append('token', jwt);
@@ -77,7 +78,23 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 					stockAdjustment(reducedStockItems);
 
 					const latest = order.getLatest();
+					const existingLinks = latest.links;
 					const parsedData = latest.collection.parseRestResponse(payload);
+
+					// Preserve existing links that the payment response didn't include.
+					// The server may not return receipt/payment links in the payment response,
+					// but parseRestResponse defaults missing arrays to [], which would wipe them.
+					if (parsedData.links && existingLinks) {
+						for (const key of Object.keys(existingLinks)) {
+							if (
+								existingLinks[key]?.length > 0 &&
+								(!parsedData.links[key] || parsedData.links[key].length === 0)
+							) {
+								parsedData.links[key] = existingLinks[key];
+							}
+						}
+					}
+
 					const success = await latest.incrementalPatch(parsedData);
 					if (success) {
 						// Log payment completed successfully
@@ -100,7 +117,7 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 
 						if (uiSettings.autoShowReceipt) {
 							router.replace({
-								pathname: `/(modals)/cart/receipt/${order.uuid}`,
+								pathname: `(modals)/cart/receipt/${order.uuid}`,
 							});
 						} else {
 							router.replace({
