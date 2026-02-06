@@ -21,9 +21,9 @@ const MONOREPO_PATH = process.argv[2] || path.resolve(__dirname, '..');
 const OUTPUT_DIR = path.resolve(MONOREPO_PATH, '.translations');
 
 // Locale files that contain the English strings for each namespace
+// (electron is a separate repo with its own workflow)
 const LOCALE_FILES = {
   core: path.resolve(MONOREPO_PATH, 'packages/core/src/contexts/translations/locales/en/core.json'),
-  electron: path.resolve(MONOREPO_PATH, 'apps/electron/src/main/translations/locales/en/electron.json'),
 };
 
 // Match t('string') or t("string") with optional second argument

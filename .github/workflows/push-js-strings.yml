@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'packages/core/src/contexts/translations/locales/en/core.json'
-      - 'apps/electron/src/main/translations/locales/en/electron.json'
   workflow_dispatch:
     inputs:
       force:
@@ -29,10 +28,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Collect the English locale files
+          # Collect the English locale file (electron has its own repo/workflow)
           mkdir -p /tmp/translations-out
           cp packages/core/src/contexts/translations/locales/en/core.json /tmp/translations-out/
-          cp apps/electron/src/main/translations/locales/en/electron.json /tmp/translations-out/
 
           git checkout --orphan translations-source
           git rm -rf .
