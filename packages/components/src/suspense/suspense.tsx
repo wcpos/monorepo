@@ -19,7 +19,6 @@ const FallbackWrapper = ({ fallback, onMount, onUnmount }: FallbackWrapperProps)
 
 export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 	const renderCount = React.useRef(0);
-	const [isFallback, setIsFallback] = React.useState(false);
 	const fallbackStartTime = React.useRef<number | null>(null);
 
 	// Extract display names of child components
@@ -37,28 +36,25 @@ export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 		renderCount.current += 1;
 
 		if (renderCount.current > 5) {
-			// Arbitrary limit, adjust to your needs.
 			console.warn(
 				'Suspense fallback component has rendered more than 5 times. This might indicate a problem.'
 			);
 		}
 	}, []);
 
-	React.useEffect(() => {
-		if (isFallback) {
-			fallbackStartTime.current = performance.now();
-			console.info('Suspense is in fallback state. Children:', childNames);
-		} else {
-			if (fallbackStartTime.current) {
-				const duration = Math.round(performance.now() - fallbackStartTime.current);
-				console.info(`Suspense resolved after ${duration} ms. Children:`, childNames);
-			}
-			fallbackStartTime.current = null;
-		}
-	}, [isFallback, childNames]);
+	// Timing logic lives directly in the callbacks — no state-as-trigger needed
+	const handleMount = React.useCallback(() => {
+		fallbackStartTime.current = performance.now();
+		console.info('Suspense is in fallback state. Children:', childNames);
+	}, [childNames]);
 
-	const handleMount = React.useCallback(() => setIsFallback(true), []);
-	const handleUnmount = React.useCallback(() => setIsFallback(false), []);
+	const handleUnmount = React.useCallback(() => {
+		if (fallbackStartTime.current) {
+			const duration = Math.round(performance.now() - fallbackStartTime.current);
+			console.info(`Suspense resolved after ${duration} ms. Children:`, childNames);
+		}
+		fallbackStartTime.current = null;
+	}, [childNames]);
 
 	return (
 		<React.Suspense

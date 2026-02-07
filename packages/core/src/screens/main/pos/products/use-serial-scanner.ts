@@ -155,14 +155,13 @@ export const useWebSerialBarcodeScanner = (options = {}) => {
 	};
 
 	/**
-	 * Clean up on unmount
+	 * Clean up on unmount only — debug and disconnect are stable refs/closures
 	 */
 	React.useEffect(() => {
 		return () => {
-			if (debug) console.log('Cleaning up...');
 			disconnect();
 		};
-	}, [debug]);
+	}, []);
 
 	return {
 		connect,

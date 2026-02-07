@@ -41,13 +41,16 @@ export const CartHeader = () => {
 	);
 
 	/**
-	 *
+	 * Open the combobox after React renders it (next frame)
 	 */
-	React.useEffect(() => {
-		if (showCustomerSelect && triggerRef?.current) {
-			triggerRef.current.open();
+	const handleShowCustomerSelect = React.useCallback((show: boolean) => {
+		setShowCustomerSelect(show);
+		if (show) {
+			requestAnimationFrame(() => {
+				triggerRef.current?.open();
+			});
 		}
-	}, [showCustomerSelect]);
+	}, []);
 
 	/**
 	 * HACK: If the combobox closes without selecting a customer, we need to go back to the customer pill.
@@ -82,7 +85,7 @@ export const CartHeader = () => {
 							</ComboboxContent>
 						</Combobox>
 					) : (
-						<Customer setShowCustomerSelect={setShowCustomerSelect} />
+						<Customer setShowCustomerSelect={handleShowCustomerSelect} />
 					)}
 				</ErrorBoundary>
 			</HStack>

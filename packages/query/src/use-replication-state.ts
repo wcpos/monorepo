@@ -28,45 +28,35 @@ export const useReplicationState = (
 	const queryID = getQueryID(query);
 	const manager = useQueryManager();
 
-	// Force re-fetch counter - incremented when we detect stale replication
-	const [refreshCounter, setRefreshCounter] = React.useState(0);
+	// Force re-render trigger — stable dispatch avoids dependency cycles
+	const [, forceUpdate] = React.useReducer((c: number) => c + 1, 0);
+
+	// Fresh lookup every render (cheap Map.get)
+	const collectionReplication = manager.activeCollectionReplications.get(queryID);
+	const queryReplication = manager.activeQueryReplications.get(queryID);
+
+	// Track the render-time value so the effect can detect stale reads
+	const lastSeenRef = React.useRef(collectionReplication);
+	lastSeenRef.current = collectionReplication;
 
 	/**
-	 * Get the collection replication state, refreshing when counter changes
-	 */
-	const collectionReplication = React.useMemo(() => {
-		return manager.activeCollectionReplications.get(queryID);
-	}, [manager, queryID, refreshCounter]);
-
-	/**
-	 * Get the query replication state, refreshing when counter changes
-	 */
-	const queryReplication = React.useMemo(() => {
-		return manager.activeQueryReplications.get(queryID);
-	}, [manager, queryID, refreshCounter]);
-
-	/**
-	 * Listen for replication changes and refresh.
-	 * Handles both add$ signals and mount-time stale detection for Suspense.
+	 * Subscribe to replication add$ events and handle Suspense race condition.
+	 * Only depends on manager and queryID — forceUpdate is a stable dispatch.
 	 */
 	React.useEffect(() => {
-		// Check on mount: if manager has a different replication than what we cached,
-		// we need to refresh (handles Suspense race condition)
-		const currentReplication = manager.activeCollectionReplications.get(queryID);
-		const isStale = currentReplication && currentReplication !== collectionReplication;
-
-		if (isStale) {
-			setRefreshCounter((c) => c + 1);
+		// Stale check: replication may have been added between render and effect
+		const current = manager.activeCollectionReplications.get(queryID);
+		if (current !== lastSeenRef.current) {
+			forceUpdate();
 		}
 
-		// Subscribe to add$ for future changes
 		const sub = manager.activeCollectionReplications.add$.subscribe((id) => {
 			if (id === queryID) {
-				setRefreshCounter((c) => c + 1);
+				forceUpdate();
 			}
 		});
 		return () => sub.unsubscribe();
-	}, [manager, queryID, collectionReplication, refreshCounter]);
+	}, [manager, queryID]);
 
 	/**
 	 * Combine the active$ observables of collectionReplication and queryReplication

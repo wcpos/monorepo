@@ -396,17 +396,15 @@ export function DragHandle({
 }) {
 	const context = React.useContext(DragHandleContext);
 
-	// Mark that a drag handle is being used
+	// Mark that a drag handle is being used — mount/unmount only
+	// setHasDragHandle is a stable React state setter
+	const setHasDragHandle = context?.setHasDragHandle;
 	React.useEffect(() => {
-		if (context) {
-			context.setHasDragHandle(true);
-		}
+		setHasDragHandle?.(true);
 		return () => {
-			if (context) {
-				context.setHasDragHandle(false);
-			}
+			setHasDragHandle?.(false);
 		};
-	}, [context]);
+	}, []);
 
 	if (!context) {
 		// If not inside a SortableItem, just render children
