@@ -144,7 +144,7 @@ function InputField({
 			}
 		}, 50);
 		return () => clearTimeout(timer);
-	}, [props.autoFocus]);
+	}, []);
 
 	return (
 		<RNTextInput

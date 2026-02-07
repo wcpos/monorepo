@@ -46,10 +46,10 @@ export const PulseTableRow = React.forwardRef<PulseTableRowRef, PulseTableRowPro
 		// Shared value for animated background color
 		const backgroundColor = useSharedValue(baseColor);
 
-		// Update base color when index or theme colors change
+		// Update base color when theme colors change (baseColor already derives from index)
 		React.useEffect(() => {
 			backgroundColor.value = baseColor;
-		}, [index, baseColor, backgroundColor]);
+		}, [baseColor]);
 
 		const animatedStyle = useAnimatedStyle(() => {
 			return {
