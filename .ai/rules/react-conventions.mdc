@@ -54,6 +54,38 @@ const handleOpenChange = (open: boolean) => {
 return <Popover open={isOpen} onOpenChange={handleOpenChange} />;
 ```
 
+### Mount-Only Effects Must Use Empty Dependencies
+Effects intended to run **once on mount** (e.g., initial focus, scroll-to-top, select-all) must use `[]` as the dependency array. Never use a prop or derived value as a dependency when the intent is "run once."
+
+A changing dependency turns a mount effect into a recurring side effect, which can silently break user input (e.g., re-selecting all text mid-typing, resetting scroll position, re-triggering focus).
+
+**❌ Bad** - Dependency causes effect to re-fire on every value change:
+```typescript
+// Intent: select all text when the input mounts
+React.useEffect(() => {
+  inputRef.current?.setSelectionRange(0, props.value?.length || 100);
+}, [props.value?.length]); // Re-fires whenever length changes!
+```
+
+**✅ Good** - Empty deps for a true mount effect:
+```typescript
+// Select all text on mount only
+React.useEffect(() => {
+  inputRef.current?.setSelectionRange(0, 100);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+```
+
+If you need to reference a value inside the effect but don't want it to re-trigger, use a ref:
+```typescript
+const latestValue = React.useRef(props.value);
+latestValue.current = props.value;
+
+React.useEffect(() => {
+  inputRef.current?.setSelectionRange(0, latestValue.current?.length || 100);
+}, []);
+```
+
 ## 3. Logging Protocol
 - **NO console.log**: Use the logger library exclusively.
 - **Library**: `import log from '@wcpos/utils/logger'`

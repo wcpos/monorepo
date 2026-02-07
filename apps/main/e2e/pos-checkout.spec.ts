@@ -40,6 +40,31 @@ test.describe('POS Cart', () => {
 		await page.waitForTimeout(500);
 	});
 
+	test('should allow entering multiple digits in numpad without resetting', async ({
+		posPage: page,
+	}) => {
+		await addFirstProductToCart(page);
+
+		const quantityButton = page.getByTestId('cart-quantity-input').first();
+		await expect(quantityButton).toBeVisible({ timeout: 15_000 });
+		await quantityButton.click();
+
+		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
+		await expect(numpad).toBeVisible({ timeout: 15_000 });
+
+		// Type 3 digits with 100ms delay so the 50ms mount-selection timer has
+		// time to fire between keystrokes. Before the fix, a useEffect re-ran on
+		// every value-length change, selecting all text and causing the next
+		// keystroke to overwrite instead of append.
+		await page.keyboard.type('123', { delay: 100 });
+
+		const numpadInput = numpad.locator('input');
+		await expect(numpadInput).toHaveValue('123');
+
+		await page.getByRole('button', { name: 'Done' }).click();
+		await page.waitForTimeout(500);
+	});
+
 	test('should add multiple different products', async ({ posPage: page }) => {
 		const addButtons = page.getByTestId('add-to-cart-button');
 
