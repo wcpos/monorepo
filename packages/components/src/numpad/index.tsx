@@ -46,11 +46,11 @@ const Display = React.forwardRef<RNTextInput, InputProps>(
 			const timer = setTimeout(() => {
 				if (inputRef.current) {
 					inputRef.current?.focus();
-					inputRef.current?.setSelectionRange(0, props.value?.length || 100);
+					inputRef.current?.setSelectionRange(0, 100);
 				}
 			}, 50);
 			return () => clearTimeout(timer);
-		}, [props.value?.length]);
+		}, []);
 
 		return (
 			<Input.Root {...props}>
