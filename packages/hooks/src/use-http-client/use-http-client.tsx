@@ -209,7 +209,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 
 		if (
 			processedConfig.method?.toLowerCase() !== 'head' &&
-			processedConfig.wcposHeaders !== false
+			(processedConfig as any).wcposHeaders !== false
 		) {
 			set(processedConfig, ['headers', 'X-WCPOS'], 1);
 		}
@@ -283,7 +283,7 @@ export const useHttpClient = (errorHandlers: HttpErrorHandler[] = EMPTY_ERROR_HA
 					(error as any).wpStatus = wpError.status;
 				}
 
-				httpLogger.debug(error);
+				httpLogger.debug(error instanceof Error ? error.message : String(error));
 				throw error;
 			}
 		},

@@ -4,34 +4,30 @@ import { getLogger } from '@wcpos/utils/logger';
 
 const debugLogger = getLogger(['wcpos', 'debug']);
 
-function useWhyDidYouUpdate(name: string, props: any) {
+function useWhyDidYouUpdate(name: string, props: Record<string, any>) {
 	// Get a mutable ref object where we can store props ...
 	// ... for comparison next time this hook runs.
-	const previousProps = React.useRef();
+	const previousProps = React.useRef<Record<string, any> | undefined>(undefined);
 	React.useEffect(() => {
 		if (previousProps.current) {
 			// Get all keys from previous and current props
-			// @ts-ignore
 			const allKeys = Object.keys({ ...previousProps.current, ...props });
 			// Use this object to keep track of changed props
-			const changesObj = {};
+			const changesObj: Record<string, { from: any; to: any }> = {};
 			// Iterate through keys
 			allKeys.forEach((key) => {
 				// If previous is different from current
-				// @ts-ignore
-				if (previousProps.current[key] !== props[key]) {
+				if (previousProps.current![key] !== props[key]) {
 					// Add to changesObj
-					// @ts-ignore
 					changesObj[key] = {
-						// @ts-ignore
-						from: previousProps.current[key],
+						from: previousProps.current![key],
 						to: props[key],
 					};
 				}
 			});
 			// If changesObj not empty then output to console
 			if (Object.keys(changesObj).length) {
-				debugLogger.debug('[why-did-you-update]', name, changesObj);
+				debugLogger.debug(`[why-did-you-update] ${name}: ${JSON.stringify(changesObj)}`);
 			}
 		}
 		// Finally update previousProps with current props for next hook call

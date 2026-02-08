@@ -136,7 +136,7 @@ const toAxiosError = (result: IpcErrorResponse): AxiosError => {
 		result.code,
 		result.config,
 		result.request,
-		result.response
+		result.response as any
 	);
 };
 
