@@ -21,9 +21,9 @@ import { useCurrentOrder } from '../contexts/current-order';
  *
  */
 export const Customer = ({
-	setShowCustomerSelect,
+	onShowCustomerSelect,
 }: {
-	setShowCustomerSelect: React.Dispatch<React.SetStateAction<boolean>>;
+	onShowCustomerSelect: (show: boolean) => void;
 }) => {
 	const { currentOrder } = useCurrentOrder();
 	const billing = useObservableEagerState(currentOrder.billing$);
@@ -44,7 +44,7 @@ export const Customer = ({
 					size="xs"
 					leftIcon="user"
 					removable={true}
-					onRemove={() => setShowCustomerSelect(true)}
+					onRemove={() => onShowCustomerSelect(true)}
 				>
 					<ButtonText>{name}</ButtonText>
 				</ButtonPill>

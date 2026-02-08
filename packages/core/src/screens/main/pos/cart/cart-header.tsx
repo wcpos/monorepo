@@ -85,7 +85,7 @@ export const CartHeader = () => {
 							</ComboboxContent>
 						</Combobox>
 					) : (
-						<Customer setShowCustomerSelect={handleShowCustomerSelect} />
+						<Customer onShowCustomerSelect={handleShowCustomerSelect} />
 					)}
 				</ErrorBoundary>
 			</HStack>
