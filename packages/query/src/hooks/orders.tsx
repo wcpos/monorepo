@@ -1,7 +1,7 @@
 /**
  *
  */
-const filterApiQueryParams = (params) => {
+const filterApiQueryParams = (params: Record<string, any>) => {
 	let orderby = params.orderby;
 
 	if (orderby === 'date_created' || orderby === 'date_created_gmt') {
@@ -31,12 +31,16 @@ const filterApiQueryParams = (params) => {
 	 * }
 	 */
 	if (params.$and) {
-		const cashier = params.$and.find((item) => item.meta_data?.$elemMatch?.key === '_pos_user');
+		const cashier = params.$and.find(
+			(item: Record<string, any>) => item.meta_data?.$elemMatch?.key === '_pos_user'
+		);
 		if (cashier) {
 			params.pos_cashier = cashier.meta_data.$elemMatch.value;
 		}
 
-		const store = params.$and.find((item) => item.meta_data?.$elemMatch?.key === '_pos_store');
+		const store = params.$and.find(
+			(item: Record<string, any>) => item.meta_data?.$elemMatch?.key === '_pos_store'
+		);
 		if (store) {
 			params.pos_store = store.meta_data.$elemMatch.value;
 		}

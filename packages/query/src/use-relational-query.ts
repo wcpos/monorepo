@@ -51,7 +51,7 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 		});
 
 		try {
-			const childQuery = manager.registerQuery(child);
+			const childQuery = manager.registerQuery(child)!;
 
 			const parentLookupQuery = manager.registerQuery({
 				...parent,
@@ -62,7 +62,7 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 					},
 				},
 				infiniteScroll: false,
-			});
+			})!;
 
 			const parentQuery = manager.registerRelationalQuery(parent, childQuery, parentLookupQuery);
 
@@ -89,8 +89,8 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 	 */
 	const queries$ = React.useMemo(
 		() =>
-			manager.localDB.reset$.pipe(
-				filter((collection) => collection.name === parentOptionsRef.current.collectionName),
+			(manager.localDB as any).reset$.pipe(
+				filter((collection: any) => collection.name === parentOptionsRef.current.collectionName),
 				map(() => {
 					logger.debug('Re-registering relational queries after collection reset', {
 						context: { collectionName: parentOptionsRef.current.collectionName },
@@ -116,9 +116,9 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 	 */
 	React.useEffect(() => {
 		return () => {
-			manager.maybePauseQueryReplications(parentQuery);
-			manager.maybePauseQueryReplications(childQuery);
-			manager.maybePauseQueryReplications(parentLookupQuery);
+			if (parentQuery) manager.maybePauseQueryReplications(parentQuery);
+			if (childQuery) manager.maybePauseQueryReplications(childQuery);
+			if (parentLookupQuery) manager.maybePauseQueryReplications(parentLookupQuery);
 		};
 	}, [parentQuery, childQuery, parentLookupQuery, manager]);
 

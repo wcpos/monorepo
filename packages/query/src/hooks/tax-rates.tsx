@@ -1,4 +1,4 @@
-type QueryHooks = import('@wcpos/query').QueryHooks;
+import type { QueryHooks } from '../query-state';
 
 /**
  * This is a hack!
@@ -40,7 +40,7 @@ const preQueryParams: QueryHooks['preQueryParams'] = (queryParams) => {
 /**
  *
  */
-const filterApiQueryParams = (params, include) => {
+const filterApiQueryParams = (params: Record<string, any>, _include?: any) => {
 	/**
 	 * FIXME: taxes have no include/exclude, so I'm just going to fetch all of them
 	 * 100 should be enough, right?

@@ -199,7 +199,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			})
 			.$.pipe(distinctUntilChanged());
 
-		const totalCount$ = combineLatest([remoteCount$, newLocalCount$]).pipe(
+		const totalCount$ = (
+			combineLatest([remoteCount$, newLocalCount$]) as unknown as Observable<[number, number]>
+		).pipe(
 			map(([remoteCount, newLocalCount]) => {
 				syncLogger.debug('totalCount$ computed', {
 					context: {
@@ -439,11 +441,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		const specificIncludes = !!include;
 		let exclude: number[] | undefined;
 
-		if (!include) {
-			include = await this.syncStateManager.getUnsyncedRemoteIDs();
-		}
+		const resolvedInclude: number[] =
+			include ?? (await this.syncStateManager.getUnsyncedRemoteIDs());
 
-		if (include.length === 0) {
+		if (resolvedInclude.length === 0) {
 			return;
 		}
 
@@ -466,10 +467,14 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 		try {
 			let response;
-			if (exclude && exclude.length < include.length) {
+			if (exclude && exclude.length < resolvedInclude.length) {
 				response = await this.dataFetcher.fetchRemoteByIDs({ exclude }, params, this.signal);
 			} else {
-				response = await this.dataFetcher.fetchRemoteByIDs({ include }, params, this.signal);
+				response = await this.dataFetcher.fetchRemoteByIDs(
+					{ include: resolvedInclude },
+					params,
+					this.signal
+				);
 			}
 			await this.bulkUpsertResponse(response);
 		} catch (error: any) {

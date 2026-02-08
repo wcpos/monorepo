@@ -114,7 +114,7 @@ export class SyncStateManager {
 				}
 
 				// Remove duplicates from the result array
-				result = result.filter((doc) => !duplicateIds.has(doc.id));
+				result = result.filter((doc: any) => !duplicateIds.has(doc.id));
 			}
 
 			const updates: any[] = [];
@@ -382,7 +382,7 @@ export class SyncStateManager {
 			.remove();
 
 		if (removed.length > 0) {
-			const ids = removed.map((doc) => doc.id);
+			const ids = removed.map((doc: any) => doc.id);
 			const result = await this.collection.find({ selector: { id: { $in: ids } } }).remove();
 
 			syncLogger.info(`Removed ${this.collection.name}`, {

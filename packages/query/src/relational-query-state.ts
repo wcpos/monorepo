@@ -8,11 +8,9 @@ import { getLogger } from '@wcpos/utils/logger';
 import { Query } from './query-state';
 
 import type { QueryConfig } from './query-state';
-import type { RxCollection, RxDocument } from 'rxdb';
+import type { RxCollection } from 'rxdb';
 
 const relationalLogger = getLogger(['wcpos', 'query', 'relational']);
-
-type DocumentType<C> = C extends RxCollection<infer D> ? RxDocument<D, object> : never;
 
 /**
  * Counts of matching children grouped by parent ID
@@ -99,7 +97,7 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 	 */
 	private clearRelationalSearch(): void {
 		relationalLogger.debug('Clearing relational search', {
-			context: { id: this.id, collection: this.collection.name },
+			context: { id: this.id, collection: (this.collection as any).name },
 		});
 		this.currentRxQuery.other.relationalSearch = null;
 		this.removeWhere(this.primaryKey).exec();
@@ -169,14 +167,14 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 	 */
 	private searchParentsDirect(searchTerm: string): Observable<string[]> {
 		return from(this.searchInstancePromise).pipe(
-			switchMap((searchInstance) =>
+			switchMap((searchInstance: any) =>
 				// Re-run search when search collection changes
-				searchInstance.collection.$.pipe(
+				(searchInstance.collection.$ as Observable<any>).pipe(
 					startWith(null),
-					switchMap(() => searchInstance.find(searchTerm))
+					switchMap(() => searchInstance.find(searchTerm) as Observable<any[]>)
 				)
 			),
-			map((documents: DocumentType<T>[]) => documents.map(({ uuid }) => uuid))
+			map((documents: any[]) => documents.map(({ uuid }: any) => uuid))
 		);
 	}
 

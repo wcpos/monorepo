@@ -30,7 +30,7 @@ export const QueryProvider = <T extends RxDatabase>({
 }: QueryProviderProps<T>) => {
 	const manager = React.useMemo(() => {
 		logger.debug('Creating/getting manager', {
-			context: { localDBName: localDB?.name },
+			context: { localDBName: (localDB as any).name },
 		});
 		return Manager.getInstance<T>(localDB, fastLocalDB, http, locale);
 	}, [localDB, fastLocalDB, http, locale]);

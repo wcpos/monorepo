@@ -11,7 +11,7 @@ import { stringify } from 'query-string';
  * @param value
  * @returns
  */
-export function isArrayOfIntegers(value) {
+export function isArrayOfIntegers(value: unknown) {
 	return Array.isArray(value) && value.every((item) => Number.isInteger(item));
 }
 

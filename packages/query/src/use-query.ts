@@ -68,8 +68,8 @@ export const useQuery = (queryOptions: QueryOptions) => {
 	 */
 	const query$ = React.useMemo(
 		() =>
-			manager.localDB.reset$.pipe(
-				filter((collection) => collection.name === queryOptionsRef.current.collectionName),
+			(manager.localDB as any).reset$.pipe(
+				filter((collection: any) => collection.name === queryOptionsRef.current.collectionName),
 				map(() => {
 					logger.debug('Re-registering query after collection reset', {
 						context: { collectionName: queryOptionsRef.current.collectionName },
@@ -92,7 +92,9 @@ export const useQuery = (queryOptions: QueryOptions) => {
 	 */
 	React.useEffect(() => {
 		return () => {
-			manager.maybePauseQueryReplications(query);
+			if (query) {
+				manager.maybePauseQueryReplications(query);
+			}
 		};
 	}, [query, manager]);
 
