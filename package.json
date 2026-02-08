@@ -11,6 +11,7 @@
     "test:ci": "pnpm jest --ci --passWithNoTests && cd packages/query && npx jest --config jest.config.cjs --ci",
     "lint": "turbo lint --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}'",
     "lint:fix": "turbo lint:fix --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}'",
+    "typecheck": "turbo typecheck --filter='{./packages/*}' --filter='{./apps/main}'",
     "main:expo": "pnpm --filter @wcpos/main exec expo",
     "clean": "node scripts/clean-node-modules",
     "electron": "pnpm --filter @wcpos/app-electron",

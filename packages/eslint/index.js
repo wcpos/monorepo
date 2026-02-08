@@ -62,8 +62,19 @@ export default [
 					memberSyntaxSortOrder: ['none', 'all', 'multiple', 'single'],
 				},
 			],
-
+		},
+	},
+	{
+		files: ['**/*.{ts,tsx,d.ts}'],
+		rules: {
 			'@typescript-eslint/no-useless-constructor': 'off',
+			'@typescript-eslint/ban-ts-comment': [
+				'error',
+				{
+					'ts-ignore': true,
+					'ts-expect-error': { descriptionFormat: '^: .+' },
+				},
+			],
 		},
 	},
 	reactCompiler.configs.recommended,
