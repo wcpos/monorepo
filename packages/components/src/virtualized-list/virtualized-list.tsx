@@ -5,6 +5,7 @@ import { FlashList } from '@shopify/flash-list';
 
 import { ItemContext, RootContext, useItemContext, useRootContext } from './utils/contexts';
 
+import type { FlashListRef } from '@shopify/flash-list';
 import type { ItemContext as BaseItemContext, ListProps, RootProps } from './types';
 
 function Root(props: RootProps) {
@@ -27,9 +28,11 @@ function List<T>({
 	onEndReached,
 	onEndReachedThreshold = 0.5,
 	keyExtractor,
-	...flashProps
+	extraData,
+	getItemType,
+	ListFooterComponent,
 }: ListProps<T>) {
-	const flashRef = React.useRef<FlashList<T>>(null);
+	const flashRef = React.useRef<FlashListRef<T>>(null);
 
 	React.useImperativeHandle(ref, () => ({
 		scrollToIndex: ({
@@ -69,12 +72,13 @@ function List<T>({
 						</ItemContext.Provider>
 					);
 				}}
-				estimatedItemSize={estimatedItemSize}
 				drawDistance={overscan * estimatedItemSize}
 				onEndReached={onEndReached}
 				onEndReachedThreshold={onEndReachedThreshold}
 				ListEmptyComponent={ListEmptyComponent}
-				{...flashProps}
+				extraData={extraData}
+				getItemType={getItemType}
+				ListFooterComponent={ListFooterComponent}
 			/>
 		</Parent>
 	);

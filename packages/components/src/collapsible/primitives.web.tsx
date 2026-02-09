@@ -21,7 +21,7 @@ function setDataset(el: HTMLElement, key: string, value: string | undefined) {
 	el.dataset[key] = value;
 }
 
-function setElementType(el: HTMLButtonElement, type: string) {
+function setElementType(el: HTMLButtonElement, type: 'button' | 'submit' | 'reset') {
 	el.type = type;
 }
 
@@ -35,13 +35,13 @@ function Root({
 	defaultOpen,
 	onOpenChange: onOpenChangeProp,
 	...viewProps
-}: SlottableViewProps & CollapsibleRootProps & { ref?: ViewRef }) {
+}: SlottableViewProps & CollapsibleRootProps & { ref?: React.Ref<ViewRef> }) {
 	const [open = false, onOpenChange] = useControllableState({
 		prop: openProp,
 		defaultProp: defaultOpen,
 		onChange: onOpenChangeProp,
 	});
-	const augmentedRef = useAugmentedRef({ ref });
+	const augmentedRef = useAugmentedRef<ViewRef>({ ref: ref ?? null });
 
 	React.useLayoutEffect(() => {
 		if (augmentedRef.current) {
@@ -75,7 +75,7 @@ function Root({
 				onOpenChange={onOpenChange}
 				disabled={disabled}
 			>
-				<Component ref={ref} {...viewProps} />
+				<Component ref={ref ?? null} {...viewProps} />
 			</Collapsible.Root>
 		</CollapsibleContext.Provider>
 	);
@@ -97,9 +97,9 @@ function Trigger({
 	onPress: onPressProp,
 	disabled: disabledProp = false,
 	...props
-}: SlottablePressableProps & { ref?: PressableRef }) {
+}: SlottablePressableProps & { ref?: React.Ref<PressableRef> }) {
 	const { disabled, open, onOpenChange } = useCollapsibleContext();
-	const augmentedRef = useAugmentedRef({ ref });
+	const augmentedRef = useAugmentedRef<PressableRef>({ ref: ref ?? null });
 
 	React.useLayoutEffect(() => {
 		if (augmentedRef.current) {
@@ -143,8 +143,8 @@ function Content({
 	asChild,
 	forceMount,
 	...props
-}: SlottableViewProps & CollapsibleContentProps & { ref?: ViewRef }) {
-	const augmentedRef = useAugmentedRef({ ref });
+}: SlottableViewProps & CollapsibleContentProps & { ref?: React.Ref<ViewRef> }) {
+	const augmentedRef = useAugmentedRef<ViewRef>({ ref: ref ?? null });
 	const { open } = useCollapsibleContext();
 
 	React.useLayoutEffect(() => {

@@ -1,10 +1,3 @@
-export type Action = {
-	type: string;
-	payload?: {
-		[key: string]: any;
-	};
-};
-
 export const ACTIONS = {
 	ADD_DIGIT: 'add-digit',
 	CHOOSE_OPERATION: 'choose-operation',
@@ -13,7 +6,16 @@ export const ACTIONS = {
 	EVALUATE: 'evaluate',
 	SWITCH_SIGN: 'switch-sign',
 	APPLY_DISCOUNT: 'apply-discount',
-};
+} as const;
+
+export type Action =
+	| { type: typeof ACTIONS.ADD_DIGIT; payload: { digit: string; overwrite?: boolean } }
+	| { type: typeof ACTIONS.CHOOSE_OPERATION; payload: { operation: string } }
+	| { type: typeof ACTIONS.CLEAR }
+	| { type: typeof ACTIONS.DELETE_DIGIT }
+	| { type: typeof ACTIONS.EVALUATE }
+	| { type: typeof ACTIONS.SWITCH_SIGN }
+	| { type: typeof ACTIONS.APPLY_DISCOUNT; payload: { discount: number } };
 
 export type CalculatorState = {
 	currentOperand: string | null;
@@ -68,25 +70,25 @@ function evaluate(state: CalculatorState, precision: number): string {
  * currentOperand is always a string with a dot as decimal separator, no thousand separator
  */
 export function reducer(state: CalculatorState, action: Action, config?: Config): CalculatorState {
-	const { type, payload } = action;
 	const precision = config?.precision || 6;
 
-	switch (type) {
-		case ACTIONS.ADD_DIGIT:
-			if (state.overwrite || payload.overwrite) {
+	switch (action.type) {
+		case ACTIONS.ADD_DIGIT: {
+			const { digit, overwrite: payloadOverwrite } = action.payload;
+			if (state.overwrite || payloadOverwrite) {
 				return {
 					...state,
-					currentOperand: payload.digit === '.' ? '0.' : payload.digit,
+					currentOperand: digit === '.' ? '0.' : digit,
 					overwrite: false,
 				};
 			}
-			if (payload.digit === '0' && state.currentOperand === '0') {
+			if (digit === '0' && state.currentOperand === '0') {
 				return state;
 			}
-			if (payload.digit === '.' && state.currentOperand && state.currentOperand.includes('.')) {
+			if (digit === '.' && state.currentOperand && state.currentOperand.includes('.')) {
 				return state;
 			}
-			if (payload.digit === '.' && state.currentOperand == null) {
+			if (digit === '.' && state.currentOperand == null) {
 				return {
 					...state,
 					currentOperand: '0.',
@@ -95,15 +97,17 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 			if (state.currentOperand === '0') {
 				return {
 					...state,
-					currentOperand: payload.digit,
+					currentOperand: digit,
 				};
 			}
 
 			return {
 				...state,
-				currentOperand: `${state.currentOperand || ''}${payload.digit}`,
+				currentOperand: `${state.currentOperand || ''}${digit}`,
 			};
-		case ACTIONS.CHOOSE_OPERATION:
+		}
+		case ACTIONS.CHOOSE_OPERATION: {
+			const { operation } = action.payload;
 			if (state.currentOperand == null && state.previousOperand == null) {
 				return state;
 			}
@@ -111,14 +115,14 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 			if (state.currentOperand == null) {
 				return {
 					...state,
-					operation: payload.operation,
+					operation,
 				};
 			}
 
 			if (state.previousOperand == null) {
 				return {
 					...state,
-					operation: payload.operation,
+					operation,
 					previousOperand: state.currentOperand,
 					currentOperand: null,
 				};
@@ -127,9 +131,10 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 			return {
 				...state,
 				previousOperand: evaluate(state, precision),
-				operation: payload.operation,
+				operation,
 				currentOperand: null,
 			};
+		}
 		case ACTIONS.CLEAR:
 			return {
 				currentOperand: null,
@@ -205,7 +210,7 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 		case ACTIONS.APPLY_DISCOUNT: {
 			if (!state.currentOperand) return state;
 			const current = parseFloat(state.currentOperand);
-			const discountMultiplier = (100 - payload.discount) / 100;
+			const discountMultiplier = (100 - action.payload.discount) / 100;
 			const computation = current * discountMultiplier;
 			const roundedResult = round(computation, precision);
 
@@ -227,7 +232,7 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 // 	maximumFractionDigits: 0,
 // });
 
-export function formatOperand(operand) {
+export function formatOperand(operand: string | null) {
 	// if (operand == null) return;
 	// const [integer, decimal] = operand.split('.');
 	// if (decimal == null) return INTEGER_FORMATTER.format(integer);

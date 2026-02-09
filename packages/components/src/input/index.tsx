@@ -53,7 +53,7 @@ function Left({ children, className }: { children: React.ReactNode; className?: 
 }
 
 interface InputFieldProps extends RNTextInputProps {
-	ref?: React.RefObject<RNTextInput>;
+	ref?: React.Ref<RNTextInput>;
 	type?:
 		| 'text'
 		| 'numeric'
@@ -76,10 +76,10 @@ function InputField({
 	type = 'text',
 	editable = true,
 	...props
-}) {
+}: InputFieldProps) {
 	const { setIsFocused } = useInputContext();
 	const inputRef = React.useRef<RNTextInput>(null);
-	const mergedRef = useMergedRef(ref, inputRef);
+	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
 	let keyboardType: RNTextInputProps['keyboardType'] = 'default';
 	let inputMode: RNTextInputProps['inputMode'] = 'text';
@@ -202,7 +202,7 @@ function Input({
 	});
 	const isDisabled = disabled || !editable;
 	const inputRef = React.useRef<RNTextInput>(null);
-	const mergedRef = useMergedRef(ref, inputRef);
+	const mergedRef = useMergedRef(ref ?? null, inputRef);
 
 	/**
 	 * NOTE - we need to trigger the onChange callback if it exists
@@ -211,7 +211,8 @@ function Input({
 	const handleClear = () => {
 		setValue('');
 		if (typeof props?.onChange === 'function') {
-			props.onChange({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>);
+			// Web-specific workaround: simulate a change event for parent components
+			props.onChange({ target: { value: '' } } as unknown as Parameters<NonNullable<RNTextInputProps['onChange']>>[0]);
 		}
 		if (inputRef.current) {
 			inputRef.current.focus();

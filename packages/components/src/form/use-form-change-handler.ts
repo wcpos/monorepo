@@ -108,7 +108,7 @@ export function useFormChangeHandler<T extends FieldValues>({
 			// When `name` is undefined, it means the entire form was reset/set programmatically
 			if (name) {
 				const value = get(values, name);
-				const changes = { [name]: value } as Partial<T>;
+				const changes = { [name]: value } as unknown as Partial<T>;
 
 				// Debounce text inputs to avoid saving on every keystroke
 				if (isTextValue(value) && debounceMs > 0) {

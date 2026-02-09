@@ -107,7 +107,7 @@ export function Icon({
 	const resolvedColor = useCSSVariable(cssVariable);
 
 	if (loading) {
-		return <Loader variant={variant} size={size} className={className} {...props} />;
+		return <Loader variant={variant as React.ComponentProps<typeof Loader>['variant']} size={size as React.ComponentProps<typeof Loader>['size']} className={className} {...props} />;
 	}
 
 	/**
@@ -115,7 +115,7 @@ export function Icon({
 	 * On web, use currentColor to inherit from CSS (enables hover state changes)
 	 * On native, use resolved CSS variable value
 	 */
-	const svgColor = fill || (Platform.isWeb || Platform.isElectron ? 'currentColor' : resolvedColor);
+	const svgColor = fill || (Platform.isWeb || Platform.isElectron ? 'currentColor' : String(resolvedColor ?? ''));
 
 	return (
 		<View className={combinedClassName} pointerEvents={pointerEvents} {...props}>

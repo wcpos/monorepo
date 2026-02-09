@@ -129,20 +129,26 @@ export const FormatNumber = ({
 	/**
 	 *
 	 */
-	const getMaskAtIndex = React.useCallback(() => {
-		const { mask = ' ' } = props;
-		if (typeof mask === 'string') {
-			return mask;
-		}
+	const getMaskAtIndex = React.useCallback(
+		(index: number) => {
+			const { mask = ' ' } = props;
+			if (typeof mask === 'string') {
+				return mask;
+			}
 
-		return mask[index] || ' ';
-	}, [props]);
+			return mask[index] || ' ';
+		},
+		[props.mask]
+	);
 
 	/**
 	 *
 	 */
 	const formatWithPattern = React.useCallback(
 		(numStr: string) => {
+			if (typeof format !== 'string') {
+				return numStr;
+			}
 			let hashCount = 0;
 			const formattedNumberAry = format.split('');
 			for (let i = 0, ln = format.length; i < ln; i++) {
@@ -170,7 +176,7 @@ export const FormatNumber = ({
 			} else if (typeof format === 'string') {
 				formattedValue = formatWithPattern(formattedValue);
 			} else if (typeof format === 'function') {
-				formattedValue = format(formattedValue);
+				formattedValue = format(Number(formattedValue));
 			} else {
 				formattedValue = formatAsNumber(formattedValue);
 			}
@@ -183,7 +189,7 @@ export const FormatNumber = ({
 	/**
 	 *
 	 */
-	const formatInput = React.useCallback((val) => {
+	const formatInput = React.useCallback((val: string) => {
 		return val;
 	}, []);
 
@@ -209,10 +215,10 @@ export const FormatNumber = ({
 		// round the number based on decimalPrecision
 		// format only if non formatted value is provided
 		if (isNumericString && !format && typeof decimalPrecision === 'number') {
-			value = roundToPrecision(value, decimalPrecision, fixedDecimalPrecision);
+			value = roundToPrecision(value ?? '', decimalPrecision, fixedDecimalPrecision);
 		}
 
-		return isNumericString ? formatNumString(value) : formatInput(value);
+		return isNumericString ? formatNumString(value ?? '') : formatInput(value ?? '');
 	}, [
 		decimalPrecision,
 		defaultValue,

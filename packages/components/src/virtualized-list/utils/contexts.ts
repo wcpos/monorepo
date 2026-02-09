@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { BaseItemContext, BaseRootContext } from '../base-types';
+import type { ItemContext as BaseItemContext, RootContext as BaseRootContext } from '../types';
 
 const RootContext = React.createContext<BaseRootContext>(null);
 

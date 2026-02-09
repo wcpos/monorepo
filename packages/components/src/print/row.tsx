@@ -4,7 +4,7 @@ import { View } from 'react-native';
 /**
  *
  */
-export const Row = ({ children }) => {
+export const Row = ({ children }: { children: React.ReactNode }) => {
 	return (
 		<View className="flex-row justify-between">
 			{React.Children.map(children, (child) => (

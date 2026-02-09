@@ -32,7 +32,7 @@ function WebView({
 	/**
 	 * Add a postMessage function to the ref
 	 */
-	const augmentedRef = useAugmentedRef({
+	const augmentedRef = useAugmentedRef<HTMLIFrameElement>({
 		ref,
 		methods: {
 			postMessage(message) {
@@ -72,9 +72,10 @@ function WebView({
 	 * Handle loaded
 	 */
 	const handleLoaded = React.useCallback(
-		(e) => {
+		(e: React.SyntheticEvent<HTMLIFrameElement>) => {
 			setLoading(false);
-			onLoad?.(e);
+			// Web-specific: iframe load events don't match RN WebView navigation events
+			onLoad?.(e as unknown as Parameters<NonNullable<RNWebViewProps['onLoad']>>[0]);
 		},
 		[onLoad]
 	);
@@ -86,7 +87,7 @@ function WebView({
 		<View className={cn('relative', className)}>
 			<iframe
 				ref={augmentedRef}
-				src={source?.uri || src}
+				src={(source && 'uri' in source ? source.uri : undefined) || src}
 				srcDoc={srcDoc}
 				onLoad={handleLoaded}
 				frameBorder="0"
@@ -94,9 +95,9 @@ function WebView({
 				className="h-full w-full"
 				onError={(error) => {
 					console.error('WebView error:', error);
-					props.onError?.(error);
+					// Web-specific: iframe error events don't match RN WebView error events
+					props.onError?.(error as unknown as Parameters<NonNullable<RNWebViewProps['onError']>>[0]);
 				}}
-				{...props}
 			/>
 			{loading && (
 				<View className="bg-opacity-75 absolute inset-0 flex items-center justify-center bg-white">

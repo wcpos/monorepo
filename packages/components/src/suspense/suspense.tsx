@@ -25,7 +25,11 @@ export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 	const childNames = React.useMemo(() => {
 		const names = React.Children.map(children, (child) => {
 			if (React.isValidElement(child)) {
-				return child.type.displayName || child.type.name || 'Unknown';
+				const type = child.type;
+				if (typeof type === 'string') return type;
+				return (type as { displayName?: string; name?: string }).displayName
+					|| (type as { name?: string }).name
+					|| 'Unknown';
 			}
 			return 'Unknown';
 		});

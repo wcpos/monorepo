@@ -12,6 +12,8 @@ export function FormSwitch({
 	description,
 	value,
 	onChange,
+	onCheckedChange: _onCheckedChange,
+	checked: _checked,
 	ref,
 	...props
 }: FormItemProps<boolean> & React.ComponentProps<typeof Switch>) {

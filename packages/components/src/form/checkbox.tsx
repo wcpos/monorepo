@@ -12,6 +12,8 @@ export function FormCheckbox({
 	description,
 	value,
 	onChange,
+	onCheckedChange: _onCheckedChange,
+	checked: _checked,
 	...props
 }: FormItemProps<boolean> & React.ComponentProps<typeof Checkbox>) {
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();

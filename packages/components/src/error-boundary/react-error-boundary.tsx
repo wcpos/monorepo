@@ -67,7 +67,7 @@ class ErrorBoundary extends React.Component<
 	React.PropsWithRef<React.PropsWithChildren<ErrorBoundaryProps>>,
 	ErrorBoundaryState
 > {
-	constructor(props) {
+	constructor(props: React.PropsWithRef<React.PropsWithChildren<ErrorBoundaryProps>>) {
 		super(props);
 		this.state = initialState;
 	}
@@ -98,7 +98,7 @@ class ErrorBoundary extends React.Component<
 	}
 
 	componentDidCatch(error: Error, info: React.ErrorInfo) {
-		this.props.onError?.(error, info);
+		this.props.onError?.(error, { componentStack: info.componentStack ?? '' });
 	}
 
 	resetErrorBoundary = (...args: unknown[]) => {
@@ -138,7 +138,7 @@ class ErrorBoundary extends React.Component<
 	}
 }
 
-function withErrorBoundary<P>(
+function withErrorBoundary<P extends Record<string, unknown>>(
 	Component: React.ComponentType<P>,
 	errorBoundaryProps: ErrorBoundaryProps
 ): React.ComponentType<P> {

@@ -12,6 +12,7 @@ export function FormRadioGroup({
 	description,
 	value,
 	onChange,
+	onValueChange: _onValueChange,
 	customComponent: Component = RadioGroup,
 	...props
 }: FormItemProps<string> & React.ComponentProps<typeof RadioGroup>) {

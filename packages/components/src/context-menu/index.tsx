@@ -82,7 +82,7 @@ const ContextMenuContent = React.forwardRef<
 						? StyleSheet.flatten([
 								Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined,
 								overlayStyle,
-							] as ViewStyle)
+							] as ViewStyle[])
 						: Platform.OS !== 'web'
 							? StyleSheet.absoluteFill
 							: undefined

@@ -6,6 +6,8 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ItemContext, RootContext, useItemContext, useRootContext } from './utils/contexts';
 import { useOnEndReached } from './utils/use-on-end-reached';
 
+import type { ReactVirtualizerOptions } from '@tanstack/react-virtual';
+import type { PartialKeys, VirtualItem, Virtualizer } from '@tanstack/virtual-core';
 import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } from './types';
 
 /**
@@ -27,8 +29,8 @@ import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } 
 
 // Web-specific extended context that includes virtualizer data
 interface WebItemContext<T> extends BaseItemContext<T> {
-	rowVirtualizer: any;
-	vItem: any;
+	rowVirtualizer: Virtualizer<HTMLDivElement, Element>;
+	vItem: VirtualItem;
 	horizontal: boolean;
 }
 
@@ -36,9 +38,14 @@ interface WebItemContext<T> extends BaseItemContext<T> {
  * React Compiler breaks @tanstack/react-virtual
  * https://github.com/TanStack/virtual/issues/736
  */
-function useVirtualWrapper(...args) {
+type VirtualizerInput = PartialKeys<
+	ReactVirtualizerOptions<HTMLDivElement, Element>,
+	'observeElementRect' | 'observeElementOffset' | 'scrollToFn'
+>;
+
+function useVirtualWrapper(options: VirtualizerInput) {
 	'use no memo';
-	return { ...useVirtualizer(...args) };
+	return { ...useVirtualizer(options) };
 }
 
 /**
@@ -70,14 +77,14 @@ function Root({ style, horizontal = false, ...props }: RootProps) {
 		<RootContext.Provider value={value}>
 			<View
 				{...props}
-				ref={setRef}
+				ref={setRef as React.Ref<View>}
 				style={[
 					{
-						overflow: 'auto',
-						display: 'block',
-						overflowX: horizontal ? 'auto' : 'hidden',
-						overflowY: horizontal ? 'hidden' : 'auto',
-					},
+						overflow: 'auto' as const,
+						display: 'block' as const,
+						overflowX: horizontal ? ('auto' as const) : ('hidden' as const),
+						overflowY: horizontal ? ('hidden' as const) : ('auto' as const),
+					} as Record<string, string>,
 					style,
 				]}
 			/>
@@ -134,8 +141,19 @@ function List<T>({
 	React.useImperativeHandle(
 		ref,
 		() => ({
-			scrollToIndex: ({ index, align = 'start', animated = true }) =>
-				rowVirtualizer.scrollToIndex(index, { align, behavior: animated ? 'smooth' : 'auto' }),
+			scrollToIndex: ({
+				index,
+				align = 'start',
+				animated = true,
+			}: {
+				index: number;
+				align?: 'start' | 'center' | 'end';
+				animated?: boolean;
+			}) =>
+				rowVirtualizer.scrollToIndex(index, {
+					align,
+					behavior: animated ? 'smooth' : 'auto',
+				}),
 			scrollToOffset: (offset: number, animated = true) =>
 				rowVirtualizer.scrollToOffset(offset, { behavior: animated ? 'smooth' : 'auto' }),
 		}),
@@ -145,7 +163,7 @@ function List<T>({
 	// Handle onEndReached logic
 	useOnEndReached({
 		scrollElement,
-		horizontal,
+		horizontal: horizontal ?? false,
 		onEndReached,
 		onEndReachedThreshold,
 		data,
@@ -218,21 +236,29 @@ function List<T>({
 }
 
 function Item({ children, ...props }: ItemProps<any>) {
-	const { index, rowVirtualizer, vItem } = useItemContext() as BaseItemContext<any>;
+	const { index, rowVirtualizer, vItem } = useItemContext() as WebItemContext<any>;
 	const { horizontal } = useRootContext();
 
+	// Web-specific props (dataSet, transform in style) require type assertion
+	// since this .web.tsx file runs exclusively in browsers via react-native-web
+	const webProps = {
+		dataSet: { index: String(index) },
+		style: {
+			position: 'absolute' as const,
+			top: 0,
+			left: 0,
+			width: '100%',
+			transform: horizontal ? undefined : `translateY(${vItem.start}px)`,
+		},
+		ref: (node: View | null) => {
+			if (node) {
+				rowVirtualizer.measureElement(node as unknown as Element);
+			}
+		},
+	} as React.ComponentProps<typeof View>;
+
 	return (
-		<View
-			dataSet={{ index: String(index) }}
-			style={{
-				position: 'absolute',
-				top: 0,
-				left: 0,
-				width: '100%',
-				transform: horizontal ? undefined : `translateY(${vItem.start}px)`,
-			}}
-			ref={(node) => rowVirtualizer.measureElement(node!)}
-		>
+		<View {...webProps}>
 			{children}
 		</View>
 	);

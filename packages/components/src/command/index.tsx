@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { type DialogProps } from '@radix-ui/react-dialog';
 
@@ -40,7 +40,7 @@ interface CommandInputProps extends React.ComponentPropsWithoutRef<typeof Input>
 	onValueChange?: (value: string) => void;
 }
 
-const CommandInput = React.forwardRef<Input, CommandInputProps>(
+const CommandInput = React.forwardRef<TextInput, CommandInputProps>(
 	({ value, onValueChange, ...props }, ref) => {
 		return (
 			<View>
@@ -114,7 +114,7 @@ interface CommandItemProps extends React.ComponentPropsWithoutRef<typeof Pressab
 	onSelect?: () => void;
 }
 
-const CommandItem = React.forwardRef<typeof Pressable, CommandItemProps>(
+const CommandItem = React.forwardRef<React.ElementRef<typeof Pressable>, CommandItemProps>(
 	({ onSelect, children, ...props }, ref) => {
 		return (
 			<Pressable ref={ref} onPress={onSelect} {...props}>

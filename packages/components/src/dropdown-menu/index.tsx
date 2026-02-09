@@ -29,7 +29,7 @@ function DropdownMenuSubTrigger({
 	inset,
 	children,
 	...props
-}: DropdownMenuPrimitive.SubTriggerProps & { inset?: boolean }) {
+}: Omit<DropdownMenuPrimitive.SubTriggerProps, 'children'> & { inset?: boolean; children?: React.ReactNode }) {
 	const { open } = DropdownMenuPrimitive.useSubContext();
 	// const Icon = Platform.OS === 'web' ? ChevronRight : open ? ChevronUp : ChevronDown;
 	return (
@@ -43,8 +43,10 @@ function DropdownMenuSubTrigger({
 				)}
 				{...props}
 			>
-				<View className="flex-row items-center gap-2">{children}</View>
-				<Icon name="chevronRight" />
+				<>
+					<View className="flex-row items-center gap-2">{children}</View>
+					<Icon name="chevronRight" />
+				</>
 			</DropdownMenuPrimitive.SubTrigger>
 		</TextClassContext.Provider>
 	);
@@ -86,7 +88,7 @@ function DropdownMenuContent({
 						? StyleSheet.flatten([
 								Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined,
 								overlayStyle,
-							] as ViewStyle)
+							] as ViewStyle[])
 						: Platform.OS !== 'web'
 							? StyleSheet.absoluteFill
 							: undefined
