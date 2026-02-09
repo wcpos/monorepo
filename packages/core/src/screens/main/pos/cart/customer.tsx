@@ -23,7 +23,7 @@ import { useCurrentOrder } from '../contexts/current-order';
 export const Customer = ({
 	setShowCustomerSelect,
 }: {
-	setShowCustomerSelect: React.Dispatch<React.SetStateAction<boolean>>;
+	setShowCustomerSelect: (show: boolean) => void;
 }) => {
 	const { currentOrder } = useCurrentOrder();
 	const billing = useObservableEagerState(currentOrder.billing$);

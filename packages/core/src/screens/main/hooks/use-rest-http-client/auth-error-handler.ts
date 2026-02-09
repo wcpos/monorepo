@@ -104,6 +104,7 @@ export const useAuthErrorHandler = (
 	const { response, promptAsync } = useWcposAuth({ site });
 
 	// Keep a ref so the error handler always calls the latest promptAsync
+	const authFlowInFlightRef = React.useRef(false);
 	const promptAsyncRef = React.useRef(promptAsync);
 	promptAsyncRef.current = promptAsync;
 
@@ -111,6 +112,11 @@ export const useAuthErrorHandler = (
 	 * Trigger OAuth flow directly — no state-as-trigger intermediate
 	 */
 	const triggerAuthFlow = React.useCallback(() => {
+		if (authFlowInFlightRef.current) {
+			authLogger.debug('OAuth flow already in flight, skipping');
+			return;
+		}
+		authFlowInFlightRef.current = true;
 		authLogger.debug('Triggering OAuth flow', {
 			context: { siteName: site.name },
 		});
@@ -131,6 +137,9 @@ export const useAuthErrorHandler = (
 						error: authError instanceof Error ? authError.message : String(authError),
 					},
 				});
+			})
+			.finally(() => {
+				authFlowInFlightRef.current = false;
 			});
 	}, [site.name]);
 
