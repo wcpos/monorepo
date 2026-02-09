@@ -246,9 +246,16 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 		const variant = getStoreVariant(testInfo);
 		const statePath = path.join(__dirname, '.auth-state', `${variant}.json`);
 
+		let state: SavedAuthState | null = null;
 		if (fs.existsSync(statePath)) {
-			const state: SavedAuthState = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+			try {
+				state = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+			} catch (e) {
+				console.warn(`[posPage] Failed to parse saved state, falling back to OAuth:`, e);
+			}
+		}
 
+		if (state) {
 			// Navigate first to establish origin for IndexedDB access
 			await page.goto('/');
 
