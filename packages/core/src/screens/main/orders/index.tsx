@@ -113,6 +113,7 @@ export function OrdersScreen() {
 								query={query}
 								placeholder={t('orders.search_orders')}
 								className="flex-1"
+								testID="search-orders"
 							/>
 							<UISettingsDialog title={t('orders.order_settings')}>
 								<UISettingsForm />

@@ -30,6 +30,17 @@ Add `*.spec.ts` files in `apps/main/e2e/` for:
 - New user-facing features
 - Critical user flows (auth, checkout, navigation)
 
+### E2E Locator Rules
+
+Tests must be **language-agnostic** — the demo stores may run in any locale.
+
+1. **Prefer `getByTestId`** — add `testID` props to components as needed (maps to `data-testid` on web).
+2. **Use structural locators** — `getByRole`, element counts, attribute selectors (`[role="button"]`).
+3. **Avoid `getByText`** — never use it for assertions or finding elements on translated pages. It couples tests to display text and breaks when content changes or the locale differs.
+4. **Acceptable `getByText` uses** — only for clicking items in dynamically-rendered lists (e.g. combobox options) where individual testIDs aren't practical. Always document why in a comment.
+5. **Verify network, not rendered text** — use `waitForResponse` to check CDN/API calls instead of asserting translated strings appeared.
+6. **Anchor assertions to testIDs** — use `toContainText` on testID-located elements rather than `getByText` on the page.
+
 ## When to Skip Tests
 
 - Purely cosmetic changes (CSS/styling only)

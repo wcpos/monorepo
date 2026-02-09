@@ -82,6 +82,7 @@ export function CustomersScreen() {
 							query={query}
 							placeholder={t('common.search_customers')}
 							className="flex-1"
+							testID="search-customers"
 						/>
 						<Tooltip>
 							<TooltipTrigger asChild>

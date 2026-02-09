@@ -57,7 +57,9 @@ export const AddNoteButton = () => {
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
-				<Button variant="outline">{t('pos_cart.order_note')}</Button>
+				<Button testID="order-note-button" variant="outline">
+					{t('pos_cart.order_note')}
+				</Button>
 			</DialogTrigger>
 			<DialogContent portalHost="pos">
 				<DialogHeader>
@@ -68,7 +70,9 @@ export const AddNoteButton = () => {
 				</DialogBody>
 				<DialogFooter>
 					<DialogClose>{t('common.cancel')}</DialogClose>
-					<DialogAction onPress={handleSave}>{t('pos_cart.add_note')}</DialogAction>
+					<DialogAction testID="add-note-button" onPress={handleSave}>
+						{t('pos_cart.add_note')}
+					</DialogAction>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

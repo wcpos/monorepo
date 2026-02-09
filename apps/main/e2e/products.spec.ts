@@ -6,26 +6,29 @@ import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fi
  */
 test.describe('Products in POS', () => {
 	test('should display products in the POS view', async ({ posPage: page }) => {
-		await expect(page.getByRole('columnheader', { name: 'Product' })).toBeVisible();
-		await expect(page.getByRole('columnheader', { name: 'Price' })).toBeVisible();
-		await expect(page.getByText(/Showing \d+ of \d+/)).toBeVisible();
+		const columnheaders = page.getByRole('columnheader');
+		await expect(columnheaders.first()).toBeVisible({ timeout: 15_000 });
+		expect(await columnheaders.count()).toBeGreaterThanOrEqual(2);
+		await expect(page.getByTestId('data-table-count')).toBeVisible();
 	});
 
 	test('should search products by name', async ({ posPage: page }) => {
-		const searchInput = page.getByPlaceholder('Search Products');
+		const searchInput = page.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_000);
 
-		const hasResults = await page
-			.getByText(/Showing [1-9]\d* of \d+/)
+		const countEl = page.getByTestId('data-table-count');
+		const noResults = page.getByTestId('no-data-message');
+
+		const hasResults = await countEl
 			.isVisible()
 			.catch(() => false);
-		const noResults = await page.getByText('No products found').isVisible().catch(() => false);
-		expect(hasResults || noResults).toBeTruthy();
+		const hasNoResults = await noResults.isVisible().catch(() => false);
+		expect(hasResults || hasNoResults).toBeTruthy();
 	});
 
 	test('should clear search and show all products', async ({ posPage: page }) => {
-		const searchInput = page.getByPlaceholder('Search Products');
+		const searchInput = page.getByTestId('search-products');
 
 		await searchInput.fill('test');
 		await page.waitForTimeout(1_000);
@@ -33,35 +36,35 @@ test.describe('Products in POS', () => {
 		await searchInput.clear();
 		await page.waitForTimeout(1_000);
 
-		await expect(page.getByText(/Showing [1-9]\d* of \d+/)).toBeVisible();
+		await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/);
 	});
 
 	test('should show "No products found" for nonsense search', async ({ posPage: page }) => {
-		const searchInput = page.getByPlaceholder('Search Products');
+		const searchInput = page.getByTestId('search-products');
 		await searchInput.fill('zzzznonexistentproductzzzz');
 		await page.waitForTimeout(1_000);
 
-		await expect(page.getByText('No products found')).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('no-data-message')).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should update product count after search', async ({ posPage: page }) => {
 		// Capture initial count
-		const countText = page.getByText(/Showing (\d+) of (\d+)/);
-		await expect(countText).toBeVisible();
-		const initialText = await countText.textContent();
+		const countEl = page.getByTestId('data-table-count');
+		await expect(countEl).toBeVisible();
+		const initialText = await countEl.textContent();
 
 		// Search for something specific
-		const searchInput = page.getByPlaceholder('Search Products');
+		const searchInput = page.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
 
 		// Count text should change (either fewer results or "No products found")
-		const hasResults = await page.getByText(/Showing \d+ of \d+/).isVisible().catch(() => false);
-		const noResults = await page.getByText('No products found').isVisible().catch(() => false);
+		const hasResults = await countEl.isVisible().catch(() => false);
+		const noResults = await page.getByTestId('no-data-message').isVisible().catch(() => false);
 		expect(hasResults || noResults).toBeTruthy();
 
 		if (hasResults) {
-			const filteredText = await page.getByText(/Showing \d+ of \d+/).textContent();
+			const filteredText = await countEl.textContent();
 			// The count should differ from the initial full count or be the same
 			// (if all products match - unlikely for "hoodie")
 			expect(filteredText).toBeTruthy();
@@ -70,18 +73,18 @@ test.describe('Products in POS', () => {
 
 	test('should add a product to the cart', async ({ posPage: page }) => {
 		await page.getByTestId('add-to-cart-button').first().click();
-		await expect(page.getByRole('button', { name: /Checkout/ })).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should show variable product with variations', async ({ posPage: page }) => {
 		// Search for a known variable product (WooCommerce sample data has "V-Neck T-Shirt" or "Hoodie")
-		const searchInput = page.getByPlaceholder('Search Products');
+		const searchInput = page.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
 
 		// If there are results, look for a variable product expand trigger
 		const hasResults = await page
-			.getByText(/Showing [1-9]\d* of \d+/)
+			.getByTestId('data-table-count')
 			.isVisible()
 			.catch(() => false);
 
@@ -107,43 +110,45 @@ test.describe('Products Page (Pro)', () => {
 	test('should navigate to Products page and see product table', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByPlaceholder('Search Products')).toBeVisible({ timeout: 30_000 });
-		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('search-products')).toBeVisible({ timeout: 30_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
 	});
 
 	test('should show stock and price columns on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
 
-		await expect(screen.getByRole('columnheader', { name: 'Stock', exact: true })).toBeVisible();
-		await expect(screen.getByRole('columnheader', { name: 'Price', exact: true })).toBeVisible();
+		const columnheaders = screen.getByRole('columnheader');
+		expect(await columnheaders.count()).toBeGreaterThanOrEqual(3);
 	});
 
 	test('should search products on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
 
-		const searchInput = screen.getByPlaceholder('Search Products');
+		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
 
-		const hasResults = await screen
-			.getByText(/Showing [1-9]\d* of \d+/)
+		const countEl = screen.getByTestId('data-table-count');
+		const noResults = screen.getByTestId('no-data-message');
+
+		const hasResults = await countEl
 			.isVisible()
 			.catch(() => false);
-		const noResults = await screen.getByText('No products found').isVisible().catch(() => false);
-		expect(hasResults || noResults).toBeTruthy();
+		const hasNoResults = await noResults.isVisible().catch(() => false);
+		expect(hasResults || hasNoResults).toBeTruthy();
 	});
 
 	test('should show product actions menu', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByText(/Showing \d+ of \d+/)).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
 
-		// Find a data row by looking for rows that contain "Manage" (stock toggle label)
-		const dataRow = screen.locator('[role="row"]').filter({ hasText: 'Manage' }).first();
+		// Find a data row within the rowgroup (body rows, not header)
+		const dataRow = screen.locator('[role="rowgroup"] [role="row"]').first();
 		await expect(dataRow).toBeVisible({ timeout: 15_000 });
 
 		// The ellipsis button is the last pressable element in the row
@@ -157,7 +162,7 @@ test.describe('Products Page (Pro)', () => {
 		}
 
 		// Menu should show Edit, Sync, or Delete options
-		await expect(page.getByText('Edit').first()).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
 	});
 });
 
@@ -172,12 +177,12 @@ test.describe('Products Page (Free)', () => {
 
 	test('should show upgrade page on Products', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button on upgrade page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
-		await expect(page.getByRole('button', { name: 'View Demo' })).toBeVisible();
+		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('view-demo-button')).toBeVisible();
 	});
 });
