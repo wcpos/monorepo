@@ -42,16 +42,12 @@ export const Calendar = ({ dateRange, onDateRangeChange, locale, ...props }: Pro
 		updateLocaleConfig(locale);
 	}, [locale]);
 
-	// Add state to track the current month
-	const [currentMonth, setCurrentMonth] = React.useState(() =>
-		dateRange ? format(dateRange.from, 'yyyy-MM') : format(new Date(), 'yyyy-MM')
-	);
-
-	// Update current month when dateRange changes
-	React.useEffect(() => {
+	// Derive current month directly from dateRange (no state sync needed)
+	const currentMonth = React.useMemo(() => {
 		if (dateRange?.from && dateRange.from.getTime()) {
-			setCurrentMonth(format(dateRange.from, 'yyyy-MM'));
+			return format(dateRange.from, 'yyyy-MM');
 		}
+		return format(new Date(), 'yyyy-MM');
 	}, [dateRange]);
 
 	// Convert DateRange to markedDates format for react-native-calendars

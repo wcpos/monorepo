@@ -93,7 +93,6 @@ export const useAuthErrorHandler = (
 	onUserMismatch?: () => void
 ): HttpErrorHandler => {
 	const { handleLoginSuccess } = useLoginHandler(site as any);
-	const [shouldTriggerAuth, setShouldTriggerAuth] = React.useState(false);
 
 	/**
 	 * Ref to track processed OAuth responses.
@@ -104,35 +103,45 @@ export const useAuthErrorHandler = (
 	// Setup OAuth flow via platform-specific useWcposAuth hook
 	const { response, promptAsync } = useWcposAuth({ site });
 
-	// ============================================================================
-	// EFFECT: Trigger OAuth when flag is set
-	// ============================================================================
+	// Keep a ref so the error handler always calls the latest promptAsync
+	const authFlowInFlightRef = React.useRef(false);
+	const promptAsyncRef = React.useRef(promptAsync);
+	promptAsyncRef.current = promptAsync;
 
-	React.useEffect(() => {
-		if (shouldTriggerAuth) {
-			authLogger.debug('shouldTriggerAuth is true, calling promptAsync', {
-				context: { siteName: site.name },
-			});
-			setShouldTriggerAuth(false);
-			promptAsync()
-				.then((result) => {
-					authLogger.debug('promptAsync resolved', {
-						context: { resultType: (result as any)?.type },
-					});
-				})
-				.catch((authError) => {
-					authLogger.warn('promptAsync rejected - Authentication failed', {
-						showToast: true,
-						saveToDb: true,
-						context: {
-							errorCode: ERROR_CODES.AUTH_REQUIRED,
-							siteName: site.name,
-							error: authError instanceof Error ? authError.message : String(authError),
-						},
-					});
-				});
+	/**
+	 * Trigger OAuth flow directly — no state-as-trigger intermediate
+	 */
+	const triggerAuthFlow = React.useCallback(() => {
+		if (authFlowInFlightRef.current) {
+			authLogger.debug('OAuth flow already in flight, skipping');
+			return;
 		}
-	}, [shouldTriggerAuth, promptAsync, site.name]);
+		authFlowInFlightRef.current = true;
+		authLogger.debug('Triggering OAuth flow', {
+			context: { siteName: site.name },
+		});
+		promptAsyncRef
+			.current()
+			.then((result) => {
+				authLogger.debug('promptAsync resolved', {
+					context: { resultType: (result as any)?.type },
+				});
+			})
+			.catch((authError) => {
+				authLogger.warn('promptAsync rejected - Authentication failed', {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.AUTH_REQUIRED,
+						siteName: site.name,
+						error: authError instanceof Error ? authError.message : String(authError),
+					},
+				});
+			})
+			.finally(() => {
+				authFlowInFlightRef.current = false;
+			});
+	}, [site.name]);
 
 	// ============================================================================
 	// EFFECT: Process OAuth response
@@ -317,7 +326,7 @@ export const useAuthErrorHandler = (
 				if (isRefreshTokenInvalid) {
 					// Session expired - immediate OAuth is appropriate
 					authLogger.debug('Refresh token is invalid, launching OAuth flow');
-					setShouldTriggerAuth(true);
+					triggerAuthFlow();
 				} else if ((error as any).errorCode === ERROR_CODES.AUTH_REQUIRED) {
 					// Pre-flight block (user may have cancelled previously)
 					// Show toast with [Login] button instead of auto-launching
@@ -329,7 +338,7 @@ export const useAuthErrorHandler = (
 						toast: {
 							action: {
 								label: 'Login',
-								onClick: () => setShouldTriggerAuth(true),
+								onClick: () => triggerAuthFlow(),
 							},
 						},
 						context: {
@@ -340,7 +349,7 @@ export const useAuthErrorHandler = (
 				} else {
 					// Unknown auth failure - try OAuth
 					authLogger.debug('Token refresh failed, attempting OAuth flow');
-					setShouldTriggerAuth(true);
+					triggerAuthFlow();
 				}
 
 				// Notify subscribers of the auth error
@@ -353,7 +362,7 @@ export const useAuthErrorHandler = (
 				throw new CanceledError('401 - attempting re-authentication');
 			},
 		}),
-		[setShouldTriggerAuth, site.name]
+		[triggerAuthFlow, site.name]
 	);
 };
 

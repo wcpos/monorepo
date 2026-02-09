@@ -31,11 +31,10 @@ export function UrlInput() {
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.INVALID_URL_FORMAT,
-					url,
 				},
 			});
 		}
-	}, [error, t, url]);
+	}, [error, t]);
 
 	/**
 	 *
