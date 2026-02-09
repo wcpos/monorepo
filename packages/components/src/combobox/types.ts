@@ -36,6 +36,7 @@ type ComboboxValueProps = {
 type ComboboxInputProps = {
 	value?: string;
 	placeholder?: string;
+	testID?: string;
 	onKeyPress?: (event: any) => void;
 };
 

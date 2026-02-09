@@ -183,6 +183,21 @@ jobs:
           path: apps/main/test-results/
           retention-days: 7
 
+  e2e-gate:
+    name: 🎭 E2E Tests
+    needs: [e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check shard results
+        run: |
+          if [ "${{ needs.e2e.result }}" = "success" ]; then
+            echo "All E2E shards passed"
+          else
+            echo "E2E shards result: ${{ needs.e2e.result }}"
+            exit 1
+          fi
+
   e2e-report:
     name: 📊 Merge E2E Reports
     needs: [deploy, e2e]

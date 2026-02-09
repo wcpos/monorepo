@@ -55,11 +55,11 @@ export const LanguageSelect = ({ value, ...props }: React.ComponentProps<typeof 
 	 */
 	return (
 		<Combobox value={{ ...value, label }} {...props}>
-			<ComboboxTrigger>
+			<ComboboxTrigger testID="language-select-trigger">
 				<ComboboxValue placeholder={t('common.select_language')} />
 			</ComboboxTrigger>
-			<ComboboxContent>
-				<ComboboxInput placeholder={t('common.search_languages')} />
+			<ComboboxContent testID="language-combobox-content">
+				<ComboboxInput testID="language-search-input" placeholder={t('common.search_languages')} />
 				<ComboboxList
 					data={options}
 					renderItem={({ item }) => (
