@@ -9,8 +9,10 @@ import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
 const AUTH_STATE_DIR = path.join(__dirname, '.auth-state');
 
-const FREE_STORE_URL = 'https://dev-free.wcpos.com';
-const PRO_STORE_URL = 'https://dev-pro.wcpos.com';
+const FREE_STORE_URL =
+	process.env.E2E_STORE_URL_FREE || process.env.E2E_STORE_URL || 'https://dev-free.wcpos.com';
+const PRO_STORE_URL =
+	process.env.E2E_STORE_URL_PRO || process.env.E2E_STORE_URL || 'https://dev-pro.wcpos.com';
 
 /**
  * Export all IndexedDB databases from the page.

@@ -7,7 +7,7 @@ import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fi
 test.describe('Products in POS', () => {
 	test('should display products in the POS view', async ({ posPage: page }) => {
 		const columnheaders = page.getByRole('columnheader');
-		await expect(columnheaders).toHaveCount(await columnheaders.count()); // wait for render
+		await expect(columnheaders.first()).toBeVisible({ timeout: 15_000 });
 		expect(await columnheaders.count()).toBeGreaterThanOrEqual(2);
 		await expect(page.getByTestId('data-table-count')).toBeVisible();
 	});

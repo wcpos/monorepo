@@ -257,23 +257,28 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 		}
 
 		if (state) {
-			// Navigate first to establish origin for IndexedDB access
-			await page.goto('/');
+			try {
+				// Navigate first to establish origin for IndexedDB access
+				await page.goto('/');
 
-			// Restore IndexedDB and localStorage before the app fully initializes
-			await restoreIndexedDB(page, state.indexedDB);
-			await restoreLocalStorage(page, state.localStorage);
+				// Restore IndexedDB and localStorage before the app fully initializes
+				await restoreIndexedDB(page, state.indexedDB);
+				await restoreLocalStorage(page, state.localStorage);
 
-			// Reload so the app picks up the restored state
-			await page.reload();
+				// Reload so the app picks up the restored state
+				await page.reload();
 
-			// App should skip auth and go straight to POS
-			// Use testIDs to avoid locale-dependent locators
-			const searchProducts = page.getByTestId('search-products');
-			await expect(searchProducts).toBeVisible({ timeout: 60_000 });
-			await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
-				timeout: 60_000,
-			});
+				// App should skip auth and go straight to POS
+				// Use testIDs to avoid locale-dependent locators
+				const searchProducts = page.getByTestId('search-products');
+				await expect(searchProducts).toBeVisible({ timeout: 60_000 });
+				await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
+					timeout: 60_000,
+				});
+			} catch (e) {
+				console.warn('[posPage] Saved state invalid/expired; falling back to OAuth.', e);
+				await authenticateWithStore(page, testInfo);
+			}
 		} else {
 			// No saved state — fall back to full OAuth (local dev without globalSetup)
 			await authenticateWithStore(page, testInfo);
