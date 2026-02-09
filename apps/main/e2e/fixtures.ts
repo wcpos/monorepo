@@ -1,5 +1,10 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
 import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
+
+import { restoreIndexedDB, restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
 
 /**
  * NOTE: Playwright requires object destructuring for the first argument in test callbacks.
@@ -229,12 +234,42 @@ export async function navigateToPage(
 /**
  * Extended test fixture that provides an authenticated POS page.
  *
- * Runs the full OAuth flow per test because the app stores all session
- * data in IndexedDB (RxDB), which Playwright's storageState cannot capture.
+ * Instead of running the full OAuth flow per test, restores IndexedDB
+ * state that was exported during globalSetup. This takes ~5s instead of
+ * ~2-5 minutes per test.
+ *
+ * Falls back to the full OAuth flow if no saved state exists (e.g. when
+ * running individual tests locally without globalSetup).
  */
 export const authenticatedTest = base.extend<{ posPage: Page }>({
 	posPage: async ({ page }, use, testInfo) => {
-		await authenticateWithStore(page, testInfo);
+		const variant = getStoreVariant(testInfo);
+		const statePath = path.join(__dirname, '.auth-state', `${variant}.json`);
+
+		if (fs.existsSync(statePath)) {
+			const state: SavedAuthState = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
+
+			// Navigate first to establish origin for IndexedDB access
+			await page.goto('/');
+
+			// Restore IndexedDB and localStorage before the app fully initializes
+			await restoreIndexedDB(page, state.indexedDB);
+			await restoreLocalStorage(page, state.localStorage);
+
+			// Reload so the app picks up the restored state
+			await page.reload();
+
+			// App should skip auth and go straight to POS
+			const searchProducts = page.getByPlaceholder('Search Products');
+			await expect(searchProducts).toBeVisible({ timeout: 60_000 });
+			await expect(page.getByText(/Showing [1-9]\d* of \d+/)).toBeVisible({
+				timeout: 60_000,
+			});
+		} else {
+			// No saved state — fall back to full OAuth (local dev without globalSetup)
+			await authenticateWithStore(page, testInfo);
+		}
+
 		await use(page);
 	},
 });

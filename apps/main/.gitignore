@@ -41,5 +41,6 @@ yarn-error.*
 
 # Playwright
 e2e/.auth/
+e2e/.auth-state/
 playwright-report/
 test-results/

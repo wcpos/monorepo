@@ -26,6 +26,7 @@ const PRO_STORE_URL = 'https://dev-pro.wcpos.com';
  * - npx playwright test --project=pro-authenticated
  */
 export default defineConfig<WcposTestOptions>({
+	globalSetup: './e2e/global-setup.ts',
 	testDir: './e2e',
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
