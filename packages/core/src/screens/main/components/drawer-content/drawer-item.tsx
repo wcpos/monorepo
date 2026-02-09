@@ -74,7 +74,13 @@ type Props = {
 };
 
 // Separate component for permanent drawer items (icon-only on large screens)
-const PermanentDrawerItem = ({ icon, label, focused, onPress, style }) => {
+const PermanentDrawerItem = ({
+	icon,
+	label,
+	focused,
+	onPress,
+	style,
+}: Pick<Props, 'icon' | 'label' | 'focused' | 'onPress' | 'style'>) => {
 	const button = (
 		<Button
 			onPress={onPress}
@@ -84,7 +90,7 @@ const PermanentDrawerItem = ({ icon, label, focused, onPress, style }) => {
 				focused ? 'border-l-primary' : 'hover:bg-white/10'
 			)}
 		>
-			{icon({ focused })}
+			{icon?.({ focused })}
 		</Button>
 	);
 
@@ -95,7 +101,7 @@ const PermanentDrawerItem = ({ icon, label, focused, onPress, style }) => {
 				<Tooltip>
 					<TooltipTrigger asChild>{button}</TooltipTrigger>
 					<TooltipContent side="right">
-						<Text>{label}</Text>
+						<Text>{typeof label === 'function' ? label({ focused }) : label}</Text>
 					</TooltipContent>
 				</Tooltip>
 			</VStack>
@@ -106,7 +112,13 @@ const PermanentDrawerItem = ({ icon, label, focused, onPress, style }) => {
 };
 
 // Standard drawer item with label (shown on smaller screens when drawer opens)
-const StandardDrawerItem = ({ icon, label, focused, onPress, style }) => (
+const StandardDrawerItem = ({
+	icon,
+	label,
+	focused,
+	onPress,
+	style,
+}: Pick<Props, 'icon' | 'label' | 'focused' | 'onPress' | 'style'>) => (
 	<Button
 		onPress={onPress}
 		size="xl"
@@ -117,9 +129,9 @@ const StandardDrawerItem = ({ icon, label, focused, onPress, style }) => (
 		style={style}
 	>
 		<HStack className="gap-3">
-			{icon({ focused })}
+			{icon?.({ focused })}
 			<ButtonText className={cn('pr-2', focused ? 'text-primary' : 'text-sidebar-foreground')}>
-				{label}
+				{typeof label === 'function' ? label({ focused }) : label}
 			</ButtonText>
 		</HStack>
 	</Button>

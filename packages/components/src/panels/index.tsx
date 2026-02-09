@@ -17,7 +17,7 @@ function PanelResizeHandle() {
 		style: {
 			width: direction === 'horizontal' ? 8 : '100%',
 			height: direction === 'horizontal' ? '100%' : 8,
-			flexDirection: direction === 'horizontal' ? 'row' as const : 'column' as const,
+			flexDirection: direction === 'horizontal' ? ('row' as const) : ('column' as const),
 			zIndex: 20,
 			alignItems: 'center' as const,
 			justifyContent: 'center' as const,

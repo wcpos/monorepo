@@ -21,8 +21,10 @@ import type { ProductDocument } from '@wcpos/database';
 
 import { useT } from '../../../../contexts/translations';
 
+type Attribute = NonNullable<ProductDocument['attributes']>[number];
+
 interface Props {
-	attribute: ProductDocument['attributes'][number];
+	attribute: Attribute;
 	selected: string;
 	onSelect: ({ id, name, option }: { id: number; name: string; option: string }) => void;
 	onRemove: () => void;
@@ -36,7 +38,7 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 	const isActive = !!selected;
 	const options = attribute?.options || [];
 	const data = React.useMemo(
-		() => options.map((option) => ({ value: option, label: option })),
+		() => options.map((option: string) => ({ value: option, label: option })),
 		[options]
 	);
 
@@ -47,8 +49,9 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 		return (
 			<Select
 				value={{ value: selected, label: selected }}
-				onValueChange={({ value }) =>
-					onSelect({ id: attribute.id, name: attribute.name, option: value })
+				onValueChange={(option) =>
+					option &&
+					onSelect({ id: attribute.id ?? 0, name: attribute.name ?? '', option: option.value })
 				}
 			>
 				<SelectPrimitiveTrigger asChild>
@@ -63,7 +66,7 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 					</ButtonPill>
 				</SelectPrimitiveTrigger>
 				<SelectContent>
-					{options.map((option, index) => (
+					{options.map((option: string, index: number) => (
 						<SelectItem key={index} label={option} value={option} />
 					))}
 				</SelectContent>
@@ -77,8 +80,13 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 	return (
 		<Combobox
 			value={{ value: selected, label: selected }}
-			onValueChange={({ value }) =>
-				onSelect({ id: attribute.id, name: attribute.name, option: value })
+			onValueChange={(option) =>
+				option &&
+				onSelect({
+					id: attribute.id ?? 0,
+					name: attribute.name ?? '',
+					option: String(option.value),
+				})
 			}
 		>
 			<ComboboxTrigger asChild>
@@ -97,8 +105,8 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 				<ComboboxList
 					data={data}
 					renderItem={({ item }) => (
-						<ComboboxItem value={item.value} label={item.label}>
-							<ComboboxItemText>{item.label}</ComboboxItemText>
+						<ComboboxItem value={String(item.value)} label={item.label} item={item}>
+							<ComboboxItemText />
 						</ComboboxItem>
 					)}
 					estimatedItemSize={20}

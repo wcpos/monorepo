@@ -19,8 +19,8 @@ export interface CurrencyFormatOptions extends NumberFormatOptions {
  */
 export const useCurrencyFormat = (options?: CurrencyFormatOptions) => {
 	const { store } = useAppState();
-	const currency = useObservableEagerState(store?.currency$);
-	const currencyPosition = useObservableEagerState(store?.currency_pos$);
+	const currency = useObservableEagerState(store?.currency$) as string;
+	const currencyPosition = useObservableEagerState(store?.currency_pos$) as string;
 
 	/**
 	 * Get currency symbol
@@ -33,11 +33,11 @@ export const useCurrencyFormat = (options?: CurrencyFormatOptions) => {
 			return options.currencySymbol;
 		}
 		if (options?.currency) {
-			const currencyData = allCurrencies.find((c) => c.code === options.currency) || {};
-			return decode(currencyData.symbol || '');
+			const currencyData = allCurrencies.find((c) => c.code === options.currency);
+			return decode(currencyData?.symbol || '');
 		}
-		const currencyData = allCurrencies.find((c) => c.code === currency) || {};
-		return decode(currencyData.symbol || '');
+		const currencyData = allCurrencies.find((c) => c.code === currency);
+		return decode(currencyData?.symbol || '');
 	}, [currency, options]);
 
 	/**

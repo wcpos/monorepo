@@ -17,9 +17,9 @@ import { useT } from '../../../../contexts/translations';
 export const StateSelectBase = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
 	const t = useT();
 	const states = useStates();
-	const options = React.useMemo(
+	const options: { label: string; value: string }[] = React.useMemo(
 		() =>
-			(states || []).map((state) => ({
+			(states || []).map((state: { name: string; code: string }) => ({
 				label: state.name,
 				value: state.code,
 			})),
@@ -38,7 +38,17 @@ export const StateSelectBase = ({ value, ...props }: React.ComponentProps<typeof
 
 	return (
 		<Select
-			value={{ ...value, label: options.find((option) => option.value === value?.value)?.label }}
+			value={
+				value
+					? {
+							...value,
+							label:
+								options.find(
+									(option: { value: string; label: string }) => option.value === value?.value
+								)?.label ?? '',
+						}
+					: undefined
+			}
 			{...props}
 		>
 			<SelectTrigger>

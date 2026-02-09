@@ -2,9 +2,9 @@ import round from 'lodash/round';
 import sumBy from 'lodash/sumBy';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
-type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 
 interface Props {
 	lineItems?: LineItem[];
@@ -58,13 +58,14 @@ export function calculateOrderTotals({
 
 	// Initialize taxLines as an object
 	const taxLines = taxRates.reduce<TaxLinesMap>((acc, taxRate) => {
-		acc[taxRate.id] = {
-			rate_id: taxRate.id,
-			label: taxRate.name,
-			compound: taxRate.compound,
+		const rateId = taxRate.id ?? 0;
+		acc[rateId] = {
+			rate_id: rateId,
+			label: taxRate.name ?? '',
+			compound: taxRate.compound ?? false,
 			tax_total: 0,
 			shipping_tax_total: 0,
-			rate_percent: parseFloat(taxRate.rate),
+			rate_percent: parseFloat(taxRate.rate ?? '0'),
 			meta_data: [],
 		};
 		return acc;
@@ -86,7 +87,7 @@ export function calculateOrderTotals({
 
 		if (Array.isArray(item.taxes)) {
 			item.taxes.forEach((tax) => {
-				taxLines[tax.id].tax_total += parseNumber(tax.total);
+				taxLines[tax.id ?? 0].tax_total += parseNumber(tax.total);
 			});
 		}
 	});
@@ -100,7 +101,7 @@ export function calculateOrderTotals({
 
 		if (Array.isArray(line.taxes)) {
 			line.taxes.forEach((tax) => {
-				taxLines[tax.id].tax_total += parseNumber(tax.total);
+				taxLines[tax.id ?? 0].tax_total += parseNumber(tax.total);
 			});
 		}
 	});
@@ -114,7 +115,7 @@ export function calculateOrderTotals({
 
 		if (Array.isArray(line.taxes)) {
 			line.taxes.forEach((tax) => {
-				taxLines[tax.id].shipping_tax_total += parseNumber(tax.total);
+				taxLines[tax.id ?? 0].shipping_tax_total += parseNumber(tax.total);
 			});
 		}
 	});
@@ -134,7 +135,7 @@ export function calculateOrderTotals({
 				shipping_tax_total: String(round(taxLine.shipping_tax_total, 6)),
 			};
 		})
-		.filter(Boolean);
+		.filter((line): line is NonNullable<typeof line> => line !== null);
 
 	return {
 		/**

@@ -19,11 +19,12 @@ import { transformCustomerJSONToOrderJSON } from '../../hooks/utils';
 const temporaryDB$ = from(createTemporaryDB()).pipe(shareReplay(1));
 
 const newOrder$ = temporaryDB$.pipe(
-	switchMap((db) =>
-		db.orders.findOne().$.pipe(
+	switchMap((db) => {
+		if (!db) throw new Error('Temporary DB not initialized');
+		return db.orders.findOne().$.pipe(
 			tap((order) => {
 				if (!isRxDocument(order)) {
-					db.orders.insert({
+					void db.orders.insert({
 						status: 'pos-open',
 						created_via: 'woocommerce-pos',
 						billing: {},
@@ -32,8 +33,8 @@ const newOrder$ = temporaryDB$.pipe(
 				}
 			}),
 			filter((order) => isRxDocument(order))
-		)
-	),
+		);
+	}),
 	distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
 );
 
@@ -65,9 +66,13 @@ export const useNewOrder = () => {
 		const customer = isRxDocument(defaultCustomer)
 			? defaultCustomer.toMutableJSON()
 			: defaultCustomer;
-		const data = transformCustomerJSONToOrderJSON(customer, country);
+		const baseData = transformCustomerJSONToOrderJSON(
+			customer as import('@wcpos/database').CustomerDocument,
+			country as string
+		);
+		const data: Record<string, unknown> = { ...baseData };
 		data.currency = currency;
-		const currencyData = allCurrencies.find((c) => c.code === currency) || {};
+		const currencyData = allCurrencies.find((c) => c.code === currency) ?? { symbol: '' };
 		data.currency_symbol = decode(currencyData.symbol || '');
 		data.prices_include_tax = false; // This setting means nothing, WC REST API always returns prices excluding tax
 		data.meta_data = [
@@ -82,7 +87,7 @@ export const useNewOrder = () => {
 		];
 
 		if (store.id !== 0) {
-			data.meta_data.push({
+			(data.meta_data as { key: string; value: string }[]).push({
 				key: '_pos_store',
 				value: String(store.id),
 			});

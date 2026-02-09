@@ -86,7 +86,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				sort: [{ createdAt: 'desc' }],
 			})
 			.$.pipe(
-				map((docs) =>
+				map((docs: import('@wcpos/database').NotificationDocument[]) =>
 					docs.map((doc) => ({
 						id: doc.id,
 						title: doc.title || '',
@@ -100,7 +100,7 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			);
 	}, [notificationsCollection, subscriberId]);
 
-	const notifications = useObservableState(notifications$, []);
+	const notifications: Notification[] = useObservableState(notifications$, []);
 
 	// Calculate counts from local data
 	const unreadCount = React.useMemo(
@@ -397,7 +397,11 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				})
 				.exec();
 
-			await Promise.all(unreadDocs.map((doc) => doc.patch({ status: 'read', seen: true })));
+			await Promise.all(
+				unreadDocs.map((doc: import('@wcpos/database').NotificationDocument) =>
+					doc.patch({ status: 'read', seen: true })
+				)
+			);
 
 			// Then update Novu
 			await novuMarkAllAsRead();
@@ -421,7 +425,11 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				})
 				.exec();
 
-			await Promise.all(unseenDocs.map((doc) => doc.patch({ seen: true })));
+			await Promise.all(
+				unseenDocs.map((doc: import('@wcpos/database').NotificationDocument) =>
+					doc.patch({ seen: true })
+				)
+			);
 
 			// Then update Novu
 			await novuMarkAllAsSeen();

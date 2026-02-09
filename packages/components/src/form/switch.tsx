@@ -16,7 +16,7 @@ export function FormSwitch({
 	checked: _checked,
 	ref,
 	...props
-}: FormItemProps<boolean> & React.ComponentProps<typeof Switch>) {
+}: FormItemProps<boolean> & Partial<React.ComponentProps<typeof Switch>>) {
 	const switchRef = React.useRef<React.ComponentRef<typeof Switch>>(null);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
@@ -44,7 +44,7 @@ export function FormSwitch({
 					}
 					aria-invalid={!!error}
 					onCheckedChange={onChange}
-					checked={value}
+					checked={value ?? false}
 					{...props}
 				/>
 				{!!label && (

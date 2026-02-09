@@ -1,10 +1,5 @@
 import * as React from 'react';
-import {
-	NativeScrollEvent,
-	NativeSyntheticEvent,
-	RefreshControl,
-	ScrollView,
-} from 'react-native';
+import { NativeScrollEvent, NativeSyntheticEvent, RefreshControl, ScrollView } from 'react-native';
 
 import {
 	ColumnDef,
@@ -25,7 +20,12 @@ import { getFlexAlign } from '../lib/utils';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table';
 
 import type { DataTableRowData } from './types';
-import type { OnChangeFn, RowSelectionState, SortingState, TableState } from '@tanstack/react-table';
+import type {
+	OnChangeFn,
+	RowSelectionState,
+	SortingState,
+	TableState,
+} from '@tanstack/react-table';
 
 interface DataTableProps<TData extends DataTableRowData, TValue> {
 	columns: ColumnDef<TData, TValue>[];

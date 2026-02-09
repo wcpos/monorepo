@@ -18,13 +18,12 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 type ProductVariationCollection = import('@wcpos/database').ProductVariationCollection;
 type Query = import('@wcpos/query').Query<ProductVariationCollection>;
 
+type LineItem = NonNullable<OrderDocument['line_items']>[number];
+
 interface VariationPopoverProps {
 	query: Query;
 	parent: import('@wcpos/database').ProductDocument;
-	addToCart: (
-		variation: ProductDocument,
-		metaData: OrderDocument['line_items'][number]['meta_data']
-	) => void;
+	addToCart: (variation: ProductDocument, metaData: LineItem['meta_data']) => void;
 }
 
 /**
@@ -51,11 +50,22 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	 * @NOTE - buttons can toggle the variation match off (removeVariationMatch) when the option is null
 	 */
 	const handleSelect = React.useCallback(
-		(attribute) => {
+		(attribute: { id?: number; name?: string; option?: string }) => {
 			if (attribute.option) {
-				query.variationMatch(attribute).exec();
+				query
+					.variationMatch({
+						id: attribute.id ?? 0,
+						name: attribute.name ?? '',
+						option: attribute.option,
+					})
+					.exec();
 			} else {
-				query.removeVariationMatch({ id: attribute.id, name: attribute.name }).exec();
+				query
+					.removeVariationMatch({
+						id: attribute.id ?? 0,
+						name: attribute.name ?? '',
+					})
+					.exec();
 			}
 		},
 		[query]
@@ -70,9 +80,9 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 				.filter((a) => a.selected)
 				.map((a) => {
 					const metaData = {
-						attr_id: a.selected.id,
-						display_key: a.selected.name,
-						display_value: a.selected.option,
+						attr_id: a.selected!.id,
+						display_key: a.selected!.name,
+						display_value: a.selected!.option,
 					};
 					return metaData;
 				});

@@ -1,4 +1,4 @@
-import { ACTIONS, Action, CalculatorState, reducer } from './reducer';
+import { Action, ACTIONS, CalculatorState, reducer } from './reducer';
 
 const defaultState: CalculatorState = {
 	currentOperand: null,

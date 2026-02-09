@@ -15,7 +15,7 @@ export function FormCheckbox({
 	onCheckedChange: _onCheckedChange,
 	checked: _checked,
 	...props
-}: FormItemProps<boolean> & React.ComponentProps<typeof Checkbox>) {
+}: FormItemProps<boolean> & Partial<React.ComponentProps<typeof Checkbox>>) {
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
 	function handleOnLabelPress() {
@@ -34,7 +34,7 @@ export function FormCheckbox({
 					}
 					aria-invalid={!!error}
 					onCheckedChange={onChange}
-					checked={value}
+					checked={value ?? false}
 					{...props}
 				/>
 				{!!label && (

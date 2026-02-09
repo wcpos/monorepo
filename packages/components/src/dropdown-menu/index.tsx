@@ -29,7 +29,10 @@ function DropdownMenuSubTrigger({
 	inset,
 	children,
 	...props
-}: Omit<DropdownMenuPrimitive.SubTriggerProps, 'children'> & { inset?: boolean; children?: React.ReactNode }) {
+}: Omit<DropdownMenuPrimitive.SubTriggerProps, 'children'> & {
+	inset?: boolean;
+	children?: React.ReactNode;
+}) {
 	const { open } = DropdownMenuPrimitive.useSubContext();
 	// const Icon = Platform.OS === 'web' ? ChevronRight : open ? ChevronUp : ChevronDown;
 	return (

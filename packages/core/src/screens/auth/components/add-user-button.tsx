@@ -18,7 +18,9 @@ export function AddUserButton({ site }: Props) {
 	const { handleLoginSuccess, isProcessing, error } = useLoginHandler(site);
 	const processedResponseRef = React.useRef<string | null>(null);
 
-	const { isReady, response, promptAsync } = useWcposAuth({ site });
+	const { isReady, response, promptAsync } = useWcposAuth({
+		site: { wcpos_login_url: site.wcpos_login_url ?? '', name: site.name ?? '' },
+	});
 
 	React.useEffect(() => {
 		if (!response) return;

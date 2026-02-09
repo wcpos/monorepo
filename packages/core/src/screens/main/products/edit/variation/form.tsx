@@ -67,7 +67,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 	 *
 	 */
 	const form = useForm<z.infer<typeof schema>>({
-		resolver: zodResolver(schema),
+		resolver: zodResolver(schema as never) as never,
 		defaultValues: {
 			status: variation.status,
 			sku: variation.sku,
@@ -88,7 +88,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 	 * @NOTE - the form needs a value for tax_class, but WC REST API uses an empty string for standard
 	 */
 	const handleSave = React.useCallback(
-		async (data) => {
+		async (data: z.infer<typeof schema>) => {
 			if (data.tax_class === 'standard') {
 				data.tax_class = '';
 			}
@@ -96,7 +96,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 			try {
 				await localPatch({
 					document: variation,
-					data,
+					data: data as Partial<import('@wcpos/database').ProductVariationDocument>,
 				});
 				await pushDocument(variation).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
@@ -192,12 +192,14 @@ export const EditVariationForm = ({ variation }: Props) => {
 					<FormField
 						control={form.control}
 						name="status"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									label={t('common.status')}
 									customComponent={ProductStatusSelect}
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -206,12 +208,13 @@ export const EditVariationForm = ({ variation }: Props) => {
 						<FormField
 							control={form.control}
 							name="stock_quantity"
-							render={({ field }) => (
+							render={({ field: { value, ...rest } }) => (
 								<FormInput
 									customComponent={NumberInput}
 									type="numeric"
 									label={t('products.stock_quantity')}
-									{...field}
+									value={value != null ? String(value) : undefined}
+									{...rest}
 								/>
 							)}
 						/>
@@ -226,12 +229,14 @@ export const EditVariationForm = ({ variation }: Props) => {
 					<FormField
 						control={form.control}
 						name="tax_class"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									label={t('common.tax_class')}
 									customComponent={TaxClassSelect}
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}

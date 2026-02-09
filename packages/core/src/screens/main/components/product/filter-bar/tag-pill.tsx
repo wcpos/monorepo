@@ -30,10 +30,11 @@ export const TagPill = ({ query, resource, selectedID }: Props) => {
 	 * @NOTE - we need to convert the value to a number because the value is a string
 	 */
 	const handleSelect = React.useCallback(
-		({ value }) => {
+		(option: import('@wcpos/components/combobox').Option | undefined) => {
+			if (!option) return;
 			query
 				.where('tags')
-				.elemMatch({ id: toNumber(value) })
+				.elemMatch({ id: toNumber(option.value) })
 				.exec();
 		},
 		[query]

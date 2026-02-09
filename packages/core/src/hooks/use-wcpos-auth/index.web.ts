@@ -163,7 +163,9 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 				// Validate CSRF state for our fallback redirect
 				if (result.type === 'success' && result.params) {
 					const savedState = getSavedCsrfState();
-					const returnedState = result.params.state as unknown as string;
+					const returnedState = (result.params as unknown as Record<string, unknown>)?.state as
+						| string
+						| undefined;
 
 					if (savedState && returnedState !== savedState) {
 						oauthLogger.error('State parameter mismatch - possible CSRF attack');
@@ -231,7 +233,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			oauthLogger.debug('expoPromptAsync returned', {
 				context: {
 					resultType: result?.type,
-					hasParams: !!result?.params,
+					hasParams: !!(result as { params?: unknown })?.params,
 				},
 			});
 

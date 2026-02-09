@@ -38,7 +38,17 @@ interface Props {
 export const WpUser = ({ site, wpUser }: Props) => {
 	const { login } = useAppState();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
-	const stores = useObservableSuspense(wpUser.populateResource('stores'));
+	const stores = useObservableSuspense(
+		(
+			wpUser as unknown as {
+				populateResource: (
+					key: string
+				) => import('observable-hooks').ObservableResource<
+					import('@wcpos/database').StoreDocument[]
+				>;
+			}
+		).populateResource('stores')
+	);
 	const t = useT();
 	const { isValid, isLoading } = useUserValidation({ site, wpUser });
 
@@ -89,7 +99,10 @@ export const WpUser = ({ site, wpUser }: Props) => {
 	return (
 		<View>
 			{Array.isArray(stores) && stores.length > 1 ? (
-				<Select onValueChange={({ value }) => handleLogin(value)} disabled={!isValid || isLoading}>
+				<Select
+					onValueChange={(option) => option && handleLogin(option.value)}
+					disabled={!isValid || isLoading}
+				>
 					<SelectPrimitiveTrigger asChild>
 						<ButtonPill
 							size="xs"
@@ -102,7 +115,11 @@ export const WpUser = ({ site, wpUser }: Props) => {
 					</SelectPrimitiveTrigger>
 					<SelectContent>
 						{stores.map((store) => (
-							<SelectItem key={store.localID} label={store.name} value={store.localID} />
+							<SelectItem
+								key={store.localID}
+								label={store.name ?? ''}
+								value={store.localID ?? ''}
+							/>
 						))}
 					</SelectContent>
 				</Select>
@@ -110,8 +127,8 @@ export const WpUser = ({ site, wpUser }: Props) => {
 				<ButtonPill
 					size="xs"
 					onPress={() => {
-						const storeID = get(stores, [0, 'localID']);
-						handleLogin(storeID);
+						const storeID = get(stores, [0, 'localID']) as string | undefined;
+						if (storeID) handleLogin(storeID);
 					}}
 					removable
 					onRemove={() => setDeleteDialogOpened(true)}

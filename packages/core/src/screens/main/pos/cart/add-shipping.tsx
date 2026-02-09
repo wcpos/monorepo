@@ -37,6 +37,8 @@ const formSchema = z.object({
 	tax_class: z.string().optional(),
 });
 
+type FormValues = z.infer<typeof formSchema>;
+
 /**
  *
  */
@@ -50,15 +52,15 @@ export const AddShipping = () => {
 	/**
 	 *
 	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+	const form = useForm<FormValues, unknown, FormValues>({
+		resolver: zodResolver(formSchema as never) as never,
 		defaultValues: {
 			method_title: '',
 			method_id: '',
 			amount: '0',
 			prices_include_tax: true,
 			tax_status: 'taxable',
-			tax_class: shippingTaxClass,
+			tax_class: (shippingTaxClass as string | undefined) ?? '',
 		},
 	});
 
@@ -66,16 +68,16 @@ export const AddShipping = () => {
 	 * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
 	 */
 	const handleAdd = React.useCallback(
-		(data: z.infer<typeof formSchema>) => {
+		(data: FormValues) => {
 			const { method_title, method_id, amount, tax_status, tax_class, prices_include_tax } = data;
 
 			addShipping({
-				method_title: isEmpty(method_title) ? t('common.shipping') : method_title,
-				method_id: isEmpty(method_id) ? 'local_pickup' : method_id,
-				amount: isEmpty(amount) ? '0' : amount,
+				method_title: isEmpty(method_title) ? t('common.shipping') : (method_title ?? ''),
+				method_id: isEmpty(method_id) ? 'local_pickup' : (method_id ?? ''),
+				amount: isEmpty(amount) ? '0' : (amount ?? '0'),
 				tax_status,
-				tax_class: tax_class === 'standard' ? '' : tax_class,
-				prices_include_tax,
+				tax_class: tax_class === 'standard' ? '' : (tax_class ?? ''),
+				prices_include_tax: prices_include_tax ?? true,
 			});
 			onOpenChange(false);
 		},
@@ -111,12 +113,14 @@ export const AddShipping = () => {
 					<FormField
 						control={form.control}
 						name="method_id"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									customComponent={ShippingMethodSelect}
 									label={t('pos_cart.shipping_method')}
-									{...field}
+									value={value ?? ''}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -150,12 +154,14 @@ export const AddShipping = () => {
 					<FormField
 						control={form.control}
 						name="tax_class"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									label={t('common.tax_class')}
 									customComponent={TaxClassSelect}
-									{...field}
+									value={value ?? ''}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}

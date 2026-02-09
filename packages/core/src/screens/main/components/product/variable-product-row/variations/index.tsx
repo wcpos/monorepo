@@ -47,10 +47,10 @@ export const Variations = ({ row }: Props) => {
 	 */
 	React.useEffect(() => {
 		if (queryParams?.attribute) {
-			query.variationMatch(queryParams.attribute).exec();
+			query?.variationMatch(queryParams.attribute).exec();
 		}
 		if (queryParams?.search) {
-			query.search(queryParams.search);
+			query?.search(queryParams.search);
 		}
 	}, [query, queryParams]);
 
@@ -60,9 +60,9 @@ export const Variations = ({ row }: Props) => {
 	React.useEffect(
 		() => {
 			return () => {
-				query.search('');
+				query?.search('');
 				updateQueryParams('search', null);
-				query.removeWhere('attributes').exec();
+				query?.removeWhere('attributes').exec();
 				updateQueryParams('attribute', null);
 			};
 		},
@@ -77,12 +77,12 @@ export const Variations = ({ row }: Props) => {
 	return (
 		<VStack className="gap-0">
 			<ErrorBoundary>
-				<VariationsFilterBar row={row} query={query} />
+				<VariationsFilterBar row={row} query={query!} />
 			</ErrorBoundary>
 			<View className="flex-1">
 				<ErrorBoundary>
 					<Suspense>
-						<VariationsTable row={row} query={query} />
+						<VariationsTable row={row} query={query!} />
 					</Suspense>
 				</ErrorBoundary>
 			</View>

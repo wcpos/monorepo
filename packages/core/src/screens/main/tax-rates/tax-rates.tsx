@@ -15,21 +15,37 @@ import {
 } from '@wcpos/components/modal';
 import { ScrollableTabsList, Tabs, TabsContent, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
+import type { Query } from '@wcpos/query';
 
 import { TaxRatesFooter } from './footer';
 import { TaxRateTable } from './rate-table';
 import { useT } from '../../../contexts/translations';
 import { useExtraData } from '../contexts/extra-data';
 
+import type { Observable } from 'rxjs';
+
+type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
+
+interface TaxClass {
+	name: string;
+	slug: string;
+}
+
+interface QueryResult {
+	hits: { document: TaxRateDocument }[];
+}
+
 interface Props {
-	query: any;
+	query: Query<import('rxdb').RxCollection>;
 }
 
 export const TaxRates = ({ query }: Props) => {
-	const result = useObservableSuspense(query.resource);
-	const rates = result.hits.map(({ document }) => document);
+	const result = useObservableSuspense(query.resource) as QueryResult;
+	const rates = result.hits.map(({ document }: { document: TaxRateDocument }) => document);
 	const { extraData } = useExtraData();
-	const taxClasses = useObservableEagerState(extraData.taxClasses$);
+	const taxClasses = useObservableEagerState(
+		(extraData as unknown as Record<string, Observable<TaxClass[]>>).taxClasses$
+	);
 	const [value, setValue] = React.useState(get(taxClasses, [0, 'slug'], ''));
 	const t = useT();
 
@@ -39,7 +55,7 @@ export const TaxRates = ({ query }: Props) => {
 	const grouped = React.useMemo(() => {
 		const ratesByClass = groupBy(rates, 'class');
 
-		return (taxClasses || []).map((taxClass) => ({
+		return (taxClasses || []).map((taxClass: TaxClass) => ({
 			name: taxClass.name,
 			slug: taxClass.slug,
 			rates: ratesByClass[taxClass.slug] || [],
@@ -51,6 +67,7 @@ export const TaxRates = ({ query }: Props) => {
 	 */
 	return (
 		<Modal>
+			{/* @ts-expect-error: "2xl" is used but ModalContent size type only allows up to "xl" */}
 			<ModalContent size="2xl">
 				<ModalHeader>
 					<ModalTitle>
@@ -60,13 +77,13 @@ export const TaxRates = ({ query }: Props) => {
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue} orientation="horizontal">
 						<ScrollableTabsList>
-							{grouped.map((group) => (
+							{grouped.map((group: { slug: string; name: string; rates: TaxRateDocument[] }) => (
 								<TabsTrigger key={group.slug} value={group.slug}>
 									<Text>{group.name}</Text>
 								</TabsTrigger>
 							))}
 						</ScrollableTabsList>
-						{grouped.map((group) => (
+						{grouped.map((group: { slug: string; name: string; rates: TaxRateDocument[] }) => (
 							<TabsContent key={group.slug} value={group.slug}>
 								<TaxRateTable rates={group.rates} />
 							</TabsContent>

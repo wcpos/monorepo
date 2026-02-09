@@ -27,9 +27,11 @@ export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 			if (React.isValidElement(child)) {
 				const type = child.type;
 				if (typeof type === 'string') return type;
-				return (type as { displayName?: string; name?: string }).displayName
-					|| (type as { name?: string }).name
-					|| 'Unknown';
+				return (
+					(type as { displayName?: string; name?: string }).displayName ||
+					(type as { name?: string }).name ||
+					'Unknown'
+				);
 			}
 			return 'Unknown';
 		});

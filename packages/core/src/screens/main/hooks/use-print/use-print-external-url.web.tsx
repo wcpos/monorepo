@@ -65,7 +65,7 @@ function startPrint(printWindow: HTMLIFrameElement, options: UsePrintExternalURL
 						messages: ['Unable to print the external URL due to cross-origin restrictions.'],
 						suppressErrors,
 					});
-					onPrintError?.('startPrint', error);
+					onPrintError?.('startPrint', error as Error);
 				}
 			} else {
 				logMessages({
@@ -77,7 +77,7 @@ function startPrint(printWindow: HTMLIFrameElement, options: UsePrintExternalURL
 				onPrintError?.('startPrint', new Error('Cannot access iframe contentWindow'));
 			}
 		} catch (error) {
-			onPrintError?.('startPrint', error);
+			onPrintError?.('startPrint', error as Error);
 		}
 	}, 500);
 }

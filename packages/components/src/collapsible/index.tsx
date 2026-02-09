@@ -24,7 +24,10 @@ const CollapsibleTrigger = ({
 	className,
 	children,
 	...props
-}: Omit<SlottablePressableProps, 'children'> & { className?: string; children?: React.ReactNode }) => {
+}: Omit<SlottablePressableProps, 'children'> & {
+	className?: string;
+	children?: React.ReactNode;
+}) => {
 	const { open } = CollapsiblePrimitive.useCollapsibleContext(); // Access the open state
 
 	return (

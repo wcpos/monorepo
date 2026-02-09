@@ -77,7 +77,9 @@ export const useOrderTotals = () => {
 				cart_tax: totals.cart_tax,
 				total_tax: totals.total_tax,
 				total: totals.total,
-				tax_lines: totals.tax_lines,
+				tax_lines: totals.tax_lines as NonNullable<
+					import('@wcpos/database').OrderDocument['tax_lines']
+				>,
 			},
 		});
 	}, [

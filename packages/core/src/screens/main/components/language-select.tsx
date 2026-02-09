@@ -54,7 +54,7 @@ export const LanguageSelect = ({ value, ...props }: React.ComponentProps<typeof 
 	 *
 	 */
 	return (
-		<Combobox value={{ ...value, label }} {...props}>
+		<Combobox value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
 			<ComboboxTrigger>
 				<ComboboxValue placeholder={t('common.select_language')} />
 			</ComboboxTrigger>
@@ -63,8 +63,8 @@ export const LanguageSelect = ({ value, ...props }: React.ComponentProps<typeof 
 				<ComboboxList
 					data={options}
 					renderItem={({ item }) => (
-						<ComboboxItem value={item.value} label={item.label}>
-							<ComboboxItemText>{item.label}</ComboboxItemText>
+						<ComboboxItem value={String(item.value)} label={item.label} item={item}>
+							<ComboboxItemText />
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}

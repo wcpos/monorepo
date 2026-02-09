@@ -56,7 +56,7 @@ export const BarcodeSettings = () => {
 	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+		resolver: zodResolver(formSchema as never) as never,
 		values: formData,
 	});
 
@@ -64,7 +64,7 @@ export const BarcodeSettings = () => {
 	 * Handle form changes and persist to store
 	 */
 	const handleChange = React.useCallback(
-		async (data) => {
+		async (data: z.infer<typeof formSchema>) => {
 			await localPatch({
 				document: store,
 				data,
@@ -73,7 +73,7 @@ export const BarcodeSettings = () => {
 		[localPatch, store]
 	);
 
-	useFormChangeHandler({ form, onChange: handleChange });
+	useFormChangeHandler({ form: form as never, onChange: handleChange as never });
 
 	/**
 	 *
@@ -86,12 +86,13 @@ export const BarcodeSettings = () => {
 					<FormField
 						control={form.control}
 						name="barcode_scanning_avg_time_input_threshold"
-						render={({ field }) => (
+						render={({ field: { value, ...rest } }) => (
 							<View className="flex-1">
 								<FormInput
 									label={t('settings.barcode_average_time_input_threshold_ms')}
 									type="numeric"
-									{...field}
+									value={value != null ? String(value) : undefined}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -99,9 +100,14 @@ export const BarcodeSettings = () => {
 					<FormField
 						control={form.control}
 						name="barcode_scanning_min_chars"
-						render={({ field }) => (
+						render={({ field: { value, ...rest } }) => (
 							<View className="flex-1">
-								<FormInput label={t('settings.barcode_minimum_length')} type="numeric" {...field} />
+								<FormInput
+									label={t('settings.barcode_minimum_length')}
+									type="numeric"
+									value={value != null ? String(value) : undefined}
+									{...rest}
+								/>
 							</View>
 						)}
 					/>

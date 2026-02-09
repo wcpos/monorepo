@@ -16,18 +16,22 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  */
 export const TableHeaderSelect = ({ table }: HeaderContext<OrderDocument, boolean>) => {
 	const t = useT();
+	const meta = table.options.meta as unknown as {
+		totalOrders: number;
+		toggleAllRowsSelected: () => void;
+	};
 
 	const totalSelected = Object.keys(table.getState().rowSelection ?? {}).length;
-	const indeterminate = totalSelected > 0 && totalSelected < table.options.meta.totalOrders;
+	const indeterminate = totalSelected > 0 && totalSelected < meta.totalOrders;
 
 	return (
 		<Tooltip>
 			<TooltipTrigger asChild>
-				<View role="div">
+				<View role="none">
 					<Checkbox
-						checked={totalSelected === table.options.meta.totalOrders}
+						checked={totalSelected === meta.totalOrders}
 						indeterminate={indeterminate}
-						onCheckedChange={table.options.meta.toggleAllRowsSelected}
+						onCheckedChange={() => meta.toggleAllRowsSelected()}
 					/>
 				</View>
 			</TooltipTrigger>

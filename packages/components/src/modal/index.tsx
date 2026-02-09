@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAvoidingView } from '@wcpos/components/keyboard-controller';
 
-import { Button } from '../button';
+import { Button, type ButtonProps } from '../button';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
@@ -61,7 +61,11 @@ function ModalClose({ asChild, disabled, ...props }: SlottablePressableProps) {
 	);
 }
 
-function ModalAction({ asChild, disabled, ...props }: SlottablePressableProps) {
+function ModalAction({
+	asChild,
+	disabled,
+	...props
+}: SlottablePressableProps & Partial<ButtonProps>) {
 	const Component = asChild ? Slot.Pressable : Button;
 
 	return (

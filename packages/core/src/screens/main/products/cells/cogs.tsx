@@ -17,8 +17,11 @@ export function COGS({
 	row,
 }: CellContext<{ document: ProductDocument }, 'cost_of_goods_sold'>) {
 	const product = row.original.document;
-	const cogs = useObservableEagerState(product.cost_of_goods_sold$);
+	const cogs = useObservableEagerState(product.cost_of_goods_sold$!);
 	const defined_value = get(cogs, ['values', 0, 'defined_value'], 0);
+	const meta = table.options.meta as unknown as {
+		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
+	};
 
 	/**
 	 *
@@ -37,7 +40,7 @@ export function COGS({
 						},
 					],
 				};
-				table.options.meta.onChange({
+				meta.onChange({
 					document: product,
 					changes: { cost_of_goods_sold: updatedCogs },
 				});

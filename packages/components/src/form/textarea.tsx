@@ -14,7 +14,8 @@ export function FormTextarea({
 	customComponent: Component = Textarea,
 	ref,
 	...props
-}: FormItemProps<string> & React.ComponentProps<typeof Textarea> & { ref?: React.Ref<TextInput> }) {
+}: FormItemProps<string> &
+	Partial<React.ComponentProps<typeof Textarea>> & { ref?: React.Ref<TextInput> }) {
 	const textareaRef = React.useRef<TextInput>(null);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 

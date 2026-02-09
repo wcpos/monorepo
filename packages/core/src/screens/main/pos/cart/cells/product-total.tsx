@@ -11,7 +11,7 @@ import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-
 
 import type { CellContext } from '@tanstack/react-table';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;
 	item: LineItem;
@@ -47,29 +47,29 @@ export const ProductTotal = ({ row, column }: CellContext<Props, 'total'>) => {
 	/**
 	 * If subtotal and total are different, then item is on sale
 	 */
-	const onSale = parseFloat(item.total) !== parseFloat(item.subtotal);
+	const onSale = parseFloat(item.total ?? '0') !== parseFloat(item.subtotal ?? '0');
 
 	/**
 	 *
 	 */
 	return (
 		<VStack space="xs" className="justify-end">
-			{onSale && column.columnDef.meta.show('on_sale') && (
+			{onSale && column.columnDef.meta?.show?.('on_sale') && (
 				<>
 					<Text className="text-muted-foreground text-right line-through">
 						{format(displaySubtotal || 0)}
 					</Text>
-					{column.columnDef.meta.show('tax') && (
+					{column.columnDef.meta?.show?.('tax') && (
 						<Text className="text-muted-foreground text-right text-sm line-through">
-							{`${taxDisplayCart} ${format(item.subtotal_tax || 0)} tax`}
+							{`${taxDisplayCart} ${format(Number(item.subtotal_tax) || 0)} tax`}
 						</Text>
 					)}
 				</>
 			)}
 			<Text className="text-right">{format(displayTotal || 0)}</Text>
-			{column.columnDef.meta.show('tax') && (
+			{column.columnDef.meta?.show?.('tax') && (
 				<Text className="text-muted-foreground text-right text-sm">
-					{`${taxDisplayCart} ${format(item.total_tax || 0)} tax`}
+					{`${taxDisplayCart} ${format(Number(item.total_tax) || 0)} tax`}
 				</Text>
 			)}
 		</VStack>

@@ -15,7 +15,7 @@ export const ProductVariationName = ({
 	column,
 }: CellContext<{ document: ProductVariationDocument }, 'name'>) => {
 	const variation = row.original.document;
-	const { show } = column.columnDef.meta;
+	const show = column.columnDef.meta?.show;
 
 	/**
 	 *
@@ -24,8 +24,8 @@ export const ProductVariationName = ({
 	return (
 		<VStack space="xs">
 			<Text className="font-bold">{variation.name}</Text>
-			{show('sku') && <Text className="text-sm">{variation.sku}</Text>}
-			{show('barcode') && <Text className="text-sm">{variation.barcode}</Text>}
+			{show?.('sku') && <Text className="text-sm">{variation.sku}</Text>}
+			{show?.('barcode') && <Text className="text-sm">{variation.barcode}</Text>}
 		</VStack>
 	);
 };

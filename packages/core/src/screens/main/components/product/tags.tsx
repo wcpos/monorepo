@@ -14,8 +14,9 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
  */
 export const ProductTags = ({ table, row }: CellContext<{ document: ProductDocument }, 'tags'>) => {
 	const product = row.original.document;
-	const tags = useObservableEagerState(product.tags$) || [];
-	const { query } = table.options.meta;
+	const tags = useObservableEagerState(product.tags$!) || [];
+
+	const query = (table.options.meta as unknown as { query: any })?.query;
 
 	if (tags.length === 0) {
 		return null;

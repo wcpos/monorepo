@@ -71,7 +71,7 @@ export const Site = ({ user, site, idx }: Props) => {
 		<>
 			<HStack space="lg" className={cn('p-4', idx !== 0 && 'border-border border-t')}>
 				<Avatar
-					source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url)}`}
+					source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url ?? '')}`}
 					className="h-10 w-10"
 				/>
 				<VStack className="flex-1">

@@ -22,7 +22,7 @@ export const QuerySearchInput = ({ query, ref, ...props }: Props) => {
 	 * If barcode detection is enabled, we need to augment the ref to include a setSearch method.
 	 */
 	const augmentedRef = useAugmentedRef({
-		ref,
+		ref: ref ?? null,
 		methods: {
 			setSearch: (search: string) => setSearch(search),
 			onSearch: (search: string) => onSearch(search),

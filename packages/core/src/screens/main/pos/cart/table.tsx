@@ -37,10 +37,19 @@ import { useCartLines } from '../hooks/use-cart-lines';
 import { CartLine, getUuidFromLineItem } from '../hooks/utils';
 import { SKU } from './cells/sku';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
-type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 type OrderDocument = import('@wcpos/database').OrderDocument;
+
+/**
+ * CartTableLine wraps a CartLine (LineItem | FeeLine | ShippingLine) with display metadata.
+ */
+interface CartTableLine {
+	item: CartLine;
+	uuid: string;
+	type: 'line_items' | 'fee_lines' | 'shipping_lines';
+}
 
 const cells = {
 	line_items: {
@@ -79,9 +88,9 @@ const cells = {
 const formatCartItems = (
 	items: LineItem[] | FeeLine[] | ShippingLine[],
 	type: 'line_items' | 'fee_lines' | 'shipping_lines'
-) => {
+): CartTableLine[] => {
 	return items.map((item) => {
-		const uuid = getUuidFromLineItem(item);
+		const uuid = getUuidFromLineItem(item) ?? '';
 
 		return {
 			item,
@@ -104,15 +113,15 @@ export const CartTable = () => {
 	const { currentOrder } = useCurrentOrder();
 
 	// Track previous cart data
-	const prevDataRef = React.useRef<CartLine[]>([]);
-	const prevOrderRef = React.useRef<OrderDocument>(null);
-	const currentOrderRef = React.useRef<OrderDocument>(null);
+	const prevDataRef = React.useRef<CartTableLine[]>([]);
+	const prevOrderRef = React.useRef<OrderDocument | null>(null);
+	const currentOrderRef = React.useRef<OrderDocument | null>(null);
 	currentOrderRef.current = currentOrder;
 
 	/**
 	 * Flatten line items, fee lines and shipping lines into a single array.
 	 */
-	const data = React.useMemo(() => {
+	const data: CartTableLine[] = React.useMemo(() => {
 		const flattenedArray = [
 			...formatCartItems(line_items, 'line_items'),
 			...formatCartItems(fee_lines, 'fee_lines'),
@@ -127,12 +136,12 @@ export const CartTable = () => {
 	const [newRowUUIDs, setNewRowUUIDs] = React.useState<string[]>([]);
 
 	React.useEffect(() => {
-		if (!currentOrderRef?.current.uuid) {
+		if (!currentOrderRef.current?.uuid) {
 			setNewRowUUIDs([]);
 			return;
 		}
 
-		if (currentOrderRef.current.uuid !== prevOrderRef?.current?.uuid) {
+		if (currentOrderRef.current.uuid !== prevOrderRef.current?.uuid) {
 			prevOrderRef.current = currentOrderRef.current;
 			prevDataRef.current = data;
 			setNewRowUUIDs([]);
@@ -146,7 +155,7 @@ export const CartTable = () => {
 				acc.push(newItem.uuid);
 			} else if (
 				newItem.type === 'line_items' &&
-				newItem.item.quantity !== prevItem.item.quantity
+				(newItem.item as LineItem).quantity !== (prevItem.item as LineItem).quantity
 			) {
 				acc.push(newItem.uuid);
 			}
@@ -167,13 +176,17 @@ export const CartTable = () => {
 	/**
 	 *
 	 */
-	const columns: ColumnDef<CartLine>[] = React.useMemo(() => {
+	const columns = React.useMemo((): ColumnDef<CartTableLine>[] => {
 		return uiColumns
 			.filter((column) => column.show)
 			.map((col) => {
 				return {
-					accessorKey: col.key,
-					header: ({ column }) => (
+					id: col.key,
+					header: ({
+						column,
+					}: {
+						column: import('@tanstack/react-table').Column<CartTableLine, unknown>;
+					}) => (
 						<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
 							{getUILabel(column.id)}
 						</Text>
@@ -198,7 +211,7 @@ export const CartTable = () => {
 							return !!(d && d.show);
 						},
 					},
-				};
+				} as ColumnDef<CartTableLine>;
 			});
 	}, [uiColumns, getUILabel]);
 
@@ -212,7 +225,7 @@ export const CartTable = () => {
 		getRowId: (line) => line.uuid,
 		// debugTable: true,
 		meta: {
-			onChange: (data: unknown) => {
+			onChange: (_data: unknown) => {
 				// fallback handler — should be overridden by the parent
 			},
 			rowRefs,
@@ -266,7 +279,9 @@ export const CartTable = () => {
 					{table.getRowModel().rows.map((row, index) => {
 						return (
 							<PulseTableRow
-								ref={(ref) => rowRefs.current.set(row.id, ref)}
+								ref={(ref) => {
+									rowRefs.current.set(row.id, ref as unknown as React.RefObject<View>);
+								}}
 								key={row.id}
 								index={index}
 								table={table}

@@ -212,7 +212,9 @@ function Input({
 		setValue('');
 		if (typeof props?.onChange === 'function') {
 			// Web-specific workaround: simulate a change event for parent components
-			props.onChange({ target: { value: '' } } as unknown as Parameters<NonNullable<RNTextInputProps['onChange']>>[0]);
+			props.onChange({ target: { value: '' } } as unknown as Parameters<
+				NonNullable<RNTextInputProps['onChange']>
+			>[0]);
 		}
 		if (inputRef.current) {
 			inputRef.current.focus();

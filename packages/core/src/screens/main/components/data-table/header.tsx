@@ -7,6 +7,11 @@ import { Text } from '@wcpos/components/text';
 
 import type { HeaderContext } from '@tanstack/react-table';
 
+interface CustomSortingEntry {
+	sortBy: string;
+	sortDirection: 'asc' | 'desc';
+}
+
 interface Props extends HeaderContext<any, any> {
 	title: string;
 }
@@ -16,7 +21,9 @@ interface Props extends HeaderContext<any, any> {
  */
 export const DataTableHeader = ({ column, table }: Props) => {
 	const canSort = column.getCanSort();
-	const { sortBy, sortDirection } = table.getState().sorting[0] || {};
+	const sortingState = table.getState().sorting[0] as unknown as CustomSortingEntry | undefined;
+	const sortBy = sortingState?.sortBy;
+	const sortDirection = sortingState?.sortDirection;
 
 	/**
 	 * @NOTE - this is a bit of a hack, but we want the price and total columns to sort on
@@ -30,7 +37,7 @@ export const DataTableHeader = ({ column, table }: Props) => {
 	if (!canSort) {
 		return (
 			<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
-				{column.columnDef.header}
+				{column.columnDef.header as React.ReactNode}
 			</Text>
 		);
 	}
@@ -39,21 +46,23 @@ export const DataTableHeader = ({ column, table }: Props) => {
 		<Pressable
 			className="max-w-full"
 			onPress={() =>
-				table.setSorting({
+				(table.setSorting as unknown as (val: CustomSortingEntry) => void)({
 					sortBy:
 						column.id === 'price' || column.id === 'total' ? `sortable_${column.id}` : column.id,
 					sortDirection: isSorted && sortDirection === 'asc' ? 'desc' : 'asc',
 				})
 			}
 		>
-			{({ hovered }) => {
+			{({ hovered }: import('react-native').PressableStateCallbackType & { hovered?: boolean }) => {
 				const showIcon = hovered || isSorted;
 				return (
 					<HStack className="gap-1">
 						<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
-							{column.columnDef.header}
+							{column.columnDef.header as React.ReactNode}
 						</Text>
-						{showIcon && <SortIcon direction={isSorted && sortDirection} hovered={hovered} />}
+						{showIcon && (
+							<SortIcon direction={isSorted ? sortDirection : undefined} hovered={hovered} />
+						)}
 					</HStack>
 				);
 			}}

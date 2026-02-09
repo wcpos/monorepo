@@ -13,13 +13,13 @@ const PARSE_LINK_HEADER_MAXLEN = parseInt(process.env.PARSE_LINK_HEADER_MAXLEN, 
 const PARSE_LINK_HEADER_THROW_ON_MAXLEN_EXCEEDED =
 	process.env.PARSE_LINK_HEADER_THROW_ON_MAXLEN_EXCEEDED != null;
 
-function hasRel(x) {
-	return x && x.rel;
+function hasRel(x: Record<string, string> | null): x is Record<string, string> & { rel: string } {
+	return !!x && !!x.rel;
 }
 
-function intoRels(acc, x) {
+function intoRels(acc: Links, x: Record<string, string> & { rel: string }): Links {
 	function splitRel(rel: string) {
-		acc[rel] = { ...x, rel };
+		acc[rel] = { ...x, rel } as Link;
 	}
 
 	x.rel.split(/\s+/).forEach(splitRel);
@@ -27,19 +27,20 @@ function intoRels(acc, x) {
 	return acc;
 }
 
-function createObjects(acc, p) {
+function createObjects(acc: Record<string, string>, p: string): Record<string, string> {
 	// rel="next" => 1: rel 2: next
 	const m = p.match(/\s*(.+)\s*=\s*"?([^"]+)"?/);
 	if (m) acc[m[1]] = m[2];
 	return acc;
 }
 
-function parseLink(link: string) {
+function parseLink(link: string): Record<string, string> | null {
 	try {
 		const m = link.match(/<?([^>]*)>(.*)/);
+		if (!m) return null;
 		const linkUrl = m[1];
 		const parts = m[2].split(';');
-		const qry = {};
+		const qry: Record<string, string> = {};
 		// The origin is unused but it's required to parse relative URLs
 		const url = new URL(linkUrl, 'https://example.com');
 
@@ -49,7 +50,7 @@ function parseLink(link: string) {
 
 		parts.shift();
 
-		let info = parts.reduce(createObjects, {});
+		let info: Record<string, string> = parts.reduce(createObjects, {});
 
 		info = { ...qry, ...info };
 		info.url = linkUrl;
@@ -77,5 +78,5 @@ function checkHeader(linkHeader: string | null | undefined) {
 export function parseLinkHeader(linkHeader: string | null | undefined): Links | null {
 	if (!checkHeader(linkHeader)) return null;
 
-	return linkHeader.split(/,\s*</).map(parseLink).filter(hasRel).reduce(intoRels, {});
+	return linkHeader!.split(/,\s*</).map(parseLink).filter(hasRel).reduce(intoRels, {});
 }

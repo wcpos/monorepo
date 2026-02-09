@@ -15,7 +15,7 @@ export const OrderNumber = ({
 	row,
 }: CellContext<{ document: OrderDocument }, 'payment_method'>) => {
 	const order = row.original.document;
-	const number = useObservableEagerState(order.number$);
+	const number = useObservableEagerState(order.number$!);
 
 	return number ? <Text>{number}</Text> : null;
 };

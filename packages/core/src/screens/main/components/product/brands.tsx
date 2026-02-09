@@ -17,8 +17,9 @@ export function ProductBrands({
 	row,
 }: CellContext<{ document: ProductDocument }, 'brands'>) {
 	const product = row.original.document;
-	const brands = useObservableEagerState(product.brands$) || [];
-	const { query } = table.options.meta;
+	const brands = useObservableEagerState(product.brands$!) || [];
+
+	const query = (table.options.meta as unknown as { query: any })?.query;
 
 	if (brands.length === 0) {
 		return null;

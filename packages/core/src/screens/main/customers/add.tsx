@@ -33,7 +33,7 @@ export const AddCustomerScreen = () => {
 	 *
 	 */
 	const form = useForm<z.infer<typeof customerFormSchema>>({
-		resolver: zodResolver(customerFormSchema),
+		resolver: zodResolver(customerFormSchema as never) as never,
 		defaultValues: {},
 	});
 

@@ -9,7 +9,7 @@ import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 import type { CellContext } from '@tanstack/react-table';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;
 	item: LineItem;
@@ -34,7 +34,7 @@ export const Quantity = ({ row, column }: CellContext<Props, 'quantity'>) => {
 				value={item.quantity}
 				onChangeText={(quantity) => updateLineItem(uuid, { quantity })}
 			/>
-			{column.columnDef.meta.show('split') && item.quantity > 1 && (
+			{column.columnDef.meta?.show?.('split') && (item.quantity ?? 0) > 1 && (
 				<Text variant="link" className="text-primary text-sm" onPress={() => splitLineItem(uuid)}>
 					{t('pos_cart.split_qty')}
 				</Text>

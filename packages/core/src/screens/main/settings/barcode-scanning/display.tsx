@@ -16,14 +16,14 @@ import { useBarcodeDetection } from '../../hooks/barcodes';
 export const BarcodeDisplay = () => {
 	const [allKeys, setKeyPress] = React.useState('');
 	const { barcode$ } = useBarcodeDetection();
-	const barcode = useObservableState(barcode$);
+	const barcode = useObservableState(barcode$) as string | undefined;
 	const t = useT();
 
 	/**
 	 *
 	 */
-	const onKeyboardEvent = React.useCallback((event: RNKeyboardEvent) => {
-		setKeyPress((prev) => (prev += getKeyFromEvent(event)));
+	const onKeyboardEvent = React.useCallback((keyboardEvent: KeyboardEvent) => {
+		setKeyPress((prev) => (prev += getKeyFromEvent(keyboardEvent as unknown as RNKeyboardEvent)));
 	}, []);
 
 	/**

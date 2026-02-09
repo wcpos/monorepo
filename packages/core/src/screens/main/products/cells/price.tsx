@@ -17,19 +17,19 @@ export const Price = ({
 	column,
 }: CellContext<{ document: ProductDocument }, 'price'>) => {
 	const product = row.original.document;
-	const price = useObservableEagerState(product.price$);
-	const taxStatus = useObservableEagerState(product.tax_status$);
-	const taxClass = useObservableEagerState(product.tax_class$);
+	const price = useObservableEagerState(product.price$!);
+	const taxStatus = useObservableEagerState(product.tax_status$!);
+	const taxClass = useObservableEagerState(product.tax_class$!);
 
 	/**
 	 *
 	 */
 	return (
 		<PriceWithTax
-			price={price}
-			taxStatus={taxStatus}
-			taxClass={taxClass}
-			taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
+			price={price ?? ''}
+			taxStatus={taxStatus === '' || taxStatus === undefined ? 'none' : taxStatus}
+			taxClass={taxClass ?? ''}
+			taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
 		/>
 	);
 };

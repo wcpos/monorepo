@@ -50,7 +50,11 @@ export const useTaxDisplayValues = ({
 			};
 		}
 
-		const { total: taxTotal } = calculateTaxes({ amount, rates: appliedRates, amountIncludesTax });
+		const { total: taxTotal } = calculateTaxes({
+			amount,
+			rates: appliedRates as { id: number; rate: string; compound: boolean; order: number }[],
+			amountIncludesTax,
+		});
 
 		if (amountIncludesTax && inclOrExcl === 'excl') {
 			displayValue = amount - taxTotal;

@@ -18,7 +18,8 @@ export function FormCombobox({
 	onChange,
 	customComponent: Component = Combobox,
 	...props
-}: FormItemProps<string> & React.ComponentProps<typeof Combobox>) {
+}: FormItemProps<string> &
+	Omit<Partial<React.ComponentProps<typeof Combobox>>, 'value' | 'onValueChange'>) {
 	const [open, setOpen] = React.useState(false);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 

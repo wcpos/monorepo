@@ -21,8 +21,8 @@ type Props = CellContext<{ document: ProductDocument | ProductVariationDocument 
  */
 export const StockQuantity = ({ row, className, withText = false }: Props) => {
 	const product = row.original.document;
-	const stockQuantity = useObservableEagerState(product.stock_quantity$);
-	const manageStock = useObservableEagerState(product.manage_stock$);
+	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
+	const manageStock = useObservableEagerState(product.manage_stock$!);
 	const { format } = useNumberFormat();
 	const t = useT();
 

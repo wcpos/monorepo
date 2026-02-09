@@ -21,7 +21,9 @@ const variantMap: Record<string, string> = {
  */
 export const Level = ({ row, table }: CellContext<{ document: LogDocument }, 'level'>) => {
 	const log = row.original.document;
-	const query = table.options.meta?.query as Query<any> | undefined;
+	const query = (table.options.meta as Record<string, unknown> | undefined)?.query as
+		| Query<any>
+		| undefined;
 
 	const handlePress = React.useCallback(() => {
 		if (query) {
@@ -30,7 +32,15 @@ export const Level = ({ row, table }: CellContext<{ document: LogDocument }, 'le
 	}, [query, log.level]);
 
 	return (
-		<ButtonPill variant={variantMap[log.level]} size="xs" onPress={handlePress}>
+		<ButtonPill
+			variant={
+				(log.level ? variantMap[log.level] : undefined) as React.ComponentProps<
+					typeof ButtonPill
+				>['variant']
+			}
+			size="xs"
+			onPress={handlePress}
+		>
 			<ButtonText>{log.level}</ButtonText>
 		</ButtonPill>
 	);

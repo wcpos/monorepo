@@ -5,7 +5,7 @@ import round from 'lodash/round';
 import { useShippingLineData } from './use-shipping-line-data';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
 
-type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 
 /**
  * Take a fee line object and calculate the tax and totals.

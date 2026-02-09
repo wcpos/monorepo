@@ -24,6 +24,7 @@ export function NotificationBell() {
 	};
 
 	return (
+		// @ts-expect-error: open prop exists at runtime but is missing from @rn-primitives/popover RootProps type
 		<Popover open={isOpen} onOpenChange={handleOpenChange}>
 			<PopoverTrigger asChild>
 				<Pressable

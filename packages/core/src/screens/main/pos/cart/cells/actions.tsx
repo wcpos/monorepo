@@ -22,14 +22,18 @@ export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
 	/**
 	 *
 	 */
+	const meta = table.options.meta!;
+
 	const handleRemoveLineItem = React.useCallback(() => {
-		const rowRef = table.options.meta.rowRefs.current.get(uuid);
+		const rowRef = (meta.rowRefs.current as unknown as Map<string, Record<string, unknown>>).get(
+			uuid
+		);
 		if (rowRef && rowRef?.pulseRemove) {
-			rowRef.pulseRemove(() => {
+			(rowRef.pulseRemove as (cb: () => void) => void)(() => {
 				removeLineItem(uuid, type);
 			});
 		}
-	}, [removeLineItem, table.options.meta.rowRefs, type, uuid]);
+	}, [removeLineItem, meta.rowRefs, type, uuid]);
 
 	/**
 	 * Use pulse effect for new rows.
@@ -38,18 +42,20 @@ export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
 	 * the ~800ms animation completes. Cleanup of table.options.meta.newRowUUIDs
 	 * must happen at that point, which the row-add event handler has no hook for.
 	 */
-	const isNew = table.options.meta.newRowUUIDs.includes(uuid);
+	const isNew = meta.newRowUUIDs.includes(uuid);
 
 	React.useEffect(() => {
 		if (isNew) {
-			const rowRef = table.options.meta.rowRefs.current.get(uuid);
+			const rowRef = (meta.rowRefs.current as unknown as Map<string, Record<string, unknown>>).get(
+				uuid
+			);
 			if (rowRef && rowRef?.pulseAdd) {
-				rowRef.pulseAdd(() => {
-					table.options.meta.removeNewRowUUID(uuid);
+				(rowRef.pulseAdd as (cb: () => void) => void)(() => {
+					meta.removeNewRowUUID(uuid);
 				});
 			}
 		}
-	}, [isNew, table.options.meta, uuid]);
+	}, [isNew, meta, uuid]);
 
 	/**
 	 *
@@ -58,6 +64,7 @@ export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
 		<IconButton
 			name="circleXmark"
 			variant="destructive"
+			// @ts-expect-error: IconButton size variants don't include 4xl, but Icon does
 			size="4xl"
 			onPress={handleRemoveLineItem}
 		/>

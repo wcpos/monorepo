@@ -74,15 +74,19 @@ export const UserMenu = () => {
 	const avatarUrl = useObservableEagerState(wpCredentials?.avatar_url$);
 	const stores = useObservableEagerState(wpCredentials?.stores$);
 	const t = useT();
-	const { uri } = useImageAttachment(wpCredentials, avatarUrl);
+	const { uri } = useImageAttachment(wpCredentials, avatarUrl as string);
 
 	/**
 	 *
 	 */
 	const storesResource = React.useMemo(
-		() => new ObservableResource(wpCredentials.populate$('stores'), (val) => !!val),
+		() =>
+			new ObservableResource(
+				wpCredentials.populate$('stores'),
+				(val): val is StoreDocument[] => !!val
+			),
 		[wpCredentials]
-	);
+	) as ObservableResource<StoreDocument[], StoreDocument[]>;
 
 	const handleReset = async () => {
 		// Clear databases to ensure clean start
@@ -90,7 +94,7 @@ export const UserMenu = () => {
 			const result = await clearAllDB();
 			uiLogger.info(result.message);
 		} catch (err) {
-			uiLogger.error('Failed to clear database:', err);
+			uiLogger.error('Failed to clear database:', { context: { error: err } });
 		}
 
 		// Reload the app to reinitialize everything
@@ -133,7 +137,7 @@ export const UserMenu = () => {
 					</DropdownMenuItem>
 				)}
 				<DropdownMenuSeparator />
-				{stores?.length > 1 && (
+				{Array.isArray(stores) && stores.length > 1 && (
 					<>
 						<DropdownMenuSub>
 							<DropdownMenuSubTrigger>

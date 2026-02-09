@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservableEagerState } from 'observable-hooks';
+import { of } from 'rxjs';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -33,14 +34,14 @@ export const EmailForm = ({ order }: Props) => {
 	const http = useRestHttpClient();
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
-	const orderID = useObservableEagerState(order.id$);
-	const defaultEmail = useObservableEagerState(order.billing.email$);
+	const orderID = useObservableEagerState(order.id$ ?? of(undefined as number | undefined));
+	const defaultEmail = order.billing?.email ?? '';
 
 	/**
 	 *
 	 */
 	const handleSendEmail = React.useCallback(
-		async ({ email, saveEmail }) => {
+		async ({ email, saveEmail }: z.infer<typeof formSchema>) => {
 			try {
 				setLoading(true);
 				const { data } = await http.post(`/orders/${orderID}/email`, {
@@ -79,6 +80,7 @@ export const EmailForm = ({ order }: Props) => {
 	 *
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
+		// @ts-expect-error: zodResolver return type doesn't perfectly match useForm's Resolver generic
 		resolver: zodResolver(formSchema),
 		defaultValues: {
 			email: defaultEmail,
@@ -115,6 +117,7 @@ export const EmailForm = ({ order }: Props) => {
 			</Form>
 			<DialogFooter className="px-0">
 				<DialogClose>{t('common.cancel')}</DialogClose>
+				{/* @ts-expect-error: loading prop is forwarded to Button via rest props but not in SlottablePressableProps type */}
 				<DialogAction onPress={sendEmail} loading={loading}>
 					{t('receipt.send')}
 				</DialogAction>

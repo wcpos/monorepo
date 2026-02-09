@@ -10,6 +10,11 @@ interface TreeDOMProps<T extends object> extends JsonViewProps<T> {
 	height?: number;
 }
 
-export default function TreeDOM<T extends object>({ dom: _dom, width: _width, height: _height, ...props }: TreeDOMProps<T>) {
+export default function TreeDOM<T extends object>({
+	dom: _dom,
+	width: _width,
+	height: _height,
+	...props
+}: TreeDOMProps<T>) {
 	return <JsonView displayDataTypes={false} collapsed={1} {...(props as JsonViewProps<object>)} />;
 }

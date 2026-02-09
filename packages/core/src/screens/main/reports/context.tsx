@@ -57,7 +57,11 @@ export const ReportsProvider = ({ query, children }: ReportsProviderProps) => {
 	 * Get the date range from the query selector - updates when filter changes
 	 */
 	const selectedDateRange = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('date_created_gmt')))
+		query.rxQuery$.pipe(
+			map(
+				() => query.getSelector('date_created_gmt') as { $gte?: string; $lte?: string } | undefined
+			)
+		)
 	);
 
 	/**
@@ -94,7 +98,7 @@ export const ReportsProvider = ({ query, children }: ReportsProviderProps) => {
 			return allOrders;
 		}
 
-		return allOrders.filter((order) => !unselectedRowIds[order.uuid]);
+		return allOrders.filter((order) => order.uuid && !unselectedRowIds[order.uuid]);
 	}, [allOrders, unselectedRowIds]);
 
 	return (

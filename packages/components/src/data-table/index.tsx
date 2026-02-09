@@ -21,7 +21,12 @@ import { getFlexAlign } from '../lib/utils';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table';
 
 import type { DataTableRowData } from './types';
-import type { OnChangeFn, RowSelectionState, SortingState, TableState } from '@tanstack/react-table';
+import type {
+	OnChangeFn,
+	RowSelectionState,
+	SortingState,
+	TableState,
+} from '@tanstack/react-table';
 
 interface DataTableProps<TData extends DataTableRowData, TValue> {
 	columns: ColumnDef<TData, TValue>[];

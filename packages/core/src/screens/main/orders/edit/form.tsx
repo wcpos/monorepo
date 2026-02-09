@@ -112,30 +112,32 @@ export const EditOrderForm = ({ order }: Props) => {
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
 	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
-		values: formData,
+	type FormValues = z.infer<typeof formSchema>;
+	const form = useForm<FormValues>({
+		resolver: zodResolver(formSchema as never) as never,
+		values: formData as FormValues,
 	});
 
 	/**
 	 * Handle save button click
 	 */
 	const handleSaveToServer = React.useCallback(
-		async (data) => {
+		async (data: z.infer<typeof formSchema>) => {
 			setLoading(true);
 			try {
 				await localPatch({
 					document: order,
-					data,
+					data: data as unknown as Partial<import('@wcpos/database').OrderDocument>,
 				});
 				await pushDocument(order).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('common.order_saved', { number: savedDoc.number }), {
+						const doc = savedDoc as unknown as { id?: number; number?: string };
+						mutationLogger.success(t('common.order_saved', { number: doc.number }), {
 							showToast: true,
 							saveToDb: true,
 							context: {
-								orderId: savedDoc.id,
-								orderNumber: savedDoc.number,
+								orderId: doc.id,
+								orderNumber: doc.number,
 							},
 						});
 					}
@@ -259,12 +261,13 @@ export const EditOrderForm = ({ order }: Props) => {
 						<FormField
 							control={form.control}
 							name="status"
-							render={({ field }) => (
+							render={({ field: { value, ...fieldRest } }) => (
 								<View className="flex-1">
 									<FormSelect
 										label={t('common.status')}
 										customComponent={OrderStatusSelect}
-										{...field}
+										value={value as never}
+										{...fieldRest}
 									/>
 								</View>
 							)}
@@ -272,9 +275,9 @@ export const EditOrderForm = ({ order }: Props) => {
 						<FormField
 							control={form.control}
 							name="parent_id"
-							render={({ field }) => (
+							render={({ field: { value, ...fieldRest } }) => (
 								<View className="flex-1">
-									<FormInput label={t('orders.parent_id')} {...field} />
+									<FormInput label={t('orders.parent_id')} value={value as never} {...fieldRest} />
 								</View>
 							)}
 						/>
@@ -285,17 +288,17 @@ export const EditOrderForm = ({ order }: Props) => {
 							name="customer_id"
 							render={({ field }) => (
 								<View className="flex-1">
-									<FormCombobox
-										customComponent={CustomerSelect}
-										label={t('common.customer')}
-										withGuest
-										{...field}
-										// override value with defaultCustomer
-										value={{
-											value: field.value,
+									{/* FormCombobox intersection type creates impossible string & Option for value prop */}
+									{React.createElement(FormCombobox, {
+										customComponent: CustomerSelect,
+										label: t('common.customer'),
+										withGuest: true,
+										...field,
+										value: {
+											value: String(field.value),
 											label: customerLabel,
-										}}
-									/>
+										},
+									} as never)}
 								</View>
 							)}
 						/>
@@ -349,12 +352,13 @@ export const EditOrderForm = ({ order }: Props) => {
 						<FormField
 							control={form.control}
 							name="currency"
-							render={({ field }) => (
+							render={({ field: { value, ...fieldRest } }) => (
 								<View className="flex-1">
 									<FormSelect
 										customComponent={CurrencySelect}
 										label={t('common.currency')}
-										{...field}
+										value={value as never}
+										{...fieldRest}
 									/>
 								</View>
 							)}

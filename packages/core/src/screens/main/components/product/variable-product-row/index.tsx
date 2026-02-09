@@ -19,14 +19,32 @@ import { getColumnStyle } from '../../data-table';
 import { VariationRowProvider } from './context';
 import { Variations } from './variations';
 
+import type { Row, Table } from '@tanstack/react-table';
+
+type ProductDocument = import('@wcpos/database').ProductDocument;
+
 const duration = 500;
 
 /**
  *
  */
-export function VariableProductRow({ item, index, table }) {
+export function VariableProductRow({
+	item,
+	index,
+	table,
+}: {
+	item: Row<{ document: ProductDocument }>;
+	index: number;
+	table: Table<{ document: ProductDocument }>;
+}) {
+	const meta = table.options.meta as
+		| {
+				expanded$: import('rxjs').Observable<Record<string, boolean>>;
+				setRowExpanded?: (rowId: string, expanded: boolean) => void;
+		  }
+		| undefined;
 	const isExpanded = useObservableEagerState(
-		table.options.meta.expanded$.pipe(map((expanded) => !!expanded[item.id]))
+		meta!.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[item.id]))
 	);
 
 	/**
@@ -64,7 +82,7 @@ export function VariableProductRow({ item, index, table }) {
 	/**
 	 * Get setRowExpanded from table meta to bypass TanStack's buggy updater function
 	 */
-	const setRowExpanded = table.options.meta?.setRowExpanded;
+	const setRowExpanded = meta?.setRowExpanded;
 
 	/**
 	 * Render the row and the animated Variations component
@@ -73,13 +91,19 @@ export function VariableProductRow({ item, index, table }) {
 		<VirtualizedList.Item>
 			<VariationRowProvider row={item} setRowExpanded={setRowExpanded}>
 				<TableRow index={index}>
-					{item.getVisibleCells().map((cell) => {
-						return (
-							<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
-								{flexRender(cell.column.columnDef.cell, cell.getContext())}
-							</TableCell>
-						);
-					})}
+					{item
+						.getVisibleCells()
+						.map(
+							(
+								cell: import('@tanstack/react-table').Cell<{ document: ProductDocument }, unknown>
+							) => {
+								return (
+									<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
+										{flexRender(cell.column.columnDef.cell, cell.getContext())}
+									</TableCell>
+								);
+							}
+						)}
 				</TableRow>
 				<Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
 					{/*
@@ -98,7 +122,7 @@ export function VariableProductRow({ item, index, table }) {
 							height.value = h;
 						}}
 					>
-						{shouldRender && <Variations row={item} />}
+						{shouldRender ? <Variations row={item} /> : null}
 					</ScrollView>
 				</Animated.View>
 			</VariationRowProvider>

@@ -9,6 +9,11 @@ interface TooltipProps {
 	 * @default false
 	 */
 	showOnNative?: boolean;
+	/**
+	 * Platform: WEB ONLY
+	 * @default 700
+	 */
+	delayDuration?: number;
 }
 
 interface TooltipTriggerProps extends Omit<TooltipPrimitive.TriggerProps, 'ref'> {

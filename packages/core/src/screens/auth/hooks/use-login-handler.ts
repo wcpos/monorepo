@@ -3,7 +3,7 @@ import * as React from 'react';
 import { router } from 'expo-router';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
 
@@ -126,19 +126,20 @@ export const useLoginHandler = (
 				if (router.canGoBack()) {
 					router.back();
 				}
-			} catch (err) {
-				const errorMessage = err.message || 'Failed to save WordPress credentials';
+			} catch (err: unknown) {
+				const errorMessage =
+					(err instanceof Error ? err.message : '') || 'Failed to save WordPress credentials';
 
 				// Determine error type and code based on error characteristics
-				let errorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
+				let errorCode: ErrorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
 
-				if (err.message?.includes('missing required parameters')) {
+				if (err instanceof Error && err.message?.includes('missing required parameters')) {
 					errorCode = ERROR_CODES.MISSING_REQUIRED_FIELD;
-				} else if (err.name === 'ValidationError') {
+				} else if (err instanceof Error && err.name === 'ValidationError') {
 					errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
-				} else if (err.name === 'RxError') {
+				} else if (err instanceof Error && err.name === 'RxError') {
 					// Check for specific RxDB error codes
-					switch (err.code) {
+					switch ((err as Error & { code?: string }).code) {
 						case 'RX1':
 							errorCode = ERROR_CODES.DUPLICATE_RECORD;
 							break;

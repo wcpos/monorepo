@@ -96,7 +96,9 @@ function WebView({
 				onError={(error) => {
 					console.error('WebView error:', error);
 					// Web-specific: iframe error events don't match RN WebView error events
-					props.onError?.(error as unknown as Parameters<NonNullable<RNWebViewProps['onError']>>[0]);
+					props.onError?.(
+						error as unknown as Parameters<NonNullable<RNWebViewProps['onError']>>[0]
+					);
 				}}
 			/>
 			{loading && (

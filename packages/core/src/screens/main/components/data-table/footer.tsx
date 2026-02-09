@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -23,7 +24,7 @@ export function DataTableFooter({ children, query, count }: Props) {
 	const { sync, active$, total$ } = useReplicationState(query);
 	const { clearAndSync } = useCollectionReset(query.collection.name);
 	const loading = useObservableState(active$, false);
-	const total = useObservableState(total$, 0);
+	const total = useObservableState(total$ ?? of(0), 0);
 	const t = useT();
 
 	return (

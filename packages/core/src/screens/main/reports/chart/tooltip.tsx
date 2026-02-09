@@ -10,12 +10,20 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 /**
  *
  */
-export const Tooltip = ({ active, payload, label }) => {
+export const Tooltip = ({
+	active,
+	payload,
+	label,
+}: {
+	active: boolean;
+	payload: { name: string; value: number }[];
+	label: string;
+}) => {
 	const t = useT();
 	const { format } = useCurrencyFormat();
 
 	const getLabel = React.useCallback(
-		(value) => {
+		(value: string) => {
 			switch (value) {
 				case 'total':
 					return t('common.total');

@@ -27,9 +27,9 @@ const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Com
 	/**
 	 *
 	 */
-	const options = React.useMemo(
+	const options: { label: string; value: string }[] = React.useMemo(
 		() =>
-			allCurrencies.map((currency) => ({
+			allCurrencies.map((currency: { name: string; symbol: string; code: string }) => ({
 				label: `${decode(currency.name)} (${decode(currency.symbol)})`,
 				value: currency.code,
 			})),
@@ -40,7 +40,7 @@ const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Com
 	 *
 	 */
 	const label = React.useMemo(() => {
-		const selected = options.find((option) => option.value === value.value);
+		const selected = options.find((option) => option.value === value?.value);
 		return selected?.label;
 	}, [options, value]);
 
@@ -48,7 +48,7 @@ const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Com
 	 *
 	 */
 	return (
-		<Combobox value={{ ...value, label }} {...props}>
+		<Combobox value={{ value: value?.value ?? '', label: label ?? '' }} {...props}>
 			<ComboboxTrigger>
 				<ComboboxValue placeholder={t('common.select_currency')} />
 			</ComboboxTrigger>
@@ -57,8 +57,8 @@ const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Com
 				<ComboboxList
 					data={options}
 					renderItem={({ item }) => (
-						<ComboboxItem value={item.value} label={item.label}>
-							<ComboboxItemText>{item.label}</ComboboxItemText>
+						<ComboboxItem value={String(item.value)} label={item.label} item={item}>
+							<ComboboxItemText />
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
@@ -72,7 +72,7 @@ const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Com
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export const CurrencySelect = (props) => {
+export const CurrencySelect = (props: React.ComponentProps<typeof Combobox>) => {
 	return (
 		<CurrenciesProvider>
 			<CurrencySelectBase {...props} />

@@ -257,11 +257,7 @@ function Item({ children, ...props }: ItemProps<any>) {
 		},
 	} as React.ComponentProps<typeof View>;
 
-	return (
-		<View {...webProps}>
-			{children}
-		</View>
-	);
+	return <View {...webProps}>{children}</View>;
 }
 
 export { Root, List, Item, useItemContext, useRootContext };

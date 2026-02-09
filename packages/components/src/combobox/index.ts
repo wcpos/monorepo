@@ -12,6 +12,7 @@ export {
 } from './combobox';
 
 export type {
+	Option,
 	ComboboxEmptyProps,
 	ComboboxRootContextType,
 	ComboboxRootProps,

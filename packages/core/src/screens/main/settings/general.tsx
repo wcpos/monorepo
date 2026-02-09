@@ -110,7 +110,7 @@ export const GeneralSettings = () => {
 	 * Also fixes the double-reset issue on first load.
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+		resolver: zodResolver(formSchema as never) as never,
 		values: formData,
 	});
 
@@ -118,7 +118,7 @@ export const GeneralSettings = () => {
 	 * Handle form changes and persist to store
 	 */
 	const handleChange = React.useCallback(
-		async (data) => {
+		async (data: z.infer<typeof formSchema>) => {
 			await localPatch({
 				document: store,
 				data,
@@ -127,7 +127,7 @@ export const GeneralSettings = () => {
 		[localPatch, store]
 	);
 
-	useFormChangeHandler({ form, onChange: handleChange });
+	useFormChangeHandler({ form: form as never, onChange: handleChange as never });
 
 	/**
 	 * Toggle customer select
@@ -214,7 +214,7 @@ export const GeneralSettings = () => {
 									customComponent={StateFormInput}
 									label={t('settings.store_base_state')}
 									{...field}
-									countryCode={countryCode}
+									{...({ countryCode } as Record<string, unknown>)}
 									disabled
 								/>
 							</View>
@@ -238,12 +238,14 @@ export const GeneralSettings = () => {
 					<FormField
 						control={form.control}
 						name="locale"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									customComponent={LanguageSelect}
 									label={t('settings.language')}
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -252,14 +254,15 @@ export const GeneralSettings = () => {
 						<FormField
 							control={form.control}
 							name="default_customer"
-							render={({ field }) => (
+							render={({ field: { value, onChange, ...rest } }) => (
 								<FormCombobox
 									customComponent={CustomerSelect}
 									label={t('settings.default_customer')}
-									withGuest
-									{...field}
+									onChange={onChange}
+									{...rest}
+									{...({ withGuest: true } as Record<string, unknown>)}
 									// override value with defaultCustomer
-									value={{ value: field.value, label: format(defaultCustomer) }}
+									value={{ value, label: format(defaultCustomer) } as never}
 									disabled={toggleCustomerSelect}
 								/>
 							)}
@@ -277,12 +280,14 @@ export const GeneralSettings = () => {
 					<FormField
 						control={form.control}
 						name="currency"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormCombobox
 									customComponent={CurrencySelect}
 									label={t('common.currency')}
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -290,12 +295,14 @@ export const GeneralSettings = () => {
 					<FormField
 						control={form.control}
 						name="currency_pos"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									customComponent={CurrencyPositionSelect}
 									label={t('settings.currency_position')}
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -314,9 +321,14 @@ export const GeneralSettings = () => {
 					<FormField
 						control={form.control}
 						name="price_num_decimals"
-						render={({ field }) => (
+						render={({ field: { value, ...rest } }) => (
 							<View className="flex-1">
-								<FormInput label={t('settings.number_of_decimals')} type="numeric" {...field} />
+								<FormInput
+									label={t('settings.number_of_decimals')}
+									type="numeric"
+									value={value ?? undefined}
+									{...rest}
+								/>
 							</View>
 						)}
 					/>
@@ -334,12 +346,14 @@ export const GeneralSettings = () => {
 					<FormField
 						control={form.control}
 						name="thousands_group_style"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									label={t('settings.thousands_group_style')}
 									customComponent={ThousandsStyleSelect}
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}

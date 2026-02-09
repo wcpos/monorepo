@@ -46,7 +46,7 @@ export const useCalculateTaxesFromValue = () => {
 
 			return calculateTaxes({
 				amount,
-				rates: appliedRates,
+				rates: appliedRates as { id: number; rate: string; compound: boolean; order: number }[],
 				amountIncludesTax,
 			});
 		},

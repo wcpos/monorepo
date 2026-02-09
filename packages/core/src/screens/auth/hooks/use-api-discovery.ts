@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+// @ts-expect-error: semver lacks type declarations in this project
 import semver from 'semver';
 
 import useHttpClient from '@wcpos/hooks/use-http-client';
@@ -120,20 +121,23 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					`WordPress API discovered: ${data.name} (WC ${data.wc_version}, WCPOS ${data.wcpos_version})`
 				);
 				return data;
-			} catch (error) {
+			} catch (error: unknown) {
 				// If it's already one of our logged errors, re-throw
 				if (error instanceof ApiDiscoveryError) {
 					throw error;
 				}
 
 				// Handle network/connection errors
-				discoveryLogger.error(`Failed to connect to ${wpApiUrl}: ${error.message}`, {
-					showToast: true,
-					context: {
-						errorCode: ERROR_CODES.CONNECTION_REFUSED,
-						wpApiUrl,
-					},
-				});
+				discoveryLogger.error(
+					`Failed to connect to ${wpApiUrl}: ${error instanceof Error ? error.message : String(error)}`,
+					{
+						showToast: true,
+						context: {
+							errorCode: ERROR_CODES.CONNECTION_REFUSED,
+							wpApiUrl,
+						},
+					}
+				);
 				throw error;
 			}
 		},

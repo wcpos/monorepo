@@ -258,7 +258,7 @@ export function subscribeToNovuEvents(handlers: NovuEventHandlers): () => void {
 		const handler = handlers.onNotificationReceived;
 		// on() returns an unsubscribe function - capture it for proper cleanup
 		const unsubscribe = novuClient.on('notifications.notification_received', (data) => {
-			const notification = data.result as Record<string, unknown>;
+			const notification = data.result as unknown as Record<string, unknown>;
 			const notificationId = notification?.id as string | undefined;
 
 			// Dedupe at source - only process each notification once globally

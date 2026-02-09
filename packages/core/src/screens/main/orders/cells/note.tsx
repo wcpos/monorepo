@@ -15,7 +15,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  */
 export const Note = ({ row }: CellContext<{ document: OrderDocument }, 'customer_note'>) => {
 	const order = row.original.document;
-	const note = useObservableEagerState(order.customer_note$);
+	const note = useObservableEagerState(order.customer_note$!);
 
 	if (!note) {
 		return null;

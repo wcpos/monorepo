@@ -54,23 +54,28 @@ export const useLocalMutation = () => {
 				 *
 				 * NOTE: rxdb only sets the root key
 				 */
-				const changes = {};
-				const doc = await latest.incrementalModify((old) => {
+				const changes: Record<string, unknown> = {};
+				const doc = await latest.incrementalModify((old: Record<string, unknown>) => {
 					Object.keys(data).forEach((key) => {
 						const path = key.split('.');
-						const root = path.shift();
+						const root = path.shift()!;
+						const value = (data as Record<string, unknown>)[key];
 						if (path.length === 0) {
-							old[root] = data[key];
-							changes[root] = data[key];
+							old[root] = value;
+							changes[root] = value;
 						} else {
 							// Handle nested keys for both objects and arrays
 							if (Array.isArray(old[root])) {
 								const updatedArray = cloneDeep(old[root]);
-								set(updatedArray, path, data[key]);
+								set(updatedArray, path, value);
 								old[root] = updatedArray;
 								changes[root] = updatedArray;
 							} else {
-								const updatedObject = set(cloneDeep(old[root]), path, data[key]);
+								const updatedObject = set(
+									cloneDeep(old[root]) as Record<string, unknown>,
+									path,
+									value
+								);
 								old[root] = updatedObject;
 								changes[root] = updatedObject;
 							}
@@ -81,10 +86,11 @@ export const useLocalMutation = () => {
 
 				return { changes, document: doc };
 			} catch (error) {
-				let message = error.message;
-				let errorCode = ERROR_CODES.TRANSACTION_FAILED;
-				if (error?.rxdb) {
-					message = 'rxdb ' + error.code;
+				const err = error as Record<string, unknown>;
+				let message = error instanceof Error ? error.message : String(error);
+				let errorCode: string = ERROR_CODES.TRANSACTION_FAILED;
+				if (err?.rxdb) {
+					message = 'rxdb ' + String(err.code);
 					errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
 				}
 				mutationLogger.error(t('common.there_was_an_error', { message }), {

@@ -10,9 +10,9 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 
 type Line = 'line_items' | 'fee_lines' | 'shipping_lines';
 type LineItem =
-	| import('@wcpos/database').OrderDocument['line_items'][number]
-	| import('@wcpos/database').OrderDocument['fee_lines'][number]
-	| import('@wcpos/database').OrderDocument['shipping_lines'][number];
+	| NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number]
+	| NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number]
+	| NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 
 /**
  *
@@ -30,19 +30,22 @@ export const useRemoveLineItem = () => {
 			const order = currentOrder.getLatest();
 
 			// Determine if the item with this UUID exists in the current list
-			const itemIndex = order[type].findIndex((item) =>
-				item.meta_data.some((meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid)
+			const items = (order[type] ?? []) as LineItem[];
+			const itemIndex = items.findIndex((item) =>
+				(item.meta_data ?? []).some(
+					(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
+				)
 			);
 
-			let updatedLines;
+			let updatedLines: LineItem[];
 
 			if (itemIndex >= 0) {
 				// If item exists, replace the existing one with the restored one
-				updatedLines = [...order[type]];
+				updatedLines = [...items];
 				updatedLines[itemIndex] = itemToRestore;
 			} else {
 				// If item does not exist, add the restored item to the array
-				updatedLines = [...order[type], itemToRestore];
+				updatedLines = [...items, itemToRestore];
 			}
 
 			// Perform the patch to restore the item
@@ -67,10 +70,11 @@ export const useRemoveLineItem = () => {
 			const order = currentOrder.getLatest();
 			let itemToRestore: LineItem | undefined;
 
-			const updatedLines = (order[type] || [])
+			const items = (order[type] ?? []) as LineItem[];
+			const updatedLines = items
 				.map((item) => {
 					if (
-						item.meta_data.some(
+						(item.meta_data ?? []).some(
 							(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
 						)
 					) {
@@ -102,9 +106,12 @@ export const useRemoveLineItem = () => {
 			});
 
 			if (itemToRestore) {
+				const itemName =
+					(itemToRestore as Record<string, unknown>).name ??
+					(itemToRestore as Record<string, unknown>).method_title;
 				cartLogger.success(
 					t('pos.removed_from_cart', {
-						name: itemToRestore?.name || itemToRestore?.method_title,
+						name: itemName,
 					}),
 					{
 						showToast: true,
@@ -113,11 +120,11 @@ export const useRemoveLineItem = () => {
 							dismissable: true,
 							action: {
 								label: t('common.undo'),
-								onClick: () => undoRemove(uuid, type, itemToRestore),
+								onClick: () => undoRemove(uuid, type, itemToRestore!),
 							},
 						},
 						context: {
-							itemName: itemToRestore?.name || itemToRestore?.method_title,
+							itemName,
 							itemType: type,
 							orderId: currentOrder.id,
 						},

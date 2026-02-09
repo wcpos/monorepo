@@ -41,9 +41,9 @@ export const useCollection = <K extends CollectionKey>(
 	 * Initial value is the current collection from storeDB.
 	 */
 	const collection = useObservableState(
-		storeDB.reset$.pipe(filter((collection) => collection.name === key)),
+		storeDB.reset$.pipe(filter((collection: { name: string }) => collection.name === key)),
 		storeDB.collections[key]
-	);
+	) as StoreCollections[K];
 
 	/**
 	 *

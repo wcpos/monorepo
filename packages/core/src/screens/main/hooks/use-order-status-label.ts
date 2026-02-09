@@ -4,11 +4,16 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { useExtraData } from '../contexts/extra-data';
 
+interface OrderStatus {
+	label: string;
+	status: string;
+}
+
 export const useOrderStatusLabel = () => {
 	const { extraData } = useExtraData();
-	let orderStatuses = useObservableEagerState(extraData.orderStatuses$);
+	let orderStatuses = useObservableEagerState(extraData.orderStatuses$) as OrderStatus[] | unknown;
 	if (!Array.isArray(orderStatuses)) {
-		orderStatuses = [];
+		orderStatuses = [] as OrderStatus[];
 	}
 
 	/**
@@ -16,7 +21,7 @@ export const useOrderStatusLabel = () => {
 	 */
 	const items = React.useMemo(
 		() =>
-			orderStatuses.map((item) => ({
+			(orderStatuses as OrderStatus[]).map((item: OrderStatus) => ({
 				label: item.label,
 				value: item.status,
 			})),
@@ -28,7 +33,9 @@ export const useOrderStatusLabel = () => {
 	 */
 	const getLabel = React.useCallback(
 		(status: string) => {
-			const item = orderStatuses.find((item) => item.status === status);
+			const item = (orderStatuses as OrderStatus[]).find(
+				(item: OrderStatus) => item.status === status
+			);
 			if (item) {
 				return item.label;
 			}

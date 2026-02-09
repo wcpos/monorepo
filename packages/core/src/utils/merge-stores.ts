@@ -52,7 +52,7 @@ export async function mergeStoresWithResponse({
 				const localID = await generateHashId({
 					user: user.uuid,
 					siteID,
-					wpCredentialsID: wpUser.uuid,
+					wpCredentialsID: wpUser.uuid ?? '',
 					storeID: store.id,
 				});
 
@@ -67,7 +67,9 @@ export async function mergeStoresWithResponse({
 		const remoteStoreIds = new Set(remoteStores.map((store) => store.id));
 
 		// Find stores to remove (exist locally but not in remote response)
-		const storesToRemove = currentStores.filter((store) => !remoteStoreIds.has(store.id));
+		const storesToRemove = currentStores.filter(
+			(store) => store.id != null && !remoteStoreIds.has(store.id)
+		);
 
 		// Remove stores that are no longer in the response
 		if (storesToRemove.length > 0) {

@@ -9,7 +9,7 @@ import { useT } from '../../../../../../contexts/translations';
 
 interface Props {
 	uuid: string;
-	item: import('@wcpos/database').OrderDocument['shipping_lines'][number];
+	item: NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 	onClose?: () => void;
 }
 

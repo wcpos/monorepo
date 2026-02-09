@@ -57,10 +57,10 @@ const iconMap = {
  */
 export const Status = ({ table, row }: CellContext<{ document: OrderDocument }, 'status'>) => {
 	const order = row.original.document;
-	const status = useObservableEagerState(order.status$);
-	const iconName = get(iconMap, [status, 'name'], 'circleQuestion');
-	const iconType = get(iconMap, [status, 'type'], 'disabled');
-	const { query } = table.options.meta;
+	const status = useObservableEagerState(order.status$!);
+	const iconName = get(iconMap, [status ?? '', 'name'], 'circleQuestion') as string;
+	const iconType = get(iconMap, [status ?? '', 'type'], 'disabled') as string;
+	const query = (table.options.meta as { query: any } | undefined)?.query;
 	const { getLabel } = useOrderStatusLabel();
 
 	/**
@@ -70,13 +70,13 @@ export const Status = ({ table, row }: CellContext<{ document: OrderDocument }, 
 		<Tooltip delayDuration={150}>
 			<TooltipTrigger asChild>
 				<IconButton
-					name={iconName}
-					variant={iconType}
-					onPress={() => query.where('status').equals(status).exec()}
+					name={iconName as import('@wcpos/components/icon').IconName}
+					variant={iconType as 'muted'}
+					onPress={() => query?.where('status').equals(status).exec()}
 				/>
 			</TooltipTrigger>
 			<TooltipContent side="right">
-				<Text>{getLabel(status)}</Text>
+				<Text>{getLabel(status ?? '')}</Text>
 			</TooltipContent>
 		</Tooltip>
 	);

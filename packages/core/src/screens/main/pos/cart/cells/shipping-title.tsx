@@ -11,7 +11,7 @@ import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 import type { CellContext } from '@tanstack/react-table';
 
-type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 interface Props {
 	uuid: string;
 	item: ShippingLine;

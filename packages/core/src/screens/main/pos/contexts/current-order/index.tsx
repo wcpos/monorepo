@@ -15,7 +15,9 @@ interface CurrentOrderContextProps {
 	setCurrentOrderID: (id: string) => void;
 }
 
-export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>(null);
+export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>(
+	null as unknown as CurrentOrderContextProps
+);
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
@@ -58,10 +60,8 @@ export const CurrentOrderProvider = ({
 	}, [currentOrderUUID]);
 
 	// Determine current order from internal state
-	let currentOrder = openOrders.find((order) => order.id === internalOrderId)?.document;
-	if (!currentOrder) {
-		currentOrder = newOrder;
-	}
+	const currentOrder =
+		openOrders.find((order) => order.id === internalOrderId)?.document ?? newOrder;
 
 	/**
 	 * Update the current order without causing a full navigation/remount.

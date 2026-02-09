@@ -55,7 +55,7 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 	const handleDelete = React.useCallback(async () => {
 		try {
 			if (customer.id) {
-				await deleteDocument(customer.id, customer.collection, { force });
+				await deleteDocument(customer.id, customer.collection as never, { force });
 			}
 			await customer.getLatest().remove();
 		} finally {
@@ -88,7 +88,7 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 						<DropdownMenuItem
 							onPress={() => {
 								if (customer.id) {
-									pullDocument(customer.id, customer.collection);
+									pullDocument(customer.id, customer.collection as never);
 								}
 							}}
 						>

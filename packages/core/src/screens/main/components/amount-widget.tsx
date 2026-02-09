@@ -26,7 +26,7 @@ interface Props {
 /**
  * Extracted widget for amount/percent input
  */
-export const AmountWidget = ({ ref, onChange, currencySymbol = '', ...props }: Props) => {
+export const AmountWidget = ({ currencySymbol = '' }: Props) => {
 	const { control } = useFormContext();
 
 	/**
@@ -45,8 +45,8 @@ export const AmountWidget = ({ ref, onChange, currencySymbol = '', ...props }: P
 	/**
 	 *
 	 */
-	const handleAmountChange = (newAmount: string) => {
-		amountField.onChange(newAmount);
+	const handleAmountChange = (newAmount: number) => {
+		amountField.onChange(String(newAmount));
 	};
 
 	const handlePercentChange = (isPercent: boolean) => {
@@ -66,12 +66,10 @@ export const AmountWidget = ({ ref, onChange, currencySymbol = '', ...props }: P
 				<ButtonText>{currencySymbol}</ButtonText>
 			</Button>
 			<NumberInput
-				ref={ref}
 				value={amountField.value}
 				placement="right"
-				onChange={handleAmountChange}
-				showDecimals
-				buttonClassName="rounded-none"
+				onChangeText={handleAmountChange}
+				className="rounded-none"
 			/>
 			<Button
 				disabled={!percentField.value}

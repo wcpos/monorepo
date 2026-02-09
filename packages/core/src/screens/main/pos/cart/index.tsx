@@ -37,7 +37,7 @@ export const OpenOrders = ({ isColumn = false }) => {
 	return (
 		<VStack className={`h-full gap-1 p-2 ${isColumn && 'pl-0'}`}>
 			<ErrorBoundary>
-				{currentOrder.isNew ? (
+				{(currentOrder as unknown as { isNew: boolean }).isNew ? (
 					<Card className="flex-1">
 						<CardHeader className="bg-card-header p-2">
 							<ErrorBoundary>

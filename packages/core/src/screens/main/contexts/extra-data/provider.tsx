@@ -3,9 +3,11 @@ import * as React from 'react';
 import { useAppState } from '../../../../contexts/app-state';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
-type ExtraDataContextProps = Record<string, never>;
+interface ExtraDataContextProps {
+	extraData: import('rxdb').RxState<Record<string, unknown>>;
+}
 
-export const ExtraDataContext = React.createContext<ExtraDataContextProps>(null);
+export const ExtraDataContext = React.createContext<ExtraDataContextProps | null>(null);
 
 /**
  * WooCommerce has a lot of extra data that we need, we'll bring it all together here.
@@ -15,7 +17,7 @@ export const ExtraDataContext = React.createContext<ExtraDataContextProps>(null)
  * @TODO - we should move country codes to here too, and currency codes
  * @TODO - there must be a smarter way to only fetch data on chnages
  */
-export const ExtraDataProvider = ({ children }) => {
+export const ExtraDataProvider = ({ children }: { children: React.ReactNode }) => {
 	const http = useRestHttpClient();
 	const { extraData } = useAppState();
 

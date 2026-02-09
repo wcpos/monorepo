@@ -33,9 +33,9 @@ const iconMap = {
  */
 export const CreatedVia = ({ row }: CellContext<{ document: OrderDocument }, 'created_via'>) => {
 	const order = row.original.document;
-	const createdVia = useObservableEagerState(order.created_via$);
-	const iconName = get(iconMap, [createdVia, 'name'], 'circleQuestion');
-	const iconType = get(iconMap, [createdVia, 'type'], 'muted');
+	const createdVia = useObservableEagerState(order.created_via$!);
+	const iconName = get(iconMap, [createdVia ?? '', 'name'], 'circleQuestion') as string;
+	const iconType = get(iconMap, [createdVia ?? '', 'type'], 'muted') as string;
 	const t = useT();
 
 	/**
@@ -60,7 +60,10 @@ export const CreatedVia = ({ row }: CellContext<{ document: OrderDocument }, 'cr
 	return (
 		<Tooltip delayDuration={150}>
 			<TooltipTrigger asChild>
-				<IconButton name={iconName} variant={iconType} />
+				<IconButton
+					name={iconName as import('@wcpos/components/icon').IconName}
+					variant={iconType as 'muted'}
+				/>
 			</TooltipTrigger>
 			<TooltipContent>
 				<Text>{label}</Text>

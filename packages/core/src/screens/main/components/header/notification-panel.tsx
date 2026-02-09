@@ -26,7 +26,7 @@ interface NotificationItemProps {
 function NotificationItem({ notification, onMarkAsRead }: NotificationItemProps) {
 	const isUnread = notification.status === 'unread';
 	// Use the i18n-aware date format hook (handles locale and auto-updates)
-	const timeAgo = useDateFormat(notification.createdAt || 0);
+	const timeAgo = useDateFormat(String(notification.createdAt ?? ''));
 
 	const handlePress = React.useCallback(() => {
 		if (isUnread) {
@@ -118,9 +118,9 @@ export function NotificationPanelContent() {
 					<VirtualizedList.List
 						data={notifications}
 						estimatedItemSize={ESTIMATED_ITEM_SIZE}
-						keyExtractor={(item) => item.id}
+						keyExtractor={(item: Notification) => item.id}
 						renderItem={renderNotificationItem}
-						style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0 }}
+						parentProps={{ style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 } }}
 					/>
 				</VirtualizedList.Root>
 			)}

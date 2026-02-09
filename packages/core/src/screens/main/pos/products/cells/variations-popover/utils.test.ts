@@ -746,7 +746,7 @@ describe('parseAttributes', () => {
 				{
 					document: {
 						attributes: [], // Empty = "any option" for ALL attributes
-					} as ProductVariationDocument,
+					} as unknown as ProductVariationDocument,
 				},
 			];
 
@@ -779,7 +779,7 @@ describe('parseAttributes', () => {
 				{
 					document: {
 						attributes: [],
-					} as ProductVariationDocument,
+					} as unknown as ProductVariationDocument,
 				},
 			];
 

@@ -6,7 +6,7 @@ import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
 import * as Slot from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import { Button } from '../button';
+import { Button, type ButtonProps } from '../button';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -120,7 +120,11 @@ function AlertDialogDescription({
 	);
 }
 
-function AlertDialogAction({ asChild, disabled, ...props }: AlertDialogPrimitive.ActionProps) {
+function AlertDialogAction({
+	asChild,
+	disabled,
+	...props
+}: AlertDialogPrimitive.ActionProps & Partial<ButtonProps>) {
 	return asChild ? (
 		<Slot.Pressable
 			aria-disabled={disabled ?? undefined}

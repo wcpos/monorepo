@@ -15,7 +15,8 @@ export function FormInput({
 	type = 'text',
 	ref,
 	...props
-}: FormItemProps<string | number> & React.ComponentProps<typeof Input>) {
+}: FormItemProps<string | number> &
+	Omit<Partial<React.ComponentProps<typeof Input>>, 'value' | 'onChangeText'>) {
 	const inputRef = React.useRef<React.ComponentRef<typeof Input>>(null);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 

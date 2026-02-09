@@ -37,7 +37,8 @@ export const VariationActions = ({
 	row,
 }: CellContext<{ document: ProductVariationDocument }, 'actions'>) => {
 	const variation = row.original.document;
-	const parent = row.getParentRow().document;
+	const parentRow = row.getParentRow()!;
+	const parent = (parentRow.original as { document: { id: number; name: string } }).document;
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const router = useRouter();
 	const pullDocument = usePullDocument();
@@ -82,8 +83,8 @@ export const VariationActions = ({
 						<DropdownMenuItem
 							onPress={() => {
 								pullDocument(
-									variation.id,
-									variation.collection,
+									variation.id!,
+									variation.collection as never,
 									`products/${parent.id}/variations`
 								);
 							}}

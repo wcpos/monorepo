@@ -35,8 +35,8 @@ export const Report = () => {
 	const t = useT();
 	const contentRef = React.useRef<View>(null);
 	const { store, wpCredentials } = useAppState();
-	const storeName = useObservableEagerState(store.name$);
-	const num_decimals = useObservableEagerState(store.price_num_decimals$);
+	const storeName = useObservableEagerState(store.name$) as string;
+	const num_decimals = useObservableEagerState(store.price_num_decimals$) as number;
 	const { selectedOrders, query } = useReports();
 
 	const { format: formatCurrency } = useCurrencyFormat();
@@ -63,18 +63,26 @@ export const Report = () => {
 	 * Get date range from query
 	 */
 	const selectedDateRange = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('date_created_gmt')))
+		query.rxQuery$.pipe(
+			map(
+				() => query.getSelector('date_created_gmt') as { $gte?: string; $lte?: string } | undefined
+			)
+		)
 	);
 
 	const reportPeriod = React.useMemo(() => {
-		const from = convertUTCStringToLocalDate(selectedDateRange.$gte);
-		const to = convertUTCStringToLocalDate(selectedDateRange.$lte);
+		const from = selectedDateRange?.$gte
+			? convertUTCStringToLocalDate(selectedDateRange.$gte)
+			: new Date();
+		const to = selectedDateRange?.$lte
+			? convertUTCStringToLocalDate(selectedDateRange.$lte)
+			: new Date();
 
 		return {
 			from: formatDate(from, 'yyyy-M-dd HH:mm:ss'),
 			to: formatDate(to, 'yyyy-M-dd HH:mm:ss'),
 		};
-	}, [formatDate, selectedDateRange.$gte, selectedDateRange.$lte]);
+	}, [formatDate, selectedDateRange?.$gte, selectedDateRange?.$lte]);
 
 	/**
 	 * Generate report timestamp
@@ -170,7 +178,7 @@ export const Report = () => {
 	 * - Native: uses html with expo-print
 	 */
 	const { print, isPrinting } = usePrint({
-		contentRef,
+		contentRef: contentRef as React.RefObject<Element | null>,
 		html,
 	});
 

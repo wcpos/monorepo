@@ -10,7 +10,7 @@ import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 import type { CellContext } from '@tanstack/react-table';
 
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 interface Props {
 	uuid: string;
 	item: FeeLine;
@@ -32,9 +32,15 @@ export const FeePrice = ({ row }: CellContext<Props, 'price'>) => {
 	return (
 		<HStack space="xs" className="justify-center">
 			{percent ? (
-				<NumberInput value={amount} onChangeText={(amount) => updateFeeLine(uuid, { amount })} />
+				<NumberInput
+					value={String(amount)}
+					onChangeText={(amount) => updateFeeLine(uuid, { amount: String(amount) })}
+				/>
 			) : (
-				<CurrencyInput value={amount} onChangeText={(amount) => updateFeeLine(uuid, { amount })} />
+				<CurrencyInput
+					value={String(amount)}
+					onChangeText={(amount) => updateFeeLine(uuid, { amount: String(amount) })}
+				/>
 			)}
 			{percent && <Icon name="percent" size="sm" />}
 		</HStack>

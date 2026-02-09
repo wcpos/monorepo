@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -57,7 +57,7 @@ interface ExtendedSiteData extends WpJsonResponse {
 	use_jwt_as_param: boolean;
 }
 
-type SiteConnectStatus =
+export type SiteConnectStatus =
 	| 'idle'
 	| 'discovering-url'
 	| 'discovering-api'
@@ -66,7 +66,7 @@ type SiteConnectStatus =
 	| 'success'
 	| 'error';
 
-interface SiteConnectProgress {
+export interface SiteConnectProgress {
 	step: number;
 	totalSteps: number;
 	message: string;
@@ -154,15 +154,15 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 					siteLogger.debug(`Added new site: ${siteData.name}`);
 					return newSite;
 				}
-			} catch (err) {
+			} catch (err: unknown) {
 				// Determine error type and code
-				let errorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
+				let errorCode: ErrorCode = ERROR_CODES.TRANSACTION_FAILED; // Default for DB operations
 
-				if (err.name === 'ValidationError') {
+				if (err instanceof Error && err.name === 'ValidationError') {
 					errorCode = ERROR_CODES.CONSTRAINT_VIOLATION;
-				} else if (err.name === 'RxError') {
+				} else if (err instanceof Error && err.name === 'RxError') {
 					// Check for specific RxDB error codes
-					switch (err.code) {
+					switch ((err as Error & { code?: string }).code) {
 						case 'RX1':
 							errorCode = ERROR_CODES.DUPLICATE_RECORD;
 							break;
@@ -177,11 +177,12 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 					}
 				}
 
-				siteLogger.error(`Failed to save site data: ${err.message}`, {
+				const errMessage = err instanceof Error ? err.message : String(err);
+				siteLogger.error(`Failed to save site data: ${errMessage}`, {
 					showToast: true,
 					context: {
 						errorCode,
-						error: err.message,
+						error: errMessage,
 					},
 				});
 

@@ -12,10 +12,10 @@ export function FormRadioGroup({
 	description,
 	value,
 	onChange,
-	onValueChange: _onValueChange,
 	customComponent: Component = RadioGroup,
 	...props
-}: FormItemProps<string> & React.ComponentProps<typeof RadioGroup>) {
+}: FormItemProps<string> &
+	Omit<Partial<React.ComponentProps<typeof RadioGroup>>, 'value' | 'onValueChange'>) {
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
 	return (

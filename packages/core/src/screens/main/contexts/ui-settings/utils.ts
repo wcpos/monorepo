@@ -55,7 +55,7 @@ export const patchState = async <T extends UISettingID>(
 	data: Partial<UISettingSchema<T>>
 ) => {
 	for (const key of Object.keys(data)) {
-		const value = data[key];
+		const value = (data as Record<string, unknown>)[key];
 
 		// Skip null/undefined values - RxState schema doesn't allow them
 		if (value === null || value === undefined) {
@@ -63,9 +63,10 @@ export const patchState = async <T extends UISettingID>(
 		}
 
 		const path = key.split('.');
-		const root = path.shift();
+		const root = path.shift()!;
 		const typedKey = root as keyof UISettingSchema<T>;
-		await state.set(typedKey, (old) => {
+		// @ts-expect-error: RxState.set path type is too narrow for dynamic keys
+		await state.set(typedKey, (old: Record<string, unknown>) => {
 			if (path.length > 0) {
 				return set(old, path, value);
 			} else {

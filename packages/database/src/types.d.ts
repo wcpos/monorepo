@@ -18,6 +18,12 @@ export interface FlexSearchInstance {
 declare module 'rxdb' {
 	interface RxCollection {
 		/**
+		 * Parse a WC REST API response, pruning and coercing data to match the schema.
+		 * Added by the parse-rest-response plugin.
+		 */
+		parseRestResponse(json: Record<string, unknown>): Record<string, unknown>;
+
+		/**
 		 * Initialize or retrieve a FlexSearch instance for a locale.
 		 * Returns null if collection has no searchFields configured.
 		 * Added by the search plugin.

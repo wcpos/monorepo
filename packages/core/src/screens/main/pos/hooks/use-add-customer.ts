@@ -13,7 +13,17 @@ import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type Customer = CustomerDocument | { id: number; billing?: object; shipping?: object };
+type Customer =
+	| CustomerDocument
+	| {
+			id: number;
+			billing?: object;
+			shipping?: object;
+			first_name?: string;
+			last_name?: string;
+			email?: string;
+			username?: string;
+	  };
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 
@@ -45,7 +55,8 @@ export const useAddCustomer = () => {
 	const addCustomer = React.useCallback(
 		async (customer: Customer) => {
 			// if RxDocument, get plain object
-			let data = isRxDocument(customer) ? (customer as CustomerDocument).toMutableJSON() : customer;
+			let data: Record<string, unknown> & { id?: number; billing?: object; shipping?: object } =
+				isRxDocument(customer) ? (customer as CustomerDocument).toMutableJSON() : customer;
 
 			// if id === 0 and no billing or shipping, use guest customer
 			const isGuest = data.id === 0 && !data.billing && !data.shipping;
@@ -55,13 +66,16 @@ export const useAddCustomer = () => {
 			const customerName =
 				data.id === 0
 					? t('common.guest')
-					: `${data.first_name || ''} ${data.last_name || ''}`.trim() ||
-						data.email ||
+					: `${(data as Record<string, unknown>).first_name || ''} ${(data as Record<string, unknown>).last_name || ''}`.trim() ||
+						(data as Record<string, unknown>).email ||
 						`#${data.id}`;
 
 			const result = await localPatch({
 				document: currentOrder,
-				data: transformCustomerJSONToOrderJSON(data, country),
+				data: transformCustomerJSONToOrderJSON(
+					data as unknown as CustomerDocument,
+					country as string
+				),
 			});
 
 			// Log customer assignment
@@ -69,7 +83,7 @@ export const useAddCustomer = () => {
 				saveToDb: true,
 				context: {
 					customerId: data.id,
-					customerEmail: data.email,
+					customerEmail: (data as Record<string, unknown>).email,
 					isGuest,
 				},
 			});

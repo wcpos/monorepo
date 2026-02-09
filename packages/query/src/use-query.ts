@@ -18,6 +18,9 @@ export interface QueryOptions {
 	hooks?: QueryHooks;
 	locale?: string;
 	endpoint?: string;
+	greedy?: boolean;
+	infiniteScroll?: boolean;
+	pageSize?: number;
 }
 
 /**

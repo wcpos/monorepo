@@ -101,7 +101,7 @@ export const parseAttributes = (
 					// Count hits that match this option (considering "any option" and selections)
 					let count = 0;
 					for (const hit of hits) {
-						if (hitMatchesOption(hit, attribute.id, option, selectedAttributes)) {
+						if (hitMatchesOption(hit, attribute.id ?? 0, option, selectedAttributes)) {
 							count++;
 						}
 					}

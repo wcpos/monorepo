@@ -4,6 +4,7 @@ import { useNavigationState } from '@react-navigation/native';
 import get from 'lodash/get';
 import { ObservableResource, useObservableState, useObservableSuspense } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
+import { of } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import {
@@ -44,12 +45,13 @@ export const Receipt = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
+	const links$ = order.links$ ?? of(undefined);
 	const receiptURL = useObservableState(
-		order.links$.pipe(map((links) => get(links, ['receipt', 0, 'href']))),
-		get(order, ['links', 'receipt', 0, 'href'])
+		links$.pipe(map((links) => get(links, ['receipt', 0, 'href']) as string | undefined)),
+		get(order, ['links', 'receipt', 0, 'href']) as string | undefined
 	);
 
-	const { print, isPrinting } = usePrintExternalURL({ externalURL: receiptURL });
+	const { print, isPrinting } = usePrintExternalURL({ externalURL: receiptURL ?? '' });
 
 	/**
 	 * Allow auto print for checkout
@@ -102,7 +104,13 @@ export const Receipt = ({ resource }: Props) => {
 				</ModalHeader>
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<ErrorBoundary>
-						<WebView ref={iframeRef} src={receiptURL} onLoad={handleLoad} className="flex-1" />
+						<WebView
+							ref={iframeRef as never}
+							src={receiptURL ?? ''}
+							onLoad={handleLoad}
+							onMessage={() => {}}
+							className="flex-1"
+						/>
 					</ErrorBoundary>
 				</ModalBody>
 				<ModalFooter>

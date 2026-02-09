@@ -13,5 +13,9 @@ export const EditOrderScreen = () => {
 
 	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
 
-	return <EditOrderModal resource={resource} />;
+	return (
+		<EditOrderModal
+			resource={resource as ObservableResource<import('@wcpos/database').OrderDocument>}
+		/>
+	);
 };

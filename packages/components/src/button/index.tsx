@@ -184,7 +184,13 @@ const Button = ({
 	 */
 	const renderIcon = (icon: IconName | React.ReactNode, position: 'left' | 'right') => {
 		if (typeof icon === 'string') {
-			return <Icon name={icon as IconName} variant={variant as IconProps['variant']} size={size as IconProps['size']} />;
+			return (
+				<Icon
+					name={icon as IconName}
+					variant={variant as IconProps['variant']}
+					size={size as IconProps['size']}
+				/>
+			);
 		}
 		return icon;
 	};
@@ -237,7 +243,10 @@ const Button = ({
 					leftIcon || rightIcon || loading ? (
 						<HStack className="max-w-full">
 							{loading ? (
-								<Loader variant={variant as React.ComponentProps<typeof Loader>['variant']} size={size as React.ComponentProps<typeof Loader>['size']} />
+								<Loader
+									variant={variant as React.ComponentProps<typeof Loader>['variant']}
+									size={size as React.ComponentProps<typeof Loader>['size']}
+								/>
 							) : (
 								leftIcon && renderIcon(leftIcon, 'left')
 							)}
@@ -309,7 +318,11 @@ const ButtonGroup = ({ children }: ButtonGroupProps) => {
 
 				return (
 					<React.Fragment key={index}>
-						{index > 0 && <ButtonGroupSeparator variant={button.props.variant as ButtonSeparatorProps['variant']} />}
+						{index > 0 && (
+							<ButtonGroupSeparator
+								variant={button.props.variant as ButtonSeparatorProps['variant']}
+							/>
+						)}
 						{React.cloneElement(button, {
 							className: classNames,
 						})}

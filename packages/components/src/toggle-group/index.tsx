@@ -27,7 +27,8 @@ const ToggleGroup = ({
 		>
 			<ToggleGroupContext.Provider value={{ variant, size }}>
 				{childrenArray.map((child, index) => {
-					if (!React.isValidElement<{ isFirstItem?: boolean; isLastItem?: boolean }>(child)) return child;
+					if (!React.isValidElement<{ isFirstItem?: boolean; isLastItem?: boolean }>(child))
+						return child;
 
 					const isFirstItem = index === 0;
 					const isLastItem = index === childrenArray.length - 1;
@@ -61,7 +62,7 @@ const ToggleGroupItem = ({
 	isLastItem,
 	...props
 }: ItemProps &
-	VariantProps<typeof toggleVariants> & { isFirstItem: boolean; isLastItem: boolean }) => {
+	VariantProps<typeof toggleVariants> & { isFirstItem?: boolean; isLastItem?: boolean }) => {
 	const context = useToggleGroupContext();
 	const { value } = ToggleGroupPrimitive.useRootContext();
 

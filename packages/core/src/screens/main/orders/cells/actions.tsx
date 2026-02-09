@@ -37,7 +37,11 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  * Helper function - @TODO move to utils
  */
-const upsertMetaData = (metaDataArray, key, value) => {
+const upsertMetaData = (
+	metaDataArray: { key?: string; value?: string; id?: number }[],
+	key: string,
+	value: string
+) => {
 	const index = metaDataArray.findIndex((item) => item.key === key);
 	if (index !== -1) {
 		metaDataArray[index].value = value;
@@ -58,7 +62,7 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
-	const orderHasID = useObservableEagerState(order.id$); // we need to update the menu with change to order.id
+	const orderHasID = useObservableEagerState(order.id$!); // we need to update the menu with change to order.id
 	const deleteDocument = useDeleteDocument();
 
 	/**
@@ -89,7 +93,7 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 			const latest = order.getLatest();
 
 			if (latest.id) {
-				await deleteDocument(latest.id, latest.collection);
+				await deleteDocument(latest.id, latest.collection as never);
 			}
 			await latest.remove();
 		} finally {
@@ -129,7 +133,7 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 								<Icon name="receipt" />
 								<Text>{t('common.receipt')}</Text>
 							</DropdownMenuItem>
-							<DropdownMenuItem onPress={() => pullDocument(order.id, order.collection)}>
+							<DropdownMenuItem onPress={() => pullDocument(order.id!, order.collection as never)}>
 								<Icon name="arrowRotateRight" />
 								<Text>{t('common.sync')}</Text>
 							</DropdownMenuItem>

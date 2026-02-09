@@ -13,7 +13,7 @@ import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 import type { CellContext } from '@tanstack/react-table';
 
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 interface Props {
 	uuid: string;
 	item: FeeLine;
@@ -33,7 +33,7 @@ export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
 	 */
 	const metaData = React.useMemo(
 		() =>
-			item.meta_data.filter((meta) => {
+			(item.meta_data ?? []).filter((meta) => {
 				if (meta.key) {
 					return !meta.key.startsWith('_');
 				}
@@ -49,7 +49,10 @@ export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
 		<VStack className="w-full">
 			<HStack className="gap-0">
 				<View className="flex-1">
-					<EditableName value={item.name} onChangeText={(name) => updateFeeLine(uuid, { name })} />
+					<EditableName
+						value={item.name ?? undefined}
+						onChangeText={(name) => updateFeeLine(uuid, { name })}
+					/>
 				</View>
 				<EditCartItemButton title={t('common.edit_2', { name: item.name })}>
 					<EditFeeLine uuid={uuid} item={item} />
@@ -60,7 +63,7 @@ export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
 				<View className="grid grid-cols-2 gap-1 p-2">
 					{metaData.map((meta) => {
 						return (
-							<React.Fragment key={meta.id || meta.display_key || meta.key}>
+							<React.Fragment key={meta.id || meta.key}>
 								<Text className="text-sm">{`${meta.key}:`}</Text>
 								<Text className="text-sm">{meta.value}</Text>
 							</React.Fragment>

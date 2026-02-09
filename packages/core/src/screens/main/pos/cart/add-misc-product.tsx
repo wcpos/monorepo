@@ -26,6 +26,8 @@ const formSchema = z.object({
 	tax_class: z.string().optional(),
 });
 
+type FormValues = z.infer<typeof formSchema>;
+
 /**
  *
  */
@@ -37,8 +39,8 @@ export const AddMiscProduct = () => {
 	/**
 	 *
 	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+	const form = useForm<FormValues, unknown, FormValues>({
+		resolver: zodResolver(formSchema as never) as never,
 		defaultValues: {
 			name: '',
 			price: '0',
@@ -52,7 +54,7 @@ export const AddMiscProduct = () => {
 	 * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
 	 */
 	const handleAdd = React.useCallback(
-		(data: z.infer<typeof formSchema>) => {
+		(data: FormValues) => {
 			const { name, price, sku, tax_status, tax_class } = data;
 			addProduct({
 				id: 0,
@@ -116,12 +118,14 @@ export const AddMiscProduct = () => {
 					<FormField
 						control={form.control}
 						name="tax_class"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									customComponent={TaxClassSelect}
 									label={t('common.tax_class')}
-									{...field}
+									value={value ?? ''}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}

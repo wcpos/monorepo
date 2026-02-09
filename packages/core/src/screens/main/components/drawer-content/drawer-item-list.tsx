@@ -33,8 +33,16 @@ export default function DrawerItemList({
 		return (
 			<DrawerItem
 				key={route.key}
-				label={drawerLabel !== undefined ? drawerLabel : title !== undefined ? title : route.name}
-				icon={drawerIcon}
+				label={
+					(drawerLabel !== undefined ? drawerLabel : title !== undefined ? title : route.name) as
+						| string
+						| ((props: { focused?: boolean; color?: string }) => React.ReactNode)
+				}
+				icon={
+					drawerIcon as
+						| ((props: { focused?: boolean; size?: number; color?: string }) => React.ReactNode)
+						| undefined
+				}
 				focused={focused}
 				activeTintColor={drawerActiveTintColor}
 				inactiveTintColor={drawerInactiveTintColor}

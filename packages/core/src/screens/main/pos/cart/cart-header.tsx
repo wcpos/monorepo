@@ -24,14 +24,14 @@ export const CartHeader = () => {
 	const { addCustomer } = useAddCustomer();
 	const [showCustomerSelect, setShowCustomerSelect] = React.useState(false);
 	const t = useT();
-	const triggerRef = React.useRef(null);
+	const triggerRef = React.useRef<{ open: () => void } | null>(null);
 	const { isPro } = useLicense();
 
 	/**
 	 *
 	 */
 	const handleSelectCustomer = React.useCallback(
-		async ({ item: customer }) => {
+		async ({ item: customer }: { item: import('@wcpos/database').CustomerDocument }) => {
 			if (customer) {
 				await addCustomer(customer);
 			}
@@ -57,7 +57,7 @@ export const CartHeader = () => {
 	 * But! If we go back to the customer pill on select, the previous customer will flash before the new one is set.
 	 * So we delay the close handler by 10ms to allow the new customer to be set before hiding the combobox.
 	 */
-	const delayedCloseHandler = React.useCallback((opened) => {
+	const delayedCloseHandler = React.useCallback((opened: boolean) => {
 		if (!opened) {
 			setTimeout(() => {
 				setShowCustomerSelect(false);
@@ -74,7 +74,15 @@ export const CartHeader = () => {
 				<Text className="font-bold">{t('common.customer')}:</Text>
 				<ErrorBoundary>
 					{showCustomerSelect ? (
-						<Combobox onValueChange={handleSelectCustomer} onOpenChange={delayedCloseHandler}>
+						<Combobox
+							onValueChange={
+								handleSelectCustomer as unknown as (
+									option: import('@wcpos/components/combobox/types').Option | undefined
+								) => void
+							}
+							onOpenChange={delayedCloseHandler}
+						>
+							{/* @ts-expect-error: ComboboxTrigger ref type is more specific than our ref with open() method */}
 							<ComboboxTrigger ref={triggerRef} asChild>
 								<ButtonPill size="xs" leftIcon="user" variant="muted">
 									<ButtonText>{t('common.select_customer')}</ButtonText>

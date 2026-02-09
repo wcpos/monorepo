@@ -42,9 +42,9 @@ const formSchema = z.object({
 export const EditCartCustomerForm = () => {
 	const t = useT();
 	const { currentOrder } = useCurrentOrder();
-	const customerID = useObservableEagerState(currentOrder.customer_id$);
-	const billingProxy = useObservableEagerState(currentOrder.billing$);
-	const shippingProxy = useObservableEagerState(currentOrder.shipping$);
+	const customerID = useObservableEagerState(currentOrder.customer_id$!);
+	const billingProxy = useObservableEagerState(currentOrder.billing$!);
+	const shippingProxy = useObservableEagerState(currentOrder.shipping$!);
 	const billing = React.useMemo(() => JSON.parse(JSON.stringify(billingProxy)), [billingProxy]);
 	const shipping = React.useMemo(() => JSON.parse(JSON.stringify(shippingProxy)), [shippingProxy]);
 	const { localPatch } = useLocalMutation();
@@ -58,15 +58,17 @@ export const EditCartCustomerForm = () => {
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
 	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+	type FormValues = z.infer<typeof formSchema>;
+
+	const form = useForm<FormValues, unknown, FormValues>({
+		resolver: zodResolver(formSchema as never) as never,
 		values: { billing, shipping },
 	});
 
 	/**
 	 *
 	 */
-	const handleSaveToOrder = async (data) => {
+	const handleSaveToOrder = async (data: FormValues) => {
 		await localPatch({
 			document: currentOrder,
 			data: {
@@ -80,7 +82,7 @@ export const EditCartCustomerForm = () => {
 	/**
 	 * We need to get the customer document and patch it with the new address
 	 */
-	const handleSaveToOrderAndToCustomer = async (data) => {
+	const handleSaveToOrderAndToCustomer = async (data: FormValues) => {
 		await handleSaveToOrder(data);
 		const customer = await customerCollection.findOne({ selector: { id: customerID } }).exec();
 		if (!customer) {
@@ -177,10 +179,12 @@ export const EditCartCustomerForm = () => {
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.close')}</DialogClose>
 					{customerID !== 0 && (
+						// @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps
 						<DialogAction onPress={onSaveToOrderAndCustomer} loading={loading}>
 							{t('pos_cart.save_to_order_customer')}
 						</DialogAction>
 					)}
+					{/* @ts-expect-error: loading prop passes through ...props to Button but isn't in SlottablePressableProps */}
 					<DialogAction onPress={onSaveToOrder} loading={loading}>
 						{t('pos_cart.save_to_order')}
 					</DialogAction>

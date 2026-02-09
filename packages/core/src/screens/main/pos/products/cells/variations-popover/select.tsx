@@ -20,10 +20,21 @@ import {
 } from '@wcpos/components/select';
 
 import { useT } from '../../../../../../contexts/translations';
+
+interface VariationSelectProps {
+	attribute: {
+		id?: number;
+		name?: string;
+		options?: string[];
+	};
+	onSelect: (attr: { id?: number; name?: string; option: string }) => void;
+	selected?: string;
+}
+
 /**
  *
  */
-const VariationSelect = ({ attribute, onSelect, selected }) => {
+const VariationSelect = ({ attribute, onSelect, selected }: VariationSelectProps) => {
 	const t = useT();
 	const options = attribute?.options || [];
 
@@ -34,16 +45,18 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 	if (options.length <= 10) {
 		return (
 			<Select
-				value={{ value: selected, label: selected }}
-				onValueChange={({ value }) =>
-					onSelect({ id: attribute.id, name: attribute.name, option: value })
-				}
+				value={selected ? { value: selected, label: selected } : undefined}
+				onValueChange={(option) => {
+					if (option) {
+						onSelect({ id: attribute.id, name: attribute.name, option: option.value });
+					}
+				}}
 			>
 				<SelectTrigger>
 					<SelectValue placeholder={t('pos_products.select_an_option')} />
 				</SelectTrigger>
 				<SelectContent>
-					{options.map((option) => (
+					{options.map((option: string) => (
 						<SelectItem key={option} label={option} value={option} />
 					))}
 				</SelectContent>
@@ -51,7 +64,7 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 		);
 	}
 
-	const data = options.map((option) => {
+	const data = options.map((option: string) => {
 		return {
 			value: option,
 			label: option,
@@ -63,10 +76,12 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 	 */
 	return (
 		<Combobox
-			value={{ value: selected, label: selected }}
-			onValueChange={({ value }) =>
-				onSelect({ id: attribute.id, name: attribute.name, option: value })
-			}
+			value={selected ? { value: selected, label: selected } : undefined}
+			onValueChange={(option) => {
+				if (option) {
+					onSelect({ id: attribute.id, name: attribute.name, option: String(option.value) });
+				}
+			}}
 		>
 			<ComboboxTrigger>
 				<ComboboxValue placeholder={t('pos_products.select_an_option')} />
@@ -76,8 +91,8 @@ const VariationSelect = ({ attribute, onSelect, selected }) => {
 				<ComboboxList
 					data={data}
 					renderItem={({ item }) => (
-						<ComboboxItem value={item.value} label={item.label}>
-							<ComboboxItemText>{item.label}</ComboboxItemText>
+						<ComboboxItem value={String(item.value)} label={item.label} item={item}>
+							<ComboboxItemText />
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}

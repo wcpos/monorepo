@@ -9,6 +9,7 @@ import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/
 import { Form, FormCombobox, FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
+import type { OrderDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../../contexts/translations';
 import { CurrencySelect } from '../../../../components/currency-select';
@@ -30,7 +31,15 @@ const formSchema = z.object({
 /**
  *
  */
-export const EditOrderMetaForm = ({ order, formData }) => {
+type FormValues = z.infer<typeof formSchema>;
+
+export const EditOrderMetaForm = ({
+	order,
+	formData,
+}: {
+	order: OrderDocument;
+	formData: FormValues;
+}) => {
 	const t = useT();
 	const { localPatch } = useLocalMutation();
 	const { onOpenChange } = useRootContext();
@@ -39,8 +48,8 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
 	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+	const form = useForm<FormValues>({
+		resolver: zodResolver(formSchema as never) as never,
 		values: formData,
 	});
 
@@ -48,10 +57,10 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 	 * Save to local db
 	 */
 	const handleSave = React.useCallback(
-		async (data) => {
+		async (data: FormValues) => {
 			await localPatch({
 				document: order,
-				data,
+				data: data as Partial<OrderDocument>,
 			});
 			onOpenChange(false);
 		},
@@ -74,12 +83,14 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 					<FormField
 						control={form.control}
 						name="currency"
-						render={({ field }) => (
+						render={({ field: { onChange, value, ...rest } }) => (
 							<View className="flex-1">
 								<FormCombobox
 									customComponent={CurrencySelect}
 									label={t('common.currency')}
-									{...field}
+									onChange={onChange}
+									value={value ?? ''}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -87,9 +98,14 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 					<FormField
 						control={form.control}
 						name="transaction_id"
-						render={({ field }) => (
+						render={({ field: { onChange, value, ...rest } }) => (
 							<View className="flex-1">
-								<FormInput label={t('common.transaction_id')} {...field} />
+								<FormInput
+									label={t('common.transaction_id')}
+									onChange={onChange}
+									value={value ?? ''}
+									{...rest}
+								/>
 							</View>
 						)}
 					/>

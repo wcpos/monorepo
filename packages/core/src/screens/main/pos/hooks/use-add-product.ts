@@ -62,13 +62,13 @@ export const useAddProduct = () => {
 			}
 
 			// check if product is already in order, if so increment quantity
-			if (!currentOrder.isNew && product.id !== 0) {
+			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && product.id !== 0) {
 				const lineItems = currentOrder.getLatest().line_items ?? [];
-				const matches = findByProductVariationID(lineItems, product.id);
-				if (matches.length === 1) {
+				const matches = findByProductVariationID(lineItems, product.id ?? 0);
+				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await updateLineItem(uuid, { quantity: matches[0].quantity + 1 });
+						success = await updateLineItem(uuid, { quantity: (matches[0].quantity ?? 0) + 1 });
 					}
 				}
 			}
@@ -76,7 +76,7 @@ export const useAddProduct = () => {
 			// if product is not in order, add it
 			if (!success) {
 				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
-				let newLineItem = convertProductToLineItemWithoutTax(product, keys);
+				let newLineItem = convertProductToLineItemWithoutTax(product as ProductDocument, keys);
 				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
 				success = await addItemToOrder('line_items', newLineItem);
 			}

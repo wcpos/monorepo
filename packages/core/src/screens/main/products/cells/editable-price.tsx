@@ -21,7 +21,17 @@ export const EditablePrice = ({
 	'sale_price' | 'regular_price'
 >) => {
 	const item = row.original.document;
-	const price = useObservableEagerState(item[`${column.id}$`]) as string;
+	const price = useObservableEagerState(
+		(item as unknown as Record<string, unknown>)[`${column.id}$`] as import('rxjs').Observable<
+			string | undefined
+		>
+	) as string;
+	const meta = table.options.meta as unknown as {
+		onChange: (arg: {
+			document: ProductDocument | ProductVariationDocument;
+			changes: Record<string, unknown>;
+		}) => void;
+	};
 
 	/**
 	 *
@@ -30,7 +40,7 @@ export const EditablePrice = ({
 		<CurrencyInput
 			value={price}
 			onChangeText={(price) =>
-				table.options.meta.onChange({ document: item, changes: { [column.id]: String(price) } })
+				meta.onChange({ document: item, changes: { [column.id]: String(price) } })
 			}
 			disabled={column.id === 'sale_price' && !item.on_sale}
 		/>

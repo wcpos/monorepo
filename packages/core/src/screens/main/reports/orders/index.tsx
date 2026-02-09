@@ -41,26 +41,30 @@ const cells = {
 	number: OrderNumber,
 };
 
-function renderCell(columnKey: string, info: any) {
-	const Renderer = cells[columnKey];
+function renderCell(columnKey: string, info: Record<string, unknown>) {
+	const Renderer = (
+		cells as unknown as Record<string, React.ComponentType<Record<string, unknown>>>
+	)[columnKey];
 	if (Renderer) {
 		return <Renderer {...info} />;
 	}
 
-	return <TextCell {...info} />;
+	return <TextCell {...(info as unknown as React.ComponentProps<typeof TextCell>)} />;
 }
 
-const headers = {
-	select: TableHeaderSelect,
+const headers: Record<string, React.ComponentType<Record<string, unknown>>> = {
+	select: TableHeaderSelect as unknown as React.ComponentType<Record<string, unknown>>,
 };
 
-const renderHeader = (props) => {
+const renderHeader = (props: Record<string, unknown> & { column: { id: string } }) => {
 	const Renderer = headers[props.column.id];
 	if (Renderer) {
 		return <Renderer {...props} />;
 	}
 
-	return <DataTableHeader {...props} />;
+	return (
+		<DataTableHeader {...(props as unknown as React.ComponentProps<typeof DataTableHeader>)} />
+	);
 };
 
 /**
@@ -76,7 +80,7 @@ export const Orders = () => {
 	const selectionState = React.useMemo<RowSelectionState>(() => {
 		const state: RowSelectionState = {};
 		allOrders.forEach((order) => {
-			if (!unselectedRowIds[order.uuid]) {
+			if (order.uuid && !unselectedRowIds[order.uuid]) {
 				state[order.uuid] = true;
 			}
 		});
@@ -94,7 +98,7 @@ export const Orders = () => {
 				// Compute the new unselectedRowIds
 				const newUnselectedRowIds: Record<string, true> = {};
 				allOrders.forEach((order) => {
-					if (!newSelectionState[order.uuid]) {
+					if (order.uuid && !newSelectionState[order.uuid]) {
 						newUnselectedRowIds[order.uuid] = true;
 					}
 				});
@@ -113,7 +117,7 @@ export const Orders = () => {
 			setUnselectedRowIds((prev) => {
 				const newUnselectedRowIds: Record<string, true> = {};
 				allOrders.forEach((order) => {
-					newUnselectedRowIds[order.uuid] = true;
+					if (order.uuid) newUnselectedRowIds[order.uuid] = true;
 				});
 				return newUnselectedRowIds;
 			});
@@ -170,7 +174,6 @@ export const Orders = () => {
 								renderHeader={renderHeader}
 								noDataMessage={t('common.no_orders_found')}
 								estimatedItemSize={100}
-								tableState={{ rowSelection: selectionState }}
 								tableConfig={tableConfig}
 							/>
 						</Suspense>

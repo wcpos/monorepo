@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import allCountries from './countries.json';
 
-export const CountriesContext = React.createContext<typeof allCountries>(null);
+export const CountriesContext = React.createContext<typeof allCountries | null>(null);
 
 interface CountriesProviderProps {
 	children: React.ReactNode;

@@ -124,14 +124,26 @@ function renderCell(columnKey: string, info: any) {
 /**
  *
  */
-function variationRenderCell({ column }) {
+function variationRenderCell({ column }: { column: { id: string } }) {
 	return get(variationCells, column.id);
 }
 
 /**
  *
  */
-function renderItem({ item, index, table }) {
+function renderItem({
+	item,
+	index,
+	table,
+}: {
+	item: import('@tanstack/react-table').Row<{
+		document: import('@wcpos/database').ProductDocument;
+	}>;
+	index: number;
+	table: import('@tanstack/react-table').Table<{
+		document: import('@wcpos/database').ProductDocument;
+	}>;
+}) {
 	if (item.original.document.type === 'variable') {
 		return <VariableProductRow item={item} index={index} table={table} />;
 	}
@@ -141,9 +153,9 @@ function renderItem({ item, index, table }) {
 /**
  *
  */
-const TableFooter = (props) => {
+const TableFooter = (props: Record<string, unknown>) => {
 	return (
-		<DataTableFooter {...props}>
+		<DataTableFooter {...(props as unknown as React.ComponentProps<typeof DataTableFooter>)}>
 			<TaxBasedOn />
 		</DataTableFooter>
 	);
@@ -170,7 +182,7 @@ export function Products() {
 			queryKeys: ['products', { target: 'page', type: 'relational' }],
 			collectionName: 'products',
 			initialParams: {
-				sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
+				sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection as 'asc' | 'desc' }],
 			},
 			infiniteScroll: true,
 		},
@@ -188,7 +200,10 @@ export function Products() {
 	/**
 	 * Barcode
 	 */
-	useBarcode(query, querySearchInputRef);
+	useBarcode(
+		query! as import('@wcpos/query').RelationalQuery<import('@wcpos/database').ProductCollection>,
+		querySearchInputRef as React.RefObject<{ setSearch: (search: string) => void } | null>
+	);
 
 	/**
 	 * Table config
@@ -202,9 +217,12 @@ export function Products() {
 	const setRowExpanded = React.useCallback(
 		(rowId: string, expanded: boolean) => {
 			if (expanded) {
-				expandedRef.current = { ...expandedRef.current, [rowId]: true };
+				expandedRef.current = {
+					...(expandedRef.current as Record<string, boolean>),
+					[rowId]: true,
+				};
 			} else {
-				expandedRef.current = omit(expandedRef.current, rowId);
+				expandedRef.current = omit(expandedRef.current as Record<string, boolean>, rowId);
 			}
 		},
 		[expandedRef]
@@ -213,16 +231,28 @@ export function Products() {
 	const tableConfig = React.useMemo(
 		() => ({
 			getExpandedRowModel: getExpandedRowModel(),
-			onExpandedChange: (updater) => {
+			onExpandedChange: (updater: ExpandedState | ((old: ExpandedState) => ExpandedState)) => {
 				const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
 				expandedRef.current = value;
 			},
-			getRowCanExpand: (row) => row.original.document.type === 'variable',
+			getRowCanExpand: (
+				row: import('@tanstack/react-table').Row<{
+					document: import('@wcpos/database').ProductDocument;
+				}>
+			) => row.original.document.type === 'variable',
 			meta: {
 				expandedRef,
 				expanded$,
 				setRowExpanded,
-				onChange: ({ document, changes }) => {
+				onChange: ({
+					document,
+					changes,
+				}: {
+					document:
+						| import('@wcpos/database').ProductDocument
+						| import('@wcpos/database').ProductVariationDocument;
+					changes: Record<string, unknown>;
+				}) => {
 					if (document.type === 'variation') {
 						variationsPatch({ document, data: changes });
 					} else {
@@ -252,7 +282,7 @@ export function Products() {
 							<ErrorBoundary>
 								<QuerySearchInput
 									ref={querySearchInputRef}
-									query={query}
+									query={query!}
 									placeholder={t('common.search_products')}
 									className="flex-1"
 								/>
@@ -267,7 +297,7 @@ export function Products() {
 							</UISettingsDialog>
 						</HStack>
 						<ErrorBoundary>
-							<FilterBar query={query} />
+							<FilterBar query={query!} />
 						</ErrorBoundary>
 					</VStack>
 				</CardHeader>
@@ -276,7 +306,7 @@ export function Products() {
 						<Suspense>
 							<DataTable<ProductDocument>
 								id="products"
-								query={query}
+								query={query!}
 								renderItem={renderItem}
 								renderCell={renderCell}
 								noDataMessage={t('common.no_products_found')}

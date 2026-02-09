@@ -36,10 +36,10 @@ export const EditCustomerForm = ({ customer }: Props) => {
 	 *
 	 */
 	const form = useForm<z.infer<typeof customerFormSchema>>({
-		resolver: zodResolver(customerFormSchema),
+		resolver: zodResolver(customerFormSchema as never) as never,
 		defaultValues: {
-			...customer.toJSON(),
-		},
+			...(customer.toJSON() as Record<string, unknown>),
+		} as z.infer<typeof customerFormSchema>,
 	});
 
 	/**
@@ -49,23 +49,28 @@ export const EditCustomerForm = ({ customer }: Props) => {
 	 * order has been reopened will be lost. We need to push the whole order object.
 	 */
 	const handleSave = React.useCallback(
-		async (data) => {
+		async (data: z.infer<typeof customerFormSchema>) => {
 			setLoading(true);
 			try {
 				await localPatch({
 					document: customer,
-					data,
+					data: data as Partial<import('@wcpos/database').CustomerDocument>,
 				});
-				await pushDocument(customer).then((savedDoc) => {
+				await pushDocument(customer).then((savedDoc: unknown) => {
 					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(t('common.saved', { name: format(savedDoc) }), {
-							showToast: true,
-							saveToDb: true,
-							context: {
-								customerId: savedDoc.id,
-								customerName: format(savedDoc),
-							},
-						});
+						mutationLogger.success(
+							t('common.saved', {
+								name: format(savedDoc as import('@wcpos/database').CustomerDocument),
+							}),
+							{
+								showToast: true,
+								saveToDb: true,
+								context: {
+									customerId: (savedDoc as { id?: number }).id,
+									customerName: format(savedDoc as import('@wcpos/database').CustomerDocument),
+								},
+							}
+						);
 					}
 				});
 			} catch (error) {

@@ -17,11 +17,11 @@ export const TableRowSelect = ({ row, table }: CellContext<OrderDocument, boolea
 	return (
 		<Tooltip>
 			<TooltipTrigger asChild>
-				<View role="div">
+				<View role="none">
 					<Checkbox
 						checked={row.getIsSelected()}
 						disabled={!row.getCanSelect()}
-						onCheckedChange={row.toggleSelected}
+						onCheckedChange={(checked) => row.toggleSelected(!!checked)}
 					/>
 				</View>
 			</TooltipTrigger>

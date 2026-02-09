@@ -26,7 +26,7 @@ export const ReportsScreen = () => {
 	const { wpCredentials, store } = useAppState();
 	const today = React.useMemo(() => new Date(), []);
 
-	const selector = {
+	const selector: Record<string, unknown> = {
 		status: 'completed',
 		date_created_gmt: {
 			$gte: convertLocalDateToUTCString(startOfDay(today)),
@@ -36,7 +36,7 @@ export const ReportsScreen = () => {
 	};
 
 	if (store?.id) {
-		selector.$and.push({
+		(selector.$and as Record<string, unknown>[]).push({
 			meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } },
 		});
 	} else {
@@ -50,7 +50,7 @@ export const ReportsScreen = () => {
 		queryKeys: ['orders', 'reports'],
 		collectionName: 'orders',
 		initialParams: {
-			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
+			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection as 'asc' | 'desc' }],
 			selector,
 		},
 		greedy: true,
@@ -59,7 +59,7 @@ export const ReportsScreen = () => {
 	return (
 		<ErrorBoundary>
 			<Suspense>
-				<ReportsProvider query={query}>
+				<ReportsProvider query={query!}>
 					<Reports />
 				</ReportsProvider>
 			</Suspense>

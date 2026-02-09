@@ -18,7 +18,8 @@ export function FormSelect({
 	value,
 	customComponent: Component = Select,
 	...props
-}: FormItemProps<string> & React.ComponentProps<typeof Select>) {
+}: FormItemProps<string> &
+	Omit<Partial<React.ComponentProps<typeof Select>>, 'value' | 'onValueChange'>) {
 	const [open, setOpen] = React.useState(false);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 

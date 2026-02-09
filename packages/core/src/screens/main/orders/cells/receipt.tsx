@@ -18,7 +18,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  */
 export const Receipt = ({ row }: CellContext<{ document: OrderDocument }, any>) => {
 	const order = row.original.document;
-	const orderHasID = !!useObservableEagerState(order.id$);
+	const orderHasID = !!useObservableEagerState(order.id$!);
 	const t = useT();
 	const router = useRouter();
 

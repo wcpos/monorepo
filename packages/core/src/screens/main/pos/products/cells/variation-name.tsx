@@ -12,12 +12,13 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 /**
  *
  */
-export const ProductVariationName = ({
-	row,
-	column,
-}: CellContext<{ document: ProductVariationDocument }, 'name'>) => {
+export const ProductVariationName = (
+	props: CellContext<{ document: ProductVariationDocument }, 'name'>
+) => {
+	const { row, column } = props;
 	const variation = row.original.document;
-	const { show } = column.columnDef.meta;
+	const meta = column.columnDef.meta;
+	const show = meta?.show ?? (() => false);
 
 	/**
 	 * Sometimes the product name from WooCommerce is encoded in html entities
@@ -29,7 +30,8 @@ export const ProductVariationName = ({
 			</Text>
 			{show('sku') && <Text className="text-sm">{variation.sku}</Text>}
 			{show('barcode') && <Text className="text-sm">{variation.barcode}</Text>}
-			{show('stock_quantity') && <StockQuantity row={row} className="text-sm" withText />}
+			{/* @ts-expect-error: CellContext column type differs but StockQuantity only uses row */}
+			{show('stock_quantity') && <StockQuantity {...props} className="text-sm" withText />}
 		</VStack>
 	);
 };

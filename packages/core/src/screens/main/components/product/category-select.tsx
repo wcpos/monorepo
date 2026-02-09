@@ -20,14 +20,18 @@ import { useQuery } from '@wcpos/query';
 /**
  *
  */
-const CategoryList = ({ query }) => {
-	const result = useObservableSuspense(query.resource);
+const CategoryList = ({ query }: { query: ReturnType<typeof useQuery> }) => {
+	const result = useObservableSuspense(query!.resource) as {
+		hits: { id: string; document: { id?: number; name?: string } }[];
+	};
 	const t = useT();
 
-	const data = result.hits.map(({ id, document }) => ({
-		value: String(document.id),
-		label: document.name,
-	}));
+	const data = result.hits.map(
+		({ id, document }: { id: string; document: { id?: number; name?: string } }) => ({
+			value: String(document.id),
+			label: document.name ?? '',
+		})
+	);
 
 	return (
 		<ComboboxList
@@ -38,8 +42,8 @@ const CategoryList = ({ query }) => {
 				}
 			}}
 			renderItem={({ item }) => (
-				<ComboboxItem value={item.value} label={item.label}>
-					<ComboboxItemText>{item.label}</ComboboxItemText>
+				<ComboboxItem value={String(item.value)} label={item.label} item={item}>
+					<ComboboxItemText />
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
@@ -74,7 +78,7 @@ export const CategorySearch = () => {
 	const onSearch = React.useCallback(
 		(value: string) => {
 			setSearch(value);
-			query.debouncedSearch(value);
+			query?.debouncedSearch(value);
 		},
 		[query]
 	);
@@ -83,7 +87,7 @@ export const CategorySearch = () => {
 	 * Clear the search when unmounting
 	 */
 	React.useEffect(() => {
-		return () => query.search('');
+		return () => query?.search('');
 	}, [query]);
 
 	/**
@@ -94,6 +98,7 @@ export const CategorySearch = () => {
 			<ComboboxInput
 				placeholder={t('common.search_categories')}
 				value={search}
+				// @ts-expect-error: onChangeText is passed through to Input via spread
 				onChangeText={onSearch}
 			/>
 			<Suspense>
@@ -106,7 +111,11 @@ export const CategorySearch = () => {
 /**
  *
  */
-export const CategorySelect = ({ onValueChange }) => {
+export const CategorySelect = ({
+	onValueChange,
+}: {
+	onValueChange?: (option: import('@wcpos/components/combobox').Option | undefined) => void;
+}) => {
 	const t = useT();
 
 	/**

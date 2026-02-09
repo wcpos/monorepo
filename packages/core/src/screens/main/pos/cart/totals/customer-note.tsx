@@ -21,7 +21,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
 export const CustomerNote = () => {
 	const [isEditing, setIsEditing] = React.useState(false);
 	const { currentOrder } = useCurrentOrder();
-	const note = useObservableEagerState(currentOrder.customer_note$);
+	const note = useObservableEagerState(currentOrder.customer_note$!);
 	const [value, setValue] = React.useState(note);
 	const t = useT();
 	const { localPatch } = useLocalMutation();
@@ -39,7 +39,7 @@ export const CustomerNote = () => {
 	const handleSaveNote = React.useCallback(() => {
 		localPatch({
 			document: currentOrder,
-			data: { customer_note: value.replace(/^\s+|\s+$/g, '').trim() },
+			data: { customer_note: (value ?? '').replace(/^\s+|\s+$/g, '').trim() },
 		});
 		setIsEditing(false);
 	}, [currentOrder, localPatch, value]);

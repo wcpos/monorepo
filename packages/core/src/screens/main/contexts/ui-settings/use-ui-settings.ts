@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { UISettingsContext } from './provider';
 import { UISettingID, UISettingSchema, UISettingState } from './utils';
@@ -25,7 +25,9 @@ export const useUISettings = <T extends UISettingID>(id: T) => {
 	 * Get UI Settings for the specified ID
 	 * NOTE: This will throw a Promise if the observable hasn't emitted yet (Suspense)
 	 */
-	const uiSettings = useObservableSuspense(resources[id]) as UISettingState<T>;
+	const uiSettings = useObservableSuspense(
+		resources[id] as unknown as ObservableResource<UISettingState<T>>
+	) as UISettingState<T>;
 
 	return {
 		uiSettings,

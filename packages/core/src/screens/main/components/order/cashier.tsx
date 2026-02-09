@@ -20,14 +20,16 @@ export const Cashier = ({ table, row }: CellContext<{ document: OrderDocument },
 	const order = row.original.document;
 	const { collection } = useCollection('customers');
 	const cashierID = useObservableEagerState(
-		order.meta_data$.pipe(
-			map((meta) => meta.find((m) => m.key === '_pos_user')),
-			map((m) => m?.value)
+		order.meta_data$!.pipe(
+			map((meta) => meta?.find((m: { key?: string; value?: string }) => m.key === '_pos_user')),
+			map((m: { key?: string; value?: string } | undefined) => m?.value)
 		)
 	);
 	const [cashierName, setCashierName] = React.useState('');
 	const { format } = useCustomerNameFormat();
-	const { query } = table.options.meta;
+	const query = (
+		table.options.meta as unknown as { query: ReturnType<typeof import('@wcpos/query').useQuery> }
+	)?.query;
 	const t = useT();
 
 	/**
@@ -35,7 +37,7 @@ export const Cashier = ({ table, row }: CellContext<{ document: OrderDocument },
 	 * But we'll just hack it for the moment
 	 */
 	React.useEffect(() => {
-		async function fetchUser(id) {
+		async function fetchUser(id: number) {
 			if (!id) {
 				setCashierName(t('common.unknown'));
 				return;
@@ -65,7 +67,7 @@ export const Cashier = ({ table, row }: CellContext<{ document: OrderDocument },
 			size="xs"
 			onPress={() =>
 				query
-					.where('meta_data')
+					?.where('meta_data')
 					.multipleElemMatch({ key: '_pos_user', value: String(cashierID) })
 					.exec()
 			}

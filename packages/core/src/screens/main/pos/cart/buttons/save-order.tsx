@@ -6,6 +6,7 @@ import { isRxDocument } from 'rxdb';
 import { Button } from '@wcpos/components/button';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import type { OrderDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
 import usePushDocument from '../../../contexts/use-push-document';
@@ -33,12 +34,13 @@ export const SaveButton = () => {
 				 * TODO; move this generic sanckbar to the pushDocument hook
 				 */
 				if (isRxDocument(savedDoc)) {
-					cartLogger.success(t('common.order_saved', { number: savedDoc.number }), {
+					const orderDoc = savedDoc as unknown as OrderDocument;
+					cartLogger.success(t('common.order_saved', { number: orderDoc.number }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
-							orderId: savedDoc.id,
-							orderNumber: savedDoc.number,
+							orderId: orderDoc.id,
+							orderNumber: orderDoc.number,
 						},
 					});
 				}

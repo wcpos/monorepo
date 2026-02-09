@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import get from 'lodash/get';
 import omit from 'lodash/omit';
 import { useObservableEagerState, useObservableRef } from 'observable-hooks';
-import { getExpandedRowModel } from '@tanstack/react-table';
+import { type ExpandedState, getExpandedRowModel, type Row } from '@tanstack/react-table';
 
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -91,14 +91,22 @@ function renderCell(columnKey: string, info: any) {
 /**
  *
  */
-function variationRenderCell({ column }) {
+function variationRenderCell({ column }: { column: { id: string } }) {
 	return get(variationCells, column.id);
 }
 
 /**
  *
  */
-function renderItem({ item, index, table }) {
+function renderItem({
+	item,
+	index,
+	table,
+}: {
+	item: Row<{ document: ProductDocument }>;
+	index: number;
+	table: import('@tanstack/react-table').Table<{ document: ProductDocument }>;
+}) {
 	if (item.original.document.type === 'variable') {
 		return <VariableProductRow item={item} index={index} table={table} />;
 	}
@@ -108,7 +116,7 @@ function renderItem({ item, index, table }) {
 /**
  *
  */
-const TableFooter = (props) => {
+const TableFooter = (props: React.ComponentProps<typeof DataTableFooter>) => {
 	return (
 		<DataTableFooter {...props}>
 			<TaxBasedOn />
@@ -124,7 +132,7 @@ export const POSProducts = ({ isColumn = false }) => {
 	const { calcTaxes } = useTaxRates();
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 	const querySearchInputRef = React.useRef<React.ElementRef<typeof QuerySearchInput>>(null);
-	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
+	const [expandedRef, expanded$] = useObservableRef<ExpandedState>({} as ExpandedState);
 	const t = useT();
 
 	/**
@@ -135,7 +143,7 @@ export const POSProducts = ({ isColumn = false }) => {
 			queryKeys: ['products', { target: 'pos', type: 'relational' }],
 			collectionName: 'products',
 			initialParams: {
-				sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
+				sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection as 'asc' | 'desc' }],
 			},
 			infiniteScroll: true,
 		},
@@ -143,7 +151,7 @@ export const POSProducts = ({ isColumn = false }) => {
 			queryKeys: ['variations', { target: 'pos', type: 'relational' }],
 			collectionName: 'variations',
 			initialParams: {
-				sort: [{ id: uiSettings.sortDirection }],
+				sort: [{ id: uiSettings.sortDirection as 'asc' | 'desc' }],
 			},
 			endpoint: 'products/variations',
 			greedy: true,
@@ -153,16 +161,21 @@ export const POSProducts = ({ isColumn = false }) => {
 	/**
 	 * Barcode
 	 */
-	const { onKeyPress } = useBarcode(query, querySearchInputRef);
+	const { onKeyPress } = useBarcode(
+		query as unknown as import('@wcpos/query').RelationalQuery<
+			import('@wcpos/database').ProductCollection
+		>,
+		querySearchInputRef as never
+	);
 
 	/**
 	 *
 	 */
 	React.useEffect(() => {
 		if (showOutOfStock) {
-			query.removeWhere('stock_status').exec();
+			query?.removeWhere('stock_status').exec();
 		} else {
-			query.where('stock_status').equals('instock').exec();
+			query?.where('stock_status').equals('instock').exec();
 		}
 	}, [query, showOutOfStock]);
 
@@ -174,10 +187,11 @@ export const POSProducts = ({ isColumn = false }) => {
 	/* eslint-disable react-compiler/react-compiler -- expandedRef is a mutable ref from useObservableRef */
 	const setRowExpanded = React.useCallback(
 		(rowId: string, expanded: boolean) => {
+			const current = expandedRef.current as Record<string, boolean>;
 			if (expanded) {
-				expandedRef.current = { ...expandedRef.current, [rowId]: true };
+				expandedRef.current = { ...current, [rowId]: true };
 			} else {
-				expandedRef.current = omit(expandedRef.current, rowId);
+				expandedRef.current = omit(current, rowId);
 			}
 		},
 		[expandedRef]
@@ -189,11 +203,12 @@ export const POSProducts = ({ isColumn = false }) => {
 	const tableConfig = React.useMemo(
 		() => ({
 			getExpandedRowModel: getExpandedRowModel(),
-			onExpandedChange: (updater) => {
+			onExpandedChange: (updater: ExpandedState | ((old: ExpandedState) => ExpandedState)) => {
 				const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
 				expandedRef.current = value;
 			},
-			getRowCanExpand: (row) => row.original.document.type === 'variable',
+			getRowCanExpand: (row: Row<{ document: ProductDocument }>) =>
+				row.original.document.type === 'variable',
 			meta: {
 				expandedRef,
 				expanded$,
@@ -218,7 +233,7 @@ export const POSProducts = ({ isColumn = false }) => {
 								<ErrorBoundary>
 									<QuerySearchInput
 										ref={querySearchInputRef}
-										query={query}
+										query={query!}
 										placeholder={t('common.search_products')}
 										className="flex-1"
 										onKeyPress={onKeyPress}
@@ -229,7 +244,7 @@ export const POSProducts = ({ isColumn = false }) => {
 								</UISettingsDialog>
 							</HStack>
 							<ErrorBoundary>
-								<FilterBar query={query} />
+								<FilterBar query={query!} />
 							</ErrorBoundary>
 						</VStack>
 					</ErrorBoundary>
@@ -239,7 +254,7 @@ export const POSProducts = ({ isColumn = false }) => {
 						<Suspense>
 							<DataTable<ProductDocument>
 								id="pos-products"
-								query={query}
+								query={query!}
 								renderItem={renderItem}
 								renderCell={renderCell}
 								noDataMessage={t('common.no_products_found')}

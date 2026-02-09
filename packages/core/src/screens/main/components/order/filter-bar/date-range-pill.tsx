@@ -28,7 +28,7 @@ interface Props {
  */
 export const DateRangePill = ({ query, onRemove }: Props) => {
 	const t = useT();
-	const triggerRef = React.useRef(null);
+	const triggerRef = React.useRef<{ close: () => void }>(null);
 	const selectedDateRange = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getSelector('date_created_gmt')))
 	);
@@ -45,8 +45,8 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 
 		// date_created_gmt in WC REST API is in UTC, but without the 'Z',
 		// we need to convert it to a local date
-		const from = convertUTCStringToLocalDate(selectedDateRange.$gte);
-		const to = convertUTCStringToLocalDate(selectedDateRange.$lte);
+		const from = convertUTCStringToLocalDate(selectedDateRange.$gte as string);
+		const to = convertUTCStringToLocalDate(selectedDateRange.$lte as string);
 
 		// check if to and from are the same day
 		if (isSameDay(from, to)) {
@@ -93,7 +93,11 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 
 	return (
 		<Popover>
-			<PopoverTrigger ref={triggerRef} asChild>
+			<PopoverTrigger
+				// @ts-expect-error: ref only needs close() but TriggerRef requires full PressableRef
+				ref={triggerRef}
+				asChild
+			>
 				<ButtonPill
 					size="xs"
 					leftIcon="calendarDays"

@@ -30,7 +30,7 @@ const CustomerPill = ({ query, resource, customerID }: CustomerPillProps) => {
 	 * @FIXME - if the customers are cleared, it's possible that the customer will be null
 	 */
 	if (!customer && customerID) {
-		customer = { id: customerID };
+		customer = { id: customerID } as CustomerDocument;
 	}
 
 	/**
@@ -38,8 +38,9 @@ const CustomerPill = ({ query, resource, customerID }: CustomerPillProps) => {
 	 */
 	return (
 		<Combobox
-			onValueChange={({ value }) => {
-				query.where('customer_id').equals(toNumber(value)).exec();
+			onValueChange={(option) => {
+				if (!option) return;
+				query.where('customer_id').equals(toNumber(option.value)).exec();
 			}}
 		>
 			<ComboboxTrigger asChild>

@@ -36,7 +36,7 @@ const CashierSearch = () => {
 	/**
 	 * Query for cashiers
 	 */
-	const query = useQuery<CustomerCollection>({
+	const query = useQuery({
 		queryKeys: ['customers', 'cashier-select'],
 		collectionName: 'customers',
 		initialParams: {
@@ -54,7 +54,7 @@ const CashierSearch = () => {
 	const onSearch = React.useCallback(
 		(value: string) => {
 			setSearch(value);
-			query.debouncedSearch(value);
+			query?.debouncedSearch(value);
 		},
 		[query]
 	);
@@ -67,6 +67,7 @@ const CashierSearch = () => {
 			<ComboboxInput
 				placeholder={t('common.search_cashiers')}
 				value={search}
+				// @ts-expect-error: onChangeText is passed through to Input via spread
 				onChangeText={onSearch}
 			/>
 			<Suspense>
@@ -88,7 +89,7 @@ export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) =>
 	 * @FIXME - if the customers are cleared, it's possible that the cashier will be null
 	 */
 	if (!cashier && cashierID) {
-		cashier = { id: cashierID };
+		cashier = { id: cashierID } as CustomerDocument;
 	}
 
 	/**
@@ -98,12 +99,13 @@ export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) =>
 	 */
 	return (
 		<Combobox
-			onValueChange={({ value }) => {
-				uiLogger.debug('value', value);
+			onValueChange={(option) => {
+				if (!option) return;
+				uiLogger.debug('value', { context: { value: option.value } });
 				query
 					.removeElemMatch('meta_data', { key: '_pos_user' }) // clear any previous value
 					.where('meta_data')
-					.multipleElemMatch({ key: '_pos_user', value: String(value) })
+					.multipleElemMatch({ key: '_pos_user', value: String(option.value) })
 					.exec();
 			}}
 		>

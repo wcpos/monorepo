@@ -6,9 +6,9 @@ import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 import { useCollection } from '../../hooks/use-collection';
 import { useCurrentOrder } from '../contexts/current-order';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
-type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 type CartLine = LineItem | FeeLine | ShippingLine;
 type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines';
 
@@ -58,7 +58,7 @@ export const useAddItemToOrder = () => {
 				});
 			}
 
-			if (order.isNew) {
+			if ((order as unknown as { isNew?: boolean }).isNew) {
 				return saveNewOrder(type, data);
 			} else {
 				return order.incrementalUpdate({

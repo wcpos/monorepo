@@ -4,14 +4,27 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import { Card } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import type { SiteDocument, UserDocument } from '@wcpos/database';
 
 import { Site } from './site';
+
+interface SitesProps {
+	user: UserDocument;
+}
 
 /**
  *
  */
-export const Sites = ({ user }) => {
-	const sites = useObservableSuspense(user.populateResource('sites'));
+export const Sites = ({ user }: SitesProps) => {
+	const sites = useObservableSuspense(
+		(
+			user as unknown as {
+				populateResource: (
+					key: string
+				) => import('observable-hooks').ObservableResource<SiteDocument[]>;
+			}
+		).populateResource('sites')
+	);
 
 	if (!sites || sites.length === 0) {
 		return null;
@@ -22,7 +35,7 @@ export const Sites = ({ user }) => {
 	 */
 	return (
 		<Card className="w-full">
-			{sites.map((site, index) => (
+			{sites.map((site: SiteDocument, index: number) => (
 				<ErrorBoundary key={site.uuid}>
 					<Site user={user} site={site} idx={index} />
 				</ErrorBoundary>

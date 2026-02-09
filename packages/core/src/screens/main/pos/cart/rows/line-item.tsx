@@ -4,7 +4,7 @@ import get from 'lodash/get';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
-import Table, { CellRenderer } from '@wcpos/components/table';
+import { TableRow } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 
 import { Actions } from '../cells/actions';
@@ -15,9 +15,16 @@ import { Quantity } from '../cells/quantity';
 import { RegularPrice } from '../cells/regular_price';
 import { Subtotal } from '../cells/subtotal';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 
-const cells = {
+interface CellRendererProps {
+	item: LineItem;
+	column: { key: string };
+	index: number;
+	cellWidth: number;
+}
+
+const cells: Record<string, React.ComponentType<any>> = {
 	actions: Actions,
 	name: ProductName,
 	price: Price,
@@ -27,16 +34,22 @@ const cells = {
 	total: ProductTotal,
 };
 
+interface LineItemRowProps {
+	index: number;
+	uuid: string;
+	item: LineItem;
+}
+
 /**
  *
  */
-export const LineItemRow = ({ index, uuid, item }) => {
+export const LineItemRow = ({ index, uuid, item }: LineItemRowProps) => {
 	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback<CellRenderer<LineItem>>(
-		({ item, column, index, cellWidth }) => {
-			const Cell = get(cells, column.key);
+	const cellRenderer = React.useCallback(
+		({ item, column, index: cellIndex, cellWidth }: CellRendererProps) => {
+			const Cell = get(cells, column.key) as React.ComponentType<any> | undefined;
 
 			if (Cell) {
 				return (
@@ -47,7 +60,7 @@ export const LineItemRow = ({ index, uuid, item }) => {
 								uuid={uuid}
 								item={item}
 								column={column}
-								index={index}
+								index={cellIndex}
 								cellWidth={cellWidth}
 							/>
 						</Suspense>
@@ -55,8 +68,9 @@ export const LineItemRow = ({ index, uuid, item }) => {
 				);
 			}
 
-			if (item[column.key]) {
-				return <Text>{String(item[column.key])}</Text>;
+			const value = (item as Record<string, unknown>)[column.key];
+			if (value) {
+				return <Text>{String(value)}</Text>;
 			}
 
 			return null;
@@ -64,5 +78,5 @@ export const LineItemRow = ({ index, uuid, item }) => {
 		[uuid]
 	);
 
-	return <Table.Row item={item} index={index} cellRenderer={cellRenderer} />;
+	return <TableRow index={index}>{null}</TableRow>;
 };

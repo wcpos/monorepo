@@ -17,7 +17,7 @@ export function ProductsScreen() {
 	return (
 		<ErrorBoundary>
 			<Suspense>
-				<TaxRatesProvider taxQuery={taxQuery}>
+				<TaxRatesProvider taxQuery={taxQuery!}>
 					<Suspense>
 						<Products />
 					</Suspense>

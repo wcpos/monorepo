@@ -5,15 +5,23 @@ import { useObservableState } from 'observable-hooks';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { useReplicationState } from '@wcpos/query';
+import type { ProductDocument } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
 import { useAppState } from '../../../../../../contexts/app-state';
 import { useT } from '../../../../../../contexts/translations';
 import SyncButton from '../../../../components/sync-button';
 
+interface VariationTableFooterProps {
+	query: Query<import('@wcpos/database').ProductVariationCollection>;
+	parent: ProductDocument;
+	count: number;
+}
+
 /**
  *
  */
-export const VariationTableFooter = ({ query, parent, count }) => {
+export const VariationTableFooter = ({ query, parent, count }: VariationTableFooterProps) => {
 	const { fastStoreDB, storeDB } = useAppState();
 	const { sync, active$ } = useReplicationState(query);
 	const loading = useObservableState(active$, false);
@@ -43,7 +51,7 @@ export const VariationTableFooter = ({ query, parent, count }) => {
 	return (
 		<HStack space="xs" className="border-border bg-footer justify-end border-b p-2">
 			<Text className="text-xs">{t('common.showing_of', { shown: count, total })}</Text>
-			<SyncButton sync={sync} clear={handleClearVariations} active={loading} />
+			<SyncButton sync={sync} clearAndSync={handleClearVariations} active={loading} />
 		</HStack>
 	);
 };

@@ -20,14 +20,24 @@ interface WpUserProps {
  *
  */
 export const WPUsers = ({ site }: WpUserProps) => {
-	const wpCreds = useObservableSuspense(site.populateResource('wp_credentials'));
+	const wpCreds = useObservableSuspense(
+		(
+			site as unknown as {
+				populateResource: (
+					key: string
+				) => import('observable-hooks').ObservableResource<
+					import('@wcpos/database').WPCredentialsDocument[]
+				>;
+			}
+		).populateResource('wp_credentials')
+	);
 	const t = useT();
 
 	return (
 		<VStack space="xs">
 			<Text className="text-sm">{t('auth.logged_in_users')}:</Text>
 			<HStack>
-				{wpCreds.map((wpCred) => (
+				{wpCreds.map((wpCred: import('@wcpos/database').WPCredentialsDocument) => (
 					<ErrorBoundary key={wpCred.uuid}>
 						<Suspense>
 							<WpUser wpUser={wpCred} site={site} />

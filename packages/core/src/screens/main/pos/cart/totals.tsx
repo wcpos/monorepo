@@ -106,7 +106,10 @@ export const Totals = () => {
 					}
 					{hasTax ? (
 						<ErrorBoundary>
-							<Taxes totalTax={total_tax} taxLines={tax_lines} />
+							<Taxes
+								totalTax={total_tax}
+								taxLines={tax_lines?.filter((t): t is NonNullable<typeof t> => t !== null)}
+							/>
 						</ErrorBoundary>
 					) : null}
 				</VStack>

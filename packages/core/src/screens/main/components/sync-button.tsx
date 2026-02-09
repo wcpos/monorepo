@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 
 import { useT } from '../../../contexts/translations';
 
-interface SyncButtonProps {
+export interface SyncButtonProps {
 	sync: () => Promise<void>;
 	clearAndSync: () => Promise<void>;
 	active: boolean;
@@ -22,11 +22,14 @@ interface SyncButtonProps {
 
 const SyncButton = ({ sync, clearAndSync, active }: SyncButtonProps) => {
 	const t = useT();
-	const triggerRef = React.useRef(null);
+	const triggerRef = React.useRef<{ open?: () => void }>(null);
 
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger ref={triggerRef} />
+			<DropdownMenuTrigger
+				// @ts-expect-error: ref only needs open() but TriggerRef requires full PressableRef
+				ref={triggerRef}
+			/>
 			<Tooltip>
 				<TooltipTrigger asChild>
 					<IconButton
@@ -34,7 +37,7 @@ const SyncButton = ({ sync, clearAndSync, active }: SyncButtonProps) => {
 						size="sm"
 						loading={active}
 						onLongPress={() => {
-							triggerRef.current?.open();
+							triggerRef.current?.open?.();
 						}}
 						onPress={() => {
 							sync();

@@ -16,9 +16,9 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
  */
 export const ProductImage = ({ row }: CellContext<{ document: ProductDocument }, 'image'>) => {
 	const product = row.original.document;
-	const images = useObservableEagerState(product.images$);
+	const images = useObservableEagerState(product.images$!);
 	const imageURL = get(images, [0, 'src'], undefined);
-	const { uri, error } = useImageAttachment(product, imageURL);
+	const { uri, error } = useImageAttachment(product, imageURL ?? '');
 
 	if (error) {
 		return (
