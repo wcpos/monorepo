@@ -82,6 +82,7 @@ export function LogsScreen() {
 								query={query}
 								placeholder={t('logs.search_logs')}
 								className="flex-1"
+								testID="search-logs"
 							/>
 							<UISettingsDialog title={t('logs.logs_settings')}>
 								<UISettingsForm />

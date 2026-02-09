@@ -41,6 +41,7 @@ export const Customer = ({
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
 				<ButtonPill
+					testID="cart-customer-name"
 					size="xs"
 					leftIcon="user"
 					removable={true}

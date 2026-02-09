@@ -78,6 +78,7 @@ export const VoidButton = () => {
 	 */
 	return (
 		<Button
+			testID="void-button"
 			size="lg"
 			onPress={handleRemove}
 			variant="destructive"

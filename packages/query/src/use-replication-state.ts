@@ -35,27 +35,41 @@ export const useReplicationState = (
 	const collectionReplication = manager.activeCollectionReplications.get(queryID);
 	const queryReplication = manager.activeQueryReplications.get(queryID);
 
-	// Track the render-time value so the effect can detect stale reads
-	const lastSeenRef = React.useRef(collectionReplication);
-	lastSeenRef.current = collectionReplication;
+	// Track the render-time values so the effect can detect stale reads
+	const lastSeenCollectionRef = React.useRef(collectionReplication);
+	lastSeenCollectionRef.current = collectionReplication;
+	const lastSeenQueryRef = React.useRef(queryReplication);
+	lastSeenQueryRef.current = queryReplication;
 
 	/**
 	 * Subscribe to replication add$ events and handle Suspense race condition.
 	 * Only depends on manager and queryID — forceUpdate is a stable dispatch.
 	 */
 	React.useEffect(() => {
-		// Stale check: replication may have been added between render and effect
-		const current = manager.activeCollectionReplications.get(queryID);
-		if (current !== lastSeenRef.current) {
+		// Stale check: replications may have been added between render and effect
+		const currentCollection = manager.activeCollectionReplications.get(queryID);
+		if (currentCollection !== lastSeenCollectionRef.current) {
+			forceUpdate();
+		}
+		const currentQuery = manager.activeQueryReplications.get(queryID);
+		if (currentQuery !== lastSeenQueryRef.current) {
 			forceUpdate();
 		}
 
-		const sub = manager.activeCollectionReplications.add$.subscribe((id) => {
+		const collectionSub = manager.activeCollectionReplications.add$.subscribe((id) => {
 			if (id === queryID) {
 				forceUpdate();
 			}
 		});
-		return () => sub.unsubscribe();
+		const querySub = manager.activeQueryReplications.add$.subscribe((id) => {
+			if (id === queryID) {
+				forceUpdate();
+			}
+		});
+		return () => {
+			collectionSub.unsubscribe();
+			querySub.unsubscribe();
+		};
 	}, [manager, queryID]);
 
 	/**

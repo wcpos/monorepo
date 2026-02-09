@@ -88,8 +88,12 @@ export const Checkout = ({ resource }: Props) => {
 					</VStack>
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction onPress={handleProcessPayment} loading={loading}>
+					<ModalClose testID="cancel-checkout-button">{t('common.cancel')}</ModalClose>
+					<ModalAction
+						testID="process-payment-button"
+						onPress={handleProcessPayment}
+						loading={loading}
+					>
 						{t('pos_checkout.process_payment')}
 					</ModalAction>
 				</ModalFooter>

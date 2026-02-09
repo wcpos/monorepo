@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
+import type { Option } from '@wcpos/components/combobox/types';
+import type { CustomerDocument } from '@wcpos/database';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -31,9 +33,9 @@ export const CartHeader = () => {
 	 *
 	 */
 	const handleSelectCustomer = React.useCallback(
-		async ({ item: customer }: { item: import('@wcpos/database').CustomerDocument }) => {
-			if (customer) {
-				await addCustomer(customer);
+		async (option: Option | undefined) => {
+			if (option?.item) {
+				await addCustomer(option.item as CustomerDocument);
 			}
 			setShowCustomerSelect(false);
 		},
@@ -74,14 +76,7 @@ export const CartHeader = () => {
 				<Text className="font-bold">{t('common.customer')}:</Text>
 				<ErrorBoundary>
 					{showCustomerSelect ? (
-						<Combobox
-							onValueChange={
-								handleSelectCustomer as unknown as (
-									option: import('@wcpos/components/combobox/types').Option | undefined
-								) => void
-							}
-							onOpenChange={delayedCloseHandler}
-						>
+						<Combobox onValueChange={handleSelectCustomer} onOpenChange={delayedCloseHandler}>
 							{/* @ts-expect-error: ComboboxTrigger ref type is more specific than our ref with open() method */}
 							<ComboboxTrigger ref={triggerRef} asChild>
 								<ButtonPill size="xs" leftIcon="user" variant="muted">

@@ -29,6 +29,7 @@ export const useWebSerialBarcodeScanner = (options: SerialOptions = {}) => {
 	const [connected, setConnected] = React.useState(false);
 	// const [barcodeData, setBarcodeData] = React.useState(null);
 
+	const portRef = React.useRef<SerialPort | null>(null);
 	const readerRef = React.useRef<ReadableStreamDefaultReader<string> | null>(null);
 	const readLoopRef = React.useRef<Promise<void> | null>(null);
 	const abortControllerRef = React.useRef<AbortController | null>(null);
@@ -79,8 +80,9 @@ export const useWebSerialBarcodeScanner = (options: SerialOptions = {}) => {
 	 * Disconnect from the serial device
 	 */
 	const disconnect = async () => {
-		if (port) {
-			if (debug) console.log('Disconnecting from port:', port);
+		const currentPort = portRef.current;
+		if (currentPort) {
+			if (debug) console.log('Disconnecting from port:', currentPort);
 
 			if (readerRef.current) {
 				if (debug) console.log('Cancelling reader...');
@@ -94,9 +96,10 @@ export const useWebSerialBarcodeScanner = (options: SerialOptions = {}) => {
 				abortControllerRef.current = null;
 			}
 
-			await port.close();
+			await currentPort.close();
 			if (debug) console.log('Port closed.');
 			setPort(null);
+			portRef.current = null;
 			setConnected(false);
 		} else {
 			if (debug) console.log('No port is currently connected.');
@@ -112,6 +115,7 @@ export const useWebSerialBarcodeScanner = (options: SerialOptions = {}) => {
 			if (debug) console.log('Port opened:', portToOpen);
 
 			setPort(portToOpen);
+			portRef.current = portToOpen;
 			setConnected(true);
 
 			// Set up a reader to read data

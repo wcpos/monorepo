@@ -285,6 +285,7 @@ export function Products() {
 									query={query!}
 									placeholder={t('common.search_products')}
 									className="flex-1"
+									testID="search-products"
 								/>
 							</ErrorBoundary>
 							{/* <Icon

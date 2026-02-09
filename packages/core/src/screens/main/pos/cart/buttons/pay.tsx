@@ -74,6 +74,7 @@ export const PayButton = () => {
 	 */
 	return (
 		<Button
+			testID="checkout-button"
 			size="lg"
 			onPress={handlePay}
 			variant="success"

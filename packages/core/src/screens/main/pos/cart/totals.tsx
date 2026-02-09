@@ -73,7 +73,7 @@ export const Totals = () => {
 		<>
 			{hasTotals ? (
 				<VStack className="border-border bg-muted/40 border-t p-2">
-					<HStack>
+					<HStack testID="cart-subtotal">
 						<Text className="grow">{t('common.subtotal')}:</Text>
 						<Text>{format(displaySubtotal)}</Text>
 					</HStack>

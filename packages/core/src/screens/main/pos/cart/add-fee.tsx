@@ -170,7 +170,9 @@ export const AddFee = () => {
 				</HStack>
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.cancel')}</DialogClose>
-					<DialogAction onPress={onAdd}>{t('common.add_to_cart')}</DialogAction>
+					<DialogAction testID="add-to-cart-submit" onPress={onAdd}>
+						{t('common.add_to_cart')}
+					</DialogAction>
 				</DialogFooter>
 			</VStack>
 		</Form>

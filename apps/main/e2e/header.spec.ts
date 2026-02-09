@@ -10,15 +10,14 @@ test.describe('Header', () => {
 
 	test('should open user menu dropdown', async ({ posPage: page }) => {
 		await page.getByRole('button', { name: /Demo Cashier/i }).click();
-		await expect(page.getByText('Settings').first()).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('settings-menu-item')).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should open settings modal from user menu', async ({ posPage: page }) => {
 		await page.getByRole('button', { name: /Demo Cashier/i }).click();
-		await page.getByText('Settings').first().click();
-		await expect(page.getByText(/General|Tax|Barcode|Keyboard|Theme/).first()).toBeVisible({
-			timeout: 10_000,
-		});
+		await expect(page.getByTestId('settings-menu-item')).toBeVisible({ timeout: 15_000 });
+		await page.getByTestId('settings-menu-item').click();
+		await expect(page.getByTestId('settings-tab-general')).toBeVisible({ timeout: 15_000 });
 	});
 });
 

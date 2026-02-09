@@ -54,7 +54,12 @@ export const SettingsScreen = () => {
 					<Tabs value={value} onValueChange={setValue}>
 						<TabsList className="w-full flex-row">
 							{tabs.map((tab) => (
-								<TabsTrigger key={tab.value} value={tab.value} className="flex-1">
+								<TabsTrigger
+									key={tab.value}
+									value={tab.value}
+									testID={`settings-tab-${tab.value}`}
+									className="flex-1"
+								>
 									<Text>{tab.label}</Text>
 								</TabsTrigger>
 							))}
