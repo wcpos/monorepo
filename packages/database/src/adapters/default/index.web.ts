@@ -9,7 +9,7 @@ export const storage = getRxStorageWorker({
 	 *
 	 * @link https://developer.mozilla.org/en-US/docs/Web/API/Worker/Worker
 	 */
-	workerInput: globalThis.idbWorker,
+	workerInput: (globalThis as Record<string, any>).idbWorker,
 	/**
 	 * (Optional) options
 	 * for the worker.

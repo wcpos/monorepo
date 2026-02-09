@@ -11,8 +11,8 @@
  * @param {string} [prefix=''] - The accumulated method path.
  * @returns {any} - A proxy representing the remote storage adapter.
  */
-export function createRemoteStorageProxy(prefix = '') {
-	if (typeof window === 'undefined' || !window.ipcRenderer) {
+export function createRemoteStorageProxy(prefix = ''): any {
+	if (typeof window === 'undefined' || !(window as any).ipcRenderer) {
 		throw new Error(
 			'Remote storage proxy can only be created in the renderer with ipcRenderer exposed'
 		);
@@ -23,7 +23,7 @@ export function createRemoteStorageProxy(prefix = '') {
 			return createRemoteStorageProxy(newPrefix);
 		},
 		async apply(target, thisArg, args) {
-			return await window.ipcRenderer.invoke('rxStorage', {
+			return await (window as any).ipcRenderer.invoke('rxStorage', {
 				methodPath: prefix,
 				args,
 			});

@@ -1,7 +1,7 @@
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-type RxPlugin = import('rxdb/dist/types').RxPlugin;
+type RxPlugin = import('rxdb').RxPlugin;
 
 const dbLogger = getLogger(['wcpos', 'db', 'delete']);
 
@@ -47,7 +47,7 @@ const deleteDBPlugin: RxPlugin = {
 		 * I need to write a separate script which does clean up
 		 */
 		postRemoveRxDatabase: {
-			after: ({ storage, databaseName }) => {
+			after: ({ storage, databaseName }: { storage: any; databaseName: string }) => {
 				if (storage?.name === 'indexeddb') {
 					const DBDeleteRequest = window.indexedDB.deleteDatabase(databaseName);
 					DBDeleteRequest.onerror = (event) => {

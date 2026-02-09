@@ -1,5 +1,7 @@
 import { generateID } from './generate-id';
 
+import type { RxCollection } from 'rxdb';
+
 jest.mock('uuid', () => {
 	return {
 		v4: jest.fn(() => 'mocked-uuid'),
@@ -17,7 +19,7 @@ describe('generateID', () => {
 					},
 				},
 			},
-		};
+		} as unknown as RxCollection;
 
 		const data: Record<string, any> = {
 			meta_data: [
@@ -40,7 +42,7 @@ describe('generateID', () => {
 					properties: {},
 				},
 			},
-		};
+		} as unknown as RxCollection;
 
 		const data: Record<string, any> = {};
 
@@ -56,7 +58,7 @@ describe('generateID', () => {
 					properties: {},
 				},
 			},
-		};
+		} as unknown as RxCollection;
 
 		const data: Record<string, any> = {};
 
@@ -74,7 +76,7 @@ describe('generateID', () => {
 					},
 				},
 			},
-		};
+		} as unknown as RxCollection;
 
 		const data: Record<string, any> = {};
 

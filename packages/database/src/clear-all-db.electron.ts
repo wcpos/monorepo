@@ -2,5 +2,5 @@
  *
  */
 export const clearAllDB = async () => {
-	return window.ipcRenderer.send('clearData');
+	return (window as any).ipcRenderer.send('clearData');
 };

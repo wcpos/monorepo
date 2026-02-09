@@ -6,22 +6,30 @@ import type { RxCollection } from 'rxdb';
  */
 export interface FlexSearchInstance {
 	/** The internal RxDB collection storing the search index */
-	collection: RxCollection;
+	collection: RxCollection & { destroy?: () => Promise<void> };
 	/** Perform a search and return matching document IDs */
 	search(query: string): Promise<string[]>;
 }
 
 /**
- * Extensions added by the search plugin to RxCollection.
- * All methods are optional since they are added at runtime by the plugin.
+ * Extensions added by plugins to RxCollection.
+ * Augmented on RxCollectionBase so that the generic type alias
+ * `type RxCollection<...>` from rxdb is not shadowed.
  */
 declare module 'rxdb' {
-	interface RxCollection {
+	interface RxCollectionBase {
 		/**
 		 * Parse a WC REST API response, pruning and coercing data to match the schema.
 		 * Added by the parse-rest-response plugin.
 		 */
 		parseRestResponse(json: Record<string, unknown>): Record<string, unknown>;
+
+		/**
+		 * Like findOne but works with any query object type (string, object, null).
+		 * Added by the find-one-fix plugin.
+		 */
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		findOneFix(queryObj?: any): any;
 
 		/**
 		 * Initialize or retrieve a FlexSearch instance for a locale.
@@ -68,7 +76,7 @@ declare module 'rxdb' {
 		_localeLRU?: string[];
 	}
 
-	interface RxDatabase {
+	interface RxDatabaseBase {
 		/**
 		 * Observable that emits when a collection is reset (removed and re-added).
 		 * Added by the reset-collection plugin.

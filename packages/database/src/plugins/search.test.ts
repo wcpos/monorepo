@@ -10,6 +10,8 @@
 // Mock the FlexSearch plugin
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
+import type { RxCollection } from 'rxdb';
+
 let shouldFailOnCreate = false;
 
 jest.mock('rxdb-premium/plugins/flexsearch', () => ({
@@ -268,7 +270,7 @@ describe('search plugin', () => {
 			const mockCollection = {
 				name: 'products',
 				options: { searchFields: ['name', 'sku'] },
-			};
+			} as unknown as RxCollection;
 
 			await addFulltextSearch({
 				identifier: 'products-search-en',
@@ -298,7 +300,7 @@ describe('search plugin', () => {
 		it('should use lazy initialization', async () => {
 			await addFulltextSearch({
 				identifier: 'test',
-				collection: {},
+				collection: {} as unknown as RxCollection,
 				docToString: jest.fn(),
 				initialization: 'lazy',
 				indexOptions: {},

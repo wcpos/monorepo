@@ -138,7 +138,7 @@ async function createSearchInstance(
 		context: { collection: collection.name, locale },
 	});
 
-	return searchInstance as FlexSearchInstance;
+	return searchInstance as unknown as FlexSearchInstance;
 }
 
 /**

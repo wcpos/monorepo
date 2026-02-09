@@ -27,7 +27,6 @@ export const createUserDB = async () => {
 	try {
 		const db = await createRxDatabase<UserCollections>({
 			name,
-			ignoreDuplicate: !!__DEV__,
 			...defaultConfig,
 		});
 		await db?.addCollections(userCollections);
@@ -55,8 +54,8 @@ export const createStoreDB = async (id: string) => {
 		const db = await createRxDatabase<StoreCollections>({
 			name,
 			allowSlowCount: true,
-			ignoreDuplicate: true, // Allow returning existing DB when switching back to a store
 			...defaultConfig,
+			ignoreDuplicate: true, // Allow returning existing DB when switching back to a store
 		});
 		await db?.addCollections(storeCollections);
 		return db;
@@ -83,8 +82,8 @@ export const createFastStoreDB = async (id: string) => {
 		const db = await createRxDatabase<SyncCollections>({
 			name,
 			allowSlowCount: true,
-			ignoreDuplicate: true, // Allow returning existing DB when switching back to a store
 			...fastStorageConfig,
+			ignoreDuplicate: true, // Allow returning existing DB when switching back to a store
 		});
 		await db?.addCollections(syncCollections);
 		return db;
@@ -109,7 +108,6 @@ export const createTemporaryDB = async () => {
 	try {
 		const db = await createRxDatabase<TemporaryCollections>({
 			name: 'temporary',
-			ignoreDuplicate: !!__DEV__,
 			...ephemeralStorageConfig,
 		});
 

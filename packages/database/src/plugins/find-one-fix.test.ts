@@ -37,7 +37,7 @@ describe('findOneFixPlugin', () => {
 			};
 
 			// Apply the plugin to the prototype (this adds findOneFix)
-			findOneFixPlugin.prototypes?.RxCollection(proto);
+			findOneFixPlugin.prototypes!.RxCollection!(proto);
 
 			// The mock collection uses the augmented prototype
 			mockCollection = Object.create(proto);
@@ -117,7 +117,7 @@ describe('findOneFixPlugin', () => {
 				findOne: originalFindOne,
 			};
 
-			findOneFixPlugin.prototypes?.RxCollection(proto);
+			findOneFixPlugin.prototypes!.RxCollection!(proto);
 			mockCollection = Object.create(proto);
 		});
 

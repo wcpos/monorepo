@@ -63,7 +63,7 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 		1(oldDoc: StoreDocumentType) {
 			oldDoc.barcode_scanning_avg_time_input_threshold = 24;
 			oldDoc.thousands_group_style = 'thousand';
-			const [country, state] = (oldDoc.default_country || '').split(':');
+			const [country, state] = ((oldDoc as any).default_country || '').split(':');
 			oldDoc.store_country = country;
 			oldDoc.store_state = state;
 			return oldDoc;
@@ -125,14 +125,14 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 		searchFields: ['name', 'sku', 'barcode'],
 		middlewares: {
 			preInsert: {
-				handle: (doc) => {
+				handle: (doc: ProductDocumentType) => {
 					doc.sortable_price = toSortableInteger(doc.price);
 					return doc;
 				},
 				parallel: false,
 			},
 			preSave: {
-				handle: (doc) => {
+				handle: (doc: ProductDocumentType) => {
 					doc.sortable_price = toSortableInteger(doc.price);
 					return doc;
 				},
@@ -174,14 +174,14 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 		searchFields: ['sku', 'barcode'],
 		middlewares: {
 			preInsert: {
-				handle: (doc) => {
+				handle: (doc: ProductVariationDocumentType) => {
 					doc.sortable_price = toSortableInteger(doc.price);
 					return doc;
 				},
 				parallel: false,
 			},
 			preSave: {
-				handle: (doc) => {
+				handle: (doc: ProductVariationDocumentType) => {
 					doc.sortable_price = toSortableInteger(doc.price);
 					return doc;
 				},
@@ -289,14 +289,14 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 		],
 		middlewares: {
 			preInsert: {
-				handle: (doc) => {
+				handle: (doc: OrderDocumentType) => {
 					doc.sortable_total = toSortableInteger(doc.total);
 					return doc;
 				},
 				parallel: false,
 			},
 			preSave: {
-				handle: (doc) => {
+				handle: (doc: OrderDocumentType) => {
 					doc.sortable_total = toSortableInteger(doc.total);
 					return doc;
 				},

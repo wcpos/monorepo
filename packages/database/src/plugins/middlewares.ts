@@ -1,6 +1,6 @@
 import forEach from 'lodash/forEach';
 
-type RxPlugin = import('rxdb/dist/types').RxPlugin;
+type RxPlugin = import('rxdb').RxPlugin;
 
 const middlewaresPlugin: RxPlugin = {
 	name: 'middleswares',
@@ -38,7 +38,7 @@ const middlewaresPlugin: RxPlugin = {
 		 *
 		 */
 		createRxCollection: {
-			after({ collection }) {
+			after({ collection }: { collection: any }) {
 				/**
 				 * Allow colections to set middleware-hooks via config options
 				 * needs to allow for promises
