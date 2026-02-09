@@ -60,8 +60,8 @@ export const CurrentOrderProvider = ({
 	}, [currentOrderUUID]);
 
 	// Determine current order from internal state
-	const currentOrder =
-		openOrders.find((order) => order.id === internalOrderId)?.document ?? newOrder;
+	const currentOrder = (openOrders.find((order) => order.id === internalOrderId)?.document ??
+		newOrder) as OrderDocument;
 
 	/**
 	 * Update the current order without causing a full navigation/remount.

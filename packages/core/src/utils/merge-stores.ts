@@ -73,7 +73,7 @@ export async function mergeStoresWithResponse({
 
 		// Remove stores that are no longer in the response
 		if (storesToRemove.length > 0) {
-			const storeIdsToRemove = storesToRemove.map((store) => store.localID);
+			const storeIdsToRemove = storesToRemove.map((store) => store.localID!);
 			await userDB.stores.bulkRemove(storeIdsToRemove);
 			appLogger.debug('Removed stores no longer in response', {
 				context: {

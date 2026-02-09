@@ -36,7 +36,7 @@ export const useBarcodeDetection = (
 	const lastInputTimeRef = React.useRef<number | null>(null);
 	const avgInputTimeRef = React.useRef<number>(0);
 	const detectingScanningRef = React.useRef<boolean>(false);
-	const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+	const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Subject to emit detected barcodes
 	const [onBarcodeScan, barcode$] = useObservableCallback((event$) =>

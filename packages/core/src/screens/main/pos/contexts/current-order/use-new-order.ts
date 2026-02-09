@@ -93,7 +93,7 @@ export const useNewOrder = () => {
 			});
 		}
 
-		newOrder.incrementalPatch(data);
+		newOrder!.incrementalPatch(data);
 	}, [newOrder, defaultCustomer, currency, tax_based_on, country]);
 
 	return { newOrder };

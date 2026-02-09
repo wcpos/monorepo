@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 
-import { createFastStoreDB, createStoreDB, createUserDB, isRxDocument } from '@wcpos/database';
+import { createFastStoreDB, createStoreDB, createUserDB } from '@wcpos/database';
 import type { UserDatabase } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import Platform from '@wcpos/utils/platform';
@@ -148,11 +148,11 @@ export const hydrateUserSession = async (
 	if (sessionIds.storeID) {
 		store = await userDB.stores.findOne(sessionIds.storeID).exec();
 	}
-	if (isRxDocument(store)) {
-		const db = await createStoreDB(store.localID);
+	if (store) {
+		const db = await createStoreDB(store.localID!);
 		if (db) {
 			storeDB = db;
-			fastStoreDB = await createFastStoreDB(store.localID);
+			fastStoreDB = await createFastStoreDB(store.localID!);
 			extraData = await db.addState('data_v2');
 		}
 	}

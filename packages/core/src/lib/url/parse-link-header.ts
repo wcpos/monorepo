@@ -9,7 +9,7 @@ interface Links {
 	[rel: string]: Link;
 }
 
-const PARSE_LINK_HEADER_MAXLEN = parseInt(process.env.PARSE_LINK_HEADER_MAXLEN, 10) || 2000;
+const PARSE_LINK_HEADER_MAXLEN = parseInt(process.env.PARSE_LINK_HEADER_MAXLEN ?? '', 10) || 2000;
 const PARSE_LINK_HEADER_THROW_ON_MAXLEN_EXCEEDED =
 	process.env.PARSE_LINK_HEADER_THROW_ON_MAXLEN_EXCEEDED != null;
 

@@ -32,8 +32,8 @@ export const useAddItemToOrder = () => {
 
 			order.remove();
 
-			const newOrder = await collection.insert(orderJSON);
-			setCurrentOrderID(newOrder?.uuid);
+			const newOrder = await collection.insert(orderJSON as any);
+			setCurrentOrderID(newOrder.uuid!);
 			return newOrder;
 		},
 		[collection, currentOrder, setCurrentOrderID]

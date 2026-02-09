@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { isRxDocument, RxDocument } from 'rxdb';
+import { RxDocument } from 'rxdb';
 
 import type {
 	CustomerDocument,
@@ -185,8 +185,8 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				// Send to server - server response becomes source of truth
 				const updatedDoc = await replicationState.remotePatch(doc, changes);
 
-				if (isRxDocument(updatedDoc)) {
-					handleSuccess(updatedDoc);
+				if (updatedDoc) {
+					handleSuccess(updatedDoc as RxDocument);
 					return updatedDoc;
 				} else {
 					// Server returned an error or invalid response - rollback local changes
@@ -259,8 +259,8 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				// Send to server - server response becomes source of truth (includes real ID)
 				const serverDoc = await replicationState.remoteCreate(localDoc!.toJSON());
 
-				if (isRxDocument(serverDoc)) {
-					handleSuccess(serverDoc);
+				if (serverDoc) {
+					handleSuccess(serverDoc as RxDocument);
 					return serverDoc;
 				} else {
 					// Server returned an error or invalid response - remove local document

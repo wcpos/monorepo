@@ -85,7 +85,7 @@ export const ThemeSettings = () => {
 	const handleThemeChange = React.useCallback(
 		async (themeName: string) => {
 			// Update Uniwind theme
-			Uniwind.setTheme(themeName);
+			Uniwind.setTheme(themeName as any);
 
 			// Persist to RxDB
 			await localPatch({

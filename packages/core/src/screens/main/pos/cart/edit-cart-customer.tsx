@@ -3,7 +3,6 @@ import * as React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
-import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
@@ -105,13 +104,13 @@ export const EditCartCustomerForm = () => {
 					shipping: data.shipping,
 				},
 			});
-			if (isRxDocument(savedDoc)) {
-				cartLogger.success(t('common.saved', { name: format(savedDoc) }), {
+			if (savedDoc) {
+				cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
 					showToast: true,
 					saveToDb: true,
 					context: {
-						customerId: savedDoc.id,
-						customerName: format(savedDoc),
+						customerId: (savedDoc as any).id,
+						customerName: format(savedDoc as any),
 					},
 				});
 			}

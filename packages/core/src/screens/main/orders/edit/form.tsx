@@ -193,15 +193,16 @@ export const EditOrderForm = ({ order }: Props) => {
 				 * @FIXME - this is similar to the transformCustomerJSONToOrderJSON function
 				 * Should we set the store country if there is no country in the billing object?
 				 */
+				const customerData = customer as any;
 				const billing = {
-					...customer.billing,
-					first_name: customer.billing.first_name || customer.first_name,
-					last_name: customer.billing.last_name || customer.last_name,
-					email: customer.billing.email || customer.email,
+					...customerData.billing,
+					first_name: customerData.billing?.first_name || customerData.first_name,
+					last_name: customerData.billing?.last_name || customerData.last_name,
+					email: customerData.billing?.email || customerData.email,
 				};
 
 				form.setValue('billing', billing, { shouldValidate: true });
-				form.setValue('shipping', customer.shipping, { shouldValidate: true });
+				form.setValue('shipping', customerData.shipping, { shouldValidate: true });
 
 				form.setValue('customer_id', customerId);
 			} catch (error) {
