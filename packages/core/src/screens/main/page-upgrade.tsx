@@ -70,13 +70,22 @@ export const PageUpgrade = ({
 					</View>
 				</View>
 				<VStack className="w-full gap-4 p-4 sm:w-1/2">
-					<Text className="text-center text-2xl font-bold sm:text-left">{title}</Text>
+					<Text testID="upgrade-title" className="text-center text-2xl font-bold sm:text-left">
+						{title}
+					</Text>
 					<Text className="text-center sm:text-left">{description}</Text>
 					<HStack className="justify-center gap-2 sm:justify-start">
-						<Button variant="secondary" onPress={() => Linking.openURL(demoURL)}>
+						<Button
+							testID="view-demo-button"
+							variant="secondary"
+							onPress={() => Linking.openURL(demoURL)}
+						>
 							{t('upgrade.view_demo')}
 						</Button>
-						<Button onPress={() => Linking.openURL('https://wcpos.com/pro')}>
+						<Button
+							testID="upgrade-to-pro-button"
+							onPress={() => Linking.openURL('https://wcpos.com/pro')}
+						>
 							{t('common.upgrade_to_pro')}
 						</Button>
 					</HStack>

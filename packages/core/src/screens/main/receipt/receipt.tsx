@@ -106,7 +106,7 @@ export const Receipt = ({ resource }: Props) => {
 					</ErrorBoundary>
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose>{t('common.close')}</ModalClose>
+					<ModalClose testID="receipt-close-button">{t('common.close')}</ModalClose>
 					<Dialog>
 						<DialogTrigger asChild>
 							<ModalAction>{t('receipt.email_receipt')}</ModalAction>
@@ -120,7 +120,7 @@ export const Receipt = ({ resource }: Props) => {
 							</DialogBody>
 						</DialogContent>
 					</Dialog>
-					<ModalAction onPress={() => print()} loading={isPrinting}>
+					<ModalAction testID="receipt-print-button" onPress={() => print()} loading={isPrinting}>
 						{t('receipt.print_receipt')}
 					</ModalAction>
 				</ModalFooter>

@@ -64,7 +64,13 @@ export const SaveButton = () => {
 	 */
 	return (
 		<View>
-			<Button variant="outline" onPress={handleSave} loading={loading} disabled={loading}>
+			<Button
+				testID="save-to-server-button"
+				variant="outline"
+				onPress={handleSave}
+				loading={loading}
+				disabled={loading}
+			>
 				{t('pos_cart.save_to_server')}
 			</Button>
 		</View>
