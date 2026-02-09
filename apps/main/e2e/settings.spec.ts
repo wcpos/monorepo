@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
-import { authenticatedTest as test } from './fixtures';
+import { authenticatedTest as test, getStoreVariant } from './fixtures';
+import type { StoreVariant } from '../playwright.config';
 
 /**
  * Helper to open settings modal via user menu.
@@ -64,96 +65,116 @@ test.describe('Settings Modal', () => {
 });
 
 test.describe('Language Settings', () => {
-	// These tests assume English as the starting language, but the demo store may be
-	// in Spanish or another locale. They need a locale-aware setup before running.
-	test.fixme(true, 'Language tests need locale-aware starting state');
+	/**
+	 * Expected starting locale per store variant.
+	 * These match the demo store configurations captured in the IndexedDB snapshots.
+	 */
+	const STORE_LOCALE: Record<StoreVariant, { triggerText: string; cdnCode: string }> = {
+		free: { triggerText: 'French', cdnCode: 'fr' },
+		pro: { triggerText: 'Spanish', cdnCode: 'es' },
+	};
 
 	/**
-	 * Helper to change language via the General settings combobox.
+	 * Helper to switch language via the General settings combobox.
+	 * Uses testIDs so it works regardless of the current UI language.
+	 * The option click is scoped to the combobox dropdown to avoid matching the trigger.
 	 */
-	async function changeLanguage(
+	async function selectLanguage(
 		page: import('@playwright/test').Page,
 		search: string,
-		label: string
+		optionText: string
 	) {
-		// Click the language combobox trigger (shows current language name)
-		const trigger = page.getByRole('button', { name: /English|French|Français/i }).first();
-		await expect(trigger).toBeVisible({ timeout: 10_000 });
-		await trigger.click();
-
-		// The search placeholder may be in English or the current language
-		const searchInput = page
-			.getByPlaceholder('Search Languages')
-			.or(page.getByPlaceholder('Rechercher des langues'));
-		await searchInput.fill(search);
+		await page.getByTestId('language-select-trigger').click();
+		await page.getByTestId('language-search-input').fill(search);
 		await page.waitForTimeout(500);
-		await page.getByText(label).click();
+		// Scope to dropdown content so we don't match the trigger text
+		await page.getByTestId('language-combobox-content').getByText(optionText).click();
 	}
 
-	test('should change language to French and load translations from CDN', async ({
+	test('should show the correct starting language for this store variant', async ({
 		posPage: page,
 	}) => {
+		const variant = getStoreVariant(test.info());
+		const expected = STORE_LOCALE[variant];
+
 		await openSettings(page);
 
-		// The General tab is shown by default with a Language combobox.
-		// The demo store defaults to "English (US)".
-		const languageTrigger = page.getByText('English (US)').first();
-		await expect(languageTrigger).toBeVisible({ timeout: 10_000 });
-		await languageTrigger.click();
+		// The language trigger must show the store's configured locale
+		await expect(page.getByTestId('language-select-trigger')).toContainText(
+			expected.triggerText,
+			{ timeout: 10_000 }
+		);
+	});
 
-		// Search for French in the combobox popover
-		await page.getByPlaceholder('Search Languages').fill('French');
-		await page.waitForTimeout(500);
+	test('should change language and load translations from CDN', async ({ posPage: page }) => {
+		const variant = getStoreVariant(test.info());
+		const expected = STORE_LOCALE[variant];
 
-		// Select "French (Français)" from the filtered list
-		await page.getByText('French (Français)').click();
+		await openSettings(page);
 
-		// Verify the language selector now shows French
-		await expect(page.getByText('French (Français)').first()).toBeVisible({ timeout: 10_000 });
+		// Verify the starting language matches the store's configured locale
+		await expect(page.getByTestId('language-select-trigger')).toContainText(
+			expected.triggerText,
+			{ timeout: 10_000 }
+		);
 
-		// Translations load asynchronously from jsDelivr CDN.
-		// The POS product table behind the modal updates with French column headers.
-		await expect(page.getByText('Produit')).toBeVisible({ timeout: 15_000 });
-		await expect(page.getByText('Prix')).toBeVisible({ timeout: 10_000 });
+		// Switch to German — neither demo store defaults to it, so a CDN fetch always happens
+		const translationFetch = page.waitForResponse(
+			(response) =>
+				response.url().includes('jsdelivr.net') &&
+				response.url().includes('/de') &&
+				response.status() === 200,
+			{ timeout: 15_000 }
+		);
 
-		// Change back to English so the test leaves the store in its original state.
-		await changeLanguage(page, 'English', 'English (US)');
+		await selectLanguage(page, 'German', 'German (Deutsch)');
 
-		// Verify product table reverts to English
-		await expect(page.getByText('Product').first()).toBeVisible({ timeout: 15_000 });
+		// Verify the trigger updated (testID-anchored)
+		await expect(page.getByTestId('language-select-trigger')).toContainText('German', {
+			timeout: 10_000,
+		});
+
+		// Verify translations were actually fetched from the CDN
+		const response = await translationFetch;
+		expect(response.ok()).toBeTruthy();
 	});
 
 	test('should persist language after closing and reopening settings', async ({
 		posPage: page,
 	}) => {
+		const variant = getStoreVariant(test.info());
+		const expected = STORE_LOCALE[variant];
+
 		await openSettings(page);
 
-		// Change to French
-		const languageTrigger = page.getByText('English (US)').first();
-		await expect(languageTrigger).toBeVisible({ timeout: 10_000 });
-		await languageTrigger.click();
-		await page.getByPlaceholder('Search Languages').fill('French');
-		await page.waitForTimeout(500);
-		await page.getByText('French (Français)').click();
+		// Verify the starting language matches the store's configured locale
+		await expect(page.getByTestId('language-select-trigger')).toContainText(
+			expected.triggerText,
+			{ timeout: 10_000 }
+		);
 
-		// Wait for French translations to load on the POS page
-		await expect(page.getByText('Produit')).toBeVisible({ timeout: 15_000 });
+		// Switch to German and wait for CDN fetch
+		const translationFetch = page.waitForResponse(
+			(response) =>
+				response.url().includes('jsdelivr.net') &&
+				response.url().includes('/de') &&
+				response.status() === 200,
+			{ timeout: 15_000 }
+		);
+
+		await selectLanguage(page, 'German', 'German (Deutsch)');
+		await translationFetch;
 
 		// Close settings modal
-		await page.getByRole('button', { name: /close|fermer/i }).first().click();
+		await page.goBack();
 		await page.waitForTimeout(1_000);
 
-		// The POS page should still show French translations
-		await expect(page.getByText('Produit')).toBeVisible({ timeout: 10_000 });
-
-		// Reopen settings and verify French is still selected
+		// Reopen settings and verify German is still selected (testID-anchored)
 		await page.getByRole('button', { name: /Demo Cashier/i }).click();
-		const settingsItem = page.getByText('Settings').or(page.getByText('Paramètres'));
-		await settingsItem.first().click();
-		await expect(page.getByText('French (Français)').first()).toBeVisible({ timeout: 10_000 });
-
-		// Revert to English for cleanup
-		await changeLanguage(page, 'English', 'English (US)');
-		await expect(page.getByText('Product').first()).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('settings-menu-item')).toBeVisible({ timeout: 15_000 });
+		await page.getByTestId('settings-menu-item').click();
+		await expect(page.getByTestId('language-select-trigger')).toContainText('German', {
+			timeout: 10_000,
+		});
 	});
 });
