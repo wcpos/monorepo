@@ -5,6 +5,7 @@ import type { ListProps as VirtualizedListPrimitiveProps } from '@wcpos/componen
 export interface Option {
 	value: string | number;
 	label: string;
+	item?: unknown;
 }
 
 interface ComboboxRootContextType {
