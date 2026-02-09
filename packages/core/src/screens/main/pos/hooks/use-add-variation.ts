@@ -54,13 +54,13 @@ export const useAddVariation = () => {
 			const parent = parentDoc.getLatest();
 
 			// check if variation is already in order, if so increment quantity
-			if (!currentOrder.isNew && parent.id !== 0) {
+			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && parent.id !== 0) {
 				const lineItems = currentOrder.getLatest().line_items ?? [];
-				const matches = findByProductVariationID(lineItems, parent.id, variation.id);
-				if (matches.length === 1) {
+				const matches = findByProductVariationID(lineItems, parent.id ?? 0, variation.id);
+				if (matches && matches.length === 1) {
 					const uuid = getUuidFromLineItem(matches[0]);
 					if (uuid) {
-						success = await updateLineItem(uuid, { quantity: matches[0].quantity + 1 });
+						success = await updateLineItem(uuid, { quantity: (matches[0].quantity ?? 0) + 1 });
 					}
 				}
 			}

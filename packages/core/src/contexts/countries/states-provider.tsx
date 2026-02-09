@@ -19,5 +19,5 @@ export const StatesProvider = ({ children, countryCode }: StatesProviderProps) =
 
 	const country = allCountries.find((country) => country.code === countryCode);
 
-	return <StatesContext.Provider value={country.states}>{children}</StatesContext.Provider>;
+	return <StatesContext.Provider value={country?.states}>{children}</StatesContext.Provider>;
 };

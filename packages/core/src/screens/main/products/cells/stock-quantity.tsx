@@ -21,9 +21,12 @@ export const StockQuantity = ({
 	table,
 }: CellContext<{ document: ProductDocument }, 'stock_quantity'>) => {
 	const product = row.original.document;
-	const stockQuantity = useObservableEagerState(product.stock_quantity$);
-	const manageStock = useObservableEagerState(product.manage_stock$);
+	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
+	const manageStock = useObservableEagerState(product.manage_stock$!);
 	const t = useT();
+	const meta = table.options.meta as unknown as {
+		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
+	};
 
 	return (
 		<VStack>
@@ -31,7 +34,7 @@ export const StockQuantity = ({
 				<NumberInput
 					value={String(stockQuantity || 0)}
 					onChangeText={(stock_quantity) =>
-						table.options.meta.onChange({ document: product, changes: { stock_quantity } })
+						meta.onChange({ document: product, changes: { stock_quantity } })
 					}
 					disabled={!manageStock}
 				/>
@@ -39,9 +42,9 @@ export const StockQuantity = ({
 			<SwitchWithLabel
 				nativeID="manage_stock"
 				label={t('products.manage')}
-				checked={manageStock}
+				checked={manageStock ?? false}
 				onCheckedChange={(manage_stock) =>
-					table.options.meta.onChange({ document: product, changes: { manage_stock } })
+					meta.onChange({ document: product, changes: { manage_stock } })
 				}
 				size="sm"
 			/>

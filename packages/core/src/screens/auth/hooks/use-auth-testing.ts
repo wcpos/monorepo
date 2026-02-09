@@ -155,8 +155,10 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 				setStatus('success');
 
 				return result;
-			} catch (err) {
-				const errorMessage = err.message || t('auth.failed_to_test_authorization_methods');
+			} catch (err: unknown) {
+				const errorMessage =
+					(err instanceof Error ? err.message : '') ||
+					t('auth.failed_to_test_authorization_methods');
 				setError(errorMessage);
 				setStatus('error');
 				authTestLogger.error(`Authorization testing failed: ${errorMessage}`, {

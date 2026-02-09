@@ -52,7 +52,7 @@ const FilterBar = ({ query }: Props) => {
 					return categoryCollection.findOne({ selector: { id } }).$.pipe(
 						tap((doc) => {
 							if (!isRxDocument(doc)) {
-								pullDocument(id, categoryCollection);
+								pullDocument(id, categoryCollection as any);
 							}
 						})
 					);
@@ -76,7 +76,7 @@ const FilterBar = ({ query }: Props) => {
 					return tagCollection.findOne({ selector: { id } }).$.pipe(
 						tap((doc) => {
 							if (!isRxDocument(doc)) {
-								pullDocument(id, tagCollection);
+								pullDocument(id, tagCollection as any);
 							}
 						})
 					);
@@ -100,7 +100,7 @@ const FilterBar = ({ query }: Props) => {
 					return brandCollection.findOne({ selector: { id } }).$.pipe(
 						tap((doc) => {
 							if (!isRxDocument(doc)) {
-								pullDocument(id, brandCollection);
+								pullDocument(id, brandCollection as any);
 							}
 						})
 					);
@@ -125,15 +125,19 @@ const FilterBar = ({ query }: Props) => {
 			<Suspense>
 				<CategoryPill
 					query={query}
-					resource={selectedCategoryResource}
+					resource={selectedCategoryResource as any}
 					selectedID={selectedCategoryID}
 				/>
 			</Suspense>
 			<Suspense>
-				<TagPill query={query} resource={selectedTagResource} selectedID={selectedTagID} />
+				<TagPill query={query} resource={selectedTagResource as any} selectedID={selectedTagID} />
 			</Suspense>
 			<Suspense>
-				<BrandsPill query={query} resource={selectedBrandResource} selectedID={selectedBrandID} />
+				<BrandsPill
+					query={query}
+					resource={selectedBrandResource as any}
+					selectedID={selectedBrandID}
+				/>
 			</Suspense>
 		</HStack>
 	);

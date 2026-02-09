@@ -1,5 +1,7 @@
 import TreeDOM from './tree-dom';
 
+import type { JsonViewProps } from '@uiw/react-json-view';
+
 /**
  *
  */

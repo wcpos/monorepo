@@ -61,7 +61,9 @@ export const PulseTableRow = React.forwardRef<PulseTableRowRef, PulseTableRowPro
 			ref,
 			methods: {
 				pulseAdd(callback?: () => void) {
-					props.table.options.meta?.scrollToRow(props.row.id);
+					(props.table.options.meta as { scrollToRow?: (id: string) => void })?.scrollToRow?.(
+						props.row.id
+					);
 					cancelAnimation(backgroundColor);
 					// Pulse to success color then back to base
 					backgroundColor.value = withSequence(
@@ -89,7 +91,7 @@ export const PulseTableRow = React.forwardRef<PulseTableRowRef, PulseTableRowPro
 
 		return (
 			<Animated.View
-				ref={augmentedRef}
+				ref={augmentedRef as unknown as React.Ref<React.Component>}
 				className={cn(
 					'web:transition-colors web:data-[state=selected]:bg-muted flex-row',
 					className

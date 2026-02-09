@@ -29,11 +29,11 @@ export const FilterBar = () => {
 	const { query } = useReports();
 	const guestCustomer = useGuestCustomer();
 	const customerID = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
+		query.rxQuery$.pipe(map(() => query.getSelector('customer_id') as number | undefined))
 	);
 	const cashierID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
-	);
+	) as string | undefined;
 	const { wpCredentials } = useAppState();
 
 	/**
@@ -49,7 +49,10 @@ export const FilterBar = () => {
 	 */
 	React.useEffect(() => {
 		if (customerID !== null && customerID !== undefined) {
-			customerQuery.where('id').equals(toNumber(customerID)).exec();
+			customerQuery!
+				.where('id')
+				.equals(toNumber(customerID as number))
+				.exec();
 		}
 	}, [customerID, customerQuery]);
 
@@ -66,7 +69,7 @@ export const FilterBar = () => {
 	 */
 	React.useEffect(() => {
 		if (cashierID) {
-			cashierQuery.where('id').equals(toNumber(cashierID)).exec();
+			cashierQuery!.where('id').equals(toNumber(cashierID)).exec();
 		}
 	}, [cashierID, cashierQuery]);
 
@@ -83,7 +86,7 @@ export const FilterBar = () => {
 					if (!id) {
 						return of(null);
 					}
-					return customerQuery.result$.pipe(
+					return customerQuery!.result$.pipe(
 						map((result) => {
 							if (result.count === 1) return result.hits[0].document;
 						}),
@@ -112,7 +115,7 @@ export const FilterBar = () => {
 					if (!id) {
 						return of(null);
 					}
-					return cashierQuery.result$.pipe(
+					return cashierQuery!.result$.pipe(
 						map((result) => {
 							if (result.count === 1) return result.hits[0].document;
 						}),
@@ -135,7 +138,13 @@ export const FilterBar = () => {
 	 *
 	 */
 	const storesResource = React.useMemo(
-		() => new ObservableResource(wpCredentials.populate$('stores'), (val) => !!val),
+		() =>
+			new ObservableResource(
+				wpCredentials.populate$('stores') as import('rxjs').Observable<
+					import('@wcpos/database').StoreDocument[]
+				>,
+				(val) => !!val
+			),
 		[wpCredentials]
 	);
 
@@ -165,7 +174,11 @@ export const FilterBar = () => {
 						<CustomerPill resource={customerResource} query={query} customerID={customerID} />
 					</Suspense>
 					<Suspense>
-						<CashierPill resource={cashierResource} query={query} cashierID={cashierID} />
+						<CashierPill
+							resource={cashierResource}
+							query={query}
+							cashierID={cashierID ? Number(cashierID) : undefined}
+						/>
 					</Suspense>
 					<StorePill resource={storesResource} query={query} />
 					<DateRangePill query={query} onRemove={removeDateRangeFilter} />

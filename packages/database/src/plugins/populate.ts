@@ -39,9 +39,13 @@ async function upsertRef(childCollection: RxCollection, data: any[]) {
 			const primaryPath = childCollection.schema.primaryPath;
 			/** TODO - I think this is a bug, shouldn't upsert do an insert if no primary? */
 			if (isEmpty(childData[primaryPath])) {
-				return childCollection.insert(childData).then((doc: RxDocument) => doc[primaryPath]);
+				return childCollection
+					.insert(childData)
+					.then((doc: RxDocument) => (doc as Record<string, any>)[primaryPath]);
 			}
-			return childCollection.upsert(childData).then((doc: RxDocument) => doc[primaryPath]);
+			return childCollection
+				.upsert(childData)
+				.then((doc: RxDocument) => (doc as Record<string, any>)[primaryPath]);
 		}
 		return Promise.resolve(childData);
 	});
@@ -86,7 +90,7 @@ async function preInsert(this: RxCollection, data: any) {
 	try {
 		await upsertRefs.call(this, data);
 	} catch (error) {
-		throw new Error(error);
+		throw new Error(error instanceof Error ? error.message : String(error));
 	}
 }
 
@@ -97,7 +101,7 @@ async function preSave(this: RxCollection, data: any) {
 	try {
 		await upsertRefs.call(this, data);
 	} catch (error) {
-		throw new Error(error);
+		throw new Error(error instanceof Error ? error.message : String(error));
 	}
 }
 
@@ -108,7 +112,7 @@ async function preRemove(this: RxCollection, data: any) {
 	try {
 		await removeRefs.call(this, data);
 	} catch (error) {
-		throw new Error(error);
+		throw new Error(error instanceof Error ? error.message : String(error));
 	}
 }
 
@@ -171,10 +175,10 @@ const populatePlugin: RxPlugin = {
 				const json = latestDoc.toMutableJSON();
 				const childrenPromises = map(childrenProps, async (object, path) => {
 					const childDocs = await latestDoc.populate(path);
-					const childPromises = childDocs.map(async (doc) => {
+					const childPromises = childDocs.map(async (doc: any) => {
 						return await doc.toPopulatedJSON();
 					});
-					json[path] = await Promise.all(childPromises);
+					(json as Record<string, any>)[path] = await Promise.all(childPromises);
 				});
 
 				return Promise.all(childrenPromises).then(() => json);

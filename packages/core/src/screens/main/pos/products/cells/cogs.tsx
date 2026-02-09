@@ -19,7 +19,7 @@ export function COGS({
 	column,
 }: CellContext<{ document: ProductDocument }, 'cost_of_goods_sold'>) {
 	const product = row.original.document;
-	const cogs = useObservableEagerState(product.cost_of_goods_sold$);
+	const cogs = useObservableEagerState(product.cost_of_goods_sold$!);
 	const cogs_value = cogs?.total_value || 0;
 	const { format } = useCurrencyFormat();
 

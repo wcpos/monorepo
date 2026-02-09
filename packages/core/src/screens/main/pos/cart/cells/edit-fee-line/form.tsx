@@ -38,12 +38,13 @@ const formSchema = z.object({
 	tax_class: z.string().optional(),
 	amount: z.number().optional(),
 	percent: z.boolean().default(false),
+	percent_of_cart_total_with_tax: z.boolean().optional(),
 	meta_data: metaDataSchema,
 });
 
 interface Props {
 	uuid: string;
-	item: import('@wcpos/database').OrderDocument['fee_lines'][number];
+	item: NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 }
 
 /**
@@ -60,17 +61,19 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 	/**
 	 *
 	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+	type FormValues = z.infer<typeof formSchema>;
+
+	const form = useForm<FormValues, unknown, FormValues>({
+		resolver: zodResolver(formSchema as never) as never,
 		defaultValues: {
-			name: item.name,
+			name: item.name ?? undefined,
 			amount: toNumber(amount),
 			percent,
-			tax_status: item.tax_status,
+			tax_status: item.tax_status ?? 'taxable',
 			tax_class: item.tax_class === '' ? 'standard' : item.tax_class,
 			prices_include_tax,
 			percent_of_cart_total_with_tax,
-			meta_data: item.meta_data,
+			meta_data: item.meta_data as FormValues['meta_data'],
 		},
 	});
 
@@ -78,7 +81,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 	 *
 	 */
 	const handleSave = React.useCallback(
-		(data: z.infer<typeof formSchema>) => {
+		(data: FormValues) => {
 			updateFeeLine(uuid, {
 				name: data.name,
 				amount: String(data.amount),
@@ -121,13 +124,15 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="amount"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormInput
 									customComponent={togglePercentage ? NumberInput : CurrencyInput}
 									label={togglePercentage ? t('pos_cart.percent') : t('pos_cart.amount')}
 									type="numeric"
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -153,12 +158,14 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="tax_class"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									label={t('common.tax_class')}
 									customComponent={TaxClassSelect}
-									{...field}
+									value={value ?? ''}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -166,12 +173,14 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="tax_status"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormRadioGroup
 									label={t('common.tax_status')}
 									customComponent={TaxStatusRadioGroup}
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}

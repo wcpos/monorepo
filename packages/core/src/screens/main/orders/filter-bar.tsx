@@ -20,7 +20,11 @@ import { useGuestCustomer } from '../hooks/use-guest-customer';
 /**
  *
  */
-export function FilterBar({ query }) {
+export function FilterBar({
+	query,
+}: {
+	query: import('@wcpos/query').Query<import('@wcpos/database').OrderCollection>;
+}) {
 	const guestCustomer = useGuestCustomer();
 	const customerID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
@@ -43,7 +47,10 @@ export function FilterBar({ query }) {
 	 */
 	React.useEffect(() => {
 		if (customerID !== null && customerID !== undefined) {
-			customerQuery.where('id').equals(customerID).exec();
+			customerQuery
+				?.where('id')
+				.equals(customerID as unknown as number)
+				.exec();
 		}
 	}, [customerID, customerQuery]);
 
@@ -60,7 +67,10 @@ export function FilterBar({ query }) {
 	 */
 	React.useEffect(() => {
 		if (cashierID) {
-			cashierQuery.where('id').equals(toNumber(cashierID)).exec();
+			cashierQuery
+				?.where('id')
+				.equals(toNumber(cashierID as string))
+				.exec();
 		}
 	}, [cashierID, cashierQuery]);
 
@@ -71,13 +81,13 @@ export function FilterBar({ query }) {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(([id]) => {
-					if (id === 0) {
+					if ((id as unknown) === 0) {
 						return of(guestCustomer);
 					}
 					if (!id) {
 						return of(null);
 					}
-					return customerQuery.result$.pipe(
+					return customerQuery!.result$.pipe(
 						map((result) => {
 							if (result.count === 1) return result.hits[0].document;
 						})
@@ -105,7 +115,7 @@ export function FilterBar({ query }) {
 					if (!id) {
 						return of(null);
 					}
-					return cashierQuery.result$.pipe(
+					return cashierQuery!.result$.pipe(
 						map((result) => {
 							if (result.count === 1) return result.hits[0].document;
 						})
@@ -138,12 +148,27 @@ export function FilterBar({ query }) {
 		<HStack className="w-full flex-wrap">
 			<StatusPill query={query} />
 			<Suspense>
-				<CustomerPill resource={customerResource} query={query} customerID={customerID} />
+				<CustomerPill
+					resource={customerResource}
+					query={query}
+					customerID={customerID as number | undefined}
+				/>
 			</Suspense>
 			<Suspense>
-				<CashierPill resource={cashierResource} query={query} cashierID={cashierID} />
+				<CashierPill
+					resource={cashierResource}
+					query={query}
+					cashierID={cashierID as number | undefined}
+				/>
 			</Suspense>
-			<StorePill resource={storesResource} query={query} />
+			<StorePill
+				resource={
+					storesResource as import('observable-hooks').ObservableResource<
+						import('@wcpos/database').StoreDocument[]
+					>
+				}
+				query={query}
+			/>
 			<DateRangePill query={query} />
 		</HStack>
 	);

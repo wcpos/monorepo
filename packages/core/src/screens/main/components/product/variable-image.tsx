@@ -21,18 +21,20 @@ export const VariableProductImage = ({
 	table,
 }: CellContext<{ document: ProductDocument }, 'image'>) => {
 	const product = row.original.document;
-	const images = useObservableEagerState(product.images$);
+	const images = useObservableEagerState(product.images$!);
 	const imageURL = get(images, [0, 'src'], undefined);
-	const { uri } = useImageAttachment(product, imageURL);
+	const { uri } = useImageAttachment(product, imageURL ?? '');
 
 	/**
 	 * Use setRowExpanded from table meta to bypass TanStack's buggy updater function
 	 */
-	const setRowExpanded = table.options.meta?.setRowExpanded;
+	const meta = table.options.meta as unknown as {
+		setRowExpanded?: (id: string, expanded: boolean) => void;
+		expanded$: import('rxjs').Observable<Record<string, boolean>>;
+	};
+	const setRowExpanded = meta?.setRowExpanded;
 	const isExpanded = useObservableEagerState(
-		table.options.meta?.expanded$?.pipe(
-			map((expanded: Record<string, boolean>) => !!expanded[row.id])
-		)
+		meta.expanded$.pipe(map((expanded: Record<string, boolean>) => !!expanded[row.id]))
 	);
 
 	const handlePress = React.useCallback(() => {

@@ -15,9 +15,11 @@ import type { TextProps } from '../text';
 interface FormFieldFieldProps<T> {
 	name: string;
 	onBlur: Noop;
-	onChange: (val: T) => void;
-	value: T;
+
+	onChange: (...args: any[]) => void;
+	value: T | undefined;
 	disabled?: boolean;
+	ref?: React.Ref<unknown>;
 }
 
 type FormItemProps<U> = FormFieldFieldProps<U> & {

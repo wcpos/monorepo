@@ -18,15 +18,20 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 	const print = React.useCallback(() => {
 		if (window && window.ipcRenderer) {
 			const printJobId = uuidv4();
+			const ipc = window.ipcRenderer as {
+				invoke: (channel: string, args: unknown) => Promise<unknown>;
+				send: (channel: string, args: unknown) => void;
+				once: (channel: string, callback: (...args: unknown[]) => void) => void;
+			};
 
 			// Send the print request to the main process
-			window.ipcRenderer.send('print-external-url', {
+			ipc.send('print-external-url', {
 				externalURL,
 				printJobId,
 			});
 
 			// Listen for onBeforePrint acknowledgment
-			window.ipcRenderer.once(`onBeforePrint-${printJobId}`, () => {
+			ipc.once(`onBeforePrint-${printJobId}`, () => {
 				setIsPrinting(true);
 				if (onBeforePrint) {
 					onBeforePrint();
@@ -34,7 +39,7 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 			});
 
 			// Listen for onAfterPrint
-			window.ipcRenderer.once(`onAfterPrint-${printJobId}`, () => {
+			ipc.once(`onAfterPrint-${printJobId}`, () => {
 				setIsPrinting(false);
 				if (onAfterPrint) {
 					onAfterPrint();
@@ -42,10 +47,10 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 			});
 
 			// Listen for onPrintError
-			window.ipcRenderer.once(`onPrintError-${printJobId}`, (_event, error) => {
+			ipc.once(`onPrintError-${printJobId}`, (_event: unknown, error: unknown) => {
 				setIsPrinting(false);
 				if (onPrintError) {
-					onPrintError('print', error);
+					onPrintError('print', error as Error);
 				}
 			});
 		} else {

@@ -40,8 +40,8 @@ export const UISettingsForm = () => {
 	/**
 	 *
 	 */
-	const form = useForm<z.infer<typeof schema>>({
-		resolver: zodResolver(schema),
+	const form = useForm({
+		resolver: zodResolver(schema as never) as never,
 		defaultValues: initialData,
 	});
 
@@ -61,7 +61,7 @@ export const UISettingsForm = () => {
 	 * Form is the source of truth during editing.
 	 * Changes are saved to RxDB but we don't re-sync back to avoid loops.
 	 */
-	useFormChangeHandler({ form, onChange: patchUI });
+	useFormChangeHandler({ form: form as never, onChange: patchUI });
 
 	/**
 	 *

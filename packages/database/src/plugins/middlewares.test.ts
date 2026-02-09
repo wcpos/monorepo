@@ -13,11 +13,6 @@ interface MockMiddlewareCollection {
 	postRemove: jest.Mock;
 }
 
-// Type for hook function argument
-interface HookArg {
-	collection: MockMiddlewareCollection;
-}
-
 describe('middlewaresPlugin', () => {
 	describe('plugin metadata', () => {
 		it('should have correct plugin name', () => {
@@ -54,9 +49,9 @@ describe('middlewaresPlugin', () => {
 		});
 
 		it('should register middleware hooks from collection options', () => {
-			const preInsertHandler = jest.fn((doc) => doc);
+			const preInsertHandler = jest.fn((doc: any) => doc);
 
-			mockCollection.options.middlewares = {
+			mockCollection.options!.middlewares = {
 				preInsert: {
 					handle: preInsertHandler,
 					parallel: false,
@@ -64,7 +59,7 @@ describe('middlewaresPlugin', () => {
 			};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as HookArg);
+			hookFn?.({ collection: mockCollection } as any);
 
 			expect(mockCollection.preInsert).toHaveBeenCalledWith(preInsertHandler, false);
 		});
@@ -73,7 +68,7 @@ describe('middlewaresPlugin', () => {
 			const preInsertHandler = jest.fn();
 			const preSaveHandler = jest.fn();
 
-			mockCollection.options.middlewares = {
+			mockCollection.options!.middlewares = {
 				preInsert: {
 					handle: preInsertHandler,
 					parallel: false,
@@ -85,7 +80,7 @@ describe('middlewaresPlugin', () => {
 			};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as HookArg);
+			hookFn?.({ collection: mockCollection } as any);
 
 			expect(mockCollection.preInsert).toHaveBeenCalledWith(preInsertHandler, false);
 			expect(mockCollection.preSave).toHaveBeenCalledWith(preSaveHandler, true);
@@ -94,7 +89,7 @@ describe('middlewaresPlugin', () => {
 		it('should handle parallel middleware registration', () => {
 			const handler = jest.fn();
 
-			mockCollection.options.middlewares = {
+			mockCollection.options!.middlewares = {
 				postInsert: {
 					handle: handler,
 					parallel: true,
@@ -102,13 +97,13 @@ describe('middlewaresPlugin', () => {
 			};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as HookArg);
+			hookFn?.({ collection: mockCollection } as any);
 
 			expect(mockCollection.postInsert).toHaveBeenCalledWith(handler, true);
 		});
 
 		it('should not fail when no middlewares are configured', () => {
-			mockCollection.options.middlewares = undefined;
+			mockCollection.options!.middlewares = undefined;
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
 
@@ -125,7 +120,7 @@ describe('middlewaresPlugin', () => {
 		});
 
 		it('should return the collection', () => {
-			mockCollection.options.middlewares = {};
+			mockCollection.options!.middlewares = {};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
 			const result = hookFn?.({ collection: mockCollection } as any);
@@ -145,21 +140,24 @@ describe('middlewaresPlugin', () => {
 			];
 
 			const handlers: Record<string, jest.Mock> = {};
-			mockCollection.options.middlewares = {};
+			mockCollection.options!.middlewares = {};
 
 			hookTypes.forEach((hookType) => {
 				handlers[hookType] = jest.fn();
-				mockCollection.options.middlewares[hookType] = {
+				mockCollection.options!.middlewares![hookType] = {
 					handle: handlers[hookType],
 					parallel: false,
 				};
 			});
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as HookArg);
+			hookFn?.({ collection: mockCollection } as any);
 
 			hookTypes.forEach((hookType) => {
-				expect(mockCollection[hookType]).toHaveBeenCalledWith(handlers[hookType], false);
+				expect((mockCollection as Record<string, any>)[hookType]).toHaveBeenCalledWith(
+					handlers[hookType],
+					false
+				);
 			});
 		});
 	});
@@ -194,7 +192,7 @@ describe('middlewaresPlugin', () => {
 			};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as HookArg);
+			hookFn?.({ collection: mockCollection } as any);
 
 			// Verify middlewares were registered
 			expect(mockCollection.preInsert).toHaveBeenCalled();
@@ -236,7 +234,7 @@ describe('middlewaresPlugin', () => {
 			};
 
 			const hookFn = middlewaresPlugin.hooks?.createRxCollection?.after;
-			hookFn?.({ collection: mockCollection } as HookArg);
+			hookFn?.({ collection: mockCollection } as any);
 
 			expect(mockCollection.preInsert).toHaveBeenCalledWith(asyncHandler, false);
 		});

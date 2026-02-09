@@ -35,7 +35,9 @@ export const OpenOrderTabs = () => {
 	 */
 	return (
 		<Tabs
-			value={currentOrder.isNew ? 'new' : currentOrder.uuid}
+			value={
+				(currentOrder as unknown as { isNew: boolean }).isNew ? 'new' : (currentOrder.uuid ?? '')
+			}
 			onValueChange={handleTabPress}
 			orientation="horizontal"
 			className=""

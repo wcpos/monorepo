@@ -10,19 +10,21 @@ export interface QueryOptions {
 	hooks?: QueryHooks;
 	locale?: string;
 	endpoint?: string;
+	infiniteScroll?: boolean;
 }
 
 export const useLocalQuery = (queryOptions: QueryOptions) => {
 	const manager = useQueryManager();
+	const logsCollection = (manager.localDB as any).collections.logs;
 
 	const query = React.useMemo(() => {
 		return new Query({
 			id: 'logs',
-			collection: manager.localDB.collections.logs,
+			collection: logsCollection,
 			initialParams: queryOptions.initialParams,
 			infiniteScroll: queryOptions.infiniteScroll,
 		});
-	}, [manager.localDB.collections.logs, queryOptions.initialParams, queryOptions.infiniteScroll]);
+	}, [logsCollection, queryOptions.initialParams, queryOptions.infiniteScroll]);
 
 	return query;
 };

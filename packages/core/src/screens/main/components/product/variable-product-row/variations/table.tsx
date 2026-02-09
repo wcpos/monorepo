@@ -14,15 +14,29 @@ import { VariationTableFooter } from './footer';
 import { TextCell } from '../../../../components/text-cell';
 import { getColumnStyle } from '../../../data-table';
 
-import type { Row } from '@tanstack/react-table';
+import type { CellContext, Row } from '@tanstack/react-table';
+
+type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 interface Props {
-	query: any;
+	query: import('@wcpos/query').Query<import('@wcpos/database').ProductVariationCollection>;
 	row: Row<{ document: ProductDocument }>;
 }
 
-const cellRenderer = (props) => {
-	const Cell = props.table.options.meta.variationRenderCell(props);
+interface VariationHit {
+	id: string;
+	document: ProductVariationDocument;
+}
+
+const cellRenderer = (props: CellContext<Record<string, unknown>, unknown>) => {
+	const meta = props.table.options.meta as
+		| {
+				variationRenderCell?: (
+					props: CellContext<Record<string, unknown>, unknown>
+				) => React.ComponentType<CellContext<Record<string, unknown>, unknown>> | null;
+		  }
+		| undefined;
+	const Cell = meta?.variationRenderCell?.(props);
 
 	if (Cell) {
 		return (
@@ -34,14 +48,14 @@ const cellRenderer = (props) => {
 		);
 	}
 
-	return <TextCell {...props} />;
+	return <TextCell {...(props as CellContext<Record<string, unknown>, string>)} />;
 };
 
 /**
  *
  */
 export const VariationsTable = ({ query, row }: Props) => {
-	const result = useObservableSuspense(query.resource);
+	const result = useObservableSuspense(query.resource) as { hits: VariationHit[] };
 
 	/**
 	 * @NOTE - Don't use a unique key here, index is sufficient
@@ -49,34 +63,50 @@ export const VariationsTable = ({ query, row }: Props) => {
 	 */
 	return (
 		<VStack className="gap-0">
-			{result.hits.map((hit, index) => {
+			{result.hits.map((hit: VariationHit, index: number) => {
 				return (
 					<TableRow key={index} index={index}>
-						{row.getVisibleCells().map((cell, index) => {
-							/**
-							 * Create a context for the subrow using the parent's cell definitions
-							 * - https://tanstack.com/table/latest/docs/guide/rows#sub-rows
-							 */
-							const subrowCellContext = {
-								...cell.getContext(),
-								row: {
-									...row,
-									parentId: row.id,
-									getParentRow: () => row.original,
-									original: hit,
-								},
-							};
+						{row
+							.getVisibleCells()
+							.map(
+								(
+									cell: import('@tanstack/react-table').Cell<
+										{ document: ProductDocument },
+										unknown
+									>,
+									cellIndex: number
+								) => {
+									/**
+									 * Create a context for the subrow using the parent's cell definitions
+									 * - https://tanstack.com/table/latest/docs/guide/rows#sub-rows
+									 */
+									const subrowCellContext = {
+										...cell.getContext(),
+										row: {
+											...row,
+											parentId: row.id,
+											getParentRow: () => row.original,
+											original: hit,
+										},
+									};
 
-							return (
-								<TableCell
-									key={index}
-									className={cn(cell.column.id === 'image' && 'relative')}
-									style={getColumnStyle(cell.column.columnDef.meta)}
-								>
-									{flexRender(cellRenderer, subrowCellContext)}
-								</TableCell>
-							);
-						})}
+									return (
+										<TableCell
+											key={cellIndex}
+											className={cn(cell.column.id === 'image' && 'relative')}
+											style={getColumnStyle(cell.column.columnDef.meta)}
+										>
+											{flexRender(
+												cellRenderer,
+												subrowCellContext as unknown as CellContext<
+													Record<string, unknown>,
+													unknown
+												>
+											)}
+										</TableCell>
+									);
+								}
+							)}
 					</TableRow>
 				);
 			})}

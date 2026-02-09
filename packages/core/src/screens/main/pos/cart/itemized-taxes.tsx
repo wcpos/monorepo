@@ -10,7 +10,15 @@ import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-cur
 /**
  *
  */
-const ItemizedTaxes = ({ taxLines = [], taxDisplayCart }) => {
+type TaxLine = NonNullable<import('@wcpos/database').OrderDocument['tax_lines']>[number];
+
+const ItemizedTaxes = ({
+	taxLines = [],
+	taxDisplayCart,
+}: {
+	taxLines?: TaxLine[];
+	taxDisplayCart: string;
+}) => {
 	const { format } = useCurrentOrderCurrencyFormat();
 	const t = useT();
 
@@ -20,7 +28,8 @@ const ItemizedTaxes = ({ taxLines = [], taxDisplayCart }) => {
 			<VStack space="xs" className="flex-1">
 				{taxLines.map((tax) => {
 					// tax_total and shipping_tax_total are separate, but we will display together
-					const displayTax = parseFloat(tax.tax_total) + parseFloat(tax.shipping_tax_total);
+					const displayTax =
+						parseFloat(tax.tax_total ?? '0') + parseFloat(tax.shipping_tax_total ?? '0');
 					return (
 						<HStack key={tax.rate_id}>
 							<Text className="flex-1 text-right">

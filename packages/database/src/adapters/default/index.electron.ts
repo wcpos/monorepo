@@ -4,7 +4,16 @@ import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import type { SQLiteQueryWithParams } from 'rxdb-premium/plugins/storage-sqlite';
+import type { SQLiteQueryWithParams, SQLResultRow } from 'rxdb-premium/plugins/storage-sqlite';
+
+declare global {
+	interface Window {
+		ipcRenderer: {
+			invoke(channel: string, ...args: any[]): Promise<any>;
+			send(channel: string, ...args: any[]): void;
+		};
+	}
+}
 
 const dbLogger = getLogger(['wcpos', 'db', 'adapter']);
 
@@ -81,7 +90,7 @@ export const storage = getRxStorageSQLite({
 		all: async (db, queryWithParams: SQLiteQueryWithParams) => {
 			try {
 				await waitForIpcRenderer;
-				const result = await invokeWithTimeout('sqlite', {
+				const result = await invokeWithTimeout<SQLResultRow[]>('sqlite', {
 					type: 'all',
 					name: db.name,
 					sql: queryWithParams,

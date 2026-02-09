@@ -60,9 +60,14 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 								onSelect={(attribute) => {
 									query.variationMatch(attribute).exec();
 								}}
-								selected={query.getVariationMatchOption({ id: attribute.id, name: attribute.name })}
+								selected={query.getVariationMatchOption({
+									id: attribute.id ?? 0,
+									name: attribute.name ?? '',
+								})}
 								onRemove={() => {
-									query.removeVariationMatch({ id: attribute.id, name: attribute.name }).exec();
+									query
+										.removeVariationMatch({ id: attribute.id ?? 0, name: attribute.name ?? '' })
+										.exec();
 								}}
 							/>
 						);

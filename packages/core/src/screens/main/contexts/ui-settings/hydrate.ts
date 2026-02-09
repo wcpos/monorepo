@@ -23,10 +23,12 @@ export function hydratedSettings(
 	const settingObservables = settingIds.reduce(
 		(acc, id) => {
 			acc[id] = from(
-				storeDB.addState<UISettingSchema<typeof id>>(`${id}_v2`).then(async (state) => {
-					await mergeWithInitalValues(id, state);
-					return state;
-				})
+				storeDB
+					.addState<UISettingSchema<typeof id>>(`${id}_v2`)
+					.then(async (state: UISettingState<UISettingID>) => {
+						await mergeWithInitalValues(id, state);
+						return state;
+					})
 			);
 			return acc;
 		},

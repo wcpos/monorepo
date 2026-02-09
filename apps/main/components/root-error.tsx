@@ -80,7 +80,9 @@ export const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 			const result = await clearAllDB();
 			appLogger.info(result.message);
 		} catch (err) {
-			appLogger.error('Failed to clear database:', err);
+			appLogger.error(
+				`Failed to clear database: ${err instanceof Error ? err.message : String(err)}`
+			);
 		}
 
 		// Reload the app to reinitialize everything
@@ -93,7 +95,7 @@ export const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 				<View style={styles.content}>
 					<Text style={styles.title}>Oops!</Text>
 					<Text style={styles.subtitle}>{"There's an error"}</Text>
-					<Text style={styles.error}>{error.toString()}</Text>
+					<Text style={styles.error}>{String(error)}</Text>
 					<TouchableOpacity style={styles.button} onPress={handleReset}>
 						<Text style={styles.buttonText}>Try again</Text>
 					</TouchableOpacity>

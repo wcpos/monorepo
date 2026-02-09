@@ -13,7 +13,7 @@ import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 import type { CellContext } from '@tanstack/react-table';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;
 	item: LineItem;
@@ -33,7 +33,7 @@ export const ProductName = ({ row, column }: CellContext<Props, 'name'>) => {
 	 */
 	const metaData = React.useMemo(
 		() =>
-			item.meta_data.filter((meta) => {
+			(item.meta_data ?? []).filter((meta) => {
 				if (meta.key) {
 					return !meta.key.startsWith('_');
 				}
@@ -56,10 +56,10 @@ export const ProductName = ({ row, column }: CellContext<Props, 'name'>) => {
 				</EditCartItemButton>
 			</HStack>
 
-			{column.columnDef.meta.show('sku') && <Text className="text-sm">{item.sku}</Text>}
+			{column.columnDef.meta?.show?.('sku') && <Text className="text-sm">{item.sku}</Text>}
 
 			{metaData.length > 0 && (
-				<VStack space="none">
+				<VStack space="xs">
 					{metaData.map((meta: any) => (
 						<HStack key={meta.id || meta.key || meta.display_key} className="flex-wrap gap-0">
 							<Text

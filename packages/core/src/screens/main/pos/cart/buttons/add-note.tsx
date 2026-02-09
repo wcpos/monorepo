@@ -25,7 +25,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
  */
 export const AddNoteButton = () => {
 	const { currentOrder } = useCurrentOrder();
-	const note = useObservableEagerState(currentOrder.customer_note$);
+	const note = useObservableEagerState(currentOrder.customer_note$!);
 	const t = useT();
 	const { localPatch } = useLocalMutation();
 	const [open, setOpen] = React.useState(false);

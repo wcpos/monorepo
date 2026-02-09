@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import flatten from 'lodash/flatten';
-
 import { useCollection } from '../use-collection';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -37,7 +35,7 @@ export const useBarcodeSearch = () => {
 					.exec(),
 			]);
 
-			return flatten(result);
+			return [...result[0], ...result[1]];
 		},
 		[productCollection, variationsCollection]
 	);

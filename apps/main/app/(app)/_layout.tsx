@@ -35,7 +35,7 @@ function AppStack() {
 				<Stack
 					screenOptions={{
 						headerShown: false,
-						contentStyle: { backgroundColor },
+						contentStyle: { backgroundColor: backgroundColor as string },
 					}}
 				>
 					<Stack.Screen name="(drawer)" />

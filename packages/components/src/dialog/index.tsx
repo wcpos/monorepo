@@ -101,7 +101,8 @@ function DialogContent({
 	children,
 	portalHost,
 	...props
-}: DialogPrimitive.ContentProps & VariantProps<typeof dialogContentVariants>) {
+}: DialogPrimitive.ContentProps &
+	VariantProps<typeof dialogContentVariants> & { portalHost?: string }) {
 	const { open } = DialogPrimitive.useRootContext();
 	return (
 		<DialogPortal hostName={portalHost}>

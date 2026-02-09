@@ -92,7 +92,7 @@ export const TaxSettings = () => {
 	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+		resolver: zodResolver(formSchema as never) as never,
 		values: formData,
 	});
 
@@ -100,7 +100,7 @@ export const TaxSettings = () => {
 	 * Handle form changes and persist to store
 	 */
 	const handleChange = React.useCallback(
-		async (data) => {
+		async (data: z.infer<typeof formSchema>) => {
 			await localPatch({
 				document: store,
 				data,
@@ -109,7 +109,7 @@ export const TaxSettings = () => {
 		[localPatch, store]
 	);
 
-	useFormChangeHandler({ form, onChange: handleChange });
+	useFormChangeHandler({ form: form as never, onChange: handleChange as never });
 
 	/**
 	 * Restore server settings
@@ -187,12 +187,14 @@ export const TaxSettings = () => {
 						<FormField
 							control={form.control}
 							name="tax_based_on"
-							render={({ field }) => (
+							render={({ field: { value, onChange, ...rest } }) => (
 								<View className="flex-1">
 									<FormSelect
 										customComponent={TaxBasedOnSelect}
 										label={t('common.calculate_tax_based_on')}
-										{...field}
+										value={value}
+										onChange={onChange}
+										{...rest}
 									/>
 								</View>
 							)}
@@ -200,12 +202,14 @@ export const TaxSettings = () => {
 						<FormField
 							control={form.control}
 							name="shipping_tax_class"
-							render={({ field }) => (
+							render={({ field: { value, onChange, ...rest } }) => (
 								<View className="flex-1">
 									<FormSelect
 										customComponent={TaxClassSelect}
 										label={t('settings.shipping_tax_class')}
-										{...field}
+										value={value}
+										onChange={onChange}
+										{...rest}
 									/>
 								</View>
 							)}

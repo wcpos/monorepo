@@ -127,7 +127,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 
 	// Debug logging function (called from worklet via scheduleOnRN)
 	const logDragStart = React.useCallback(
-		(itemId: string, index: number, positionsSnapshot: Record<string, number>) => {
+		(itemId: string | number, index: number, positionsSnapshot: Record<string, number>) => {
 			uiLogger.debug(`Drag started for ${itemId}`, {
 				context: { index, positions: positionsSnapshot },
 			});

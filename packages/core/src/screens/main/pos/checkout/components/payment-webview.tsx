@@ -19,7 +19,7 @@ const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
-export interface PaymentWebviewProps extends React.ComponentProps<typeof WebView> {
+export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof WebView>> {
 	order: OrderDocument;
 	setLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }
@@ -30,7 +30,7 @@ export interface PaymentWebviewProps extends React.ComponentProps<typeof WebView
 export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewProps) => {
 	const router = useRouter();
 	const paymentURL = useObservableState(
-		order.links$.pipe(map((links) => get(links, ['payment', 0, 'href']))),
+		order.links$!.pipe(map((links) => get(links, ['payment', 0, 'href']))),
 		get(order, ['links', 'payment', 0, 'href'])
 	);
 	const { wpCredentials } = useAppState();
@@ -55,7 +55,7 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 	const paymentURLWithToken = React.useMemo(() => {
 		if (!paymentURL) return '';
 		// Append the JWT token as a query parameter to the payment URL
-		const url = new URL(paymentURL);
+		const url = new URL(paymentURL as string);
 		url.searchParams.append('token', jwt);
 		return url.toString();
 	}, [paymentURL, jwt]);
@@ -72,25 +72,37 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 				try {
 					const payload = event.data.payload;
 					// get line_items with "_reduced_stock" meta
-					const reducedStockItems = (payload?.line_items || []).filter((item) =>
-						item.meta_data.some((meta) => meta.key === '_reduced_stock')
+					const reducedStockItems = (payload?.line_items || []).filter(
+						(item: Record<string, unknown>) =>
+							(item.meta_data as { key: string }[])?.some(
+								(meta: { key: string }) => meta.key === '_reduced_stock'
+							)
 					);
 					stockAdjustment(reducedStockItems);
 
 					const latest = order.getLatest();
 					const existingLinks = latest.links;
-					const parsedData = latest.collection.parseRestResponse(payload);
+					const parsedData = (
+						latest.collection as unknown as {
+							parseRestResponse: (data: unknown) => Record<string, unknown>;
+						}
+					).parseRestResponse(payload);
 
 					// Preserve existing links that the payment response didn't include.
 					// The server may not return receipt/payment links in the payment response,
 					// but parseRestResponse defaults missing arrays to [], which would wipe them.
 					if (parsedData.links && existingLinks) {
-						for (const key of Object.keys(existingLinks)) {
+						const parsedLinks = parsedData.links as Record<string, { href?: string }[]>;
+						const existingLinksRecord = existingLinks as Record<
+							string,
+							{ href?: string }[] | undefined
+						>;
+						for (const key of Object.keys(existingLinksRecord)) {
 							if (
-								existingLinks[key]?.length > 0 &&
-								(!parsedData.links[key] || parsedData.links[key].length === 0)
+								(existingLinksRecord[key]?.length ?? 0) > 0 &&
+								(!parsedLinks[key] || parsedLinks[key].length === 0)
 							) {
-								parsedData.links[key] = existingLinks[key];
+								parsedLinks[key] = existingLinksRecord[key]!;
 							}
 						}
 					}
@@ -126,7 +138,8 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 						}
 					}
 				} catch (err) {
-					orderLogger.error(err?.message || 'Payment processing error', {
+					const errorMessage = err instanceof Error ? err.message : 'Payment processing error';
+					orderLogger.error(errorMessage, {
 						showToast: true,
 						saveToDb: true,
 						context: {
@@ -145,7 +158,7 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 	/**
 	 *
 	 */
-	const onWebViewLoaded = React.useCallback((event) => {
+	const onWebViewLoaded = React.useCallback((_event: unknown) => {
 		//
 	}, []);
 
@@ -156,24 +169,26 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 		<ErrorBoundary>
 			{paymentURL ? (
 				<WebView
+					{...(props as React.ComponentProps<typeof WebView>)}
 					src={paymentURLWithToken}
 					onLoad={onWebViewLoaded}
 					onMessage={(event) => {
-						if (event?.data?.payload?.data) {
-							orderLogger.error(event?.data?.payload?.message || 'Payment error', {
+						const data = event?.nativeEvent?.data as Record<string, unknown> | undefined;
+						const payload = data?.payload as Record<string, unknown> | undefined;
+						if (payload?.data) {
+							orderLogger.error((payload?.message as string) || 'Payment error', {
 								showToast: true,
 								saveToDb: true,
 								context: {
 									errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
-									payloadData: event?.data?.payload?.data,
+									payloadData: payload?.data,
 								},
 							});
 						} else {
-							handlePaymentReceived(event);
+							handlePaymentReceived(data as unknown as MessageEvent);
 						}
 					}}
 					className="h-full flex-1"
-					{...props}
 				/>
 			) : null}
 		</ErrorBoundary>

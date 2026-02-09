@@ -24,19 +24,19 @@ export const useBarcodeDetection = (
 ) => {
 	const t = useT();
 	const { store } = useAppState();
-	const minLength = useObservableEagerState(store.barcode_scanning_min_chars$);
-	const prefix = useObservableEagerState(store.barcode_scanning_prefix$);
-	const suffix = useObservableEagerState(store.barcode_scanning_suffix$);
+	const minLength = useObservableEagerState(store.barcode_scanning_min_chars$) as number;
+	const prefix = useObservableEagerState(store.barcode_scanning_prefix$) as string;
+	const suffix = useObservableEagerState(store.barcode_scanning_suffix$) as string;
 	const avgTimeInputThreshold = useObservableEagerState(
 		store.barcode_scanning_avg_time_input_threshold$
-	);
+	) as number;
 
 	// Refs to keep track of mutable state without causing re-renders
 	const inputStackRef = React.useRef<string[]>([]);
 	const lastInputTimeRef = React.useRef<number | null>(null);
 	const avgInputTimeRef = React.useRef<number>(0);
 	const detectingScanningRef = React.useRef<boolean>(false);
-	const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+	const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Subject to emit detected barcodes
 	const [onBarcodeScan, barcode$] = useObservableCallback((event$) =>
@@ -147,7 +147,8 @@ export const useBarcodeDetection = (
 	 */
 	const onKeyUp = React.useCallback(
 		(e: KeyboardEvent) => {
-			const ignoreInput = e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA';
+			const target = e.target as HTMLElement | null;
+			const ignoreInput = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
 			if (!ignoreInput) {
 				handleKeyInput(e.key);
 			}

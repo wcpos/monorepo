@@ -16,7 +16,9 @@ export const Address = ({
 	column,
 }: CellContext<{ document: OrderDocument }, 'billing' | 'shipping'>) => {
 	const order = row.original.document;
-	const address = useObservableEagerState(order[`${column.id}$`]);
+	const address = useObservableEagerState(
+		(order as unknown as Record<string, import('rxjs').Observable<unknown>>)[`${column.id}$`]
+	) as Record<string, string> | undefined;
 
 	return address ? <FormatAddress address={address} showName={false} /> : null;
 };

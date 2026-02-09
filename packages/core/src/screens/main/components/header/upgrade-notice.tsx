@@ -7,7 +7,7 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
 
-export const UpgradeNotice = ({ setShowUpgrade }) => {
+export const UpgradeNotice = ({ setShowUpgrade }: { setShowUpgrade: (show: boolean) => void }) => {
 	const t = useT();
 
 	/**

@@ -46,7 +46,7 @@ export const SettingsScreen = () => {
 
 	return (
 		<Modal>
-			<ModalContent size="2xl">
+			<ModalContent size="xl">
 				<ModalHeader>
 					<ModalTitle>{t('common.settings')}</ModalTitle>
 				</ModalHeader>

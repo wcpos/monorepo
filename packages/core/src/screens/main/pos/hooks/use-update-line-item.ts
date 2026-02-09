@@ -9,9 +9,10 @@ import { updatePosDataMeta } from './utils';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 
-interface Changes extends Partial<LineItem> {
+interface Changes extends Partial<Omit<LineItem, 'price'>> {
+	price?: number;
 	regular_price?: number;
 	tax_status?: string;
 }
@@ -79,8 +80,10 @@ export const useUpdateLineItem = () => {
 	const splitLineItem = React.useCallback(
 		async (uuid: string) => {
 			const order = currentOrder.getLatest();
-			const lineItemIndex = order.line_items.findIndex((item) =>
-				item.meta_data.some((meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid)
+			const lineItemIndex = (order.line_items ?? []).findIndex((item) =>
+				(item.meta_data ?? []).some(
+					(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
+				)
 			);
 
 			if (lineItemIndex === -1) {
@@ -88,16 +91,16 @@ export const useUpdateLineItem = () => {
 				return;
 			}
 
-			const lineItemToSplit = order.line_items[lineItemIndex];
+			const lineItemToSplit = (order.line_items ?? [])[lineItemIndex];
 
-			if (lineItemToSplit.quantity <= 1) {
+			if ((lineItemToSplit?.quantity ?? 0) <= 1) {
 				console.error('Line item quantity must be greater than 1');
 				return;
 			}
 
 			const lineItemToCopy = calculateLineItemTaxesAndTotals({ ...lineItemToSplit, quantity: 1 });
-			const quantity = Math.floor(lineItemToSplit.quantity);
-			const rawRemainder = lineItemToSplit.quantity - quantity;
+			const quantity = Math.floor(lineItemToSplit?.quantity ?? 0);
+			const rawRemainder = (lineItemToSplit?.quantity ?? 0) - quantity;
 			const remainder = parseFloat(rawRemainder.toFixed(6));
 			const newLineItems = [{ ...lineItemToCopy }];
 			unset(lineItemToCopy, 'id'); // remove id so it is treated as a new item
@@ -105,7 +108,7 @@ export const useUpdateLineItem = () => {
 			for (let i = 1; i < quantity; i++) {
 				const newItem = {
 					...lineItemToCopy,
-					meta_data: lineItemToCopy.meta_data.map((meta) =>
+					meta_data: (lineItemToCopy.meta_data ?? []).map((meta) =>
 						meta.key === '_woocommerce_pos_uuid' ? { ...meta, value: uuidv4() } : meta
 					),
 				};
@@ -120,7 +123,7 @@ export const useUpdateLineItem = () => {
 				const newItem = {
 					...remainderLineItem,
 					quantity: remainder,
-					meta_data: remainderLineItem.meta_data.map((meta) =>
+					meta_data: (remainderLineItem.meta_data ?? []).map((meta) =>
 						meta.key === '_woocommerce_pos_uuid' ? { ...meta, value: uuidv4() } : meta
 					),
 				};
@@ -129,9 +132,9 @@ export const useUpdateLineItem = () => {
 
 			// Replace the original item with the new items in the order
 			const updatedLineItems = [
-				...order.line_items.slice(0, lineItemIndex),
+				...(order.line_items ?? []).slice(0, lineItemIndex),
 				...newLineItems,
-				...order.line_items.slice(lineItemIndex + 1),
+				...(order.line_items ?? []).slice(lineItemIndex + 1),
 			];
 
 			return localPatch({ document: order, data: { line_items: updatedLineItems } });

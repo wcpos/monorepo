@@ -68,7 +68,7 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 	const onSearch = React.useCallback(
 		(value: string) => {
 			setSearch(value);
-			query.debouncedSearch(value);
+			query?.debouncedSearch(value);
 		},
 		[query]
 	);
@@ -77,7 +77,7 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 	 * Clear the search when unmounting
 	 */
 	React.useEffect(() => {
-		return () => query.search('');
+		return () => query?.search('');
 	}, [query]);
 
 	/**
@@ -88,6 +88,7 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 			<ComboboxInput
 				placeholder={t('common.search_customers')}
 				value={search}
+				// @ts-expect-error: onChangeText is passed through to Input via spread
 				onChangeText={onSearch}
 			/>
 			<Suspense>
@@ -97,8 +98,13 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 	);
 }
 
+interface CustomerHit {
+	id: string;
+	document: CustomerDocument;
+}
+
 export function CustomerList({ query, withGuest }: { query: any; withGuest: boolean }) {
-	const result = useObservableSuspense(query.resource);
+	const result = useObservableSuspense(query.resource) as { hits: CustomerHit[] };
 	const t = useT();
 
 	/**
@@ -107,25 +113,35 @@ export function CustomerList({ query, withGuest }: { query: any; withGuest: bool
 	const data = React.useMemo(
 		() =>
 			withGuest
-				? [{ id: 'guest', document: { id: 0 } }, ...result.hits.filter((hit) => hit.id !== 'guest')]
+				? [
+						{ id: 'guest', document: { id: 0 } as CustomerDocument },
+						...result.hits.filter((hit: CustomerHit) => hit.id !== 'guest'),
+					]
 				: result.hits,
 		[result.hits, withGuest]
 	);
 
 	return (
 		<ComboboxList
-			data={data}
+			data={data as unknown as import('@wcpos/components/combobox').Option[]}
 			shouldFilter={false}
 			onEndReached={() => {
 				if (query?.infiniteScroll) {
 					query.loadMore();
 				}
 			}}
-			renderItem={({ item }) => (
-				<ComboboxItem value={item.document.id} item={item.document}>
-					<CustomerSelectItem customer={item.document} />
-				</ComboboxItem>
-			)}
+			renderItem={({ item }) => {
+				const hit = item as unknown as CustomerHit;
+				return (
+					<ComboboxItem
+						value={String(hit.document.id)}
+						label={String(hit.document.id)}
+						item={hit.document}
+					>
+						<CustomerSelectItem customer={hit.document} />
+					</ComboboxItem>
+				);
+			}}
 			estimatedItemSize={44}
 			ListEmptyComponent={<ComboboxEmpty>{t('common.no_customers_found')}</ComboboxEmpty>}
 		/>

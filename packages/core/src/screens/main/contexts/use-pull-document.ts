@@ -11,7 +11,11 @@ import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'pull']);
 
-type RxCollection = import('rxdb').RxCollection;
+interface AnyRxCollection {
+	name: string;
+	parseRestResponse: (data: unknown) => Record<string, unknown>;
+	upsert: (data: Record<string, unknown>) => Promise<unknown>;
+}
 
 /**
  * Pull document needs to be improved
@@ -56,22 +60,27 @@ const usePullDocument = () => {
 	 * Save document data to local database (DB operation)
 	 */
 	const saveToLocalDB = React.useCallback(
-		async (data: any, collection: RxCollection, id: number) => {
+		async (data: any, collection: AnyRxCollection, id: number) => {
 			try {
 				const parsedData = collection.parseRestResponse(data);
 				const success = await collection.upsert(parsedData);
 				return success;
 			} catch (err) {
-				syncLogger.error(t('common.failed_to_save_to_local_database', { error: err.message }), {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
-						documentId: id,
-						collectionName: collection.name,
+				syncLogger.error(
+					t('common.failed_to_save_to_local_database', {
 						error: err instanceof Error ? err.message : String(err),
-					},
-				});
+					}),
+					{
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.TRANSACTION_FAILED,
+							documentId: id,
+							collectionName: collection.name,
+							error: err instanceof Error ? err.message : String(err),
+						},
+					}
+				);
 				throw err;
 			}
 		},
@@ -82,7 +91,7 @@ const usePullDocument = () => {
 	 * Main pull document function - orchestrates fetch and save
 	 */
 	return React.useCallback(
-		async (id: number, collection: RxCollection, apiEndpoint?: string) => {
+		async (id: number, collection: AnyRxCollection, apiEndpoint?: string) => {
 			const endpoint = apiEndpoint || collection.name;
 			// quick hack to stop the Guest customer error
 			const num = Number(id);

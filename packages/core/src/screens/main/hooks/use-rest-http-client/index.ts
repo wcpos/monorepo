@@ -20,7 +20,7 @@ const httpLogger = getLogger(['wcpos', 'http', 'rest']);
  * @param responseString
  * @returns
  */
-function extractValidJSON(responseString) {
+function extractValidJSON(responseString: string) {
 	// Find the index where the actual JSON starts
 	const indexOfJsonStart = responseString.search(/[{[]/);
 
@@ -86,7 +86,13 @@ export const useRestHttpClient = (endpoint = '') => {
 	 * @see refresh-http-client.electron.ts - Electron implementation
 	 */
 	const getHttpClient = React.useCallback(() => {
-		return createRefreshHttpClient();
+		return createRefreshHttpClient() as {
+			post: (
+				url: string,
+				data: unknown,
+				config?: import('axios').AxiosRequestConfig
+			) => Promise<unknown>;
+		};
 	}, []);
 
 	/**

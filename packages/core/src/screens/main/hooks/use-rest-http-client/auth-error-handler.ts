@@ -71,7 +71,7 @@ const authLogger = getLogger(['wcpos', 'auth', 'error']);
  * RxJS subject for error events.
  * Components can subscribe to be notified of auth errors.
  */
-const errorSubject = new BehaviorSubject(null);
+const errorSubject = new BehaviorSubject<import('axios').AxiosError | null>(null);
 
 /**
  * Hook that creates the fallback authentication error handler.

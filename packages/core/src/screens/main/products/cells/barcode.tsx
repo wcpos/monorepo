@@ -12,8 +12,11 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
  */
 export const Barcode = ({ row, table }: CellContext<{ document: ProductDocument }, 'name'>) => {
 	const product = row.original.document;
-	const barcode = useObservableEagerState(product.barcode$);
+	const barcode = useObservableEagerState(product.barcode$!);
 	const [value, setValue] = React.useState(barcode);
+	const meta = table.options.meta as unknown as {
+		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
+	};
 
 	/**
 	 * Update value if prop changes
@@ -26,8 +29,8 @@ export const Barcode = ({ row, table }: CellContext<{ document: ProductDocument 
 	 *
 	 */
 	const handleSubmit = React.useCallback(() => {
-		table.options.meta.onChange({ document: product, changes: { barcode: value } });
-	}, [product, table.options.meta, value]);
+		meta.onChange({ document: product, changes: { barcode: value } });
+	}, [product, meta, value]);
 
 	/**
 	 *

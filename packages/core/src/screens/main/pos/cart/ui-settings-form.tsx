@@ -45,15 +45,15 @@ export const UISettingsForm = () => {
 	 * Use `values` instead of `defaultValues` + useEffect reset pattern.
 	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
-	const form = useForm<z.infer<typeof schema>>({
-		resolver: zodResolver(schema),
+	const form = useForm({
+		resolver: zodResolver(schema as never) as never,
 		values: formData,
 	});
 
 	/**
 	 *
 	 */
-	useFormChangeHandler({ form, onChange: patchUI });
+	useFormChangeHandler({ form: form as never, onChange: patchUI });
 
 	/**
 	 *

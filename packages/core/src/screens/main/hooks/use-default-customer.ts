@@ -29,7 +29,7 @@ export const useDefaultCustomer = () => {
 	 * Needed to fetch the customer document from RxDB
 	 */
 	React.useEffect(() => {
-		query.where('id').equals(defaultCustomerID).exec();
+		query?.where('id').equals(defaultCustomerID).exec();
 	}, [defaultCustomerID, query]);
 
 	/**
@@ -37,7 +37,7 @@ export const useDefaultCustomer = () => {
 	 */
 	const defaultCustomer$ = useObservable(
 		() =>
-			query.result$.pipe(
+			query!.result$.pipe(
 				map((result) => {
 					if (result.count === 1) {
 						return result.hits[0].document;

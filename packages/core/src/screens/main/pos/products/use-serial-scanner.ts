@@ -1,19 +1,38 @@
 import * as React from 'react';
 
 /**
+ * Web Serial API types (not in standard TypeScript lib)
+ */
+interface SerialPort {
+	open(options: { baudRate: number }): Promise<void>;
+	close(): Promise<void>;
+	readable: ReadableStream;
+}
+
+interface Serial {
+	requestPort(): Promise<SerialPort>;
+	getPorts(): Promise<SerialPort[]>;
+}
+
+interface SerialOptions {
+	debug?: boolean;
+	baudRate?: number;
+}
+
+/**
  * Custom hook to connect to a barcode scanner using the Web Serial API
  */
-export const useWebSerialBarcodeScanner = (options = {}) => {
+export const useWebSerialBarcodeScanner = (options: SerialOptions = {}) => {
 	const { debug = false, baudRate = 9600 } = options;
 
-	const [port, setPort] = React.useState(null);
+	const [port, setPort] = React.useState<SerialPort | null>(null);
 	const [connected, setConnected] = React.useState(false);
 	// const [barcodeData, setBarcodeData] = React.useState(null);
 
-	const portRef = React.useRef(null);
-	const readerRef = React.useRef(null);
-	const readLoopRef = React.useRef(null);
-	const abortControllerRef = React.useRef(null);
+	const portRef = React.useRef<SerialPort | null>(null);
+	const readerRef = React.useRef<ReadableStreamDefaultReader<string> | null>(null);
+	const readLoopRef = React.useRef<Promise<void> | null>(null);
+	const abortControllerRef = React.useRef<AbortController | null>(null);
 
 	/**
 	 * Connect to the serial device
@@ -21,12 +40,13 @@ export const useWebSerialBarcodeScanner = (options = {}) => {
 	const connect = async () => {
 		try {
 			if (debug) console.log('Requesting serial port...');
-			const port = await navigator.serial.requestPort();
-			if (debug) console.log('Port selected by user:', port);
+			const serial = (navigator as unknown as { serial: Serial }).serial;
+			const selectedPort = await serial.requestPort();
+			if (debug) console.log('Port selected by user:', selectedPort);
 
-			if (port) {
-				if (debug) console.log('Opening port:', port);
-				await openPort(port);
+			if (selectedPort) {
+				if (debug) console.log('Opening port:', selectedPort);
+				await openPort(selectedPort);
 			} else {
 				if (debug) console.log('No port selected by the user.');
 			}
@@ -41,7 +61,8 @@ export const useWebSerialBarcodeScanner = (options = {}) => {
 	const reconnect = async () => {
 		try {
 			if (debug) console.log('Attempting to reconnect to previously authorized ports...');
-			const ports = await navigator.serial.getPorts();
+			const serial = (navigator as unknown as { serial: Serial }).serial;
+			const ports = await serial.getPorts();
 			if (debug) console.log('Previously authorized ports:', ports);
 
 			if (ports.length > 0) {
@@ -88,7 +109,7 @@ export const useWebSerialBarcodeScanner = (options = {}) => {
 	/**
 	 * Open the serial port and set up the reader
 	 */
-	const openPort = async (portToOpen) => {
+	const openPort = async (portToOpen: SerialPort) => {
 		try {
 			await portToOpen.open({ baudRate });
 			if (debug) console.log('Port opened:', portToOpen);
@@ -115,7 +136,7 @@ export const useWebSerialBarcodeScanner = (options = {}) => {
 	/**
 	 * Read loop to continuously read data from the serial port
 	 */
-	const readLoop = async (reader, signal) => {
+	const readLoop = async (reader: ReadableStreamDefaultReader<string>, signal: AbortSignal) => {
 		try {
 			while (true) {
 				const { value, done } = await reader.read();
@@ -142,7 +163,7 @@ export const useWebSerialBarcodeScanner = (options = {}) => {
 	/**
 	 * Handle incoming data from the serial port
 	 */
-	const handleIncomingData = (data) => {
+	const handleIncomingData = (_data: string) => {
 		// Process the data as needed
 		// For example, accumulate data until a newline character
 		// Uncomment and implement barcode data processing if needed

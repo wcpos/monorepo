@@ -3,7 +3,6 @@ import * as React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
-import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -33,7 +32,7 @@ export const AddCustomerScreen = () => {
 	 *
 	 */
 	const form = useForm<z.infer<typeof customerFormSchema>>({
-		resolver: zodResolver(customerFormSchema),
+		resolver: zodResolver(customerFormSchema as never) as never,
 		defaultValues: {},
 	});
 
@@ -45,13 +44,13 @@ export const AddCustomerScreen = () => {
 			setLoading(true);
 			try {
 				const savedDoc = await create({ data });
-				if (isRxDocument(savedDoc)) {
-					mutationLogger.success(t('common.saved', { name: format(savedDoc) }), {
+				if (savedDoc) {
+					mutationLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
 						showToast: true,
 						saveToDb: true,
 						context: {
-							customerId: savedDoc.id,
-							customerName: format(savedDoc),
+							customerId: (savedDoc as any).id,
+							customerName: format(savedDoc as any),
 						},
 					});
 				}

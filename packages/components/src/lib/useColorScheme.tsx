@@ -1,11 +1,10 @@
 import { useUniwind } from 'uniwind';
 
 export function useColorScheme() {
-	const { colorScheme, setColorScheme, toggleColorScheme } = useUniwind();
+	const { theme } = useUniwind();
+	const colorScheme = (theme as 'light' | 'dark') ?? 'dark';
 	return {
-		colorScheme: colorScheme ?? 'dark',
+		colorScheme,
 		isDarkColorScheme: colorScheme === 'dark',
-		setColorScheme,
-		toggleColorScheme,
 	};
 }

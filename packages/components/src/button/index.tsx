@@ -6,7 +6,7 @@ import { cva } from 'class-variance-authority';
 import * as Haptics from 'expo-haptics';
 
 import { HStack } from '../hstack';
-import { Icon, IconName } from '../icon';
+import { Icon, type IconName, type IconProps } from '../icon';
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
 import { Text, TextClassContext } from '../text';
@@ -184,7 +184,13 @@ const Button = ({
 	 */
 	const renderIcon = (icon: IconName | React.ReactNode, position: 'left' | 'right') => {
 		if (typeof icon === 'string') {
-			return <Icon name={icon} variant={variant} size={size} />;
+			return (
+				<Icon
+					name={icon as IconName}
+					variant={variant as IconProps['variant']}
+					size={size as IconProps['size']}
+				/>
+			);
 		}
 		return icon;
 	};
@@ -237,7 +243,10 @@ const Button = ({
 					leftIcon || rightIcon || loading ? (
 						<HStack className="max-w-full">
 							{loading ? (
-								<Loader variant={variant} size={size} />
+								<Loader
+									variant={variant as React.ComponentProps<typeof Loader>['variant']}
+									size={size as React.ComponentProps<typeof Loader>['size']}
+								/>
 							) : (
 								leftIcon && renderIcon(leftIcon, 'left')
 							)}
@@ -287,7 +296,9 @@ type ButtonGroupProps = {
 };
 
 const ButtonGroup = ({ children }: ButtonGroupProps) => {
-	const buttons = React.Children.toArray(children);
+	const buttons = React.Children.toArray(children).filter(
+		(child): child is React.ReactElement<ButtonProps> => React.isValidElement(child)
+	);
 
 	return (
 		<HStack className="gap-0">
@@ -307,7 +318,11 @@ const ButtonGroup = ({ children }: ButtonGroupProps) => {
 
 				return (
 					<React.Fragment key={index}>
-						{index > 0 && <ButtonGroupSeparator {...button.props} />}
+						{index > 0 && (
+							<ButtonGroupSeparator
+								variant={button.props.variant as ButtonSeparatorProps['variant']}
+							/>
+						)}
 						{React.cloneElement(button, {
 							className: classNames,
 						})}

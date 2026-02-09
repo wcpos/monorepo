@@ -31,6 +31,9 @@ jobs:
       - name: 🧹 Run ESLint
         run: pnpm lint
 
+      - name: 🔍 Typecheck
+        run: pnpm typecheck
+
   unit-tests:
     name: 🧪 Unit Tests
     runs-on: ubuntu-latest

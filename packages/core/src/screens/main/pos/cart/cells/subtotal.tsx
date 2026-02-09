@@ -10,7 +10,7 @@ import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 
 import type { CellContext } from '@tanstack/react-table';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;
 	item: LineItem;
@@ -31,7 +31,7 @@ export const Subtotal = ({ row, column }: CellContext<Props, 'subtotal'>) => {
 	 */
 	const displaySubtotal = React.useMemo(() => {
 		if (taxDisplayCart === 'incl') {
-			return parseFloat(item.subtotal) + parseFloat(item.subtotal_tax);
+			return parseFloat(item.subtotal ?? '0') + parseFloat(item.subtotal_tax ?? '0');
 		}
 
 		return item.subtotal;
@@ -42,10 +42,10 @@ export const Subtotal = ({ row, column }: CellContext<Props, 'subtotal'>) => {
 	 */
 	return (
 		<VStack space="xs" className="justify-end">
-			<Text className="text-right">{format(displaySubtotal || 0)}</Text>
-			{column.columnDef.meta?.show('tax') && (
+			<Text className="text-right">{format(Number(displaySubtotal) || 0)}</Text>
+			{column.columnDef.meta?.show?.('tax') && (
 				<Text className="text-muted-foreground text-right text-sm">
-					{`${taxDisplayCart} ${format(item.subtotal_tax) || 0} tax`}
+					{`${taxDisplayCart} ${format(Number(item.subtotal_tax) || 0)} tax`}
 				</Text>
 			)}
 		</VStack>

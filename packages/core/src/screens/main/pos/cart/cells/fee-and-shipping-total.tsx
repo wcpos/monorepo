@@ -10,8 +10,8 @@ import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-
 
 import type { CellContext } from '@tanstack/react-table';
 
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
-type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 interface Props {
 	uuid: string;
 	item: FeeLine | ShippingLine;
@@ -32,7 +32,7 @@ export const FeeAndShippingTotal = ({ row, column }: CellContext<Props, 'total'>
 	 */
 	const displayTotal = React.useMemo(() => {
 		if (taxDisplayCart === 'incl') {
-			return parseFloat(item.total) + parseFloat(item.total_tax);
+			return parseFloat(item.total ?? '0') + parseFloat(item.total_tax ?? '0');
 		}
 
 		return item.total;
@@ -43,10 +43,10 @@ export const FeeAndShippingTotal = ({ row, column }: CellContext<Props, 'total'>
 	 */
 	return (
 		<VStack space="xs" className="justify-end">
-			<Text className="text-right">{format(displayTotal || 0)}</Text>
-			{column.columnDef.meta.show('tax') && (
+			<Text className="text-right">{format(Number(displayTotal) || 0)}</Text>
+			{column.columnDef.meta?.show?.('tax') && (
 				<Text className="text-muted-foreground text-right text-sm">
-					{`${taxDisplayCart} ${format(item.total_tax) || 0} tax`}
+					{`${taxDisplayCart} ${format(Number(item.total_tax) || 0)} tax`}
 				</Text>
 			)}
 		</VStack>

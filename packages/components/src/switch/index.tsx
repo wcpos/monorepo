@@ -138,12 +138,13 @@ const SwitchNative = React.forwardRef<
 		}
 	};
 
-	const translateX = useDerivedValue(() => (props.checked ? getTranslateX(size) : 0));
+	const effectiveSize = size ?? 'default';
+	const translateX = useDerivedValue(() => (props.checked ? getTranslateX(effectiveSize) : 0));
 	const animatedRootStyle = useAnimatedStyle(() => {
 		return {
 			backgroundColor: interpolateColor(
 				translateX.value,
-				[0, getTranslateX(size)],
+				[0, getTranslateX(effectiveSize)],
 				[RGB_COLORS[colorScheme].input, RGB_COLORS[colorScheme].primary]
 			),
 		};

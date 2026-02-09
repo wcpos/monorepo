@@ -4,6 +4,7 @@ import {
 	TextInput as RNTextInput,
 	TextInputKeyPressEventData,
 	View,
+	ViewStyle,
 } from 'react-native';
 
 import { useAugmentedRef } from '@rn-primitives/hooks';
@@ -20,8 +21,10 @@ import { Input, InputProps } from '../input';
 import { Text } from '../text';
 import { VStack } from '../vstack';
 
+type TextInputKeyPressEvent = NativeSyntheticEvent<TextInputKeyPressEventData>;
+
 const Display = React.forwardRef<RNTextInput, InputProps>(
-	({ selection, onSelectionChange, ...props }, ref) => {
+	({ selection, onSelectionChange, className, disabled, ...props }, ref) => {
 		const inputRef = React.useRef<RNTextInput>(null);
 		const mergedRef = useMergedRef(ref, inputRef);
 		/**
@@ -29,7 +32,9 @@ const Display = React.forwardRef<RNTextInput, InputProps>(
 		 */
 		const handleBackspacePress = React.useCallback(() => {
 			if (props.onKeyPress) {
-				props.onKeyPress({ nativeEvent: { key: 'Backspace' } as TextInputKeyPressEventData });
+				props.onKeyPress({
+					nativeEvent: { key: 'Backspace' },
+				} as TextInputKeyPressEvent);
 			}
 			if (inputRef?.current) {
 				inputRef?.current.focus();
@@ -46,15 +51,21 @@ const Display = React.forwardRef<RNTextInput, InputProps>(
 			const timer = setTimeout(() => {
 				if (inputRef.current) {
 					inputRef.current?.focus();
-					inputRef.current?.setSelectionRange(0, 100);
+					(inputRef.current as unknown as HTMLInputElement)?.setSelectionRange(0, 100);
 				}
 			}, 50);
 			return () => clearTimeout(timer);
 		}, []);
 
 		return (
-			<Input.Root {...props}>
-				<Input.InputField ref={mergedRef} type="numeric" {...props} />
+			<Input.Root className={className} disabled={disabled}>
+				<Input.InputField
+					ref={mergedRef}
+					type="numeric"
+					className={className}
+					placeholderTextColor={undefined}
+					{...props}
+				/>
 				<Input.Right className="pr-1">
 					<IconButton name="deleteLeft" onPress={handleBackspacePress} />
 				</Input.Right>
@@ -137,7 +148,8 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 			(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
 				let shouldReplace = false;
 				if (augmentedRef && augmentedRef.current) {
-					shouldReplace = augmentedRef.current?.selectionStart === 0;
+					shouldReplace =
+						(augmentedRef.current as unknown as HTMLInputElement)?.selectionStart === 0;
 				}
 				const key = e.nativeEvent.key;
 				switch (key) {
@@ -163,7 +175,8 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 			(key: string) => {
 				let shouldReplace = false;
 				if (augmentedRef && augmentedRef.current) {
-					shouldReplace = augmentedRef.current?.selectionStart === 0;
+					shouldReplace =
+						(augmentedRef.current as unknown as HTMLInputElement)?.selectionStart === 0;
 				}
 				switch (key) {
 					case '+/-':
@@ -178,7 +191,7 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 				// after a button press, we want to focus the input
 				if (augmentedRef && augmentedRef.current) {
 					augmentedRef.current?.focus();
-					augmentedRef.current?.setSelectionRange(100, 100);
+					(augmentedRef.current as unknown as HTMLInputElement)?.setSelectionRange(100, 100);
 				}
 			},
 			[addDigit, augmentedRef, decimalSeparator, switchSign]
@@ -188,7 +201,7 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 		 *
 		 */
 		return (
-			<VStack style={{ width: hasDiscounts ? '222px' : '146px' }}>
+			<VStack style={{ width: hasDiscounts ? '222px' : '146px' } as unknown as ViewStyle}>
 				<Display
 					ref={augmentedRef}
 					value={formatDisplay(currentValue)}
@@ -198,7 +211,10 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 					// onSelectionChange={setSelection}
 				/>
 				<HStack className="gap-1">
-					<View className="grid grid-cols-3 gap-1" style={{ width: '146px' }}>
+					<View
+						className="grid grid-cols-3 gap-1"
+						style={{ width: '146px' } as unknown as ViewStyle}
+					>
 						{[
 							['1', '2', '3'],
 							['4', '5', '6'],
@@ -216,7 +232,10 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 						)}
 					</View>
 					{hasDiscounts && (
-						<View className="grid grid-cols-1 gap-1" style={{ width: '72px' }}>
+						<View
+							className="grid grid-cols-1 gap-1"
+							style={{ width: '72px' } as unknown as ViewStyle}
+						>
 							{discounts.map((discount) => (
 								<Button key={discount} variant="muted" onPress={() => applyDiscount(discount)}>
 									<HStack className="gap-0.5">

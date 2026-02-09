@@ -11,7 +11,13 @@ export const CheckoutScreen = () => {
 	const { collection } = useCollection('orders');
 	const query = collection.findOneFix(orderId);
 
-	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
+	const resource = React.useMemo(
+		() =>
+			new ObservableResource(query.$) as ObservableResource<
+				import('@wcpos/database').OrderDocument
+			>,
+		[query]
+	);
 
 	return <Checkout resource={resource} />;
 };

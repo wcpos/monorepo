@@ -20,14 +20,18 @@ import { useQuery } from '@wcpos/query';
 /**
  *
  */
-function BrandList({ query }) {
-	const result = useObservableSuspense(query.resource);
+function BrandList({ query }: { query: ReturnType<typeof useQuery> }) {
+	const result = useObservableSuspense(query!.resource) as {
+		hits: { id: string; document: { id?: number; name?: string } }[];
+	};
 	const t = useT();
 
-	const data = result.hits.map(({ id, document }) => ({
-		value: String(document.id),
-		label: document.name,
-	}));
+	const data = result.hits.map(
+		({ id, document }: { id: string; document: { id?: number; name?: string } }) => ({
+			value: String(document.id),
+			label: document.name ?? '',
+		})
+	);
 
 	return (
 		<ComboboxList
@@ -38,8 +42,8 @@ function BrandList({ query }) {
 				}
 			}}
 			renderItem={({ item }) => (
-				<ComboboxItem value={item.value} label={item.label}>
-					<ComboboxItemText>{item.label}</ComboboxItemText>
+				<ComboboxItem value={String(item.value)} label={item.label} item={item}>
+					<ComboboxItemText />
 				</ComboboxItem>
 			)}
 			estimatedItemSize={44}
@@ -74,7 +78,7 @@ export function BrandSearch() {
 	const onSearch = React.useCallback(
 		(value: string) => {
 			setSearch(value);
-			query.debouncedSearch(value);
+			query?.debouncedSearch(value);
 		},
 		[query]
 	);
@@ -83,7 +87,7 @@ export function BrandSearch() {
 	 * Clear the search when unmounting
 	 */
 	React.useEffect(() => {
-		return () => query.search('');
+		return () => query?.search('');
 	}, [query]);
 
 	/**
@@ -94,6 +98,7 @@ export function BrandSearch() {
 			<ComboboxInput
 				placeholder={t('common.search_brands')}
 				value={search}
+				// @ts-expect-error: onChangeText is passed through to Input via spread
 				onChangeText={onSearch}
 			/>
 			<Suspense>
@@ -106,7 +111,11 @@ export function BrandSearch() {
 /**
  *
  */
-export function BrandSelect({ onValueChange }) {
+export function BrandSelect({
+	onValueChange,
+}: {
+	onValueChange?: (option: import('@wcpos/components/combobox').Option | undefined) => void;
+}) {
 	const t = useT();
 
 	/**

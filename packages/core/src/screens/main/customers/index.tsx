@@ -36,13 +36,13 @@ const cells = {
 	date_modified_gmt: Date,
 };
 
-function renderCell(columnKey: string, info: any) {
-	const Renderer = cells[columnKey];
+function renderCell(columnKey: string, info: Record<string, unknown>) {
+	const Renderer = cells[columnKey as keyof typeof cells];
 	if (Renderer) {
-		return <Renderer {...info} />;
+		return <Renderer {...(info as any)} />;
 	}
 
-	return <TextCell {...info} />;
+	return <TextCell {...(info as any)} />;
 }
 
 /**
@@ -61,7 +61,7 @@ export function CustomersScreen() {
 		queryKeys: ['customers'],
 		collectionName: 'customers',
 		initialParams: {
-			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
+			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection } as Record<string, 'asc' | 'desc'>],
 		},
 		infiniteScroll: true,
 	});
@@ -79,7 +79,7 @@ export function CustomersScreen() {
 				<CardHeader className="bg-card-header p-0">
 					<HStack className="p-2">
 						<QuerySearchInput
-							query={query}
+							query={query!}
 							placeholder={t('common.search_customers')}
 							className="flex-1"
 							testID="search-customers"
@@ -105,7 +105,7 @@ export function CustomersScreen() {
 						<Suspense>
 							<DataTable
 								id="customers"
-								query={query}
+								query={query!}
 								renderCell={renderCell}
 								noDataMessage={t('common.no_customers_found')}
 								estimatedItemSize={100}

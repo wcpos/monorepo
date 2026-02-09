@@ -25,7 +25,7 @@ import { useT } from '../../../../../contexts/translations';
 
 interface Props {
 	query: Query<OrderCollection>;
-	resource: ObservableResource<StoreDocument>;
+	resource: ObservableResource<StoreDocument[]>;
 }
 
 /**
@@ -50,16 +50,16 @@ export const StorePill = ({ resource, query }: Props) => {
 	/**
 	 *
 	 */
-	const value = React.useMemo(() => {
+	const value = React.useMemo((): { value: string; label: string } | undefined => {
 		const number = Number(selected);
 		if (Number.isInteger(number) && !isNaN(number)) {
 			const store = (stores || []).find((s) => s.id === number);
 			if (store) {
-				return { value: number, label: store.name };
+				return { value: String(number), label: store.name ?? '' };
 			}
-			return store ? store.name : null;
+			return undefined;
 		} else {
-			switch (selected) {
+			switch (selected as unknown as string) {
 				case 'woocommerce-pos':
 					return { value: 'woocommerce-pos', label: t('common.pos') };
 				case 'checkout':
@@ -68,25 +68,30 @@ export const StorePill = ({ resource, query }: Props) => {
 					return { value: 'admin', label: t('common.wp_admin') };
 			}
 		}
+		return undefined;
 	}, [selected, stores, t]);
 
 	/**
 	 * @NOTE - meta_data is used for _pos_user and _pos_store, so we need multipleElemMatch
 	 */
 	const handleSelect = React.useCallback(
-		({ value, label }) => {
-			if (isString(value)) {
-				query
-					.removeElemMatch('meta_data', { key: '_pos_store' })
-					.where('created_via')
-					.equals(value)
-					.exec();
-			} else {
+		(option: { value: string; label: string } | undefined) => {
+			if (!option) return;
+			const { value } = option;
+			// Store IDs are numeric strings, while created_via values are alphabetic
+			const numericValue = Number(value);
+			if (Number.isInteger(numericValue) && !isNaN(numericValue)) {
 				query
 					.removeWhere('created_via')
 					.removeElemMatch('meta_data', { key: '_pos_store' }) // clear any previous value
 					.where('meta_data')
 					.multipleElemMatch({ key: '_pos_store', value: String(value) })
+					.exec();
+			} else {
+				query
+					.removeElemMatch('meta_data', { key: '_pos_store' })
+					.where('created_via')
+					.equals(value)
 					.exec();
 			}
 		},
@@ -145,7 +150,11 @@ export const StorePill = ({ resource, query }: Props) => {
 							<SelectLabel>{t('common.store')}</SelectLabel>
 							{(stores || []).map((store) => {
 								return (
-									<SelectItem key={store.id} value={store.id} label={store.name}>
+									<SelectItem
+										key={store.id}
+										value={String(store.id ?? '')}
+										label={store.name ?? ''}
+									>
 										{store.name}
 									</SelectItem>
 								);

@@ -1,11 +1,5 @@
 import * as React from 'react';
-import {
-	NativeScrollEvent,
-	NativeSyntheticEvent,
-	RefreshControl,
-	ScrollView,
-	View,
-} from 'react-native';
+import { NativeScrollEvent, NativeSyntheticEvent, RefreshControl, ScrollView } from 'react-native';
 
 import {
 	ColumnDef,
@@ -25,24 +19,31 @@ import { DataTableRow } from './row';
 import { getFlexAlign } from '../lib/utils';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table';
 
-interface DataTableProps<TData, TValue> {
+import type { DataTableRowData } from './types';
+import type {
+	OnChangeFn,
+	RowSelectionState,
+	SortingState,
+	TableState,
+} from '@tanstack/react-table';
+
+interface DataTableProps<TData extends DataTableRowData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
 	data: TData[];
 	onRowPress?: (row: Row<TData>) => void;
 	estimatedItemSize?: number;
 	isRefreshing?: boolean;
 	onRefresh?: () => void;
-	renderItem?: ({ item, index }: { item: Row<TData>; index: number }) => React.ReactNode;
-	extraContext?: Record<string, any>;
-	tableMeta?: Record<string, any>;
-	TableFooterComponent?: React.ComponentType<any>;
-	tableState?: any;
+	renderItem?: (info: { item: Row<TData>; index: number }) => React.ReactNode;
+	extraContext?: Record<string, unknown>;
+	tableMeta?: Record<string, unknown>;
+	TableFooterComponent?: React.ComponentType<Record<string, unknown>>;
+	tableState?: Partial<TableState>;
 	enableRowSelection?: boolean;
-	onRowSelectionChange?: (newRowSelection: any) => void;
-	onSortingChange?: (updaterOrValue: any) => void;
-	extraData?: any;
+	onRowSelectionChange?: OnChangeFn<RowSelectionState>;
+	onSortingChange?: OnChangeFn<SortingState>;
+	extraData?: Record<string, unknown>;
 	onEndReached?: () => void;
-	[key: string]: any;
 }
 
 const DataTableContext = React.createContext<any | undefined>(undefined);
@@ -55,7 +56,7 @@ const useDataTable = () => {
 	return context;
 };
 
-const DataTable = <TData, TValue>({
+const DataTable = <TData extends DataTableRowData, TValue>({
 	columns,
 	data,
 	onRowPress,
@@ -72,7 +73,6 @@ const DataTable = <TData, TValue>({
 	onSortingChange,
 	extraData,
 	onEndReached,
-	...props
 }: DataTableProps<TData, TValue>) => {
 	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
 
@@ -91,16 +91,12 @@ const DataTable = <TData, TValue>({
 		meta: {
 			expanded$,
 			expandedRef,
-			onChange: (data: any) => {
+			onChange: (data: unknown) => {
 				console.log('onChange called without handler', data);
 			},
 			...tableMeta,
 		},
 		state: {
-			sorting: {
-				sortBy: 'name',
-				sortDirection: 'asc',
-			},
 			...tableState,
 		},
 		enableRowSelection: !!enableRowSelection,
@@ -118,7 +114,11 @@ const DataTable = <TData, TValue>({
 
 	const context = React.useMemo(() => ({ table, ...extraContext }), [table, extraContext]);
 
-	const scrollRef = React.useRef<ScrollView>(null);
+	/**
+	 * On web, ScrollView renders as an HTMLDivElement.
+	 * We use the DOM type so the virtualizer and clientHeight work correctly.
+	 */
+	const scrollRef = React.useRef<HTMLDivElement>(null);
 	const scrollPositionRef = React.useRef(0);
 
 	/**
@@ -131,18 +131,27 @@ const DataTable = <TData, TValue>({
 		estimateSize: () => estimatedItemSize,
 		measureElement:
 			typeof window !== 'undefined' && navigator.userAgent.indexOf('Firefox') === -1
-				? (element) => element?.getBoundingClientRect().height
+				? (element: Element) => element?.getBoundingClientRect().height
 				: undefined,
 		overscan: 5,
 		// debug: true,
-		shouldAdjustScrollPositionOnItemSizeChange: (item, delta, instance) => {
-			const scrollOffset = instance.getScrollOffset();
-			const viewportEnd = scrollOffset + instance.options.size;
-
-			// Only adjust if the item's size change affects the viewport
-			return item.start < viewportEnd && item.end > scrollOffset;
-		},
 	});
+
+	/**
+	 * Adjust scroll position when item sizes change, but only if the change
+	 * affects the currently visible viewport area.
+	 *
+	 * This property is on the Virtualizer class but not in VirtualizerOptions,
+	 * so it must be set after construction. The mutation is intentional API usage.
+	 */
+	// eslint-disable-next-line react-compiler/react-compiler
+	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
+		const scrollOffset = instance.scrollOffset ?? 0;
+		const scrollHeight = instance.scrollRect?.height ?? 0;
+		const viewportEnd = scrollOffset + scrollHeight;
+
+		return item.start < viewportEnd && item.end > scrollOffset;
+	};
 
 	/**
 	 * Handler to detect when the scroll is near the bottom
@@ -183,7 +192,7 @@ const DataTable = <TData, TValue>({
 	 */
 	React.useEffect(() => {
 		if (scrollRef.current && scrollPositionRef.current !== 0) {
-			scrollRef.current.scrollTo({ y: scrollPositionRef.current, animated: false });
+			scrollRef.current.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
 		}
 	}, [data]);
 
@@ -219,7 +228,7 @@ const DataTable = <TData, TValue>({
 				</TableHeader>
 				<TableBody>
 					<ScrollView
-						ref={scrollRef}
+						ref={scrollRef as unknown as React.RefObject<ScrollView>}
 						scrollEventThrottle={100}
 						onScroll={handleScroll}
 						refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
@@ -229,13 +238,12 @@ const DataTable = <TData, TValue>({
 							height: virtualizer.getTotalSize(),
 						}}
 						onContentSizeChange={handleContentSizeChange}
-						{...props}
 					>
 						{virtualizer.getVirtualItems().map((virtualItem) => {
 							const row = table.getRowModel().rows[virtualItem.index];
 							return (
-								<View
-									dataSet={{ index: virtualItem.index }}
+								<div
+									data-index={virtualItem.index}
 									ref={(node) => virtualizer.measureElement(node)}
 									key={row.id}
 									style={{
@@ -248,7 +256,7 @@ const DataTable = <TData, TValue>({
 										item: row,
 										index: virtualItem.index,
 									})}
-								</View>
+								</div>
 							);
 						})}
 					</ScrollView>

@@ -43,70 +43,71 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 	const { shortCode } = useLocale();
 
 	// Array of date range options for buttons
-	const dateRanges = React.useMemo(() => {
-		return [
-			{
-				label: t('common.today'),
-				range: { from: startOfDay(today), to: endOfDay(today) },
-				action: () => setDate({ from: startOfDay(today), to: endOfDay(today) }),
-			},
-			{
-				label: t('common.yesterday'),
-				range: { from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) },
-				action: () =>
-					setDate({ from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) }),
-			},
-			{
-				label: t('common.this_week'),
-				range: {
-					from: startOfWeek(today, { weekStartsOn: 1 }),
-					to: endOfWeek(today, { weekStartsOn: 1 }),
+	const dateRanges: { label: string; range: DateRange; action: () => void }[] =
+		React.useMemo(() => {
+			return [
+				{
+					label: t('common.today'),
+					range: { from: startOfDay(today), to: endOfDay(today) },
+					action: () => setDate({ from: startOfDay(today), to: endOfDay(today) }),
 				},
-				action: () =>
-					setDate({
+				{
+					label: t('common.yesterday'),
+					range: { from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) },
+					action: () =>
+						setDate({ from: startOfDay(subDays(today, 1)), to: endOfDay(subDays(today, 1)) }),
+				},
+				{
+					label: t('common.this_week'),
+					range: {
 						from: startOfWeek(today, { weekStartsOn: 1 }),
 						to: endOfWeek(today, { weekStartsOn: 1 }),
-					}),
-			},
-			{
-				label: t('common.last_week'),
-				range: {
-					from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
-					to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
+					},
+					action: () =>
+						setDate({
+							from: startOfWeek(today, { weekStartsOn: 1 }),
+							to: endOfWeek(today, { weekStartsOn: 1 }),
+						}),
 				},
-				action: () =>
-					setDate({
+				{
+					label: t('common.last_week'),
+					range: {
 						from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
 						to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
-					}),
-			},
-			{
-				label: t('common.this_month'),
-				range: {
-					from: startOfMonth(today),
-					to: endOfMonth(today),
+					},
+					action: () =>
+						setDate({
+							from: startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
+							to: endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }),
+						}),
 				},
-				action: () => setDate({ from: startOfMonth(today), to: endOfMonth(today) }),
-			},
-			{
-				label: t('common.last_month'),
-				range: {
-					from: startOfMonth(subMonths(today, 1)),
-					to: endOfMonth(subMonths(today, 1)),
+				{
+					label: t('common.this_month'),
+					range: {
+						from: startOfMonth(today),
+						to: endOfMonth(today),
+					},
+					action: () => setDate({ from: startOfMonth(today), to: endOfMonth(today) }),
 				},
-				action: () =>
-					setDate({
+				{
+					label: t('common.last_month'),
+					range: {
 						from: startOfMonth(subMonths(today, 1)),
 						to: endOfMonth(subMonths(today, 1)),
-					}),
-			},
-		];
-	}, [t, today]);
+					},
+					action: () =>
+						setDate({
+							from: startOfMonth(subMonths(today, 1)),
+							to: endOfMonth(subMonths(today, 1)),
+						}),
+				},
+			];
+		}, [t, today]);
 
 	/**
 	 * State for the selected date range
 	 */
-	const [date, setDate] = React.useState<DateRange | undefined>(dateRanges[0].range);
+	const [date, setDate] = React.useState<DateRange | undefined>(dateRanges[0]?.range);
 
 	/**
 	 * Handle date range change from the Calendar component
@@ -138,7 +139,7 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 				/>
 			</HStack>
 			<HStack className="justify-end">
-				<Button onPress={() => onSelect(date)}>
+				<Button onPress={() => date && onSelect(date)}>
 					<ButtonText>{t('common.done')}</ButtonText>
 				</Button>
 			</HStack>

@@ -1,3 +1,5 @@
+declare const scheduler: { yield?: () => Promise<void> } | undefined;
+
 /**
  * Yields execution to allow the event loop to process other tasks.
  *

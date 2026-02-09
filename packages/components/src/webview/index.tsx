@@ -22,7 +22,7 @@ function WebView({ ref, src, onMessage, ...props }: WebViewProps) {
 		methods: {
 			postMessage(message) {
 				// Inject JavaScript that calls window.postMessage with the message
-				augmentedRef.current.injectJavaScript(`
+				augmentedRef.current?.injectJavaScript(`
 					(function() {
 						window.postMessage(${JSON.stringify(message)}, '*');
 						return true;
@@ -48,7 +48,7 @@ function WebView({ ref, src, onMessage, ...props }: WebViewProps) {
 						parsedData = JSON.parse(parsedData);
 						// We can't modify nativeEvent directly, so we pass the parsed data separately
 						// The component using this WebView can access parsedData from its onMessage handler
-						onMessage?.({ ...nativeEvent, data: parsedData });
+						onMessage?.({ nativeEvent: { ...nativeEvent, data: parsedData } });
 					} catch {
 						// If it's not valid JSON, just pass the original event
 						onMessage?.(event);

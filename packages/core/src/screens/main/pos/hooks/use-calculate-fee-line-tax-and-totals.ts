@@ -6,7 +6,7 @@ import { useFeeLineData } from './use-fee-line-data';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
 import { useCurrentOrder } from '../contexts/current-order';
 
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 
 /**
  * Take a fee line object and calculate the tax and totals.
@@ -35,8 +35,8 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 			const { cart_total, cart_total_tax } = (order.line_items || []).reduce(
 				(acc, item) => {
 					if (item.product_id !== null) {
-						acc.cart_total += parseFloat(item.total);
-						acc.cart_total_tax += parseFloat(item.total_tax);
+						acc.cart_total += parseFloat(item.total ?? '0');
+						acc.cart_total_tax += parseFloat(item.total_tax ?? '0');
 					}
 					return acc;
 				},
@@ -66,7 +66,7 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 			const tax = calculateTaxesFromValue({
 				amount: value,
 				taxClass: feeLine.tax_class,
-				taxStatus: feeLine.tax_status,
+				taxStatus: feeLine.tax_status ?? 'taxable',
 				amountIncludesTax: prices_include_tax,
 			});
 

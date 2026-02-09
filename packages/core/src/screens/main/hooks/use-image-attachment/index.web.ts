@@ -34,6 +34,7 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 
 				// If not, fetch and store it
 				// wcposHeaders: false prevents X-WCPOS header which triggers CORS preflight on external URLs
+				// @ts-expect-error: wcposHeaders is a custom config option from our axios interceptor
 				const response = await get(imageUrl, { responseType: 'arraybuffer', wcposHeaders: false });
 
 				if (!response || response.status !== 200) {

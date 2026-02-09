@@ -41,7 +41,7 @@ export const ProductStatusSelect = ({ value, ...props }: React.ComponentProps<ty
 	 *
 	 */
 	return (
-		<Select value={{ ...value, label }} {...props}>
+		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);

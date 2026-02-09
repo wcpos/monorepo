@@ -51,7 +51,7 @@ export const ThousandsStyleSelect = ({ value, ...props }: React.ComponentProps<t
 	 *
 	 */
 	return (
-		<Select value={{ ...value, label }} {...props}>
+		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);

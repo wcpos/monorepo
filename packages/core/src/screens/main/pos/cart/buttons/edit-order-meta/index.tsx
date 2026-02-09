@@ -49,7 +49,10 @@ export const EditOrderMeta = ({ order }: Props) => {
 				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="form">
-				<EditOrderMetaForm order={order} formData={formData} />
+				<EditOrderMetaForm
+					order={order}
+					formData={formData as React.ComponentProps<typeof EditOrderMetaForm>['formData']}
+				/>
 			</TabsContent>
 			<TabsContent value="json">
 				<Tree value={order.getLatest().toJSON()} />

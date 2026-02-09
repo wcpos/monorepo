@@ -15,7 +15,7 @@ type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;
 
 export const useBarcode = (
 	productQuery: Query,
-	querySearchInputRef: React.RefObject<typeof QuerySearchInput>
+	querySearchInputRef: React.RefObject<{ setSearch: (search: string) => void } | null>
 ) => {
 	const { barcode$, onKeyPress } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
@@ -24,7 +24,8 @@ export const useBarcode = (
 	/**
 	 *
 	 */
-	useSubscription(barcode$, async (barcode) => {
+	useSubscription(barcode$, async (rawBarcode) => {
+		const barcode = rawBarcode as string;
 		const text1 = t('common.barcode_scanned', { barcode });
 		const results = await barcodeSearch(barcode);
 		let text2;

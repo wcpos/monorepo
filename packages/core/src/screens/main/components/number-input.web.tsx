@@ -54,10 +54,10 @@ export const NumberInput = ({
 	...props
 }: NumberInputProps) => {
 	const { store } = useAppState();
-	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$);
+	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$) as string | undefined;
 	const t = useT();
-	const triggerRef = React.useRef(null);
-	const numpadRef = React.useRef(null);
+	const triggerRef = React.useRef<{ close: () => void }>(null);
+	const numpadRef = React.useRef<{ getValue: () => number }>(null);
 	const { format } = useNumberFormat(formatOptions);
 	const { format: formatDisplay } = useNumberFormat({
 		fixedDecimalScale: false,
@@ -99,7 +99,11 @@ export const NumberInput = ({
 	 */
 	return (
 		<Popover>
-			<PopoverTrigger ref={triggerRef} asChild>
+			<PopoverTrigger
+				// @ts-expect-error: ref only needs close() but TriggerRef requires full PressableRef
+				ref={triggerRef}
+				asChild
+			>
 				<Button
 					testID={testID}
 					variant="outline"
@@ -109,9 +113,10 @@ export const NumberInput = ({
 					<ButtonText>{value !== '' ? format(value) : ''}</ButtonText>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent side={placement} className="w-auto p-2">
+			<PopoverContent side={placement as 'top' | 'bottom'} className="w-auto p-2">
 				<VStack className="gap-1">
 					<Numpad
+						// @ts-expect-error: ref only needs getValue() but Numpad expects full TextInput ref
 						ref={numpadRef}
 						initialValue={toNumber(value)}
 						onChangeText={handleChange}

@@ -20,18 +20,22 @@ export const FormErrors = () => {
 	/**
 	 *
 	 */
-	const flattenErrors = (errors, path = '', result = []) => {
+	const flattenErrors = (
+		errors: Record<string, unknown>,
+		path = '',
+		result: { path: string; message: string }[] = []
+	): { path: string; message: string }[] => {
 		Object.keys(errors).forEach((key) => {
-			const error = errors[key];
+			const error = errors[key] as Record<string, unknown> | undefined;
 			const currentPath = path ? `${path}.${key}` : key;
 
 			if (error && typeof error === 'object') {
 				if (error.message) {
 					// It's a field error
-					result.push({ path: currentPath, message: error.message });
+					result.push({ path: currentPath, message: String(error.message) });
 				} else {
 					// It's a nested object, recurse into it
-					flattenErrors(error, currentPath, result);
+					flattenErrors(error as Record<string, unknown>, currentPath, result);
 				}
 			}
 		});

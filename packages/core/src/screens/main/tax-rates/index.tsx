@@ -14,7 +14,7 @@ export const TaxRatesModal = () => {
 	return (
 		<ErrorBoundary>
 			<Suspense>
-				<TaxRates query={query} />
+				<TaxRates query={query!} />
 			</Suspense>
 		</ErrorBoundary>
 	);

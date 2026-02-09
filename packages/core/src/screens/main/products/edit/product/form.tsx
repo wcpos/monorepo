@@ -69,7 +69,7 @@ export const EditProductForm = ({ product }: Props) => {
 	 *
 	 */
 	const form = useForm<z.infer<typeof schema>>({
-		resolver: zodResolver(schema),
+		resolver: zodResolver(schema as never) as never,
 		defaultValues: {
 			name: product.name,
 			status: product.status,
@@ -92,7 +92,7 @@ export const EditProductForm = ({ product }: Props) => {
 	 * @NOTE - the form needs a value for tax_class, but WC REST API uses an empty string for standard
 	 */
 	const handleSave = React.useCallback(
-		async (data) => {
+		async (data: z.infer<typeof schema>) => {
 			if (data.tax_class === 'standard') {
 				data.tax_class = '';
 			}
@@ -100,7 +100,7 @@ export const EditProductForm = ({ product }: Props) => {
 			try {
 				await localPatch({
 					document: product,
-					data,
+					data: data as Partial<import('@wcpos/database').ProductDocument>,
 				});
 				await pushDocument(product).then((savedDoc) => {
 					if (isRxDocument(savedDoc)) {
@@ -202,12 +202,14 @@ export const EditProductForm = ({ product }: Props) => {
 						<FormField
 							control={form.control}
 							name="status"
-							render={({ field }) => (
+							render={({ field: { value, onChange, ...rest } }) => (
 								<View className="flex-1">
 									<FormSelect
 										label={t('common.status')}
 										customComponent={ProductStatusSelect}
-										{...field}
+										value={value as string}
+										onChange={onChange}
+										{...rest}
 									/>
 								</View>
 							)}
@@ -226,13 +228,14 @@ export const EditProductForm = ({ product }: Props) => {
 						<FormField
 							control={form.control}
 							name="stock_quantity"
-							render={({ field }) => (
+							render={({ field: { value, ...rest } }) => (
 								<View className="flex-1">
 									<FormInput
 										customComponent={NumberInput}
 										type="numeric"
 										label={t('products.stock_quantity')}
-										{...field}
+										value={value != null ? String(value) : undefined}
+										{...rest}
 									/>
 								</View>
 							)}
@@ -252,12 +255,14 @@ export const EditProductForm = ({ product }: Props) => {
 					<FormField
 						control={form.control}
 						name="tax_class"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									label={t('common.tax_class')}
 									customComponent={TaxClassSelect}
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}

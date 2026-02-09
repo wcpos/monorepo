@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 
-import { createFastStoreDB, createStoreDB, createUserDB, isRxDocument } from '@wcpos/database';
+import { createFastStoreDB, createStoreDB, createUserDB } from '@wcpos/database';
 import type { UserDatabase } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import Platform from '@wcpos/utils/platform';
@@ -148,10 +148,13 @@ export const hydrateUserSession = async (
 	if (sessionIds.storeID) {
 		store = await userDB.stores.findOne(sessionIds.storeID).exec();
 	}
-	if (isRxDocument(store)) {
-		storeDB = await createStoreDB(store.localID);
-		fastStoreDB = await createFastStoreDB(store.localID);
-		extraData = await storeDB.addState('data_v2');
+	if (store) {
+		const db = await createStoreDB(store.localID!);
+		if (db) {
+			storeDB = db;
+			fastStoreDB = await createFastStoreDB(store.localID!);
+			extraData = await db.addState('data_v2');
+		}
 	}
 
 	return { site, wpCredentials, store, storeDB, fastStoreDB, extraData };
@@ -196,6 +199,9 @@ const initializeUserDBStep: HydrationStep = {
 	progressIncrement: 20,
 	execute: async (context) => {
 		const userDB = await createUserDB();
+		if (!userDB) {
+			throw new Error('Failed to create user database');
+		}
 		const appState = await userDB.addState('v2');
 		const translationsState = await userDB.addState('translations_v2');
 		let user = await userDB.users.findOne().exec();
@@ -363,6 +369,9 @@ const hydrateUserSessionStep: HydrationStep = {
 	message: 'Loading user session...',
 	progressIncrement: 50,
 	execute: async (context) => {
+		if (!context.userDB) {
+			throw new Error('Missing userDB in hydration context');
+		}
 		const current = await context.appState.get('current');
 		return await hydrateUserSession(context.userDB, current || {});
 	},

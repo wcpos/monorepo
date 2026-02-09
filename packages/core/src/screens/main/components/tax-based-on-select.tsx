@@ -43,7 +43,7 @@ export const TaxBasedOnSelect = ({ value, ...props }: React.ComponentProps<typeo
 	 *
 	 */
 	return (
-		<Select value={{ ...value, label }} {...props}>
+		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);

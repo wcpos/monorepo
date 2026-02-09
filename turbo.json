@@ -11,6 +11,10 @@
         "cache": false,
         "inputs": ["**/*.{ts,tsx,js,jsx}"]
       },
+      "typecheck": {
+        "dependsOn": ["^typecheck"],
+        "outputs": []
+      },
       "build": {
         "dependsOn": ["^build"],
         "outputs": [

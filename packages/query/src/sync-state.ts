@@ -1,10 +1,10 @@
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
-import type { StoreCollection, SyncCollection } from '@wcpos/database';
+import type { SyncCollection } from '@wcpos/database';
 
 import { yieldToEventLoop } from './yield';
 
-import type { RxDocument } from 'rxdb';
+import type { RxCollection, RxDocument } from 'rxdb';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'state']);
 
@@ -14,7 +14,7 @@ interface ServerRecord {
 }
 
 interface SyncStateManagerOptions {
-	collection: StoreCollection;
+	collection: RxCollection;
 	syncCollection: SyncCollection;
 	endpoint: string;
 }
@@ -23,7 +23,7 @@ interface SyncStateManagerOptions {
  * Manages the sync state of a collection by comparing the local state to the server state.
  */
 export class SyncStateManager {
-	public collection: StoreCollection;
+	public collection: RxCollection;
 	public syncCollection: SyncCollection;
 	private endpoint: string;
 
@@ -78,10 +78,11 @@ export class SyncStateManager {
 			// Check for duplicate IDs in the result array
 			const idCounts = new Map<number, RxDocument[]>();
 			for (const doc of result) {
-				if (!idCounts.has(doc.id)) {
-					idCounts.set(doc.id, []);
+				const docId = doc.id as number;
+				if (!idCounts.has(docId)) {
+					idCounts.set(docId, []);
 				}
-				idCounts.get(doc.id)!.push(doc);
+				idCounts.get(docId)!.push(doc);
 			}
 
 			// Find IDs with duplicates
@@ -114,14 +115,16 @@ export class SyncStateManager {
 				}
 
 				// Remove duplicates from the result array
-				result = result.filter((doc) => !duplicateIds.has(doc.id));
+				result = result.filter((doc: any) => !duplicateIds.has(doc.id));
 			}
 
 			const updates: any[] = [];
 
 			for (const localDoc of result) {
-				const remoteDoc = serverStateMap.get(localDoc.id);
-				processedIds.add(localDoc.id);
+				const localId = localDoc.id as number;
+				const localDateModified = localDoc.date_modified_gmt as string;
+				const remoteDoc = serverStateMap.get(localId);
+				processedIds.add(localId);
 				if (!remoteDoc) {
 					/**
 					 * @FIXME - this is a hack for the products variations endpoint
@@ -129,28 +132,28 @@ export class SyncStateManager {
 					 */
 					if (!/^products\/\d+\/variations$/.test(this.endpoint)) {
 						updates.push({
-							id: localDoc.id,
+							id: localId,
 							endpoint: this.endpoint,
 							status: 'PULL_DELETE',
 						});
 					} else {
 						// debugger;
 					}
-				} else if (remoteDoc.date_modified_gmt > localDoc.date_modified_gmt) {
+				} else if (remoteDoc.date_modified_gmt > localDateModified) {
 					updates.push({
-						id: localDoc.id,
+						id: localId,
 						endpoint: this.endpoint,
 						status: 'PULL_UPDATE',
 					});
-				} else if (remoteDoc.date_modified_gmt < localDoc.date_modified_gmt) {
+				} else if (remoteDoc.date_modified_gmt < localDateModified) {
 					updates.push({
-						id: localDoc.id,
+						id: localId,
 						endpoint: this.endpoint,
 						status: 'PUSH_UPDATE',
 					});
 				} else {
 					updates.push({
-						id: localDoc.id,
+						id: localId,
 						endpoint: this.endpoint,
 						status: 'SYNCED',
 					});
@@ -232,12 +235,13 @@ export class SyncStateManager {
 		const updates: any[] = [];
 
 		for (const localDoc of result) {
-			const remoteDoc = serverStateMap.get(localDoc.id);
-			processedIds.add(localDoc.id);
+			const localId = localDoc.id as number;
+			const remoteDoc = serverStateMap.get(localId);
+			processedIds.add(localId);
 
-			if (remoteDoc && remoteDoc.date_modified_gmt > localDoc.date_modified_gmt) {
+			if (remoteDoc && remoteDoc.date_modified_gmt > (localDoc.date_modified_gmt as string)) {
 				updates.push({
-					id: localDoc.id,
+					id: localId,
 					endpoint: this.endpoint,
 					status: 'PULL_UPDATE',
 				});
@@ -323,11 +327,11 @@ export class SyncStateManager {
 		// If the local docs exist, we need to make sure we are not overwriting a newer date_modified_gmt
 		const skipped: any[] = [];
 
-		for (const localDoc of localDocs) {
-			const remoteDoc = responseMap.get(localDoc[primaryPath]);
-			if (remoteDoc && remoteDoc.date_modified_gmt < localDoc.date_modified_gmt) {
+		for (const [, localDoc] of localDocs) {
+			const remoteDoc = responseMap.get((localDoc as any)[primaryPath]);
+			if (remoteDoc && remoteDoc.date_modified_gmt < (localDoc as any).date_modified_gmt) {
 				skipped.push(remoteDoc);
-				responseMap.delete(localDoc[primaryPath]);
+				responseMap.delete((localDoc as any)[primaryPath]);
 			}
 		}
 
@@ -382,7 +386,7 @@ export class SyncStateManager {
 			.remove();
 
 		if (removed.length > 0) {
-			const ids = removed.map((doc) => doc.id);
+			const ids = removed.map((doc: any) => doc.id);
 			const result = await this.collection.find({ selector: { id: { $in: ids } } }).remove();
 
 			syncLogger.info(`Removed ${this.collection.name}`, {

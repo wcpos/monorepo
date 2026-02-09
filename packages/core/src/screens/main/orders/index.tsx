@@ -54,7 +54,7 @@ const cells = {
 };
 
 function renderCell(columnKey: string, info: any) {
-	const Renderer = cells[columnKey];
+	const Renderer = cells[columnKey as keyof typeof cells];
 	if (Renderer) {
 		return <Renderer {...info} />;
 	}
@@ -71,12 +71,12 @@ export function OrdersScreen() {
 	const { wpCredentials, store } = useAppState();
 	const { bottom } = useSafeAreaInsets();
 
-	const selector = {
+	const selector: Record<string, unknown> = {
 		$and: [{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } }],
 	};
 
 	if (store?.id) {
-		selector.$and.push({
+		(selector.$and as Record<string, unknown>[]).push({
 			meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } },
 		});
 	} else {
@@ -90,7 +90,7 @@ export function OrdersScreen() {
 		queryKeys: ['orders'],
 		collectionName: 'orders',
 		initialParams: {
-			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
+			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection } as Record<string, 'asc' | 'desc'>],
 			selector,
 		},
 		infiniteScroll: true,
@@ -110,7 +110,7 @@ export function OrdersScreen() {
 					<VStack>
 						<HStack>
 							<QuerySearchInput
-								query={query}
+								query={query!}
 								placeholder={t('orders.search_orders')}
 								className="flex-1"
 								testID="search-orders"
@@ -120,7 +120,7 @@ export function OrdersScreen() {
 							</UISettingsDialog>
 						</HStack>
 						<ErrorBoundary>
-							<FilterBar query={query} />
+							<FilterBar query={query!} />
 						</ErrorBoundary>
 					</VStack>
 				</CardHeader>
@@ -129,7 +129,7 @@ export function OrdersScreen() {
 						<Suspense>
 							<DataTable<OrderDocument>
 								id="orders"
-								query={query}
+								query={query!}
 								renderCell={renderCell}
 								noDataMessage={t('common.no_orders_found')}
 								estimatedItemSize={100}

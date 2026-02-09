@@ -33,13 +33,13 @@ const cells = {
 	code: Code,
 };
 
-function renderCell(columnKey: string, info: any) {
-	const Renderer = cells[columnKey];
+function renderCell(columnKey: string, info: Record<string, unknown>) {
+	const Renderer = cells[columnKey as keyof typeof cells];
 	if (Renderer) {
-		return <Renderer {...info} />;
+		return <Renderer {...(info as any)} />;
 	}
 
-	return <TextCell {...info} />;
+	return <TextCell {...(info as any)} />;
 }
 
 /**
@@ -57,7 +57,7 @@ export function LogsScreen() {
 		queryKeys: ['logs'],
 		collectionName: 'logs',
 		initialParams: {
-			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection }],
+			sort: [{ [uiSettings.sortBy]: uiSettings.sortDirection } as Record<string, 'asc' | 'desc'>],
 			selector: {
 				level: { $in: DEFAULT_LOG_LEVELS },
 			},
@@ -98,12 +98,10 @@ export function LogsScreen() {
 						<Suspense>
 							<DataTable<LogDocument>
 								id="logs"
-								query={query}
+								query={query!}
 								renderCell={renderCell}
 								noDataMessage={t('logs.no_logs_found')}
 								estimatedItemSize={100}
-								keyExtractor={(row) => row.original.document.logId}
-								ListFooterComponent={() => {}}
 								TableFooterComponent={LogsFooter}
 							/>
 						</Suspense>

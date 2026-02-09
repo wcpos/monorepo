@@ -31,7 +31,9 @@ export function DemoButton() {
 
 	// Setup auth hook with demo user parameter
 	const { isReady, response, promptAsync } = useWcposAuth({
-		site: connectedSite,
+		site: connectedSite
+			? { wcpos_login_url: connectedSite.wcpos_login_url ?? '', name: connectedSite.name ?? '' }
+			: null,
 		extraParams: { user: 'demo' },
 	});
 
@@ -81,7 +83,9 @@ export function DemoButton() {
 		} catch (err) {
 			// Don't show toast here - specific error messages are already displayed
 			// by the hooks (use-url-discovery, use-api-discovery, use-auth-testing)
-			authLogger.error(`Demo connection failed: ${err.message}`);
+			authLogger.error(
+				`Demo connection failed: ${err instanceof Error ? err.message : String(err)}`
+			);
 		}
 	};
 

@@ -5,6 +5,7 @@ import type { ProductDocument } from '@wcpos/database';
 
 import {
 	calculateDefaultAmount,
+	type CartLine,
 	convertProductToLineItemWithoutTax,
 	convertVariationToLineItemWithoutTax,
 	extractFeeLineData,
@@ -484,9 +485,11 @@ describe('Utilities', () => {
 	// Test updatePosDataMeta
 	describe('updatePosDataMeta', () => {
 		it('should add new POS data if none exists', () => {
-			const item = { meta_data: [] };
+			const item = {
+				meta_data: [] as { key: string; value?: string }[],
+			} as unknown as CartLine;
 			const updatedItem = updatePosDataMeta(item, { key: 'value' });
-			expect(updatedItem.meta_data?.[0].key).toBe('_woocommerce_pos_data');
+			expect(updatedItem.meta_data?.[0]?.key).toBe('_woocommerce_pos_data');
 		});
 
 		it('should merge with existing POS data', () => {

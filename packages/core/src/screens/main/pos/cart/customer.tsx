@@ -21,14 +21,14 @@ import { useCurrentOrder } from '../contexts/current-order';
  *
  */
 export const Customer = ({
-	setShowCustomerSelect,
+	onShowCustomerSelect,
 }: {
-	setShowCustomerSelect: (show: boolean) => void;
+	onShowCustomerSelect: (show: boolean) => void;
 }) => {
 	const { currentOrder } = useCurrentOrder();
-	const billing = useObservableEagerState(currentOrder.billing$);
-	const shipping = useObservableEagerState(currentOrder.shipping$);
-	const customer_id = useObservableEagerState(currentOrder.customer_id$);
+	const billing = useObservableEagerState(currentOrder.billing$!);
+	const shipping = useObservableEagerState(currentOrder.shipping$!);
+	const customer_id = useObservableEagerState(currentOrder.customer_id$!);
 	const { format } = useCustomerNameFormat();
 	const name = format({ billing, shipping, id: customer_id });
 	const t = useT();
@@ -45,7 +45,7 @@ export const Customer = ({
 					size="xs"
 					leftIcon="user"
 					removable={true}
-					onRemove={() => setShowCustomerSelect(true)}
+					onRemove={() => onShowCustomerSelect(true)}
 				>
 					<ButtonText>{name}</ButtonText>
 				</ButtonPill>

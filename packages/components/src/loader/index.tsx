@@ -77,7 +77,7 @@ export const Loader = ({ className, variant = 'default', size, ...props }: Loade
 		'--color-foreground';
 
 	// Use Uniwind's useCSSVariable hook to get the actual theme color
-	const resolvedColor = useCSSVariable(cssVariable);
+	const resolvedColor = String(useCSSVariable(cssVariable) ?? '');
 
 	/**
 	 * Initialize the rotation animation on mount.

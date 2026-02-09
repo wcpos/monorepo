@@ -10,16 +10,21 @@ import { useCollection } from '../../hooks/use-collection';
 import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 
-import type { QuerySearchInput } from '../../components/query-search-input';
-
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
+type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;
+
+interface SearchInputRef {
+	setSearch: (search: string) => void;
+	onSearch: (search: string) => void;
+}
 
 export const useBarcode = (
 	productQuery: Query,
-	querySearchInputRef: React.RefObject<typeof QuerySearchInput>
+	querySearchInputRef: React.RefObject<SearchInputRef | null>
 ) => {
 	const { barcode$, onKeyPress } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
@@ -33,9 +38,10 @@ export const useBarcode = (
 	/**
 	 *
 	 */
-	useSubscription(barcode$, async (barcode) => {
-		const text1 = t('common.barcode_scanned', { barcode });
-		const results = await barcodeSearch(barcode);
+	useSubscription(barcode$, async (barcode: unknown) => {
+		const barcodeStr = String(barcode);
+		const text1 = t('common.barcode_scanned', { barcode: barcodeStr });
+		const results = await barcodeSearch(barcodeStr);
 
 		if (results.length !== 1) {
 			barcodeLogger.error(text1, {
@@ -46,12 +52,12 @@ export const useBarcode = (
 				},
 				context: {
 					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
-					barcode,
+					barcode: barcodeStr,
 					resultsCount: results.length,
 				},
 			});
-			productQuery.search(barcode);
-			querySearchInputRef.current?.setSearch(barcode);
+			productQuery.search(barcodeStr);
+			(querySearchInputRef.current as SearchInputRef | null)?.setSearch(barcodeStr);
 			return;
 		}
 
@@ -67,7 +73,7 @@ export const useBarcode = (
 					text2: t('pos_products.out_of_stock', { name: product.name }),
 				},
 				context: {
-					barcode,
+					barcode: barcodeStr,
 					productId: product.id,
 					productName: product.name,
 					stockStatus: product.stock_status,
@@ -83,29 +89,31 @@ export const useBarcode = (
 			 */
 			const parent_id = product.parent_id;
 			if (!parent_id) {
-				productQuery.search(barcode);
-				querySearchInputRef.current?.setSearch(barcode);
+				productQuery.search(barcodeStr);
+				(querySearchInputRef.current as SearchInputRef | null)?.setSearch(barcodeStr);
 				return;
 			}
 
 			const parent = await productCollection.findOne({ selector: { id: parent_id } }).exec();
 			if (!parent) {
-				productQuery.search(barcode);
-				querySearchInputRef.current?.setSearch(barcode);
+				productQuery.search(barcodeStr);
+				(querySearchInputRef.current as SearchInputRef | null)?.setSearch(barcodeStr);
 				return;
 			}
 
-			const metaData = product.attributes.map((attribute) => {
-				return {
-					attr_id: attribute.id,
-					display_key: attribute.name,
-					display_value: attribute.option,
-				};
-			});
+			const metaData = (product.attributes ?? []).map(
+				(attribute: { id?: number; name?: string; option?: string }) => {
+					return {
+						attr_id: attribute.id ?? 0,
+						display_key: attribute.name ?? '',
+						display_value: attribute.option ?? '',
+					};
+				}
+			);
 
-			addVariation(product, parent, metaData);
+			addVariation(product as ProductVariationDocument, parent, metaData);
 		} else {
-			addProduct(product);
+			addProduct(product as ProductDocument);
 		}
 
 		/**
@@ -118,14 +126,14 @@ export const useBarcode = (
 				text2: t('common.added_to_cart', { name: product.name }),
 			},
 			context: {
-				barcode,
+				barcode: barcodeStr,
 				productId: product.id,
 				productName: product.name,
 			},
 		});
 
 		// clear search after successful scan?
-		querySearchInputRef.current?.onSearch('');
+		(querySearchInputRef.current as SearchInputRef | null)?.onSearch('');
 	});
 
 	return { onKeyPress };

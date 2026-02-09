@@ -30,13 +30,16 @@ export const StatusPill = ({ query }: Props) => {
 	const t = useT();
 	const isActive = !!selected;
 	const { items } = useOrderStatusLabel();
-	const value = items.find((item) => item.value === selected);
+	const value = items.find((item) => item.value === (selected as unknown as string));
 
 	/**
 	 *
 	 */
 	return (
-		<Select value={value} onValueChange={({ value }) => query.where('status').equals(value).exec()}>
+		<Select
+			value={value}
+			onValueChange={(option) => option && query.where('status').equals(option.value).exec()}
+		>
 			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
 					size="xs"

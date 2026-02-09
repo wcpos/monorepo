@@ -6,10 +6,19 @@ import { useQuery } from '@wcpos/query';
 
 import Variations from './variations';
 
+type ProductDocument = import('@wcpos/database').ProductDocument;
+type OrderDocument = import('@wcpos/database').OrderDocument;
+type LineItem = NonNullable<OrderDocument['line_items']>[number];
+
+interface VariationsPopoverProps {
+	parent: ProductDocument;
+	addToCart: (variation: ProductDocument, metaData: LineItem['meta_data']) => void;
+}
+
 /**
  *
  */
-const VariationsPopover = ({ parent, addToCart }) => {
+const VariationsPopover = ({ parent, addToCart }: VariationsPopoverProps) => {
 	/**
 	 *
 	 */
@@ -29,13 +38,15 @@ const VariationsPopover = ({ parent, addToCart }) => {
 	React.useEffect(
 		() => {
 			return () => {
-				query.removeWhere('attributes').exec();
+				query?.removeWhere('attributes').exec();
 			};
 		},
 		[
 			// only run when the component unmounts
 		]
 	);
+
+	if (!query) return null;
 
 	return (
 		<ErrorBoundary>

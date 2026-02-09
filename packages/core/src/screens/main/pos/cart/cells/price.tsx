@@ -13,7 +13,7 @@ import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 import type { CellContext } from '@tanstack/react-table';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;
 	item: LineItem;
@@ -55,13 +55,13 @@ export const Price = ({ row, column }: CellContext<Props, 'price'>) => {
 	 */
 	return (
 		<VStack space="xs">
-			{isOnSale && column.columnDef.meta?.show('on_sale') && (
+			{isOnSale && column.columnDef.meta?.show?.('on_sale') && (
 				<Text className="text-muted-foreground text-right line-through">
 					{format(regular_price || 0)}
 				</Text>
 			)}
 			<CurrencyInput
-				value={parseFloat(price)}
+				value={price}
 				onChangeText={(price) => updateLineItem(uuid, { price })}
 				discounts={ensureNumberArray(quickDiscounts)}
 			/>

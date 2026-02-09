@@ -9,7 +9,7 @@ import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 import type { CellContext } from '@tanstack/react-table';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 interface Props {
 	uuid: string;
 	item: LineItem;

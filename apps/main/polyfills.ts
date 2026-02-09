@@ -4,12 +4,12 @@ import { Blob } from 'expo-blob';
 
 if (typeof global.crypto === 'undefined') {
 	global.crypto = {
-		getRandomValues: Crypto.getRandomValues,
-		randomUUID: Crypto.randomUUID,
+		getRandomValues: Crypto.getRandomValues as Crypto['getRandomValues'],
+		randomUUID: Crypto.randomUUID as Crypto['randomUUID'],
 		subtle: {
 			digest: Crypto.digest,
 		},
-	};
+	} as unknown as Crypto;
 }
 
 if (!global.btoa) {

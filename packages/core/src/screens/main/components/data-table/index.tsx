@@ -50,7 +50,7 @@ interface Props {
  * React Compiler breaks tanstack/react-table
  * https://github.com/facebook/react/issues/33057
  */
-function useReactTableWrapper(...args) {
+function useReactTableWrapper(...args: Parameters<typeof useReactTable>) {
 	'use no memo';
 	return { ...useReactTable(...args) };
 }
@@ -70,7 +70,9 @@ function DataTable<TData>({
 	TableFooterComponent,
 }: Props) {
 	const { uiSettings, getUILabel, patchUI } = useUISettings(id);
-	const uiColumns = useObservableEagerState(uiSettings.columns$);
+	const uiColumns = useObservableEagerState(
+		uiSettings.columns$ as import('rxjs').Observable<Record<string, unknown>[]>
+	);
 	const t = useT();
 	const result = useObservableSuspense(query.resource);
 	const deferredResult = React.useDeferredValue(result);
@@ -94,7 +96,7 @@ function DataTable<TData>({
 	 * Sorting
 	 */
 	const handleSortingChange = React.useCallback(
-		({ sortBy, sortDirection }) => {
+		({ sortBy, sortDirection }: { sortBy: string; sortDirection: 'asc' | 'desc' }) => {
 			patchUI({ sortBy, sortDirection });
 			query.sort([{ [sortBy]: sortDirection }]).exec();
 		},
@@ -139,7 +141,10 @@ function DataTable<TData>({
 										table,
 									})
 								) : (
-									<DataTableHeader {...header} table={table} />
+									<DataTableHeader
+										{...header.getContext()}
+										title={String(header.column.columnDef.header ?? '')}
+									/>
 								)}
 							</TableHead>
 						))}
@@ -154,8 +159,8 @@ function DataTable<TData>({
 							? renderItem({ item, index, table })
 							: defaultRenderItem({ item, index, table })
 					}
-					estimatedItemSize={estimatedItemSize}
-					parentComponent={TableBody}
+					estimatedItemSize={estimatedItemSize ?? 50}
+					parentComponent={TableBody as unknown as typeof import('react-native').View}
 					getItemType={getItemType}
 					onEndReachedThreshold={0.1}
 					onEndReached={() => {
@@ -191,11 +196,11 @@ function DataTable<TData>({
 	);
 }
 
-function defaultRenderItem({ item, index, table }) {
+function defaultRenderItem({ item, index, table }: { item: any; index: number; table: any }) {
 	return (
 		<VirtualizedList.Item>
 			<TableRow index={index}>
-				{item.getVisibleCells().map((cell) => {
+				{item.getVisibleCells().map((cell: any) => {
 					return (
 						<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
 							{flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -212,7 +217,7 @@ function buildColumns(
 	getUILabel: (key: string) => string,
 	renderCell?: (columnKey: string, info: any) => React.ReactNode
 ): ColumnDef<any, any>[] {
-	return columns.map((c) => {
+	return columns.map((c: any) => {
 		return {
 			accessorKey: c.key,
 			enableSorting: !c.disableSort,
@@ -225,7 +230,7 @@ function buildColumns(
 					return !!(d && d.show);
 				},
 			},
-			cell: (info) => (renderCell ? renderCell(c.key, info) : <TextCell {...info} />),
+			cell: (info: any) => (renderCell ? renderCell(c.key, info) : <TextCell {...info} />),
 			header: c.hideLabel ? '' : getUILabel(c.key),
 		};
 	});

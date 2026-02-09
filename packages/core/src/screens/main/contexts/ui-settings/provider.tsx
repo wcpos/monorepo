@@ -41,7 +41,7 @@ export interface UISettingsContextValue {
 	) => Promise<UISettingState<T>>;
 }
 
-export const UISettingsContext = React.createContext<UISettingsContextValue>(null);
+export const UISettingsContext = React.createContext<UISettingsContextValue | null>(null);
 
 /**
  *

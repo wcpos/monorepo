@@ -34,7 +34,14 @@ export const customerFormSchema = z.object({
 /**
  *
  */
-export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
+interface CustomerFormProps {
+	form: ReturnType<typeof import('react-hook-form').useForm<z.infer<typeof customerFormSchema>>>;
+	onClose: () => void;
+	onSubmit: (data: z.infer<typeof customerFormSchema>) => void;
+	loading: boolean;
+}
+
+export const CustomerForm = ({ form, onClose, onSubmit, loading }: CustomerFormProps) => {
 	const t = useT();
 
 	/**
@@ -49,7 +56,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 	 * The username is editable on create, but not on edit.
 	 * We can check whether the customer has an ID to determine if we are on an edit.
 	 */
-	const hasUsername = !!form.getValues().id;
+	const hasUsername = !!(form.getValues() as Record<string, unknown>).id;
 
 	/**
 	 * Intercept handleSubmit to populate billing fields if empty.
@@ -86,7 +93,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="first_name"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('common.first_name')} {...field} />
+								<FormInput label={t('common.first_name')} {...field} value={field.value ?? ''} />
 							</View>
 						)}
 					/>
@@ -95,7 +102,7 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="last_name"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('common.last_name')} {...field} />
+								<FormInput label={t('common.last_name')} {...field} value={field.value ?? ''} />
 							</View>
 						)}
 					/>
@@ -115,7 +122,12 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="role"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('common.role')} {...field} editable={false} />
+								<FormInput
+									label={t('common.role')}
+									{...field}
+									value={field.value ?? ''}
+									editable={false}
+								/>
 							</View>
 						)}
 					/>
@@ -126,7 +138,12 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 						name="username"
 						render={({ field }) => (
 							<View className="flex-1">
-								<FormInput label={t('common.username')} {...field} editable={!hasUsername} />
+								<FormInput
+									label={t('common.username')}
+									{...field}
+									value={field.value ?? ''}
+									editable={!hasUsername}
+								/>
 							</View>
 						)}
 					/>

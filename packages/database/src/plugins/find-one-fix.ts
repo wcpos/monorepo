@@ -7,7 +7,7 @@ export const findOneFixPlugin: RxPlugin = {
 	rxdb: true,
 	prototypes: {
 		RxCollection: (proto: any) => {
-			proto.findOneFix = function (this, queryObj) {
+			proto.findOneFix = function (this: any, queryObj: any) {
 				if (isEmpty(queryObj)) {
 					return {
 						exec: () => Promise.resolve(null),

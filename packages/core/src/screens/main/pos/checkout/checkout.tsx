@@ -34,9 +34,9 @@ interface Props {
  */
 export const Checkout = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
-	const orderNumber = useObservableEagerState(order.number$);
+	const orderNumber = useObservableEagerState(order.number$!);
 	const t = useT();
-	const webViewRef = React.useRef<WebViewProps>();
+	const webViewRef = React.useRef<{ postMessage?: (msg: unknown) => void }>(null);
 	const [loading, setLoading] = React.useState(false);
 
 	/**
@@ -84,7 +84,7 @@ export const Checkout = ({ resource }: Props) => {
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
-						<PaymentWebview order={order} ref={webViewRef} setLoading={setLoading} />
+						<PaymentWebview order={order} ref={webViewRef as never} setLoading={setLoading} />
 					</VStack>
 				</ModalBody>
 				<ModalFooter>

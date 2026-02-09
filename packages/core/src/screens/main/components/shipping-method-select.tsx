@@ -28,22 +28,26 @@ export const ShippingMethodSelect = ({ value, ...props }: React.ComponentProps<t
 	 *
 	 */
 	const options = React.useMemo(() => {
-		return (shippingMethods || []).map((method) => ({
-			label: method.title,
-			value: method.id,
-		}));
+		return ((shippingMethods as { id: string; title: string }[]) || []).map(
+			(method: { id: string; title: string }) => ({
+				label: method.title,
+				value: method.id,
+			})
+		);
 	}, [shippingMethods]);
 
 	/**
 	 *
 	 */
-	const label = options.find((option) => option.value === value?.value)?.label;
+	const label = options.find(
+		(option: { value: string; label: string }) => option.value === value?.value
+	)?.label;
 
 	/**
 	 *
 	 */
 	return (
-		<Select value={{ ...value, label }} {...props}>
+		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);

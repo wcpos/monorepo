@@ -113,7 +113,7 @@ export const ShippingAddressForm = () => {
 								customComponent={StateFormInput}
 								label={t('common.state')}
 								{...field}
-								countryCode={countryCode}
+								{...({ countryCode } as Record<string, unknown>)}
 							/>
 						</View>
 					)}

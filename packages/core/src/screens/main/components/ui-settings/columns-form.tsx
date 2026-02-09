@@ -31,25 +31,34 @@ export const columnsFormSchema = z.object({
 	),
 });
 
+type ColumnsFormValues = z.infer<typeof columnsFormSchema>;
+type ColumnField = ColumnsFormValues['columns'][number] & { id: string };
+
+interface UISettingsColumnsFormProps {
+	columns: ColumnsFormValues['columns'];
+	getUILabel: (key: string) => string;
+}
+
 /**
  *
  */
-export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
+export const UISettingsColumnsForm = ({ columns, getUILabel }: UISettingsColumnsFormProps) => {
 	const t = useT();
-	const [openColumns, setOpenColumns] = React.useState({});
+	const [openColumns, setOpenColumns] = React.useState<Record<string, boolean>>({});
 	const form = useFormContext();
 
-	const toggleColumn = (columnKey) => {
+	const toggleColumn = (columnKey: string) => {
 		setOpenColumns((prevState) => ({
 			...prevState,
 			[columnKey]: !prevState[columnKey],
 		}));
 	};
 
-	const { fields, move } = useFieldArray({
+	const { fields: rawFields, move } = useFieldArray({
 		control: form.control,
 		name: 'columns',
 	});
+	const fields = rawFields as unknown as ColumnField[];
 
 	/**
 	 * Handle reorder from SortableList
@@ -57,7 +66,7 @@ export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
 	 * The form's watch subscription (via useFormChangeHandler) will trigger the save.
 	 */
 	const handleOrderChange = React.useCallback(
-		({ fromIndex, toIndex }: ReorderResult<(typeof fields)[number]>) => {
+		({ fromIndex, toIndex }: ReorderResult<ColumnField>) => {
 			if (fromIndex !== toIndex) {
 				move(fromIndex, toIndex);
 			}
@@ -68,7 +77,7 @@ export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
 	/**
 	 * Render a single column item (shared between SortableList and simple list)
 	 */
-	const renderColumnItem = (column: (typeof fields)[number], columnIndex: number) => (
+	const renderColumnItem = (column: ColumnField, columnIndex: number) => (
 		<VStack key={column.key} className="gap-0 rounded p-2 transition-shadow hover:shadow-md">
 			<HStack>
 				<DragHandle className="mr-2">
@@ -98,18 +107,20 @@ export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
 				<Collapsible open={openColumns[column.key]}>
 					<CollapsibleContent>
 						<VStack className="gap-0 pt-2 pl-10">
-							{column.display.map((displayItem, displayIndex) => (
-								<FormField
-									key={displayItem.key}
-									control={form.control}
-									name={`columns.${columnIndex}.display.${displayIndex}.show`}
-									render={({ field }) => (
-										<View className="p-2">
-											<FormSwitch label={getUILabel(displayItem.key)} {...field} />
-										</View>
-									)}
-								/>
-							))}
+							{column.display.map(
+								(displayItem: { key: string; show: boolean }, displayIndex: number) => (
+									<FormField
+										key={displayItem.key}
+										control={form.control}
+										name={`columns.${columnIndex}.display.${displayIndex}.show`}
+										render={({ field }) => (
+											<View className="p-2">
+												<FormSwitch label={getUILabel(displayItem.key)} {...field} />
+											</View>
+										)}
+									/>
+								)
+							)}
 						</VStack>
 					</CollapsibleContent>
 				</Collapsible>

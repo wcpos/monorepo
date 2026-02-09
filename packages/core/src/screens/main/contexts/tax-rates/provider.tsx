@@ -30,7 +30,7 @@ interface TaxRatesContextProps {
 	taxClasses: string[];
 }
 
-export const TaxRatesContext = React.createContext<TaxRatesContextProps>(null);
+export const TaxRatesContext = React.createContext<TaxRatesContextProps | null>(null);
 
 interface TaxRatesProviderProps {
 	children: React.ReactNode;
@@ -87,22 +87,25 @@ export const TaxRatesProvider = ({ children, taxQuery, order }: TaxRatesProvider
 						return of(baseLocation);
 					}
 					// subscribe to the order billing and shipping addresses
-					return combineLatest([order.billing$, order.shipping$]).pipe(
+					return combineLatest([
+						order.billing$ as import('rxjs').Observable<Record<string, string | undefined>>,
+						order.shipping$ as import('rxjs').Observable<Record<string, string | undefined>>,
+					]).pipe(
 						map(([billing, shipping]) => {
 							if (taxBasedOn === 'billing') {
 								return {
-									country: billing.country,
-									state: billing.state,
-									city: billing.city,
-									postcode: billing.postcode,
+									country: billing?.country ?? '',
+									state: billing?.state ?? '',
+									city: billing?.city ?? '',
+									postcode: billing?.postcode ?? '',
 								};
 							}
 							if (taxBasedOn === 'shipping') {
 								return {
-									country: shipping.country,
-									state: shipping.state,
-									city: shipping.city,
-									postcode: shipping.postcode,
+									country: shipping?.country ?? '',
+									state: shipping?.state ?? '',
+									city: shipping?.city ?? '',
+									postcode: shipping?.postcode ?? '',
 								};
 							}
 							return baseLocation;
@@ -114,7 +117,12 @@ export const TaxRatesProvider = ({ children, taxQuery, order }: TaxRatesProvider
 		[order, taxBasedOn, baseLocation]
 	);
 
-	const location = useObservableEagerState(location$);
+	const location = useObservableEagerState(location$) as {
+		country: string;
+		state: string;
+		city: string;
+		postcode: string;
+	};
 
 	/**
 	 * Filter tax rates based on address - store, billing or shipping
@@ -132,13 +140,14 @@ export const TaxRatesProvider = ({ children, taxQuery, order }: TaxRatesProvider
 			value={{
 				allRates, // all rates are needed sometimes for itemized tax display
 				rates,
-				shippingTaxClass,
-				calcTaxes,
-				pricesIncludeTax,
-				taxRoundAtSubtotal,
-				taxBasedOn,
+				shippingTaxClass: shippingTaxClass as string,
+				calcTaxes: calcTaxes as boolean,
+				pricesIncludeTax: pricesIncludeTax as boolean,
+				taxRoundAtSubtotal: taxRoundAtSubtotal as boolean,
+				taxBasedOn: taxBasedOn as 'base' | 'shipping' | 'billing',
 				location,
 				taxQuery, // pass through for easy access
+				taxClasses: [...new Set(allRates.map((r) => r.class).filter(Boolean))] as string[],
 			}}
 		>
 			{children}

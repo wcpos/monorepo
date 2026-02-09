@@ -3,7 +3,7 @@ import get from 'lodash/get';
 /**
  *
  */
-const filterApiQueryParams = (params) => {
+const filterApiQueryParams = (params: Record<string, any>) => {
 	let orderby = params.orderby;
 
 	if (orderby === 'name') {

@@ -27,7 +27,7 @@ const StateComboboxBase = ({
 	const states = useStates();
 	const options = React.useMemo(
 		() =>
-			(states || []).map((state) => ({
+			(states || []).map((state: { name: string; code: string }) => ({
 				label: state.name,
 				value: state.code,
 			})),
@@ -49,7 +49,12 @@ const StateComboboxBase = ({
 	 */
 	return (
 		<Combobox
-			value={{ ...value, label: options.find((option) => option.value === value?.value)?.label }}
+			value={{
+				value: value?.value ?? '',
+				label:
+					options.find((option: { value: string; label: string }) => option.value === value?.value)
+						?.label ?? '',
+			}}
 			{...props}
 		>
 			<ComboboxTrigger disabled={disabled}>
@@ -60,8 +65,8 @@ const StateComboboxBase = ({
 				<ComboboxList
 					data={options}
 					renderItem={({ item }) => (
-						<ComboboxItem value={item.value} label={item.label}>
-							<ComboboxItemText>{item.label}</ComboboxItemText>
+						<ComboboxItem value={String(item.value)} label={item.label} item={item}>
+							<ComboboxItemText />
 						</ComboboxItem>
 					)}
 					estimatedItemSize={44}
@@ -79,7 +84,7 @@ export const StateCombobox = ({
 	...props
 }: React.ComponentProps<typeof Combobox> & { countryCode?: string }) => {
 	return (
-		<StatesProvider countryCode={countryCode}>
+		<StatesProvider countryCode={countryCode ?? ''}>
 			<StateComboboxBase {...props} />
 		</StatesProvider>
 	);

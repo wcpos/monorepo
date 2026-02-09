@@ -1,5 +1,5 @@
-type RxPlugin = import('rxdb/dist/types').RxPlugin;
-type RxDocument = import('rxdb/dist/types').RxDocument;
+type RxPlugin = import('rxdb').RxPlugin;
+type RxDocument = import('rxdb').RxDocument;
 
 const woocommercePlugin: RxPlugin = {
 	name: 'woocommerce',
@@ -41,10 +41,12 @@ const woocommercePlugin: RxPlugin = {
 		/**
 		 * add a foo-property to each document. You can then call myDocument.foo (='bar')
 		 */
-		createRxDocument(doc: RxDocument) {
-			console.log('TODO - remove this');
-			// @ts-ignore
-			doc.foo = 'bar';
+		createRxDocument: {
+			after(doc: RxDocument) {
+				console.log('TODO - remove this');
+				// @ts-expect-error: Adding custom property to document for plugin demo
+				doc.foo = 'bar';
+			},
 		},
 	},
 };

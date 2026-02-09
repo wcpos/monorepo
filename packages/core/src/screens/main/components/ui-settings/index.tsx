@@ -77,7 +77,10 @@ const UISettingsDialog = ({ title, children }: Props) => {
 					</DialogBody>
 					<DialogFooter>
 						<DialogClose>{t('common.close')}</DialogClose>
-						<DialogAction variant="destructive" onPress={handleButtonPress}>
+						<DialogAction
+							{...({ variant: 'destructive' } as Record<string, unknown>)}
+							onPress={handleButtonPress}
+						>
 							{t('common.restore_default_settings')}
 						</DialogAction>
 					</DialogFooter>

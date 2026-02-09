@@ -1,7 +1,7 @@
 /**
  *
  */
-const filterApiQueryParams = (params) => {
+const filterApiQueryParams = (params: Record<string, any>) => {
 	let orderby = params.orderby;
 
 	if (orderby === 'date_created' || orderby === 'date_created_gmt') {

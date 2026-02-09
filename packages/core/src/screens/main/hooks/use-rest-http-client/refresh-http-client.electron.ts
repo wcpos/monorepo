@@ -12,10 +12,12 @@
  * @see packages/hooks/src/use-http-client/http.electron.ts - Main IPC HTTP
  */
 
+import type { AxiosRequestConfig } from 'axios';
+
 declare global {
 	interface Window {
 		ipcRenderer: {
-			invoke: (channel: string, data?: any) => Promise<any>;
+			invoke: (channel: string, args: unknown) => Promise<unknown>;
 		};
 	}
 }
@@ -23,10 +25,10 @@ declare global {
 interface RefreshHttpClient {
 	post: (
 		url: string,
-		data: any,
-		config?: { headers?: Record<string, string> }
+		data: unknown,
+		config?: AxiosRequestConfig
 	) => Promise<{
-		data: any;
+		data: unknown;
 		status: number;
 		statusText: string;
 	}>;
@@ -40,7 +42,7 @@ interface RefreshHttpClient {
  */
 export function createRefreshHttpClient(): RefreshHttpClient {
 	return {
-		post: async (url: string, data: any, config: { headers?: Record<string, string> } = {}) => {
+		post: async (url: string, data: unknown, config: AxiosRequestConfig = {}) => {
 			const requestId = crypto.randomUUID();
 
 			// Construct axios-compatible config for IPC
@@ -55,18 +57,26 @@ export function createRefreshHttpClient(): RefreshHttpClient {
 			};
 
 			// Send request through IPC to main process
-			const result = await window.ipcRenderer.invoke('axios', {
+			const result = (await window.ipcRenderer.invoke('axios', {
 				type: 'request',
 				requestId,
 				config: axiosConfig,
-			});
+			})) as {
+				success?: boolean;
+				data?: unknown;
+				status?: number;
+				statusText?: string;
+				message?: string;
+				response?: { data?: Record<string, unknown>; status?: number };
+			};
 
 			// Handle IPC error response
 			if (result.success === false) {
 				// Include response details in error message for better debugging
+				const respData = result.response?.data as Record<string, unknown> | undefined;
 				const errorMessage =
-					result.response?.data?.error_description ||
-					result.response?.data?.message ||
+					(respData?.error_description as string) ||
+					(respData?.message as string) ||
 					result.message ||
 					`HTTP ${result.response?.status || 'unknown'}`;
 
@@ -79,8 +89,8 @@ export function createRefreshHttpClient(): RefreshHttpClient {
 			// Success response
 			return {
 				data: result.data,
-				status: result.status,
-				statusText: result.statusText,
+				status: result.status ?? 200,
+				statusText: result.statusText ?? 'OK',
 			};
 		},
 	};

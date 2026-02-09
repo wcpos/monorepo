@@ -25,9 +25,22 @@ import type {
 
 const queryLogger = getLogger(['wcpos', 'query', 'state']);
 
-type DocumentType<C> = C extends RxCollection<infer D> ? RxDocument<D, object> : never;
+type DocumentType<C> = C extends RxCollection ? RxDocument<any, object> : never;
 
 export type QueryParams = MangoQuery & { search?: string };
+
+export interface QueryHooks {
+	preQueryParams?: (queryParams: QueryParams) => QueryParams;
+	postQueryResult?: (
+		docs: any[],
+		modifiedParams: QueryParams,
+		originalParams: QueryParams
+	) => any[];
+	filterApiQueryParams?: (
+		params: Record<string, any>,
+		mangoQuery?: QueryParams
+	) => Record<string, any>;
+}
 
 export interface QueryConfig<T> {
 	id: string;
@@ -79,7 +92,7 @@ interface QueryMethods<DocType, Q = Query<any>> {
 	or(array: any[]): Q;
 	nor(array: any[]): Q;
 	and(array: any[]): Q;
-	sort(sortBy: MangoQuerySortPart<DocType>): Q;
+	sort(sortBy: MangoQuerySortPart<DocType>[]): Q;
 	skip(skipValue: number): Q;
 	limit(limitValue: number): Q;
 	search(searchTerm: string): void;
@@ -107,9 +120,10 @@ export class Query<T extends RxCollection>
 	public readonly id: string;
 	public readonly collection: T;
 	public readonly primaryKey: string;
-	public readonly searchInstancePromise: Promise<void>;
+	public readonly searchInstancePromise: Promise<any>;
 	public readonly locale: string;
-	public readonly endpoint; // @FIXME - this is used in the replication state but not in this class
+	public readonly endpoint: string | undefined; // @FIXME - this is used in the replication state but not in this class
+	public readonly greedy: boolean;
 	private _variationMatchesCache = new WeakMap<
 		RxQuery,
 		{ id: number; name: string; option: string }[]
@@ -157,15 +171,16 @@ export class Query<T extends RxCollection>
 		super();
 		this.id = id;
 		this.collection = collection;
-		this.primaryKey = collection.schema.primaryPath;
-		this.searchInstancePromise = collection.initSearch(locale);
+		this.primaryKey = (collection as any).schema.primaryPath;
+		this.searchInstancePromise = (collection as any).initSearch(locale);
 		this.locale = locale;
 		this.endpoint = endpoint; // @FIXME - this is used in the replication state but not in this class
+		this.greedy = greedy;
 		this.infiniteScroll = infiniteScroll;
 		this.pageSize = pageSize;
 		this.currentPage = 0;
 
-		this.currentRxQuery = collection.find(initialParams);
+		this.currentRxQuery = (collection as any).find(initialParams);
 		if (autoExec) {
 			this.exec();
 		}
@@ -173,7 +188,7 @@ export class Query<T extends RxCollection>
 
 	async cancel(): Promise<void> {
 		queryLogger.debug('Query cancelling', {
-			context: { id: this.id, collection: this.collection.name },
+			context: { id: this.id, collection: (this.collection as any).name },
 		});
 
 		this.subjects.result.next({
@@ -217,7 +232,7 @@ export class Query<T extends RxCollection>
 		this.exec();
 	}
 
-	private resetPagination(): void {
+	protected resetPagination(): void {
 		this.currentPage = 0;
 	}
 
@@ -234,12 +249,12 @@ export class Query<T extends RxCollection>
 				.pipe(
 					distinctUntilChanged((prev, next) => {
 						const idsAreEqual = isEqual(
-							prev.hits.map((hit) => hit.id),
-							next.hits.map((hit) => hit.id)
+							prev.hits.map((hit: any) => hit.id),
+							next.hits.map((hit: any) => hit.id)
 						);
 						let childrenAreEqual = true;
 						if (idsAreEqual && next.searchActive) {
-							childrenAreEqual = prev.hits.every((hit, index) => {
+							childrenAreEqual = prev.hits.every((hit: any, index: any) => {
 								const nextHit = next.hits[index];
 								return (
 									hit.parentSearchTerm === nextHit.parentSearchTerm &&
@@ -336,7 +351,7 @@ export class Query<T extends RxCollection>
 	public where(path: string, value?: MangoQuerySelector<DocumentType<T>>): this {
 		let newRxQuery;
 		if (value) {
-			newRxQuery = this.currentRxQuery.where(path, value);
+			newRxQuery = (this.currentRxQuery as any).where(path, value);
 			this.updateQuery(newRxQuery);
 		} else {
 			newRxQuery = this.currentRxQuery.where(path);
@@ -404,19 +419,19 @@ export class Query<T extends RxCollection>
 	}
 
 	public regex(value: string | { $regex: string; $options?: string }): this {
-		const newRxQuery = this.currentRxQuery.regex(value);
+		const newRxQuery = (this.currentRxQuery as any).regex(value);
 		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public size(value: number): this {
-		const newRxQuery = this.currentRxQuery.size(value);
+		const newRxQuery = (this.currentRxQuery as any).size(value);
 		this.updateQuery(newRxQuery);
 		return this;
 	}
 
 	public mod(value: any): this {
-		const newRxQuery = this.currentRxQuery.mod(value);
+		const newRxQuery = (this.currentRxQuery as any).mod(value);
 		this.updateQuery(newRxQuery);
 		return this;
 	}
@@ -451,10 +466,10 @@ export class Query<T extends RxCollection>
 		return this;
 	}
 
-	public sort(sortBy: MangoQuerySortPart<DocumentType<T>>): this {
+	public sort(sortBy: MangoQuerySortPart<DocumentType<T>>[]): this {
 		const currentMangoQuery = this.currentRxQuery.mangoQuery;
 		const newMangoQuery = { ...currentMangoQuery, sort: sortBy };
-		const newRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = (this.collection as any).find(newMangoQuery);
 		this.updateQuery(newRxQuery);
 		return this;
 	}
@@ -478,7 +493,7 @@ export class Query<T extends RxCollection>
 		// If the search term is empty, remove the uuid filter and unsubscribe from the search
 		if (isEmpty(searchTerm)) {
 			queryLogger.debug('Search cleared', {
-				context: { id: this.id, collection: this.collection.name },
+				context: { id: this.id, collection: (this.collection as any).name },
 			});
 			this.cancelSub('search');
 			this.removeWhere(this.primaryKey);
@@ -488,7 +503,7 @@ export class Query<T extends RxCollection>
 		}
 
 		queryLogger.debug('Search started', {
-			context: { id: this.id, collection: this.collection.name, searchTerm },
+			context: { id: this.id, collection: (this.collection as any).name, searchTerm },
 		});
 
 		this.resetPagination();
@@ -506,8 +521,8 @@ export class Query<T extends RxCollection>
 						)
 					)
 				)
-				.subscribe((results: DocumentType<T>[]) => {
-					const uuids = results.map((result) => result[this.primaryKey]);
+				.subscribe((results: any) => {
+					const uuids = results.map((result: any) => result[this.primaryKey]);
 					/**
 					 * @NOTE - don't reset the pagination when we're getting search updates
 					 */
@@ -542,7 +557,7 @@ export class Query<T extends RxCollection>
 			newSelector.$and = newSelector.$and.filter((condition) => {
 				if (condition[field]) return false;
 
-				if (condition.$elemMatch && condition.$elemMatch[field]) return false;
+				if (condition.$elemMatch && (condition.$elemMatch as any)[field]) return false;
 
 				if (Array.isArray(condition.$or)) {
 					const hasField = condition.$or.some(
@@ -564,7 +579,7 @@ export class Query<T extends RxCollection>
 		}
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
-		const newRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = (this.collection as any).find(newMangoQuery);
 		this.updateQuery(newRxQuery);
 		return this;
 	}
@@ -611,7 +626,7 @@ export class Query<T extends RxCollection>
 		}
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
-		const newRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = (this.collection as any).find(newMangoQuery);
 		this.updateQuery(newRxQuery);
 		return this;
 	}
@@ -646,7 +661,7 @@ export class Query<T extends RxCollection>
 		}
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
-		const newRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = (this.collection as any).find(newMangoQuery);
 		this.updateQuery(newRxQuery);
 
 		return this;
@@ -691,10 +706,10 @@ export class Query<T extends RxCollection>
 			],
 		};
 
-		newSelector.$and.push(orCondition);
+		(newSelector as any).$and.push(orCondition);
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
-		const newRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = (this.collection as any).find(newMangoQuery);
 		this.updateQuery(newRxQuery);
 
 		return this;
@@ -729,17 +744,17 @@ export class Query<T extends RxCollection>
 		);
 
 		// If $and array is empty, create a new selector without it
-		if (newSelector.$and.length === 0) {
-			const { $and, ...remainingSelector } = newSelector;
+		if ((newSelector as any).$and.length === 0) {
+			const { $and, ...remainingSelector } = newSelector as any;
 			const newMangoQuery = { ...currentMangoQuery, selector: remainingSelector };
-			const newRxQuery = this.collection.find(newMangoQuery);
+			const newRxQuery = (this.collection as any).find(newMangoQuery);
 			this.updateQuery(newRxQuery);
 			return this;
 		}
 
 		const newMangoQuery = { ...currentMangoQuery, selector: newSelector };
 		// this.collection._queryCache._map = new Map();
-		const newRxQuery = this.collection.find(newMangoQuery);
+		const newRxQuery = (this.collection as any).find(newMangoQuery);
 		this.updateQuery(newRxQuery);
 
 		return this;
@@ -751,7 +766,9 @@ export class Query<T extends RxCollection>
 	 * @returns The selector value, or `undefined` if not found.
 	 */
 	public getSelector(path: string): MangoQuerySelector<any> | undefined {
-		return get(this.currentRxQuery, ['mangoQuery', 'selector', path]);
+		return get(this.currentRxQuery, ['mangoQuery', 'selector', path]) as
+			| MangoQuerySelector<any>
+			| undefined;
 	}
 
 	/**
@@ -805,7 +822,7 @@ export class Query<T extends RxCollection>
 
 		const andConditions = get(this.currentRxQuery, ['mangoQuery', 'selector', '$and']);
 		if (!andConditions) {
-			const matches = [];
+			const matches: { id: number; name: string; option: string }[] = [];
 			this._variationMatchesCache.set(this.currentRxQuery, matches);
 			return matches;
 		}

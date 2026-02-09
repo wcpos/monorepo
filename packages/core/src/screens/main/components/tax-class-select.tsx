@@ -31,22 +31,26 @@ export const TaxClassSelect = ({ value, ...props }: React.ComponentProps<typeof 
 	 * It's a mess.
 	 */
 	const options = React.useMemo(() => {
-		return (taxClasses || []).map((taxClass) => ({
-			label: taxClass.name,
-			value: taxClass.slug,
-		}));
+		return ((taxClasses || []) as { name: string; slug: string }[]).map(
+			(taxClass: { name: string; slug: string }) => ({
+				label: taxClass.name,
+				value: taxClass.slug,
+			})
+		);
 	}, [taxClasses]);
 
 	/**
 	 *
 	 */
-	const label = options.find((option) => option.value === value?.value)?.label;
+	const label = options.find(
+		(option: { value: string; label: string }) => option.value === value?.value
+	)?.label;
 
 	/**
 	 *
 	 */
 	return (
-		<Select value={{ ...value, label }} {...props}>
+		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);

@@ -18,7 +18,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-function getVariablePrices(metaData) {
+function getVariablePrices(metaData: { key?: string; value?: string }[] | undefined) {
 	if (!metaData) {
 		uiLogger.error('metaData is not defined', {
 			context: {
@@ -28,7 +28,9 @@ function getVariablePrices(metaData) {
 		return null;
 	}
 
-	const metaDataEntry = metaData.find((m) => m.key === '_woocommerce_pos_variable_prices');
+	const metaDataEntry = metaData.find(
+		(m: { key?: string; value?: string }) => m.key === '_woocommerce_pos_variable_prices'
+	);
 
 	if (!metaDataEntry) {
 		uiLogger.error("No '_woocommerce_pos_variable_prices' key found in metaData", {
@@ -40,7 +42,7 @@ function getVariablePrices(metaData) {
 	}
 
 	try {
-		const variablePrices = JSON.parse(metaDataEntry.value);
+		const variablePrices = JSON.parse(metaDataEntry.value ?? '');
 		return variablePrices;
 	} catch (error) {
 		uiLogger.error("Unable to parse '_woocommerce_pos_variable_prices' value into JSON", {
@@ -63,10 +65,16 @@ export const VariableProductPrice = ({
 	column,
 }: CellContext<{ document: ProductDocument }, 'price' | 'regular_price' | 'sale_price'>) => {
 	const product = row.original.document;
-	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
-	const taxClass = useObservableState(product.tax_class$, product.tax_class);
+	const taxStatus = useObservableState(product.tax_status$!, product.tax_status) as
+		| 'none'
+		| 'taxable'
+		| 'shipping'
+		| undefined;
+	const taxClass = useObservableState(product.tax_class$!, product.tax_class) as string | undefined;
 
-	const metaData = useObservableState(product.meta_data$, product.meta_data);
+	const metaData = useObservableState(product.meta_data$!, product.meta_data) as
+		| { key?: string; value?: string }[]
+		| undefined;
 	const variablePrices = getVariablePrices(metaData);
 
 	/**
@@ -81,9 +89,9 @@ export const VariableProductPrice = ({
 		return (
 			<PriceWithTax
 				price={variablePrices[column.id].max}
-				taxStatus={taxStatus}
-				taxClass={taxClass}
-				taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
+				taxStatus={taxStatus ?? 'none'}
+				taxClass={taxClass ?? ''}
+				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
 			/>
 		);
 	}
@@ -93,16 +101,16 @@ export const VariableProductPrice = ({
 		<HStack className="flex-wrap justify-end gap-1">
 			<PriceWithTax
 				price={variablePrices[column.id].min}
-				taxStatus={taxStatus}
-				taxClass={taxClass}
-				taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
+				taxStatus={taxStatus ?? 'none'}
+				taxClass={taxClass ?? ''}
+				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
 			/>
 			<Text> - </Text>
 			<PriceWithTax
 				price={variablePrices[column.id].max}
-				taxStatus={taxStatus}
-				taxClass={taxClass}
-				taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
+				taxStatus={taxStatus ?? 'none'}
+				taxClass={taxClass ?? ''}
+				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
 			/>
 		</HStack>
 	);

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { TextInput } from 'react-native';
 
 import { FormDescription, FormItem, FormLabel, FormMessage } from './common';
 import { useFormField } from './context';
@@ -13,13 +14,14 @@ export function FormTextarea({
 	customComponent: Component = Textarea,
 	ref,
 	...props
-}: FormItemProps<string> & React.ComponentProps<typeof Textarea>) {
-	const textareaRef = React.useRef<React.ComponentRef<typeof Textarea>>(null);
+}: FormItemProps<string> &
+	Partial<React.ComponentProps<typeof Textarea>> & { ref?: React.Ref<TextInput> }) {
+	const textareaRef = React.useRef<TextInput>(null);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
 	React.useImperativeHandle(ref, () => {
 		if (!textareaRef.current) {
-			return {} as React.ComponentRef<typeof Textarea>;
+			return {} as TextInput;
 		}
 		return textareaRef.current;
 	}, []);
@@ -29,9 +31,9 @@ export function FormTextarea({
 			return;
 		}
 		if (textareaRef.current.isFocused()) {
-			textareaRef.current?.blur();
+			textareaRef.current.blur();
 		} else {
-			textareaRef.current?.focus();
+			textareaRef.current.focus();
 		}
 	}
 

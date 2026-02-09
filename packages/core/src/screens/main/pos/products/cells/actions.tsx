@@ -22,7 +22,7 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 			testID="add-to-cart-button"
 			name="circlePlus"
 			variant="success"
-			size="4xl"
+			size="xl"
 			onPress={() => addProduct(row.original.document)}
 		/>
 	);

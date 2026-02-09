@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
+import { EMPTY, type Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -86,21 +87,24 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				sort: [{ createdAt: 'desc' }],
 			})
 			.$.pipe(
-				map((docs) =>
+				map((docs: import('@wcpos/database').NotificationDocument[]) =>
 					docs.map((doc) => ({
-						id: doc.id,
+						id: doc.id ?? '',
 						title: doc.title || '',
 						body: doc.body || '',
 						status: doc.status as 'unread' | 'read' | 'archived',
 						seen: doc.seen ?? false,
 						createdAt: doc.createdAt || 0,
-						workflowId: doc.workflowId,
+						workflowId: doc.workflowId ?? undefined,
 					}))
 				)
 			);
 	}, [notificationsCollection, subscriberId]);
 
-	const notifications = useObservableState(notifications$, []);
+	const notifications: Notification[] = useObservableState(
+		(notifications$ ?? EMPTY) as Observable<Notification[]>,
+		[]
+	);
 
 	// Calculate counts from local data
 	const unreadCount = React.useMemo(
@@ -397,7 +401,11 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				})
 				.exec();
 
-			await Promise.all(unreadDocs.map((doc) => doc.patch({ status: 'read', seen: true })));
+			await Promise.all(
+				unreadDocs.map((doc: import('@wcpos/database').NotificationDocument) =>
+					doc.patch({ status: 'read', seen: true })
+				)
+			);
 
 			// Then update Novu
 			await novuMarkAllAsRead();
@@ -421,7 +429,11 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				})
 				.exec();
 
-			await Promise.all(unseenDocs.map((doc) => doc.patch({ seen: true })));
+			await Promise.all(
+				unseenDocs.map((doc: import('@wcpos/database').NotificationDocument) =>
+					doc.patch({ seen: true })
+				)
+			);
 
 			// Then update Novu
 			await novuMarkAllAsSeen();

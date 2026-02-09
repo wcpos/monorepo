@@ -5,7 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { extractFeeLineData } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 
 /**
  * Custom hook to retrieve and process fee line data.

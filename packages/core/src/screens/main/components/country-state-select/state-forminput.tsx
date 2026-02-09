@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import type { Option } from '@wcpos/components/combobox';
 import { Input } from '@wcpos/components/input';
 
 import { StateCombobox } from './state-combobox';
@@ -23,8 +24,8 @@ const StateFormInputBase = ({
 	 * Handle select
 	 */
 	const handleSelect = React.useCallback(
-		({ value }) => {
-			onChangeText(value);
+		(option: Option | undefined) => {
+			onChangeText?.(String(option?.value ?? ''));
 		},
 		[onChangeText]
 	);
@@ -32,10 +33,21 @@ const StateFormInputBase = ({
 	if (hasStates) {
 		if (hasManyStates) {
 			return (
-				<StateCombobox value={{ value }} onValueChange={handleSelect} countryCode={countryCode} />
+				// @ts-expect-error: StateCombobox renders its own children internally
+				<StateCombobox
+					value={{ value: value ?? '', label: '' }}
+					onValueChange={handleSelect}
+					countryCode={countryCode}
+				/>
 			);
 		}
-		return <StateSelect value={{ value }} onValueChange={handleSelect} countryCode={countryCode} />;
+		return (
+			<StateSelect
+				value={{ value: value ?? '', label: '' }}
+				onValueChange={handleSelect}
+				countryCode={countryCode ?? ''}
+			/>
+		);
 	}
 
 	return <Input value={value} onChangeText={onChangeText} {...props} />;

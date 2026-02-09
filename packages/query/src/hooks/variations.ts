@@ -9,7 +9,7 @@ import { filterVariationsByAttributes } from './variations.helpers';
  * - remove attributes from query
  * - filter variations by attributes after query
  */
-const preQueryParams = (queryParams) => {
+const preQueryParams = (queryParams: Record<string, any>) => {
 	if (queryParams?.selector?.attributes) {
 		unset(queryParams, ['selector', 'attributes']);
 	}
@@ -20,7 +20,11 @@ const preQueryParams = (queryParams) => {
 /**
  *
  */
-const postQueryResult = (docs, modifiedParams, originalParams) => {
+const postQueryResult = (
+	docs: any[],
+	modifiedParams: Record<string, any>,
+	originalParams: Record<string, any>
+) => {
 	const allMatch = get(originalParams, ['selector', 'attributes', '$allMatch']);
 
 	if (Array.isArray(allMatch) && allMatch.length > 0) {
@@ -38,7 +42,7 @@ const postQueryResult = (docs, modifiedParams, originalParams) => {
 /**
  *
  */
-const filterApiQueryParams = (params) => {
+const filterApiQueryParams = (params: Record<string, any>) => {
 	let orderby = params.orderby;
 
 	if (orderby === 'name') {

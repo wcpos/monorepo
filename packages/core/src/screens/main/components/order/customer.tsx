@@ -21,12 +21,12 @@ export const Customer = ({
 	column,
 }: CellContext<{ document: OrderDocument }, 'customer_id'>) => {
 	const order = row.original.document;
-	const { query } = table.options.meta;
+	const query = (table.options.meta as { query: any } | undefined)?.query;
 	const { format } = useCustomerNameFormat();
-	const customerID = useObservableEagerState(order.customer_id$);
-	const billing = useObservableEagerState(order.billing$);
-	const shipping = useObservableEagerState(order.shipping$);
-	const { show } = column.columnDef.meta;
+	const customerID = useObservableEagerState(order.customer_id$!);
+	const billing = useObservableEagerState(order.billing$!);
+	const shipping = useObservableEagerState(order.shipping$!);
+	const show = (column.columnDef.meta as { show?: (key: string) => boolean } | undefined)?.show;
 
 	return (
 		<VStack className="max-w-full">
@@ -35,10 +35,10 @@ export const Customer = ({
 				size="xs"
 				onPress={() => query.where('customer_id').equals(customerID).exec()}
 			>
-				{format({ billing, shipping, id: customerID })}
+				{format({ billing, shipping, id: customerID } as any)}
 			</ButtonPill>
-			{show('billing') && <FormatAddress address={billing} showName={false} />}
-			{show('shipping') && <FormatAddress address={shipping} showName={false} />}
+			{show?.('billing') && <FormatAddress address={billing as any} showName={false} />}
+			{show?.('shipping') && <FormatAddress address={shipping as any} showName={false} />}
 		</VStack>
 	);
 };

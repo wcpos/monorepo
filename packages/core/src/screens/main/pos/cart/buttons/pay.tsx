@@ -20,7 +20,7 @@ const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
  */
 export const PayButton = () => {
 	const { currentOrder } = useCurrentOrder();
-	const total = useObservableEagerState(currentOrder.total$);
+	const total = useObservableEagerState(currentOrder.total$!);
 	const { format } = useCurrentOrderCurrencyFormat();
 	const router = useRouter();
 	const [loading, setLoading] = React.useState(false);
@@ -82,7 +82,7 @@ export const PayButton = () => {
 			loading={loading}
 		>
 			{t('pos_cart.checkout', {
-				order_total: format(parseFloat(total) || 0),
+				order_total: format(parseFloat(total ?? '0') || 0),
 			})}
 		</Button>
 	);

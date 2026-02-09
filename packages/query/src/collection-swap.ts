@@ -115,7 +115,7 @@ export async function swapCollection(config: CollectionSwapConfig): Promise<Coll
 
 		// Step 9: Emit reset$ for STORE collection only (this triggers query re-registration)
 		// We only need to emit for store since that's what queries use
-		emitCollectionReset(finalStoreCollection, storeDB.name);
+		emitCollectionReset(finalStoreCollection, (storeDB as any).name);
 		swapLogger.debug('Emitted reset$ for store collection', { context: { collectionName } });
 
 		const duration = performance.now() - startTime;
@@ -208,22 +208,22 @@ async function removeCollections(
 		context: {
 			collectionName,
 			callNumber,
-			hasSyncCollection: !!fastStoreDB.collections[collectionName],
-			hasStoreCollection: !!storeDB.collections[collectionName],
+			hasSyncCollection: !!(fastStoreDB as any).collections[collectionName],
+			hasStoreCollection: !!(storeDB as any).collections[collectionName],
 		},
 	});
 
 	// Remove sync collection first (prevents sync during removal)
-	if (fastStoreDB.collections[collectionName]) {
+	if ((fastStoreDB as any).collections[collectionName]) {
 		swapLogger.debug('Removing sync collection', { context: { collectionName } });
-		await fastStoreDB.collections[collectionName].remove();
+		await (fastStoreDB as any).collections[collectionName].remove();
 		swapLogger.debug('Sync collection removed', { context: { collectionName } });
 	}
 
 	// Remove store collection
-	if (storeDB.collections[collectionName]) {
+	if ((storeDB as any).collections[collectionName]) {
 		swapLogger.debug('Removing store collection', { context: { collectionName } });
-		await storeDB.collections[collectionName].remove();
+		await (storeDB as any).collections[collectionName].remove();
 		swapLogger.debug('Store collection removed', { context: { collectionName } });
 	}
 }
@@ -241,14 +241,16 @@ async function waitForCollectionToExist(
 	const pollInterval = 10; // Check every 10ms
 
 	while (Date.now() - startTime < timeout) {
-		const collection = database.collections[collectionName];
+		const collection = (database as any).collections[collectionName];
 		if (collection && !(collection as any).destroyed) {
 			return collection;
 		}
 		await new Promise((resolve) => setTimeout(resolve, pollInterval));
 	}
 
-	throw new Error(`Timeout waiting for collection to exist: ${collectionName} in ${database.name}`);
+	throw new Error(
+		`Timeout waiting for collection to exist: ${collectionName} in ${(database as any).name}`
+	);
 }
 
 /**

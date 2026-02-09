@@ -11,5 +11,8 @@ export const useTaxRates = () => {
 	}
 
 	const context = React.useContext(TaxRatesContext);
+	if (!context) {
+		throw new Error('useTaxRates must be called within TaxRatesProvider');
+	}
 	return context;
 };

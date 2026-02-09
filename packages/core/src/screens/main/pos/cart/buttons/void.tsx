@@ -10,6 +10,8 @@ import { useT } from '../../../../../contexts/translations';
 import useDeleteDocument from '../../../contexts/use-delete-document';
 import { useCurrentOrder } from '../../contexts/current-order';
 
+import type { RxCollection } from 'rxdb';
+
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
 
 /**
@@ -25,10 +27,10 @@ export const VoidButton = () => {
 	 *
 	 */
 	const undoRemove = React.useCallback(
-		async (orderJson) => {
+		async (orderJson: Record<string, unknown>) => {
 			try {
 				await currentOrder.collection.insert(orderJson);
-				router.setParams({ orderID: orderJson.uuid });
+				router.setParams({ orderID: orderJson.uuid as string });
 			} catch (err) {
 				cartLogger.error('Failed to restore order', {
 					showToast: true,
@@ -48,10 +50,10 @@ export const VoidButton = () => {
 	 *
 	 */
 	const handleRemove = React.useCallback(async () => {
-		const orderJson = await currentOrder.toPopulatedJSON();
+		const orderJson = currentOrder.toMutableJSON();
 		const latest = currentOrder.getLatest();
 		if (latest.id) {
-			deleteDocument(latest.id, latest.collection);
+			deleteDocument(latest.id, latest.collection as unknown as { name: string });
 		}
 		latest.remove();
 		cartLogger.success(t('pos_cart.order_removed'), {

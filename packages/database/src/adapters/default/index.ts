@@ -36,7 +36,7 @@ async function withDatabaseRetry<T>(
 			return await operation();
 		} catch (error) {
 			lastError = error;
-			const errorMessage = error.message || '';
+			const errorMessage = (error as Error).message || '';
 			const isConnectionError =
 				errorMessage.includes('already released') || errorMessage.includes('database is locked');
 
@@ -70,17 +70,17 @@ if (__DEV__) {
 
 	// This is a simple workaround to detect module reloads - when this module is reloaded,
 	// the old instance's cleanup code will run, helping to close connections
-	if (global.__EXPO_SQLITE_CONNECTION_CLEANUP__) {
+	if ((globalThis as Record<string, any>).__EXPO_SQLITE_CONNECTION_CLEANUP__) {
 		// Previous instance exists, run its cleanup
 		try {
-			global.__EXPO_SQLITE_CONNECTION_CLEANUP__();
+			(globalThis as Record<string, any>).__EXPO_SQLITE_CONNECTION_CLEANUP__();
 		} catch (e) {
 			console.warn('Error during previous connection cleanup', e);
 		}
 	}
 
 	// Store our cleanup function globally so next HMR reload can access it
-	global.__EXPO_SQLITE_CONNECTION_CLEANUP__ = closeAllDatabases;
+	(globalThis as Record<string, any>).__EXPO_SQLITE_CONNECTION_CLEANUP__ = closeAllDatabases;
 }
 
 function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<any> {

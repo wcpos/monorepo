@@ -18,9 +18,11 @@ export const StockStatus = ({
 	row,
 }: CellContext<{ document: ProductDocument }, 'stock_status'>) => {
 	const product = row.original.document;
-	const stockStatus = useObservableEagerState(product.stock_status$);
+	const stockStatus = useObservableEagerState(product.stock_status$!);
 	const { getLabel } = useStockStatusLabel();
-	const { query } = table.options.meta;
+	const meta = table.options.meta as unknown as {
+		query: { where: (field: string) => { equals: (val: unknown) => { exec: () => void } } };
+	};
 
 	const variant = React.useMemo(() => {
 		switch (stockStatus) {
@@ -41,9 +43,9 @@ export const StockStatus = ({
 		<ButtonPill
 			size="xs"
 			variant={variant}
-			onPress={() => query.where('stock_status').equals(stockStatus).exec()}
+			onPress={() => meta.query.where('stock_status').equals(stockStatus).exec()}
 		>
-			{getLabel(stockStatus)}
+			{getLabel(stockStatus ?? '')}
 		</ButtonPill>
 	);
 };

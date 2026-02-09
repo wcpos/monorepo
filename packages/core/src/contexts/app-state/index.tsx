@@ -55,7 +55,7 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 			}));
 
 			// Hydrate session data from database
-			const sessionData = await hydrateUserSession(state.userDB, {
+			const sessionData = await hydrateUserSession(state.userDB!, {
 				siteID,
 				wpCredentialsID,
 				storeID,
@@ -100,7 +100,7 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 			const newState = { ...current, storeID: store.localID };
 			await state.appState.set('current', () => newState);
 
-			const sessionData = await hydrateUserSession(state.userDB, newState);
+			const sessionData = await hydrateUserSession(state.userDB!, newState);
 
 			updateAppState(sessionData);
 		},

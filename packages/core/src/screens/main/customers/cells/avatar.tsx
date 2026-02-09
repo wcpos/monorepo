@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
+import { of } from 'rxjs';
 
 import { Image } from '@wcpos/components/image';
 
@@ -15,8 +16,10 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
  */
 export const Avatar = ({ row }: CellContext<{ document: CustomerDocument }, 'avatar_url'>) => {
 	const customer = row.original.document;
-	const avatarUrl = useObservableEagerState(customer.avatar_url$);
-	const { uri } = useImageAttachment(customer, avatarUrl);
+	const avatarUrl = useObservableEagerState(
+		customer.avatar_url$ ?? of(undefined as string | undefined)
+	);
+	const { uri } = useImageAttachment(customer, avatarUrl ?? '');
 
 	return <Image source={{ uri }} className="h-10 w-10 rounded" recyclingKey={customer.uuid} />;
 };

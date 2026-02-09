@@ -12,7 +12,7 @@ import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'push']);
 
-type RxDocument = import('rxdb').RxDocument;
+type AnyRxDocument = import('rxdb').RxDocument<any>;
 
 /**
  *
@@ -25,22 +25,27 @@ const usePushDocument = () => {
 	 * Prepare document data from local database (DB operation)
 	 */
 	const prepareDocumentData = React.useCallback(
-		async (doc: RxDocument) => {
+		async (doc: AnyRxDocument) => {
 			try {
 				const latestDoc = doc.getLatest();
 				const json = latestDoc.toJSON();
 				return { json, latestDoc };
 			} catch (err) {
-				syncLogger.error(t('common.failed_to_prepare_document_data', { error: err.message }), {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
-						documentId: doc.id,
-						collectionName: doc.collection.name,
+				syncLogger.error(
+					t('common.failed_to_prepare_document_data', {
 						error: err instanceof Error ? err.message : String(err),
-					},
-				});
+					}),
+					{
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.TRANSACTION_FAILED,
+							documentId: doc.id,
+							collectionName: doc.collection.name,
+							error: err instanceof Error ? err.message : String(err),
+						},
+					}
+				);
 				throw err;
 			}
 		},
@@ -95,7 +100,7 @@ const usePushDocument = () => {
 	 * "Document update conflict. When changing a document you must work on the previous revision"
 	 */
 	const updateLocalDocument = React.useCallback(
-		async (latestDoc: RxDocument, serverData: any) => {
+		async (latestDoc: AnyRxDocument, serverData: any) => {
 			try {
 				const parsedData = latestDoc.collection.parseRestResponse(serverData);
 
@@ -105,16 +110,21 @@ const usePushDocument = () => {
 
 				return latestDoc.incrementalPatch(parsedData);
 			} catch (err) {
-				syncLogger.error(t('common.failed_to_update_local_document', { error: err.message }), {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
-						documentId: latestDoc.id,
-						collectionName: latestDoc.collection.name,
+				syncLogger.error(
+					t('common.failed_to_update_local_document', {
 						error: err instanceof Error ? err.message : String(err),
-					},
-				});
+					}),
+					{
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.TRANSACTION_FAILED,
+							documentId: latestDoc.id,
+							collectionName: latestDoc.collection.name,
+							error: err instanceof Error ? err.message : String(err),
+						},
+					}
+				);
 				throw err;
 			}
 		},
@@ -125,7 +135,7 @@ const usePushDocument = () => {
 	 * Main push document function - orchestrates prepare, send, and update
 	 */
 	return React.useCallback(
-		async (doc: RxDocument) => {
+		async (doc: AnyRxDocument) => {
 			const collection = doc.collection;
 			let endpoint = collection.name;
 			if (collection.name === 'variations') {
@@ -142,7 +152,7 @@ const usePushDocument = () => {
 			}
 
 			// Send to server
-			const serverData = await sendToServer(endpoint, json, latestDoc.id);
+			const serverData = await sendToServer(endpoint, json, latestDoc.id as number | string);
 
 			// Update local document with server response
 			return await updateLocalDocument(latestDoc, serverData);

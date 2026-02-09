@@ -11,7 +11,7 @@ export class SubscribableBase {
 	 */
 	protected abortController = new AbortController();
 
-	public readonly subs: Record<string, Subscription> = {};
+	public readonly subs: Record<string, Subscription | { unsubscribe(): void }> = {};
 	protected subjects: Record<string, Subject<any>> = {};
 
 	/**
@@ -20,7 +20,7 @@ export class SubscribableBase {
 	 * Adds a subscription to the subs map with a unique key
 	 * If a subscription already exists for the key, it unsubscribes first.
 	 */
-	addSub(key: string, subscription: Subscription) {
+	addSub(key: string, subscription: Subscription | { unsubscribe(): void }) {
 		if (this.subs[key]) {
 			this.subs[key].unsubscribe();
 		}

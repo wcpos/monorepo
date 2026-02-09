@@ -15,9 +15,9 @@ interface CheckoutTitleProps {
  *
  */
 const CheckoutTitle = ({ order }: CheckoutTitleProps) => {
-	const currencySymbol = useObservableEagerState(order.currency_symbol$);
-	const total = useObservableEagerState(order.total$);
-	const { format } = useCurrencyFormat({ currencySymbol });
+	const currencySymbol = useObservableEagerState(order.currency_symbol$!);
+	const total = useObservableEagerState(order.total$!);
+	const { format } = useCurrencyFormat({ currencySymbol: currencySymbol ?? '' });
 	const t = useT();
 
 	if (!order) {
@@ -27,7 +27,7 @@ const CheckoutTitle = ({ order }: CheckoutTitleProps) => {
 	return (
 		<Text className="text-center text-lg font-bold">
 			{t('pos_checkout.amount_to_pay')}
-			{`: ${format(total || 0)}`}
+			{`: ${format(parseFloat(total ?? '0') || 0)}`}
 		</Text>
 	);
 };

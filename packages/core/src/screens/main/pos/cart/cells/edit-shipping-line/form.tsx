@@ -44,7 +44,7 @@ const formSchema = z.object({
 
 interface Props {
 	uuid: string;
-	item: import('@wcpos/database').OrderDocument['shipping_lines'][number];
+	item: NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 }
 
 /**
@@ -60,17 +60,19 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 	/**
 	 *
 	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+	type FormValues = z.infer<typeof formSchema>;
+
+	const form = useForm<FormValues, unknown, FormValues>({
+		resolver: zodResolver(formSchema as never) as never,
 		defaultValues: {
-			method_title: item.method_title,
-			method_id: item.method_id,
+			method_title: item.method_title ?? undefined,
+			method_id: item.method_id ?? undefined,
 			instance_id: item.instance_id,
 			amount: toNumber(amount),
 			prices_include_tax,
 			tax_status,
 			tax_class: tax_class === '' ? 'standard' : tax_class,
-			meta_data: item.meta_data,
+			meta_data: item.meta_data as FormValues['meta_data'],
 		},
 	});
 
@@ -78,16 +80,18 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 	 *
 	 */
 	const handleSave = React.useCallback(
-		(data: z.infer<typeof formSchema>) => {
+		(data: FormValues) => {
 			updateShippingLine(uuid, {
 				method_title: data.method_title,
 				method_id: data.method_id,
 				instance_id: data.instance_id,
-				amount: String(data.amount),
+				amount: data.amount,
 				tax_status: data.tax_status,
 				tax_class: data.tax_class === 'standard' ? '' : data.tax_class,
 				prices_include_tax: data.prices_include_tax,
-				meta_data: data.meta_data,
+				meta_data: data.meta_data as NonNullable<
+					import('@wcpos/database').OrderDocument['shipping_lines']
+				>[number]['meta_data'],
 			});
 			onOpenChange(false);
 		},
@@ -117,12 +121,14 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="method_id"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									label={t('pos_cart.shipping_method')}
 									customComponent={ShippingMethodSelect}
-									{...field}
+									value={value ?? ''}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -141,13 +147,15 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="amount"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormInput
 									customComponent={CurrencyInput}
 									label={t('pos_cart.amount')}
 									type="numeric"
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -166,12 +174,14 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="tax_class"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									label={t('common.tax_class')}
 									customComponent={TaxClassSelect}
-									{...field}
+									value={value ?? ''}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -179,12 +189,14 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="tax_status"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormRadioGroup
 									label={t('common.tax_status')}
 									customComponent={TaxStatusRadioGroup}
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}

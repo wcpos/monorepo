@@ -78,7 +78,7 @@ export function generateSubscriberMetadata(
 	return {
 		domain: extractDomain(site.url || ''),
 		// Use nullish coalescing to preserve legitimate 0 values
-		storeId: store.id ?? store.localID,
+		storeId: store.id ?? store.localID ?? '',
 		licenseKey: site.license?.key,
 		licenseStatus: site.license?.status,
 		appVersion: AppInfo.version,

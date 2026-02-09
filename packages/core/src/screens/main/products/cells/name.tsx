@@ -18,8 +18,11 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
  */
 export function ProductName(props: CellContext<{ document: ProductDocument }, 'name'>) {
 	const product = props.row.original.document;
-	const show = props.column.columnDef.meta.show;
-	const name = useObservableEagerState(product.name$);
+	const show = props.column.columnDef.meta?.show;
+	const name = useObservableEagerState(product.name$!);
+	const meta = props.table.options.meta as unknown as {
+		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
+	};
 
 	/**
 	 *
@@ -28,13 +31,11 @@ export function ProductName(props: CellContext<{ document: ProductDocument }, 'n
 		<VStack space="xs" className="w-full">
 			<EditableName
 				value={name}
-				onChangeText={(name) =>
-					props.table.options.meta.onChange({ document: product, changes: { name } })
-				}
+				onChangeText={(name) => meta.onChange({ document: product, changes: { name } })}
 			/>
-			{show('sku') && <Text className="text-sm">{product.sku}</Text>}
-			{show('barcode') && <Text className="text-sm">{product.barcode}</Text>}
-			{show('attributes') && <PlainAttributes {...props} />}
+			{show?.('sku') && <Text className="text-sm">{product.sku}</Text>}
+			{show?.('barcode') && <Text className="text-sm">{product.barcode}</Text>}
+			{show?.('attributes') && <PlainAttributes {...props} />}
 			{product.type === 'variable' && <ProductAttributes {...props} />}
 			{product.type === 'grouped' && <GroupedNames {...props} />}
 		</VStack>

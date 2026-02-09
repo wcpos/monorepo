@@ -77,7 +77,7 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 						<DropdownMenuItem
 							onPress={() => {
 								if (product.id) {
-									pullDocument(product.id, product.collection);
+									pullDocument(product.id, product.collection as never);
 								}
 							}}
 						>

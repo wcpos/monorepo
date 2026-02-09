@@ -277,7 +277,7 @@ export const convertVariationToLineItemWithoutTax = (
 /**
  * Implementation of updatePosDataMeta
  */
-export function updatePosDataMeta(item: CartLine, newData: any): CartLine {
+export function updatePosDataMeta<T extends CartLine>(item: T, newData: any): T {
 	const meta_data = item.meta_data ?? [];
 	let posDataFound = false;
 

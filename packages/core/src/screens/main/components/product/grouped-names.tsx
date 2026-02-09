@@ -14,9 +14,11 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-const GroupedNames = ({ query }) => {
-	const result = useObservableSuspense(query.resource);
-	const names = result.hits.map(({ document }) => document.name);
+const GroupedNames = ({ query }: { query: ReturnType<typeof useQuery> }) => {
+	const result = useObservableSuspense(query!.resource) as {
+		hits: { document: { name?: string } }[];
+	};
+	const names = result.hits.map(({ document }: { document: { name?: string } }) => document.name);
 	const t = useT();
 
 	/**

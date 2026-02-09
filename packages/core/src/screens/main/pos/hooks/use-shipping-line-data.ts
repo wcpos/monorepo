@@ -5,7 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { extractShippingLineData } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 
-type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 
 /**
  * Custom hook to retrieve and process shipping line data.
@@ -19,7 +19,8 @@ export const useShippingLineData = () => {
 	 * Retrieves and processes the shipping line data.
 	 */
 	const getShippingLineData = React.useCallback(
-		(item: ShippingLine) => extractShippingLineData(item, pricesIncludeTax, shippingTaxClass),
+		(item: ShippingLine) =>
+			extractShippingLineData(item, pricesIncludeTax, shippingTaxClass as string),
 		[pricesIncludeTax, shippingTaxClass]
 	);
 

@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
+import { of } from 'rxjs';
 
 import useHttpClient, { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
@@ -33,9 +34,13 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 	const [error, setError] = React.useState<string | null>(null);
 
 	// Use reactive state for access token to get latest value
-	const accessToken = useObservableEagerState(wpUser.access_token$);
-	const refreshToken = useObservableEagerState(wpUser.refresh_token$);
-	const userId = useObservableEagerState(wpUser.id$);
+	const accessToken = useObservableEagerState(
+		wpUser.access_token$ ?? of(undefined as string | undefined)
+	);
+	const refreshToken = useObservableEagerState(
+		wpUser.refresh_token$ ?? of(undefined as string | undefined)
+	);
+	const userId = useObservableEagerState(wpUser.id$ ?? of(undefined as number | undefined));
 
 	// Use stable values for site to avoid unnecessary re-renders
 	const siteUrl = site.url;
@@ -246,8 +251,8 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 							userDB,
 							wpUser,
 							remoteStores: data.stores,
-							user: { uuid: user.uuid },
-							siteID: site.uuid,
+							user: { uuid: user.uuid ?? '' },
+							siteID: site.uuid ?? '',
 						});
 					}
 				} catch (error) {

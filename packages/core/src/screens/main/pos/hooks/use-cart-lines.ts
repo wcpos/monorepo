@@ -8,16 +8,16 @@ import { useUpdateFeeLine } from './use-update-fee-line';
 import { getUuidFromLineItem } from './utils';
 import { useCurrentOrder } from '../contexts/current-order';
 
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 
 /**
  * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.
  */
 export const useCartLines = () => {
 	const { currentOrder } = useCurrentOrder();
-	const lineItems = useObservableEagerState(currentOrder.line_items$);
-	const feeLines = useObservableEagerState(currentOrder.fee_lines$);
-	const shippingLines = useObservableEagerState(currentOrder.shipping_lines$);
+	const lineItems = useObservableEagerState(currentOrder.line_items$!);
+	const feeLines = useObservableEagerState(currentOrder.fee_lines$!);
+	const shippingLines = useObservableEagerState(currentOrder.shipping_lines$!);
 	const { getFeeLineData } = useFeeLineData();
 	const { updateFeeLine } = useUpdateFeeLine();
 
@@ -45,8 +45,8 @@ export const useCartLines = () => {
 					// Sum the total and total_tax of all line items
 					const test = (items || []).reduce(
 						(acc, item) => {
-							acc.cart_total += parseFloat(item.total);
-							acc.cart_total_tax += parseFloat(item.total_tax);
+							acc.cart_total += parseFloat(item.total ?? '0');
+							acc.cart_total_tax += parseFloat(item.total_tax ?? '0');
 							return acc;
 						},
 						{ cart_total: 0, cart_total_tax: 0 }
@@ -69,7 +69,7 @@ export const useCartLines = () => {
 			// Update each percentage fee line
 			for (const feeLine of percentageFeeLines) {
 				const uuid = getUuidFromLineItem(feeLine);
-				await updateFeeLine(uuid, {});
+				await updateFeeLine(uuid ?? '', {});
 			}
 		}
 	});

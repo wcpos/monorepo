@@ -15,16 +15,16 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  */
 export const Total = ({ row, column }: CellContext<{ document: OrderDocument }, 'total'>) => {
 	const order = row.original.document;
-	const total = useObservableEagerState(order.total$);
-	const currencySymbol = useObservableEagerState(order.currency_symbol$);
-	const payment_method_title = useObservableEagerState(order.payment_method_title$);
-	const { format } = useCurrencyFormat({ currencySymbol });
-	const { show } = column.columnDef.meta;
+	const total = useObservableEagerState(order.total$!);
+	const currencySymbol = useObservableEagerState(order.currency_symbol$!);
+	const payment_method_title = useObservableEagerState(order.payment_method_title$!);
+	const { format } = useCurrencyFormat({ currencySymbol: currencySymbol as string });
+	const show = (column.columnDef.meta as { show?: (key: string) => boolean } | undefined)?.show;
 
 	return (
 		<>
-			<Text>{format(parseFloat(total))}</Text>
-			{show('payment_method') && (
+			<Text>{format(parseFloat(total ?? '0'))}</Text>
+			{show?.('payment_method') && (
 				<Text className="text-muted-foreground text-right text-sm">{payment_method_title}</Text>
 			)}
 		</>

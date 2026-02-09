@@ -22,7 +22,7 @@ const HeaderLeft = () => {
 	 *
 	 */
 	const handleOpenDrawer = React.useCallback(() => {
-		navigation.openDrawer();
+		(navigation as unknown as { openDrawer: () => void }).openDrawer();
 	}, [navigation]);
 
 	/**

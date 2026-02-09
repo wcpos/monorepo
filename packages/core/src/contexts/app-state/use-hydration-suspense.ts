@@ -94,9 +94,9 @@ export const useHydrationSuspense = (): UseHydrationSuspenseReturn => {
 			currentStep: 'COMPLETE',
 			error: null,
 		};
-	} catch (promiseOrError) {
+	} catch (promiseOrError: unknown) {
 		// If it's a promise (suspense), let it bubble up
-		if (promiseOrError && typeof promiseOrError.then === 'function') {
+		if (promiseOrError && typeof (promiseOrError as Promise<unknown>).then === 'function') {
 			throw promiseOrError;
 		}
 		// If it's an error, handle it

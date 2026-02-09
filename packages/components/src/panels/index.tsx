@@ -13,17 +13,20 @@ const usePanelGroupContext = PanelPrimitives.usePanelGroupContext;
 function PanelResizeHandle() {
 	const { direction } = usePanelGroupContext();
 
+	const handleProps = {
+		style: {
+			width: direction === 'horizontal' ? 8 : '100%',
+			height: direction === 'horizontal' ? '100%' : 8,
+			flexDirection: direction === 'horizontal' ? ('row' as const) : ('column' as const),
+			zIndex: 20,
+			alignItems: 'center' as const,
+			justifyContent: 'center' as const,
+		},
+	};
+
 	return (
 		<PanelPrimitives.PanelResizeHandle
-			style={{
-				width: direction === 'horizontal' ? 8 : '100%',
-				height: direction === 'horizontal' ? '100%' : 8,
-				flexDirection: direction === 'horizontal' ? 'row' : 'column',
-				// position: 'relative',
-				zIndex: 20,
-				alignItems: 'center',
-				justifyContent: 'center',
-			}}
+			{...(handleProps as React.ComponentProps<typeof PanelPrimitives.PanelResizeHandle>)}
 		>
 			{/* <View
 				className={cn(

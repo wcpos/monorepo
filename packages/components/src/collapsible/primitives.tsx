@@ -17,7 +17,7 @@ function Root({
 	defaultOpen,
 	onOpenChange: onOpenChangeProp,
 	...viewProps
-}: SlottableViewProps & CollapsibleRootProps & { ref?: ViewRef }) {
+}: SlottableViewProps & CollapsibleRootProps & { ref?: React.Ref<ViewRef> }) {
 	const nativeID = React.useId();
 	const [open = false, onOpenChange] = useControllableState({
 		prop: openProp,
@@ -82,10 +82,11 @@ function Trigger({
 }
 
 function Content({
+	ref,
 	asChild,
 	forceMount,
 	...props
-}: SlottableViewProps & CollapsibleContentProps & { ref?: ViewRef }) {
+}: SlottableViewProps & CollapsibleContentProps & { ref?: React.Ref<ViewRef> }) {
 	const { nativeID, open } = useCollapsibleContext();
 
 	if (!forceMount) {
@@ -97,6 +98,7 @@ function Content({
 	const Component = asChild ? Slot.View : View;
 	return (
 		<Component
+			ref={ref}
 			aria-hidden={!(forceMount || open)}
 			aria-labelledby={nativeID}
 			role={'region'}

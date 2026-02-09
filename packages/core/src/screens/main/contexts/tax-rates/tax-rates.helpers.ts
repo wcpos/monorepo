@@ -73,9 +73,11 @@ export function filterTaxRates(
 
 		return filter(sortedTaxRates, (rate, index) => {
 			const countryMatch =
-				isEmpty(rate.country) || rate.country.toUpperCase() === country.toUpperCase();
-			const stateMatch = isEmpty(rate.state) || rate.state.toUpperCase() === state.toUpperCase();
-			const postcodeMatch = isEmpty(rate.postcodes) || postcodeMatcher(postcode, rate.postcodes);
+				isEmpty(rate.country) || (rate.country ?? '').toUpperCase() === country.toUpperCase();
+			const stateMatch =
+				isEmpty(rate.state) || (rate.state ?? '').toUpperCase() === state.toUpperCase();
+			const postcodeMatch =
+				isEmpty(rate.postcodes) || postcodeMatcher(postcode, rate.postcodes ?? []);
 			const cityMatch =
 				isEmpty(rate.cities) ||
 				includes(

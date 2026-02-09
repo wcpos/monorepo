@@ -38,10 +38,12 @@ export const useStockAdjustment = () => {
 			if (Array.isArray(lineItems) && lineItems.length > 0) {
 				const productIds = lineItems
 					.filter((product) => product.variation_id === 0)
-					.map((product) => product.product_id);
+					.map((product) => product.product_id)
+					.filter((id): id is number => id != null);
 				const variationIds = lineItems
 					.filter((product) => product.variation_id !== 0)
-					.map((product) => product.variation_id);
+					.map((product) => product.variation_id)
+					.filter((id): id is number => id != null);
 
 				/**
 				 * @TODO - this needs to be greedy if array.length > 10

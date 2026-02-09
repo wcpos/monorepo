@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { isRxDocument, RxDocument } from 'rxdb';
+import { RxDocument } from 'rxdb';
 
 import type {
 	CustomerDocument,
@@ -130,11 +130,12 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	 */
 	const handleSuccess = React.useCallback(
 		(doc: RxDocument) => {
-			mutationLogger.success(t('common.saved_2', { id: doc.id, title: collectionLabel }), {
+			const docId = (doc as unknown as Record<string, unknown>).id;
+			mutationLogger.success(t('common.saved_2', { id: docId, title: collectionLabel }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
-					documentId: doc.id,
+					documentId: docId,
 					collectionName,
 					collectionLabel,
 				},
@@ -184,8 +185,8 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				// Send to server - server response becomes source of truth
 				const updatedDoc = await replicationState.remotePatch(doc, changes);
 
-				if (isRxDocument(updatedDoc)) {
-					handleSuccess(updatedDoc);
+				if (updatedDoc) {
+					handleSuccess(updatedDoc as RxDocument);
 					return updatedDoc;
 				} else {
 					// Server returned an error or invalid response - rollback local changes
@@ -256,14 +257,14 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				}
 
 				// Send to server - server response becomes source of truth (includes real ID)
-				const serverDoc = await replicationState.remoteCreate(localDoc.toJSON());
+				const serverDoc = await replicationState.remoteCreate(localDoc!.toJSON());
 
-				if (isRxDocument(serverDoc)) {
-					handleSuccess(serverDoc);
+				if (serverDoc) {
+					handleSuccess(serverDoc as RxDocument);
 					return serverDoc;
 				} else {
 					// Server returned an error or invalid response - remove local document
-					await localDoc.getLatest().remove();
+					await localDoc!.getLatest().remove();
 					handleError(new Error(t('common.not_created', { title: collectionLabel })));
 				}
 			} catch (error) {

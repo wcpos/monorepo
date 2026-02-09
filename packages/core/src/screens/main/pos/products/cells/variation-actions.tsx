@@ -6,6 +6,7 @@ import { useAddVariation } from '../../hooks/use-add-variation';
 
 import type { CellContext } from '@tanstack/react-table';
 
+type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 /**
@@ -15,16 +16,17 @@ export const ProductVariationActions = ({
 	row,
 }: CellContext<{ document: ProductVariationDocument }, 'actions'>) => {
 	const variation = row.original.document;
-	const parent = row.getParentRow().document;
+	const parentRow = row.getParentRow();
+	const parent = parentRow?.original?.document;
 	const { addVariation } = useAddVariation();
 
 	/**
 	 * TODO: move this to a helper function
 	 */
 	const metaData = React.useMemo(() => {
-		return variation.attributes.map((attribute) => {
+		return (variation.attributes ?? []).map((attribute) => {
 			return {
-				attr_id: attribute.id,
+				attr_id: attribute.id ?? 0,
 				display_key: attribute.name,
 				display_value: attribute.option,
 			};
@@ -37,8 +39,10 @@ export const ProductVariationActions = ({
 	return (
 		<IconButton
 			name="circlePlus"
-			size="4xl"
-			onPress={() => addVariation(variation, parent, metaData)}
+			size="xl"
+			onPress={() =>
+				parent && addVariation(variation, parent as unknown as ProductDocument, metaData)
+			}
 			variant="success"
 		/>
 	);

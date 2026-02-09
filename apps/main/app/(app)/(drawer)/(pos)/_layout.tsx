@@ -73,9 +73,9 @@ export default function POSLayout() {
 		() =>
 			new ObservableResource(
 				ordersCollection.find({ selector: { status: 'pos-open' } }).$.pipe(
-					map((docs: OrderDocument[]) => {
+					map((docs) => {
 						const filteredDocs = docs.filter((doc) => {
-							const metaData = doc.meta_data;
+							const metaData = doc.meta_data ?? [];
 							const _pos_user = metaData.find((item) => item.key === '_pos_user')?.value;
 							const _pos_store = metaData.find((item) => item.key === '_pos_store')?.value;
 							if (storeID === 0) {
@@ -84,13 +84,24 @@ export default function POSLayout() {
 							return _pos_user === String(cashierID) && _pos_store === String(storeID);
 						});
 						const filteredAndSortedDocs = filteredDocs.sort((a, b) =>
-							a.date_created_gmt.localeCompare(b.date_created_gmt)
+							(a.date_created_gmt ?? '').localeCompare(b.date_created_gmt ?? '')
 						);
-						return filteredAndSortedDocs.map((doc) => ({ id: doc.uuid, document: doc }));
+						return filteredAndSortedDocs.map((doc) => ({
+							id: doc.uuid!,
+							document: doc as OrderDocument,
+						}));
 					}),
-					distinctUntilChanged((prev, next) => prev.length === next.length)
+					distinctUntilChanged(
+						(
+							prev: { id: string; document: OrderDocument }[],
+							next: { id: string; document: OrderDocument }[]
+						) => prev.length === next.length
+					)
 				)
-			),
+			) as ObservableResource<
+				{ id: string; document: OrderDocument }[],
+				{ id: string; document: OrderDocument }[]
+			>,
 		[cashierID, ordersCollection, storeID]
 	);
 
@@ -120,12 +131,12 @@ function POSStack() {
 	});
 
 	return (
-		<TaxRatesProvider taxQuery={taxQuery} order={currentOrder}>
+		<TaxRatesProvider taxQuery={taxQuery!} order={currentOrder}>
 			<Stack
 				screenOptions={{
 					animation: 'none',
 					headerShown: false,
-					contentStyle: { backgroundColor },
+					contentStyle: { backgroundColor: backgroundColor as string },
 				}}
 			>
 				<Stack.Screen name="index" />

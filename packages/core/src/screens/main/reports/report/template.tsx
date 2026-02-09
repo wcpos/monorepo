@@ -22,8 +22,8 @@ import { useReports } from '../context';
 export const ZReport = () => {
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
-	const storeName = useObservableEagerState(store.name$);
-	const num_decimals = useObservableEagerState(store.price_num_decimals$);
+	const storeName = useObservableEagerState(store.name$) as string;
+	const num_decimals = useObservableEagerState(store.price_num_decimals$) as number;
 	const { selectedOrders, query } = useReports();
 	const {
 		total,
@@ -38,7 +38,11 @@ export const ZReport = () => {
 	} = calculateTotals({ orders: selectedOrders, num_decimals });
 
 	const selectedDateRange = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('date_created_gmt')))
+		query.rxQuery$.pipe(
+			map(
+				() => query.getSelector('date_created_gmt') as { $gte?: string; $lte?: string } | undefined
+			)
+		)
 	);
 
 	const { format: formatCurrency } = useCurrencyFormat();
@@ -50,14 +54,18 @@ export const ZReport = () => {
 	 *
 	 */
 	const reportPeriod = React.useMemo(() => {
-		const from = convertUTCStringToLocalDate(selectedDateRange.$gte);
-		const to = convertUTCStringToLocalDate(selectedDateRange.$lte);
+		const from = selectedDateRange?.$gte
+			? convertUTCStringToLocalDate(selectedDateRange.$gte)
+			: new Date();
+		const to = selectedDateRange?.$lte
+			? convertUTCStringToLocalDate(selectedDateRange.$lte)
+			: new Date();
 
 		return {
 			from: formatDate(from, 'yyyy-M-dd HH:mm:ss'),
 			to: formatDate(to, 'yyyy-M-dd HH:mm:ss'),
 		};
-	}, [formatDate, selectedDateRange.$gte, selectedDateRange.$lte]);
+	}, [formatDate, selectedDateRange?.$gte, selectedDateRange?.$lte]);
 
 	/**
 	 * Create a report generated date string when:

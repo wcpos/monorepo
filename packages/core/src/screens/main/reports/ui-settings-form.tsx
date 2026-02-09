@@ -36,14 +36,14 @@ export const UISettingsForm = () => {
 	 * This makes the form reactive to external data changes (react-hook-form best practice).
 	 */
 	const form = useForm<z.infer<typeof schema>>({
-		resolver: zodResolver(schema),
+		resolver: zodResolver(schema as never) as never,
 		values: formData,
 	});
 
 	/**
 	 * Handle form changes and patch UI
 	 */
-	useFormChangeHandler({ form, onChange: patchUI });
+	useFormChangeHandler({ form: form as never, onChange: patchUI });
 
 	/**
 	 *

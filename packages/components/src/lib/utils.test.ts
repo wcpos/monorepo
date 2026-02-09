@@ -72,21 +72,21 @@ describe('lib/utils', () => {
 	});
 
 	describe('getFlexAlign', () => {
-		it('should return start for left', () => {
-			expect(getFlexAlign('left')).toBe('start');
+		it('should return flex-start for left', () => {
+			expect(getFlexAlign('left')).toBe('flex-start');
 		});
 
-		it('should return end for right', () => {
-			expect(getFlexAlign('right')).toBe('end');
+		it('should return flex-end for right', () => {
+			expect(getFlexAlign('right')).toBe('flex-end');
 		});
 
 		it('should return center for center', () => {
 			expect(getFlexAlign('center')).toBe('center');
 		});
 
-		it('should return start for invalid input', () => {
+		it('should return flex-start for invalid input', () => {
 			// @ts-expect-error - testing invalid input
-			expect(getFlexAlign('invalid')).toBe('start');
+			expect(getFlexAlign('invalid')).toBe('flex-start');
 		});
 	});
 });

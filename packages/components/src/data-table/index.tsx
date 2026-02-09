@@ -20,25 +20,37 @@ import { DataTableRow } from './row';
 import { getFlexAlign } from '../lib/utils';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table';
 
-import type { FlashListProps } from '@shopify/flash-list';
+import type { DataTableRowData } from './types';
+import type {
+	OnChangeFn,
+	RowSelectionState,
+	SortingState,
+	TableState,
+} from '@tanstack/react-table';
 
-interface DataTableProps<TData, TValue> {
+interface DataTableProps<TData extends DataTableRowData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
 	data: TData[];
 	onRowPress?: (row: Row<TData>) => void;
 	estimatedItemSize?: number;
 	isRefreshing?: boolean;
 	onRefresh?: () => void;
-	renderItem?: FlashListProps<TData>['renderItem'];
+	renderItem?: (info: { item: Row<TData>; index: number }) => React.ReactElement | null;
 	/**
 	 * Made available to any children via the DataTableContext
 	 */
-	extraContext?: Record<string, any>;
+	extraContext?: Record<string, unknown>;
 	/**
 	 * Made available to the table instance
 	 */
-	tableMeta?: Record<string, any>;
-	TableFooterComponent?: React.ComponentType<any>;
+	tableMeta?: Record<string, unknown>;
+	TableFooterComponent?: React.ComponentType<Record<string, unknown>>;
+	tableState?: Partial<TableState>;
+	enableRowSelection?: boolean;
+	onRowSelectionChange?: OnChangeFn<RowSelectionState>;
+	onSortingChange?: OnChangeFn<SortingState>;
+	extraData?: Record<string, unknown>;
+	onEndReached?: () => void;
 }
 
 const DataTableContext = React.createContext<any | undefined>(undefined);
@@ -57,7 +69,7 @@ const useDataTable = () => {
  * @docs https://tanstack.com/table
  * @docs https://shopify.github.io/flash-list/
  */
-const DataTable = <TData, TValue>({
+const DataTable = <TData extends DataTableRowData, TValue>({
 	columns,
 	data,
 	onRowPress,
@@ -95,16 +107,12 @@ const DataTable = <TData, TValue>({
 		meta: {
 			expanded$,
 			expandedRef,
-			onChange: (data: any) => {
+			onChange: (data: unknown) => {
 				console.log('onChange called without handler', data);
 			},
 			...tableMeta,
 		},
 		state: {
-			sorting: {
-				sortBy: 'name',
-				sortDirection: 'asc',
-			},
 			...tableState,
 		},
 		enableRowSelection: !!enableRowSelection,
@@ -221,7 +229,6 @@ const DataTable = <TData, TValue>({
 					<Animated.View style={[animatedStyle, { flex: 1 }]}>
 						<FlashList
 							data={table.getRowModel().rows}
-							estimatedItemSize={estimatedItemSize}
 							showsVerticalScrollIndicator={false}
 							contentContainerStyle={{
 								paddingBottom: insets.bottom,

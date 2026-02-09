@@ -26,7 +26,7 @@ interface Props {
  */
 export const StockStatusPill = ({ query }: Props) => {
 	const selected = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('stock_status')))
+		query.rxQuery$.pipe(map(() => query.getSelector('stock_status') as string | undefined))
 	);
 	const t = useT();
 	const isActive = !!selected;
@@ -47,7 +47,7 @@ export const StockStatusPill = ({ query }: Props) => {
 	return (
 		<Select
 			value={value}
-			onValueChange={({ value }) => query.where('stock_status').equals(value).exec()}
+			onValueChange={(option) => option && query.where('stock_status').equals(option.value).exec()}
 		>
 			<SelectPrimitiveTrigger asChild>
 				<ButtonPill

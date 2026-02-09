@@ -14,22 +14,25 @@
  */
 import { filterTaxRates } from './tax-rates.helpers';
 
-// Helper to create mock tax rates
-const createTaxRate = (overrides: Partial<ReturnType<typeof createTaxRate>> = {}) => ({
-	id: 1,
-	country: '',
-	state: '',
-	postcodes: [] as string[],
-	cities: [] as string[],
-	rate: '10',
-	name: 'Tax',
-	priority: 1,
-	order: 1,
-	class: 'standard',
-	compound: false,
-	shipping: true,
-	...overrides,
-});
+type TaxRate = import('@wcpos/database').TaxRateDocument;
+
+// Helper to create mock tax rates - cast as TaxRate for test purposes
+const createTaxRate = (overrides: Record<string, unknown> = {}) =>
+	({
+		id: 1,
+		country: '',
+		state: '',
+		postcodes: [] as string[],
+		cities: [] as string[],
+		rate: '10',
+		name: 'Tax',
+		priority: 1,
+		order: 1,
+		class: 'standard',
+		compound: false,
+		shipping: true,
+		...overrides,
+	}) as unknown as TaxRate;
 
 describe('tax-rates.helpers', () => {
 	describe('filterTaxRates', () => {

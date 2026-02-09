@@ -11,5 +11,8 @@ export const useExtraData = () => {
 	}
 
 	const context = React.useContext(ExtraDataContext);
+	if (!context) {
+		throw new Error('useExtraData must be called within ExtraDataProvider');
+	}
 	return context;
 };

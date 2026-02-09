@@ -9,10 +9,12 @@ import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'delete']);
 
-type RxCollection = import('rxdb').RxCollection;
+interface AnyRxCollection {
+	name: string;
+}
 
 interface DeleteDocumentFunction {
-	(id: number, collection: RxCollection, params?: any): Promise<void>;
+	(id: number, collection: AnyRxCollection, params?: Record<string, unknown>): Promise<void>;
 }
 
 const useDeleteDocument = () => {

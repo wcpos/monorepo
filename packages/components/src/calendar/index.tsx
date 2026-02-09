@@ -39,7 +39,9 @@ export const Calendar = ({ dateRange, onDateRangeChange, locale, ...props }: Pro
 
 	// Update locale configuration when language changes
 	React.useEffect(() => {
-		updateLocaleConfig(locale);
+		if (locale) {
+			updateLocaleConfig(locale);
+		}
 	}, [locale]);
 
 	// Derive current month directly from dateRange (no state sync needed)
@@ -153,21 +155,24 @@ export const Calendar = ({ dateRange, onDateRangeChange, locale, ...props }: Pro
 				textMonthFontSize: 14,
 				textDayHeaderFontSize: Platform.OS === 'web' ? 12 : 14,
 				weekVerticalMargin: 2,
-				'stylesheet.calendar.header': {
-					header: {
-						flexDirection: 'row',
-						justifyContent: 'space-between',
-						paddingLeft: 10,
-						paddingRight: 10,
-						marginTop: 0,
-						alignItems: 'center',
+				// react-native-calendars supports stylesheet overrides but they're not in the Theme type
+				...({
+					'stylesheet.calendar.header': {
+						header: {
+							flexDirection: 'row',
+							justifyContent: 'space-between',
+							paddingLeft: 10,
+							paddingRight: 10,
+							marginTop: 0,
+							alignItems: 'center',
+						},
+						week: {
+							marginTop: 0,
+							flexDirection: 'row',
+							justifyContent: 'space-between',
+						},
 					},
-					week: {
-						marginTop: 0,
-						flexDirection: 'row',
-						justifyContent: 'space-between',
-					},
-				},
+				} as Record<string, unknown>),
 			}}
 			{...props}
 		/>

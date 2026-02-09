@@ -115,7 +115,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		await this.collectionReplication.firstSync;
 		const saved = await this.sync();
 
-		if (this.greedy && saved && saved.length > 0) {
+		if (this.greedy && saved && (saved as any[]).length > 0) {
 			/**
 			 * This is a hack to stop products/variations query from fetching potentially 1000's of documents
 			 * We only want the greedy for 'search' in that case

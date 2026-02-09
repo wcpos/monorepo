@@ -13,7 +13,7 @@ import { useT } from '../../../../../contexts/translations';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').ProductVariationDocument>;
-	parentID: string;
+	parentID?: string;
 }
 
 export const EditVariationModal = ({ resource }: Props) => {

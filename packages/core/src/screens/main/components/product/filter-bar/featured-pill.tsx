@@ -19,7 +19,7 @@ interface Props {
  */
 const FeaturedPill = ({ query }: Props) => {
 	const isActive = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('featured')))
+		query.rxQuery$.pipe(map(() => !!query.getSelector('featured')))
 	);
 	const t = useT();
 

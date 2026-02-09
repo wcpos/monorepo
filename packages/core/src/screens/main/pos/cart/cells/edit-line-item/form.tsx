@@ -37,7 +37,7 @@ const formSchema = z.object({
 
 interface Props {
 	uuid: string;
-	item: import('@wcpos/database').OrderDocument['line_items'][number];
+	item: NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 }
 
 /**
@@ -53,8 +53,10 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 	/**
 	 *
 	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+	type FormValues = z.infer<typeof formSchema>;
+
+	const form = useForm<FormValues, unknown, FormValues>({
+		resolver: zodResolver(formSchema as never) as never,
 		defaultValues: {
 			name: item.name,
 			sku: item.sku,
@@ -63,7 +65,7 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 			regular_price: toNumber(regular_price),
 			tax_status,
 			tax_class: item.tax_class === '' ? 'standard' : item.tax_class,
-			meta_data: item.meta_data,
+			meta_data: item.meta_data as FormValues['meta_data'],
 		},
 	});
 
@@ -71,16 +73,16 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 	 *
 	 */
 	const handleSave = React.useCallback(
-		(data: z.infer<typeof formSchema>) => {
+		(data: FormValues) => {
 			updateLineItem(uuid, {
 				name: data.name,
 				sku: data.sku,
 				quantity: data.quantity,
-				price: String(data.price),
-				regular_price: String(data.regular_price),
+				price: data.price,
+				regular_price: data.regular_price,
 				tax_status: data.tax_status,
 				tax_class: data.tax_class === 'standard' ? '' : data.tax_class,
-				meta_data: data.meta_data,
+				meta_data: data.meta_data as never,
 			});
 			onOpenChange(false);
 		},
@@ -117,13 +119,15 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="quantity"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormInput
 									customComponent={NumberInput}
 									label={t('pos_cart.quantity')}
 									type="numeric"
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -133,13 +137,15 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="price"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormInput
 									customComponent={CurrencyInput}
 									label={t('common.price')}
 									type="numeric"
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -147,13 +153,15 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="regular_price"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormInput
 									customComponent={CurrencyInput}
 									label={t('common.regular_price')}
 									type="numeric"
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -163,12 +171,14 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="tax_class"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormSelect
 									label={t('common.tax_class')}
 									customComponent={TaxClassSelect}
-									{...field}
+									value={value ?? ''}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}
@@ -176,12 +186,14 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 					<FormField
 						control={form.control}
 						name="tax_status"
-						render={({ field }) => (
+						render={({ field: { value, onChange, ...rest } }) => (
 							<View className="flex-1">
 								<FormRadioGroup
 									label={t('common.tax_status')}
 									customComponent={TaxStatusRadioGroup}
-									{...field}
+									value={value}
+									onChange={onChange}
+									{...rest}
 								/>
 							</View>
 						)}

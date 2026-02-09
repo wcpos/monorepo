@@ -15,6 +15,7 @@ import type { FallbackProps } from 'react-error-boundary';
  */
 const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 	const [containerWidth, setContainerWidth] = React.useState(0);
+	const errorMessage = error instanceof Error ? error.message : String(error);
 
 	/**
 	 *
@@ -27,7 +28,7 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 	/**
 	 *
 	 */
-	if (containerWidth < 200 || error.message.length > 1000) {
+	if (containerWidth < 200 || errorMessage.length > 1000) {
 		return (
 			<HStack className="bg-error items-start justify-between p-2" onLayout={handleLayout}>
 				<Tooltip>
@@ -37,7 +38,7 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 					<TooltipContent>
 						<VStack className="w-full flex-1 gap-1">
 							<Text className="font-bold">Something went wrong:</Text>
-							<Text>{error.message}</Text>
+							<Text>{errorMessage}</Text>
 						</VStack>
 					</TooltipContent>
 				</Tooltip>
@@ -54,7 +55,7 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 			<Icon name="triangleExclamation" size="4xl" className="text-error-foreground" />
 			<VStack className="w-full flex-1 gap-1">
 				<Text className="text-error-foreground font-bold">Something went wrong:</Text>
-				<Text className="text-error-foreground">{error.message}</Text>
+				<Text className="text-error-foreground">{errorMessage}</Text>
 			</VStack>
 			<IconButton
 				name="xmark"
