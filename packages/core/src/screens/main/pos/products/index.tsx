@@ -222,6 +222,7 @@ export const POSProducts = ({ isColumn = false }) => {
 										placeholder={t('common.search_products')}
 										className="flex-1"
 										onKeyPress={onKeyPress}
+										testID="search-products"
 									/>
 								</ErrorBoundary>
 								<UISettingsDialog title={t('common.product_settings')}>

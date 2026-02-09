@@ -3,18 +3,18 @@ import { authenticatedTest, navigateToPage } from './fixtures';
 
 authenticatedTest.describe('Authenticated Navigation', () => {
 	authenticatedTest('should show the POS screen after login', async ({ posPage: page }) => {
-		await expect(page.getByPlaceholder('Search Products')).toBeVisible();
+		await expect(page.getByTestId('search-products')).toBeVisible();
 	});
 
 	authenticatedTest('should be responsive on mobile viewport', async ({ posPage: page }) => {
 		await page.setViewportSize({ width: 375, height: 667 });
-		await expect(page.getByPlaceholder('Search Products')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 10_000 });
 	});
 
 	authenticatedTest('should be responsive on desktop viewport', async ({ posPage: page }) => {
 		await page.setViewportSize({ width: 1920, height: 1080 });
-		await expect(page.getByPlaceholder('Search Products')).toBeVisible();
-		await expect(page.getByText('Guest')).toBeVisible();
+		await expect(page.getByTestId('search-products')).toBeVisible();
+		await expect(page.getByTestId('cart-customer-name')).toBeVisible();
 	});
 });
 
@@ -44,7 +44,7 @@ authenticatedTest.describe('Drawer Navigation', () => {
 		'should navigate to Logs page',
 		async ({ posPage: page }) => {
 			await navigateToPage(page, 'logs');
-			await expect(page.getByTestId('screen-logs').getByPlaceholder('Search Logs')).toBeVisible({ timeout: 30_000 });
+			await expect(page.getByTestId('screen-logs').getByTestId('search-logs')).toBeVisible({ timeout: 30_000 });
 		}
 	);
 
@@ -62,7 +62,7 @@ authenticatedTest.describe('Drawer Navigation', () => {
 		'should navigate to a page and back to POS',
 		async ({ posPage: page }) => {
 			await navigateToPage(page, 'logs');
-			await expect(page.getByTestId('screen-logs').getByPlaceholder('Search Logs')).toBeVisible({ timeout: 30_000 });
+			await expect(page.getByTestId('screen-logs').getByTestId('search-logs')).toBeVisible({ timeout: 30_000 });
 
 			// Wait for logs page to fully render before navigating away
 			await page.waitForTimeout(1_000);
@@ -72,7 +72,7 @@ authenticatedTest.describe('Drawer Navigation', () => {
 			// The POS screen should show the search products input
 			// Try both screen-pos testId and just the placeholder directly
 			const posScreen = page.getByTestId('screen-pos');
-			const searchProducts = posScreen.getByPlaceholder('Search Products').or(page.getByPlaceholder('Search Products'));
+			const searchProducts = posScreen.getByTestId('search-products').or(page.getByTestId('search-products'));
 			await expect(searchProducts.first()).toBeVisible({ timeout: 30_000 });
 		}
 	);

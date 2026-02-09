@@ -114,6 +114,16 @@ async function setupVariant(
 	});
 	const page = await context.newPage();
 
+	// Capture console output for debugging
+	page.on('console', (msg) => {
+		if (msg.type() === 'error' || msg.type() === 'warning') {
+			console.log(`[global-setup] [${variant}] ${msg.type()}: ${msg.text()}`);
+		}
+	});
+	page.on('pageerror', (err) => {
+		console.log(`[global-setup] [${variant}] PAGE ERROR: ${err.message}`);
+	});
+
 	// Create a mock testInfo that provides the store config
 	const testInfo = {
 		project: {

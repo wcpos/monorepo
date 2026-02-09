@@ -91,13 +91,13 @@ export default defineConfig<WcposTestOptions>({
 		},
 	],
 
-	/* Run local dev server before tests (only when not testing against deployed URL) */
+	/* Build and serve web app locally before tests (only when not testing against deployed URL) */
 	webServer: process.env.BASE_URL
 		? undefined
 		: {
-				command: 'pnpm expo start --web --port 8081',
+				command: 'pnpm run build:web && npx serve web-build -p 8081 -s',
 				url: 'http://localhost:8081',
 				reuseExistingServer: !process.env.CI,
-				timeout: 120 * 1000,
+				timeout: 180 * 1000,
 			},
 });

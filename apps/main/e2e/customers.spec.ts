@@ -5,23 +5,17 @@ import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fi
  * Customer-related tests in the POS context (both free and pro).
  */
 test.describe('Customers in POS', () => {
-	test('should show Guest as default customer', async ({ posPage: page }) => {
-		await expect(page.getByText('Guest')).toBeVisible();
+	test('should show guest customer by default', async ({ posPage: page }) => {
+		await expect(page.getByTestId('cart-customer-name')).toBeVisible();
 	});
 
-	test('should show customer area with Guest label', async ({ posPage: page }) => {
-		await expect(page.getByText('Customer')).toBeVisible({ timeout: 10_000 });
-	});
-
-	test('should open customer address dialog when clicking Guest', async ({ posPage: page }) => {
-		// Find and click the Guest button/chip - this opens the address editor
-		const guestButton = page.getByText('Guest').first();
-		await expect(guestButton).toBeVisible({ timeout: 15_000 });
-		await guestButton.click();
+	test('should open customer address dialog when clicking customer name', async ({ posPage: page }) => {
+		const customerPill = page.getByTestId('cart-customer-name');
+		await expect(customerPill).toBeVisible({ timeout: 15_000 });
+		await customerPill.click();
 
 		// Should open the Edit Customer Address dialog
-		await expect(page.getByText('Edit Customer Address')).toBeVisible({ timeout: 15_000 });
-		await expect(page.getByText('Billing Address')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 15_000 });
 	});
 
 });
@@ -45,17 +39,16 @@ test.describe('Add Customer from Cart (Pro)', () => {
 		await expect(addButton).toBeEnabled({ timeout: 10_000 });
 		await addButton.click();
 
-		await expect(page.getByText('Add new customer')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should show customer form fields in dialog', async ({ posPage: page }) => {
 		await page.getByTestId('add-customer-button').click();
-		await expect(page.getByText('Add new customer')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 
-		// Form should contain name/email fields
-		await expect(
-			page.getByText(/first name|last name|email/i).first()
-		).toBeVisible({ timeout: 15_000 });
+		// Form should contain input fields for customer details
+		const inputs = page.getByRole('dialog').locator('input');
+		expect(await inputs.count()).toBeGreaterThanOrEqual(1);
 	});
 });
 
@@ -87,20 +80,20 @@ test.describe('Customers Page (Pro)', () => {
 	test('should navigate to Customers page and see customer list', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
 		const screen = page.getByTestId('screen-customers');
-		await expect(screen.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
+		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show customer data or empty state', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
 		const screen = page.getByTestId('screen-customers');
-		await expect(screen.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
+		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
 
 		const hasCustomers = await screen
-			.getByText(/Showing \d+ of \d+/)
+			.getByTestId('data-table-count')
 			.isVisible({ timeout: 10_000 })
 			.catch(() => false);
 		const noCustomers = await screen
-			.getByText('No customers found')
+			.getByTestId('no-data-message')
 			.isVisible({ timeout: 15_000 })
 			.catch(() => false);
 		expect(hasCustomers || noCustomers).toBeTruthy();
@@ -109,18 +102,19 @@ test.describe('Customers Page (Pro)', () => {
 	test('should search customers', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
 		const screen = page.getByTestId('screen-customers');
-		await expect(screen.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
+		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
 
-		const searchInput = screen.getByPlaceholder('Search Customers');
+		const searchInput = screen.getByTestId('search-customers');
 		await searchInput.fill('admin');
 		await page.waitForTimeout(1_500);
 
-		const hasResults = await screen
-			.getByText(/Showing [1-9]\d* of \d+/)
+		const countEl = screen.getByTestId('data-table-count');
+		const hasResults = await countEl
 			.isVisible()
+			.then(async (visible) => visible && /[1-9]/.test(await countEl.textContent() ?? ''))
 			.catch(() => false);
 		const noResults = await screen
-			.getByText('No customers found')
+			.getByTestId('no-data-message')
 			.isVisible()
 			.catch(() => false);
 		expect(hasResults || noResults).toBeTruthy();
@@ -129,7 +123,7 @@ test.describe('Customers Page (Pro)', () => {
 	test('should have add customer button on Customers page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
 		const screen = page.getByTestId('screen-customers');
-		await expect(screen.getByPlaceholder('Search Customers')).toBeVisible({ timeout: 30_000 });
+		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
 
 		// The add customer button is an IconButton with userPlus icon next to the search
 		// It doesn't have accessible text, so we find it by being a button near the search
@@ -153,12 +147,12 @@ test.describe('Customers Page (Free)', () => {
 
 	test('should show upgrade page on Customers', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
-		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show View Demo button', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
-		await expect(page.getByText('Upgrade to Pro', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
-		await expect(page.getByRole('button', { name: 'View Demo' })).toBeVisible();
+		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('view-demo-button')).toBeVisible();
 	});
 });

@@ -150,7 +150,8 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 
 	// Wait for POS screen - the app may auto-navigate after auth,
 	// or we may need to select user/store on the connect screen.
-	const searchProducts = page.getByPlaceholder('Search Products');
+	// Use testID to avoid locale-dependent placeholders (store may use French).
+	const searchProducts = page.getByTestId('search-products');
 
 	for (let attempt = 0; attempt < 3; attempt++) {
 		if (await searchProducts.isVisible({ timeout: 10_000 }).catch(() => false)) {
@@ -178,8 +179,8 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 
 	await expect(searchProducts).toBeVisible({ timeout: 60_000 });
 
-	// Wait for products to sync
-	await expect(page.getByText(/Showing [1-9]\d* of \d+/)).toBeVisible({ timeout: 120_000 });
+	// Wait for products to sync (use testID to avoid locale-dependent text)
+	await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, { timeout: 120_000 });
 }
 
 /**
@@ -267,9 +268,10 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 			await page.reload();
 
 			// App should skip auth and go straight to POS
-			const searchProducts = page.getByPlaceholder('Search Products');
+			// Use testIDs to avoid locale-dependent locators
+			const searchProducts = page.getByTestId('search-products');
 			await expect(searchProducts).toBeVisible({ timeout: 60_000 });
-			await expect(page.getByText(/Showing [1-9]\d* of \d+/)).toBeVisible({
+			await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
 				timeout: 60_000,
 			});
 		} else {
