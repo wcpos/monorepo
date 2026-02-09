@@ -140,7 +140,11 @@ const DataTable = <TData extends DataTableRowData, TValue>({
 	/**
 	 * Adjust scroll position when item sizes change, but only if the change
 	 * affects the currently visible viewport area.
+	 *
+	 * This property is on the Virtualizer class but not in VirtualizerOptions,
+	 * so it must be set after construction. The mutation is intentional API usage.
 	 */
+	// eslint-disable-next-line react-compiler/react-compiler
 	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
 		const scrollOffset = instance.scrollOffset ?? 0;
 		const scrollHeight = instance.scrollRect?.height ?? 0;
