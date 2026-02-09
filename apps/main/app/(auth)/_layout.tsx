@@ -33,7 +33,12 @@ export default function AuthLayout() {
 	return (
 		<>
 			<SystemBars style={statusBarStyle} />
-			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}>
+			<Stack
+				screenOptions={{
+					headerShown: false,
+					contentStyle: { backgroundColor: backgroundColor as string },
+				}}
+			>
 				<Stack.Screen name="connect" />
 				{/* <Stack.Screen
 					name="(modals)/login"

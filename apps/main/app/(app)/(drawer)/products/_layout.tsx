@@ -10,7 +10,12 @@ export default function ProductsLayout() {
 	const backgroundColor = useCSSVariable('--color-background');
 
 	return (
-		<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }}>
+		<Stack
+			screenOptions={{
+				headerShown: false,
+				contentStyle: { backgroundColor: backgroundColor as string },
+			}}
+		>
 			<Stack.Screen name="index" />
 			<Stack.Screen
 				name="(modals)/edit/product/[productId]"
