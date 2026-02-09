@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
+import type { Option } from '@wcpos/components/combobox/types';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { IconButton } from '@wcpos/components/icon-button';
@@ -31,9 +32,9 @@ export const CartHeader = () => {
 	 *
 	 */
 	const handleSelectCustomer = React.useCallback(
-		async ({ item: customer }) => {
-			if (customer) {
-				await addCustomer(customer);
+		async (option: Option | undefined) => {
+			if (option?.item) {
+				await addCustomer(option.item);
 			}
 			setShowCustomerSelect(false);
 		},

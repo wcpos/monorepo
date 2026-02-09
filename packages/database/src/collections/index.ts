@@ -274,7 +274,7 @@ const brands: RxCollectionCreator<ProductBrandDocumentType> = {
  */
 const orderSchema: RxJsonSchema<OrderDocumentType> = ordersLiteral;
 type OrderDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof ordersLiteral>;
-export type OrderDocument = RxDocument<OrderDocumentType>;
+export type OrderDocument = RxDocument<OrderDocumentType> & { readonly isNew?: boolean };
 export type OrderCollection = RxCollection<OrderDocumentType>;
 const orders: RxCollectionCreator<OrderDocumentType> = {
 	schema: orderSchema,
