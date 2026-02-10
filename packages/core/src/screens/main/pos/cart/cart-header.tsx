@@ -76,7 +76,10 @@ export const CartHeader = () => {
 				<Text className="font-bold">{t('common.customer')}:</Text>
 				<ErrorBoundary>
 					{showCustomerSelect ? (
-						<Combobox<CustomerDocument> onValueChange={handleSelectCustomer} onOpenChange={delayedCloseHandler}>
+						<Combobox<CustomerDocument>
+							onValueChange={handleSelectCustomer}
+							onOpenChange={delayedCloseHandler}
+						>
 							{/* @ts-expect-error: ComboboxTrigger ref type is more specific than our ref with open() method */}
 							<ComboboxTrigger ref={triggerRef} asChild>
 								<ButtonPill size="xs" leftIcon="user" variant="muted">
