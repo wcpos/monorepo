@@ -222,4 +222,4 @@ export function useAppInfo(options?: UseAppInfoOptions): AppInfoResult {
  * Re-export static AppInfo for non-React code
  * (e.g., Novu subscriber, HTTP clients)
  */
-export { default as AppInfo } from '@wcpos/utils/app-info';
+export { AppInfo } from '@wcpos/utils/app-info';
