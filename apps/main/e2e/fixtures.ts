@@ -61,10 +61,12 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		};
 	});
 
+	console.log('[auth] Navigating to /');
 	await page.goto('/');
 	await expect(page.getByRole('button', { name: 'Enter Demo Store' })).toBeVisible({
 		timeout: 60_000,
 	});
+	console.log('[auth] Enter Demo Store button visible');
 
 	// Type the store URL and connect
 	const urlInput = page.getByRole('textbox', { name: /Enter the URL/i });
@@ -75,13 +77,16 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	const connectButton = page.getByRole('button', { name: 'Connect' });
 	await expect(connectButton).toBeEnabled({ timeout: 10_000 });
 	await connectButton.click();
+	console.log('[auth] Connect button clicked');
 
 	// Wait for the store to be discovered
 	await expect(page.getByText('Logged in users:')).toBeVisible({ timeout: 60_000 });
+	console.log('[auth] "Logged in users:" visible');
 
 	// Click the + button to trigger OAuth
 	const addUserButton = page.getByTestId('add-user-button');
 	await addUserButton.click();
+	console.log('[auth] Add user button clicked');
 
 	// Wait for the auth URL to be captured
 	let authUrl: string | null = null;
@@ -94,11 +99,13 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	if (!authUrl) {
 		throw new Error('Failed to capture OAuth URL from window.open');
 	}
+	console.log('[auth] Captured OAuth URL');
 
 	// Get the localStorage handle for postMessage verification
 	const handle = await page.evaluate(() =>
 		window.localStorage.getItem('ExpoWebBrowserRedirectHandle')
 	);
+	console.log(`[auth] ExpoWebBrowserRedirectHandle: ${handle}`);
 
 	// Open the auth URL in a new page and complete login
 	const loginPage = await context.newPage();
@@ -135,6 +142,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	);
 
 	const callbackUrl = loginPage.url();
+	console.log(`[auth] Callback URL: ${callbackUrl}`);
 	await loginPage.close();
 
 	// Simulate the postMessage that the popup would normally send
@@ -144,9 +152,11 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		},
 		{ url: callbackUrl, handle }
 	);
+	console.log('[auth] postMessage sent, waiting for app to process...');
 
 	// Wait for the app to process the auth result
 	await page.waitForTimeout(5_000);
+	console.log(`[auth] Page URL after auth: ${page.url()}`);
 
 	// Wait for POS screen - the app may auto-navigate after auth,
 	// or we may need to select user/store on the connect screen.
@@ -154,9 +164,17 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	const searchProducts = page.getByTestId('search-products');
 
 	for (let attempt = 0; attempt < 3; attempt++) {
+		console.log(`[auth] Attempt ${attempt + 1}/3 to find POS screen`);
 		if (await searchProducts.isVisible({ timeout: 10_000 }).catch(() => false)) {
+			console.log('[auth] POS screen found');
 			break;
 		}
+
+		// Log what's on screen
+		const visibleText = await page
+			.evaluate(() => document.body?.innerText?.substring(0, 300) || '')
+			.catch(() => '');
+		console.log(`[auth] Visible text: ${visibleText}`);
 
 		// Try clicking user button if visible
 		const userButton = page
@@ -165,6 +183,8 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 			.filter({ hasText: /^[A-Z][a-z]+/ })
 			.first();
 		if (await userButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
+			const buttonText = await userButton.textContent().catch(() => '');
+			console.log(`[auth] Clicking user button: "${buttonText}"`);
 			await userButton.click().catch(() => {});
 			await page.waitForTimeout(2_000);
 		}
@@ -172,6 +192,8 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		// Try clicking store button if visible
 		const storeButton = page.getByRole('button').filter({ hasText: /Store/ }).first();
 		if (await storeButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
+			const buttonText = await storeButton.textContent().catch(() => '');
+			console.log(`[auth] Clicking store button: "${buttonText}"`);
 			await storeButton.click().catch(() => {});
 			await page.waitForTimeout(2_000);
 		}
