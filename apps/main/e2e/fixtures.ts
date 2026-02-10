@@ -145,6 +145,16 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	console.log(`[auth] Callback URL: ${callbackUrl}`);
 	await loginPage.close();
 
+	// The cashier validation API must complete before the user button works —
+	// it populates stores in the local DB, which gives storeID to handleLogin.
+	// Set up the response listener BEFORE sending postMessage so we don't miss it.
+	const cashierApiPromise = page
+		.waitForResponse(
+			(response) => response.url().includes('/cashier/') && response.ok(),
+			{ timeout: 60_000 }
+		)
+		.catch(() => null);
+
 	// Simulate the postMessage that the popup would normally send
 	await page.evaluate(
 		({ url, handle }) => {
@@ -152,22 +162,29 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		},
 		{ url: callbackUrl, handle }
 	);
-	console.log('[auth] postMessage sent, waiting for app to process...');
+	console.log('[auth] postMessage sent, waiting for cashier validation API...');
 
-	// Wait for the app to process the auth result and save credentials
-	await page.waitForTimeout(5_000);
+	// Wait for the cashier validation API to complete — this is what populates
+	// the stores array that the user button needs to call login().
+	const cashierResponse = await cashierApiPromise;
+	if (cashierResponse) {
+		console.log(
+			`[auth] Cashier API completed: ${cashierResponse.status()} ${cashierResponse.url().substring(0, 120)}`
+		);
+	} else {
+		console.log('[auth] Cashier API call not detected within timeout, proceeding anyway...');
+	}
+
+	// Give RxDB time to save stores from the API response and trigger re-render
+	await page.waitForTimeout(3_000);
 	console.log(`[auth] Page URL after auth: ${page.url()}`);
 
-	// Wait for POS screen - the app may auto-navigate after auth,
-	// or we may need to select user/store on the connect screen.
-	// Use testID to avoid locale-dependent placeholders (store may use French).
+	// Wait for POS screen — the user button (e.g. "Demo Cashier") should now
+	// work because stores have been populated by the cashier validation response.
 	const searchProducts = page.getByTestId('search-products');
 
-	// The user button (e.g. "Demo Cashier") only navigates to POS once the
-	// store data has been fetched from the server via useUserValidation.
-	// We retry with increasing delays to give the async store fetch time to complete.
-	for (let attempt = 0; attempt < 10; attempt++) {
-		console.log(`[auth] Attempt ${attempt + 1}/10 to find POS screen`);
+	for (let attempt = 0; attempt < 5; attempt++) {
+		console.log(`[auth] Attempt ${attempt + 1}/5 to find POS screen`);
 		if (await searchProducts.isVisible({ timeout: 5_000 }).catch(() => false)) {
 			console.log('[auth] POS screen found');
 			break;
@@ -179,48 +196,40 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 			continue;
 		}
 
-		// Log what's on screen for debugging
-		const buttons = await page
-			.evaluate(() =>
-				Array.from(document.querySelectorAll('button'))
-					.map((b) => b.textContent?.trim())
-					.filter(Boolean)
-					.join(' | ')
-			)
-			.catch(() => '');
-		console.log(`[auth] Buttons: ${buttons}`);
-
-		// Try clicking user button if visible (locale-independent: match capitalized names)
+		// Find the user button (e.g. "Demo Cashier") — a ButtonPill inside the site card.
+		// Exclude navigation/demo buttons that aren't user login buttons.
 		const userButton = page
 			.getByRole('button')
-			.filter({ hasNotText: /Connect|Enter Demo Store|Clear text|Connecter|Entrer|Help/i })
+			.filter({
+				hasNotText:
+					/Connect|Enter Demo|Clear text|Connecter|Entrer|Help|magasin|démonstration/i,
+			})
 			.filter({ hasText: /^[A-Z][a-z]+/ })
 			.first();
+
 		if (await userButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
 			const buttonText = await userButton.textContent().catch(() => '');
+			const isDisabled = await userButton
+				.evaluate((el) => (el as HTMLButtonElement).disabled)
+				.catch(() => true);
+
+			if (isDisabled) {
+				console.log(`[auth] User button "${buttonText}" is disabled, waiting...`);
+				await page.waitForTimeout(3_000);
+				continue;
+			}
+
 			console.log(`[auth] Clicking user button: "${buttonText}"`);
 			await userButton.click().catch(() => {});
-			// Wait for the click to trigger login and navigation
 			await page.waitForTimeout(3_000);
 
-			// Check if we navigated after the click
 			if (!page.url().includes('/connect')) {
 				console.log(`[auth] Navigated to ${page.url()} after user click`);
 				continue;
 			}
 		}
 
-		// Try clicking store button if visible (could be in any locale)
-		const storeButton = page.getByRole('button').filter({ hasText: /Store|Boutique|Magasin/i }).first();
-		if (await storeButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
-			const buttonText = await storeButton.textContent().catch(() => '');
-			console.log(`[auth] Clicking store button: "${buttonText}"`);
-			await storeButton.click().catch(() => {});
-			await page.waitForTimeout(3_000);
-		}
-
-		// Wait a bit longer between retries to give store data time to load
-		await page.waitForTimeout(2_000);
+		await page.waitForTimeout(3_000);
 	}
 
 	await expect(searchProducts).toBeVisible({ timeout: 60_000 });
