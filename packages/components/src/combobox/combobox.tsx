@@ -39,17 +39,17 @@ function useComboboxRootContext() {
 	return context;
 }
 
-function Combobox({
+function Combobox<T = undefined>({
 	children,
 	value: valueProp,
 	defaultValue,
 	onValueChange: onValueChangeProp,
 	...props
-}: ComboboxRootProps) {
-	const [value, onValueChange] = useControllableState<Option | undefined>({
-		prop: valueProp,
-		defaultProp: defaultValue,
-		onChange: onValueChangeProp,
+}: ComboboxRootProps<T>) {
+	const [value, onValueChange] = useControllableState<Option<any> | undefined>({
+		prop: valueProp as Option<any> | undefined,
+		defaultProp: defaultValue as Option<any> | undefined,
+		onChange: onValueChangeProp as ((value: Option<any> | undefined) => void) | undefined,
 	});
 	const [filterValue, setFilterValue] = React.useState('');
 

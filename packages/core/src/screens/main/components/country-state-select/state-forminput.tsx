@@ -24,7 +24,7 @@ const StateFormInputBase = ({
 	 * Handle select
 	 */
 	const handleSelect = React.useCallback(
-		(option: Option | undefined) => {
+		(option: Option<any> | undefined) => {
 			onChangeText?.(String(option?.value ?? ''));
 		},
 		[onChangeText]
@@ -33,7 +33,7 @@ const StateFormInputBase = ({
 	if (hasStates) {
 		if (hasManyStates) {
 			return (
-				// @ts-expect-error: StateCombobox renders its own children internally
+				// @ts-expect-error: StateCombobox provides its own children but ComponentProps<typeof Combobox> requires them
 				<StateCombobox
 					value={{ value: value ?? '', label: '' }}
 					onValueChange={handleSelect}
