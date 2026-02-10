@@ -2,25 +2,25 @@ import type { ViewProps } from 'react-native';
 
 import type { ListProps as VirtualizedListPrimitiveProps } from '@wcpos/components/virtualized-list';
 
-export interface Option {
-	value: string | number;
+export interface Option<T = undefined> {
+	value: string;
 	label: string;
-	item?: unknown;
+	item?: T;
 }
 
 interface ComboboxRootContextType {
-	value: Option | undefined;
-	onValueChange: (option: Option | undefined) => void;
+	value: Option<any> | undefined;
+	onValueChange: (option: Option<any> | undefined) => void;
 	disabled?: boolean;
 	filterValue: string;
 	onFilterChange: (text: string) => void;
 }
 
-type ComboboxRootProps = {
+type ComboboxRootProps<T = undefined> = {
 	children: React.ReactNode;
-	value?: Option;
-	defaultValue?: Option;
-	onValueChange?: (option: Option | undefined) => void;
+	value?: Option<T>;
+	defaultValue?: Option<T>;
+	onValueChange?: (option: Option<T> | undefined) => void;
 	onOpenChange?: (open: boolean) => void;
 	disabled?: boolean;
 };

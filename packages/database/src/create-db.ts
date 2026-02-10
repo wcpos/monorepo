@@ -55,7 +55,7 @@ export const createStoreDB = async (id: string) => {
 			name,
 			allowSlowCount: true,
 			...defaultConfig,
-			ignoreDuplicate: true, // Allow returning existing DB when switching back to a store
+			closeDuplicates: true, // Allow returning existing DB when switching back to a store
 		});
 		await db?.addCollections(storeCollections);
 		return db;
@@ -83,7 +83,7 @@ export const createFastStoreDB = async (id: string) => {
 			name,
 			allowSlowCount: true,
 			...fastStorageConfig,
-			ignoreDuplicate: true, // Allow returning existing DB when switching back to a store
+			closeDuplicates: true, // Allow returning existing DB when switching back to a store
 		});
 		await db?.addCollections(syncCollections);
 		return db;

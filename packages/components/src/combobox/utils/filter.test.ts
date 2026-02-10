@@ -92,8 +92,8 @@ describe('filter', () => {
 
 			it('should handle options with numeric values', () => {
 				const options: Option[] = [
-					{ label: 'Item One', value: 1 },
-					{ label: 'Item Two', value: 2 },
+					{ label: 'Item One', value: '1' },
+					{ label: 'Item Two', value: '2' },
 				];
 
 				const result = defaultFilter(options, 'One');

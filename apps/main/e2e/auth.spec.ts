@@ -26,7 +26,7 @@ test.describe('Connect Screen', () => {
 		await page.locator('input[type="url"]').fill('https://example.com');
 		await page.getByRole('button', { name: 'Connect' }).click();
 
-		await expect(page.getByText('Logged in users:')).not.toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('logged-in-users-label')).not.toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should connect to store and show site card', async ({ page }, testInfo) => {
@@ -40,7 +40,7 @@ test.describe('Connect Screen', () => {
 		await expect(connectButton).toBeEnabled({ timeout: 10_000 });
 		await connectButton.click();
 
-		await expect(page.getByText('Logged in users:')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('logged-in-users-label')).toBeVisible({ timeout: 30_000 });
 	});
 
 	test('should show add user button after store discovery', async ({ page }, testInfo) => {
@@ -51,7 +51,7 @@ test.describe('Connect Screen', () => {
 		await page.waitForTimeout(1_000);
 
 		await page.getByRole('button', { name: 'Connect' }).click();
-		await expect(page.getByText('Logged in users:')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('logged-in-users-label')).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByTestId('add-user-button')).toBeVisible();
 	});
 });
@@ -67,7 +67,7 @@ test.describe('Unauthenticated Navigation', () => {
 		await page.goto('/some-nonexistent-route');
 
 		await expect(
-			page.getByRole('button', { name: 'Connect' }).or(page.getByText(/doesn't exist/i))
+			page.getByRole('button', { name: 'Connect' }).or(page.getByTestId('not-found-screen'))
 		).toBeVisible({ timeout: 60_000 });
 	});
 });

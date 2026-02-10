@@ -39,17 +39,17 @@ function useComboboxRootContext() {
 	return context;
 }
 
-function Combobox({
+function Combobox<T = undefined>({
 	children,
 	value: valueProp,
 	defaultValue,
 	onValueChange: onValueChangeProp,
 	...props
-}: ComboboxRootProps) {
-	const [value, onValueChange] = useControllableState<Option | undefined>({
-		prop: valueProp,
-		defaultProp: defaultValue,
-		onChange: onValueChangeProp,
+}: ComboboxRootProps<T>) {
+	const [value, onValueChange] = useControllableState<Option<any> | undefined>({
+		prop: valueProp as Option<any> | undefined,
+		defaultProp: defaultValue as Option<any> | undefined,
+		onChange: onValueChangeProp as ((value: Option<any> | undefined) => void) | undefined,
 	});
 	const [filterValue, setFilterValue] = React.useState('');
 
@@ -251,9 +251,9 @@ function ComboboxItem({ value, label, item, className, ...props }: ComboboxItemP
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
 
 	const handlePress = React.useCallback(() => {
-		onValueChange({ value, label } as Option);
+		onValueChange({ value, label, item });
 		onOpenChange(false);
-	}, [onValueChange, value, label, onOpenChange]);
+	}, [onValueChange, value, label, item, onOpenChange]);
 
 	return (
 		<VirtualizedListPrimitive.Item>

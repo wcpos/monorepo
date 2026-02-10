@@ -151,6 +151,21 @@ async function setupVariant(
 		console.log(
 			`[global-setup] Saved ${variant} state (${Object.keys(indexedDB).length} databases)`
 		);
+	} catch (error) {
+		// Capture screenshot for debugging
+		const screenshotPath = path.join(AUTH_STATE_DIR, `${variant}-failure.png`);
+		await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+		console.log(`[global-setup] Screenshot saved to ${screenshotPath}`);
+		console.log(`[global-setup] Page URL at failure: ${page.url()}`);
+		console.log(
+			`[global-setup] Page title: ${await page.title().catch(() => 'unknown')}`
+		);
+		// Log visible text for debugging (first 500 chars)
+		const bodyText = await page
+			.evaluate(() => document.body?.innerText?.substring(0, 500) || '')
+			.catch(() => '');
+		console.log(`[global-setup] Visible text: ${bodyText}`);
+		throw error;
 	} finally {
 		await context.close();
 		await browser.close();
