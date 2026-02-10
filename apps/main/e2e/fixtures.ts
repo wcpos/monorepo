@@ -142,7 +142,8 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	);
 
 	const callbackUrl = loginPage.url();
-	console.log(`[auth] Callback URL: ${callbackUrl}`);
+	// Log only the origin to avoid exposing tokens in CI logs
+	console.log(`[auth] Callback received from: ${new URL(callbackUrl).origin}`);
 	await loginPage.close();
 
 	// The cashier validation API must complete before the user button works —

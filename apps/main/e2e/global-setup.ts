@@ -157,7 +157,6 @@ async function setupVariant(
 		await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
 		console.log(`[global-setup] Screenshot saved to ${screenshotPath}`);
 		console.log(`[global-setup] Page URL at failure: ${page.url()}`);
-		const pageContent = await page.content().catch(() => '');
 		console.log(
 			`[global-setup] Page title: ${await page.title().catch(() => 'unknown')}`
 		);
