@@ -14,7 +14,7 @@ interface CheckoutTitleProps {
 /**
  *
  */
-const CheckoutTitle = ({ order }: CheckoutTitleProps) => {
+export function CheckoutTitle({ order }: CheckoutTitleProps) {
 	const currencySymbol = useObservableEagerState(order.currency_symbol$!);
 	const total = useObservableEagerState(order.total$!);
 	const { format } = useCurrencyFormat({ currencySymbol: currencySymbol ?? '' });
@@ -30,6 +30,4 @@ const CheckoutTitle = ({ order }: CheckoutTitleProps) => {
 			{`: ${format(parseFloat(total ?? '0') || 0)}`}
 		</Text>
 	);
-};
-
-export default CheckoutTitle;
+}

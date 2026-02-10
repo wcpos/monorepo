@@ -1,5 +1,5 @@
-export { useHttpClient as default } from './use-http-client';
-export { default as http } from './http';
+export { useHttpClient } from './use-http-client';
+export { http } from './http';
 export { createTokenRefreshHandler } from './create-token-refresh-handler';
 export { requestStateManager } from './request-state-manager';
 export { scheduleRequest, pauseQueue, resumeQueue, getQueueMetrics } from './request-queue';

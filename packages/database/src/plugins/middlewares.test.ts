@@ -1,4 +1,4 @@
-import middlewaresPlugin from './middlewares';
+import { middlewaresPlugin } from './middlewares';
 
 // Type for mock collection used in tests
 interface MockMiddlewareCollection {

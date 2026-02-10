@@ -8,7 +8,7 @@ import en from './locales/en/core.json';
 import { useLocale } from '../../hooks/use-locale';
 import { useAppState } from '../app-state';
 
-export const TranslationProvider = ({ children }: { children: React.ReactNode }) => {
+export function TranslationProvider({ children }: { children: React.ReactNode }) {
 	const { translationsState } = useAppState();
 	const { locale } = useLocale();
 
@@ -51,7 +51,7 @@ export const TranslationProvider = ({ children }: { children: React.ReactNode })
 	}, [locale, i18nInstance]);
 
 	return <I18nextProvider i18n={i18nInstance}>{children}</I18nextProvider>;
-};
+}
 
 export const useT = () => {
 	const { t } = useTranslation();

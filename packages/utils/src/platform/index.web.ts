@@ -15,4 +15,4 @@ const Platform: PlatformType = {
 	isStandalone: (window.navigator as any).standalone,
 };
 
-export default Platform;
+export { Platform };

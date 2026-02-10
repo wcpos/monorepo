@@ -7,7 +7,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
-import useDeleteDocument from '../../../contexts/use-delete-document';
+import { useDeleteDocument } from '../../../contexts/use-delete-document';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 import type { RxCollection } from 'rxdb';
@@ -17,7 +17,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
 /**
  *
  */
-export const VoidButton = () => {
+export function VoidButton() {
 	const { currentOrder } = useCurrentOrder();
 	const router = useRouter();
 	const deleteDocument = useDeleteDocument();
@@ -87,4 +87,4 @@ export const VoidButton = () => {
 			{t('pos_cart.void')}
 		</Button>
 	);
-};
+}

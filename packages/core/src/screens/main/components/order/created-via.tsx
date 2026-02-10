@@ -31,7 +31,7 @@ const iconMap = {
 /**
  *
  */
-export const CreatedVia = ({ row }: CellContext<{ document: OrderDocument }, 'created_via'>) => {
+export function CreatedVia({ row }: CellContext<{ document: OrderDocument }, 'created_via'>) {
 	const order = row.original.document;
 	const createdVia = useObservableEagerState(order.created_via$!);
 	const iconName = get(iconMap, [createdVia ?? '', 'name'], 'circleQuestion') as string;
@@ -70,4 +70,4 @@ export const CreatedVia = ({ row }: CellContext<{ document: OrderDocument }, 'cr
 			</TooltipContent>
 		</Tooltip>
 	);
-};
+}

@@ -17,7 +17,7 @@ import { useOrderTotals } from '../hooks/use-order-totals';
 /**
  *
  */
-export const Totals = () => {
+export function Totals() {
 	const t = useT();
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { inclOrExcl } = useTaxInclOrExcl({ context: 'cart' });
@@ -117,4 +117,4 @@ export const Totals = () => {
 			<CustomerNote />
 		</>
 	);
-};
+}

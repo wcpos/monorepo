@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import type { StoreDocument } from '@wcpos/database';
-import Platform from '@wcpos/utils/platform';
+import { Platform } from '@wcpos/utils/platform';
 
 import { useHydrationSuspense } from './use-hydration-suspense';
 import { hydrateUserSession } from './hydration-steps';
@@ -21,7 +21,7 @@ function navigateToUrl(url: string): void {
 /**
  *
  */
-export const AppStateProvider = ({ children }: { children: React.ReactNode }) => {
+export function AppStateProvider({ children }: { children: React.ReactNode }) {
 	const hydration = useHydrationSuspense();
 
 	// Handle errors by throwing them - let error boundaries handle display
@@ -118,7 +118,7 @@ export const AppStateProvider = ({ children }: { children: React.ReactNode }) =>
 	}, [state, updateAppState, login, logout, switchStore]);
 
 	return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
-};
+}
 
 export const useAppState = () => {
 	const context = React.useContext(AppStateContext);

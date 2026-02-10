@@ -36,10 +36,7 @@ interface MetaDataFormProps {
 /**
  *
  */
-export const MetaDataForm: React.FC<MetaDataFormProps> = ({
-	name = 'meta_data',
-	withDisplayValues,
-}) => {
+export function MetaDataForm({ name = 'meta_data', withDisplayValues }: MetaDataFormProps) {
 	const t = useT();
 	const { control, setValue, getValues } = useFormContext();
 	const { fields, append, remove } = useFieldArray({
@@ -140,4 +137,4 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 			</CollapsibleContent>
 		</Collapsible>
 	);
-};
+}

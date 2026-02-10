@@ -26,7 +26,7 @@ interface Props {
 /**
  * Extracted widget for amount/percent input
  */
-export const AmountWidget = ({ currencySymbol = '' }: Props) => {
+export function AmountWidget({ currencySymbol = '' }: Props) {
 	const { control } = useFormContext();
 
 	/**
@@ -80,4 +80,4 @@ export const AmountWidget = ({ currencySymbol = '' }: Props) => {
 			</Button>
 		</HStack>
 	);
-};
+}

@@ -23,7 +23,7 @@ interface Props {
 /**
  *
  */
-export const StatusPill = ({ query }: Props) => {
+export function StatusPill({ query }: Props) {
 	const selected = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getSelector('status')))
 	);
@@ -58,4 +58,4 @@ export const StatusPill = ({ query }: Props) => {
 			</SelectContent>
 		</Select>
 	);
-};
+}

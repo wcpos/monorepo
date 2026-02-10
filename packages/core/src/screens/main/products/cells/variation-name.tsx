@@ -10,10 +10,10 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 /**
  *
  */
-export const ProductVariationName = ({
+export function ProductVariationName({
 	row,
 	column,
-}: CellContext<{ document: ProductVariationDocument }, 'name'>) => {
+}: CellContext<{ document: ProductVariationDocument }, 'name'>) {
 	const variation = row.original.document;
 	const show = column.columnDef.meta?.show;
 
@@ -28,4 +28,4 @@ export const ProductVariationName = ({
 			{show?.('barcode') && <Text className="text-sm">{variation.barcode}</Text>}
 		</VStack>
 	);
-};
+}

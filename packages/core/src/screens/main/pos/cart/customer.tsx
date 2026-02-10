@@ -14,17 +14,17 @@ import {
 
 import { EditCartCustomerForm } from './edit-cart-customer';
 import { useT } from '../../../../contexts/translations';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
 
 /**
  *
  */
-export const Customer = ({
+export function Customer({
 	onShowCustomerSelect,
 }: {
 	onShowCustomerSelect: (show: boolean) => void;
-}) => {
+}) {
 	const { currentOrder } = useCurrentOrder();
 	const billing = useObservableEagerState(currentOrder.billing$!);
 	const shipping = useObservableEagerState(currentOrder.shipping$!);
@@ -60,4 +60,4 @@ export const Customer = ({
 			</DialogContent>
 		</Dialog>
 	);
-};
+}

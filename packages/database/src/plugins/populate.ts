@@ -215,4 +215,4 @@ const populatePlugin: RxPlugin = {
 	},
 };
 
-export default populatePlugin;
+export { populatePlugin };

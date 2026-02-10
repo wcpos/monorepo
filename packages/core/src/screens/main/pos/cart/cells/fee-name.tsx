@@ -23,7 +23,7 @@ interface Props {
 /**
  *
  */
-export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
+export function FeeName({ row }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
 	const { updateFeeLine } = useUpdateFeeLine();
 	const t = useT();
@@ -73,4 +73,4 @@ export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
 			)}
 		</VStack>
 	);
-};
+}

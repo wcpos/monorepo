@@ -17,7 +17,7 @@ interface DeleteDocumentFunction {
 	(id: number, collection: AnyRxCollection, params?: Record<string, unknown>): Promise<void>;
 }
 
-const useDeleteDocument = () => {
+export const useDeleteDocument = () => {
 	const http = useRestHttpClient();
 	const t = useT();
 
@@ -58,5 +58,3 @@ const useDeleteDocument = () => {
 		[http, t]
 	);
 };
-
-export default useDeleteDocument;

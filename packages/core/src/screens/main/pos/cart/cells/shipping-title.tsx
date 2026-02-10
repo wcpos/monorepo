@@ -21,7 +21,7 @@ interface Props {
 /**
  *
  */
-export const ShippingTitle = ({ row }: CellContext<Props, 'name'>) => {
+export function ShippingTitle({ row }: CellContext<Props, 'name'>) {
 	const { item, uuid } = row.original;
 	const { updateShippingLine } = useUpdateShippingLine();
 	const t = useT();
@@ -39,4 +39,4 @@ export const ShippingTitle = ({ row }: CellContext<Props, 'name'>) => {
 			</EditCartItemButton>
 		</HStack>
 	);
-};
+}

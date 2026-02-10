@@ -42,7 +42,7 @@ interface UISettingsColumnsFormProps {
 /**
  *
  */
-export const UISettingsColumnsForm = ({ columns, getUILabel }: UISettingsColumnsFormProps) => {
+export function UISettingsColumnsForm({ columns, getUILabel }: UISettingsColumnsFormProps) {
 	const t = useT();
 	const [openColumns, setOpenColumns] = React.useState<Record<string, boolean>>({});
 	const form = useFormContext();
@@ -145,4 +145,4 @@ export const UISettingsColumnsForm = ({ columns, getUILabel }: UISettingsColumns
 			</VStack>
 		</VStack>
 	);
-};
+}

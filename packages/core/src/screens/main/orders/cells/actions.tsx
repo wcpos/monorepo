@@ -26,8 +26,8 @@ import { Text } from '@wcpos/components/text';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import useDeleteDocument from '../../contexts/use-delete-document';
-import usePullDocument from '../../contexts/use-pull-document';
+import { useDeleteDocument } from '../../contexts/use-delete-document';
+import { usePullDocument } from '../../contexts/use-pull-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -53,7 +53,7 @@ const upsertMetaData = (
 /**
  *
  */
-export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actions'>) => {
+export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actions'>) {
 	const order = row.original.document;
 	const router = useRouter();
 	// const status = useObservableState(order.status$, order.status);
@@ -175,4 +175,4 @@ export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actio
 			</AlertDialog>
 		</>
 	);
-};
+}

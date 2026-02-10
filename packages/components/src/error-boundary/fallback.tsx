@@ -13,7 +13,7 @@ import type { FallbackProps } from 'react-error-boundary';
 /**
  * TODO - convert this to a general removable message component
  */
-const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
+export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 	const [containerWidth, setContainerWidth] = React.useState(0);
 	const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -65,6 +65,4 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 			/>
 		</HStack>
 	);
-};
-
-export default Fallback;
+}

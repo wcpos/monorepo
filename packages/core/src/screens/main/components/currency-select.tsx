@@ -14,13 +14,13 @@ import {
 	ComboboxValue,
 } from '@wcpos/components/combobox';
 
-import useCurrencies, { CurrenciesProvider } from '../../../contexts/currencies';
+import { CurrenciesProvider, useCurrencies } from '../../../contexts/currencies';
 import { useT } from '../../../contexts/translations';
 
 /**
  *
  */
-const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Combobox>) => {
+function CurrencySelectBase({ value, ...props }: React.ComponentProps<typeof Combobox>) {
 	const t = useT();
 	const allCurrencies = useCurrencies();
 
@@ -67,15 +67,15 @@ const CurrencySelectBase = ({ value, ...props }: React.ComponentProps<typeof Com
 			</ComboboxContent>
 		</Combobox>
 	);
-};
+}
 
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export const CurrencySelect = (props: React.ComponentProps<typeof Combobox>) => {
+export function CurrencySelect(props: React.ComponentProps<typeof Combobox>) {
 	return (
 		<CurrenciesProvider>
 			<CurrencySelectBase {...props} />
 		</CurrenciesProvider>
 	);
-};
+}

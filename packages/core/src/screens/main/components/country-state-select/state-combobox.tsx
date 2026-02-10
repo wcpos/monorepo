@@ -18,11 +18,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-const StateComboboxBase = ({
-	value,
-	disabled,
-	...props
-}: React.ComponentProps<typeof Combobox>) => {
+function StateComboboxBase({ value, disabled, ...props }: React.ComponentProps<typeof Combobox>) {
 	const t = useT();
 	const states = useStates();
 	const options = React.useMemo(
@@ -75,17 +71,17 @@ const StateComboboxBase = ({
 			</ComboboxContent>
 		</Combobox>
 	);
-};
+}
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export const StateCombobox = ({
+export function StateCombobox({
 	countryCode,
 	...props
-}: React.ComponentProps<typeof Combobox> & { countryCode?: string }) => {
+}: React.ComponentProps<typeof Combobox> & { countryCode?: string }) {
 	return (
 		<StatesProvider countryCode={countryCode ?? ''}>
 			<StateComboboxBase {...props} />
 		</StatesProvider>
 	);
-};
+}

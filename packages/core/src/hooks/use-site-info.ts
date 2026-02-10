@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import useHttpClient from '@wcpos/hooks/use-http-client';
+import { useHttpClient } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
 
 const appLogger = getLogger(['wcpos', 'app', 'site']);

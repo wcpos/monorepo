@@ -54,4 +54,4 @@ const middlewaresPlugin: RxPlugin = {
 	},
 };
 
-export default middlewaresPlugin;
+export { middlewaresPlugin };

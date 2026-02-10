@@ -31,7 +31,7 @@ import { FormErrors } from '../components/form-errors';
 import { LanguageSelect } from '../components/language-select';
 import { ThousandsStyleSelect } from '../components/thousands-style-select';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
-import useCustomerNameFormat from '../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
@@ -58,7 +58,7 @@ const formSchema = z.object({
 /**
  *
  */
-export const GeneralSettings = () => {
+export function GeneralSettings() {
 	const { store } = useAppState();
 	const formData = useObservablePickState(
 		store.$,
@@ -368,4 +368,4 @@ export const GeneralSettings = () => {
 			</VStack>
 		</Form>
 	);
-};
+}

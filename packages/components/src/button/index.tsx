@@ -165,7 +165,7 @@ type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 		disableHaptics?: boolean;
 	};
 
-const Button = ({
+function Button({
 	className,
 	variant,
 	size,
@@ -176,7 +176,7 @@ const Button = ({
 	disableHaptics = false,
 	onPress,
 	...props
-}: ButtonProps) => {
+}: ButtonProps) {
 	const disabled = props.disabled || loading;
 
 	/**
@@ -260,7 +260,7 @@ const Button = ({
 			</Pressable>
 		</TextClassContext.Provider>
 	);
-};
+}
 
 /**
  *
@@ -284,9 +284,9 @@ const separatorVariants = cva('w-px self-stretch opacity-80', {
 
 type ButtonSeparatorProps = ViewProps & VariantProps<typeof separatorVariants>;
 
-const ButtonGroupSeparator = ({ variant, className, ...props }: ButtonSeparatorProps) => {
+function ButtonGroupSeparator({ variant, className, ...props }: ButtonSeparatorProps) {
 	return <View className={cn(separatorVariants({ variant }), className)} {...props} />;
-};
+}
 
 /**
  *
@@ -295,7 +295,7 @@ type ButtonGroupProps = {
 	children: React.ReactElement<ButtonProps>[];
 };
 
-const ButtonGroup = ({ children }: ButtonGroupProps) => {
+function ButtonGroup({ children }: ButtonGroupProps) {
 	const buttons = React.Children.toArray(children).filter(
 		(child): child is React.ReactElement<ButtonProps> => React.isValidElement(child)
 	);
@@ -331,7 +331,7 @@ const ButtonGroup = ({ children }: ButtonGroupProps) => {
 			})}
 		</HStack>
 	);
-};
+}
 
 /**
  *
@@ -344,7 +344,7 @@ type ButtonPillProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 		onRemove?: () => void;
 	};
 
-const ButtonPill = ({ className, removable, onRemove, ...props }: ButtonPillProps) => {
+function ButtonPill({ className, removable, onRemove, ...props }: ButtonPillProps) {
 	return removable ? (
 		<ButtonGroup>
 			<Button className={cn('rounded-full', className)} {...props} />
@@ -359,7 +359,7 @@ const ButtonPill = ({ className, removable, onRemove, ...props }: ButtonPillProp
 	) : (
 		<Button className={cn('rounded-full', className)} {...props} />
 	);
-};
+}
 
 export {
 	Button,

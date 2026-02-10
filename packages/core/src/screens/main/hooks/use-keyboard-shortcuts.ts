@@ -4,7 +4,7 @@ import { useHotkeys } from '@wcpos/hooks/use-hotkeys';
 
 import { useAppState } from '../../../contexts/app-state';
 
-const useKeyboardShortcuts = () => {
+export const useKeyboardShortcuts = () => {
 	const router = useRouter();
 	const { logout } = useAppState();
 
@@ -43,5 +43,3 @@ const useKeyboardShortcuts = () => {
 		router.push('/(app)/(drawer)/support');
 	});
 };
-
-export default useKeyboardShortcuts;

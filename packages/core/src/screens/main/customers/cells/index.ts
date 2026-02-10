@@ -4,7 +4,7 @@ import { Avatar } from './avatar';
 import { CustomerEmail } from './email';
 import { Date } from '../../components/date';
 
-export default {
+export const customerCells = {
 	avatar_url: Avatar,
 	billing: Address,
 	shipping: Address,

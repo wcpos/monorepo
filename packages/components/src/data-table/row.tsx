@@ -16,7 +16,7 @@ interface Props<TData> {
 /**
  * @TODO - it might be good to have a local state for visibility of columns to make the UI more responsive
  */
-export const DataTableRow = <TData,>({ row, index, className }: Props<TData>) => {
+export function DataTableRow<TData>({ row, index, className }: Props<TData>) {
 	return (
 		<TableRow index={index} className={className}>
 			{row.getVisibleCells().map((cell, index) => {
@@ -41,4 +41,4 @@ export const DataTableRow = <TData,>({ row, index, className }: Props<TData>) =>
 			})}
 		</TableRow>
 	);
-};
+}

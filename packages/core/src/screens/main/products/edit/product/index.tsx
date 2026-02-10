@@ -8,7 +8,7 @@ import { useCollection } from '../../../hooks/use-collection';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-export const EditProductScreen = () => {
+export function EditProductScreen() {
 	const { productId } = useLocalSearchParams<{ productId: string }>();
 	const { collection } = useCollection('products');
 	const query = collection.findOneFix(productId);
@@ -22,4 +22,4 @@ export const EditProductScreen = () => {
 	);
 
 	return <EditProductModal resource={resource} />;
-};
+}

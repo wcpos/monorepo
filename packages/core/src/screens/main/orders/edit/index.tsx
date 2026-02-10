@@ -6,7 +6,7 @@ import { ObservableResource } from 'observable-hooks';
 import { EditOrderModal } from './modal';
 import { useCollection } from '../../hooks/use-collection';
 
-export const EditOrderScreen = () => {
+export function EditOrderScreen() {
 	const { orderId } = useLocalSearchParams<{ orderId: string }>();
 	const { collection } = useCollection('orders');
 	const query = collection.findOneFix(orderId);
@@ -18,4 +18,4 @@ export const EditOrderScreen = () => {
 			resource={resource as ObservableResource<import('@wcpos/database').OrderDocument>}
 		/>
 	);
-};
+}

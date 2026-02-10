@@ -31,7 +31,7 @@ type FormValues = z.infer<typeof formSchema>;
 /**
  *
  */
-export const AddMiscProduct = () => {
+export function AddMiscProduct() {
 	const t = useT();
 	const { addProduct } = useAddProduct();
 	const { onOpenChange } = useRootContext();
@@ -153,4 +153,4 @@ export const AddMiscProduct = () => {
 			</VStack>
 		</Form>
 	);
-};
+}

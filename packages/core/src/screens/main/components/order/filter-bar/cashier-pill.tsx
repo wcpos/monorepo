@@ -15,7 +15,7 @@ import { Query, useQuery } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../../contexts/translations';
-import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'filter']);
@@ -29,7 +29,7 @@ interface CashierPillProps {
 /**
  * Cashier Search
  */
-const CashierSearch = () => {
+function CashierSearch() {
 	const t = useT();
 	const [search, setSearch] = React.useState('');
 
@@ -75,12 +75,12 @@ const CashierSearch = () => {
 			</Suspense>
 		</>
 	);
-};
+}
 
 /**
  *
  */
-export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) => {
+export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 	let cashier = useObservableSuspense(resource);
 	const { format } = useCustomerNameFormat();
 	const t = useT();
@@ -125,4 +125,4 @@ export const CashierPill = ({ query, resource, cashierID }: CashierPillProps) =>
 			</ComboboxContent>
 		</Combobox>
 	);
-};
+}

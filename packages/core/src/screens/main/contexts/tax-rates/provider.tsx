@@ -43,7 +43,7 @@ interface TaxRatesProviderProps {
  *
  * If an order is passed in, we can use the order's location to query the tax rates
  */
-export const TaxRatesProvider = ({ children, taxQuery, order }: TaxRatesProviderProps) => {
+export function TaxRatesProvider({ children, taxQuery, order }: TaxRatesProviderProps) {
 	const result = useObservableSuspense(taxQuery.resource);
 	const allRates = React.useMemo(() => result.hits.map((hit) => hit.document), [result.hits]);
 
@@ -153,4 +153,4 @@ export const TaxRatesProvider = ({ children, taxQuery, order }: TaxRatesProvider
 			{children}
 		</TaxRatesContext.Provider>
 	);
-};
+}

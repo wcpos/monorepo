@@ -1,7 +1,7 @@
 import { addRxPlugin } from 'rxdb';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 
-import populatePlugin from './populate';
+import { populatePlugin } from './populate';
 import { create, generateNested } from '../tests/helpers/nested-collection';
 
 // Type for collection with plugin methods

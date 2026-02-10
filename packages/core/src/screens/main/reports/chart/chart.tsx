@@ -39,7 +39,7 @@ type TooltipState = {
 	taxY: number;
 };
 
-export default function SkiaChart() {
+export function Chart() {
 	const { selectedOrders, dateRange } = useReports();
 	const { format } = useCurrencyFormat();
 	const { dateFnsLocale, formatDate } = useLocalDate();

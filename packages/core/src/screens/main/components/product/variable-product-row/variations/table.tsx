@@ -54,7 +54,7 @@ const cellRenderer = (props: CellContext<Record<string, unknown>, unknown>) => {
 /**
  *
  */
-export const VariationsTable = ({ query, row }: Props) => {
+export function VariationsTable({ query, row }: Props) {
 	const result = useObservableSuspense(query.resource) as { hits: VariationHit[] };
 
 	/**
@@ -117,4 +117,4 @@ export const VariationsTable = ({ query, row }: Props) => {
 			/>
 		</VStack>
 	);
-};
+}

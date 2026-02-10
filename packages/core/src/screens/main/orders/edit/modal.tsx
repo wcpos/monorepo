@@ -15,7 +15,7 @@ interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
 }
 
-export const EditOrderModal = ({ resource }: Props) => {
+export function EditOrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
@@ -65,4 +65,4 @@ export const EditOrderModal = ({ resource }: Props) => {
 			</ModalContent>
 		</Modal>
 	);
-};
+}

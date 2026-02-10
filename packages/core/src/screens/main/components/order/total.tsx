@@ -13,7 +13,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const Total = ({ row, column }: CellContext<{ document: OrderDocument }, 'total'>) => {
+export function Total({ row, column }: CellContext<{ document: OrderDocument }, 'total'>) {
 	const order = row.original.document;
 	const total = useObservableEagerState(order.total$!);
 	const currencySymbol = useObservableEagerState(order.currency_symbol$!);
@@ -29,4 +29,4 @@ export const Total = ({ row, column }: CellContext<{ document: OrderDocument }, 
 			)}
 		</>
 	);
-};
+}

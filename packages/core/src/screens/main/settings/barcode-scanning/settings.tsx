@@ -26,7 +26,7 @@ const formSchema = z.object({
 /**
  *
  */
-export const BarcodeSettings = () => {
+export function BarcodeSettings() {
 	const { store } = useAppState();
 	const t = useT();
 	const { localPatch } = useLocalMutation();
@@ -135,4 +135,4 @@ export const BarcodeSettings = () => {
 			</VStack>
 		</Form>
 	);
-};
+}

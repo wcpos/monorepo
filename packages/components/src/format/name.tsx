@@ -7,10 +7,10 @@ export interface FormatNameProps {
 	lastName?: string;
 }
 
-export const FormatName = ({ firstName, lastName }: FormatNameProps) => {
+export function FormatName({ firstName, lastName }: FormatNameProps) {
 	return (
 		<Text>
 			{firstName} {lastName}
 		</Text>
 	);
-};
+}

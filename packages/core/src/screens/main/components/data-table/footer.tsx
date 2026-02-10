@@ -9,7 +9,7 @@ import { Query, useReplicationState } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import { useCollectionReset } from '../../hooks/use-collection-reset';
-import SyncButton from '../sync-button';
+import { SyncButton } from '../sync-button';
 
 interface Props {
 	children?: React.ReactNode;

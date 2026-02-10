@@ -19,7 +19,7 @@ interface HeaderTitleProps {
  * Uses a hidden measurement element to report intrinsic (unconstrained) text width,
  * which is used by the parent to determine if centering should be applied.
  */
-const HeaderTitle = ({ children, centered = false, onIntrinsicWidth }: HeaderTitleProps) => {
+export function HeaderTitle({ children, centered = false, onIntrinsicWidth }: HeaderTitleProps) {
 	const handleMeasureLayout = React.useCallback(
 		(event: LayoutChangeEvent) => {
 			onIntrinsicWidth?.(event.nativeEvent.layout.width);
@@ -50,6 +50,4 @@ const HeaderTitle = ({ children, centered = false, onIntrinsicWidth }: HeaderTit
 			</Text>
 		</View>
 	);
-};
-
-export default HeaderTitle;
+}

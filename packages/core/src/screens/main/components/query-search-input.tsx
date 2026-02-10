@@ -15,7 +15,7 @@ interface Props extends InputProps {
 /**
  *
  */
-export const QuerySearchInput = ({ query, ref, ...props }: Props) => {
+export function QuerySearchInput({ query, ref, ...props }: Props) {
 	const [search, setSearch] = React.useState('');
 
 	/**
@@ -52,4 +52,4 @@ export const QuerySearchInput = ({ query, ref, ...props }: Props) => {
 	 *
 	 */
 	return <Input ref={augmentedRef} value={search} onChangeText={onSearch} clearable {...props} />;
-};
+}

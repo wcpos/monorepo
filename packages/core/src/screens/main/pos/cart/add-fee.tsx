@@ -43,7 +43,7 @@ type FormValues = z.infer<typeof formSchema>;
 /**
  *
  */
-export const AddFee = () => {
+export function AddFee() {
 	const t = useT();
 	const { addFee } = useAddFee();
 	const { onOpenChange } = useRootContext();
@@ -177,4 +177,4 @@ export const AddFee = () => {
 			</VStack>
 		</Form>
 	);
-};
+}

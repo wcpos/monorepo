@@ -9,9 +9,9 @@ import { useCSSVariable } from 'uniwind';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 
-import Left from './left';
-import Right from './right';
-import HeaderTitle from './title';
+import { HeaderLeft as Left } from './left';
+import { HeaderRight as Right } from './right';
+import { HeaderTitle } from './title';
 import { UpgradeNotice } from './upgrade-notice';
 import { useAppState } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
@@ -34,7 +34,7 @@ interface Props {
  * For long titles, the text truncates with ellipsis while using all
  * available space between the buttons.
  */
-export const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
+export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 	const insets = useSafeAreaInsets();
 	const { store } = useAppState();
 	const storeName = useObservableState(store.name$, store.name);
@@ -132,4 +132,4 @@ export const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
 			</View>
 		</ErrorBoundary>
 	);
-};
+}

@@ -63,7 +63,7 @@ type LoaderProps = ViewProps & VariantProps<typeof loaderVariants>;
 /**
  *
  */
-export const Loader = ({ className, variant = 'default', size, ...props }: LoaderProps) => {
+export function Loader({ className, variant = 'default', size, ...props }: LoaderProps) {
 	const textClass = React.useContext(TextClassContext);
 	const rotation = useSharedValue(0);
 
@@ -125,4 +125,4 @@ export const Loader = ({ className, variant = 'default', size, ...props }: Loade
 			</Animated.View>
 		</View>
 	);
-};
+}

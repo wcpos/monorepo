@@ -46,7 +46,7 @@ export const UISettingsContext = React.createContext<UISettingsContextValue | nu
 /**
  *
  */
-export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
+export function UISettingsProvider({ children }: UISettingsProviderProps) {
 	const { storeDB } = useAppState();
 	const { getLabel } = useUILabel();
 
@@ -135,4 +135,4 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	);
 
 	return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;
-};
+}

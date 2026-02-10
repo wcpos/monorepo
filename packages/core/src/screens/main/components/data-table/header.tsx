@@ -19,7 +19,7 @@ interface Props extends HeaderContext<any, any> {
 /**
  *
  */
-export const DataTableHeader = ({ column, table }: Props) => {
+export function DataTableHeader({ column, table }: Props) {
 	const canSort = column.getCanSort();
 	const sortingState = table.getState().sorting[0] as unknown as CustomSortingEntry | undefined;
 	const sortBy = sortingState?.sortBy;
@@ -68,4 +68,4 @@ export const DataTableHeader = ({ column, table }: Props) => {
 			}}
 		</Pressable>
 	);
-};
+}

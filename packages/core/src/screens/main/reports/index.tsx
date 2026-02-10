@@ -21,7 +21,7 @@ export type CustomersStackParamList = {
 /**
  *
  */
-export const ReportsScreen = () => {
+export function ReportsScreen() {
 	const { uiSettings } = useUISettings('reports-orders');
 	const { wpCredentials, store } = useAppState();
 	const today = React.useMemo(() => new Date(), []);
@@ -65,4 +65,4 @@ export const ReportsScreen = () => {
 			</Suspense>
 		</ErrorBoundary>
 	);
-};
+}

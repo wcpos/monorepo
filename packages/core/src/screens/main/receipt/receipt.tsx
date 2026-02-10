@@ -41,7 +41,7 @@ interface Props {
 /**
  *
  */
-export const Receipt = ({ resource }: Props) => {
+export function Receipt({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
@@ -135,4 +135,4 @@ export const Receipt = ({ resource }: Props) => {
 			</ModalContent>
 		</Modal>
 	);
-};
+}

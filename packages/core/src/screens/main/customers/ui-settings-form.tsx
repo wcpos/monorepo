@@ -22,7 +22,7 @@ export const schema = z.object({
 /**
  *
  */
-export const UISettingsForm = () => {
+export function UISettingsForm() {
 	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings('customers');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
 	const { setButtonPressHandler } = useDialogContext();
@@ -55,4 +55,4 @@ export const UISettingsForm = () => {
 			</VStack>
 		</Form>
 	);
-};
+}

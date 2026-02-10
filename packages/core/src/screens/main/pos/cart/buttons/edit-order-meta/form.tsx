@@ -33,13 +33,13 @@ const formSchema = z.object({
  */
 type FormValues = z.infer<typeof formSchema>;
 
-export const EditOrderMetaForm = ({
+export function EditOrderMetaForm({
 	order,
 	formData,
 }: {
 	order: OrderDocument;
 	formData: FormValues;
-}) => {
+}) {
 	const t = useT();
 	const { localPatch } = useLocalMutation();
 	const { onOpenChange } = useRootContext();
@@ -118,4 +118,4 @@ export const EditOrderMetaForm = ({
 			</VStack>
 		</Form>
 	);
-};
+}

@@ -17,7 +17,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
 /**
  *
  */
-export const OrderMetaButton = () => {
+export function OrderMetaButton() {
 	const { currentOrder } = useCurrentOrder();
 	const t = useT();
 
@@ -38,4 +38,4 @@ export const OrderMetaButton = () => {
 			</DialogContent>
 		</Dialog>
 	);
-};
+}

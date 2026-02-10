@@ -21,7 +21,7 @@ interface Props {
 /**
  * Changing the total actually updates the price, because the WC REST API makes no sense
  */
-export const FeeAndShippingTotal = ({ row, column }: CellContext<Props, 'total'>) => {
+export function FeeAndShippingTotal({ row, column }: CellContext<Props, 'total'>) {
 	const item = row.original.item;
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { store } = useAppState();
@@ -51,4 +51,4 @@ export const FeeAndShippingTotal = ({ row, column }: CellContext<Props, 'total'>
 			)}
 		</VStack>
 	);
-};
+}

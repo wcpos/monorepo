@@ -9,7 +9,7 @@ import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerSearch } from '../../customer-select';
 
 interface CustomerPillProps {
@@ -21,7 +21,7 @@ interface CustomerPillProps {
 /**
  *
  */
-const CustomerPill = ({ query, resource, customerID }: CustomerPillProps) => {
+export function CustomerPill({ query, resource, customerID }: CustomerPillProps) {
 	let customer = useObservableSuspense(resource);
 	const { format } = useCustomerNameFormat();
 	const t = useT();
@@ -59,6 +59,4 @@ const CustomerPill = ({ query, resource, customerID }: CustomerPillProps) => {
 			</ComboboxContent>
 		</Combobox>
 	);
-};
-
-export default CustomerPill;
+}

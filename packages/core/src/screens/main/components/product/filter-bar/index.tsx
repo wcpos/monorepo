@@ -10,11 +10,11 @@ import { Suspense } from '@wcpos/components/suspense';
 import type { Query } from '@wcpos/query';
 
 import { CategoryPill } from './category-pill';
-import FeaturedPill from './featured-pill';
-import OnSalePill from './on-sale-pill';
+import { FeaturedPill } from './featured-pill';
+import { OnSalePill } from './on-sale-pill';
 import { StockStatusPill } from './stock-status-pill';
 import { TagPill } from './tag-pill';
-import usePullDocument from '../../../contexts/use-pull-document';
+import { usePullDocument } from '../../../contexts/use-pull-document';
 import { useCollection } from '../../../hooks/use-collection';
 import { BrandsPill } from './brands-pill';
 
@@ -27,7 +27,7 @@ interface Props {
 /**
  *
  */
-const FilterBar = ({ query }: Props) => {
+export function FilterBar({ query }: Props) {
 	const pullDocument = usePullDocument();
 	const { collection: categoryCollection } = useCollection('products/categories');
 	const { collection: tagCollection } = useCollection('products/tags');
@@ -141,6 +141,4 @@ const FilterBar = ({ query }: Props) => {
 			</Suspense>
 		</HStack>
 	);
-};
-
-export default FilterBar;
+}

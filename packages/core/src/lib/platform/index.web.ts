@@ -16,4 +16,4 @@ const Platform: PlatformType = {
 	isStandalone: (globalThis.navigator as any).standalone,
 };
 
-export default Platform;
+export { Platform };

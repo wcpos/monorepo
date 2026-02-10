@@ -8,7 +8,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useT } from '../../../contexts/translations';
 import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
 import { useLoginHandler } from '../hooks/use-login-handler';
-import useSiteConnect from '../hooks/use-site-connect';
+import { useSiteConnect } from '../hooks/use-site-connect';
 
 const authLogger = getLogger(['wcpos', 'auth', 'demo']);
 

@@ -4,7 +4,7 @@ import { View } from 'react-native';
 /**
  *
  */
-export const Row = ({ children }: { children: React.ReactNode }) => {
+export function Row({ children }: { children: React.ReactNode }) {
 	return (
 		<View className="flex-row justify-between">
 			{React.Children.map(children, (child) => (
@@ -12,4 +12,4 @@ export const Row = ({ children }: { children: React.ReactNode }) => {
 			))}
 		</View>
 	);
-};
+}

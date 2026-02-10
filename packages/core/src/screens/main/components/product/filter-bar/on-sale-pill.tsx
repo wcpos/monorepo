@@ -17,7 +17,7 @@ interface Props {
 /**
  *
  */
-const OnSalePill = ({ query }: Props) => {
+export function OnSalePill({ query }: Props) {
 	const isActive = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => !!query.getSelector('on_sale')))
 	);
@@ -35,6 +35,4 @@ const OnSalePill = ({ query }: Props) => {
 			<ButtonText>{t('common.on_sale')}</ButtonText>
 		</ButtonPill>
 	);
-};
-
-export default OnSalePill;
+}

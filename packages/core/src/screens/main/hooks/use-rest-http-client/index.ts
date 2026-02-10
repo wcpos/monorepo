@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import merge from 'lodash/merge';
 
-import useHttpClient, { RequestConfig, requestStateManager } from '@wcpos/hooks/use-http-client';
+import { RequestConfig, requestStateManager, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client/create-token-refresh-handler';
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { getLogger } from '@wcpos/utils/logger';

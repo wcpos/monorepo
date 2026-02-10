@@ -16,7 +16,7 @@ interface Props {
 /**
  *
  */
-export const EditOrderMeta = ({ order }: Props) => {
+export function EditOrderMeta({ order }: Props) {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 
@@ -59,4 +59,4 @@ export const EditOrderMeta = ({ order }: Props) => {
 			</TabsContent>
 		</Tabs>
 	);
-};
+}

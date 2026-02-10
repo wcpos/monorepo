@@ -24,7 +24,7 @@ interface Props {
 /**
  *
  */
-export const StockStatusPill = ({ query }: Props) => {
+export function StockStatusPill({ query }: Props) {
 	const selected = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getSelector('stock_status') as string | undefined))
 	);
@@ -67,4 +67,4 @@ export const StockStatusPill = ({ query }: Props) => {
 			</SelectContent>
 		</Select>
 	);
-};
+}

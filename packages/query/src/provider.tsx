@@ -21,13 +21,13 @@ interface QueryProviderProps<T extends RxDatabase> {
 /**
  * @TODO -
  */
-export const QueryProvider = <T extends RxDatabase>({
+export function QueryProvider<T extends RxDatabase>({
 	localDB,
 	fastLocalDB,
 	http,
 	children,
 	locale,
-}: QueryProviderProps<T>) => {
+}: QueryProviderProps<T>) {
 	const manager = React.useMemo(() => {
 		logger.debug('Creating/getting manager', {
 			context: { localDBName: (localDB as any).name },
@@ -36,7 +36,7 @@ export const QueryProvider = <T extends RxDatabase>({
 	}, [localDB, fastLocalDB, http, locale]);
 
 	return <QueryContext.Provider value={manager}>{children}</QueryContext.Provider>;
-};
+}
 
 /**
  *

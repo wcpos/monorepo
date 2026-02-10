@@ -18,7 +18,7 @@ import { useExtraData } from '../contexts/extra-data';
 /**
  *
  */
-export const ShippingMethodSelect = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
+export function ShippingMethodSelect({ value, ...props }: React.ComponentProps<typeof Select>) {
 	const { extraData } = useExtraData();
 	const shippingMethods = useObservableEagerState(extraData.shippingMethods$);
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
@@ -66,4 +66,4 @@ export const ShippingMethodSelect = ({ value, ...props }: React.ComponentProps<t
 			</SelectContent>
 		</Select>
 	);
-};
+}

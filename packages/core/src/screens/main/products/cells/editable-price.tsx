@@ -12,14 +12,14 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 /**
  *
  */
-export const EditablePrice = ({
+export function EditablePrice({
 	row,
 	column,
 	table,
 }: CellContext<
 	{ document: ProductDocument | ProductVariationDocument },
 	'sale_price' | 'regular_price'
->) => {
+>) {
 	const item = row.original.document;
 	const price = useObservableEagerState(
 		(item as unknown as Record<string, unknown>)[`${column.id}$`] as import('rxjs').Observable<
@@ -45,4 +45,4 @@ export const EditablePrice = ({
 			disabled={column.id === 'sale_price' && !item.on_sale}
 		/>
 	);
-};
+}

@@ -70,4 +70,4 @@ const deleteDBPlugin: RxPlugin = {
 	},
 };
 
-export default deleteDBPlugin;
+export { deleteDBPlugin };

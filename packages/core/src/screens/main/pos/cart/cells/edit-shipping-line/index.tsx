@@ -16,7 +16,7 @@ interface Props {
 /**
  *
  */
-export const EditShippingLine = ({ uuid, item, onClose }: Props) => {
+export function EditShippingLine({ uuid, item, onClose }: Props) {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 
@@ -38,4 +38,4 @@ export const EditShippingLine = ({ uuid, item, onClose }: Props) => {
 			</TabsContent>
 		</Tabs>
 	);
-};
+}

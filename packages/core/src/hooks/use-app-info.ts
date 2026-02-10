@@ -28,7 +28,7 @@ import { type Observable, of } from 'rxjs';
 import semver from 'semver';
 
 import type { SiteDocument } from '@wcpos/database';
-import AppInfo from '@wcpos/utils/app-info';
+import { AppInfo } from '@wcpos/utils/app-info';
 
 import { AppStateContext } from '../contexts/app-state';
 

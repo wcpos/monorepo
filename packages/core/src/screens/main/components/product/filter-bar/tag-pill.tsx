@@ -21,7 +21,7 @@ interface Props {
 /**
  *
  */
-export const TagPill = ({ query, resource, selectedID }: Props) => {
+export function TagPill({ query, resource, selectedID }: Props) {
 	const tag = useObservableSuspense(resource);
 	const t = useT();
 	const isActive = !!selectedID;
@@ -63,4 +63,4 @@ export const TagPill = ({ query, resource, selectedID }: Props) => {
 			</ComboboxContent>
 		</Combobox>
 	);
-};
+}

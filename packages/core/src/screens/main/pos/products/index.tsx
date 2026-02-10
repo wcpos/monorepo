@@ -25,7 +25,7 @@ import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../../components/data-table';
-import FilterBar from '../../components/product/filter-bar';
+import { FilterBar } from '../../components/product/filter-bar';
 import { ProductImage } from '../../components/product/image';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
 import { VariableProductImage } from '../../components/product/variable-image';
@@ -116,18 +116,18 @@ function renderItem({
 /**
  *
  */
-const TableFooter = (props: React.ComponentProps<typeof DataTableFooter>) => {
+function TableFooter(props: React.ComponentProps<typeof DataTableFooter>) {
 	return (
 		<DataTableFooter {...props}>
 			<TaxBasedOn />
 		</DataTableFooter>
 	);
-};
+}
 
 /**
  *
  */
-export const POSProducts = ({ isColumn = false }) => {
+export function POSProducts({ isColumn = false }) {
 	const { uiSettings } = useUISettings('pos-products');
 	const { calcTaxes } = useTaxRates();
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
@@ -270,4 +270,4 @@ export const POSProducts = ({ isColumn = false }) => {
 			</Card>
 		</View>
 	);
-};
+}

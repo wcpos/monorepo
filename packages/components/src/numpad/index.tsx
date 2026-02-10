@@ -10,7 +10,7 @@ import {
 import { useAugmentedRef } from '@rn-primitives/hooks';
 import toNumber from 'lodash/toNumber';
 
-import useMergedRef from '@wcpos/hooks/use-merged-ref';
+import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 
 import { useCalculator } from './use-calculator';
 import { Button, ButtonText } from '../button';
@@ -83,11 +83,13 @@ interface NumpadKeyProps {
 	discount?: boolean;
 }
 
-const Key = ({ label, icon, onPress, discount }: NumpadKeyProps) => (
-	<Button variant="muted" onPress={onPress} rightIcon={discount ? 'percent' : undefined}>
-		{icon ? <Icon name={icon} /> : <ButtonText>{label}</ButtonText>}
-	</Button>
-);
+function Key({ label, icon, onPress, discount }: NumpadKeyProps) {
+	return (
+		<Button variant="muted" onPress={onPress} rightIcon={discount ? 'percent' : undefined}>
+			{icon ? <Icon name={icon} /> : <ButtonText>{label}</ButtonText>}
+		</Button>
+	);
+}
 
 Key.displayName = 'NumpadKey';
 

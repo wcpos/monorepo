@@ -32,7 +32,7 @@ interface TaxRatesTabsProps {
 /**
  *
  */
-export const TaxRatesTabs = ({ query }: TaxRatesTabsProps) => {
+export function TaxRatesTabs({ query }: TaxRatesTabsProps) {
 	const result = useObservableSuspense(query.resource) as QueryResult;
 	const rates = result.hits.map(({ document }: { document: TaxRateDocument }) => document);
 	const { extraData } = useExtraData();
@@ -76,6 +76,4 @@ export const TaxRatesTabs = ({ query }: TaxRatesTabsProps) => {
 			<TaxRatesFooter count={rates.length} query={query} />
 		</>
 	);
-};
-
-export default TaxRatesTabs;
+}

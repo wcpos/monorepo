@@ -7,6 +7,6 @@ import type { NumberInputProps } from './number-input';
 /**
  *
  */
-export const CurrencyInput = (props: NumberInputProps) => {
+export function CurrencyInput(props: NumberInputProps) {
 	return <NumberInput {...props} formatOptions={{ fixedDecimalScale: true }} />;
-};
+}

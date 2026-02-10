@@ -12,7 +12,7 @@ import { useCurrentOrder } from '../contexts/current-order';
 /**
  *
  */
-export const OpenOrderTabs = () => {
+export function OpenOrderTabs() {
 	const { currentOrder, openOrders, setCurrentOrderID } = useCurrentOrder();
 	const t = useT();
 
@@ -61,4 +61,4 @@ export const OpenOrderTabs = () => {
 			</ScrollableTabsList>
 		</Tabs>
 	);
-};
+}

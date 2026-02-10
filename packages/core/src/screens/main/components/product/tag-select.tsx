@@ -20,7 +20,7 @@ import { useQuery } from '@wcpos/query';
 /**
  *
  */
-const TagList = ({ query }: { query: ReturnType<typeof useQuery> }) => {
+function TagList({ query }: { query: ReturnType<typeof useQuery> }) {
 	const result = useObservableSuspense(query!.resource) as {
 		hits: { id: string; document: { id?: number; name?: string } }[];
 	};
@@ -50,12 +50,12 @@ const TagList = ({ query }: { query: ReturnType<typeof useQuery> }) => {
 			ListEmptyComponent={<ComboboxEmpty>{t('common.no_tag_found')}</ComboboxEmpty>}
 		/>
 	);
-};
+}
 
 /**
  *
  */
-export const TagSearch = () => {
+export function TagSearch() {
 	const t = useT();
 	const [search, setSearch] = React.useState('');
 
@@ -106,16 +106,16 @@ export const TagSearch = () => {
 			</Suspense>
 		</>
 	);
-};
+}
 
 /**
  *
  */
-export const TagSelect = ({
+export function TagSelect({
 	onValueChange,
 }: {
 	onValueChange?: (option: import('@wcpos/components/combobox').Option | undefined) => void;
-}) => {
+}) {
 	const t = useT();
 
 	/**
@@ -131,4 +131,4 @@ export const TagSelect = ({
 			</ComboboxContent>
 		</Combobox>
 	);
-};
+}

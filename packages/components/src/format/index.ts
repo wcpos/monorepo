@@ -1,6 +1,6 @@
 import { FormatAddress, FormatAddressProps } from './address';
-import FormatCurrency, { FormatCurrencyProps } from './currency';
-import FormatDate, { FormatDateProps } from './date';
+import { FormatCurrency, type FormatCurrencyProps } from './currency';
+import { FormatDate, type FormatDateProps } from './date';
 import { FormatList, FormatListProps } from './list';
 import { FormatName, FormatNameProps } from './name';
 import { FormatNumber, FormatNumberProps } from './number';

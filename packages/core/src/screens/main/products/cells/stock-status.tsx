@@ -13,10 +13,10 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const StockStatus = ({
+export function StockStatus({
 	table,
 	row,
-}: CellContext<{ document: ProductDocument }, 'stock_status'>) => {
+}: CellContext<{ document: ProductDocument }, 'stock_status'>) {
 	const product = row.original.document;
 	const stockStatus = useObservableEagerState(product.stock_status$!);
 	const { getLabel } = useStockStatusLabel();
@@ -48,4 +48,4 @@ export const StockStatus = ({
 			{getLabel(stockStatus ?? '')}
 		</ButtonPill>
 	);
-};
+}

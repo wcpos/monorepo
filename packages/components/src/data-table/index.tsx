@@ -69,7 +69,7 @@ const useDataTable = () => {
  * @docs https://tanstack.com/table
  * @docs https://shopify.github.io/flash-list/
  */
-const DataTable = <TData extends DataTableRowData, TValue>({
+function DataTable<TData extends DataTableRowData, TValue>({
 	columns,
 	data,
 	onRowPress,
@@ -87,7 +87,7 @@ const DataTable = <TData extends DataTableRowData, TValue>({
 	extraData,
 	onEndReached,
 	...props
-}: DataTableProps<TData, TValue>) => {
+}: DataTableProps<TData, TValue>) {
 	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
 
 	const insets = useSafeAreaInsets();
@@ -256,7 +256,7 @@ const DataTable = <TData extends DataTableRowData, TValue>({
 			{TableFooterComponent && <TableFooterComponent />}
 		</DataTableContext.Provider>
 	);
-};
+}
 
 export { DataTable, DataTableRow, useDataTable };
 export type { DataTableProps };

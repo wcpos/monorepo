@@ -14,14 +14,14 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { useT } from '../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../components/customer/customer-form';
 import { useMutation } from '../hooks/mutations/use-mutation';
-import useCustomerNameFormat from '../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../hooks/use-customer-name-format';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
 
 /**
  *
  */
-export const AddCustomerScreen = () => {
+export function AddCustomerScreen() {
 	const { create } = useMutation({ collectionName: 'customers' });
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
@@ -95,4 +95,4 @@ export const AddCustomerScreen = () => {
 			</ModalContent>
 		</Modal>
 	);
-};
+}

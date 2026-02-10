@@ -16,7 +16,7 @@ import { useReports } from './context';
 import { useAppState } from '../../../contexts/app-state';
 import { convertLocalDateToUTCString } from '../../../hooks/use-local-date';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
-import CustomerPill from '../components/order/filter-bar/customer-pill';
+import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
@@ -25,7 +25,7 @@ import { useGuestCustomer } from '../hooks/use-guest-customer';
 /**
  *
  */
-export const FilterBar = () => {
+export function FilterBar() {
 	const { query } = useReports();
 	const guestCustomer = useGuestCustomer();
 	const customerID = useObservableEagerState(
@@ -186,4 +186,4 @@ export const FilterBar = () => {
 			</Card>
 		</View>
 	);
-};
+}

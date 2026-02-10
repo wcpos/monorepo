@@ -13,7 +13,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const Note = ({ row }: CellContext<{ document: OrderDocument }, 'customer_note'>) => {
+export function Note({ row }: CellContext<{ document: OrderDocument }, 'customer_note'>) {
 	const order = row.original.document;
 	const note = useObservableEagerState(order.customer_note$!);
 
@@ -31,4 +31,4 @@ export const Note = ({ row }: CellContext<{ document: OrderDocument }, 'customer
 			</TooltipContent>
 		</Tooltip>
 	);
-};
+}

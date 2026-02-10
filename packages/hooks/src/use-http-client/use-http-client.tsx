@@ -4,7 +4,7 @@ import set from 'lodash/set';
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import http from './http';
+import { http } from './http';
 import { parseWpError } from './parse-wp-error';
 import { scheduleRequest } from './request-queue';
 import { requestStateManager } from './request-state-manager';

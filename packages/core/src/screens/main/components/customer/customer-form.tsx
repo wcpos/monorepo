@@ -41,7 +41,7 @@ interface CustomerFormProps {
 	loading: boolean;
 }
 
-export const CustomerForm = ({ form, onClose, onSubmit, loading }: CustomerFormProps) => {
+export function CustomerForm({ form, onClose, onSubmit, loading }: CustomerFormProps) {
 	const t = useT();
 
 	/**
@@ -193,4 +193,4 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }: CustomerFormP
 			</VStack>
 		</Form>
 	);
-};
+}

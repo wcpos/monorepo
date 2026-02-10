@@ -8,7 +8,7 @@ import { BarcodeDisplay } from './display';
 import { BarcodeSettings } from './settings';
 import { useT } from '../../../../contexts/translations';
 
-export const BarcodeScanning = () => {
+export function BarcodeScanning() {
 	const t = useT();
 
 	return (
@@ -21,4 +21,4 @@ export const BarcodeScanning = () => {
 			</ModalFooter>
 		</VStack>
 	);
-};
+}

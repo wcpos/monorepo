@@ -9,7 +9,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type { OrderDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
-import usePushDocument from '../../../contexts/use-push-document';
+import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
@@ -17,7 +17,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'save']);
 /**
  *
  */
-export const SaveButton = () => {
+export function SaveButton() {
 	const { currentOrder } = useCurrentOrder();
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
@@ -77,4 +77,4 @@ export const SaveButton = () => {
 			</Button>
 		</View>
 	);
-};
+}

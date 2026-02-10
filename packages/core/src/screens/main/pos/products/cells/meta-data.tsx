@@ -14,7 +14,7 @@ interface Props {
 /**
  *
  */
-export const MetaData = ({ product }: Props) => {
+export function MetaData({ product }: Props) {
 	const { uiSettings } = useUISettings('pos-products');
 	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
 
@@ -46,4 +46,4 @@ export const MetaData = ({ product }: Props) => {
 			))}
 		</VStack>
 	);
-};
+}

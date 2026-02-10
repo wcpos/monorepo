@@ -12,7 +12,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const ProductTags = ({ table, row }: CellContext<{ document: ProductDocument }, 'tags'>) => {
+export function ProductTags({ table, row }: CellContext<{ document: ProductDocument }, 'tags'>) {
 	const product = row.original.document;
 	const tags = useObservableEagerState(product.tags$!) || [];
 
@@ -44,4 +44,4 @@ export const ProductTags = ({ table, row }: CellContext<{ document: ProductDocum
 			})}
 		</HStack>
 	);
-};
+}

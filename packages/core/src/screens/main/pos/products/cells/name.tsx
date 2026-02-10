@@ -8,7 +8,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { MetaData } from './meta-data';
 import { PlainAttributes, ProductAttributes } from '../../../components/product/attributes';
 import { ProductCategories } from '../../../components/product/categories';
-import GroupedNames from '../../../components/product/grouped-names';
+import { GroupedNames } from '../../../components/product/grouped-names';
 import { ProductTags } from '../../../components/product/tags';
 import { StockQuantity } from '../cells/stock-quantity';
 import { ProductBrands } from '../../../components/product/brands';

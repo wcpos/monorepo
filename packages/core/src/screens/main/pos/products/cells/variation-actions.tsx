@@ -12,9 +12,9 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 /**
  *
  */
-export const ProductVariationActions = ({
+export function ProductVariationActions({
 	row,
-}: CellContext<{ document: ProductVariationDocument }, 'actions'>) => {
+}: CellContext<{ document: ProductVariationDocument }, 'actions'>) {
 	const variation = row.original.document;
 	const parentRow = row.getParentRow();
 	const parent = parentRow?.original?.document;
@@ -46,4 +46,4 @@ export const ProductVariationActions = ({
 			variant="success"
 		/>
 	);
-};
+}

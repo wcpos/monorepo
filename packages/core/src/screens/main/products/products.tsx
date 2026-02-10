@@ -29,7 +29,7 @@ import { useT } from '../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../components/data-table';
 import { Date } from '../components/date';
 import { ProductCategories } from '../components/product/categories';
-import FilterBar from '../components/product/filter-bar';
+import { FilterBar } from '../components/product/filter-bar';
 import { ProductImage } from '../components/product/image';
 import { ProductTags } from '../components/product/tags';
 import { TaxBasedOn } from '../components/product/tax-based-on';
@@ -153,13 +153,13 @@ function renderItem({
 /**
  *
  */
-const TableFooter = (props: Record<string, unknown>) => {
+function TableFooter(props: Record<string, unknown>) {
 	return (
 		<DataTableFooter {...(props as unknown as React.ComponentProps<typeof DataTableFooter>)}>
 			<TaxBasedOn />
 		</DataTableFooter>
 	);
-};
+}
 
 /**
  * Tables are expensive to render, so memoize all props.

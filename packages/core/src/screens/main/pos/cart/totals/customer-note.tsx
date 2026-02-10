@@ -18,7 +18,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
 /**
  *
  */
-export const CustomerNote = () => {
+export function CustomerNote() {
 	const [isEditing, setIsEditing] = React.useState(false);
 	const { currentOrder } = useCurrentOrder();
 	const note = useObservableEagerState(currentOrder.customer_note$!);
@@ -82,4 +82,4 @@ export const CustomerNote = () => {
 			</View>
 		</HStack>
 	);
-};
+}

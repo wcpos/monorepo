@@ -20,7 +20,7 @@ export interface SyncButtonProps {
 	active: boolean;
 }
 
-const SyncButton = ({ sync, clearAndSync, active }: SyncButtonProps) => {
+export function SyncButton({ sync, clearAndSync, active }: SyncButtonProps) {
 	const t = useT();
 	const triggerRef = React.useRef<{ open?: () => void }>(null);
 
@@ -61,6 +61,4 @@ const SyncButton = ({ sync, clearAndSync, active }: SyncButtonProps) => {
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
-};
-
-export default SyncButton;
+}

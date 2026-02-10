@@ -8,16 +8,16 @@ interface FallbackWrapperProps {
 	onUnmount: () => void;
 }
 
-const FallbackWrapper = ({ fallback, onMount, onUnmount }: FallbackWrapperProps) => {
+function FallbackWrapper({ fallback, onMount, onUnmount }: FallbackWrapperProps) {
 	React.useEffect(() => {
 		onMount();
 		return onUnmount;
 	}, [onMount, onUnmount]);
 
 	return fallback || <Text>Loading ...</Text>;
-};
+}
 
-export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
+export function DevSuspense({ fallback, children }: SuspenseProps) {
 	const renderCount = React.useRef(0);
 	const fallbackStartTime = React.useRef<number | null>(null);
 
@@ -71,4 +71,4 @@ export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 			{children}
 		</React.Suspense>
 	);
-};
+}

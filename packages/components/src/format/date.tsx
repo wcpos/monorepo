@@ -8,8 +8,9 @@ export interface FormatDateProps {
 	value: string;
 }
 
-const FormatDate = ({ value }: FormatDateProps) => {
+function FormatDate({ value }: FormatDateProps) {
 	return <Text>{format(new Date(value || ''), 'dd/MM/yyyy')}</Text>;
-};
+}
 
-export default React.memo(FormatDate);
+const MemoizedFormatDate = React.memo(FormatDate);
+export { MemoizedFormatDate as FormatDate };

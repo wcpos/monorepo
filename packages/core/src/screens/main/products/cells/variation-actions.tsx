@@ -23,8 +23,8 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
-import useDeleteDocument from '../../contexts/use-delete-document';
-import usePullDocument from '../../contexts/use-pull-document';
+import { useDeleteDocument } from '../../contexts/use-delete-document';
+import { usePullDocument } from '../../contexts/use-pull-document';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -33,9 +33,9 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 /**
  *
  */
-export const VariationActions = ({
+export function VariationActions({
 	row,
-}: CellContext<{ document: ProductVariationDocument }, 'actions'>) => {
+}: CellContext<{ document: ProductVariationDocument }, 'actions'>) {
 	const variation = row.original.document;
 	const parentRow = row.getParentRow()!;
 	const parent = (parentRow.original as { document: { id: number; name: string } }).document;
@@ -125,4 +125,4 @@ export const VariationActions = ({
 			</AlertDialog>
 		</>
 	);
-};
+}

@@ -70,7 +70,7 @@ const renderHeader = (props: Record<string, unknown> & { column: { id: string } 
 /**
  *
  */
-export const Orders = () => {
+export function Orders() {
 	const t = useT();
 	const { query, allOrders, unselectedRowIds, setUnselectedRowIds } = useReports();
 
@@ -182,4 +182,4 @@ export const Orders = () => {
 			</Card>
 		</View>
 	);
-};
+}

@@ -1,2 +1,2 @@
-import rules from '../eslint/index.js';
-export default rules;
+import { config } from '../eslint/index.js';
+export default config;

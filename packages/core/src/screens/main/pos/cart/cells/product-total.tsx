@@ -21,7 +21,7 @@ interface Props {
 /**
  *
  */
-export const ProductTotal = ({ row, column }: CellContext<Props, 'total'>) => {
+export function ProductTotal({ row, column }: CellContext<Props, 'total'>) {
 	const item = row.original.item;
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { store } = useAppState();
@@ -74,4 +74,4 @@ export const ProductTotal = ({ row, column }: CellContext<Props, 'total'>) => {
 			)}
 		</VStack>
 	);
-};
+}

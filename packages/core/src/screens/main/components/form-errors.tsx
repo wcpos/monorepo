@@ -11,7 +11,7 @@ import { useT } from '../../../contexts/translations';
  * TODO: this should probably be in the components package, but we need to extract useT first.
  * TODO: translate zod error messages using z.setErrorMap
  */
-export const FormErrors = () => {
+export function FormErrors() {
 	const t = useT();
 	const {
 		formState: { errors },
@@ -59,4 +59,4 @@ export const FormErrors = () => {
 			))}
 		</View>
 	);
-};
+}

@@ -11,10 +11,10 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 type AddressData = FormatAddressProps['address'];
 
-export const Address = ({
+export function Address({
 	row,
 	column,
-}: CellContext<{ document: CustomerDocument }, 'billing' | 'shipping'>) => {
+}: CellContext<{ document: CustomerDocument }, 'billing' | 'shipping'>) {
 	const customer = row.original.document;
 	const key = column.id as 'billing' | 'shipping';
 	const obs$ = key === 'billing' ? customer.billing$ : customer.shipping$;
@@ -22,4 +22,4 @@ export const Address = ({
 	const address = useObservableEagerState(obs$) as AddressData | undefined;
 
 	return <FormatAddress address={address ?? {}} showName={true} />;
-};
+}

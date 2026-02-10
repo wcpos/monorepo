@@ -1,3 +1,3 @@
-export const AddProduct = () => {
+export function AddProduct() {
 	return null;
-};
+}

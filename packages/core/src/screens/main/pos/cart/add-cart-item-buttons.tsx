@@ -13,7 +13,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-export const AddCartItemButtons = () => {
+export function AddCartItemButtons() {
 	const t = useT();
 	/**
 	 *
@@ -40,4 +40,4 @@ export const AddCartItemButtons = () => {
 			</HStack>
 		</VStack>
 	);
-};
+}

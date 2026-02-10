@@ -17,7 +17,7 @@ type AnyRxDocument = import('rxdb').RxDocument<any>;
 /**
  *
  */
-const usePushDocument = () => {
+export const usePushDocument = () => {
 	const http = useRestHttpClient();
 	const t = useT();
 
@@ -160,5 +160,3 @@ const usePushDocument = () => {
 		[prepareDocumentData, sendToServer, updateLocalDocument]
 	);
 };
-
-export default usePushDocument;

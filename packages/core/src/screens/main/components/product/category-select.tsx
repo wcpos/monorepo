@@ -20,7 +20,7 @@ import { useQuery } from '@wcpos/query';
 /**
  *
  */
-const CategoryList = ({ query }: { query: ReturnType<typeof useQuery> }) => {
+function CategoryList({ query }: { query: ReturnType<typeof useQuery> }) {
 	const result = useObservableSuspense(query!.resource) as {
 		hits: { id: string; document: { id?: number; name?: string } }[];
 	};
@@ -50,12 +50,12 @@ const CategoryList = ({ query }: { query: ReturnType<typeof useQuery> }) => {
 			ListEmptyComponent={<ComboboxEmpty>{t('common.no_category_found')}</ComboboxEmpty>}
 		/>
 	);
-};
+}
 
 /**
  *
  */
-export const CategorySearch = () => {
+export function CategorySearch() {
 	const t = useT();
 	const [search, setSearch] = React.useState('');
 
@@ -106,16 +106,16 @@ export const CategorySearch = () => {
 			</Suspense>
 		</>
 	);
-};
+}
 
 /**
  *
  */
-export const CategorySelect = ({
+export function CategorySelect({
 	onValueChange,
 }: {
 	onValueChange?: (option: import('@wcpos/components/combobox').Option | undefined) => void;
-}) => {
+}) {
 	const t = useT();
 
 	/**
@@ -131,4 +131,4 @@ export const CategorySelect = ({
 			</ComboboxContent>
 		</Combobox>
 	);
-};
+}

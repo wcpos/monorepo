@@ -59,11 +59,11 @@ function getVariablePrices(metaData: { key?: string; value?: string }[] | undefi
 /**
  *
  */
-export const VariableProductPrice = ({
+export function VariableProductPrice({
 	table,
 	row,
 	column,
-}: CellContext<{ document: ProductDocument }, 'price' | 'regular_price' | 'sale_price'>) => {
+}: CellContext<{ document: ProductDocument }, 'price' | 'regular_price' | 'sale_price'>) {
 	const product = row.original.document;
 	const taxStatus = useObservableState(product.tax_status$!, product.tax_status) as
 		| 'none'
@@ -114,4 +114,4 @@ export const VariableProductPrice = ({
 			/>
 		</HStack>
 	);
-};
+}

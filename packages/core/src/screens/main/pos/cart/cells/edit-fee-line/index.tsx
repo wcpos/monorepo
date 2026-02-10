@@ -16,7 +16,7 @@ interface Props {
 /**
  *
  */
-export const EditFeeLine = ({ uuid, item }: Props) => {
+export function EditFeeLine({ uuid, item }: Props) {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 
@@ -38,4 +38,4 @@ export const EditFeeLine = ({ uuid, item }: Props) => {
 			</TabsContent>
 		</Tabs>
 	);
-};
+}

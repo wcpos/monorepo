@@ -113,7 +113,7 @@ function AboutDialogContent() {
 /**
  * Version display with About dialog
  */
-const Version = () => {
+export function Version() {
 	const { screenSize } = useTheme();
 	const { appVersion } = useAppInfo();
 
@@ -136,6 +136,4 @@ const Version = () => {
 			</DialogContent>
 		</Dialog>
 	);
-};
-
-export default Version;
+}

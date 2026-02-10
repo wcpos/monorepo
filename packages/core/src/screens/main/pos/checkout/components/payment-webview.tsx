@@ -27,7 +27,7 @@ export interface PaymentWebviewProps extends Partial<React.ComponentProps<typeof
 /**
  *
  */
-export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewProps) => {
+export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewProps) {
 	const router = useRouter();
 	const paymentURL = useObservableState(
 		order.links$!.pipe(map((links) => get(links, ['payment', 0, 'href']))),
@@ -193,4 +193,4 @@ export const PaymentWebview = ({ order, setLoading, ...props }: PaymentWebviewPr
 			) : null}
 		</ErrorBoundary>
 	);
-};
+}

@@ -49,7 +49,7 @@ interface ReportsProviderProps {
 /**
  *
  */
-export const ReportsProvider = ({ query, children }: ReportsProviderProps) => {
+export function ReportsProvider({ query, children }: ReportsProviderProps) {
 	const result = useObservableSuspense(query.resource);
 	const [unselectedRowIds, setUnselectedRowIds] = React.useState<RowSelectionState>({});
 
@@ -115,4 +115,4 @@ export const ReportsProvider = ({ query, children }: ReportsProviderProps) => {
 			{children}
 		</ReportsContext.Provider>
 	);
-};
+}

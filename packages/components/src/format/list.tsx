@@ -6,7 +6,7 @@ export interface FormatListProps {
 	array?: [];
 }
 
-export const FormatList = ({ array }: FormatListProps) => {
+export function FormatList({ array }: FormatListProps) {
 	return (
 		<>
 			{array?.map((item, index) => {
@@ -17,4 +17,4 @@ export const FormatList = ({ array }: FormatListProps) => {
 			})}
 		</>
 	);
-};
+}

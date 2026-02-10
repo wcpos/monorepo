@@ -5,7 +5,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { CollectionReplicationState } from './collection-replication-state';
-import allHooks from './hooks';
+import { allHooks } from './hooks';
 import { QueryReplicationState } from './query-replication-state';
 import { Query } from './query-state';
 import { Registry } from './registry';

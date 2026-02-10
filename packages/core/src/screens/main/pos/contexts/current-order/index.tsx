@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useRouter } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import Platform from '@wcpos/utils/platform';
+import { Platform } from '@wcpos/utils/platform';
 
 import { useNewOrder } from './use-new-order';
 
@@ -33,11 +33,11 @@ interface CurrentOrderContextProviderProps {
  * a product from the Products tab in small screen mode, the Cart tab will see
  * the newly created order).
  */
-export const CurrentOrderProvider = ({
+export function CurrentOrderProvider({
 	children,
 	resource,
 	currentOrderUUID,
-}: CurrentOrderContextProviderProps) => {
+}: CurrentOrderContextProviderProps) {
 	const { newOrder } = useNewOrder();
 	const openOrders = useObservableSuspense(resource);
 	const router = useRouter();
@@ -104,7 +104,7 @@ export const CurrentOrderProvider = ({
 			{children}
 		</CurrentOrderContext.Provider>
 	);
-};
+}
 
 /**
  *

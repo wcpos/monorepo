@@ -9,10 +9,10 @@ export interface FormatNumberProps {
 	decimalSeparator?: string;
 }
 
-export const FormatNumber = ({ children, prefix, suffix }: FormatNumberProps) => {
+export function FormatNumber({ children, prefix, suffix }: FormatNumberProps) {
 	return (
 		<Text>
 			{prefix} {children} {suffix}
 		</Text>
 	);
-};
+}

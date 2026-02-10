@@ -39,7 +39,7 @@ interface Props {
 	query: Query<import('rxdb').RxCollection>;
 }
 
-export const TaxRates = ({ query }: Props) => {
+export function TaxRates({ query }: Props) {
 	const result = useObservableSuspense(query.resource) as QueryResult;
 	const rates = result.hits.map(({ document }: { document: TaxRateDocument }) => document);
 	const { extraData } = useExtraData();
@@ -97,4 +97,4 @@ export const TaxRates = ({ query }: Props) => {
 			</ModalContent>
 		</Modal>
 	);
-};
+}

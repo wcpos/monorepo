@@ -43,7 +43,7 @@ export interface NumberInputProps {
 /**
  * @FIXME - when the settings change, the button display does not change
  */
-export const NumberInput = ({
+export function NumberInput({
 	onChangeText,
 	disabled = false,
 	discounts,
@@ -52,7 +52,7 @@ export const NumberInput = ({
 	formatOptions,
 	testID,
 	...props
-}: NumberInputProps) => {
+}: NumberInputProps) {
 	const { store } = useAppState();
 	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$) as string | undefined;
 	const t = useT();
@@ -133,4 +133,4 @@ export const NumberInput = ({
 			</PopoverContent>
 		</Popover>
 	);
-};
+}

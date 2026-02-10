@@ -19,7 +19,7 @@ type Props = CellContext<{ document: ProductDocument | ProductVariationDocument 
 /**
  *
  */
-export const StockQuantity = ({ row, className, withText = false }: Props) => {
+export function StockQuantity({ row, className, withText = false }: Props) {
 	const product = row.original.document;
 	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
 	const manageStock = useObservableEagerState(product.manage_stock$!);
@@ -44,4 +44,4 @@ export const StockQuantity = ({ row, className, withText = false }: Props) => {
 	return manageStock && isFinite(stockQuantity) ? (
 		<Text className={className}>{format(stockQuantity)}</Text>
 	) : null;
-};
+}

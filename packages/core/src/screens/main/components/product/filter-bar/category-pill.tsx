@@ -21,7 +21,7 @@ interface Props {
 /**
  *
  */
-export const CategoryPill = ({ query, resource, selectedID }: Props) => {
+export function CategoryPill({ query, resource, selectedID }: Props) {
 	const category = useObservableSuspense(resource);
 	const t = useT();
 	const isActive = !!selectedID;
@@ -67,4 +67,4 @@ export const CategoryPill = ({ query, resource, selectedID }: Props) => {
 			</ComboboxContent>
 		</Combobox>
 	);
-};
+}

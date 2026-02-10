@@ -7,7 +7,7 @@ import { ButtonPill } from '@wcpos/components/button';
 import { useT } from '@wcpos/core/contexts/translations';
 
 import { useCollection } from '../../hooks/use-collection';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -16,7 +16,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const Cashier = ({ table, row }: CellContext<{ document: OrderDocument }, 'cashier'>) => {
+export function Cashier({ table, row }: CellContext<{ document: OrderDocument }, 'cashier'>) {
 	const order = row.original.document;
 	const { collection } = useCollection('customers');
 	const cashierID = useObservableEagerState(
@@ -75,4 +75,4 @@ export const Cashier = ({ table, row }: CellContext<{ document: OrderDocument },
 			{cashierName}
 		</ButtonPill>
 	);
-};
+}

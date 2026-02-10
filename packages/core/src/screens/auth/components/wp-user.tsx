@@ -35,7 +35,7 @@ interface Props {
 	wpUser: import('@wcpos/database').WPCredentialsDocument;
 }
 
-export const WpUser = ({ site, wpUser }: Props) => {
+export function WpUser({ site, wpUser }: Props) {
 	const { login } = useAppState();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const stores = useObservableSuspense(
@@ -152,4 +152,4 @@ export const WpUser = ({ site, wpUser }: Props) => {
 			</AlertDialog>
 		</View>
 	);
-};
+}

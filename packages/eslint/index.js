@@ -2,7 +2,7 @@ import expoConfig from 'eslint-config-expo/flat.js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import reactCompiler from 'eslint-plugin-react-compiler';
 
-export default [
+export const config = [
 	// Global ignores - git submodules manage their own linting
 	{ ignores: ['apps/electron/**', 'apps/web/**'] },
 	eslintPluginPrettierRecommended,
@@ -64,7 +64,34 @@ export default [
 			],
 
 			'@typescript-eslint/no-useless-constructor': 'off',
+
+			// prefer function declarations for named components, and arrow functions for unnamed components
+			'react/function-component-definition': [
+				'error',
+				{
+					namedComponents: 'function-declaration',
+					unnamedComponents: 'arrow-function',
+				},
+			],
+
+			// prefer named exports over default exports
+			'import/no-default-export': 'error',
 		},
 	},
 	reactCompiler.configs.recommended,
+	// Files that legitimately need default exports
+	{
+		files: [
+			'app/**/*.{ts,tsx}', // Expo Router requires default exports
+			'app.config.ts', // Expo config
+			'**/*.config.{ts,js}', // Config files (playwright, etc.)
+			'**/*.stories.{ts,tsx}', // Storybook
+			'**/e2e/global-setup.ts', // Playwright global setup
+			'**/tree-dom.tsx', // Expo "use dom" requires default export
+			'**/discord.tsx', // Expo "use dom" requires default export
+		],
+		rules: {
+			'import/no-default-export': 'off',
+		},
+	},
 ];

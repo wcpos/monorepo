@@ -19,7 +19,7 @@ interface Props extends CalendarProps {
 	locale?: string;
 }
 
-export const Calendar = ({ dateRange, onDateRangeChange, locale, ...props }: Props) => {
+export function Calendar({ dateRange, onDateRangeChange, locale, ...props }: Props) {
 	// Theme colors via CSS variables
 	const [
 		primaryColor,
@@ -177,4 +177,4 @@ export const Calendar = ({ dateRange, onDateRangeChange, locale, ...props }: Pro
 			{...props}
 		/>
 	);
-};
+}

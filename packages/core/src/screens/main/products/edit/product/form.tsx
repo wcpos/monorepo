@@ -28,7 +28,7 @@ import { NumberInput } from '../../../components/number-input';
 import { ProductStatusSelect } from '../../../components/product/status-select';
 import { TaxClassSelect } from '../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../components/tax-status-radio-group';
-import usePushDocument from '../../../contexts/use-push-document';
+import { usePushDocument } from '../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'product']);
@@ -55,7 +55,7 @@ interface Props {
 /**
  *
  */
-export const EditProductForm = ({ product }: Props) => {
+export function EditProductForm({ product }: Props) {
 	const pushDocument = usePushDocument();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
@@ -291,4 +291,4 @@ export const EditProductForm = ({ product }: Props) => {
 			</VStack>
 		</Form>
 	);
-};
+}

@@ -8,7 +8,7 @@ import {
 	formatNames,
 	fullFormats,
 } from './formats';
-import formatLimit from './limit';
+import { formatLimitPlugin } from './limit';
 
 import type Ajv from 'ajv';
 import type { Format, Plugin } from 'ajv';
@@ -42,7 +42,7 @@ const formatsPlugin: FormatsPlugin = (
 		opts.mode === 'fast' ? [fastFormats, fastName] : [fullFormats, fullName];
 	const list = opts.formats || formatNames;
 	addFormats(ajv, list, formats, exportName);
-	if (opts.keywords) formatLimit(ajv);
+	if (opts.keywords) formatLimitPlugin(ajv);
 	return ajv;
 };
 
@@ -72,4 +72,4 @@ function addFormats(ajv: Ajv, list: FormatName[], fs: DefinedFormats, exportName
 // module.exports = exports = formatsPlugin;
 // Object.defineProperty(exports, '__esModule', { value: true });
 
-export default formatsPlugin;
+export { formatsPlugin };

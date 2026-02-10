@@ -11,9 +11,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const YesNoRadioGroup = (
-	props: React.ComponentProps<typeof RadioGroup> & { name: string }
-) => {
+export function YesNoRadioGroup(props: React.ComponentProps<typeof RadioGroup> & { name: string }) {
 	const t = useT();
 	const { setValue } = useFormContext();
 
@@ -40,4 +38,4 @@ export const YesNoRadioGroup = (
 			})}
 		</RadioGroup>
 	);
-};
+}

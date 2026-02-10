@@ -31,13 +31,13 @@ interface DisplayCurrentTaxRatesProps {
 /**
  *
  */
-export const DisplayCurrentTaxRates = ({
+export function DisplayCurrentTaxRates({
 	rates,
 	country,
 	state,
 	city,
 	postcode,
-}: DisplayCurrentTaxRatesProps) => {
+}: DisplayCurrentTaxRatesProps) {
 	const router = useRouter();
 	const t = useT();
 
@@ -135,4 +135,4 @@ export const DisplayCurrentTaxRates = ({
 			</View>
 		</VStack>
 	);
-};
+}

@@ -10,24 +10,26 @@ import type { SlottablePressableProps, SlottableViewProps } from '@rn-primitives
 
 const CollapsibleContent = CollapsiblePrimitive.Content;
 
-const Collapsible = ({
+function Collapsible({
 	className,
 	children,
 	...props
-}: SlottableViewProps & CollapsibleRootProps & { className?: string }) => (
-	<CollapsiblePrimitive.Root className={cn('flex-col gap-2', className)} {...props}>
-		{children}
-	</CollapsiblePrimitive.Root>
-);
+}: SlottableViewProps & CollapsibleRootProps & { className?: string }) {
+	return (
+		<CollapsiblePrimitive.Root className={cn('flex-col gap-2', className)} {...props}>
+			{children}
+		</CollapsiblePrimitive.Root>
+	);
+}
 
-const CollapsibleTrigger = ({
+function CollapsibleTrigger({
 	className,
 	children,
 	...props
 }: Omit<SlottablePressableProps, 'children'> & {
 	className?: string;
 	children?: React.ReactNode;
-}) => {
+}) {
 	const { open } = CollapsiblePrimitive.useCollapsibleContext(); // Access the open state
 
 	return (
@@ -43,6 +45,6 @@ const CollapsibleTrigger = ({
 			</CollapsiblePrimitive.Trigger>
 		</TextClassContext.Provider>
 	);
-};
+}
 
 export { Collapsible, CollapsibleTrigger, CollapsibleContent };

@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import get from 'lodash/get';
 import { useCSSVariable } from 'uniwind';
 
-import Platform from '@wcpos/utils/platform';
+import { Platform } from '@wcpos/utils/platform';
 
 import { getColorVariableFromClassName } from '../lib/get-color-variable';
 import { cn } from '../lib/utils';

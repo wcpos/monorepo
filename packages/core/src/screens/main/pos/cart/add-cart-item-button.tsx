@@ -19,7 +19,7 @@ interface Props {
 /**
  *
  */
-const AddCartItemButton = ({ title, children }: Props) => {
+function AddCartItemButton({ title, children }: Props) {
 	return (
 		<ErrorBoundary>
 			<Dialog>
@@ -35,6 +35,6 @@ const AddCartItemButton = ({ title, children }: Props) => {
 			</Dialog>
 		</ErrorBoundary>
 	);
-};
+}
 
 export { AddCartItemButton };

@@ -142,13 +142,13 @@ function withErrorBoundary<P extends Record<string, unknown>>(
 	Component: React.ComponentType<P>,
 	errorBoundaryProps: ErrorBoundaryProps
 ): React.ComponentType<P> {
-	const Wrapped: React.ComponentType<P> = (props) => {
+	function Wrapped(props: P) {
 		return (
 			<ErrorBoundary {...errorBoundaryProps}>
 				<Component {...props} />
 			</ErrorBoundary>
 		);
-	};
+	}
 
 	// Format for display in DevTools
 	const name = Component.displayName || Component.name || 'Unknown';

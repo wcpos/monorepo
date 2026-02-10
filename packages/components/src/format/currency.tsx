@@ -15,12 +15,13 @@ export interface FormatCurrencyProps {
 	thousand?: string;
 }
 
-const FormatCurrency = ({ children, symbol }: FormatCurrencyProps) => {
+function FormatCurrency({ children, symbol }: FormatCurrencyProps) {
 	return (
 		<Text>
 			{symbol} {children}
 		</Text>
 	);
-};
+}
 
-export default React.memo(FormatCurrency);
+const MemoizedFormatCurrency = React.memo(FormatCurrency);
+export { MemoizedFormatCurrency as FormatCurrency };

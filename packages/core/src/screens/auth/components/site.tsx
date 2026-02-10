@@ -42,7 +42,7 @@ function getUrlWithoutProtocol(url: string) {
 /**
  *
  */
-export const Site = ({ user, site, idx }: Props) => {
+export function Site({ user, site, idx }: Props) {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 	const { wcposVersionPass } = useVersionCheck({ site });
@@ -127,4 +127,4 @@ export const Site = ({ user, site, idx }: Props) => {
 			</AlertDialog>
 		</>
 	);
-};
+}

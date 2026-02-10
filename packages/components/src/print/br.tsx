@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-export const Br = () => {
+export function Br() {
 	return <View className="h-4" />;
-};
+}

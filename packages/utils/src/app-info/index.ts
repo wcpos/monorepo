@@ -34,4 +34,4 @@ const AppInfo: AppInfo = {
 	userAgent: `WCPOS/${version} (${Platform.OS}; build ${platformVersion})`,
 };
 
-export default AppInfo;
+export { AppInfo };

@@ -32,7 +32,7 @@ function ensureNumberArray(input: string | number[]): number[] {
 /**
  *
  */
-export const RegularPrice = ({ row }: CellContext<Props, 'regular_price'>) => {
+export function RegularPrice({ row }: CellContext<Props, 'regular_price'>) {
 	const item = row.original.item;
 	const uuid = row.original.uuid;
 	const { updateLineItem } = useUpdateLineItem();
@@ -55,4 +55,4 @@ export const RegularPrice = ({ row }: CellContext<Props, 'regular_price'>) => {
 			discounts={ensureNumberArray(quickDiscounts)}
 		/>
 	);
-};
+}

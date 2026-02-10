@@ -50,7 +50,7 @@ interface Props {
 /**
  * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
  */
-export const EditFeeLineForm = ({ uuid, item }: Props) => {
+export function EditFeeLineForm({ uuid, item }: Props) {
 	const t = useT();
 	const { updateFeeLine } = useUpdateFeeLine();
 	const { onOpenChange } = useRootContext();
@@ -194,4 +194,4 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 			</VStack>
 		</Form>
 	);
-};
+}

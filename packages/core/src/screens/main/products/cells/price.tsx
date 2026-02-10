@@ -11,11 +11,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const Price = ({
-	table,
-	row,
-	column,
-}: CellContext<{ document: ProductDocument }, 'price'>) => {
+export function Price({ table, row, column }: CellContext<{ document: ProductDocument }, 'price'>) {
 	const product = row.original.document;
 	const price = useObservableEagerState(product.price$!);
 	const taxStatus = useObservableEagerState(product.tax_status$!);
@@ -32,4 +28,4 @@ export const Price = ({
 			taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
 		/>
 	);
-};
+}

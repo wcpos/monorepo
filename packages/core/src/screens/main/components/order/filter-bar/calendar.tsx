@@ -37,7 +37,7 @@ const isDateRangeEqual = (range1: DateRange | undefined, range2: DateRange) => {
 /**
  * DateRangeCalendar Component
  */
-export const DateRangeCalendar = ({ onSelect }: Props) => {
+export function DateRangeCalendar({ onSelect }: Props) {
 	const t = useT();
 	const today = React.useMemo(() => new Date(), []);
 	const { shortCode } = useLocale();
@@ -145,4 +145,4 @@ export const DateRangeCalendar = ({ onSelect }: Props) => {
 			</HStack>
 		</VStack>
 	);
-};
+}

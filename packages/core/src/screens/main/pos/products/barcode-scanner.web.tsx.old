@@ -4,7 +4,7 @@ import { Text, View, StyleSheet, Button } from 'react-native';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 import { Camera } from 'expo-camera';
 
-import log from '@wcpos/utils/logger';
+import { log } from '@wcpos/utils/logger';
 
 export default function App() {
 	const [hasPermission, setHasPermission] = useState(null);

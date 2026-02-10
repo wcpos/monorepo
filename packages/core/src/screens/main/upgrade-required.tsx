@@ -10,7 +10,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';
 
-export const UpgradeRequired = () => {
+export function UpgradeRequired() {
 	const t = useT();
 	const { logout } = useAppState();
 
@@ -33,4 +33,4 @@ export const UpgradeRequired = () => {
 			</VStack>
 		</View>
 	);
-};
+}

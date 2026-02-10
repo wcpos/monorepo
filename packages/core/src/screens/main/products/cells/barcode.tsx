@@ -10,7 +10,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const Barcode = ({ row, table }: CellContext<{ document: ProductDocument }, 'name'>) => {
+export function Barcode({ row, table }: CellContext<{ document: ProductDocument }, 'name'>) {
 	const product = row.original.document;
 	const barcode = useObservableEagerState(product.barcode$!);
 	const [value, setValue] = React.useState(barcode);
@@ -44,4 +44,4 @@ export const Barcode = ({ row, table }: CellContext<{ document: ProductDocument 
 			blurOnSubmit
 		/>
 	);
-};
+}

@@ -227,4 +227,4 @@ const parseRestResponsePlugin: RxPlugin = {
 	hooks: {},
 };
 
-export default parseRestResponsePlugin;
+export { parseRestResponsePlugin };

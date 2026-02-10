@@ -4,7 +4,7 @@ import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
 
-import useHttpClient, { createTokenRefreshHandler } from '@wcpos/hooks/use-http-client';
+import { createTokenRefreshHandler, useHttpClient } from '@wcpos/hooks/use-http-client';
 import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';

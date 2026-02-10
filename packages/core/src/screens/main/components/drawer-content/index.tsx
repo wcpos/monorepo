@@ -3,12 +3,12 @@ import * as React from 'react';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import DrawerItemList from './drawer-item-list';
-import Version from './version';
+import { DrawerItemList } from './drawer-item-list';
+import { Version } from './version';
 
 import type { DrawerContentComponentProps } from '@react-navigation/drawer';
 
-export const DrawerContent = (props: DrawerContentComponentProps) => {
+export function DrawerContent(props: DrawerContentComponentProps) {
 	const insets = useSafeAreaInsets();
 
 	return (
@@ -29,4 +29,4 @@ export const DrawerContent = (props: DrawerContentComponentProps) => {
 			<Version />
 		</DrawerContentScrollView>
 	);
-};
+}

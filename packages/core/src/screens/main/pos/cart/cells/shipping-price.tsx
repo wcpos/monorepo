@@ -16,7 +16,7 @@ interface Props {
 /**
  *
  */
-export const ShippingPrice = ({ row }: CellContext<Props, 'total'>) => {
+export function ShippingPrice({ row }: CellContext<Props, 'total'>) {
 	const { item, uuid } = row.original;
 	const { updateShippingLine } = useUpdateShippingLine();
 	const { getShippingLineData } = useShippingLineData();
@@ -28,4 +28,4 @@ export const ShippingPrice = ({ row }: CellContext<Props, 'total'>) => {
 	return (
 		<CurrencyInput value={amount} onChangeText={(amount) => updateShippingLine(uuid, { amount })} />
 	);
-};
+}

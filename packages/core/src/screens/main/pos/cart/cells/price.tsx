@@ -36,7 +36,7 @@ function ensureNumberArray(input: string | number[]): number[] {
 /**
  *
  */
-export const Price = ({ row, column }: CellContext<Props, 'price'>) => {
+export function Price({ row, column }: CellContext<Props, 'price'>) {
 	const { item, uuid } = row.original;
 	const { updateLineItem } = useUpdateLineItem();
 	const { getLineItemData } = useLineItemData();
@@ -67,4 +67,4 @@ export const Price = ({ row, column }: CellContext<Props, 'price'>) => {
 			/>
 		</VStack>
 	);
-};
+}

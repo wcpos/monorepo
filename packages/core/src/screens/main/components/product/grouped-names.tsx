@@ -14,7 +14,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-const GroupedNames = ({ query }: { query: ReturnType<typeof useQuery> }) => {
+function GroupedNamesList({ query }: { query: ReturnType<typeof useQuery> }) {
 	const result = useObservableSuspense(query!.resource) as {
 		hits: { document: { name?: string } }[];
 	};
@@ -32,12 +32,12 @@ const GroupedNames = ({ query }: { query: ReturnType<typeof useQuery> }) => {
 			</Text>
 		</HStack>
 	);
-};
+}
 
 /**
  *
  */
-const WrappedQuery = ({ row }: CellContext<{ document: ProductDocument }, 'name'>) => {
+export function GroupedNames({ row }: CellContext<{ document: ProductDocument }, 'name'>) {
 	const parent = row.original.document;
 
 	/**
@@ -55,7 +55,5 @@ const WrappedQuery = ({ row }: CellContext<{ document: ProductDocument }, 'name'
 		},
 	});
 
-	return <GroupedNames query={query} />;
-};
-
-export default WrappedQuery;
+	return <GroupedNamesList query={query} />;
+}

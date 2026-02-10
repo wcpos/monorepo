@@ -9,10 +9,8 @@ interface CurrenciesProviderProps {
 	code?: string;
 }
 
-const CurrenciesProvider = ({ children, code }: CurrenciesProviderProps) => {
+export function CurrenciesProvider({ children, code }: CurrenciesProviderProps) {
 	const value = code ? allCurrencies.find((currency) => currency.code === code) : allCurrencies;
 
 	return <CurrenciesContext.Provider value={value}>{children}</CurrenciesContext.Provider>;
-};
-
-export default CurrenciesProvider;
+}

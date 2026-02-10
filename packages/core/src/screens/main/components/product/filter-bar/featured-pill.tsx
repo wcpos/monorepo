@@ -17,7 +17,7 @@ interface Props {
 /**
  *
  */
-const FeaturedPill = ({ query }: Props) => {
+export function FeaturedPill({ query }: Props) {
 	const isActive = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => !!query.getSelector('featured')))
 	);
@@ -35,6 +35,4 @@ const FeaturedPill = ({ query }: Props) => {
 			<ButtonText>{t('common.featured')}</ButtonText>
 		</ButtonPill>
 	);
-};
-
-export default FeaturedPill;
+}

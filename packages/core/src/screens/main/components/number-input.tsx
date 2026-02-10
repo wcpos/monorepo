@@ -29,7 +29,7 @@ export interface NumberInputProps extends Omit<InputProps, 'value' | 'onChangeTe
  * Uses internal string state to allow typing decimals freely.
  * Emits number on blur.
  */
-export const NumberInput = ({
+export function NumberInput({
 	value,
 	onChangeText,
 	// These props are accepted for API parity with web but not used in native text input
@@ -39,7 +39,7 @@ export const NumberInput = ({
 	onBlur,
 	onFocus,
 	...props
-}: NumberInputProps) => {
+}: NumberInputProps) {
 	const { store } = useAppState();
 	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$) || '.';
 
@@ -108,4 +108,4 @@ export const NumberInput = ({
 			type="decimal"
 		/>
 	);
-};
+}

@@ -28,7 +28,7 @@ declare module 'rxdb' {
 		 * Like findOne but works with any query object type (string, object, null).
 		 * Added by the find-one-fix plugin.
 		 */
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 		findOneFix(queryObj?: any): any;
 
 		/**

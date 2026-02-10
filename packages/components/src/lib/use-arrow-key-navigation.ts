@@ -1,6 +1,6 @@
 import React from 'react';
 
-import Platform from '@wcpos/utils/platform';
+import { Platform } from '@wcpos/utils/platform';
 
 /**
  * Hook that enables arrow key navigation by moving focus between focusable elements

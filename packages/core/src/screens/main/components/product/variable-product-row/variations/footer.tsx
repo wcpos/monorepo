@@ -10,7 +10,7 @@ import type { Query } from '@wcpos/query';
 
 import { useAppState } from '../../../../../../contexts/app-state';
 import { useT } from '../../../../../../contexts/translations';
-import SyncButton from '../../../../components/sync-button';
+import { SyncButton } from '../../../../components/sync-button';
 
 interface VariationTableFooterProps {
 	query: Query<import('@wcpos/database').ProductVariationCollection>;
@@ -21,7 +21,7 @@ interface VariationTableFooterProps {
 /**
  *
  */
-export const VariationTableFooter = ({ query, parent, count }: VariationTableFooterProps) => {
+export function VariationTableFooter({ query, parent, count }: VariationTableFooterProps) {
 	const { fastStoreDB, storeDB } = useAppState();
 	const { sync, active$ } = useReplicationState(query);
 	const loading = useObservableState(active$, false);
@@ -54,4 +54,4 @@ export const VariationTableFooter = ({ query, parent, count }: VariationTableFoo
 			<SyncButton sync={sync} clearAndSync={handleClearVariations} active={loading} />
 		</HStack>
 	);
-};
+}

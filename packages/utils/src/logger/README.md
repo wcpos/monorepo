@@ -22,7 +22,7 @@ A progressive enhancement logger for WooCommerce POS that supports console loggi
 ### Basic Usage
 
 ```typescript
-import log from '@wcpos/utils/logger';
+import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 // 1. Simple console log (always works)
@@ -178,7 +178,7 @@ loginLogger.error('Login failed', {
 
 **Before (deprecated):**
 ```typescript
-import log from '@wcpos/utils/logger';
+import { log } from '@wcpos/utils/logger';
 
 log.info('User logged in', { context: { userId: 123 } });
 ```
@@ -311,7 +311,7 @@ window.wcposLog.error('Test error message')
 ### Programmatic Usage
 
 ```typescript
-import log from '@wcpos/utils/logger';
+import { log } from '@wcpos/utils/logger';
 
 // Get current level
 const level = log.getLevel(); // 'debug' | 'info' | 'warn' | 'error'
