@@ -168,16 +168,56 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	// the stores array that the user button needs to call login().
 	const cashierResponse = await cashierApiPromise;
 	if (cashierResponse) {
+		const body = await cashierResponse.json().catch(() => null);
+		const storeCount = Array.isArray(body?.stores) ? body.stores.length : 'N/A';
 		console.log(
-			`[auth] Cashier API completed: ${cashierResponse.status()} ${cashierResponse.url().substring(0, 120)}`
+			`[auth] Cashier API completed: ${cashierResponse.status()} — stores: ${storeCount}, keys: ${body ? Object.keys(body).join(',') : 'null'}`
 		);
+		if (body?.stores) {
+			console.log(`[auth] Stores data: ${JSON.stringify(body.stores).substring(0, 200)}`);
+		}
 	} else {
 		console.log('[auth] Cashier API call not detected within timeout, proceeding anyway...');
 	}
 
 	// Give RxDB time to save stores from the API response and trigger re-render
-	await page.waitForTimeout(3_000);
+	await page.waitForTimeout(5_000);
 	console.log(`[auth] Page URL after auth: ${page.url()}`);
+
+	// Log IndexedDB state for debugging
+	const dbState = await page
+		.evaluate(async () => {
+			try {
+				const dbs = await indexedDB.databases();
+				const dbNames = dbs.map((d) => d.name).join(', ');
+				// Check if stores exist in any DB
+				for (const dbInfo of dbs) {
+					if (!dbInfo.name || !dbInfo.version) continue;
+					const db = await new Promise<IDBDatabase>((resolve, reject) => {
+						const req = indexedDB.open(dbInfo.name!, dbInfo.version);
+						req.onsuccess = () => resolve(req.result);
+						req.onerror = () => reject(req.error);
+					});
+					const storeNames = Array.from(db.objectStoreNames);
+					if (storeNames.includes('stores')) {
+						const tx = db.transaction('stores', 'readonly');
+						const records = await new Promise<any[]>((resolve, reject) => {
+							const req = tx.objectStore('stores').getAll();
+							req.onsuccess = () => resolve(req.result);
+							req.onerror = () => reject(req.error);
+						});
+						db.close();
+						return `DBs: ${dbNames} | stores table in "${dbInfo.name}": ${records.length} records — ${JSON.stringify(records.map((r) => ({ id: r.id, name: r.name, localID: r.localID }))).substring(0, 300)}`;
+					}
+					db.close();
+				}
+				return `DBs: ${dbNames} | No stores table found`;
+			} catch (e) {
+				return `Error reading IndexedDB: ${e}`;
+			}
+		})
+		.catch((e) => `evaluate error: ${e}`);
+	console.log(`[auth] IndexedDB: ${dbState}`);
 
 	// Wait for POS screen — the user button (e.g. "Demo Cashier") should now
 	// work because stores have been populated by the cashier validation response.
