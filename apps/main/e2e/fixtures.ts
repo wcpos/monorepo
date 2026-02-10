@@ -172,9 +172,20 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 
 		// Log what's on screen
 		const visibleText = await page
-			.evaluate(() => document.body?.innerText?.substring(0, 300) || '')
+			.evaluate(() => document.body?.innerText?.substring(0, 500) || '')
 			.catch(() => '');
 		console.log(`[auth] Visible text: ${visibleText}`);
+
+		// Log all visible buttons
+		const buttons = await page
+			.evaluate(() =>
+				Array.from(document.querySelectorAll('button'))
+					.map((b) => b.textContent?.trim())
+					.filter(Boolean)
+					.join(' | ')
+			)
+			.catch(() => '');
+		console.log(`[auth] Buttons: ${buttons}`);
 
 		// Try clicking user button if visible
 		const userButton = page
