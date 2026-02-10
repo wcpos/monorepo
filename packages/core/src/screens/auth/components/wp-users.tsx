@@ -35,7 +35,9 @@ export const WPUsers = ({ site }: WpUserProps) => {
 
 	return (
 		<VStack space="xs">
-			<Text className="text-sm">{t('auth.logged_in_users')}:</Text>
+			<Text testID="logged-in-users-label" className="text-sm">
+				{t('auth.logged_in_users')}:
+			</Text>
 			<HStack>
 				{wpCreds.map((wpCred: import('@wcpos/database').WPCredentialsDocument) => (
 					<ErrorBoundary key={wpCred.uuid}>

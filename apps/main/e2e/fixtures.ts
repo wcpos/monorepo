@@ -80,8 +80,8 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	console.log('[auth] Connect button clicked');
 
 	// Wait for the store to be discovered
-	await expect(page.getByText('Logged in users:')).toBeVisible({ timeout: 60_000 });
-	console.log('[auth] "Logged in users:" visible');
+	await expect(page.getByTestId('logged-in-users-label')).toBeVisible({ timeout: 60_000 });
+	console.log('[auth] logged-in-users-label visible');
 
 	// Click the + button to trigger OAuth
 	const addUserButton = page.getByTestId('add-user-button');

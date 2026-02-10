@@ -9,7 +9,7 @@ export default function NotFoundScreen() {
 	return (
 		<>
 			<Stack.Screen options={{ title: 'Oops!' }} />
-			<View>
+			<View testID="not-found-screen">
 				<VStack>
 					<Text>{"This screen doesn't exist."}</Text>
 

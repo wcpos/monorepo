@@ -28,8 +28,6 @@ test.describe('Upgrade Banner (Free)', () => {
 	});
 
 	test('should show upgrade banner for free users', async ({ posPage: page }) => {
-		// Banner rotates between messages but all contain "Pro" and end with "!"
-		const upgradeText = page.getByText(/Pro.*!/).first();
-		await expect(upgradeText).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('upgrade-notice-banner')).toBeVisible({ timeout: 10_000 });
 	});
 });

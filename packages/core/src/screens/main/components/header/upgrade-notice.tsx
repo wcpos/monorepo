@@ -26,7 +26,7 @@ export const UpgradeNotice = ({ setShowUpgrade }: { setShowUpgrade: (show: boole
 	}, [t]);
 
 	return (
-		<HStack className="bg-attention">
+		<HStack testID="upgrade-notice-banner" className="bg-attention">
 			<View className="grow justify-center p-0 pl-7">
 				<Text
 					className="text-attention-foreground mx-auto text-sm"
