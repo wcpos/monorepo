@@ -33,9 +33,9 @@ export const CartHeader = () => {
 	 *
 	 */
 	const handleSelectCustomer = React.useCallback(
-		async (option: Option | undefined) => {
+		async (option: Option<CustomerDocument> | undefined) => {
 			if (option?.item) {
-				await addCustomer(option.item as CustomerDocument);
+				await addCustomer(option.item);
 			}
 			setShowCustomerSelect(false);
 		},

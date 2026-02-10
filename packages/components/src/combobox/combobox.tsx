@@ -251,9 +251,9 @@ function ComboboxItem({ value, label, item, className, ...props }: ComboboxItemP
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
 
 	const handlePress = React.useCallback(() => {
-		onValueChange({ value, label } as Option);
+		onValueChange({ value, label, item });
 		onOpenChange(false);
-	}, [onValueChange, value, label, onOpenChange]);
+	}, [onValueChange, value, label, item, onOpenChange]);
 
 	return (
 		<VirtualizedListPrimitive.Item>
