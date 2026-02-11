@@ -31,7 +31,7 @@ interface Props {
 /**
  *
  */
-export const StorePill = ({ resource, query }: Props) => {
+export function StorePill({ resource, query }: Props) {
 	const stores = useObservableSuspense(resource);
 	const selectedCreatedVia = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getSelector('created_via')))
@@ -165,4 +165,4 @@ export const StorePill = ({ resource, query }: Props) => {
 			</SelectContent>
 		</Select>
 	);
-};
+}

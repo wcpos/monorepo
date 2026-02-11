@@ -20,7 +20,7 @@ interface Props {
 /**
  *
  */
-export const FeePrice = ({ row }: CellContext<Props, 'price'>) => {
+export function FeePrice({ row }: CellContext<Props, 'price'>) {
 	const { item, uuid } = row.original;
 	const { updateFeeLine } = useUpdateFeeLine();
 	const { getFeeLineData } = useFeeLineData();
@@ -45,4 +45,4 @@ export const FeePrice = ({ row }: CellContext<Props, 'price'>) => {
 			{percent && <Icon name="percent" size="sm" />}
 		</HStack>
 	);
-};
+}

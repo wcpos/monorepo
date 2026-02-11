@@ -13,7 +13,7 @@ import { useBarcodeDetection } from '../../hooks/barcodes';
 /**
  *
  */
-export const BarcodeDisplay = () => {
+export function BarcodeDisplay() {
 	const [allKeys, setKeyPress] = React.useState('');
 	const { barcode$ } = useBarcodeDetection();
 	const barcode = useObservableState(barcode$) as string | undefined;
@@ -43,4 +43,4 @@ export const BarcodeDisplay = () => {
 			</VStack>
 		</VStack>
 	);
-};
+}

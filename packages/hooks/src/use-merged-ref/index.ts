@@ -1,1 +1,1 @@
-export { useMergedRef as default } from './use-merged-ref';
+export { useMergedRef } from './use-merged-ref';

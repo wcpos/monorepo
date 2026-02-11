@@ -18,4 +18,4 @@ const Platform: PlatformType = {
 	isWeb: false,
 };
 
-export default Platform;
+export { Platform };

@@ -23,7 +23,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
 /**
  *
  */
-export const AddNoteButton = () => {
+export function AddNoteButton() {
 	const { currentOrder } = useCurrentOrder();
 	const note = useObservableEagerState(currentOrder.customer_note$!);
 	const t = useT();
@@ -77,4 +77,4 @@ export const AddNoteButton = () => {
 			</DialogContent>
 		</Dialog>
 	);
-};
+}

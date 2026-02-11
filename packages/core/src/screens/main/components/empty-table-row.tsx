@@ -9,7 +9,7 @@ interface EmptyTableRowProps {
 	message?: string;
 }
 
-const EmptyTableRow = ({ message }: EmptyTableRowProps) => {
+export function EmptyTableRow({ message }: EmptyTableRowProps) {
 	const t = useT();
 
 	return (
@@ -17,6 +17,4 @@ const EmptyTableRow = ({ message }: EmptyTableRowProps) => {
 			<Text>{message || t('common.no_results_found')}</Text>
 		</View>
 	);
-};
-
-export default EmptyTableRow;
+}

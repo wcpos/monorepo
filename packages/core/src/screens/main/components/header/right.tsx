@@ -6,7 +6,7 @@ import { NotificationBell } from './notification-bell';
 import { Online } from './online';
 import { UserMenu } from './user-menu';
 
-const HeaderRight = () => {
+export function HeaderRight() {
 	return (
 		<HStack className="gap-0">
 			<Online />
@@ -14,6 +14,4 @@ const HeaderRight = () => {
 			<UserMenu />
 		</HStack>
 	);
-};
-
-export default HeaderRight;
+}

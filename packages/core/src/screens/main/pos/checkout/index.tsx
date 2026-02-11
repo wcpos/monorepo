@@ -6,7 +6,7 @@ import { ObservableResource } from 'observable-hooks';
 import { Checkout } from './checkout';
 import { useCollection } from '../../hooks/use-collection';
 
-export const CheckoutScreen = () => {
+export function CheckoutScreen() {
 	const { orderId } = useLocalSearchParams<{ orderId: string }>();
 	const { collection } = useCollection('orders');
 	const query = collection.findOneFix(orderId);
@@ -20,4 +20,4 @@ export const CheckoutScreen = () => {
 	);
 
 	return <Checkout resource={resource} />;
-};
+}

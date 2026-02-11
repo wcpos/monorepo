@@ -231,8 +231,6 @@ export const RxDBAuditLogPlugin: RxPlugin = {
 	},
 };
 
-export default RxDBAuditLogPlugin;
-
 // Export for testing
 export {
 	calculateChanges,

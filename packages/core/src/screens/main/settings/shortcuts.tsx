@@ -13,7 +13,7 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
 
-export const KeyboardShortcuts = () => {
+export function KeyboardShortcuts() {
 	const t = useT();
 
 	const shortcuts = [
@@ -59,4 +59,4 @@ export const KeyboardShortcuts = () => {
 			</ModalFooter>
 		</>
 	);
-};
+}

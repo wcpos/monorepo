@@ -103,7 +103,7 @@ const formatCartItems = (
 /**
  *
  */
-export const CartTable = () => {
+export function CartTable() {
 	const { uiSettings, getUILabel } = useUISettings('pos-cart');
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
@@ -314,4 +314,4 @@ export const CartTable = () => {
 			</ScrollView>
 		</Table>
 	);
-};
+}

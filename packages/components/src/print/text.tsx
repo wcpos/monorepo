@@ -44,18 +44,10 @@ type TextProps = RNTextProps & VariantProps<typeof textVariants>;
 /**
  *
  */
-export const Text = ({
-	children,
-	size,
-	align,
-	bold,
-	underline,
-	uppercase,
-	className,
-}: TextProps) => {
+export function Text({ children, size, align, bold, underline, uppercase, className }: TextProps) {
 	return (
 		<RNText className={cn(textVariants({ size, align, bold, underline, uppercase }), className)}>
 			{children}
 		</RNText>
 	);
-};
+}

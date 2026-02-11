@@ -11,7 +11,7 @@ import { TableHeaderSelect } from './header-select';
 import { TableRowSelect } from './row-select';
 import { useT } from '../../../../contexts/translations';
 import { DataTable, DataTableHeader } from '../../components/data-table';
-import { Date } from '../../components/date';
+import { DateCell } from '../../components/date';
 import { Cashier } from '../../components/order/cashier';
 import { CreatedVia } from '../../components/order/created-via';
 import { Customer } from '../../components/order/customer';
@@ -31,10 +31,10 @@ const cells = {
 	customer_id: Customer,
 	status: Status,
 	total: Total,
-	date_created_gmt: Date,
-	date_modified_gmt: Date,
-	date_completed_gmt: Date,
-	date_paid_gmt: Date,
+	date_created_gmt: DateCell,
+	date_modified_gmt: DateCell,
+	date_completed_gmt: DateCell,
+	date_paid_gmt: DateCell,
 	payment_method: PaymentMethod,
 	created_via: CreatedVia,
 	cashier: Cashier,
@@ -70,7 +70,7 @@ const renderHeader = (props: Record<string, unknown> & { column: { id: string } 
 /**
  *
  */
-export const Orders = () => {
+export function Orders() {
 	const t = useT();
 	const { query, allOrders, unselectedRowIds, setUnselectedRowIds } = useReports();
 
@@ -182,4 +182,4 @@ export const Orders = () => {
 			</Card>
 		</View>
 	);
-};
+}

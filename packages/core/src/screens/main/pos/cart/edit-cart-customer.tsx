@@ -22,7 +22,7 @@ import { ShippingAddressForm, shippingAddressSchema } from '../../components/shi
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCollection } from '../../hooks/use-collection';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
@@ -38,7 +38,7 @@ const formSchema = z.object({
 /**
  * RxDocument .billing$ and .shipping$ emit Proxy(Object) which can't be used in react-hook-form
  */
-export const EditCartCustomerForm = () => {
+export function EditCartCustomerForm() {
 	const t = useT();
 	const { currentOrder } = useCurrentOrder();
 	const customerID = useObservableEagerState(currentOrder.customer_id$!);
@@ -191,4 +191,4 @@ export const EditCartCustomerForm = () => {
 			</VStack>
 		</Form>
 	);
-};
+}

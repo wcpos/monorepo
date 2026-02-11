@@ -19,7 +19,7 @@ interface Props {
 /**
  *
  */
-export const Taxes = ({ totalTax, taxLines = [] }: Props) => {
+export function Taxes({ totalTax, taxLines = [] }: Props) {
 	const { store } = useAppState();
 	const taxTotalDisplay = useObservableEagerState(store.tax_total_display$);
 	const { format } = useCurrentOrderCurrencyFormat();
@@ -58,4 +58,4 @@ export const Taxes = ({ totalTax, taxLines = [] }: Props) => {
 			</HStack>
 		</HStack>
 	);
-};
+}

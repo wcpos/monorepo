@@ -50,7 +50,7 @@ interface Props {
 /**
  *
  */
-export const EditShippingLineForm = ({ uuid, item }: Props) => {
+export function EditShippingLineForm({ uuid, item }: Props) {
 	const t = useT();
 	const { updateShippingLine } = useUpdateShippingLine();
 	const { onOpenChange } = useRootContext();
@@ -210,4 +210,4 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 			</VStack>
 		</Form>
 	);
-};
+}

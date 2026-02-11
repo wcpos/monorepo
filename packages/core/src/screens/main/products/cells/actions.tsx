@@ -24,14 +24,14 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
-import useDeleteDocument from '../../contexts/use-delete-document';
-import usePullDocument from '../../contexts/use-pull-document';
+import { useDeleteDocument } from '../../contexts/use-delete-document';
+import { usePullDocument } from '../../contexts/use-pull-document';
 
 import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'actions'>) => {
+export function Actions({ row }: CellContext<{ document: ProductDocument }, 'actions'>) {
 	const router = useRouter();
 	const product = row.original.document;
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
@@ -113,4 +113,4 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 			</AlertDialog>
 		</>
 	);
-};
+}

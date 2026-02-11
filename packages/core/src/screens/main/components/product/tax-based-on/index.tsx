@@ -12,7 +12,7 @@ import { useTaxRates } from '../../../contexts/tax-rates';
 /**
  *
  */
-export const TaxBasedOn = () => {
+export function TaxBasedOn() {
 	const { rates, taxBasedOn, location } = useTaxRates();
 	const t = useT();
 
@@ -55,4 +55,4 @@ export const TaxBasedOn = () => {
 			</HoverCardContent>
 		</HoverCard>
 	);
-};
+}

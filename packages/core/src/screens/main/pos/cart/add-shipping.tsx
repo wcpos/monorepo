@@ -42,7 +42,7 @@ type FormValues = z.infer<typeof formSchema>;
 /**
  *
  */
-export const AddShipping = () => {
+export function AddShipping() {
 	const t = useT();
 	const { addShipping } = useAddShipping();
 	const { onOpenChange } = useRootContext();
@@ -189,4 +189,4 @@ export const AddShipping = () => {
 			</VStack>
 		</Form>
 	);
-};
+}

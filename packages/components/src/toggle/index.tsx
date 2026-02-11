@@ -46,30 +46,32 @@ const toggleTextVariants = cva('text-foreground text-sm font-medium', {
 	},
 });
 
-const Toggle = ({
+function Toggle({
 	className,
 	variant,
 	size,
 	...props
-}: TogglePrimitive.RootProps & VariantProps<typeof toggleVariants>) => (
-	<TextClassContext.Provider
-		value={cn(
-			toggleTextVariants({ variant, size }),
-			props.pressed ? 'text-accent-foreground' : 'web:group-hover:text-muted-foreground',
-			className
-		)}
-	>
-		<TogglePrimitive.Root
-			className={cn(
-				toggleVariants({ variant, size }),
-				props.disabled && 'web:pointer-events-none opacity-50',
-				props.pressed && 'bg-accent',
+}: TogglePrimitive.RootProps & VariantProps<typeof toggleVariants>) {
+	return (
+		<TextClassContext.Provider
+			value={cn(
+				toggleTextVariants({ variant, size }),
+				props.pressed ? 'text-accent-foreground' : 'web:group-hover:text-muted-foreground',
 				className
 			)}
-			{...props}
-		/>
-	</TextClassContext.Provider>
-);
+		>
+			<TogglePrimitive.Root
+				className={cn(
+					toggleVariants({ variant, size }),
+					props.disabled && 'web:pointer-events-none opacity-50',
+					props.pressed && 'bg-accent',
+					className
+				)}
+				{...props}
+			/>
+		</TextClassContext.Provider>
+	);
+}
 
 // function ToggleIcon({
 // 	className,

@@ -20,7 +20,7 @@ interface Props {
 /**
  *
  */
-const EditCartItemButton = ({ title, children }: Props) => {
+function EditCartItemButton({ title, children }: Props) {
 	const [openDialog, setOpenDialog] = React.useState(false);
 
 	return (
@@ -43,6 +43,6 @@ const EditCartItemButton = ({ title, children }: Props) => {
 			</Dialog>
 		</ErrorBoundary>
 	);
-};
+}
 
 export { EditCartItemButton };

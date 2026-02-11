@@ -11,7 +11,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
-import useSiteConnect from '../hooks/use-site-connect';
+import { useSiteConnect } from '../hooks/use-site-connect';
 
 const siteLogger = getLogger(['wcpos', 'auth', 'site']);
 

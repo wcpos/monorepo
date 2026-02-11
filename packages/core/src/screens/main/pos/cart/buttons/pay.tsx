@@ -9,7 +9,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
-import usePushDocument from '../../../contexts/use-push-document';
+import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useCurrentOrder } from '../../contexts/current-order';
 
@@ -18,7 +18,7 @@ const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
 /**
  *
  */
-export const PayButton = () => {
+export function PayButton() {
 	const { currentOrder } = useCurrentOrder();
 	const total = useObservableEagerState(currentOrder.total$!);
 	const { format } = useCurrentOrderCurrencyFormat();
@@ -86,4 +86,4 @@ export const PayButton = () => {
 			})}
 		</Button>
 	);
-};
+}

@@ -10,7 +10,7 @@ import { useCurrencyFormat } from '../../hooks/use-currency-format';
 /**
  *
  */
-export const Tooltip = ({
+export function Tooltip({
 	active,
 	payload,
 	label,
@@ -18,7 +18,7 @@ export const Tooltip = ({
 	active: boolean;
 	payload: { name: string; value: number }[];
 	label: string;
-}) => {
+}) {
 	const t = useT();
 	const { format } = useCurrencyFormat();
 
@@ -54,4 +54,4 @@ export const Tooltip = ({
 	}
 
 	return null;
-};
+}

@@ -11,9 +11,9 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const TaxStatusRadioGroup = (
+export function TaxStatusRadioGroup(
 	props: React.ComponentProps<typeof RadioGroup> & { name: string }
-) => {
+) {
 	const { setValue } = useFormContext();
 	const t = useT();
 
@@ -40,4 +40,4 @@ export const TaxStatusRadioGroup = (
 			})}
 		</RadioGroup>
 	);
-};
+}

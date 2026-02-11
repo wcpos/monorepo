@@ -32,7 +32,7 @@ export const schema = z.object({
 /**
  *
  */
-export const UISettingsForm = () => {
+export function UISettingsForm() {
 	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings('pos-cart');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
 	const { setButtonPressHandler } = useDialogContext();
@@ -82,4 +82,4 @@ export const UISettingsForm = () => {
 			</Form>
 		</VStack>
 	);
-};
+}

@@ -10,12 +10,12 @@ import { Textarea } from '@wcpos/components/textarea';
  * This component maintains internal editing state separate from the controlled value.
  * The parent's onChangeText is only called on submit (blur/enter), not on every keystroke.
  */
-export const EditableName = ({
+export function EditableName({
 	value: valueProp,
 	defaultValue,
 	onChangeText,
 	...props
-}: InputProps) => {
+}: InputProps) {
 	const [editing, setEditing] = React.useState(false);
 	// Internal editing value - separate from controlled prop
 	const [editValue, setEditValue] = React.useState(valueProp ?? defaultValue ?? '');
@@ -66,4 +66,4 @@ export const EditableName = ({
 			</ButtonText>
 		</Button>
 	);
-};
+}

@@ -12,7 +12,7 @@ interface StatesProviderProps {
 /**
  * @TODO - fetch states from the server, and cache locally
  */
-export const StatesProvider = ({ children, countryCode }: StatesProviderProps) => {
+export function StatesProvider({ children, countryCode }: StatesProviderProps) {
 	if (!countryCode) {
 		throw new Error('countryCode is required');
 	}
@@ -20,4 +20,4 @@ export const StatesProvider = ({ children, countryCode }: StatesProviderProps) =
 	const country = allCountries.find((country) => country.code === countryCode);
 
 	return <StatesContext.Provider value={country?.states}>{children}</StatesContext.Provider>;
-};
+}

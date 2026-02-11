@@ -12,4 +12,4 @@ const Platform: PlatformType = {
 	isNative: true,
 };
 
-export default Platform;
+export { Platform };

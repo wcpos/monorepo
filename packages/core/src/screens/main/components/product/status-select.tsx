@@ -15,7 +15,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-export const ProductStatusSelect = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
+export function ProductStatusSelect({ value, ...props }: React.ComponentProps<typeof Select>) {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 
@@ -60,4 +60,4 @@ export const ProductStatusSelect = ({ value, ...props }: React.ComponentProps<ty
 			</SelectContent>
 		</Select>
 	);
-};
+}

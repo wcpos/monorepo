@@ -7,7 +7,7 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { EditableName } from '../../components/editable-name';
 import { PlainAttributes, ProductAttributes } from '../../components/product/attributes';
-import GroupedNames from '../../components/product/grouped-names';
+import { GroupedNames } from '../../components/product/grouped-names';
 
 import type { CellContext } from '@tanstack/react-table';
 

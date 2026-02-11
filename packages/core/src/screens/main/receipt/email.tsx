@@ -30,7 +30,7 @@ interface Props {
 /**
  *
  */
-export const EmailForm = ({ order }: Props) => {
+export function EmailForm({ order }: Props) {
 	const http = useRestHttpClient();
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
@@ -124,4 +124,4 @@ export const EmailForm = ({ order }: Props) => {
 			</DialogFooter>
 		</VStack>
 	);
-};
+}

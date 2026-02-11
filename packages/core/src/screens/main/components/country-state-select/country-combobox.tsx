@@ -20,11 +20,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-const CountryComboboxBase = ({
-	value,
-	disabled,
-	...props
-}: React.ComponentProps<typeof Combobox>) => {
+function CountryComboboxBase({ value, disabled, ...props }: React.ComponentProps<typeof Combobox>) {
 	const allCountries = useCountries();
 	const t = useT();
 
@@ -71,14 +67,14 @@ const CountryComboboxBase = ({
 			</ComboboxContent>
 		</Combobox>
 	);
-};
+}
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export const CountryCombobox = (props: React.ComponentProps<typeof Combobox>) => {
+export function CountryCombobox(props: React.ComponentProps<typeof Combobox>) {
 	return (
 		<CountriesProvider>
 			<CountryComboboxBase {...props} />
 		</CountriesProvider>
 	);
-};
+}

@@ -18,7 +18,7 @@ import { useExtraData } from '../contexts/extra-data';
 /**
  *
  */
-export const TaxClassSelect = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
+export function TaxClassSelect({ value, ...props }: React.ComponentProps<typeof Select>) {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 	const { extraData } = useExtraData();
@@ -69,4 +69,4 @@ export const TaxClassSelect = ({ value, ...props }: React.ComponentProps<typeof 
 			</SelectContent>
 		</Select>
 	);
-};
+}

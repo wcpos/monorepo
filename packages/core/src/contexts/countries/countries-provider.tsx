@@ -11,6 +11,6 @@ interface CountriesProviderProps {
 /**
  * @TODO - fetch countries from the server, and cache locally
  */
-export const CountriesProvider = ({ children }: CountriesProviderProps) => {
+export function CountriesProvider({ children }: CountriesProviderProps) {
 	return <CountriesContext.Provider value={allCountries}>{children}</CountriesContext.Provider>;
-};
+}

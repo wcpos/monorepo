@@ -16,7 +16,7 @@ const adjustForPadding = (width: number, height: number) => {
 	};
 };
 
-export const Support = () => {
+export function Support() {
 	const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
 	const { bottom } = useSafeAreaInsets();
 
@@ -66,4 +66,4 @@ export const Support = () => {
 			/>
 		</View>
 	);
-};
+}

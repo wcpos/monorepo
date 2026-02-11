@@ -19,13 +19,13 @@ interface Props {
 	strikethrough?: boolean;
 }
 
-export const PriceWithTax = ({
+export function PriceWithTax({
 	price,
 	taxStatus,
 	taxClass,
 	taxDisplay = 'tooltip',
 	strikethrough,
-}: Props) => {
+}: Props) {
 	const { format } = useCurrencyFormat();
 	const { calcTaxes } = useTaxRates();
 	const taxable = taxStatus === 'taxable' && calcTaxes;
@@ -79,4 +79,4 @@ export const PriceWithTax = ({
 			{format(displayValue)}
 		</Text>
 	);
-};
+}

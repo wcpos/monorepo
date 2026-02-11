@@ -34,7 +34,7 @@ interface VariationSelectProps {
 /**
  *
  */
-const VariationSelect = ({ attribute, onSelect, selected }: VariationSelectProps) => {
+export function VariationSelect({ attribute, onSelect, selected }: VariationSelectProps) {
 	const t = useT();
 	const options = attribute?.options || [];
 
@@ -101,6 +101,4 @@ const VariationSelect = ({ attribute, onSelect, selected }: VariationSelectProps
 			</ComboboxContent>
 		</Combobox>
 	);
-};
-
-export default VariationSelect;
+}

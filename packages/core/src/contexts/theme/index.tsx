@@ -10,13 +10,13 @@ interface ThemeContextType {
 
 const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
 	const screenSize = useBreakpoint();
 
 	const value = React.useMemo(() => ({ screenSize }), [screenSize]);
 
 	return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-};
+}
 
 export const useTheme = () => {
 	const context = React.useContext(ThemeContext);

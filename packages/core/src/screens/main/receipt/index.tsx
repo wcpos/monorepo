@@ -8,7 +8,7 @@ import { useCollection } from '../hooks/use-collection';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
-export const ReceiptScreen = () => {
+export function ReceiptScreen() {
 	const { orderId } = useLocalSearchParams<{ orderId: string }>();
 	const { collection } = useCollection('orders');
 	const query = collection.findOneFix(orderId);
@@ -19,4 +19,4 @@ export const ReceiptScreen = () => {
 	);
 
 	return <Receipt resource={resource} />;
-};
+}

@@ -14,9 +14,9 @@ import { disableVersionCheck, setPremiumFlag } from 'rxdb-premium/plugins/shared
 import { RxDBAuditLogPlugin } from './audit-log';
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
-import middlewaresPlugin from './middlewares';
-import parseRestResponsePlugin from './parse-rest-response';
-import populatePlugin from './populate';
+import { middlewaresPlugin } from './middlewares';
+import { parseRestResponsePlugin } from './parse-rest-response';
+import { populatePlugin } from './populate';
 import { resetCollectionPlugin } from './reset-collection';
 import { searchPlugin } from './search';
 

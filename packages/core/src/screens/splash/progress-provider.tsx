@@ -17,10 +17,10 @@ interface SplashProgressProviderProps {
 	initialProgress?: number;
 }
 
-export const SplashProgressProvider = ({
+export function SplashProgressProvider({
 	children,
 	initialProgress = 0,
-}: SplashProgressProviderProps) => {
+}: SplashProgressProviderProps) {
 	const progress = useSharedValue(initialProgress);
 
 	const setProgress = React.useCallback(
@@ -49,7 +49,7 @@ export const SplashProgressProvider = ({
 	);
 
 	return <SplashProgressContext.Provider value={value}>{children}</SplashProgressContext.Provider>;
-};
+}
 
 export const useSplashProgress = () => {
 	const context = React.useContext(SplashProgressContext);

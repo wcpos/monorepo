@@ -33,7 +33,7 @@ interface Props {
 /**
  *
  */
-export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }: Props) => {
+export function VariationSelect({ attribute, selected = '', onSelect, onRemove }: Props) {
 	const t = useT();
 	const isActive = !!selected;
 	const options = attribute?.options || [];
@@ -115,4 +115,4 @@ export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }
 			</ComboboxContent>
 		</Combobox>
 	);
-};
+}

@@ -10,11 +10,7 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../contexts/translations';
 
-export const PageUpgrade = ({
-	page,
-}: {
-	page: 'products' | 'orders' | 'customers' | 'reports';
-}) => {
+export function PageUpgrade({ page }: { page: 'products' | 'orders' | 'customers' | 'reports' }) {
 	const t = useT();
 
 	/**
@@ -93,4 +89,4 @@ export const PageUpgrade = ({
 			</View>
 		</View>
 	);
-};
+}

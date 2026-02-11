@@ -49,7 +49,7 @@ const formSchema = z.object({
 /**
  *
  */
-export const TaxSettings = () => {
+export function TaxSettings() {
 	const { store } = useAppState();
 	const t = useT();
 	const router = useRouter();
@@ -293,4 +293,4 @@ export const TaxSettings = () => {
 			</Form>
 		</VStack>
 	);
-};
+}

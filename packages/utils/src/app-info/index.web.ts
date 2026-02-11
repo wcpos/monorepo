@@ -30,4 +30,4 @@ const AppInfo: AppInfo = {
 	userAgent: `WCPOS/${version} (web)`,
 };
 
-export default AppInfo;
+export { AppInfo };

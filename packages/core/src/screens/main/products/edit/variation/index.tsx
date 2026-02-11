@@ -8,7 +8,7 @@ import { useCollection } from '../../../hooks/use-collection';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
-export const EditVariationScreen = () => {
+export function EditVariationScreen() {
 	const { variationId } = useLocalSearchParams<{ variationId: string }>();
 	const { collection } = useCollection('variations');
 	const query = collection.findOneFix(variationId);
@@ -22,4 +22,4 @@ export const EditVariationScreen = () => {
 	);
 
 	return <EditVariationModal resource={resource} />;
-};
+}

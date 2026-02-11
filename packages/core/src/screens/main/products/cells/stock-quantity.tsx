@@ -16,10 +16,10 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const StockQuantity = ({
+export function StockQuantity({
 	row,
 	table,
-}: CellContext<{ document: ProductDocument }, 'stock_quantity'>) => {
+}: CellContext<{ document: ProductDocument }, 'stock_quantity'>) {
 	const product = row.original.document;
 	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
 	const manageStock = useObservableEagerState(product.manage_stock$!);
@@ -50,4 +50,4 @@ export const StockQuantity = ({
 			/>
 		</VStack>
 	);
-};
+}

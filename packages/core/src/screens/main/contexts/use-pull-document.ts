@@ -22,7 +22,7 @@ interface AnyRxCollection {
  * - it should be part of the replication process
  * - it should be reactive, a lot of components need to suspend until the document is pulled
  */
-const usePullDocument = () => {
+export const usePullDocument = () => {
 	const http = useRestHttpClient();
 	const t = useT();
 
@@ -107,5 +107,3 @@ const usePullDocument = () => {
 		[fetchFromServer, saveToLocalDB]
 	);
 };
-
-export default usePullDocument;

@@ -14,11 +14,11 @@ interface Props {
 /**
  *
  */
-export const CartTabTitle = ({ order }: Props) => {
+export function CartTabTitle({ order }: Props) {
 	const total = useObservableEagerState(order.total$!);
 	const currencySymbol = useObservableEagerState(order.currency_symbol$!);
 	const { format } = useCurrencyFormat({ currencySymbol: currencySymbol ?? '' });
 	const t = useT();
 
 	return <Text>{t('pos_cart.cart', { order_total: format(parseFloat(total ?? '0') || 0) })}</Text>;
-};
+}

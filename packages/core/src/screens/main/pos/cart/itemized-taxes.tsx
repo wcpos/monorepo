@@ -12,13 +12,13 @@ import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-cur
  */
 type TaxLine = NonNullable<import('@wcpos/database').OrderDocument['tax_lines']>[number];
 
-const ItemizedTaxes = ({
+export function ItemizedTaxes({
 	taxLines = [],
 	taxDisplayCart,
 }: {
 	taxLines?: TaxLine[];
 	taxDisplayCart: string;
-}) => {
+}) {
 	const { format } = useCurrentOrderCurrencyFormat();
 	const t = useT();
 
@@ -42,6 +42,4 @@ const ItemizedTaxes = ({
 			</VStack>
 		</HStack>
 	);
-};
-
-export default ItemizedTaxes;
+}

@@ -1,3 +1,3 @@
 import axios from 'axios';
 
-export default axios;
+export const http = axios;

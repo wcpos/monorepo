@@ -20,7 +20,7 @@ import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
  * Allows users to switch between themes.
  * Persists theme selection to RxDB store document.
  */
-export const ThemeSettings = () => {
+export function ThemeSettings() {
 	const t = useT();
 	const { theme, hasAdaptiveThemes } = useUniwind();
 	const { store } = useAppState();
@@ -182,4 +182,4 @@ export const ThemeSettings = () => {
 			</ModalFooter>
 		</VStack>
 	);
-};
+}

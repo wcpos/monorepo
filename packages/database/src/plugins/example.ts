@@ -51,4 +51,4 @@ const woocommercePlugin: RxPlugin = {
 	},
 };
 
-export default woocommercePlugin;
+export { woocommercePlugin };

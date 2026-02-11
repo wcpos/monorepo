@@ -20,7 +20,7 @@ interface Props {
 /**
  *
  */
-export const Subtotal = ({ row, column }: CellContext<Props, 'subtotal'>) => {
+export function Subtotal({ row, column }: CellContext<Props, 'subtotal'>) {
 	const item = row.original.item;
 	const { format } = useCurrencyFormat();
 	const { store } = useAppState();
@@ -50,4 +50,4 @@ export const Subtotal = ({ row, column }: CellContext<Props, 'subtotal'>) => {
 			)}
 		</VStack>
 	);
-};
+}

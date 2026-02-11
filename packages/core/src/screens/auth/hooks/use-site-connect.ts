@@ -85,7 +85,7 @@ interface UseSiteConnectReturn {
  * Main hook for connecting to a WooCommerce site
  * Orchestrates URL discovery, API discovery, and authorization testing
  */
-const useSiteConnect = (): UseSiteConnectReturn => {
+export const useSiteConnect = (): UseSiteConnectReturn => {
 	const { user, userDB } = useAppState();
 	const [status, setStatus] = React.useState<SiteConnectStatus>('idle');
 	const [progress, setProgress] = React.useState<SiteConnectProgress | null>(null);
@@ -280,5 +280,3 @@ const useSiteConnect = (): UseSiteConnectReturn => {
 		reset,
 	};
 };
-
-export default useSiteConnect;

@@ -6,7 +6,7 @@ interface Props extends SvgProps {
 	animate?: boolean;
 }
 
-const Logo: React.FC<Props> = ({ animate, width = 100, height = 100, ...props }) => {
+export function Logo({ animate, width = 100, height = 100, ...props }: Props) {
 	// const scaleY = React.useRef(new Animated.Value(1));
 
 	// const pulse = () => {
@@ -84,6 +84,4 @@ const Logo: React.FC<Props> = ({ animate, width = 100, height = 100, ...props })
 			/>
 		</Svg>
 	);
-};
-
-export default Logo;
+}

@@ -18,12 +18,12 @@ interface VariationButtonsProps {
 /**
  *
  */
-const VariationButtons = ({
+export function VariationButtons({
 	attribute,
 	onSelect,
 	selected = '',
 	optionCounts,
-}: VariationButtonsProps) => {
+}: VariationButtonsProps) {
 	const options = attribute?.options || [];
 
 	const handleSelect = (option: string | undefined) => {
@@ -43,6 +43,4 @@ const VariationButtons = ({
 			</ToggleGroup>
 		</View>
 	);
-};
-
-export default VariationButtons;
+}

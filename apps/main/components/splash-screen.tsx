@@ -15,7 +15,7 @@ SplashScreen.preventAutoHideAsync();
  * NOTE: the ThemeProvider is not loaded yet, so we can't use any theme related components here
  * @TODO - should we have a timeout and a way to force clear the local DBs if it takes too long?
  */
-export const Splash = ({ progress = 0, message }: { progress?: number; message?: string }) => {
+export function Splash({ progress = 0, message }: { progress?: number; message?: string }) {
 	React.useEffect(() => {
 		// Once our JS-based splash is ready to be shown, hide the native splash.
 		// Then we conditionally render our custom splash UI or the real app.
@@ -38,4 +38,4 @@ export const Splash = ({ progress = 0, message }: { progress?: number; message?:
 			</VStack>
 		</View>
 	);
-};
+}

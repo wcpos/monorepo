@@ -97,4 +97,4 @@ const formatLimitPlugin: Plugin<undefined> = (ajv: Ajv): Ajv => {
 	return ajv;
 };
 
-export default formatLimitPlugin;
+export { formatLimitPlugin };

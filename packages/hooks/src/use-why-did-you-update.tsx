@@ -35,4 +35,4 @@ function useWhyDidYouUpdate(name: string, props: Record<string, any>) {
 	});
 }
 
-export default useWhyDidYouUpdate;
+export { useWhyDidYouUpdate };

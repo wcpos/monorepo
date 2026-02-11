@@ -13,7 +13,7 @@ import { Sites } from './components/sites';
 import { UrlInput } from './components/url-input';
 import { useAppState } from '../../contexts/app-state';
 
-export const Connect = () => {
+export function Connect() {
 	const { user } = useAppState();
 
 	return (
@@ -34,4 +34,4 @@ export const Connect = () => {
 			</View>
 		</KeyboardAvoidingView>
 	);
-};
+}

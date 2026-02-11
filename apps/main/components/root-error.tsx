@@ -73,7 +73,7 @@ const styles: any = StyleSheet.create({
 /**
  *
  */
-export const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
+export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 	const handleReset = async () => {
 		// Clear databases to ensure clean start
 		try {
@@ -103,4 +103,4 @@ export const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 			</ScrollView>
 		</SafeAreaView>
 	);
-};
+}

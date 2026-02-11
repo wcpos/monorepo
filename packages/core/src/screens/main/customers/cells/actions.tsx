@@ -28,9 +28,9 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
-import useDeleteDocument from '../../contexts/use-delete-document';
-import usePullDocument from '../../contexts/use-pull-document';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useDeleteDocument } from '../../contexts/use-delete-document';
+import { usePullDocument } from '../../contexts/use-pull-document';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -39,7 +39,7 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
 /**
  *
  */
-export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'actions'>) => {
+export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'actions'>) {
 	const customer = row.original.document;
 	const router = useRouter();
 	const pullDocument = usePullDocument();
@@ -141,4 +141,4 @@ export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'ac
 			</AlertDialog>
 		</>
 	);
-};
+}

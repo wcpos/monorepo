@@ -17,7 +17,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const PlainAttributes = ({ row }: CellContext<{ document: ProductDocument }, 'name'>) => {
+export function PlainAttributes({ row }: CellContext<{ document: ProductDocument }, 'name'>) {
 	const product = row.original.document;
 	const attributes = useObservableEagerState(product.attributes$!);
 
@@ -42,7 +42,7 @@ export const PlainAttributes = ({ row }: CellContext<{ document: ProductDocument
 				))}
 		</VStack>
 	);
-};
+}
 
 /**
  *
@@ -53,10 +53,10 @@ type ProductRowOriginal = {
 	parentSearchTerm?: string;
 };
 
-export const ProductAttributes = ({
+export function ProductAttributes({
 	row,
 	table,
-}: CellContext<{ document: ProductDocument }, 'name'>) => {
+}: CellContext<{ document: ProductDocument }, 'name'>) {
 	const original = row.original as ProductRowOriginal;
 	const product = row.original.document;
 	const attributes = useObservableEagerState(product.attributes$!);
@@ -193,4 +193,4 @@ export const ProductAttributes = ({
 			</Text>
 		</VStack>
 	);
-};
+}

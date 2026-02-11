@@ -22,7 +22,7 @@ interface Props {
 /**
  *
  */
-export const VariationsFilterBar = ({ row, query }: Props) => {
+export function VariationsFilterBar({ row, query }: Props) {
 	const parent = row.original.document;
 	const { rowId, setRowExpanded } = useVariationRow();
 
@@ -76,4 +76,4 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 			<IconButton size="sm" name="chevronUp" onPress={() => setRowExpanded?.(rowId, false)} />
 		</HStack>
 	);
-};
+}

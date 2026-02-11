@@ -1,4 +1,2 @@
-import CurrenciesProvider from './provider';
-
-export { CurrenciesProvider };
-export { useCurrencies as default } from './use-currencies';
+export { CurrenciesProvider } from './provider';
+export { useCurrencies } from './use-currencies';

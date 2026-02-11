@@ -9,7 +9,7 @@ import { useReplicationState } from '@wcpos/query';
 import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
-import SyncButton from '../components/sync-button';
+import { SyncButton } from '../components/sync-button';
 import { useCollectionReset } from '../hooks/use-collection-reset';
 
 interface TaxRatesFooterProps {
@@ -20,7 +20,7 @@ interface TaxRatesFooterProps {
 /**
  *
  */
-export const TaxRatesFooter = ({ count, query }: TaxRatesFooterProps) => {
+export function TaxRatesFooter({ count, query }: TaxRatesFooterProps) {
 	const { sync, active$, total$ } = useReplicationState(query);
 	const { clearAndSync } = useCollectionReset('taxes');
 	const active = useObservableState(active$, false);
@@ -33,4 +33,4 @@ export const TaxRatesFooter = ({ count, query }: TaxRatesFooterProps) => {
 			<SyncButton sync={sync} clearAndSync={clearAndSync} active={active} />
 		</HStack>
 	);
-};
+}

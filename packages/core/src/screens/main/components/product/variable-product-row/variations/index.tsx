@@ -21,7 +21,7 @@ interface Props {
 /**
  *
  */
-export const Variations = ({ row }: Props) => {
+export function Variations({ row }: Props) {
 	const parent = row.original.document;
 	const { queryParams, updateQueryParams } = useVariationRow();
 
@@ -88,4 +88,4 @@ export const Variations = ({ row }: Props) => {
 			</View>
 		</VStack>
 	);
-};
+}

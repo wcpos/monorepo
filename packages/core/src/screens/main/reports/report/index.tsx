@@ -23,7 +23,7 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
 import { usePrint } from '../../hooks/use-print';
 import { useReports } from '../context';
@@ -31,7 +31,7 @@ import { useReports } from '../context';
 /**
  *
  */
-export const Report = () => {
+export function Report() {
 	const t = useT();
 	const contentRef = React.useRef<View>(null);
 	const { store, wpCredentials } = useAppState();
@@ -218,4 +218,4 @@ export const Report = () => {
 			</Card>
 		</View>
 	);
-};
+}

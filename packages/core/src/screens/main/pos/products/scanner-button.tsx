@@ -4,7 +4,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 
 import { useWebSerialBarcodeScanner } from './use-serial-scanner';
 
-export const ScannerButton = () => {
+export function ScannerButton() {
 	const { connect } = useWebSerialBarcodeScanner({ debug: true });
 
 	return (
@@ -14,4 +14,4 @@ export const ScannerButton = () => {
 			onPress={connect}
 		/>
 	);
-};
+}

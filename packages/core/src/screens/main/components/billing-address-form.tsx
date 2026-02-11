@@ -36,7 +36,7 @@ export const billingAddressSchema = z.object({
 /**
  *
  */
-export const BillingAddressForm = () => {
+export function BillingAddressForm() {
 	const { control, watch, getValues } = useFormContext();
 	const t = useT();
 
@@ -153,4 +153,4 @@ export const BillingAddressForm = () => {
 			</HStack>
 		</VStack>
 	);
-};
+}

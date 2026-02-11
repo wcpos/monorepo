@@ -16,7 +16,7 @@ import * as React from 'react';
 
 import { ResponseType, useAuthRequest } from 'expo-auth-session';
 
-import AppInfo from '@wcpos/utils/app-info';
+import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { buildAuthUrl, generateState, getRedirectUri, parseAuthResult } from './utils';

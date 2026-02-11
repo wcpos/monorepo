@@ -137,4 +137,4 @@ const useHttpErrorHandler = () => {
 	return errorHandler;
 };
 
-export default useHttpErrorHandler;
+export { useHttpErrorHandler };

@@ -22,7 +22,7 @@ import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
@@ -30,7 +30,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 /**
  *
  */
-export const AddNewCustomer = () => {
+export function AddNewCustomer() {
 	const t = useT();
 	const [open, setOpen] = React.useState(false);
 	const { create } = useMutation({ collectionName: 'customers' });
@@ -132,4 +132,4 @@ export const AddNewCustomer = () => {
 			</Dialog>
 		</ErrorBoundary>
 	);
-};
+}

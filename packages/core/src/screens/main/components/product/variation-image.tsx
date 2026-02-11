@@ -15,9 +15,9 @@ import type { CellContext } from '@tanstack/react-table';
 /**
  *
  */
-export const ProductVariationImage = ({
+export function ProductVariationImage({
 	row,
-}: CellContext<{ document: ProductVariationDocument }, 'image'>) => {
+}: CellContext<{ document: ProductVariationDocument }, 'image'>) {
 	const variation = row.original.document;
 	const image = useObservableEagerState(variation.image$!);
 	const imageURL = get(image, 'src', undefined);
@@ -36,4 +36,4 @@ export const ProductVariationImage = ({
 			</View>
 		</>
 	);
-};
+}

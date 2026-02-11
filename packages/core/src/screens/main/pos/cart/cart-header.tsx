@@ -22,7 +22,7 @@ import { useAddCustomer } from '../hooks/use-add-customer';
 /**
  *
  */
-export const CartHeader = () => {
+export function CartHeader() {
 	const { addCustomer } = useAddCustomer();
 	const [showCustomerSelect, setShowCustomerSelect] = React.useState(false);
 	const t = useT();
@@ -112,4 +112,4 @@ export const CartHeader = () => {
 			</UISettingsDialog>
 		</HStack>
 	);
-};
+}

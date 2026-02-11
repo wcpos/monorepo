@@ -88,7 +88,7 @@ React.useEffect(() => {
 
 ## 3. Logging Protocol
 - **NO console.log**: Use the logger library exclusively.
-- **Library**: `import log from '@wcpos/utils/logger'`
+- **Library**: `import { log } from '@wcpos/utils/logger'`
 - **Methods**: `log.debug()`, `log.info()`, `log.warn()`, `log.error()`, `log.success()`.
 
 ## 4. TypeScript & Architecture
@@ -97,7 +97,7 @@ React.useEffect(() => {
 
 ## 5. Logger Quick Reference
 ```typescript
-import log from '@wcpos/utils/logger';
+import { log } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 log.debug('Debug msg', { context: { data } });

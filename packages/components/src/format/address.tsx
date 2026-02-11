@@ -104,7 +104,7 @@ const addresses = {
 	VN: '{name}\n{company}\n{address_1}\n{city}\n{country}',
 };
 
-export const FormatAddress = ({ address, showName }: FormatAddressProps) => {
+export function FormatAddress({ address, showName }: FormatAddressProps) {
 	const addr = { ...address } as Template; // clone address
 	let template =
 		addr.country && addresses.hasOwnProperty(addr.country)
@@ -135,4 +135,4 @@ export const FormatAddress = ({ address, showName }: FormatAddressProps) => {
 			})}
 		</View>
 	);
-};
+}

@@ -12,9 +12,9 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 /**
  *
  */
-export const ProductVariationName = (
+export function ProductVariationName(
 	props: CellContext<{ document: ProductVariationDocument }, 'name'>
-) => {
+) {
 	const { row, column } = props;
 	const variation = row.original.document;
 	const meta = column.columnDef.meta;
@@ -34,4 +34,4 @@ export const ProductVariationName = (
 			{show('stock_quantity') && <StockQuantity {...props} className="text-sm" withText />}
 		</VStack>
 	);
-};
+}

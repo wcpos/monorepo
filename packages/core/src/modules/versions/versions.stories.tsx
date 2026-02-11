@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import Versions from '.';
+import { Versions } from '.';
 
 export default {
 	title: 'Modules/Versions',

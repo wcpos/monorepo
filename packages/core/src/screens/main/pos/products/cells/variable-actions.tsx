@@ -3,7 +3,7 @@ import * as React from 'react';
 import { IconButton } from '@wcpos/components/icon-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 
-import VariationsPopover from './variations-popover';
+import { VariationsPopover } from './variations-popover';
 import { useAddVariation } from '../../hooks/use-add-variation';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -20,7 +20,7 @@ interface MetaData {
 /**
  *
  */
-export const VariableActions = ({ row }: CellContext<{ document: ProductDocument }, 'actions'>) => {
+export function VariableActions({ row }: CellContext<{ document: ProductDocument }, 'actions'>) {
 	const parent = row.original.document;
 	const { addVariation } = useAddVariation();
 	const triggerRef = React.useRef<{ close: () => void } | null>(null);
@@ -51,4 +51,4 @@ export const VariableActions = ({ row }: CellContext<{ document: ProductDocument
 			</PopoverContent>
 		</Popover>
 	);
-};
+}

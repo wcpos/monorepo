@@ -40,7 +40,7 @@ interface Props {
 /**
  *
  */
-const UISettingsDialog = ({ title, children }: Props) => {
+function UISettingsDialog({ title, children }: Props) {
 	const [openDialog, setOpenDialog] = React.useState(false);
 	const t = useT();
 	const buttonPressHandlerRef = React.useRef<(() => void) | null>(null);
@@ -88,6 +88,6 @@ const UISettingsDialog = ({ title, children }: Props) => {
 			</Dialog>
 		</ErrorBoundary>
 	);
-};
+}
 
 export { UISettingsDialog, columnsFormSchema, UISettingsColumnsForm, useDialogContext };

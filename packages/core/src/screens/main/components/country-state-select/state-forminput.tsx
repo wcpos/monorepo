@@ -10,12 +10,12 @@ import { StatesProvider, useStates } from '../../../../contexts/countries';
 /**
  * Here we follow the API for FormInput, but we switch between Input, Combobox and a Select
  */
-const StateFormInputBase = ({
+function StateFormInputBase({
 	value,
 	onChangeText,
 	countryCode,
 	...props
-}: React.ComponentProps<typeof Input> & { countryCode?: string }) => {
+}: React.ComponentProps<typeof Input> & { countryCode?: string }) {
 	const states = useStates();
 	const hasStates = states && states.length > 0;
 	const hasManyStates = states && states.length > 10;
@@ -51,14 +51,14 @@ const StateFormInputBase = ({
 	}
 
 	return <Input value={value} onChangeText={onChangeText} {...props} />;
-};
+}
 /**
  * We need the provider so we can check how many states are available
  */
-export const StateFormInput = ({
+export function StateFormInput({
 	countryCode,
 	...props
-}: React.ComponentProps<typeof Input> & { countryCode?: string }) => {
+}: React.ComponentProps<typeof Input> & { countryCode?: string }) {
 	/**
 	 * If no country code is provided, we just render an input
 	 */
@@ -71,4 +71,4 @@ export const StateFormInput = ({
 			<StateFormInputBase {...props} countryCode={countryCode} />
 		</StatesProvider>
 	);
-};
+}

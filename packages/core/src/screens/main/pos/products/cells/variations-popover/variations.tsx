@@ -7,8 +7,8 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
-import VariationButtons from './buttons';
-import VariationSelect from './select';
+import { VariationButtons } from './buttons';
+import { VariationSelect } from './select';
 import { parseAttributes } from './utils';
 import { useT } from '../../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
@@ -29,7 +29,7 @@ interface VariationPopoverProps {
 /**
  *
  */
-const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
+export function Variations({ query, parent, addToCart }: VariationPopoverProps) {
 	const result = useObservableSuspense(query.resource);
 	const selectedAttributes = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getVariationMatches()))
@@ -123,6 +123,4 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 			)}
 		</VStack>
 	);
-};
-
-export default Variations;
+}

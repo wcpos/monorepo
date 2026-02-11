@@ -8,10 +8,10 @@ type WebViewProps = {
 	onError?: (event: React.SyntheticEvent<HTMLIFrameElement, Event>) => void;
 };
 
-const WebViewBase = (
+function WebViewBase(
 	{ src, title, onError, onMessage, onLoad }: WebViewProps,
 	ref: React.Ref<HTMLIFrameElement>
-) => {
+) {
 	// React.useEffect(() => {
 	// 	if (typeof onMessage === 'function') {
 	// 		window.addEventListener('message', onMessage);
@@ -35,6 +35,6 @@ const WebViewBase = (
 			style={{ border: 'none' }}
 		/>
 	);
-};
+}
 
 export const WebView = React.forwardRef(WebViewBase);

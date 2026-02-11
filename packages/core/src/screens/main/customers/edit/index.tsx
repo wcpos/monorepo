@@ -9,7 +9,7 @@ import type { CustomerDocument } from '@wcpos/database';
 import { EditCustomer } from './edit-customer';
 import { useCollection } from '../../hooks/use-collection';
 
-export const EditCustomerScreen = () => {
+export function EditCustomerScreen() {
 	const { customerId } = useLocalSearchParams<{ customerId: string }>();
 	const { collection } = useCollection('customers');
 	const query = collection.findOneFix(customerId);
@@ -24,4 +24,4 @@ export const EditCustomerScreen = () => {
 			<EditCustomer resource={resource} />
 		</Suspense>
 	);
-};
+}

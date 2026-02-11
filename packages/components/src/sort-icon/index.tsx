@@ -15,7 +15,7 @@ export interface SortIconProps {
 	hovered?: boolean;
 }
 
-export const SortIcon = ({ direction, hovered = false }: SortIconProps) => {
+export function SortIcon({ direction, hovered = false }: SortIconProps) {
 	return (
 		<VStack className="gap-0">
 			<Icon
@@ -36,4 +36,4 @@ export const SortIcon = ({ direction, hovered = false }: SortIconProps) => {
 			/>
 		</VStack>
 	);
-};
+}

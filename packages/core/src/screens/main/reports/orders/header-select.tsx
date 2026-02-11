@@ -14,7 +14,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const TableHeaderSelect = ({ table }: HeaderContext<OrderDocument, boolean>) => {
+export function TableHeaderSelect({ table }: HeaderContext<OrderDocument, boolean>) {
 	const t = useT();
 	const meta = table.options.meta as unknown as {
 		totalOrders: number;
@@ -40,4 +40,4 @@ export const TableHeaderSelect = ({ table }: HeaderContext<OrderDocument, boolea
 			</TooltipContent>
 		</Tooltip>
 	);
-};
+}

@@ -26,7 +26,7 @@ interface Props {
 /**
  *
  */
-export const DateRangePill = ({ query, onRemove }: Props) => {
+export function DateRangePill({ query, onRemove }: Props) {
 	const t = useT();
 	const triggerRef = React.useRef<{ close: () => void }>(null);
 	const selectedDateRange = useObservableEagerState(
@@ -119,4 +119,4 @@ export const DateRangePill = ({ query, onRemove }: Props) => {
 			</PopoverContent>
 		</Popover>
 	);
-};
+}

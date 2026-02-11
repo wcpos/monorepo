@@ -22,7 +22,7 @@ import { VStack } from '@wcpos/components/vstack';
 import type { WebViewProps } from '@wcpos/components/webview';
 
 import { PaymentWebview } from './components/payment-webview';
-import CheckoutTitle from './components/title';
+import { CheckoutTitle } from './components/title';
 import { useT } from '../../../../contexts/translations';
 
 interface Props {
@@ -32,7 +32,7 @@ interface Props {
 /**
  *
  */
-export const Checkout = ({ resource }: Props) => {
+export function Checkout({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const orderNumber = useObservableEagerState(order.number$!);
 	const t = useT();
@@ -100,4 +100,4 @@ export const Checkout = ({ resource }: Props) => {
 			</ModalContent>
 		</Modal>
 	);
-};
+}

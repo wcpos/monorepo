@@ -223,4 +223,4 @@ const request = (config: AxiosRequestConfig = {}): Promise<any> => {
 	});
 };
 
-export default { request, isCancel };
+export const http = { request, isCancel };

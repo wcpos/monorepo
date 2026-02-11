@@ -503,4 +503,4 @@ export function getLogger(category: string[]): CategoryLogger {
 	return new CategoryLogger(category);
 }
 
-export default log;
+export { log };

@@ -11,9 +11,9 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const InclExclRadioGroup = (
+export function InclExclRadioGroup(
 	props: React.ComponentProps<typeof RadioGroup> & { name: string }
-) => {
+) {
 	const t = useT();
 	const { setValue } = useFormContext();
 
@@ -40,4 +40,4 @@ export const InclExclRadioGroup = (
 			})}
 		</RadioGroup>
 	);
-};
+}

@@ -16,7 +16,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const SettingsScreen = () => {
+export function SettingsScreen() {
 	const [value, setValue] = React.useState('general');
 	const t = useT();
 
@@ -76,4 +76,4 @@ export const SettingsScreen = () => {
 			</ModalContent>
 		</Modal>
 	);
-};
+}

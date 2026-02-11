@@ -11,11 +11,9 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const OrderNumber = ({
-	row,
-}: CellContext<{ document: OrderDocument }, 'payment_method'>) => {
+export function OrderNumber({ row }: CellContext<{ document: OrderDocument }, 'payment_method'>) {
 	const order = row.original.document;
 	const number = useObservableEagerState(order.number$!);
 
 	return number ? <Text>{number}</Text> : null;
-};
+}

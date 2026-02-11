@@ -20,7 +20,7 @@ interface TaxRateTableProps {
 /**
  *
  */
-export const TaxRateTable = ({ rates }: TaxRateTableProps) => {
+export function TaxRateTable({ rates }: TaxRateTableProps) {
 	const t = useT();
 
 	return (
@@ -105,4 +105,4 @@ export const TaxRateTable = ({ rates }: TaxRateTableProps) => {
 			</TableBody>
 		</Table>
 	);
-};
+}

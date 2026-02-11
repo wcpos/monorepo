@@ -27,9 +27,9 @@ import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../components/data-table';
-import { Date } from '../components/date';
+import { DateCell } from '../components/date';
 import { ProductCategories } from '../components/product/categories';
-import FilterBar from '../components/product/filter-bar';
+import { FilterBar } from '../components/product/filter-bar';
 import { ProductImage } from '../components/product/image';
 import { ProductTags } from '../components/product/tags';
 import { TaxBasedOn } from '../components/product/tax-based-on';
@@ -59,8 +59,8 @@ const cells = {
 		price: Price,
 		regular_price: EditablePrice,
 		sale_price: EditablePrice,
-		date_created: Date,
-		date_modified: Date,
+		date_created: DateCell,
+		date_modified: DateCell,
 		stock_quantity: StockQuantity,
 		stock_status: StockStatus,
 		categories: ProductCategories,
@@ -76,8 +76,8 @@ const cells = {
 		regular_price: VariableProductPrice,
 		price: VariableProductPrice,
 		sale_price: VariableProductPrice,
-		date_created: Date,
-		date_modified: Date,
+		date_created: DateCell,
+		date_modified: DateCell,
 		stock_quantity: StockQuantity,
 		stock_status: StockStatus,
 		categories: ProductCategories,
@@ -94,8 +94,8 @@ const variationCells = {
 	sale_price: EditablePrice,
 	regular_price: EditablePrice,
 	stock_quantity: StockQuantity,
-	date_created: Date,
-	date_modified: Date,
+	date_created: DateCell,
+	date_modified: DateCell,
 	barcode: Barcode,
 	stock_status: StockStatus,
 	image: ProductVariationImage,
@@ -153,13 +153,13 @@ function renderItem({
 /**
  *
  */
-const TableFooter = (props: Record<string, unknown>) => {
+function TableFooter(props: Record<string, unknown>) {
 	return (
 		<DataTableFooter {...(props as unknown as React.ComponentProps<typeof DataTableFooter>)}>
 			<TaxBasedOn />
 		</DataTableFooter>
 	);
-};
+}
 
 /**
  * Tables are expensive to render, so memoize all props.

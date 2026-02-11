@@ -31,10 +31,10 @@ import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
-import usePushDocument from '../../contexts/use-push-document';
+import { usePushDocument } from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCollection } from '../../hooks/use-collection';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'order']);
@@ -60,7 +60,7 @@ const formSchema = z.object({
 /**
  *
  */
-export const EditOrderForm = ({ order }: Props) => {
+export function EditOrderForm({ order }: Props) {
 	const pushDocument = usePushDocument();
 	const { localPatch } = useLocalMutation();
 	const t = useT();
@@ -385,4 +385,4 @@ export const EditOrderForm = ({ order }: Props) => {
 			</VStack>
 		</Form>
 	);
-};
+}

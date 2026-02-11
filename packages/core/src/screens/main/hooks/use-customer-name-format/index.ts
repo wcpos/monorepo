@@ -1,1 +1,1 @@
-export { useCustomerNameFormat as default } from './use-customer-name-format';
+export { useCustomerNameFormat } from './use-customer-name-format';

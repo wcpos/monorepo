@@ -19,7 +19,7 @@ const variantMap: Record<string, string> = {
 /**
  *
  */
-export const Level = ({ row, table }: CellContext<{ document: LogDocument }, 'level'>) => {
+export function Level({ row, table }: CellContext<{ document: LogDocument }, 'level'>) {
 	const log = row.original.document;
 	const query = (table.options.meta as Record<string, unknown> | undefined)?.query as
 		| Query<any>
@@ -44,4 +44,4 @@ export const Level = ({ row, table }: CellContext<{ document: LogDocument }, 'le
 			<ButtonText>{log.level}</ButtonText>
 		</ButtonPill>
 	);
-};
+}

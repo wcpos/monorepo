@@ -3,7 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { createFastStoreDB, createStoreDB, createUserDB } from '@wcpos/database';
 import type { UserDatabase } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
-import Platform from '@wcpos/utils/platform';
+import { Platform } from '@wcpos/utils/platform';
 
 import { initialProps } from './initial-props';
 

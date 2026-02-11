@@ -3,7 +3,7 @@ import { TextInput as RNTextInput, TextInputProps as RNTextInputProps, View } fr
 
 import { useControllableState } from '@rn-primitives/hooks';
 
-import useMergedRef from '@wcpos/hooks/use-merged-ref';
+import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
 
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';

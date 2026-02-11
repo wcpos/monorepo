@@ -2,18 +2,14 @@ import * as React from 'react';
 
 import { CommonActions, DrawerActions } from '@react-navigation/native';
 
-import DrawerItem from './drawer-item';
+import { DrawerItem } from './drawer-item';
 
 import type { DrawerContentComponentProps } from '@react-navigation/drawer';
 
 /**
  * Component that renders the navigation list in the drawer.
  */
-export default function DrawerItemList({
-	state,
-	navigation,
-	descriptors,
-}: DrawerContentComponentProps) {
+export function DrawerItemList({ state, navigation, descriptors }: DrawerContentComponentProps) {
 	const focusedRoute = state.routes[state.index];
 	const focusedDescriptor = descriptors[focusedRoute.key];
 	const focusedOptions = focusedDescriptor.options;

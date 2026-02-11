@@ -16,7 +16,7 @@ interface HydrationProvidersProps {
 /**
  * Provider sandwich to ensure all providers are hydrated before rendering the app
  */
-export const HydrationProviders = ({ children }: HydrationProvidersProps) => {
+export function HydrationProviders({ children }: HydrationProvidersProps) {
 	return (
 		<SplashProgressProvider initialProgress={0}>
 			<Suspense
@@ -42,4 +42,4 @@ export const HydrationProviders = ({ children }: HydrationProvidersProps) => {
 			</Suspense>
 		</SplashProgressProvider>
 	);
-};
+}

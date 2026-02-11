@@ -19,7 +19,7 @@ interface WpUserProps {
 /**
  *
  */
-export const WPUsers = ({ site }: WpUserProps) => {
+export function WPUsers({ site }: WpUserProps) {
 	const wpCreds = useObservableSuspense(
 		(
 			site as unknown as {
@@ -50,4 +50,4 @@ export const WPUsers = ({ site }: WpUserProps) => {
 			</HStack>
 		</VStack>
 	);
-};
+}

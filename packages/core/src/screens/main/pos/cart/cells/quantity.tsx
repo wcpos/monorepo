@@ -19,7 +19,7 @@ interface Props {
 /**
  *
  */
-export const Quantity = ({ row, column }: CellContext<Props, 'quantity'>) => {
+export function Quantity({ row, column }: CellContext<Props, 'quantity'>) {
 	const { item, uuid } = row.original;
 	const { updateLineItem, splitLineItem } = useUpdateLineItem();
 	const t = useT();
@@ -41,4 +41,4 @@ export const Quantity = ({ row, column }: CellContext<Props, 'quantity'>) => {
 			)}
 		</VStack>
 	);
-};
+}

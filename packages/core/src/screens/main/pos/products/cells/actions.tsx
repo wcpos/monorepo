@@ -11,7 +11,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'actions'>) => {
+export function Actions({ row }: CellContext<{ document: ProductDocument }, 'actions'>) {
 	const { addProduct } = useAddProduct();
 
 	/**
@@ -26,4 +26,4 @@ export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'act
 			onPress={() => addProduct(row.original.document)}
 		/>
 	);
-};
+}

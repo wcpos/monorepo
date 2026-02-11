@@ -4,7 +4,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Suspense } from '@wcpos/components/suspense';
 import { useQuery } from '@wcpos/query';
 
-import Variations from './variations';
+import { Variations } from './variations';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -18,7 +18,7 @@ interface VariationsPopoverProps {
 /**
  *
  */
-const VariationsPopover = ({ parent, addToCart }: VariationsPopoverProps) => {
+export function VariationsPopover({ parent, addToCart }: VariationsPopoverProps) {
 	/**
 	 *
 	 */
@@ -55,6 +55,4 @@ const VariationsPopover = ({ parent, addToCart }: VariationsPopoverProps) => {
 			</Suspense>
 		</ErrorBoundary>
 	);
-};
-
-export default VariationsPopover;
+}

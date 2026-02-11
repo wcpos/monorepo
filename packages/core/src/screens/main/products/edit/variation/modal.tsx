@@ -16,7 +16,7 @@ interface Props {
 	parentID?: string;
 }
 
-export const EditVariationModal = ({ resource }: Props) => {
+export function EditVariationModal({ resource }: Props) {
 	const variation = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
@@ -64,4 +64,4 @@ export const EditVariationModal = ({ resource }: Props) => {
 			</ModalContent>
 		</Modal>
 	);
-};
+}

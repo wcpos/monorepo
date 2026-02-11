@@ -4,7 +4,7 @@ import { useQuery } from '@wcpos/query';
 
 import { TaxRates } from './tax-rates';
 
-export const TaxRatesModal = () => {
+export function TaxRatesModal() {
 	const query = useQuery({
 		queryKeys: ['tax-rates'],
 		collectionName: 'taxes',
@@ -18,4 +18,4 @@ export const TaxRatesModal = () => {
 			</Suspense>
 		</ErrorBoundary>
 	);
-};
+}

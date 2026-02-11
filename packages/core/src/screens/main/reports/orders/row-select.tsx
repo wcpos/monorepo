@@ -11,7 +11,7 @@ import { useT } from '../../../../contexts/translations';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
-export const TableRowSelect = ({ row, table }: CellContext<OrderDocument, boolean>) => {
+export function TableRowSelect({ row, table }: CellContext<OrderDocument, boolean>) {
 	const t = useT();
 
 	return (
@@ -30,4 +30,4 @@ export const TableRowSelect = ({ row, table }: CellContext<OrderDocument, boolea
 			</TooltipContent>
 		</Tooltip>
 	);
-};
+}

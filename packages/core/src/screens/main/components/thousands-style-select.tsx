@@ -18,7 +18,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const ThousandsStyleSelect = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
+export function ThousandsStyleSelect({ value, ...props }: React.ComponentProps<typeof Select>) {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 	const { store } = useAppState();
@@ -70,4 +70,4 @@ export const ThousandsStyleSelect = ({ value, ...props }: React.ComponentProps<t
 			</SelectContent>
 		</Select>
 	);
-};
+}

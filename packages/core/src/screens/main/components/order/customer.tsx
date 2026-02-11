@@ -6,7 +6,7 @@ import { ButtonPill } from '@wcpos/components/button';
 import { FormatAddress } from '@wcpos/components/format';
 import { VStack } from '@wcpos/components/vstack';
 
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -15,11 +15,11 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const Customer = ({
+export function Customer({
 	table,
 	row,
 	column,
-}: CellContext<{ document: OrderDocument }, 'customer_id'>) => {
+}: CellContext<{ document: OrderDocument }, 'customer_id'>) {
 	const order = row.original.document;
 	const query = (table.options.meta as { query: any } | undefined)?.query;
 	const { format } = useCustomerNameFormat();
@@ -41,4 +41,4 @@ export const Customer = ({
 			{show?.('shipping') && <FormatAddress address={shipping as any} showName={false} />}
 		</VStack>
 	);
-};
+}

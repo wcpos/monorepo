@@ -30,13 +30,13 @@ const useRootContext = () => {
 	return context;
 };
 
-const Modal = ({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) => {
+function Modal({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
 	return (
 		<Context.Provider value={{ onClose: onClose ? onClose : () => router.back() }}>
 			{children}
 		</Context.Provider>
 	);
-};
+}
 
 function ModalClose({ asChild, disabled, ...props }: SlottablePressableProps) {
 	const { onClose } = useRootContext();

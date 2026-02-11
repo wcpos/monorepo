@@ -35,7 +35,7 @@ export interface FormatNumberProps {
 	isNumericString?: boolean;
 }
 
-export const FormatNumber = ({
+export function FormatNumber({
 	defaultValue,
 	decimalSeparator = '.',
 	thousandsGroupStyle = 'thousand',
@@ -48,7 +48,7 @@ export const FormatNumber = ({
 	allowedDecimalSeparators = ['.'],
 	allowNegative = true,
 	...props
-}: FormatNumberProps) => {
+}: FormatNumberProps) {
 	const thousandSeparator = props.thousandSeparator === true ? ',' : props.thousandSeparator;
 
 	if (decimalSeparator === thousandSeparator) {
@@ -233,4 +233,4 @@ export const FormatNumber = ({
 	 *
 	 */
 	return <Text>{formattedValue}</Text>;
-};
+}

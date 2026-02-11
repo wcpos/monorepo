@@ -16,10 +16,10 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const VariableProductImage = ({
+export function VariableProductImage({
 	row,
 	table,
-}: CellContext<{ document: ProductDocument }, 'image'>) => {
+}: CellContext<{ document: ProductDocument }, 'image'>) {
 	const product = row.original.document;
 	const images = useObservableEagerState(product.images$!);
 	const imageURL = get(images, [0, 'src'], undefined);
@@ -46,4 +46,4 @@ export const VariableProductImage = ({
 			<Image source={{ uri }} recyclingKey={product.uuid} className="h-full w-full rounded" />
 		</Pressable>
 	);
-};
+}

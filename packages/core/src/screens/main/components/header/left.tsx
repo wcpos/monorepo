@@ -13,7 +13,7 @@ import { useT } from '../../../../contexts/translations';
  * Header left button - uses sidebar-foreground for icons/text since
  * the header has a dark sidebar background in all themes.
  */
-const HeaderLeft = () => {
+export function HeaderLeft() {
 	const { screenSize } = useTheme();
 	const navigation = useNavigation();
 	const t = useT();
@@ -60,6 +60,4 @@ const HeaderLeft = () => {
 			</HStack>
 		</Button>
 	);
-};
-
-export default HeaderLeft;
+}

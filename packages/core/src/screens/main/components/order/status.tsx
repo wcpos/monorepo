@@ -55,7 +55,7 @@ const iconMap = {
 /**
  *
  */
-export const Status = ({ table, row }: CellContext<{ document: OrderDocument }, 'status'>) => {
+export function Status({ table, row }: CellContext<{ document: OrderDocument }, 'status'>) {
 	const order = row.original.document;
 	const status = useObservableEagerState(order.status$!);
 	const iconName = get(iconMap, [status ?? '', 'name'], 'circleQuestion') as string;
@@ -80,4 +80,4 @@ export const Status = ({ table, row }: CellContext<{ document: OrderDocument }, 
 			</TooltipContent>
 		</Tooltip>
 	);
-};
+}

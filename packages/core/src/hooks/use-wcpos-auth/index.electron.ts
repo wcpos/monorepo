@@ -4,7 +4,7 @@
  */
 import * as React from 'react';
 
-import AppInfo from '@wcpos/utils/app-info';
+import { AppInfo } from '@wcpos/utils/app-info';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { buildAuthUrl, generateState, getRedirectUri } from './utils';

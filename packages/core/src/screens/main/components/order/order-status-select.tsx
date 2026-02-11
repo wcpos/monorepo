@@ -14,7 +14,7 @@ import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 /**
  *
  */
-export const OrderStatusSelect = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
+export function OrderStatusSelect({ value, ...props }: React.ComponentProps<typeof Select>) {
 	const t = useT();
 	const { items } = useOrderStatusLabel();
 
@@ -34,4 +34,4 @@ export const OrderStatusSelect = ({ value, ...props }: React.ComponentProps<type
 			</SelectContent>
 		</Select>
 	);
-};
+}

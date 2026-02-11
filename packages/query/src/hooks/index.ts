@@ -6,7 +6,7 @@ import * as tags from './tags';
 import * as taxRates from './tax-rates';
 import * as variations from './variations';
 
-export default {
+export const allHooks = {
 	'products/categories': categories,
 	customers,
 	orders,

@@ -21,7 +21,7 @@ export const schema = z.object({
 /**
  *
  */
-export const UISettingsForm = () => {
+export function UISettingsForm() {
 	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('products');
 	// Get initial data once - don't subscribe to changes while editing
 	const initialData = React.useMemo(() => uiSettings.get(), [uiSettings]);
@@ -66,4 +66,4 @@ export const UISettingsForm = () => {
 			</VStack>
 		</Form>
 	);
-};
+}

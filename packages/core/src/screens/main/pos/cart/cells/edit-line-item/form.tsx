@@ -43,7 +43,7 @@ interface Props {
 /**
  * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
  */
-export const EditLineItemForm = ({ uuid, item }: Props) => {
+export function EditLineItemForm({ uuid, item }: Props) {
 	const t = useT();
 	const { updateLineItem } = useUpdateLineItem();
 	const { onOpenChange } = useRootContext();
@@ -207,4 +207,4 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 			</VStack>
 		</Form>
 	);
-};
+}

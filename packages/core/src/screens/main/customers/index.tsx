@@ -21,7 +21,7 @@ import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import { TextCell } from '../components/text-cell';
-import { Date } from '../components/date';
+import { DateCell } from '../components/date';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
@@ -32,8 +32,8 @@ const cells = {
 	shipping: Address,
 	actions: Actions,
 	email: CustomerEmail,
-	date_created_gmt: Date,
-	date_modified_gmt: Date,
+	date_created_gmt: DateCell,
+	date_modified_gmt: DateCell,
 };
 
 function renderCell(columnKey: string, info: Record<string, unknown>) {

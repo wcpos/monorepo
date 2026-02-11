@@ -16,7 +16,7 @@ import { Report } from './report';
 /**
  *
  */
-export const Reports = () => {
+export function Reports() {
 	const { screenSize } = useTheme();
 	const { bottom } = useSafeAreaInsets();
 
@@ -68,4 +68,4 @@ export const Reports = () => {
 			</View>
 		</VStack>
 	);
-};
+}

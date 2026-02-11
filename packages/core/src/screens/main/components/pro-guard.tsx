@@ -22,7 +22,7 @@ export const withProAccess = <P extends object>(
 	WrappedComponent: React.ComponentType<P>,
 	page: ProPage
 ) => {
-	return function ProAccessWrapper(props: P) {
+	function ProAccessWrapper(props: P) {
 		const { isPro } = useLicense();
 
 		if (!isPro) {
@@ -30,5 +30,7 @@ export const withProAccess = <P extends object>(
 		}
 
 		return <WrappedComponent {...props} />;
-	};
+	}
+
+	return ProAccessWrapper;
 };

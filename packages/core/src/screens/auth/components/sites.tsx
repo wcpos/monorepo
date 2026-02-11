@@ -15,7 +15,7 @@ interface SitesProps {
 /**
  *
  */
-export const Sites = ({ user }: SitesProps) => {
+export function Sites({ user }: SitesProps) {
 	const sites = useObservableSuspense(
 		(
 			user as unknown as {
@@ -42,4 +42,4 @@ export const Sites = ({ user }: SitesProps) => {
 			))}
 		</Card>
 	);
-};
+}

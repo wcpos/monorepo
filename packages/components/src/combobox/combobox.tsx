@@ -6,7 +6,7 @@ import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import * as Slot from '@rn-primitives/slot';
 
-import Platform from '@wcpos/utils/platform';
+import { Platform } from '@wcpos/utils/platform';
 
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';

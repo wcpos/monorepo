@@ -24,7 +24,7 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
-import Platform from '@wcpos/utils/platform';
+import { Platform } from '@wcpos/utils/platform';
 import { clearAllDB } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -46,7 +46,7 @@ interface StoreSubMenuProps {
 /**
  *
  */
-const StoreSubMenu = ({ storesResource, switchStore, currentStoreID }: StoreSubMenuProps) => {
+function StoreSubMenu({ storesResource, switchStore, currentStoreID }: StoreSubMenuProps) {
 	const stores = useObservableSuspense(storesResource);
 
 	return (
@@ -62,12 +62,12 @@ const StoreSubMenu = ({ storesResource, switchStore, currentStoreID }: StoreSubM
 			))}
 		</Animated.View>
 	);
-};
+}
 
 /**
  * @TODO - remove hardcoded screensize
  */
-export const UserMenu = () => {
+export function UserMenu() {
 	const { wpCredentials, site, store, logout, switchStore } = useAppState();
 	const router = useRouter();
 	const { screenSize } = useTheme();
@@ -178,4 +178,4 @@ export const UserMenu = () => {
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
-};
+}

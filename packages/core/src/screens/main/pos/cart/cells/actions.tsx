@@ -15,7 +15,7 @@ interface Props {
 		| import('@wcpos/database').OrderDocument['shipping_lines'];
 }
 
-export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
+export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 	const { uuid, type } = row.original;
 	const { removeLineItem } = useRemoveLineItem();
 
@@ -69,4 +69,4 @@ export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
 			onPress={handleRemoveLineItem}
 		/>
 	);
-};
+}

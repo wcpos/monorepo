@@ -35,7 +35,7 @@ export const shippingAddressSchema = z.object({
 /**
  *
  */
-export const ShippingAddressForm = () => {
+export function ShippingAddressForm() {
 	const { control, watch, getValues } = useFormContext();
 	const t = useT();
 
@@ -145,4 +145,4 @@ export const ShippingAddressForm = () => {
 			</HStack>
 		</VStack>
 	);
-};
+}

@@ -11,9 +11,9 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
-import usePushDocument from '../../contexts/use-push-document';
+import { usePushDocument } from '../../contexts/use-push-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'customer']);
 
@@ -24,7 +24,7 @@ interface Props {
 /**
  *
  */
-export const EditCustomerForm = ({ customer }: Props) => {
+export function EditCustomerForm({ customer }: Props) {
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
@@ -102,4 +102,4 @@ export const EditCustomerForm = ({ customer }: Props) => {
 			loading={loading}
 		/>
 	);
-};
+}

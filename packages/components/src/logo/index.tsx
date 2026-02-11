@@ -6,7 +6,7 @@ interface Props extends SvgProps {
 	animate?: boolean;
 }
 
-export const Logo = ({ animate, width = 100, height = 100, ...props }: Props) => {
+export function Logo({ animate, width = 100, height = 100, ...props }: Props) {
 	return (
 		<Svg viewBox="0 0 1260 1260" width={width} height={height} {...props}>
 			<Path
@@ -65,4 +65,4 @@ export const Logo = ({ animate, width = 100, height = 100, ...props }: Props) =>
 			/>
 		</Svg>
 	);
-};
+}

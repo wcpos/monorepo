@@ -10,13 +10,13 @@ import { Tree } from '@wcpos/components/tree';
 
 import { EditCustomerForm } from './form';
 import { useT } from '../../../../contexts/translations';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').CustomerDocument>;
 }
 
-export const EditCustomer = ({ resource }: Props) => {
+export function EditCustomer({ resource }: Props) {
 	const customer = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
@@ -65,4 +65,4 @@ export const EditCustomer = ({ resource }: Props) => {
 			</ModalContent>
 		</Modal>
 	);
-};
+}

@@ -15,7 +15,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const TaxBasedOnSelect = ({ value, ...props }: React.ComponentProps<typeof Select>) => {
+export function TaxBasedOnSelect({ value, ...props }: React.ComponentProps<typeof Select>) {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 
@@ -62,4 +62,4 @@ export const TaxBasedOnSelect = ({ value, ...props }: React.ComponentProps<typeo
 			</SelectContent>
 		</Select>
 	);
-};
+}

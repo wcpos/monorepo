@@ -24,7 +24,7 @@ interface CommandDialogProps extends DialogProps {
 	children?: React.ReactNode;
 }
 
-const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
+function CommandDialog({ children, ...props }: CommandDialogProps) {
 	return (
 		<Dialog {...props}>
 			<DialogContent>
@@ -32,7 +32,7 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
 			</DialogContent>
 		</Dialog>
 	);
-};
+}
 CommandDialog.displayName = 'CommandDialog';
 
 interface CommandInputProps extends React.ComponentPropsWithoutRef<typeof Input> {

@@ -7,7 +7,7 @@ import { cn } from '@wcpos/components/lib/utils';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { VStack } from '@wcpos/components/vstack';
-import Platform from '@wcpos/utils/platform';
+import { Platform } from '@wcpos/utils/platform';
 
 import type { DrawerNavigationOptions } from '@react-navigation/drawer';
 
@@ -74,13 +74,13 @@ type Props = {
 };
 
 // Separate component for permanent drawer items (icon-only on large screens)
-const PermanentDrawerItem = ({
+function PermanentDrawerItem({
 	icon,
 	label,
 	focused,
 	onPress,
 	style,
-}: Pick<Props, 'icon' | 'label' | 'focused' | 'onPress' | 'style'>) => {
+}: Pick<Props, 'icon' | 'label' | 'focused' | 'onPress' | 'style'>) {
 	const button = (
 		<Button
 			onPress={onPress}
@@ -109,38 +109,48 @@ const PermanentDrawerItem = ({
 	}
 
 	return React.cloneElement(button, { style });
-};
+}
 
 // Standard drawer item with label (shown on smaller screens when drawer opens)
-const StandardDrawerItem = ({
+function StandardDrawerItem({
 	icon,
 	label,
 	focused,
 	onPress,
 	style,
-}: Pick<Props, 'icon' | 'label' | 'focused' | 'onPress' | 'style'>) => (
-	<Button
-		onPress={onPress}
-		size="xl"
-		className={cn(
-			'h-12 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
-			focused ? 'border-l-primary' : 'hover:bg-white/10'
-		)}
-		style={style}
-	>
-		<HStack className="gap-3">
-			{icon?.({ focused })}
-			<ButtonText className={cn('pr-2', focused ? 'text-primary' : 'text-sidebar-foreground')}>
-				{typeof label === 'function' ? label({ focused }) : label}
-			</ButtonText>
-		</HStack>
-	</Button>
-);
+}: Pick<Props, 'icon' | 'label' | 'focused' | 'onPress' | 'style'>) {
+	return (
+		<Button
+			onPress={onPress}
+			size="xl"
+			className={cn(
+				'h-12 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
+				focused ? 'border-l-primary' : 'hover:bg-white/10'
+			)}
+			style={style}
+		>
+			<HStack className="gap-3">
+				{icon?.({ focused })}
+				<ButtonText className={cn('pr-2', focused ? 'text-primary' : 'text-sidebar-foreground')}>
+					{typeof label === 'function' ? label({ focused }) : label}
+				</ButtonText>
+			</HStack>
+		</Button>
+	);
+}
 
 /**
  * DrawerItem component with declarative approach
  */
-const DrawItem = ({ label, icon, focused, onPress, drawerType, style = {}, ...rest }: Props) => {
+export function DrawerItem({
+	label,
+	icon,
+	focused,
+	onPress,
+	drawerType,
+	style = {},
+	...rest
+}: Props) {
 	// Use permanent drawer item for 'permanent' type, standard for all others
 	if (drawerType === 'permanent') {
 		return (
@@ -163,6 +173,4 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, style = {}, ...re
 			style={style}
 		/>
 	);
-};
-
-export default DrawItem;
+}

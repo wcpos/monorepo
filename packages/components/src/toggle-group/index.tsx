@@ -11,13 +11,13 @@ import type { ItemProps, RootProps } from '@rn-primitives/toggle-group';
 
 const ToggleGroupContext = React.createContext<VariantProps<typeof toggleVariants> | null>(null);
 
-const ToggleGroup = ({
+function ToggleGroup({
 	className,
 	variant,
 	size,
 	children,
 	...props
-}: RootProps & VariantProps<typeof toggleVariants>) => {
+}: RootProps & VariantProps<typeof toggleVariants>) {
 	const childrenArray = React.Children.toArray(children);
 
 	return (
@@ -41,7 +41,7 @@ const ToggleGroup = ({
 			</ToggleGroupContext.Provider>
 		</ToggleGroupPrimitive.Root>
 	);
-};
+}
 
 function useToggleGroupContext() {
 	const context = React.useContext(ToggleGroupContext);
@@ -53,7 +53,7 @@ function useToggleGroupContext() {
 	return context;
 }
 
-const ToggleGroupItem = ({
+function ToggleGroupItem({
 	className,
 	children,
 	variant,
@@ -62,7 +62,7 @@ const ToggleGroupItem = ({
 	isLastItem,
 	...props
 }: ItemProps &
-	VariantProps<typeof toggleVariants> & { isFirstItem?: boolean; isLastItem?: boolean }) => {
+	VariantProps<typeof toggleVariants> & { isFirstItem?: boolean; isLastItem?: boolean }) {
 	const context = useToggleGroupContext();
 	const { value } = ToggleGroupPrimitive.useRootContext();
 
@@ -94,6 +94,6 @@ const ToggleGroupItem = ({
 			</ToggleGroupPrimitive.Item>
 		</TextClassContext.Provider>
 	);
-};
+}
 
 export { ToggleGroup, ToggleGroupItem };

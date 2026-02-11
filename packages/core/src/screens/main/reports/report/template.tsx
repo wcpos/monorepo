@@ -12,14 +12,14 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { convertUTCStringToLocalDate, useLocalDate } from '../../../../hooks/use-local-date';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
 import { useNumberFormat } from '../../hooks/use-number-format';
 import { useReports } from '../context';
 
 /**
  *
  */
-export const ZReport = () => {
+export function ZReport() {
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
 	const storeName = useObservableEagerState(store.name$) as string;
@@ -212,4 +212,4 @@ export const ZReport = () => {
 			<Br />
 		</View>
 	);
-};
+}

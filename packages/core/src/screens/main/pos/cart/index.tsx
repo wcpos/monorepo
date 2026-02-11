@@ -24,7 +24,7 @@ import { useCurrentOrder } from '../contexts/current-order';
  *
 
  */
-export const OpenOrders = ({ isColumn = false }) => {
+export function OpenOrders({ isColumn = false }) {
 	const { currentOrder } = useCurrentOrder();
 
 	if (!currentOrder) {
@@ -94,4 +94,4 @@ export const OpenOrders = ({ isColumn = false }) => {
 			</ErrorBoundary>
 		</VStack>
 	);
-};
+}
