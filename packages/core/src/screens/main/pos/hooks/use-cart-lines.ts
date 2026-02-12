@@ -114,7 +114,6 @@ export const useCartLines = () => {
 			let needsUpdate = false;
 			const updatedCouponLines = await Promise.all(
 				activeCouponLines.map(async (cl: any) => {
-
 					const coupon = await couponCollection.findOne({ selector: { code: cl.code } }).exec();
 
 					if (!coupon) return cl;
