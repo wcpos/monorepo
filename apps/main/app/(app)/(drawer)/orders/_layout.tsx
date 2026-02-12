@@ -33,6 +33,14 @@ export default function OrdersLayout() {
 					contentStyle: { backgroundColor: 'transparent' },
 				}}
 			/>
+			<Stack.Screen
+				name="(modals)/refund/[orderId]"
+				options={{
+					presentation: 'containedTransparentModal',
+					animation: 'fade',
+					contentStyle: { backgroundColor: 'transparent' },
+				}}
+			/>
 		</Stack>
 	);
 }
