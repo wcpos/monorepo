@@ -28,7 +28,6 @@ test.describe('Products in POS', () => {
 
 		// Click toggle to switch to table view
 		await page.getByTestId('view-mode-toggle').click();
-		await page.waitForTimeout(1_000);
 
 		// Table view should show column headers
 		const columnheaders = page.getByRole('columnheader');
@@ -43,7 +42,6 @@ test.describe('Products in POS', () => {
 
 		// Switch back to grid
 		await page.getByTestId('view-mode-toggle').click();
-		await page.waitForTimeout(1_000);
 
 		// Tiles should reappear
 		const tiles = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
@@ -115,16 +113,9 @@ test.describe('Products in POS', () => {
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
 
-		const hasResults = await page
-			.getByTestId('data-table-count')
-			.isVisible()
-			.catch(() => false);
-
-		if (hasResults) {
-			// Variable products render with a distinct testID in grid view
-			const variableTiles = page.getByTestId('variable-product-tile');
-			await expect(variableTiles.first()).toBeVisible({ timeout: 10_000 });
-		}
+		// Seed data must include "hoodie" as a variable product
+		const variableTiles = page.getByTestId('variable-product-tile');
+		await expect(variableTiles.first()).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should open variation popover when clicking variable product tile', async ({
@@ -135,13 +126,10 @@ test.describe('Products in POS', () => {
 		await page.waitForTimeout(1_500);
 
 		const variableTile = page.getByTestId('variable-product-tile');
-		const isVisible = await variableTile.first().isVisible().catch(() => false);
-
-		if (isVisible) {
-			await variableTile.first().click();
-			// The popover renders with role="dialog" from the Popover component
-			await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
-		}
+		await expect(variableTile.first()).toBeVisible({ timeout: 10_000 });
+		await variableTile.first().click();
+		// The popover renders with role="dialog" from the Popover component
+		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should add product to cart in table view', async ({ posPage: page }) => {
