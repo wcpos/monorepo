@@ -34,6 +34,7 @@ import {
 import { useUISettings } from '../../contexts/ui-settings';
 
 const gridFieldsSchema = z.object({
+	name: z.boolean(),
 	price: z.boolean(),
 	tax: z.boolean(),
 	on_sale: z.boolean(),
@@ -154,6 +155,7 @@ export function UISettingsForm() {
 								<Text className="font-medium">{t('common.tile_fields')}</Text>
 								{(
 									[
+										'name',
 										'price',
 										'tax',
 										'on_sale',

@@ -26,6 +26,7 @@ interface MetaData {
 }
 
 interface GridFields {
+	name: boolean;
 	price: boolean;
 	tax: boolean;
 	on_sale: boolean;
@@ -67,6 +68,14 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 	const safeTaxStatus = (taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
 	const taxDisplay = gridFields.tax ? ('text' as const) : ('none' as const);
 	const showOnSale = gridFields.on_sale && onSale;
+	const hasAnyField =
+		gridFields.name ||
+		gridFields.price ||
+		gridFields.sku ||
+		gridFields.barcode ||
+		gridFields.category ||
+		gridFields.stock_quantity ||
+		gridFields.cost_of_goods_sold;
 
 	const addToCart = React.useCallback(
 		(variation: ProductVariationDocument | ProductDocument, metaData: MetaData[]) => {
@@ -79,23 +88,25 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 	);
 
 	return (
-		<View className="m-1 flex-1">
-			<Popover>
-				<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
-					<Pressable
-						className="bg-card border-border flex-1 overflow-hidden rounded-lg border"
-						testID="variable-product-tile"
-					>
-						<View className="aspect-square">
-							<Image source={imageSource} recyclingKey={product.uuid} className="h-full w-full" />
-							<View className="absolute top-1 right-1 rounded bg-black/50 px-1 py-0.5">
-								<Text className="text-xs text-white">{t('common.variants')}</Text>
-							</View>
+		<Popover className="bg-card border-border m-1 flex-1 overflow-hidden rounded-lg border">
+			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
+				<Pressable
+					className="flex-1"
+					testID="variable-product-tile"
+				>
+					<View className="aspect-square">
+						<Image source={imageSource} recyclingKey={product.uuid} className="h-full w-full" />
+						<View className="absolute top-1 right-1 rounded bg-black/50 px-1 py-0.5">
+							<Text className="text-xs text-white">{t('common.variants')}</Text>
 						</View>
+					</View>
+					{hasAnyField && (
 						<VStack className="p-2" space="xs">
-							<Text className="font-bold" numberOfLines={2} decodeHtml>
-								{name}
-							</Text>
+							{gridFields.name && (
+								<Text className="font-bold" numberOfLines={2} decodeHtml>
+									{name}
+								</Text>
+							)}
 							{gridFields.price && (
 								<>
 									{showOnSale ? (
@@ -146,16 +157,16 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 							)}
 							{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
 								<Text className="text-muted-foreground text-xs">
-									{t('common.cost_of_goods_sold')}: {format(costOfGoodsSold?.total_value || 0)}
+									{t('common.cogs')}: {format(costOfGoodsSold?.total_value || 0)}
 								</Text>
 							) : null}
 						</VStack>
-					</Pressable>
-				</PopoverTrigger>
-				<PopoverContent side="right" align="center" className="w-auto max-w-80 p-2">
-					<VariationsPopover parent={product} addToCart={addToCart as never} />
-				</PopoverContent>
-			</Popover>
-		</View>
+					)}
+				</Pressable>
+			</PopoverTrigger>
+			<PopoverContent side="right" align="center" className="w-auto max-w-80 p-2">
+				<VariationsPopover parent={product} addToCart={addToCart as never} />
+			</PopoverContent>
+		</Popover>
 	);
 }

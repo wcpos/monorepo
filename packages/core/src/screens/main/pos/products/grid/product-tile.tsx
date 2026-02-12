@@ -17,6 +17,7 @@ import { useAddProduct } from '../../hooks/use-add-product';
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
 interface GridFields {
+	name: boolean;
 	price: boolean;
 	tax: boolean;
 	on_sale: boolean;
@@ -56,6 +57,14 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 	const safeTaxStatus = (taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
 	const taxDisplay = gridFields.tax ? ('text' as const) : ('none' as const);
 	const showOnSale = gridFields.on_sale && onSale;
+	const hasAnyField =
+		gridFields.name ||
+		gridFields.price ||
+		gridFields.sku ||
+		gridFields.barcode ||
+		gridFields.category ||
+		gridFields.stock_quantity ||
+		gridFields.cost_of_goods_sold;
 
 	const handlePress = React.useCallback(() => {
 		addProduct(product);
@@ -70,64 +79,68 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 			<View className="aspect-square">
 				<Image source={imageSource} recyclingKey={product.uuid} className="h-full w-full" />
 			</View>
-			<VStack className="p-2" space="xs">
-				<Text className="font-bold" numberOfLines={2} decodeHtml>
-					{name}
-				</Text>
-				{gridFields.price && (
-					<>
-						{showOnSale ? (
-							<VStack space="xs">
-								<PriceWithTax
-									price={regularPrice ?? ''}
-									taxStatus={safeTaxStatus}
-									taxClass={taxClass ?? ''}
-									taxDisplay={taxDisplay}
-									strikethrough
-								/>
+			{hasAnyField && (
+				<VStack className="p-2" space="xs">
+					{gridFields.name && (
+						<Text className="font-bold" numberOfLines={2} decodeHtml>
+							{name}
+						</Text>
+					)}
+					{gridFields.price && (
+						<>
+							{showOnSale ? (
+								<VStack space="xs">
+									<PriceWithTax
+										price={regularPrice ?? ''}
+										taxStatus={safeTaxStatus}
+										taxClass={taxClass ?? ''}
+										taxDisplay={taxDisplay}
+										strikethrough
+									/>
+									<PriceWithTax
+										price={price ?? ''}
+										taxStatus={safeTaxStatus}
+										taxClass={taxClass ?? ''}
+										taxDisplay={taxDisplay}
+									/>
+								</VStack>
+							) : (
 								<PriceWithTax
 									price={price ?? ''}
 									taxStatus={safeTaxStatus}
 									taxClass={taxClass ?? ''}
 									taxDisplay={taxDisplay}
 								/>
-							</VStack>
-						) : (
-							<PriceWithTax
-								price={price ?? ''}
-								taxStatus={safeTaxStatus}
-								taxClass={taxClass ?? ''}
-								taxDisplay={taxDisplay}
-							/>
-						)}
-					</>
-				)}
-				{gridFields.sku && sku ? (
-					<Text className="text-muted-foreground text-xs">
-						{t('common.sku')}: {sku}
-					</Text>
-				) : null}
-				{gridFields.barcode && barcode ? (
-					<Text className="text-muted-foreground text-xs">
-						{t('common.barcode')}: {barcode}
-					</Text>
-				) : null}
-				{gridFields.category && categories.length > 0 && (
-					<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
-						{categories.map((c) => c.name ?? '').join(', ')}
-					</Text>
-				)}
-				{gridFields.stock_quantity && stockQuantity != null && (
-					<Text className="text-muted-foreground text-xs">
-						{t('common.stock')}: {stockQuantity}
-					</Text>
-				)}
-				{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
-					<Text className="text-muted-foreground text-xs">
-						{t('common.cost_of_goods_sold')}: {format(costOfGoodsSold?.total_value || 0)}
-					</Text>
-				) : null}
-			</VStack>
+							)}
+						</>
+					)}
+					{gridFields.sku && sku ? (
+						<Text className="text-muted-foreground text-xs">
+							{t('common.sku')}: {sku}
+						</Text>
+					) : null}
+					{gridFields.barcode && barcode ? (
+						<Text className="text-muted-foreground text-xs">
+							{t('common.barcode')}: {barcode}
+						</Text>
+					) : null}
+					{gridFields.category && categories.length > 0 && (
+						<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
+							{categories.map((c) => c.name ?? '').join(', ')}
+						</Text>
+					)}
+					{gridFields.stock_quantity && stockQuantity != null && (
+						<Text className="text-muted-foreground text-xs">
+							{t('common.stock')}: {stockQuantity}
+						</Text>
+					)}
+					{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
+						<Text className="text-muted-foreground text-xs">
+							{t('common.cogs')}: {format(costOfGoodsSold?.total_value || 0)}
+						</Text>
+					) : null}
+				</VStack>
+			)}
 		</Pressable>
 	);
 }

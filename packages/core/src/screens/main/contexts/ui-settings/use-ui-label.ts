@@ -16,7 +16,7 @@ export const useUILabel = () => {
 				'pos-products': {
 					showOutOfStock: t('common.show_out-of-stock_products'),
 					image: t('common.image'),
-					name: t('common.product'),
+					name: t('common.product_name'),
 					stock_quantity: t('common.stock'),
 					sku: t('common.sku'),
 					barcode: t('common.barcode'),
