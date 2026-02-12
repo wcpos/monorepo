@@ -137,7 +137,7 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 						{gridFields.stock_quantity && stockQuantity != null && (
 							<Text className="text-muted-foreground text-xs">Stock: {stockQuantity}</Text>
 						)}
-						{gridFields.cost_of_goods_sold && costOfGoodsSold ? (
+						{gridFields.cost_of_goods_sold && costOfGoodsSold != null && costOfGoodsSold !== '' ? (
 							<Text className="text-muted-foreground text-xs">
 								COGS: {format(Number(costOfGoodsSold))}
 							</Text>
