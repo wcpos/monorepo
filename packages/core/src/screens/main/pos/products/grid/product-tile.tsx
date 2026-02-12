@@ -107,7 +107,7 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 				) : null}
 				{gridFields.category && categories.length > 0 && (
 					<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
-						{categories.map((c: { name: string }) => c.name).join(', ')}
+						{categories.map((c) => c.name ?? '').join(', ')}
 					</Text>
 				)}
 				{gridFields.stock_quantity && stockQuantity != null && (
