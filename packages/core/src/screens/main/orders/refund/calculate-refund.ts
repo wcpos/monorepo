@@ -2,13 +2,13 @@ interface LineItemInput {
 	quantity: number;
 	total: string;
 	totalTax: string;
-	taxes: Array<{ id: number; total: string }>;
+	taxes: { id: number; total: string }[];
 	refundQty: number;
 }
 
 interface LineItemRefund {
 	refund_total: string;
-	refund_tax: Array<{ id: number; refund_total: string }>;
+	refund_tax: { id: number; refund_total: string }[];
 }
 
 /**

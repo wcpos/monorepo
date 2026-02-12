@@ -134,9 +134,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 								<Text>{t('common.receipt')}</Text>
 							</DropdownMenuItem>
 							<DropdownMenuItem
-								onPress={() =>
-									router.push({ pathname: `/orders/refund/${order.uuid}` })
-								}
+								onPress={() => router.push({ pathname: `/orders/refund/${order.uuid}` })}
 							>
 								<Icon name="arrowRotateLeft" />
 								<Text>{t('orders.refund')}</Text>
