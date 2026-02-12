@@ -230,7 +230,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	 */
 	const create = React.useCallback(
 		async ({ data }: { data: Record<string, unknown> }) => {
-			let localDoc: RxDocument | null = null;
+			let localDoc: RxDocument<any> | null = null;
 
 			try {
 				// Create local document with empty fields and provided data
@@ -245,7 +245,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					}
 				}
 
-				localDoc = await collection.insert({ ...emptyJSON, ...data });
+				localDoc = await collection.insert({ ...emptyJSON, ...data } as any);
 
 				const replicationState = manager.registerCollectionReplication({
 					collection,

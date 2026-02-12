@@ -2,6 +2,7 @@ import { ExtractDocumentTypeFromTypedRxJsonSchema, RxJsonSchema } from 'rxdb';
 
 import { brandsLiteral } from './schemas/brands';
 import { categoriesLiteral } from './schemas/categories';
+import { couponsLiteral } from './schemas/coupons';
 import { customersLiteral } from './schemas/customers';
 // import { gatewaysLiteral } from './schemas/gateways';
 // import { logsLiteral } from './schemas/logs';
@@ -352,6 +353,20 @@ const customers: RxCollectionCreator<CustomerDocumentType> = {
 };
 
 /**
+ * Coupons
+ */
+const couponSchema: RxJsonSchema<CouponDocumentType> = couponsLiteral;
+type CouponDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof couponsLiteral>;
+export type CouponDocument = RxDocument<CouponDocumentType>;
+export type CouponCollection = RxCollection<CouponDocumentType>;
+const coupons: RxCollectionCreator<CouponDocumentType> = {
+	schema: couponSchema,
+	options: {
+		searchFields: ['code', 'description'],
+	},
+};
+
+/**
  * Taxes
  */
 const taxRateSchema: RxJsonSchema<TaxRateDocumentType> = taxRatesLiteral;
@@ -418,6 +433,7 @@ export type StoreCollections = {
 	variations: ProductVariationCollection;
 	orders: OrderCollection;
 	customers: CustomerCollection;
+	coupons: CouponCollection;
 	taxes: TaxRateCollection;
 	// payment_gateways: GatewayCollection;
 	'products/categories': ProductCategoryCollection;
@@ -432,6 +448,7 @@ export type SyncCollections = {
 	variations: SyncCollection;
 	orders: SyncCollection;
 	customers: SyncCollection;
+	coupons: SyncCollection;
 	taxes: SyncCollection;
 	// payment_gateways: GatewayCollection;
 	'products/categories': SyncCollection;
@@ -461,6 +478,7 @@ export const storeCollections = {
 	variations,
 	orders,
 	customers,
+	coupons,
 	taxes, // NOTE: WC REST API uses 'taxes', not 'tax_rates', going against all other endpoints.
 	// payment_gateways,
 	'products/categories': categories, // NOTE: WC REST API uses 'products/categories' endpoint
@@ -476,6 +494,7 @@ export const syncCollections = {
 	variations: sync,
 	orders: sync,
 	customers: sync,
+	coupons: sync,
 	taxes: sync,
 	// payment_gateways: sync,
 	'products/categories': sync,

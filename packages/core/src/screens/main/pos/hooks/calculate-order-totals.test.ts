@@ -423,3 +423,81 @@ describe('calculateOrderTotals', () => {
 		});
 	});
 });
+
+describe('coupon line calculations', () => {
+	it('subtracts coupon discount from totals', () => {
+		const lineItems = [
+			{
+				subtotal: '100',
+				total: '100',
+				subtotal_tax: '10',
+				total_tax: '10',
+				taxes: [{ id: 1, total: '10' }],
+			},
+		];
+		const couponLines = [
+			{
+				code: 'SAVE10',
+				discount: '10',
+				discount_tax: '1',
+			},
+		];
+
+		const result = calculateOrderTotals({
+			lineItems: lineItems as any,
+			couponLines: couponLines as any,
+			taxRates: [{ id: 1, name: 'Tax', rate: '10', compound: false }] as any,
+			taxRoundAtSubtotal: false,
+		});
+
+		expect(result.discount_total).toBe('10');
+		expect(result.discount_tax).toBe('1');
+		expect(result.total).toBe('99');
+	});
+
+	it('handles multiple coupon lines', () => {
+		const lineItems = [
+			{
+				subtotal: '200',
+				total: '200',
+				subtotal_tax: '20',
+				total_tax: '20',
+				taxes: [{ id: 1, total: '20' }],
+			},
+		];
+		const couponLines = [
+			{ code: 'SAVE10', discount: '10', discount_tax: '0' },
+			{ code: 'EXTRA5', discount: '5', discount_tax: '0' },
+		];
+
+		const result = calculateOrderTotals({
+			lineItems: lineItems as any,
+			couponLines: couponLines as any,
+			taxRates: [{ id: 1, name: 'Tax', rate: '10', compound: false }] as any,
+			taxRoundAtSubtotal: false,
+		});
+
+		expect(result.discount_total).toBe('15');
+		expect(result.total).toBe('205');
+	});
+
+	it('works with no coupon lines', () => {
+		const lineItems = [
+			{
+				subtotal: '100',
+				total: '100',
+				subtotal_tax: '10',
+				total_tax: '10',
+				taxes: [{ id: 1, total: '10' }],
+			},
+		];
+
+		const result = calculateOrderTotals({
+			lineItems: lineItems as any,
+			taxRates: [{ id: 1, name: 'Tax', rate: '10', compound: false }] as any,
+			taxRoundAtSubtotal: false,
+		});
+
+		expect(result.discount_total).toBe('0');
+	});
+});
