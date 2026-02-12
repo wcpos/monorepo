@@ -81,24 +81,27 @@ function calculatePercentDiscount(
 
 	if (limitToXItems !== null && limitToXItems > 0) {
 		// Expand each item into individual units, sort by price descending,
-		// then take the top N units and re-aggregate by product_id.
-		const expanded: { item: CouponLineItem; unitIndex: number }[] = [];
-		for (const item of items) {
+		// then take the top N units and re-aggregate by item index (not product_id,
+		// since multiple line items can share the same product_id).
+		const expanded: { item: CouponLineItem; itemIndex: number }[] = [];
+		items.forEach((item, itemIndex) => {
 			for (let i = 0; i < item.quantity; i++) {
-				expanded.push({ item, unitIndex: i });
+				expanded.push({ item, itemIndex });
 			}
-		}
+		});
 		expanded.sort((a, b) => b.item.price - a.item.price);
 
 		const limited = expanded.slice(0, limitToXItems);
 		const quantityMap = new Map<number, number>();
-		for (const { item } of limited) {
-			quantityMap.set(item.product_id, (quantityMap.get(item.product_id) || 0) + 1);
+		for (const { itemIndex } of limited) {
+			quantityMap.set(itemIndex, (quantityMap.get(itemIndex) || 0) + 1);
 		}
 
-		targetItems = items
-			.filter((item) => quantityMap.has(item.product_id))
-			.map((item) => ({ ...item, quantity: quantityMap.get(item.product_id)! }));
+		targetItems = items.reduce<CouponLineItem[]>((acc, item, itemIndex) => {
+			const qty = quantityMap.get(itemIndex);
+			if (qty) acc.push({ ...item, quantity: qty });
+			return acc;
+		}, []);
 	}
 
 	const perItem: PerItemDiscount[] = [];
