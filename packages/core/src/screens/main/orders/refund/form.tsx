@@ -154,6 +154,8 @@ export function RefundOrderForm({ order }: Props) {
 	const handleSubmit = React.useCallback(async () => {
 		if (loading) return;
 		if (!order.id) return;
+		const valid = await form.trigger();
+		if (!valid) return;
 		setConfirmOpen(false);
 		setLoading(true);
 
@@ -178,11 +180,12 @@ export function RefundOrderForm({ order }: Props) {
 
 			const refundLineItems = values.line_items
 				.map((item, index) => {
-					if (item.refund_qty === 0) return null;
+					const clampedQty = Math.min(Math.max(item.refund_qty, 0), item.quantity);
+					if (clampedQty === 0) return null;
 					const calc = freshLineItemRefunds[index];
 					return {
 						id: item.id,
-						quantity: item.refund_qty,
+						quantity: clampedQty,
 						refund_total: calc.refund_total,
 						refund_tax: calc.refund_tax,
 					};
