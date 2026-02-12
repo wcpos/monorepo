@@ -1,0 +1,42 @@
+{
+	"_comment": "Coverage baseline — ratchet ensures these numbers never decrease. Update after adding tests.",
+	"_updated": "2026-02-12",
+	"packages": {
+		"utils": {
+			"statements": 35,
+			"branches": 0,
+			"functions": 50,
+			"lines": 33.33
+		},
+		"database": {
+			"statements": 37.62,
+			"branches": 44.31,
+			"functions": 44.29,
+			"lines": 36.25
+		},
+		"hooks": {
+			"statements": 58.95,
+			"branches": 55.35,
+			"functions": 53.12,
+			"lines": 58.94
+		},
+		"components": {
+			"statements": 55.46,
+			"branches": 73.18,
+			"functions": 32.96,
+			"lines": 57.95
+		},
+		"query": {
+			"statements": 79.21,
+			"branches": 70.57,
+			"functions": 73.58,
+			"lines": 79.35
+		},
+		"core": {
+			"statements": 22.71,
+			"branches": 26.57,
+			"functions": 28.49,
+			"lines": 21.96
+		}
+	}
+}

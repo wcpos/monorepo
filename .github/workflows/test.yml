@@ -125,6 +125,43 @@ jobs:
             echo "$failure_md" > /tmp/test-summary/failures.md
           fi
 
+      - name: 🔒 Coverage ratchet check
+        if: always()
+        run: |
+          node -e "
+            const fs = require('fs');
+            const baseline = JSON.parse(fs.readFileSync('coverage-baseline.json', 'utf8'));
+            const packages = Object.keys(baseline.packages);
+            const metrics = ['statements', 'branches', 'functions', 'lines'];
+            let failed = false;
+
+            for (const pkg of packages) {
+              const summaryPath = 'packages/' + pkg + '/coverage/coverage-summary.json';
+              if (!fs.existsSync(summaryPath)) continue;
+              const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+              const current = summary.total;
+              const base = baseline.packages[pkg];
+
+              for (const metric of metrics) {
+                const currentPct = current[metric]?.pct ?? 0;
+                const basePct = base[metric] ?? 0;
+                if (currentPct < basePct) {
+                  console.error('@wcpos/' + pkg + ': ' + metric + ' dropped from ' + basePct + '% to ' + currentPct + '%');
+                  failed = true;
+                }
+              }
+            }
+
+            if (failed) {
+              console.error('');
+              console.error('Coverage ratchet failed — coverage must not decrease.');
+              console.error('If you removed code/tests intentionally, update coverage-baseline.json.');
+              process.exit(1);
+            } else {
+              console.log('Coverage ratchet passed.');
+            }
+          "
+
       - name: 📊 Generate coverage summary
         if: always()
         run: |
