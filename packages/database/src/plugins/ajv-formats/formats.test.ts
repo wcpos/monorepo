@@ -355,4 +355,148 @@ describe('ajv-formats', () => {
 			expect(formatNames.sort()).toEqual(fullFormatKeys.sort());
 		});
 	});
+
+	describe('compareDate', () => {
+		const dateCompare = (fullFormats.date as any).compare;
+
+		it('should return undefined when either argument is falsy', () => {
+			expect(dateCompare('', '2024-01-15')).toBeUndefined();
+			expect(dateCompare('2024-01-15', '')).toBeUndefined();
+			expect(dateCompare('', '')).toBeUndefined();
+		});
+
+		it('should return 1 when first date is later', () => {
+			expect(dateCompare('2024-02-01', '2024-01-01')).toBe(1);
+		});
+
+		it('should return -1 when first date is earlier', () => {
+			expect(dateCompare('2024-01-01', '2024-02-01')).toBe(-1);
+		});
+
+		it('should return 0 when dates are equal', () => {
+			expect(dateCompare('2024-01-15', '2024-01-15')).toBe(0);
+		});
+	});
+
+	describe('compareTime', () => {
+		const timeCompare = (fullFormats.time as any).compare;
+
+		it('should return undefined when either argument is falsy', () => {
+			expect(timeCompare('', '12:00:00Z')).toBeUndefined();
+			expect(timeCompare('12:00:00Z', '')).toBeUndefined();
+		});
+
+		it('should return a positive number when first time is later', () => {
+			expect(timeCompare('14:00:00Z', '12:00:00Z')).toBeGreaterThan(0);
+		});
+
+		it('should return a negative number when first time is earlier', () => {
+			expect(timeCompare('10:00:00Z', '12:00:00Z')).toBeLessThan(0);
+		});
+
+		it('should return 0 when times are equal', () => {
+			expect(timeCompare('12:00:00Z', '12:00:00Z')).toBe(0);
+		});
+
+		it('should return undefined for invalid time strings', () => {
+			expect(timeCompare('not-a-time', '12:00:00Z')).toBeUndefined();
+		});
+	});
+
+	describe('compareIsoTime', () => {
+		const isoTimeCompare = (fullFormats['iso-time'] as any).compare;
+
+		it('should return undefined when either argument is falsy', () => {
+			expect(isoTimeCompare('', '12:00:00')).toBeUndefined();
+			expect(isoTimeCompare('12:00:00', '')).toBeUndefined();
+		});
+
+		it('should return 1 when first time is later', () => {
+			expect(isoTimeCompare('14:00:00', '12:00:00')).toBe(1);
+		});
+
+		it('should return -1 when first time is earlier', () => {
+			expect(isoTimeCompare('10:00:00', '14:00:00')).toBe(-1);
+		});
+
+		it('should return 0 when times are equal', () => {
+			expect(isoTimeCompare('12:30:45', '12:30:45')).toBe(0);
+		});
+
+		it('should return undefined for non-matching strings', () => {
+			expect(isoTimeCompare('not-a-time', '12:00:00')).toBeUndefined();
+			expect(isoTimeCompare('12:00:00', 'bad')).toBeUndefined();
+		});
+	});
+
+	describe('compareDateTime', () => {
+		const dateTimeCompare = (fullFormats['date-time'] as any).compare;
+
+		it('should return undefined when either argument is falsy', () => {
+			expect(dateTimeCompare('', '2024-01-15T12:00:00Z')).toBeUndefined();
+			expect(dateTimeCompare('2024-01-15T12:00:00Z', '')).toBeUndefined();
+		});
+
+		it('should return positive when first is later', () => {
+			expect(dateTimeCompare('2024-02-15T12:00:00Z', '2024-01-15T12:00:00Z')).toBeGreaterThan(0);
+		});
+
+		it('should return negative when first is earlier', () => {
+			expect(dateTimeCompare('2024-01-15T12:00:00Z', '2024-02-15T12:00:00Z')).toBeLessThan(0);
+		});
+
+		it('should return 0 when date-times are equal', () => {
+			expect(dateTimeCompare('2024-01-15T12:00:00Z', '2024-01-15T12:00:00Z')).toBe(0);
+		});
+
+		it('should return undefined for invalid date-time strings', () => {
+			expect(dateTimeCompare('invalid', '2024-01-15T12:00:00Z')).toBeUndefined();
+		});
+	});
+
+	describe('compareIsoDateTime', () => {
+		const isoDateTimeCompare = (fullFormats['iso-date-time'] as any).compare;
+
+		it('should return undefined when either argument is falsy', () => {
+			expect(isoDateTimeCompare('', '2024-01-15T12:00:00')).toBeUndefined();
+			expect(isoDateTimeCompare('2024-01-15T12:00:00', '')).toBeUndefined();
+		});
+
+		it('should compare by date first', () => {
+			expect(isoDateTimeCompare('2024-02-01T10:00:00', '2024-01-01T14:00:00')).toBe(1);
+			expect(isoDateTimeCompare('2024-01-01T14:00:00', '2024-02-01T10:00:00')).toBe(-1);
+		});
+
+		it('should compare by time when dates are equal', () => {
+			const result = isoDateTimeCompare('2024-01-15T14:00:00Z', '2024-01-15T12:00:00Z');
+			expect(result).toBeGreaterThan(0);
+		});
+
+		it('should return 0 for equal iso datetimes', () => {
+			expect(isoDateTimeCompare('2024-01-15T12:00:00', '2024-01-15T12:00:00')).toBe(0);
+		});
+
+		it('should handle space separator', () => {
+			expect(isoDateTimeCompare('2024-02-01 12:00:00', '2024-01-01 12:00:00')).toBe(1);
+		});
+	});
+
+	describe('uri function', () => {
+		const uriValidate =
+			typeof fullFormats.uri === 'function' ? fullFormats.uri : (fullFormats.uri as any).validate;
+
+		it('should validate URIs with path', () => {
+			expect(uriValidate('http://example.com/path')).toBe(true);
+		});
+
+		it('should reject strings without URI fragment pattern', () => {
+			// Strings without / or : should fail the NOT_URI_FRAGMENT check
+			expect(uriValidate('just-a-string')).toBe(false);
+		});
+
+		it('should validate URIs with scheme', () => {
+			expect(uriValidate('https://example.com')).toBe(true);
+			expect(uriValidate('ftp://files.example.com')).toBe(true);
+		});
+	});
 });
