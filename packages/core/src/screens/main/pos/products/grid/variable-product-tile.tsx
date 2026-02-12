@@ -90,10 +90,7 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 	return (
 		<Popover className="bg-card border-border m-1 flex-1 overflow-hidden rounded-lg border">
 			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
-				<Pressable
-					className="flex-1"
-					testID="variable-product-tile"
-				>
+				<Pressable className="flex-1" testID="variable-product-tile">
 					<View className="aspect-square">
 						<Image source={imageSource} recyclingKey={product.uuid} className="h-full w-full" />
 						<View className="absolute top-1 right-1 rounded bg-black/50 px-1 py-0.5">
