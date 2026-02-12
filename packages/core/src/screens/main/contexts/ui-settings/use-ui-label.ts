@@ -16,7 +16,7 @@ export const useUILabel = () => {
 				'pos-products': {
 					showOutOfStock: t('common.show_out-of-stock_products'),
 					image: t('common.image'),
-					name: t('common.product'),
+					name: t('common.product_name'),
 					stock_quantity: t('common.stock'),
 					sku: t('common.sku'),
 					barcode: t('common.barcode'),
@@ -33,6 +33,9 @@ export const useUILabel = () => {
 					attributes: t('common.attributes'),
 					meta_data: t('common.meta_data'),
 					metaDataKeys: t('common.meta_data_keys'),
+					viewMode: t('common.view_mode'),
+					gridColumns: t('common.tile_size'),
+					category: t('common.categories'),
 				},
 				'pos-cart': {
 					autoShowReceipt: t('common.automatically_show_receipt_after_checkout'),
