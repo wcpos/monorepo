@@ -114,9 +114,9 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 				{gridFields.stock_quantity && stockQuantity != null && (
 					<Text className="text-muted-foreground text-xs">Stock: {stockQuantity}</Text>
 				)}
-				{gridFields.cost_of_goods_sold && costOfGoodsSold != null && costOfGoodsSold !== '' ? (
+				{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
 					<Text className="text-muted-foreground text-xs">
-						COGS: {format(Number(costOfGoodsSold))}
+						COGS: {format(costOfGoodsSold?.total_value || 0)}
 					</Text>
 				) : null}
 			</VStack>
