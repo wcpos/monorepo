@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
-import { useForm, useFieldArray, useWatch } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
 import {
@@ -218,10 +218,7 @@ export function RefundOrderForm({ order }: Props) {
 
 			router.back();
 		} catch (err: any) {
-			const serverMessage = extractErrorMessage(
-				err?.response?.data,
-				t('orders.refund_failed')
-			);
+			const serverMessage = extractErrorMessage(err?.response?.data, t('orders.refund_failed'));
 			refundLogger.error(serverMessage, {
 				showToast: true,
 				saveToDb: true,
@@ -277,17 +274,12 @@ export function RefundOrderForm({ order }: Props) {
 					<TableBody>
 						{fields.map((field, index) => {
 							const unitPrice =
-								field.quantity > 0
-									? (parseFloat(field.total) / field.quantity).toFixed(2)
-									: '0.00';
+								field.quantity > 0 ? (parseFloat(field.total) / field.quantity).toFixed(2) : '0.00';
 							const itemRefund = lineItemRefunds[index];
 							const itemRefundWithTax = itemRefund
 								? (
 										parseFloat(itemRefund.refund_total) +
-										itemRefund.refund_tax.reduce(
-											(s, t) => s + parseFloat(t.refund_total),
-											0
-										)
+										itemRefund.refund_tax.reduce((s, t) => s + parseFloat(t.refund_total), 0)
 									).toFixed(2)
 								: '0.00';
 
@@ -306,9 +298,7 @@ export function RefundOrderForm({ order }: Props) {
 										<FormField
 											control={form.control}
 											name={`line_items.${index}.refund_qty`}
-											render={({ field: qtyField }) => (
-												<FormInput type="numeric" {...qtyField} />
-											)}
+											render={({ field: qtyField }) => <FormInput type="numeric" {...qtyField} />}
 										/>
 									</TableCell>
 									<TableCell className="flex-1">
@@ -368,11 +358,7 @@ export function RefundOrderForm({ order }: Props) {
 				{/* Footer */}
 				<ModalFooter className="px-0">
 					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction
-						loading={loading}
-						disabled={!isValid}
-						onPress={() => setConfirmOpen(true)}
-					>
+					<ModalAction loading={loading} disabled={!isValid} onPress={() => setConfirmOpen(true)}>
 						{t('orders.process_refund')}
 					</ModalAction>
 				</ModalFooter>

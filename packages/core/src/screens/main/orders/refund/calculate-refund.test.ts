@@ -114,9 +114,7 @@ describe('calculateRefundTotal', () => {
 
 	it('returns just line item totals with taxes when no custom amount', () => {
 		const result = calculateRefundTotal({
-			lineItemRefunds: [
-				{ refund_total: '10.00', refund_tax: [{ id: 1, refund_total: '2.00' }] },
-			],
+			lineItemRefunds: [{ refund_total: '10.00', refund_tax: [{ id: 1, refund_total: '2.00' }] }],
 			customAmount: '',
 		});
 

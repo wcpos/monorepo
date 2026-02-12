@@ -36,9 +36,7 @@ export function RefundOrderModal({ resource }: Props) {
 			<ModalContent size="lg">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>
-							{t('orders.refund_order', { number: order.id || '' })}
-						</Text>
+						<Text>{t('orders.refund_order', { number: order.id || '' })}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
