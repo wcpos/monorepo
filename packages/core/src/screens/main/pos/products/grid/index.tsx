@@ -22,6 +22,7 @@ interface ProductGridProps {
 }
 
 interface GridFields {
+	name: boolean;
 	price: boolean;
 	tax: boolean;
 	on_sale: boolean;
