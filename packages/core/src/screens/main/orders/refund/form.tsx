@@ -47,22 +47,38 @@ interface Props {
 
 const CASH_METHODS = ['pos_cash', 'cod', 'cash', 'cash_on_delivery'];
 
-const refundFormSchema = z.object({
-	line_items: z.array(
-		z.object({
-			id: z.number(),
-			name: z.string(),
-			quantity: z.number(),
-			total: z.string(),
-			total_tax: z.string(),
-			taxes: z.array(z.object({ id: z.number(), total: z.string() })),
-			refund_qty: z.number().min(0),
-		})
-	),
-	custom_amount: z.string().optional().default(''),
-	reason: z.string().optional().default(''),
-	api_refund: z.boolean(),
-});
+const refundFormSchema = z
+	.object({
+		line_items: z.array(
+			z.object({
+				id: z.number(),
+				name: z.string(),
+				quantity: z.number(),
+				total: z.string(),
+				total_tax: z.string(),
+				taxes: z.array(z.object({ id: z.number(), total: z.string() })),
+				refund_qty: z.number().int().min(0),
+			})
+		),
+		custom_amount: z
+			.string()
+			.optional()
+			.default('')
+			.refine((v) => v === '' || /^\d+(\.\d{0,2})?$/.test(v), 'Invalid amount'),
+		reason: z.string().optional().default(''),
+		api_refund: z.boolean(),
+	})
+	.superRefine(({ line_items }, ctx) => {
+		line_items.forEach((item, index) => {
+			if (item.refund_qty > item.quantity) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: 'Refund qty cannot exceed purchased qty',
+					path: ['line_items', index, 'refund_qty'],
+				});
+			}
+		});
+	});
 
 type RefundFormValues = z.infer<typeof refundFormSchema>;
 
@@ -136,16 +152,34 @@ export function RefundOrderForm({ order }: Props) {
 	const isValid = refundTotalNum > 0 && refundTotalNum <= maxRefundable;
 
 	const handleSubmit = React.useCallback(async () => {
+		if (loading) return;
+		if (!order.id) return;
 		setConfirmOpen(false);
 		setLoading(true);
 
 		try {
 			const values = form.getValues();
 
+			// Recompute at submit time to avoid stale memoized values
+			const freshLineItemRefunds = values.line_items.map((item) =>
+				calculateLineItemRefund({
+					quantity: item.quantity,
+					total: item.total,
+					totalTax: item.total_tax,
+					taxes: item.taxes,
+					refundQty: item.refund_qty,
+				})
+			);
+
+			const freshRefundTotal = calculateRefundTotal({
+				lineItemRefunds: freshLineItemRefunds,
+				customAmount: values.custom_amount || '',
+			});
+
 			const refundLineItems = values.line_items
 				.map((item, index) => {
 					if (item.refund_qty === 0) return null;
-					const calc = lineItemRefunds[index];
+					const calc = freshLineItemRefunds[index];
 					return {
 						id: item.id,
 						quantity: item.refund_qty,
@@ -156,7 +190,7 @@ export function RefundOrderForm({ order }: Props) {
 				.filter(Boolean);
 
 			const payload: Record<string, unknown> = {
-				amount: refundTotal,
+				amount: freshRefundTotal,
 				reason: values.reason || '',
 				api_refund: values.api_refund,
 			};
@@ -167,19 +201,17 @@ export function RefundOrderForm({ order }: Props) {
 
 			await http.post(`orders/${order.id}/refunds`, payload);
 
-			refundLogger.success(t('orders.refund_processed', { amount: refundTotal }), {
+			refundLogger.success(t('orders.refund_processed', { amount: freshRefundTotal }), {
 				showToast: true,
 				saveToDb: true,
 				context: {
 					orderId: order.id,
-					amount: refundTotal,
+					amount: freshRefundTotal,
 				},
 			});
 
 			// Re-sync the order to pick up updated refunds array and totals
-			if (order.id) {
-				await pullDocument(order.id, order.collection as never);
-			}
+			await pullDocument(order.id, order.collection as never);
 
 			router.back();
 		} catch (err: any) {
@@ -193,14 +225,13 @@ export function RefundOrderForm({ order }: Props) {
 				context: {
 					errorCode: ERROR_CODES.TRANSACTION_FAILED,
 					orderId: order.id,
-					amount: refundTotal,
 					error: err instanceof Error ? err.message : String(err),
 				},
 			});
 		} finally {
 			setLoading(false);
 		}
-	}, [form, lineItemRefunds, refundTotal, http, order, pullDocument, router, t]);
+	}, [loading, form, http, order, pullDocument, router, t]);
 
 	return (
 		<Form {...form}>
@@ -357,7 +388,7 @@ export function RefundOrderForm({ order }: Props) {
 						</AlertDialogHeader>
 						<AlertDialogFooter>
 							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-							<AlertDialogAction variant="destructive" onPress={handleSubmit}>
+							<AlertDialogAction variant="destructive" onPress={handleSubmit} disabled={loading}>
 								{t('orders.process_refund')}
 							</AlertDialogAction>
 						</AlertDialogFooter>

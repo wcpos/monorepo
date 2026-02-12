@@ -59,6 +59,32 @@ describe('calculateLineItemRefund', () => {
 		]);
 	});
 
+	it('clamps refundQty exceeding quantity to full refund', () => {
+		const result = calculateLineItemRefund({
+			quantity: 2,
+			total: '20.00',
+			totalTax: '4.00',
+			taxes: [{ id: 1, total: '4.00' }],
+			refundQty: 5,
+		});
+
+		expect(result.refund_total).toBe('20.00');
+		expect(result.refund_tax).toEqual([{ id: 1, refund_total: '4.00' }]);
+	});
+
+	it('clamps negative refundQty to zero', () => {
+		const result = calculateLineItemRefund({
+			quantity: 2,
+			total: '20.00',
+			totalTax: '4.00',
+			taxes: [{ id: 1, total: '4.00' }],
+			refundQty: -3,
+		});
+
+		expect(result.refund_total).toBe('0.00');
+		expect(result.refund_tax).toEqual([{ id: 1, refund_total: '0.00' }]);
+	});
+
 	it('handles zero tax', () => {
 		const result = calculateLineItemRefund({
 			quantity: 2,
