@@ -99,6 +99,7 @@ test.describe('Products in POS', () => {
 		if (hasResults) {
 			const filteredText = await countEl.textContent();
 			expect(filteredText).toBeTruthy();
+			expect(filteredText).not.toEqual(initialText);
 		}
 	});
 
