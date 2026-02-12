@@ -137,7 +137,11 @@ jobs:
 
             for (const pkg of packages) {
               const summaryPath = 'packages/' + pkg + '/coverage/coverage-summary.json';
-              if (!fs.existsSync(summaryPath)) continue;
+              if (!fs.existsSync(summaryPath)) {
+                console.error('@wcpos/' + pkg + ': coverage summary missing at ' + summaryPath);
+                failed = true;
+                continue;
+              }
               const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
               const current = summary.total;
               const base = baseline.packages[pkg];

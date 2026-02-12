@@ -33,7 +33,9 @@ function createMockScrollElement(overrides: Partial<HTMLDivElement> = {}) {
 		}),
 		// Helper to trigger scroll
 		_triggerScroll() {
-			(listeners['scroll'] || []).forEach((h) => h());
+			(listeners['scroll'] || []).forEach((h) => {
+				h();
+			});
 		},
 		...overrides,
 	} as unknown as HTMLDivElement;
