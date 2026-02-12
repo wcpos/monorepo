@@ -100,6 +100,11 @@ export function UISettingsForm() {
 				<VStack>
 					<FormField
 						control={form.control}
+						name="showOutOfStock"
+						render={({ field }) => <FormSwitch label={getUILabel('showOutOfStock')} {...field} />}
+					/>
+					<FormField
+						control={form.control}
 						name="viewMode"
 						render={({ field: { value, onChange } }) => (
 							<View className="gap-1 px-1">
@@ -123,11 +128,6 @@ export function UISettingsForm() {
 								</Select>
 							</View>
 						)}
-					/>
-					<FormField
-						control={form.control}
-						name="showOutOfStock"
-						render={({ field }) => <FormSwitch label={getUILabel('showOutOfStock')} {...field} />}
 					/>
 					{viewMode === 'grid' ? (
 						<VStack>
