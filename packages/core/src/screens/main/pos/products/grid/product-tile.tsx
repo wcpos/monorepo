@@ -8,6 +8,7 @@ import { Image } from '@wcpos/components/image';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
+import { useT } from '../../../../../contexts/translations';
 import { PriceWithTax } from '../../../components/product/price-with-tax';
 import { useImageAttachment } from '../../../hooks/use-image-attachment';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
@@ -32,6 +33,7 @@ interface ProductTileProps {
 }
 
 export function ProductTile({ product, gridFields }: ProductTileProps) {
+	const t = useT();
 	const { addProduct } = useAddProduct();
 	const { format } = useCurrencyFormat();
 	const name = useObservableEagerState(product.name$!);
@@ -49,10 +51,10 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
 	const costOfGoodsSold = useObservableEagerState(product.cost_of_goods_sold$!);
 
-	const imageSource = error ? { uri: 'https://via.placeholder.com/150' } : { uri };
+	const imageSource = !uri || error ? { uri: 'https://via.placeholder.com/150' } : { uri };
 
 	const safeTaxStatus = (taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
-	const taxDisplay = gridFields.tax ? ('text' as const) : ('tooltip' as const);
+	const taxDisplay = gridFields.tax ? ('text' as const) : ('none' as const);
 	const showOnSale = gridFields.on_sale && onSale;
 
 	const handlePress = React.useCallback(() => {
@@ -101,10 +103,14 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 					</>
 				)}
 				{gridFields.sku && sku ? (
-					<Text className="text-muted-foreground text-xs">SKU: {sku}</Text>
+					<Text className="text-muted-foreground text-xs">
+						{t('common.sku')}: {sku}
+					</Text>
 				) : null}
 				{gridFields.barcode && barcode ? (
-					<Text className="text-muted-foreground text-xs">Barcode: {barcode}</Text>
+					<Text className="text-muted-foreground text-xs">
+						{t('common.barcode')}: {barcode}
+					</Text>
 				) : null}
 				{gridFields.category && categories.length > 0 && (
 					<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
@@ -112,11 +118,13 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 					</Text>
 				)}
 				{gridFields.stock_quantity && stockQuantity != null && (
-					<Text className="text-muted-foreground text-xs">Stock: {stockQuantity}</Text>
+					<Text className="text-muted-foreground text-xs">
+						{t('common.stock')}: {stockQuantity}
+					</Text>
 				)}
 				{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
 					<Text className="text-muted-foreground text-xs">
-						COGS: {format(costOfGoodsSold?.total_value || 0)}
+						{t('common.cost_of_goods_sold')}: {format(costOfGoodsSold?.total_value || 0)}
 					</Text>
 				) : null}
 			</VStack>
