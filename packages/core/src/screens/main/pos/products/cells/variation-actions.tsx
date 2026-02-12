@@ -39,7 +39,7 @@ export function ProductVariationActions({
 	return (
 		<IconButton
 			name="circlePlus"
-			size="xl"
+			size="4xl"
 			onPress={() =>
 				parent && addVariation(variation, parent as unknown as ProductDocument, metaData)
 			}

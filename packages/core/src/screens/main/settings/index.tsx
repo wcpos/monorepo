@@ -46,7 +46,7 @@ export function SettingsScreen() {
 
 	return (
 		<Modal>
-			<ModalContent size="xl">
+			<ModalContent size="2xl">
 				<ModalHeader>
 					<ModalTitle>{t('common.settings')}</ModalTitle>
 				</ModalHeader>
