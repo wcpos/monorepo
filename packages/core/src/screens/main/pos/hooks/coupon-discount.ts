@@ -137,8 +137,9 @@ function calculateFixedCartDiscount(amount: number, items: CouponLineItem[]): Di
 		if (i === items.length - 1) {
 			// Last item gets the remainder to handle rounding residuals
 			const discount = round(cappedAmount - distributed, 6);
-			perItem.push({ product_id: item.product_id, discount: Math.min(discount, itemTotal) });
-			distributed += discount;
+			const cappedDiscount = Math.min(discount, itemTotal);
+			perItem.push({ product_id: item.product_id, discount: cappedDiscount });
+			distributed += cappedDiscount;
 		} else {
 			const proportion = itemTotal / cartTotal;
 			const discount = round(cappedAmount * proportion, 2);

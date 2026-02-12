@@ -20,8 +20,9 @@ export interface ValidationResult {
  * email restrictions, and product/category eligibility.
  */
 export function validateCoupon(coupon: any, context: CouponValidationContext): ValidationResult {
-	// 1. Already applied check
-	if (context.appliedCoupons.includes(coupon.code)) {
+	// 1. Already applied check (case-insensitive, since codes are stored lowercase)
+	const codeLower = coupon.code?.toLowerCase();
+	if (context.appliedCoupons.some((c: string) => c.toLowerCase() === codeLower)) {
 		return { valid: false, error: 'This coupon has already been applied.' };
 	}
 
