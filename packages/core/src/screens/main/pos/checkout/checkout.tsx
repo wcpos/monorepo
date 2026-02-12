@@ -19,7 +19,6 @@ import {
 } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import type { WebViewProps } from '@wcpos/components/webview';
 
 import { PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
