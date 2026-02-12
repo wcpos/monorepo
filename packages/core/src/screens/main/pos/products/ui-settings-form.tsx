@@ -13,6 +13,14 @@ import {
 	useFormChangeHandler,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
+import {
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@wcpos/components/select';
 import { Slider } from '@wcpos/components/slider';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -37,6 +45,7 @@ const gridFieldsSchema = z.object({
 });
 
 export const schema = z.object({
+	viewMode: z.enum(['grid', 'table']),
 	showOutOfStock: z.boolean(),
 	...columnsFormSchema.shape,
 	metaDataKeys: z.string().optional(),
@@ -89,6 +98,32 @@ export function UISettingsForm() {
 		<VStack>
 			<Form {...form}>
 				<VStack>
+					<FormField
+						control={form.control}
+						name="viewMode"
+						render={({ field: { value, onChange } }) => (
+							<View className="gap-1 px-1">
+								<Text>{getUILabel('viewMode')}</Text>
+								<Select
+									value={{
+										value,
+										label: value === 'grid' ? t('common.grid') : t('common.table'),
+									}}
+									onValueChange={(val) => onChange(val?.value || 'table')}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder={getUILabel('viewMode')} />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectGroup>
+											<SelectItem label={t('common.grid')} value="grid" />
+											<SelectItem label={t('common.table')} value="table" />
+										</SelectGroup>
+									</SelectContent>
+								</Select>
+							</View>
+						)}
+					/>
 					<FormField
 						control={form.control}
 						name="showOutOfStock"

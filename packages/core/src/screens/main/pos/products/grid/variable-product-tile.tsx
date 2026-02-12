@@ -79,81 +79,83 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 	);
 
 	return (
-		<Popover>
-			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
-				<Pressable
-					className="bg-card border-border m-1 flex-1 overflow-hidden rounded-lg border"
-					testID="variable-product-tile"
-				>
-					<View className="aspect-square">
-						<Image source={imageSource} recyclingKey={product.uuid} className="h-full w-full" />
-						<View className="absolute top-1 right-1 rounded bg-black/50 px-1 py-0.5">
-							<Text className="text-xs text-white">{t('common.variants')}</Text>
+		<View className="m-1 flex-1">
+			<Popover>
+				<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
+					<Pressable
+						className="bg-card border-border flex-1 overflow-hidden rounded-lg border"
+						testID="variable-product-tile"
+					>
+						<View className="aspect-square">
+							<Image source={imageSource} recyclingKey={product.uuid} className="h-full w-full" />
+							<View className="absolute top-1 right-1 rounded bg-black/50 px-1 py-0.5">
+								<Text className="text-xs text-white">{t('common.variants')}</Text>
+							</View>
 						</View>
-					</View>
-					<VStack className="p-2" space="xs">
-						<Text className="font-bold" numberOfLines={2} decodeHtml>
-							{name}
-						</Text>
-						{gridFields.price && (
-							<>
-								{showOnSale ? (
-									<VStack space="xs">
-										<PriceWithTax
-											price={regularPrice ?? ''}
-											taxStatus={safeTaxStatus}
-											taxClass={taxClass ?? ''}
-											taxDisplay={taxDisplay}
-											strikethrough
-										/>
+						<VStack className="p-2" space="xs">
+							<Text className="font-bold" numberOfLines={2} decodeHtml>
+								{name}
+							</Text>
+							{gridFields.price && (
+								<>
+									{showOnSale ? (
+										<VStack space="xs">
+											<PriceWithTax
+												price={regularPrice ?? ''}
+												taxStatus={safeTaxStatus}
+												taxClass={taxClass ?? ''}
+												taxDisplay={taxDisplay}
+												strikethrough
+											/>
+											<PriceWithTax
+												price={price ?? ''}
+												taxStatus={safeTaxStatus}
+												taxClass={taxClass ?? ''}
+												taxDisplay={taxDisplay}
+											/>
+										</VStack>
+									) : (
 										<PriceWithTax
 											price={price ?? ''}
 											taxStatus={safeTaxStatus}
 											taxClass={taxClass ?? ''}
 											taxDisplay={taxDisplay}
 										/>
-									</VStack>
-								) : (
-									<PriceWithTax
-										price={price ?? ''}
-										taxStatus={safeTaxStatus}
-										taxClass={taxClass ?? ''}
-										taxDisplay={taxDisplay}
-									/>
-								)}
-							</>
-						)}
-						{gridFields.sku && sku ? (
-							<Text className="text-muted-foreground text-xs">
-								{t('common.sku')}: {sku}
-							</Text>
-						) : null}
-						{gridFields.barcode && barcode ? (
-							<Text className="text-muted-foreground text-xs">
-								{t('common.barcode')}: {barcode}
-							</Text>
-						) : null}
-						{gridFields.category && categories.length > 0 && (
-							<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
-								{categories.map((c) => c.name ?? '').join(', ')}
-							</Text>
-						)}
-						{gridFields.stock_quantity && stockQuantity != null && (
-							<Text className="text-muted-foreground text-xs">
-								{t('common.stock')}: {stockQuantity}
-							</Text>
-						)}
-						{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
-							<Text className="text-muted-foreground text-xs">
-								{t('common.cost_of_goods_sold')}: {format(costOfGoodsSold?.total_value || 0)}
-							</Text>
-						) : null}
-					</VStack>
-				</Pressable>
-			</PopoverTrigger>
-			<PopoverContent side="bottom" className="w-auto max-w-80 p-2">
-				<VariationsPopover parent={product} addToCart={addToCart as never} />
-			</PopoverContent>
-		</Popover>
+									)}
+								</>
+							)}
+							{gridFields.sku && sku ? (
+								<Text className="text-muted-foreground text-xs">
+									{t('common.sku')}: {sku}
+								</Text>
+							) : null}
+							{gridFields.barcode && barcode ? (
+								<Text className="text-muted-foreground text-xs">
+									{t('common.barcode')}: {barcode}
+								</Text>
+							) : null}
+							{gridFields.category && categories.length > 0 && (
+								<Text className="text-muted-foreground text-xs" numberOfLines={1} decodeHtml>
+									{categories.map((c) => c.name ?? '').join(', ')}
+								</Text>
+							)}
+							{gridFields.stock_quantity && stockQuantity != null && (
+								<Text className="text-muted-foreground text-xs">
+									{t('common.stock')}: {stockQuantity}
+								</Text>
+							)}
+							{gridFields.cost_of_goods_sold && costOfGoodsSold != null ? (
+								<Text className="text-muted-foreground text-xs">
+									{t('common.cost_of_goods_sold')}: {format(costOfGoodsSold?.total_value || 0)}
+								</Text>
+							) : null}
+						</VStack>
+					</Pressable>
+				</PopoverTrigger>
+				<PopoverContent side="right" align="center" className="w-auto max-w-80 p-2">
+					<VariationsPopover parent={product} addToCart={addToCart as never} />
+				</PopoverContent>
+			</Popover>
+		</View>
 	);
 }

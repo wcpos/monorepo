@@ -33,6 +33,7 @@ export const useUILabel = () => {
 					attributes: t('common.attributes'),
 					meta_data: t('common.meta_data'),
 					metaDataKeys: t('common.meta_data_keys'),
+					viewMode: t('common.view_mode'),
 					gridColumns: t('common.tile_size'),
 					category: t('common.categories'),
 				},
