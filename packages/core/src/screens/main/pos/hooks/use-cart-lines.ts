@@ -113,8 +113,7 @@ export const useCartLines = () => {
 
 			let needsUpdate = false;
 			const updatedCouponLines = await Promise.all(
-				(couponLines || []).map(async (cl: any) => {
-					if (!cl.code) return cl;
+				activeCouponLines.map(async (cl: any) => {
 
 					const coupon = await couponCollection.findOne({ selector: { code: cl.code } }).exec();
 
@@ -126,10 +125,10 @@ export const useCartLines = () => {
 							discount_type: couponData.discount_type as any,
 							amount: couponData.amount || '0',
 							limit_usage_to_x_items: couponData.limit_usage_to_x_items ?? null,
-							product_ids: couponData.product_ids || [],
-							excluded_product_ids: couponData.excluded_product_ids || [],
-							product_categories: couponData.product_categories || [],
-							excluded_product_categories: couponData.excluded_product_categories || [],
+							product_ids: [...(couponData.product_ids || [])],
+							excluded_product_ids: [...(couponData.excluded_product_ids || [])],
+							product_categories: [...(couponData.product_categories || [])],
+							excluded_product_categories: [...(couponData.excluded_product_categories || [])],
 							exclude_sale_items: couponData.exclude_sale_items || false,
 						},
 						couponLineItems
