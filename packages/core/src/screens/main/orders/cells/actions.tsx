@@ -133,6 +133,12 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 								<Icon name="receipt" />
 								<Text>{t('common.receipt')}</Text>
 							</DropdownMenuItem>
+							<DropdownMenuItem
+								onPress={() => router.push({ pathname: `/orders/refund/${order.uuid}` })}
+							>
+								<Icon name="arrowRotateLeft" />
+								<Text>{t('orders.refund')}</Text>
+							</DropdownMenuItem>
 							<DropdownMenuItem onPress={() => pullDocument(order.id!, order.collection as never)}>
 								<Icon name="arrowRotateRight" />
 								<Text>{t('common.sync')}</Text>
