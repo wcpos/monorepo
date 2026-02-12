@@ -47,6 +47,7 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 	const sku = useObservableEagerState(product.sku$!);
 	const barcode = useObservableEagerState(product.barcode$!);
 	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
+	const costOfGoodsSold = useObservableEagerState(product.cost_of_goods_sold$!);
 
 	const imageSource = error ? { uri: 'https://via.placeholder.com/150' } : { uri };
 
@@ -113,9 +114,9 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 				{gridFields.stock_quantity && stockQuantity != null && (
 					<Text className="text-muted-foreground text-xs">Stock: {stockQuantity}</Text>
 				)}
-				{gridFields.cost_of_goods_sold && product.cost_of_goods_sold ? (
+				{gridFields.cost_of_goods_sold && costOfGoodsSold ? (
 					<Text className="text-muted-foreground text-xs">
-						COGS: {format(Number(product.cost_of_goods_sold))}
+						COGS: {format(Number(costOfGoodsSold))}
 					</Text>
 				) : null}
 			</VStack>

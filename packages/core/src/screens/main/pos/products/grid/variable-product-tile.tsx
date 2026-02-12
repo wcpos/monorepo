@@ -10,6 +10,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import { VariationsPopover } from '../cells/variations-popover';
+import { useT } from '../../../../../contexts/translations';
 import { PriceWithTax } from '../../../components/product/price-with-tax';
 import { useImageAttachment } from '../../../hooks/use-image-attachment';
 import { useAddVariation } from '../../hooks/use-add-variation';
@@ -41,6 +42,7 @@ interface VariableProductTileProps {
 }
 
 export function VariableProductTile({ product, gridFields }: VariableProductTileProps) {
+	const t = useT();
 	const { addVariation } = useAddVariation();
 	const { format } = useCurrencyFormat();
 	const triggerRef = React.useRef<{ close: () => void } | null>(null);
@@ -58,6 +60,7 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 	const sku = useObservableEagerState(product.sku$!);
 	const barcode = useObservableEagerState(product.barcode$!);
 	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
+	const costOfGoodsSold = useObservableEagerState(product.cost_of_goods_sold$!);
 
 	const imageSource = error ? { uri: 'https://via.placeholder.com/150' } : { uri };
 
@@ -85,7 +88,7 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 					<View className="aspect-square">
 						<Image source={imageSource} recyclingKey={product.uuid} className="h-full w-full" />
 						<View className="absolute top-1 right-1 rounded bg-black/50 px-1 py-0.5">
-							<Text className="text-xs text-white">Variants</Text>
+							<Text className="text-xs text-white">{t('common.variants')}</Text>
 						</View>
 					</View>
 					<VStack className="p-2" space="xs">
@@ -134,9 +137,9 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 						{gridFields.stock_quantity && stockQuantity != null && (
 							<Text className="text-muted-foreground text-xs">Stock: {stockQuantity}</Text>
 						)}
-						{gridFields.cost_of_goods_sold && product.cost_of_goods_sold ? (
+						{gridFields.cost_of_goods_sold && costOfGoodsSold ? (
 							<Text className="text-muted-foreground text-xs">
-								COGS: {format(Number(product.cost_of_goods_sold))}
+								COGS: {format(Number(costOfGoodsSold))}
 							</Text>
 						) : null}
 					</VStack>
