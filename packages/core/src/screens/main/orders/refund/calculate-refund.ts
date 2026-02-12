@@ -17,14 +17,15 @@ interface LineItemRefund {
 export function calculateLineItemRefund(input: LineItemInput): LineItemRefund {
 	const { quantity, total, totalTax, taxes, refundQty } = input;
 
-	if (refundQty === 0 || quantity === 0) {
+	const safeRefundQty = Math.min(Math.max(refundQty, 0), quantity);
+	if (safeRefundQty === 0 || quantity === 0) {
 		return {
 			refund_total: '0.00',
 			refund_tax: taxes.map((tax) => ({ id: tax.id, refund_total: '0.00' })),
 		};
 	}
 
-	const ratio = refundQty / quantity;
+	const ratio = safeRefundQty / quantity;
 	const refundTotal = (parseFloat(total) * ratio).toFixed(2);
 	const refundTax = taxes.map((tax) => ({
 		id: tax.id,
