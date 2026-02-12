@@ -21,8 +21,10 @@ import { StockQuantity } from './cells/stock-quantity';
 import { VariableActions } from './cells/variable-actions';
 import { ProductVariationActions } from './cells/variation-actions';
 import { ProductVariationName } from './cells/variation-name';
+import { ProductGrid } from './grid';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
+import { ViewModeToggle } from './view-mode-toggle';
 import { useT } from '../../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../../components/data-table';
 import { FilterBar } from '../../components/product/filter-bar';
@@ -131,6 +133,7 @@ export function POSProducts({ isColumn = false }) {
 	const { uiSettings } = useUISettings('pos-products');
 	const { calcTaxes } = useTaxRates();
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
+	const viewMode = useObservableEagerState(uiSettings.viewMode$);
 	const querySearchInputRef = React.useRef<React.ElementRef<typeof QuerySearchInput>>(null);
 	const [expandedRef, expanded$] = useObservableRef<ExpandedState>({} as ExpandedState);
 	const t = useT();
@@ -240,6 +243,7 @@ export function POSProducts({ isColumn = false }) {
 										testID="search-products"
 									/>
 								</ErrorBoundary>
+								<ViewModeToggle />
 								<UISettingsDialog title={t('common.product_settings')}>
 									<UISettingsForm />
 								</UISettingsDialog>
@@ -253,17 +257,21 @@ export function POSProducts({ isColumn = false }) {
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
 						<Suspense>
-							<DataTable<ProductDocument>
-								id="pos-products"
-								query={query!}
-								renderItem={renderItem}
-								renderCell={renderCell}
-								noDataMessage={t('common.no_products_found')}
-								estimatedItemSize={100}
-								TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
-								getItemType={(row) => row.original.document.type}
-								tableConfig={tableConfig}
-							/>
+							{viewMode === 'grid' ? (
+								<ProductGrid query={query!} />
+							) : (
+								<DataTable<ProductDocument>
+									id="pos-products"
+									query={query!}
+									renderItem={renderItem}
+									renderCell={renderCell}
+									noDataMessage={t('common.no_products_found')}
+									estimatedItemSize={100}
+									TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
+									getItemType={(row) => row.original.document.type}
+									tableConfig={tableConfig}
+								/>
+							)}
 						</Suspense>
 					</ErrorBoundary>
 				</CardContent>
