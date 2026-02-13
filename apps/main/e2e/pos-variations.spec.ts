@@ -190,18 +190,18 @@ test.describe('POS Variations', () => {
 		await expect(variationPlusButtons.first()).toBeVisible({ timeout: 15_000 });
 
 		const buttonCount = await variationPlusButtons.count();
-		if (buttonCount >= 2) {
-			// Add first variation
-			await variationPlusButtons.nth(0).click();
-			await page.waitForTimeout(500);
+		expect(buttonCount).toBeGreaterThanOrEqual(2);
 
-			// Add second variation
-			await variationPlusButtons.nth(1).click();
-			await page.waitForTimeout(500);
+		// Add first variation
+		await variationPlusButtons.nth(0).click();
+		await page.waitForTimeout(500);
 
-			// Cart should show the checkout button
-			await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
-		}
+		// Add second variation
+		await variationPlusButtons.nth(1).click();
+		await page.waitForTimeout(500);
+
+		// Cart should show the checkout button
+		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should increment quantity when adding same variation twice', async ({
@@ -226,8 +226,9 @@ test.describe('POS Variations', () => {
 		// Should have checkout button
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 
-		// Should see at least one cart quantity input
+		// Should see at least one cart quantity input with value "2"
 		const quantityInputs = page.getByTestId('cart-quantity-input');
 		await expect(quantityInputs.first()).toBeVisible({ timeout: 10_000 });
+		await expect(quantityInputs.first()).toContainText('2', { timeout: 5_000 });
 	});
 });
