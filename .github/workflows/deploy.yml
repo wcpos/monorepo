@@ -18,7 +18,13 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
+    paths:
+      - apps/**
+      - packages/**
+      - .github/workflows/deploy.yml
+      - package.json
+      - pnpm-lock.yaml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -31,6 +37,7 @@ jobs:
   deploy:
     name: 🚀 Deploy
     runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
       is_production: ${{ steps.get-url.outputs.is_production }}
@@ -109,7 +116,7 @@ jobs:
   e2e:
     name: 🎭 E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     needs: deploy
-    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true')
+    if: needs.deploy.outputs.deployment_url != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_e2e != 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -130,6 +137,14 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+
+      - name: 💾 Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
 
       - name: 🎭 Install Playwright browsers
         run: cd apps/main && npx playwright install --with-deps chromium
