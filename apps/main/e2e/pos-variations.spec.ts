@@ -2,11 +2,30 @@ import { expect, type Page } from '@playwright/test';
 import { authenticatedTest as test } from './fixtures';
 
 /**
+ * Helper: ensure the POS products are in table view (not grid view).
+ * The variation popover button and expand link only appear in table view.
+ * The default view mode may differ between environments.
+ */
+async function ensureTableView(page: Page) {
+	// Grid view renders product tiles; if we see one, switch to table view
+	const tile = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
+	const isGridView = await tile.first().isVisible({ timeout: 2_000 }).catch(() => false);
+	if (isGridView) {
+		const toggle = page.getByTestId('view-mode-toggle');
+		await toggle.click();
+		await page.waitForTimeout(1_000);
+	}
+}
+
+/**
  * Helper: search for a variable product (WooCommerce sample data "hoodie")
  * and wait for results to appear. Variable products may take longer to sync
  * from WooCommerce in CI, so we use generous timeouts.
  */
 async function searchForVariableProduct(page: Page) {
+	// These tests require table view — switch if needed
+	await ensureTableView(page);
+
 	const searchInput = page.getByTestId('search-products');
 	await searchInput.fill('hoodie');
 	await page.waitForTimeout(2_000);
