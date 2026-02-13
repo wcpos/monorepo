@@ -38,6 +38,7 @@ export function ProductVariationActions({
 	 */
 	return (
 		<IconButton
+			testID="add-variation-to-cart-button"
 			name="circlePlus"
 			size="4xl"
 			onPress={() =>
