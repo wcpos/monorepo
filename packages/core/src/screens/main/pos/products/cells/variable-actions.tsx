@@ -44,7 +44,12 @@ export function VariableActions({ row }: CellContext<{ document: ProductDocument
 	return (
 		<Popover>
 			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
-				<IconButton name="circleChevronRight" variant="success" size="4xl" />
+				<IconButton
+					testID="variable-product-popover-button"
+					name="circleChevronRight"
+					variant="success"
+					size="4xl"
+				/>
 			</PopoverTrigger>
 			<PopoverContent side="right" className="w-auto max-w-80 p-2">
 				<VariationsPopover parent={parent} addToCart={addToCart as never} />

@@ -115,7 +115,7 @@ export function Variations({ query, parent, addToCart }: VariationPopoverProps) 
 				</VStack>
 			))}
 			{selectedVariation && (
-				<Button onPress={handleAddToCart}>
+				<Button testID="variation-popover-add-to-cart" onPress={handleAddToCart}>
 					<ButtonText>
 						{t('common.add_to_cart') + ': ' + format(selectedVariation.price)}
 					</ButtonText>
