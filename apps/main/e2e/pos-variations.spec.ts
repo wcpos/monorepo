@@ -3,20 +3,22 @@ import { authenticatedTest as test } from './fixtures';
 
 /**
  * Helper: search for a variable product (WooCommerce sample data "hoodie")
- * and wait for results to appear.
+ * and wait for results to appear. Variable products may take longer to sync
+ * from WooCommerce in CI, so we use generous timeouts.
  */
 async function searchForVariableProduct(page: Page) {
 	const searchInput = page.getByTestId('search-products');
 	await searchInput.fill('hoodie');
-	await page.waitForTimeout(1_500);
+	await page.waitForTimeout(2_000);
 
-	// Verify we got results
+	// Verify we got results — product sync can be slow in CI
 	const countEl = page.getByTestId('data-table-count');
-	await expect(countEl).toBeVisible({ timeout: 15_000 });
+	await expect(countEl).toBeVisible({ timeout: 30_000 });
 
-	// Verify there's at least one variable product popover button
+	// Verify there's at least one variable product popover button.
+	// Variable products render a chevron button instead of a "+" button.
 	const popoverButton = page.getByTestId('variable-product-popover-button').first();
-	await expect(popoverButton).toBeVisible({ timeout: 15_000 });
+	await expect(popoverButton).toBeVisible({ timeout: 30_000 });
 }
 
 /**
