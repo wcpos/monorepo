@@ -6,8 +6,10 @@ async function addFirstProductToCart(page: Page) {
 	const tile = page.getByTestId('product-tile').first();
 	const tableButton = page.getByTestId('add-to-cart-button').first();
 
-	const isTileVisible = await tile.isVisible().catch(() => false);
-	if (isTileVisible) {
+	// Wait for products to render in whichever view mode is active
+	await expect(tile.or(tableButton)).toBeVisible({ timeout: 15_000 });
+
+	if (await tile.isVisible()) {
 		await tile.click();
 	} else {
 		await tableButton.click();
@@ -77,7 +79,10 @@ test.describe('POS Cart', () => {
 		const tile = page.getByTestId('product-tile');
 		const tableButton = page.getByTestId('add-to-cart-button');
 
-		const isTileVisible = await tile.first().isVisible().catch(() => false);
+		// Wait for products to render in whichever view mode is active
+		await expect(tile.first().or(tableButton.first())).toBeVisible({ timeout: 15_000 });
+
+		const isTileVisible = await tile.first().isVisible();
 		const buttons = isTileVisible ? tile : tableButton;
 
 		await buttons.nth(0).click();
