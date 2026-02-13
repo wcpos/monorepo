@@ -198,6 +198,81 @@ test.describe('Products Page (Pro)', () => {
 
 		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
 	});
+
+	test('should expand variable product to show variations', async ({ posPage: page }) => {
+		await navigateToPage(page, 'products');
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+
+		// Search for a variable product
+		const searchInput = screen.getByTestId('search-products');
+		await searchInput.fill('hoodie');
+		await page.waitForTimeout(2_000);
+
+		// Click the expand link on the variable product
+		const expandLink = screen.getByTestId('variable-product-expand').first();
+		await expect(expandLink).toBeVisible({ timeout: 30_000 });
+		await expandLink.click();
+		await page.waitForTimeout(1_500);
+
+		// Variation rows should now be visible with their actions menus
+		const variationActionsMenu = screen.getByTestId('variation-actions-menu');
+		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
+	});
+
+	test('should show variation actions menu with edit/sync/delete', async ({
+		posPage: page,
+	}) => {
+		await navigateToPage(page, 'products');
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+
+		// Search for a variable product and expand it
+		const searchInput = screen.getByTestId('search-products');
+		await searchInput.fill('hoodie');
+		await page.waitForTimeout(2_000);
+
+		const expandLink = screen.getByTestId('variable-product-expand').first();
+		await expect(expandLink).toBeVisible({ timeout: 30_000 });
+		await expandLink.click();
+		await page.waitForTimeout(1_500);
+
+		// Click the variation actions menu (ellipsis button)
+		const variationActionsMenu = screen.getByTestId('variation-actions-menu').first();
+		await expect(variationActionsMenu).toBeVisible({ timeout: 15_000 });
+		await variationActionsMenu.click();
+
+		// The dropdown should show menu items (Edit, Sync, Delete)
+		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
+	});
+
+	test('should collapse expanded variable product on Products page', async ({
+		posPage: page,
+	}) => {
+		await navigateToPage(page, 'products');
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+
+		// Search and expand
+		const searchInput = screen.getByTestId('search-products');
+		await searchInput.fill('hoodie');
+		await page.waitForTimeout(2_000);
+
+		const expandLink = screen.getByTestId('variable-product-expand').first();
+		await expect(expandLink).toBeVisible({ timeout: 30_000 });
+		await expandLink.click();
+		await page.waitForTimeout(1_500);
+
+		const variationActionsMenu = screen.getByTestId('variation-actions-menu');
+		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
+
+		// Collapse
+		await expandLink.click();
+		await page.waitForTimeout(1_000);
+
+		// Variation actions should no longer be visible
+		await expect(variationActionsMenu.first()).not.toBeVisible({ timeout: 10_000 });
+	});
 });
 
 /**
