@@ -85,7 +85,9 @@ test.describe('POS Variations', () => {
 		const optionButtons = popoverContent.locator('[data-testid^="variation-option-"]');
 		const optionCount = await optionButtons.count();
 
-		// Click each first available option
+		// Click available options so each attribute group gets a selection.
+		// Products with multiple attributes (e.g. Color + Logo) need one
+		// option selected per group before a single variation resolves.
 		for (let i = 0; i < optionCount; i++) {
 			const btn = optionButtons.nth(i);
 			const isDisabled = await btn.isDisabled().catch(() => true);
@@ -97,7 +99,6 @@ test.describe('POS Variations', () => {
 				await btn.click();
 				// Wait for the popover to update after selection
 				await page.waitForTimeout(500);
-				break;
 			}
 		}
 
