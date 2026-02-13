@@ -1,9 +1,17 @@
 import { expect, type Page } from '@playwright/test';
 import { authenticatedTest as test } from './fixtures';
 
-/** Helper to add the first simple product to the cart */
+/** Helper to add the first simple product to the cart. Works in both grid and table view. */
 async function addFirstProductToCart(page: Page) {
-	await page.getByTestId('add-to-cart-button').first().click();
+	const tile = page.getByTestId('product-tile').first();
+	const tableButton = page.getByTestId('add-to-cart-button').first();
+
+	const isTileVisible = await tile.isVisible().catch(() => false);
+	if (isTileVisible) {
+		await tile.click();
+	} else {
+		await tableButton.click();
+	}
 	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 }
 
@@ -65,12 +73,17 @@ test.describe('POS Cart', () => {
 	});
 
 	test('should add multiple different products', async ({ posPage: page }) => {
-		const addButtons = page.getByTestId('add-to-cart-button');
+		// Works in both grid (product-tile) and table (add-to-cart-button) views
+		const tile = page.getByTestId('product-tile');
+		const tableButton = page.getByTestId('add-to-cart-button');
 
-		await addButtons.nth(0).click();
+		const isTileVisible = await tile.first().isVisible().catch(() => false);
+		const buttons = isTileVisible ? tile : tableButton;
+
+		await buttons.nth(0).click();
 		await page.waitForTimeout(500);
 
-		await addButtons.nth(1).click();
+		await buttons.nth(1).click();
 		await page.waitForTimeout(500);
 
 		await expect(page.getByTestId('checkout-button')).toBeVisible();

@@ -192,15 +192,9 @@ test.describe('Products Page (Pro)', () => {
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
 
-		const dataRow = screen.locator('[role="rowgroup"] [role="row"]').first();
-		await expect(dataRow).toBeVisible({ timeout: 15_000 });
-
-		const rowButtons = dataRow.locator('[role="button"]');
-		const count = await rowButtons.count();
-
-		if (count > 0) {
-			await rowButtons.nth(count - 1).click();
-		}
+		const actionsButton = screen.getByTestId('product-actions-button').first();
+		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
+		await actionsButton.click();
 
 		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
 	});
