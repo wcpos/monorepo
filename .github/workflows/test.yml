@@ -2,7 +2,13 @@ name: Test
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
+    paths:
+      - apps/**
+      - packages/**
+      - .github/workflows/test.yml
+      - package.json
+      - pnpm-lock.yaml
   push:
     branches: [main]
 
@@ -14,6 +20,7 @@ jobs:
   lint:
     name: 🧹 Lint
     runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false || github.ref == 'refs/heads/main'
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@v4
