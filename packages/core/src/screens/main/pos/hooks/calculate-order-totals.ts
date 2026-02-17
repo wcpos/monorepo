@@ -125,6 +125,17 @@ export function calculateOrderTotals({
 
 	// Calculate coupon discount totals
 	couponLines.forEach((line) => {
+		/**
+		 * Synced coupon lines (with an ID) have already been applied by WooCommerce
+		 * to line item totals. Re-applying them here would double-discount.
+		 *
+		 * Local-only coupon lines (no ID yet) still need to be reflected in POS totals
+		 * before server sync.
+		 */
+		if (typeof line.id === 'number' && line.id > 0) {
+			return;
+		}
+
 		const couponDiscount = parseNumber(line.discount);
 		const couponDiscountTax = parseNumber(line.discount_tax);
 		discount_total += couponDiscount;
