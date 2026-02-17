@@ -455,6 +455,39 @@ describe('coupon line calculations', () => {
 		expect(result.total).toBe('99');
 	});
 
+	it('does not double-apply synced coupon discounts', () => {
+		const lineItems = [
+			{
+				subtotal: '100',
+				total: '90',
+				subtotal_tax: '10',
+				total_tax: '9',
+				taxes: [{ id: 1, total: '9' }],
+			},
+		];
+		const couponLines = [
+			{
+				id: 123,
+				code: 'SAVE10',
+				discount: '10',
+				discount_tax: '1',
+			},
+		];
+
+		const result = calculateOrderTotals({
+			lineItems: lineItems as any,
+			couponLines: couponLines as any,
+			taxRates: [{ id: 1, name: 'Tax', rate: '10', compound: false }] as any,
+			taxRoundAtSubtotal: false,
+		});
+
+		// Synced orders already have discounted line totals.
+		// Coupon lines should not be subtracted again.
+		expect(result.discount_total).toBe('10');
+		expect(result.discount_tax).toBe('1');
+		expect(result.total).toBe('99');
+	});
+
 	it('handles multiple coupon lines', () => {
 		const lineItems = [
 			{
