@@ -67,7 +67,6 @@ export function TaxRates({ query }: Props) {
 	 */
 	return (
 		<Modal>
-			{/* @ts-expect-error: "2xl" is used but ModalContent size type only allows up to "xl" */}
 			<ModalContent size="2xl">
 				<ModalHeader>
 					<ModalTitle>

@@ -13,6 +13,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { useUISettings } from '../../../contexts/ui-settings';
+import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 const paymentLogger = getLogger(['wcpos', 'pos', 'checkout', 'payment']);
@@ -38,6 +39,9 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();
+	const httpClient = useRestHttpClient('orders');
+	const paymentReceivedRef = React.useRef(false);
+	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Create a logger with order context
 	const orderLogger = React.useMemo(
@@ -70,6 +74,11 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 				typeof event?.data?.payload === 'object'
 			) {
 				try {
+					paymentReceivedRef.current = true;
+					if (fallbackTimerRef.current) {
+						clearTimeout(fallbackTimerRef.current);
+						fallbackTimerRef.current = null;
+					}
 					const payload = event.data.payload;
 					// get line_items with "_reduced_stock" meta
 					const reducedStockItems = (payload?.line_items || []).filter(
@@ -109,7 +118,6 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 
 					const success = await latest.incrementalPatch(parsedData);
 					if (success) {
-						// Log payment completed successfully
 						orderLogger.success(
 							t('pos_checkout.payment_completed_for_order', {
 								orderNumber: payload.number || order.number,
@@ -156,15 +164,132 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 	);
 
 	/**
-	 *
+	 * When the webview loads (including redirects after payment), schedule a fallback
+	 * fetch in case the payment gateway doesn't send a postMessage.
 	 */
-	const onWebViewLoaded = React.useCallback((_event: unknown) => {
-		//
+	const onWebViewLoaded = React.useCallback(
+		(_event: unknown) => {
+			if (fallbackTimerRef.current) {
+				clearTimeout(fallbackTimerRef.current);
+			}
+
+			fallbackTimerRef.current = setTimeout(async () => {
+				if (paymentReceivedRef.current) return;
+
+				// Check local status first - if it's no longer pos-open,
+				// the postMessage path already handled the update
+				const localStatus = order.getLatest().status;
+				if (!localStatus || localStatus !== 'pos-open') return;
+
+				try {
+					orderLogger.info('No postMessage received, fetching order status', {
+						context: { orderId: order.id },
+					});
+
+					const response = await httpClient.get(`/${order.id}`);
+					if (!response?.data) return;
+
+					const serverOrder = response.data as Record<string, unknown>;
+					const serverStatus = serverOrder.status as string;
+
+					// If server still matches local, payment hasn't completed yet
+					if (serverStatus === localStatus) return;
+
+					paymentReceivedRef.current = true;
+
+					const reducedStockItems = (
+						(serverOrder.line_items as Record<string, unknown>[]) || []
+					).filter((item) =>
+						(item.meta_data as { key: string }[])?.some((meta) => meta.key === '_reduced_stock')
+					);
+					stockAdjustment(reducedStockItems);
+
+					const latest = order.getLatest();
+					const existingLinks = latest.links;
+					const parsedData = (
+						latest.collection as unknown as {
+							parseRestResponse: (data: unknown) => Record<string, unknown>;
+						}
+					).parseRestResponse(serverOrder);
+
+					if (parsedData.links && existingLinks) {
+						const parsedLinks = parsedData.links as Record<string, { href?: string }[]>;
+						const existingLinksRecord = existingLinks as Record<
+							string,
+							{ href?: string }[] | undefined
+						>;
+						for (const key of Object.keys(existingLinksRecord)) {
+							if (
+								(existingLinksRecord[key]?.length ?? 0) > 0 &&
+								(!parsedLinks[key] || parsedLinks[key].length === 0)
+							) {
+								parsedLinks[key] = existingLinksRecord[key]!;
+							}
+						}
+					}
+
+					const success = await latest.incrementalPatch(parsedData);
+					if (success) {
+						orderLogger.success(
+							t('pos_checkout.payment_completed_for_order', {
+								orderNumber: (serverOrder.number as string | number) || order.number,
+							}),
+							{
+								showToast: true,
+								saveToDb: true,
+								context: {
+									total: serverOrder.total,
+									paymentMethod: serverOrder.payment_method,
+									paymentMethodTitle: serverOrder.payment_method_title,
+									status: serverStatus,
+									source: 'fallback-fetch',
+								},
+							}
+						);
+
+						if (uiSettings.autoShowReceipt) {
+							router.replace({
+								pathname: `(modals)/cart/receipt/${order.uuid}`,
+							});
+						} else {
+							router.replace({ pathname: `cart` });
+						}
+					}
+				} catch (err) {
+					const errorMessage = err instanceof Error ? err.message : 'Fallback order fetch failed';
+					orderLogger.error(errorMessage, {
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
+							error: err instanceof Error ? err.message : String(err),
+							source: 'fallback-fetch',
+						},
+					});
+				} finally {
+					setLoading(false);
+				}
+			}, 1000);
+		},
+		[
+			order,
+			httpClient,
+			stockAdjustment,
+			uiSettings.autoShowReceipt,
+			router,
+			setLoading,
+			orderLogger,
+			t,
+		]
+	);
+
+	React.useEffect(() => {
+		return () => {
+			if (fallbackTimerRef.current) {
+				clearTimeout(fallbackTimerRef.current);
+			}
+		};
 	}, []);
 
-	/**
-	 *
-	 */
 	return (
 		<ErrorBoundary>
 			{paymentURL ? (
@@ -185,7 +310,7 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 								},
 							});
 						} else {
-							handlePaymentReceived(data as unknown as MessageEvent);
+							handlePaymentReceived({ data } as unknown as MessageEvent);
 						}
 					}}
 					className="h-full flex-1"

@@ -65,7 +65,7 @@ export function VariationActions({
 	return (
 		<>
 			<DropdownMenu>
-				<DropdownMenuTrigger>
+				<DropdownMenuTrigger testID="variation-actions-menu">
 					<Icon name="ellipsisVertical" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">

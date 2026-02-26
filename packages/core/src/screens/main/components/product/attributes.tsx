@@ -188,7 +188,12 @@ export function ProductAttributes({
 						))}
 					</HStack>
 				))}
-			<Text className="text-primary text-xs" variant="link" onPress={handleExpand}>
+			<Text
+				testID="variable-product-expand"
+				className="text-primary text-xs"
+				variant="link"
+				onPress={handleExpand}
+			>
 				{expandText}
 			</Text>
 		</VStack>

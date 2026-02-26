@@ -85,7 +85,7 @@ export function VariationsTable({ query, row }: Props) {
 										row: {
 											...row,
 											parentId: row.id,
-											getParentRow: () => row.original,
+											getParentRow: () => row,
 											original: hit,
 										},
 									};
