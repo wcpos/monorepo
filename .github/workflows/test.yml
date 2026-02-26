@@ -3,12 +3,6 @@ name: Test
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review]
-    paths:
-      - apps/**
-      - packages/**
-      - .github/workflows/test.yml
-      - package.json
-      - pnpm-lock.yaml
   push:
     branches: [main]
 
@@ -17,49 +11,68 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: 🧹 Lint
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false || github.ref == 'refs/heads/main'
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
     steps:
-      - name: 🏗 Setup repository
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
+        id: filter
+        with:
+          filters: |
+            src:
+              - 'apps/**'
+              - 'packages/**'
+              - '.github/workflows/test.yml'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+
+  lint:
+    name: "\U0001F9F9 Lint"
+    runs-on: ubuntu-latest
+    needs: changes
+    if: (needs.changes.outputs.src == 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
+    steps:
+      - name: "\U0001F3D7 Setup repository"
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           submodules: false
 
-      - name: 🏗 Setup monorepo
+      - name: "\U0001F3D7 Setup monorepo"
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
-      - name: 🧹 Run ESLint
+      - name: "\U0001F9F9 Run ESLint"
         run: pnpm lint
 
-      - name: 🔍 Typecheck
+      - name: "\U0001F50D Typecheck"
         run: pnpm typecheck
 
   unit-tests:
-    name: 🧪 Unit Tests
+    name: "\U0001F9EA Unit Tests"
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [changes, lint]
+    if: needs.changes.outputs.src == 'true'
     steps:
-      - name: 🏗 Setup repository
+      - name: "\U0001F3D7 Setup repository"
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           submodules: false
 
-      - name: 🏗 Setup monorepo
+      - name: "\U0001F3D7 Setup monorepo"
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
-      - name: 🧪 Run tests for each package
+      - name: "\U0001F9EA Run tests for each package"
         run: |
           # Track failures but continue to generate coverage for all packages
           failed=0
@@ -88,7 +101,7 @@ jobs:
             exit 1
           fi
 
-      - name: 📊 Generate test failure summary
+      - name: "\U0001F4CA Generate test failure summary"
         if: always()
         run: |
           # Collect test failures from JSON results
@@ -132,7 +145,7 @@ jobs:
             echo "$failure_md" > /tmp/test-summary/failures.md
           fi
 
-      - name: 🔒 Coverage ratchet check
+      - name: "\U0001F512 Coverage ratchet check"
         if: always()
         run: |
           node -e "
@@ -173,7 +186,7 @@ jobs:
             }
           "
 
-      - name: 📊 Generate coverage summary
+      - name: "\U0001F4CA Generate coverage summary"
         if: always()
         run: |
           echo "## 📊 Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
@@ -194,7 +207,7 @@ jobs:
             fi
           done
 
-      - name: 📤 Upload coverage reports
+      - name: "\U0001F4E4 Upload coverage reports"
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -202,7 +215,7 @@ jobs:
           path: packages/*/coverage/
           retention-days: 7
 
-      - name: 💬 Comment coverage on PR
+      - name: "\U0001F4AC Comment coverage on PR"
         if: github.event_name == 'pull_request' && always()
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
