@@ -36,7 +36,12 @@ export function VariationButtons({
 		<View className="flex-row">
 			<ToggleGroup value={selected} onValueChange={handleSelect} type="single">
 				{options.map((option: string) => (
-					<ToggleGroupItem key={option} value={option} disabled={optionCounts[option] === 0}>
+					<ToggleGroupItem
+						key={option}
+						value={option}
+						disabled={optionCounts[option] === 0}
+						testID={`variation-option-${option}`}
+					>
 						<Text>{option}</Text>
 					</ToggleGroupItem>
 				))}

@@ -64,7 +64,6 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 		<IconButton
 			name="circleXmark"
 			variant="destructive"
-			// @ts-expect-error: IconButton size variants don't include 4xl, but Icon does
 			size="4xl"
 			onPress={handleRemoveLineItem}
 		/>

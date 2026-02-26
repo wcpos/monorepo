@@ -3,13 +3,49 @@ import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fi
 
 /**
  * Product browsing and search in the POS panel (both free and pro).
+ *
+ * The default view mode is "grid" (tile view). Tests cover both the grid
+ * and table views, as well as toggling between them.
  */
 test.describe('Products in POS', () => {
-	test('should display products in the POS view', async ({ posPage: page }) => {
+	test('should display product tiles in grid view by default', async ({ posPage: page }) => {
+		const tiles = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
+		await expect(tiles.first()).toBeVisible({ timeout: 15_000 });
+
+		const tileCount = await tiles.count();
+		expect(tileCount).toBeGreaterThanOrEqual(1);
+		await expect(page.getByTestId('data-table-count')).toBeVisible();
+	});
+
+	test('should display the view mode toggle button', async ({ posPage: page }) => {
+		await expect(page.getByTestId('view-mode-toggle')).toBeVisible();
+	});
+
+	test('should switch from grid view to table view', async ({ posPage: page }) => {
+		// Default is grid — verify tiles are showing
+		const tiles = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
+		await expect(tiles.first()).toBeVisible({ timeout: 15_000 });
+
+		// Click toggle to switch to table view
+		await page.getByTestId('view-mode-toggle').click();
+
+		// Table view should show column headers
 		const columnheaders = page.getByRole('columnheader');
 		await expect(columnheaders.first()).toBeVisible({ timeout: 15_000 });
 		expect(await columnheaders.count()).toBeGreaterThanOrEqual(2);
-		await expect(page.getByTestId('data-table-count')).toBeVisible();
+	});
+
+	test('should switch from table view back to grid view', async ({ posPage: page }) => {
+		// Switch to table first
+		await page.getByTestId('view-mode-toggle').click();
+		await expect(page.getByRole('columnheader').first()).toBeVisible({ timeout: 15_000 });
+
+		// Switch back to grid
+		await page.getByTestId('view-mode-toggle').click();
+
+		// Tiles should reappear
+		const tiles = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
+		await expect(tiles.first()).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('should search products by name', async ({ posPage: page }) => {
@@ -48,53 +84,62 @@ test.describe('Products in POS', () => {
 	});
 
 	test('should update product count after search', async ({ posPage: page }) => {
-		// Capture initial count
 		const countEl = page.getByTestId('data-table-count');
 		await expect(countEl).toBeVisible();
 		const initialText = await countEl.textContent();
 
-		// Search for something specific
 		const searchInput = page.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
 
-		// Count text should change (either fewer results or "No products found")
 		const hasResults = await countEl.isVisible().catch(() => false);
 		const noResults = await page.getByTestId('no-data-message').isVisible().catch(() => false);
 		expect(hasResults || noResults).toBeTruthy();
 
 		if (hasResults) {
 			const filteredText = await countEl.textContent();
-			// The count should differ from the initial full count or be the same
-			// (if all products match - unlikely for "hoodie")
 			expect(filteredText).toBeTruthy();
 		}
 	});
 
-	test('should add a product to the cart', async ({ posPage: page }) => {
-		await page.getByTestId('add-to-cart-button').first().click();
+	test('should add a simple product to cart by clicking tile', async ({ posPage: page }) => {
+		// In grid view, clicking a product tile adds it to the cart
+		await page.getByTestId('product-tile').first().click();
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 	});
 
-	test('should show variable product with variations', async ({ posPage: page }) => {
-		// Search for a known variable product (WooCommerce sample data has "V-Neck T-Shirt" or "Hoodie")
+	test('should show variable product tiles in grid view', async ({ posPage: page }) => {
 		const searchInput = page.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
 
-		// If there are results, look for a variable product expand trigger
-		const hasResults = await page
-			.getByTestId('data-table-count')
-			.isVisible()
-			.catch(() => false);
+		// Seed data must include "hoodie" as a variable product
+		const variableTiles = page.getByTestId('variable-product-tile');
+		await expect(variableTiles.first()).toBeVisible({ timeout: 10_000 });
+	});
 
-		if (hasResults) {
-			// Variable products have a different action button (chevron instead of plus)
-			// Check that at least one product row exists
-			const rows = page.locator('table tbody tr, [role="row"]');
-			const rowCount = await rows.count();
-			expect(rowCount).toBeGreaterThan(0);
-		}
+	test('should open variation popover when clicking variable product tile', async ({
+		posPage: page,
+	}) => {
+		const searchInput = page.getByTestId('search-products');
+		await searchInput.fill('hoodie');
+		await page.waitForTimeout(1_500);
+
+		const variableTile = page.getByTestId('variable-product-tile');
+		await expect(variableTile.first()).toBeVisible({ timeout: 10_000 });
+		await variableTile.first().click();
+		// The popover renders with role="dialog" from the Popover component
+		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('should add product to cart in table view', async ({ posPage: page }) => {
+		// Switch to table view
+		await page.getByTestId('view-mode-toggle').click();
+		await expect(page.getByRole('columnheader').first()).toBeVisible({ timeout: 15_000 });
+
+		// Table view uses the add-to-cart-button in each row
+		await page.getByTestId('add-to-cart-button').first().click();
+		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
 	});
 });
 
@@ -147,22 +192,86 @@ test.describe('Products Page (Pro)', () => {
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
 
-		// Find a data row within the rowgroup (body rows, not header)
-		const dataRow = screen.locator('[role="rowgroup"] [role="row"]').first();
-		await expect(dataRow).toBeVisible({ timeout: 15_000 });
+		const actionsButton = screen.getByTestId('product-actions-button').first();
+		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
+		await actionsButton.click();
 
-		// The ellipsis button is the last pressable element in the row
-		// All IconButtons in wcpos render as Pressable with role="button"
-		const rowButtons = dataRow.locator('[role="button"]');
-		const count = await rowButtons.count();
-
-		// Click the last button (the ellipsis/actions button)
-		if (count > 0) {
-			await rowButtons.nth(count - 1).click();
-		}
-
-		// Menu should show Edit, Sync, or Delete options
 		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
+	});
+
+	test('should expand variable product to show variations', async ({ posPage: page }) => {
+		await navigateToPage(page, 'products');
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+
+		// Search for a variable product
+		const searchInput = screen.getByTestId('search-products');
+		await searchInput.fill('hoodie');
+		await page.waitForTimeout(2_000);
+
+		// Click the expand link on the variable product
+		const expandLink = screen.getByTestId('variable-product-expand').first();
+		await expect(expandLink).toBeVisible({ timeout: 30_000 });
+		await expandLink.click();
+		await page.waitForTimeout(1_500);
+
+		// Variation rows should now be visible with their actions menus
+		const variationActionsMenu = screen.getByTestId('variation-actions-menu');
+		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
+	});
+
+	test('should show variation actions menu with edit/sync/delete', async ({
+		posPage: page,
+	}) => {
+		await navigateToPage(page, 'products');
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+
+		// Search for a variable product and expand it
+		const searchInput = screen.getByTestId('search-products');
+		await searchInput.fill('hoodie');
+		await page.waitForTimeout(2_000);
+
+		const expandLink = screen.getByTestId('variable-product-expand').first();
+		await expect(expandLink).toBeVisible({ timeout: 30_000 });
+		await expandLink.click();
+		await page.waitForTimeout(1_500);
+
+		// Click the variation actions menu (ellipsis button)
+		const variationActionsMenu = screen.getByTestId('variation-actions-menu').first();
+		await expect(variationActionsMenu).toBeVisible({ timeout: 15_000 });
+		await variationActionsMenu.click();
+
+		// The dropdown should show menu items (Edit, Sync, Delete)
+		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
+	});
+
+	test('should collapse expanded variable product on Products page', async ({
+		posPage: page,
+	}) => {
+		await navigateToPage(page, 'products');
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+
+		// Search and expand
+		const searchInput = screen.getByTestId('search-products');
+		await searchInput.fill('hoodie');
+		await page.waitForTimeout(2_000);
+
+		const expandLink = screen.getByTestId('variable-product-expand').first();
+		await expect(expandLink).toBeVisible({ timeout: 30_000 });
+		await expandLink.click();
+		await page.waitForTimeout(1_500);
+
+		const variationActionsMenu = screen.getByTestId('variation-actions-menu');
+		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
+
+		// Collapse
+		await expandLink.click();
+		await page.waitForTimeout(1_000);
+
+		// Variation actions should no longer be visible
+		await expect(variationActionsMenu.first()).not.toBeVisible({ timeout: 10_000 });
 	});
 });
 

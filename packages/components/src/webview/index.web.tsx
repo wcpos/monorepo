@@ -49,13 +49,15 @@ function WebView({
 			const { origin, data } = event;
 
 			const message = {
-				data,
-				url: origin,
-				loading: false,
-				title: '',
-				canGoBack: false,
-				canGoForward: false,
-				lockIdentifier: 0,
+				nativeEvent: {
+					data,
+					url: origin,
+					loading: false,
+					title: '',
+					canGoBack: false,
+					canGoForward: false,
+					lockIdentifier: 0,
+				},
 			};
 
 			onMessage?.(message as any);
