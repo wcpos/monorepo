@@ -38,6 +38,8 @@ interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
 }
 
+const CHECKOUT_ROUTE_NAMES = ['Checkout', '(modals)/cart/[orderId]/checkout'] as const;
+
 /**
  *
  */
@@ -59,7 +61,7 @@ export function Receipt({ resource }: Props) {
 	const { uiSettings } = useUISettings('pos-cart');
 	const checkoutRef = React.useRef(false);
 	useNavigationState((state) => {
-		if (state.routeNames.includes('Checkout')) {
+		if (CHECKOUT_ROUTE_NAMES.some((routeName) => state.routeNames.includes(routeName))) {
 			checkoutRef.current = true;
 		}
 		return state;
