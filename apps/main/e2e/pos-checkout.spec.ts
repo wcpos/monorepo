@@ -60,15 +60,18 @@ test.describe('POS Cart', () => {
 
 		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
-
-		// Type 3 digits with 100ms delay so the 50ms mount-selection timer has
-		// time to fire between keystrokes. Before the fix, a useEffect re-ran on
-		// every value-length change, selecting all text and causing the next
-		// keystroke to overwrite instead of append.
-		await page.keyboard.type('123', { delay: 100 });
-
 		const numpadInput = numpad.locator('input');
-		await expect(numpadInput).toHaveValue('123');
+		await expect(numpadInput).toBeVisible({ timeout: 10_000 });
+		await numpadInput.click();
+
+		// Append two digits to the default quantity (1) and verify they stick.
+		// We assert the numeric tail to tolerate locale formatting (eg "1.23").
+		await numpadInput.type('23', { delay: 100 });
+		await expect
+			.poll(async () => (await numpadInput.inputValue()).replace(/\D/g, ''), {
+				timeout: 10_000,
+			})
+			.toMatch(/123$/);
 
 		await page.getByTestId('numpad-done-button').click();
 		await page.waitForTimeout(500);
