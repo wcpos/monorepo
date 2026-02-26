@@ -46,7 +46,7 @@ jobs:
       is_production: ${{ steps.get-url.outputs.is_production }}
     steps:
       - name: 🏗 Setup repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
           submodules: false
@@ -129,7 +129,7 @@ jobs:
         shardTotal: [6]
     steps:
       - name: 🏗 Setup repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
           submodules: false
@@ -297,7 +297,7 @@ jobs:
       pull-requests: write
     steps:
       - name: 🏗 Checkout (for gh CLI)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: 📥 Download test results
         if: needs.e2e.result == 'failure'
