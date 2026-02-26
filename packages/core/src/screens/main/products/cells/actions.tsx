@@ -60,7 +60,7 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<IconButton name="ellipsisVertical" />
+					<IconButton name="ellipsisVertical" testID="product-actions-button" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem

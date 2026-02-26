@@ -2,57 +2,84 @@ name: Test
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
   push:
     branches: [main]
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: 🧹 Lint
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
     steps:
-      - name: 🏗 Setup repository
-        uses: actions/checkout@v4
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
+        id: filter
+        with:
+          filters: |
+            src:
+              - 'apps/**'
+              - 'packages/**'
+              - '.github/workflows/test.yml'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+
+  lint:
+    name: "\U0001F9F9 Lint"
+    runs-on: ubuntu-latest
+    needs: changes
+    if: (needs.changes.outputs.src == 'true') && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main')
+    steps:
+      - name: "\U0001F3D7 Setup repository"
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           submodules: false
 
-      - name: 🏗 Setup monorepo
+      - name: "\U0001F3D7 Setup monorepo"
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
-      - name: 🧹 Run ESLint
+      - name: "\U0001F9F9 Run ESLint"
         run: pnpm lint
 
-      - name: 🔍 Typecheck
+      - name: "\U0001F50D Typecheck"
         run: pnpm typecheck
 
   unit-tests:
-    name: 🧪 Unit Tests
+    name: "\U0001F9EA Unit Tests"
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [changes, lint]
+    if: needs.changes.outputs.src == 'true'
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     steps:
-      - name: 🏗 Setup repository
-        uses: actions/checkout@v4
+      - name: "\U0001F3D7 Setup repository"
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           submodules: false
 
-      - name: 🏗 Setup monorepo
+      - name: "\U0001F3D7 Setup monorepo"
         uses: ./.github/actions/setup-monorepo
         with:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
 
-      - name: 🧪 Run tests for each package
+      - name: "\U0001F9EA Run tests for each package"
         run: |
           # Track failures but continue to generate coverage for all packages
           failed=0
@@ -81,7 +108,7 @@ jobs:
             exit 1
           fi
 
-      - name: 📊 Generate test failure summary
+      - name: "\U0001F4CA Generate test failure summary"
         if: always()
         run: |
           # Collect test failures from JSON results
@@ -125,7 +152,48 @@ jobs:
             echo "$failure_md" > /tmp/test-summary/failures.md
           fi
 
-      - name: 📊 Generate coverage summary
+      - name: "\U0001F512 Coverage ratchet check"
+        if: always()
+        run: |
+          node -e "
+            const fs = require('fs');
+            const baseline = JSON.parse(fs.readFileSync('coverage-baseline.json', 'utf8'));
+            const packages = Object.keys(baseline.packages);
+            const metrics = ['statements', 'branches', 'functions', 'lines'];
+            let failed = false;
+
+            for (const pkg of packages) {
+              const summaryPath = 'packages/' + pkg + '/coverage/coverage-summary.json';
+              if (!fs.existsSync(summaryPath)) {
+                console.error('@wcpos/' + pkg + ': coverage summary missing at ' + summaryPath);
+                failed = true;
+                continue;
+              }
+              const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+              const current = summary.total;
+              const base = baseline.packages[pkg];
+
+              for (const metric of metrics) {
+                const currentPct = current[metric]?.pct ?? 0;
+                const basePct = base[metric] ?? 0;
+                if (currentPct < basePct) {
+                  console.error('@wcpos/' + pkg + ': ' + metric + ' dropped from ' + basePct + '% to ' + currentPct + '%');
+                  failed = true;
+                }
+              }
+            }
+
+            if (failed) {
+              console.error('');
+              console.error('Coverage ratchet failed — coverage must not decrease.');
+              console.error('If you removed code/tests intentionally, update coverage-baseline.json.');
+              process.exit(1);
+            } else {
+              console.log('Coverage ratchet passed.');
+            }
+          "
+
+      - name: "\U0001F4CA Generate coverage summary"
         if: always()
         run: |
           echo "## 📊 Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
@@ -146,21 +214,22 @@ jobs:
             fi
           done
 
-      - name: 📤 Upload coverage reports
-        uses: actions/upload-artifact@v4
+      - name: "\U0001F4E4 Upload coverage reports"
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: coverage-reports
           path: packages/*/coverage/
           retention-days: 7
 
-      - name: 💬 Comment coverage on PR
+      - name: "\U0001F4AC Comment coverage on PR"
         if: github.event_name == 'pull_request' && always()
-        uses: actions/github-script@v7
+        continue-on-error: true
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');
-            
+
             const packages = ['core', 'components', 'database', 'hooks', 'utils', 'query'];
             let coverageRows = [];
             let totalStatements = 0;
@@ -168,12 +237,12 @@ jobs:
             let totalFunctions = 0;
             let totalLines = 0;
             let packageCount = 0;
-            
+
             const getEmoji = (pct) => {
               if (pct === null || pct === undefined || pct === '-') return '⚪';
               return pct >= 80 ? '🟢' : pct >= 60 ? '🟡' : '🔴';
             };
-            
+
             for (const pkg of packages) {
               const coveragePath = `packages/${pkg}/coverage/coverage-summary.json`;
               try {
@@ -212,7 +281,7 @@ jobs:
                 coverageRows.push(`| @wcpos/${pkg} | ⚪ Error | ⚪ - | ⚪ - | ⚪ - |`);
               }
             }
-            
+
             // Calculate averages
             let avgRow = '| **Average** | ⚪ - | ⚪ - | ⚪ - | ⚪ - |';
             if (packageCount > 0) {
@@ -234,10 +303,10 @@ jobs:
                 '|'
               ].join(' ');
             }
-            
+
             const tableHeader = '| Package | Statements | Branches | Functions | Lines |\n|---------|------------|----------|-----------|-------|';
             const legend = '<details>\n<summary>Coverage Legend</summary>\n\n- 🟢 Good (≥80%)\n- 🟡 Moderate (60-79%)\n- 🔴 Needs improvement (<60%)\n- ⚪ No coverage data\n\n</details>';
-            
+
             // Read test failure summary if it exists
             let failureSection = '';
             const failurePath = '/tmp/test-summary/failures.md';

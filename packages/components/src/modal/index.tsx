@@ -130,6 +130,7 @@ const modalContentVariants = cva(
 				sm: 'w-80',
 				lg: 'w-lg',
 				xl: 'w-160',
+				'2xl': 'w-200',
 				full: 'w-full',
 			},
 		},

@@ -5,6 +5,19 @@
     "width": 60,
     "showOutOfStock": false,
     "position": "left",
+    "viewMode": "grid",
+    "gridColumns": 4,
+    "gridFields": {
+      "name": true,
+      "price": true,
+      "tax": false,
+      "on_sale": false,
+      "category": false,
+      "sku": false,
+      "barcode": false,
+      "stock_quantity": false,
+      "cost_of_goods_sold": false
+    },
     "columns": [
       {
         "key": "image",

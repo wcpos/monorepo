@@ -1,48 +1,14 @@
 ---
-description: Testing and linting requirements for the monorepo
+description: E2E locator rules for the monorepo
 alwaysApply: true
 ---
 
-# Pre-Commit Requirements
+# E2E Locator Rules (Playwright)
 
-Before committing changes, run linting and tests.
+Tests must be **language-agnostic** — demo stores may run in any locale.
 
-## Linting (ESLint + Prettier)
-
-```bash
-pnpm lint:fix
-```
-
-The project uses `@wcpos/eslint-config` with Prettier (tabs, single quotes, trailing commas), import ordering, and React Compiler rules.
-
-## Unit Tests (Jest)
-
-Add `*.test.ts` files colocated with the code for:
-- Utility functions and helpers
-- Business logic (tax calculations, order totals, etc.)
-- Data transformations and hooks with complex logic
-
-Run: `pnpm test` or `cd packages/<pkg> && npx jest <path>`
-
-## E2E Tests (Playwright)
-
-Add `*.spec.ts` files in `apps/main/e2e/` for:
-- New user-facing features
-- Critical user flows (auth, checkout, navigation)
-
-### E2E Locator Rules
-
-Tests must be **language-agnostic** — the demo stores may run in any locale.
-
-1. **Prefer `getByTestId`** — add `testID` props to components as needed (maps to `data-testid` on web).
-2. **Use structural locators** — `getByRole`, element counts, attribute selectors (`[role="button"]`).
-3. **Avoid `getByText`** — never use it for assertions or finding elements on translated pages. It couples tests to display text and breaks when content changes or the locale differs.
-4. **Acceptable `getByText` uses** — only for clicking items in dynamically-rendered lists (e.g. combobox options) where individual testIDs aren't practical. Always document why in a comment.
-5. **Verify network, not rendered text** — use `waitForResponse` to check CDN/API calls instead of asserting translated strings appeared.
-6. **Anchor assertions to testIDs** — use `toContainText` on testID-located elements rather than `getByText` on the page.
-
-## When to Skip Tests
-
-- Purely cosmetic changes (CSS/styling only)
-- Documentation or comments only
-- User explicitly requests no tests
+1. **Prefer `getByTestId`** — add `testID` props to components (maps to `data-testid` on web)
+2. **Use structural locators** — `getByRole`, element counts, attribute selectors
+3. **Avoid `getByText`** — breaks on translation/locale changes. Only acceptable for clicking dynamically-rendered list items (document why in a comment)
+4. **Verify network, not text** — use `waitForResponse` for API assertions
+5. **Anchor to testIDs** — use `toContainText` on testID-located elements

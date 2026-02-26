@@ -28,6 +28,9 @@ const buttonVariants = cva(
 				sm: 'p-1',
 				lg: '',
 				xl: '',
+				'2xl': '',
+				'3xl': '',
+				'4xl': '',
 			},
 		},
 		defaultVariants: {
