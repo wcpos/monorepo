@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { authenticatedTest as test } from './fixtures';
 
 /**
@@ -7,14 +7,44 @@ import { authenticatedTest as test } from './fixtures';
  * The default view mode may differ between environments.
  */
 async function ensureTableView(page: Page) {
-	// Grid view renders product tiles; if we see one, switch to table view
-	const tile = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
-	const isGridView = await tile.first().isVisible({ timeout: 2_000 }).catch(() => false);
-	if (isGridView) {
-		const toggle = page.getByTestId('view-mode-toggle');
-		await toggle.click();
-		await page.waitForTimeout(1_000);
+	const toggle = page.getByTestId('view-mode-toggle');
+	// Scope columnheader to products pane to avoid matching cart panel headers on desktop
+	const productsPane = page.locator('[data-testid="products-pane"], [data-testid="products-table"], [data-testid="product-list"]').first();
+	const tableHeader = productsPane.getByRole('columnheader').first();
+	const variablePopoverButton = page.getByTestId('variable-product-popover-button').first();
+
+	// Check if table indicators are already present (wait up to 2s for visibility).
+	// Note: isVisible({ timeout }) is deprecated in Playwright v1.40+ and silently ignores timeout.
+	// Use waitFor for actual waiting behavior.
+	const isTableView = await (async () => {
+		try {
+			await variablePopoverButton.waitFor({ state: 'visible', timeout: 2_000 });
+			return true;
+		} catch {
+			try {
+				await tableHeader.waitFor({ state: 'visible', timeout: 500 });
+				return true;
+			} catch {
+				return false;
+			}
+		}
+	})();
+	if (isTableView) {
+		return;
 	}
+
+	await expect(toggle).toBeVisible({ timeout: 15_000 });
+	await toggle.click();
+
+	// Wait until table indicators appear after toggling from grid.
+	await expect
+		.poll(
+			async () =>
+				(await tableHeader.isVisible().catch(() => false)) ||
+				(await variablePopoverButton.isVisible().catch(() => false)),
+			{ timeout: 15_000 }
+		)
+		.toBeTruthy();
 }
 
 /**
@@ -33,11 +63,59 @@ async function searchForVariableProduct(page: Page) {
 	// Verify we got results — product sync can be slow in CI
 	const countEl = page.getByTestId('data-table-count');
 	await expect(countEl).toBeVisible({ timeout: 30_000 });
+	await expect(countEl).toContainText(/[1-9]/, { timeout: 30_000 });
+
+	// Re-ensure table mode after results load in case settings hydration flips mode.
+	await ensureTableView(page);
 
 	// Verify there's at least one variable product popover button.
 	// Variable products render a chevron button instead of a "+" button.
 	const popoverButton = page.getByTestId('variable-product-popover-button').first();
 	await expect(popoverButton).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * Open the variable-product popover and return its dialog content.
+ */
+async function openVariationPopover(page: Page): Promise<Locator> {
+	const popoverButton = page.getByTestId('variable-product-popover-button').first();
+	await popoverButton.click();
+
+	const popoverDialog = page.getByRole('dialog').last();
+	await expect(popoverDialog).toBeVisible({ timeout: 10_000 });
+	return popoverDialog;
+}
+
+/**
+ * Select variation options until a valid combination resolves.
+ */
+async function selectUntilAddToCartVisible(page: Page, popoverDialog: Locator) {
+	const options = popoverDialog.locator('[data-testid^="variation-option-"]');
+	await expect(options.first()).toBeVisible({ timeout: 15_000 });
+
+	const optionCount = await options.count();
+	expect(optionCount).toBeGreaterThan(0);
+
+	const addToCartButton = page.getByTestId('variation-popover-add-to-cart');
+	for (let i = 0; i < optionCount; i++) {
+		const option = options.nth(i);
+		const isDisabled = await option.isDisabled().catch(() => true);
+		if (isDisabled) {
+			continue;
+		}
+
+		await option.click();
+
+		const isReady = await expect
+			.poll(async () => addToCartButton.isVisible().catch(() => false), { timeout: 1_000 })
+			.toBeTruthy()
+			.then(() => true)
+			.catch(() => false);
+
+		if (isReady) {
+			return;
+		}
+	}
 }
 
 /**
@@ -78,54 +156,19 @@ test.describe('POS Variations', () => {
 		posPage: page,
 	}) => {
 		await searchForVariableProduct(page);
-
-		const popoverButton = page.getByTestId('variable-product-popover-button').first();
-		await popoverButton.click();
-
-		// The popover should appear with variation attribute options
-		// Wait for the popover content to render (uses Radix popover)
-		const popoverContent = page.locator('[data-radix-popper-content-wrapper]').first();
-		await expect(popoverContent).toBeVisible({ timeout: 10_000 });
+		await openVariationPopover(page);
 	});
 
 	test('should add variation to cart via popover attribute selection', async ({
 		posPage: page,
 	}) => {
 		await searchForVariableProduct(page);
-
-		// Open the variation popover
-		const popoverButton = page.getByTestId('variable-product-popover-button').first();
-		await popoverButton.click();
-
-		const popoverContent = page.locator('[data-radix-popper-content-wrapper]').first();
-		await expect(popoverContent).toBeVisible({ timeout: 10_000 });
-
-		// Select variation attributes by clicking toggle buttons
-		// Each attribute group has toggle buttons for options; click the first
-		// enabled option in each group to narrow down to a single variation
-		const optionButtons = popoverContent.locator('[data-testid^="variation-option-"]');
-		const optionCount = await optionButtons.count();
-
-		// Click available options so each attribute group gets a selection.
-		// Products with multiple attributes (e.g. Color + Logo) need one
-		// option selected per group before a single variation resolves.
-		for (let i = 0; i < optionCount; i++) {
-			const btn = optionButtons.nth(i);
-			const isDisabled = await btn.isDisabled().catch(() => true);
-			const isPressed =
-				(await btn.getAttribute('data-state')) === 'on' ||
-				(await btn.getAttribute('aria-pressed')) === 'true';
-
-			if (!isDisabled && !isPressed) {
-				await btn.click();
-				// Wait for the popover to update after selection
-				await page.waitForTimeout(500);
-			}
-		}
+		const popoverDialog = await openVariationPopover(page);
+		await selectUntilAddToCartVisible(page, popoverDialog);
 
 		// After selecting all attributes, the "Add to Cart" button should appear
 		const addToCartButton = page.getByTestId('variation-popover-add-to-cart');
-		await expect(addToCartButton).toBeVisible({ timeout: 10_000 });
+		await expect(addToCartButton).toBeVisible({ timeout: 15_000 });
 
 		await addToCartButton.click();
 

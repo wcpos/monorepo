@@ -33,6 +33,9 @@ concurrency:
 env:
   EXPO_USE_FAST_RESOLVER: true
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: 🚀 Deploy
@@ -72,25 +75,25 @@ jobs:
           OUTPUT=$(eas deploy --export-dir ./build --non-interactive --json 2>&1)
           EXIT_CODE=$?
           set -e
-          
+
           echo "EAS output: $OUTPUT"
-          
+
           if [ $EXIT_CODE -ne 0 ]; then
             echo "::warning::EAS deploy exited with code $EXIT_CODE"
           fi
-          
+
           # Extract URL from JSON output
           URL=$(echo "$OUTPUT" | grep -E '^\{' -A 100 | jq -r '.url // empty' 2>/dev/null || echo "")
           if [ -z "$URL" ]; then
             URL=$(echo "$OUTPUT" | grep -oE 'https://wcpos[a-zA-Z0-9._-]+\.expo\.app' | head -1 | tr -d '"' || echo "")
           fi
-          
+
           # Fail if deployment failed AND no URL was extracted
           if [ $EXIT_CODE -ne 0 ] && [ -z "$URL" ]; then
             echo "::error::Deployment failed and no URL was extracted"
             exit 1
           fi
-          
+
           echo "Deployment URL: $URL"
           echo "preview_url=$URL" >> $GITHUB_OUTPUT
 
@@ -288,6 +291,10 @@ jobs:
     needs: [deploy, e2e, e2e-report]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     steps:
       - name: 🏗 Checkout (for gh CLI)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -312,6 +319,7 @@ jobs:
       - name: 📤 Upload screenshots for embedding
         id: upload-screenshots
         if: needs.e2e.result == 'failure'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -375,6 +383,7 @@ jobs:
           echo "release_tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: 💬 Comment on PR
+        continue-on-error: true
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |

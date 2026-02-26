@@ -6,6 +6,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -58,6 +61,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, lint]
     if: needs.changes.outputs.src == 'true'
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     steps:
       - name: "\U0001F3D7 Setup repository"
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -217,11 +224,12 @@ jobs:
 
       - name: "\U0001F4AC Comment coverage on PR"
         if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');
-            
+
             const packages = ['core', 'components', 'database', 'hooks', 'utils', 'query'];
             let coverageRows = [];
             let totalStatements = 0;
@@ -229,12 +237,12 @@ jobs:
             let totalFunctions = 0;
             let totalLines = 0;
             let packageCount = 0;
-            
+
             const getEmoji = (pct) => {
               if (pct === null || pct === undefined || pct === '-') return '⚪';
               return pct >= 80 ? '🟢' : pct >= 60 ? '🟡' : '🔴';
             };
-            
+
             for (const pkg of packages) {
               const coveragePath = `packages/${pkg}/coverage/coverage-summary.json`;
               try {
@@ -273,7 +281,7 @@ jobs:
                 coverageRows.push(`| @wcpos/${pkg} | ⚪ Error | ⚪ - | ⚪ - | ⚪ - |`);
               }
             }
-            
+
             // Calculate averages
             let avgRow = '| **Average** | ⚪ - | ⚪ - | ⚪ - | ⚪ - |';
             if (packageCount > 0) {
@@ -295,10 +303,10 @@ jobs:
                 '|'
               ].join(' ');
             }
-            
+
             const tableHeader = '| Package | Statements | Branches | Functions | Lines |\n|---------|------------|----------|-----------|-------|';
             const legend = '<details>\n<summary>Coverage Legend</summary>\n\n- 🟢 Good (≥80%)\n- 🟡 Moderate (60-79%)\n- 🔴 Needs improvement (<60%)\n- ⚪ No coverage data\n\n</details>';
-            
+
             // Read test failure summary if it exists
             let failureSection = '';
             const failurePath = '/tmp/test-summary/failures.md';
