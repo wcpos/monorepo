@@ -7,14 +7,30 @@ import { authenticatedTest as test } from './fixtures';
  * The default view mode may differ between environments.
  */
 async function ensureTableView(page: Page) {
-	// Grid view renders product tiles; if we see one, switch to table view
-	const tile = page.getByTestId('product-tile').or(page.getByTestId('variable-product-tile'));
-	const isGridView = await tile.first().isVisible({ timeout: 2_000 }).catch(() => false);
-	if (isGridView) {
-		const toggle = page.getByTestId('view-mode-toggle');
-		await toggle.click();
-		await page.waitForTimeout(1_000);
+	const toggle = page.getByTestId('view-mode-toggle');
+	const tableHeader = page.getByRole('columnheader').first();
+	const variablePopoverButton = page.getByTestId('variable-product-popover-button').first();
+
+	// If table indicators are already present, don't toggle.
+	const isTableView =
+		(await tableHeader.isVisible({ timeout: 2_000 }).catch(() => false)) ||
+		(await variablePopoverButton.isVisible({ timeout: 2_000 }).catch(() => false));
+	if (isTableView) {
+		return;
 	}
+
+	await expect(toggle).toBeVisible({ timeout: 15_000 });
+	await toggle.click();
+
+	// Wait until table indicators appear after toggling from grid.
+	await expect
+		.poll(
+			async () =>
+				(await tableHeader.isVisible().catch(() => false)) ||
+				(await variablePopoverButton.isVisible().catch(() => false)),
+			{ timeout: 15_000 }
+		)
+		.toBeTruthy();
 }
 
 /**
@@ -33,6 +49,10 @@ async function searchForVariableProduct(page: Page) {
 	// Verify we got results — product sync can be slow in CI
 	const countEl = page.getByTestId('data-table-count');
 	await expect(countEl).toBeVisible({ timeout: 30_000 });
+	await expect(countEl).toContainText(/[1-9]/, { timeout: 30_000 });
+
+	// Re-ensure table mode after results load in case settings hydration flips mode.
+	await ensureTableView(page);
 
 	// Verify there's at least one variable product popover button.
 	// Variable products render a chevron button instead of a "+" button.
