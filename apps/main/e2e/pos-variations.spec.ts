@@ -8,13 +8,27 @@ import { authenticatedTest as test } from './fixtures';
  */
 async function ensureTableView(page: Page) {
 	const toggle = page.getByTestId('view-mode-toggle');
-	const tableHeader = page.getByRole('columnheader').first();
+	// Scope columnheader to products pane to avoid matching cart panel headers on desktop
+	const productsPane = page.locator('[data-testid="products-pane"], [data-testid="products-table"], [data-testid="product-list"]').first();
+	const tableHeader = productsPane.getByRole('columnheader').first();
 	const variablePopoverButton = page.getByTestId('variable-product-popover-button').first();
 
-	// If table indicators are already present, don't toggle.
-	const isTableView =
-		(await tableHeader.isVisible({ timeout: 2_000 }).catch(() => false)) ||
-		(await variablePopoverButton.isVisible({ timeout: 2_000 }).catch(() => false));
+	// Check if table indicators are already present (wait up to 2s for visibility).
+	// Note: isVisible({ timeout }) is deprecated in Playwright v1.40+ and silently ignores timeout.
+	// Use waitFor for actual waiting behavior.
+	const isTableView = await (async () => {
+		try {
+			await variablePopoverButton.waitFor({ state: 'visible', timeout: 2_000 });
+			return true;
+		} catch {
+			try {
+				await tableHeader.waitFor({ state: 'visible', timeout: 500 });
+				return true;
+			} catch {
+				return false;
+			}
+		}
+	})();
 	if (isTableView) {
 		return;
 	}
