@@ -93,14 +93,10 @@ test.describe('Orders Page (Pro)', () => {
 		const dataRow = screen.locator('[role="rowgroup"] [role="row"]').first();
 		await expect(dataRow).toBeVisible({ timeout: 15_000 });
 
-		// The ellipsis button is the last pressable element in the row
-		const rowButtons = dataRow.locator('[role="button"]');
-		const count = await rowButtons.count();
-
-		// Click the last button (the ellipsis/actions button)
-		if (count > 0) {
-			await rowButtons.nth(count - 1).click();
-		}
+		// The actions trigger is the last button in the row
+		const actionsButton = dataRow.locator('[role="button"]').last();
+		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
+		await actionsButton.click();
 
 		// Menu should show at least one menu item
 		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
