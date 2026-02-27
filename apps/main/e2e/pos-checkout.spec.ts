@@ -72,7 +72,7 @@ async function setPosCartSetting(
 			const numericIds = records
 				.map((record) => Number.parseInt(String(record.i), 10))
 				.filter((id) => Number.isFinite(id));
-			const nextNumericId = Math.max(...numericIds) + 1;
+			const nextNumericId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
 			const id = String(nextNumericId).padStart(14, '0');
 
 			const lwt = Date.now() + 0.01;
