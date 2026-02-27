@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@expo/metro-runtime": "~55.0.6",
-    "@react-native-community/netinfo": "11.5.2",
+    "@react-native-community/netinfo": "12.0.1",
     "@react-navigation/drawer": "^7.8.0",
     "@shopify/flash-list": "2.0.2",
     "@shopify/react-native-skia": "2.4.18",
