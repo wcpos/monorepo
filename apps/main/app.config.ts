@@ -23,7 +23,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		icon: './assets/images/icon.png',
 		scheme: 'wcpos',
 		userInterfaceStyle: 'automatic',
-		newArchEnabled: true,
 
 		splash: {
 			image: './assets/images/splash-icon.png',
@@ -49,7 +48,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 				// Bonjour services for printer discovery
 				NSBonjourServices: ['_ipp._tcp', '_ipps._tcp', '_pdl-datastream._tcp'],
 			},
-			jsEngine: 'hermes',
 		},
 
 		android: {
@@ -60,7 +58,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			},
 			package: isDev ? 'com.wcpos.main.dev' : isAdhoc ? 'com.wcpos.main.adhoc' : 'com.wcpos.main',
 			versionCode: 1,
-			jsEngine: 'hermes',
 		},
 
 		web: {

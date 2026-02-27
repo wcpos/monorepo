@@ -91,7 +91,7 @@ export const PulseTableRow = React.forwardRef<PulseTableRowRef, PulseTableRowPro
 
 		return (
 			<Animated.View
-				ref={augmentedRef as unknown as React.Ref<React.Component>}
+				ref={augmentedRef as React.Ref<Animated.View>}
 				className={cn(
 					'web:transition-colors web:data-[state=selected]:bg-muted flex-row',
 					className
