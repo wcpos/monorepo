@@ -10,20 +10,20 @@
   },
   "peerDependencies": {
     "@shopify/flash-list": "2.0.2",
-    "expo-haptics": "~15.0.3",
-    "expo-image": "~3.0.10",
-    "expo-router": "~6.0.13",
-    "react-native-gesture-handler": "2.28.0",
-    "react-native-svg": "15.12.1",
-    "react-native-webview": "13.15.0"
+    "expo-haptics": "~55.0.8",
+    "expo-image": "~55.0.5",
+    "expo-router": "~55.0.3",
+    "react-native-gesture-handler": "~2.30.0",
+    "react-native-svg": "15.15.3",
+    "react-native-webview": "13.16.0"
   },
   "devDependencies": {
     "@svgr/cli": "^8.1.0",
     "@types/lodash": "^4.17.20",
-    "expo-haptics": "~15.0.3",
-    "expo-image": "~3.0.10",
-    "expo-router": "~6.0.13",
-    "react-native-svg": "15.12.1"
+    "expo-haptics": "~55.0.8",
+    "expo-image": "~55.0.5",
+    "expo-router": "~55.0.3",
+    "react-native-svg": "15.15.3"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^1.7.7",
@@ -73,7 +73,7 @@
     "lodash": "^4.17.21",
     "react-hook-form": "^7.61.1",
     "react-native-calendars": "^1.1313.0",
-    "react-native-keyboard-controller": "1.18.5",
+    "react-native-keyboard-controller": "1.20.7",
     "uniwind": "npm:uniwind-pro@beta",
     "react-native-resizable-panels": "^0.0.3",
     "sonner": "^2.0.7",

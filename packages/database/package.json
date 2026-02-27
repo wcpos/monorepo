@@ -19,10 +19,10 @@
     "lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix"
   },
   "peerDependencies": {
-    "expo-sqlite": "~16.0.4"
+    "expo-sqlite": "~55.0.10"
   },
   "dependencies": {
-    "expo-file-system": "~19.0.6",
+    "expo-file-system": "~55.0.10",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.4",
@@ -35,7 +35,7 @@
     "@faker-js/faker": "^10.0.0",
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.20",
-    "expo-sqlite": "~16.0.4",
+    "expo-sqlite": "~55.0.10",
     "jest": "^30.1.0",
     "ts-jest": "^29.4.6"
   }
