@@ -26,6 +26,96 @@ async function clickCartActionButton(page: Page, testId: string) {
 	await page.getByTestId(testId).locator('button').click();
 }
 
+/**
+ * Persist a POS cart UI setting directly in RxDB state.
+ * This avoids locale-dependent UI selectors for toggles.
+ */
+async function setPosCartSetting(
+	page: Page,
+	key: 'autoShowReceipt' | 'autoPrintReceipt',
+	value: boolean
+) {
+	await page.evaluate(
+		async ({ key, value }) => {
+			const dbs = await indexedDB.databases();
+			const dbInfo = dbs.find((db) => db.name?.startsWith('store_v2_') && db.version);
+			if (!dbInfo?.name || !dbInfo.version) {
+				throw new Error('Store database not found');
+			}
+
+			const db = await new Promise<IDBDatabase>((resolve, reject) => {
+				const req = indexedDB.open(dbInfo.name!, dbInfo.version);
+				req.onsuccess = () => resolve(req.result);
+				req.onerror = () => reject(req.error);
+			});
+
+			const storeName = Array.from(db.objectStoreNames).find(
+				(name) => name.startsWith('rx-state-pos-cart_v2-') && name.endsWith('-documents')
+			);
+			if (!storeName) {
+				db.close();
+				throw new Error('POS cart state store not found');
+			}
+
+			const readTx = db.transaction(storeName, 'readonly');
+			const records = await new Promise<any[]>((resolve, reject) => {
+				const req = readTx.objectStore(storeName).getAll();
+				req.onsuccess = () => resolve(req.result as any[]);
+				req.onerror = () => reject(req.error);
+			});
+
+			if (records.length === 0) {
+				db.close();
+				throw new Error('No POS cart state records found');
+			}
+
+			const numericIds = records
+				.map((record) => Number.parseInt(String(record.i), 10))
+				.filter((id) => Number.isFinite(id));
+			const nextNumericId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
+			const id = String(nextNumericId).padStart(14, '0');
+
+			const lwt = Date.now() + 0.01;
+			const lwtInt = Math.floor(lwt) - 1;
+			const lwtIntStr = lwtInt.toString().padStart(15, '0');
+			const lwtDecParts = lwt.toString().split('.');
+			const lwtDecStr = (lwtDecParts.length > 1 ? lwtDecParts[1] : '0')
+				.padEnd(2, '0')
+				.substring(0, 2);
+			const encodedLwt = lwtIntStr + lwtDecStr;
+
+			const lastRecord = records[records.length - 1];
+			const sId = lastRecord?.d?.sId || 'e2e';
+
+			const newRecord = {
+				i: id,
+				d: {
+					id,
+					sId,
+					ops: [{ k: key, v: value }],
+					_deleted: false,
+					_meta: { lwt },
+					_rev: `1-${sId}`,
+					_attachments: {},
+				},
+				i0: '0' + id,
+				i1: encodedLwt + id,
+				i2: '0' + encodedLwt,
+			};
+
+			const writeTx = db.transaction(storeName, 'readwrite');
+			writeTx.objectStore(storeName).put(newRecord);
+			await new Promise<void>((resolve, reject) => {
+				writeTx.oncomplete = () => resolve();
+				writeTx.onerror = () => reject(writeTx.error);
+			});
+
+			db.close();
+		},
+		{ key, value }
+	);
+}
+
 test.describe('POS Cart', () => {
 	test('should show guest customer by default', async ({ posPage: page }) => {
 		await expect(page.getByTestId('cart-customer-name')).toBeVisible();
@@ -278,5 +368,26 @@ test.describe('POS Checkout', () => {
 		await expect(
 			receiptPrintButton.or(receiptCloseButton).or(posScreen)
 		).toBeVisible({ timeout: 60_000 });
+	});
+
+	test('should auto print receipt after checkout when enabled', async ({ posPage: page }) => {
+		await setPosCartSetting(page, 'autoShowReceipt', true);
+		await setPosCartSetting(page, 'autoPrintReceipt', true);
+		await page.reload();
+		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 30_000 });
+
+		await addFirstProductToCart(page);
+
+		await page.getByTestId('checkout-button').click();
+		await expect(page.getByTestId('process-payment-button')).toBeVisible({
+			timeout: 10_000,
+		});
+		const orderIdMatch = page.url().match(/\/cart\/([^/]+)\/checkout$/);
+		expect(orderIdMatch?.[1]).toBeTruthy();
+
+		await page.goto(`/cart/receipt/${orderIdMatch![1]}`);
+		const printButton = page.getByTestId('receipt-print-button');
+		await expect(printButton).toBeVisible({ timeout: 30_000 });
+		await expect(printButton).toBeDisabled({ timeout: 10_000 });
 	});
 });
