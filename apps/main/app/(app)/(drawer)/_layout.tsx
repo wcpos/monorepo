@@ -9,7 +9,10 @@ import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
-import { LogsBadge, useUnreadErrorCount } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
+import {
+	LogsBadge,
+	useUnreadErrorCount,
+} from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import { Header } from '@wcpos/core/screens/main/components/header';
 
 export const unstable_settings = {
