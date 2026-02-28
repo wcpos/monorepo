@@ -10,6 +10,7 @@
 import { logger } from 'react-native-logs';
 
 import { getErrorCodeDocURL } from './constants';
+import { redactSensitiveFields } from './redact';
 
 // Custom options interface
 export interface LoggerOptions {
@@ -137,6 +138,11 @@ const mainTransport = (props: any) => {
 		}
 	} else {
 		message = String(rawMsg || '');
+	}
+
+	// Redact sensitive fields from context before any output
+	if (options.context) {
+		options = { ...options, context: redactSensitiveFields(options.context) };
 	}
 
 	// Check if this log level should be shown (based on runtime level)
