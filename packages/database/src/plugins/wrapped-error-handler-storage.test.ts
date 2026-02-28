@@ -289,6 +289,21 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(result.error[0].documentInDb).toEqual(prev);
 		});
 
+		it('should handle composite primary keys', async () => {
+			const compositeInstance = createMockStorageInstance({
+				schema: { primaryKey: { key: 'syncId', fields: ['endpoint', 'id'], separator: '|' } },
+				bulkWrite: jest.fn().mockRejectedValue(new Error('CONFLICT')),
+			});
+			const storage = createMockStorage(compositeInstance);
+			const wrapped = wrappedErrorHandlerStorage({ storage });
+			const wrappedInstance = await wrapped.createStorageInstance({} as any);
+
+			const writes = [{ document: { syncId: 'products|42', endpoint: 'products', id: '42' } }];
+			const result = await wrappedInstance.bulkWrite(writes as any, 'ctx');
+
+			expect(result.error[0].documentId).toBe('products|42');
+		});
+
 		it('should re-throw for requestRemote errors', async () => {
 			const error = new Error('could not requestRemote');
 			const instance = createMockStorageInstance({

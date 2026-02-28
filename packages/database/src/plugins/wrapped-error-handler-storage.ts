@@ -82,6 +82,12 @@ function wrapStorageInstance<RxDocType>(
 	const originalFindDocumentsById = instance.findDocumentsById.bind(instance);
 	const originalBulkWrite = instance.bulkWrite.bind(instance);
 
+	// Handle composite primary keys (object with `key` property) vs simple string keys
+	const pkField =
+		typeof instance.schema.primaryKey === 'string'
+			? instance.schema.primaryKey
+			: instance.schema.primaryKey.key;
+
 	instance.findDocumentsById = async (ids, withDeleted) => {
 		try {
 			return await originalFindDocumentsById(ids, withDeleted);
@@ -107,7 +113,7 @@ function wrapStorageInstance<RxDocType>(
 					error: documentWrites.map((write) => ({
 						status: 409 as const,
 						isError: true as const,
-						documentId: (write.document as any)[instance.schema.primaryKey],
+						documentId: (write.document as any)[pkField],
 						writeRow: write,
 						documentInDb: (write.previous || write.document) as any,
 					})),
