@@ -41,6 +41,10 @@ export function VariationSelect({ attribute, selected = '', onSelect, onRemove }
 		() => options.map((option: string) => ({ value: option, label: option })),
 		[options]
 	);
+	const renderEmpty = React.useCallback(
+		() => <ComboboxEmpty>{t('common.no_variation_found')}</ComboboxEmpty>,
+		[t]
+	);
 
 	/**
 	 * Select for short list of options
@@ -79,7 +83,7 @@ export function VariationSelect({ attribute, selected = '', onSelect, onRemove }
 	 */
 	return (
 		<Combobox
-			value={{ value: selected, label: selected }}
+			value={selected ? { value: selected, label: selected } : undefined}
 			onValueChange={(option) =>
 				option &&
 				onSelect({
@@ -110,7 +114,7 @@ export function VariationSelect({ attribute, selected = '', onSelect, onRemove }
 						</ComboboxItem>
 					)}
 					estimatedItemSize={20}
-					ListEmptyComponent={() => <ComboboxEmpty>{t('common.no_variation_found')}</ComboboxEmpty>}
+					ListEmptyComponent={renderEmpty}
 				></ComboboxList>
 			</ComboboxContent>
 		</Combobox>
