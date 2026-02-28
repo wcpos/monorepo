@@ -54,8 +54,6 @@ function createMockStorageInstance(overrides: Partial<RxStorageInstance<any, any
 		databaseName: 'test-db',
 		internals: {},
 		options: {},
-		conflictResultionTasks: jest.fn(),
-		resolveConflictResultionTask: jest.fn(),
 		...overrides,
 	} as unknown as RxStorageInstance<any, any, any, any>;
 }

@@ -572,7 +572,7 @@ export function wrappedErrorHandlerStorage<Internals, InstanceCreationOptions>({
 }): RxStorage<Internals, InstanceCreationOptions> {
 	return {
 		name: 'error-handler-' + storage.name,
-		rxpiCompatibilityVersion: storage.rxpiCompatibilityVersion,
+		rxdbVersion: storage.rxdbVersion,
 		async createStorageInstance<RxDocType>(
 			params: RxStorageInstanceCreationParams<RxDocType, InstanceCreationOptions>
 		) {
