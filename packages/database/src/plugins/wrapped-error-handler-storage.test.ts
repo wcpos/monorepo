@@ -289,7 +289,7 @@ describe('wrappedErrorHandlerStorage', () => {
 			expect(result.error[0].documentInDb).toEqual(prev);
 		});
 
-		it('should handle composite primary keys', async () => {
+		it('should handle composite primary keys in error response', async () => {
 			const compositeInstance = createMockStorageInstance({
 				schema: { primaryKey: { key: 'syncId', fields: ['endpoint', 'id'], separator: '|' } },
 				bulkWrite: jest.fn().mockRejectedValue(new Error('CONFLICT')),
@@ -298,10 +298,10 @@ describe('wrappedErrorHandlerStorage', () => {
 			const wrapped = wrappedErrorHandlerStorage({ storage });
 			const wrappedInstance = await wrapped.createStorageInstance({} as any);
 
-			const writes = [{ document: { syncId: 'products|42', endpoint: 'products', id: '42' } }];
+			const writes = [{ document: { syncId: 'orders|42', endpoint: 'orders', id: 42 }, previous: undefined }];
 			const result = await wrappedInstance.bulkWrite(writes as any, 'ctx');
 
-			expect(result.error[0].documentId).toBe('products|42');
+			expect(result.error[0].documentId).toBe('orders|42');
 		});
 
 		it('should re-throw for requestRemote errors', async () => {
