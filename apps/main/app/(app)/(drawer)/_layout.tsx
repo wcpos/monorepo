@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { Drawer } from 'expo-router/drawer';
 import { useCSSVariable } from 'uniwind';
@@ -6,9 +7,13 @@ import { useCSSVariable } from 'uniwind';
 import { Icon } from '@wcpos/components/icon';
 import { useTheme } from '@wcpos/core/contexts/theme';
 import { useT } from '@wcpos/core/contexts/translations';
-import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
-import { Header } from '@wcpos/core/screens/main/components/header';
 import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
+import { DrawerContent } from '@wcpos/core/screens/main/components/drawer-content';
+import {
+	LogsBadge,
+	useUnreadErrorCount,
+} from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
+import { Header } from '@wcpos/core/screens/main/components/header';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -29,6 +34,7 @@ export default function DrawerLayout() {
 	//
 	const { license } = useAppInfo();
 	const [showUpgrade, setShowUpgrade] = React.useState(!license?.isPro);
+	const { count: unreadErrorCount, markAsRead: markLogsAsRead } = useUnreadErrorCount();
 
 	return (
 		<Drawer
@@ -132,15 +138,21 @@ export default function DrawerLayout() {
 			/>
 			<Drawer.Screen
 				name="logs"
+				listeners={{
+					focus: () => markLogsAsRead(),
+				}}
 				options={{
 					title: t('common.logs'),
 					drawerLabel: t('common.logs'),
 					drawerIcon: ({ focused }) => (
-						<Icon
-							size="xl"
-							name="heartPulse"
-							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
-						/>
+						<View>
+							<Icon
+								size="xl"
+								name="heartPulse"
+								className={focused ? 'text-primary' : 'text-sidebar-foreground'}
+							/>
+							<LogsBadge count={unreadErrorCount} />
+						</View>
 					),
 					drawerItemStyle: { marginTop: 'auto' },
 				}}

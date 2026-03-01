@@ -37,6 +37,10 @@ describe('logger/error-codes', () => {
 			expect(ERROR_CODES.RECORD_NOT_FOUND).toBe('DB02002');
 			expect(ERROR_CODES.INSERT_FAILED).toBe('DB02004');
 			expect(ERROR_CODES.VALIDATION_FAILED).toBe('DB03004');
+			expect(ERROR_CODES.WRITE_CONFLICT).toBe('DB02007');
+			expect(ERROR_CODES.SCHEMA_VALIDATION_FAILED).toBe('DB03005');
+			expect(ERROR_CODES.STORAGE_ERROR).toBe('DB01004');
+			expect(ERROR_CODES.WORKER_CONNECTION_LOST).toBe('DB01005');
 		});
 
 		it('should have payment error codes', () => {

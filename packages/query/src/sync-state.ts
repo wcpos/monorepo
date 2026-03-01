@@ -310,7 +310,7 @@ export class SyncStateManager {
 
 				if (result.error.length > 0) {
 					syncLogger.error('Error inserting documents', {
-						showToast: true,
+						showToast: false,
 						saveToDb: true,
 						context: {
 							errorCode: ERROR_CODES.INSERT_FAILED,
@@ -356,7 +356,7 @@ export class SyncStateManager {
 
 				if (result.error.length > 0) {
 					syncLogger.error('Error upserting documents', {
-						showToast: true,
+						showToast: false,
 						saveToDb: true,
 						context: {
 							errorCode: ERROR_CODES.DB_UPSERT_FAILED,

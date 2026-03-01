@@ -7,7 +7,7 @@ import pickBy from 'lodash/pickBy';
 import uniq from 'lodash/uniq';
 import { ObservableResource } from 'observable-hooks';
 import { isRxCollection, RxCollection, RxDocument, RxPlugin } from 'rxdb';
-import { combineLatest } from 'rxjs';
+import { combineLatest, of } from 'rxjs';
 import { distinctUntilChanged, map as rxMap, startWith, switchMap } from 'rxjs/operators';
 
 /**
@@ -143,9 +143,14 @@ const populatePlugin: RxPlugin = {
 				const refCollection = getRefCollection(this.collection, key);
 				return this.get$(key).pipe(
 					distinctUntilChanged(isEqual),
-					switchMap((ids: string[]) => refCollection.findByIds(ids).exec()),
+					switchMap((ids: string[]) => {
+						const validIds = Array.isArray(ids) ? ids.filter((id) => id != null && id !== '') : [];
+						if (validIds.length === 0) return of(new Map() as Map<string, RxDocument>);
+						return refCollection.findByIds(validIds).exec();
+					}),
 					switchMap((docsMap: Map<string, RxDocument>) => {
 						const docs = [...docsMap.values()];
+						if (docs.length === 0) return of([] as RxDocument[]);
 
 						// Map each lineItem to an observable of its deleted$ property
 						const deletedObservables = docs.map((doc) => doc.deleted$);
