@@ -25,7 +25,11 @@ function handleStorageError(methodName: string, error: unknown): boolean {
 	}
 
 	// Schema validation errors (COL22)
-	if (message.includes('COL22') || message.includes('schema')) {
+	if (
+		message.includes('COL22') ||
+		message.includes('schema validation') ||
+		message.includes('schema mismatch')
+	) {
 		storageLogger.warn(`Schema validation failed in ${methodName}`, {
 			saveToDb: true,
 			context: {

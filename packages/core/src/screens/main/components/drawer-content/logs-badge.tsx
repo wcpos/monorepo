@@ -12,18 +12,18 @@ import { useQueryManager } from '@wcpos/query';
  */
 export function useUnreadErrorCount() {
 	const manager = useQueryManager();
-	const logsCollection = (manager.localDB as any).collections.logs;
+	const logsCollection = (manager.localDB as any).collections?.logs;
 	const [lastViewedTimestamp, setLastViewedTimestamp] = React.useState(() => Date.now());
 
 	const count = useObservableState(
 		React.useMemo(
 			() =>
-				logsCollection.count({
+				logsCollection?.count({
 					selector: {
 						level: { $eq: 'error' },
 						timestamp: { $gt: lastViewedTimestamp },
 					},
-				}).$,
+				}).$ ?? null,
 			[logsCollection, lastViewedTimestamp]
 		),
 		0

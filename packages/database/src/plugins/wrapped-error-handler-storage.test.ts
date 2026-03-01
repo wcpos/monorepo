@@ -25,8 +25,9 @@ jest.mock('@wcpos/utils/logger/error-codes', () => ({
 }));
 
 /**
- * The source file calls getLogger at module load time, so the mock logger
- * instance already exists. Retrieve it so we can make assertions against it.
+ * The module under test calls getLogger() at load time (line 6 of the source),
+ * which runs during the import above. The mock is already in place by then
+ * (jest.mock is hoisted), so we can grab the instance it returned.
  */
 const mockLoggerInstance = (getLogger as jest.Mock).mock.results[0].value as {
 	warn: jest.Mock;
@@ -133,7 +134,8 @@ describe('wrappedErrorHandlerStorage', () => {
 			['CONFLICT error', new Error('CONFLICT on document xyz')],
 			['409 error', new Error('HTTP 409 response')],
 			['COL22 error', new Error('COL22: schema validation')],
-			['schema error', new Error('schema mismatch detected')],
+			['schema validation error', new Error('schema validation failed for field')],
+			['schema mismatch error', new Error('schema mismatch detected')],
 			['key range error', new Error('No key or key range specified')],
 			['invalid key error', new Error('No valid key provided')],
 		])('should return an empty array for handled error: %s', async (_label, error) => {
@@ -232,7 +234,8 @@ describe('wrappedErrorHandlerStorage', () => {
 			['CONFLICT error', new Error('CONFLICT on document')],
 			['409 error', new Error('409 write rejected')],
 			['COL22 error', new Error('COL22 validation failure')],
-			['schema error', new Error('schema does not match')],
+			['schema validation error', new Error('schema validation error on write')],
+			['schema mismatch error', new Error('schema mismatch on field')],
 			['key range error', new Error('No key or key range specified')],
 			['invalid key error', new Error('No valid key for write')],
 		])('should return error response for handled error: %s', async (_label, error) => {
