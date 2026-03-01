@@ -16,7 +16,7 @@ export const useOrderTotals = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { allRates, taxRoundAtSubtotal } = useTaxRates();
 	const { localPatch } = useLocalMutation();
-	const { line_items, fee_lines, shipping_lines } = useCartLines();
+	const { line_items, fee_lines, shipping_lines, coupon_lines } = useCartLines();
 
 	/**
 	 *
@@ -26,21 +26,18 @@ export const useOrderTotals = () => {
 			lineItems: line_items,
 			feeLines: fee_lines,
 			shippingLines: shipping_lines,
+			couponLines: coupon_lines,
 			taxRates: allRates, // NOTE: rates are not used for calc, just to get the tax rate label
 			taxRoundAtSubtotal,
 		});
 
 		return totals;
-	}, [line_items, fee_lines, shipping_lines, allRates, taxRoundAtSubtotal]);
+	}, [line_items, fee_lines, shipping_lines, coupon_lines, allRates, taxRoundAtSubtotal]);
 
 	/**
 	 *
 	 */
 	useDeepCompareEffect(() => {
-		/**
-		 * This will always patch on the first render, but we don't want to update the date_modified_gmt
-		 * So, only patch if the totals have been modified.
-		 */
 		const currentTotals = pick(currentOrder, [
 			'discount_tax',
 			'discount_total',
@@ -82,18 +79,7 @@ export const useOrderTotals = () => {
 				>,
 			},
 		});
-	}, [
-		/**
-		 * If we have currentOrder and totals as dependencies, the currentOrder will change first,
-		 * update with the old totals, then the new totals will be calculated and updated.
-		 *
-		 * @TODO - this seems to work, but I worry about the order of operations,
-		 * could currentOrder ever be stale?
-		 */
-		// currentOrder,
-		// localPatch,
-		totals,
-	]);
+	}, [totals]);
 
 	return totals;
 };
