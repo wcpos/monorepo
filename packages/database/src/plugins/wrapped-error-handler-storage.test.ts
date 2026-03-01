@@ -301,7 +301,9 @@ describe('wrappedErrorHandlerStorage', () => {
 			const wrapped = wrappedErrorHandlerStorage({ storage });
 			const wrappedInstance = await wrapped.createStorageInstance({} as any);
 
-			const writes = [{ document: { syncId: 'orders|42', endpoint: 'orders', id: 42 }, previous: undefined }];
+			const writes = [
+				{ document: { syncId: 'orders|42', endpoint: 'orders', id: 42 }, previous: undefined },
+			];
 			const result = await wrappedInstance.bulkWrite(writes as any, 'ctx');
 
 			expect(result.error[0].documentId).toBe('orders|42');
