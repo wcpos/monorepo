@@ -8,11 +8,12 @@ import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 
-type Line = 'line_items' | 'fee_lines' | 'shipping_lines';
+type Line = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 type LineItem =
 	| NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number]
 	| NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number]
-	| NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
+	| NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number]
+	| NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
 
 /**
  *
@@ -87,6 +88,8 @@ export const useRemoveLineItem = () => {
 									return { ...item, name: null };
 								case 'shipping_lines':
 									return { ...item, method_id: null };
+								case 'coupon_lines':
+									return { ...item, code: null };
 								default:
 									return item;
 							}

@@ -9,8 +9,9 @@ import { useCurrentOrder } from '../contexts/current-order';
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
-type CartLine = LineItem | FeeLine | ShippingLine;
-type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines';
+type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+type CartLine = LineItem | FeeLine | ShippingLine | CouponLine;
+type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_lines';
 
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
