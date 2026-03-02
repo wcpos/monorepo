@@ -5,7 +5,9 @@ import * as ProgressPrimitive from '@rn-primitives/progress';
 import Animated, {
 	Extrapolation,
 	interpolate,
+	runOnJS,
 	type SharedValue,
+	useAnimatedReaction,
 	useAnimatedStyle,
 	useDerivedValue,
 	withSpring,
@@ -61,11 +63,18 @@ type IndicatorProps = {
 };
 
 function WebIndicator({ value, sharedValue, className }: IndicatorProps) {
-	if (Platform.OS !== 'web') {
-		return null;
-	}
+	const [svProgress, setSvProgress] = React.useState(sharedValue?.value);
 
-	const progress = Math.max(0, Math.min(sharedValue?.value ?? value ?? 0, 100));
+	useAnimatedReaction(
+		() => sharedValue?.value,
+		(currentValue) => {
+			if (currentValue !== undefined) {
+				runOnJS(setSvProgress)(currentValue);
+			}
+		}
+	);
+
+	const progress = Math.max(0, Math.min(svProgress ?? value ?? 0, 100));
 
 	return (
 		<View
@@ -88,10 +97,6 @@ function NativeIndicator({ value, sharedValue, className }: IndicatorProps) {
 			),
 		};
 	});
-
-	if (Platform.OS === 'web') {
-		return null;
-	}
 
 	return (
 		<ProgressPrimitive.Indicator asChild>
