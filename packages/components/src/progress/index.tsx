@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Platform, View } from 'react-native';
 
 import * as ProgressPrimitive from '@rn-primitives/progress';
 import Animated, {
@@ -44,6 +45,39 @@ function Indicator({
 	sharedValue?: SharedValue<number>;
 	className?: string;
 }) {
+	return <PlatformIndicator value={value} sharedValue={sharedValue} className={className} />;
+}
+
+const PlatformIndicator = Platform.select({
+	web: WebIndicator,
+	native: NativeIndicator,
+	default: NullIndicator,
+});
+
+type IndicatorProps = {
+	value: number | undefined | null;
+	sharedValue?: SharedValue<number>;
+	className?: string;
+};
+
+function WebIndicator({ value, sharedValue, className }: IndicatorProps) {
+	if (Platform.OS !== 'web') {
+		return null;
+	}
+
+	const progress = Math.max(0, Math.min(sharedValue?.value ?? value ?? 0, 100));
+
+	return (
+		<View
+			className={cn('h-full w-full flex-1 transition-all', className)}
+			style={{ transform: `translateX(-${100 - progress}%)` }}
+		>
+			<ProgressPrimitive.Indicator className={cn('bg-primary h-full w-full', className)} />
+		</View>
+	);
+}
+
+function NativeIndicator({ value, sharedValue, className }: IndicatorProps) {
 	const progress = useDerivedValue(() => sharedValue?.value ?? value ?? 0);
 
 	const indicator = useAnimatedStyle(() => {
@@ -55,9 +89,17 @@ function Indicator({
 		};
 	});
 
+	if (Platform.OS === 'web') {
+		return null;
+	}
+
 	return (
 		<ProgressPrimitive.Indicator asChild>
 			<Animated.View style={indicator} className={cn('bg-primary h-full', className)} />
 		</ProgressPrimitive.Indicator>
 	);
+}
+
+function NullIndicator(_props: IndicatorProps) {
+	return null;
 }
