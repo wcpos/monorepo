@@ -103,9 +103,9 @@ function NativeIndicator({ value, sharedValue, className }: IndicatorProps) {
 	});
 
 	return (
-		<ProgressPrimitive.Indicator asChild>
-			<Animated.View style={indicator} className={cn('bg-primary h-full', className)} />
-		</ProgressPrimitive.Indicator>
+		<Animated.View style={indicator} className={cn('h-full')}>
+			<ProgressPrimitive.Indicator className={cn('bg-primary h-full w-full', className)} />
+		</Animated.View>
 	);
 }
 
