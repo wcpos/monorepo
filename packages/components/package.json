@@ -9,13 +9,13 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@shopify/flash-list": "2.0.2",
+    "@shopify/flash-list": "^2.2.2",
     "expo-haptics": "~55.0.8",
     "expo-image": "~55.0.5",
     "expo-router": "~55.0.3",
     "react-native-gesture-handler": "~2.30.0",
     "react-native-svg": "15.15.3",
-    "react-native-webview": "13.16.0"
+    "react-native-webview": "~13.16.0"
   },
   "devDependencies": {
     "@svgr/cli": "^8.1.0",
@@ -74,7 +74,7 @@
     "react-hook-form": "^7.61.1",
     "react-native-calendars": "^1.1313.0",
     "react-native-keyboard-controller": "1.20.7",
-    "uniwind": "npm:uniwind-pro@beta",
+    "uniwind": "npm:uniwind-pro@latest",
     "react-native-resizable-panels": "^0.0.3",
     "sonner": "^2.0.7",
     "sonner-native": "^0.23.0",

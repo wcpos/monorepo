@@ -34,16 +34,17 @@
       "expo": "~55.0.0",
       "lightningcss": "1.30.1",
       "pnpm": "10.17.0",
-      "uniwind": "npm:uniwind-pro@beta",
-      "react": "19.2.0",
-      "react-dom": "19.2.0",
-      "react-native": "0.83.2",
+      "uniwind": "npm:uniwind-pro@latest",
+      "react": "~19.2.0",
+      "react-dom": "~19.2.0",
+      "react-native": "~0.83.2",
       "react-native-edge-to-edge": "^1.6.2",
       "react-native-gesture-handler": "~2.30.0",
       "react-native-safe-area-context": "~5.6.2",
       "@react-navigation/drawer": "^7.5.0"
     },
     "onlyBuiltDependencies": [
+      "@shopify/react-native-skia",
       "@tailwindcss/oxide",
       "@zowe/secrets-for-zowe-sdk",
       "better-sqlite3",
@@ -71,6 +72,6 @@
   },
   "dependencies": {
     "turbo": "^2.5.0",
-    "typescript": "~5.8.3"
+    "typescript": "^5.8.3"
   }
 }

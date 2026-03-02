@@ -63,6 +63,30 @@ export const config = [
 				},
 			],
 
+			// Catch deprecated reanimated imports that moved to react-native-worklets in v4
+			'no-restricted-imports': [
+				'error',
+				{
+					paths: [
+						{
+							name: 'react-native-reanimated',
+							importNames: [
+								'runOnJS',
+								'runOnUI',
+								'executeOnUIRuntimeSync',
+								'runOnRuntime',
+								'makeShareableCloneRecursive',
+								'createWorkletRuntime',
+								'WorkletRuntime',
+								'isWorkletFunction',
+							],
+							message:
+								'This export is deprecated in reanimated v4. Import from "react-native-worklets" instead (e.g. runOnJS → scheduleOnRN, runOnUI → scheduleOnUI).',
+						},
+					],
+				},
+			],
+
 			'@typescript-eslint/no-useless-constructor': 'off',
 
 			// prefer function declarations for named components, and arrow functions for unnamed components
