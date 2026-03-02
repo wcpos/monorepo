@@ -110,5 +110,5 @@ function NativeIndicator({ value, sharedValue, className }: IndicatorProps) {
 }
 
 function NullIndicator(_props: IndicatorProps) {
-	return null;
+	return <></>;
 }
