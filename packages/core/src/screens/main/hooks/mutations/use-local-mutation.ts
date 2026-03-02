@@ -38,14 +38,22 @@ export const useLocalMutation = () => {
 	const localPatch = React.useCallback(
 		async <T extends Document>({ document, data }: LocalPatchProps<T>) => {
 			try {
+				const patchData = { ...(data as Record<string, unknown>) };
+
 				// check schema for date_modified_gmt field
 				const hasDate = get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
 
 				if (hasDate) {
-					data.date_modified_gmt = convertLocalDateToUTCString(new Date());
+					patchData.date_modified_gmt = convertLocalDateToUTCString(new Date());
 				}
 
 				const latest = document.getLatest(); // This seems to be required, else rxdb gives conflict error.
+				const patchEntries = Object.entries(patchData).filter(([, value]) => value !== undefined);
+
+				// Ignore no-op patches (eg: undefined form values) to avoid schema validation errors.
+				if (patchEntries.length === 0) {
+					return { changes: {}, document: latest };
+				}
 
 				/**
 				 * Data from Form component can be nested in dot notation, so we need use lodash set.
@@ -56,10 +64,9 @@ export const useLocalMutation = () => {
 				 */
 				const changes: Record<string, unknown> = {};
 				const doc = await latest.incrementalModify((old: Record<string, unknown>) => {
-					Object.keys(data).forEach((key) => {
+					patchEntries.forEach(([key, value]) => {
 						const path = key.split('.');
 						const root = path.shift()!;
-						const value = (data as Record<string, unknown>)[key];
 						if (path.length === 0) {
 							old[root] = value;
 							changes[root] = value;
