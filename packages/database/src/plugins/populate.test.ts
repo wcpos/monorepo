@@ -70,6 +70,29 @@ describe('populatePlugin', () => {
 		expect(children[0].child.length).toBe(1);
 	});
 
+	it('handles null and empty IDs in the reference array without crashing', async () => {
+		const nestedCollection = await create(0);
+		const childData = generateNested();
+		// Insert a valid child
+		await nestedCollection.insert(childData as any);
+
+		// Insert parent that references the valid child
+		const parentData = {
+			uuid: 'parent-null-test',
+			name: 'parent',
+			child: [childData.uuid],
+		};
+		const doc = await nestedCollection.insert(parentData as any);
+
+		// Manually patch in null/empty IDs to simulate bad data from server
+		await doc.incrementalPatch({ child: [childData.uuid, null as any, '' as any] });
+		const latest = doc.getLatest() as unknown as NestedDoc;
+
+		const children = await latest.populate('child');
+		expect(children.length).toBe(1);
+		expect((children[0] as any).uuid).toBe(childData.uuid);
+	});
+
 	it('provides a toPopulatedJSON function which populates and exports the nested document data', async () => {
 		const nestedCollection = await create(0);
 		const json = {
