@@ -239,13 +239,14 @@ function List<T>({
 function Item({ children, ...props }: ItemProps<any>) {
 	const { index, rowVirtualizer, vItem } = useItemContext() as WebItemContext<any>;
 	const { horizontal } = useRootContext();
-	const { measureElement } = rowVirtualizer;
+	const virtualizerRef = React.useRef(rowVirtualizer);
+	virtualizerRef.current = rowVirtualizer;
 	const measureRef = React.useMemo(
 		() =>
 			createStableMeasureRef<Element>((node) => {
-				measureElement(node);
+				virtualizerRef.current.measureElement(node);
 			}),
-		[measureElement]
+		[] // stable: always calls latest measureElement via ref
 	);
 
 	// Web-specific props (dataSet, transform in style) require type assertion

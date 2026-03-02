@@ -26,6 +26,20 @@ describe('createStableMeasureRef', () => {
 		expect(measureElement).toHaveBeenCalledTimes(2);
 	});
 
+	it('measures again when a different node instance is provided', () => {
+		const measureElement = jest.fn();
+		const measureRef = createStableMeasureRef(measureElement);
+		const nodeA = {} as Element;
+		const nodeB = {} as Element;
+
+		measureRef(nodeA);
+		measureRef(nodeB);
+
+		expect(measureElement).toHaveBeenCalledTimes(2);
+		expect(measureElement).toHaveBeenNthCalledWith(1, nodeA);
+		expect(measureElement).toHaveBeenNthCalledWith(2, nodeB);
+	});
+
 	it('ignores null when there is no mounted node', () => {
 		const measureElement = jest.fn();
 		const measureRef = createStableMeasureRef(measureElement);
