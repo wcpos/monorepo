@@ -5,13 +5,13 @@ import * as ProgressPrimitive from '@rn-primitives/progress';
 import Animated, {
 	Extrapolation,
 	interpolate,
-	runOnJS,
 	type SharedValue,
 	useAnimatedReaction,
 	useAnimatedStyle,
 	useDerivedValue,
 	withSpring,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { cn } from '../lib/utils';
 
@@ -74,7 +74,7 @@ function WebIndicator({ value, sharedValue, className }: IndicatorProps) {
 	useAnimatedReaction(
 		() => sharedValue?.value,
 		(currentValue) => {
-			runOnJS(setSvProgress)(currentValue);
+			scheduleOnRN(setSvProgress, currentValue);
 		}
 	);
 
