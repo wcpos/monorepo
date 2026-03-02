@@ -63,14 +63,18 @@ type IndicatorProps = {
 };
 
 function WebIndicator({ value, sharedValue, className }: IndicatorProps) {
-	const [svProgress, setSvProgress] = React.useState(sharedValue?.value);
+	const [svProgress, setSvProgress] = React.useState<number | undefined>(sharedValue?.value);
+
+	React.useEffect(() => {
+		if (!sharedValue) {
+			setSvProgress(undefined);
+		}
+	}, [sharedValue]);
 
 	useAnimatedReaction(
 		() => sharedValue?.value,
 		(currentValue) => {
-			if (currentValue !== undefined) {
-				runOnJS(setSvProgress)(currentValue);
-			}
+			runOnJS(setSvProgress)(currentValue);
 		}
 	);
 
@@ -78,7 +82,7 @@ function WebIndicator({ value, sharedValue, className }: IndicatorProps) {
 
 	return (
 		<View
-			className={cn('h-full w-full flex-1 transition-all', className)}
+			className={cn('h-full w-full flex-1 transition-all')}
 			style={{ transform: `translateX(-${100 - progress}%)` }}
 		>
 			<ProgressPrimitive.Indicator className={cn('bg-primary h-full w-full', className)} />
