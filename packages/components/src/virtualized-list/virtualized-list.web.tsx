@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { createStableMeasureRef } from './utils/create-stable-measure-ref';
 import { ItemContext, RootContext, useItemContext, useRootContext } from './utils/contexts';
 import { useOnEndReached } from './utils/use-on-end-reached';
 
@@ -238,6 +239,15 @@ function List<T>({
 function Item({ children, ...props }: ItemProps<any>) {
 	const { index, rowVirtualizer, vItem } = useItemContext() as WebItemContext<any>;
 	const { horizontal } = useRootContext();
+	const virtualizerRef = React.useRef(rowVirtualizer);
+	virtualizerRef.current = rowVirtualizer;
+	const measureRef = React.useMemo(
+		() =>
+			createStableMeasureRef<Element>((node) => {
+				virtualizerRef.current.measureElement(node);
+			}),
+		[] // stable: always calls latest measureElement via ref
+	);
 
 	// Web-specific props (dataSet, transform in style) require type assertion
 	// since this .web.tsx file runs exclusively in browsers via react-native-web
@@ -250,11 +260,7 @@ function Item({ children, ...props }: ItemProps<any>) {
 			width: '100%',
 			transform: horizontal ? undefined : `translateY(${vItem.start}px)`,
 		},
-		ref: (node: View | null) => {
-			if (node) {
-				rowVirtualizer.measureElement(node as unknown as Element);
-			}
-		},
+		ref: measureRef as unknown as React.Ref<View>,
 	} as React.ComponentProps<typeof View>;
 
 	return <View {...webProps}>{children}</View>;
