@@ -19,11 +19,6 @@ import '../polyfills';
 
 WebBrowser.maybeCompleteAuthSession();
 
-export const unstable_settings = {
-	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: '(app)',
-};
-
 /**
  * Forwards safe area insets to Uniwind for p-safe, m-safe, etc. utilities
  */
