@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 
 import { HStack } from '@wcpos/components/hstack';
@@ -23,7 +23,7 @@ interface Props {
 export function DataTableFooter({ children, query, count }: Props) {
 	const { sync, active$, total$ } = useReplicationState(query);
 	const { clearAndSync } = useCollectionReset(query.collection.name);
-	const loading = useObservableState(active$, false);
+	const loading = useObservableEagerState(active$);
 	const total = useObservableState(total$ ?? of(0), 0);
 	const t = useT();
 
