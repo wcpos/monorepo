@@ -24,7 +24,7 @@ test.describe('Customers in POS', () => {
  * Pro: create a new customer from the POS cart.
  */
 test.describe('Add Customer from Cart (Pro)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_fixtures, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Adding customers from cart requires Pro');
 	});
@@ -56,7 +56,7 @@ test.describe('Add Customer from Cart (Pro)', () => {
  * Free: add customer button should be disabled.
  */
 test.describe('Add Customer from Cart (Free)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_fixtures, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Only for free stores');
 	});
@@ -72,7 +72,7 @@ test.describe('Add Customer from Cart (Free)', () => {
  * Customers page (pro-only drawer page).
  */
 test.describe('Customers Page (Pro)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_fixtures, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Customers page requires Pro');
 	});
@@ -137,20 +137,20 @@ test.describe('Customers Page (Pro)', () => {
 });
 
 /**
- * Free users should see upgrade page.
+ * Free users should see the blurred preview overlay when navigating to Customers.
  */
 test.describe('Customers Page (Free)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_fixtures, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});
 
-	test('should show upgrade page on Customers', async ({ posPage: page }) => {
+	test('should show upgrade overlay on Customers', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
 		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 	});
 
-	test('should show View Demo button', async ({ posPage: page }) => {
+	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {
 		await navigateToPage(page, 'customers');
 		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByTestId('view-demo-button')).toBeVisible();

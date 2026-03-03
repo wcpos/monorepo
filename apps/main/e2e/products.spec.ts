@@ -147,7 +147,7 @@ test.describe('Products in POS', () => {
  * Products page (pro-only drawer page with inline editing).
  */
 test.describe('Products Page (Pro)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_fixtures, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Products page requires Pro');
 	});
@@ -276,20 +276,20 @@ test.describe('Products Page (Pro)', () => {
 });
 
 /**
- * Free users should see the upgrade page when navigating to Products.
+ * Free users should see the blurred preview overlay when navigating to Products.
  */
 test.describe('Products Page (Free)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_fixtures, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});
 
-	test('should show upgrade page on Products', async ({ posPage: page }) => {
+	test('should show upgrade overlay on Products', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 	});
 
-	test('should show View Demo button on upgrade page', async ({ posPage: page }) => {
+	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByTestId('view-demo-button')).toBeVisible();

@@ -19,6 +19,7 @@ import { Avatar } from './cells/avatar';
 import { CustomerEmail } from './cells/email';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
+import { useProAccess } from '../contexts/pro-access';
 import { DataTable } from '../components/data-table';
 import { TextCell } from '../components/text-cell';
 import { DateCell } from '../components/date';
@@ -53,6 +54,7 @@ export function CustomersScreen() {
 	const t = useT();
 	const router = useRouter();
 	const { bottom } = useSafeAreaInsets();
+	const { readOnly } = useProAccess();
 
 	/**
 	 *
@@ -89,10 +91,11 @@ export function CustomersScreen() {
 								<IconButton
 									name="userPlus"
 									onPress={() => router.push({ pathname: '/customers/add' })}
+									disabled={readOnly}
 								/>
 							</TooltipTrigger>
 							<TooltipContent>
-								<Text>{t('common.add_new_customer')}</Text>
+								<Text>{readOnly ? t('common.upgrade_to_pro') : t('common.add_new_customer')}</Text>
 							</TooltipContent>
 						</Tooltip>
 						<UISettingsDialog title={t('customers.customer_settings')}>

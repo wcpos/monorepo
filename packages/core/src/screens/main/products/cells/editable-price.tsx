@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { CurrencyInput } from '../../components/currency-input';
+import { useProAccess } from '../../contexts/pro-access';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -32,6 +33,7 @@ export function EditablePrice({
 			changes: Record<string, unknown>;
 		}) => void;
 	};
+	const { readOnly } = useProAccess();
 
 	/**
 	 *
@@ -42,7 +44,7 @@ export function EditablePrice({
 			onChangeText={(price) =>
 				meta.onChange({ document: item, changes: { [column.id]: String(price) } })
 			}
-			disabled={column.id === 'sale_price' && !item.on_sale}
+			disabled={readOnly || (column.id === 'sale_price' && !item.on_sale)}
 		/>
 	);
 }

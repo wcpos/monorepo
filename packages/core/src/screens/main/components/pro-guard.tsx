@@ -1,35 +1,52 @@
 import * as React from 'react';
+import { Platform, View } from 'react-native';
 
+import { BlurTargetView } from 'expo-blur';
+
+import { ProAccessProvider } from '../contexts/pro-access';
 import { useLicense } from '../hooks/use-license';
-import { PageUpgrade } from '../page-upgrade';
+import { ProPreviewOverlay } from './pro-preview-overlay';
 
 type ProPage = 'products' | 'orders' | 'customers' | 'reports';
 
-/**
- * Higher-order component that wraps a screen to make it Pro-only.
- *
- * If the user doesn't have a Pro license, shows the PageUpgrade screen instead.
- *
- * Usage:
- * ```tsx
- * import { withProAccess } from '@wcpos/core/screens/main/components/pro-guard';
- * import { OrdersScreen } from '@wcpos/core/screens/main/orders';
- *
- * export default withProAccess(OrdersScreen, 'orders');
- * ```
- */
 export const withProAccess = <P extends object>(
 	WrappedComponent: React.ComponentType<P>,
 	page: ProPage
 ) => {
 	function ProAccessWrapper(props: P) {
 		const { isPro } = useLicense();
+		const blurTargetRef = React.useRef(null);
 
-		if (!isPro) {
-			return <PageUpgrade page={page} />;
+		if (isPro) {
+			return (
+				<ProAccessProvider value={{ readOnly: false }}>
+					<WrappedComponent {...props} />
+				</ProAccessProvider>
+			);
 		}
 
-		return <WrappedComponent {...props} />;
+		// Free user: render real page with blur overlay
+		const content = (
+			<ProAccessProvider value={{ readOnly: true }}>
+				<WrappedComponent {...props} />
+			</ProAccessProvider>
+		);
+
+		return (
+			<View style={{ flex: 1 }}>
+				{Platform.OS === 'android' ? (
+					<BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
+						{content}
+					</BlurTargetView>
+				) : (
+					content
+				)}
+				<ProPreviewOverlay
+					page={page}
+					blurTarget={Platform.OS === 'android' ? blurTargetRef : undefined}
+				/>
+			</View>
+		);
 	}
 
 	return ProAccessWrapper;
