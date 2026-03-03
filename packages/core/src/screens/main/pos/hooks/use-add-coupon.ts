@@ -56,7 +56,7 @@ export const useAddCoupon = () => {
 
 				const order = currentOrder.getLatest();
 				const lineItems = (order.line_items || []).filter((item: any) => item.product_id !== null);
-				const appliedCouponLines = (order.coupon_lines || []).filter((cl: any) => cl.code !== null);
+				const appliedCouponLines = (order.coupon_lines || []).filter((cl: any) => cl.code != null);
 				const appliedCoupons = appliedCouponLines.map((cl: any) => cl.code);
 
 				// 2. Look up applied coupons that have individual_use for reverse check
