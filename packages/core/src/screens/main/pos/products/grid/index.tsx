@@ -63,7 +63,7 @@ export function ProductGrid({ query }: ProductGridProps) {
 					renderItem={({ item: row }) => (
 						<VirtualizedList.Item>
 							<View className="flex-row">
-								{row.map((product: ProductDocument) =>
+								{row?.map((product: ProductDocument) =>
 									product.type === 'variable' ? (
 										<VariableProductTile
 											key={product.uuid}
@@ -75,7 +75,8 @@ export function ProductGrid({ query }: ProductGridProps) {
 									)
 								)}
 								{/* Spacers for incomplete last row */}
-								{row.length < gridColumns &&
+								{row &&
+									row.length < gridColumns &&
 									Array.from({ length: gridColumns - row.length }).map((_, i) => (
 										<View key={`spacer-${i}`} className="m-1 flex-1" />
 									))}
