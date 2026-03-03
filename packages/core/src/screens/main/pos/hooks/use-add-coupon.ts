@@ -65,7 +65,7 @@ export const useAddCoupon = () => {
 					const appliedCouponDoc = await couponCollection
 						.findOne({ selector: { code: cl.code } })
 						.exec();
-					if (appliedCouponDoc?.toJSON().individual_use) {
+					if (appliedCouponDoc?.toJSON().individual_use && cl.code) {
 						appliedCouponsWithIndividualUse.push(cl.code);
 					}
 				}
