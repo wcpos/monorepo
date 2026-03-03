@@ -15,7 +15,7 @@ interface LineItemRefund {
  * Calculate proportional refund amounts for a line item based on refund quantity.
  */
 export function calculateLineItemRefund(input: LineItemInput): LineItemRefund {
-	const { quantity, total, totalTax, taxes, refundQty } = input;
+	const { quantity, total, taxes, refundQty } = input;
 
 	const safeRefundQty = Math.min(Math.max(refundQty, 0), quantity);
 	if (safeRefundQty === 0 || quantity === 0) {
