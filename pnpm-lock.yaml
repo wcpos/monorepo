@@ -61,6 +61,9 @@ importers:
       expo-blob:
         specifier: ~55.0.8
         version: 55.0.8(expo@55.0.4)
+      expo-blur:
+        specifier: ~55.0.8
+        version: 55.0.8(expo@55.0.4)(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)
       expo-constants:
         specifier: ~55.0.7
         version: 55.0.7(expo@55.0.4)(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4))(typescript@5.9.3)
@@ -5723,6 +5726,13 @@ packages:
     resolution: {integrity: sha512-0o3zb7hCMCZZ9W40Xq0s057gmHOqWSoS1h8FrH2BL1s0n7zt4e+z/BtqoLHsTVGnc9CILJCq7kqhhTm5MDA1Hg==}
     peerDependencies:
       expo: ~55.0.0
+
+  expo-blur@55.0.8:
+    resolution: {integrity: sha512-hmYhQiYFMTpHNzFaCF63jTABgnsozB5+wSEV8rCNBfNEHTdRVNFPkF+TZpbIqJpkhHfGLsKptRmR/wyZmAqREA==}
+    peerDependencies:
+      expo: ~55.0.0
+      react: ~19.2.0
+      react-native: ~0.83.2
 
   expo-constants@55.0.7:
     resolution: {integrity: sha512-kdcO4TsQRRqt0USvjaY5vgQMO9H52K3kBZ/ejC7F6rz70mv08GoowrZ1CYOr5O4JpPDRlIpQfZJUucaS/c+KWQ==}
@@ -15852,6 +15862,12 @@ snapshots:
   expo-blob@55.0.8(expo@55.0.4):
     dependencies:
       expo: 55.0.4(@babel/core@7.28.6)(@expo/dom-webview@55.0.3)(@expo/metro-runtime@55.0.6)(expo-router@55.0.3)(react-dom@19.2.4(react@19.2.4))(react-native-webview@13.16.1(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4))(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+
+  expo-blur@55.0.8(expo@55.0.4)(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4):
+    dependencies:
+      expo: 55.0.4(@babel/core@7.28.6)(@expo/dom-webview@55.0.3)(@expo/metro-runtime@55.0.6)(expo-router@55.0.3)(react-dom@19.2.4(react@19.2.4))(react-native-webview@13.16.1(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4))(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      react: 19.2.4
+      react-native: 0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4)
 
   expo-constants@55.0.7(expo@55.0.4)(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4))(typescript@5.9.3):
     dependencies:
