@@ -4,6 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import get from 'lodash/get';
 
 import { CurrencyInput } from '../../components/currency-input';
+import { useProAccess } from '../../contexts/pro-access';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -22,6 +23,7 @@ export function COGS({
 	const meta = table.options.meta as unknown as {
 		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
 	};
+	const { readOnly } = useProAccess();
 
 	/**
 	 *
@@ -29,6 +31,7 @@ export function COGS({
 	return (
 		<CurrencyInput
 			value={defined_value}
+			disabled={readOnly}
 			onChangeText={(newValue) => {
 				// Construct a plain object update (RxDB Proxy objects can't be cloned)
 				const updatedCogs = {

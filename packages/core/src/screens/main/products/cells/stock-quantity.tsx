@@ -8,6 +8,7 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { NumberInput } from '../../components/number-input';
+import { useProAccess } from '../../contexts/pro-access';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -27,6 +28,7 @@ export function StockQuantity({
 	const meta = table.options.meta as unknown as {
 		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
 	};
+	const { readOnly } = useProAccess();
 
 	return (
 		<VStack>
@@ -36,7 +38,7 @@ export function StockQuantity({
 					onChangeText={(stock_quantity) =>
 						meta.onChange({ document: product, changes: { stock_quantity } })
 					}
-					disabled={!manageStock}
+					disabled={readOnly || !manageStock}
 				/>
 			</View>
 			<SwitchWithLabel
@@ -47,6 +49,7 @@ export function StockQuantity({
 					meta.onChange({ document: product, changes: { manage_stock } })
 				}
 				size="sm"
+				disabled={readOnly}
 			/>
 		</VStack>
 	);
