@@ -28,6 +28,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
+import { useProAccess } from '../../contexts/pro-access';
 import { useDeleteDocument } from '../../contexts/use-delete-document';
 import { usePullDocument } from '../../contexts/use-pull-document';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
@@ -48,6 +49,7 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 	const { format } = useCustomerNameFormat();
 	const [force, setForce] = React.useState(!customer.id);
 	const deleteDocument = useDeleteDocument();
+	const { readOnly } = useProAccess();
 
 	/**
 	 * Handle delete button click
@@ -63,6 +65,10 @@ export function Actions({ row }: CellContext<{ document: CustomerDocument }, 'ac
 			// setDeleteDialogOpened(false);
 		}
 	}, [customer, deleteDocument, force]);
+
+	if (readOnly) {
+		return null;
+	}
 
 	/**
 	 *
