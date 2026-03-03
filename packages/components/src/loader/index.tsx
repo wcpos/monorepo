@@ -2,13 +2,6 @@ import React from 'react';
 import { View, ViewProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import Animated, {
-	Easing,
-	useAnimatedStyle,
-	useSharedValue,
-	withRepeat,
-	withTiming,
-} from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import { useCSSVariable } from 'uniwind';
 
@@ -65,7 +58,6 @@ type LoaderProps = ViewProps & VariantProps<typeof loaderVariants>;
  */
 export function Loader({ className, variant = 'default', size, ...props }: LoaderProps) {
 	const textClass = React.useContext(TextClassContext);
-	const rotation = useSharedValue(0);
 
 	// Combine all classNames to find the effective text color
 	const combinedClassName = cn(loaderVariants({ variant, size }), textClass, className);
@@ -79,28 +71,9 @@ export function Loader({ className, variant = 'default', size, ...props }: Loade
 	// Use Uniwind's useCSSVariable hook to get the actual theme color
 	const resolvedColor = String(useCSSVariable(cssVariable) ?? '');
 
-	/**
-	 * Initialize the rotation animation on mount.
-	 * Legitimate useEffect for starting an external animation (Reanimated).
-	 */
-	React.useEffect(() => {
-		rotation.value = withRepeat(
-			withTiming(360, {
-				duration: 750,
-				easing: Easing.linear,
-			}),
-			-1,
-			false
-		);
-	}, [rotation]);
-
-	const animatedStyle = useAnimatedStyle(() => ({
-		transform: [{ rotate: `${rotation.value}deg` }],
-	}));
-
 	return (
 		<View className={combinedClassName} {...props}>
-			<Animated.View style={[{ width: '100%', height: '100%' }, animatedStyle]}>
+			<View className="size-full animate-spin duration-750">
 				<Svg viewBox="0 0 32 32" width="100%" height="100%">
 					<Circle
 						cx="16"
@@ -122,7 +95,7 @@ export function Loader({ className, variant = 'default', size, ...props }: Loade
 						stroke={resolvedColor}
 					/>
 				</Svg>
-			</Animated.View>
+			</View>
 		</View>
 	);
 }
