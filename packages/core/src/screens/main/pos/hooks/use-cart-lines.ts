@@ -87,7 +87,8 @@ export const useCartLines = () => {
 
 		// Recalculate local-only coupon discounts when line items change.
 		// Synced coupon lines (with an id) are server-authoritative and should not be recalculated.
-		const activeCouponLines = (couponLines || []).filter((cl: any) => cl.code !== null && !cl.id);
+		const allCouponLines = (couponLines || []).filter((cl: any) => cl.code !== null);
+		const activeCouponLines = allCouponLines.filter((cl: any) => !cl.id);
 		if (activeCouponLines.length > 0) {
 			const activeLineItems = (lineItems || []).filter((item: any) => item.product_id !== null);
 			const productIds = activeLineItems.map((item: any) => item.product_id).filter(Boolean);
@@ -146,10 +147,18 @@ export const useCartLines = () => {
 			);
 
 			if (needsUpdate) {
+				// Merge updated local coupons back into full list to preserve synced coupons
+				const updatedByCode = new Map(
+					updatedCouponLines.map((cl: any) => [cl.code, cl])
+				);
+				const mergedCouponLines = allCouponLines.map((cl: any) =>
+					!cl.id && cl.code !== null ? (updatedByCode.get(cl.code) ?? cl) : cl
+				);
+
 				const order = currentOrder.getLatest();
 				await localPatch({
 					document: order,
-					data: { coupon_lines: updatedCouponLines },
+					data: { coupon_lines: mergedCouponLines },
 				});
 			}
 		}
