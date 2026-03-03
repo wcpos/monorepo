@@ -13,7 +13,7 @@ async function navigateToOrders(page: Page) {
  * Orders page (pro-only).
  */
 test.describe('Orders Page (Pro)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_fixtures, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Orders page requires Pro');
 	});
@@ -107,7 +107,7 @@ test.describe('Orders Page (Pro)', () => {
  * Free users should see the blurred preview overlay when navigating to Orders.
  */
 test.describe('Orders Page (Free)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_fixtures, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});
