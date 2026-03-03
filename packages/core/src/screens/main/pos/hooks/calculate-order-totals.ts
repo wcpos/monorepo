@@ -5,11 +5,13 @@ type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
+type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
 
 interface Props {
 	lineItems?: LineItem[];
 	shippingLines?: ShippingLine[];
 	feeLines?: FeeLine[];
+	couponLines?: CouponLine[];
 	taxRates?: TaxRateDocument[];
 	taxRoundAtSubtotal?: boolean;
 }
@@ -41,6 +43,7 @@ export function calculateOrderTotals({
 	lineItems = [],
 	shippingLines = [],
 	feeLines = [],
+	couponLines = [],
 	taxRates = [],
 	taxRoundAtSubtotal = false,
 }: Props) {
@@ -118,6 +121,27 @@ export function calculateOrderTotals({
 				taxLines[tax.id ?? 0].shipping_tax_total += parseNumber(tax.total);
 			});
 		}
+	});
+
+	// Calculate coupon discount totals
+	couponLines.forEach((line) => {
+		/**
+		 * Synced coupon lines (with an ID) have already been applied by WooCommerce
+		 * to line item totals. Re-applying them here would double-discount.
+		 *
+		 * Local-only coupon lines (no ID yet) still need to be reflected in POS totals
+		 * before server sync.
+		 */
+		if (typeof line.id === 'number' && line.id > 0) {
+			return;
+		}
+
+		const couponDiscount = parseNumber(line.discount);
+		const couponDiscountTax = parseNumber(line.discount_tax);
+		discount_total += couponDiscount;
+		discount_tax += couponDiscountTax;
+		total -= couponDiscount;
+		total_tax -= couponDiscountTax;
 	});
 
 	// Sum the tax totals for cart_tax before converting to string

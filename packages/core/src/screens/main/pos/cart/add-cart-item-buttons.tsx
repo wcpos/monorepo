@@ -5,6 +5,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import { AddCartItemButton } from './add-cart-item-button';
+import { AddCoupon } from './add-coupon';
 import { AddFee } from './add-fee';
 import { AddMiscProduct } from './add-misc-product';
 import { AddShipping } from './add-shipping';
@@ -36,6 +37,12 @@ export function AddCartItemButtons() {
 				<Text className="flex-1">{t('pos_cart.add_shipping')}</Text>
 				<AddCartItemButton title={t('pos_cart.add_shipping')}>
 					<AddShipping />
+				</AddCartItemButton>
+			</HStack>
+			<HStack testID="add-coupon">
+				<Text className="flex-1">{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</Text>
+				<AddCartItemButton title={t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}>
+					<AddCoupon />
 				</AddCartItemButton>
 			</HStack>
 		</VStack>
