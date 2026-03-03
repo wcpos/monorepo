@@ -24,6 +24,7 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
+import { useProAccess } from '../../contexts/pro-access';
 import { useDeleteDocument } from '../../contexts/use-delete-document';
 import { usePullDocument } from '../../contexts/use-pull-document';
 
@@ -38,6 +39,7 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 	const pullDocument = usePullDocument();
 	const t = useT();
 	const deleteDocument = useDeleteDocument();
+	const { readOnly } = useProAccess();
 
 	/**
 	 * Handle delete button click
@@ -52,6 +54,10 @@ export function Actions({ row }: CellContext<{ document: ProductDocument }, 'act
 			//
 		}
 	}, [product, deleteDocument]);
+
+	if (readOnly) {
+		return null;
+	}
 
 	/**
 	 *
