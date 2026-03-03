@@ -60,7 +60,7 @@ export function ProPreviewOverlay({ page, blurTarget }: Props) {
 	return (
 		<View style={StyleSheet.absoluteFill} pointerEvents="box-none">
 			<BlurView
-				intensity={70}
+				intensity={30}
 				tint="light"
 				blurReductionFactor={4}
 				blurMethod="dimezisBlurViewSdk31Plus"
