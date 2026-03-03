@@ -1,14 +1,14 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { Loader } from '@wcpos/components/loader';
 import { Query, useReplicationState } from '@wcpos/query';
 
 export function ListFooterComponent({ query }: { query: Query<any> }) {
 	const { active$ } = useReplicationState(query);
-	const loading = useObservableState(active$, false);
+	const loading = useObservableEagerState(active$);
 
 	if (!loading) return null;
 
