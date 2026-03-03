@@ -33,10 +33,13 @@ export const useRemoveCoupon = () => {
 		async (couponCode: string) => {
 			const order = currentOrder.getLatest();
 			const couponLines = order.coupon_lines || [];
+			const normalizedCode = couponCode.toLowerCase().trim();
 
+			let removed = false;
 			const updatedCouponLines = couponLines
 				.map((cl: any) => {
-					if (cl.code === couponCode) {
+					if ((cl.code ?? '').toLowerCase() === normalizedCode) {
+						removed = true;
 						// If synced (has id), null the code to signal deletion
 						if (cl.id) {
 							return { ...cl, code: null };
@@ -47,6 +50,8 @@ export const useRemoveCoupon = () => {
 					return cl;
 				})
 				.filter((cl: any) => cl !== null);
+
+			if (!removed) return;
 
 			await localPatch({
 				document: order,

@@ -47,10 +47,14 @@ export function validateCoupon(coupon: any, context: CouponValidationContext): V
 	if (
 		coupon.usage_limit_per_user !== null &&
 		coupon.usage_limit_per_user > 0 &&
-		context.customerId !== null
+		(context.customerId !== null || context.customerEmail)
 	) {
+		const identifier =
+			context.customerId !== null
+				? String(context.customerId)
+				: context.customerEmail.toLowerCase();
 		const userUsageCount = (coupon.used_by || []).filter(
-			(id: string | number) => String(id) === String(context.customerId)
+			(id: string | number) => String(id).toLowerCase() === identifier
 		).length;
 		if (userUsageCount >= coupon.usage_limit_per_user) {
 			return { valid: false, error: 'Coupon usage limit has been reached for this customer.' };
@@ -77,7 +81,10 @@ export function validateCoupon(coupon: any, context: CouponValidationContext): V
 	}
 
 	// 8. Email restrictions
-	if (coupon.email_restrictions && coupon.email_restrictions.length > 0 && context.customerEmail) {
+	if (coupon.email_restrictions && coupon.email_restrictions.length > 0) {
+		if (!context.customerEmail) {
+			return { valid: false, error: 'This coupon requires an email address.' };
+		}
 		const emailLower = context.customerEmail.toLowerCase();
 		const matches = coupon.email_restrictions.some((pattern: string) => {
 			const patternLower = pattern.toLowerCase().trim();

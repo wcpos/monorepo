@@ -95,21 +95,24 @@ export const useCartLines = () => {
 					: [];
 			const productMap = new Map(products.map((p: any) => [p.id, p]));
 
-			const couponLineItems: CouponLineItem[] = activeLineItems.map((item: any) => {
-				const product = productMap.get(item.product_id);
-				const qty = item.quantity || 1;
-				return {
-					product_id: item.product_id,
-					quantity: qty,
-					price: parseFloat(item.subtotal || '0') / qty,
-					subtotal: item.subtotal || '0',
-					total: item.total || '0',
-					categories: product?.categories || [],
-					on_sale: product
-						? parseFloat(product.price || '0') < parseFloat(product.regular_price || '0')
-						: false,
-				};
-			});
+			const couponLineItems: CouponLineItem[] = activeLineItems
+				.map((item: any) => {
+					const product = productMap.get(item.product_id);
+					const qty = item.quantity ?? 1;
+					if (qty <= 0) return null;
+					return {
+						product_id: item.product_id,
+						quantity: qty,
+						price: parseFloat(item.subtotal || '0') / qty,
+						subtotal: item.subtotal || '0',
+						total: item.total || '0',
+						categories: product?.categories || [],
+						on_sale: product
+							? parseFloat(product.price || '0') < parseFloat(product.regular_price || '0')
+							: false,
+					};
+				})
+				.filter(Boolean) as CouponLineItem[];
 
 			let needsUpdate = false;
 			const updatedCouponLines = await Promise.all(
