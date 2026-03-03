@@ -64,7 +64,8 @@ export function EditableName({
 		<Button
 			variant="outline"
 			className="max-w-full items-start"
-			onPress={editable ? () => setEditing(true) : undefined}
+			onPress={() => setEditing(true)}
+			disabled={!editable}
 		>
 			<ButtonText className="font-bold" numberOfLines={1} decodeHtml>
 				{editValue}
