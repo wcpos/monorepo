@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Linking, Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { BlurView } from 'expo-blur';
 
@@ -8,6 +8,7 @@ import { Card, CardContent } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useT } from '../../../contexts/translations';
 
@@ -18,7 +19,12 @@ interface Props {
 	blurTarget?: React.RefObject<View | null>;
 }
 
-function getPageConfig(page: ProPage, t: ReturnType<typeof useT>) {
+interface PageConfig {
+	description: string;
+	demoURL: string;
+}
+
+function getPageConfig(page: ProPage, t: ReturnType<typeof useT>): PageConfig {
 	switch (page) {
 		case 'products':
 			return {
@@ -40,6 +46,10 @@ function getPageConfig(page: ProPage, t: ReturnType<typeof useT>) {
 				description: t('upgrade.unlock_end_of_day_reports_by'),
 				demoURL: 'https://demo.wcpos.com/pos/reports',
 			};
+		default: {
+			const _exhaustive: never = page;
+			return _exhaustive;
+		}
 	}
 }
 
@@ -61,13 +71,22 @@ export function ProPreviewOverlay({ page, blurTarget }: Props) {
 				<Card className="max-w-sm shadow-lg">
 					<CardContent className="p-6">
 						<VStack className="items-center gap-4">
-							<Text className="text-xl font-bold">{t('common.upgrade_to_pro')}</Text>
+							<Text testID="upgrade-title" className="text-xl font-bold">
+								{t('common.upgrade_to_pro')}
+							</Text>
 							<Text className="text-muted-foreground text-center">{description}</Text>
 							<HStack className="gap-2">
-								<Button variant="secondary" onPress={() => Linking.openURL(demoURL)}>
+								<Button
+									testID="view-demo-button"
+									variant="secondary"
+									onPress={() => openExternalURL(demoURL)}
+								>
 									{t('upgrade.view_demo')}
 								</Button>
-								<Button onPress={() => Linking.openURL('https://wcpos.com/pro')}>
+								<Button
+									testID="upgrade-to-pro-button"
+									onPress={() => openExternalURL('https://wcpos.com/pro')}
+								>
 									{t('common.upgrade_to_pro')}
 								</Button>
 							</HStack>

@@ -61,7 +61,7 @@ test.describe('Reports Page (Pro)', () => {
 });
 
 /**
- * Free users should see upgrade page.
+ * Free users should see the blurred preview overlay when navigating to Reports.
  */
 test.describe('Reports Page (Free)', () => {
 	test.beforeEach(async ({}, testInfo) => {
@@ -69,12 +69,12 @@ test.describe('Reports Page (Free)', () => {
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});
 
-	test('should show upgrade page on Reports', async ({ posPage: page }) => {
+	test('should show upgrade overlay on Reports', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
 		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 	});
 
-	test('should show View Demo button', async ({ posPage: page }) => {
+	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {
 		await navigateToPage(page, 'reports');
 		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
 		await expect(page.getByTestId('view-demo-button')).toBeVisible();

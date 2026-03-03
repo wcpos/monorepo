@@ -4,10 +4,14 @@ interface ProAccessContextValue {
 	readOnly: boolean;
 }
 
-const ProAccessContext = createContext<ProAccessContextValue>({ readOnly: false });
+const ProAccessContext = createContext<ProAccessContextValue | null>(null);
 
 export const ProAccessProvider = ProAccessContext.Provider;
 
 export function useProAccess(): ProAccessContextValue {
-	return useContext(ProAccessContext);
+	const context = useContext(ProAccessContext);
+	if (context === null) {
+		throw new Error('useProAccess must be used within a ProAccessProvider');
+	}
+	return context;
 }
