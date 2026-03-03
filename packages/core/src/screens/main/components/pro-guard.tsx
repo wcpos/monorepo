@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Platform, View } from 'react-native';
 
+import { useIsFocused } from '@react-navigation/native';
 import { BlurTargetView } from 'expo-blur';
 
 import { ProAccessProvider } from '../contexts/pro-access';
@@ -15,7 +16,16 @@ export const withProAccess = <P extends object>(
 ) => {
 	function ProAccessWrapper(props: P) {
 		const { isPro } = useLicense();
+		const isFocused = useIsFocused();
+		const [overlayKey, setOverlayKey] = React.useState(0);
 		const blurTargetRef = React.useRef(null);
+
+		// Remount overlay on each focus to reset any devtools DOM tampering
+		React.useEffect(() => {
+			if (isFocused) {
+				setOverlayKey((k) => k + 1);
+			}
+		}, [isFocused]);
 
 		if (isPro) {
 			return (
@@ -42,6 +52,7 @@ export const withProAccess = <P extends object>(
 					content
 				)}
 				<ProPreviewOverlay
+					key={overlayKey}
 					page={page}
 					blurTarget={Platform.OS === 'android' ? blurTargetRef : undefined}
 				/>
