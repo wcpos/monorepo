@@ -26,6 +26,7 @@ import { Text } from '@wcpos/components/text';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { useProAccess } from '../../contexts/pro-access';
 import { useDeleteDocument } from '../../contexts/use-delete-document';
 import { usePullDocument } from '../../contexts/use-pull-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -64,6 +65,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	const { store, wpCredentials } = useAppState();
 	const orderHasID = useObservableEagerState(order.id$!); // we need to update the menu with change to order.id
 	const deleteDocument = useDeleteDocument();
+	const { readOnly } = useProAccess();
 
 	/**
 	 * To re-open an order, we need to:
@@ -100,6 +102,10 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 			//
 		}
 	}, [deleteDocument, order]);
+
+	if (readOnly) {
+		return null;
+	}
 
 	/**
 	 *
