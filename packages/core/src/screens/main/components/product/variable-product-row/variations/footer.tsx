@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -24,7 +24,7 @@ interface VariationTableFooterProps {
 export function VariationTableFooter({ query, parent, count }: VariationTableFooterProps) {
 	const { fastStoreDB, storeDB } = useAppState();
 	const { sync, active$ } = useReplicationState(query);
-	const loading = useObservableState(active$, false);
+	const loading = useObservableEagerState(active$);
 
 	/**
 	 *

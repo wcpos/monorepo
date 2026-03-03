@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 
 import { HStack } from '@wcpos/components/hstack';
@@ -23,7 +23,7 @@ interface TaxRatesFooterProps {
 export function TaxRatesFooter({ count, query }: TaxRatesFooterProps) {
 	const { sync, active$, total$ } = useReplicationState(query);
 	const { clearAndSync } = useCollectionReset('taxes');
-	const active = useObservableState(active$, false);
+	const active = useObservableEagerState(active$);
 	const total = useObservableState(total$ ?? of(0), 0);
 	const t = useT();
 
