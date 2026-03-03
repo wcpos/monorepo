@@ -88,6 +88,9 @@
   /* Custom border width */
   --border-width-hairline: var(--hairline-width);
 
+  /* Custom durations */
+  --duration-750: 750ms;
+
   /* Custom animations (web-only - React Native uses Reanimated) */
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
