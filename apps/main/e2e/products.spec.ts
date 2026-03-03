@@ -147,7 +147,7 @@ test.describe('Products in POS', () => {
  * Products page (pro-only drawer page with inline editing).
  */
 test.describe('Products Page (Pro)', () => {
-	test.beforeEach(async (_fixtures, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Products page requires Pro');
 	});
@@ -279,7 +279,7 @@ test.describe('Products Page (Pro)', () => {
  * Free users should see the blurred preview overlay when navigating to Products.
  */
 test.describe('Products Page (Free)', () => {
-	test.beforeEach(async (_fixtures, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});

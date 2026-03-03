@@ -14,6 +14,7 @@ export function EditableName({
 	value: valueProp,
 	defaultValue,
 	onChangeText,
+	editable = true,
 	...props
 }: InputProps) {
 	const [editing, setEditing] = React.useState(false);
@@ -60,7 +61,12 @@ export function EditableName({
 	 * Sometimes the product name from WooCommerce is encoded in html entities
 	 */
 	return (
-		<Button variant="outline" className="max-w-full items-start" onPress={() => setEditing(true)}>
+		<Button
+			variant="outline"
+			className="max-w-full items-start"
+			onPress={() => setEditing(true)}
+			disabled={!editable}
+		>
 			<ButtonText className="font-bold" numberOfLines={1} decodeHtml>
 				{editValue}
 			</ButtonText>
