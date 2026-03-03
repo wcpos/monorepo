@@ -165,11 +165,11 @@ describe('coupon-discount', () => {
 				const result = calculateCouponDiscount(config, items);
 
 				// Each item is ~33.33% of the total
-				// First two get round($10 * 0.33336..., 2) = $3.33 each
-				// Last gets remainder: $10 - $3.33 - $3.33 = $3.34
-				expect(result.perItem[0].discount).toBe(3.33);
-				expect(result.perItem[1].discount).toBe(3.33);
-				expect(result.perItem[2].discount).toBeCloseTo(3.34, 2);
+				// First two get round($10 * 0.33336..., 6) with higher precision
+				// Last gets remainder: $10 - distributed
+				expect(result.perItem[0].discount).toBeCloseTo(3.333333, 5);
+				expect(result.perItem[1].discount).toBeCloseTo(3.333333, 5);
+				expect(result.perItem[2].discount).toBeCloseTo(3.333334, 5);
 				expect(result.totalDiscount).toBeCloseTo(10, 2);
 			});
 

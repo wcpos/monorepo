@@ -379,13 +379,14 @@ describe('coupon-validation', () => {
 				expect(result.error).toBe('This coupon is not valid for your email address.');
 			});
 
-			it('should skip email check when no customer email is on the order', () => {
+			it('should reject email-restricted coupon when no customer email is on the order', () => {
 				const coupon = createCoupon({ email_restrictions: ['vip@store.com'] });
 				const context = createContext({ customerEmail: '' });
 
-				// Without an email we cannot validate, so let it pass
+				// Without an email we cannot validate against restrictions, so reject
 				const result = validateCoupon(coupon, context);
-				expect(result.valid).toBe(true);
+				expect(result.valid).toBe(false);
+				expect(result.error).toBe('This coupon requires an email address.');
 			});
 		});
 
