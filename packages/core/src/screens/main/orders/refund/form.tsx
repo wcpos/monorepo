@@ -97,7 +97,7 @@ export function RefundOrderForm({ order }: Props) {
 		return order.refunds.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0);
 	}, [order.refunds]);
 
-	const maxRefundable = parseFloat(order.total || '0') - previousRefundTotal;
+	const maxRefundable = Number((parseFloat(order.total || '0') - previousRefundTotal).toFixed(2));
 
 	const initialLineItems = React.useMemo(() => {
 		return (order.line_items || []).map((item) => ({
