@@ -4,6 +4,7 @@ import { useObservable, useObservableEagerState, useSubscription } from 'observa
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
 import { calculateCouponDiscount } from './coupon-discount';
+import { isProductOnSale } from './coupon-helpers';
 import { useFeeLineData } from './use-fee-line-data';
 import { useUpdateFeeLine } from './use-update-fee-line';
 import { getUuidFromLineItem } from './utils';
@@ -84,8 +85,9 @@ export const useCartLines = () => {
 			}
 		}
 
-		// Recalculate coupon discounts when line items change
-		const activeCouponLines = (couponLines || []).filter((cl: any) => cl.code !== null);
+		// Recalculate local-only coupon discounts when line items change.
+		// Synced coupon lines (with an id) are server-authoritative and should not be recalculated.
+		const activeCouponLines = (couponLines || []).filter((cl: any) => cl.code !== null && !cl.id);
 		if (activeCouponLines.length > 0) {
 			const activeLineItems = (lineItems || []).filter((item: any) => item.product_id !== null);
 			const productIds = activeLineItems.map((item: any) => item.product_id).filter(Boolean);
@@ -107,9 +109,7 @@ export const useCartLines = () => {
 						subtotal: item.subtotal || '0',
 						total: item.total || '0',
 						categories: product?.categories || [],
-						on_sale: product
-							? parseFloat(product.price || '0') < parseFloat(product.regular_price || '0')
-							: false,
+						on_sale: isProductOnSale(product),
 					};
 				})
 				.filter(Boolean) as CouponLineItem[];

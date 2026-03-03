@@ -4,6 +4,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { calculateCouponDiscount } from './coupon-discount';
+import { isProductOnSale } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useT } from '../../../../contexts/translations';
@@ -55,9 +56,21 @@ export const useAddCoupon = () => {
 
 				const order = currentOrder.getLatest();
 				const lineItems = (order.line_items || []).filter((item: any) => item.product_id !== null);
-				const appliedCoupons = (order.coupon_lines || []).map((cl: any) => cl.code).filter(Boolean);
+				const appliedCouponLines = (order.coupon_lines || []).filter((cl: any) => cl.code !== null);
+				const appliedCoupons = appliedCouponLines.map((cl: any) => cl.code);
 
-				// 2. Look up products for category/on_sale info
+				// 2. Look up applied coupons that have individual_use for reverse check
+				const appliedCouponsWithIndividualUse: string[] = [];
+				for (const cl of appliedCouponLines) {
+					const appliedCouponDoc = await couponCollection
+						.findOne({ selector: { code: cl.code } })
+						.exec();
+					if (appliedCouponDoc?.toJSON().individual_use) {
+						appliedCouponsWithIndividualUse.push(cl.code);
+					}
+				}
+
+				// 3. Look up products for category/on_sale info
 				const productIds = lineItems.map((item: any) => item.product_id).filter(Boolean);
 				const products =
 					productIds.length > 0
@@ -65,7 +78,7 @@ export const useAddCoupon = () => {
 						: [];
 				const productMap = new Map(products.map((p: any) => [p.id, p]));
 
-				// 3. Build validation context
+				// 4. Build validation context
 				const couponLineItems: CouponLineItem[] = lineItems.map((item: any) => {
 					const product = productMap.get(item.product_id);
 					const qty = item.quantity || 1;
@@ -76,9 +89,7 @@ export const useAddCoupon = () => {
 						subtotal: item.subtotal || '0',
 						total: item.total || '0',
 						categories: product?.categories || [],
-						on_sale: product
-							? parseFloat(product.price || '0') < parseFloat(product.regular_price || '0')
-							: false,
+						on_sale: isProductOnSale(product),
 					};
 				});
 
@@ -90,6 +101,7 @@ export const useAddCoupon = () => {
 				const validation = validateCoupon(coupon.toJSON(), {
 					lineItems: couponLineItems,
 					appliedCoupons,
+					appliedCouponsWithIndividualUse,
 					cartSubtotal,
 					customerEmail: order.billing?.email || '',
 					customerId: order.customer_id || null,
@@ -99,7 +111,7 @@ export const useAddCoupon = () => {
 					return { success: false, error: validation.error };
 				}
 
-				// 4. Calculate discount
+				// 5. Calculate discount
 				const couponData = coupon.toJSON();
 				const discountResult = calculateCouponDiscount(
 					{
@@ -115,7 +127,7 @@ export const useAddCoupon = () => {
 					couponLineItems
 				);
 
-				// 5. Add to coupon_lines
+				// 6. Add to coupon_lines
 				await addItemToOrder('coupon_lines', {
 					code: couponData.code,
 					discount: String(discountResult.totalDiscount),

@@ -17,6 +17,20 @@ export interface CouponRestrictions {
 }
 
 /**
+ * Determines whether a product is on sale by comparing price to regular_price.
+ * Handles null/undefined/NaN values safely (returns false when data is missing).
+ */
+export function isProductOnSale(
+	product: { price?: string | null; regular_price?: string | null } | null | undefined
+): boolean {
+	if (!product || !product.price || !product.regular_price) return false;
+	const price = parseFloat(product.price);
+	const regularPrice = parseFloat(product.regular_price);
+	if (isNaN(price) || isNaN(regularPrice) || regularPrice <= 0) return false;
+	return price < regularPrice;
+}
+
+/**
  * Filters line items to those eligible for a given coupon based on its restrictions.
  * Mirrors the WooCommerce coupon product/category restriction logic.
  */

@@ -6,7 +6,12 @@
  * getEligibleItems mirrors WooCommerce's coupon product/category restriction
  * checks. It decides which cart line items a coupon can actually apply to.
  */
-import { type CouponLineItem, type CouponRestrictions, getEligibleItems } from './coupon-helpers';
+import {
+	type CouponLineItem,
+	type CouponRestrictions,
+	getEligibleItems,
+	isProductOnSale,
+} from './coupon-helpers';
 
 // Factory for building test line items
 const createItem = (overrides: Partial<CouponLineItem> = {}): CouponLineItem => ({
@@ -30,6 +35,52 @@ const noRestrictions: CouponRestrictions = {
 };
 
 describe('coupon-helpers', () => {
+	describe('isProductOnSale', () => {
+		it('should return false for null product', () => {
+			expect(isProductOnSale(null)).toBe(false);
+		});
+
+		it('should return false for undefined product', () => {
+			expect(isProductOnSale(undefined)).toBe(false);
+		});
+
+		it('should return true when price is less than regular_price', () => {
+			expect(isProductOnSale({ price: '10', regular_price: '20' })).toBe(true);
+		});
+
+		it('should return false when price equals regular_price', () => {
+			expect(isProductOnSale({ price: '20', regular_price: '20' })).toBe(false);
+		});
+
+		it('should return false when price is greater than regular_price', () => {
+			expect(isProductOnSale({ price: '25', regular_price: '20' })).toBe(false);
+		});
+
+		it('should return false when price is null', () => {
+			expect(isProductOnSale({ price: null, regular_price: '20' })).toBe(false);
+		});
+
+		it('should return false when regular_price is null', () => {
+			expect(isProductOnSale({ price: '10', regular_price: null })).toBe(false);
+		});
+
+		it('should return false when both prices are null', () => {
+			expect(isProductOnSale({ price: null, regular_price: null })).toBe(false);
+		});
+
+		it('should return false when regular_price is "0"', () => {
+			expect(isProductOnSale({ price: '0', regular_price: '0' })).toBe(false);
+		});
+
+		it('should return false when regular_price is empty string', () => {
+			expect(isProductOnSale({ price: '10', regular_price: '' })).toBe(false);
+		});
+
+		it('should return false when price is undefined', () => {
+			expect(isProductOnSale({ regular_price: '20' })).toBe(false);
+		});
+	});
+
 	describe('getEligibleItems', () => {
 		describe('no restrictions', () => {
 			it('should return all items when no restrictions are set', () => {
