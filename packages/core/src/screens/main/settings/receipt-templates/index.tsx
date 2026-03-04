@@ -259,7 +259,7 @@ export function ReceiptTemplateSettings() {
 								<View className="border-border h-64 rounded-md border">
 									<WebView
 										ref={iframeRef as never}
-										srcDoc={previewHtml}
+										src={`data:text/html;charset=utf-8,${encodeURIComponent(previewHtml)}`}
 										onMessage={() => {}}
 										className="flex-1"
 									/>
