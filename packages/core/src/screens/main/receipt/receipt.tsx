@@ -2,7 +2,12 @@ import * as React from 'react';
 
 import { useNavigationState } from '@react-navigation/native';
 import get from 'lodash/get';
-import { ObservableResource, useObservableState, useObservableSuspense } from 'observable-hooks';
+import {
+	ObservableResource,
+	useObservableEagerState,
+	useObservableState,
+	useObservableSuspense,
+} from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { of } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -27,12 +32,20 @@ import {
 	ModalTitle,
 } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
+import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
+import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 
 import { EmailForm } from './email';
+import { FiscalStatus } from './fiscal-status';
+import { useReceiptData } from './hooks/use-receipt-data';
+import { ReceiptModeBadge } from './mode-badge';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import { usePrintExternalURL } from '../hooks/use-print';
+
+import type { ReceiptMode } from './hooks/use-receipt-data';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
@@ -41,25 +54,94 @@ interface Props {
 const CHECKOUT_ROUTE_NAMES = ['Checkout', '(modals)/cart/[orderId]/checkout'] as const;
 
 /**
+ * Appends or updates the mode query parameter on a receipt URL.
+ */
+function appendModeParam(url: string, mode: ReceiptMode): string {
+	try {
+		const parsed = new URL(url);
+		parsed.searchParams.set('mode', mode);
+		return parsed.toString();
+	} catch {
+		// URL might be relative — safely update query while preserving hash
+		const [beforeHash, hash = ''] = url.split('#');
+		const [pathname, query = ''] = beforeHash.split('?');
+		const params = new URLSearchParams(query);
+		params.set('mode', mode);
+		const next = `${pathname}?${params.toString()}`;
+		return hash ? `${next}#${hash}` : next;
+	}
+}
+
+/**
  *
  */
 export function Receipt({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
+
+	// Get the WC order ID for the receipts API
+	const orderId = useObservableEagerState(order.id$ ?? of(undefined as number | undefined));
+
+	// Legacy receipt URL from order links
 	const links$ = order.links$ ?? of(undefined);
-	const receiptURL = useObservableState(
+	const baseReceiptURL = useObservableState(
 		links$.pipe(map((links) => get(links, ['receipt', 0, 'href']) as string | undefined)),
 		get(order, ['links', 'receipt', 0, 'href']) as string | undefined
 	);
 
-	const { print, isPrinting } = usePrintExternalURL({ externalURL: receiptURL ?? '' });
+	// Mode state — default to live
+	const [selectedMode, setSelectedMode] = React.useState<ReceiptMode>('live');
+
+	// Reset mode for each new order to avoid carrying stale mode across receipts
+	React.useEffect(() => {
+		setSelectedMode('live');
+	}, [orderId]);
+
+	// Fetch receipt metadata from the receipts REST API
+	const {
+		mode: activeMode,
+		hasSnapshot,
+		submissionStatus,
+		isLoading: isLoadingReceipt,
+		refetch,
+	} = useReceiptData({
+		orderId,
+		mode: selectedMode,
+	});
+
+	// Build the receipt URL with mode parameter
+	const receiptURL = React.useMemo(() => {
+		if (!baseReceiptURL) return '';
+		return appendModeParam(baseReceiptURL, selectedMode);
+	}, [baseReceiptURL, selectedMode]);
+
+	const { print, isPrinting } = usePrintExternalURL({
+		externalURL: receiptURL,
+	});
+
+	// Retry fiscal submission
+	const http = useRestHttpClient();
+	const [isRetrying, setIsRetrying] = React.useState(false);
+	const handleFiscalRetry = React.useCallback(async () => {
+		if (!orderId || isRetrying) return;
+		setIsRetrying(true);
+		try {
+			await http.post(`/receipts/${orderId}/fiscal/retry`, {});
+			refetch();
+		} catch {
+			// Error handled by HTTP client
+		} finally {
+			setIsRetrying(false);
+		}
+	}, [http, orderId, isRetrying, refetch]);
 
 	/**
 	 * Allow auto print for checkout
 	 */
 	const { uiSettings } = useUISettings('pos-cart');
 	const checkoutRef = React.useRef(false);
+	const hasAutoPrintedRef = React.useRef(false);
 	useNavigationState((state) => {
 		if (CHECKOUT_ROUTE_NAMES.some((routeName) => state.routeNames.includes(routeName))) {
 			checkoutRef.current = true;
@@ -67,11 +149,17 @@ export function Receipt({ resource }: Props) {
 		return state;
 	});
 
+	// Reset auto-print guard when a new receipt is loaded
+	React.useEffect(() => {
+		hasAutoPrintedRef.current = false;
+	}, [orderId]);
+
 	/**
-	 * Handle load
+	 * Handle load — single-shot auto-print guard prevents duplicate prints on mode switch
 	 */
 	const handleLoad = () => {
-		if (uiSettings.autoPrintReceipt && checkoutRef.current) {
+		if (uiSettings.autoPrintReceipt && checkoutRef.current && !hasAutoPrintedRef.current) {
+			hasAutoPrintedRef.current = true;
 			print();
 		}
 	};
@@ -103,16 +191,44 @@ export function Receipt({ resource }: Props) {
 					<ModalTitle>
 						<Text>{t('common.receipt')}</Text>
 					</ModalTitle>
+					{hasSnapshot && (
+						<ToggleGroup
+							type="single"
+							value={selectedMode}
+							onValueChange={(val) => {
+								if (val) setSelectedMode(val as ReceiptMode);
+							}}
+							size="sm"
+						>
+							<ToggleGroupItem value="fiscal">
+								<Text>{t('receipt.fiscal', 'Fiscal')}</Text>
+							</ToggleGroupItem>
+							<ToggleGroupItem value="live">
+								<Text>{t('receipt.live', 'Live')}</Text>
+							</ToggleGroupItem>
+						</ToggleGroup>
+					)}
 				</ModalHeader>
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<ErrorBoundary>
-						<WebView
-							ref={iframeRef as never}
-							src={receiptURL ?? ''}
-							onLoad={handleLoad}
-							onMessage={() => {}}
-							className="flex-1"
-						/>
+						<VStack className="h-full gap-2">
+							<ReceiptModeBadge mode={activeMode} />
+							{submissionStatus && (
+								<FiscalStatus
+									status={submissionStatus}
+									onRetry={
+										submissionStatus === 'failed' && !isRetrying ? handleFiscalRetry : undefined
+									}
+								/>
+							)}
+							<WebView
+								ref={iframeRef as never}
+								src={receiptURL}
+								onLoad={handleLoad}
+								onMessage={() => {}}
+								className="flex-1"
+							/>
+						</VStack>
 					</ErrorBoundary>
 				</ModalBody>
 				<ModalFooter>
@@ -130,7 +246,11 @@ export function Receipt({ resource }: Props) {
 							</DialogBody>
 						</DialogContent>
 					</Dialog>
-					<ModalAction testID="receipt-print-button" onPress={() => print()} loading={isPrinting}>
+					<ModalAction
+						testID="receipt-print-button"
+						onPress={() => print()}
+						loading={isPrinting || isLoadingReceipt}
+					>
 						{t('receipt.print_receipt')}
 					</ModalAction>
 				</ModalFooter>

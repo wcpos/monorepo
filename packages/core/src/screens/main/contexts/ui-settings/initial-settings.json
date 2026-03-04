@@ -117,6 +117,8 @@
     "sortDirection": "asc",
     "autoShowReceipt": true,
     "autoPrintReceipt": false,
+    "receiptOutputType": "html",
+    "openCashDrawer": false,
     "quickDiscounts": [5, 10, 15, 20],
     "columns": [
       {
