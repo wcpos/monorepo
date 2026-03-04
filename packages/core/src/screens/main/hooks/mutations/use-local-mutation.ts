@@ -5,6 +5,7 @@ import get from 'lodash/get';
 import set from 'lodash/set';
 
 import type {
+	CouponDocument,
 	CustomerDocument,
 	OrderDocument,
 	ProductDocument,
@@ -18,7 +19,12 @@ import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 
-type Document = OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument;
+type Document =
+	| OrderDocument
+	| ProductDocument
+	| CustomerDocument
+	| ProductVariationDocument
+	| CouponDocument;
 
 // Generic interface for LocalPatchProps, where T extends Document.
 interface LocalPatchProps<T extends Document> {
@@ -63,7 +69,7 @@ export const useLocalMutation = () => {
 				 * NOTE: rxdb only sets the root key
 				 */
 				const changes: Record<string, unknown> = {};
-				const doc = await latest.incrementalModify((old: Record<string, unknown>) => {
+				const doc = await latest.incrementalModify(((old: Record<string, unknown>) => {
 					patchEntries.forEach(([key, value]) => {
 						const path = key.split('.');
 						const root = path.shift()!;
@@ -89,7 +95,7 @@ export const useLocalMutation = () => {
 						}
 					});
 					return old;
-				});
+				}) as never);
 
 				return { changes, document: doc };
 			} catch (error) {

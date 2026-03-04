@@ -8,8 +8,8 @@ type CouponDocument = import('@wcpos/database').CouponDocument;
 
 export function Usage({ row }: CellContext<{ document: CouponDocument }, 'usage_count'>) {
 	const coupon = row.original.document;
-	const usageCount = useObservableEagerState(coupon.usage_count$);
-	const usageLimit = useObservableEagerState(coupon.usage_limit$);
+	const usageCount = useObservableEagerState(coupon.usage_count$!) ?? 0;
+	const usageLimit = useObservableEagerState(coupon.usage_limit$!);
 
 	const display =
 		usageLimit != null ? `${usageCount} / ${usageLimit}` : String(usageCount ?? 0);

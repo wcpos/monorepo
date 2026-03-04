@@ -30,7 +30,7 @@ const labelMap: Record<string, string> = {
 
 export function DiscountType({ row }: CellContext<{ document: CouponDocument }, 'discount_type'>) {
 	const coupon = row.original.document;
-	const discountType = useObservableEagerState(coupon.discount_type$);
+	const discountType = useObservableEagerState(coupon.discount_type$!) ?? 'percent';
 	const t = useT();
 
 	const resolvedType = discountType ?? 'percent';
