@@ -317,10 +317,26 @@ describe('coupon-helpers', () => {
 
 			it('should apply product exclusion, category inclusion, and sale exclusion', () => {
 				const items = [
-					createItem({ product_id: 1, categories: [{ id: 100 }], on_sale: false }),
-					createItem({ product_id: 2, categories: [{ id: 100 }], on_sale: true }),
-					createItem({ product_id: 3, categories: [{ id: 200 }], on_sale: false }),
-					createItem({ product_id: 4, categories: [{ id: 100 }], on_sale: false }),
+					createItem({
+						product_id: 1,
+						categories: [{ id: 100 }],
+						on_sale: false,
+					}),
+					createItem({
+						product_id: 2,
+						categories: [{ id: 100 }],
+						on_sale: true,
+					}),
+					createItem({
+						product_id: 3,
+						categories: [{ id: 200 }],
+						on_sale: false,
+					}),
+					createItem({
+						product_id: 4,
+						categories: [{ id: 100 }],
+						on_sale: false,
+					}),
 				];
 				const restrictions: CouponRestrictions = {
 					product_ids: [],
@@ -341,10 +357,26 @@ describe('coupon-helpers', () => {
 
 			it('should apply all restriction types simultaneously', () => {
 				const items = [
-					createItem({ product_id: 10, categories: [{ id: 1 }, { id: 2 }], on_sale: false }),
-					createItem({ product_id: 20, categories: [{ id: 1 }], on_sale: true }),
-					createItem({ product_id: 30, categories: [{ id: 3 }], on_sale: false }),
-					createItem({ product_id: 40, categories: [{ id: 1 }], on_sale: false }),
+					createItem({
+						product_id: 10,
+						categories: [{ id: 1 }, { id: 2 }],
+						on_sale: false,
+					}),
+					createItem({
+						product_id: 20,
+						categories: [{ id: 1 }],
+						on_sale: true,
+					}),
+					createItem({
+						product_id: 30,
+						categories: [{ id: 3 }],
+						on_sale: false,
+					}),
+					createItem({
+						product_id: 40,
+						categories: [{ id: 1 }],
+						on_sale: false,
+					}),
 				];
 				const restrictions: CouponRestrictions = {
 					product_ids: [10, 20, 40],
@@ -360,6 +392,49 @@ describe('coupon-helpers', () => {
 				// Item 40: in product_ids, but excluded by excluded_product_ids -> fail
 				const result = getEligibleItems(items, restrictions);
 				expect(result).toHaveLength(0);
+			});
+
+			it('should exclude item when it has both an included and excluded category', () => {
+				const items = [createItem({ product_id: 1, categories: [{ id: 100 }, { id: 200 }] })];
+				const restrictions: CouponRestrictions = {
+					product_ids: [],
+					excluded_product_ids: [],
+					product_categories: [100],
+					excluded_product_categories: [200],
+					exclude_sale_items: false,
+				};
+
+				// Item is in required category 100 BUT also in excluded category 200 — excluded wins
+				const result = getEligibleItems(items, restrictions);
+				expect(result).toHaveLength(0);
+			});
+
+			it('should exclude item with empty categories when category inclusion is required', () => {
+				const items = [createItem({ product_id: 1, categories: [] })];
+				const restrictions: CouponRestrictions = {
+					product_ids: [],
+					excluded_product_ids: [],
+					product_categories: [100],
+					excluded_product_categories: [],
+					exclude_sale_items: false,
+				};
+
+				const result = getEligibleItems(items, restrictions);
+				expect(result).toHaveLength(0);
+			});
+
+			it('should include all items when none are on sale and exclude_sale_items is true', () => {
+				const items = [
+					createItem({ product_id: 1, on_sale: false }),
+					createItem({ product_id: 2, on_sale: false }),
+				];
+				const restrictions: CouponRestrictions = {
+					...noRestrictions,
+					exclude_sale_items: true,
+				};
+
+				const result = getEligibleItems(items, restrictions);
+				expect(result).toHaveLength(2);
 			});
 		});
 	});

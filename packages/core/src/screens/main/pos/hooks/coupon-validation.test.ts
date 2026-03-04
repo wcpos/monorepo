@@ -389,7 +389,9 @@ describe('coupon-validation', () => {
 			});
 
 			it('should pass when customer email matches exactly', () => {
-				const coupon = createCoupon({ email_restrictions: ['test@example.com'] });
+				const coupon = createCoupon({
+					email_restrictions: ['test@example.com'],
+				});
 				const context = createContext({ customerEmail: 'test@example.com' });
 
 				const result = validateCoupon(coupon, context);
@@ -397,7 +399,9 @@ describe('coupon-validation', () => {
 			});
 
 			it('should pass with case-insensitive email match', () => {
-				const coupon = createCoupon({ email_restrictions: ['Test@Example.COM'] });
+				const coupon = createCoupon({
+					email_restrictions: ['Test@Example.COM'],
+				});
 				const context = createContext({ customerEmail: 'test@example.com' });
 
 				const result = validateCoupon(coupon, context);
@@ -501,6 +505,59 @@ describe('coupon-validation', () => {
 					],
 				});
 
+				const result = validateCoupon(coupon, context);
+				expect(result.valid).toBe(true);
+			});
+
+			it('should REJECT fixed_cart coupon when any item is on sale and exclude_sale_items is true', () => {
+				const coupon = createCoupon({
+					discount_type: 'fixed_cart',
+					exclude_sale_items: true,
+				});
+				const context = createContext({
+					lineItems: [
+						createItem({ product_id: 1, on_sale: true }),
+						createItem({ product_id: 2, on_sale: false }),
+					],
+				});
+
+				// WooCommerce: fixed_cart + exclude_sale_items rejects the ENTIRE coupon
+				// when ANY sale item is in the cart (unlike percent/fixed_product which just skip sale items)
+				const result = validateCoupon(coupon, context);
+				expect(result.valid).toBe(false);
+				expect(result.error).toBe('This coupon is not applicable to items in your cart.');
+			});
+
+			it('should ACCEPT fixed_product coupon when some items are on sale and exclude_sale_items is true', () => {
+				const coupon = createCoupon({
+					discount_type: 'fixed_product',
+					exclude_sale_items: true,
+				});
+				const context = createContext({
+					lineItems: [
+						createItem({ product_id: 1, on_sale: true }),
+						createItem({ product_id: 2, on_sale: false }),
+					],
+				});
+
+				// fixed_product just skips sale items, coupon remains valid
+				const result = validateCoupon(coupon, context);
+				expect(result.valid).toBe(true);
+			});
+
+			it('should ACCEPT percent coupon when some items are on sale and exclude_sale_items is true', () => {
+				const coupon = createCoupon({
+					discount_type: 'percent',
+					exclude_sale_items: true,
+				});
+				const context = createContext({
+					lineItems: [
+						createItem({ product_id: 1, on_sale: true }),
+						createItem({ product_id: 2, on_sale: false }),
+					],
+				});
+
+				// percent just skips sale items, coupon remains valid
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(true);
 			});

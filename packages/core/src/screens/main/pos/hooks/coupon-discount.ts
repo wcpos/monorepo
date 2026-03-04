@@ -43,6 +43,18 @@ export function calculateCouponDiscount(
 		return { totalDiscount: 0, perItem: [] };
 	}
 
+	// WooCommerce: fixed_cart + exclude_sale_items rejects the entire coupon
+	// when ANY sale item is in the cart. This must be enforced here (not only
+	// in validateCoupon) because recalculation can run without re-validation
+	// when cart items change after the coupon has been applied.
+	if (
+		config.discount_type === 'fixed_cart' &&
+		config.exclude_sale_items &&
+		items.some((item) => item.on_sale)
+	) {
+		return { totalDiscount: 0, perItem: [] };
+	}
+
 	const eligible = getEligibleItems(items, {
 		product_ids: config.product_ids,
 		excluded_product_ids: config.excluded_product_ids,
@@ -61,10 +73,45 @@ export function calculateCouponDiscount(
 		case 'fixed_cart':
 			return calculateFixedCartDiscount(amount, eligible);
 		case 'fixed_product':
-			return calculateFixedProductDiscount(amount, eligible);
+			return calculateFixedProductDiscount(amount, eligible, config.limit_usage_to_x_items);
 		default:
 			return { totalDiscount: 0, perItem: [] };
 	}
+}
+
+/**
+ * Select the top N highest-priced units from the given items.
+ * Expands each item into individual units, sorts by price descending,
+ * takes the top N, and re-aggregates by item index (not product_id,
+ * since multiple line items can share the same product_id).
+ * Returns the original items unchanged when no limit applies.
+ */
+function selectTopPricedUnits(
+	items: CouponLineItem[],
+	limitToXItems: number | null
+): CouponLineItem[] {
+	if (limitToXItems === null || limitToXItems <= 0) {
+		return items;
+	}
+
+	const expanded: { item: CouponLineItem; itemIndex: number }[] = [];
+	items.forEach((item, itemIndex) => {
+		for (let i = 0; i < item.quantity; i++) {
+			expanded.push({ item, itemIndex });
+		}
+	});
+	expanded.sort((a, b) => b.item.price - a.item.price);
+
+	const quantityMap = new Map<number, number>();
+	for (const { itemIndex } of expanded.slice(0, limitToXItems)) {
+		quantityMap.set(itemIndex, (quantityMap.get(itemIndex) || 0) + 1);
+	}
+
+	return items.reduce<CouponLineItem[]>((acc, item, itemIndex) => {
+		const qty = quantityMap.get(itemIndex);
+		if (qty) acc.push({ ...item, quantity: qty });
+		return acc;
+	}, []);
 }
 
 /**
@@ -77,32 +124,7 @@ function calculatePercentDiscount(
 	items: CouponLineItem[],
 	limitToXItems: number | null
 ): DiscountResult {
-	let targetItems = items;
-
-	if (limitToXItems !== null && limitToXItems > 0) {
-		// Expand each item into individual units, sort by price descending,
-		// then take the top N units and re-aggregate by item index (not product_id,
-		// since multiple line items can share the same product_id).
-		const expanded: { item: CouponLineItem; itemIndex: number }[] = [];
-		items.forEach((item, itemIndex) => {
-			for (let i = 0; i < item.quantity; i++) {
-				expanded.push({ item, itemIndex });
-			}
-		});
-		expanded.sort((a, b) => b.item.price - a.item.price);
-
-		const limited = expanded.slice(0, limitToXItems);
-		const quantityMap = new Map<number, number>();
-		for (const { itemIndex } of limited) {
-			quantityMap.set(itemIndex, (quantityMap.get(itemIndex) || 0) + 1);
-		}
-
-		targetItems = items.reduce<CouponLineItem[]>((acc, item, itemIndex) => {
-			const qty = quantityMap.get(itemIndex);
-			if (qty) acc.push({ ...item, quantity: qty });
-			return acc;
-		}, []);
-	}
+	const targetItems = selectTopPricedUnits(items, limitToXItems);
 
 	const perItem: PerItemDiscount[] = [];
 	let totalDiscount = 0;
@@ -157,12 +179,19 @@ function calculateFixedCartDiscount(amount: number, items: CouponLineItem[]): Di
 /**
  * Fixed product discount: apply a fixed amount per unit of each eligible item.
  * Per-unit discount is capped at the item's unit price so the total never goes negative.
+ * When limit_usage_to_x_items is set, only the N highest-priced units receive the discount.
  */
-function calculateFixedProductDiscount(amount: number, items: CouponLineItem[]): DiscountResult {
+function calculateFixedProductDiscount(
+	amount: number,
+	items: CouponLineItem[],
+	limitToXItems: number | null
+): DiscountResult {
+	const targetItems = selectTopPricedUnits(items, limitToXItems);
+
 	const perItem: PerItemDiscount[] = [];
 	let totalDiscount = 0;
 
-	for (const item of items) {
+	for (const item of targetItems) {
 		const perUnitDiscount = Math.min(amount, item.price);
 		const discount = round(perUnitDiscount * item.quantity, 6);
 		perItem.push({ product_id: item.product_id, discount });
