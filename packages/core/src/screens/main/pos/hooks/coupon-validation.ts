@@ -145,5 +145,15 @@ export function validateCoupon(coupon: any, context: CouponValidationContext): V
 		return { valid: false, error: 'This coupon is not applicable to items in your cart.' };
 	}
 
+	// 9b. WooCommerce: fixed_cart + exclude_sale_items rejects the entire coupon
+	// when ANY sale item is in the cart, even if non-sale items exist.
+	if (
+		coupon.discount_type === 'fixed_cart' &&
+		coupon.exclude_sale_items &&
+		context.lineItems.some((item) => item.on_sale)
+	) {
+		return { valid: false, error: 'This coupon is not applicable to items in your cart.' };
+	}
+
 	return { valid: true };
 }
