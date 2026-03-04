@@ -361,6 +361,53 @@ describe('coupon-helpers', () => {
 				const result = getEligibleItems(items, restrictions);
 				expect(result).toHaveLength(0);
 			});
+
+			it('should exclude item when it has both an included and excluded category', () => {
+				const items = [
+					createItem({ product_id: 1, categories: [{ id: 100 }, { id: 200 }] }),
+				];
+				const restrictions: CouponRestrictions = {
+					product_ids: [],
+					excluded_product_ids: [],
+					product_categories: [100],
+					excluded_product_categories: [200],
+					exclude_sale_items: false,
+				};
+
+				// Item is in required category 100 BUT also in excluded category 200 — excluded wins
+				const result = getEligibleItems(items, restrictions);
+				expect(result).toHaveLength(0);
+			});
+
+			it('should exclude item with empty categories when category inclusion is required', () => {
+				const items = [
+					createItem({ product_id: 1, categories: [] }),
+				];
+				const restrictions: CouponRestrictions = {
+					product_ids: [],
+					excluded_product_ids: [],
+					product_categories: [100],
+					excluded_product_categories: [],
+					exclude_sale_items: false,
+				};
+
+				const result = getEligibleItems(items, restrictions);
+				expect(result).toHaveLength(0);
+			});
+
+			it('should include all items when none are on sale and exclude_sale_items is true', () => {
+				const items = [
+					createItem({ product_id: 1, on_sale: false }),
+					createItem({ product_id: 2, on_sale: false }),
+				];
+				const restrictions: CouponRestrictions = {
+					...noRestrictions,
+					exclude_sale_items: true,
+				};
+
+				const result = getEligibleItems(items, restrictions);
+				expect(result).toHaveLength(2);
+			});
 		});
 	});
 });
