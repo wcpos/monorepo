@@ -4,6 +4,7 @@ import { useObservable, useObservableEagerState, useSubscription } from 'observa
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
 import { calculateCouponDiscount } from './coupon-discount';
+import { isProductOnSale } from './coupon-helpers';
 import { useFeeLineData } from './use-fee-line-data';
 import { useUpdateFeeLine } from './use-update-fee-line';
 import { getUuidFromLineItem } from './utils';
@@ -38,7 +39,7 @@ export const useCartLines = () => {
 			line_items: (lineItems || []).filter((item) => item.product_id !== null),
 			fee_lines: (feeLines || []).filter((item) => item.name !== null),
 			shipping_lines: (shippingLines || []).filter((item) => item.method_id !== null),
-			coupon_lines: (couponLines || []).filter((item) => item.code !== null),
+			coupon_lines: (couponLines || []).filter((item) => item.code != null),
 		};
 	}, [lineItems, feeLines, shippingLines, couponLines]);
 
@@ -84,8 +85,10 @@ export const useCartLines = () => {
 			}
 		}
 
-		// Recalculate coupon discounts when line items change
-		const activeCouponLines = (couponLines || []).filter((cl: any) => cl.code !== null);
+		// Recalculate local-only coupon discounts when line items change.
+		// Synced coupon lines (with an id) are server-authoritative and should not be recalculated.
+		const allCouponLines = couponLines || [];
+		const activeCouponLines = allCouponLines.filter((cl: any) => cl.code != null && !cl.id);
 		if (activeCouponLines.length > 0) {
 			const activeLineItems = (lineItems || []).filter((item: any) => item.product_id !== null);
 			const productIds = activeLineItems.map((item: any) => item.product_id).filter(Boolean);
@@ -107,9 +110,7 @@ export const useCartLines = () => {
 						subtotal: item.subtotal || '0',
 						total: item.total || '0',
 						categories: product?.categories || [],
-						on_sale: product
-							? parseFloat(product.price || '0') < parseFloat(product.regular_price || '0')
-							: false,
+						on_sale: isProductOnSale(product),
 					};
 				})
 				.filter(Boolean) as CouponLineItem[];
@@ -146,10 +147,16 @@ export const useCartLines = () => {
 			);
 
 			if (needsUpdate) {
+				// Merge updated local coupons back into full list to preserve synced coupons
+				const updatedByCode = new Map(updatedCouponLines.map((cl: any) => [cl.code, cl]));
+				const mergedCouponLines = allCouponLines.map((cl: any) =>
+					!cl.id && cl.code != null ? (updatedByCode.get(cl.code) ?? cl) : cl
+				);
+
 				const order = currentOrder.getLatest();
 				await localPatch({
 					document: order,
-					data: { coupon_lines: updatedCouponLines },
+					data: { coupon_lines: mergedCouponLines },
 				});
 			}
 		}

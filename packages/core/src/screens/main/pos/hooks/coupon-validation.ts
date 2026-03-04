@@ -3,6 +3,7 @@ import { type CouponLineItem, getEligibleItems } from './coupon-helpers';
 export interface CouponValidationContext {
 	lineItems: CouponLineItem[];
 	appliedCoupons: string[];
+	appliedCouponsWithIndividualUse?: string[];
 	cartSubtotal: number;
 	customerEmail: string;
 	customerId: number | null;
@@ -11,6 +12,17 @@ export interface CouponValidationContext {
 export interface ValidationResult {
 	valid: boolean;
 	error?: string;
+}
+
+/**
+ * WooCommerce sends _gmt fields as bare ISO strings without a Z suffix.
+ * JavaScript's Date constructor parses those as local time, which is wrong.
+ */
+function parseGmtDate(dateStr: string): Date {
+	if (!/Z|[+-]\d{2}:\d{2}$/.test(dateStr)) {
+		return new Date(dateStr + 'Z');
+	}
+	return new Date(dateStr);
 }
 
 /**
@@ -26,9 +38,9 @@ export function validateCoupon(coupon: any, context: CouponValidationContext): V
 		return { valid: false, error: 'This coupon has already been applied.' };
 	}
 
-	// 2. Expiry check
+	// 2. Expiry check — parse as UTC since the field is _gmt
 	if (coupon.date_expires_gmt) {
-		const expiry = new Date(coupon.date_expires_gmt);
+		const expiry = parseGmtDate(coupon.date_expires_gmt);
 		if (expiry.getTime() < Date.now()) {
 			return { valid: false, error: 'This coupon has expired.' };
 		}
@@ -75,9 +87,20 @@ export function validateCoupon(coupon: any, context: CouponValidationContext): V
 		}
 	}
 
-	// 7. Individual use
+	// 7a. Individual use — new coupon has individual_use and others already applied
 	if (coupon.individual_use && context.appliedCoupons.length > 0) {
 		return { valid: false, error: 'This coupon cannot be used with other coupons.' };
+	}
+
+	// 7b. Individual use — an already-applied coupon has individual_use
+	if (
+		context.appliedCouponsWithIndividualUse &&
+		context.appliedCouponsWithIndividualUse.length > 0
+	) {
+		return {
+			valid: false,
+			error: `Coupon "${context.appliedCouponsWithIndividualUse[0]}" cannot be used with other coupons.`,
+		};
 	}
 
 	// 8. Email restrictions

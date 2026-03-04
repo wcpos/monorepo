@@ -112,6 +112,34 @@ describe('coupon-validation', () => {
 				expect(result.valid).toBe(false);
 				expect(result.error).toBe('This coupon has expired.');
 			});
+
+			it('should parse bare ISO strings (no Z suffix) as UTC, not local time', () => {
+				// WooCommerce sends date_expires_gmt without Z suffix
+				const futureUtc = new Date(Date.now() + 86_400_000);
+				const bareIso = futureUtc.toISOString().replace('Z', '');
+				const coupon = createCoupon({ date_expires_gmt: bareIso });
+
+				const result = validateCoupon(coupon, createContext());
+				expect(result.valid).toBe(true);
+			});
+
+			it('should handle date strings with explicit Z suffix', () => {
+				const future = new Date(Date.now() + 86_400_000).toISOString();
+				expect(future.endsWith('Z')).toBe(true);
+				const coupon = createCoupon({ date_expires_gmt: future });
+
+				const result = validateCoupon(coupon, createContext());
+				expect(result.valid).toBe(true);
+			});
+
+			it('should handle date strings with timezone offset', () => {
+				const future = new Date(Date.now() + 86_400_000);
+				const withOffset = future.toISOString().replace('Z', '+00:00');
+				const coupon = createCoupon({ date_expires_gmt: withOffset });
+
+				const result = validateCoupon(coupon, createContext());
+				expect(result.valid).toBe(true);
+			});
 		});
 
 		// ---------------------------------------------------------------
@@ -314,6 +342,39 @@ describe('coupon-validation', () => {
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
 				expect(result.error).toBe('This coupon cannot be used with other coupons.');
+			});
+
+			it('should fail when an already-applied coupon has individual_use (reverse check)', () => {
+				const coupon = createCoupon({ code: 'BONUS', individual_use: false });
+				const context = createContext({
+					appliedCoupons: ['SOLO'],
+					appliedCouponsWithIndividualUse: ['SOLO'],
+				});
+
+				const result = validateCoupon(coupon, context);
+				expect(result.valid).toBe(false);
+				expect(result.error).toContain('SOLO');
+				expect(result.error).toContain('cannot be used with other coupons');
+			});
+
+			it('should pass when appliedCouponsWithIndividualUse is empty', () => {
+				const coupon = createCoupon({ code: 'BONUS', individual_use: false });
+				const context = createContext({
+					appliedCoupons: ['OTHER'],
+					appliedCouponsWithIndividualUse: [],
+				});
+
+				const result = validateCoupon(coupon, context);
+				expect(result.valid).toBe(true);
+			});
+
+			it('should pass when appliedCouponsWithIndividualUse is not provided', () => {
+				const coupon = createCoupon({ code: 'BONUS', individual_use: false });
+				const context = createContext({ appliedCoupons: ['OTHER'] });
+				// appliedCouponsWithIndividualUse defaults to undefined
+
+				const result = validateCoupon(coupon, context);
+				expect(result.valid).toBe(true);
 			});
 		});
 
