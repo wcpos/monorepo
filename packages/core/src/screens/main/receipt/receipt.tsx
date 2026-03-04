@@ -93,6 +93,11 @@ export function Receipt({ resource }: Props) {
 	// Mode state — default to live
 	const [selectedMode, setSelectedMode] = React.useState<ReceiptMode>('live');
 
+	// Reset mode for each new order to avoid carrying stale mode across receipts
+	React.useEffect(() => {
+		setSelectedMode('live');
+	}, [orderId]);
+
 	// Fetch receipt metadata from the receipts REST API
 	const {
 		mode: activeMode,

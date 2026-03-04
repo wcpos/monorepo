@@ -173,7 +173,7 @@ export function ReceiptTemplateSettings() {
 	}, [http, selectedTemplate]);
 
 	/**
-	 * Insert a field placeholder at the current cursor position.
+	 * Append a field placeholder to the current template content.
 	 */
 	const handleInsertField = React.useCallback(
 		(placeholder: string) => {
