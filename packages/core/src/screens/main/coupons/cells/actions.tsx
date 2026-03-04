@@ -48,14 +48,15 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 	const { readOnly } = useProAccess();
 
 	const handleDelete = React.useCallback(async () => {
-		try {
-			if (coupon.id) {
-				await deleteDocument(coupon.id, coupon.collection as never, { force });
+		if (coupon.id) {
+			const deletedRemotely = await deleteDocument(coupon.id, coupon.collection as never, {
+				force,
+			});
+			if (!deletedRemotely) {
+				return;
 			}
-			await coupon.getLatest().remove();
-		} catch {
-			// Errors are already logged in useDeleteDocument
 		}
+		await coupon.getLatest().remove();
 	}, [coupon, deleteDocument, force]);
 
 	if (readOnly) {
