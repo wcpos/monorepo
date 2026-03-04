@@ -389,7 +389,9 @@ describe('coupon-validation', () => {
 			});
 
 			it('should pass when customer email matches exactly', () => {
-				const coupon = createCoupon({ email_restrictions: ['test@example.com'] });
+				const coupon = createCoupon({
+					email_restrictions: ['test@example.com'],
+				});
 				const context = createContext({ customerEmail: 'test@example.com' });
 
 				const result = validateCoupon(coupon, context);
@@ -397,7 +399,9 @@ describe('coupon-validation', () => {
 			});
 
 			it('should pass with case-insensitive email match', () => {
-				const coupon = createCoupon({ email_restrictions: ['Test@Example.COM'] });
+				const coupon = createCoupon({
+					email_restrictions: ['Test@Example.COM'],
+				});
 				const context = createContext({ customerEmail: 'test@example.com' });
 
 				const result = validateCoupon(coupon, context);

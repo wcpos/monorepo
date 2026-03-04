@@ -55,8 +55,14 @@ describe('coupon stacking (non-sequential)', () => {
 			createItem({ product_id: 1, price: 50, quantity: 1 }),
 			createItem({ product_id: 2, price: 50, quantity: 1 }),
 		];
-		const percentCoupon = createConfig({ discount_type: 'percent', amount: '10' });
-		const fixedCartCoupon = createConfig({ discount_type: 'fixed_cart', amount: '5' });
+		const percentCoupon = createConfig({
+			discount_type: 'percent',
+			amount: '10',
+		});
+		const fixedCartCoupon = createConfig({
+			discount_type: 'fixed_cart',
+			amount: '5',
+		});
 
 		const result1 = calculateCouponDiscount(percentCoupon, items);
 		const result2 = calculateCouponDiscount(fixedCartCoupon, items);
@@ -69,8 +75,14 @@ describe('coupon stacking (non-sequential)', () => {
 
 	it('should apply percent + fixed_product together', () => {
 		const items = [createItem({ product_id: 1, price: 40, quantity: 2 })];
-		const percentCoupon = createConfig({ discount_type: 'percent', amount: '25' });
-		const fixedProductCoupon = createConfig({ discount_type: 'fixed_product', amount: '3' });
+		const percentCoupon = createConfig({
+			discount_type: 'percent',
+			amount: '25',
+		});
+		const fixedProductCoupon = createConfig({
+			discount_type: 'fixed_product',
+			amount: '3',
+		});
 
 		const result1 = calculateCouponDiscount(percentCoupon, items);
 		const result2 = calculateCouponDiscount(fixedProductCoupon, items);

@@ -104,7 +104,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should handle 100% off (full item price)', () => {
-				const config = createConfig({ discount_type: 'percent', amount: '100' });
+				const config = createConfig({
+					discount_type: 'percent',
+					amount: '100',
+				});
 				const items = [createItem({ product_id: 1, price: 75, quantity: 2 })];
 
 				const result = calculateCouponDiscount(config, items);
@@ -114,7 +117,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should cap discount at item total (percent > 100 does not go negative)', () => {
-				const config = createConfig({ discount_type: 'percent', amount: '150' });
+				const config = createConfig({
+					discount_type: 'percent',
+					amount: '150',
+				});
 				const items = [createItem({ product_id: 1, price: 40, quantity: 1 })];
 
 				const result = calculateCouponDiscount(config, items);
@@ -127,7 +133,10 @@ describe('coupon-discount', () => {
 
 		describe('fixed cart discount', () => {
 			it('should distribute $10 proportionally across $60 + $40 items', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '10' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '10',
+				});
 				const items = [
 					createItem({ product_id: 1, price: 60, quantity: 1 }),
 					createItem({ product_id: 2, price: 40, quantity: 1 }),
@@ -144,7 +153,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should cap at cart total when coupon exceeds cart value', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '500' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '500',
+				});
 				const items = [createItem({ product_id: 1, price: 100, quantity: 1 })];
 
 				const result = calculateCouponDiscount(config, items);
@@ -154,7 +166,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should handle rounding residuals by giving remainder to last item', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '10' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '10',
+				});
 				// Three items at $33.33 each = $99.99 total
 				const items = [
 					createItem({ product_id: 1, price: 33.33, quantity: 1 }),
@@ -174,7 +189,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should handle a single item in cart', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '15' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '15',
+				});
 				const items = [createItem({ product_id: 1, price: 80, quantity: 1 })];
 
 				const result = calculateCouponDiscount(config, items);
@@ -184,7 +202,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should handle items with quantity > 1', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '20' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '20',
+				});
 				const items = [createItem({ product_id: 1, price: 50, quantity: 2 })];
 
 				const result = calculateCouponDiscount(config, items);
@@ -195,7 +216,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should split $1 across 3 items at $1 each (Woo rounding edge case)', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '1' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '1',
+				});
 				const items = [
 					createItem({ product_id: 1, price: 1, quantity: 1 }),
 					createItem({ product_id: 2, price: 1, quantity: 1 }),
@@ -211,7 +235,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should split $10 across 11 items at $10 each', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '10' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '10',
+				});
 				const items = Array.from({ length: 11 }, (_, i) =>
 					createItem({ product_id: i + 1, price: 10, quantity: 1 })
 				);
@@ -223,7 +250,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should split $5 across items with different quantities (2+3+2)', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '5' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '5',
+				});
 				const items = [
 					createItem({ product_id: 1, price: 10, quantity: 2 }),
 					createItem({ product_id: 2, price: 10, quantity: 3 }),
@@ -237,10 +267,13 @@ describe('coupon-discount', () => {
 			});
 
 			it('should handle mixed $13.95 x3 + $1.80 x5 items', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '10' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '10',
+				});
 				const items = [
 					createItem({ product_id: 1, price: 13.95, quantity: 3 }),
-					createItem({ product_id: 2, price: 1.80, quantity: 5 }),
+					createItem({ product_id: 2, price: 1.8, quantity: 5 }),
 				];
 
 				const result = calculateCouponDiscount(config, items);
@@ -250,7 +283,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should handle zero-dollar items mixed with normal items', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '5' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '5',
+				});
 				const items = [
 					createItem({ product_id: 1, price: 0, quantity: 1 }),
 					createItem({ product_id: 2, price: 20, quantity: 1 }),
@@ -265,7 +301,10 @@ describe('coupon-discount', () => {
 
 		describe('fixed product discount', () => {
 			it('should apply $5 per unit across 3 units', () => {
-				const config = createConfig({ discount_type: 'fixed_product', amount: '5' });
+				const config = createConfig({
+					discount_type: 'fixed_product',
+					amount: '5',
+				});
 				const items = [createItem({ product_id: 1, price: 20, quantity: 3 })];
 
 				const result = calculateCouponDiscount(config, items);
@@ -275,7 +314,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should cap per-unit discount at item price', () => {
-				const config = createConfig({ discount_type: 'fixed_product', amount: '200' });
+				const config = createConfig({
+					discount_type: 'fixed_product',
+					amount: '200',
+				});
 				const items = [createItem({ product_id: 1, price: 50, quantity: 2 })];
 
 				const result = calculateCouponDiscount(config, items);
@@ -304,7 +346,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should handle multiple products with different prices', () => {
-				const config = createConfig({ discount_type: 'fixed_product', amount: '10' });
+				const config = createConfig({
+					discount_type: 'fixed_product',
+					amount: '10',
+				});
 				const items = [
 					createItem({ product_id: 1, price: 50, quantity: 2 }),
 					createItem({ product_id: 2, price: 8, quantity: 3 }),
@@ -363,7 +408,7 @@ describe('coupon-discount', () => {
 				});
 				const items = [
 					createItem({ product_id: 1, price: 13.95, quantity: 3 }),
-					createItem({ product_id: 2, price: 1.80, quantity: 5 }),
+					createItem({ product_id: 2, price: 1.8, quantity: 5 }),
 				];
 
 				const result = calculateCouponDiscount(config, items);
@@ -411,7 +456,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should handle $20 coupon on $13.95 item x3 (caps at item price)', () => {
-				const config = createConfig({ discount_type: 'fixed_product', amount: '20' });
+				const config = createConfig({
+					discount_type: 'fixed_product',
+					amount: '20',
+				});
 				const items = [createItem({ product_id: 1, price: 13.95, quantity: 3 })];
 
 				const result = calculateCouponDiscount(config, items);
@@ -422,7 +470,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should handle coupon on $8.95 items (precision edge case)', () => {
-				const config = createConfig({ discount_type: 'fixed_product', amount: '10' });
+				const config = createConfig({
+					discount_type: 'fixed_product',
+					amount: '10',
+				});
 				const items = [createItem({ product_id: 1, price: 8.95, quantity: 2 })];
 
 				const result = calculateCouponDiscount(config, items);
@@ -502,7 +553,10 @@ describe('coupon-discount', () => {
 			});
 
 			it('should handle items with zero price', () => {
-				const config = createConfig({ discount_type: 'fixed_cart', amount: '10' });
+				const config = createConfig({
+					discount_type: 'fixed_cart',
+					amount: '10',
+				});
 				const items = [createItem({ product_id: 1, price: 0, quantity: 1 })];
 
 				const result = calculateCouponDiscount(config, items);
