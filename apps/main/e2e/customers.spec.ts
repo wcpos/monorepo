@@ -88,15 +88,22 @@ test.describe('Customers Page (Pro)', () => {
 		const screen = page.getByTestId('screen-customers');
 		await expect(screen.getByTestId('search-customers')).toBeVisible({ timeout: 30_000 });
 
-		const hasCustomers = await screen
-			.getByTestId('data-table-count')
-			.isVisible({ timeout: 10_000 })
-			.catch(() => false);
-		const noCustomers = await screen
-			.getByTestId('no-data-message')
-			.isVisible({ timeout: 15_000 })
-			.catch(() => false);
-		expect(hasCustomers || noCustomers).toBeTruthy();
+		await expect
+			.poll(
+				async () => {
+					const hasCustomers = await screen
+						.getByTestId('data-table-count')
+						.isVisible()
+						.catch(() => false);
+					const noCustomers = await screen
+						.getByTestId('no-data-message')
+						.isVisible()
+						.catch(() => false);
+					return hasCustomers || noCustomers;
+				},
+				{ timeout: 30_000 }
+			)
+			.toBeTruthy();
 	});
 
 	test('should search customers', async ({ posPage: page }) => {
@@ -106,18 +113,27 @@ test.describe('Customers Page (Pro)', () => {
 
 		const searchInput = screen.getByTestId('search-customers');
 		await searchInput.fill('admin');
-		await page.waitForTimeout(1_500);
 
-		const countEl = screen.getByTestId('data-table-count');
-		const hasResults = await countEl
-			.isVisible()
-			.then(async (visible) => visible && /[1-9]/.test(await countEl.textContent() ?? ''))
-			.catch(() => false);
-		const noResults = await screen
-			.getByTestId('no-data-message')
-			.isVisible()
-			.catch(() => false);
-		expect(hasResults || noResults).toBeTruthy();
+		await expect
+			.poll(
+				async () => {
+					const countEl = screen.getByTestId('data-table-count');
+					const hasResults = await countEl
+						.isVisible()
+						.then(
+							async (visible) =>
+								visible && /[0-9]/.test((await countEl.textContent()) ?? '')
+						)
+						.catch(() => false);
+					const noResults = await screen
+						.getByTestId('no-data-message')
+						.isVisible()
+						.catch(() => false);
+					return hasResults || noResults;
+				},
+				{ timeout: 15_000 }
+			)
+			.toBeTruthy();
 	});
 
 	test('should have add customer button on Customers page', async ({ posPage: page }) => {

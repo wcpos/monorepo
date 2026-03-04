@@ -15,6 +15,7 @@ export const couponsLiteral = {
 		},
 		code: {
 			type: 'string',
+			maxLength: 255,
 		},
 		amount: {
 			type: 'string',

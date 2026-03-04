@@ -21,15 +21,22 @@ test.describe('Coupons Page (Pro)', () => {
 		const screen = page.getByTestId('screen-coupons');
 		await expect(screen.getByTestId('search-coupons')).toBeVisible({ timeout: 30_000 });
 
-		const hasCoupons = await screen
-			.getByTestId('data-table-count')
-			.isVisible({ timeout: 10_000 })
-			.catch(() => false);
-		const noCoupons = await screen
-			.getByTestId('no-data-message')
-			.isVisible({ timeout: 15_000 })
-			.catch(() => false);
-		expect(hasCoupons || noCoupons).toBeTruthy();
+		await expect
+			.poll(
+				async () => {
+					const hasCoupons = await screen
+						.getByTestId('data-table-count')
+						.isVisible()
+						.catch(() => false);
+					const noCoupons = await screen
+						.getByTestId('no-data-message')
+						.isVisible()
+						.catch(() => false);
+					return hasCoupons || noCoupons;
+				},
+				{ timeout: 30_000 }
+			)
+			.toBeTruthy();
 	});
 
 	test('should search coupons', async ({ posPage: page }) => {
