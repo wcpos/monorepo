@@ -365,3 +365,24 @@ jobs:
                 body: body
               });
             }
+
+  merge-gate:
+    name: "✅ Merge Gate"
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests]
+    if: always()
+    steps:
+      - name: Check required jobs
+        run: |
+          lint="${{ needs.lint.result }}"
+          tests="${{ needs.unit-tests.result }}"
+
+          # 'skipped' is acceptable (paths-filter found no code changes)
+          for job in "$lint" "$tests"; do
+            if [[ "$job" != "success" && "$job" != "skipped" ]]; then
+              echo "::error::Required job failed with status: $job"
+              exit 1
+            fi
+          done
+
+          echo "All required checks passed (or were skipped due to no code changes)."
