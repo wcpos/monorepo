@@ -102,6 +102,7 @@ export function ReceiptTemplateSettings() {
 	const [previewHtml, setPreviewHtml] = React.useState<string | null>(null);
 	const [isPreviewing, setIsPreviewing] = React.useState(false);
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
+	const previewSeqRef = React.useRef(0);
 
 	const selectedTemplate = templates.find((tpl) => tpl.id === selectedId) ?? null;
 	const isPersistableTemplate = typeof selectedTemplate?.id === 'number';
@@ -119,6 +120,7 @@ export function ReceiptTemplateSettings() {
 	// Clear preview when template selection changes
 	React.useEffect(() => {
 		setPreviewHtml(null);
+		setIsPreviewing(false);
 	}, [selectedId]);
 
 	const form = useForm<z.infer<typeof editorSchema>>({
@@ -158,17 +160,22 @@ export function ReceiptTemplateSettings() {
 	 */
 	const handlePreview = React.useCallback(async () => {
 		if (!selectedTemplate) return;
+		const seq = ++previewSeqRef.current;
 		setIsPreviewing(true);
 		try {
 			const response = await http.get('/receipts/preview', {
 				params: { template_id: selectedTemplate.id },
 			});
+			if (previewSeqRef.current !== seq) return;
 			const data = response?.data as { rendered_html?: string };
 			setPreviewHtml(data.rendered_html ?? null);
 		} catch {
+			if (previewSeqRef.current !== seq) return;
 			setPreviewHtml(null);
 		} finally {
-			setIsPreviewing(false);
+			if (previewSeqRef.current === seq) {
+				setIsPreviewing(false);
+			}
 		}
 	}, [http, selectedTemplate]);
 
@@ -177,12 +184,13 @@ export function ReceiptTemplateSettings() {
 	 */
 	const handleInsertField = React.useCallback(
 		(placeholder: string) => {
+			if (!isPersistableTemplate) return;
 			const current = form.getValues('content');
 			form.setValue('content', current + placeholder, {
 				shouldDirty: true,
 			});
 		},
-		[form]
+		[form, isPersistableTemplate]
 	);
 
 	if (isLoading) {
@@ -264,7 +272,7 @@ export function ReceiptTemplateSettings() {
 							</View>
 
 							{/* Field picker — only for logicless templates */}
-							{selectedTemplate.engine === 'logicless' && (
+							{selectedTemplate.engine === 'logicless' && isPersistableTemplate && (
 								<View className="w-56">
 									<Text className="text-muted-foreground mb-1 text-xs font-medium uppercase">
 										{t('receipt.available_fields', 'Fields')}
