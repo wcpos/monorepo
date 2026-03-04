@@ -53,8 +53,8 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 				await deleteDocument(coupon.id, coupon.collection as never, { force });
 			}
 			await coupon.getLatest().remove();
-		} finally {
-			// close handled by dialog
+		} catch {
+			// Errors are already logged in useDeleteDocument
 		}
 	}, [coupon, deleteDocument, force]);
 
@@ -83,7 +83,9 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 						<DropdownMenuItem
 							onPress={() => {
 								if (coupon.id) {
-									pullDocument(coupon.id, coupon.collection as never);
+									void pullDocument(coupon.id, coupon.collection as never).catch(() => {
+										// Errors are already logged in usePullDocument
+									});
 								}
 							}}
 						>

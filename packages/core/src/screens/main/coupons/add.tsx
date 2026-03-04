@@ -30,8 +30,10 @@ export function AddCouponScreen() {
 		async (data: z.infer<typeof couponFormSchema>) => {
 			setLoading(true);
 			try {
-				await create({ data });
-				router.back();
+				const created = await create({ data });
+				if (created) {
+					router.back();
+				}
 			} finally {
 				setLoading(false);
 			}

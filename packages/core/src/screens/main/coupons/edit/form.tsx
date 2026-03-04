@@ -46,19 +46,17 @@ export function EditCouponForm({ coupon }: Props) {
 					throw new Error('Local patch failed');
 				}
 				const savedDoc = await pushDocument(patched.document);
-				if (isRxDocument(savedDoc)) {
-					mutationLogger.success(
-						t('common.saved', { name: (savedDoc as { code?: string }).code }),
-						{
-							showToast: true,
-							saveToDb: true,
-							context: {
-								couponId: (savedDoc as { id?: number }).id,
-								couponCode: (savedDoc as { code?: string }).code,
-							},
-						}
-					);
+				if (!isRxDocument(savedDoc)) {
+					throw new Error('Failed to save coupon');
 				}
+				mutationLogger.success(t('common.saved', { name: (savedDoc as { code?: string }).code }), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						couponId: (savedDoc as { id?: number }).id,
+						couponCode: (savedDoc as { code?: string }).code,
+					},
+				});
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				mutationLogger.error(t('coupons.failed_to_save_coupon'), {
