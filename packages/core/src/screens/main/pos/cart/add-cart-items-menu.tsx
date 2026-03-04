@@ -118,10 +118,7 @@ export function AddCartItemsMenu() {
 			</Dialog>
 
 			{/* Fee dialog */}
-			<Dialog
-				open={openDialog === 'fee'}
-				onOpenChange={(open) => !open && setOpenDialog(null)}
-			>
+			<Dialog open={openDialog === 'fee'} onOpenChange={(open) => !open && setOpenDialog(null)}>
 				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('pos_cart.add_fee')}</DialogTitle>
@@ -152,10 +149,7 @@ export function AddCartItemsMenu() {
 			</Dialog>
 
 			{/* Coupon dialog */}
-			<Dialog
-				open={openDialog === 'coupon'}
-				onOpenChange={(open) => !open && setOpenDialog(null)}
-			>
+			<Dialog open={openDialog === 'coupon'} onOpenChange={(open) => !open && setOpenDialog(null)}>
 				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</DialogTitle>
