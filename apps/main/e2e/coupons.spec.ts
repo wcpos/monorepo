@@ -5,7 +5,7 @@ import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fi
  * Coupons page (pro-only drawer page).
  */
 test.describe('Coupons Page (Pro)', () => {
-	test.beforeEach(async (_fixtures, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Coupons page requires Pro');
 	});
@@ -80,7 +80,7 @@ test.describe('Coupons Page (Pro)', () => {
  * Free users should see the blurred preview overlay when navigating to Coupons.
  */
 test.describe('Coupons Page (Free)', () => {
-	test.beforeEach(async (_fixtures, testInfo) => {
+	test.beforeEach(async ({}, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});

@@ -33,10 +33,9 @@ export function DiscountType({ row }: CellContext<{ document: CouponDocument }, 
 	const discountType = useObservableEagerState(coupon.discount_type$!) ?? 'percent';
 	const t = useT();
 
-	const resolvedType = discountType ?? 'percent';
-	const bgStyle = styleMap[resolvedType] ?? styleMap.percent;
-	const txtStyle = textStyleMap[resolvedType] ?? textStyleMap.percent;
-	const label = t(labelMap[resolvedType] ?? labelMap.percent);
+	const bgStyle = styleMap[discountType] ?? styleMap.percent;
+	const txtStyle = textStyleMap[discountType] ?? textStyleMap.percent;
+	const label = t(labelMap[discountType] ?? labelMap.percent);
 
 	return (
 		<View className={bgStyle}>
