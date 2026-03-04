@@ -61,7 +61,7 @@ export function calculateCouponDiscount(
 		case 'fixed_cart':
 			return calculateFixedCartDiscount(amount, eligible);
 		case 'fixed_product':
-			return calculateFixedProductDiscount(amount, eligible);
+			return calculateFixedProductDiscount(amount, eligible, config.limit_usage_to_x_items);
 		default:
 			return { totalDiscount: 0, perItem: [] };
 	}
@@ -157,12 +157,41 @@ function calculateFixedCartDiscount(amount: number, items: CouponLineItem[]): Di
 /**
  * Fixed product discount: apply a fixed amount per unit of each eligible item.
  * Per-unit discount is capped at the item's unit price so the total never goes negative.
+ * When limit_usage_to_x_items is set, only the N highest-priced units receive the discount.
  */
-function calculateFixedProductDiscount(amount: number, items: CouponLineItem[]): DiscountResult {
+function calculateFixedProductDiscount(
+	amount: number,
+	items: CouponLineItem[],
+	limitToXItems: number | null
+): DiscountResult {
+	let targetItems = items;
+
+	if (limitToXItems !== null && limitToXItems > 0) {
+		const expanded: { item: CouponLineItem; itemIndex: number }[] = [];
+		items.forEach((item, itemIndex) => {
+			for (let i = 0; i < item.quantity; i++) {
+				expanded.push({ item, itemIndex });
+			}
+		});
+		expanded.sort((a, b) => b.item.price - a.item.price);
+
+		const limited = expanded.slice(0, limitToXItems);
+		const quantityMap = new Map<number, number>();
+		for (const { itemIndex } of limited) {
+			quantityMap.set(itemIndex, (quantityMap.get(itemIndex) || 0) + 1);
+		}
+
+		targetItems = items.reduce<CouponLineItem[]>((acc, item, itemIndex) => {
+			const qty = quantityMap.get(itemIndex);
+			if (qty) acc.push({ ...item, quantity: qty });
+			return acc;
+		}, []);
+	}
+
 	const perItem: PerItemDiscount[] = [];
 	let totalDiscount = 0;
 
-	for (const item of items) {
+	for (const item of targetItems) {
 		const perUnitDiscount = Math.min(amount, item.price);
 		const discount = round(perUnitDiscount * item.quantity, 6);
 		perItem.push({ product_id: item.product_id, discount });
