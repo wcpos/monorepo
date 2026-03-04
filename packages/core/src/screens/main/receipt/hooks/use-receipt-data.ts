@@ -27,6 +27,7 @@ interface UseReceiptDataResult {
 	submissionStatus: SubmissionStatus | null;
 	isLoading: boolean;
 	error: Error | null;
+	refetch: () => void;
 }
 
 interface UseReceiptDataOptions {
@@ -46,7 +47,8 @@ export function useReceiptData({
 	mode = 'live',
 }: UseReceiptDataOptions): UseReceiptDataResult {
 	const http = useRestHttpClient();
-	const [state, setState] = React.useState<UseReceiptDataResult>({
+	const [fetchKey, setFetchKey] = React.useState(0);
+	const [state, setState] = React.useState<Omit<UseReceiptDataResult, 'refetch'>>({
 		data: null,
 		mode,
 		hasSnapshot: false,
@@ -55,8 +57,22 @@ export function useReceiptData({
 		error: null,
 	});
 
+	const refetch = React.useCallback(() => {
+		setFetchKey((k) => k + 1);
+	}, []);
+
 	React.useEffect(() => {
-		if (!orderId) return;
+		if (!orderId) {
+			setState({
+				data: null,
+				mode,
+				hasSnapshot: false,
+				submissionStatus: null,
+				isLoading: false,
+				error: null,
+			});
+			return;
+		}
 
 		let cancelled = false;
 
@@ -102,7 +118,7 @@ export function useReceiptData({
 		return () => {
 			cancelled = true;
 		};
-	}, [http, orderId, mode]);
+	}, [http, orderId, mode, fetchKey]);
 
-	return state;
+	return { ...state, refetch };
 }

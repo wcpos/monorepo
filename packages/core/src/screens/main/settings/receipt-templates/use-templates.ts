@@ -39,11 +39,13 @@ interface UseTemplatesResult {
  */
 export function useTemplates(): UseTemplatesResult {
 	const http = useRestHttpClient();
+	const requestSeq = React.useRef(0);
 	const [templates, setTemplates] = React.useState<ReceiptTemplate[]>([]);
 	const [isLoading, setIsLoading] = React.useState(false);
 	const [error, setError] = React.useState<Error | null>(null);
 
 	const fetchTemplates = React.useCallback(async () => {
+		const requestId = ++requestSeq.current;
 		setIsLoading(true);
 		setError(null);
 
@@ -51,9 +53,11 @@ export function useTemplates(): UseTemplatesResult {
 			const response = await http.get('/templates', {
 				params: { type: 'receipt', context: 'edit' },
 			});
+			if (requestId !== requestSeq.current) return;
 			const data = (response?.data ?? []) as ReceiptTemplate[];
 			setTemplates(data);
 		} catch (err) {
+			if (requestId !== requestSeq.current) return;
 			const e = err instanceof Error ? err : new Error(String(err));
 			logger.error('Failed to fetch receipt templates', {
 				saveToDb: true,
@@ -61,7 +65,9 @@ export function useTemplates(): UseTemplatesResult {
 			});
 			setError(e);
 		} finally {
-			setIsLoading(false);
+			if (requestId === requestSeq.current) {
+				setIsLoading(false);
+			}
 		}
 	}, [http]);
 

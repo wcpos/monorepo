@@ -104,18 +104,31 @@ export function ReceiptTemplateSettings() {
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
 
 	const selectedTemplate = templates.find((tpl) => tpl.id === selectedId) ?? null;
+	const isPersistableTemplate = typeof selectedTemplate?.id === 'number';
 
-	// Auto-select first template when list loads
+	// Auto-select first template when list loads or selected template disappears
 	React.useEffect(() => {
-		if (templates.length > 0 && selectedId === null) {
+		if (
+			templates.length > 0 &&
+			(selectedId === null || !templates.some((tpl) => tpl.id === selectedId))
+		) {
 			setSelectedId(templates[0].id);
 		}
 	}, [templates, selectedId]);
 
+	// Clear preview when template selection changes
+	React.useEffect(() => {
+		setPreviewHtml(null);
+	}, [selectedId]);
+
 	const form = useForm<z.infer<typeof editorSchema>>({
 		resolver: zodResolver(editorSchema as never) as never,
-		values: { content: selectedTemplate?.content ?? '' },
+		defaultValues: { content: '' },
 	});
+
+	React.useEffect(() => {
+		form.reset({ content: selectedTemplate?.content ?? '' });
+	}, [form, selectedTemplate?.id, selectedTemplate?.content]);
 
 	/**
 	 * Save template content back to the API.
@@ -231,9 +244,18 @@ export function ReceiptTemplateSettings() {
 											<FormTextarea
 												label={t('receipt.template_content', 'Template')}
 												{...field}
+												editable={isPersistableTemplate}
 												numberOfLines={16}
 												className="font-mono"
 											/>
+											{!isPersistableTemplate && (
+												<Text className="text-muted-foreground mt-1 text-xs">
+													{t(
+														'receipt.template_read_only',
+														'This template is read-only and cannot be saved.'
+													)}
+												</Text>
+											)}
 										)}
 									/>
 								</Form>

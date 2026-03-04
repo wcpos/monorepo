@@ -62,9 +62,13 @@ function appendModeParam(url: string, mode: ReceiptMode): string {
 		parsed.searchParams.set('mode', mode);
 		return parsed.toString();
 	} catch {
-		// URL might be relative — fall back to simple string concat
-		const separator = url.includes('?') ? '&' : '?';
-		return `${url}${separator}mode=${mode}`;
+		// URL might be relative — safely update query while preserving hash
+		const [beforeHash, hash = ''] = url.split('#');
+		const [pathname, query = ''] = beforeHash.split('?');
+		const params = new URLSearchParams(query);
+		params.set('mode', mode);
+		const next = `${pathname}?${params.toString()}`;
+		return hash ? `${next}#${hash}` : next;
 	}
 }
 
@@ -95,6 +99,7 @@ export function Receipt({ resource }: Props) {
 		hasSnapshot,
 		submissionStatus,
 		isLoading: isLoadingReceipt,
+		refetch,
 	} = useReceiptData({
 		orderId,
 		mode: selectedMode,
@@ -112,20 +117,26 @@ export function Receipt({ resource }: Props) {
 
 	// Retry fiscal submission
 	const http = useRestHttpClient();
+	const [isRetrying, setIsRetrying] = React.useState(false);
 	const handleFiscalRetry = React.useCallback(async () => {
-		if (!orderId) return;
+		if (!orderId || isRetrying) return;
+		setIsRetrying(true);
 		try {
 			await http.post(`/receipts/${orderId}/fiscal/retry`, {});
+			refetch();
 		} catch {
 			// Error handled by HTTP client
+		} finally {
+			setIsRetrying(false);
 		}
-	}, [http, orderId]);
+	}, [http, orderId, isRetrying, refetch]);
 
 	/**
 	 * Allow auto print for checkout
 	 */
 	const { uiSettings } = useUISettings('pos-cart');
 	const checkoutRef = React.useRef(false);
+	const hasAutoPrintedRef = React.useRef(false);
 	useNavigationState((state) => {
 		if (CHECKOUT_ROUTE_NAMES.some((routeName) => state.routeNames.includes(routeName))) {
 			checkoutRef.current = true;
@@ -133,11 +144,17 @@ export function Receipt({ resource }: Props) {
 		return state;
 	});
 
+	// Reset auto-print guard when a new receipt is loaded
+	React.useEffect(() => {
+		hasAutoPrintedRef.current = false;
+	}, [orderId]);
+
 	/**
-	 * Handle load
+	 * Handle load — single-shot auto-print guard prevents duplicate prints on mode switch
 	 */
 	const handleLoad = () => {
-		if (uiSettings.autoPrintReceipt && checkoutRef.current) {
+		if (uiSettings.autoPrintReceipt && checkoutRef.current && !hasAutoPrintedRef.current) {
+			hasAutoPrintedRef.current = true;
 			print();
 		}
 	};
@@ -194,7 +211,11 @@ export function Receipt({ resource }: Props) {
 							{submissionStatus && (
 								<FiscalStatus
 									status={submissionStatus}
-									onRetry={submissionStatus === 'failed' ? handleFiscalRetry : undefined}
+									onRetry={
+										submissionStatus === 'failed' && !isRetrying
+											? handleFiscalRetry
+											: undefined
+									}
 								/>
 							)}
 							<WebView
