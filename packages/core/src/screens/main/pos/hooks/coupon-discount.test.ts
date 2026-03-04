@@ -193,6 +193,74 @@ describe('coupon-discount', () => {
 				expect(result.totalDiscount).toBe(20);
 				expect(result.perItem).toEqual([{ product_id: 1, discount: 20 }]);
 			});
+
+			it('should split $1 across 3 items at $1 each (Woo rounding edge case)', () => {
+				const config = createConfig({ discount_type: 'fixed_cart', amount: '1' });
+				const items = [
+					createItem({ product_id: 1, price: 1, quantity: 1 }),
+					createItem({ product_id: 2, price: 1, quantity: 1 }),
+					createItem({ product_id: 3, price: 1, quantity: 1 }),
+				];
+
+				const result = calculateCouponDiscount(config, items);
+
+				expect(result.totalDiscount).toBeCloseTo(1, 2);
+				expect(result.perItem).toHaveLength(3);
+				const sum = result.perItem.reduce((s, p) => s + p.discount, 0);
+				expect(sum).toBeCloseTo(1, 5);
+			});
+
+			it('should split $10 across 11 items at $10 each', () => {
+				const config = createConfig({ discount_type: 'fixed_cart', amount: '10' });
+				const items = Array.from({ length: 11 }, (_, i) =>
+					createItem({ product_id: i + 1, price: 10, quantity: 1 })
+				);
+
+				const result = calculateCouponDiscount(config, items);
+
+				expect(result.totalDiscount).toBeCloseTo(10, 2);
+				expect(result.perItem).toHaveLength(11);
+			});
+
+			it('should split $5 across items with different quantities (2+3+2)', () => {
+				const config = createConfig({ discount_type: 'fixed_cart', amount: '5' });
+				const items = [
+					createItem({ product_id: 1, price: 10, quantity: 2 }),
+					createItem({ product_id: 2, price: 10, quantity: 3 }),
+					createItem({ product_id: 3, price: 10, quantity: 2 }),
+				];
+
+				const result = calculateCouponDiscount(config, items);
+
+				expect(result.totalDiscount).toBeCloseTo(5, 2);
+				expect(result.perItem).toHaveLength(3);
+			});
+
+			it('should handle mixed $13.95 x3 + $1.80 x5 items', () => {
+				const config = createConfig({ discount_type: 'fixed_cart', amount: '10' });
+				const items = [
+					createItem({ product_id: 1, price: 13.95, quantity: 3 }),
+					createItem({ product_id: 2, price: 1.80, quantity: 5 }),
+				];
+
+				const result = calculateCouponDiscount(config, items);
+
+				expect(result.totalDiscount).toBeCloseTo(10, 2);
+				expect(result.perItem).toHaveLength(2);
+			});
+
+			it('should handle zero-dollar items mixed with normal items', () => {
+				const config = createConfig({ discount_type: 'fixed_cart', amount: '5' });
+				const items = [
+					createItem({ product_id: 1, price: 0, quantity: 1 }),
+					createItem({ product_id: 2, price: 20, quantity: 1 }),
+					createItem({ product_id: 3, price: 30, quantity: 1 }),
+				];
+
+				const result = calculateCouponDiscount(config, items);
+
+				expect(result.totalDiscount).toBeCloseTo(5, 2);
+			});
 		});
 
 		describe('fixed product discount', () => {
@@ -340,6 +408,28 @@ describe('coupon-discount', () => {
 				// All 3 units: $5 * 3 = $15
 				expect(result.totalDiscount).toBe(15);
 				expect(result.perItem).toEqual([{ product_id: 1, discount: 15 }]);
+			});
+
+			it('should handle $20 coupon on $13.95 item x3 (caps at item price)', () => {
+				const config = createConfig({ discount_type: 'fixed_product', amount: '20' });
+				const items = [createItem({ product_id: 1, price: 13.95, quantity: 3 })];
+
+				const result = calculateCouponDiscount(config, items);
+
+				// $20 per unit capped at $13.95 per unit -> $13.95 * 3 = $41.85
+				expect(result.totalDiscount).toBe(41.85);
+				expect(result.perItem).toEqual([{ product_id: 1, discount: 41.85 }]);
+			});
+
+			it('should handle coupon on $8.95 items (precision edge case)', () => {
+				const config = createConfig({ discount_type: 'fixed_product', amount: '10' });
+				const items = [createItem({ product_id: 1, price: 8.95, quantity: 2 })];
+
+				const result = calculateCouponDiscount(config, items);
+
+				// $10 per unit capped at $8.95 -> $8.95 * 2 = $17.90
+				expect(result.totalDiscount).toBe(17.9);
+				expect(result.perItem).toEqual([{ product_id: 1, discount: 17.9 }]);
 			});
 		});
 
