@@ -109,6 +109,20 @@ export default function DrawerLayout() {
 				}}
 			/>
 			<Drawer.Screen
+				name="coupons"
+				options={{
+					title: t('common.coupons'),
+					drawerLabel: t('common.coupons'),
+					drawerIcon: ({ focused }) => (
+						<Icon
+							size="xl"
+							name="badgePercent"
+							className={focused ? 'text-primary' : 'text-sidebar-foreground'}
+						/>
+					),
+				}}
+			/>
+			<Drawer.Screen
 				name="customers"
 				options={{
 					title: t('common.customers'),

@@ -12,7 +12,7 @@ import { openExternalURL } from '@wcpos/utils/open-external-url';
 
 import { useT } from '../../../contexts/translations';
 
-type ProPage = 'products' | 'orders' | 'customers' | 'reports';
+type ProPage = 'products' | 'orders' | 'coupons' | 'customers' | 'reports';
 
 interface Props {
 	page: ProPage;
@@ -35,6 +35,11 @@ function getPageConfig(page: ProPage, t: ReturnType<typeof useT>): PageConfig {
 			return {
 				description: t('upgrade.re-open_and_print_receipts_for_older'),
 				demoURL: 'https://demo.wcpos.com/pos/orders',
+			};
+		case 'coupons':
+			return {
+				description: t('upgrade.manage_and_apply_coupons_by'),
+				demoURL: 'https://demo.wcpos.com/pos/coupons',
 			};
 		case 'customers':
 			return {

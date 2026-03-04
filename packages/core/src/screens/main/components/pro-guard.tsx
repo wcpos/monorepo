@@ -8,7 +8,7 @@ import { ProAccessProvider } from '../contexts/pro-access';
 import { useLicense } from '../hooks/use-license';
 import { ProPreviewOverlay } from './pro-preview-overlay';
 
-type ProPage = 'products' | 'orders' | 'customers' | 'reports';
+type ProPage = 'products' | 'orders' | 'coupons' | 'customers' | 'reports';
 
 export const withProAccess = <P extends object>(
 	WrappedComponent: React.ComponentType<P>,

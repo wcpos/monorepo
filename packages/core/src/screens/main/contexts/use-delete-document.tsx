@@ -14,7 +14,7 @@ interface AnyRxCollection {
 }
 
 interface DeleteDocumentFunction {
-	(id: number, collection: AnyRxCollection, params?: Record<string, unknown>): Promise<void>;
+	(id: number, collection: AnyRxCollection, params?: Record<string, unknown>): Promise<boolean>;
 }
 
 export const useDeleteDocument = () => {
@@ -35,7 +35,9 @@ export const useDeleteDocument = () => {
 							collectionName: collection.name,
 						},
 					});
+					return true;
 				}
+				return false;
 			} catch (err: any) {
 				// Extract the WooCommerce/WordPress error message from the response
 				const serverMessage = extractErrorMessage(
@@ -53,6 +55,7 @@ export const useDeleteDocument = () => {
 						error: err instanceof Error ? err.message : String(err),
 					},
 				});
+				return false;
 			}
 		},
 		[http, t]

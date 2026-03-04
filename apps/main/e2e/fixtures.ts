@@ -321,16 +321,17 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
  * The drawer renders icon-only buttons in permanent mode (lg screens).
  * These have no text or aria-labels, so we identify them by position.
  * The order matches the Drawer.Screen definitions in _layout.tsx:
- *   0=POS, 1=Products, 2=Orders, 3=Customers, 4=Reports, 5=Logs, 6=Support
+ *   0=POS, 1=Products, 2=Orders, 3=Coupons, 4=Customers, 5=Reports, 6=Logs, 7=Support
  */
 const DRAWER_INDEX: Record<string, number> = {
 	pos: 0,
 	products: 1,
 	orders: 2,
-	customers: 3,
-	reports: 4,
-	logs: 5,
-	support: 6,
+	coupons: 3,
+	customers: 4,
+	reports: 5,
+	logs: 6,
+	support: 7,
 };
 
 /**
@@ -341,7 +342,7 @@ const DRAWER_INDEX: Record<string, number> = {
  */
 export async function navigateToPage(
 	page: Page,
-	route: 'pos' | 'products' | 'orders' | 'customers' | 'reports' | 'logs' | 'support'
+	route: 'pos' | 'products' | 'orders' | 'coupons' | 'customers' | 'reports' | 'logs' | 'support'
 ) {
 	const idx = DRAWER_INDEX[route];
 	const allButtons = page.locator('button');

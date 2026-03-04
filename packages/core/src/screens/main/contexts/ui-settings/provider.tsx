@@ -29,6 +29,7 @@ export interface UISettingsContextValue {
 		'pos-cart': ObservableResource<UISettingState<'pos-cart'>>;
 		products: ObservableResource<UISettingState<'products'>>;
 		orders: ObservableResource<UISettingState<'orders'>>;
+		coupons: ObservableResource<UISettingState<'coupons'>>;
 		customers: ObservableResource<UISettingState<'customers'>>;
 		logs: ObservableResource<UISettingState<'logs'>>;
 		'reports-orders': ObservableResource<UISettingState<'reports-orders'>>;
@@ -114,6 +115,7 @@ export function UISettingsProvider({ children }: UISettingsProviderProps) {
 			'pos-cart': createUIResource('pos-cart'),
 			products: createUIResource('products'),
 			orders: createUIResource('orders'),
+			coupons: createUIResource('coupons'),
 			customers: createUIResource('customers'),
 			logs: createUIResource('logs'),
 			'reports-orders': createUIResource('reports-orders'),

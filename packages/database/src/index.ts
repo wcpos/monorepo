@@ -18,6 +18,8 @@ export { isRxDocument, isRxQuery, isRxCollection, isRxDatabase } from 'rxdb';
  * Re-export types
  */
 export type {
+	CouponCollection,
+	CouponDocument,
 	CustomerCollection,
 	CustomerDocument,
 	LogCollection,
