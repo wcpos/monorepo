@@ -441,6 +441,56 @@
       }
     ]
   },
+  "coupons": {
+    "sortBy": "code",
+    "sortDirection": "asc",
+    "columns": [
+      {
+        "key": "code",
+        "show": true,
+        "flex": 2
+      },
+      {
+        "key": "amount",
+        "show": true,
+        "align": "right"
+      },
+      {
+        "key": "discount_type",
+        "show": true
+      },
+      {
+        "key": "description",
+        "show": true,
+        "flex": 2,
+        "disableSort": true
+      },
+      {
+        "key": "usage_count",
+        "show": true,
+        "align": "center"
+      },
+      {
+        "key": "date_expires_gmt",
+        "show": true
+      },
+      {
+        "key": "date_created_gmt",
+        "show": false
+      },
+      {
+        "key": "date_modified_gmt",
+        "show": false
+      },
+      {
+        "key": "actions",
+        "disableSort": true,
+        "width": 46,
+        "hideLabel": true,
+        "show": true
+      }
+    ]
+  },
   "customers": {
     "sortBy": "last_name",
     "sortDirection": "asc",
