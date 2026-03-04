@@ -212,9 +212,7 @@ export function Receipt({ resource }: Props) {
 								<FiscalStatus
 									status={submissionStatus}
 									onRetry={
-										submissionStatus === 'failed' && !isRetrying
-											? handleFiscalRetry
-											: undefined
+										submissionStatus === 'failed' && !isRetrying ? handleFiscalRetry : undefined
 									}
 								/>
 							)}

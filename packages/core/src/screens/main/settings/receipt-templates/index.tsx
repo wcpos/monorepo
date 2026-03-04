@@ -241,21 +241,23 @@ export function ReceiptTemplateSettings() {
 										control={form.control}
 										name="content"
 										render={({ field }) => (
-											<FormTextarea
-												label={t('receipt.template_content', 'Template')}
-												{...field}
-												editable={isPersistableTemplate}
-												numberOfLines={16}
-												className="font-mono"
-											/>
-											{!isPersistableTemplate && (
-												<Text className="text-muted-foreground mt-1 text-xs">
-													{t(
-														'receipt.template_read_only',
-														'This template is read-only and cannot be saved.'
-													)}
-												</Text>
-											)}
+											<>
+												<FormTextarea
+													label={t('receipt.template_content', 'Template')}
+													{...field}
+													editable={isPersistableTemplate}
+													numberOfLines={16}
+													className="font-mono"
+												/>
+												{!isPersistableTemplate && (
+													<Text className="text-muted-foreground mt-1 text-xs">
+														{t(
+															'receipt.template_read_only',
+															'This template is read-only and cannot be saved.'
+														)}
+													</Text>
+												)}
+											</>
 										)}
 									/>
 								</Form>
