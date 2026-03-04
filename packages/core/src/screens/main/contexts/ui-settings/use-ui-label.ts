@@ -96,6 +96,17 @@ export const useUILabel = () => {
 					receipt: t('common.receipt'),
 					actions: t('common.actions'),
 				},
+				coupons: {
+					code: t('common.code'),
+					amount: t('common.amount'),
+					discount_type: t('common.type'),
+					description: t('common.description'),
+					usage_count: t('common.usage'),
+					date_expires_gmt: t('common.expiry_date'),
+					date_created_gmt: t('common.date_created'),
+					date_modified_gmt: t('common.date_modified'),
+					actions: t('common.actions'),
+				},
 				customers: {
 					avatar_url: t('common.image'),
 					id: t('common.id'),

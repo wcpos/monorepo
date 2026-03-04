@@ -5,7 +5,7 @@ import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fi
  * Coupons page (pro-only drawer page).
  */
 test.describe('Coupons Page (Pro)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_fixtures, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'pro', 'Coupons page requires Pro');
 	});
@@ -39,18 +39,27 @@ test.describe('Coupons Page (Pro)', () => {
 
 		const searchInput = screen.getByTestId('search-coupons');
 		await searchInput.fill('test');
-		await page.waitForTimeout(1_500);
 
-		const countEl = screen.getByTestId('data-table-count');
-		const hasResults = await countEl
-			.isVisible()
-			.then(async (visible) => visible && /[0-9]/.test(await countEl.textContent() ?? ''))
-			.catch(() => false);
-		const noResults = await screen
-			.getByTestId('no-data-message')
-			.isVisible()
-			.catch(() => false);
-		expect(hasResults || noResults).toBeTruthy();
+		await expect
+			.poll(
+				async () => {
+					const countEl = screen.getByTestId('data-table-count');
+					const hasResults = await countEl
+						.isVisible()
+						.then(
+							async (visible) =>
+								visible && /[0-9]/.test((await countEl.textContent()) ?? '')
+						)
+						.catch(() => false);
+					const noResults = await screen
+						.getByTestId('no-data-message')
+						.isVisible()
+						.catch(() => false);
+					return hasResults || noResults;
+				},
+				{ timeout: 15_000 }
+			)
+			.toBeTruthy();
 	});
 
 	test('should have add coupon button on Coupons page', async ({ posPage: page }) => {
@@ -71,7 +80,7 @@ test.describe('Coupons Page (Pro)', () => {
  * Free users should see the blurred preview overlay when navigating to Coupons.
  */
 test.describe('Coupons Page (Free)', () => {
-	test.beforeEach(async ({}, testInfo) => {
+	test.beforeEach(async (_fixtures, testInfo) => {
 		const variant = getStoreVariant(testInfo);
 		test.skip(variant !== 'free', 'Upgrade page only shows for free stores');
 	});

@@ -38,25 +38,27 @@ export function EditCouponForm({ coupon }: Props) {
 		async (data: z.infer<typeof couponFormSchema>) => {
 			setLoading(true);
 			try {
-				await localPatch({
+				const patched = await localPatch({
 					document: coupon,
 					data: data as Partial<import('@wcpos/database').CouponDocument>,
 				});
-				await pushDocument(coupon).then((savedDoc: unknown) => {
-					if (isRxDocument(savedDoc)) {
-						mutationLogger.success(
-							t('common.saved', { name: (savedDoc as { code?: string }).code }),
-							{
-								showToast: true,
-								saveToDb: true,
-								context: {
-									couponId: (savedDoc as { id?: number }).id,
-									couponCode: (savedDoc as { code?: string }).code,
-								},
-							}
-						);
-					}
-				});
+				if (!patched?.document) {
+					throw new Error('Local patch failed');
+				}
+				const savedDoc = await pushDocument(patched.document);
+				if (isRxDocument(savedDoc)) {
+					mutationLogger.success(
+						t('common.saved', { name: (savedDoc as { code?: string }).code }),
+						{
+							showToast: true,
+							saveToDb: true,
+							context: {
+								couponId: (savedDoc as { id?: number }).id,
+								couponCode: (savedDoc as { code?: string }).code,
+							},
+						}
+					);
+				}
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				mutationLogger.error(t('coupons.failed_to_save_coupon'), {

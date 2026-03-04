@@ -11,7 +11,8 @@ export function Usage({ row }: CellContext<{ document: CouponDocument }, 'usage_
 	const usageCount = useObservableEagerState(coupon.usage_count$);
 	const usageLimit = useObservableEagerState(coupon.usage_limit$);
 
-	const display = usageLimit ? `${usageCount} / ${usageLimit}` : String(usageCount);
+	const display =
+		usageLimit != null ? `${usageCount} / ${usageLimit}` : String(usageCount ?? 0);
 
 	return <Text className="text-center">{display}</Text>;
 }

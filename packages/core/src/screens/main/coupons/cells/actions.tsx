@@ -42,7 +42,8 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 	const pullDocument = usePullDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
-	const [force, setForce] = React.useState(!coupon.id);
+	const initialForce = !coupon.id;
+	const [force, setForce] = React.useState(initialForce);
 	const deleteDocument = useDeleteDocument();
 	const { readOnly } = useProAccess();
 
@@ -100,7 +101,15 @@ export function Actions({ row }: CellContext<{ document: CouponDocument }, 'acti
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
-			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
+			<AlertDialog
+				open={deleteDialogOpened}
+				onOpenChange={(open) => {
+					setDeleteDialogOpened(open);
+					if (open) {
+						setForce(initialForce);
+					}
+				}}
+			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>{t('coupons.delete', { name: coupon.code })}</AlertDialogTitle>
