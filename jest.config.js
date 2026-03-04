@@ -1,7 +1,6 @@
 // Root Jest config for monorepo - enables Cursor's Jest extension to run tests from any package
 module.exports = {
-	// Limit workers to avoid memory exhaustion when running all projects
-	maxWorkers: '50%',
+	maxWorkers: 2,
 	projects: [
 		'<rootDir>/packages/core',
 		'<rootDir>/packages/components',
