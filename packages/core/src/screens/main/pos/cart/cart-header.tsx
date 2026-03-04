@@ -6,17 +6,14 @@ import type { Option } from '@wcpos/components/combobox/types';
 import type { CustomerDocument } from '@wcpos/database';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
-import { IconButton } from '@wcpos/components/icon-button';
 import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 
-import { AddNewCustomer } from './add-customer';
+import { AddCartItemsMenu } from './add-cart-items-menu';
 import { Customer } from './customer';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../../contexts/translations';
 import { CustomerSearch } from '../../components/customer-select';
 import { UISettingsDialog } from '../../components/ui-settings';
-import { useLicense } from '../../hooks/use-license';
 import { useAddCustomer } from '../hooks/use-add-customer';
 
 /**
@@ -27,8 +24,6 @@ export function CartHeader() {
 	const [showCustomerSelect, setShowCustomerSelect] = React.useState(false);
 	const t = useT();
 	const triggerRef = React.useRef<{ open: () => void } | null>(null);
-	const { isPro } = useLicense();
-
 	/**
 	 *
 	 */
@@ -95,18 +90,7 @@ export function CartHeader() {
 					)}
 				</ErrorBoundary>
 			</HStack>
-			{isPro ? (
-				<AddNewCustomer />
-			) : (
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<IconButton disabled name="userPlus" />
-					</TooltipTrigger>
-					<TooltipContent>
-						<Text>{t('common.upgrade_to_pro')}</Text>
-					</TooltipContent>
-				</Tooltip>
-			)}
+			<AddCartItemsMenu />
 			<UISettingsDialog title={t('pos_cart.cart_settings')}>
 				<UISettingsForm />
 			</UISettingsDialog>
