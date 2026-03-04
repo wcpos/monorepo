@@ -11,9 +11,6 @@ module.exports = {
 			'ts-jest',
 			{
 				tsconfig: 'tsconfig.json',
-				// Disable type checking - just transpile
-				// This avoids path resolution issues when running from monorepo root
-				// Type checking is handled by tsc and the IDE
 				isolatedModules: true,
 			},
 		],
