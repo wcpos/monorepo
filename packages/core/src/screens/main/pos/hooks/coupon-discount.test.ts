@@ -252,6 +252,95 @@ describe('coupon-discount', () => {
 				]);
 				expect(result.totalDiscount).toBe(44);
 			});
+
+			it('should limit to top N most expensive units with limit_usage_to_x_items', () => {
+				const config = createConfig({
+					discount_type: 'fixed_product',
+					amount: '10',
+					limit_usage_to_x_items: 1,
+				});
+				const items = [
+					createItem({ product_id: 1, price: 50, quantity: 1 }),
+					createItem({ product_id: 2, price: 30, quantity: 1 }),
+				];
+
+				const result = calculateCouponDiscount(config, items);
+
+				// Only 1 unit gets discount — the $50 one (most expensive)
+				expect(result.totalDiscount).toBe(10);
+				expect(result.perItem).toEqual([{ product_id: 1, discount: 10 }]);
+			});
+
+			it('should limit across expanded quantities', () => {
+				const config = createConfig({
+					discount_type: 'fixed_product',
+					amount: '5',
+					limit_usage_to_x_items: 1,
+				});
+				// 3 units at $20, but only 1 should get the discount
+				const items = [createItem({ product_id: 1, price: 20, quantity: 3 })];
+
+				const result = calculateCouponDiscount(config, items);
+
+				// $5 * 1 unit = $5
+				expect(result.totalDiscount).toBe(5);
+				expect(result.perItem).toEqual([{ product_id: 1, discount: 5 }]);
+			});
+
+			it('should limit of 5 across products with quantities 3+5', () => {
+				const config = createConfig({
+					discount_type: 'fixed_product',
+					amount: '10',
+					limit_usage_to_x_items: 5,
+				});
+				const items = [
+					createItem({ product_id: 1, price: 13.95, quantity: 3 }),
+					createItem({ product_id: 2, price: 1.80, quantity: 5 }),
+				];
+
+				const result = calculateCouponDiscount(config, items);
+
+				// 5 most expensive units: all 3 of product 1 ($13.95) + 2 of product 2 ($1.80)
+				// Product 1: $10 * 3 = $30
+				// Product 2: $1.80 (capped) * 2 = $3.60
+				expect(result.perItem).toEqual([
+					{ product_id: 1, discount: 30 },
+					{ product_id: 2, discount: 3.6 },
+				]);
+				expect(result.totalDiscount).toBe(33.6);
+			});
+
+			it('should apply to all units when limit >= total quantity', () => {
+				const config = createConfig({
+					discount_type: 'fixed_product',
+					amount: '5',
+					limit_usage_to_x_items: 10,
+				});
+				const items = [
+					createItem({ product_id: 1, price: 20, quantity: 2 }),
+					createItem({ product_id: 2, price: 15, quantity: 1 }),
+				];
+
+				const result = calculateCouponDiscount(config, items);
+
+				// All 3 units get the discount: $5*2 + $5*1 = $15
+				expect(result.totalDiscount).toBe(15);
+			});
+
+			it('should still work with null limit (no restriction)', () => {
+				const config = createConfig({
+					discount_type: 'fixed_product',
+					amount: '5',
+					limit_usage_to_x_items: null,
+				});
+				const items = [createItem({ product_id: 1, price: 20, quantity: 3 })];
+
+				const result = calculateCouponDiscount(config, items);
+
+				// All 3 units: $5 * 3 = $15
+				expect(result.totalDiscount).toBe(15);
+				expect(result.perItem).toEqual([{ product_id: 1, discount: 15 }]);
+			});
 		});
 
 		describe('edge cases', () => {
