@@ -6,7 +6,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { EditCartItemButton } from './edit-cart-item-button';
 import { EditShippingLine } from './edit-shipping-line';
 import { useT } from '../../../../../contexts/translations';
-import { EditableName } from '../../../components/editable-name';
+import { EditableField } from '../../../components/editable-field';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -29,7 +29,7 @@ export function ShippingTitle({ row }: CellContext<Props, 'name'>) {
 	return (
 		<HStack className="w-full gap-0">
 			<View className="flex-1">
-				<EditableName
+				<EditableField
 					value={item.method_title}
 					onChangeText={(method_title) => updateShippingLine(uuid, { method_title })}
 				/>

@@ -10,7 +10,7 @@ import { Textarea } from '@wcpos/components/textarea';
  * This component maintains internal editing state separate from the controlled value.
  * The parent's onChangeText is only called on submit (blur/enter), not on every keystroke.
  */
-export function EditableName({
+export function EditableField({
 	value: valueProp,
 	defaultValue,
 	onChangeText,

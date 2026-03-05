@@ -2,8 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Input } from '@wcpos/components/input';
-
+import { EditableField } from '../../components/editable-field';
 import { useProAccess } from '../../contexts/pro-access';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -23,10 +22,10 @@ export function EditableCode({ row, table }: CellContext<{ document: CouponDocum
 	const { readOnly } = useProAccess();
 
 	return (
-		<Input
+		<EditableField
 			value={code}
 			onChangeText={(val) => meta.onChange({ document: item, changes: { code: val } })}
-			disabled={readOnly}
+			editable={!readOnly}
 		/>
 	);
 }

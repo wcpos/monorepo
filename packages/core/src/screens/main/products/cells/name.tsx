@@ -5,7 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
-import { EditableName } from '../../components/editable-name';
+import { EditableField } from '../../components/editable-field';
 import { PlainAttributes, ProductAttributes } from '../../components/product/attributes';
 import { GroupedNames } from '../../components/product/grouped-names';
 import { useProAccess } from '../../contexts/pro-access';
@@ -31,7 +31,7 @@ export function ProductName(props: CellContext<{ document: ProductDocument }, 'n
 	 */
 	return (
 		<VStack space="xs" className="w-full">
-			<EditableName
+			<EditableField
 				value={name}
 				onChangeText={
 					readOnly ? undefined : (name) => meta.onChange({ document: product, changes: { name } })
