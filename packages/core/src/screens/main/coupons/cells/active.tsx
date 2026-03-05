@@ -17,7 +17,9 @@ export function Active({ row }: CellContext<{ document: CouponDocument }, string
 		>
 	) as string | null;
 
-	const isExpired = dateExpiresGmt ? convertUTCStringToLocalDate(dateExpiresGmt) < new Date() : false;
+	const isExpired = dateExpiresGmt
+		? convertUTCStringToLocalDate(dateExpiresGmt) < new Date()
+		: false;
 	const isActive = status === 'publish' && !isExpired;
 
 	if (!isActive) return null;

@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
 
 /**
@@ -29,21 +29,29 @@ test.describe('Add Customer from Cart (Pro)', () => {
 		test.skip(variant !== 'pro', 'Adding customers from cart requires Pro');
 	});
 
+	const openAddCustomerMenuItem = async (page: Page) => {
+		await expect(page.getByTestId('add-cart-item-menu')).toBeVisible({ timeout: 10_000 });
+		await page.getByTestId('add-cart-item-menu').click();
+		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
+		await expect(addCustomerMenuItem).toBeEnabled({ timeout: 10_000 });
+		return addCustomerMenuItem;
+	};
+
 	test('should have enabled add customer button', async ({ posPage: page }) => {
-		const addButton = page.getByTestId('add-customer-button');
-		await expect(addButton).toBeEnabled({ timeout: 10_000 });
+		const addCustomerMenuItem = await openAddCustomerMenuItem(page);
+		await expect(addCustomerMenuItem).toBeEnabled({ timeout: 10_000 });
 	});
 
 	test('should open add customer dialog from cart', async ({ posPage: page }) => {
-		const addButton = page.getByTestId('add-customer-button');
-		await expect(addButton).toBeEnabled({ timeout: 10_000 });
-		await addButton.click();
+		const addCustomerMenuItem = await openAddCustomerMenuItem(page);
+		await addCustomerMenuItem.click();
 
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should show customer form fields in dialog', async ({ posPage: page }) => {
-		await page.getByTestId('add-customer-button').click();
+		const addCustomerMenuItem = await openAddCustomerMenuItem(page);
+		await addCustomerMenuItem.click();
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 
 		// Form should contain input fields for customer details
