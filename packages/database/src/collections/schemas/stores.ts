@@ -122,6 +122,13 @@ export const storesLiteral = {
 			enum: ['yes', 'no'],
 			enumNames: ['Yes', 'No'],
 		},
+		woocommerce_calc_discounts_sequentially: {
+			description: 'Calculate coupon discounts sequentially',
+			type: 'string',
+			default: 'no',
+			enum: ['yes', 'no'],
+			enumNames: ['Yes', 'No'],
+		},
 		currency: {
 			title: 'Currency',
 			description:

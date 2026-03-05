@@ -8,6 +8,7 @@ import { isProductOnSale } from './coupon-helpers';
 import { useFeeLineData } from './use-fee-line-data';
 import { useUpdateFeeLine } from './use-update-fee-line';
 import { getUuidFromLineItem } from './utils';
+import { useAppState } from '../../../../contexts/app-state';
 import { useCollection } from '../../hooks/use-collection';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -16,10 +17,38 @@ import type { CouponLineItem } from './coupon-helpers';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 
+function applyPerItemDiscountsToLineItems(
+	items: CouponLineItem[],
+	perItem: { product_id: number; discount: number }[]
+): CouponLineItem[] {
+	const nextItems = items.map((item) => ({ ...item }));
+
+	for (const entry of perItem) {
+		let remaining = entry.discount;
+		if (remaining <= 0) continue;
+
+		for (const item of nextItems) {
+			if (item.product_id !== entry.product_id || item.quantity <= 0) continue;
+
+			const lineTotal = item.price * item.quantity;
+			if (lineTotal <= 0) continue;
+
+			const lineDiscount = Math.min(lineTotal, remaining);
+			item.price = Math.max(0, item.price - lineDiscount / item.quantity);
+			remaining -= lineDiscount;
+
+			if (remaining <= 0) break;
+		}
+	}
+
+	return nextItems;
+}
+
 /**
  * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.
  */
 export const useCartLines = () => {
+	const { store } = useAppState();
 	const { currentOrder } = useCurrentOrder();
 	const lineItems = useObservableEagerState(currentOrder.line_items$!);
 	const feeLines = useObservableEagerState(currentOrder.fee_lines$!);
@@ -30,6 +59,11 @@ export const useCartLines = () => {
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
 	const { localPatch } = useLocalMutation();
+	const woocommerceSequential = useObservableEagerState(
+		(store as any).woocommerce_calc_discounts_sequentially$
+	);
+	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
+	const calcDiscountsSequentially = (woocommerceSequential ?? legacySequential) === 'yes';
 
 	/**
 	 * We need to filter out any items that have been 'removed', eg: product_id === null.
@@ -116,35 +150,42 @@ export const useCartLines = () => {
 				.filter(Boolean) as CouponLineItem[];
 
 			let needsUpdate = false;
-			const updatedCouponLines = await Promise.all(
-				activeCouponLines.map(async (cl: any) => {
-					const coupon = await couponCollection.findOne({ selector: { code: cl.code } }).exec();
+			let discountItems = couponLineItems;
+			const updatedCouponLines: any[] = [];
 
-					if (!coupon) return cl;
+			for (const cl of activeCouponLines) {
+				const coupon = await couponCollection.findOne({ selector: { code: cl.code } }).exec();
+				if (!coupon) {
+					updatedCouponLines.push(cl);
+					continue;
+				}
 
-					const couponData = coupon.toJSON();
-					const result = calculateCouponDiscount(
-						{
-							discount_type: couponData.discount_type as any,
-							amount: couponData.amount || '0',
-							limit_usage_to_x_items: couponData.limit_usage_to_x_items ?? null,
-							product_ids: [...(couponData.product_ids || [])],
-							excluded_product_ids: [...(couponData.excluded_product_ids || [])],
-							product_categories: [...(couponData.product_categories || [])],
-							excluded_product_categories: [...(couponData.excluded_product_categories || [])],
-							exclude_sale_items: couponData.exclude_sale_items || false,
-						},
-						couponLineItems
-					);
+				const couponData = coupon.toJSON();
+				const result = calculateCouponDiscount(
+					{
+						discount_type: couponData.discount_type as any,
+						amount: couponData.amount || '0',
+						limit_usage_to_x_items: couponData.limit_usage_to_x_items ?? null,
+						product_ids: [...(couponData.product_ids || [])],
+						excluded_product_ids: [...(couponData.excluded_product_ids || [])],
+						product_categories: [...(couponData.product_categories || [])],
+						excluded_product_categories: [...(couponData.excluded_product_categories || [])],
+						exclude_sale_items: couponData.exclude_sale_items || false,
+					},
+					discountItems
+				);
 
-					const newDiscount = String(result.totalDiscount);
-					if (newDiscount !== cl.discount) {
-						needsUpdate = true;
-					}
+				const newDiscount = String(result.totalDiscount);
+				if (newDiscount !== cl.discount) {
+					needsUpdate = true;
+				}
 
-					return { ...cl, discount: newDiscount, discount_tax: '0' };
-				})
-			);
+				updatedCouponLines.push({ ...cl, discount: newDiscount, discount_tax: '0' });
+
+				if (calcDiscountsSequentially) {
+					discountItems = applyPerItemDiscountsToLineItems(discountItems, result.perItem);
+				}
+			}
 
 			if (needsUpdate) {
 				// Merge updated local coupons back into full list to preserve synced coupons

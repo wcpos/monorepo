@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -7,6 +9,7 @@ import { calculateCouponDiscount } from './coupon-discount';
 import { isProductOnSale } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
 import { useAddItemToOrder } from './use-add-item-to-order';
+import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useCollection } from '../../hooks/use-collection';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -14,6 +17,33 @@ import { useCurrentOrder } from '../contexts/current-order';
 import type { CouponLineItem } from './coupon-helpers';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
+
+function applyPerItemDiscountsToLineItems(
+	items: CouponLineItem[],
+	perItem: { product_id: number; discount: number }[]
+): CouponLineItem[] {
+	const nextItems = items.map((item) => ({ ...item }));
+
+	for (const entry of perItem) {
+		let remaining = entry.discount;
+		if (remaining <= 0) continue;
+
+		for (const item of nextItems) {
+			if (item.product_id !== entry.product_id || item.quantity <= 0) continue;
+
+			const lineTotal = item.price * item.quantity;
+			if (lineTotal <= 0) continue;
+
+			const lineDiscount = Math.min(lineTotal, remaining);
+			item.price = Math.max(0, item.price - lineDiscount / item.quantity);
+			remaining -= lineDiscount;
+
+			if (remaining <= 0) break;
+		}
+	}
+
+	return nextItems;
+}
 
 /**
  * Hook for adding a coupon to the current order.
@@ -25,9 +55,15 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 export const useAddCoupon = () => {
 	const { addItemToOrder } = useAddItemToOrder();
 	const t = useT();
+	const { store } = useAppState();
 	const { currentOrder } = useCurrentOrder();
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
+	const woocommerceSequential = useObservableEagerState(
+		(store as any).woocommerce_calc_discounts_sequentially$
+	);
+	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
+	const calcDiscountsSequentially = (woocommerceSequential ?? legacySequential) === 'yes';
 
 	const orderLogger = React.useMemo(
 		() =>
@@ -113,19 +149,47 @@ export const useAddCoupon = () => {
 
 				// 5. Calculate discount
 				const couponData = coupon.toJSON();
-				const discountResult = calculateCouponDiscount(
-					{
-						discount_type: couponData.discount_type as any,
-						amount: couponData.amount || '0',
-						limit_usage_to_x_items: couponData.limit_usage_to_x_items ?? null,
-						product_ids: [...(couponData.product_ids || [])],
-						excluded_product_ids: [...(couponData.excluded_product_ids || [])],
-						product_categories: [...(couponData.product_categories || [])],
-						excluded_product_categories: [...(couponData.excluded_product_categories || [])],
-						exclude_sale_items: couponData.exclude_sale_items || false,
-					},
-					couponLineItems
-				);
+				const couponConfig = {
+					discount_type: couponData.discount_type as any,
+					amount: couponData.amount || '0',
+					limit_usage_to_x_items: couponData.limit_usage_to_x_items ?? null,
+					product_ids: [...(couponData.product_ids || [])],
+					excluded_product_ids: [...(couponData.excluded_product_ids || [])],
+					product_categories: [...(couponData.product_categories || [])],
+					excluded_product_categories: [...(couponData.excluded_product_categories || [])],
+					exclude_sale_items: couponData.exclude_sale_items || false,
+				};
+
+				let discountItems = couponLineItems;
+				if (calcDiscountsSequentially && appliedCouponLines.length > 0) {
+					for (const appliedCouponLine of appliedCouponLines) {
+						const appliedCoupon = await couponCollection
+							.findOne({ selector: { code: appliedCouponLine.code } })
+							.exec();
+						if (!appliedCoupon) continue;
+
+						const appliedCouponData = appliedCoupon.toJSON();
+						const appliedResult = calculateCouponDiscount(
+							{
+								discount_type: appliedCouponData.discount_type as any,
+								amount: appliedCouponData.amount || '0',
+								limit_usage_to_x_items: appliedCouponData.limit_usage_to_x_items ?? null,
+								product_ids: [...(appliedCouponData.product_ids || [])],
+								excluded_product_ids: [...(appliedCouponData.excluded_product_ids || [])],
+								product_categories: [...(appliedCouponData.product_categories || [])],
+								excluded_product_categories: [
+									...(appliedCouponData.excluded_product_categories || []),
+								],
+								exclude_sale_items: appliedCouponData.exclude_sale_items || false,
+							},
+							discountItems
+						);
+
+						discountItems = applyPerItemDiscountsToLineItems(discountItems, appliedResult.perItem);
+					}
+				}
+
+				const discountResult = calculateCouponDiscount(couponConfig, discountItems);
 
 				// 6. Add to coupon_lines
 				await addItemToOrder('coupon_lines', {
@@ -164,7 +228,15 @@ export const useAddCoupon = () => {
 				};
 			}
 		},
-		[couponCollection, productCollection, currentOrder, addItemToOrder, t, orderLogger]
+		[
+			couponCollection,
+			productCollection,
+			currentOrder,
+			addItemToOrder,
+			t,
+			orderLogger,
+			calcDiscountsSequentially,
+		]
 	);
 
 	return { addCoupon };
