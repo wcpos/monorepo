@@ -94,6 +94,7 @@ function DataTable<TData>({
 		() => [{ sortBy: uiSettings.sortBy, sortDirection: uiSettings.sortDirection }],
 		[uiSettings.sortBy, uiSettings.sortDirection]
 	);
+	const currentSortDirection = uiSettings.sortDirection === 'desc' ? 'desc' : 'asc';
 
 	/**
 	 * Sorting
@@ -102,12 +103,12 @@ function DataTable<TData>({
 		(change: SortingChangeInput) => {
 			const { sortBy, sortDirection } = normalizeSortingChange(change, {
 				sortBy: uiSettings.sortBy,
-				sortDirection: uiSettings.sortDirection,
+				sortDirection: currentSortDirection,
 			});
 			patchUI({ sortBy, sortDirection });
 			query.sort([{ [sortBy]: sortDirection }]).exec();
 		},
-		[patchUI, query, uiSettings.sortBy, uiSettings.sortDirection]
+		[currentSortDirection, patchUI, query, uiSettings.sortBy]
 	);
 
 	const table = useReactTableWrapper({
