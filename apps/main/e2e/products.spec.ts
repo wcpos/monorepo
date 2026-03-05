@@ -206,9 +206,7 @@ test.describe('Products Page (Pro)', () => {
 		};
 
 		const initialNames = await getTopNameValues();
-		if (new Set(initialNames.filter(Boolean)).size < 2) {
-			test.skip(true, 'Need at least two distinct names to validate sorting');
-		}
+		expect(new Set(initialNames.filter(Boolean)).size).toBeGreaterThanOrEqual(2);
 
 		const nameHeader = screen.getByRole('columnheader', { name: /^name$/i });
 		await nameHeader.click();
