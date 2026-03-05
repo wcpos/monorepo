@@ -109,7 +109,7 @@ export function CouponsScreen() {
 							<Tooltip>
 								<TooltipTrigger asChild>
 									<IconButton
-										name="circlePlus"
+										name="plus"
 										onPress={() => router.push({ pathname: '/coupons/add' })}
 										disabled={readOnly}
 									/>
