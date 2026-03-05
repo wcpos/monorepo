@@ -13,5 +13,5 @@ export function TextCell({ row, column }: CellContext<any, string>) {
 	const item = row.original.document;
 	const value = useObservableEagerState(item[`${column.id}$`]);
 
-	return <Text>{value ? String(value) : ''}</Text>;
+	return <Text>{value == null ? '' : String(value)}</Text>;
 }

@@ -27,8 +27,8 @@ export function Status({ row, table }: CellContext<{ document: CouponDocument },
 	const t = useT();
 	const query = (table.options.meta as unknown as { query: any })?.query;
 
-	const icon = iconMap[status] ?? iconMap.publish;
-	const label = t(labelMap[status] ?? labelMap.publish);
+	const icon = iconMap[status] ?? 'circleInfo';
+	const label = labelMap[status] ? t(labelMap[status]) : status;
 
 	return (
 		<ButtonPill

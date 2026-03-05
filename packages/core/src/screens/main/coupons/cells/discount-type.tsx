@@ -23,7 +23,7 @@ export function DiscountType({
 	const t = useT();
 	const query = (table.options.meta as unknown as { query: any })?.query;
 
-	const label = t(labelMap[discountType] ?? labelMap.percent);
+	const label = labelMap[discountType] ? t(labelMap[discountType]) : discountType;
 
 	return (
 		<ButtonPill
