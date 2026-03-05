@@ -175,8 +175,20 @@ test.describe('Products Page (Pro)', () => {
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
 
-		const dataRows = screen.locator('[role="rowgroup"] [role="row"]');
+		const dataRows = screen.getByRole('row').filter({ has: screen.getByRole('cell') });
 		await expect(dataRows.first()).toBeVisible({ timeout: 30_000 });
+
+		const columnHeaders = screen.getByRole('columnheader');
+		const headerCount = await columnHeaders.count();
+		let nameColumnIndex = -1;
+		for (let i = 0; i < headerCount; i++) {
+			const headerText = ((await columnHeaders.nth(i).textContent()) || '').trim().toLowerCase();
+			if (headerText === 'name') {
+				nameColumnIndex = i;
+				break;
+			}
+		}
+		expect(nameColumnIndex).toBeGreaterThanOrEqual(0);
 
 		const getTopNameValues = async () => {
 			const rowCount = await dataRows.count();
@@ -185,7 +197,7 @@ test.describe('Products Page (Pro)', () => {
 
 			for (let index = 0; index < sampleSize; index++) {
 				const value = (
-					(await dataRows.nth(index).locator('[role="cell"]').nth(1).textContent()) || ''
+					(await dataRows.nth(index).getByRole('cell').nth(nameColumnIndex).textContent()) || ''
 				).trim();
 				values.push(value);
 			}
@@ -198,7 +210,7 @@ test.describe('Products Page (Pro)', () => {
 			test.skip(true, 'Need at least two distinct names to validate sorting');
 		}
 
-		const nameHeader = screen.getByRole('columnheader').nth(1);
+		const nameHeader = screen.getByRole('columnheader', { name: /^name$/i });
 		await nameHeader.click();
 
 		await expect

@@ -40,8 +40,13 @@ function fromTanStackSorting(
 }
 
 function isLegacySortingChange(value: unknown): value is LegacySortingChange {
+	if (typeof value !== 'object' || value === null) {
+		return false;
+	}
+	const candidate = value as { sortBy?: unknown; sortDirection?: unknown };
 	return (
-		typeof value === 'object' && value !== null && 'sortBy' in value && 'sortDirection' in value
+		typeof candidate.sortBy === 'string' &&
+		(candidate.sortDirection === 'asc' || candidate.sortDirection === 'desc')
 	);
 }
 
