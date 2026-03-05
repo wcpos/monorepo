@@ -446,6 +446,13 @@
     "sortDirection": "desc",
     "columns": [
       {
+        "key": "active",
+        "show": true,
+        "width": 46,
+        "hideLabel": true,
+        "disableSort": true
+      },
+      {
         "key": "code",
         "show": true,
         "flex": 2,
@@ -477,6 +484,11 @@
       {
         "key": "date_expires_gmt",
         "show": true,
+        "disableSort": true
+      },
+      {
+        "key": "status",
+        "show": false,
         "disableSort": true
       },
       {

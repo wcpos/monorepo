@@ -15,8 +15,9 @@ export function EditableField({
 	defaultValue,
 	onChangeText,
 	editable = true,
+	bold = true,
 	...props
-}: InputProps) {
+}: InputProps & { bold?: boolean }) {
 	const [editing, setEditing] = React.useState(false);
 	// Internal editing value - separate from controlled prop
 	const [editValue, setEditValue] = React.useState(valueProp ?? defaultValue ?? '');
@@ -67,7 +68,7 @@ export function EditableField({
 			onPress={() => setEditing(true)}
 			disabled={!editable}
 		>
-			<ButtonText className="font-bold" numberOfLines={1} decodeHtml>
+			<ButtonText className={bold ? 'font-bold' : undefined} numberOfLines={1} decodeHtml>
 				{editValue}
 			</ButtonText>
 		</Button>

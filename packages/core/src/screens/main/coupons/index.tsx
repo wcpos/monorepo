@@ -15,11 +15,13 @@ import { VStack } from '@wcpos/components/vstack';
 import { useQuery } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
+import { Active } from './cells/active';
 import { DiscountType } from './cells/discount-type';
 import { EditableAmount } from './cells/editable-amount';
 import { EditableCode } from './cells/editable-code';
 import { EditableDate } from './cells/editable-date';
 import { EditableDescription } from './cells/editable-description';
+import { Status } from './cells/status';
 import { Usage } from './cells/usage';
 import { FilterBar } from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
@@ -36,10 +38,12 @@ import { useMutation } from '../hooks/mutations/use-mutation';
 type CouponDocument = import('@wcpos/database').CouponDocument;
 
 const cells = {
+	active: Active,
 	code: EditableCode,
 	description: EditableDescription,
 	amount: EditableAmount,
 	discount_type: DiscountType,
+	status: Status,
 	usage_count: Usage,
 	actions: Actions,
 	date_expires_gmt: EditableDate,

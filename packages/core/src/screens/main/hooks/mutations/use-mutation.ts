@@ -178,11 +178,6 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 
 			const { document: doc, changes } = result;
 
-			// Strip date_modified_gmt from server payload — it's set locally for optimistic UI
-			// but the server sets its own value. Including it causes processServerResponse to
-			// skip the response (local date is newer than server date).
-			const { date_modified_gmt: _, ...serverChanges } = changes;
-
 			try {
 				const replicationState = manager.registerCollectionReplication({
 					collection,
@@ -194,7 +189,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				}
 
 				// Send to server - server response becomes source of truth
-				const updatedDoc = await replicationState.remotePatch(doc, serverChanges);
+				const updatedDoc = await replicationState.remotePatch(doc, changes);
 
 				if (updatedDoc) {
 					handleSuccess(updatedDoc as RxDocument);

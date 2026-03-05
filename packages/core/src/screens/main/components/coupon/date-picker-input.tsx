@@ -47,7 +47,7 @@ export function DatePickerInput({ value, onChange, label, disabled }: Props) {
 	]).map(String);
 
 	const displayText = React.useMemo(() => {
-		if (!value) return label || t('coupons.expiry_date');
+		if (!value) return label || '';
 		const date = convertUTCStringToLocalDate(value);
 		return formatDate(date, 'd MMM yyyy');
 	}, [value, label, t, formatDate]);

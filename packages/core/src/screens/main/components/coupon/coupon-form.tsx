@@ -11,6 +11,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { couponFormSchema } from './coupon-schema';
 import { DatePickerInput } from './date-picker-input';
 import { DiscountTypeSelect } from './discount-type-select';
+import { StatusSelect } from './status-select';
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../form-errors';
@@ -49,9 +50,11 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 						name="amount"
 						render={({ field }) => (
 							<View className="flex-1">
-								<CurrencyInput
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('common.amount')}
 									value={field.value ?? ''}
-									onChangeText={(val) => field.onChange(String(val))}
+									onChange={field.onChange}
 								/>
 							</View>
 						)}
@@ -73,6 +76,23 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 							</View>
 						)}
 					/>
+					<FormField
+						control={form.control}
+						name="status"
+						render={({ field: { value, onChange, ...rest } }) => (
+							<View className="flex-1">
+								<FormSelect
+									customComponent={StatusSelect}
+									label={t('coupons.status')}
+									value={value as string}
+									onChange={onChange}
+									{...rest}
+								/>
+							</View>
+						)}
+					/>
+				</HStack>
+				<HStack className="w-full gap-4">
 					<FormField
 						control={form.control}
 						name="date_expires_gmt"
@@ -105,9 +125,11 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 						name="minimum_amount"
 						render={({ field }) => (
 							<View className="flex-1">
-								<CurrencyInput
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('coupons.minimum_amount')}
 									value={field.value ?? ''}
-									onChangeText={(val) => field.onChange(String(val))}
+									onChange={field.onChange}
 								/>
 							</View>
 						)}
@@ -117,9 +139,11 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 						name="maximum_amount"
 						render={({ field }) => (
 							<View className="flex-1">
-								<CurrencyInput
+								<FormInput
+									customComponent={CurrencyInput}
+									label={t('coupons.maximum_amount')}
 									value={field.value ?? ''}
-									onChangeText={(val) => field.onChange(String(val))}
+									onChange={field.onChange}
 								/>
 							</View>
 						)}

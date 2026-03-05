@@ -29,6 +29,7 @@ export function EditableDescription({
 			value={description}
 			onChangeText={(val) => meta.onChange({ document: item, changes: { description: val } })}
 			editable={!readOnly}
+			bold={false}
 		/>
 	);
 }

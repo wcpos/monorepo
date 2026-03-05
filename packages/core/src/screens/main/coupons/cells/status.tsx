@@ -1,6 +1,7 @@
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { Icon, type IconName } from '@wcpos/components/icon';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -8,29 +9,34 @@ import type { CellContext } from '@tanstack/react-table';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
 
-const labelMap: Record<string, string> = {
-	percent: 'coupons.percent_short',
-	fixed_cart: 'coupons.fixed_cart_short',
-	fixed_product: 'coupons.fixed_product_short',
+const iconMap: Record<string, IconName> = {
+	publish: 'circleCheck',
+	draft: 'penToSquare',
+	pending: 'clock',
 };
 
-export function DiscountType({
-	row,
-	table,
-}: CellContext<{ document: CouponDocument }, 'discount_type'>) {
+const labelMap: Record<string, string> = {
+	publish: 'coupons.publish',
+	draft: 'coupons.draft',
+	pending: 'coupons.pending',
+};
+
+export function Status({ row, table }: CellContext<{ document: CouponDocument }, 'status'>) {
 	const coupon = row.original.document;
-	const discountType = useObservableEagerState(coupon.discount_type$!) ?? 'percent';
+	const status = useObservableEagerState(coupon.status$!) as string;
 	const t = useT();
 	const query = (table.options.meta as unknown as { query: any })?.query;
 
-	const label = t(labelMap[discountType] ?? labelMap.percent);
+	const icon = iconMap[status] ?? iconMap.publish;
+	const label = t(labelMap[status] ?? labelMap.publish);
 
 	return (
 		<ButtonPill
 			variant="ghost-primary"
 			size="xs"
-			onPress={() => query?.where('discount_type').equals(discountType).exec()}
+			onPress={() => query?.where('status').equals(status).exec()}
 		>
+			<Icon name={icon} size="xs" />
 			<ButtonText numberOfLines={1}>{label}</ButtonText>
 		</ButtonPill>
 	);
