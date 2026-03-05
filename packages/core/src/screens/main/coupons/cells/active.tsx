@@ -2,6 +2,8 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { Icon } from '@wcpos/components/icon';
 
+import { convertUTCStringToLocalDate } from '../../../../hooks/use-local-date';
+
 import type { CellContext } from '@tanstack/react-table';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
@@ -15,7 +17,7 @@ export function Active({ row }: CellContext<{ document: CouponDocument }, string
 		>
 	) as string | null;
 
-	const isExpired = dateExpiresGmt ? new Date(dateExpiresGmt) < new Date() : false;
+	const isExpired = dateExpiresGmt ? convertUTCStringToLocalDate(dateExpiresGmt) < new Date() : false;
 	const isActive = status === 'publish' && !isExpired;
 
 	if (!isActive) return null;
