@@ -8,7 +8,6 @@ import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import { VStack } from '@wcpos/components/vstack';
 
-import { AddCartItemButtons } from './add-cart-item-buttons';
 import { AddNoteButton } from './buttons/add-note';
 import { OrderMetaButton } from './buttons/order-meta';
 import { PayButton } from './buttons/pay';
@@ -44,9 +43,7 @@ export function OpenOrders({ isColumn = false }) {
 								<CartHeader />
 							</ErrorBoundary>
 						</CardHeader>
-						<CardContent className="flex-1 p-0">
-							<AddCartItemButtons />
-						</CardContent>
+						<CardContent className="flex-1 p-0" />
 					</Card>
 				) : (
 					<Card className="flex-1">
@@ -61,7 +58,6 @@ export function OpenOrders({ isColumn = false }) {
 									<CartTable />
 								</ErrorBoundary>
 							</View>
-							<AddCartItemButtons />
 							<ErrorBoundary>
 								<Totals />
 							</ErrorBoundary>

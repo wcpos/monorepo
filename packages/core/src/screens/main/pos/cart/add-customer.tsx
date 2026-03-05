@@ -133,3 +133,94 @@ export function AddNewCustomer() {
 		</ErrorBoundary>
 	);
 }
+
+/**
+ * Controlled version of the AddNewCustomer dialog, for use when an external
+ * component (e.g. a dropdown menu) needs to manage open/close state.
+ */
+interface AddCustomerDialogProps {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+}
+
+export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps) {
+	const t = useT();
+	const { create } = useMutation({ collectionName: 'customers' });
+	const [loading, setLoading] = React.useState(false);
+	const { format } = useCustomerNameFormat();
+	const { currentOrder } = useCurrentOrder();
+	const { localPatch } = useLocalMutation();
+
+	const form = useForm<z.infer<typeof customerFormSchema>>({
+		resolver: zodResolver(customerFormSchema as never) as never,
+		defaultValues: {},
+	});
+
+	React.useEffect(() => {
+		if (!open) {
+			form.reset({});
+		}
+	}, [form, open]);
+
+	const handleSave = React.useCallback(
+		async (data: z.infer<typeof customerFormSchema>) => {
+			setLoading(true);
+			try {
+				const savedDoc = await create({ data });
+				if (savedDoc) {
+					cartLogger.success(t('common.saved', { name: format(savedDoc as any) }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							customerId: (savedDoc as any).id,
+							customerName: format(savedDoc as any),
+						},
+					});
+					if (currentOrder) {
+						const json = (savedDoc as any).toJSON();
+						await localPatch({
+							document: currentOrder,
+							data: {
+								customer_id: json.id,
+								billing: json.billing,
+								shipping: json.shipping,
+							},
+						});
+						onOpenChange(false);
+					}
+				}
+			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				cartLogger.error(t('common.failed_to_save_customer'), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.TRANSACTION_FAILED,
+						error: errorMessage,
+					},
+				});
+			} finally {
+				setLoading(false);
+			}
+		},
+		[create, currentOrder, format, localPatch, onOpenChange, t]
+	);
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent size="lg" portalHost="pos">
+				<DialogHeader>
+					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
+				</DialogHeader>
+				<DialogBody>
+					<CustomerForm
+						form={form}
+						onClose={() => onOpenChange(false)}
+						onSubmit={handleSave}
+						loading={loading}
+					/>
+				</DialogBody>
+			</DialogContent>
+		</Dialog>
+	);
+}
