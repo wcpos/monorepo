@@ -39,18 +39,18 @@ export function AddCartItemsMenu() {
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<IconButton name="circlePlus" />
+					<IconButton name="circlePlus" testID="add-cart-item-menu" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end" portalHost="pos">
 					{isPro ? (
-						<DropdownMenuItem onPress={() => setOpenDialog('customer')}>
+						<DropdownMenuItem testID="menu-add-customer" onPress={() => setOpenDialog('customer')}>
 							<Icon name="userPlus" />
 							<Text>{t('common.add_new_customer')}</Text>
 						</DropdownMenuItem>
 					) : (
 						<Tooltip>
 							<TooltipTrigger asChild>
-								<DropdownMenuItem disabled>
+								<DropdownMenuItem testID="menu-add-customer" disabled>
 									<Icon name="userPlus" />
 									<Text>{t('common.add_new_customer')}</Text>
 								</DropdownMenuItem>
@@ -61,27 +61,30 @@ export function AddCartItemsMenu() {
 						</Tooltip>
 					)}
 					<DropdownMenuSeparator />
-					<DropdownMenuItem onPress={() => setOpenDialog('misc-product')}>
+					<DropdownMenuItem
+						testID="menu-add-misc-product"
+						onPress={() => setOpenDialog('misc-product')}
+					>
 						<Icon name="circlePlus" />
 						<Text>{t('pos_cart.add_miscellaneous_product')}</Text>
 					</DropdownMenuItem>
-					<DropdownMenuItem onPress={() => setOpenDialog('fee')}>
+					<DropdownMenuItem testID="menu-add-fee" onPress={() => setOpenDialog('fee')}>
 						<Icon name="circlePlus" />
 						<Text>{t('pos_cart.add_fee')}</Text>
 					</DropdownMenuItem>
-					<DropdownMenuItem onPress={() => setOpenDialog('shipping')}>
+					<DropdownMenuItem testID="menu-add-shipping" onPress={() => setOpenDialog('shipping')}>
 						<Icon name="circlePlus" />
 						<Text>{t('pos_cart.add_shipping')}</Text>
 					</DropdownMenuItem>
 					{isPro ? (
-						<DropdownMenuItem onPress={() => setOpenDialog('coupon')}>
+						<DropdownMenuItem testID="menu-add-coupon" onPress={() => setOpenDialog('coupon')}>
 							<Icon name="circlePlus" />
 							<Text>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</Text>
 						</DropdownMenuItem>
 					) : (
 						<Tooltip>
 							<TooltipTrigger asChild>
-								<DropdownMenuItem disabled>
+								<DropdownMenuItem testID="menu-add-coupon" disabled>
 									<Icon name="circlePlus" />
 									<Text>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</Text>
 								</DropdownMenuItem>

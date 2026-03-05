@@ -18,12 +18,15 @@ async function addFirstProductToCart(page: Page) {
 }
 
 /**
- * Click the icon button inside a cart action row identified by testID.
- * The cart action buttons (Add Fee, Add Shipping, etc.) each have a testID
- * on the wrapper, with the clickable button nested inside.
+ * Open the cart "+" dropdown menu and click a menu item by testID.
+ * The add-cart-item actions (Fee, Shipping, etc.) are now behind a single
+ * dropdown trigger in the cart header.
  */
-async function clickCartActionButton(page: Page, testId: string) {
-	await page.getByTestId(testId).locator('button').click();
+async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
+	await page.getByTestId('add-cart-item-menu').click();
+	const menuItem = page.getByTestId(menuItemTestId);
+	await expect(menuItem).toBeVisible({ timeout: 5_000 });
+	await menuItem.click();
 }
 
 /**
@@ -213,36 +216,66 @@ test.describe('POS Cart', () => {
 	});
 });
 
-test.describe('POS Cart - Fees', () => {
-	test('should add a fee to the cart', async ({ posPage: page }) => {
+test.describe('POS Cart - Add Items Menu', () => {
+	test('should show the add-cart-item dropdown menu', async ({ posPage: page }) => {
+		const trigger = page.getByTestId('add-cart-item-menu');
+		await expect(trigger).toBeVisible({ timeout: 15_000 });
+		await trigger.click();
+
+		// All non-pro menu items should be visible
+		await expect(page.getByTestId('menu-add-misc-product')).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByTestId('menu-add-fee')).toBeVisible();
+		await expect(page.getByTestId('menu-add-shipping')).toBeVisible();
+	});
+
+	test('should add a fee via the dropdown menu', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 
-		await clickCartActionButton(page, 'add-fee');
+		await openCartMenuAndClick(page, 'menu-add-fee');
 
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toBeVisible({ timeout: 15_000 });
 		const addToCartButton = page.getByTestId('add-to-cart-submit');
 		await expect(addToCartButton).toBeVisible({ timeout: 15_000 });
 		await addToCartButton.click();
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should add shipping to the cart', async ({ posPage: page }) => {
+	test('should add shipping via the dropdown menu', async ({ posPage: page }) => {
 		await addFirstProductToCart(page);
 
-		await clickCartActionButton(page, 'add-shipping');
+		await openCartMenuAndClick(page, 'menu-add-shipping');
 
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toBeVisible({ timeout: 15_000 });
 		const addToCartButton = page.getByTestId('add-to-cart-submit');
 		await expect(addToCartButton).toBeVisible({ timeout: 15_000 });
 		await addToCartButton.click();
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should add a miscellaneous product', async ({ posPage: page }) => {
-		await clickCartActionButton(page, 'add-misc-product');
+	test('should add a miscellaneous product via the dropdown menu', async ({ posPage: page }) => {
+		await openCartMenuAndClick(page, 'menu-add-misc-product');
 
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toBeVisible({ timeout: 15_000 });
 		const addToCartButton = page.getByTestId('add-to-cart-submit');
 		await expect(addToCartButton).toBeVisible({ timeout: 15_000 });
 		await addToCartButton.click();
 		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+	});
+
+	test('should close the dialog without adding an item', async ({ posPage: page }) => {
+		await addFirstProductToCart(page);
+
+		await openCartMenuAndClick(page, 'menu-add-fee');
+
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+		// Close via Escape key
+		await page.keyboard.press('Escape');
+		await expect(dialog).not.toBeVisible({ timeout: 5_000 });
 	});
 });
 
