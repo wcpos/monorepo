@@ -197,8 +197,9 @@ test.describe('Products Page (Pro)', () => {
 		expect(initialBeanieY).not.toBe(initialBeanieWithLogoY);
 		const initialSortDirection = Math.sign(initialBeanieY - initialBeanieWithLogoY);
 
-		// First column header corresponds to product/name and is sortable.
-		const productHeader = screen.getByRole('columnheader').nth(1);
+		// Click the actual Product header by accessible name instead of index.
+		const productHeader = screen.getByRole('columnheader', { name: /product/i }).first();
+		await expect(productHeader).toBeVisible({ timeout: 15_000 });
 		await productHeader.click();
 
 		await expect

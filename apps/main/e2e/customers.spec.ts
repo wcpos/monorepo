@@ -53,7 +53,10 @@ test.describe('Add Customer from Cart (Pro)', () => {
 
 	test('should show customer form fields in dialog', async ({ posPage: page }) => {
 		await openAddCartItemsMenu(page);
-		await page.getByTestId('menu-add-customer').click();
+		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
+		await expect(addCustomerMenuItem).toBeVisible({ timeout: 10_000 });
+		await expect(addCustomerMenuItem).toBeEnabled();
+		await addCustomerMenuItem.click();
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 
 		// Form should contain input fields for customer details
@@ -71,7 +74,7 @@ test.describe('Add Customer from Cart (Free)', () => {
 		test.skip(variant !== 'free', 'Only for free stores');
 	});
 
-	test('should not have add customer testId (pro-only)', async ({ posPage: page }) => {
+	test('should show add-customer menu item disabled for free users', async ({ posPage: page }) => {
 		await openAddCartItemsMenu(page);
 		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
 		await expect(addCustomerMenuItem).toBeVisible({ timeout: 10_000 });
