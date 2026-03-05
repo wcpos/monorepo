@@ -442,22 +442,25 @@
     ]
   },
   "coupons": {
-    "sortBy": "code",
-    "sortDirection": "asc",
+    "sortBy": "date_created_gmt",
+    "sortDirection": "desc",
     "columns": [
       {
         "key": "code",
         "show": true,
-        "flex": 2
+        "flex": 2,
+        "disableSort": true
       },
       {
         "key": "amount",
         "show": true,
-        "align": "right"
+        "align": "right",
+        "disableSort": true
       },
       {
         "key": "discount_type",
-        "show": true
+        "show": true,
+        "disableSort": true
       },
       {
         "key": "description",
@@ -468,11 +471,13 @@
       {
         "key": "usage_count",
         "show": true,
-        "align": "center"
+        "align": "center",
+        "disableSort": true
       },
       {
         "key": "date_expires_gmt",
-        "show": true
+        "show": true,
+        "disableSort": true
       },
       {
         "key": "date_created_gmt",
