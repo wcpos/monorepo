@@ -44,7 +44,7 @@ export function DataTableHeader({ column, table }: Props) {
 
 	return (
 		<Pressable
-			className="max-w-full"
+			className="h-full w-full justify-center"
 			onPress={() =>
 				(table.setSorting as unknown as (val: CustomSortingEntry) => void)({
 					sortBy:

@@ -168,6 +168,44 @@ test.describe('Products Page (Pro)', () => {
 		expect(await columnheaders.count()).toBeGreaterThanOrEqual(3);
 	});
 
+	test('should reorder rows when clicking the Name column header on Products page', async ({
+		posPage: page,
+	}) => {
+		await navigateToPage(page, 'products');
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+
+		const dataRows = screen.locator('[role="rowgroup"] [role="row"]');
+		await expect(dataRows.first()).toBeVisible({ timeout: 30_000 });
+
+		const getTopNameValues = async () => {
+			const rowCount = await dataRows.count();
+			const sampleSize = Math.min(rowCount, 5);
+			const values: string[] = [];
+
+			for (let index = 0; index < sampleSize; index++) {
+				const value = (
+					(await dataRows.nth(index).locator('[role="cell"]').nth(1).textContent()) || ''
+				).trim();
+				values.push(value);
+			}
+
+			return values;
+		};
+
+		const initialNames = await getTopNameValues();
+		if (new Set(initialNames.filter(Boolean)).size < 2) {
+			test.skip(true, 'Need at least two distinct names to validate sorting');
+		}
+
+		const nameHeader = screen.getByRole('columnheader').nth(1);
+		await nameHeader.click();
+
+		await expect
+			.poll(async () => JSON.stringify(await getTopNameValues()), { timeout: 15_000 })
+			.not.toBe(JSON.stringify(initialNames));
+	});
+
 	test('should search products on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
