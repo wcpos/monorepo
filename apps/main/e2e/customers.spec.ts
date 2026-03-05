@@ -1,5 +1,11 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
+
+async function openAddCartItemsMenu(page: Page) {
+	const menuButton = page.getByTestId('add-cart-item-menu');
+	await expect(menuButton).toBeVisible({ timeout: 15_000 });
+	await menuButton.click();
+}
 
 /**
  * Customer-related tests in the POS context (both free and pro).
@@ -30,20 +36,24 @@ test.describe('Add Customer from Cart (Pro)', () => {
 	});
 
 	test('should have enabled add customer button', async ({ posPage: page }) => {
-		const addButton = page.getByTestId('add-customer-button');
-		await expect(addButton).toBeEnabled({ timeout: 10_000 });
+		await openAddCartItemsMenu(page);
+		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
+		await expect(addCustomerMenuItem).toBeVisible({ timeout: 10_000 });
+		await expect(addCustomerMenuItem).toBeEnabled();
 	});
 
 	test('should open add customer dialog from cart', async ({ posPage: page }) => {
-		const addButton = page.getByTestId('add-customer-button');
-		await expect(addButton).toBeEnabled({ timeout: 10_000 });
-		await addButton.click();
+		await openAddCartItemsMenu(page);
+		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
+		await expect(addCustomerMenuItem).toBeEnabled({ timeout: 10_000 });
+		await addCustomerMenuItem.click();
 
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('should show customer form fields in dialog', async ({ posPage: page }) => {
-		await page.getByTestId('add-customer-button').click();
+		await openAddCartItemsMenu(page);
+		await page.getByTestId('menu-add-customer').click();
 		await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 });
 
 		// Form should contain input fields for customer details
@@ -62,9 +72,10 @@ test.describe('Add Customer from Cart (Free)', () => {
 	});
 
 	test('should not have add customer testId (pro-only)', async ({ posPage: page }) => {
-		// Free users get a disabled icon button without the testId
-		const addButton = page.getByTestId('add-customer-button');
-		await expect(addButton).toHaveCount(0);
+		await openAddCartItemsMenu(page);
+		const addCustomerMenuItem = page.getByTestId('menu-add-customer');
+		await expect(addCustomerMenuItem).toBeVisible({ timeout: 10_000 });
+		await expect(addCustomerMenuItem).toBeDisabled();
 	});
 });
 

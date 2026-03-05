@@ -175,45 +175,41 @@ test.describe('Products Page (Pro)', () => {
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
 
-		const dataRows = screen.getByRole('row').filter({ has: screen.getByRole('cell') });
-		await expect(dataRows.first()).toBeVisible({ timeout: 30_000 });
+		// Use deterministic fixture data known to contain two distinct product names.
+		const searchInput = screen.getByTestId('search-products');
+		await searchInput.fill('beanie');
+		await page.waitForTimeout(1_500);
 
-		const columnHeaders = screen.getByRole('columnheader');
-		const headerCount = await columnHeaders.count();
-		let nameColumnIndex = -1;
-		for (let i = 0; i < headerCount; i++) {
-			const headerText = ((await columnHeaders.nth(i).textContent()) || '').trim().toLowerCase();
-			if (headerText === 'name') {
-				nameColumnIndex = i;
-				break;
-			}
-		}
-		expect(nameColumnIndex).toBeGreaterThanOrEqual(0);
+		const beanieRow = screen.getByRole('button', { name: /^Beanie$/ }).first();
+		const beanieWithLogoRow = screen.getByRole('button', { name: /Beanie with Logo/i }).first();
+		await expect(beanieRow).toBeVisible({ timeout: 30_000 });
+		await expect(beanieWithLogoRow).toBeVisible({ timeout: 30_000 });
 
-		const getTopNameValues = async () => {
-			const rowCount = await dataRows.count();
-			const sampleSize = Math.min(rowCount, 5);
-			const values: string[] = [];
-
-			for (let index = 0; index < sampleSize; index++) {
-				const value = (
-					(await dataRows.nth(index).getByRole('cell').nth(nameColumnIndex).textContent()) || ''
-				).trim();
-				values.push(value);
-			}
-
-			return values;
+		const getRowOrder = async () => {
+			return Promise.all(
+				[beanieRow, beanieWithLogoRow].map(async (row) => (await row.boundingBox())?.y ?? -1)
+			);
 		};
 
-		const initialNames = await getTopNameValues();
-		expect(new Set(initialNames.filter(Boolean)).size).toBeGreaterThanOrEqual(2);
+		const [initialBeanieY, initialBeanieWithLogoY] = await getRowOrder();
+		expect(initialBeanieY).toBeGreaterThan(0);
+		expect(initialBeanieWithLogoY).toBeGreaterThan(0);
+		expect(initialBeanieY).not.toBe(initialBeanieWithLogoY);
+		const initialSortDirection = Math.sign(initialBeanieY - initialBeanieWithLogoY);
 
-		const nameHeader = screen.getByRole('columnheader', { name: /^name$/i });
-		await nameHeader.click();
+		// First column header corresponds to product/name and is sortable.
+		const productHeader = screen.getByRole('columnheader').nth(1);
+		await productHeader.click();
 
 		await expect
-			.poll(async () => JSON.stringify(await getTopNameValues()), { timeout: 15_000 })
-			.not.toBe(JSON.stringify(initialNames));
+			.poll(
+				async () => {
+					const [beanieY, beanieWithLogoY] = await getRowOrder();
+					return Math.sign(beanieY - beanieWithLogoY);
+				},
+				{ timeout: 15_000 }
+			)
+			.toBe(initialSortDirection * -1);
 	});
 
 	test('should search products on Products page', async ({ posPage: page }) => {
