@@ -4,6 +4,7 @@ import get from 'lodash/get';
 import { RxDocument } from 'rxdb';
 
 import type {
+	CouponDocument,
 	CustomerDocument,
 	OrderDocument,
 	ProductDocument,
@@ -20,7 +21,12 @@ import { CollectionKey, useCollection } from '../use-collection';
 
 const mutationLogger = getLogger(['wcpos', 'mutations', 'document']);
 
-type Document = OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument;
+type Document =
+	| OrderDocument
+	| ProductDocument
+	| CustomerDocument
+	| ProductVariationDocument
+	| CouponDocument;
 
 interface Props {
 	collectionName: CollectionKey;

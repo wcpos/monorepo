@@ -364,6 +364,16 @@ const coupons: RxCollectionCreator<CouponDocumentType> = {
 	options: {
 		searchFields: ['code', 'description'],
 	},
+	migrationStrategies: {
+		1(oldDoc) {
+			oldDoc.status = oldDoc.status || '';
+			oldDoc.date_created = oldDoc.date_created || '';
+			oldDoc.date_modified = oldDoc.date_modified || '';
+			oldDoc.date_expires = oldDoc.date_expires || null;
+			oldDoc.links = oldDoc.links || {};
+			return oldDoc;
+		},
+	},
 };
 
 /**

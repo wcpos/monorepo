@@ -11,7 +11,8 @@ import type { CellContext } from '@tanstack/react-table';
 type Document =
 	| import('@wcpos/database').ProductDocument
 	| import('@wcpos/database').CustomerDocument
-	| import('@wcpos/database').OrderDocument;
+	| import('@wcpos/database').OrderDocument
+	| import('@wcpos/database').CouponDocument;
 
 /**
  * We should always use the GMT date, and then format it based on the user's timezone.

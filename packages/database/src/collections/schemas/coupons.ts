@@ -1,6 +1,6 @@
 export const couponsLiteral = {
 	title: 'WooCommerce Coupon schema',
-	version: 0,
+	version: 1,
 	description: 'WooCommerce Coupon schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -12,6 +12,9 @@ export const couponsLiteral = {
 		},
 		id: {
 			type: 'integer',
+		},
+		status: {
+			type: 'string',
 		},
 		code: {
 			type: 'string',
@@ -27,11 +30,20 @@ export const couponsLiteral = {
 		description: {
 			type: 'string',
 		},
+		date_created: {
+			type: 'string',
+		},
 		date_created_gmt: {
+			type: 'string',
+		},
+		date_modified: {
 			type: 'string',
 		},
 		date_modified_gmt: {
 			type: 'string',
+		},
+		date_expires: {
+			type: ['string', 'null'],
 		},
 		date_expires_gmt: {
 			type: ['string', 'null'],
@@ -113,6 +125,9 @@ export const couponsLiteral = {
 					value: {},
 				},
 			},
+		},
+		links: {
+			type: 'object',
 		},
 	},
 	required: ['uuid'],

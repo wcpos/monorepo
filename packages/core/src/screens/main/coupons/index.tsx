@@ -11,11 +11,17 @@ import { IconButton } from '@wcpos/components/icon-button';
 import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
+import { VStack } from '@wcpos/components/vstack';
 import { useQuery } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { DiscountType } from './cells/discount-type';
+import { EditableAmount } from './cells/editable-amount';
+import { EditableCode } from './cells/editable-code';
+import { EditableDate } from './cells/editable-date';
+import { EditableDescription } from './cells/editable-description';
 import { Usage } from './cells/usage';
+import { FilterBar } from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { useProAccess } from '../contexts/pro-access';
@@ -25,12 +31,18 @@ import { DateCell } from '../components/date';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
+import { useMutation } from '../hooks/mutations/use-mutation';
+
+type CouponDocument = import('@wcpos/database').CouponDocument;
 
 const cells = {
+	code: EditableCode,
+	description: EditableDescription,
+	amount: EditableAmount,
 	discount_type: DiscountType,
 	usage_count: Usage,
 	actions: Actions,
-	date_expires_gmt: DateCell,
+	date_expires_gmt: EditableDate,
 	date_created_gmt: DateCell,
 	date_modified_gmt: DateCell,
 };
@@ -50,6 +62,7 @@ export function CouponsScreen() {
 	const router = useRouter();
 	const { bottom } = useSafeAreaInsets();
 	const { readOnly } = useProAccess();
+	const { patch } = useMutation({ collectionName: 'coupons' });
 
 	const query = useQuery({
 		queryKeys: ['coupons'],
@@ -60,6 +73,23 @@ export function CouponsScreen() {
 		infiniteScroll: true,
 	});
 
+	const tableConfig = React.useMemo(
+		() => ({
+			meta: {
+				onChange: ({
+					document,
+					changes,
+				}: {
+					document: CouponDocument;
+					changes: Record<string, unknown>;
+				}) => {
+					patch({ document, data: changes });
+				},
+			},
+		}),
+		[patch]
+	);
+
 	return (
 		<View
 			testID="screen-coupons"
@@ -67,30 +97,35 @@ export function CouponsScreen() {
 			style={{ paddingBottom: bottom !== 0 ? bottom : undefined }}
 		>
 			<Card className="flex-1">
-				<CardHeader className="bg-card-header p-0">
-					<HStack className="p-2">
-						<QuerySearchInput
-							query={query!}
-							placeholder={t('common.search_coupons')}
-							className="flex-1"
-							testID="search-coupons"
-						/>
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<IconButton
-									name="circlePlus"
-									onPress={() => router.push({ pathname: '/coupons/add' })}
-									disabled={readOnly}
-								/>
-							</TooltipTrigger>
-							<TooltipContent>
-								<Text>{readOnly ? t('common.upgrade_to_pro') : t('coupons.add_coupon')}</Text>
-							</TooltipContent>
-						</Tooltip>
-						<UISettingsDialog title={t('coupons.coupon_settings')}>
-							<UISettingsForm />
-						</UISettingsDialog>
-					</HStack>
+				<CardHeader className="bg-card-header p-2">
+					<VStack>
+						<HStack>
+							<QuerySearchInput
+								query={query!}
+								placeholder={t('common.search_coupons')}
+								className="flex-1"
+								testID="search-coupons"
+							/>
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<IconButton
+										name="circlePlus"
+										onPress={() => router.push({ pathname: '/coupons/add' })}
+										disabled={readOnly}
+									/>
+								</TooltipTrigger>
+								<TooltipContent>
+									<Text>{readOnly ? t('common.upgrade_to_pro') : t('coupons.add_coupon')}</Text>
+								</TooltipContent>
+							</Tooltip>
+							<UISettingsDialog title={t('coupons.coupon_settings')}>
+								<UISettingsForm />
+							</UISettingsDialog>
+						</HStack>
+						<ErrorBoundary>
+							<FilterBar query={query!} />
+						</ErrorBoundary>
+					</VStack>
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
@@ -101,6 +136,7 @@ export function CouponsScreen() {
 								renderCell={renderCell}
 								noDataMessage={t('common.no_coupons_found')}
 								estimatedItemSize={100}
+								tableConfig={tableConfig}
 							/>
 						</Suspense>
 					</ErrorBoundary>
