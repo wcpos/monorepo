@@ -161,19 +161,28 @@ export class EpsonEposAdapter implements PrinterTransport {
     });
 
     // Step 2: create a printer device handle
-    this.printer = await new Promise<EpsonPrinter>((resolve, reject) => {
-      this.device!.createDevice(
-        "local_printer",
-        this.device!.DEVICE_TYPE_PRINTER,
-        { crypto: this.port === 8043, buffer: false },
-        (printer, retcode) => {
-          if (retcode === "OK" && printer) {
-            resolve(printer);
-          } else {
-            reject(new Error(`Epson device creation failed: ${retcode}`));
-          }
-        },
-      );
-    });
+    // Wrap in try-catch so a createDevice failure disconnects the socket
+    // from Step 1, preventing orphaned WebSocket connections on retry.
+    try {
+      this.printer = await new Promise<EpsonPrinter>((resolve, reject) => {
+        this.device!.createDevice(
+          "local_printer",
+          this.device!.DEVICE_TYPE_PRINTER,
+          { crypto: this.port === 8043, buffer: false },
+          (printer, retcode) => {
+            if (retcode === "OK" && printer) {
+              resolve(printer);
+            } else {
+              reject(new Error(`Epson device creation failed: ${retcode}`));
+            }
+          },
+        );
+      });
+    } catch (error) {
+      this.device?.disconnect();
+      this.device = null;
+      this.printer = null;
+      throw error;
+    }
   }
 }

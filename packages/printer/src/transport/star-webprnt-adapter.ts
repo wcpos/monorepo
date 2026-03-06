@@ -39,14 +39,24 @@ export class StarWebPrntAdapter implements PrinterTransport {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
-    const response = await fetch(this.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/xml; charset=utf-8",
-      },
-      body: xml,
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeoutId));
+    let response: Response;
+    try {
+      response = await fetch(this.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/xml; charset=utf-8",
+        },
+        body: xml,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("Star WebPRNT request timed out after 30000ms");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
