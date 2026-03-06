@@ -405,6 +405,9 @@ importers:
       '@tanstack/react-table':
         specifier: ^8.20.6
         version: 8.21.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@wcpos/printer':
+        specifier: workspace:*
+        version: link:../printer
       '@widgetbot/react-embed':
         specifier: ^1.10.0
         version: 1.10.0
@@ -661,9 +664,15 @@ importers:
       '@point-of-sale/receipt-printer-encoder':
         specifier: ^3.0.3
         version: 3.0.3
+      expo-print:
+        specifier: '>=55.0.0'
+        version: 55.0.8(expo@55.0.4)(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4))
       p-queue:
         specifier: ^8.1.0
         version: 8.1.1
+      react-native-tcp-socket:
+        specifier: '>=6.0.0'
+        version: 6.4.1(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4))
 
   packages/query:
     dependencies:
@@ -4763,6 +4772,9 @@ packages:
   buffer-xor@1.0.3:
     resolution: {integrity: sha512-571s0T7nZWK6vB67HI5dyUF7wXiNcfaPPPTl6zYCNApANjIvYJTg7hlud/+cJpdAhS7dVzqMLmfhfHR3rAcOjQ==}
 
+  buffer@5.7.1:
+    resolution: {integrity: sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ==}
+
   buffer@6.0.3:
     resolution: {integrity: sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA==}
 
@@ -8210,6 +8222,11 @@ packages:
 
   react-native-swipe-gestures@1.0.5:
     resolution: {integrity: sha512-Ns7Bn9H/Tyw278+5SQx9oAblDZ7JixyzeOczcBK8dipQk2pD7Djkcfnf1nB/8RErAmMLL9iXgW0QHqiII8AhKw==}
+
+  react-native-tcp-socket@6.4.1:
+    resolution: {integrity: sha512-2+zya9ielB8nWfMYVULB64ZqLzQD32qIzTnDef7NM1BChaJiA1btkJTBL+8WnyBrujjlCBVxBC3gAkXtG5hmvQ==}
+    peerDependencies:
+      react-native: ~0.83.2
 
   react-native-web@0.21.2:
     resolution: {integrity: sha512-SO2t9/17zM4iEnFvlu2DA9jqNbzNhoUP+AItkoCOyFmDMOhUnBBznBDCYN92fGdfAkfQlWzPoez6+zLxFNsZEg==}
@@ -14703,6 +14720,11 @@ snapshots:
   buffer-xor@1.0.3:
     optional: true
 
+  buffer@5.7.1:
+    dependencies:
+      base64-js: 1.5.1
+      ieee754: 1.2.1
+
   buffer@6.0.3:
     dependencies:
       base64-js: 1.5.1
@@ -19046,6 +19068,12 @@ snapshots:
       warn-once: 0.1.1
 
   react-native-swipe-gestures@1.0.5: {}
+
+  react-native-tcp-socket@6.4.1(react-native@0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4)):
+    dependencies:
+      buffer: 5.7.1
+      eventemitter3: 4.0.7
+      react-native: 0.83.2(@babel/core@7.28.6)(@types/react@19.2.14)(react@19.2.4)
 
   react-native-web@0.21.2(encoding@0.1.13)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:

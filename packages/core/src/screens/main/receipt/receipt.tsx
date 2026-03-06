@@ -46,7 +46,7 @@ import { TemplateSwitcher } from './template-switcher';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
-import { usePrintExternalURL } from '../hooks/use-print';
+import { usePrint } from '@wcpos/printer';
 
 import type { ReceiptMode } from './hooks/use-receipt-data';
 
@@ -107,6 +107,7 @@ export function Receipt({ resource }: Props) {
 		selectedTemplateId,
 		setSelectedTemplateId,
 		renderedHtml,
+		receiptData,
 		receiptUrl: templateReceiptUrl,
 		isOffline,
 		isSyncing,
@@ -135,9 +136,10 @@ export function Receipt({ resource }: Props) {
 		return appendModeParam(baseReceiptURL, selectedMode);
 	}, [baseReceiptURL, selectedMode]);
 
-	const { print, isPrinting } = usePrintExternalURL({
-		externalURL: templateReceiptUrl || receiptURL,
+	const { print, isPrinting } = usePrint({
+		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
+		receiptUrl: templateReceiptUrl || receiptURL,
 	});
 
 	// Retry fiscal submission
