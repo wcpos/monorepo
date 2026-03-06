@@ -35,5 +35,5 @@ export function markStorageHealthy() {
 }
 
 export function resetStorageHealth() {
-	subject.next(initialState);
+	markStorageHealthy();
 }

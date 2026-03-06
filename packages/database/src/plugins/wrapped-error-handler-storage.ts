@@ -56,6 +56,9 @@ function handleStorageError(methodName: string, error: unknown): boolean {
 
 	// Worker communication failures
 	if (message.includes('could not requestRemote')) {
+		if (error instanceof Error) {
+			(error as Error & { code?: string }).code = ERROR_CODES.WORKER_CONNECTION_LOST;
+		}
 		markStorageDegraded(methodName, message);
 		storageLogger.error(`Storage worker error in ${methodName}`, {
 			saveToDb: true,

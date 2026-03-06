@@ -225,15 +225,18 @@ describe('wrappedErrorHandlerStorage', () => {
 			const wrapped = wrappedErrorHandlerStorage({ storage });
 			const wrappedInstance = await wrapped.createStorageInstance({} as any);
 
-			await expect(wrappedInstance.query({} as any)).rejects.toThrow('could not requestRemote');
+			try {
+				await expect(wrappedInstance.query({} as any)).rejects.toThrow('could not requestRemote');
 
-			expect(getStorageHealthSnapshot()).toMatchObject({
-				status: 'degraded',
-				source: 'query',
-				reason: 'could not requestRemote',
-			});
-			expect(healthStates).toContain('degraded');
-			sub.unsubscribe();
+				expect(getStorageHealthSnapshot()).toMatchObject({
+					status: 'degraded',
+					source: 'query',
+					reason: 'could not requestRemote',
+				});
+				expect(healthStates).toContain('degraded');
+			} finally {
+				sub.unsubscribe();
+			}
 		});
 	});
 
@@ -365,14 +368,16 @@ describe('wrappedErrorHandlerStorage', () => {
 			const events: string[] = [];
 			const sub = storageHealth$.subscribe((state) => events.push(state.status));
 
-			await expect(wrappedInstance.bulkWrite(sampleWrites as any, 'ctx')).rejects.toThrow(
-				'could not requestRemote'
-			);
+			try {
+				await expect(wrappedInstance.bulkWrite(sampleWrites as any, 'ctx')).rejects.toThrow(
+					'could not requestRemote'
+				);
 
-			expect(events).toContain('degraded');
-			expect(getStorageHealthSnapshot().status).toBe('degraded');
-
-			sub.unsubscribe();
+				expect(events).toContain('degraded');
+				expect(getStorageHealthSnapshot().status).toBe('degraded');
+			} finally {
+				sub.unsubscribe();
+			}
 		});
 
 		it('should re-throw for unknown errors', async () => {

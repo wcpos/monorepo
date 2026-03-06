@@ -8,9 +8,14 @@ export function createStorageDegradedError() {
 }
 
 export function isStorageDegradedError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+	const code = (error as Error & { code?: string }).code;
 	return (
-		error instanceof Error &&
-		((error as Error & { code?: string }).code === ERROR_CODES.WORKER_CONNECTION_LOST ||
-			error.message === 'storage unavailable')
+		code === ERROR_CODES.WORKER_CONNECTION_LOST ||
+		error.name === 'StorageDegradedError' ||
+		error.message === 'storage unavailable' ||
+		error.message.includes('could not requestRemote')
 	);
 }
