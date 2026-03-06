@@ -170,11 +170,10 @@ export const useAddCoupon = () => {
 				const discountResult = calculateCouponDiscount(couponConfig, discountItems);
 
 				// 6. Apply discount to line items and add coupon line
-				const discountedLineItems = computeDiscountedLineItems(order.line_items || [], [
+				const latestOrder = currentOrder.getLatest();
+				const discountedLineItems = computeDiscountedLineItems(latestOrder.line_items || [], [
 					discountResult.perItem,
 				]);
-
-				const latestOrder = currentOrder.getLatest();
 				await localPatch({
 					document: latestOrder,
 					data: {

@@ -99,11 +99,13 @@ export const useCartLines = () => {
 			}
 		}
 
-		// Recalculate local-only coupon discounts when line items change.
-		// Synced coupon lines (with an id) are server-authoritative and should not be recalculated.
+		// Recalculate coupon discounts on line items when line items change.
+		// All coupons (local + synced) must be replayed so line item totals reflect
+		// every active coupon's discount. Only local coupon discount amounts are updated;
+		// synced coupon_lines keep their server-authoritative discount values.
 		const allCouponLines = couponLines || [];
-		const activeCouponLines = allCouponLines.filter((cl: any) => cl.code != null && !cl.id);
-		if (activeCouponLines.length > 0) {
+		const replayCouponLines = allCouponLines.filter((cl: any) => cl.code != null);
+		if (replayCouponLines.length > 0) {
 			// Reset all line items to pre-coupon totals so discounts are applied cleanly
 			const allLineItems = (lineItems || []).map((item: any) => {
 				if (item.product_id === null) return item;
@@ -139,10 +141,10 @@ export const useCartLines = () => {
 			const updatedCouponLines: any[] = [];
 			const allPerItemDiscounts: PerItemDiscount[][] = [];
 
-			for (const cl of activeCouponLines) {
+			for (const cl of replayCouponLines) {
 				const coupon = await couponCollection.findOne({ selector: { code: cl.code } }).exec();
 				if (!coupon) {
-					updatedCouponLines.push(cl);
+					if (!cl.id) updatedCouponLines.push(cl);
 					continue;
 				}
 
@@ -161,9 +163,13 @@ export const useCartLines = () => {
 					discountItems
 				);
 
-				const newDiscount = String(result.totalDiscount);
-				updatedCouponLines.push({ ...cl, discount: newDiscount, discount_tax: '0' });
 				allPerItemDiscounts.push(result.perItem);
+
+				// Only update discount amounts for local coupons; synced ones keep server values
+				if (!cl.id) {
+					const newDiscount = String(result.totalDiscount);
+					updatedCouponLines.push({ ...cl, discount: newDiscount, discount_tax: '0' });
+				}
 
 				if (calcDiscountsSequentially) {
 					discountItems = applyPerItemDiscountsToLineItems(discountItems, result.perItem);
