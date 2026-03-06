@@ -9,5 +9,13 @@
   "dependencies": {
     "@point-of-sale/receipt-printer-encoder": "^3.0.3",
     "p-queue": "^8.1.0"
+  },
+  "peerDependencies": {
+    "expo-print": ">=55.0.0"
+  },
+  "peerDependenciesMeta": {
+    "expo-print": {
+      "optional": true
+    }
   }
 }
