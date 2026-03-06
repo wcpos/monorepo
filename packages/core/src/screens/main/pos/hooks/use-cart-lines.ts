@@ -4,7 +4,7 @@ import { useObservable, useObservableEagerState, useSubscription } from 'observa
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
 import { calculateCouponDiscount } from './coupon-discount';
-import { isProductOnSale } from './coupon-helpers';
+import { applyPerItemDiscountsToLineItems, isProductOnSale } from './coupon-helpers';
 import { useFeeLineData } from './use-fee-line-data';
 import { useUpdateFeeLine } from './use-update-fee-line';
 import { getUuidFromLineItem } from './utils';
@@ -16,33 +16,6 @@ import { useCurrentOrder } from '../contexts/current-order';
 import type { CouponLineItem } from './coupon-helpers';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
-
-function applyPerItemDiscountsToLineItems(
-	items: CouponLineItem[],
-	perItem: { product_id: number; discount: number }[]
-): CouponLineItem[] {
-	const nextItems = items.map((item) => ({ ...item }));
-
-	for (const entry of perItem) {
-		let remaining = entry.discount;
-		if (remaining <= 0) continue;
-
-		for (const item of nextItems) {
-			if (item.product_id !== entry.product_id || item.quantity <= 0) continue;
-
-			const lineTotal = item.price * item.quantity;
-			if (lineTotal <= 0) continue;
-
-			const lineDiscount = Math.min(lineTotal, remaining);
-			item.price = Math.max(0, item.price - lineDiscount / item.quantity);
-			remaining -= lineDiscount;
-
-			if (remaining <= 0) break;
-		}
-	}
-
-	return nextItems;
-}
 
 /**
  * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.
@@ -63,7 +36,8 @@ export const useCartLines = () => {
 		(store as any).woocommerce_calc_discounts_sequentially$
 	);
 	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
-	const calcDiscountsSequentially = (woocommerceSequential ?? legacySequential) === 'yes';
+	const calcDiscountsSequentially =
+		woocommerceSequential === 'yes' || legacySequential === 'yes';
 
 	/**
 	 * We need to filter out any items that have been 'removed', eg: product_id === null.

@@ -83,6 +83,10 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.theme = 'system';
 			return oldDoc;
 		},
+		4(oldDoc: StoreDocumentType) {
+			oldDoc.woocommerce_calc_discounts_sequentially = 'no';
+			return oldDoc;
+		},
 	},
 };
 

@@ -6,7 +6,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { calculateCouponDiscount } from './coupon-discount';
-import { isProductOnSale } from './coupon-helpers';
+import { applyPerItemDiscountsToLineItems, isProductOnSale } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useAppState } from '../../../../contexts/app-state';
@@ -17,33 +17,6 @@ import { useCurrentOrder } from '../contexts/current-order';
 import type { CouponLineItem } from './coupon-helpers';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
-
-function applyPerItemDiscountsToLineItems(
-	items: CouponLineItem[],
-	perItem: { product_id: number; discount: number }[]
-): CouponLineItem[] {
-	const nextItems = items.map((item) => ({ ...item }));
-
-	for (const entry of perItem) {
-		let remaining = entry.discount;
-		if (remaining <= 0) continue;
-
-		for (const item of nextItems) {
-			if (item.product_id !== entry.product_id || item.quantity <= 0) continue;
-
-			const lineTotal = item.price * item.quantity;
-			if (lineTotal <= 0) continue;
-
-			const lineDiscount = Math.min(lineTotal, remaining);
-			item.price = Math.max(0, item.price - lineDiscount / item.quantity);
-			remaining -= lineDiscount;
-
-			if (remaining <= 0) break;
-		}
-	}
-
-	return nextItems;
-}
 
 /**
  * Hook for adding a coupon to the current order.
@@ -63,7 +36,8 @@ export const useAddCoupon = () => {
 		(store as any).woocommerce_calc_discounts_sequentially$
 	);
 	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
-	const calcDiscountsSequentially = (woocommerceSequential ?? legacySequential) === 'yes';
+	const calcDiscountsSequentially =
+		woocommerceSequential === 'yes' || legacySequential === 'yes';
 
 	const orderLogger = React.useMemo(
 		() =>

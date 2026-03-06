@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 3,
+	version: 4,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
