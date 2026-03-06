@@ -8,6 +8,7 @@
   "files": ["src/**"],
   "dependencies": {
     "@point-of-sale/receipt-printer-encoder": "^3.0.3",
+    "mustache": "^4.2.0",
     "p-queue": "^8.1.0"
   },
   "devDependencies": {
