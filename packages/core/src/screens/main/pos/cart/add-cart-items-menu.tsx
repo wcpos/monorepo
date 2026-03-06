@@ -102,63 +102,79 @@ export function AddCartItemsMenu() {
 			)}
 
 			{openDialog === 'misc-product' && (
-			<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
-				<DialogContent size="lg" portalHost="pos">
-					<DialogHeader>
-						<DialogTitle>{t('pos_cart.add_miscellaneous_product')}</DialogTitle>
-					</DialogHeader>
-					<DialogBody>
-						<ErrorBoundary>
-							<AddMiscProduct />
-						</ErrorBoundary>
-					</DialogBody>
-				</DialogContent>
-			</Dialog>
+				<Dialog
+					open
+					onOpenChange={(open) => !open && setOpenDialog(null)}
+					style={{ display: 'none' }}
+				>
+					<DialogContent size="lg" portalHost="pos">
+						<DialogHeader>
+							<DialogTitle>{t('pos_cart.add_miscellaneous_product')}</DialogTitle>
+						</DialogHeader>
+						<DialogBody>
+							<ErrorBoundary>
+								<AddMiscProduct />
+							</ErrorBoundary>
+						</DialogBody>
+					</DialogContent>
+				</Dialog>
 			)}
 
 			{openDialog === 'fee' && (
-			<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
-				<DialogContent size="lg" portalHost="pos">
-					<DialogHeader>
-						<DialogTitle>{t('pos_cart.add_fee')}</DialogTitle>
-					</DialogHeader>
-					<DialogBody>
-						<ErrorBoundary>
-							<AddFee />
-						</ErrorBoundary>
-					</DialogBody>
-				</DialogContent>
-			</Dialog>
+				<Dialog
+					open
+					onOpenChange={(open) => !open && setOpenDialog(null)}
+					style={{ display: 'none' }}
+				>
+					<DialogContent size="lg" portalHost="pos">
+						<DialogHeader>
+							<DialogTitle>{t('pos_cart.add_fee')}</DialogTitle>
+						</DialogHeader>
+						<DialogBody>
+							<ErrorBoundary>
+								<AddFee />
+							</ErrorBoundary>
+						</DialogBody>
+					</DialogContent>
+				</Dialog>
 			)}
 
 			{openDialog === 'shipping' && (
-			<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
-				<DialogContent size="lg" portalHost="pos">
-					<DialogHeader>
-						<DialogTitle>{t('pos_cart.add_shipping')}</DialogTitle>
-					</DialogHeader>
-					<DialogBody>
-						<ErrorBoundary>
-							<AddShipping />
-						</ErrorBoundary>
-					</DialogBody>
-				</DialogContent>
-			</Dialog>
+				<Dialog
+					open
+					onOpenChange={(open) => !open && setOpenDialog(null)}
+					style={{ display: 'none' }}
+				>
+					<DialogContent size="lg" portalHost="pos">
+						<DialogHeader>
+							<DialogTitle>{t('pos_cart.add_shipping')}</DialogTitle>
+						</DialogHeader>
+						<DialogBody>
+							<ErrorBoundary>
+								<AddShipping />
+							</ErrorBoundary>
+						</DialogBody>
+					</DialogContent>
+				</Dialog>
 			)}
 
 			{openDialog === 'coupon' && (
-			<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
-				<DialogContent size="lg" portalHost="pos">
-					<DialogHeader>
-						<DialogTitle>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</DialogTitle>
-					</DialogHeader>
-					<DialogBody>
-						<ErrorBoundary>
-							<AddCoupon />
-						</ErrorBoundary>
-					</DialogBody>
-				</DialogContent>
-			</Dialog>
+				<Dialog
+					open
+					onOpenChange={(open) => !open && setOpenDialog(null)}
+					style={{ display: 'none' }}
+				>
+					<DialogContent size="lg" portalHost="pos">
+						<DialogHeader>
+							<DialogTitle>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</DialogTitle>
+						</DialogHeader>
+						<DialogBody>
+							<ErrorBoundary>
+								<AddCoupon />
+							</ErrorBoundary>
+						</DialogBody>
+					</DialogContent>
+				</Dialog>
 			)}
 		</>
 	);

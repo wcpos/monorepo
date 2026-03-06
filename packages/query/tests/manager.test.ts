@@ -376,6 +376,35 @@ describe('Manager', () => {
 		});
 	});
 
+	describe('rxQuery$ replication dedup', () => {
+		it('should skip pause/start when rxQuery$ re-emits with same endpoint', async () => {
+			const query = manager.registerQuery({
+				queryKeys: ['dedupTest'],
+				collectionName: 'products',
+				initialParams: { sort: [{ name: 'asc' }] },
+			});
+
+			// Wait for rxQuery$ subscription to fire and set the active replication
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			const key = manager.stringify(['dedupTest']);
+			const replication = manager.activeQueryReplications.get(key);
+			expect(replication).toBeDefined();
+
+			const startSpy = jest.spyOn(replication, 'start');
+			const pauseSpy = jest.spyOn(replication, 'pause');
+
+			// Trigger rxQuery$ to emit again with unchanged params
+			query.search('');
+
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			// Same replication object — should not pause or restart
+			expect(startSpy).not.toHaveBeenCalled();
+			expect(pauseSpy).not.toHaveBeenCalled();
+		});
+	});
+
 	describe('maybePauseQueryReplications', () => {
 		it('should return early when query has no active replication', () => {
 			// Create a mock query that has no entry in activeQueryReplications

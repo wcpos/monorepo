@@ -207,7 +207,7 @@ export function AddCustomerDialog({ open, onOpenChange }: AddCustomerDialogProps
 	);
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={onOpenChange} style={{ display: 'none' }}>
 			<DialogContent size="lg" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('common.add_new_customer')}</DialogTitle>
