@@ -3,6 +3,7 @@ import * as React from 'react';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import { isStorageDegradedError } from '../../contexts/storage-health/error';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
 import { useT } from '../../../../contexts/translations';
@@ -64,7 +65,10 @@ export const useAddFee = () => {
 					meta_data,
 				});
 
-				await addItemToOrder('fee_lines', newFeeLine);
+				const savedOrder = await addItemToOrder('fee_lines', newFeeLine);
+				if (!savedOrder) {
+					return;
+				}
 
 				// Log fee added success
 				orderLogger.info(t('pos.fee_added', { feeName: data.name }), {
@@ -76,6 +80,10 @@ export const useAddFee = () => {
 					},
 				});
 			} catch (error) {
+				if (isStorageDegradedError(error)) {
+					return;
+				}
+
 				orderLogger.error(t('pos.error_adding_fee_to_cart'), {
 					showToast: true,
 					saveToDb: true,

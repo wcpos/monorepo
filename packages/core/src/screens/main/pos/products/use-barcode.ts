@@ -4,6 +4,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
+import { useStorageHealth } from '../../contexts/storage-health/provider';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
 import { useCollection } from '../../hooks/use-collection';
@@ -34,6 +35,7 @@ export const useBarcode = (
 	const { collection: productCollection } = useCollection('products');
 	const { uiSettings } = useUISettings('pos-products');
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
+	const { isDegraded } = useStorageHealth();
 
 	/**
 	 *
@@ -41,6 +43,19 @@ export const useBarcode = (
 	useSubscription(barcode$, async (barcode: unknown) => {
 		const barcodeStr = String(barcode);
 		const text1 = t('common.barcode_scanned', { barcode: barcodeStr });
+
+		if (isDegraded) {
+			barcodeLogger.error(t('common.barcode_scanning_temporarily_unavailable'), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
+					barcode: barcodeStr,
+				},
+			});
+			return;
+		}
+
 		const results = await barcodeSearch(barcodeStr);
 
 		if (results.length !== 1) {

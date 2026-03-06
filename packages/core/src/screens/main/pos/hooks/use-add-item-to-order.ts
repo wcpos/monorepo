@@ -2,7 +2,10 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { throwIfStorageDegraded } from './block-on-storage-degraded';
 import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
+import { useT } from '../../../../contexts/translations';
+import { useStorageHealth } from '../../contexts/storage-health/provider';
 import { useCollection } from '../../hooks/use-collection';
 import { useCurrentOrder } from '../contexts/current-order';
 
@@ -16,6 +19,8 @@ type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines' | 'coupon_line
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const { collection } = useCollection('orders');
+	const t = useT();
+	const { isDegraded } = useStorageHealth();
 
 	/**
 	 *
@@ -45,6 +50,14 @@ export const useAddItemToOrder = () => {
 	 */
 	const addItemToOrder = React.useCallback(
 		async (type: CartLineType, data: CartLine) => {
+			throwIfStorageDegraded({
+				isDegraded,
+				message: t('common.pos_storage_connection_lost'),
+				context: {
+					lineType: type,
+				},
+			});
+
 			const order = currentOrder.getLatest();
 
 			// make sure items have a uuid before saving
@@ -69,7 +82,7 @@ export const useAddItemToOrder = () => {
 				});
 			}
 		},
-		[currentOrder, saveNewOrder]
+		[currentOrder, isDegraded, saveNewOrder, t]
 	);
 
 	return { addItemToOrder };

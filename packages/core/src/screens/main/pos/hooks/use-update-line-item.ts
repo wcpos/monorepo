@@ -3,10 +3,13 @@ import * as React from 'react';
 import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
+import { throwIfStorageDegraded } from './block-on-storage-degraded';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useLineItemData } from './use-line-item-data';
 import { updatePosDataMeta } from './utils';
+import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useStorageHealth } from '../../contexts/storage-health/provider';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -25,6 +28,8 @@ export const useUpdateLineItem = () => {
 	const { localPatch } = useLocalMutation();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { getLineItemData } = useLineItemData();
+	const t = useT();
+	const { isDegraded } = useStorageHealth();
 
 	/**
 	 * Update line item
@@ -33,6 +38,12 @@ export const useUpdateLineItem = () => {
 	 */
 	const updateLineItem = React.useCallback(
 		async (uuid: string, changes: Changes) => {
+			throwIfStorageDegraded({
+				isDegraded,
+				message: t('common.pos_storage_connection_lost'),
+				context: { lineItemUUID: uuid },
+			});
+
 			const order = currentOrder.getLatest();
 			const json = order.toMutableJSON();
 			let updated = false;
@@ -71,7 +82,7 @@ export const useUpdateLineItem = () => {
 				return localPatch({ document: order, data: { line_items: updatedLineItems } });
 			}
 		},
-		[calculateLineItemTaxesAndTotals, currentOrder, getLineItemData, localPatch]
+		[calculateLineItemTaxesAndTotals, currentOrder, getLineItemData, isDegraded, localPatch, t]
 	);
 
 	/**
@@ -79,6 +90,12 @@ export const useUpdateLineItem = () => {
 	 */
 	const splitLineItem = React.useCallback(
 		async (uuid: string) => {
+			throwIfStorageDegraded({
+				isDegraded,
+				message: t('common.pos_storage_connection_lost'),
+				context: { lineItemUUID: uuid },
+			});
+
 			const order = currentOrder.getLatest();
 			const lineItemIndex = (order.line_items ?? []).findIndex((item) =>
 				(item.meta_data ?? []).some(
@@ -139,7 +156,7 @@ export const useUpdateLineItem = () => {
 
 			return localPatch({ document: order, data: { line_items: updatedLineItems } });
 		},
-		[calculateLineItemTaxesAndTotals, currentOrder, localPatch]
+		[calculateLineItemTaxesAndTotals, currentOrder, isDegraded, localPatch, t]
 	);
 
 	return { updateLineItem, splitLineItem };

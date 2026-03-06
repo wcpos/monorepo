@@ -9,6 +9,8 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
+import { isStorageDegradedError } from '../../../contexts/storage-health/error';
+import { useStorageHealth } from '../../../contexts/storage-health/provider';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useCurrentOrder } from '../../contexts/current-order';
@@ -26,6 +28,7 @@ export function PayButton() {
 	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
 	const t = useT();
+	const { isDegraded } = useStorageHealth();
 
 	/**
 	 *
@@ -55,6 +58,10 @@ export function PayButton() {
 				}
 			});
 		} catch (error) {
+			if (isStorageDegradedError(error)) {
+				return;
+			}
+
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			orderLogger.error(t('pos_cart.checkout_failed'), {
 				showToast: true,
@@ -72,18 +79,19 @@ export function PayButton() {
 	/**
 	 *
 	 */
-	return (
-		<Button
-			testID="checkout-button"
-			size="lg"
-			onPress={handlePay}
-			variant="success"
-			className="flex-3 rounded-t-none rounded-bl-none"
-			loading={loading}
-		>
-			{t('pos_cart.checkout', {
-				order_total: format(parseFloat(total ?? '0') || 0),
-			})}
-		</Button>
+	return React.createElement(
+		Button,
+		{
+			testID: 'checkout-button',
+			size: 'lg',
+			onPress: handlePay,
+			variant: 'success',
+			className: 'flex-3 rounded-t-none rounded-bl-none',
+			loading,
+			disabled: loading || isDegraded,
+		},
+		t('pos_cart.checkout', {
+			order_total: format(parseFloat(total ?? '0') || 0),
+		})
 	);
 }

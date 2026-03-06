@@ -11,6 +11,7 @@ import { Suspense } from '@wcpos/components/suspense';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { TaxRatesProvider } from '@wcpos/core/screens/main/contexts/tax-rates';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
+import { StorageHealthBanner } from '@wcpos/core/screens/main/pos/components/storage-health-banner';
 import {
 	CurrentOrderProvider,
 	useCurrentOrder,
@@ -132,6 +133,7 @@ function POSStack() {
 
 	return (
 		<TaxRatesProvider taxQuery={taxQuery!} order={currentOrder}>
+			<StorageHealthBanner />
 			<Stack
 				screenOptions={{
 					animation: 'none',

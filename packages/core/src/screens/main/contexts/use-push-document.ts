@@ -8,6 +8,8 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
+import { createStorageDegradedError } from '../contexts/storage-health/error';
+import { useStorageHealth } from '../contexts/storage-health/provider';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const syncLogger = getLogger(['wcpos', 'sync', 'push']);
@@ -20,6 +22,7 @@ type AnyRxDocument = import('rxdb').RxDocument<any>;
 export const usePushDocument = () => {
 	const http = useRestHttpClient();
 	const t = useT();
+	const { isDegraded } = useStorageHealth();
 
 	/**
 	 * Prepare document data from local database (DB operation)
@@ -136,6 +139,19 @@ export const usePushDocument = () => {
 	 */
 	return React.useCallback(
 		async (doc: AnyRxDocument) => {
+			if (isDegraded) {
+				syncLogger.error(t('common.pos_storage_connection_lost'), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
+						documentId: doc.id,
+						collectionName: doc.collection.name,
+					},
+				});
+				throw createStorageDegradedError();
+			}
+
 			const collection = doc.collection;
 			let endpoint = collection.name;
 			if (collection.name === 'variations') {
@@ -157,6 +173,6 @@ export const usePushDocument = () => {
 			// Update local document with server response
 			return await updateLocalDocument(latestDoc, serverData);
 		},
-		[prepareDocumentData, sendToServer, updateLocalDocument]
+		[isDegraded, prepareDocumentData, sendToServer, t, updateLocalDocument]
 	);
 };

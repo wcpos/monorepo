@@ -4,6 +4,11 @@
 
 import { getLogger } from '@wcpos/utils/logger';
 
+import {
+	getStorageHealthSnapshot,
+	resetStorageHealth,
+	storageHealth$,
+} from './storage-health-events';
 import { wrappedErrorHandlerStorage } from './wrapped-error-handler-storage';
 
 import type { RxStorage, RxStorageInstance } from 'rxdb';
@@ -74,6 +79,7 @@ function createMockStorage(instance: RxStorageInstance<any, any, any, any>) {
 describe('wrappedErrorHandlerStorage', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		resetStorageHealth();
 	});
 
 	// -----------------------------------------------------------------------
@@ -206,6 +212,34 @@ describe('wrappedErrorHandlerStorage', () => {
 		});
 	});
 
+	describe('query', () => {
+		it('emits degraded health when query loses worker connection', async () => {
+			const healthStates: string[] = [];
+			const sub = storageHealth$.subscribe((state) => healthStates.push(state.status));
+
+			const error = new Error('could not requestRemote');
+			const instance = createMockStorageInstance({
+				query: jest.fn().mockRejectedValue(error),
+			});
+			const storage = createMockStorage(instance);
+			const wrapped = wrappedErrorHandlerStorage({ storage });
+			const wrappedInstance = await wrapped.createStorageInstance({} as any);
+
+			try {
+				await expect(wrappedInstance.query({} as any)).rejects.toThrow('could not requestRemote');
+
+				expect(getStorageHealthSnapshot()).toMatchObject({
+					status: 'degraded',
+					source: 'query',
+					reason: 'could not requestRemote',
+				});
+				expect(healthStates).toContain('degraded');
+			} finally {
+				sub.unsubscribe();
+			}
+		});
+	});
+
 	// -----------------------------------------------------------------------
 	// bulkWrite
 	// -----------------------------------------------------------------------
@@ -321,6 +355,29 @@ describe('wrappedErrorHandlerStorage', () => {
 			await expect(wrappedInstance.bulkWrite(sampleWrites as any, 'test-context')).rejects.toThrow(
 				'could not requestRemote'
 			);
+		});
+
+		it('emits degraded health when bulkWrite loses worker connection', async () => {
+			const error = new Error('could not requestRemote');
+			const instance = createMockStorageInstance({
+				bulkWrite: jest.fn().mockRejectedValue(error),
+			});
+			const storage = createMockStorage(instance);
+			const wrapped = wrappedErrorHandlerStorage({ storage });
+			const wrappedInstance = await wrapped.createStorageInstance({} as any);
+			const events: string[] = [];
+			const sub = storageHealth$.subscribe((state) => events.push(state.status));
+
+			try {
+				await expect(wrappedInstance.bulkWrite(sampleWrites as any, 'ctx')).rejects.toThrow(
+					'could not requestRemote'
+				);
+
+				expect(events).toContain('degraded');
+				expect(getStorageHealthSnapshot().status).toBe('degraded');
+			} finally {
+				sub.unsubscribe();
+			}
 		});
 
 		it('should re-throw for unknown errors', async () => {

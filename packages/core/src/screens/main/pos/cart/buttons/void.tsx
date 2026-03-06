@@ -7,10 +7,9 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
+import { useStorageHealth } from '../../../contexts/storage-health/provider';
 import { useDeleteDocument } from '../../../contexts/use-delete-document';
 import { useCurrentOrder } from '../../contexts/current-order';
-
-import type { RxCollection } from 'rxdb';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'void']);
 
@@ -22,6 +21,7 @@ export function VoidButton() {
 	const router = useRouter();
 	const deleteDocument = useDeleteDocument();
 	const t = useT();
+	const { isDegraded } = useStorageHealth();
 
 	/**
 	 *
@@ -50,6 +50,18 @@ export function VoidButton() {
 	 *
 	 */
 	const handleRemove = React.useCallback(async () => {
+		if (isDegraded) {
+			cartLogger.error(t('common.pos_storage_connection_lost'), {
+				showToast: true,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.WORKER_CONNECTION_LOST,
+					orderId: currentOrder.id,
+				},
+			});
+			return;
+		}
+
 		const orderJson = currentOrder.toMutableJSON();
 		const latest = currentOrder.getLatest();
 		if (latest.id) {
@@ -71,20 +83,21 @@ export function VoidButton() {
 				orderNumber: latest.number,
 			},
 		});
-	}, [currentOrder, t, deleteDocument, undoRemove]);
+	}, [currentOrder, deleteDocument, isDegraded, t, undoRemove]);
 
 	/**
 	 *
 	 */
-	return (
-		<Button
-			testID="void-button"
-			size="lg"
-			onPress={handleRemove}
-			variant="destructive"
-			className="flex-1 rounded-t-none rounded-br-none"
-		>
-			{t('pos_cart.void')}
-		</Button>
+	return React.createElement(
+		Button,
+		{
+			testID: 'void-button',
+			size: 'lg',
+			onPress: handleRemove,
+			variant: 'destructive',
+			className: 'flex-1 rounded-t-none rounded-br-none',
+			disabled: isDegraded,
+		},
+		t('pos_cart.void')
 	);
 }

@@ -1,6 +1,8 @@
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import { markStorageDegraded } from './storage-health-events';
+
 import type { RxStorage, RxStorageInstance, RxStorageInstanceCreationParams } from 'rxdb';
 
 const storageLogger = getLogger(['wcpos', 'db', 'storage']);
@@ -54,6 +56,10 @@ function handleStorageError(methodName: string, error: unknown): boolean {
 
 	// Worker communication failures
 	if (message.includes('could not requestRemote')) {
+		if (error instanceof Error) {
+			(error as Error & { code?: string }).code = ERROR_CODES.WORKER_CONNECTION_LOST;
+		}
+		markStorageDegraded(methodName, message);
 		storageLogger.error(`Storage worker error in ${methodName}`, {
 			saveToDb: true,
 			context: {
@@ -85,6 +91,9 @@ function wrapStorageInstance<RxDocType>(
 ): RxStorageInstance<RxDocType, any, any, any> {
 	const originalFindDocumentsById = instance.findDocumentsById.bind(instance);
 	const originalBulkWrite = instance.bulkWrite.bind(instance);
+	const originalQuery = instance.query?.bind(instance);
+	const originalCount = instance.count?.bind(instance);
+	const originalGetChangedDocumentsSince = instance.getChangedDocumentsSince?.bind(instance);
 
 	// Handle composite primary keys (object with `key` property) vs simple string keys
 	const pkField =
@@ -126,6 +135,48 @@ function wrapStorageInstance<RxDocType>(
 			throw error;
 		}
 	};
+
+	if (originalQuery) {
+		instance.query = async (preparedQuery) => {
+			try {
+				return await originalQuery(preparedQuery);
+			} catch (error) {
+				const handled = handleStorageError('query', error);
+				if (handled) {
+					return { documents: [] } as any;
+				}
+				throw error;
+			}
+		};
+	}
+
+	if (originalCount) {
+		instance.count = async (preparedQuery) => {
+			try {
+				return await originalCount(preparedQuery);
+			} catch (error) {
+				const handled = handleStorageError('count', error);
+				if (handled) {
+					return { count: 0, mode: 'slow' } as any;
+				}
+				throw error;
+			}
+		};
+	}
+
+	if (originalGetChangedDocumentsSince) {
+		instance.getChangedDocumentsSince = async (limit, checkpoint) => {
+			try {
+				return await originalGetChangedDocumentsSince(limit, checkpoint);
+			} catch (error) {
+				const handled = handleStorageError('getChangedDocumentsSince', error);
+				if (handled) {
+					return { documents: [], checkpoint } as any;
+				}
+				throw error;
+			}
+		};
+	}
 
 	return instance;
 }

@@ -7,6 +7,7 @@ import { PortalHost } from '@wcpos/components/portal';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
+import { StorageHealthProvider } from '@wcpos/core/screens/main/contexts/storage-health/provider';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { useRestHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client';
@@ -31,31 +32,32 @@ function AppStack() {
 
 	return (
 		<QueryProvider localDB={storeDB} fastLocalDB={fastStoreDB} http={http} locale={locale}>
-			<UISettingsProvider>
-				<Stack
-					screenOptions={{
-						headerShown: false,
-						contentStyle: { backgroundColor: backgroundColor as string },
-					}}
-				>
-					<Stack.Screen name="(drawer)" />
-					<Stack.Screen
-						name="(modals)/settings"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
-							contentStyle: { backgroundColor: 'transparent' },
+			<StorageHealthProvider>
+				<UISettingsProvider>
+					<Stack
+						screenOptions={{
+							headerShown: false,
+							contentStyle: { backgroundColor: backgroundColor as string },
 						}}
-					/>
-					<Stack.Screen
-						name="(modals)/tax-rates"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
-							contentStyle: { backgroundColor: 'transparent' },
-						}}
-					/>
-					{/* <Stack.Screen
+					>
+						<Stack.Screen name="(drawer)" />
+						<Stack.Screen
+							name="(modals)/settings"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
+							}}
+						/>
+						<Stack.Screen
+							name="(modals)/tax-rates"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
+							}}
+						/>
+						{/* <Stack.Screen
 						name="(modals)/login"
 						options={{
 							presentation: 'containedTransparentModal',
@@ -63,14 +65,15 @@ function AppStack() {
 							contentStyle: { backgroundColor: 'transparent' },
 						}}
 					/> */}
-				</Stack>
-				{/**
-				 * We need to have a PortalHost inside the UISettingsProvider
-				 */}
-				<ErrorBoundary>
-					<PortalHost />
-				</ErrorBoundary>
-			</UISettingsProvider>
+					</Stack>
+					{/**
+					 * We need to have a PortalHost inside the UISettingsProvider
+					 */}
+					<ErrorBoundary>
+						<PortalHost />
+					</ErrorBoundary>
+				</UISettingsProvider>
+			</StorageHealthProvider>
 		</QueryProvider>
 	);
 }

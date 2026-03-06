@@ -11,6 +11,7 @@ import { validateCoupon } from './coupon-validation';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { isStorageDegradedError } from '../../contexts/storage-health/error';
 import { useCollection } from '../../hooks/use-collection';
 import { useCurrentOrder } from '../contexts/current-order';
 
@@ -165,12 +166,18 @@ export const useAddCoupon = () => {
 				const discountResult = calculateCouponDiscount(couponConfig, discountItems);
 
 				// 6. Add to coupon_lines
-				await addItemToOrder('coupon_lines', {
+				const savedOrder = await addItemToOrder('coupon_lines', {
 					code: couponData.code,
 					discount: String(discountResult.totalDiscount),
 					discount_tax: '0',
 					meta_data: [],
 				});
+				if (!savedOrder) {
+					return {
+						success: false,
+						error: t('common.pos_storage_connection_lost'),
+					};
+				}
 
 				orderLogger.info(t('pos_cart.coupon_applied', { defaultValue: 'Coupon applied' }), {
 					context: {
@@ -182,6 +189,13 @@ export const useAddCoupon = () => {
 
 				return { success: true };
 			} catch (error) {
+				if (isStorageDegradedError(error)) {
+					return {
+						success: false,
+						error: t('common.pos_storage_connection_lost'),
+					};
+				}
+
 				orderLogger.error(
 					t('common.there_was_an_error', {
 						message: error instanceof Error ? error.message : String(error),
