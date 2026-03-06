@@ -11,10 +11,14 @@
     "p-queue": "^8.1.0"
   },
   "peerDependencies": {
-    "expo-print": ">=55.0.0"
+    "expo-print": ">=55.0.0",
+    "react-native-tcp-socket": ">=6.0.0"
   },
   "peerDependenciesMeta": {
     "expo-print": {
+      "optional": true
+    },
+    "react-native-tcp-socket": {
       "optional": true
     }
   }
