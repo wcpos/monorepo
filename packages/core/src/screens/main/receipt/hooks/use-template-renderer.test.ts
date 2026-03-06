@@ -2,7 +2,11 @@ type ReceiptData = Record<string, unknown> | null | undefined;
 
 describe('receipt data selection logic', () => {
 	const localData = { meta: { order_number: '123' }, source: 'local' };
-	const apiData: ReceiptData = { meta: { order_number: '123' }, source: 'api', extra_field: 'server-only' };
+	const apiData: ReceiptData = {
+		meta: { order_number: '123' },
+		source: 'api',
+		extra_field: 'server-only',
+	};
 
 	it('uses API data when available', () => {
 		const result = apiData ?? localData;
