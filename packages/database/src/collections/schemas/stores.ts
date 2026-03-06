@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 3,
+	version: 4,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -116,6 +116,13 @@ export const storesLiteral = {
 			enumNames: ['Yes', 'No'],
 		},
 		calc_discounts_sequentially: {
+			description: 'Calculate coupon discounts sequentially',
+			type: 'string',
+			default: 'no',
+			enum: ['yes', 'no'],
+			enumNames: ['Yes', 'No'],
+		},
+		woocommerce_calc_discounts_sequentially: {
 			description: 'Calculate coupon discounts sequentially',
 			type: 'string',
 			default: 'no',

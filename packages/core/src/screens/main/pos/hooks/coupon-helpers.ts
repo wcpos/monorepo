@@ -78,3 +78,34 @@ export function getEligibleItems(
 		return true;
 	});
 }
+
+/**
+ * Adjusts line item prices by subtracting per-item discounts from a prior coupon.
+ * Used in sequential discount mode so the next coupon sees reduced prices.
+ */
+export function applyPerItemDiscountsToLineItems(
+	items: CouponLineItem[],
+	perItem: { product_id: number; discount: number }[]
+): CouponLineItem[] {
+	const nextItems = items.map((item) => ({ ...item }));
+
+	for (const entry of perItem) {
+		let remaining = entry.discount;
+		if (remaining <= 0) continue;
+
+		for (const item of nextItems) {
+			if (item.product_id !== entry.product_id || item.quantity <= 0) continue;
+
+			const lineTotal = item.price * item.quantity;
+			if (lineTotal <= 0) continue;
+
+			const lineDiscount = Math.min(lineTotal, remaining);
+			item.price = Math.max(0, item.price - lineDiscount / item.quantity);
+			remaining -= lineDiscount;
+
+			if (remaining <= 0) break;
+		}
+	}
+
+	return nextItems;
+}

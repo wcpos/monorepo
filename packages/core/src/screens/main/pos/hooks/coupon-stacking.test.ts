@@ -125,10 +125,9 @@ describe('coupon stacking (non-sequential)', () => {
 
 describe('coupon stacking (sequential)', () => {
 	// Sequential mode: second coupon applies to already-discounted price.
-	// Requires woocommerce_calc_discounts_sequentially setting.
-	// Skipped until setting is exposed via POS settings API.
+	// Requires woocommerce_calc_discounts_sequentially setting to be enabled.
 
-	it.skip('should apply second percent coupon to reduced price', () => {
+	it('should apply second percent coupon to reduced price', () => {
 		const items = [createItem({ product_id: 1, price: 25, quantity: 1 })];
 		const coupon1 = createConfig({ discount_type: 'percent', amount: '10' });
 		const coupon2 = createConfig({ discount_type: 'percent', amount: '20' });
