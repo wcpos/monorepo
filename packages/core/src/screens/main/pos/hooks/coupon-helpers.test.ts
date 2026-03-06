@@ -7,6 +7,7 @@
  * checks. It decides which cart line items a coupon can actually apply to.
  */
 import {
+	computeDiscountedLineItems,
 	type CouponLineItem,
 	type CouponRestrictions,
 	getEligibleItems,
@@ -437,5 +438,98 @@ describe('coupon-helpers', () => {
 				expect(result).toHaveLength(2);
 			});
 		});
+	});
+});
+
+describe('computeDiscountedLineItems', () => {
+	it('applies a single coupon discount to a line item', () => {
+		const lineItems = [
+			{
+				product_id: 63,
+				total: '40.909091',
+				total_tax: '4.090909',
+				subtotal: '40.909091',
+				subtotal_tax: '4.090909',
+				taxes: [{ id: 4, subtotal: '4.090909', total: '4.090909' }],
+			},
+		];
+
+		const result = computeDiscountedLineItems(lineItems, [
+			[{ product_id: 63, discount: 12.272727 }],
+		]);
+
+		expect(parseFloat(result[0].total!)).toBeCloseTo(28.636364, 4);
+		expect(parseFloat(result[0].total_tax!)).toBeCloseTo(2.863636, 4);
+		// Total + tax should be ~31.50
+		expect(parseFloat(result[0].total!) + parseFloat(result[0].total_tax!)).toBeCloseTo(31.5, 2);
+	});
+
+	it('returns items unchanged when no discounts apply', () => {
+		const lineItems = [{ product_id: 1, total: '50', total_tax: '5', taxes: [] }];
+
+		const result = computeDiscountedLineItems(lineItems, []);
+		expect(result).toBe(lineItems);
+	});
+
+	it('skips items with null product_id', () => {
+		const lineItems = [{ product_id: null, total: '50', total_tax: '5', taxes: [] }];
+
+		const result = computeDiscountedLineItems(lineItems, [[{ product_id: 1, discount: 10 }]]);
+
+		expect(result[0].total).toBe('50');
+	});
+
+	it('distributes discount proportionally across same-product line items', () => {
+		const lineItems = [
+			{ product_id: 1, total: '30', total_tax: '3', taxes: [] },
+			{ product_id: 1, total: '70', total_tax: '7', taxes: [] },
+		];
+
+		const result = computeDiscountedLineItems(lineItems, [[{ product_id: 1, discount: 10 }]]);
+
+		// 30% of discount goes to first item, 70% to second
+		expect(parseFloat(result[0].total!)).toBeCloseTo(27, 4);
+		expect(parseFloat(result[1].total!)).toBeCloseTo(63, 4);
+	});
+
+	it('caps discount so total never goes below zero', () => {
+		const lineItems = [{ product_id: 1, total: '5', total_tax: '0.5', taxes: [] }];
+
+		const result = computeDiscountedLineItems(lineItems, [[{ product_id: 1, discount: 100 }]]);
+
+		expect(parseFloat(result[0].total!)).toBe(0);
+		expect(parseFloat(result[0].total_tax!)).toBe(0);
+	});
+
+	it('aggregates discounts from multiple coupons', () => {
+		const lineItems = [{ product_id: 1, total: '100', total_tax: '10', taxes: [] }];
+
+		const result = computeDiscountedLineItems(lineItems, [
+			[{ product_id: 1, discount: 20 }],
+			[{ product_id: 1, discount: 10 }],
+		]);
+
+		expect(parseFloat(result[0].total!)).toBeCloseTo(70, 4);
+		expect(parseFloat(result[0].total_tax!)).toBeCloseTo(7, 4);
+	});
+
+	it('updates per-rate taxes proportionally', () => {
+		const lineItems = [
+			{
+				product_id: 1,
+				total: '100',
+				total_tax: '15',
+				taxes: [
+					{ id: 1, subtotal: '10', total: '10' },
+					{ id: 2, subtotal: '5', total: '5' },
+				],
+			},
+		];
+
+		const result = computeDiscountedLineItems(lineItems, [[{ product_id: 1, discount: 50 }]]);
+
+		// 50% discount → taxes halved
+		expect(parseFloat(result[0].taxes![0].total!)).toBeCloseTo(5, 4);
+		expect(parseFloat(result[0].taxes![1].total!)).toBeCloseTo(2.5, 4);
 	});
 });

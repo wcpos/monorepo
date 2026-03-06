@@ -4,7 +4,12 @@ import { useObservable, useObservableEagerState, useSubscription } from 'observa
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
 import { calculateCouponDiscount } from './coupon-discount';
-import { applyPerItemDiscountsToLineItems, isProductOnSale } from './coupon-helpers';
+import {
+	applyPerItemDiscountsToLineItems,
+	computeDiscountedLineItems,
+	isProductOnSale,
+} from './coupon-helpers';
+import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useFeeLineData } from './use-fee-line-data';
 import { useUpdateFeeLine } from './use-update-fee-line';
 import { getUuidFromLineItem } from './utils';
@@ -14,6 +19,7 @@ import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
 import type { CouponLineItem } from './coupon-helpers';
+import type { PerItemDiscount } from './coupon-discount';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
 
@@ -32,6 +38,7 @@ export const useCartLines = () => {
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
 	const { localPatch } = useLocalMutation();
+	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const woocommerceSequential = useObservableEagerState(
 		(store as any).woocommerce_calc_discounts_sequentially$
 	);
@@ -97,7 +104,13 @@ export const useCartLines = () => {
 		const allCouponLines = couponLines || [];
 		const activeCouponLines = allCouponLines.filter((cl: any) => cl.code != null && !cl.id);
 		if (activeCouponLines.length > 0) {
-			const activeLineItems = (lineItems || []).filter((item: any) => item.product_id !== null);
+			// Reset all line items to pre-coupon totals so discounts are applied cleanly
+			const allLineItems = (lineItems || []).map((item: any) => {
+				if (item.product_id === null) return item;
+				return calculateLineItemTaxesAndTotals(item);
+			});
+			const activeLineItems = allLineItems.filter((item: any) => item.product_id !== null);
+
 			const productIds = activeLineItems.map((item: any) => item.product_id).filter(Boolean);
 			const products =
 				productIds.length > 0
@@ -122,9 +135,9 @@ export const useCartLines = () => {
 				})
 				.filter(Boolean) as CouponLineItem[];
 
-			let needsUpdate = false;
 			let discountItems = couponLineItems;
 			const updatedCouponLines: any[] = [];
+			const allPerItemDiscounts: PerItemDiscount[][] = [];
 
 			for (const cl of activeCouponLines) {
 				const coupon = await couponCollection.findOne({ selector: { code: cl.code } }).exec();
@@ -149,30 +162,32 @@ export const useCartLines = () => {
 				);
 
 				const newDiscount = String(result.totalDiscount);
-				if (newDiscount !== cl.discount) {
-					needsUpdate = true;
-				}
-
 				updatedCouponLines.push({ ...cl, discount: newDiscount, discount_tax: '0' });
+				allPerItemDiscounts.push(result.perItem);
 
 				if (calcDiscountsSequentially) {
 					discountItems = applyPerItemDiscountsToLineItems(discountItems, result.perItem);
 				}
 			}
 
-			if (needsUpdate) {
-				// Merge updated local coupons back into full list to preserve synced coupons
-				const updatedByCode = new Map(updatedCouponLines.map((cl: any) => [cl.code, cl]));
-				const mergedCouponLines = allCouponLines.map((cl: any) =>
-					!cl.id && cl.code != null ? (updatedByCode.get(cl.code) ?? cl) : cl
-				);
+			// Always apply discounts to line items (even if coupon amounts haven't changed,
+			// the line items may have been reset by a quantity/price change)
+			const discountedLineItems = computeDiscountedLineItems(allLineItems, allPerItemDiscounts);
 
-				const order = currentOrder.getLatest();
-				await localPatch({
-					document: order,
-					data: { coupon_lines: mergedCouponLines },
-				});
-			}
+			// Merge updated local coupons back into full list to preserve synced coupons
+			const updatedByCode = new Map(updatedCouponLines.map((cl: any) => [cl.code, cl]));
+			const mergedCouponLines = allCouponLines.map((cl: any) =>
+				!cl.id && cl.code != null ? (updatedByCode.get(cl.code) ?? cl) : cl
+			);
+
+			const order = currentOrder.getLatest();
+			await localPatch({
+				document: order,
+				data: {
+					coupon_lines: mergedCouponLines,
+					line_items: discountedLineItems,
+				},
+			});
 		}
 	});
 

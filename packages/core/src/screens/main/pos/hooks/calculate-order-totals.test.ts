@@ -425,21 +425,24 @@ describe('calculateOrderTotals', () => {
 });
 
 describe('coupon line calculations', () => {
-	it('subtracts coupon discount from totals', () => {
+	it('derives discount from line item subtotal-total difference', () => {
+		// Coupon discounts are now applied directly to line item totals.
+		// calculateOrderTotals derives discount_total/discount_tax from
+		// the difference between subtotal and total on each line item.
 		const lineItems = [
 			{
 				subtotal: '100',
-				total: '100',
+				total: '90',
 				subtotal_tax: '10',
-				total_tax: '10',
-				taxes: [{ id: 1, total: '10' }],
+				total_tax: '9',
+				taxes: [{ id: 1, total: '9' }],
 			},
 		];
 		const couponLines = [
 			{
 				code: 'SAVE10',
 				discount: '10',
-				discount_tax: '1',
+				discount_tax: '0',
 			},
 		];
 
@@ -453,9 +456,10 @@ describe('coupon line calculations', () => {
 		expect(result.discount_total).toBe('10');
 		expect(result.discount_tax).toBe('1');
 		expect(result.total).toBe('99');
+		expect(result.cart_tax).toBe('9');
 	});
 
-	it('does not double-apply synced coupon discounts', () => {
+	it('handles synced coupon discounts (already in line items)', () => {
 		const lineItems = [
 			{
 				subtotal: '100',
@@ -481,21 +485,20 @@ describe('coupon line calculations', () => {
 			taxRoundAtSubtotal: false,
 		});
 
-		// Synced orders already have discounted line totals.
-		// Coupon lines should not be subtracted again.
 		expect(result.discount_total).toBe('10');
 		expect(result.discount_tax).toBe('1');
 		expect(result.total).toBe('99');
 	});
 
-	it('handles multiple coupon lines', () => {
+	it('handles multiple coupons applied to line items', () => {
+		// Two coupons: total discount of 15, applied to line items
 		const lineItems = [
 			{
 				subtotal: '200',
-				total: '200',
+				total: '185',
 				subtotal_tax: '20',
-				total_tax: '20',
-				taxes: [{ id: 1, total: '20' }],
+				total_tax: '18.5',
+				taxes: [{ id: 1, total: '18.5' }],
 			},
 		];
 		const couponLines = [
@@ -511,7 +514,8 @@ describe('coupon line calculations', () => {
 		});
 
 		expect(result.discount_total).toBe('15');
-		expect(result.total).toBe('205');
+		expect(result.discount_tax).toBe('1.5');
+		expect(result.total).toBe('203.5');
 	});
 
 	it('works with no coupon lines', () => {
