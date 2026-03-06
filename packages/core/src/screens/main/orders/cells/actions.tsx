@@ -51,7 +51,7 @@ const upsertMetaData = (
 	}
 };
 
-const REFUNDABLE_STATUSES = ['completed', 'processing', 'on-hold', 'refunded'] as const;
+const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold', 'refunded'];
 
 /**
  *
