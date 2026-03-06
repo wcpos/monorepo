@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
 
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -12,7 +13,9 @@ import { Taxes } from './totals/taxes';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
 import { useTaxInclOrExcl } from '../../hooks/use-tax-incl-or-excl';
+import { useCartLines } from '../hooks/use-cart-lines';
 import { useOrderTotals } from '../hooks/use-order-totals';
+import { useRemoveCoupon } from '../hooks/use-remove-coupon';
 
 /**
  *
@@ -33,7 +36,11 @@ export function Totals() {
 		discount_total,
 		shipping_tax,
 		shipping_total,
+		coupon_total,
+		coupon_tax,
 	} = useOrderTotals();
+	const { coupon_lines } = useCartLines();
+	const { removeCoupon } = useRemoveCoupon();
 
 	/**
 	 * Convert to numbers
@@ -47,27 +54,34 @@ export function Totals() {
 	const totalTaxNumber = toNumber(total_tax);
 	const feeTaxNumber = toNumber(fee_tax);
 	const shippingTaxNumber = toNumber(shipping_tax);
+	const couponTotalNumber = toNumber(coupon_total);
+	const couponTaxNumber = toNumber(coupon_tax);
 
 	/**
 	 * Helpers
 	 */
 	const hasSubtotal = subtotalNumber !== 0;
-	const hasDiscount = discountTotalNumber !== 0;
 	const hasShipping = shippingTotalNumber !== 0;
 	const hasFee = feeTotalNumber !== 0;
 	const hasTax = totalTaxNumber !== 0;
-	const hasTotals = hasSubtotal || hasDiscount || hasShipping || hasFee || hasTax;
 
 	/**
 	 *
 	 */
 	const displaySubtotal =
 		inclOrExcl === 'incl' ? subtotalNumber + subtotalTaxNumber : subtotalNumber;
-	const displayDiscountTotal =
-		inclOrExcl === 'incl' ? discountTotalNumber + discountTaxNumber : discountTotalNumber;
 	const displayFeeTotal = inclOrExcl === 'incl' ? feeTotalNumber + feeTaxNumber : feeTotalNumber;
 	const displayShippingTotal =
 		inclOrExcl === 'incl' ? shippingTotalNumber + shippingTaxNumber : shippingTotalNumber;
+
+	const saleDiscountNumber = discountTotalNumber - couponTotalNumber;
+	const saleDiscountTaxNumber = discountTaxNumber - couponTaxNumber;
+	const hasSaleDiscount = saleDiscountNumber > 0.001;
+	const displaySaleDiscount =
+		inclOrExcl === 'incl' ? saleDiscountNumber + saleDiscountTaxNumber : saleDiscountNumber;
+
+	const hasCoupons = coupon_lines.length > 0;
+	const hasTotals = hasSubtotal || hasSaleDiscount || hasCoupons || hasShipping || hasFee || hasTax;
 
 	return (
 		<>
@@ -78,13 +92,38 @@ export function Totals() {
 						<Text>{format(displaySubtotal)}</Text>
 					</HStack>
 					{
-						// Discounts
-						hasDiscount && (
+						// Sale discounts (non-coupon)
+						hasSaleDiscount && (
 							<HStack>
 								<Text className="grow">{t('pos_cart.discount')}:</Text>
-								<Text>{format(-1 * displayDiscountTotal)}</Text>
+								<Text>{format(-1 * displaySaleDiscount)}</Text>
 							</HStack>
 						)
+					}
+					{
+						// Coupon pills
+						coupon_lines.map((coupon) => {
+							const couponDiscount = toNumber(coupon.discount);
+							const couponDiscountTax = toNumber(coupon.discount_tax);
+							const displayCouponDiscount =
+								inclOrExcl === 'incl' ? couponDiscount + couponDiscountTax : couponDiscount;
+							return (
+								<HStack key={coupon.code}>
+									<ButtonPill
+										size="xs"
+										variant="ghost-attention"
+										leftIcon="tag"
+										removable
+										onRemove={() => removeCoupon(coupon.code!)}
+										className="grow-0"
+									>
+										<ButtonText>{coupon.code}</ButtonText>
+									</ButtonPill>
+									<Text className="grow" />
+									<Text>{format(-1 * displayCouponDiscount)}</Text>
+								</HStack>
+							);
+						})
 					}
 					{
 						// Fees
