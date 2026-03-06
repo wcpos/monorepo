@@ -57,7 +57,7 @@ const upsertMetaData = (
 export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actions'>) {
 	const order = row.original.document;
 	const router = useRouter();
-	// const status = useObservableState(order.status$, order.status);
+	const status = useObservableEagerState(order.status$!);
 	const pullDocument = usePullDocument();
 	const { localPatch } = useLocalMutation();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
@@ -66,6 +66,8 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	const orderHasID = useObservableEagerState(order.id$!); // we need to update the menu with change to order.id
 	const deleteDocument = useDeleteDocument();
 	const { readOnly } = useProAccess();
+	const refundableStatuses = ['completed', 'processing', 'on-hold', 'refunded'];
+	const canRefund = orderHasID && !!status && refundableStatuses.includes(status);
 
 	/**
 	 * To re-open an order, we need to:
@@ -139,12 +141,14 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 								<Icon name="receipt" />
 								<Text>{t('common.receipt')}</Text>
 							</DropdownMenuItem>
-							<DropdownMenuItem
-								onPress={() => router.push({ pathname: `/orders/refund/${order.uuid}` })}
-							>
-								<Icon name="arrowRotateLeft" />
-								<Text>{t('orders.refund')}</Text>
-							</DropdownMenuItem>
+							{canRefund && (
+								<DropdownMenuItem
+									onPress={() => router.push({ pathname: `/orders/refund/${order.uuid}` })}
+								>
+									<Icon name="arrowRotateLeft" />
+									<Text>{t('orders.refund')}</Text>
+								</DropdownMenuItem>
+							)}
 							<DropdownMenuItem onPress={() => pullDocument(order.id!, order.collection as never)}>
 								<Icon name="arrowRotateRight" />
 								<Text>{t('common.sync')}</Text>
