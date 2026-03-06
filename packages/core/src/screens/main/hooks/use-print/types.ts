@@ -3,6 +3,8 @@
  */
 export interface UsePrintExternalURLOptions {
 	externalURL: string;
+	/** Inline HTML to print instead of fetching from externalURL */
+	html?: string;
 	onBeforePrint?: () => void | Promise<void>;
 	onAfterPrint?: () => void;
 	onPrintError?: (errorLocation: string, error: Error) => void;

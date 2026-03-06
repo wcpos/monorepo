@@ -112,6 +112,7 @@ export function Receipt({ resource }: Props) {
 		orderId,
 		baseReceiptURL,
 		mode: selectedMode,
+		order,
 	});
 
 	// Fetch receipt metadata from the receipts REST API
@@ -134,6 +135,7 @@ export function Receipt({ resource }: Props) {
 
 	const { print, isPrinting } = usePrintExternalURL({
 		externalURL: templateReceiptUrl || receiptURL,
+		html: renderedHtml ?? undefined,
 	});
 
 	// Retry fiscal submission

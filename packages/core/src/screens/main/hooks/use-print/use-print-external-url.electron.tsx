@@ -9,7 +9,7 @@ import type { UsePrintExternalURLOptions } from './types';
 const printLogger = getLogger(['wcpos', 'print', 'external']);
 
 export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
-	const { externalURL, onBeforePrint, onAfterPrint, onPrintError } = options;
+	const { externalURL, html, onBeforePrint, onAfterPrint, onPrintError } = options;
 	const [isPrinting, setIsPrinting] = React.useState(false);
 
 	/**
@@ -24,9 +24,15 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 				once: (channel: string, callback: (...args: unknown[]) => void) => void;
 			};
 
+			// When inline HTML is provided, encode as a data URI so the
+			// main process can load it without requiring a new IPC channel.
+			const urlToSend = html
+				? `data:text/html;base64,${btoa(unescape(encodeURIComponent(html)))}`
+				: externalURL;
+
 			// Send the print request to the main process
 			ipc.send('print-external-url', {
-				externalURL,
+				externalURL: urlToSend,
 				printJobId,
 			});
 
@@ -56,7 +62,7 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 		} else {
 			printLogger.error('ipcRenderer not available');
 		}
-	}, [externalURL, onBeforePrint, onAfterPrint, onPrintError]);
+	}, [externalURL, html, onBeforePrint, onAfterPrint, onPrintError]);
 
 	return { print, isPrinting };
 };

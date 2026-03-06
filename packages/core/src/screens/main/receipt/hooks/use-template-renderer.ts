@@ -7,6 +7,8 @@ import type { TemplateDocument } from '@wcpos/database';
 
 import { useActiveTemplates } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
+import { buildReceiptData } from '../utils/build-receipt-data';
+import { useAppState } from '../../../../contexts/app-state';
 
 import type { ReceiptData } from '../utils/build-receipt-data';
 import type { ReceiptMode } from './use-receipt-data';
@@ -15,6 +17,8 @@ interface UseTemplateRendererOptions {
 	orderId: number | undefined;
 	baseReceiptURL: string | undefined;
 	mode: ReceiptMode;
+	/** The RxDB order document — used to build local receipt data when offline */
+	order: Record<string, any> | undefined;
 }
 
 interface TemplateRendererResult {
@@ -31,13 +35,24 @@ export function useTemplateRenderer({
 	orderId,
 	baseReceiptURL,
 	mode,
+	order,
 }: UseTemplateRendererOptions): TemplateRendererResult {
 	const templates = useActiveTemplates();
+	const { store } = useAppState();
 	const { status } = useOnlineStatus();
 	const isOffline = status !== 'online-website-available';
 
 	// Fetch receipt data from API (when online)
 	const { data: apiReceiptData } = useReceiptData({ orderId, mode });
+
+	// Fall back to locally-built receipt data when the API response is unavailable
+	const receiptData = React.useMemo(() => {
+		if (apiReceiptData) return apiReceiptData;
+		if (order && store) {
+			return buildReceiptData(order, store);
+		}
+		return null;
+	}, [apiReceiptData, order, store]);
 
 	// Default to the first template (or the one marked is_active)
 	const defaultId = React.useMemo(() => {
@@ -57,7 +72,6 @@ export function useTemplateRenderer({
 	// Pre-render all Mustache templates into a cache
 	const preRenderedCache = React.useMemo(() => {
 		const cache = new Map<string | number, string>();
-		const receiptData = apiReceiptData ?? null;
 		if (!receiptData) return cache;
 
 		for (const tmpl of templates) {
@@ -70,7 +84,7 @@ export function useTemplateRenderer({
 			}
 		}
 		return cache;
-	}, [templates, apiReceiptData]);
+	}, [templates, receiptData]);
 
 	// Determine output
 	let renderedHtml: string | null = null;
@@ -81,7 +95,7 @@ export function useTemplateRenderer({
 		if (cached) {
 			renderedHtml = cached;
 		} else {
-			const data = apiReceiptData;
+			const data = receiptData;
 			if (data && selectedTemplate.content) {
 				try {
 					renderedHtml = Mustache.render(selectedTemplate.content, data);
@@ -113,7 +127,7 @@ export function useTemplateRenderer({
 		setSelectedTemplateId,
 		renderedHtml,
 		receiptUrl,
-		receiptData: apiReceiptData,
+		receiptData,
 		isOffline,
 	};
 }

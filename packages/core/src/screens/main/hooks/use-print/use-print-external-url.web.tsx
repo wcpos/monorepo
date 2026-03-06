@@ -89,6 +89,7 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 	const handlePrint = React.useCallback(() => {
 		const {
 			externalURL,
+			html,
 			onBeforePrint,
 			onAfterPrint,
 			onPrintError,
@@ -100,9 +101,13 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 		removePrintIframe(preserveAfterPrint, true);
 
 		const proceedToPrint = () => {
-			if (externalURL) {
+			if (html || externalURL) {
 				const printWindow = generatePrintWindow();
-				printWindow.src = externalURL;
+				if (html) {
+					printWindow.srcdoc = html;
+				} else {
+					printWindow.src = externalURL;
+				}
 
 				// Set up onload handler to start printing once the content is loaded
 				printWindow.onload = () => {
