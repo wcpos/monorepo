@@ -8,6 +8,7 @@ import { customersLiteral } from './schemas/customers';
 // import { logsLiteral } from './schemas/logs';
 import { logsLiteral } from './schemas/logs';
 import { notificationsLiteral } from './schemas/notifications';
+import { templatesLiteral } from './schemas/templates';
 import { ordersLiteral } from './schemas/orders';
 import { productsLiteral } from './schemas/products';
 import { sitesLiteral } from './schemas/sites';
@@ -434,6 +435,15 @@ const notifications: RxCollectionCreator<NotificationDocumentType> = {
 	schema: notificationSchema,
 };
 
+/**
+ * Templates
+ */
+const templateSchema: RxJsonSchema<TemplateDocumentType> = templatesLiteral;
+type TemplateDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof templatesLiteral>;
+export type TemplateDocument = RxDocument<TemplateDocumentType>;
+export type TemplateCollection = RxCollection<TemplateDocumentType>;
+const templates: RxCollectionCreator<TemplateDocumentType> = { schema: templateSchema };
+
 export type UserCollections = {
 	users: UserCollection;
 	sites: SiteCollection;
@@ -455,6 +465,7 @@ export type StoreCollections = {
 	'products/brands': ProductBrandCollection;
 	logs: LogCollection;
 	notifications: NotificationCollection;
+	templates: TemplateCollection;
 };
 
 export type SyncCollections = {
@@ -468,6 +479,7 @@ export type SyncCollections = {
 	'products/categories': SyncCollection;
 	'products/tags': SyncCollection;
 	'products/brands': SyncCollection;
+	templates: SyncCollection;
 };
 
 export type TemporaryCollections = {
@@ -500,6 +512,7 @@ export const storeCollections = {
 	'products/brands': brands, // NOTE: WC REST API uses 'products/brands' endpoint
 	logs,
 	notifications,
+	templates,
 };
 
 // @NOTE: sync collection should have corresponding collections in storeCollections
@@ -514,6 +527,7 @@ export const syncCollections = {
 	'products/categories': sync,
 	'products/tags': sync,
 	'products/brands': sync,
+	templates: sync,
 };
 
 export const temporaryCollections = {
