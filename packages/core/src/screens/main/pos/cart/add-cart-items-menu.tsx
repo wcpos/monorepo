@@ -65,20 +65,20 @@ export function AddCartItemsMenu() {
 						testID="menu-add-misc-product"
 						onPress={() => setOpenDialog('misc-product')}
 					>
-						<Icon name="circlePlus" />
+						<Icon name="box" />
 						<Text>{t('pos_cart.add_miscellaneous_product')}</Text>
 					</DropdownMenuItem>
 					<DropdownMenuItem testID="menu-add-fee" onPress={() => setOpenDialog('fee')}>
-						<Icon name="circlePlus" />
+						<Icon name="fileInvoiceDollar" />
 						<Text>{t('pos_cart.add_fee')}</Text>
 					</DropdownMenuItem>
 					<DropdownMenuItem testID="menu-add-shipping" onPress={() => setOpenDialog('shipping')}>
-						<Icon name="circlePlus" />
+						<Icon name="truck" />
 						<Text>{t('pos_cart.add_shipping')}</Text>
 					</DropdownMenuItem>
 					{isPro ? (
 						<DropdownMenuItem testID="menu-add-coupon" onPress={() => setOpenDialog('coupon')}>
-							<Icon name="circlePlus" />
+							<Icon name="badgePercent" />
 							<Text>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</Text>
 						</DropdownMenuItem>
 					) : (
@@ -97,17 +97,12 @@ export function AddCartItemsMenu() {
 				</DropdownMenuContent>
 			</DropdownMenu>
 
-			{/* Add New Customer dialog — uses its own internal form/state */}
-			<AddCustomerDialog
-				open={openDialog === 'customer'}
-				onOpenChange={(open) => !open && setOpenDialog(null)}
-			/>
+			{openDialog === 'customer' && (
+				<AddCustomerDialog open onOpenChange={(open) => !open && setOpenDialog(null)} />
+			)}
 
-			{/* Misc product dialog */}
-			<Dialog
-				open={openDialog === 'misc-product'}
-				onOpenChange={(open) => !open && setOpenDialog(null)}
-			>
+			{openDialog === 'misc-product' && (
+			<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
 				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('pos_cart.add_miscellaneous_product')}</DialogTitle>
@@ -119,9 +114,10 @@ export function AddCartItemsMenu() {
 					</DialogBody>
 				</DialogContent>
 			</Dialog>
+			)}
 
-			{/* Fee dialog */}
-			<Dialog open={openDialog === 'fee'} onOpenChange={(open) => !open && setOpenDialog(null)}>
+			{openDialog === 'fee' && (
+			<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
 				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('pos_cart.add_fee')}</DialogTitle>
@@ -133,12 +129,10 @@ export function AddCartItemsMenu() {
 					</DialogBody>
 				</DialogContent>
 			</Dialog>
+			)}
 
-			{/* Shipping dialog */}
-			<Dialog
-				open={openDialog === 'shipping'}
-				onOpenChange={(open) => !open && setOpenDialog(null)}
-			>
+			{openDialog === 'shipping' && (
+			<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
 				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('pos_cart.add_shipping')}</DialogTitle>
@@ -150,9 +144,10 @@ export function AddCartItemsMenu() {
 					</DialogBody>
 				</DialogContent>
 			</Dialog>
+			)}
 
-			{/* Coupon dialog */}
-			<Dialog open={openDialog === 'coupon'} onOpenChange={(open) => !open && setOpenDialog(null)}>
+			{openDialog === 'coupon' && (
+			<Dialog open onOpenChange={(open) => !open && setOpenDialog(null)}>
 				<DialogContent size="lg" portalHost="pos">
 					<DialogHeader>
 						<DialogTitle>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</DialogTitle>
@@ -164,6 +159,7 @@ export function AddCartItemsMenu() {
 					</DialogBody>
 				</DialogContent>
 			</Dialog>
+			)}
 		</>
 	);
 }
