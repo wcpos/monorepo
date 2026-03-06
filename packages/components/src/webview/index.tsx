@@ -6,14 +6,15 @@ import { WebView as RNWebView, WebViewProps as RNWebViewProps } from 'react-nati
 
 export interface WebViewProps extends RNWebViewProps {
 	ref: React.RefObject<RNWebView>;
-	src: string;
+	src?: string;
+	srcDoc?: string;
 	onMessage: (event: { nativeEvent: { data: any } }) => void;
 }
 
 /**
  * WebView component that automatically resizes to fill its parent container
  */
-function WebView({ ref, src, onMessage, ...props }: WebViewProps) {
+function WebView({ ref, src, srcDoc, onMessage, ...props }: WebViewProps) {
 	/**
 	 * Add a postMessage function to the ref
 	 */
@@ -32,10 +33,13 @@ function WebView({ ref, src, onMessage, ...props }: WebViewProps) {
 		},
 	});
 
+	// srcDoc (inline HTML) takes priority over src (URI)
+	const source = srcDoc ? { html: srcDoc } : { uri: src || '' };
+
 	return (
 		<RNWebView
 			ref={augmentedRef}
-			source={{ uri: src }}
+			source={source}
 			onMessage={(event) => {
 				/**
 				 * https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md#onmessage
