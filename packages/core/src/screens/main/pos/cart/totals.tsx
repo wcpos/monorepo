@@ -112,7 +112,7 @@ export function Totals() {
 									<ButtonPill
 										size="xs"
 										variant="attention"
-										leftIcon="tag"
+										leftIcon="badgePercent"
 										removable
 										onRemove={() => removeCoupon(coupon.code!)}
 										className="grow-0"

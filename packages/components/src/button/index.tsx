@@ -184,12 +184,7 @@ function Button({
 	 */
 	const renderIcon = (icon: IconName | React.ReactNode, position: 'left' | 'right') => {
 		if (typeof icon === 'string') {
-			return (
-				<Icon
-					name={icon as IconName}
-					size={size as IconProps['size']}
-				/>
-			);
+			return <Icon name={icon as IconName} size={size as IconProps['size']} />;
 		}
 		return icon;
 	};
