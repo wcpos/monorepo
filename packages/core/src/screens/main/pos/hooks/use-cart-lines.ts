@@ -144,8 +144,9 @@ export const useCartLines = () => {
 			for (const cl of replayCouponLines) {
 				const coupon = await couponCollection.findOne({ selector: { code: cl.code } }).exec();
 				if (!coupon) {
-					if (!cl.id) updatedCouponLines.push(cl);
-					continue;
+					// Can't safely recompute line-item discounts unless every active
+					// coupon can be replayed — abort to avoid totals drifting.
+					return;
 				}
 
 				const couponData = coupon.toJSON();
