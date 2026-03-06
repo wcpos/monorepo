@@ -103,11 +103,13 @@ export const useCartLines = () => {
 		// All coupons (local + synced) must be replayed so line item totals reflect
 		// every active coupon's discount. Only local coupon discount amounts are updated;
 		// synced coupon_lines keep their server-authoritative discount values.
-		const allCouponLines = couponLines || [];
+		// Read fresh order state to avoid stale closure values during async replay
+		const freshOrder = currentOrder.getLatest();
+		const allCouponLines = freshOrder.coupon_lines || [];
 		const replayCouponLines = allCouponLines.filter((cl: any) => cl.code != null);
 		if (replayCouponLines.length > 0) {
 			// Reset all line items to pre-coupon totals so discounts are applied cleanly
-			const allLineItems = (lineItems || []).map((item: any) => {
+			const allLineItems = (freshOrder.line_items || []).map((item: any) => {
 				if (item.product_id === null) return item;
 				return calculateLineItemTaxesAndTotals(item);
 			});
@@ -187,7 +189,11 @@ export const useCartLines = () => {
 				!cl.id && cl.code != null ? (updatedByCode.get(cl.code) ?? cl) : cl
 			);
 
+			// Bail if order changed during async replay to avoid overwriting concurrent edits
 			const order = currentOrder.getLatest();
+			if (order !== freshOrder) {
+				return;
+			}
 			await localPatch({
 				document: order,
 				data: {

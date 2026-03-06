@@ -171,6 +171,15 @@ export const useAddCoupon = () => {
 
 				// 6. Apply discount to line items and add coupon line
 				const latestOrder = currentOrder.getLatest();
+
+				// Bail if cart changed during async coupon lookups to avoid stale writes
+				if (latestOrder !== order) {
+					return {
+						success: false,
+						error: "Cart changed during coupon application. Please try again.",
+					};
+				}
+
 				const discountedLineItems = computeDiscountedLineItems(latestOrder.line_items || [], [
 					discountResult.perItem,
 				]);
