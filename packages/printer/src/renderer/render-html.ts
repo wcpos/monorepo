@@ -44,8 +44,10 @@ function renderNode(node: ThermalNode): string {
       return `<div style="text-align: center; padding: 8px 0"><div style="background: repeating-linear-gradient(90deg, #000 0px, #000 2px, #fff 2px, #fff 4px); height: ${node.height}px; margin: 0 auto; width: 80%"></div><div style="font-size: 11px; margin-top: 4px">${escapeHtml(node.value)}</div></div>`;
     case 'qrcode':
       return `<div style="text-align: center; padding: 8px 0"><div style="width: ${node.size * 25}px; height: ${node.size * 25}px; border: 1px solid #000; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999">QR</div></div>`;
-    case 'image':
-      return `<div style="text-align: center; padding: 8px 0"><img src="${escapeHtml(node.src)}" style="max-width: ${node.width}px; height: auto" /></div>`;
+    case 'image': {
+      const safeSrc = /^(https?:|data:image\/)/i.test(node.src) ? escapeHtml(node.src) : '';
+      return `<div style="text-align: center; padding: 8px 0"><img src="${safeSrc}" style="max-width: ${node.width}px; height: auto" /></div>`;
+    }
     case 'cut':
       return '<div style="border-top: 1px dashed #ccc; margin: 12px 0; position: relative"><span style="position: absolute; top: -8px; left: -4px; font-size: 14px">&#9986;</span></div>';
     case 'feed':

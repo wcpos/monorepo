@@ -63,13 +63,17 @@ function parseChildren(parent: Element): ThermalNode[] {
         nodes.push({ type: 'size', width: w, height: intAttr(el, 'height', w), children: parseChildren(el) });
         break;
       }
-      case 'align':
+      case 'align': {
+        const modeAttr = el.getAttribute('mode');
+        const validModes = ['left', 'center', 'right'] as const;
+        const mode = validModes.includes(modeAttr as typeof validModes[number]) ? (modeAttr as 'left' | 'center' | 'right') : 'left';
         nodes.push({
           type: 'align',
-          mode: (el.getAttribute('mode') as 'left' | 'center' | 'right') ?? 'left',
+          mode,
           children: parseChildren(el),
         });
         break;
+      }
       case 'row':
         nodes.push({
           type: 'row',
