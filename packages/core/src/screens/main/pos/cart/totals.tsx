@@ -111,7 +111,7 @@ export function Totals() {
 								<HStack key={coupon.code}>
 									<ButtonPill
 										size="xs"
-										variant="ghost-attention"
+										variant="attention"
 										leftIcon="tag"
 										removable
 										onRemove={() => removeCoupon(coupon.code!)}

@@ -187,7 +187,6 @@ function Button({
 			return (
 				<Icon
 					name={icon as IconName}
-					variant={variant as IconProps['variant']}
 					size={size as IconProps['size']}
 				/>
 			);
