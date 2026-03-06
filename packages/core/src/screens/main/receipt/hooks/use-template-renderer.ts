@@ -3,7 +3,7 @@ import * as React from 'react';
 import Mustache from 'mustache';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { renderThermalPreview } from '@wcpos/printer';
+import { renderThermalPreview, mapReceiptData } from '@wcpos/printer';
 import type { TemplateDocument } from '@wcpos/database';
 
 import { useActiveTemplates } from './use-active-templates';
@@ -77,6 +77,12 @@ export function useTemplateRenderer({
 	const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
 
 	// Pre-render all offline-capable templates into a cache
+	// Normalise receipt data so thermal preview uses the same shape as thermal printing
+	const normalisedReceiptData = React.useMemo(
+		() => (receiptData ? mapReceiptData(receiptData as Record<string, any>) : null),
+		[receiptData]
+	);
+
 	const preRenderedCache = React.useMemo(() => {
 		const cache = new Map<string | number, string>();
 		if (!receiptData) return cache;
@@ -87,7 +93,10 @@ export function useTemplateRenderer({
 					if (tmpl.engine === 'thermal') {
 						cache.set(
 							tmpl.id,
-							renderThermalPreview(tmpl.content, receiptData as Record<string, any>)
+							renderThermalPreview(
+								tmpl.content,
+								(normalisedReceiptData ?? receiptData) as Record<string, any>
+							)
 						);
 					} else {
 						cache.set(tmpl.id, Mustache.render(tmpl.content, receiptData));
@@ -98,7 +107,7 @@ export function useTemplateRenderer({
 			}
 		}
 		return cache;
-	}, [templates, receiptData]);
+	}, [templates, receiptData, normalisedReceiptData]);
 
 	// Determine output
 	let renderedHtml: string | null = null;
@@ -115,7 +124,7 @@ export function useTemplateRenderer({
 					if (selectedTemplate.engine === 'thermal') {
 						renderedHtml = renderThermalPreview(
 							selectedTemplate.content,
-							data as Record<string, any>
+							(normalisedReceiptData ?? data) as Record<string, any>
 						);
 					} else {
 						renderedHtml = Mustache.render(selectedTemplate.content, data);
