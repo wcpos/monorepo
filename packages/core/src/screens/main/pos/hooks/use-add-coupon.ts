@@ -176,14 +176,16 @@ export const useAddCoupon = () => {
 				if (latestOrder !== order) {
 					return {
 						success: false,
-						error: "Cart changed during coupon application. Please try again.",
-					};
+						error: t('pos_cart.cart_changed', {
+						defaultValue: 'Cart changed during coupon application. Please try again.',
+					}),
+				};
 				}
 
 				const discountedLineItems = computeDiscountedLineItems(latestOrder.line_items || [], [
 					discountResult.perItem,
 				]);
-				await localPatch({
+				const patchResult = await localPatch({
 					document: latestOrder,
 					data: {
 						coupon_lines: [
@@ -198,6 +200,15 @@ export const useAddCoupon = () => {
 						line_items: discountedLineItems,
 					},
 				});
+
+				if (!patchResult) {
+					return {
+						success: false,
+						error: t('pos_cart.coupon_apply_failed', {
+							defaultValue: 'Failed to apply coupon. Please try again.',
+						}),
+					};
+				}
 
 				orderLogger.info(t('pos_cart.coupon_applied', { defaultValue: 'Coupon applied' }), {
 					context: {
