@@ -32,9 +32,12 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 
 			// When inline HTML is provided, encode as a data URI so the
 			// main process can load it without requiring a new IPC channel.
-			const urlToSend = html
-				? `data:text/html;base64,${btoa(unescape(encodeURIComponent(html)))}`
-				: externalURL;
+			let urlToSend = externalURL;
+			if (html) {
+				const bytes = new TextEncoder().encode(html);
+				const binString = Array.from(bytes, (byte) => String.fromCodePoint(byte)).join('');
+				urlToSend = `data:text/html;base64,${btoa(binString)}`;
+			}
 
 			// Send the print request to the main process
 			ipc.send('print-external-url', {

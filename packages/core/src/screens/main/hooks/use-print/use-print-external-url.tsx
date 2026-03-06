@@ -33,7 +33,7 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 				printHtml = html;
 			} else {
 				// Fetch HTML content from the URL
-				const response = await fetch(externalURL);
+				const response = await fetch(externalURL!);
 				if (!response.ok) {
 					throw new Error(`Failed to fetch receipt: ${response.status} ${response.statusText}`);
 				}

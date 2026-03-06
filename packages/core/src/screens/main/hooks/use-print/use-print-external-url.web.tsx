@@ -107,7 +107,7 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 					printWindow.setAttribute('sandbox', 'allow-same-origin');
 					printWindow.srcdoc = html;
 				} else {
-					printWindow.src = externalURL;
+					printWindow.src = externalURL!;
 				}
 
 				// Set up onload handler to start printing once the content is loaded
@@ -130,7 +130,7 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 				document.body.appendChild(printWindow);
 			} else {
 				logMessages({
-					messages: ['No external URL provided to print'],
+					messages: ['No HTML or external URL provided to print'],
 					suppressErrors,
 				});
 			}

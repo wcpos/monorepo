@@ -93,12 +93,14 @@ describe('buildReceiptData', () => {
 		expect(result.lines).toHaveLength(1);
 		expect(result.lines[0].name).toBe('Widget');
 		expect(result.lines[0].quantity).toBe(2);
+		expect(result.lines[0].price).toBe(12.5);
 		expect(result.lines[0].sku).toBe('WDG-001');
 		expect(result.lines[0].total).toBe('20.00');
 	});
 
 	it('maps totals', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
+		expect(result.totals.subtotal).toBe('25.00');
 		expect(result.totals.grand_total_incl).toBe('25.00');
 		expect(result.totals.tax_total).toBe('2.50');
 		expect(result.totals.discount_total).toBe('5.00');

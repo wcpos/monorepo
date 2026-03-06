@@ -245,23 +245,15 @@ export function Receipt({ resource }: Props) {
 								onSelect={setSelectedTemplateId}
 								isOffline={isOffline}
 							/>
-							{renderedHtml ? (
-								<WebView
-									ref={iframeRef as never}
-									srcDoc={renderedHtml}
-									onLoad={handleLoad}
-									onMessage={() => {}}
-									className="flex-1"
-								/>
-							) : (
-								<WebView
-									ref={iframeRef as never}
-									src={templateReceiptUrl || receiptURL}
-									onLoad={handleLoad}
-									onMessage={() => {}}
-									className="flex-1"
-								/>
-							)}
+							<WebView
+								ref={iframeRef as never}
+								{...(renderedHtml
+									? { srcDoc: renderedHtml }
+									: { src: templateReceiptUrl || receiptURL })}
+								onLoad={handleLoad}
+								onMessage={() => {}}
+								className="flex-1"
+							/>
 						</VStack>
 					</ErrorBoundary>
 				</ModalBody>
