@@ -115,6 +115,14 @@ export class EpsonEposAdapter implements PrinterTransport {
   }
 
   async disconnect(): Promise<void> {
+    // Wait for any in-progress connection attempt to complete
+    if (this.connecting) {
+      try {
+        await this.connecting;
+      } catch {
+        // Connection failed, proceed with cleanup
+      }
+    }
     if (this.device) {
       this.device.disconnect();
       this.device = null;

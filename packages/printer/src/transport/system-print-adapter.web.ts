@@ -43,39 +43,48 @@ export class SystemPrintAdapter implements PrinterTransport {
 
       // Wait for content to render before printing
       setTimeout(() => {
+        const win = iframe.contentWindow;
+        if (!win) {
+          document.body.removeChild(iframe);
+          reject(new Error("Cannot access iframe window"));
+          return;
+        }
+
+        // Use afterprint to detect when the print dialog closes so the
+        // print queue waits for the actual operation to finish.
+        const FALLBACK_TIMEOUT = 60_000;
+        let settled = false;
+        let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+
+        const cleanup = () => {
+          if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
+          win.removeEventListener("afterprint", settle);
+          // Defer iframe removal so the browser finishes spooling
+          setTimeout(() => {
+            const el = document.getElementById("wcpos-print-frame");
+            if (el) document.body.removeChild(el);
+          }, 1000);
+        };
+
+        const settle = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve();
+        };
+
         try {
-          const win = iframe.contentWindow;
-          if (!win) {
-            reject(new Error("Cannot access iframe window"));
-            return;
-          }
-
-          // Use afterprint to detect when the print dialog closes so the
-          // print queue waits for the actual operation to finish.
-          const FALLBACK_TIMEOUT = 60_000;
-          let settled = false;
-
-          const settle = () => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(fallbackTimer);
-            resolve();
-            // Defer cleanup so the browser finishes spooling
-            setTimeout(() => {
-              const el = document.getElementById("wcpos-print-frame");
-              if (el) document.body.removeChild(el);
-            }, 1000);
-          };
-
-          const fallbackTimer = setTimeout(settle, FALLBACK_TIMEOUT);
+          fallbackTimer = setTimeout(settle, FALLBACK_TIMEOUT);
           win.addEventListener("afterprint", settle, { once: true });
 
           win.focus();
           win.print();
         } catch (error) {
-          const el = document.getElementById("wcpos-print-frame");
-          if (el) document.body.removeChild(el);
-          reject(error);
+          if (!settled) {
+            settled = true;
+            cleanup();
+            reject(error);
+          }
         }
       }, 500);
     });
