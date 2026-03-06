@@ -11,6 +11,7 @@
     "p-queue": "^8.1.0"
   },
   "devDependencies": {
+    "jsdom": "^26.1.0",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
