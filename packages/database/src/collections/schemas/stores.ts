@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 4,
+	version: 5,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -503,6 +503,24 @@ export const storesLiteral = {
 					value: {
 						description: 'Meta value.',
 						type: 'string',
+					},
+				},
+			},
+		},
+		active_templates: {
+			description: 'Per-store template assignments (Pro feature). Array of template IDs with sort order.',
+			type: 'array',
+			default: [],
+			items: {
+				type: 'object',
+				properties: {
+					template_id: {
+						description: 'Template ID (integer for database, string for virtual).',
+						type: ['string', 'integer'],
+					},
+					sort_order: {
+						type: 'integer',
+						default: 0,
 					},
 				},
 			},

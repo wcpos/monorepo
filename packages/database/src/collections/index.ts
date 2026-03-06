@@ -88,6 +88,10 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.woocommerce_calc_discounts_sequentially = 'no';
 			return oldDoc;
 		},
+		5(oldDoc: StoreDocumentType) {
+			oldDoc.active_templates = [];
+			return oldDoc;
+		},
 	},
 };
 
