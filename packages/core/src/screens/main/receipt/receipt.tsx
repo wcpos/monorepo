@@ -46,6 +46,7 @@ import { TemplateSwitcher } from './template-switcher';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
+import { useDefaultPrinterProfile } from '../settings/printer/use-default-printer-profile';
 import { usePrint } from '@wcpos/printer';
 
 import type { ReceiptMode } from './hooks/use-receipt-data';
@@ -136,10 +137,14 @@ export function Receipt({ resource }: Props) {
 		return appendModeParam(baseReceiptURL, selectedMode);
 	}, [baseReceiptURL, selectedMode]);
 
+	// Default printer profile for direct thermal printing (bypasses system dialog)
+	const defaultProfile = useDefaultPrinterProfile();
+
 	const { print, isPrinting } = usePrint({
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || receiptURL,
+		printerProfile: defaultProfile,
 	});
 
 	// Retry fiscal submission
