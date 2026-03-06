@@ -55,4 +55,6 @@ export type {
 	UserDocument,
 	WPCredentialsCollection,
 	WPCredentialsDocument,
+	PrinterProfileCollection,
+	PrinterProfileDocument,
 } from './collections';
