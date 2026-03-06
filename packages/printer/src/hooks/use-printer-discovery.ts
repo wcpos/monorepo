@@ -1,6 +1,6 @@
-import * as React from 'react';
+import * as React from "react";
 
-import type { DiscoveredPrinter } from '../types';
+import type { DiscoveredPrinter } from "../types";
 
 interface UsePrinterDiscoveryResult {
   /** Currently discovered/added printers */
@@ -16,7 +16,7 @@ interface UsePrinterDiscoveryResult {
     name: string,
     address: string,
     port?: number,
-    vendor?: 'epson' | 'star' | 'generic',
+    vendor?: "epson" | "star" | "generic",
   ) => void;
   /** Remove a discovered printer by id */
   removeDiscoveredPrinter: (id: string) => void;
@@ -46,16 +46,19 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
       name: string,
       address: string,
       port: number = 9100,
-      vendor: 'epson' | 'star' | 'generic' = 'generic',
+      vendor: "epson" | "star" | "generic" = "generic",
     ) => {
+      const normalizedAddress = address.trim().toLowerCase();
       setPrinters((prev) => [
         // Remove duplicate if same address:port already exists
-        ...prev.filter((p) => !(p.address === address && p.port === port)),
+        ...prev.filter(
+          (p) => !(p.address === normalizedAddress && p.port === port),
+        ),
         {
-          id: `${address}:${port}`,
+          id: `${normalizedAddress}:${port}`,
           name,
-          connectionType: 'network' as const,
-          address,
+          connectionType: "network" as const,
+          address: normalizedAddress,
           port,
           vendor,
         },

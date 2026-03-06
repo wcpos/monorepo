@@ -25,10 +25,14 @@ export function LanguageSelect({ value, ...props }: React.ComponentProps<typeof 
 		[]
 	);
 
-	const label = options.find((option) => option.value === value?.value)?.label;
+	const selectedLabel =
+		options.find((option) => option.value === value?.value)?.label ??
+		value?.label ??
+		value?.value ??
+		'';
 
 	return (
-		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
+		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);

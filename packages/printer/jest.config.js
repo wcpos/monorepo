@@ -1,4 +1,4 @@
-const TEST_REGEX = '(/__tests__/.*\\.(test|spec)|(\\.|/)(test|spec))\\.(jsx?|js?|tsx?|ts?)$';
+const TEST_REGEX = '(/__tests__/.*\\.(test|spec)|(\\.|/)(test|spec))\\.(tsx?|jsx?)$';
 
 module.exports = {
 	displayName: '@wcpos/printer',

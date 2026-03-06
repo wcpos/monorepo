@@ -11,7 +11,7 @@ import { useAppState } from '../../../../contexts/app-state';
 /**
  * Converts an RxDB printer profile document into a plain PrinterProfile object.
  */
-function toPrinterProfile(doc: PrinterProfileDocument): PrinterProfile {
+export function toPrinterProfile(doc: PrinterProfileDocument): PrinterProfile {
 	return {
 		id: doc.id,
 		name: doc.name,

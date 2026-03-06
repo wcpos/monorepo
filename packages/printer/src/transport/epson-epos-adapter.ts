@@ -1,4 +1,4 @@
-import type { PrinterTransport } from '../types';
+import type { PrinterTransport } from "../types";
 
 /**
  * Global type declarations for the Epson ePOS SDK.
@@ -27,7 +27,9 @@ interface EpsonePOSDevice {
 interface EpsonPrinter {
   addCommand(data: string): void;
   send(): void;
-  onreceive: ((response: { success: boolean; code: string; status: number }) => void) | null;
+  onreceive:
+    | ((response: { success: boolean; code: string; status: number }) => void)
+    | null;
   onerror: ((error: { status: number; responseText: string }) => void) | null;
 }
 
@@ -51,10 +53,11 @@ interface EpsonPrinter {
  * connection for subsequent prints. Call disconnect() to clean up.
  */
 export class EpsonEposAdapter implements PrinterTransport {
-  readonly name = 'epson-epos-web';
+  readonly name = "epson-epos-web";
 
   private device: EpsonePOSDevice | null = null;
   private printer: EpsonPrinter | null = null;
+  private connecting: Promise<void> | null = null;
 
   /**
    * @param host - Printer IP address or hostname (e.g., "192.168.1.100")
@@ -68,8 +71,17 @@ export class EpsonEposAdapter implements PrinterTransport {
   async printRaw(data: Uint8Array): Promise<void> {
     await this.ensureConnected();
 
-    // Convert bytes to a string of char codes (the SDK's addCommand format)
-    const rawString = String.fromCharCode(...data);
+    // Convert bytes to a string of char codes (the SDK's addCommand format).
+    // Process in chunks to avoid call stack limits on large receipts.
+    const CHUNK_SIZE = 8192;
+    const chunks: string[] = [];
+    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+      const chunk = data.subarray(i, i + CHUNK_SIZE);
+      chunks.push(
+        String.fromCharCode.apply(null, chunk as unknown as number[]),
+      );
+    }
+    const rawString = chunks.join("");
 
     return new Promise<void>((resolve, reject) => {
       this.printer!.onreceive = (response) => {
@@ -86,7 +98,11 @@ export class EpsonEposAdapter implements PrinterTransport {
       this.printer!.onerror = (error) => {
         this.printer!.onreceive = null;
         this.printer!.onerror = null;
-        reject(new Error(`Epson print error (status ${error.status}): ${error.responseText}`));
+        reject(
+          new Error(
+            `Epson print error (status ${error.status}): ${error.responseText}`,
+          ),
+        );
       };
 
       this.printer!.addCommand(rawString);
@@ -95,7 +111,7 @@ export class EpsonEposAdapter implements PrinterTransport {
   }
 
   async printHtml(_html: string): Promise<void> {
-    throw new Error('EpsonEposAdapter does not support HTML printing.');
+    throw new Error("EpsonEposAdapter does not support HTML printing.");
   }
 
   async disconnect(): Promise<void> {
@@ -112,13 +128,21 @@ export class EpsonEposAdapter implements PrinterTransport {
    */
   private async ensureConnected(): Promise<void> {
     if (this.printer) return;
+    if (this.connecting) return this.connecting;
 
+    this.connecting = this.doConnect().finally(() => {
+      this.connecting = null;
+    });
+    return this.connecting;
+  }
+
+  private async doConnect(): Promise<void> {
     const epson = (window as any).epson;
     if (!epson?.ePOSDevice) {
       throw new Error(
-        'Epson ePOS SDK not loaded. Add the ePOS SDK script to your HTML page before ' +
-          'using the Epson adapter. Download from: ' +
-          'https://download.epson-biz.com/modules/pos/index.php?page=single_soft&cid=6679',
+        "Epson ePOS SDK not loaded. Add the ePOS SDK script to your HTML page before " +
+          "using the Epson adapter. Download from: " +
+          "https://download.epson-biz.com/modules/pos/index.php?page=single_soft&cid=6679",
       );
     }
 
@@ -127,7 +151,7 @@ export class EpsonEposAdapter implements PrinterTransport {
     // Step 1: open WebSocket connection to the printer
     await new Promise<void>((resolve, reject) => {
       this.device!.connect(this.host, this.port, (status: string) => {
-        if (status === 'OK' || status === 'SSL_CONNECT_OK') {
+        if (status === "OK" || status === "SSL_CONNECT_OK") {
           resolve();
         } else {
           this.device = null;
@@ -139,11 +163,11 @@ export class EpsonEposAdapter implements PrinterTransport {
     // Step 2: create a printer device handle
     this.printer = await new Promise<EpsonPrinter>((resolve, reject) => {
       this.device!.createDevice(
-        'local_printer',
+        "local_printer",
         this.device!.DEVICE_TYPE_PRINTER,
         { crypto: this.port === 8043, buffer: false },
         (printer, retcode) => {
-          if (retcode === 'OK' && printer) {
+          if (retcode === "OK" && printer) {
             resolve(printer);
           } else {
             reject(new Error(`Epson device creation failed: ${retcode}`));
