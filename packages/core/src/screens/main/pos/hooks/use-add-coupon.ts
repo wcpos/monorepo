@@ -177,9 +177,9 @@ export const useAddCoupon = () => {
 					return {
 						success: false,
 						error: t('pos_cart.cart_changed', {
-						defaultValue: 'Cart changed during coupon application. Please try again.',
-					}),
-				};
+							defaultValue: 'Cart changed during coupon application. Please try again.',
+						}),
+					};
 				}
 
 				const discountedLineItems = computeDiscountedLineItems(latestOrder.line_items || [], [
