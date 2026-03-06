@@ -36,8 +36,7 @@ export const useAddCoupon = () => {
 		(store as any).woocommerce_calc_discounts_sequentially$
 	);
 	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
-	const calcDiscountsSequentially =
-		woocommerceSequential === 'yes' || legacySequential === 'yes';
+	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
 
 	const orderLogger = React.useMemo(
 		() =>

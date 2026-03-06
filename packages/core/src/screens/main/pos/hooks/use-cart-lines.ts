@@ -36,8 +36,7 @@ export const useCartLines = () => {
 		(store as any).woocommerce_calc_discounts_sequentially$
 	);
 	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
-	const calcDiscountsSequentially =
-		woocommerceSequential === 'yes' || legacySequential === 'yes';
+	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
 
 	/**
 	 * We need to filter out any items that have been 'removed', eg: product_id === null.
