@@ -85,7 +85,10 @@ export function useTemplateRenderer({
 			if (tmpl.offline_capable && tmpl.content) {
 				try {
 					if (tmpl.engine === 'thermal') {
-						cache.set(tmpl.id, renderThermalPreview(tmpl.content, receiptData as Record<string, any>));
+						cache.set(
+							tmpl.id,
+							renderThermalPreview(tmpl.content, receiptData as Record<string, any>)
+						);
 					} else {
 						cache.set(tmpl.id, Mustache.render(tmpl.content, receiptData));
 					}
@@ -110,7 +113,10 @@ export function useTemplateRenderer({
 			if (data && selectedTemplate.content) {
 				try {
 					if (selectedTemplate.engine === 'thermal') {
-						renderedHtml = renderThermalPreview(selectedTemplate.content, data as Record<string, any>);
+						renderedHtml = renderThermalPreview(
+							selectedTemplate.content,
+							data as Record<string, any>
+						);
 					} else {
 						renderedHtml = Mustache.render(selectedTemplate.content, data);
 					}

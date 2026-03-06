@@ -31,7 +31,8 @@ export const templatesLiteral = {
 			type: 'string',
 		},
 		content: {
-			description: 'Template content. HTML for logicless, XML for thermal. Present in view context for offline-capable templates.',
+			description:
+				'Template content. HTML for logicless, XML for thermal. Present in view context for offline-capable templates.',
 			type: 'string',
 		},
 		menu_order: {
@@ -41,7 +42,8 @@ export const templatesLiteral = {
 			multipleOf: 1,
 		},
 		offline_capable: {
-			description: 'True for logicless (Mustache) and thermal (XML) templates that can render without server.',
+			description:
+				'True for logicless (Mustache) and thermal (XML) templates that can render without server.',
 			type: 'boolean',
 		},
 		is_active: {

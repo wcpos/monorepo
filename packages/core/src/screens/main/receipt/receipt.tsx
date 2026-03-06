@@ -148,7 +148,8 @@ export function Receipt({ resource }: Props) {
 		receiptUrl: templateReceiptUrl || receiptURL,
 		printerProfile: defaultProfile,
 		templateEngine: selectedTemplateEngine ?? undefined,
-		templateXml: selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
+		templateXml:
+			selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
 	});
 
 	// Retry fiscal submission
