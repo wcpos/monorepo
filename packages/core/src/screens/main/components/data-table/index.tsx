@@ -24,6 +24,7 @@ import { useT } from '../../../../contexts/translations';
 import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
+import { normalizeSortingChange } from './sorting-change';
 
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -45,6 +46,8 @@ interface Props {
 	ListFooterComponent?: React.ComponentType<any>;
 	TableFooterComponent?: React.ComponentType<any>;
 }
+
+type SortingChangeInput = Parameters<typeof normalizeSortingChange>[0];
 
 /**
  * React Compiler breaks tanstack/react-table
@@ -91,16 +94,21 @@ function DataTable<TData>({
 		() => [{ sortBy: uiSettings.sortBy, sortDirection: uiSettings.sortDirection }],
 		[uiSettings.sortBy, uiSettings.sortDirection]
 	);
+	const currentSortDirection = uiSettings.sortDirection === 'desc' ? 'desc' : 'asc';
 
 	/**
 	 * Sorting
 	 */
 	const handleSortingChange = React.useCallback(
-		({ sortBy, sortDirection }: { sortBy: string; sortDirection: 'asc' | 'desc' }) => {
+		(change: SortingChangeInput) => {
+			const { sortBy, sortDirection } = normalizeSortingChange(change, {
+				sortBy: uiSettings.sortBy,
+				sortDirection: currentSortDirection,
+			});
 			patchUI({ sortBy, sortDirection });
 			query.sort([{ [sortBy]: sortDirection }]).exec();
 		},
-		[patchUI, query]
+		[currentSortDirection, patchUI, query, uiSettings.sortBy]
 	);
 
 	const table = useReactTableWrapper({

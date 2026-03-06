@@ -53,6 +53,7 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 								<FormInput
 									customComponent={CurrencyInput}
 									label={t('common.amount')}
+									{...field}
 									value={field.value ?? ''}
 									onChange={field.onChange}
 								/>
@@ -128,6 +129,7 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 								<FormInput
 									customComponent={CurrencyInput}
 									label={t('coupons.minimum_amount')}
+									{...field}
 									value={field.value ?? ''}
 									onChange={field.onChange}
 								/>
@@ -142,6 +144,7 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 								<FormInput
 									customComponent={CurrencyInput}
 									label={t('coupons.maximum_amount')}
+									{...field}
 									value={field.value ?? ''}
 									onChange={field.onChange}
 								/>

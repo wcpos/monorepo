@@ -168,6 +168,51 @@ test.describe('Products Page (Pro)', () => {
 		expect(await columnheaders.count()).toBeGreaterThanOrEqual(3);
 	});
 
+	test('should reorder rows when clicking the Name column header on Products page', async ({
+		posPage: page,
+	}) => {
+		await navigateToPage(page, 'products');
+		const screen = page.getByTestId('screen-products');
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+
+		// Use deterministic fixture data known to contain two distinct product names.
+		const searchInput = screen.getByTestId('search-products');
+		await searchInput.fill('beanie');
+		await page.waitForTimeout(1_500);
+
+		const beanieRow = screen.getByRole('button', { name: /^Beanie$/ }).first();
+		const beanieWithLogoRow = screen.getByRole('button', { name: /Beanie with Logo/i }).first();
+		await expect(beanieRow).toBeVisible({ timeout: 30_000 });
+		await expect(beanieWithLogoRow).toBeVisible({ timeout: 30_000 });
+
+		const getRowOrder = async () => {
+			return Promise.all(
+				[beanieRow, beanieWithLogoRow].map(async (row) => (await row.boundingBox())?.y ?? -1)
+			);
+		};
+
+		const [initialBeanieY, initialBeanieWithLogoY] = await getRowOrder();
+		expect(initialBeanieY).toBeGreaterThan(0);
+		expect(initialBeanieWithLogoY).toBeGreaterThan(0);
+		expect(initialBeanieY).not.toBe(initialBeanieWithLogoY);
+		const initialSortDirection = Math.sign(initialBeanieY - initialBeanieWithLogoY);
+
+		// Click the actual Product header by accessible name instead of index.
+		const productHeader = screen.getByRole('columnheader', { name: /product/i }).first();
+		await expect(productHeader).toBeVisible({ timeout: 15_000 });
+		await productHeader.click();
+
+		await expect
+			.poll(
+				async () => {
+					const [beanieY, beanieWithLogoY] = await getRowOrder();
+					return Math.sign(beanieY - beanieWithLogoY);
+				},
+				{ timeout: 15_000 }
+			)
+			.toBe(initialSortDirection * -1);
+	});
+
 	test('should search products on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
