@@ -85,7 +85,7 @@ export function AddCartItemsMenu() {
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<DropdownMenuItem testID="menu-add-coupon" disabled>
-									<Icon name="circlePlus" />
+									<Icon name="badgePercent" />
 									<Text>{t('pos_cart.add_coupon', { defaultValue: 'Add Coupon' })}</Text>
 								</DropdownMenuItem>
 							</TooltipTrigger>
