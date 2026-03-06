@@ -76,7 +76,10 @@ function formatAddress(addr: Record<string, string | undefined>): string {
 }
 
 function computeSubtotal(lineItems: { subtotal?: string }[]): string {
-	const sum = lineItems.reduce((acc, item) => acc + parseFloat(item.subtotal || '0'), 0);
+	const sum = lineItems.reduce((acc, item) => {
+		const subtotal = Number(item.subtotal ?? 0);
+		return acc + (Number.isFinite(subtotal) ? subtotal : 0);
+	}, 0);
 	return sum.toFixed(2);
 }
 

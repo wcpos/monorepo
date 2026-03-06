@@ -104,6 +104,7 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 			if (html || externalURL) {
 				const printWindow = generatePrintWindow();
 				if (html) {
+					printWindow.setAttribute('sandbox', 'allow-same-origin');
 					printWindow.srcdoc = html;
 				} else {
 					printWindow.src = externalURL;

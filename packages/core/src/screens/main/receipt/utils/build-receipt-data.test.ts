@@ -125,4 +125,16 @@ describe('buildReceiptData', () => {
 		expect(result.lines).toHaveLength(0);
 		expect(result.totals.subtotal).toBe('0.00');
 	});
+
+	it('handles malformed subtotal without producing NaN', () => {
+		const orderBadSubtotal = {
+			...mockOrder,
+			line_items: [
+				{ ...mockOrder.line_items[0], subtotal: 'not-a-number' },
+				{ ...mockOrder.line_items[0], subtotal: '10.00' },
+			],
+		};
+		const result = buildReceiptData(orderBadSubtotal, mockStore);
+		expect(result.totals.subtotal).toBe('10.00');
+	});
 });

@@ -34,7 +34,7 @@ function WebView({ ref, src, srcDoc, onMessage, ...props }: WebViewProps) {
 	});
 
 	// srcDoc (inline HTML) takes priority over src (URI)
-	const source = srcDoc ? { html: srcDoc } : { uri: src || '' };
+	const source = srcDoc != null ? { html: srcDoc } : { uri: src || '' };
 
 	return (
 		<RNWebView

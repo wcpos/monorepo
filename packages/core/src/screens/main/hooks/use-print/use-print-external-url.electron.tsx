@@ -16,6 +16,12 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 	 *
 	 */
 	const print = React.useCallback(() => {
+		if (!html && !externalURL) {
+			printLogger.warn('No HTML or external URL provided to print');
+			onPrintError?.('print', new Error('No HTML or external URL provided to print'));
+			return;
+		}
+
 		if (window && window.ipcRenderer) {
 			const printJobId = uuidv4();
 			const ipc = window.ipcRenderer as {

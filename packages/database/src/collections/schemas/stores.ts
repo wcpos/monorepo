@@ -524,6 +524,7 @@ export const storesLiteral = {
 						default: 0,
 					},
 				},
+				required: ['template_id'],
 			},
 		},
 	},
