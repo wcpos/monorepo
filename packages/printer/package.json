@@ -10,6 +10,9 @@
     "@point-of-sale/receipt-printer-encoder": "^3.0.3",
     "p-queue": "^8.1.0"
   },
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  },
   "peerDependencies": {
     "expo-print": ">=55.0.0",
     "react-native-tcp-socket": ">=6.0.0",

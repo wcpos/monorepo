@@ -25,15 +25,15 @@ export class NetworkAdapter implements PrinterTransport {
       const client = TcpSocket.createConnection(
         { host: this.host, port: this.port },
         () => {
-          client.write(Buffer.from(data), (err) => {
+          client.write(Buffer.from(data) as any, undefined, ((err: any) => {
             clearTimeout(timeout);
             if (err) {
               client.destroy();
               reject(err);
             } else {
-              client.end(() => resolve());
+              (client as any).end(() => resolve());
             }
-          });
+          }) as any);
         },
       );
 
