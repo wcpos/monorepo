@@ -1,13 +1,15 @@
 import * as React from 'react';
 
+import { mapReceiptData } from '../encoder/map-receipt-data';
 import { PrinterService } from '../printer-service';
 
 import type { ReceiptData } from '../encoder/types';
 import type { PrinterProfile } from '../types';
 
 interface UsePrintOptions {
-  /** Receipt data for ESC/POS encoding */
-  receiptData?: ReceiptData;
+  /** Receipt data for ESC/POS encoding. Accepts both the canonical shape
+   *  and the offline rendering shape — the mapper normalises automatically. */
+  receiptData?: ReceiptData | Record<string, any>;
   /** HTML content for system print fallback */
   html?: string;
   /** Receipt URL — fetched and used as HTML for system print fallback */
@@ -56,8 +58,9 @@ export function usePrint(options: UsePrintOptions) {
       const service = getService();
 
       if (printerProfile && printerProfile.connectionType !== 'system' && receiptData) {
-        // Direct thermal printing — encode and send bytes
-        await service.printReceipt(receiptData, printerProfile);
+        // Direct thermal printing — normalise shape then encode and send bytes
+        const normalised = mapReceiptData(receiptData as Record<string, any>);
+        await service.printReceipt(normalised, printerProfile);
       } else {
         // System print fallback — need HTML content
         let htmlContent = html;

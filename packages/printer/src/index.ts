@@ -1,5 +1,6 @@
 export { encodeReceipt } from './encoder/encode-receipt';
 export type { EncodeReceiptOptions } from './encoder/encode-receipt';
+export { mapReceiptData } from './encoder/map-receipt-data';
 export type { ReceiptData } from './encoder/types';
 export { PrinterService } from './printer-service';
 export { usePrint } from './hooks/use-print';
