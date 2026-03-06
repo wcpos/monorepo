@@ -8,11 +8,14 @@ import '@wcpos/components/data-table/types';
 import type { RefObject } from 'react';
 import type { View } from 'react-native';
 
+import type { Query } from '@wcpos/query';
+
 import type { RowData } from '@tanstack/react-table';
 
 declare module '@tanstack/react-table' {
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	interface TableMeta<TData extends RowData> {
+		query?: Query<any>;
 		rowRefs: RefObject<Map<string, RefObject<View>>>;
 		newRowUUIDs: string[];
 		removeNewRowUUID: (uuid: string) => void;

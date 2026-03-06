@@ -21,7 +21,7 @@ export function DiscountType({
 	const coupon = row.original.document;
 	const discountType = useObservableEagerState(coupon.discount_type$!) ?? 'percent';
 	const t = useT();
-	const query = (table.options.meta as unknown as { query: any })?.query;
+	const query = table.options.meta?.query;
 
 	const label = labelMap[discountType] ? t(labelMap[discountType]) : discountType;
 

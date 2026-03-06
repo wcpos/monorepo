@@ -1,5 +1,6 @@
 import { filterApiQueryParams as filterOrderParams } from '../src/hooks/orders';
 import { filterApiQueryParams as filterCustomerParams } from '../src/hooks/customers';
+import { filterApiQueryParams as filterCouponParams } from '../src/hooks/coupons';
 import {
 	filterApiQueryParams as filterVariationParams,
 	preQueryParams,
@@ -115,6 +116,33 @@ describe('Hook Filters', () => {
 			});
 			expect(result.roles).toEqual(['administrator', 'shop_manager']);
 			expect(result.role).toBeUndefined();
+		});
+	});
+
+	describe('Coupons - filterApiQueryParams', () => {
+		it('should convert date_created orderby to date', () => {
+			const result = filterCouponParams({ orderby: 'date_created' });
+			expect(result.orderby).toBe('date');
+		});
+
+		it('should convert date_created_gmt orderby to date', () => {
+			const result = filterCouponParams({ orderby: 'date_created_gmt' });
+			expect(result.orderby).toBe('date');
+		});
+
+		it('should convert date_modified orderby to modified', () => {
+			const result = filterCouponParams({ orderby: 'date_modified' });
+			expect(result.orderby).toBe('modified');
+		});
+
+		it('should convert date_modified_gmt orderby to modified', () => {
+			const result = filterCouponParams({ orderby: 'date_modified_gmt' });
+			expect(result.orderby).toBe('modified');
+		});
+
+		it('should pass through other orderby values unchanged', () => {
+			const result = filterCouponParams({ orderby: 'code' });
+			expect(result.orderby).toBe('code');
 		});
 	});
 
