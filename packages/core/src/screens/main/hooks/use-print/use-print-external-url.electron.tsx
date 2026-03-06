@@ -16,6 +16,12 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 	 *
 	 */
 	const print = React.useCallback(() => {
+		if (!html && !externalURL) {
+			printLogger.warn('No HTML or external URL provided to print');
+			onPrintError?.('print', new Error('No HTML or external URL provided to print'));
+			return;
+		}
+
 		if (window && window.ipcRenderer) {
 			const printJobId = uuidv4();
 			const ipc = window.ipcRenderer as {
@@ -24,10 +30,18 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 				once: (channel: string, callback: (...args: unknown[]) => void) => void;
 			};
 
+			// When inline HTML is provided, encode as a data URI so the
+			// main process can load it without requiring a new IPC channel.
+			let urlToSend = externalURL;
+			if (html) {
+				const bytes = new TextEncoder().encode(html);
+				const binString = Array.from(bytes, (byte) => String.fromCodePoint(byte)).join('');
+				urlToSend = `data:text/html;base64,${btoa(binString)}`;
+			}
+
 			// Send the print request to the main process
 			ipc.send('print-external-url', {
-				externalURL,
-				html,
+				externalURL: urlToSend,
 				printJobId,
 			});
 

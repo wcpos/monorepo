@@ -89,7 +89,9 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			return oldDoc;
 		},
 		5(oldDoc: StoreDocumentType) {
-			oldDoc.active_templates = [];
+			oldDoc.active_templates = Array.isArray(oldDoc.active_templates)
+				? oldDoc.active_templates
+				: [];
 			return oldDoc;
 		},
 	},

@@ -111,10 +111,10 @@ export function Receipt({ resource }: Props) {
 		isOffline,
 		isSyncing,
 	} = useTemplateRenderer({
-		orderDocument: order,
 		orderId,
 		baseReceiptURL,
 		mode: selectedMode,
+		order,
 	});
 
 	// Fetch receipt metadata from the receipts REST API
@@ -248,23 +248,15 @@ export function Receipt({ resource }: Props) {
 								onSelect={setSelectedTemplateId}
 								isOffline={isOffline}
 							/>
-							{renderedHtml ? (
-								<WebView
-									ref={iframeRef as never}
-									srcDoc={renderedHtml}
-									onLoad={handleLoad}
-									onMessage={() => {}}
-									className="flex-1"
-								/>
-							) : (
-								<WebView
-									ref={iframeRef as never}
-									src={templateReceiptUrl || receiptURL}
-									onLoad={handleLoad}
-									onMessage={() => {}}
-									className="flex-1"
-								/>
-							)}
+							<WebView
+								ref={iframeRef as never}
+								{...(renderedHtml != null
+									? { srcDoc: renderedHtml }
+									: { src: templateReceiptUrl || receiptURL })}
+								onLoad={handleLoad}
+								onMessage={() => {}}
+								className="flex-1"
+							/>
 						</VStack>
 					</ErrorBoundary>
 				</ModalBody>

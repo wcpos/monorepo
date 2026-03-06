@@ -3,7 +3,7 @@ import * as React from 'react';
 import Mustache from 'mustache';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import type { OrderDocument, TemplateDocument } from '@wcpos/database';
+import type { TemplateDocument } from '@wcpos/database';
 
 import { useActiveTemplates } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
@@ -14,10 +14,11 @@ import type { ReceiptData } from '../utils/build-receipt-data';
 import type { ReceiptMode } from './use-receipt-data';
 
 interface UseTemplateRendererOptions {
-	orderDocument: OrderDocument;
 	orderId: number | undefined;
 	baseReceiptURL: string | undefined;
 	mode: ReceiptMode;
+	/** The RxDB order document — used to build local receipt data when offline */
+	order: Record<string, any> | undefined;
 }
 
 interface TemplateRendererResult {
@@ -32,27 +33,27 @@ interface TemplateRendererResult {
 }
 
 export function useTemplateRenderer({
-	orderDocument,
 	orderId,
 	baseReceiptURL,
 	mode,
+	order,
 }: UseTemplateRendererOptions): TemplateRendererResult {
 	const templates = useActiveTemplates();
 	const { store } = useAppState();
 	const { status } = useOnlineStatus();
 	const isOffline = status !== 'online-website-available';
 
-	// Build local receipt data immediately from RxDB documents
-	const localReceiptData = React.useMemo(() => {
-		if (!orderDocument || !store) return null;
-		return buildReceiptData(orderDocument as Record<string, any>, store as Record<string, any>);
-	}, [orderDocument, store]);
-
 	// Fetch receipt data from API (when online)
 	const { data: apiReceiptData, isLoading } = useReceiptData({ orderId, mode });
 
-	// Use API data when available, fall back to local data
-	const receiptData = apiReceiptData ?? localReceiptData;
+	// Fall back to locally-built receipt data when the API response is unavailable
+	const receiptData = React.useMemo(() => {
+		if (apiReceiptData) return apiReceiptData;
+		if (order && store) {
+			return buildReceiptData(order, store);
+		}
+		return null;
+	}, [apiReceiptData, order, store]);
 
 	// Syncing: API fetch is in flight and we're still showing local data
 	const isSyncing = isLoading && !apiReceiptData;
@@ -97,11 +98,14 @@ export function useTemplateRenderer({
 		const cached = preRenderedCache.get(selectedTemplate.id);
 		if (cached) {
 			renderedHtml = cached;
-		} else if (receiptData && selectedTemplate.content) {
-			try {
-				renderedHtml = Mustache.render(selectedTemplate.content, receiptData);
-			} catch {
-				renderedHtml = '<p>Template render error</p>';
+		} else {
+			const data = receiptData;
+			if (data && selectedTemplate.content) {
+				try {
+					renderedHtml = Mustache.render(selectedTemplate.content, data);
+				} catch {
+					renderedHtml = '<p>Template render error</p>';
+				}
 			}
 		}
 	} else if (selectedTemplate && baseReceiptURL) {

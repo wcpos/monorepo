@@ -21,9 +21,10 @@ export function useActiveTemplates(): TemplateDocument[] {
 	const isPro = !!license?.isPro;
 
 	// Read per-store template assignments (will be empty until store schema v5)
+	type TemplateAssignment = { template_id: string | number; sort_order: number };
 	const activeTemplates = useObservableEagerState(
-		store.active_templates$ ?? of([] as { template_id: string | number; sort_order: number }[])
-	);
+		store.active_templates$ ?? of([] as TemplateAssignment[])
+	) as TemplateAssignment[];
 
 	// Query all receipt templates from RxDB
 	const query = React.useMemo(() => {
@@ -34,8 +35,12 @@ export function useActiveTemplates(): TemplateDocument[] {
 	}, [storeDB]);
 
 	const allTemplates = useObservableState(
-		query.$.pipe(map((docs) => docs.filter((doc) => doc.is_virtual || doc.status === 'publish'))),
-		[]
+		query.$.pipe(
+			map((docs: TemplateDocument[]) =>
+				docs.filter((doc) => doc.is_virtual || doc.status === 'publish')
+			)
+		),
+		[] as TemplateDocument[]
 	);
 
 	// Apply per-store filtering for Pro users

@@ -15,23 +15,26 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 		const { externalURL, html, onBeforePrint, onAfterPrint, onPrintError } = options;
 
 		if (!html && !externalURL) {
-			printLogger.warn('No HTML or external URL provided to print');
+			const error = new Error('No HTML or external URL provided to print');
+			printLogger.warn(error.message);
+			onPrintError?.('print', error);
 			return;
 		}
 
 		try {
 			setIsPrinting(true);
 
+			// Call onBeforePrint if provided
 			const beforePrintResult = onBeforePrint?.();
 			if (beforePrintResult instanceof Promise) {
 				await beforePrintResult;
 			}
 
 			let printHtml: string;
-
 			if (html) {
 				printHtml = html;
 			} else {
+				// Fetch HTML content from the URL
 				const response = await fetch(externalURL!);
 				if (!response.ok) {
 					throw new Error(`Failed to fetch receipt: ${response.status} ${response.statusText}`);
@@ -39,8 +42,10 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 				printHtml = await response.text();
 			}
 
+			// Print using expo-print
 			await Print.printAsync({ html: printHtml });
 
+			// Call onAfterPrint if provided
 			onAfterPrint?.();
 		} catch (error) {
 			printLogger.error('Print error', { context: { error } });

@@ -47,6 +47,8 @@ export type {
 	SyncDocument,
 	TaxRateCollection,
 	TaxRateDocument,
+	TemplateCollection,
+	TemplateDocument,
 	TemporaryDatabase,
 	UserCollection,
 	UserDatabase,
