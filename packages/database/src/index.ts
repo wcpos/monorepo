@@ -6,8 +6,16 @@ import './types.d';
 export { createUserDB, createStoreDB, createTemporaryDB, createFastStoreDB } from './create-db';
 export { userCollections, storeCollections, syncCollections } from './collections';
 export { clearAllDB } from './clear-all-db';
+export {
+	getStorageHealthSnapshot,
+	markStorageDegraded,
+	markStorageHealthy,
+	resetStorageHealth,
+	storageHealth$,
+} from './plugins/storage-health-events';
 export type { ClearDBResult } from './clear-all-db';
 export type { FlexSearchInstance } from './types.d';
+export type { StorageHealthState, StorageHealthStatus } from './plugins/storage-health-events';
 
 /**
  * Re-export some rxdb helpers

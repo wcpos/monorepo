@@ -215,6 +215,28 @@ describe('Manager', () => {
 			// Clean up
 			await replication.cancel();
 		});
+
+		it('pauses all active replications when storage health degrades', () => {
+			manager.registerQuery({
+				queryKeys: ['products-health'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+
+			const collectionReplication = manager.activeCollectionReplications.get('["products-health"]');
+			const queryReplication = manager.activeQueryReplications.get('["products-health"]');
+
+			expect(collectionReplication).toBeDefined();
+			expect(queryReplication).toBeDefined();
+
+			collectionReplication.start();
+			queryReplication.start();
+
+			manager.pauseAllReplications('storage-health');
+
+			expect(collectionReplication.subjects.paused.getValue()).toBe(true);
+			expect(queryReplication.subjects.paused.getValue()).toBe(true);
+		});
 	});
 
 	describe('getApiQueryParams', () => {

@@ -5,6 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import { isStorageDegradedError } from '../../contexts/storage-health/error';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useUpdateLineItem } from './use-update-line-item';
@@ -47,56 +48,65 @@ export const useAddVariation = () => {
 			parentDoc: ProductDocument,
 			metaData?: MetaData[]
 		) => {
-			let success;
+			try {
+				let success;
 
-			// always make sure we have the latest product document
-			const variation = variationDoc.getLatest();
-			const parent = parentDoc.getLatest();
+				// always make sure we have the latest product document
+				const variation = variationDoc.getLatest();
+				const parent = parentDoc.getLatest();
 
-			// check if variation is already in order, if so increment quantity
-			if (!(currentOrder as unknown as { isNew?: boolean }).isNew && parent.id !== 0) {
-				const lineItems = currentOrder.getLatest().line_items ?? [];
-				const matches = findByProductVariationID(lineItems, parent.id ?? 0, variation.id);
-				if (matches && matches.length === 1) {
-					const uuid = getUuidFromLineItem(matches[0]);
-					if (uuid) {
-						success = await updateLineItem(uuid, { quantity: (matches[0].quantity ?? 0) + 1 });
+				// check if variation is already in order, if so increment quantity
+				if (!(currentOrder as unknown as { isNew?: boolean }).isNew && parent.id !== 0) {
+					const lineItems = currentOrder.getLatest().line_items ?? [];
+					const matches = findByProductVariationID(lineItems, parent.id ?? 0, variation.id);
+					if (matches && matches.length === 1) {
+						const uuid = getUuidFromLineItem(matches[0]);
+						if (uuid) {
+							success = await updateLineItem(uuid, {
+								quantity: (matches[0].quantity ?? 0) + 1,
+							});
+						}
 					}
 				}
-			}
 
-			// if variation is not in order, add it
-			if (!success) {
-				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
-				let newLineItem = convertVariationToLineItemWithoutTax(variation, parent, metaData, keys);
-				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
-				success = await addItemToOrder('line_items', newLineItem);
-			}
+				// if variation is not in order, add it
+				if (!success) {
+					const keys = metaDataKeys ? metaDataKeys.split(',') : [];
+					let newLineItem = convertVariationToLineItemWithoutTax(variation, parent, metaData, keys);
+					newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
+					success = await addItemToOrder('line_items', newLineItem);
+				}
 
-			// returned success should be the updated order
-			if (success) {
-				cartLogger.success(t('common.added_to_cart', { name: parent.name }), {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						variationId: variation.id,
-						productId: parent.id,
-						productName: parent.name,
-						orderId: currentOrder.id,
-					},
-				});
-			} else {
-				cartLogger.error(t('pos.error_adding_to_cart', { name: parent.name }), {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.TRANSACTION_FAILED,
-						variationId: variation.id,
-						productId: parent.id,
-						productName: parent.name,
-						orderId: currentOrder.id,
-					},
-				});
+				// returned success should be the updated order
+				if (success) {
+					cartLogger.success(t('common.added_to_cart', { name: parent.name }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							variationId: variation.id,
+							productId: parent.id,
+							productName: parent.name,
+							orderId: currentOrder.id,
+						},
+					});
+				} else {
+					cartLogger.error(t('pos.error_adding_to_cart', { name: parent.name }), {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.TRANSACTION_FAILED,
+							variationId: variation.id,
+							productId: parent.id,
+							productName: parent.name,
+							orderId: currentOrder.id,
+						},
+					});
+				}
+			} catch (error) {
+				if (isStorageDegradedError(error)) {
+					return;
+				}
+				throw error;
 			}
 		},
 		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]

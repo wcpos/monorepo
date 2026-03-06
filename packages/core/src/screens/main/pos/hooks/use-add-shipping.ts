@@ -3,6 +3,7 @@ import * as React from 'react';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import { isStorageDegradedError } from '../../contexts/storage-health/error';
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
 import { useT } from '../../../../contexts/translations';
@@ -64,7 +65,10 @@ export const useAddShipping = () => {
 					meta_data,
 				});
 
-				await addItemToOrder('shipping_lines', newShippingLine);
+				const savedOrder = await addItemToOrder('shipping_lines', newShippingLine);
+				if (!savedOrder) {
+					return;
+				}
 
 				// Log shipping added success
 				orderLogger.info(t('pos.shipping_added', { methodTitle: data.method_title }), {
@@ -76,6 +80,10 @@ export const useAddShipping = () => {
 					},
 				});
 			} catch (error) {
+				if (isStorageDegradedError(error)) {
+					return;
+				}
+
 				orderLogger.error(t('pos.error_adding_shipping_to_cart'), {
 					showToast: true,
 					saveToDb: true,

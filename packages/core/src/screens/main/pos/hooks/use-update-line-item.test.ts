@@ -5,17 +5,21 @@ import { act, renderHook } from '@testing-library/react';
 
 import { useUpdateLineItem } from './use-update-line-item';
 
-// Mock uuid ESM module
+const mockLocalPatch = jest.fn();
+const mockUseStorageHealth = jest.fn();
+
 jest.mock('uuid', () => ({
 	v4: jest.fn(() => 'mock-uuid-v4'),
 }));
 
-// Logger mocks are provided by moduleNameMapper in jest.config.js
+jest.mock('../../../../contexts/translations', () => ({
+	useT: () => (key: string) => key,
+}));
 
-// Mock the localPatch function
-const mockLocalPatch = jest.fn();
+jest.mock('../../contexts/storage-health/provider', () => ({
+	useStorageHealth: () => mockUseStorageHealth(),
+}));
 
-// Mock useCurrentOrder
 jest.mock('../contexts/current-order', () => ({
 	useCurrentOrder: () => ({
 		currentOrder: {
@@ -37,7 +41,11 @@ jest.mock('../contexts/current-order', () => ({
 								{ key: '_woocommerce_pos_uuid', value: '23e108ca-63a7-469a-ad12-ed72e0d04be3' },
 								{
 									key: '_woocommerce_pos_data',
-									value: JSON.stringify({ price: 10, regular_price: 10, tax_status: 'taxable' }),
+									value: JSON.stringify({
+										price: 10,
+										regular_price: 10,
+										tax_status: 'taxable',
+									}),
 								},
 							],
 						},
@@ -53,14 +61,12 @@ jest.mock('../contexts/current-order', () => ({
 	}),
 }));
 
-// Mock useLocalMutation
 jest.mock('../../hooks/mutations/use-local-mutation', () => ({
 	useLocalMutation: () => ({
 		localPatch: mockLocalPatch,
 	}),
 }));
 
-// Mock useCalculateLineItemTaxAndTotals
 jest.mock('./use-calculate-line-item-tax-and-totals', () => ({
 	useCalculateLineItemTaxAndTotals: () => ({
 		calculateLineItemTaxesAndTotals: jest.fn().mockImplementation((lineItem) => {
@@ -81,7 +87,6 @@ jest.mock('./use-calculate-line-item-tax-and-totals', () => ({
 	}),
 }));
 
-// Mock useLineItemData
 jest.mock('./use-line-item-data', () => ({
 	useLineItemData: () => ({
 		getLineItemData: jest.fn().mockImplementation((lineItem) => {
@@ -97,6 +102,18 @@ jest.mock('./use-line-item-data', () => ({
 describe('useUpdateLineItem', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockUseStorageHealth.mockReturnValue({ status: 'healthy', isDegraded: false });
+	});
+
+	it('blocks updates when storage health is degraded', async () => {
+		mockUseStorageHealth.mockReturnValue({ status: 'degraded', isDegraded: true });
+		const { result } = renderHook(() => useUpdateLineItem());
+
+		await expect(
+			result.current.updateLineItem('23e108ca-63a7-469a-ad12-ed72e0d04be3', { quantity: 2 })
+		).rejects.toThrow('storage unavailable');
+
+		expect(mockLocalPatch).not.toHaveBeenCalled();
 	});
 
 	it('updates line item name correctly', async () => {
@@ -124,7 +141,6 @@ describe('useUpdateLineItem', () => {
 
 	it('updates line item quantity correctly', async () => {
 		const { result } = renderHook(() => useUpdateLineItem());
-
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newQuantity = 3;
 
@@ -148,7 +164,6 @@ describe('useUpdateLineItem', () => {
 
 	it('updates line item price correctly', async () => {
 		const { result } = renderHook(() => useUpdateLineItem());
-
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newPrice = 20;
 
@@ -156,7 +171,6 @@ describe('useUpdateLineItem', () => {
 			await result.current.updateLineItem(uuid, { price: newPrice });
 		});
 
-		// Verify localPatch was called with the correct line item
 		expect(mockLocalPatch).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({
@@ -164,7 +178,6 @@ describe('useUpdateLineItem', () => {
 						expect.objectContaining({
 							meta_data: expect.arrayContaining([
 								expect.objectContaining({ value: uuid }),
-								// Verify price was updated in pos_data metadata
 								expect.objectContaining({
 									key: '_woocommerce_pos_data',
 									value: expect.stringContaining(`"price":${newPrice}`),
@@ -179,7 +192,6 @@ describe('useUpdateLineItem', () => {
 
 	it('updates subtotal and total when quantity is changed', async () => {
 		const { result } = renderHook(() => useUpdateLineItem());
-
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newQuantity = 7;
 
@@ -206,7 +218,6 @@ describe('useUpdateLineItem', () => {
 
 	it('updates taxes when quantity is changed', async () => {
 		const { result } = renderHook(() => useUpdateLineItem());
-
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newQuantity = 7;
 
@@ -240,7 +251,6 @@ describe('useUpdateLineItem', () => {
 
 	it('updates taxes when price is changed', async () => {
 		const { result } = renderHook(() => useUpdateLineItem());
-
 		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
 		const newPrice = 20;
 
@@ -248,7 +258,6 @@ describe('useUpdateLineItem', () => {
 			await result.current.updateLineItem(uuid, { price: newPrice });
 		});
 
-		// Verify localPatch was called and the line item has tax calculations
 		expect(mockLocalPatch).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({
@@ -256,7 +265,6 @@ describe('useUpdateLineItem', () => {
 						expect.objectContaining({
 							meta_data: expect.arrayContaining([expect.objectContaining({ value: uuid })]),
 							quantity: 1,
-							// Taxes should be calculated (values depend on mock implementation)
 							subtotal_tax: expect.any(String),
 							total_tax: expect.any(String),
 							taxes: expect.arrayContaining([

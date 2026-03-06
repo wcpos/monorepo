@@ -9,6 +9,8 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type { OrderDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
+import { isStorageDegradedError } from '../../../contexts/storage-health/error';
+import { useStorageHealth } from '../../../contexts/storage-health/provider';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrder } from '../../contexts/current-order';
 
@@ -22,6 +24,7 @@ export function SaveButton() {
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
+	const { isDegraded } = useStorageHealth();
 
 	/**
 	 *
@@ -46,6 +49,10 @@ export function SaveButton() {
 				}
 			});
 		} catch (error) {
+			if (isStorageDegradedError(error)) {
+				return;
+			}
+
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			cartLogger.error(t('common.failed_to_save_order'), {
 				showToast: true,
@@ -64,17 +71,19 @@ export function SaveButton() {
 	/**
 	 *
 	 */
-	return (
-		<View>
-			<Button
-				testID="save-to-server-button"
-				variant="outline"
-				onPress={handleSave}
-				loading={loading}
-				disabled={loading}
-			>
-				{t('pos_cart.save_to_server')}
-			</Button>
-		</View>
+	return React.createElement(
+		View,
+		null,
+		React.createElement(
+			Button,
+			{
+				testID: 'save-to-server-button',
+				variant: 'outline',
+				onPress: handleSave,
+				loading,
+				disabled: loading || isDegraded,
+			},
+			t('pos_cart.save_to_server')
+		)
 	);
 }

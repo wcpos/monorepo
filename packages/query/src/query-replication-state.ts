@@ -33,6 +33,7 @@ interface QueryReplicationConfig<T extends RxCollection> {
 	collection: T;
 	httpClient: any;
 	collectionReplication: CollectionReplicationState<T>;
+	shouldRestartCollectionReplication?: () => boolean;
 	hooks?: any;
 	endpoint: string;
 	greedy?: boolean;
@@ -44,6 +45,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	public readonly httpClient: any;
 	public readonly endpoint: any;
 	public readonly collectionReplication: CollectionReplicationState<T>;
+	public readonly shouldRestartCollectionReplication: () => boolean;
 	public syncCompleted = false;
 	public readonly greedy;
 	private dataFetcher: DataFetcher;
@@ -75,6 +77,8 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		this.collection = config.collection;
 		this.endpoint = config.endpoint;
 		this.collectionReplication = config.collectionReplication;
+		this.shouldRestartCollectionReplication =
+			config.shouldRestartCollectionReplication ?? (() => true);
 		this.greedy = config.greedy || false;
 
 		// @NOTE: this endpoint is different to the general collection endpoint, it has query params
@@ -219,7 +223,9 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 				},
 			});
 		} finally {
-			this.collectionReplication.start();
+			if (this.shouldRestartCollectionReplication()) {
+				this.collectionReplication.start();
+			}
 			this.subjects.active.next(false);
 		}
 	}

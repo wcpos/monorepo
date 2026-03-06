@@ -56,6 +56,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	// private static instanceCount = 0;
 	// private instanceId: number;
 	private static instance: Manager<any>;
+	private globalReplicationPauseReason: string | null = null;
 
 	private constructor(
 		public localDB: TDatabase,
@@ -454,7 +455,9 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		this.activeCollectionReplications.set(queryState.id, collectionReplication);
-		collectionReplication.start();
+		if (!this.globalReplicationPauseReason) {
+			collectionReplication.start();
+		}
 
 		/**
 		 * Add internal subscriptions to the query state
@@ -496,7 +499,9 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				}
 				this.activeQueryReplications.set(queryState.id, queryReplication);
 
-				queryReplication.start();
+				if (!this.globalReplicationPauseReason) {
+					queryReplication.start();
+				}
 			})
 		);
 	}
@@ -607,6 +612,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				collection,
 				endpoint: queryEndpoint,
 				greedy,
+				shouldRestartCollectionReplication: () => !this.globalReplicationPauseReason,
 			});
 
 			this.replicationStates.set(queryEndpoint, queryReplication);
@@ -749,6 +755,26 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			}
 		});
 		return matchingStates;
+	}
+
+	pauseAllReplications(reason = 'manual') {
+		this.globalReplicationPauseReason = reason;
+		this.activeCollectionReplications.forEach((replication) => {
+			replication.pause();
+		});
+		this.activeQueryReplications.forEach((replication) => {
+			replication.pause();
+		});
+	}
+
+	resumeAllReplications(_reason = 'manual') {
+		this.globalReplicationPauseReason = null;
+		this.activeCollectionReplications.forEach((replication) => {
+			replication.start();
+		});
+		this.activeQueryReplications.forEach((replication) => {
+			replication.start();
+		});
 	}
 
 	/**
