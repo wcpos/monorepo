@@ -59,10 +59,13 @@ export class SystemPrintAdapter implements PrinterTransport {
         const cleanup = () => {
           if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
           win.removeEventListener("afterprint", settle);
-          // Defer iframe removal so the browser finishes spooling
+          // Defer iframe removal so the browser finishes spooling.
+          // Use the captured iframe ref — not getElementById — to avoid
+          // removing a newer iframe created by a subsequent print job.
           setTimeout(() => {
-            const el = document.getElementById("wcpos-print-frame");
-            if (el) document.body.removeChild(el);
+            if (iframe.isConnected) {
+              iframe.remove();
+            }
           }, 1000);
         };
 
