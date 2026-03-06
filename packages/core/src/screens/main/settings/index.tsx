@@ -8,6 +8,7 @@ import { Text } from '@wcpos/components/text';
 
 import { BarcodeScanning } from './barcode-scanning';
 import { GeneralSettings } from './general';
+import { PrinterSettings } from './printer';
 import { ReceiptTemplateSettings } from './receipt-templates';
 import { KeyboardShortcuts } from './shortcuts';
 import { TaxSettings } from './tax';
@@ -37,6 +38,11 @@ export function SettingsScreen() {
 			value: 'barcode',
 			label: t('settings.barcode_scanning'),
 			component: <BarcodeScanning />,
+		},
+		{
+			value: 'printer',
+			label: t('settings.printer', 'Printer'),
+			component: <PrinterSettings />,
 		},
 		{
 			value: 'shortcuts',

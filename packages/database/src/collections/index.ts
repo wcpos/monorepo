@@ -19,6 +19,7 @@ import { taxRatesLiteral } from './schemas/tax-rates';
 import { usersLiteral } from './schemas/users';
 import { variationsLiteral } from './schemas/variations';
 import { wpCredentialsLiteral } from './schemas/wp-credientials';
+import { printerProfilesLiteral } from './schemas/printer-profiles';
 import { toSortableInteger } from './utils';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
@@ -450,6 +451,19 @@ export type TemplateDocument = RxDocument<TemplateDocumentType>;
 export type TemplateCollection = RxCollection<TemplateDocumentType>;
 const templates: RxCollectionCreator<TemplateDocumentType> = { schema: templateSchema };
 
+/**
+ * Printer Profiles (local-only, not synced to server)
+ */
+const printerProfileSchema: RxJsonSchema<PrinterProfileDocumentType> = printerProfilesLiteral;
+type PrinterProfileDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof printerProfilesLiteral
+>;
+export type PrinterProfileDocument = RxDocument<PrinterProfileDocumentType>;
+export type PrinterProfileCollection = RxCollection<PrinterProfileDocumentType>;
+const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
+	schema: printerProfileSchema,
+};
+
 export type UserCollections = {
 	users: UserCollection;
 	sites: SiteCollection;
@@ -472,6 +486,7 @@ export type StoreCollections = {
 	logs: LogCollection;
 	notifications: NotificationCollection;
 	templates: TemplateCollection;
+	printer_profiles: PrinterProfileCollection;
 };
 
 export type SyncCollections = {
@@ -519,6 +534,7 @@ export const storeCollections = {
 	logs,
 	notifications,
 	templates,
+	printer_profiles,
 };
 
 // @NOTE: sync collection should have corresponding collections in storeCollections

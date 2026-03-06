@@ -1,0 +1,36 @@
+{
+  "name": "@wcpos/printer",
+  "version": "0.1.0",
+  "description": "Printer encoding and transport for WooCommerce POS",
+  "author": "kilbot <paul@kilbot.com>",
+  "license": "MIT",
+  "main": "./src/index.ts",
+  "files": ["src/**"],
+  "dependencies": {
+    "@point-of-sale/receipt-printer-encoder": "^3.0.3",
+    "p-queue": "^8.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "expo-print": ">=55.0.0",
+    "react-native-tcp-socket": ">=6.0.0",
+    "react-native-esc-pos-printer": ">=4.0.0",
+    "react-native-star-io10": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "expo-print": {
+      "optional": true
+    },
+    "react-native-tcp-socket": {
+      "optional": true
+    },
+    "react-native-esc-pos-printer": {
+      "optional": true
+    },
+    "react-native-star-io10": {
+      "optional": true
+    }
+  }
+}

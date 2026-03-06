@@ -35,6 +35,7 @@ import { Text } from '@wcpos/components/text';
 import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
+import { usePrint } from '@wcpos/printer';
 
 import { EmailForm } from './email';
 import { FiscalStatus } from './fiscal-status';
@@ -46,7 +47,7 @@ import { TemplateSwitcher } from './template-switcher';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
-import { usePrintExternalURL } from '../hooks/use-print';
+import { useDefaultPrinterProfile } from '../settings/printer/use-default-printer-profile';
 
 import type { ReceiptMode } from './hooks/use-receipt-data';
 
@@ -107,6 +108,7 @@ export function Receipt({ resource }: Props) {
 		selectedTemplateId,
 		setSelectedTemplateId,
 		renderedHtml,
+		receiptData,
 		receiptUrl: templateReceiptUrl,
 		isOffline,
 		isSyncing,
@@ -135,9 +137,14 @@ export function Receipt({ resource }: Props) {
 		return appendModeParam(baseReceiptURL, selectedMode);
 	}, [baseReceiptURL, selectedMode]);
 
-	const { print, isPrinting } = usePrintExternalURL({
-		externalURL: templateReceiptUrl || receiptURL,
+	// Default printer profile for direct thermal printing (bypasses system dialog)
+	const defaultProfile = useDefaultPrinterProfile();
+
+	const { print, isPrinting } = usePrint({
+		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
+		receiptUrl: templateReceiptUrl || receiptURL,
+		printerProfile: defaultProfile,
 	});
 
 	// Retry fiscal submission
