@@ -39,7 +39,9 @@ import { WebView } from '@wcpos/components/webview';
 import { EmailForm } from './email';
 import { FiscalStatus } from './fiscal-status';
 import { useReceiptData } from './hooks/use-receipt-data';
+import { useTemplateRenderer } from './hooks/use-template-renderer';
 import { ReceiptModeBadge } from './mode-badge';
+import { TemplateSwitcher } from './template-switcher';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
@@ -98,6 +100,21 @@ export function Receipt({ resource }: Props) {
 		setSelectedMode('live');
 	}, [orderId]);
 
+	// Template renderer — provides template list, selection, and rendered output
+	const {
+		templates,
+		selectedTemplateId,
+		setSelectedTemplateId,
+		renderedHtml,
+		receiptUrl: templateReceiptUrl,
+		isOffline,
+	} = useTemplateRenderer({
+		orderId,
+		baseReceiptURL,
+		mode: selectedMode,
+		order,
+	});
+
 	// Fetch receipt metadata from the receipts REST API
 	const {
 		mode: activeMode,
@@ -117,7 +134,8 @@ export function Receipt({ resource }: Props) {
 	}, [baseReceiptURL, selectedMode]);
 
 	const { print, isPrinting } = usePrintExternalURL({
-		externalURL: receiptURL,
+		externalURL: templateReceiptUrl || receiptURL,
+		html: renderedHtml ?? undefined,
 	});
 
 	// Retry fiscal submission
@@ -221,9 +239,17 @@ export function Receipt({ resource }: Props) {
 									}
 								/>
 							)}
+							<TemplateSwitcher
+								templates={templates}
+								selectedId={selectedTemplateId}
+								onSelect={setSelectedTemplateId}
+								isOffline={isOffline}
+							/>
 							<WebView
 								ref={iframeRef as never}
-								src={receiptURL}
+								{...(renderedHtml != null
+									? { srcDoc: renderedHtml }
+									: { src: templateReceiptUrl || receiptURL })}
 								onLoad={handleLoad}
 								onMessage={() => {}}
 								className="flex-1"
