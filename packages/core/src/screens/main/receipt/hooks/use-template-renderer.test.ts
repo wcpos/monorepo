@@ -118,7 +118,7 @@ describe('useTemplateRenderer', () => {
 			expect(result.current.isSyncing).toBe(false);
 		});
 
-		it('is false when not loading and no data (offline)', () => {
+		it('is false when loading completes without data', () => {
 			mockUseReceiptData.mockReturnValue({ data: null, isLoading: false });
 
 			const { result } = renderHook(() => useTemplateRenderer(defaultOptions));
