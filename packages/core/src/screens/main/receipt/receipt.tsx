@@ -110,6 +110,8 @@ export function Receipt({ resource }: Props) {
 		renderedHtml,
 		receiptData,
 		receiptUrl: templateReceiptUrl,
+		selectedTemplateEngine,
+		selectedTemplateContent,
 		isOffline,
 		isSyncing,
 	} = useTemplateRenderer({
@@ -145,6 +147,9 @@ export function Receipt({ resource }: Props) {
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || receiptURL,
 		printerProfile: defaultProfile,
+		templateEngine: selectedTemplateEngine ?? undefined,
+		templateXml:
+			selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
 	});
 
 	// Retry fiscal submission

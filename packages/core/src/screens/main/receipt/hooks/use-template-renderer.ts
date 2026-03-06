@@ -3,6 +3,7 @@ import * as React from 'react';
 import Mustache from 'mustache';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import { mapReceiptData, renderThermalPreview } from '@wcpos/printer';
 import type { TemplateDocument } from '@wcpos/database';
 
 import { useActiveTemplates } from './use-active-templates';
@@ -28,6 +29,8 @@ interface TemplateRendererResult {
 	renderedHtml: string | null;
 	receiptUrl: string | null;
 	receiptData: ReceiptData | Record<string, unknown> | null;
+	selectedTemplateEngine: string | null;
+	selectedTemplateContent: string | null;
 	isOffline: boolean;
 	isSyncing: boolean;
 }
@@ -73,7 +76,13 @@ export function useTemplateRenderer({
 
 	const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
 
-	// Pre-render all Mustache templates into a cache
+	// Pre-render all offline-capable templates into a cache
+	// Normalise receipt data so thermal preview uses the same shape as thermal printing
+	const normalisedReceiptData = React.useMemo(
+		() => (receiptData ? mapReceiptData(receiptData as Record<string, any>) : null),
+		[receiptData]
+	);
+
 	const preRenderedCache = React.useMemo(() => {
 		const cache = new Map<string | number, string>();
 		if (!receiptData) return cache;
@@ -81,14 +90,24 @@ export function useTemplateRenderer({
 		for (const tmpl of templates) {
 			if (tmpl.offline_capable && tmpl.content) {
 				try {
-					cache.set(tmpl.id, Mustache.render(tmpl.content, receiptData));
+					if (tmpl.engine === 'thermal') {
+						cache.set(
+							tmpl.id,
+							renderThermalPreview(
+								tmpl.content,
+								(normalisedReceiptData ?? receiptData) as Record<string, any>
+							)
+						);
+					} else {
+						cache.set(tmpl.id, Mustache.render(tmpl.content, receiptData));
+					}
 				} catch {
 					// Skip templates with render errors
 				}
 			}
 		}
 		return cache;
-	}, [templates, receiptData]);
+	}, [templates, receiptData, normalisedReceiptData]);
 
 	// Determine output
 	let renderedHtml: string | null = null;
@@ -102,7 +121,14 @@ export function useTemplateRenderer({
 			const data = receiptData;
 			if (data && selectedTemplate.content) {
 				try {
-					renderedHtml = Mustache.render(selectedTemplate.content, data);
+					if (selectedTemplate.engine === 'thermal') {
+						renderedHtml = renderThermalPreview(
+							selectedTemplate.content,
+							(normalisedReceiptData ?? data) as Record<string, any>
+						);
+					} else {
+						renderedHtml = Mustache.render(selectedTemplate.content, data);
+					}
 				} catch {
 					renderedHtml = '<p>Template render error</p>';
 				}
@@ -132,6 +158,8 @@ export function useTemplateRenderer({
 		renderedHtml,
 		receiptUrl,
 		receiptData,
+		selectedTemplateEngine: selectedTemplate?.engine ?? null,
+		selectedTemplateContent: selectedTemplate?.content ?? null,
 		isOffline,
 		isSyncing,
 	};

@@ -27,11 +27,12 @@ export const templatesLiteral = {
 			maxLength: 20,
 		},
 		engine: {
-			description: 'Rendering engine: logicless or legacy-php.',
+			description: 'Rendering engine: logicless, thermal, or legacy-php.',
 			type: 'string',
 		},
 		content: {
-			description: 'Template HTML content. Present for logicless templates only (in view context).',
+			description:
+				'Template content. HTML for logicless, XML for thermal. Present in view context for offline-capable templates.',
 			type: 'string',
 		},
 		menu_order: {
@@ -41,7 +42,8 @@ export const templatesLiteral = {
 			multipleOf: 1,
 		},
 		offline_capable: {
-			description: 'True for logicless (Mustache) templates that can render without server.',
+			description:
+				'True for logicless (Mustache) and thermal (XML) templates that can render without server.',
 			type: 'boolean',
 		},
 		is_active: {
