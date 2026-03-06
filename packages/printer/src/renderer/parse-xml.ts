@@ -35,8 +35,10 @@ function parseChildren(parent: Element): ThermalNode[] {
   for (const child of Array.from(parent.childNodes)) {
     if (child.nodeType === 3 /* TEXT_NODE */) {
       const text = child.textContent ?? '';
-      if (text.trim()) {
-        nodes.push({ type: 'raw-text', value: text.trim() });
+      // Skip whitespace-only nodes (indentation), but preserve
+      // non-empty text as-is so spaces around inline elements survive.
+      if (/\S/.test(text)) {
+        nodes.push({ type: 'raw-text', value: text });
       }
       continue;
     }
@@ -82,12 +84,15 @@ function parseChildren(parent: Element): ThermalNode[] {
         break;
       case 'col':
         break;
-      case 'line':
+      case 'line': {
+        const styleAttr = el.getAttribute('style');
+        const validStyles = ['single', 'double'] as const;
         nodes.push({
           type: 'line',
-          style: (el.getAttribute('style') as 'single' | 'double') ?? 'single',
+          style: validStyles.includes(styleAttr as typeof validStyles[number]) ? (styleAttr as 'single' | 'double') : 'single',
         });
         break;
+      }
       case 'barcode':
         nodes.push({
           type: 'barcode',
@@ -110,12 +115,15 @@ function parseChildren(parent: Element): ThermalNode[] {
           width: intAttr(el, 'width', 200),
         });
         break;
-      case 'cut':
+      case 'cut': {
+        const cutAttr = el.getAttribute('type');
+        const validCuts = ['full', 'partial'] as const;
         nodes.push({
           type: 'cut',
-          cutType: (el.getAttribute('type') as 'full' | 'partial') ?? 'partial',
+          cutType: validCuts.includes(cutAttr as typeof validCuts[number]) ? (cutAttr as 'full' | 'partial') : 'partial',
         });
         break;
+      }
       case 'feed':
         nodes.push({ type: 'feed', lines: intAttr(el, 'lines', 1) });
         break;
@@ -137,7 +145,7 @@ function parseRowChildren(row: Element): ColNode[] {
       cols.push({
         type: 'col',
         width: intAttr(child, 'width', 12),
-        align: (child.getAttribute('align') as 'left' | 'right') ?? 'left',
+        align: (['left', 'right'] as const).includes(child.getAttribute('align') as 'left' | 'right') ? (child.getAttribute('align') as 'left' | 'right') : 'left',
         children: parseChildren(child),
       });
     }
