@@ -41,6 +41,7 @@ import { FiscalStatus } from './fiscal-status';
 import { useReceiptData } from './hooks/use-receipt-data';
 import { useTemplateRenderer } from './hooks/use-template-renderer';
 import { ReceiptModeBadge } from './mode-badge';
+import { SyncingBadge } from './syncing-badge';
 import { TemplateSwitcher } from './template-switcher';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
@@ -108,6 +109,7 @@ export function Receipt({ resource }: Props) {
 		renderedHtml,
 		receiptUrl: templateReceiptUrl,
 		isOffline,
+		isSyncing,
 	} = useTemplateRenderer({
 		orderId,
 		baseReceiptURL,
@@ -231,6 +233,7 @@ export function Receipt({ resource }: Props) {
 					<ErrorBoundary>
 						<VStack className="h-full gap-2">
 							<ReceiptModeBadge mode={activeMode} />
+							<SyncingBadge isSyncing={isSyncing} />
 							{submissionStatus && (
 								<FiscalStatus
 									status={submissionStatus}
@@ -259,19 +262,23 @@ export function Receipt({ resource }: Props) {
 				</ModalBody>
 				<ModalFooter>
 					<ModalClose testID="receipt-close-button">{t('common.close')}</ModalClose>
-					<Dialog>
-						<DialogTrigger asChild>
-							<ModalAction>{t('receipt.email_receipt')}</ModalAction>
-						</DialogTrigger>
-						<DialogContent>
-							<DialogHeader>
-								<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
-							</DialogHeader>
-							<DialogBody>
-								<EmailForm order={order} />
-							</DialogBody>
-						</DialogContent>
-					</Dialog>
+					{!isOffline ? (
+						<Dialog>
+							<DialogTrigger asChild>
+								<ModalAction>{t('receipt.email_receipt')}</ModalAction>
+							</DialogTrigger>
+							<DialogContent>
+								<DialogHeader>
+									<DialogTitle>{t('receipt.email_receipt')}</DialogTitle>
+								</DialogHeader>
+								<DialogBody>
+									<EmailForm order={order} />
+								</DialogBody>
+							</DialogContent>
+						</Dialog>
+					) : (
+						<ModalAction disabled>{t('receipt.email_receipt')}</ModalAction>
+					)}
 					<ModalAction
 						testID="receipt-print-button"
 						onPress={() => print()}

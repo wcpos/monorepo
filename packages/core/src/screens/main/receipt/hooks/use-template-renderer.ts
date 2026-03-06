@@ -29,6 +29,7 @@ interface TemplateRendererResult {
 	receiptUrl: string | null;
 	receiptData: ReceiptData | Record<string, unknown> | null;
 	isOffline: boolean;
+	isSyncing: boolean;
 }
 
 export function useTemplateRenderer({
@@ -43,7 +44,7 @@ export function useTemplateRenderer({
 	const isOffline = status !== 'online-website-available';
 
 	// Fetch receipt data from API (when online)
-	const { data: apiReceiptData } = useReceiptData({ orderId, mode });
+	const { data: apiReceiptData, isLoading } = useReceiptData({ orderId, mode });
 
 	// Fall back to locally-built receipt data when the API response is unavailable
 	const receiptData = React.useMemo(() => {
@@ -53,6 +54,9 @@ export function useTemplateRenderer({
 		}
 		return null;
 	}, [apiReceiptData, order, store]);
+
+	// Syncing: API fetch is in flight and we're still showing local data
+	const isSyncing = isLoading && !apiReceiptData;
 
 	// Default to the first template (or the one marked is_active)
 	const defaultId = React.useMemo(() => {
@@ -129,5 +133,6 @@ export function useTemplateRenderer({
 		receiptUrl,
 		receiptData,
 		isOffline,
+		isSyncing,
 	};
 }
