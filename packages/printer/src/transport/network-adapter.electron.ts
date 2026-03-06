@@ -20,6 +20,7 @@ export class NetworkAdapter implements PrinterTransport {
   constructor(
     private host: string,
     private port: number = 9100,
+    _vendor?: string,
   ) {}
 
   async printRaw(data: Uint8Array): Promise<void> {

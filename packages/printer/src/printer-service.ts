@@ -23,7 +23,7 @@ export class PrinterService {
 
     switch (profile.connectionType) {
       case 'network':
-        transport = new NetworkAdapter(profile.address!, profile.port);
+        transport = new NetworkAdapter(profile.address!, profile.port, profile.vendor);
         break;
       case 'system':
       default:

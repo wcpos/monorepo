@@ -1,28 +1,52 @@
+import { EpsonEposAdapter } from './epson-epos-adapter';
+import { StarWebPrntAdapter } from './star-webprnt-adapter';
+
 import type { PrinterTransport } from '../types';
 
 /**
- * Web network adapter — placeholder.
+ * Web network adapter — delegates to vendor-specific adapters.
  *
- * Browsers cannot open raw TCP sockets. Network printing on web
- * uses vendor-specific JS SDKs (Epson ePOS, Star WebPRNT) which
- * are implemented as separate adapters.
+ * Browsers cannot open raw TCP sockets, so network printing on web
+ * requires a vendor-specific protocol:
+ *
+ * - **Star** printers expose an HTTP endpoint (Star WebPRNT) that
+ *   accepts XML-wrapped print commands via POST.
+ * - **Epson** printers expose a WebSocket endpoint (ePOS) that the
+ *   Epson ePOS SDK connects to.
+ *
+ * If no vendor is specified, throws with guidance on how to configure
+ * the printer profile.
  */
 export class NetworkAdapter implements PrinterTransport {
   readonly name = 'network-web';
+  private delegate: PrinterTransport;
 
-  constructor(
-    private _host: string,
-    private _port: number = 9100,
-  ) {}
-
-  async printRaw(_data: Uint8Array): Promise<void> {
-    throw new Error(
-      'Raw TCP printing is not available in web browsers. ' +
-      'Configure an Epson or Star network printer for web printing.',
-    );
+  constructor(host: string, port: number = 9100, vendor?: string) {
+    switch (vendor) {
+      case 'epson':
+        this.delegate = new EpsonEposAdapter(host, port === 9100 ? 8043 : port);
+        break;
+      case 'star':
+        this.delegate = new StarWebPrntAdapter(`https://${host}/StarWebPRNT/SendMessage`);
+        break;
+      default:
+        throw new Error(
+          'Direct network printing in web browsers requires a vendor-specific protocol. ' +
+            'Set your printer vendor to "Epson" or "Star" in printer settings, ' +
+            'or use the system print dialog instead.',
+        );
+    }
   }
 
-  async printHtml(_html: string): Promise<void> {
-    throw new Error('NetworkAdapter does not support HTML printing.');
+  async printRaw(data: Uint8Array): Promise<void> {
+    return this.delegate.printRaw(data);
+  }
+
+  async printHtml(html: string): Promise<void> {
+    return this.delegate.printHtml(html);
+  }
+
+  async disconnect(): Promise<void> {
+    return this.delegate.disconnect?.();
   }
 }
