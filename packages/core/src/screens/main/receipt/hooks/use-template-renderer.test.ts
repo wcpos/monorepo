@@ -75,10 +75,9 @@ describe('useTemplateRenderer', () => {
 				order: defaultOptions.order,
 				store: { name: 'Test Store' },
 			});
-			expect(mockBuildReceiptData).toHaveBeenCalledWith(
-				defaultOptions.order,
-				{ name: 'Test Store' }
-			);
+			expect(mockBuildReceiptData).toHaveBeenCalledWith(defaultOptions.order, {
+				name: 'Test Store',
+			});
 		});
 
 		it('returns null when no API data and no order', () => {
