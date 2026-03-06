@@ -20,6 +20,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { PrinterService } from '@wcpos/printer';
+import type { PrinterProfile } from '@wcpos/printer';
 
 import { ConnectionTypeSelect } from './components/connection-type-select';
 import { LanguageSelect } from './components/language-select';
@@ -28,8 +29,6 @@ import { VendorSelect } from './components/vendor-select';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { FormErrors } from '../../components/form-errors';
-
-import type { PrinterProfile } from '@wcpos/printer';
 
 const addPrinterSchema = z.object({
 	name: z.string().min(1),
@@ -158,10 +157,7 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 								render={({ field }) => (
 									<FormInput
 										label={t('settings.printer_name', 'Printer Name')}
-										placeholder={t(
-											'settings.printer_name_placeholder',
-											'e.g. Receipt Printer'
-										)}
+										placeholder={t('settings.printer_name_placeholder', 'e.g. Receipt Printer')}
 										{...field}
 									/>
 								)}
@@ -267,10 +263,7 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 									name="autoPrint"
 									render={({ field }) => (
 										<FormSwitch
-											label={t(
-												'settings.auto_print_on_checkout',
-												'Auto-print on checkout'
-											)}
+											label={t('settings.auto_print_on_checkout', 'Auto-print on checkout')}
 											{...field}
 										/>
 									)}
@@ -279,10 +272,7 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 									control={form.control}
 									name="autoCut"
 									render={({ field }) => (
-										<FormSwitch
-											label={t('settings.auto_cut_paper', 'Auto-cut paper')}
-											{...field}
-										/>
+										<FormSwitch label={t('settings.auto_cut_paper', 'Auto-cut paper')} {...field} />
 									)}
 								/>
 								<FormField
@@ -290,10 +280,7 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 									name="autoOpenDrawer"
 									render={({ field }) => (
 										<FormSwitch
-											label={t(
-												'settings.auto_open_cash_drawer',
-												'Auto-open cash drawer'
-											)}
+											label={t('settings.auto_open_cash_drawer', 'Auto-open cash drawer')}
 											{...field}
 										/>
 									)}

@@ -35,6 +35,7 @@ import { Text } from '@wcpos/components/text';
 import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
+import { usePrint } from '@wcpos/printer';
 
 import { EmailForm } from './email';
 import { FiscalStatus } from './fiscal-status';
@@ -47,7 +48,6 @@ import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import { useDefaultPrinterProfile } from '../settings/printer/use-default-printer-profile';
-import { usePrint } from '@wcpos/printer';
 
 import type { ReceiptMode } from './hooks/use-receipt-data';
 

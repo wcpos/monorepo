@@ -3,10 +3,10 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { useAppState } from '../../../../contexts/app-state';
-
 import type { PrinterProfile } from '@wcpos/printer';
 import type { PrinterProfileDocument } from '@wcpos/database';
+
+import { useAppState } from '../../../../contexts/app-state';
 
 /**
  * Converts an RxDB printer profile document into a plain PrinterProfile object.

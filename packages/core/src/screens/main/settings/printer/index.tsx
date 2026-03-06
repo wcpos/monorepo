@@ -9,13 +9,12 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { PrinterService } from '@wcpos/printer';
+import type { PrinterProfileDocument } from '@wcpos/database';
+import type { PrinterProfile } from '@wcpos/printer';
 
 import { AddPrinter } from './add-printer';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-
-import type { PrinterProfileDocument } from '@wcpos/database';
-import type { PrinterProfile } from '@wcpos/printer';
 
 const printerService = new PrinterService();
 
@@ -27,10 +26,7 @@ export function PrinterSettings() {
 	/**
 	 * Subscribe to all printer profiles from the RxDB collection.
 	 */
-	const profiles$ = React.useMemo(
-		() => storeDB.collections.printer_profiles.find().$,
-		[storeDB]
-	);
+	const profiles$ = React.useMemo(() => storeDB.collections.printer_profiles.find().$, [storeDB]);
 	const profiles = useObservableState(profiles$, []) as PrinterProfileDocument[];
 
 	/**
@@ -110,7 +106,7 @@ export function PrinterSettings() {
 					<Text className="text-muted-foreground">
 						{t('settings.no_printers_configured', 'No printers configured')}
 					</Text>
-					<Text className="text-sm text-muted-foreground">
+					<Text className="text-muted-foreground text-sm">
 						{t(
 							'settings.printer_setup_description',
 							'Add a thermal receipt printer to enable silent printing without the system dialog.'
@@ -130,41 +126,25 @@ export function PrinterSettings() {
 										<HStack className="items-center gap-2">
 											<Text className="text-base font-semibold">{doc.name}</Text>
 											{doc.isDefault && (
-												<View className="rounded bg-primary px-2 py-0.5">
-													<Text className="text-xs text-primary-foreground">
+												<View className="bg-primary rounded px-2 py-0.5">
+													<Text className="text-primary-foreground text-xs">
 														{t('common.default', 'Default')}
 													</Text>
 												</View>
 											)}
 										</HStack>
-										<Text className="text-sm text-muted-foreground">
-											{connectionLabel(doc)}
-										</Text>
+										<Text className="text-muted-foreground text-sm">{connectionLabel(doc)}</Text>
 									</VStack>
 									<HStack className="gap-2">
-										<Button
-											variant="outline"
-											size="sm"
-											onPress={() => handleTestPrint(doc)}
-										>
+										<Button variant="outline" size="sm" onPress={() => handleTestPrint(doc)}>
 											<Text>{t('settings.test_print', 'Test')}</Text>
 										</Button>
 										{!doc.isDefault && (
-											<Button
-												variant="outline"
-												size="sm"
-												onPress={() => handleSetDefault(doc.id)}
-											>
-												<Text>
-													{t('settings.set_default', 'Set Default')}
-												</Text>
+											<Button variant="outline" size="sm" onPress={() => handleSetDefault(doc.id)}>
+												<Text>{t('settings.set_default', 'Set Default')}</Text>
 											</Button>
 										)}
-										<Button
-											variant="destructive"
-											size="sm"
-											onPress={() => handleDelete(doc.id)}
-										>
+										<Button variant="destructive" size="sm" onPress={() => handleDelete(doc.id)}>
 											<Text>{t('common.delete', 'Delete')}</Text>
 										</Button>
 									</HStack>
