@@ -88,6 +88,7 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 
 	const handlePrint = React.useCallback(() => {
 		const {
+			html,
 			externalURL,
 			onBeforePrint,
 			onAfterPrint,
@@ -100,34 +101,38 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 		removePrintIframe(preserveAfterPrint, true);
 
 		const proceedToPrint = () => {
-			if (externalURL) {
-				const printWindow = generatePrintWindow();
-				printWindow.src = externalURL;
-
-				// Set up onload handler to start printing once the content is loaded
-				printWindow.onload = () => {
-					try {
-						startPrint(printWindow, {
-							...options,
-							onAfterPrint: () => {
-								// Reset the Promise resolve so we can print again
-								promiseResolveRef.current = null;
-								setIsPrinting(false);
-								onAfterPrint?.();
-							},
-						});
-					} catch (error) {
-						onPrintError?.('startPrint', error as Error);
-					}
-				};
-
-				document.body.appendChild(printWindow);
-			} else {
+			if (!html && !externalURL) {
 				logMessages({
-					messages: ['No external URL provided to print'],
+					messages: ['No HTML or external URL provided to print'],
 					suppressErrors,
 				});
+				return;
 			}
+
+			const printWindow = generatePrintWindow();
+
+			printWindow.onload = () => {
+				try {
+					startPrint(printWindow, {
+						...options,
+						onAfterPrint: () => {
+							promiseResolveRef.current = null;
+							setIsPrinting(false);
+							onAfterPrint?.();
+						},
+					});
+				} catch (error) {
+					onPrintError?.('startPrint', error as Error);
+				}
+			};
+
+			if (html) {
+				printWindow.srcdoc = html;
+			} else {
+				printWindow.src = externalURL!;
+			}
+
+			document.body.appendChild(printWindow);
 		};
 
 		const onBeforePrintWrapper = () => {
