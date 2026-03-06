@@ -9,7 +9,7 @@ import type { UsePrintExternalURLOptions } from './types';
 const printLogger = getLogger(['wcpos', 'print', 'external']);
 
 export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
-	const { externalURL, onBeforePrint, onAfterPrint, onPrintError } = options;
+	const { externalURL, html, onBeforePrint, onAfterPrint, onPrintError } = options;
 	const [isPrinting, setIsPrinting] = React.useState(false);
 
 	/**
@@ -27,6 +27,7 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 			// Send the print request to the main process
 			ipc.send('print-external-url', {
 				externalURL,
+				html,
 				printJobId,
 			});
 
@@ -56,7 +57,7 @@ export const usePrintExternalURL = (options: UsePrintExternalURLOptions) => {
 		} else {
 			printLogger.error('ipcRenderer not available');
 		}
-	}, [externalURL, onBeforePrint, onAfterPrint, onPrintError]);
+	}, [externalURL, html, onBeforePrint, onAfterPrint, onPrintError]);
 
 	return { print, isPrinting };
 };
