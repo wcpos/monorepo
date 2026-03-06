@@ -20,15 +20,22 @@ export function VendorSelect({ value, ...props }: React.ComponentProps<typeof Se
 		() => [
 			{ value: 'epson', label: 'Epson' },
 			{ value: 'star', label: 'Star Micronics' },
-			{ value: 'generic', label: t('settings.printer_vendor_generic', 'Generic') },
+			{
+				value: 'generic',
+				label: t('settings.printer_vendor_generic', 'Generic'),
+			},
 		],
 		[t]
 	);
 
-	const label = options.find((option) => option.value === value?.value)?.label;
+	const selectedLabel =
+		options.find((option) => option.value === value?.value)?.label ??
+		value?.label ??
+		value?.value ??
+		'';
 
 	return (
-		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
+		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);

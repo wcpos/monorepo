@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { v4 as uuidv4 } from 'uuid';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/button';
+import { Button } from '@wcpos/components/button';
 import {
 	Dialog,
 	DialogBody,
@@ -30,19 +30,29 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { FormErrors } from '../../components/form-errors';
 
-const addPrinterSchema = z.object({
-	name: z.string().min(1),
-	connectionType: z.enum(['network', 'system']).default('network'),
-	address: z.string().optional(),
-	port: z.coerce.number().default(9100),
-	vendor: z.enum(['epson', 'star', 'generic']).default('generic'),
-	language: z.enum(['esc-pos', 'star-prnt', 'star-line']).default('esc-pos'),
-	columns: z.coerce.number().default(48),
-	autoPrint: z.boolean().default(false),
-	autoCut: z.boolean().default(true),
-	autoOpenDrawer: z.boolean().default(false),
-	isDefault: z.boolean().default(true),
-});
+const addPrinterSchema = z
+	.object({
+		name: z.string().min(1),
+		connectionType: z.enum(['network', 'system']).default('network'),
+		address: z.string().optional(),
+		port: z.coerce.number().int().min(1).max(65535).default(9100),
+		vendor: z.enum(['epson', 'star', 'generic']).default('generic'),
+		language: z.enum(['esc-pos', 'star-prnt', 'star-line']).default('esc-pos'),
+		columns: z.coerce.number().default(48),
+		autoPrint: z.boolean().default(false),
+		autoCut: z.boolean().default(true),
+		autoOpenDrawer: z.boolean().default(false),
+		isDefault: z.boolean().default(true),
+	})
+	.superRefine((data, ctx) => {
+		if (data.connectionType === 'network' && (!data.address || !data.address.trim())) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: 'IP address is required for network printers',
+				path: ['address'],
+			});
+		}
+	});
 
 type AddPrinterFormData = z.infer<typeof addPrinterSchema>;
 
@@ -52,12 +62,12 @@ interface AddPrinterProps {
 	onSave: () => void;
 }
 
-const printerService = new PrinterService();
-
 export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 	const t = useT();
 	const { storeDB } = useAppState();
 	const [testLoading, setTestLoading] = React.useState(false);
+	const [testError, setTestError] = React.useState<string | null>(null);
+	const printerService = React.useMemo(() => new PrinterService(), []);
 
 	const form = useForm<AddPrinterFormData>({
 		resolver: zodResolver(addPrinterSchema as never) as never,
@@ -106,14 +116,16 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 		const data = form.getValues();
 		const profile = buildProfile(data);
 		setTestLoading(true);
+		setTestError(null);
 		try {
 			await printerService.testPrint(profile);
-		} catch {
-			// TODO: show error toast
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			setTestError(message);
 		} finally {
 			setTestLoading(false);
 		}
-	}, [form, buildProfile]);
+	}, [form, buildProfile, printerService]);
 
 	/**
 	 * Save the printer profile to the RxDB collection.
@@ -121,6 +133,15 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 	const handleSave = React.useCallback(
 		async (data: AddPrinterFormData) => {
 			const collection = storeDB.collections.printer_profiles;
+
+			// Clear existing defaults before inserting a new default
+			if (data.isDefault) {
+				const existingDefaults = await collection.find({ selector: { isDefault: true } }).exec();
+				for (const doc of existingDefaults) {
+					await doc.patch({ isDefault: false });
+				}
+			}
+
 			await collection.insert({
 				id: uuidv4(),
 				name: data.name,
@@ -300,6 +321,7 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 					</Form>
 				</DialogBody>
 				<DialogFooter>
+					{testError && <Text className="text-destructive text-sm">{testError}</Text>}
 					<Button variant="outline" onPress={handleTestPrint} loading={testLoading}>
 						<Text>{t('settings.test_print', 'Test Print')}</Text>
 					</Button>

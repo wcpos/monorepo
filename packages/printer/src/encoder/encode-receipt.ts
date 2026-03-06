@@ -1,13 +1,13 @@
-import { encodeThermalTemplate } from '../renderer';
+import { encodeThermalTemplate } from "../renderer";
 
-import { DEFAULT_THERMAL_TEMPLATE } from './default-thermal-template';
-import type { ReceiptData } from './types';
+import { DEFAULT_THERMAL_TEMPLATE } from "./default-thermal-template";
+import type { ReceiptData } from "./types";
 
 export interface EncodeReceiptOptions {
   /** Printer model key from receipt-printer-encoder's database */
   printerModel?: string;
   /** Printer command language */
-  language?: 'esc-pos' | 'star-prnt' | 'star-line';
+  language?: "esc-pos" | "star-prnt" | "star-line";
   /** Characters per line. 48 = 80mm, 32 = 58mm */
   columns?: number;
   /** Include cut command. Default: true */
@@ -20,10 +20,13 @@ function formatMoney(value: number, currency: string): string {
   return `${currency} ${value.toFixed(2)}`;
 }
 
-export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions = {}): Uint8Array {
+export function encodeReceipt(
+  data: ReceiptData,
+  options: EncodeReceiptOptions = {},
+): Uint8Array {
   const {
     printerModel,
-    language = 'esc-pos',
+    language = "esc-pos",
     columns = 48,
     cut = true,
     openDrawer = false,
@@ -53,8 +56,8 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
     address_lines: (data.store.address_lines ?? []).map((line) => ({ line })),
     has_phone: !!data.store.phone,
     has_tax_id: !!data.store.tax_id,
-    cashier_name: data.cashier?.name || '',
-    customer_name: data.customer?.name || '',
+    cashier_name: data.cashier?.name || "",
+    customer_name: data.customer?.name || "",
     formatted_lines: data.lines.map((item) => ({
       name: item.name,
       detail: `  x${item.qty} @ ${formatMoney(item.unit_price_incl, currency)}`,
@@ -65,7 +68,7 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
     subtotal_fmt: formatMoney(data.totals.subtotal_incl, currency),
     has_discount: data.totals.discount_total_incl > 0,
     discount_fmt: `-${formatMoney(data.totals.discount_total_incl, currency)}`,
-    show_tax: data.presentation_hints.display_tax !== 'hidden' && data.totals.tax_total > 0,
+    show_tax: data.presentation_hints.display_tax !== "hidden" && data.totals.tax_total > 0,
     tax_lines: data.tax_summary.map((tax) => ({
       label: tax.rate ? `${tax.label} (${tax.rate}%)` : tax.label,
       amount_fmt: formatMoney(tax.tax_amount, currency),

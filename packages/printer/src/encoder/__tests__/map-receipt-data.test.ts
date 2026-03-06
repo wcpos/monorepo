@@ -69,17 +69,22 @@ describe('mapReceiptData', () => {
 			expect(result).toBe(sampleReceiptData);
 		});
 
-		it('detects canonical shape via meta.order_id', () => {
-			const data = { meta: { order_id: 5 }, totals: {} };
+		it('detects canonical shape when both meta and totals markers are present', () => {
+			const data = {
+				meta: { schema_version: 1, order_id: 5 },
+				totals: { subtotal_incl: 10 },
+			};
 			const result = mapReceiptData(data);
 			// Should pass through (same reference) because isCanonicalShape returns true
 			expect(result).toBe(data);
 		});
 
-		it('detects canonical shape via totals.subtotal_incl', () => {
-			const data = { meta: {}, totals: { subtotal_incl: 10 } };
+		it('does not treat partial canonical markers as canonical', () => {
+			// Only meta markers, no totals marker — should map, not passthrough
+			const data = { meta: { order_id: 5 }, totals: {} };
 			const result = mapReceiptData(data);
-			expect(result).toBe(data);
+			expect(result).not.toBe(data);
+			expect(result.meta.schema_version).toBe(1);
 		});
 	});
 

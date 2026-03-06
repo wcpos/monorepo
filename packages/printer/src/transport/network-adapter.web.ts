@@ -1,7 +1,7 @@
-import { EpsonEposAdapter } from './epson-epos-adapter';
-import { StarWebPrntAdapter } from './star-webprnt-adapter';
+import { EpsonEposAdapter } from "./epson-epos-adapter";
+import { StarWebPrntAdapter } from "./star-webprnt-adapter";
 
-import type { PrinterTransport } from '../types';
+import type { PrinterTransport } from "../types";
 
 /**
  * Web network adapter — delegates to vendor-specific adapters.
@@ -18,22 +18,27 @@ import type { PrinterTransport } from '../types';
  * the printer profile.
  */
 export class NetworkAdapter implements PrinterTransport {
-  readonly name = 'network-web';
+  readonly name = "network-web";
   private delegate: PrinterTransport;
 
   constructor(host: string, port: number = 9100, vendor?: string) {
     switch (vendor) {
-      case 'epson':
+      case "epson":
         this.delegate = new EpsonEposAdapter(host, port === 9100 ? 8043 : port);
         break;
-      case 'star':
-        this.delegate = new StarWebPrntAdapter(`https://${host}/StarWebPRNT/SendMessage`);
+      case "star":
+        {
+          const starPort = port === 9100 ? "" : `:${port}`;
+          this.delegate = new StarWebPrntAdapter(
+            `https://${host}${starPort}/StarWebPRNT/SendMessage`,
+          );
+        }
         break;
       default:
         throw new Error(
-          'Direct network printing in web browsers requires a vendor-specific protocol. ' +
+          "Direct network printing in web browsers requires a vendor-specific protocol. " +
             'Set your printer vendor to "Epson" or "Star" in printer settings, ' +
-            'or use the system print dialog instead.',
+            "or use the system print dialog instead.",
         );
     }
   }

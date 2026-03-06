@@ -1,4 +1,4 @@
-import type { PrinterTransport } from '../types';
+import type { PrinterTransport } from "../types";
 
 /**
  * Star WebPRNT adapter for web browsers.
@@ -16,7 +16,7 @@ import type { PrinterTransport } from '../types';
  * or configure a reverse proxy.
  */
 export class StarWebPrntAdapter implements PrinterTransport {
-  readonly name = 'star-webprnt';
+  readonly name = "star-webprnt";
 
   constructor(private url: string) {}
 
@@ -26,26 +26,40 @@ export class StarWebPrntAdapter implements PrinterTransport {
     const xml = [
       '<?xml version="1.0" encoding="utf-8"?>',
       '<StarWebPrint xmlns="http://schema.starwebprnt.com" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">',
-      '  <SendMessage>',
-      '    <Request>',
-      '      <initialize />',
+      "  <SendMessage>",
+      "    <Request>",
+      "      <initialize />",
       `      <rawData>${base64}</rawData>`,
       '      <cutpaper feed="true" />',
-      '    </Request>',
-      '  </SendMessage>',
-      '</StarWebPrint>',
-    ].join('\n');
+      "    </Request>",
+      "  </SendMessage>",
+      "</StarWebPrint>",
+    ].join("\n");
 
-    const response = await fetch(this.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/xml; charset=utf-8',
-      },
-      body: xml,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
+    let response: Response;
+    try {
+      response = await fetch(this.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/xml; charset=utf-8",
+        },
+        body: xml,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error("Star WebPRNT request timed out after 30000ms");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
-      const body = await response.text().catch(() => '');
+      const body = await response.text().catch(() => "");
       throw new Error(
         `Star WebPRNT request failed (HTTP ${response.status}): ${body || response.statusText}`,
       );
@@ -54,13 +68,13 @@ export class StarWebPrntAdapter implements PrinterTransport {
     // Parse the response XML to check for printer errors
     const responseText = await response.text();
     const statusMatch = responseText.match(/<Status>(\w+)<\/Status>/);
-    if (statusMatch && statusMatch[1] !== 'Normal') {
+    if (statusMatch && statusMatch[1] !== "Normal") {
       throw new Error(`Star printer reported status: ${statusMatch[1]}`);
     }
   }
 
   async printHtml(_html: string): Promise<void> {
-    throw new Error('StarWebPrntAdapter does not support HTML printing.');
+    throw new Error("StarWebPrntAdapter does not support HTML printing.");
   }
 
   async disconnect(): Promise<void> {
@@ -75,9 +89,11 @@ export class StarWebPrntAdapter implements PrinterTransport {
  * modern browsers and web workers.
  */
 function uint8ArrayToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const CHUNK_SIZE = 8192;
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, i + CHUNK_SIZE);
+    chunks.push(String.fromCharCode.apply(null, chunk as unknown as number[]));
   }
-  return btoa(binary);
+  return btoa(chunks.join(""));
 }

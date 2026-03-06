@@ -10,18 +10,17 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { PrinterService } from '@wcpos/printer';
 import type { PrinterProfileDocument } from '@wcpos/database';
-import type { PrinterProfile } from '@wcpos/printer';
 
 import { AddPrinter } from './add-printer';
+import { toPrinterProfile } from './use-default-printer-profile';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-
-const printerService = new PrinterService();
 
 export function PrinterSettings() {
 	const t = useT();
 	const { storeDB } = useAppState();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
+	const printerService = React.useMemo(() => new PrinterService(), []);
 
 	/**
 	 * Subscribe to all printer profiles from the RxDB collection.
@@ -62,27 +61,17 @@ export function PrinterSettings() {
 	/**
 	 * Test print using the given profile document.
 	 */
-	const handleTestPrint = React.useCallback(async (doc: PrinterProfileDocument) => {
-		const profile: PrinterProfile = {
-			id: doc.id,
-			name: doc.name,
-			connectionType: doc.connectionType as PrinterProfile['connectionType'],
-			vendor: (doc.vendor ?? 'generic') as PrinterProfile['vendor'],
-			address: doc.address,
-			port: doc.port ?? 9100,
-			language: (doc.language ?? 'esc-pos') as PrinterProfile['language'],
-			columns: doc.columns ?? 48,
-			autoPrint: doc.autoPrint ?? false,
-			autoCut: doc.autoCut ?? true,
-			autoOpenDrawer: doc.autoOpenDrawer ?? false,
-			isDefault: doc.isDefault ?? false,
-		};
-		try {
-			await printerService.testPrint(profile);
-		} catch {
-			// TODO: show error toast
-		}
-	}, []);
+	const handleTestPrint = React.useCallback(
+		async (doc: PrinterProfileDocument) => {
+			const profile = toPrinterProfile(doc);
+			try {
+				await printerService.testPrint(profile);
+			} catch {
+				// TODO: show error toast
+			}
+		},
+		[printerService]
+	);
 
 	/**
 	 * Format connection info for display.
