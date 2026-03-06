@@ -51,6 +51,8 @@ const upsertMetaData = (
 	}
 };
 
+const REFUNDABLE_STATUSES = ['completed', 'processing', 'on-hold', 'refunded'] as const;
+
 /**
  *
  */
@@ -66,8 +68,7 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 	const orderHasID = useObservableEagerState(order.id$!); // we need to update the menu with change to order.id
 	const deleteDocument = useDeleteDocument();
 	const { readOnly } = useProAccess();
-	const refundableStatuses = ['completed', 'processing', 'on-hold', 'refunded'];
-	const canRefund = orderHasID && !!status && refundableStatuses.includes(status);
+	const canRefund = orderHasID && !!status && REFUNDABLE_STATUSES.includes(status);
 
 	/**
 	 * To re-open an order, we need to:
