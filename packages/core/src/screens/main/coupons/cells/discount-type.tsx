@@ -1,8 +1,6 @@
-import { View } from 'react-native';
-
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Text } from '@wcpos/components/text';
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -10,36 +8,30 @@ import type { CellContext } from '@tanstack/react-table';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
 
-const styleMap: Record<string, string> = {
-	percent: 'bg-primary rounded px-2 py-0.5',
-	fixed_cart: 'bg-secondary rounded px-2 py-0.5',
-	fixed_product: 'bg-muted rounded px-2 py-0.5',
-};
-
-const textStyleMap: Record<string, string> = {
-	percent: 'text-primary-foreground text-xs',
-	fixed_cart: 'text-secondary-foreground text-xs',
-	fixed_product: 'text-muted-foreground text-xs',
-};
-
 const labelMap: Record<string, string> = {
-	percent: 'coupons.percent',
-	fixed_cart: 'coupons.fixed_cart',
-	fixed_product: 'coupons.fixed_product',
+	percent: 'coupons.percent_short',
+	fixed_cart: 'coupons.fixed_cart_short',
+	fixed_product: 'coupons.fixed_product_short',
 };
 
-export function DiscountType({ row }: CellContext<{ document: CouponDocument }, 'discount_type'>) {
+export function DiscountType({
+	row,
+	table,
+}: CellContext<{ document: CouponDocument }, 'discount_type'>) {
 	const coupon = row.original.document;
 	const discountType = useObservableEagerState(coupon.discount_type$!) ?? 'percent';
 	const t = useT();
+	const query = table.options.meta?.query;
 
-	const bgStyle = styleMap[discountType] ?? styleMap.percent;
-	const txtStyle = textStyleMap[discountType] ?? textStyleMap.percent;
-	const label = t(labelMap[discountType] ?? labelMap.percent);
+	const label = labelMap[discountType] ? t(labelMap[discountType]) : discountType;
 
 	return (
-		<View className={bgStyle}>
-			<Text className={txtStyle}>{label}</Text>
-		</View>
+		<ButtonPill
+			variant="ghost-primary"
+			size="xs"
+			onPress={() => query?.where('discount_type').equals(discountType).exec()}
+		>
+			<ButtonText numberOfLines={1}>{label}</ButtonText>
+		</ButtonPill>
 	);
 }

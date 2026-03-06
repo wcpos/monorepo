@@ -13,27 +13,25 @@ import { convertUTCStringToLocalDate, useLocalDate } from '../../../hooks/use-lo
 /**
  *
  */
-export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', fromNow = true) => {
+export const useDateFormat = (
+	gmtDate: string | number | null | undefined = '',
+	formatPattern = 'MMMM d, yyyy',
+	fromNow = true
+) => {
 	const heartbeat$ = useHeartbeatObservable(60000); // every minute
 	const { dateFnsLocale, formatDate } = useLocalDate();
 	const [visibleRef, visible$] = useObservableRef(false);
 
-	let date: Date;
+	let date: Date | null = null;
 
-	// Determine if gmtDate is an ISO string or a Unix timestamp
-	if (typeof gmtDate === 'string') {
+	if (typeof gmtDate === 'string' && gmtDate !== '') {
 		date = convertUTCStringToLocalDate(gmtDate);
 	} else if (typeof gmtDate === 'number') {
 		date = new Date(gmtDate);
-	} else {
-		throw new Error('Invalid date format');
 	}
 
-	/**
-	 *
-	 */
 	const getDisplayDate = React.useCallback(() => {
-		if (!isValid(date)) {
+		if (!date || !isValid(date)) {
 			return null;
 		}
 
@@ -47,10 +45,6 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 		}
 	}, [date, fromNow, dateFnsLocale, formatDate, formatPattern]);
 
-	/**
-	 * We will turn off the heartbeat if the screen is not visible
-	 */
-
 	useFocusEffect(
 		React.useCallback(() => {
 			setRefValue(visibleRef, true);
@@ -60,12 +54,9 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 		}, [visibleRef])
 	);
 
-	/**
-	 *
-	 */
 	return useObservableState(
 		visible$.pipe(
-			filter((visible) => visible && isToday(date)),
+			filter((visible) => visible && !!date && isToday(date)),
 			switchMap(() => heartbeat$),
 			map(getDisplayDate)
 		),

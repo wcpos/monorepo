@@ -8,7 +8,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { EditCartItemButton } from './edit-cart-item-button';
 import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
-import { EditableName } from '../../../components/editable-name';
+import { EditableField } from '../../../components/editable-field';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -49,7 +49,10 @@ export function ProductName({ row, column }: CellContext<Props, 'name'>) {
 		<VStack className="w-full">
 			<HStack className="gap-0">
 				<View className="flex-1">
-					<EditableName value={item.name} onChangeText={(name) => updateLineItem(uuid, { name })} />
+					<EditableField
+						value={item.name}
+						onChangeText={(name) => updateLineItem(uuid, { name })}
+					/>
 				</View>
 				<EditCartItemButton title={t('common.edit_2', { name: item.name })}>
 					<EditLineItem uuid={uuid} item={item} />

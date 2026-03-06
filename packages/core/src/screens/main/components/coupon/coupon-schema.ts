@@ -4,6 +4,7 @@ export const couponFormSchema = z.object({
 	code: z.string().min(1),
 	amount: z.string().optional().default(''),
 	discount_type: z.enum(['percent', 'fixed_cart', 'fixed_product']).default('percent'),
+	status: z.enum(['publish', 'draft', 'pending']).default('publish'),
 	description: z.string().optional().default(''),
 	date_expires_gmt: z.string().nullable().optional(),
 	individual_use: z.boolean().optional().default(false),

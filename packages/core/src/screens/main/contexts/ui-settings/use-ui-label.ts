@@ -97,10 +97,12 @@ export const useUILabel = () => {
 					actions: t('common.actions'),
 				},
 				coupons: {
+					active: t('coupons.active'),
 					code: t('common.code'),
 					amount: t('common.amount'),
 					discount_type: t('common.type'),
 					description: t('common.description'),
+					status: t('common.status'),
 					usage_count: t('common.usage'),
 					date_expires_gmt: t('common.expiry_date'),
 					date_created_gmt: t('common.date_created'),

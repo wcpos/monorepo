@@ -39,7 +39,7 @@ export function AddCartItemsMenu() {
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<IconButton name="circlePlus" testID="add-cart-item-menu" />
+					<IconButton name="plus" testID="add-cart-item-menu" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end" portalHost="pos">
 					{isPro ? (

@@ -8,7 +8,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { EditCartItemButton } from './edit-cart-item-button';
 import { EditFeeLine } from './edit-fee-line';
 import { useT } from '../../../../../contexts/translations';
-import { EditableName } from '../../../components/editable-name';
+import { EditableField } from '../../../components/editable-field';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -49,7 +49,7 @@ export function FeeName({ row }: CellContext<Props, 'name'>) {
 		<VStack className="w-full">
 			<HStack className="gap-0">
 				<View className="flex-1">
-					<EditableName
+					<EditableField
 						value={item.name ?? undefined}
 						onChangeText={(name) => updateFeeLine(uuid, { name })}
 					/>
