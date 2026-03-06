@@ -1,0 +1,13 @@
+{
+  "name": "@wcpos/printer",
+  "version": "0.1.0",
+  "description": "Printer encoding and transport for WooCommerce POS",
+  "author": "kilbot <paul@kilbot.com>",
+  "license": "MIT",
+  "main": "./src/index.ts",
+  "files": ["src/**"],
+  "dependencies": {
+    "@point-of-sale/receipt-printer-encoder": "^3.0.3",
+    "p-queue": "^8.1.0"
+  }
+}
