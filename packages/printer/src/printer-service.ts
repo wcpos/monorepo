@@ -1,6 +1,7 @@
 import PQueue from 'p-queue';
 
 import { encodeReceipt } from './encoder/encode-receipt';
+import { encodeThermalTemplate } from './renderer';
 import { NetworkAdapter } from './transport/network-adapter';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
 
@@ -37,16 +38,17 @@ export class PrinterService {
 
   /**
    * Print a receipt using the given profile.
-   * If no profile, falls back to system print.
+   * If templateXml is provided, uses the custom XML template via encodeThermalTemplate().
+   * Otherwise falls back to the built-in default layout via encodeReceipt().
    */
   async printReceipt(
     receiptData: ReceiptData,
     profile?: PrinterProfile,
     html?: string,
+    templateXml?: string,
   ): Promise<void> {
     return this.queue.add(async () => {
       if (!profile || profile.connectionType === 'system') {
-        // Fallback: system print dialog with HTML
         const transport = new SystemPrintAdapter();
         if (!html) {
           throw new Error('System printing requires HTML content');
@@ -55,18 +57,25 @@ export class PrinterService {
         return;
       }
 
-      // Direct printing: encode and send bytes
       const transport = this.getTransport(profile);
-
-      const encoderOptions: EncodeReceiptOptions = {
+      const encoderOptions = {
         language: profile.language,
         columns: profile.columns,
         printerModel: profile.printerModel,
-        cut: profile.autoCut,
-        openDrawer: profile.autoOpenDrawer,
       };
 
-      const bytes = encodeReceipt(receiptData, encoderOptions);
+      let bytes: Uint8Array;
+      if (templateXml) {
+        bytes = encodeThermalTemplate(templateXml, receiptData, encoderOptions);
+      } else {
+        const encodeOpts: EncodeReceiptOptions = {
+          ...encoderOptions,
+          cut: profile.autoCut,
+          openDrawer: profile.autoOpenDrawer,
+        };
+        bytes = encodeReceipt(receiptData, encodeOpts);
+      }
+
       await transport.printRaw(bytes);
     });
   }

@@ -16,6 +16,10 @@ interface UsePrintOptions {
   receiptUrl?: string;
   /** Active printer profile. If undefined, uses system print dialog. */
   printerProfile?: PrinterProfile;
+  /** XML template content for thermal engine templates */
+  templateXml?: string;
+  /** Engine type of the selected template */
+  templateEngine?: string;
   /** Callbacks */
   onBeforePrint?: () => void | Promise<void>;
   onAfterPrint?: () => void;
@@ -43,6 +47,8 @@ export function usePrint(options: UsePrintOptions) {
       html,
       receiptUrl,
       printerProfile,
+      templateXml,
+      templateEngine,
       onBeforePrint,
       onAfterPrint,
       onPrintError,
@@ -60,7 +66,11 @@ export function usePrint(options: UsePrintOptions) {
       if (printerProfile && printerProfile.connectionType !== 'system' && receiptData) {
         // Direct thermal printing — normalise shape then encode and send bytes
         const normalised = mapReceiptData(receiptData as Record<string, any>);
-        await service.printReceipt(normalised, printerProfile);
+        if (templateEngine === 'thermal' && templateXml) {
+          await service.printReceipt(normalised, printerProfile, undefined, templateXml);
+        } else {
+          await service.printReceipt(normalised, printerProfile);
+        }
       } else {
         // System print fallback — need HTML content
         let htmlContent = html;
