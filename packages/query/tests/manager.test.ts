@@ -376,6 +376,58 @@ describe('Manager', () => {
 		});
 	});
 
+	describe('rxQuery$ replication dedup', () => {
+		it('should skip pause/start when rxQuery$ re-emits with same endpoint', async () => {
+			// Spy on registerQueryReplication so we can wait for it event-driven
+			const regSpy = jest.spyOn(manager, 'registerQueryReplication');
+
+			const query = manager.registerQuery({
+				queryKeys: ['dedupTest'],
+				collectionName: 'products',
+				initialParams: { sort: [{ name: 'asc' }] },
+			});
+
+			// Wait for the first registerQueryReplication call (initial rxQuery$ emission)
+			await new Promise<void>((resolve) => {
+				const check = () => {
+					if (regSpy.mock.calls.length >= 1) {
+						resolve();
+					} else {
+						setTimeout(check, 5);
+					}
+				};
+				check();
+			});
+
+			const key = manager.stringify(['dedupTest']);
+			const replication = manager.activeQueryReplications.get(key);
+			expect(replication).toBeDefined();
+
+			const startSpy = jest.spyOn(replication, 'start');
+			const pauseSpy = jest.spyOn(replication, 'pause');
+			const callCountBefore = regSpy.mock.calls.length;
+
+			// Trigger rxQuery$ to emit again with unchanged params
+			query.search('');
+
+			// Wait for registerQueryReplication to be called again (proves rxQuery$ emitted)
+			await new Promise<void>((resolve) => {
+				const check = () => {
+					if (regSpy.mock.calls.length > callCountBefore) {
+						resolve();
+					} else {
+						setTimeout(check, 5);
+					}
+				};
+				check();
+			});
+
+			// Same replication object — dedup guard should prevent pause/start
+			expect(startSpy).not.toHaveBeenCalled();
+			expect(pauseSpy).not.toHaveBeenCalled();
+		});
+	});
+
 	describe('maybePauseQueryReplications', () => {
 		it('should return early when query has no active replication', () => {
 			// Create a mock query that has no entry in activeQueryReplications

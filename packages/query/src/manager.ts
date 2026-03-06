@@ -490,6 +490,12 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				if (!queryReplication) {
 					return;
 				}
+
+				const currentReplication = this.activeQueryReplications.get(queryState.id);
+				if (currentReplication === queryReplication) {
+					return;
+				}
+
 				// if we're replacing an existing query replication, maybe pause it
 				if (this.activeQueryReplications.has(queryState.id)) {
 					this.maybePauseQueryReplications(queryState);
