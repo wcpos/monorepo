@@ -143,5 +143,13 @@ describe('useTemplateRenderer', () => {
 
 			expect(result.current.isOffline).toBe(true);
 		});
+
+		it('is true when website is unavailable', () => {
+			mockUseOnlineStatus.mockReturnValue({ status: 'online-website-unavailable' });
+
+			const { result } = renderHook(() => useTemplateRenderer(defaultOptions));
+
+			expect(result.current.isOffline).toBe(true);
+		});
 	});
 });
