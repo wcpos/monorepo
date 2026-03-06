@@ -1,3 +1,7 @@
+import round from 'lodash/round';
+
+import type { PerItemDiscount } from './coupon-discount';
+
 export interface CouponLineItem {
 	product_id: number;
 	quantity: number;
@@ -108,4 +112,75 @@ export function applyPerItemDiscountsToLineItems(
 	}
 
 	return nextItems;
+}
+
+/**
+ * Apply coupon per-item discounts to order line items.
+ * Reduces each line item's total, total_tax, and per-rate taxes
+ * while keeping subtotal/subtotal_tax unchanged.
+ *
+ * Line items should have pre-coupon totals before calling this.
+ * For incremental application (adding one more coupon), pass only
+ * the new coupon's perItem array — the function subtracts from
+ * the current total.
+ */
+export function computeDiscountedLineItems<
+	T extends {
+		product_id?: number | null;
+		total?: string;
+		total_tax?: string;
+		taxes?: { id?: number; subtotal?: string; total?: string; [key: string]: any }[];
+		[key: string]: any;
+	},
+>(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][]): T[] {
+	if (allPerItemDiscounts.length === 0) return lineItems;
+
+	const discountMap = new Map<number, number>();
+	for (const perItemDiscounts of allPerItemDiscounts) {
+		for (const { product_id, discount } of perItemDiscounts) {
+			discountMap.set(product_id, (discountMap.get(product_id) || 0) + discount);
+		}
+	}
+
+	if (discountMap.size === 0) return lineItems;
+
+	// Sum totals per product_id for proportional distribution when multiple
+	// line items share the same product_id
+	const totalByProductId = new Map<number, number>();
+	for (const item of lineItems) {
+		const pid = item.product_id;
+		if (pid == null || !discountMap.has(pid)) continue;
+		totalByProductId.set(pid, (totalByProductId.get(pid) || 0) + parseFloat(item.total || '0'));
+	}
+
+	return lineItems.map((item) => {
+		const pid = item.product_id;
+		if (pid == null || !discountMap.has(pid)) return item;
+
+		const totalDiscountForProduct = discountMap.get(pid)!;
+		if (totalDiscountForProduct <= 0) return item;
+
+		const currentTotal = parseFloat(item.total || '0');
+		if (currentTotal <= 0) return item;
+
+		const currentTotalTax = parseFloat(item.total_tax || '0');
+
+		const productTotal = totalByProductId.get(pid) || currentTotal;
+		const itemDiscount = totalDiscountForProduct * (currentTotal / productTotal);
+		const newTotal = Math.max(0, currentTotal - itemDiscount);
+		const ratio = currentTotal > 0 ? newTotal / currentTotal : 0;
+		const newTotalTax = currentTotalTax * ratio;
+
+		const taxes = (item.taxes || []).map((tax) => ({
+			...tax,
+			total: String(round(parseFloat(tax.total || '0') * ratio, 6)),
+		}));
+
+		return {
+			...item,
+			total: String(round(newTotal, 6)),
+			total_tax: String(round(newTotalTax, 6)),
+			taxes,
+		} as T;
+	});
 }

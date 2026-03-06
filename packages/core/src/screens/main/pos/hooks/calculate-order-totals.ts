@@ -123,26 +123,9 @@ export function calculateOrderTotals({
 		}
 	});
 
-	// Calculate coupon discount totals
-	couponLines.forEach((line) => {
-		/**
-		 * Synced coupon lines (with an ID) have already been applied by WooCommerce
-		 * to line item totals. Re-applying them here would double-discount.
-		 *
-		 * Local-only coupon lines (no ID yet) still need to be reflected in POS totals
-		 * before server sync.
-		 */
-		if (typeof line.id === 'number' && line.id > 0) {
-			return;
-		}
-
-		const couponDiscount = parseNumber(line.discount);
-		const couponDiscountTax = parseNumber(line.discount_tax);
-		discount_total += couponDiscount;
-		discount_tax += couponDiscountTax;
-		total -= couponDiscount;
-		total_tax -= couponDiscountTax;
-	});
+	// Coupon discounts are applied directly to line item totals (total < subtotal),
+	// so discount_total and discount_tax are already captured above from line item
+	// differences. No additional adjustment from coupon_lines is needed.
 
 	// Sum the tax totals for cart_tax before converting to string
 	const taxLinesArray = Object.values(taxLines) || [];

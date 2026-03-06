@@ -1,17 +1,22 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
+import { v4 as uuidv4 } from 'uuid';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { calculateCouponDiscount } from './coupon-discount';
-import { applyPerItemDiscountsToLineItems, isProductOnSale } from './coupon-helpers';
+import {
+	applyPerItemDiscountsToLineItems,
+	computeDiscountedLineItems,
+	isProductOnSale,
+} from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
-import { useAddItemToOrder } from './use-add-item-to-order';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useCollection } from '../../hooks/use-collection';
+import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
 import type { CouponLineItem } from './coupon-helpers';
@@ -26,7 +31,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
  * and adds it to the order's coupon_lines.
  */
 export const useAddCoupon = () => {
-	const { addItemToOrder } = useAddItemToOrder();
+	const { localPatch } = useLocalMutation();
 	const t = useT();
 	const { store } = useAppState();
 	const { currentOrder } = useCurrentOrder();
@@ -164,13 +169,46 @@ export const useAddCoupon = () => {
 
 				const discountResult = calculateCouponDiscount(couponConfig, discountItems);
 
-				// 6. Add to coupon_lines
-				await addItemToOrder('coupon_lines', {
-					code: couponData.code,
-					discount: String(discountResult.totalDiscount),
-					discount_tax: '0',
-					meta_data: [],
+				// 6. Apply discount to line items and add coupon line
+				const latestOrder = currentOrder.getLatest();
+
+				// Bail if cart changed during async coupon lookups to avoid stale writes
+				if (latestOrder !== order) {
+					return {
+						success: false,
+						error: t('pos_cart.cart_changed', {
+							defaultValue: 'Cart changed during coupon application. Please try again.',
+						}),
+					};
+				}
+
+				const discountedLineItems = computeDiscountedLineItems(latestOrder.line_items || [], [
+					discountResult.perItem,
+				]);
+				const patchResult = await localPatch({
+					document: latestOrder,
+					data: {
+						coupon_lines: [
+							...(latestOrder.coupon_lines || []),
+							{
+								code: couponData.code,
+								discount: String(discountResult.totalDiscount),
+								discount_tax: '0',
+								meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidv4() }],
+							},
+						],
+						line_items: discountedLineItems,
+					},
 				});
+
+				if (!patchResult) {
+					return {
+						success: false,
+						error: t('pos_cart.coupon_apply_failed', {
+							defaultValue: 'Failed to apply coupon. Please try again.',
+						}),
+					};
+				}
 
 				orderLogger.info(t('pos_cart.coupon_applied', { defaultValue: 'Coupon applied' }), {
 					context: {
@@ -205,7 +243,7 @@ export const useAddCoupon = () => {
 			couponCollection,
 			productCollection,
 			currentOrder,
-			addItemToOrder,
+			localPatch,
 			t,
 			orderLogger,
 			calcDiscountsSequentially,
