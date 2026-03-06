@@ -58,6 +58,8 @@ export function calculateOrderTotals({
 	let total_tax = 0;
 	let fee_total = 0;
 	let fee_tax = 0;
+	let coupon_total = 0;
+	let coupon_tax = 0;
 
 	// Initialize taxLines as an object
 	const taxLines = taxRates.reduce<TaxLinesMap>((acc, taxRate) => {
@@ -123,9 +125,28 @@ export function calculateOrderTotals({
 		}
 	});
 
-	// Coupon discounts are applied directly to line item totals (total < subtotal),
-	// so discount_total and discount_tax are already captured above from line item
-	// differences. No additional adjustment from coupon_lines is needed.
+	// Calculate coupon discount totals
+	couponLines.forEach((line) => {
+		/**
+		 * Synced coupon lines (with an ID) have already been applied by WooCommerce
+		 * to line item totals. Re-applying them here would double-discount.
+		 *
+		 * Local-only coupon lines (no ID yet) still need to be reflected in POS totals
+		 * before server sync.
+		 */
+		if (typeof line.id === 'number' && line.id > 0) {
+			return;
+		}
+
+		const couponDiscount = parseNumber(line.discount);
+		const couponDiscountTax = parseNumber(line.discount_tax);
+		coupon_total += couponDiscount;
+		coupon_tax += couponDiscountTax;
+		discount_total += couponDiscount;
+		discount_tax += couponDiscountTax;
+		total -= couponDiscount;
+		total_tax -= couponDiscountTax;
+	});
 
 	// Sum the tax totals for cart_tax before converting to string
 	const taxLinesArray = Object.values(taxLines) || [];
@@ -166,5 +187,7 @@ export function calculateOrderTotals({
 		 */
 		fee_total: String(round(fee_total, 6)),
 		fee_tax: String(round(fee_tax, 6)),
+		coupon_total: String(round(coupon_total, 6)),
+		coupon_tax: String(round(coupon_tax, 6)),
 	};
 }
