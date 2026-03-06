@@ -15,7 +15,9 @@ export function usePrintExternalURL(options: UsePrintExternalURLOptions) {
 		const { externalURL, html, onBeforePrint, onAfterPrint, onPrintError } = options;
 
 		if (!html && !externalURL) {
-			printLogger.warn('No HTML or external URL provided to print');
+			const error = new Error('No HTML or external URL provided to print');
+			printLogger.warn(error.message);
+			onPrintError?.('print', error);
 			return;
 		}
 

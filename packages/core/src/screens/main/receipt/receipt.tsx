@@ -247,7 +247,7 @@ export function Receipt({ resource }: Props) {
 							/>
 							<WebView
 								ref={iframeRef as never}
-								{...(renderedHtml
+								{...(renderedHtml != null
 									? { srcDoc: renderedHtml }
 									: { src: templateReceiptUrl || receiptURL })}
 								onLoad={handleLoad}
