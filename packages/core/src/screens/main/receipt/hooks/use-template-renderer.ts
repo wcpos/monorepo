@@ -3,7 +3,7 @@ import * as React from 'react';
 import Mustache from 'mustache';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { renderThermalPreview, mapReceiptData } from '@wcpos/printer';
+import { mapReceiptData, renderThermalPreview } from '@wcpos/printer';
 import type { TemplateDocument } from '@wcpos/database';
 
 import { useActiveTemplates } from './use-active-templates';
