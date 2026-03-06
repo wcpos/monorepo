@@ -75,7 +75,7 @@ function formatAddress(addr: Record<string, string | undefined>): string {
 	return parts.join(', ');
 }
 
-function computeSubtotal(lineItems: Array<{ subtotal?: string }>): string {
+function computeSubtotal(lineItems: { subtotal?: string }[]): string {
 	const sum = lineItems.reduce((acc, item) => acc + parseFloat(item.subtotal || '0'), 0);
 	return sum.toFixed(2);
 }

@@ -1,19 +1,15 @@
 import * as React from 'react';
 
 import Mustache from 'mustache';
-import { useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
+import type { TemplateDocument } from '@wcpos/database';
 
 import { useActiveTemplates } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
-import { buildReceiptData } from '../utils/build-receipt-data';
-import { useAppState } from '../../../../contexts/app-state';
 
-import type { ReceiptMode } from './use-receipt-data';
-import type { TemplateDocument } from '@wcpos/database';
 import type { ReceiptData } from '../utils/build-receipt-data';
+import type { ReceiptMode } from './use-receipt-data';
 
 interface UseTemplateRendererOptions {
 	orderId: number | undefined;
@@ -38,32 +34,7 @@ export function useTemplateRenderer({
 }: UseTemplateRendererOptions): TemplateRendererResult {
 	const templates = useActiveTemplates();
 	const { status } = useOnlineStatus();
-	const { store } = useAppState();
 	const isOffline = status !== 'online-website-available';
-
-	// Get store data for offline receipt_data construction
-	const storeName = useObservableEagerState(store.name$ ?? of(''));
-	const storeAddress = useObservableEagerState(store.store_address$ ?? of(''));
-	const storeCity = useObservableEagerState(store.store_city$ ?? of(''));
-	const storeState = useObservableEagerState(store.store_state$ ?? of(''));
-	const storePostcode = useObservableEagerState(store.store_postcode$ ?? of(''));
-	const storeCountry = useObservableEagerState(store.store_country$ ?? of(''));
-	const storePhone = useObservableEagerState(store.phone$ ?? of(''));
-	const storeEmail = useObservableEagerState(store.email$ ?? of(''));
-
-	const storeData = React.useMemo(
-		() => ({
-			name: storeName,
-			store_address: storeAddress,
-			store_city: storeCity,
-			store_state: storeState,
-			store_postcode: storePostcode,
-			store_country: storeCountry,
-			phone: storePhone,
-			email: storeEmail,
-		}),
-		[storeName, storeAddress, storeCity, storeState, storePostcode, storeCountry, storePhone, storeEmail]
-	);
 
 	// Fetch receipt data from API (when online)
 	const { data: apiReceiptData } = useReceiptData({ orderId, mode });

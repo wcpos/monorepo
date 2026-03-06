@@ -4,10 +4,10 @@ import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 import { map } from 'rxjs/operators';
 
+import type { TemplateDocument } from '@wcpos/database';
+
 import { useAppState } from '../../../../contexts/app-state';
 import { useAppInfo } from '../../../../hooks/use-app-info';
-
-import type { TemplateDocument } from '@wcpos/database';
 
 /**
  * Returns active receipt templates for the current store.
@@ -22,7 +22,7 @@ export function useActiveTemplates(): TemplateDocument[] {
 
 	// Read per-store template assignments (will be empty until store schema v5)
 	const activeTemplates = useObservableEagerState(
-		store.active_templates$ ?? of([] as Array<{ template_id: string | number; sort_order: number }>)
+		store.active_templates$ ?? of([] as { template_id: string | number; sort_order: number }[])
 	);
 
 	// Query all receipt templates from RxDB

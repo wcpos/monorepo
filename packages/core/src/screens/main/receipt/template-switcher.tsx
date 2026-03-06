@@ -8,10 +8,9 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@wcpos/components/select';
+import type { TemplateDocument } from '@wcpos/database';
 
 import { useT } from '../../../contexts/translations';
-
-import type { TemplateDocument } from '@wcpos/database';
 
 interface TemplateSwitcherProps {
 	templates: TemplateDocument[];
@@ -78,14 +77,7 @@ export function TemplateSwitcher({
 						const disabled = isOffline && !tmpl.offline_capable;
 						const label = buildLabel(tmpl);
 
-						return (
-							<SelectItem
-								key={stringId}
-								value={stringId}
-								label={label}
-								disabled={disabled}
-							/>
-						);
+						return <SelectItem key={stringId} value={stringId} label={label} disabled={disabled} />;
 					})}
 				</SelectGroup>
 			</SelectContent>

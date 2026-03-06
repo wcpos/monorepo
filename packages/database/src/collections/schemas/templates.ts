@@ -31,8 +31,7 @@ export const templatesLiteral = {
 			type: 'string',
 		},
 		content: {
-			description:
-				'Template HTML content. Present for logicless templates only (in view context).',
+			description: 'Template HTML content. Present for logicless templates only (in view context).',
 			type: 'string',
 		},
 		menu_order: {

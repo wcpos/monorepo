@@ -508,7 +508,8 @@ export const storesLiteral = {
 			},
 		},
 		active_templates: {
-			description: 'Per-store template assignments (Pro feature). Array of template IDs with sort order.',
+			description:
+				'Per-store template assignments (Pro feature). Array of template IDs with sort order.',
 			type: 'array',
 			default: [],
 			items: {
