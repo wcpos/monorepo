@@ -1,175 +1,161 @@
-import * as React from "react";
+import * as React from 'react';
 
-import toNumber from "lodash/toNumber";
+import toNumber from 'lodash/toNumber';
 
-import { ButtonPill, ButtonText } from "@wcpos/components/button";
-import { ErrorBoundary } from "@wcpos/components/error-boundary";
-import { HStack } from "@wcpos/components/hstack";
-import { Text } from "@wcpos/components/text";
-import { VStack } from "@wcpos/components/vstack";
+import { ButtonPill, ButtonText } from '@wcpos/components/button';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { HStack } from '@wcpos/components/hstack';
+import { Text } from '@wcpos/components/text';
+import { VStack } from '@wcpos/components/vstack';
 
-import { CustomerNote } from "./totals/customer-note";
-import { Taxes } from "./totals/taxes";
-import { useT } from "../../../../contexts/translations";
-import { useCurrentOrderCurrencyFormat } from "../../hooks/use-current-order-currency-format";
-import { useTaxInclOrExcl } from "../../hooks/use-tax-incl-or-excl";
-import { useCartLines } from "../hooks/use-cart-lines";
-import { useOrderTotals } from "../hooks/use-order-totals";
-import { useRemoveCoupon } from "../hooks/use-remove-coupon";
+import { CustomerNote } from './totals/customer-note';
+import { Taxes } from './totals/taxes';
+import { useT } from '../../../../contexts/translations';
+import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
+import { useTaxInclOrExcl } from '../../hooks/use-tax-incl-or-excl';
+import { useCartLines } from '../hooks/use-cart-lines';
+import { useOrderTotals } from '../hooks/use-order-totals';
+import { useRemoveCoupon } from '../hooks/use-remove-coupon';
 
 /**
  *
  */
 export function Totals() {
-  const t = useT();
-  const { format } = useCurrentOrderCurrencyFormat();
-  const { inclOrExcl } = useTaxInclOrExcl({ context: "cart" });
+	const t = useT();
+	const { format } = useCurrentOrderCurrencyFormat();
+	const { inclOrExcl } = useTaxInclOrExcl({ context: 'cart' });
 
-  const {
-    subtotal,
-    subtotal_tax,
-    fee_total,
-    fee_tax,
-    tax_lines,
-    total_tax,
-    discount_tax,
-    discount_total,
-    shipping_tax,
-    shipping_total,
-    coupon_total,
-    coupon_tax,
-  } = useOrderTotals();
-  const { coupon_lines } = useCartLines();
-  const { removeCoupon } = useRemoveCoupon();
+	const {
+		subtotal,
+		subtotal_tax,
+		fee_total,
+		fee_tax,
+		tax_lines,
+		total_tax,
+		discount_tax,
+		discount_total,
+		shipping_tax,
+		shipping_total,
+		coupon_total,
+		coupon_tax,
+	} = useOrderTotals();
+	const { coupon_lines } = useCartLines();
+	const { removeCoupon } = useRemoveCoupon();
 
-  /**
-   * Convert to numbers
-   */
-  const subtotalNumber = toNumber(subtotal);
-  const subtotalTaxNumber = toNumber(subtotal_tax);
-  const discountTotalNumber = toNumber(discount_total);
-  const discountTaxNumber = toNumber(discount_tax);
-  const feeTotalNumber = toNumber(fee_total);
-  const shippingTotalNumber = toNumber(shipping_total);
-  const totalTaxNumber = toNumber(total_tax);
-  const feeTaxNumber = toNumber(fee_tax);
-  const shippingTaxNumber = toNumber(shipping_tax);
-  const couponTotalNumber = toNumber(coupon_total);
-  const couponTaxNumber = toNumber(coupon_tax);
+	/**
+	 * Convert to numbers
+	 */
+	const subtotalNumber = toNumber(subtotal);
+	const subtotalTaxNumber = toNumber(subtotal_tax);
+	const discountTotalNumber = toNumber(discount_total);
+	const discountTaxNumber = toNumber(discount_tax);
+	const feeTotalNumber = toNumber(fee_total);
+	const shippingTotalNumber = toNumber(shipping_total);
+	const totalTaxNumber = toNumber(total_tax);
+	const feeTaxNumber = toNumber(fee_tax);
+	const shippingTaxNumber = toNumber(shipping_tax);
+	const couponTotalNumber = toNumber(coupon_total);
+	const couponTaxNumber = toNumber(coupon_tax);
 
-  /**
-   * Helpers
-   */
-  const hasSubtotal = subtotalNumber !== 0;
-  const hasShipping = shippingTotalNumber !== 0;
-  const hasFee = feeTotalNumber !== 0;
-  const hasTax = totalTaxNumber !== 0;
+	/**
+	 * Helpers
+	 */
+	const hasSubtotal = subtotalNumber !== 0;
+	const hasShipping = shippingTotalNumber !== 0;
+	const hasFee = feeTotalNumber !== 0;
+	const hasTax = totalTaxNumber !== 0;
 
-  /**
-   *
-   */
-  const displaySubtotal =
-    inclOrExcl === "incl" ? subtotalNumber + subtotalTaxNumber : subtotalNumber;
-  const displayFeeTotal =
-    inclOrExcl === "incl" ? feeTotalNumber + feeTaxNumber : feeTotalNumber;
-  const displayShippingTotal =
-    inclOrExcl === "incl"
-      ? shippingTotalNumber + shippingTaxNumber
-      : shippingTotalNumber;
+	/**
+	 *
+	 */
+	const displaySubtotal =
+		inclOrExcl === 'incl' ? subtotalNumber + subtotalTaxNumber : subtotalNumber;
+	const displayFeeTotal = inclOrExcl === 'incl' ? feeTotalNumber + feeTaxNumber : feeTotalNumber;
+	const displayShippingTotal =
+		inclOrExcl === 'incl' ? shippingTotalNumber + shippingTaxNumber : shippingTotalNumber;
 
-  const saleDiscountNumber = discountTotalNumber - couponTotalNumber;
-  const saleDiscountTaxNumber = discountTaxNumber - couponTaxNumber;
-  const hasSaleDiscount = saleDiscountNumber > 0.001;
-  const displaySaleDiscount =
-    inclOrExcl === "incl"
-      ? saleDiscountNumber + saleDiscountTaxNumber
-      : saleDiscountNumber;
+	const saleDiscountNumber = discountTotalNumber - couponTotalNumber;
+	const saleDiscountTaxNumber = discountTaxNumber - couponTaxNumber;
+	const hasSaleDiscount = saleDiscountNumber > 0.001;
+	const displaySaleDiscount =
+		inclOrExcl === 'incl' ? saleDiscountNumber + saleDiscountTaxNumber : saleDiscountNumber;
 
-  const hasCoupons = coupon_lines.length > 0;
-  const hasTotals =
-    hasSubtotal ||
-    hasSaleDiscount ||
-    hasCoupons ||
-    hasShipping ||
-    hasFee ||
-    hasTax;
+	const hasCoupons = coupon_lines.length > 0;
+	const hasTotals = hasSubtotal || hasSaleDiscount || hasCoupons || hasShipping || hasFee || hasTax;
 
-  return (
-    <>
-      {hasTotals ? (
-        <VStack className="border-border bg-muted/40 border-t p-2">
-          <HStack testID="cart-subtotal">
-            <Text className="grow">{t("common.subtotal")}:</Text>
-            <Text>{format(displaySubtotal)}</Text>
-          </HStack>
-          {
-            // Sale discounts (non-coupon)
-            hasSaleDiscount && (
-              <HStack>
-                <Text className="grow">{t("pos_cart.discount")}:</Text>
-                <Text>{format(-1 * displaySaleDiscount)}</Text>
-              </HStack>
-            )
-          }
-          {
-            // Coupon pills
-            coupon_lines.map((coupon) => {
-              const couponDiscount = toNumber(coupon.discount);
-              const couponDiscountTax = toNumber(coupon.discount_tax);
-              const displayCouponDiscount =
-                inclOrExcl === "incl"
-                  ? couponDiscount + couponDiscountTax
-                  : couponDiscount;
-              return (
-                <HStack key={coupon.code}>
-                  <ButtonPill
-                    size="xs"
-                    variant="attention"
-                    leftIcon="badgePercent"
-                    removable
-                    onRemove={() => removeCoupon(coupon.code!)}
-                    removeAccessibilityLabel={`Remove coupon ${coupon.code}`}
-                    className="grow-0"
-                  >
-                    <ButtonText>{coupon.code}</ButtonText>
-                  </ButtonPill>
-                  <Text className="grow" />
-                  <Text>{format(-1 * displayCouponDiscount)}</Text>
-                </HStack>
-              );
-            })
-          }
-          {
-            // Fees
-            hasFee && (
-              <HStack>
-                <Text className="grow">{t("pos_cart.fees")}:</Text>
-                <Text>{format(displayFeeTotal)}</Text>
-              </HStack>
-            )
-          }
-          {
-            // Shipping
-            hasShipping && (
-              <HStack>
-                <Text className="grow">{t("common.shipping")}:</Text>
-                <Text>{format(displayShippingTotal)}</Text>
-              </HStack>
-            )
-          }
-          {hasTax ? (
-            <ErrorBoundary>
-              <Taxes
-                totalTax={total_tax}
-                taxLines={tax_lines?.filter(
-                  (t): t is NonNullable<typeof t> => t !== null,
-                )}
-              />
-            </ErrorBoundary>
-          ) : null}
-        </VStack>
-      ) : null}
-      <CustomerNote />
-    </>
-  );
+	return (
+		<>
+			{hasTotals ? (
+				<VStack className="border-border bg-muted/40 border-t p-2">
+					<HStack testID="cart-subtotal">
+						<Text className="grow">{t('common.subtotal')}:</Text>
+						<Text>{format(displaySubtotal)}</Text>
+					</HStack>
+					{
+						// Sale discounts (non-coupon)
+						hasSaleDiscount && (
+							<HStack>
+								<Text className="grow">{t('pos_cart.discount')}:</Text>
+								<Text>{format(-1 * displaySaleDiscount)}</Text>
+							</HStack>
+						)
+					}
+					{
+						// Coupon pills
+						coupon_lines.map((coupon) => {
+							if (!coupon.code) return null;
+							const couponDiscount = toNumber(coupon.discount);
+							const couponDiscountTax = toNumber(coupon.discount_tax);
+							const displayCouponDiscount =
+								inclOrExcl === 'incl' ? couponDiscount + couponDiscountTax : couponDiscount;
+							return (
+								<HStack key={coupon.code}>
+									<ButtonPill
+										size="xs"
+										variant="attention"
+										leftIcon="badgePercent"
+										removable
+										onRemove={() => removeCoupon(coupon.code)}
+										removeAccessibilityLabel={`Remove coupon ${coupon.code}`}
+										className="grow-0"
+									>
+										<ButtonText>{coupon.code}</ButtonText>
+									</ButtonPill>
+									<Text className="grow" />
+									<Text>{format(-1 * displayCouponDiscount)}</Text>
+								</HStack>
+							);
+						})
+					}
+					{
+						// Fees
+						hasFee && (
+							<HStack>
+								<Text className="grow">{t('pos_cart.fees')}:</Text>
+								<Text>{format(displayFeeTotal)}</Text>
+							</HStack>
+						)
+					}
+					{
+						// Shipping
+						hasShipping && (
+							<HStack>
+								<Text className="grow">{t('common.shipping')}:</Text>
+								<Text>{format(displayShippingTotal)}</Text>
+							</HStack>
+						)
+					}
+					{hasTax ? (
+						<ErrorBoundary>
+							<Taxes
+								totalTax={total_tax}
+								taxLines={tax_lines?.filter((t): t is NonNullable<typeof t> => t !== null)}
+							/>
+						</ErrorBoundary>
+					) : null}
+				</VStack>
+			) : null}
+			<CustomerNote />
+		</>
+	);
 }
