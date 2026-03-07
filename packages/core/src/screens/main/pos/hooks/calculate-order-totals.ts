@@ -1,29 +1,37 @@
-import round from 'lodash/round';
-import sumBy from 'lodash/sumBy';
+import round from "lodash/round";
+import sumBy from "lodash/sumBy";
 
-type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
-type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
-type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+type TaxRateDocument = import("@wcpos/database").TaxRateDocument;
+type LineItem = NonNullable<
+  import("@wcpos/database").OrderDocument["line_items"]
+>[number];
+type FeeLine = NonNullable<
+  import("@wcpos/database").OrderDocument["fee_lines"]
+>[number];
+type ShippingLine = NonNullable<
+  import("@wcpos/database").OrderDocument["shipping_lines"]
+>[number];
+type CouponLine = NonNullable<
+  import("@wcpos/database").OrderDocument["coupon_lines"]
+>[number];
 
 interface Props {
-	lineItems?: LineItem[];
-	shippingLines?: ShippingLine[];
-	feeLines?: FeeLine[];
-	couponLines?: CouponLine[];
-	taxRates?: TaxRateDocument[];
-	taxRoundAtSubtotal?: boolean;
+  lineItems?: LineItem[];
+  shippingLines?: ShippingLine[];
+  feeLines?: FeeLine[];
+  couponLines?: CouponLine[];
+  taxRates?: TaxRateDocument[];
+  taxRoundAtSubtotal?: boolean;
 }
 
 interface TaxLine {
-	rate_id: number;
-	label: string;
-	compound: boolean;
-	tax_total: number;
-	shipping_tax_total: number;
-	rate_percent: number;
-	meta_data: any[];
+  rate_id: number;
+  label: string;
+  compound: boolean;
+  tax_total: number;
+  shipping_tax_total: number;
+  rate_percent: number;
+  meta_data: any[];
 }
 
 // Define a type for the accumulator in the reduce function
@@ -33,161 +41,146 @@ type TaxLinesMap = Record<string, TaxLine>;
  *
  */
 function parseNumber(value: any): number {
-	return isNaN(value) ? 0 : parseFloat(value);
+  return isNaN(value) ? 0 : parseFloat(value);
 }
 
 /**
  * @TODO - rounding?!
  */
 export function calculateOrderTotals({
-	lineItems = [],
-	shippingLines = [],
-	feeLines = [],
-	couponLines = [],
-	taxRates = [],
-	taxRoundAtSubtotal = false,
+  lineItems = [],
+  shippingLines = [],
+  feeLines = [],
+  couponLines = [],
+  taxRates = [],
+  taxRoundAtSubtotal = false,
 }: Props) {
-	let discount_total = 0;
-	let discount_tax = 0;
-	let shipping_total = 0;
-	let shipping_tax = 0;
-	let cart_tax = 0;
-	let subtotal = 0;
-	let subtotal_tax = 0;
-	let total = 0;
-	let total_tax = 0;
-	let fee_total = 0;
-	let fee_tax = 0;
-	let coupon_total = 0;
-	let coupon_tax = 0;
+  let discount_total = 0;
+  let discount_tax = 0;
+  let shipping_total = 0;
+  let shipping_tax = 0;
+  let cart_tax = 0;
+  let subtotal = 0;
+  let subtotal_tax = 0;
+  let total = 0;
+  let total_tax = 0;
+  let fee_total = 0;
+  let fee_tax = 0;
+  let coupon_total = 0;
+  let coupon_tax = 0;
 
-	// Initialize taxLines as an object
-	const taxLines = taxRates.reduce<TaxLinesMap>((acc, taxRate) => {
-		const rateId = taxRate.id ?? 0;
-		acc[rateId] = {
-			rate_id: rateId,
-			label: taxRate.name ?? '',
-			compound: taxRate.compound ?? false,
-			tax_total: 0,
-			shipping_tax_total: 0,
-			rate_percent: parseFloat(taxRate.rate ?? '0'),
-			meta_data: [],
-		};
-		return acc;
-	}, {});
+  // Initialize taxLines as an object
+  const taxLines = taxRates.reduce<TaxLinesMap>((acc, taxRate) => {
+    const rateId = taxRate.id ?? 0;
+    acc[rateId] = {
+      rate_id: rateId,
+      label: taxRate.name ?? "",
+      compound: taxRate.compound ?? false,
+      tax_total: 0,
+      shipping_tax_total: 0,
+      rate_percent: parseFloat(taxRate.rate ?? "0"),
+      meta_data: [],
+    };
+    return acc;
+  }, {});
 
-	// Calculate line item totals
-	lineItems.forEach((item) => {
-		const parsedSubtotal = parseNumber(item.subtotal);
-		const parsedTotal = parseNumber(item.total);
-		const parsedSubtotalTax = parseNumber(item.subtotal_tax);
-		const parsedTotalTax = parseNumber(item.total_tax);
+  // Calculate line item totals
+  lineItems.forEach((item) => {
+    const parsedSubtotal = parseNumber(item.subtotal);
+    const parsedTotal = parseNumber(item.total);
+    const parsedSubtotalTax = parseNumber(item.subtotal_tax);
+    const parsedTotalTax = parseNumber(item.total_tax);
 
-		discount_total += parsedSubtotal - parsedTotal;
-		discount_tax += parsedSubtotalTax - parsedTotalTax;
-		subtotal += parsedSubtotal;
-		subtotal_tax += parsedSubtotalTax;
-		total += parsedTotal;
-		total_tax += parsedTotalTax;
+    discount_total += parsedSubtotal - parsedTotal;
+    discount_tax += parsedSubtotalTax - parsedTotalTax;
+    subtotal += parsedSubtotal;
+    subtotal_tax += parsedSubtotalTax;
+    total += parsedTotal;
+    total_tax += parsedTotalTax;
 
-		if (Array.isArray(item.taxes)) {
-			item.taxes.forEach((tax) => {
-				taxLines[tax.id ?? 0].tax_total += parseNumber(tax.total);
-			});
-		}
-	});
+    if (Array.isArray(item.taxes)) {
+      item.taxes.forEach((tax) => {
+        taxLines[tax.id ?? 0].tax_total += parseNumber(tax.total);
+      });
+    }
+  });
 
-	// Calculate fee totals
-	feeLines.forEach((line) => {
-		fee_total += parseNumber(line.total);
-		fee_tax += parseNumber(line.total_tax);
-		total += parseNumber(line.total);
-		total_tax += parseNumber(line.total_tax);
+  // Calculate fee totals
+  feeLines.forEach((line) => {
+    fee_total += parseNumber(line.total);
+    fee_tax += parseNumber(line.total_tax);
+    total += parseNumber(line.total);
+    total_tax += parseNumber(line.total_tax);
 
-		if (Array.isArray(line.taxes)) {
-			line.taxes.forEach((tax) => {
-				taxLines[tax.id ?? 0].tax_total += parseNumber(tax.total);
-			});
-		}
-	});
+    if (Array.isArray(line.taxes)) {
+      line.taxes.forEach((tax) => {
+        taxLines[tax.id ?? 0].tax_total += parseNumber(tax.total);
+      });
+    }
+  });
 
-	// Calculate shipping totals
-	shippingLines.forEach((line) => {
-		shipping_total += parseNumber(line.total);
-		shipping_tax += parseNumber(line.total_tax);
-		total += parseNumber(line.total);
-		total_tax += parseNumber(line.total_tax);
+  // Calculate shipping totals
+  shippingLines.forEach((line) => {
+    shipping_total += parseNumber(line.total);
+    shipping_tax += parseNumber(line.total_tax);
+    total += parseNumber(line.total);
+    total_tax += parseNumber(line.total_tax);
 
-		if (Array.isArray(line.taxes)) {
-			line.taxes.forEach((tax) => {
-				taxLines[tax.id ?? 0].shipping_tax_total += parseNumber(tax.total);
-			});
-		}
-	});
+    if (Array.isArray(line.taxes)) {
+      line.taxes.forEach((tax) => {
+        taxLines[tax.id ?? 0].shipping_tax_total += parseNumber(tax.total);
+      });
+    }
+  });
 
-	// Calculate coupon discount totals
-	couponLines.forEach((line) => {
-		/**
-		 * Synced coupon lines (with an ID) have already been applied by WooCommerce
-		 * to line item totals. Re-applying them here would double-discount.
-		 *
-		 * Local-only coupon lines (no ID yet) still need to be reflected in POS totals
-		 * before server sync.
-		 */
-		if (typeof line.id === 'number' && line.id > 0) {
-			return;
-		}
+  // Accumulate coupon totals for display purposes only.
+  // Coupon discounts are already reflected in line_items (subtotal vs total),
+  // so we must NOT re-adjust discount_total/total here.
+  couponLines.forEach((line) => {
+    coupon_total += parseNumber(line.discount);
+    coupon_tax += parseNumber(line.discount_tax);
+  });
 
-		const couponDiscount = parseNumber(line.discount);
-		const couponDiscountTax = parseNumber(line.discount_tax);
-		coupon_total += couponDiscount;
-		coupon_tax += couponDiscountTax;
-		discount_total += couponDiscount;
-		discount_tax += couponDiscountTax;
-		total -= couponDiscount;
-		total_tax -= couponDiscountTax;
-	});
+  // Sum the tax totals for cart_tax before converting to string
+  const taxLinesArray = Object.values(taxLines) || [];
+  cart_tax += sumBy(taxLinesArray, "tax_total");
 
-	// Sum the tax totals for cart_tax before converting to string
-	const taxLinesArray = Object.values(taxLines) || [];
-	cart_tax += sumBy(taxLinesArray, 'tax_total');
+  const filteredTaxLines = taxLinesArray
+    .map((taxLine) => {
+      if (taxLine.tax_total === 0 && taxLine.shipping_tax_total === 0) {
+        return null;
+      }
+      return {
+        ...taxLine,
+        tax_total: String(round(taxLine.tax_total, 6)),
+        shipping_tax_total: String(round(taxLine.shipping_tax_total, 6)),
+      };
+    })
+    .filter((line): line is NonNullable<typeof line> => line !== null);
 
-	const filteredTaxLines = taxLinesArray
-		.map((taxLine) => {
-			if (taxLine.tax_total === 0 && taxLine.shipping_tax_total === 0) {
-				return null;
-			}
-			return {
-				...taxLine,
-				tax_total: String(round(taxLine.tax_total, 6)),
-				shipping_tax_total: String(round(taxLine.shipping_tax_total, 6)),
-			};
-		})
-		.filter((line): line is NonNullable<typeof line> => line !== null);
-
-	return {
-		/**
-		 * These properties are stored on the order document
-		 */
-		discount_total: String(round(discount_total, 6)),
-		discount_tax: String(round(discount_tax, 6)),
-		shipping_total: String(round(shipping_total, 6)),
-		shipping_tax: String(round(shipping_tax, 6)),
-		cart_tax: String(round(cart_tax, 6)),
-		total: String(round(total + total_tax, 6)),
-		total_tax: String(round(total_tax, 6)),
-		tax_lines: filteredTaxLines,
-		/**
-		 * Subtotals are not stored on the order document, but we need them to display in the cart
-		 */
-		subtotal: String(round(subtotal, 6)),
-		subtotal_tax: String(round(subtotal_tax, 6)),
-		/**
-		 * Need to add fee_total to display in the cart, to match the WC Admin display
-		 */
-		fee_total: String(round(fee_total, 6)),
-		fee_tax: String(round(fee_tax, 6)),
-		coupon_total: String(round(coupon_total, 6)),
-		coupon_tax: String(round(coupon_tax, 6)),
-	};
+  return {
+    /**
+     * These properties are stored on the order document
+     */
+    discount_total: String(round(discount_total, 6)),
+    discount_tax: String(round(discount_tax, 6)),
+    shipping_total: String(round(shipping_total, 6)),
+    shipping_tax: String(round(shipping_tax, 6)),
+    cart_tax: String(round(cart_tax, 6)),
+    total: String(round(total + total_tax, 6)),
+    total_tax: String(round(total_tax, 6)),
+    tax_lines: filteredTaxLines,
+    /**
+     * Subtotals are not stored on the order document, but we need them to display in the cart
+     */
+    subtotal: String(round(subtotal, 6)),
+    subtotal_tax: String(round(subtotal_tax, 6)),
+    /**
+     * Need to add fee_total to display in the cart, to match the WC Admin display
+     */
+    fee_total: String(round(fee_total, 6)),
+    fee_tax: String(round(fee_tax, 6)),
+    coupon_total: String(round(coupon_total, 6)),
+    coupon_tax: String(round(coupon_tax, 6)),
+  };
 }
