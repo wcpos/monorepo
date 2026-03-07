@@ -48,13 +48,23 @@ describe('calculateOrderTotals', () => {
 				total: '115.5',
 				total_tax: '10.5',
 				tax_lines: expect.arrayContaining([
-					expect.objectContaining({ rate_id: 1, tax_total: '9', shipping_tax_total: '1' }),
-					expect.objectContaining({ rate_id: 2, tax_total: '0.5', shipping_tax_total: '0' }),
+					expect.objectContaining({
+						rate_id: 1,
+						tax_total: '9',
+						shipping_tax_total: '1',
+					}),
+					expect.objectContaining({
+						rate_id: 2,
+						tax_total: '0.5',
+						shipping_tax_total: '0',
+					}),
 				]),
 				subtotal: '100',
 				subtotal_tax: '10',
 				fee_total: '5',
 				fee_tax: '0.5',
+				coupon_total: '0',
+				coupon_tax: '0',
 			});
 		});
 
@@ -80,6 +90,8 @@ describe('calculateOrderTotals', () => {
 				subtotal_tax: '0',
 				fee_total: '0',
 				fee_tax: '0',
+				coupon_total: '0',
+				coupon_tax: '0',
 			});
 		});
 
@@ -101,6 +113,8 @@ describe('calculateOrderTotals', () => {
 				subtotal_tax: '0',
 				fee_total: '0',
 				fee_tax: '0',
+				coupon_total: '0',
+				coupon_tax: '0',
 			});
 		});
 	});
@@ -130,16 +144,11 @@ describe('calculateOrderTotals', () => {
 			expect(result.discount_total).toBe('0');
 		});
 
-		/**
-		 * NOTE: There's a subtle bug in parseNumber - isNaN(null) returns false
-		 * (because Number(null) = 0), but parseFloat(null) returns NaN.
-		 * This test documents current behavior - could be improved later.
-		 */
-		it('documents current behavior with null (potential improvement)', () => {
+		it('handles null values by treating them as 0', () => {
 			const lineItems = [
 				{
 					subtotal: '100',
-					total: null, // isNaN(null) = false, parseFloat(null) = NaN
+					total: null,
 					subtotal_tax: '0',
 					total_tax: '0',
 					taxes: [],
@@ -151,9 +160,8 @@ describe('calculateOrderTotals', () => {
 				taxRates: mockTaxRates,
 			});
 
-			// Current behavior: null becomes NaN in calculations
-			// This could be improved by checking for null explicitly
-			expect(result.total).toBe('NaN');
+			// null is treated as 0
+			expect(result.total).toBe('0');
 		});
 
 		it('handles numeric strings correctly', () => {
@@ -488,6 +496,8 @@ describe('coupon line calculations', () => {
 		expect(result.discount_total).toBe('10');
 		expect(result.discount_tax).toBe('1');
 		expect(result.total).toBe('99');
+		expect(result.coupon_total).toBe('10');
+		expect(result.coupon_tax).toBe('1');
 	});
 
 	it('handles multiple coupons applied to line items', () => {
@@ -516,6 +526,8 @@ describe('coupon line calculations', () => {
 		expect(result.discount_total).toBe('15');
 		expect(result.discount_tax).toBe('1.5');
 		expect(result.total).toBe('203.5');
+		expect(result.coupon_total).toBe('15');
+		expect(result.coupon_tax).toBe('0');
 	});
 
 	it('works with no coupon lines', () => {
@@ -536,5 +548,7 @@ describe('coupon line calculations', () => {
 		});
 
 		expect(result.discount_total).toBe('0');
+		expect(result.coupon_total).toBe('0');
+		expect(result.coupon_tax).toBe('0');
 	});
 });

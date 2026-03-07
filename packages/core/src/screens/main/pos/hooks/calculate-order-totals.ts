@@ -33,7 +33,11 @@ type TaxLinesMap = Record<string, TaxLine>;
  *
  */
 function parseNumber(value: any): number {
-	return isNaN(value) ? 0 : parseFloat(value);
+	if (value == null || isNaN(value)) {
+		return 0;
+	}
+	const parsed = parseFloat(value);
+	return isNaN(parsed) ? 0 : parsed;
 }
 
 /**
@@ -58,6 +62,8 @@ export function calculateOrderTotals({
 	let total_tax = 0;
 	let fee_total = 0;
 	let fee_tax = 0;
+	let coupon_total = 0;
+	let coupon_tax = 0;
 
 	// Initialize taxLines as an object
 	const taxLines = taxRates.reduce<TaxLinesMap>((acc, taxRate) => {
@@ -123,9 +129,13 @@ export function calculateOrderTotals({
 		}
 	});
 
-	// Coupon discounts are applied directly to line item totals (total < subtotal),
-	// so discount_total and discount_tax are already captured above from line item
-	// differences. No additional adjustment from coupon_lines is needed.
+	// Accumulate coupon totals for display purposes only.
+	// Coupon discounts are already reflected in line_items (subtotal vs total),
+	// so we must NOT re-adjust discount_total/total here.
+	couponLines.forEach((line) => {
+		coupon_total += parseNumber(line.discount);
+		coupon_tax += parseNumber(line.discount_tax);
+	});
 
 	// Sum the tax totals for cart_tax before converting to string
 	const taxLinesArray = Object.values(taxLines) || [];
@@ -166,5 +176,7 @@ export function calculateOrderTotals({
 		 */
 		fee_total: String(round(fee_total, 6)),
 		fee_tax: String(round(fee_tax, 6)),
+		coupon_total: String(round(coupon_total, 6)),
+		coupon_tax: String(round(coupon_tax, 6)),
 	};
 }

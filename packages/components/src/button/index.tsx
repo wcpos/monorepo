@@ -184,13 +184,7 @@ function Button({
 	 */
 	const renderIcon = (icon: IconName | React.ReactNode, position: 'left' | 'right') => {
 		if (typeof icon === 'string') {
-			return (
-				<Icon
-					name={icon as IconName}
-					variant={variant as IconProps['variant']}
-					size={size as IconProps['size']}
-				/>
-			);
+			return <Icon name={icon as IconName} size={size as IconProps['size']} />;
 		}
 		return icon;
 	};
@@ -226,7 +220,11 @@ function Button({
 
 	return (
 		<TextClassContext.Provider
-			value={buttonTextVariants({ variant, size, className: 'web:pointer-events-none' })}
+			value={buttonTextVariants({
+				variant,
+				size,
+				className: 'web:pointer-events-none',
+			})}
 		>
 			<Pressable
 				className={cn(
@@ -275,6 +273,7 @@ const separatorVariants = cva('w-px self-stretch opacity-80', {
 			muted: 'bg-muted',
 			success: 'bg-success',
 			ghost: 'bg-accent',
+			attention: 'bg-attention',
 		},
 	},
 	defaultVariants: {
@@ -342,18 +341,29 @@ type ButtonPillProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 		rightIcon?: IconName;
 		removable?: boolean;
 		onRemove?: () => void;
+		removeAccessibilityLabel?: string;
 	};
 
-function ButtonPill({ className, removable, onRemove, ...props }: ButtonPillProps) {
+function ButtonPill({
+	className,
+	removable,
+	onRemove,
+	removeAccessibilityLabel,
+	...props
+}: ButtonPillProps) {
+	const { onPress: _onPress, ...labelProps } = props;
+
 	return removable ? (
 		<ButtonGroup>
-			<Button className={cn('rounded-full', className)} {...props} />
+			<Button className={cn('rounded-full', className)} {...labelProps} />
 			<Button
 				className={cn('rounded-full', className)}
 				variant={props.variant}
 				size={props.size}
 				leftIcon="xmark"
 				onPress={onRemove}
+				accessibilityLabel={removeAccessibilityLabel}
+				accessibilityRole="button"
 			/>
 		</ButtonGroup>
 	) : (
