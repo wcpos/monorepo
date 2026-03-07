@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# Block docs/ files from being committed
+docs_files=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/')
+if [ -n "$docs_files" ]; then
+  echo "BLOCKED: docs/ files should not be committed to the public repo:"
+  echo "$docs_files"
+  echo ""
+  echo "Remove them from staging with:"
+  echo "  git reset HEAD -- docs/"
+  exit 1
+fi
+
+# Run lint-staged to auto-fix formatting on staged files
+npx lint-staged

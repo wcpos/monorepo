@@ -362,8 +362,7 @@ function ButtonPill({
 				size={props.size}
 				leftIcon="xmark"
 				onPress={onRemove}
-				accessibilityLabel={removeAccessibilityLabel}
-				accessibilityRole="button"
+				accessibilityLabel={removeAccessibilityLabel ?? 'Remove'}
 			/>
 		</ButtonGroup>
 	) : (

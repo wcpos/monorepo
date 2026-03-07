@@ -26,7 +26,8 @@
     "utils": "pnpm --filter @wcpos/utils",
     "preinstall": "pnpm ignored-builds || true",
     "expo:install": "pnpm --filter main exec expo install",
-    "extract:translations": "node scripts/extract-js-strings.js"
+    "extract:translations": "node scripts/extract-js-strings.js",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "packageManager": "pnpm@10.17.0",
   "pnpm": {
@@ -67,8 +68,12 @@
       "electron-winstaller"
     ]
   },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": "eslint --fix"
+  },
   "devDependencies": {
-    "glob": "^13.0.0"
+    "glob": "^13.0.0",
+    "lint-staged": "^16.3.2"
   },
   "dependencies": {
     "turbo": "^2.5.0",
