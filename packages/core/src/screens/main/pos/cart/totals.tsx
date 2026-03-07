@@ -103,23 +103,24 @@ export function Totals() {
 					{
 						// Coupon pills
 						coupon_lines.map((coupon) => {
-							if (!coupon.code) return null;
+							const code = coupon.code;
+							if (!code) return null;
 							const couponDiscount = toNumber(coupon.discount);
 							const couponDiscountTax = toNumber(coupon.discount_tax);
 							const displayCouponDiscount =
 								inclOrExcl === 'incl' ? couponDiscount + couponDiscountTax : couponDiscount;
 							return (
-								<HStack key={coupon.code}>
+								<HStack key={code}>
 									<ButtonPill
 										size="xs"
 										variant="attention"
 										leftIcon="badgePercent"
 										removable
-										onRemove={() => removeCoupon(coupon.code)}
-										removeAccessibilityLabel={`Remove coupon ${coupon.code}`}
+										onRemove={() => removeCoupon(code)}
+										removeAccessibilityLabel={`Remove coupon ${code}`}
 										className="grow-0"
 									>
-										<ButtonText>{coupon.code}</ButtonText>
+										<ButtonText>{code}</ButtonText>
 									</ButtonPill>
 									<Text className="grow" />
 									<Text>{format(-1 * displayCouponDiscount)}</Text>

@@ -351,9 +351,11 @@ function ButtonPill({
 	removeAccessibilityLabel,
 	...props
 }: ButtonPillProps) {
+	const { onPress: _onPress, ...labelProps } = props;
+
 	return removable ? (
 		<ButtonGroup>
-			<Button className={cn('rounded-full', className)} {...props} />
+			<Button className={cn('rounded-full', className)} {...labelProps} />
 			<Button
 				className={cn('rounded-full', className)}
 				variant={props.variant}
