@@ -21,8 +21,8 @@
     "@svgr/cli": "^8.1.0",
     "@types/lodash": "^4.17.20",
     "expo-haptics": "~55.0.8",
-    "expo-image": "~55.0.5",
-    "expo-router": "~55.0.3",
+    "expo-image": "~55.0.6",
+    "expo-router": "~55.0.4",
     "react-native-svg": "15.15.3"
   },
   "dependencies": {
@@ -63,7 +63,7 @@
     "@rn-primitives/types": "^1.2.0",
     "@rn-primitives/utils": "^1.2.0",
     "@tanstack/react-table": "^8.20.6",
-    "@tanstack/react-virtual": "^3.13.13",
+    "@tanstack/react-virtual": "^3.13.21",
     "@uiw/react-json-view": "2.0.0-alpha.32",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -74,10 +74,10 @@
     "react-hook-form": "^7.61.1",
     "react-native-calendars": "^1.1313.0",
     "react-native-keyboard-controller": "1.20.7",
-    "uniwind": "npm:uniwind-pro@latest",
     "react-native-resizable-panels": "^0.0.3",
     "sonner": "^2.0.7",
     "sonner-native": "^0.23.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "uniwind": "npm:uniwind-pro@latest"
   }
 }

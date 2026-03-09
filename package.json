@@ -29,12 +29,11 @@
     "extract:translations": "node scripts/extract-js-strings.js",
     "prepare": "git config core.hooksPath .githooks"
   },
-  "packageManager": "pnpm@10.17.0",
+  "packageManager": "pnpm@10.31.0",
   "pnpm": {
     "overrides": {
       "expo": "~55.0.0",
       "lightningcss": "1.30.1",
-      "pnpm": "10.17.0",
       "uniwind": "npm:uniwind-pro@latest",
       "react": "~19.2.0",
       "react-dom": "~19.2.0",
@@ -42,7 +41,8 @@
       "react-native-edge-to-edge": "^1.6.2",
       "react-native-gesture-handler": "~2.30.0",
       "react-native-safe-area-context": "~5.6.2",
-      "@react-navigation/drawer": "^7.5.0"
+      "@react-navigation/drawer": "^7.5.0",
+      "tar": "^7.5.11"
     },
     "onlyBuiltDependencies": [
       "@shopify/react-native-skia",
@@ -76,7 +76,7 @@
     "lint-staged": "^16.3.2"
   },
   "dependencies": {
-    "turbo": "^2.5.0",
+    "turbo": "^2.8.14",
     "typescript": "^5.8.3"
   }
 }
