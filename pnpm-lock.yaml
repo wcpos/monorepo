@@ -7,7 +7,6 @@ settings:
 overrides:
   expo: ~55.0.0
   lightningcss: 1.30.1
-  pnpm: 10.31.0
   uniwind: npm:uniwind-pro@latest
   react: ~19.2.0
   react-dom: ~19.2.0
@@ -16,7 +15,7 @@ overrides:
   react-native-gesture-handler: ~2.30.0
   react-native-safe-area-context: ~5.6.2
   '@react-navigation/drawer': ^7.5.0
-  tar: '>=7.5.11'
+  tar: ^7.5.11
 
 importers:
 
@@ -109,8 +108,8 @@ importers:
         specifier: ^8.55.0
         version: 8.56.1(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3)
       '@vercel/webpack-asset-relocator-loader':
-        specifier: 1.7.3
-        version: 1.7.3
+        specifier: 1.10.0
+        version: 1.10.0(encoding@0.1.13)
       '@wcpos/eslint-config':
         specifier: ^2.0.0
         version: 2.2.0(eslint-config-expo@55.0.0(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3))(eslint-config-prettier@10.1.8(eslint@9.39.3(jiti@2.6.1)))(eslint-plugin-prettier@5.5.5(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.3(jiti@2.6.1)))(eslint@9.39.3(jiti@2.6.1))(prettier@3.8.1))(eslint@9.39.3(jiti@2.6.1))(prettier-plugin-tailwindcss@0.7.2(prettier@3.8.1))(prettier@3.8.1)
@@ -118,8 +117,8 @@ importers:
         specifier: ^9.2.1
         version: 9.2.1
       electron:
-        specifier: 40.4.0
-        version: 40.4.0
+        specifier: 40.8.0
+        version: 40.8.0
       electron-debug:
         specifier: ^4.1.0
         version: 4.1.0
@@ -2860,6 +2859,11 @@ packages:
     resolution: {integrity: sha512-1DpKU0Z5ThltBwjNySMC14g0CkbyhCaz9FkhxqNsZI6uAPJXFS8cMXlBKo26FJ8ZuW6S9GCMcR9IO5k2X5/9Fg==}
     engines: {node: '>= 12.13.0'}
 
+  '@mapbox/node-pre-gyp@2.0.3':
+    resolution: {integrity: sha512-uwPAhccfFJlsfCxMYTwOdVfOz3xqyj8xYL3zJj8f0pb30tLohnnFPhLuqp4/qoEz8sNxe4SESZedcBojRefIzg==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   '@mgcrea/react-native-dnd@2.5.3':
     resolution: {integrity: sha512-Qi2OOfZFyrV7p9q80DLX60pavHfqpxqMrahZxz2S6Y+xwmgfwBAVVHv/GIO3CTs3OIMuXdQ5OFfFgbjpZGAZMw==}
     peerDependencies:
@@ -5516,8 +5520,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@vercel/webpack-asset-relocator-loader@1.7.3':
-    resolution: {integrity: sha512-vizrI18v8Lcb1PmNNUBz7yxPxxXoOeuaVEjTG9MjvDrphjiSxFZrRJ5tIghk+qdLFRCXI5HBCshgobftbmrC5g==}
+  '@vercel/webpack-asset-relocator-loader@1.10.0':
+    resolution: {integrity: sha512-CCDqnX5Jt1hmwvUhpkKm4y8oK9Z4HyEtNPthxTp37WOllawyuAxDuNCAr2X6SmwOlFpcudNzIBvuDQ29MVQuCQ==}
 
   '@vitest/expect@4.0.18':
     resolution: {integrity: sha512-8sCWUyckXXYvx4opfzVY03EOiYVxyNrHS5QxX3DAIi5dpJAAkyJezHCP77VMX4HKA2LDT/Jpfo8i2r5BE3GnQQ==}
@@ -5652,6 +5656,12 @@ packages:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
 
+  acorn-class-fields@1.0.0:
+    resolution: {integrity: sha512-l+1FokF34AeCXGBHkrXFmml9nOIRI+2yBnBpO5MaVAaTIJ96irWLtcCxX+7hAp6USHFCe+iyyBB4ZhxV807wmA==}
+    engines: {node: '>=4.8.2'}
+    peerDependencies:
+      acorn: ^6 || ^7 || ^8
+
   acorn-globals@7.0.1:
     resolution: {integrity: sha512-umOSDSDrfHbTNPuNpC2NSnnA3LUrqpevPb4T9jRx4MagXNS0rs+gwiTcAvqCRmsD6utzsrzNt+ebm00SNWiC3Q==}
 
@@ -5670,6 +5680,18 @@ packages:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
     peerDependencies:
       acorn: ^6.0.0 || ^7.0.0 || ^8.0.0
+
+  acorn-private-class-elements@1.0.0:
+    resolution: {integrity: sha512-zYNcZtxKgVCg1brS39BEou86mIao1EV7eeREG+6WMwKbuYTeivRRs6S2XdWnboRde6G9wKh2w+WBydEyJsJ6mg==}
+    engines: {node: '>=4.8.2'}
+    peerDependencies:
+      acorn: ^6.1.0 || ^7 || ^8
+
+  acorn-static-class-features@1.0.0:
+    resolution: {integrity: sha512-XZJECjbmMOKvMHiNzbiPXuXpLAJfN3dAKtfIYbk1eHiWdsutlek+gS7ND4B8yJ3oqvHo1NxfafnezVmq7NXK0A==}
+    engines: {node: '>=4.8.2'}
+    peerDependencies:
+      acorn: ^6.1.0 || ^7 || ^8
 
   acorn-walk@8.3.5:
     resolution: {integrity: sha512-HEHNfbars9v4pgpW6SO1KSPkfoS0xVOM/9UzkJltjlsHZmJasxg8aXkuZa7SMf8vKGIBhpUsPluQSqhJFCqebw==}
@@ -6491,6 +6513,10 @@ packages:
     resolution: {integrity: sha512-ZqRXc+tZukToSNmh5C2iWMSoV3X1YUcPbqEM4DkEG5tNQXrQUZCNVGGv3IuicnkMtPfGf3Xtp8WCXs295iQ1pQ==}
     engines: {node: '>= 0.10.0'}
 
+  consola@3.4.2:
+    resolution: {integrity: sha512-5IKcdX0nnYavi6G7TtOhwkYzyjfJlatbjMjuLSfE2kYT5pMDOilZ4OvMhi637CcDICTmz3wARPoyhqyX1Y+XvA==}
+    engines: {node: ^14.18.0 || >=16.10.0}
+
   content-disposition@0.5.4:
     resolution: {integrity: sha512-FveZTNuGw04cxlAiWbzi6zTAL/lhehaWbTtgluJh4/E95DqMwTmha3KZN1aAWA8cFIhHzMZUvLevkw5Rqk+tSQ==}
     engines: {node: '>= 0.6'}
@@ -7018,8 +7044,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@40.4.0:
-    resolution: {integrity: sha512-31l4V7Ys4oUuXyaN/cCNnyBdDXN9RwOVOG+JhiHCf4zx5tZkHd43PKGY6KLEWpeYCxaphsuGSEjagJLfPqKj8g==}
+  electron@40.8.0:
+    resolution: {integrity: sha512-WoPq0Nr9Yx3g7T6VnJXdwa/rr2+VRyH3a+K+ezfMKBlf6WjxE/LmhMQabKbb6yjm9RbZhJBRcYyoLph421O2mQ==}
     engines: {node: '>= 12.20.55'}
     hasBin: true
 
@@ -7335,6 +7361,9 @@ packages:
   estraverse@5.3.0:
     resolution: {integrity: sha512-MMdARuVEQziNTeJD8DgMqmhwR11BRQ/cBP+pLtYdSTnf3MIO8fFeiINEbX36ZdNlfU/7A9f3gUw49B3oQsvwBA==}
     engines: {node: '>=4.0'}
+
+  estree-walker@0.6.1:
+    resolution: {integrity: sha512-SqmZANLWS0mnatqbSfRP5g8OXZC12Fgg1IwNtLsyHDzJizORW4khDfjPqJZsemPWBB2uqykUah5YpQ6epsqC/w==}
 
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
@@ -9224,6 +9253,10 @@ packages:
     resolution: {integrity: sha512-IWqP2SCPhyVFTBtRcgMHdzlf9ul25NwaFx4wCEH/KjAXuuHY4yNjvPXsBokp8jCB936PyWRaPKUNh8NvylLp2Q==}
     engines: {node: '>=6.11.5'}
 
+  loader-utils@1.4.2:
+    resolution: {integrity: sha512-I5d00Pd/jwMD2QCduo657+YM/6L3KZu++pmX9VFncxaxvHcru9jx1lBaFft+r4Mt2jK0Yhp41XlRAihzPxHNCg==}
+    engines: {node: '>=4.0.0'}
+
   loader-utils@2.0.4:
     resolution: {integrity: sha512-xXqpXoINfFhgua9xiqD8fPFHgkoq1mmmpE92WlDbm9rNRd/EbRb+Gqf908T2DMfuHjjJlksiK2RbHVOdD/MqSw==}
     engines: {node: '>=8.9.0'}
@@ -9317,6 +9350,9 @@ packages:
   macos-alias@0.2.12:
     resolution: {integrity: sha512-yiLHa7cfJcGRFq4FrR4tMlpNHb4Vy4mWnpajlSSIFM5k4Lv8/7BbbDLzCAVogWNl0LlLhizRp1drXv0hK9h0Yw==}
     os: [darwin]
+
+  magic-string@0.25.9:
+    resolution: {integrity: sha512-RmF0AsMzgt25qzqqLc1+MbHmhdx0ojF2Fvs4XnOqz2ZOBXzzkEwc/dJQZCYHAn7v1jbVOjAZfK8msRn4BxO4VQ==}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -10891,6 +10927,10 @@ packages:
     resolution: {integrity: sha512-OrZaX2Mb+rJCpH/6CpSqt9xFVpN++x01XnN2ie9g6P5/3xelLAkXWVADpdz1IHD/KFfEXyE6V0U01OQ3UO2rEg==}
     engines: {node: '>=8'}
 
+  resolve-from@3.0.0:
+    resolution: {integrity: sha512-GnlH6vxLymXJNMBo7XP1fJIzBFbdYt49CuTwmB/6N53t+kMPRMFKz783LlQ4tv28XoQfMWinAJX6WCGf2IlaIw==}
+    engines: {node: '>=4'}
+
   resolve-from@4.0.0:
     resolution: {integrity: sha512-pb/MYmXstAkysRFx8piNI1tGFNQIFA3vkE3Gq4EuA1dF6gHp/+vgZqsCGJapvy8N3Q+4o7FwvquPJcnZ7RYy4g==}
     engines: {node: '>=4'}
@@ -10970,6 +11010,9 @@ packages:
   roarr@2.15.4:
     resolution: {integrity: sha512-CHhPh+UNHD2GTXNYhPWLnU8ONHdI+5DI+4EYIAOaiD63rHeYlZvyh8P+in5999TTSFgUYuKUAjzRI4mdh/p+2A==}
     engines: {node: '>=8.0'}
+
+  rollup-pluginutils@2.8.2:
+    resolution: {integrity: sha512-EEp9NhnUkwY8aif6bxgovPHMoMoNr2FulJziTndpt5H9RdwC47GSGuII9XxpSdzVGM0GWrNPHV6ie1LTNJPaLQ==}
 
   rollup@4.59.0:
     resolution: {integrity: sha512-2oMpl67a3zCH9H79LeMcbDhXW/UmWG/y2zuqnF2jQq5uq9TbM9TVyXvA4+t+ne2IIkBdrLpAaRQAvo7YI/Yyeg==}
@@ -11352,6 +11395,10 @@ packages:
   source-map@0.7.6:
     resolution: {integrity: sha512-i5uvt8C3ikiWeNZSVZNWcfZPItFQOsYTUAOkcUPGd8DqDy1uOUikjt5dG+uRlwyvR108Fb9DOd4GvXfT0N2/uQ==}
     engines: {node: '>= 12'}
+
+  sourcemap-codec@1.4.8:
+    resolution: {integrity: sha512-9NykojV5Uih4lgo5So5dtw+f0JgJX30KCNI8gwhz2J9A15wD0Ml6tjHKwf6fTSa6fAdVBdZeNOs9eJ71qCk8vA==}
+    deprecated: Please use @jridgewell/sourcemap-codec instead
 
   sparse-bitfield@3.0.3:
     resolution: {integrity: sha512-kvzhi7vqKTfkh0PZU+2D2PIllw2ymqJKujUcyPMd9Y75Nv4nPbGJZXNhxsgdQab2BmlDct1YnfQCguEvHr7VsQ==}
@@ -15705,6 +15752,19 @@ snapshots:
     dependencies:
       cross-spawn: 7.0.6
 
+  '@mapbox/node-pre-gyp@2.0.3(encoding@0.1.13)':
+    dependencies:
+      consola: 3.4.2
+      detect-libc: 2.1.2
+      https-proxy-agent: 7.0.6
+      node-fetch: 2.7.0(encoding@0.1.13)
+      nopt: 8.1.0
+      semver: 7.7.4
+      tar: 7.5.11
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+
   '@mgcrea/react-native-dnd@2.5.3(react-native-gesture-handler@2.30.0(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4))(react-native-reanimated@4.2.2(react-native-worklets@0.7.4(@babel/core@7.29.0)(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4))(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4))(react-native@0.83.2(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)':
     dependencies:
       react: 19.2.4
@@ -18558,9 +18618,27 @@ snapshots:
   '@unrs/resolver-binding-win32-x64-msvc@1.11.1':
     optional: true
 
-  '@vercel/webpack-asset-relocator-loader@1.7.3':
+  '@vercel/webpack-asset-relocator-loader@1.10.0(encoding@0.1.13)':
     dependencies:
+      '@mapbox/node-pre-gyp': 2.0.3(encoding@0.1.13)
+      acorn: 8.16.0
+      acorn-class-fields: 1.0.0(acorn@8.16.0)
+      acorn-private-class-elements: 1.0.0(acorn@8.16.0)
+      acorn-static-class-features: 1.0.0(acorn@8.16.0)
+      bindings: 1.5.0
+      estree-walker: 0.6.1
+      glob: 7.2.3
+      graceful-fs: 4.2.11
+      loader-utils: 1.4.2
+      magic-string: 0.25.9
+      node-gyp-build: 4.8.4
       resolve: 1.22.11
+      resolve-from: 3.0.0
+      rollup-pluginutils: 2.8.2
+      sourcemap-codec: 1.4.8
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
 
   '@vitest/expect@4.0.18':
     dependencies:
@@ -18730,6 +18808,11 @@ snapshots:
       mime-types: 3.0.2
       negotiator: 1.0.0
 
+  acorn-class-fields@1.0.0(acorn@8.16.0):
+    dependencies:
+      acorn: 8.16.0
+      acorn-private-class-elements: 1.0.0(acorn@8.16.0)
+
   acorn-globals@7.0.1:
     dependencies:
       acorn: 8.16.0
@@ -18746,6 +18829,15 @@ snapshots:
   acorn-jsx@5.3.2(acorn@8.16.0):
     dependencies:
       acorn: 8.16.0
+
+  acorn-private-class-elements@1.0.0(acorn@8.16.0):
+    dependencies:
+      acorn: 8.16.0
+
+  acorn-static-class-features@1.0.0(acorn@8.16.0):
+    dependencies:
+      acorn: 8.16.0
+      acorn-private-class-elements: 1.0.0(acorn@8.16.0)
 
   acorn-walk@8.3.5:
     dependencies:
@@ -19723,6 +19815,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  consola@3.4.2: {}
+
   content-disposition@0.5.4:
     dependencies:
       safe-buffer: 5.2.1
@@ -20313,7 +20407,7 @@ snapshots:
       - supports-color
     optional: true
 
-  electron@40.4.0:
+  electron@40.8.0:
     dependencies:
       '@electron/get': 2.0.3
       '@types/node': 24.12.0
@@ -20796,6 +20890,8 @@ snapshots:
   estraverse@4.3.0: {}
 
   estraverse@5.3.0: {}
+
+  estree-walker@0.6.1: {}
 
   estree-walker@3.0.3:
     dependencies:
@@ -23378,6 +23474,12 @@ snapshots:
 
   loader-runner@4.3.1: {}
 
+  loader-utils@1.4.2:
+    dependencies:
+      big.js: 5.2.2
+      emojis-list: 3.0.0
+      json5: 1.0.2
+
   loader-utils@2.0.4:
     dependencies:
       big.js: 5.2.2
@@ -23466,6 +23568,10 @@ snapshots:
     dependencies:
       nan: 2.14.0
     optional: true
+
+  magic-string@0.25.9:
+    dependencies:
+      sourcemap-codec: 1.4.8
 
   magic-string@0.30.21:
     dependencies:
@@ -25268,6 +25374,8 @@ snapshots:
     dependencies:
       resolve-from: 5.0.0
 
+  resolve-from@3.0.0: {}
+
   resolve-from@4.0.0: {}
 
   resolve-from@5.0.0: {}
@@ -25349,6 +25457,10 @@ snapshots:
       semver-compare: 1.0.0
       sprintf-js: 1.1.3
     optional: true
+
+  rollup-pluginutils@2.8.2:
+    dependencies:
+      estree-walker: 0.6.1
 
   rollup@4.59.0:
     dependencies:
@@ -25876,6 +25988,8 @@ snapshots:
   source-map@0.6.1: {}
 
   source-map@0.7.6: {}
+
+  sourcemap-codec@1.4.8: {}
 
   sparse-bitfield@3.0.3:
     dependencies:
