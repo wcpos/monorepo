@@ -1,11 +1,12 @@
 import React from 'react';
 import { View } from 'react-native';
 
+import { flexRender } from '@tanstack/react-table';
+
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
-import { flexRender } from '@tanstack/react-table';
 import type { OrderDocument } from '@wcpos/database';
 
 import { TableHeaderSelect } from './header-select';
@@ -67,7 +68,7 @@ const renderHeader = (props: RenderHeaderProps) => {
 		<DataTableHeader
 			columnId={props.column.id}
 			header={flexRender(props.column.columnDef.header, props.getContext())}
-			disableSort={props.column.columnDef.enableSorting === false}
+			disableSort={!props.column.getCanSort()}
 			sortBy={props.sortBy}
 			sortDirection={props.sortDirection}
 			onSortingChange={props.onSortingChange}
