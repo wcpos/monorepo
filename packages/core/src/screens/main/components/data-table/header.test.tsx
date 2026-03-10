@@ -2,17 +2,10 @@
  * @jest-environment node
  */
 
-import React from 'react';
+import { getSortField } from './sort-field';
 
 describe('DataTableHeader sorting behavior', () => {
-	describe('sort field mapping', () => {
-		function getSortField(columnId: string): string {
-			if (columnId === 'price' || columnId === 'total') {
-				return `sortable_${columnId}`;
-			}
-			return columnId;
-		}
-
+	describe('getSortField', () => {
 		it('maps price column to sortable_price', () => {
 			expect(getSortField('price')).toBe('sortable_price');
 		});
@@ -30,6 +23,8 @@ describe('DataTableHeader sorting behavior', () => {
 	});
 
 	describe('sort direction toggling', () => {
+		// This mirrors the onPress logic in DataTableHeader:
+		// isSorted && sortDirection === 'asc' ? 'desc' : 'asc'
 		function getNextSortDirection(
 			columnSortField: string,
 			currentSortBy: string,

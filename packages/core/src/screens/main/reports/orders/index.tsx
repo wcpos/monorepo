@@ -10,7 +10,7 @@ import type { OrderDocument } from '@wcpos/database';
 import { TableHeaderSelect } from './header-select';
 import { TableRowSelect } from './row-select';
 import { useT } from '../../../../contexts/translations';
-import { DataTable, DataTableHeader } from '../../components/data-table';
+import { DataTable, DataTableHeader, type RenderHeaderProps } from '../../components/data-table';
 import { DateCell } from '../../components/date';
 import { Cashier } from '../../components/order/cashier';
 import { CreatedVia } from '../../components/order/created-via';
@@ -56,14 +56,10 @@ const headers: Record<string, React.ComponentType<Record<string, unknown>>> = {
 	select: TableHeaderSelect as unknown as React.ComponentType<Record<string, unknown>>,
 };
 
-const renderHeader = (
-	props: Record<string, unknown> & {
-		column: { id: string; columnDef: { header?: React.ReactNode; enableSorting?: boolean } };
-	}
-) => {
+const renderHeader = (props: RenderHeaderProps) => {
 	const Renderer = headers[props.column.id];
 	if (Renderer) {
-		return <Renderer {...props} />;
+		return <Renderer {...(props as unknown as Record<string, unknown>)} />;
 	}
 
 	return (
@@ -71,11 +67,9 @@ const renderHeader = (
 			columnId={props.column.id}
 			header={props.column.columnDef.header as React.ReactNode}
 			disableSort={!props.column.columnDef.enableSorting}
-			sortBy={props.sortBy as string}
-			sortDirection={props.sortDirection as 'asc' | 'desc'}
-			onSortingChange={
-				props.onSortingChange as (sort: { sortBy: string; sortDirection: 'asc' | 'desc' }) => void
-			}
+			sortBy={props.sortBy}
+			sortDirection={props.sortDirection}
+			onSortingChange={props.onSortingChange}
 		/>
 	);
 };

@@ -5,24 +5,17 @@ import { HStack } from '@wcpos/components/hstack';
 import { SortIcon } from '@wcpos/components/sort-icon';
 import { Text } from '@wcpos/components/text';
 
+import { getSortField } from './sort-field';
+
+import type { SortingChange } from './sort-field';
+
 interface Props {
 	columnId: string;
 	header: React.ReactNode;
 	disableSort?: boolean;
 	sortBy: string;
 	sortDirection: 'asc' | 'desc';
-	onSortingChange: (sort: { sortBy: string; sortDirection: 'asc' | 'desc' }) => void;
-}
-
-/**
- * Maps column IDs to the actual sort field name used in the database.
- * Price and total columns sort on indexed `sortable_` prefixed fields.
- */
-function getSortField(columnId: string): string {
-	if (columnId === 'price' || columnId === 'total') {
-		return `sortable_${columnId}`;
-	}
-	return columnId;
+	onSortingChange: (sort: SortingChange) => void;
 }
 
 export function DataTableHeader({

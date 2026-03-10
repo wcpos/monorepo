@@ -25,7 +25,15 @@ import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
 
-import type { ColumnDef } from '@tanstack/react-table';
+import type { SortingChange } from './sort-field';
+import type { ColumnDef, Header, Table as TanStackTable } from '@tanstack/react-table';
+
+interface RenderHeaderProps extends Header<any, any> {
+	table: TanStackTable<any>;
+	sortBy: string;
+	sortDirection: 'asc' | 'desc';
+	onSortingChange: (sort: SortingChange) => void;
+}
 
 interface Props {
 	id: UISettingID;
@@ -39,7 +47,7 @@ interface Props {
 		table: any;
 	}) => React.ReactElement<React.ComponentProps<typeof VirtualizedList.Item>>;
 	renderCell?: (columnKey: string, info: any) => React.ReactNode;
-	renderHeader?: (props: any) => React.ReactNode;
+	renderHeader?: (props: RenderHeaderProps) => React.ReactNode;
 	tableConfig?: any;
 	getItemType?: (row: any) => string;
 	ListFooterComponent?: React.ComponentType<any>;
@@ -267,3 +275,4 @@ function getColumnStyle(meta: any): ViewStyle {
 }
 
 export { DataTable, DataTableHeader, DataTableFooter, defaultRenderItem, getColumnStyle };
+export type { RenderHeaderProps, SortingChange };
