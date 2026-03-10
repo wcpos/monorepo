@@ -147,7 +147,7 @@ function DataTable<TData>({
 								) : (
 									<DataTableHeader
 										columnId={header.column.id}
-										header={header.column.columnDef.header as React.ReactNode}
+										header={flexRender(header.column.columnDef.header, header.getContext())}
 										disableSort={!header.column.columnDef.enableSorting}
 										sortBy={sortBy}
 										sortDirection={sortDirection}

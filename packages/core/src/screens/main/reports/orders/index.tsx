@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
+import { flexRender } from '@tanstack/react-table';
 import type { OrderDocument } from '@wcpos/database';
 
 import { TableHeaderSelect } from './header-select';
@@ -65,7 +66,7 @@ const renderHeader = (props: RenderHeaderProps) => {
 	return (
 		<DataTableHeader
 			columnId={props.column.id}
-			header={props.column.columnDef.header as React.ReactNode}
+			header={flexRender(props.column.columnDef.header, props.getContext())}
 			disableSort={!props.column.columnDef.enableSorting}
 			sortBy={props.sortBy}
 			sortDirection={props.sortDirection}
