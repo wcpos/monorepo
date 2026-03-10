@@ -67,7 +67,7 @@ const renderHeader = (props: RenderHeaderProps) => {
 		<DataTableHeader
 			columnId={props.column.id}
 			header={flexRender(props.column.columnDef.header, props.getContext())}
-			disableSort={!props.column.columnDef.enableSorting}
+			disableSort={props.column.columnDef.enableSorting === false}
 			sortBy={props.sortBy}
 			sortDirection={props.sortDirection}
 			onSortingChange={props.onSortingChange}

@@ -148,7 +148,7 @@ function DataTable<TData>({
 									<DataTableHeader
 										columnId={header.column.id}
 										header={flexRender(header.column.columnDef.header, header.getContext())}
-										disableSort={!header.column.columnDef.enableSorting}
+										disableSort={header.column.columnDef.enableSorting === false}
 										sortBy={sortBy}
 										sortDirection={sortDirection}
 										onSortingChange={handleSortingChange}
