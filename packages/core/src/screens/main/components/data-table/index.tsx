@@ -24,7 +24,6 @@ import { useT } from '../../../../contexts/translations';
 import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
-import { normalizeSortingChange } from './sorting-change';
 
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -46,8 +45,6 @@ interface Props {
 	ListFooterComponent?: React.ComponentType<any>;
 	TableFooterComponent?: React.ComponentType<any>;
 }
-
-type SortingChangeInput = Parameters<typeof normalizeSortingChange>[0];
 
 /**
  * React Compiler breaks tanstack/react-table
@@ -90,25 +87,15 @@ function DataTable<TData>({
 		[uiColumns]
 	);
 
-	const sorting = React.useMemo(
-		() => [{ sortBy: uiSettings.sortBy, sortDirection: uiSettings.sortDirection }],
-		[uiSettings.sortBy, uiSettings.sortDirection]
-	);
-	const currentSortDirection = uiSettings.sortDirection === 'desc' ? 'desc' : 'asc';
+	const sortBy = uiSettings.sortBy;
+	const sortDirection: 'asc' | 'desc' = uiSettings.sortDirection === 'desc' ? 'desc' : 'asc';
 
-	/**
-	 * Sorting
-	 */
 	const handleSortingChange = React.useCallback(
-		(change: SortingChangeInput) => {
-			const { sortBy, sortDirection } = normalizeSortingChange(change, {
-				sortBy: uiSettings.sortBy,
-				sortDirection: currentSortDirection,
-			});
+		({ sortBy, sortDirection }: { sortBy: string; sortDirection: 'asc' | 'desc' }) => {
 			patchUI({ sortBy, sortDirection });
 			query.sort([{ [sortBy]: sortDirection }]).exec();
 		},
-		[currentSortDirection, patchUI, query, uiSettings.sortBy]
+		[patchUI, query]
 	);
 
 	const table = useReactTableWrapper({
@@ -116,10 +103,8 @@ function DataTable<TData>({
 		data: deferredResult.hits,
 		getRowId: (row: { id: string; document: TData }) => row.id,
 		getCoreRowModel: getCoreRowModel(),
-		onSortingChange: handleSortingChange,
-		manualSorting: true,
 		...tableConfig,
-		state: { columnVisibility, sorting, ...tableConfig?.state },
+		state: { columnVisibility, ...tableConfig?.state },
 		meta: {
 			query,
 			...tableConfig?.meta,
@@ -147,11 +132,18 @@ function DataTable<TData>({
 									renderHeader({
 										...header,
 										table,
+										sortBy,
+										sortDirection,
+										onSortingChange: handleSortingChange,
 									})
 								) : (
 									<DataTableHeader
-										{...header.getContext()}
-										title={String(header.column.columnDef.header ?? '')}
+										columnId={header.column.id}
+										header={header.column.columnDef.header as React.ReactNode}
+										disableSort={!header.column.columnDef.enableSorting}
+										sortBy={sortBy}
+										sortDirection={sortDirection}
+										onSortingChange={handleSortingChange}
 									/>
 								)}
 							</TableHead>

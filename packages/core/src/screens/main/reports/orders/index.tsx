@@ -56,14 +56,27 @@ const headers: Record<string, React.ComponentType<Record<string, unknown>>> = {
 	select: TableHeaderSelect as unknown as React.ComponentType<Record<string, unknown>>,
 };
 
-const renderHeader = (props: Record<string, unknown> & { column: { id: string } }) => {
+const renderHeader = (
+	props: Record<string, unknown> & {
+		column: { id: string; columnDef: { header?: React.ReactNode; enableSorting?: boolean } };
+	}
+) => {
 	const Renderer = headers[props.column.id];
 	if (Renderer) {
 		return <Renderer {...props} />;
 	}
 
 	return (
-		<DataTableHeader {...(props as unknown as React.ComponentProps<typeof DataTableHeader>)} />
+		<DataTableHeader
+			columnId={props.column.id}
+			header={props.column.columnDef.header as React.ReactNode}
+			disableSort={!props.column.columnDef.enableSorting}
+			sortBy={props.sortBy as string}
+			sortDirection={props.sortDirection as 'asc' | 'desc'}
+			onSortingChange={
+				props.onSortingChange as (sort: { sortBy: string; sortDirection: 'asc' | 'desc' }) => void
+			}
+		/>
 	);
 };
 

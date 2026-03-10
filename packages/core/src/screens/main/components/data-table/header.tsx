@@ -5,39 +5,41 @@ import { HStack } from '@wcpos/components/hstack';
 import { SortIcon } from '@wcpos/components/sort-icon';
 import { Text } from '@wcpos/components/text';
 
-import type { HeaderContext } from '@tanstack/react-table';
-
-interface CustomSortingEntry {
+interface Props {
+	columnId: string;
+	header: React.ReactNode;
+	disableSort?: boolean;
 	sortBy: string;
 	sortDirection: 'asc' | 'desc';
-}
-
-interface Props extends HeaderContext<any, any> {
-	title: string;
+	onSortingChange: (sort: { sortBy: string; sortDirection: 'asc' | 'desc' }) => void;
 }
 
 /**
- *
+ * Maps column IDs to the actual sort field name used in the database.
+ * Price and total columns sort on indexed `sortable_` prefixed fields.
  */
-export function DataTableHeader({ column, table }: Props) {
-	const canSort = column.getCanSort();
-	const sortingState = table.getState().sorting[0] as unknown as CustomSortingEntry | undefined;
-	const sortBy = sortingState?.sortBy;
-	const sortDirection = sortingState?.sortDirection;
+function getSortField(columnId: string): string {
+	if (columnId === 'price' || columnId === 'total') {
+		return `sortable_${columnId}`;
+	}
+	return columnId;
+}
 
-	/**
-	 * @NOTE - this is a bit of a hack, but we want the price and total columns to sort on
-	 * `sortable_price` and `sortable_total` instead of `price` and `total`
-	 */
-	const isSorted =
-		column.id === 'price' || column.id === 'total'
-			? sortBy === `sortable_${column.id}`
-			: sortBy === column.id;
+export function DataTableHeader({
+	columnId,
+	header,
+	disableSort,
+	sortBy,
+	sortDirection,
+	onSortingChange,
+}: Props) {
+	const sortField = getSortField(columnId);
+	const isSorted = sortBy === sortField;
 
-	if (!canSort) {
+	if (disableSort) {
 		return (
 			<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
-				{column.columnDef.header as React.ReactNode}
+				{header}
 			</Text>
 		);
 	}
@@ -46,9 +48,8 @@ export function DataTableHeader({ column, table }: Props) {
 		<Pressable
 			className="h-full w-full justify-center"
 			onPress={() =>
-				(table.setSorting as unknown as (val: CustomSortingEntry) => void)({
-					sortBy:
-						column.id === 'price' || column.id === 'total' ? `sortable_${column.id}` : column.id,
+				onSortingChange({
+					sortBy: sortField,
 					sortDirection: isSorted && sortDirection === 'asc' ? 'desc' : 'asc',
 				})
 			}
@@ -58,7 +59,7 @@ export function DataTableHeader({ column, table }: Props) {
 				return (
 					<HStack className="gap-1">
 						<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
-							{column.columnDef.header as React.ReactNode}
+							{header}
 						</Text>
 						{showIcon && (
 							<SortIcon direction={isSorted ? sortDirection : undefined} hovered={hovered} />
