@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { useObservableSuspense } from 'observable-hooks';
 
+import { Platform } from '@wcpos/utils/platform';
+
 import {
 	Combobox,
 	ComboboxContent,
@@ -35,6 +37,7 @@ export function AddCoupon() {
 	const { onOpenChange } = useRootContext();
 	const [error, setError] = React.useState<string | null>(null);
 	const [selected, setSelected] = React.useState<CouponDocument | null>(null);
+	const [isApplying, setIsApplying] = React.useState(false);
 
 	const handleValueChange = React.useCallback(
 		(option: { value: string; label: string; item?: CouponDocument } | undefined) => {
@@ -45,15 +48,20 @@ export function AddCoupon() {
 	);
 
 	const handleApply = React.useCallback(async () => {
-		if (!selected) return;
+		if (!selected || isApplying) return;
+		setIsApplying(true);
 		setError(null);
-		const result = await addCoupon(selected.code ?? '');
-		if (result.success) {
-			onOpenChange(false);
-		} else {
-			setError(result.error || 'Failed to apply coupon.');
+		try {
+			const result = await addCoupon(selected.code ?? '');
+			if (result.success) {
+				onOpenChange(false);
+			} else {
+				setError(result.error || 'Failed to apply coupon.');
+			}
+		} finally {
+			setIsApplying(false);
 		}
-	}, [selected, addCoupon, onOpenChange]);
+	}, [selected, isApplying, addCoupon, onOpenChange]);
 
 	return (
 		<VStack className="gap-4">
@@ -61,19 +69,19 @@ export function AddCoupon() {
 			<Combobox onValueChange={handleValueChange}>
 				<ComboboxTrigger>
 					<ComboboxValue
-						placeholder={t('pos_cart.enter_coupon_code', { defaultValue: 'Select coupon...' })}
+						placeholder={t('pos_cart.select_coupon', { defaultValue: 'Select coupon...' })}
 					/>
 				</ComboboxTrigger>
 				<ComboboxContent
 					portalHost="pos"
-					style={{ width: 'var(--radix-popover-trigger-width)' } as any}
+					{...(Platform.OS === 'web' ? { style: { width: 'var(--radix-popover-trigger-width)' } } : {})}
 				>
 					<CouponSearch />
 				</ComboboxContent>
 			</Combobox>
 			<DialogFooter className="px-0">
 				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction testID="add-coupon-submit" onPress={handleApply} disabled={!selected}>
+				<DialogAction testID="add-coupon-submit" onPress={handleApply} disabled={!selected || isApplying}>
 					{t('common.apply', { defaultValue: 'Apply' })}
 				</DialogAction>
 			</DialogFooter>
@@ -111,7 +119,6 @@ function CouponSearch() {
 			<ComboboxInput
 				placeholder={t('pos_cart.search_coupons', { defaultValue: 'Search coupons...' })}
 				value={search}
-				// @ts-expect-error: onChangeText is passed through to Input via spread
 				onChangeText={onSearch}
 			/>
 			<Suspense>
@@ -157,6 +164,7 @@ function CouponList({ query }: { query: any }) {
 }
 
 function CouponItemContent({ coupon }: { coupon: CouponDocument }) {
+	const t = useT();
 	const { format } = useCurrencyFormat();
 
 	const amountLabel = React.useMemo(() => {
@@ -175,15 +183,15 @@ function CouponItemContent({ coupon }: { coupon: CouponDocument }) {
 	const typeLabel = React.useMemo(() => {
 		switch (coupon.discount_type) {
 			case 'percent':
-				return 'Percentage discount';
+				return t('pos_cart.percentage_discount', { defaultValue: 'Percentage discount' });
 			case 'fixed_cart':
-				return 'Fixed cart discount';
+				return t('pos_cart.fixed_cart_discount', { defaultValue: 'Fixed cart discount' });
 			case 'fixed_product':
-				return 'Fixed product discount';
+				return t('pos_cart.fixed_product_discount', { defaultValue: 'Fixed product discount' });
 			default:
 				return '';
 		}
-	}, [coupon.discount_type]);
+	}, [coupon.discount_type, t]);
 
 	return (
 		<HStack className="flex-1 items-center justify-between">

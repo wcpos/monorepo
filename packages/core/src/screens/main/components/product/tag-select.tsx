@@ -98,7 +98,6 @@ export function TagSearch() {
 			<ComboboxInput
 				placeholder={t('common.search_tags')}
 				value={search}
-				// @ts-expect-error: onChangeText is passed through to Input via spread
 				onChangeText={onSearch}
 			/>
 			<Suspense>

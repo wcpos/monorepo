@@ -98,7 +98,6 @@ export function BrandSearch() {
 			<ComboboxInput
 				placeholder={t('common.search_brands')}
 				value={search}
-				// @ts-expect-error: onChangeText is passed through to Input via spread
 				onChangeText={onSearch}
 			/>
 			<Suspense>

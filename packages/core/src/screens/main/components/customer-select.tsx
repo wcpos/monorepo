@@ -88,7 +88,6 @@ export function CustomerSearch({ withGuest = false }: { withGuest?: boolean }) {
 			<ComboboxInput
 				placeholder={t('common.search_customers')}
 				value={search}
-				// @ts-expect-error: onChangeText is passed through to Input via spread
 				onChangeText={onSearch}
 			/>
 			<Suspense>
