@@ -20,7 +20,15 @@ type ExtendedRxJsonSchema<T> = RxJsonSchema<T> & {
  * Used when a property is missing from incoming data and has no schema default.
  */
 export function getDefaultForType(schema: ExtendedRxJsonSchema<any>): any {
-	switch (schema.type) {
+	const type = schema.type;
+
+	// Handle union types like ['integer', 'null'] — prefer null if allowed
+	if (Array.isArray(type)) {
+		if (type.includes('null')) return null;
+		return getDefaultForType({ ...schema, type: type[0] });
+	}
+
+	switch (type) {
 		case 'string':
 			return '';
 		case 'number':
@@ -95,7 +103,48 @@ function coercePrimitiveTypes(
 	collection?: RxCollection,
 	parentSchema?: ExtendedRxJsonSchema<any> | null
 ): any {
-	switch (schema.type) {
+	const type = schema.type;
+
+	// Handle union types like ['integer', 'null'], ['string', 'null'], etc.
+	if (Array.isArray(type)) {
+		// If data is null/undefined and null is allowed, return null
+		if ((data === null || data === undefined) && type.includes('null')) {
+			return null;
+		}
+		// Empty string for nullable numeric types should be treated as null
+		if (
+			data === '' &&
+			type.includes('null') &&
+			(type.includes('integer') || type.includes('number'))
+		) {
+			return null;
+		}
+		// Find the type that matches the current data value to preserve its type
+		const nonNullTypes = type.filter((t) => t !== 'null');
+		const matchedType = nonNullTypes.find((t) => {
+			switch (t) {
+				case 'string':
+					return typeof data === 'string';
+				case 'integer':
+					return typeof data === 'number' && Number.isInteger(data);
+				case 'number':
+					return typeof data === 'number';
+				case 'boolean':
+					return typeof data === 'boolean';
+				case 'object':
+					return typeof data === 'object' && data !== null && !Array.isArray(data);
+				case 'array':
+					return Array.isArray(data);
+				default:
+					return false;
+			}
+		});
+		// Use matched type if data already fits, otherwise fall back to first non-null type
+		const targetType = matchedType || nonNullTypes[0] || type[0];
+		return coercePrimitiveTypes({ ...schema, type: targetType }, data, collection, parentSchema);
+	}
+
+	switch (type) {
 		case 'number':
 		case 'integer':
 			return Number(data);
