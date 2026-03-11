@@ -28,8 +28,8 @@ import { ListFooterComponent as DefaultListFooterComponent } from './list-footer
 import type { SortingChange } from './sort-field';
 import type { ColumnDef, Header, Table as TanStackTable } from '@tanstack/react-table';
 
-interface RenderHeaderProps extends Header<any, any> {
-	table: TanStackTable<any>;
+interface RenderHeaderProps<TData = unknown> extends Header<TData, unknown> {
+	table: TanStackTable<TData>;
 	sortBy: string;
 	sortDirection: 'asc' | 'desc';
 	onSortingChange: (sort: SortingChange) => void;
@@ -99,7 +99,7 @@ function DataTable<TData>({
 	const sortDirection: 'asc' | 'desc' = uiSettings.sortDirection === 'desc' ? 'desc' : 'asc';
 
 	const handleSortingChange = React.useCallback(
-		({ sortBy, sortDirection }: { sortBy: string; sortDirection: 'asc' | 'desc' }) => {
+		({ sortBy, sortDirection }: SortingChange) => {
 			patchUI({ sortBy, sortDirection });
 			query.sort([{ [sortBy]: sortDirection }]).exec();
 		},
