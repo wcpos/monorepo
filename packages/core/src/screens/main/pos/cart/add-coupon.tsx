@@ -79,7 +79,7 @@ export function AddCoupon() {
 				<ComboboxContent
 					portalHost="pos"
 					{...(Platform.OS === 'web'
-						? { style: { width: 'var(--radix-popover-trigger-width)' } }
+						? ({ style: { width: 'var(--radix-popover-trigger-width)' } } as any)
 						: {})}
 				>
 					<CouponSearch onSearchChange={() => setError(null)} />
