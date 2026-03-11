@@ -98,7 +98,6 @@ export function CategorySearch() {
 			<ComboboxInput
 				placeholder={t('common.search_categories')}
 				value={search}
-				// @ts-expect-error: onChangeText is passed through to Input via spread
 				onChangeText={onSearch}
 			/>
 			<Suspense>

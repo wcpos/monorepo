@@ -67,7 +67,6 @@ function CashierSearch() {
 			<ComboboxInput
 				placeholder={t('common.search_cashiers')}
 				value={search}
-				// @ts-expect-error: onChangeText is passed through to Input via spread
 				onChangeText={onSearch}
 			/>
 			<Suspense>

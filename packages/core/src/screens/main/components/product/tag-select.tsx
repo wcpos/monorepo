@@ -95,12 +95,7 @@ export function TagSearch() {
 	 */
 	return (
 		<>
-			<ComboboxInput
-				placeholder={t('common.search_tags')}
-				value={search}
-				// @ts-expect-error: onChangeText is passed through to Input via spread
-				onChangeText={onSearch}
-			/>
+			<ComboboxInput placeholder={t('common.search_tags')} value={search} onChangeText={onSearch} />
 			<Suspense>
 				<TagList query={query} />
 			</Suspense>

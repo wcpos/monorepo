@@ -38,6 +38,7 @@ type ComboboxInputProps = {
 	placeholder?: string;
 	testID?: string;
 	onKeyPress?: (event: any) => void;
+	onChangeText?: (value: string) => void;
 };
 
 export type ComboboxListProps<T> = Omit<VirtualizedListPrimitiveProps<T>, 'data'> & {

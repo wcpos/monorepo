@@ -155,7 +155,7 @@ function ComboboxContent({
 	);
 }
 
-function ComboboxInput(props: ComboboxInputProps) {
+function ComboboxInput({ onChangeText, ...props }: ComboboxInputProps) {
 	const { onFilterChange } = useComboboxRootContext();
 	const [isPending, startTransition] = React.useTransition();
 	const [inputValue, setInputValue] = React.useState('');
@@ -163,6 +163,7 @@ function ComboboxInput(props: ComboboxInputProps) {
 	const handleChange = React.useCallback(
 		(currentText: string) => {
 			setInputValue(currentText);
+			onChangeText?.(currentText);
 
 			startTransition(() => {
 				if (onFilterChange) {
@@ -170,7 +171,7 @@ function ComboboxInput(props: ComboboxInputProps) {
 				}
 			});
 		},
-		[onFilterChange, startTransition]
+		[onFilterChange, onChangeText, startTransition]
 	);
 
 	const handleKeyPress = React.useCallback((event: any) => {
