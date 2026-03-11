@@ -845,6 +845,108 @@ describe('coerceData - special cases', () => {
 	});
 });
 
+describe('union types (nullable fields)', () => {
+	it('should coerce string to integer for ["integer", "null"] type', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				low_stock_amount: { type: ['integer', 'null'] },
+			},
+		};
+		const data = { low_stock_amount: '5' };
+		const coercedData = coerceData(schema, data);
+		expect(coercedData.low_stock_amount).toBe(5);
+	});
+
+	it('should return null for null value with ["integer", "null"] type', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				low_stock_amount: { type: ['integer', 'null'] },
+			},
+		};
+		const data = { low_stock_amount: null };
+		const coercedData = coerceData(schema, data);
+		expect(coercedData.low_stock_amount).toBe(null);
+	});
+
+	it('should return null for empty string with nullable numeric type', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				low_stock_amount: { type: ['integer', 'null'] },
+			},
+		};
+		const data = { low_stock_amount: '' };
+		const coercedData = coerceData(schema, data);
+		expect(coercedData.low_stock_amount).toBe(null);
+	});
+
+	it('should coerce string to number for ["number", "null"] type', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				stock_quantity: { type: ['number', 'null'] },
+			},
+		};
+		const data = { stock_quantity: '10.5' };
+		const coercedData = coerceData(schema, data);
+		expect(coercedData.stock_quantity).toBe(10.5);
+	});
+
+	it('should return null for null value with ["number", "null"] type', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				stock_quantity: { type: ['number', 'null'] },
+			},
+		};
+		const data = { stock_quantity: null };
+		const coercedData = coerceData(schema, data);
+		expect(coercedData.stock_quantity).toBe(null);
+	});
+
+	it('should handle ["string", "null"] type', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				note: { type: ['string', 'null'] },
+			},
+		};
+		expect(coerceData(schema, { note: null }).note).toBe(null);
+		expect(coerceData(schema, { note: 'hello' }).note).toBe('hello');
+		expect(coerceData(schema, { note: 123 }).note).toBe('123');
+	});
+
+	it('should return null as default for missing nullable fields', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				low_stock_amount: { type: ['integer', 'null'] },
+				stock_quantity: { type: ['number', 'null'] },
+			},
+		};
+		const data = {};
+		const coercedData = coerceData(schema, data);
+		expect(coercedData.low_stock_amount).toBe(null);
+		expect(coercedData.stock_quantity).toBe(null);
+	});
+});
+
 // describe('parseRestResponse', () => {
 // 	it('should parse nested data', () => {
 // 		const ordersCollection = {

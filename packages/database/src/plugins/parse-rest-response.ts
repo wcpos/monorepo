@@ -20,7 +20,15 @@ type ExtendedRxJsonSchema<T> = RxJsonSchema<T> & {
  * Used when a property is missing from incoming data and has no schema default.
  */
 export function getDefaultForType(schema: ExtendedRxJsonSchema<any>): any {
-	switch (schema.type) {
+	const type = schema.type;
+
+	// Handle union types like ['integer', 'null'] — prefer null if allowed
+	if (Array.isArray(type)) {
+		if (type.includes('null')) return null;
+		return getDefaultForType({ ...schema, type: type[0] });
+	}
+
+	switch (type) {
 		case 'string':
 			return '';
 		case 'number':
@@ -95,7 +103,28 @@ function coercePrimitiveTypes(
 	collection?: RxCollection,
 	parentSchema?: ExtendedRxJsonSchema<any> | null
 ): any {
-	switch (schema.type) {
+	const type = schema.type;
+
+	// Handle union types like ['integer', 'null'], ['string', 'null'], etc.
+	if (Array.isArray(type)) {
+		// If data is null/undefined and null is allowed, return null
+		if ((data === null || data === undefined) && type.includes('null')) {
+			return null;
+		}
+		// Empty string for nullable numeric types should be treated as null
+		if (
+			data === '' &&
+			type.includes('null') &&
+			(type.includes('integer') || type.includes('number'))
+		) {
+			return null;
+		}
+		// Coerce using the primary (non-null) type
+		const primaryType = type.find((t) => t !== 'null') || type[0];
+		return coercePrimitiveTypes({ ...schema, type: primaryType }, data, collection, parentSchema);
+	}
+
+	switch (type) {
 		case 'number':
 		case 'integer':
 			return Number(data);
