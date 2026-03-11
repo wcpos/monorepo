@@ -351,11 +351,12 @@ function ButtonPill({
 	removeAccessibilityLabel,
 	...props
 }: ButtonPillProps) {
-	const { onPress: _onPress, ...labelProps } = props;
-
+	// NOTE: props (including onPress) must be spread onto the label Button.
+	// Slot-based wrappers like DialogTrigger asChild inject onPress to control
+	// open/close state — stripping it breaks that composition pattern.
 	return removable ? (
 		<ButtonGroup>
-			<Button className={cn('rounded-full', className)} {...labelProps} />
+			<Button className={cn('rounded-full', className)} {...props} />
 			<Button
 				className={cn('rounded-full', className)}
 				variant={props.variant}
