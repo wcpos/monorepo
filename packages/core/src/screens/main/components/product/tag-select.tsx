@@ -95,11 +95,7 @@ export function TagSearch() {
 	 */
 	return (
 		<>
-			<ComboboxInput
-				placeholder={t('common.search_tags')}
-				value={search}
-				onChangeText={onSearch}
-			/>
+			<ComboboxInput placeholder={t('common.search_tags')} value={search} onChangeText={onSearch} />
 			<Suspense>
 				<TagList query={query} />
 			</Suspense>

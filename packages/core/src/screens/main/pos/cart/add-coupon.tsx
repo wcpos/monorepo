@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { Platform } from '@wcpos/utils/platform';
-
 import {
 	Combobox,
 	ComboboxContent,
@@ -56,12 +55,17 @@ export function AddCoupon() {
 			if (result.success) {
 				onOpenChange(false);
 			} else {
-				setError(result.error || 'Failed to apply coupon.');
+				setError(
+					result.error ||
+						t('pos_cart.failed_to_apply_coupon', {
+							defaultValue: 'Failed to apply coupon.',
+						})
+				);
 			}
 		} finally {
 			setIsApplying(false);
 		}
-	}, [selected, isApplying, addCoupon, onOpenChange]);
+	}, [selected, isApplying, addCoupon, onOpenChange, t]);
 
 	return (
 		<VStack className="gap-4">
@@ -74,14 +78,20 @@ export function AddCoupon() {
 				</ComboboxTrigger>
 				<ComboboxContent
 					portalHost="pos"
-					{...(Platform.OS === 'web' ? { style: { width: 'var(--radix-popover-trigger-width)' } } : {})}
+					{...(Platform.OS === 'web'
+						? { style: { width: 'var(--radix-popover-trigger-width)' } }
+						: {})}
 				>
-					<CouponSearch />
+					<CouponSearch onSearchChange={() => setError(null)} />
 				</ComboboxContent>
 			</Combobox>
 			<DialogFooter className="px-0">
 				<DialogClose>{t('common.cancel')}</DialogClose>
-				<DialogAction testID="add-coupon-submit" onPress={handleApply} disabled={!selected || isApplying}>
+				<DialogAction
+					testID="add-coupon-submit"
+					onPress={handleApply}
+					disabled={!selected || isApplying}
+				>
 					{t('common.apply', { defaultValue: 'Apply' })}
 				</DialogAction>
 			</DialogFooter>
@@ -89,7 +99,7 @@ export function AddCoupon() {
 	);
 }
 
-function CouponSearch() {
+function CouponSearch({ onSearchChange }: { onSearchChange?: () => void }) {
 	const t = useT();
 	const [search, setSearch] = React.useState('');
 
@@ -105,9 +115,10 @@ function CouponSearch() {
 	const onSearch = React.useCallback(
 		(value: string) => {
 			setSearch(value);
+			onSearchChange?.();
 			query?.debouncedSearch(value);
 		},
-		[query]
+		[onSearchChange, query]
 	);
 
 	React.useEffect(() => {
