@@ -928,6 +928,34 @@ describe('union types (nullable fields)', () => {
 		expect(coerceData(schema, { note: null }).note).toBe(null);
 		expect(coerceData(schema, { note: 'hello' }).note).toBe('hello');
 		expect(coerceData(schema, { note: 123 }).note).toBe('123');
+		expect(coerceData(schema, { note: '' }).note).toBe('');
+	});
+
+	it('should return null for undefined value with nullable type', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				stock_quantity: { type: ['integer', 'null'] },
+			},
+		};
+		const data = { stock_quantity: undefined };
+		const coercedData = coerceData(schema, data);
+		expect(coercedData.stock_quantity).toBe(null);
+	});
+
+	it('should preserve integer type for ["string", "integer"] union', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'uuid',
+			properties: {
+				id: { type: ['string', 'integer'] },
+			},
+		};
+		expect(coerceData(schema, { id: 42 }).id).toBe(42);
+		expect(coerceData(schema, { id: 'virtual-1' }).id).toBe('virtual-1');
 	});
 
 	it('should return null as default for missing nullable fields', () => {

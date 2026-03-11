@@ -119,9 +119,29 @@ function coercePrimitiveTypes(
 		) {
 			return null;
 		}
-		// Coerce using the primary (non-null) type
-		const primaryType = type.find((t) => t !== 'null') || type[0];
-		return coercePrimitiveTypes({ ...schema, type: primaryType }, data, collection, parentSchema);
+		// Find the type that matches the current data value to preserve its type
+		const nonNullTypes = type.filter((t) => t !== 'null');
+		const matchedType = nonNullTypes.find((t) => {
+			switch (t) {
+				case 'string':
+					return typeof data === 'string';
+				case 'integer':
+					return typeof data === 'number' && Number.isInteger(data);
+				case 'number':
+					return typeof data === 'number';
+				case 'boolean':
+					return typeof data === 'boolean';
+				case 'object':
+					return typeof data === 'object' && data !== null && !Array.isArray(data);
+				case 'array':
+					return Array.isArray(data);
+				default:
+					return false;
+			}
+		});
+		// Use matched type if data already fits, otherwise fall back to first non-null type
+		const targetType = matchedType || nonNullTypes[0] || type[0];
+		return coercePrimitiveTypes({ ...schema, type: targetType }, data, collection, parentSchema);
 	}
 
 	switch (type) {
