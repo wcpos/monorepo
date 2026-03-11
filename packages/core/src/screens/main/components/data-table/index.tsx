@@ -24,9 +24,16 @@ import { useT } from '../../../../contexts/translations';
 import { DataTableHeader } from './header';
 import { DataTableFooter } from './footer';
 import { ListFooterComponent as DefaultListFooterComponent } from './list-footer';
-import { normalizeSortingChange } from './sorting-change';
 
-import type { ColumnDef } from '@tanstack/react-table';
+import type { SortingChange } from './sort-field';
+import type { ColumnDef, Header, Table as TanStackTable } from '@tanstack/react-table';
+
+interface RenderHeaderProps<TData = unknown> extends Header<TData, unknown> {
+	table: TanStackTable<TData>;
+	sortBy: string;
+	sortDirection: 'asc' | 'desc';
+	onSortingChange: (sort: SortingChange) => void;
+}
 
 interface Props {
 	id: UISettingID;
@@ -40,14 +47,12 @@ interface Props {
 		table: any;
 	}) => React.ReactElement<React.ComponentProps<typeof VirtualizedList.Item>>;
 	renderCell?: (columnKey: string, info: any) => React.ReactNode;
-	renderHeader?: (props: any) => React.ReactNode;
+	renderHeader?: (props: RenderHeaderProps) => React.ReactNode;
 	tableConfig?: any;
 	getItemType?: (row: any) => string;
 	ListFooterComponent?: React.ComponentType<any>;
 	TableFooterComponent?: React.ComponentType<any>;
 }
-
-type SortingChangeInput = Parameters<typeof normalizeSortingChange>[0];
 
 /**
  * React Compiler breaks tanstack/react-table
@@ -90,25 +95,15 @@ function DataTable<TData>({
 		[uiColumns]
 	);
 
-	const sorting = React.useMemo(
-		() => [{ sortBy: uiSettings.sortBy, sortDirection: uiSettings.sortDirection }],
-		[uiSettings.sortBy, uiSettings.sortDirection]
-	);
-	const currentSortDirection = uiSettings.sortDirection === 'desc' ? 'desc' : 'asc';
+	const sortBy = uiSettings.sortBy;
+	const sortDirection: 'asc' | 'desc' = uiSettings.sortDirection === 'desc' ? 'desc' : 'asc';
 
-	/**
-	 * Sorting
-	 */
 	const handleSortingChange = React.useCallback(
-		(change: SortingChangeInput) => {
-			const { sortBy, sortDirection } = normalizeSortingChange(change, {
-				sortBy: uiSettings.sortBy,
-				sortDirection: currentSortDirection,
-			});
+		({ sortBy, sortDirection }: SortingChange) => {
 			patchUI({ sortBy, sortDirection });
 			query.sort([{ [sortBy]: sortDirection }]).exec();
 		},
-		[currentSortDirection, patchUI, query, uiSettings.sortBy]
+		[patchUI, query]
 	);
 
 	const table = useReactTableWrapper({
@@ -116,10 +111,8 @@ function DataTable<TData>({
 		data: deferredResult.hits,
 		getRowId: (row: { id: string; document: TData }) => row.id,
 		getCoreRowModel: getCoreRowModel(),
-		onSortingChange: handleSortingChange,
-		manualSorting: true,
 		...tableConfig,
-		state: { columnVisibility, sorting, ...tableConfig?.state },
+		state: { columnVisibility, ...tableConfig?.state },
 		meta: {
 			query,
 			...tableConfig?.meta,
@@ -147,11 +140,18 @@ function DataTable<TData>({
 									renderHeader({
 										...header,
 										table,
+										sortBy,
+										sortDirection,
+										onSortingChange: handleSortingChange,
 									})
 								) : (
 									<DataTableHeader
-										{...header.getContext()}
-										title={String(header.column.columnDef.header ?? '')}
+										columnId={header.column.id}
+										header={flexRender(header.column.columnDef.header, header.getContext())}
+										disableSort={!header.column.getCanSort()}
+										sortBy={sortBy}
+										sortDirection={sortDirection}
+										onSortingChange={handleSortingChange}
 									/>
 								)}
 							</TableHead>
@@ -275,3 +275,4 @@ function getColumnStyle(meta: any): ViewStyle {
 }
 
 export { DataTable, DataTableHeader, DataTableFooter, defaultRenderItem, getColumnStyle };
+export type { RenderHeaderProps, SortingChange };

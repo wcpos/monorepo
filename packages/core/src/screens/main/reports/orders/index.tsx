@@ -1,6 +1,8 @@
 import React from 'react';
 import { View } from 'react-native';
 
+import { flexRender } from '@tanstack/react-table';
+
 import { Card, CardContent, CardHeader } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
@@ -10,7 +12,7 @@ import type { OrderDocument } from '@wcpos/database';
 import { TableHeaderSelect } from './header-select';
 import { TableRowSelect } from './row-select';
 import { useT } from '../../../../contexts/translations';
-import { DataTable, DataTableHeader } from '../../components/data-table';
+import { DataTable, DataTableHeader, type RenderHeaderProps } from '../../components/data-table';
 import { DateCell } from '../../components/date';
 import { Cashier } from '../../components/order/cashier';
 import { CreatedVia } from '../../components/order/created-via';
@@ -56,14 +58,21 @@ const headers: Record<string, React.ComponentType<Record<string, unknown>>> = {
 	select: TableHeaderSelect as unknown as React.ComponentType<Record<string, unknown>>,
 };
 
-const renderHeader = (props: Record<string, unknown> & { column: { id: string } }) => {
+const renderHeader = (props: RenderHeaderProps) => {
 	const Renderer = headers[props.column.id];
 	if (Renderer) {
-		return <Renderer {...props} />;
+		return <Renderer {...(props as unknown as Record<string, unknown>)} />;
 	}
 
 	return (
-		<DataTableHeader {...(props as unknown as React.ComponentProps<typeof DataTableHeader>)} />
+		<DataTableHeader
+			columnId={props.column.id}
+			header={flexRender(props.column.columnDef.header, props.getContext())}
+			disableSort={!props.column.getCanSort()}
+			sortBy={props.sortBy}
+			sortDirection={props.sortDirection}
+			onSortingChange={props.onSortingChange}
+		/>
 	);
 };
 
