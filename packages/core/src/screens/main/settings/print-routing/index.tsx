@@ -44,7 +44,7 @@ export function PrintRoutingSettings() {
 				.$.pipe(map((docs) => (docs as PrinterProfileDocument[]).map(toPrinterProfile))),
 		[storeDB]
 	);
-	const printers = useObservableState(profiles$, []);
+	const printers = useObservableState<PrinterProfile[]>(profiles$, []);
 
 	// Subscribe to all overrides
 	const overrides$ = React.useMemo(
@@ -156,7 +156,7 @@ export function PrintRoutingSettings() {
 										}}
 									>
 										<SelectTrigger>
-											<SelectValue />
+											<SelectValue placeholder={t('settings.select_printer', 'Select printer…')} />
 										</SelectTrigger>
 										<SelectContent>
 											<SelectGroup>
