@@ -30,6 +30,14 @@ export const templatesLiteral = {
 			description: 'Rendering engine: logicless, thermal, or legacy-php.',
 			type: 'string',
 		},
+		output_type: {
+			description: 'Output format: html for browser rendering, escpos for thermal byte encoding.',
+			type: 'string',
+		},
+		paper_width: {
+			description: 'Physical paper width: 58mm, 80mm, or null for HTML/A4.',
+			type: ['string', 'null'],
+		},
 		content: {
 			description:
 				'Template content. HTML for logicless, XML for thermal. Present in view context for offline-capable templates.',
