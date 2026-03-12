@@ -25,6 +25,7 @@ export function toPrinterProfile(doc: PrinterProfileDocument): PrinterProfile {
 		autoCut: doc.autoCut ?? true,
 		autoOpenDrawer: doc.autoOpenDrawer ?? false,
 		isDefault: doc.isDefault ?? false,
+		isBuiltIn: doc.isBuiltIn ?? false,
 	};
 }
 

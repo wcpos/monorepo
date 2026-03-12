@@ -23,6 +23,7 @@ const epsonPrinter: PrinterProfile = {
 	autoCut: true,
 	autoOpenDrawer: false,
 	isDefault: true,
+	isBuiltIn: false,
 };
 
 const starPrinter58: PrinterProfile = {
@@ -38,6 +39,7 @@ const starPrinter58: PrinterProfile = {
 	autoCut: true,
 	autoOpenDrawer: false,
 	isDefault: false,
+	isBuiltIn: false,
 };
 
 const systemPrinter: PrinterProfile = {
@@ -52,6 +54,7 @@ const systemPrinter: PrinterProfile = {
 	autoCut: false,
 	autoOpenDrawer: false,
 	isDefault: false,
+	isBuiltIn: true,
 };
 
 const allPrinters = [epsonPrinter, starPrinter58, systemPrinter];

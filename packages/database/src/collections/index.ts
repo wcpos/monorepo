@@ -475,6 +475,13 @@ export type PrinterProfileDocument = RxDocument<PrinterProfileDocumentType>;
 export type PrinterProfileCollection = RxCollection<PrinterProfileDocumentType>;
 const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 	schema: printerProfileSchema,
+	migrationStrategies: {
+		1(oldDoc) {
+			// v1: Added isBuiltIn field for platform-provided printers
+			oldDoc.isBuiltIn = false;
+			return oldDoc;
+		},
+	},
 };
 
 /**

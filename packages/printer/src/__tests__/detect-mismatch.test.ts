@@ -21,6 +21,7 @@ const thermalPrinter: PrinterProfile = {
 	autoCut: true,
 	autoOpenDrawer: false,
 	isDefault: true,
+	isBuiltIn: false,
 };
 
 const systemPrinter: PrinterProfile = {
@@ -35,6 +36,7 @@ const systemPrinter: PrinterProfile = {
 	autoCut: false,
 	autoOpenDrawer: false,
 	isDefault: false,
+	isBuiltIn: true,
 };
 
 describe('detectMismatch', () => {

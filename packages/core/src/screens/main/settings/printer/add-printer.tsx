@@ -105,6 +105,7 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 			autoCut: data.autoCut,
 			autoOpenDrawer: data.autoOpenDrawer,
 			isDefault: data.isDefault,
+			isBuiltIn: false,
 		}),
 		[]
 	);
