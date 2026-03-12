@@ -113,7 +113,7 @@ export function PrintingSettings() {
 	const handleDelete = React.useCallback(
 		async (id: string) => {
 			const doc = await storeDB.collections.printer_profiles.findOne(id).exec();
-			if (doc) {
+			if (doc && !doc.isBuiltIn) {
 				await doc.remove();
 			}
 		},
@@ -245,7 +245,7 @@ export function PrintingSettings() {
 
 			{/* Printers section */}
 			<VStack className="gap-2">
-				<Text className="text-sm font-semibold">{t('settings.printer', 'Printers')}</Text>
+				<Text className="text-sm font-semibold">{t('settings.printers', 'Printers')}</Text>
 				<Table>
 					<TableHeader>
 						<TableRow>

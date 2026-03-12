@@ -1,6 +1,9 @@
 import * as React from 'react';
 
+import { getLogger } from '@wcpos/utils/logger';
 import type { StoreDatabase } from '@wcpos/database';
+
+const logger = getLogger(['wcpos', 'printing', 'system-printer']);
 
 const SYSTEM_PRINTER_ID = '__system__';
 
@@ -35,6 +38,11 @@ export function useEnsureSystemPrinter(storeDB: StoreDatabase) {
 						isBuiltIn: true,
 					});
 				}
+			})
+			.catch((err) => {
+				logger.error('Failed to ensure system printer', {
+					context: { error: err instanceof Error ? err.message : String(err) },
+				});
 			});
 	}, [storeDB]);
 }
