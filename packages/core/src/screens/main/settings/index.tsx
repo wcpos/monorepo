@@ -8,6 +8,7 @@ import { Text } from '@wcpos/components/text';
 
 import { BarcodeScanning } from './barcode-scanning';
 import { GeneralSettings } from './general';
+import { PrintRoutingSettings } from './print-routing';
 import { PrinterSettings } from './printer';
 import { ReceiptTemplateSettings } from './receipt-templates';
 import { KeyboardShortcuts } from './shortcuts';
@@ -43,6 +44,11 @@ export function SettingsScreen() {
 			value: 'printer',
 			label: t('settings.printer', 'Printer'),
 			component: <PrinterSettings />,
+		},
+		{
+			value: 'print-routing',
+			label: t('settings.print_routing', 'Print Routing'),
+			component: <PrintRoutingSettings />,
 		},
 		{
 			value: 'shortcuts',
