@@ -147,8 +147,8 @@ export function Receipt({ resource }: Props) {
 		if (!selectedTemplate) return null;
 		return {
 			id: String(selectedTemplate.id),
-			output_type: (selectedTemplate as any).output_type ?? 'html',
-			paper_width: (selectedTemplate as any).paper_width ?? null,
+			output_type: selectedTemplate.output_type ?? 'html',
+			paper_width: selectedTemplate.paper_width ?? null,
 		};
 	}, [selectedTemplate]);
 
