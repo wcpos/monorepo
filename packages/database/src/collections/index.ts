@@ -450,7 +450,15 @@ const templateSchema: RxJsonSchema<TemplateDocumentType> = templatesLiteral;
 type TemplateDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof templatesLiteral>;
 export type TemplateDocument = RxDocument<TemplateDocumentType>;
 export type TemplateCollection = RxCollection<TemplateDocumentType>;
-const templates: RxCollectionCreator<TemplateDocumentType> = { schema: templateSchema };
+const templates: RxCollectionCreator<TemplateDocumentType> = {
+	schema: templateSchema,
+	migrationStrategies: {
+		1(oldDoc) {
+			// v1: Added output_type and paper_width fields — populated on next sync
+			return oldDoc;
+		},
+	},
+};
 
 /**
  * Printer Profiles (local-only, not synced to server)

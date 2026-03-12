@@ -128,12 +128,12 @@ export function PrintRoutingSettings() {
 			{templates.map((tmpl) => {
 				const tmplId = String(tmpl.id);
 				const currentOverride = overrides.get(tmplId);
-				const currentValue = currentOverride ?? AUTO_VALUE;
 
 				const autoLabel = autoMatchLabel(tmpl);
 				const selectedPrinter = currentOverride
 					? printers.find((p) => p.id === currentOverride)
 					: null;
+				const currentValue = selectedPrinter ? currentOverride! : AUTO_VALUE;
 				const selectedLabel = selectedPrinter ? selectedPrinter.name : autoLabel;
 
 				return (

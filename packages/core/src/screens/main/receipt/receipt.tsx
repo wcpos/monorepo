@@ -153,14 +153,20 @@ export function Receipt({ resource }: Props) {
 	}, [selectedTemplate]);
 
 	// Resolve printer for this template
-	const { allPrinters, resolvedPrinter, manualPrinterId, setManualPrinterId, mismatchWarning } =
-		useResolvedPrinter({ template: templateInfo });
+	const {
+		allPrinters,
+		resolvedPrinter,
+		printerSelection,
+		setPrinterSelection,
+		mismatchWarning,
+		useSystemDialog,
+	} = useResolvedPrinter({ template: templateInfo });
 
 	const { print, isPrinting } = usePrint({
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || receiptURL,
-		printerProfile: resolvedPrinter ?? undefined,
+		printerProfile: useSystemDialog ? undefined : (resolvedPrinter ?? undefined),
 		templateEngine: selectedTemplateEngine ?? undefined,
 		templateXml:
 			selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
@@ -276,8 +282,9 @@ export function Receipt({ resource }: Props) {
 							/>
 							<PrinterSwitcher
 								printers={allPrinters}
-								selectedId={manualPrinterId ?? resolvedPrinter?.id ?? null}
-								onSelect={setManualPrinterId}
+								printerSelection={printerSelection}
+								resolvedPrinterId={resolvedPrinter?.id ?? null}
+								onSelect={setPrinterSelection}
 							/>
 							<MismatchBadge message={mismatchWarning} />
 							<WebView

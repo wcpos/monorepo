@@ -10,6 +10,11 @@ import type { PrinterProfileDocument, TemplatePrinterOverrideDocument } from '@w
 import { toPrinterProfile } from '../../settings/printer/use-default-printer-profile';
 import { useAppState } from '../../../../contexts/app-state';
 
+export type PrinterSelection =
+	| { type: 'auto' }
+	| { type: 'system' }
+	| { type: 'manual'; printerId: string };
+
 interface UseResolvedPrinterOptions {
 	template: TemplateInfo | null;
 }
@@ -17,16 +22,19 @@ interface UseResolvedPrinterOptions {
 interface UseResolvedPrinterResult {
 	allPrinters: PrinterProfile[];
 	resolvedPrinter: PrinterProfile | null;
-	manualPrinterId: string | null;
-	setManualPrinterId: (id: string | null) => void;
+	printerSelection: PrinterSelection;
+	setPrinterSelection: (selection: PrinterSelection) => void;
 	mismatchWarning: string | null;
+	useSystemDialog: boolean;
 }
 
 export function useResolvedPrinter({
 	template,
 }: UseResolvedPrinterOptions): UseResolvedPrinterResult {
 	const { storeDB } = useAppState();
-	const [manualPrinterId, setManualPrinterId] = React.useState<string | null>(null);
+	const [printerSelection, setPrinterSelection] = React.useState<PrinterSelection>({
+		type: 'auto',
+	});
 
 	// Subscribe to all printer profiles
 	const profiles$ = React.useMemo(
@@ -54,33 +62,47 @@ export function useResolvedPrinter({
 	);
 	const overrides = useObservableState(overrides$, new Map<string, string>());
 
-	// Reset manual selection when template changes
+	// Reset selection when template changes
 	React.useEffect(() => {
-		setManualPrinterId(null);
+		setPrinterSelection({ type: 'auto' });
 	}, [template?.id]);
 
-	// Resolve printer
+	// Resolve printer based on selection type
 	const resolvedPrinter = React.useMemo(() => {
 		if (!template) return null;
+
+		if (printerSelection.type === 'system') {
+			return null;
+		}
+
+		if (printerSelection.type === 'manual') {
+			return allPrinters.find((p) => p.id === printerSelection.printerId) ?? null;
+		}
+
+		// auto: use routing resolution
 		return resolvePrinter({
 			template,
 			overrides,
 			profiles: allPrinters,
-			manualPrinterId: manualPrinterId ?? undefined,
 		});
-	}, [template, overrides, allPrinters, manualPrinterId]);
+	}, [template, overrides, allPrinters, printerSelection]);
 
-	// Mismatch detection
+	// Whether to use system dialog (no printer profile)
+	const useSystemDialog = printerSelection.type === 'system';
+
+	// Mismatch detection (only relevant for auto/manual, not system dialog)
 	const mismatchWarning = React.useMemo(() => {
 		if (!template) return null;
+		if (printerSelection.type === 'system') return null;
 		return detectMismatch(template, resolvedPrinter);
-	}, [template, resolvedPrinter]);
+	}, [template, resolvedPrinter, printerSelection.type]);
 
 	return {
 		allPrinters,
 		resolvedPrinter,
-		manualPrinterId,
-		setManualPrinterId,
+		printerSelection,
+		setPrinterSelection,
 		mismatchWarning,
+		useSystemDialog,
 	};
 }

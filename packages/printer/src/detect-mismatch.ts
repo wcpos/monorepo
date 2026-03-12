@@ -1,10 +1,5 @@
 import type { PrinterProfile } from './types';
-
-interface TemplateInfo {
-	id: string | number;
-	output_type: string;
-	paper_width: string | null;
-}
+import type { TemplateInfo } from './resolve-printer';
 
 export function detectMismatch(
 	template: TemplateInfo,

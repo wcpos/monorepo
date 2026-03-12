@@ -11,19 +11,26 @@ import {
 import type { PrinterProfile } from '@wcpos/printer';
 
 import { useT } from '../../../contexts/translations';
+import type { PrinterSelection } from './hooks/use-resolved-printer';
 
 interface PrinterSwitcherProps {
 	printers: PrinterProfile[];
-	selectedId: string | null;
-	onSelect: (id: string | null) => void;
+	printerSelection: PrinterSelection;
+	resolvedPrinterId: string | null;
+	onSelect: (selection: PrinterSelection) => void;
 }
 
 /**
  * Dropdown for selecting which printer to send the current print job to.
- * Shows all configured printers plus a "System Dialog" fallback.
+ * Shows all configured printers plus "Auto (routed)" and "System Dialog" options.
  * Hidden when no printers are configured (system dialog is implicit).
  */
-export function PrinterSwitcher({ printers, selectedId, onSelect }: PrinterSwitcherProps) {
+export function PrinterSwitcher({
+	printers,
+	printerSelection,
+	resolvedPrinterId,
+	onSelect,
+}: PrinterSwitcherProps) {
 	const t = useT();
 
 	if (printers.length === 0) {
@@ -38,20 +45,45 @@ export function PrinterSwitcher({ printers, selectedId, onSelect }: PrinterSwitc
 		return `${printer.name}  —  ${addr}:${printer.port}`;
 	}
 
+	const AUTO_VALUE = '__auto__';
 	const SYSTEM_DIALOG_VALUE = '__system_dialog__';
 
-	const selectedPrinter = printers.find((p) => p.id === selectedId);
-	const selectedLabel = selectedPrinter
-		? buildLabel(selectedPrinter)
-		: t('receipt.system_dialog', 'System Dialog');
-	const selectedValue = selectedId ?? SYSTEM_DIALOG_VALUE;
+	// Determine current value and label
+	let selectedValue: string;
+	let selectedLabel: string;
+
+	if (printerSelection.type === 'system') {
+		selectedValue = SYSTEM_DIALOG_VALUE;
+		selectedLabel = t('receipt.system_dialog', 'System Dialog');
+	} else if (printerSelection.type === 'manual') {
+		const printer = printers.find((p) => p.id === printerSelection.printerId);
+		selectedValue = printer ? printerSelection.printerId : AUTO_VALUE;
+		selectedLabel = printer
+			? buildLabel(printer)
+			: `${t('common.auto', 'Auto')}`;
+	} else {
+		// auto
+		selectedValue = AUTO_VALUE;
+		const resolvedPrinter = resolvedPrinterId
+			? printers.find((p) => p.id === resolvedPrinterId)
+			: null;
+		selectedLabel = resolvedPrinter
+			? `${t('common.auto', 'Auto')}  —  ${resolvedPrinter.name}`
+			: `${t('common.auto', 'Auto')}  —  ${t('receipt.system_dialog', 'System Dialog')}`;
+	}
 
 	return (
 		<Select
 			value={{ value: selectedValue, label: selectedLabel }}
 			onValueChange={(option) => {
 				if (!option) return;
-				onSelect(option.value === SYSTEM_DIALOG_VALUE ? null : option.value);
+				if (option.value === AUTO_VALUE) {
+					onSelect({ type: 'auto' });
+				} else if (option.value === SYSTEM_DIALOG_VALUE) {
+					onSelect({ type: 'system' });
+				} else {
+					onSelect({ type: 'manual', printerId: option.value });
+				}
 			}}
 		>
 			<SelectTrigger>
@@ -59,6 +91,7 @@ export function PrinterSwitcher({ printers, selectedId, onSelect }: PrinterSwitc
 			</SelectTrigger>
 			<SelectContent>
 				<SelectGroup>
+					<SelectItem value={AUTO_VALUE} label={`${t('common.auto', 'Auto')}`} />
 					<SelectItem
 						value={SYSTEM_DIALOG_VALUE}
 						label={t('receipt.system_dialog', 'System Dialog')}
