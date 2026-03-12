@@ -1,6 +1,6 @@
 export const printerProfilesLiteral = {
 	title: 'Printer Profiles schema',
-	version: 0,
+	version: 1,
 	description: 'Local printer profiles for direct thermal printing',
 	type: 'object',
 	primaryKey: 'id',
@@ -61,6 +61,11 @@ export const printerProfilesLiteral = {
 		isDefault: {
 			type: 'boolean',
 			default: false,
+		},
+		isBuiltIn: {
+			type: 'boolean',
+			default: false,
+			description: 'True for platform-provided printers that cannot be deleted',
 		},
 	},
 	required: ['id', 'name', 'connectionType'],

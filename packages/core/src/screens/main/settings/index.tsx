@@ -8,9 +8,7 @@ import { Text } from '@wcpos/components/text';
 
 import { BarcodeScanning } from './barcode-scanning';
 import { GeneralSettings } from './general';
-import { PrintRoutingSettings } from './print-routing';
-import { PrinterSettings } from './printer';
-import { ReceiptTemplateSettings } from './receipt-templates';
+import { PrintingSettings } from './printing';
 import { KeyboardShortcuts } from './shortcuts';
 import { TaxSettings } from './tax';
 import { ThemeSettings } from './theme';
@@ -31,24 +29,14 @@ export function SettingsScreen() {
 		},
 		{ value: 'tax', label: t('settings.tax_settings'), component: <TaxSettings /> },
 		{
-			value: 'receipts',
-			label: t('receipt.receipt_templates', 'Receipt Templates'),
-			component: <ReceiptTemplateSettings />,
+			value: 'printing',
+			label: t('settings.printing', 'Printing'),
+			component: <PrintingSettings />,
 		},
 		{
 			value: 'barcode',
 			label: t('settings.barcode_scanning'),
 			component: <BarcodeScanning />,
-		},
-		{
-			value: 'printer',
-			label: t('settings.printer', 'Printer'),
-			component: <PrinterSettings />,
-		},
-		{
-			value: 'print-routing',
-			label: t('settings.print_routing', 'Print Routing'),
-			component: <PrintRoutingSettings />,
 		},
 		{
 			value: 'shortcuts',
