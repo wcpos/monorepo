@@ -330,6 +330,10 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 		3(oldDoc) {
 			return oldDoc;
 		},
+		// v4: Allow null coupon_lines code for WooCommerce deletion markers
+		4(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
