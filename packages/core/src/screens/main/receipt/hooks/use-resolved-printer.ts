@@ -44,7 +44,7 @@ export function useResolvedPrinter({
 				.$.pipe(map((docs) => (docs as PrinterProfileDocument[]).map(toPrinterProfile))),
 		[storeDB]
 	);
-	const allPrinters = useObservableState(profiles$, []);
+	const allPrinters = useObservableState<PrinterProfile[]>(profiles$, []);
 
 	// Subscribe to all overrides
 	const overrides$ = React.useMemo(

@@ -11,6 +11,7 @@ import {
 import type { PrinterProfile } from '@wcpos/printer';
 
 import { useT } from '../../../contexts/translations';
+
 import type { PrinterSelection } from './hooks/use-resolved-printer';
 
 interface PrinterSwitcherProps {
@@ -58,9 +59,7 @@ export function PrinterSwitcher({
 	} else if (printerSelection.type === 'manual') {
 		const printer = printers.find((p) => p.id === printerSelection.printerId);
 		selectedValue = printer ? printerSelection.printerId : AUTO_VALUE;
-		selectedLabel = printer
-			? buildLabel(printer)
-			: `${t('common.auto', 'Auto')}`;
+		selectedLabel = printer ? buildLabel(printer) : `${t('common.auto', 'Auto')}`;
 	} else {
 		// auto
 		selectedValue = AUTO_VALUE;
