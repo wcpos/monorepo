@@ -1,4 +1,7 @@
+import isEmpty from 'lodash/isEmpty';
 import round from 'lodash/round';
+
+import { calculateTaxes } from '../../hooks/utils/calculate-taxes';
 
 import type { PerItemDiscount } from './coupon-discount';
 
@@ -183,4 +186,61 @@ export function computeDiscountedLineItems<
 			taxes,
 		} as T;
 	});
+}
+
+/**
+ * Calculate the coupon_line discount and discount_tax split to match WooCommerce behavior.
+ *
+ * WooCommerce splits coupon discounts based on the prices_include_tax setting:
+ * - When prices include tax: the coupon amount is tax-inclusive, so the tax is
+ *   extracted from the discount (discount = net portion, discount_tax = tax portion).
+ * - When prices exclude tax: the coupon amount is tax-exclusive, so the tax is
+ *   calculated on top (discount = full amount, discount_tax = tax on the discount).
+ *
+ * Tax is calculated per-item using each line item's tax class, then summed.
+ */
+export function calculateCouponDiscountTaxSplit(
+	perItemDiscounts: PerItemDiscount[],
+	lineItems: { product_id?: number | null; tax_class?: string }[],
+	taxRates: { id: number; rate: string; compound: boolean; order: number; class?: string }[],
+	pricesIncludeTax: boolean
+): { discount: string; discount_tax: string } {
+	let totalDiscount = 0;
+	let totalDiscountTax = 0;
+
+	for (const entry of perItemDiscounts) {
+		if (entry.discount <= 0) continue;
+
+		const lineItem = lineItems.find((item) => item.product_id === entry.product_id);
+		const taxClass = isEmpty(lineItem?.tax_class) ? 'standard' : lineItem!.tax_class!;
+		const applicableRates = taxRates.filter((r) => r.class === taxClass);
+
+		if (applicableRates.length > 0) {
+			const taxResult = calculateTaxes({
+				amount: entry.discount,
+				rates: applicableRates as {
+					id: number;
+					rate: string;
+					compound: boolean;
+					order: number;
+				}[],
+				amountIncludesTax: pricesIncludeTax,
+			});
+
+			if (pricesIncludeTax) {
+				totalDiscountTax += taxResult.total;
+				totalDiscount += entry.discount - taxResult.total;
+			} else {
+				totalDiscount += entry.discount;
+				totalDiscountTax += taxResult.total;
+			}
+		} else {
+			totalDiscount += entry.discount;
+		}
+	}
+
+	return {
+		discount: String(round(totalDiscount, 6)),
+		discount_tax: String(round(totalDiscountTax, 6)),
+	};
 }

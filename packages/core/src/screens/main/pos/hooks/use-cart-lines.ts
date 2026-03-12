@@ -6,6 +6,7 @@ import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 import { calculateCouponDiscount } from './coupon-discount';
 import {
 	applyPerItemDiscountsToLineItems,
+	calculateCouponDiscountTaxSplit,
 	computeDiscountedLineItems,
 	isProductOnSale,
 } from './coupon-helpers';
@@ -14,6 +15,7 @@ import { useFeeLineData } from './use-fee-line-data';
 import { useUpdateFeeLine } from './use-update-fee-line';
 import { getUuidFromLineItem } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
+import { useTaxRates } from '../../contexts/tax-rates';
 import { useCollection } from '../../hooks/use-collection';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -39,6 +41,7 @@ export const useCartLines = () => {
 	const { collection: productCollection } = useCollection('products');
 	const { localPatch } = useLocalMutation();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
+	const { rates: taxRates, pricesIncludeTax } = useTaxRates();
 	const woocommerceSequential = useObservableEagerState(
 		(store as any).woocommerce_calc_discounts_sequentially$
 	);
@@ -172,8 +175,19 @@ export const useCartLines = () => {
 
 				// Only update discount amounts for local coupons; synced ones keep server values
 				if (!cl.id) {
-					const newDiscount = String(result.totalDiscount);
-					updatedCouponLines.push({ ...cl, discount: newDiscount, discount_tax: '0' });
+					const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
+						result.perItem,
+						activeLineItems,
+						taxRates as {
+							id: number;
+							rate: string;
+							compound: boolean;
+							order: number;
+							class?: string;
+						}[],
+						pricesIncludeTax
+					);
+					updatedCouponLines.push({ ...cl, discount, discount_tax });
 				}
 
 				if (calcDiscountsSequentially) {
