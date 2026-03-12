@@ -47,7 +47,9 @@ import { TemplateSwitcher } from './template-switcher';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
-import { useDefaultPrinterProfile } from '../settings/printer/use-default-printer-profile';
+import { useResolvedPrinter } from './hooks/use-resolved-printer';
+import { PrinterSwitcher } from './printer-switcher';
+import { MismatchBadge } from './mismatch-badge';
 
 import type { ReceiptMode } from './hooks/use-receipt-data';
 
@@ -139,14 +141,32 @@ export function Receipt({ resource }: Props) {
 		return appendModeParam(baseReceiptURL, selectedMode);
 	}, [baseReceiptURL, selectedMode]);
 
-	// Default printer profile for direct thermal printing (bypasses system dialog)
-	const defaultProfile = useDefaultPrinterProfile();
+	// Build template info for routing
+	const selectedTemplate = templates.find((t) => String(t.id) === String(selectedTemplateId));
+	const templateInfo = React.useMemo(() => {
+		if (!selectedTemplate) return null;
+		return {
+			id: String(selectedTemplate.id),
+			output_type: selectedTemplate.output_type ?? 'html',
+			paper_width: selectedTemplate.paper_width ?? null,
+		};
+	}, [selectedTemplate]);
+
+	// Resolve printer for this template
+	const {
+		allPrinters,
+		resolvedPrinter,
+		printerSelection,
+		setPrinterSelection,
+		mismatchWarning,
+		useSystemDialog,
+	} = useResolvedPrinter({ template: templateInfo });
 
 	const { print, isPrinting } = usePrint({
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || receiptURL,
-		printerProfile: defaultProfile,
+		printerProfile: useSystemDialog ? undefined : (resolvedPrinter ?? undefined),
 		templateEngine: selectedTemplateEngine ?? undefined,
 		templateXml:
 			selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
@@ -260,6 +280,13 @@ export function Receipt({ resource }: Props) {
 								onSelect={setSelectedTemplateId}
 								isOffline={isOffline}
 							/>
+							<PrinterSwitcher
+								printers={allPrinters}
+								printerSelection={printerSelection}
+								resolvedPrinterId={resolvedPrinter?.id ?? null}
+								onSelect={setPrinterSelection}
+							/>
+							<MismatchBadge message={mismatchWarning} />
 							<WebView
 								ref={iframeRef as never}
 								{...(renderedHtml != null

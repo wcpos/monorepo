@@ -1,6 +1,6 @@
 export const templatesLiteral = {
 	title: 'WCPOS Template schema',
-	version: 0,
+	version: 1,
 	description: 'POS receipt/report templates',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -29,6 +29,14 @@ export const templatesLiteral = {
 		engine: {
 			description: 'Rendering engine: logicless, thermal, or legacy-php.',
 			type: 'string',
+		},
+		output_type: {
+			description: 'Output format: html for browser rendering, escpos for thermal byte encoding.',
+			type: 'string',
+		},
+		paper_width: {
+			description: 'Physical paper width: 58mm, 80mm, or null for HTML/A4.',
+			type: ['string', 'null'],
 		},
 		content: {
 			description:

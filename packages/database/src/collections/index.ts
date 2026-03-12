@@ -20,6 +20,7 @@ import { usersLiteral } from './schemas/users';
 import { variationsLiteral } from './schemas/variations';
 import { wpCredentialsLiteral } from './schemas/wp-credientials';
 import { printerProfilesLiteral } from './schemas/printer-profiles';
+import { templatePrinterOverridesLiteral } from './schemas/template-printer-overrides';
 import { toSortableInteger } from './utils';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
@@ -449,7 +450,15 @@ const templateSchema: RxJsonSchema<TemplateDocumentType> = templatesLiteral;
 type TemplateDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof templatesLiteral>;
 export type TemplateDocument = RxDocument<TemplateDocumentType>;
 export type TemplateCollection = RxCollection<TemplateDocumentType>;
-const templates: RxCollectionCreator<TemplateDocumentType> = { schema: templateSchema };
+const templates: RxCollectionCreator<TemplateDocumentType> = {
+	schema: templateSchema,
+	migrationStrategies: {
+		1(oldDoc) {
+			// v1: Added output_type and paper_width fields — populated on next sync
+			return oldDoc;
+		},
+	},
+};
 
 /**
  * Printer Profiles (local-only, not synced to server)
@@ -462,6 +471,20 @@ export type PrinterProfileDocument = RxDocument<PrinterProfileDocumentType>;
 export type PrinterProfileCollection = RxCollection<PrinterProfileDocumentType>;
 const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 	schema: printerProfileSchema,
+};
+
+/**
+ * Template Printer Overrides (local-only, not synced to server)
+ */
+const templatePrinterOverrideSchema: RxJsonSchema<TemplatePrinterOverrideDocumentType> =
+	templatePrinterOverridesLiteral;
+type TemplatePrinterOverrideDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<
+	typeof templatePrinterOverridesLiteral
+>;
+export type TemplatePrinterOverrideDocument = RxDocument<TemplatePrinterOverrideDocumentType>;
+export type TemplatePrinterOverrideCollection = RxCollection<TemplatePrinterOverrideDocumentType>;
+const template_printer_overrides: RxCollectionCreator<TemplatePrinterOverrideDocumentType> = {
+	schema: templatePrinterOverrideSchema,
 };
 
 export type UserCollections = {
@@ -487,6 +510,7 @@ export type StoreCollections = {
 	notifications: NotificationCollection;
 	templates: TemplateCollection;
 	printer_profiles: PrinterProfileCollection;
+	template_printer_overrides: TemplatePrinterOverrideCollection;
 };
 
 export type SyncCollections = {
@@ -535,6 +559,7 @@ export const storeCollections = {
 	notifications,
 	templates,
 	printer_profiles,
+	template_printer_overrides,
 };
 
 // @NOTE: sync collection should have corresponding collections in storeCollections

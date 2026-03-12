@@ -57,4 +57,6 @@ export type {
 	WPCredentialsDocument,
 	PrinterProfileCollection,
 	PrinterProfileDocument,
+	TemplatePrinterOverrideCollection,
+	TemplatePrinterOverrideDocument,
 } from './collections';
