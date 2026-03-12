@@ -600,7 +600,7 @@ export const ordersLiteral = {
 					},
 					code: {
 						description: 'Coupon code.',
-						type: 'string',
+						type: ['string', 'null'],
 					},
 					discount: {
 						description: 'Discount total.',

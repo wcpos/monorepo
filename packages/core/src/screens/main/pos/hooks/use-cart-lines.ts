@@ -106,7 +106,9 @@ export const useCartLines = () => {
 		// Read fresh order state to avoid stale closure values during async replay
 		const freshOrder = currentOrder.getLatest();
 		const allCouponLines = freshOrder.coupon_lines || [];
-		const replayCouponLines = allCouponLines.filter((cl: any) => cl.code != null);
+		const replayCouponLines = allCouponLines.filter(
+			(cl: any): cl is any & { code: string } => cl.code != null
+		);
 		if (replayCouponLines.length > 0) {
 			// Reset all line items to pre-coupon totals so discounts are applied cleanly
 			const allLineItems = (freshOrder.line_items || []).map((item: any) => {
