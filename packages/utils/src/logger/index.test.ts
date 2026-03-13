@@ -159,7 +159,12 @@ describe('logger/index', () => {
 
 	describe('setDatabase', () => {
 		it('should accept a database collection', () => {
-			const mockCollection = { insert: jest.fn() };
+			const mockCollection = {
+				insert: jest.fn(),
+				find: jest.fn().mockReturnValue({
+					remove: jest.fn().mockResolvedValue([]),
+				}),
+			};
 			expect(() => setDatabase(mockCollection)).not.toThrow();
 		});
 	});

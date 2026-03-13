@@ -55,6 +55,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 // Global state
 let toastShow: ((config: any) => void) | null = null;
 let dbCollection: any | null = null;
+let hasPruned = false;
 
 // Log level severity (lower = more verbose)
 const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
@@ -116,12 +117,13 @@ export const setToast = (toastShowFunction: (config: any) => void) => {
 
 /**
  * Set Database collection - call when database is ready.
- * Prunes log entries older than 30 days on each initialization.
+ * Prunes log entries older than 30 days once on first initialization.
  */
 export const setDatabase = (collection: any) => {
 	dbCollection = collection;
 
-	if (collection) {
+	if (collection && !hasPruned) {
+		hasPruned = true;
 		const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
 		collection
 			.find({ selector: { timestamp: { $lt: thirtyDaysAgo } } })
@@ -131,7 +133,9 @@ export const setDatabase = (collection: any) => {
 					console.log(`Pruned ${removed.length} log entries older than 30 days`);
 				}
 			})
-			.catch(console.error);
+			.catch((error: unknown) => {
+				console.error('Failed to prune old log entries', error);
+			});
 	}
 };
 
