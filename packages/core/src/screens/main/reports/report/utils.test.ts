@@ -176,7 +176,7 @@ describe('calculateTotals', () => {
 				meta_data: [],
 				refunds: [{ id: 3, reason: '', total: '-10.00' }],
 			},
-		] as OrderDocument[];
+		] as unknown as OrderDocument[];
 
 		const result = calculateTotals({ orders: ordersWithRefunds });
 		expect(result.refundTotal).toBe(32); // 17 + 5 + 10
