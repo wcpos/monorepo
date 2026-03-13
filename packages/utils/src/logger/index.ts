@@ -115,10 +115,24 @@ export const setToast = (toastShowFunction: (config: any) => void) => {
 };
 
 /**
- * Set Database collection - call when database is ready
+ * Set Database collection - call when database is ready.
+ * Prunes log entries older than 30 days on each initialization.
  */
 export const setDatabase = (collection: any) => {
 	dbCollection = collection;
+
+	if (collection) {
+		const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+		collection
+			.find({ selector: { timestamp: { $lt: thirtyDaysAgo } } })
+			.remove()
+			.then((removed: any[]) => {
+				if (removed.length > 0) {
+					console.log(`Pruned ${removed.length} log entries older than 30 days`);
+				}
+			})
+			.catch(console.error);
+	}
 };
 
 /**
