@@ -175,7 +175,7 @@ export const useCartLines = () => {
 				const exTaxPerItem = convertDiscountsToExTax(
 					result.perItem,
 					activeLineItems,
-					couponData.discount_type,
+					couponData.discount_type || '',
 					pricesIncludeTax
 				);
 

@@ -172,7 +172,7 @@ export const useAddCoupon = () => {
 						const exTaxPerItem = convertDiscountsToExTax(
 							appliedResult.perItem,
 							lineItems,
-							appliedCouponData.discount_type,
+							appliedCouponData.discount_type || '',
 							pricesIncludeTax
 						);
 						discountItems = applyPerItemDiscountsToLineItems(discountItems, exTaxPerItem);
