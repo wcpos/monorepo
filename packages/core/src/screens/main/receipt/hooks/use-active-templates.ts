@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import type { TemplateDocument } from '@wcpos/database';
+import { useQuery } from '@wcpos/query';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useAppInfo } from '../../../../hooks/use-app-info';
@@ -12,6 +13,7 @@ import { useAppInfo } from '../../../../hooks/use-app-info';
 /**
  * Returns active receipt templates for the current store.
  *
+ * Triggers replication so templates sync from WP on first use.
  * Pro + store has active_templates: returns only those templates, in assigned sort order.
  * Otherwise: returns all published + virtual templates, sorted by menu_order.
  */
@@ -19,6 +21,16 @@ export function useActiveTemplates(): TemplateDocument[] {
 	const { store, storeDB } = useAppState();
 	const { license } = useAppInfo();
 	const isPro = !!license?.isPro;
+
+	// Trigger template replication from the server — greedy ensures all pages are fetched
+	useQuery({
+		queryKeys: ['templates'],
+		collectionName: 'templates',
+		greedy: true,
+		initialParams: {
+			selector: { type: 'receipt' },
+		},
+	});
 
 	// Read per-store template assignments (will be empty until store schema v5)
 	type TemplateAssignment = { template_id: string | number; sort_order: number };

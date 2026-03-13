@@ -5,6 +5,7 @@ import * as orders from './orders';
 import * as products from './products';
 import * as tags from './tags';
 import * as taxRates from './tax-rates';
+import * as templates from './templates';
 import * as variations from './variations';
 
 export const allHooks = {
@@ -15,5 +16,6 @@ export const allHooks = {
 	products,
 	'products/tags': tags,
 	taxes: taxRates,
+	templates,
 	variations,
 };
