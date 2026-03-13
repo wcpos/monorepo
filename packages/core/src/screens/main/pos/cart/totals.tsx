@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -13,6 +14,7 @@ import { Taxes } from './totals/taxes';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
 import { useTaxInclOrExcl } from '../../hooks/use-tax-incl-or-excl';
+import { useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
 import { useOrderTotals } from '../hooks/use-order-totals';
 import { useRemoveCoupon } from '../hooks/use-remove-coupon';
@@ -41,6 +43,9 @@ export function Totals() {
 	} = useOrderTotals();
 	const { coupon_lines } = useCartLines();
 	const { removeCoupon } = useRemoveCoupon();
+	const { currentOrder } = useCurrentOrder();
+	const refunds = useObservableEagerState(currentOrder.refunds$!);
+	const orderTotal = useObservableEagerState(currentOrder.total$!);
 
 	/**
 	 * Convert to numbers
@@ -82,6 +87,12 @@ export function Totals() {
 
 	const hasCoupons = coupon_lines.length > 0;
 	const hasTotals = hasSubtotal || hasSaleDiscount || hasCoupons || hasShipping || hasFee || hasTax;
+
+	const hasRefunds = refunds && refunds.length > 0;
+	const refundTotal = hasRefunds
+		? refunds.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0)
+		: 0;
+	const netPayment = parseFloat(orderTotal ?? '0') - refundTotal;
 
 	return (
 		<>
@@ -154,6 +165,25 @@ export function Totals() {
 							/>
 						</ErrorBoundary>
 					) : null}
+					{hasRefunds && (
+						<>
+							{refunds.map((refund) => {
+								const refundAmount = Math.abs(parseFloat(refund.total || '0'));
+								return (
+									<HStack key={refund.id}>
+										<Text className="text-destructive grow">
+											{t('orders.refund')} #{refund.id}:
+										</Text>
+										<Text className="text-destructive">{format(-refundAmount)}</Text>
+									</HStack>
+								);
+							})}
+							<HStack className="border-border border-t border-dashed pt-1">
+								<Text className="grow font-bold">{t('orders.net_payment')}:</Text>
+								<Text className="font-bold">{format(netPayment)}</Text>
+							</HStack>
+						</>
+					)}
 				</VStack>
 			) : null}
 			<CustomerNote />
