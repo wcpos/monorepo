@@ -8,6 +8,7 @@ import {
 	applyPerItemDiscountsToLineItems,
 	calculateCouponDiscountTaxSplit,
 	computeDiscountedLineItems,
+	convertDiscountsToExTax,
 	isProductOnSale,
 } from './coupon-helpers';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -148,21 +149,6 @@ export const useCartLines = () => {
 			const updatedCouponLines: any[] = [];
 			const allPerItemDiscounts: PerItemDiscount[][] = [];
 
-			// Build effective tax rates so sequential discount adjustments
-			// correctly convert tax-inclusive discounts to ex-tax amounts.
-			const effectiveTaxRates = new Map<number, number>();
-			if (pricesIncludeTax) {
-				for (const item of activeLineItems) {
-					const pid = (item as any).product_id;
-					if (pid == null || effectiveTaxRates.has(pid)) continue;
-					const sub = parseFloat((item as any).subtotal || '0');
-					const subTax = parseFloat((item as any).subtotal_tax || '0');
-					if (sub > 0) {
-						effectiveTaxRates.set(pid, subTax / sub);
-					}
-				}
-			}
-
 			for (const cl of replayCouponLines) {
 				const coupon = await couponCollection.findOne({ selector: { code: cl.code } }).exec();
 				if (!coupon) {
@@ -186,12 +172,19 @@ export const useCartLines = () => {
 					discountItems
 				);
 
-				allPerItemDiscounts.push(result.perItem);
+				const exTaxPerItem = convertDiscountsToExTax(
+					result.perItem,
+					activeLineItems,
+					couponData.discount_type,
+					pricesIncludeTax
+				);
+
+				allPerItemDiscounts.push(exTaxPerItem);
 
 				// Only update discount amounts for local coupons; synced ones keep server values
 				if (!cl.id) {
 					const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
-						result.perItem,
+						exTaxPerItem,
 						activeLineItems,
 						taxRates as {
 							id: number;
@@ -199,29 +192,19 @@ export const useCartLines = () => {
 							compound: boolean;
 							order: number;
 							class?: string;
-						}[],
-						pricesIncludeTax
+						}[]
 					);
 					updatedCouponLines.push({ ...cl, discount, discount_tax });
 				}
 
 				if (calcDiscountsSequentially) {
-					discountItems = applyPerItemDiscountsToLineItems(
-						discountItems,
-						result.perItem,
-						pricesIncludeTax,
-						effectiveTaxRates
-					);
+					discountItems = applyPerItemDiscountsToLineItems(discountItems, exTaxPerItem);
 				}
 			}
 
 			// Always apply discounts to line items (even if coupon amounts haven't changed,
 			// the line items may have been reset by a quantity/price change)
-			const discountedLineItems = computeDiscountedLineItems(
-				allLineItems,
-				allPerItemDiscounts,
-				pricesIncludeTax
-			);
+			const discountedLineItems = computeDiscountedLineItems(allLineItems, allPerItemDiscounts);
 
 			// Merge updated local coupons back into full list to preserve synced coupons
 			const updatedByCode = new Map(updatedCouponLines.map((cl: any) => [cl.code, cl]));
