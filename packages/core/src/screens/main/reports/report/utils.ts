@@ -19,10 +19,16 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 	let totalTax = 0;
 	let totalItemsSold = 0;
 	let averageOrderValue = 0;
+	let refundTotal = 0;
 
 	orders.forEach((order) => {
 		// Total
 		total += toNumber(order.total || '0');
+
+		// Refund total (refund totals are negative strings, e.g. "-17.00")
+		(order.refunds || []).forEach((refund) => {
+			refundTotal += Math.abs(toNumber(refund.total || 0));
+		});
 
 		// Discount total
 		discountTotal += toNumber(order.discount_total || 0);
@@ -153,6 +159,7 @@ export const calculateTotals = ({ orders, num_decimals = 2 }: CalculateTotalsPro
 
 	return {
 		total,
+		refundTotal,
 		paymentMethodsArray,
 		taxTotalsArray,
 		totalTax,

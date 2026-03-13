@@ -49,6 +49,7 @@ export function Report() {
 	 */
 	const {
 		total,
+		refundTotal,
 		paymentMethodsArray,
 		taxTotalsArray,
 		totalTax,
@@ -108,6 +109,7 @@ export function Report() {
 			totalTax: formatCurrency(totalTax),
 			netSales: formatCurrency(total - totalTax),
 			discountTotal: formatCurrency(discountTotal),
+			refundTotal: refundTotal > 0 ? formatCurrency(-refundTotal) : '',
 			paymentMethodsArray: paymentMethodsArray.map((pm) => ({
 				...pm,
 				total: formatCurrency(pm.total),
@@ -137,6 +139,7 @@ export function Report() {
 				totalTaxCollected: t('reports.total_tax_collected'),
 				totalSales: t('reports.total_sales'),
 				totalDiscounts: t('reports.total_discounts'),
+				totalRefunds: t('reports.total_refunds', { _default: 'Total Refunds' }),
 				paymentMethods: t('reports.payment_methods'),
 				unpaid: t('reports.unpaid'),
 				unknown: t('common.unknown'),
@@ -162,6 +165,7 @@ export function Report() {
 		total,
 		totalTax,
 		discountTotal,
+		refundTotal,
 		paymentMethodsArray,
 		taxTotalsArray,
 		shippingTotalsArray,

@@ -12,6 +12,7 @@ const makeData = (overrides = {}) => ({
 	totalTax: '$100.00',
 	netSales: '$900.00',
 	discountTotal: '$50.00',
+	refundTotal: '',
 	paymentMethodsArray: [
 		{ payment_method: 'cash', payment_method_title: 'Cash', total: '$500.00' },
 		{ payment_method: 'card', payment_method_title: 'Card', total: '$500.00' },
@@ -32,6 +33,7 @@ const makeData = (overrides = {}) => ({
 		totalTaxCollected: 'Tax Collected',
 		totalSales: 'Total Sales',
 		totalDiscounts: 'Discounts',
+		totalRefunds: 'Total Refunds',
 		paymentMethods: 'Payment Methods',
 		unpaid: 'Unpaid',
 		unknown: 'Unknown',
@@ -125,6 +127,18 @@ describe('generateZReportHTML', () => {
 		expect(html).toContain('Cashier/Store Totals');
 		expect(html).toContain('Cashier ID: 42');
 		expect(html).toContain('Cashier ID: 43');
+	});
+
+	it('should not include refund row when refundTotal is empty', () => {
+		const html = generateZReportHTML(makeData());
+		expect(html).not.toContain('Total Refunds:');
+	});
+
+	it('should include refund row when refundTotal is present', () => {
+		const data = makeData({ refundTotal: '-$25.00' });
+		const html = generateZReportHTML(data);
+		expect(html).toContain('Total Refunds:');
+		expect(html).toContain('-$25.00');
 	});
 
 	it('should include additional info section', () => {

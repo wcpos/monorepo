@@ -254,10 +254,12 @@ function ToolTip({
 	const taxHeight = chartBounds.bottom - taxY;
 	const y = totalY - taxHeight;
 
+	const tooltipHeight = point.refund_total > 0 ? 106 : TOOLTIP_HEIGHT;
+
 	// Calculate tooltip position to keep it on screen
 	const spaceAbove = y - chartBounds.top;
-	const tooltipAbove = spaceAbove >= TOOLTIP_HEIGHT + TOOLTIP_MARGIN;
-	const tooltipY = tooltipAbove ? y - TOOLTIP_HEIGHT - TOOLTIP_MARGIN : y + TOOLTIP_MARGIN;
+	const tooltipAbove = spaceAbove >= tooltipHeight + TOOLTIP_MARGIN;
+	const tooltipY = tooltipAbove ? y - tooltipHeight - TOOLTIP_MARGIN : y + TOOLTIP_MARGIN;
 
 	// Horizontal position - centered on x, but constrained to chart bounds
 	let tooltipX = x - TOOLTIP_WIDTH / 2;
@@ -280,7 +282,7 @@ function ToolTip({
 				x={tooltipX}
 				y={tooltipY}
 				width={TOOLTIP_WIDTH}
-				height={TOOLTIP_HEIGHT}
+				height={tooltipHeight}
 				r={8}
 				color={bgColor}
 			/>
@@ -308,10 +310,20 @@ function ToolTip({
 				font={font}
 				color={textColor}
 			/>
+			{/* Refunds (only shown when > 0) */}
+			{point.refund_total > 0 && (
+				<Text
+					x={tooltipX + TOOLTIP_PADDING}
+					y={tooltipY + TOOLTIP_PADDING + 66}
+					text={`Refunds: -${formatCurrency(point.refund_total)}`}
+					font={font}
+					color={textColor}
+				/>
+			)}
 			{/* Order count */}
 			<Text
 				x={tooltipX + TOOLTIP_PADDING}
-				y={tooltipY + TOOLTIP_PADDING + 66}
+				y={tooltipY + TOOLTIP_PADDING + (point.refund_total > 0 ? 84 : 66)}
 				text={`Orders: ${point.order_count}`}
 				font={font}
 				color={textColor}

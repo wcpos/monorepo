@@ -144,4 +144,46 @@ describe('calculateTotals', () => {
 			totalAmount: 200,
 		});
 	});
+
+	it('calculates refund total from orders with refunds', () => {
+		const ordersWithRefunds = [
+			{
+				total: '100',
+				total_tax: '10',
+				discount_total: '0',
+				payment_method: 'pos_cash',
+				payment_method_title: 'Cash',
+				needs_payment: false,
+				line_items: [{ quantity: 1 }],
+				tax_lines: [],
+				shipping_lines: [],
+				meta_data: [],
+				refunds: [
+					{ id: 1, reason: 'Damaged', total: '-17.00' },
+					{ id: 2, reason: '', total: '-5.00' },
+				],
+			},
+			{
+				total: '50',
+				total_tax: '5',
+				discount_total: '0',
+				payment_method: 'pos_cash',
+				payment_method_title: 'Cash',
+				needs_payment: false,
+				line_items: [{ quantity: 1 }],
+				tax_lines: [],
+				shipping_lines: [],
+				meta_data: [],
+				refunds: [{ id: 3, reason: '', total: '-10.00' }],
+			},
+		] as unknown as OrderDocument[];
+
+		const result = calculateTotals({ orders: ordersWithRefunds });
+		expect(result.refundTotal).toBe(32); // 17 + 5 + 10
+	});
+
+	it('returns zero refundTotal when no refunds exist', () => {
+		const result = calculateTotals({ orders: mockOrders });
+		expect(result.refundTotal).toBe(0);
+	});
 });

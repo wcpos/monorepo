@@ -34,6 +34,7 @@ export interface AggregatedDataPoint {
 	total_tax: number; // Tax portion
 	subtotal: number; // Total minus tax (for stacked bar display)
 	order_count: number;
+	refund_total: number;
 	dateObj: Date;
 }
 
@@ -263,6 +264,7 @@ export const aggregateData = (
 			total_tax: 0,
 			subtotal: 0,
 			order_count: 0,
+			refund_total: 0,
 			dateObj: date,
 		};
 	});
@@ -292,6 +294,11 @@ export const aggregateData = (
 			dataMap[key].total_tax += orderTax;
 			dataMap[key].subtotal += orderTotal - orderTax;
 			dataMap[key].order_count += 1;
+			const orderRefunds = (order.refunds || []).reduce(
+				(sum, r) => sum + Math.abs(parseFloat(r.total || '0')),
+				0
+			);
+			dataMap[key].refund_total += orderRefunds;
 		}
 	});
 

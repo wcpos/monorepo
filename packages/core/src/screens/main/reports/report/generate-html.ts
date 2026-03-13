@@ -13,6 +13,7 @@ interface ReportData {
 	totalTax: string;
 	netSales: string;
 	discountTotal: string;
+	refundTotal: string;
 	paymentMethodsArray: {
 		payment_method: string;
 		payment_method_title: string;
@@ -47,6 +48,7 @@ interface ReportData {
 		totalTaxCollected: string;
 		totalSales: string;
 		totalDiscounts: string;
+		totalRefunds: string;
 		paymentMethods: string;
 		unpaid: string;
 		unknown: string;
@@ -126,6 +128,7 @@ export function generateZReportHTML(data: ReportData): string {
 		totalTax,
 		netSales,
 		discountTotal,
+		refundTotal,
 		paymentMethodsArray,
 		taxTotalsArray,
 		shippingTotalsArray,
@@ -216,6 +219,7 @@ export function generateZReportHTML(data: ReportData): string {
 			${row('Total Net Sales:', netSales)}
 			${row('Total Tax Collected:', totalTax)}
 			${row('Total Sales:', total, true)}
+			${refundTotal.length > 0 ? row(`${t.totalRefunds}:`, refundTotal) : ''}
 			${row('Total Discounts:', discountTotal)}
 			<div class="br"></div>
 

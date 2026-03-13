@@ -27,6 +27,7 @@ export function ZReport() {
 	const { selectedOrders, query } = useReports();
 	const {
 		total,
+		refundTotal,
 		paymentMethodsArray,
 		taxTotalsArray,
 		totalTax,
@@ -121,6 +122,12 @@ export function ZReport() {
 					{formatCurrency(total)}
 				</Text>
 			</Row>
+			{refundTotal > 0 && (
+				<Row>
+					<Text>Total Refunds:</Text>
+					<Text align="right">{formatCurrency(-refundTotal)}</Text>
+				</Row>
+			)}
 			<Row>
 				<Text>Total Discounts:</Text>
 				<Text align="right">{formatCurrency(discountTotal)}</Text>
