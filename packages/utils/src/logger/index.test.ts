@@ -169,11 +169,17 @@ describe('logger/index', () => {
 		});
 
 		it('should prune log entries older than 30 days on init', async () => {
+			// Use isolateModules to get a fresh module where hasPruned is false
 			const mockRemove = jest.fn().mockResolvedValue([{ id: '1' }, { id: '2' }]);
 			const mockFind = jest.fn().mockReturnValue({ remove: mockRemove });
 			const mockCollection = { insert: jest.fn(), find: mockFind };
 
-			setDatabase(mockCollection);
+			let freshSetDatabase: typeof setDatabase;
+			jest.isolateModules(() => {
+				freshSetDatabase = require('./index').setDatabase;
+			});
+
+			freshSetDatabase!(mockCollection);
 
 			// Let the microtask (find().remove().then()) settle
 			await Promise.resolve();
