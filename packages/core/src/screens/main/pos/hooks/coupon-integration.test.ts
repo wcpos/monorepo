@@ -263,7 +263,7 @@ describe('coupon integration: real order scenarios', () => {
 			true
 		);
 
-		// 50% of 20 ex-tax = 10 discount. With tax extraction: 10/1.1 = 9.0909 ex-tax
+		// 50% of 20 ex-tax = 10 discount. Percent discounts are already ex-tax (no conversion needed).
 		const newTotal = parseFloat(discountedLineItems[0].total);
 		const newTax = parseFloat(discountedLineItems[0].total_tax);
 
