@@ -46,7 +46,7 @@ export function PrintingSettings() {
 	const t = useT();
 	const { storeDB } = useAppState();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
-	const [testingPrinterId, setTestingPrinterId] = React.useState<string | null>(null);
+	const [testingPrinterIds, setTestingPrinterIds] = React.useState<Set<string>>(new Set());
 	const printerService = React.useMemo(() => new PrinterService(), []);
 	const templates = useActiveTemplates();
 
@@ -138,7 +138,7 @@ export function PrintingSettings() {
 
 	const handleTestPrint = React.useCallback(
 		async (profile: PrinterProfile) => {
-			setTestingPrinterId(profile.id);
+			setTestingPrinterIds((prev) => new Set(prev).add(profile.id));
 			try {
 				await printerService.testPrint(profile);
 				Toast.show({
@@ -152,7 +152,11 @@ export function PrintingSettings() {
 					type: 'error',
 				});
 			} finally {
-				setTestingPrinterId(null);
+				setTestingPrinterIds((prev) => {
+					const next = new Set(prev);
+					next.delete(profile.id);
+					return next;
+				});
 			}
 		},
 		[printerService, t]
@@ -296,7 +300,7 @@ export function PrintingSettings() {
 										<Button
 											variant="outline"
 											size="sm"
-											loading={testingPrinterId === profile.id}
+											loading={testingPrinterIds.has(profile.id)}
 											onPress={() => handleTestPrint(profile)}
 										>
 											<Text>{t('settings.test_print', 'Test')}</Text>
