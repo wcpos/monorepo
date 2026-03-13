@@ -11,6 +11,7 @@ import {
 	applyPerItemDiscountsToLineItems,
 	calculateCouponDiscountTaxSplit,
 	computeDiscountedLineItems,
+	convertDiscountsToExTax,
 	isProductOnSale,
 } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
@@ -168,13 +169,26 @@ export const useAddCoupon = () => {
 							discountItems
 						);
 
-						discountItems = applyPerItemDiscountsToLineItems(discountItems, appliedResult.perItem);
+						const exTaxPerItem = convertDiscountsToExTax(
+							appliedResult.perItem,
+							lineItems,
+							appliedCouponData.discount_type || '',
+							pricesIncludeTax
+						);
+						discountItems = applyPerItemDiscountsToLineItems(discountItems, exTaxPerItem);
 					}
 				}
 
 				const discountResult = calculateCouponDiscount(couponConfig, discountItems);
 
-				// 6. Apply discount to line items and add coupon line
+				// 6. Normalize discounts to ex-tax, then apply to line items and coupon line
+				const exTaxPerItem = convertDiscountsToExTax(
+					discountResult.perItem,
+					lineItems,
+					couponConfig.discount_type,
+					pricesIncludeTax
+				);
+
 				const latestOrder = currentOrder.getLatest();
 
 				// Bail if cart changed during async coupon lookups to avoid stale writes
@@ -188,10 +202,10 @@ export const useAddCoupon = () => {
 				}
 
 				const discountedLineItems = computeDiscountedLineItems(latestOrder.line_items || [], [
-					discountResult.perItem,
+					exTaxPerItem,
 				]);
 				const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
-					discountResult.perItem,
+					exTaxPerItem,
 					lineItems,
 					taxRates as {
 						id: number;
@@ -199,8 +213,7 @@ export const useAddCoupon = () => {
 						compound: boolean;
 						order: number;
 						class?: string;
-					}[],
-					pricesIncludeTax
+					}[]
 				);
 				const patchResult = await localPatch({
 					document: latestOrder,

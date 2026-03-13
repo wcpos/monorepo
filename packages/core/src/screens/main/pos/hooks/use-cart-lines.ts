@@ -8,6 +8,7 @@ import {
 	applyPerItemDiscountsToLineItems,
 	calculateCouponDiscountTaxSplit,
 	computeDiscountedLineItems,
+	convertDiscountsToExTax,
 	isProductOnSale,
 } from './coupon-helpers';
 import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
@@ -171,12 +172,19 @@ export const useCartLines = () => {
 					discountItems
 				);
 
-				allPerItemDiscounts.push(result.perItem);
+				const exTaxPerItem = convertDiscountsToExTax(
+					result.perItem,
+					activeLineItems,
+					couponData.discount_type || '',
+					pricesIncludeTax
+				);
+
+				allPerItemDiscounts.push(exTaxPerItem);
 
 				// Only update discount amounts for local coupons; synced ones keep server values
 				if (!cl.id) {
 					const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
-						result.perItem,
+						exTaxPerItem,
 						activeLineItems,
 						taxRates as {
 							id: number;
@@ -184,14 +192,13 @@ export const useCartLines = () => {
 							compound: boolean;
 							order: number;
 							class?: string;
-						}[],
-						pricesIncludeTax
+						}[]
 					);
 					updatedCouponLines.push({ ...cl, discount, discount_tax });
 				}
 
 				if (calcDiscountsSequentially) {
-					discountItems = applyPerItemDiscountsToLineItems(discountItems, result.perItem);
+					discountItems = applyPerItemDiscountsToLineItems(discountItems, exTaxPerItem);
 				}
 			}
 

@@ -7,7 +7,9 @@
  * checks. It decides which cart line items a coupon can actually apply to.
  */
 import {
+	applyPerItemDiscountsToLineItems,
 	computeDiscountedLineItems,
+	convertDiscountsToExTax,
 	type CouponLineItem,
 	type CouponRestrictions,
 	getEligibleItems,
@@ -531,5 +533,98 @@ describe('computeDiscountedLineItems', () => {
 		// 50% discount → taxes halved
 		expect(parseFloat(result[0].taxes![0].total!)).toBeCloseTo(5, 4);
 		expect(parseFloat(result[0].taxes![1].total!)).toBeCloseTo(2.5, 4);
+	});
+});
+
+describe('applyPerItemDiscountsToLineItems', () => {
+	it('subtracts discount from matching item price', () => {
+		const items: CouponLineItem[] = [
+			createItem({ product_id: 1, quantity: 2, price: 10, subtotal: '20', total: '20' }),
+		];
+		const result = applyPerItemDiscountsToLineItems(items, [{ product_id: 1, discount: 6 }]);
+		// 6 discount spread over 2 units -> price reduced by 3 per unit
+		expect(result[0].price).toBeCloseTo(7, 4);
+	});
+
+	it('subtracts discount directly from price (ex-tax discounts)', () => {
+		const items: CouponLineItem[] = [
+			createItem({
+				product_id: 1,
+				quantity: 1,
+				price: 16.363636,
+				subtotal: '16.363636',
+				total: '16.363636',
+			}),
+		];
+		const result = applyPerItemDiscountsToLineItems(items, [{ product_id: 1, discount: 3 }]);
+		// discount applied directly: 16.363636 - 3 = 13.363636
+		expect(result[0].price).toBeCloseTo(13.363636, 4);
+	});
+});
+
+describe('convertDiscountsToExTax', () => {
+	it('converts fixed_cart discount from inc-tax to ex-tax', () => {
+		// $3 inc 10% tax → ex-tax = 3 / 1.10 = 2.727273
+		const perItem = [{ product_id: 1, discount: 3 }];
+		const lineItems = [{ product_id: 1, subtotal: '16.363636', subtotal_tax: '1.636364' }];
+
+		const result = convertDiscountsToExTax(perItem, lineItems, 'fixed_cart', true);
+
+		expect(result[0].discount).toBeCloseTo(2.727273, 4);
+	});
+
+	it('converts fixed_product discount from inc-tax to ex-tax', () => {
+		const perItem = [{ product_id: 1, discount: 5 }];
+		const lineItems = [{ product_id: 1, subtotal: '20', subtotal_tax: '2' }];
+
+		const result = convertDiscountsToExTax(perItem, lineItems, 'fixed_product', true);
+
+		// 5 / 1.10 = 4.545455
+		expect(result[0].discount).toBeCloseTo(4.545455, 4);
+	});
+
+	it('does NOT convert percent discounts (already ex-tax)', () => {
+		const perItem = [{ product_id: 1, discount: 10 }];
+		const lineItems = [{ product_id: 1, subtotal: '20', subtotal_tax: '2' }];
+
+		const result = convertDiscountsToExTax(perItem, lineItems, 'percent', true);
+
+		// Should be unchanged
+		expect(result[0].discount).toBe(10);
+	});
+
+	it('returns discounts unchanged when pricesIncludeTax is false', () => {
+		const perItem = [{ product_id: 1, discount: 3 }];
+		const lineItems = [{ product_id: 1, subtotal: '16.363636', subtotal_tax: '1.636364' }];
+
+		const result = convertDiscountsToExTax(perItem, lineItems, 'fixed_cart', false);
+
+		expect(result[0].discount).toBe(3);
+	});
+
+	it('handles zero-tax items (no conversion needed)', () => {
+		const perItem = [{ product_id: 1, discount: 5 }];
+		const lineItems = [{ product_id: 1, subtotal: '20', subtotal_tax: '0' }];
+
+		const result = convertDiscountsToExTax(perItem, lineItems, 'fixed_cart', true);
+
+		// No tax rate → discount unchanged
+		expect(result[0].discount).toBe(5);
+	});
+
+	it('handles multiple items with different tax rates', () => {
+		const perItem = [
+			{ product_id: 1, discount: 5 },
+			{ product_id: 2, discount: 3 },
+		];
+		const lineItems = [
+			{ product_id: 1, subtotal: '20', subtotal_tax: '2' }, // 10% tax
+			{ product_id: 2, subtotal: '10', subtotal_tax: '1.5' }, // 15% tax
+		];
+
+		const result = convertDiscountsToExTax(perItem, lineItems, 'fixed_cart', true);
+
+		expect(result[0].discount).toBeCloseTo(4.545455, 4); // 5 / 1.10
+		expect(result[1].discount).toBeCloseTo(2.608696, 4); // 3 / 1.15
 	});
 });

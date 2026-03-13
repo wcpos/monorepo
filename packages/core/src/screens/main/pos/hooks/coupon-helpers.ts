@@ -87,8 +87,38 @@ export function getEligibleItems(
 }
 
 /**
+ * Convert tax-inclusive per-item discounts to ex-tax amounts.
+ *
+ * Percent coupon discounts are already ex-tax (calculated from ex-tax prices),
+ * so only fixed_cart and fixed_product discounts need conversion.
+ *
+ * Each item's discount is divided by (1 + effective_tax_rate), where the rate
+ * is derived from the order line item's subtotal_tax / subtotal.
+ */
+export function convertDiscountsToExTax(
+	perItem: PerItemDiscount[],
+	lineItems: { product_id?: number | null; subtotal?: string; subtotal_tax?: string }[],
+	discountType: string,
+	pricesIncludeTax: boolean
+): PerItemDiscount[] {
+	if (!pricesIncludeTax || discountType === 'percent') return perItem;
+
+	return perItem.map((entry) => {
+		if (entry.discount <= 0) return entry;
+		const li = lineItems.find((item) => item.product_id === entry.product_id);
+		const subtotal = parseFloat(li?.subtotal || '0');
+		const subtotalTax = parseFloat(li?.subtotal_tax || '0');
+		const rate = subtotal > 0 ? subtotalTax / subtotal : 0;
+		if (rate <= 0) return entry;
+		return { ...entry, discount: round(entry.discount / (1 + rate), 6) };
+	});
+}
+
+/**
  * Adjusts line item prices by subtracting per-item discounts from a prior coupon.
  * Used in sequential discount mode so the next coupon sees reduced prices.
+ *
+ * Discounts must be ex-tax (use convertDiscountsToExTax first when pricesIncludeTax).
  */
 export function applyPerItemDiscountsToLineItems(
 	items: CouponLineItem[],
@@ -97,20 +127,21 @@ export function applyPerItemDiscountsToLineItems(
 	const nextItems = items.map((item) => ({ ...item }));
 
 	for (const entry of perItem) {
-		let remaining = entry.discount;
+		const remaining = entry.discount;
 		if (remaining <= 0) continue;
 
+		let left = remaining;
 		for (const item of nextItems) {
 			if (item.product_id !== entry.product_id || item.quantity <= 0) continue;
 
 			const lineTotal = item.price * item.quantity;
 			if (lineTotal <= 0) continue;
 
-			const lineDiscount = Math.min(lineTotal, remaining);
+			const lineDiscount = Math.min(lineTotal, left);
 			item.price = Math.max(0, item.price - lineDiscount / item.quantity);
-			remaining -= lineDiscount;
+			left -= lineDiscount;
 
-			if (remaining <= 0) break;
+			if (left <= 0) break;
 		}
 	}
 
@@ -122,10 +153,8 @@ export function applyPerItemDiscountsToLineItems(
  * Reduces each line item's total, total_tax, and per-rate taxes
  * while keeping subtotal/subtotal_tax unchanged.
  *
+ * Discounts must be ex-tax (use convertDiscountsToExTax first when pricesIncludeTax).
  * Line items should have pre-coupon totals before calling this.
- * For incremental application (adding one more coupon), pass only
- * the new coupon's perItem array — the function subtracts from
- * the current total.
  */
 export function computeDiscountedLineItems<
 	T extends {
@@ -189,21 +218,15 @@ export function computeDiscountedLineItems<
 }
 
 /**
- * Calculate the coupon_line discount and discount_tax split to match WooCommerce behavior.
+ * Calculate the coupon_line discount and discount_tax split.
  *
- * WooCommerce splits coupon discounts based on the prices_include_tax setting:
- * - When prices include tax: the coupon amount is tax-inclusive, so the tax is
- *   extracted from the discount (discount = net portion, discount_tax = tax portion).
- * - When prices exclude tax: the coupon amount is tax-exclusive, so the tax is
- *   calculated on top (discount = full amount, discount_tax = tax on the discount).
- *
+ * Expects ex-tax discount amounts (use convertDiscountsToExTax first).
  * Tax is calculated per-item using each line item's tax class, then summed.
  */
 export function calculateCouponDiscountTaxSplit(
 	perItemDiscounts: PerItemDiscount[],
 	lineItems: { product_id?: number | null; tax_class?: string }[],
-	taxRates: { id: number; rate: string; compound: boolean; order: number; class?: string }[],
-	pricesIncludeTax: boolean
+	taxRates: { id: number; rate: string; compound: boolean; order: number; class?: string }[]
 ): { discount: string; discount_tax: string } {
 	let totalDiscount = 0;
 	let totalDiscountTax = 0;
@@ -224,16 +247,11 @@ export function calculateCouponDiscountTaxSplit(
 					compound: boolean;
 					order: number;
 				}[],
-				amountIncludesTax: pricesIncludeTax,
+				amountIncludesTax: false,
 			});
 
-			if (pricesIncludeTax) {
-				totalDiscountTax += taxResult.total;
-				totalDiscount += entry.discount - taxResult.total;
-			} else {
-				totalDiscount += entry.discount;
-				totalDiscountTax += taxResult.total;
-			}
+			totalDiscount += entry.discount;
+			totalDiscountTax += taxResult.total;
 		} else {
 			totalDiscount += entry.discount;
 		}

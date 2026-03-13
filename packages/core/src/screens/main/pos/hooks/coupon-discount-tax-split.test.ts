@@ -1,12 +1,11 @@
 /**
  * @jest-environment node
  *
- * Tests for calculateCouponDiscountTaxSplit — the function that splits a coupon's
- * discount into tax-exclusive discount and discount_tax to match WooCommerce behavior.
+ * Tests for calculateCouponDiscountTaxSplit -- the function that splits a coupon's
+ * ex-tax discount into discount and discount_tax amounts.
  *
- * WooCommerce behavior:
- * - prices_include_tax = true:  coupon amount is tax-inclusive, tax is extracted
- * - prices_include_tax = false: coupon amount is tax-exclusive, tax is calculated on top
+ * The function always receives ex-tax discount amounts. When prices include tax,
+ * the caller is responsible for converting to ex-tax first via convertDiscountsToExTax.
  */
 import { calculateCouponDiscountTaxSplit } from './coupon-helpers';
 
@@ -40,84 +39,75 @@ const compoundRate10 = {
 };
 
 describe('calculateCouponDiscountTaxSplit', () => {
-	describe('prices include tax (tax-inclusive)', () => {
-		it('splits a fixed_product discount for a single item at 10%', () => {
-			// Coupon: $1 off per item, 1 item, 10% tax
-			// WC expects: discount = 1/1.1 = 0.909090..., discount_tax = 1 - 0.909090... = 0.090909...
-			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 1 }];
+	describe('ex-tax discounts (prices include tax, already converted)', () => {
+		it('calculates tax on an ex-tax discount for a single item at 10%', () => {
+			// Original tax-inclusive discount was $1, converted to ex-tax: $1/1.1 = $0.909091
+			// Tax on $0.909091 at 10% = $0.090909
+			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 0.909091 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
 			expect(parseFloat(result.discount)).toBeCloseTo(0.909091, 4);
 			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.090909, 4);
-			// Sum should equal the original discount
-			expect(parseFloat(result.discount) + parseFloat(result.discount_tax)).toBeCloseTo(1, 6);
 		});
 
-		it('splits a fixed_product discount across two items at 10%', () => {
-			// Matches the user's real scenario: $1/item coupon, 2 items, 10% tax
-			// WC returns: discount = 1.82, discount_tax = 0.18
+		it('calculates tax on ex-tax discounts across two items at 10%', () => {
+			// Original: $1/item tax-inclusive, ex-tax: $0.909091 each
 			const perItem: PerItemDiscount[] = [
-				{ product_id: 66, discount: 1 },
-				{ product_id: 69, discount: 1 },
+				{ product_id: 66, discount: 0.909091 },
+				{ product_id: 69, discount: 0.909091 },
 			];
 			const lineItems = [
 				{ product_id: 66, tax_class: '' },
 				{ product_id: 69, tax_class: '' },
 			];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
-			// Total discount = $2, split at 10% inclusive
-			// $2 / 1.1 = $1.818181... ≈ $1.818182
-			// $2 - $1.818181... = $0.181818... ≈ $0.181818
+			// Total ex-tax discount = $1.818182, tax = $0.181818
 			expect(parseFloat(result.discount)).toBeCloseTo(1.818182, 4);
 			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.181818, 4);
-			expect(parseFloat(result.discount) + parseFloat(result.discount_tax)).toBeCloseTo(2, 6);
 		});
 
-		it('splits a percent discount at 10%', () => {
-			// 30% coupon on a $100 item = $30 discount (tax-inclusive)
-			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 30 }];
+		it('calculates tax on an ex-tax percent discount at 10%', () => {
+			// Original: $30 tax-inclusive, ex-tax: $30/1.1 = $27.272727
+			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 27.272727 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
-			// $30 / 1.1 = $27.272727...
 			expect(parseFloat(result.discount)).toBeCloseTo(27.272727, 4);
 			expect(parseFloat(result.discount_tax)).toBeCloseTo(2.727273, 4);
-			expect(parseFloat(result.discount) + parseFloat(result.discount_tax)).toBeCloseTo(30, 6);
 		});
 
-		it('splits a fixed_cart discount proportionally distributed', () => {
-			// $10 cart coupon split across items
+		it('calculates tax on ex-tax fixed_cart discount proportionally distributed', () => {
+			// Original: $6 + $4 = $10 tax-inclusive, ex-tax: $6/1.1 + $4/1.1 = $5.454545 + $3.636364
 			const perItem: PerItemDiscount[] = [
-				{ product_id: 1, discount: 6 },
-				{ product_id: 2, discount: 4 },
+				{ product_id: 1, discount: 5.454545 },
+				{ product_id: 2, discount: 3.636364 },
 			];
 			const lineItems = [
 				{ product_id: 1, tax_class: '' },
 				{ product_id: 2, tax_class: '' },
 			];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
-			// Total $10 / 1.1 = $9.090909...
+			// Total ex-tax = $9.090909, tax = $0.909091
 			expect(parseFloat(result.discount)).toBeCloseTo(9.090909, 4);
 			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.909091, 4);
-			expect(parseFloat(result.discount) + parseFloat(result.discount_tax)).toBeCloseTo(10, 6);
 		});
 	});
 
 	describe('prices exclude tax (tax-exclusive)', () => {
 		it('calculates discount_tax on top for a single item at 10%', () => {
 			// Coupon: $1 off, 10% tax-exclusive
-			// WC expects: discount = $1, discount_tax = $1 × 10% = $0.10
+			// WC expects: discount = $1, discount_tax = $1 x 10% = $0.10
 			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 1 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], false);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
 			expect(parseFloat(result.discount)).toBeCloseTo(1, 6);
 			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.1, 6);
@@ -133,7 +123,7 @@ describe('calculateCouponDiscountTaxSplit', () => {
 				{ product_id: 2, tax_class: '' },
 			];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], false);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
 			expect(parseFloat(result.discount)).toBeCloseTo(2, 6);
 			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.2, 6);
@@ -142,7 +132,7 @@ describe('calculateCouponDiscountTaxSplit', () => {
 
 	describe('mixed tax classes', () => {
 		it('applies different rates per item based on tax_class', () => {
-			// Item 1: standard 10%, Item 2: reduced 5%
+			// Item 1: standard 10% on $10 ex-tax, Item 2: reduced 5% on $10 ex-tax
 			const perItem: PerItemDiscount[] = [
 				{ product_id: 1, discount: 10 },
 				{ product_id: 2, discount: 10 },
@@ -152,20 +142,16 @@ describe('calculateCouponDiscountTaxSplit', () => {
 				{ product_id: 2, tax_class: 'reduced-rate' },
 			];
 
-			const result = calculateCouponDiscountTaxSplit(
-				perItem,
-				lineItems,
-				[standardRate10, reducedRate5],
-				true
-			);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [
+				standardRate10,
+				reducedRate5,
+			]);
 
-			// Item 1: $10 / 1.10 = $9.090909, tax = $0.909091
-			// Item 2: $10 / 1.05 = $9.52381, tax = $0.47619
-			// Total discount = 9.090909 + 9.52381 = 18.614719
-			// Total tax = 0.909091 + 0.47619 = 1.385281
-			expect(parseFloat(result.discount)).toBeCloseTo(18.614719, 3);
-			expect(parseFloat(result.discount_tax)).toBeCloseTo(1.385281, 3);
-			expect(parseFloat(result.discount) + parseFloat(result.discount_tax)).toBeCloseTo(20, 4);
+			// Item 1: $10, tax = $10 x 10% = $1.00
+			// Item 2: $10, tax = $10 x 5% = $0.50
+			// Total discount = $20, total tax = $1.50
+			expect(parseFloat(result.discount)).toBeCloseTo(20, 4);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(1.5, 4);
 		});
 
 		it('handles items with no matching tax rates (zero tax)', () => {
@@ -178,26 +164,26 @@ describe('calculateCouponDiscountTaxSplit', () => {
 				{ product_id: 2, tax_class: 'zero-rate' }, // no matching rate
 			];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
-			// Item 1: $10 / 1.10 = $9.090909, tax = $0.909091
-			// Item 2: no rates → full discount, no tax
-			expect(parseFloat(result.discount)).toBeCloseTo(19.090909, 4);
-			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.909091, 4);
+			// Item 1: $10, tax = $1.00
+			// Item 2: no rates, no tax, discount = $10
+			expect(parseFloat(result.discount)).toBeCloseTo(20, 4);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(1, 4);
 		});
 	});
 
 	describe('compound tax rates', () => {
-		it('handles compound tax rate with inclusive pricing', () => {
-			// 10% compound rate on $10 discount
+		it('handles compound tax rate on ex-tax discount', () => {
+			// $10 ex-tax discount with compound 10% rate
 			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 10 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [compoundRate10], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [compoundRate10]);
 
-			// Compound inclusive: tax = 10 - 10/(1+0.1) = 10 - 9.0909 = 0.9091
-			expect(parseFloat(result.discount)).toBeCloseTo(9.090909, 4);
-			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.909091, 4);
+			// Compound 10% on $10 = $1.00 tax
+			expect(parseFloat(result.discount)).toBeCloseTo(10, 4);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(1, 4);
 		});
 	});
 
@@ -206,8 +192,7 @@ describe('calculateCouponDiscountTaxSplit', () => {
 			const result = calculateCouponDiscountTaxSplit(
 				[],
 				[{ product_id: 1, tax_class: '' }],
-				[standardRate10],
-				true
+				[standardRate10]
 			);
 
 			expect(result.discount).toBe('0');
@@ -218,8 +203,7 @@ describe('calculateCouponDiscountTaxSplit', () => {
 			const result = calculateCouponDiscountTaxSplit(
 				[{ product_id: 1, discount: 0 }],
 				[{ product_id: 1, tax_class: '' }],
-				[standardRate10],
-				true
+				[standardRate10]
 			);
 
 			expect(result.discount).toBe('0');
@@ -227,24 +211,25 @@ describe('calculateCouponDiscountTaxSplit', () => {
 		});
 
 		it('handles missing line item for a product_id', () => {
-			// Product not found in line items — defaults to standard tax class
+			// Product not found in line items -- defaults to standard tax class
 			const perItem: PerItemDiscount[] = [{ product_id: 999, discount: 10 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
 			// Falls back to 'standard' class, so standard rate applies
-			expect(parseFloat(result.discount)).toBeCloseTo(9.090909, 4);
-			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.909091, 4);
+			// $10 ex-tax, tax = $1.00
+			expect(parseFloat(result.discount)).toBeCloseTo(10, 4);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(1, 4);
 		});
 
 		it('handles empty tax rates array', () => {
 			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 10 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, []);
 
-			// No tax rates → full discount, no tax
+			// No tax rates -> full discount, no tax
 			expect(parseFloat(result.discount)).toBeCloseTo(10, 6);
 			expect(parseFloat(result.discount_tax)).toBeCloseTo(0, 6);
 		});
@@ -253,7 +238,7 @@ describe('calculateCouponDiscountTaxSplit', () => {
 			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 1 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
 			// Check that values are strings with at most 6 decimal places
 			expect(typeof result.discount).toBe('string');
@@ -266,19 +251,18 @@ describe('calculateCouponDiscountTaxSplit', () => {
 			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 99999.99 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
-			expect(parseFloat(result.discount) + parseFloat(result.discount_tax)).toBeCloseTo(
-				99999.99,
-				2
-			);
+			// $99999.99 ex-tax, tax = $9999.999
+			expect(parseFloat(result.discount)).toBeCloseTo(99999.99, 2);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(9999.999, 2);
 		});
 
 		it('handles negative discount (should not occur but be safe)', () => {
 			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: -5 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10], true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
 			// Negative discounts are skipped
 			expect(result.discount).toBe('0');
@@ -293,9 +277,12 @@ describe('calculateCouponDiscountTaxSplit', () => {
 			// Coupon: fixed_product, $1/item
 			// 2 items: Belt (product 66) and Hoodie (product 69)
 			// WC server returned: discount = "1.82", discount_tax = "0.18"
+			//
+			// The caller converts tax-inclusive $1 discounts to ex-tax via
+			// convertDiscountsToExTax: $1/1.1 = $0.909091 each
 			const perItem: PerItemDiscount[] = [
-				{ product_id: 66, discount: 1 },
-				{ product_id: 69, discount: 1 },
+				{ product_id: 66, discount: 0.909091 },
+				{ product_id: 69, discount: 0.909091 },
 			];
 			const lineItems = [
 				{ product_id: 66, tax_class: '' },
@@ -304,10 +291,9 @@ describe('calculateCouponDiscountTaxSplit', () => {
 			// The user's tax rate is 10% compound
 			const rates = [{ id: 4, rate: '10', compound: true, order: 1, class: 'standard' }];
 
-			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, rates, true);
+			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, rates);
 
-			// WC returned discount = "1.82" (2dp), we calculate to 6dp
-			// $2 / 1.1 = $1.818181... and $2 × 10/110 = $0.181818...
+			// Total ex-tax discount = $1.818182, tax = $0.181818
 			expect(parseFloat(result.discount)).toBeCloseTo(1.818182, 4);
 			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.181818, 4);
 
