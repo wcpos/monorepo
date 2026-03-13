@@ -6,6 +6,7 @@ import { map } from 'rxjs/operators';
 
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
+import { Toast } from '@wcpos/components/toast';
 import {
 	Select,
 	SelectContent,
@@ -45,6 +46,7 @@ export function PrintingSettings() {
 	const t = useT();
 	const { storeDB } = useAppState();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
+	const [testingPrinterId, setTestingPrinterId] = React.useState<string | null>(null);
 	const printerService = React.useMemo(() => new PrinterService(), []);
 	const templates = useActiveTemplates();
 
@@ -136,13 +138,24 @@ export function PrintingSettings() {
 
 	const handleTestPrint = React.useCallback(
 		async (profile: PrinterProfile) => {
+			setTestingPrinterId(profile.id);
 			try {
 				await printerService.testPrint(profile);
-			} catch {
-				// TODO: show error toast
+				Toast.show({
+					title: t('settings.test_print_sent', 'Test print sent to %s').replace('%s', profile.name),
+					type: 'success',
+				});
+			} catch (err) {
+				Toast.show({
+					title: t('settings.test_print_failed', 'Test print failed'),
+					description: err instanceof Error ? err.message : String(err),
+					type: 'error',
+				});
+			} finally {
+				setTestingPrinterId(null);
 			}
 		},
-		[printerService]
+		[printerService, t]
 	);
 
 	const connectionLabel = React.useCallback(
@@ -280,7 +293,12 @@ export function PrintingSettings() {
 								</TableCell>
 								<TableCell>
 									<HStack className="gap-2">
-										<Button variant="outline" size="sm" onPress={() => handleTestPrint(profile)}>
+										<Button
+											variant="outline"
+											size="sm"
+											loading={testingPrinterId === profile.id}
+											onPress={() => handleTestPrint(profile)}
+										>
 											<Text>{t('settings.test_print', 'Test')}</Text>
 										</Button>
 										{!profile.isDefault && (
