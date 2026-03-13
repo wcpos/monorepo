@@ -86,9 +86,9 @@ export function Totals() {
 		inclOrExcl === 'incl' ? saleDiscountNumber + saleDiscountTaxNumber : saleDiscountNumber;
 
 	const hasCoupons = coupon_lines.length > 0;
-	const hasTotals = hasSubtotal || hasSaleDiscount || hasCoupons || hasShipping || hasFee || hasTax;
-
-	const hasRefunds = refunds && refunds.length > 0;
+	const hasRefunds = Boolean(refunds && refunds.length > 0);
+	const hasTotals =
+		hasSubtotal || hasSaleDiscount || hasCoupons || hasShipping || hasFee || hasTax || hasRefunds;
 	const refundTotal = hasRefunds
 		? refunds.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0)
 		: 0;
