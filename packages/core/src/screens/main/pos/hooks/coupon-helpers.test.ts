@@ -7,6 +7,7 @@
  * checks. It decides which cart line items a coupon can actually apply to.
  */
 import {
+	applyPerItemDiscountsToLineItems,
 	computeDiscountedLineItems,
 	type CouponLineItem,
 	type CouponRestrictions,
@@ -612,10 +613,7 @@ describe('computeDiscountedLineItems', () => {
 				},
 			];
 
-			const result = computeDiscountedLineItems(
-				lineItems,
-				[[{ product_id: 1, discount: 3 }]]
-			);
+			const result = computeDiscountedLineItems(lineItems, [[{ product_id: 1, discount: 3 }]]);
 
 			// Without tax extraction: 16.363636 - 3 = 13.363636
 			expect(parseFloat(result[0].total!)).toBeCloseTo(13.363636, 4);
@@ -643,5 +641,55 @@ describe('computeDiscountedLineItems', () => {
 			// No tax rate to extract, so discount applied directly
 			expect(parseFloat(result[0].total!)).toBeCloseTo(15, 4);
 		});
+	});
+});
+
+describe('applyPerItemDiscountsToLineItems', () => {
+	it('subtracts discount from matching item price', () => {
+		const items: CouponLineItem[] = [
+			createItem({ product_id: 1, quantity: 2, price: 10, subtotal: '20', total: '20' }),
+		];
+		const result = applyPerItemDiscountsToLineItems(items, [{ product_id: 1, discount: 6 }]);
+		// 6 discount spread over 2 units -> price reduced by 3 per unit
+		expect(result[0].price).toBeCloseTo(7, 4);
+	});
+
+	it('extracts tax from discount when pricesIncludeTax is true', () => {
+		// Item: $18 inc 10% tax -> ex-tax price = $16.3636 per unit
+		// Fixed product coupon: $3 inc tax -> ex-tax discount = $3/1.10 = $2.7273
+		const items: CouponLineItem[] = [
+			createItem({
+				product_id: 1,
+				quantity: 1,
+				price: 16.363636,
+				subtotal: '16.363636',
+				total: '16.363636',
+			}),
+		];
+		const taxRates = new Map([[1, 0.1]]);
+		const result = applyPerItemDiscountsToLineItems(
+			items,
+			[{ product_id: 1, discount: 3 }],
+			true,
+			taxRates
+		);
+		// ex-tax discount = 3 / 1.10 = 2.727273
+		// new price = 16.363636 - 2.727273 = 13.636364
+		expect(result[0].price).toBeCloseTo(13.636364, 4);
+	});
+
+	it('does not extract tax when pricesIncludeTax is false', () => {
+		const items: CouponLineItem[] = [
+			createItem({
+				product_id: 1,
+				quantity: 1,
+				price: 16.363636,
+				subtotal: '16.363636',
+				total: '16.363636',
+			}),
+		];
+		const result = applyPerItemDiscountsToLineItems(items, [{ product_id: 1, discount: 3 }]);
+		// discount applied directly: 16.363636 - 3 = 13.363636
+		expect(result[0].price).toBeCloseTo(13.363636, 4);
 	});
 });

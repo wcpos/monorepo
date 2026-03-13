@@ -145,6 +145,21 @@ export const useAddCoupon = () => {
 
 				let discountItems = couponLineItems;
 				if (calcDiscountsSequentially && appliedCouponLines.length > 0) {
+					// Build effective tax rates so applyPerItemDiscountsToLineItems can
+					// convert tax-inclusive discounts to ex-tax before adjusting prices.
+					const effectiveTaxRates = new Map<number, number>();
+					if (pricesIncludeTax) {
+						for (const item of lineItems) {
+							const pid = (item as any).product_id;
+							if (pid == null || effectiveTaxRates.has(pid)) continue;
+							const sub = parseFloat((item as any).subtotal || '0');
+							const subTax = parseFloat((item as any).subtotal_tax || '0');
+							if (sub > 0) {
+								effectiveTaxRates.set(pid, subTax / sub);
+							}
+						}
+					}
+
 					for (const appliedCouponLine of appliedCouponLines) {
 						const appliedCoupon = await couponCollection
 							.findOne({ selector: { code: appliedCouponLine.code } })
@@ -168,7 +183,12 @@ export const useAddCoupon = () => {
 							discountItems
 						);
 
-						discountItems = applyPerItemDiscountsToLineItems(discountItems, appliedResult.perItem);
+						discountItems = applyPerItemDiscountsToLineItems(
+							discountItems,
+							appliedResult.perItem,
+							pricesIncludeTax,
+							effectiveTaxRates
+						);
 					}
 				}
 
@@ -187,9 +207,11 @@ export const useAddCoupon = () => {
 					};
 				}
 
-				const discountedLineItems = computeDiscountedLineItems(latestOrder.line_items || [], [
-					discountResult.perItem,
-				], pricesIncludeTax);
+				const discountedLineItems = computeDiscountedLineItems(
+					latestOrder.line_items || [],
+					[discountResult.perItem],
+					pricesIncludeTax
+				);
 				const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
 					discountResult.perItem,
 					lineItems,

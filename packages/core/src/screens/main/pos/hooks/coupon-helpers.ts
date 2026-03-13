@@ -89,15 +89,32 @@ export function getEligibleItems(
 /**
  * Adjusts line item prices by subtracting per-item discounts from a prior coupon.
  * Used in sequential discount mode so the next coupon sees reduced prices.
+ *
+ * When pricesIncludeTax is true, discount amounts from fixed_cart / fixed_product
+ * coupons are tax-inclusive while CouponLineItem.price is ex-tax. The tax portion
+ * must be stripped from the discount before subtracting so subsequent coupons
+ * compute from the correct ex-tax base.  effectiveTaxRates maps product_id to the
+ * ratio subtotal_tax / subtotal derived from the order line items.
  */
 export function applyPerItemDiscountsToLineItems(
 	items: CouponLineItem[],
-	perItem: { product_id: number; discount: number }[]
+	perItem: { product_id: number; discount: number }[],
+	pricesIncludeTax = false,
+	effectiveTaxRates?: Map<number, number>
 ): CouponLineItem[] {
 	const nextItems = items.map((item) => ({ ...item }));
 
 	for (const entry of perItem) {
 		let remaining = entry.discount;
+
+		// Convert tax-inclusive discount to ex-tax so it aligns with CouponLineItem.price
+		if (pricesIncludeTax && effectiveTaxRates) {
+			const rate = effectiveTaxRates.get(entry.product_id) ?? 0;
+			if (rate > 0) {
+				remaining = remaining / (1 + rate);
+			}
+		}
+
 		if (remaining <= 0) continue;
 
 		for (const item of nextItems) {

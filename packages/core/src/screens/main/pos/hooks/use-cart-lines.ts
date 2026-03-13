@@ -148,6 +148,21 @@ export const useCartLines = () => {
 			const updatedCouponLines: any[] = [];
 			const allPerItemDiscounts: PerItemDiscount[][] = [];
 
+			// Build effective tax rates so sequential discount adjustments
+			// correctly convert tax-inclusive discounts to ex-tax amounts.
+			const effectiveTaxRates = new Map<number, number>();
+			if (pricesIncludeTax) {
+				for (const item of activeLineItems) {
+					const pid = (item as any).product_id;
+					if (pid == null || effectiveTaxRates.has(pid)) continue;
+					const sub = parseFloat((item as any).subtotal || '0');
+					const subTax = parseFloat((item as any).subtotal_tax || '0');
+					if (sub > 0) {
+						effectiveTaxRates.set(pid, subTax / sub);
+					}
+				}
+			}
+
 			for (const cl of replayCouponLines) {
 				const coupon = await couponCollection.findOne({ selector: { code: cl.code } }).exec();
 				if (!coupon) {
@@ -191,13 +206,22 @@ export const useCartLines = () => {
 				}
 
 				if (calcDiscountsSequentially) {
-					discountItems = applyPerItemDiscountsToLineItems(discountItems, result.perItem);
+					discountItems = applyPerItemDiscountsToLineItems(
+						discountItems,
+						result.perItem,
+						pricesIncludeTax,
+						effectiveTaxRates
+					);
 				}
 			}
 
 			// Always apply discounts to line items (even if coupon amounts haven't changed,
 			// the line items may have been reset by a quantity/price change)
-			const discountedLineItems = computeDiscountedLineItems(allLineItems, allPerItemDiscounts, pricesIncludeTax);
+			const discountedLineItems = computeDiscountedLineItems(
+				allLineItems,
+				allPerItemDiscounts,
+				pricesIncludeTax
+			);
 
 			// Merge updated local coupons back into full list to preserve synced coupons
 			const updatedByCode = new Map(updatedCouponLines.map((cl: any) => [cl.code, cl]));
