@@ -422,6 +422,8 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 					timeout: 60_000,
 				});
 			} catch (e) {
+				// Ensure the JS-blocking route is removed so the fallback can load scripts
+				await page.unroute('**/*.js');
 				console.warn('[posPage] Saved state invalid/expired; falling back to OAuth.', e);
 				await authenticateWithStore(page, testInfo);
 			}
