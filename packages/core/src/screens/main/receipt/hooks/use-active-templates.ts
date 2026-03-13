@@ -22,10 +22,11 @@ export function useActiveTemplates(): TemplateDocument[] {
 	const { license } = useAppInfo();
 	const isPro = !!license?.isPro;
 
-	// Trigger template replication from the server
+	// Trigger template replication from the server — greedy ensures all pages are fetched
 	useQuery({
 		queryKeys: ['templates'],
 		collectionName: 'templates',
+		greedy: true,
 		initialParams: {
 			selector: { type: 'receipt' },
 		},

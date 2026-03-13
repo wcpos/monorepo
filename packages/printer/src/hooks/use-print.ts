@@ -71,13 +71,24 @@ function printUrlViaElectron(url: string): Promise<void> {
 		const afterChannel = `onAfterPrint-${jobId}`;
 		const errorChannel = `onPrintError-${jobId}`;
 
-		const onAfter = () => {
+		const timeoutId = setTimeout(() => {
+			cleanup();
+			reject(new Error(`Electron print timed out after ${FETCH_TIMEOUT_MS}ms`));
+		}, FETCH_TIMEOUT_MS);
+
+		const cleanup = () => {
+			clearTimeout(timeoutId);
+			ipc.removeListener(afterChannel, onAfter);
 			ipc.removeListener(errorChannel, onError);
+		};
+
+		const onAfter = () => {
+			cleanup();
 			resolve();
 		};
-		const onError = (_error: unknown) => {
-			ipc.removeListener(afterChannel, onAfter);
-			reject(new Error(`Electron print failed: ${String(_error)}`));
+		const onError = (_event: unknown, error?: unknown) => {
+			cleanup();
+			reject(new Error(`Electron print failed: ${String(error ?? 'unknown error')}`));
 		};
 
 		ipc.once(afterChannel, onAfter);
