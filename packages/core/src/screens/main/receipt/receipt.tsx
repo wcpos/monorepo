@@ -225,7 +225,11 @@ export function Receipt({ resource }: Props) {
 					) : (
 						<ModalAction disabled>{t('receipt.email_receipt')}</ModalAction>
 					)}
-					<ModalAction testID="receipt-print-button" onPress={() => print()} loading={isPrinting || isSyncing}>
+					<ModalAction
+						testID="receipt-print-button"
+						onPress={() => print()}
+						loading={isPrinting || isSyncing}
+					>
 						{t('receipt.print_receipt')}
 					</ModalAction>
 				</ModalFooter>
