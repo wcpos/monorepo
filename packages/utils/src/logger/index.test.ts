@@ -159,8 +159,35 @@ describe('logger/index', () => {
 
 	describe('setDatabase', () => {
 		it('should accept a database collection', () => {
-			const mockCollection = { insert: jest.fn() };
+			const mockCollection = {
+				insert: jest.fn(),
+				find: jest.fn().mockReturnValue({
+					remove: jest.fn().mockResolvedValue([]),
+				}),
+			};
 			expect(() => setDatabase(mockCollection)).not.toThrow();
+		});
+
+		it('should prune log entries older than 30 days on init', async () => {
+			// Use isolateModules to get a fresh module where hasPruned is false
+			const mockRemove = jest.fn().mockResolvedValue([{ id: '1' }, { id: '2' }]);
+			const mockFind = jest.fn().mockReturnValue({ remove: mockRemove });
+			const mockCollection = { insert: jest.fn(), find: mockFind };
+
+			let freshSetDatabase: typeof setDatabase;
+			jest.isolateModules(() => {
+				freshSetDatabase = require('./index').setDatabase;
+			});
+
+			freshSetDatabase!(mockCollection);
+
+			// Let the microtask (find().remove().then()) settle
+			await Promise.resolve();
+
+			expect(mockFind).toHaveBeenCalledWith({
+				selector: { timestamp: { $lt: expect.any(Number) } },
+			});
+			expect(mockRemove).toHaveBeenCalled();
 		});
 	});
 });
