@@ -53,7 +53,7 @@ export const useNewOrder = () => {
 
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
 	const currency = useObservableEagerState(store.currency$);
-	// const prices_include_tax = useObservableEagerState(store.prices_include_tax$);
+	const prices_include_tax = useObservableEagerState(store.prices_include_tax$);
 	const tax_based_on = useObservableEagerState(store.tax_based_on$);
 	const country = useObservableEagerState(store.store_country$);
 
@@ -74,7 +74,7 @@ export const useNewOrder = () => {
 		data.currency = currency;
 		const currencyData = allCurrencies.find((c) => c.code === currency) ?? { symbol: '' };
 		data.currency_symbol = decode(currencyData.symbol || '');
-		data.prices_include_tax = false; // This setting means nothing, WC REST API always returns prices excluding tax
+		data.prices_include_tax = prices_include_tax === 'yes';
 		data.meta_data = [
 			{
 				key: '_woocommerce_pos_tax_based_on',
@@ -94,7 +94,7 @@ export const useNewOrder = () => {
 		}
 
 		newOrder!.incrementalPatch(data);
-	}, [newOrder, defaultCustomer, currency, tax_based_on, country]);
+	}, [newOrder, defaultCustomer, currency, prices_include_tax, tax_based_on, country]);
 
 	return { newOrder };
 };

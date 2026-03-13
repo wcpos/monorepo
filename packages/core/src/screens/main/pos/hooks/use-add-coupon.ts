@@ -9,12 +9,14 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import { calculateCouponDiscount } from './coupon-discount';
 import {
 	applyPerItemDiscountsToLineItems,
+	calculateCouponDiscountTaxSplit,
 	computeDiscountedLineItems,
 	isProductOnSale,
 } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { useTaxRates } from '../../contexts/tax-rates';
 import { useCollection } from '../../hooks/use-collection';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -37,6 +39,7 @@ export const useAddCoupon = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
+	const { rates: taxRates, pricesIncludeTax } = useTaxRates();
 	const woocommerceSequential = useObservableEagerState(
 		(store as any).woocommerce_calc_discounts_sequentially$
 	);
@@ -187,6 +190,18 @@ export const useAddCoupon = () => {
 				const discountedLineItems = computeDiscountedLineItems(latestOrder.line_items || [], [
 					discountResult.perItem,
 				]);
+				const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
+					discountResult.perItem,
+					lineItems,
+					taxRates as {
+						id: number;
+						rate: string;
+						compound: boolean;
+						order: number;
+						class?: string;
+					}[],
+					pricesIncludeTax
+				);
 				const patchResult = await localPatch({
 					document: latestOrder,
 					data: {
@@ -194,8 +209,8 @@ export const useAddCoupon = () => {
 							...(latestOrder.coupon_lines || []),
 							{
 								code: couponData.code,
-								discount: String(discountResult.totalDiscount),
-								discount_tax: '0',
+								discount,
+								discount_tax,
 								meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidv4() }],
 							},
 						],
@@ -249,6 +264,8 @@ export const useAddCoupon = () => {
 			t,
 			orderLogger,
 			calcDiscountsSequentially,
+			taxRates,
+			pricesIncludeTax,
 		]
 	);
 
