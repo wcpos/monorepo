@@ -2,9 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
-import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
 import { restoreIndexedDB, restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
+
+import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
 /**
  * NOTE: Playwright requires object destructuring for the first argument in test callbacks.
@@ -116,10 +117,20 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	const usernameInput = loginPage.locator('#user_login, #wcpos-user-login');
 	const passwordInput = loginPage.locator('#user_pass, #wcpos-user-pass');
 
-	if (await usernameInput.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
+	if (
+		await usernameInput
+			.first()
+			.isVisible({ timeout: 5_000 })
+			.catch(() => false)
+	) {
 		await usernameInput.first().fill(E2E_USERNAME);
 	}
-	if (await passwordInput.first().isVisible({ timeout: 5_000 }).catch(() => false)) {
+	if (
+		await passwordInput
+			.first()
+			.isVisible({ timeout: 5_000 })
+			.catch(() => false)
+	) {
 		await passwordInput.first().fill(E2E_PASSWORD);
 	}
 
@@ -135,9 +146,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	const appOrigin = new URL(page.url()).origin;
 	await loginPage.waitForURL(
 		(url) =>
-			url.hostname === 'localhost' ||
-			url.hostname === '127.0.0.1' ||
-			url.origin === appOrigin,
+			url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.origin === appOrigin,
 		{ timeout: 60_000 }
 	);
 
@@ -150,10 +159,9 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	// it populates stores in the local DB, which gives storeID to handleLogin.
 	// Set up the response listener BEFORE sending postMessage so we don't miss it.
 	const cashierApiPromise = page
-		.waitForResponse(
-			(response) => response.url().includes('/cashier/') && response.ok(),
-			{ timeout: 60_000 }
-		)
+		.waitForResponse((response) => response.url().includes('/cashier/') && response.ok(), {
+			timeout: 60_000,
+		})
 		.catch(() => null);
 
 	// Simulate the postMessage that the popup would normally send
@@ -391,14 +399,19 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 
 		if (state) {
 			try {
-				// Navigate first to establish origin for IndexedDB access
+				// Block JavaScript so the app doesn't initialize RxDB (which would
+				// create databases at the current schema version) before we restore
+				// the snapshot. Without this, restoreIndexedDB hits a VersionError
+				// when the snapshot's version doesn't match the app's version.
+				await page.route('**/*.js', (route) => route.abort());
 				await page.goto('/');
 
-				// Restore IndexedDB and localStorage before the app fully initializes
+				// Restore IndexedDB and localStorage while JS is blocked
 				await restoreIndexedDB(page, state.indexedDB);
 				await restoreLocalStorage(page, state.localStorage);
 
-				// Reload so the app picks up the restored state
+				// Unblock JS and reload so the app picks up the restored state
+				await page.unroute('**/*.js');
 				await page.reload();
 
 				// App should skip auth and go straight to POS
@@ -409,6 +422,8 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 					timeout: 60_000,
 				});
 			} catch (e) {
+				// Ensure the JS-blocking route is removed so the fallback can load scripts
+				await page.unroute('**/*.js');
 				console.warn('[posPage] Saved state invalid/expired; falling back to OAuth.', e);
 				await authenticateWithStore(page, testInfo);
 			}
@@ -417,6 +432,7 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 			await authenticateWithStore(page, testInfo);
 		}
 
+		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
 		await use(page);
 	},
 });
