@@ -32,51 +32,25 @@ import {
 	ModalTitle,
 } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
-import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/toggle-group';
 import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 import { usePrint } from '@wcpos/printer';
 
 import { EmailForm } from './email';
-import { FiscalStatus } from './fiscal-status';
-import { useReceiptData } from './hooks/use-receipt-data';
 import { useTemplateRenderer } from './hooks/use-template-renderer';
-import { ReceiptModeBadge } from './mode-badge';
+import { MismatchBadge } from './mismatch-badge';
+import { PrinterSwitcher } from './printer-switcher';
 import { SyncingBadge } from './syncing-badge';
 import { TemplateSwitcher } from './template-switcher';
+import { useResolvedPrinter } from './hooks/use-resolved-printer';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
-import { useRestHttpClient } from '../hooks/use-rest-http-client';
-import { useResolvedPrinter } from './hooks/use-resolved-printer';
-import { PrinterSwitcher } from './printer-switcher';
-import { MismatchBadge } from './mismatch-badge';
-
-import type { ReceiptMode } from './hooks/use-receipt-data';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
 }
 
 const CHECKOUT_ROUTE_NAMES = ['Checkout', '(modals)/cart/[orderId]/checkout'] as const;
-
-/**
- * Appends or updates the mode query parameter on a receipt URL.
- */
-function appendModeParam(url: string, mode: ReceiptMode): string {
-	try {
-		const parsed = new URL(url);
-		parsed.searchParams.set('mode', mode);
-		return parsed.toString();
-	} catch {
-		// URL might be relative — safely update query while preserving hash
-		const [beforeHash, hash = ''] = url.split('#');
-		const [pathname, query = ''] = beforeHash.split('?');
-		const params = new URLSearchParams(query);
-		params.set('mode', mode);
-		const next = `${pathname}?${params.toString()}`;
-		return hash ? `${next}#${hash}` : next;
-	}
-}
 
 /**
  *
@@ -96,14 +70,6 @@ export function Receipt({ resource }: Props) {
 		get(order, ['links', 'receipt', 0, 'href']) as string | undefined
 	);
 
-	// Mode state — default to live
-	const [selectedMode, setSelectedMode] = React.useState<ReceiptMode>('live');
-
-	// Reset mode for each new order to avoid carrying stale mode across receipts
-	React.useEffect(() => {
-		setSelectedMode('live');
-	}, [orderId]);
-
 	// Template renderer — provides template list, selection, and rendered output
 	const {
 		templates,
@@ -119,30 +85,12 @@ export function Receipt({ resource }: Props) {
 	} = useTemplateRenderer({
 		orderId,
 		baseReceiptURL,
-		mode: selectedMode,
+		mode: 'live',
 		order,
 	});
 
-	// Fetch receipt metadata from the receipts REST API
-	const {
-		mode: activeMode,
-		hasSnapshot,
-		submissionStatus,
-		isLoading: isLoadingReceipt,
-		refetch,
-	} = useReceiptData({
-		orderId,
-		mode: selectedMode,
-	});
-
-	// Build the receipt URL with mode parameter
-	const receiptURL = React.useMemo(() => {
-		if (!baseReceiptURL) return '';
-		return appendModeParam(baseReceiptURL, selectedMode);
-	}, [baseReceiptURL, selectedMode]);
-
 	// Build template info for routing
-	const selectedTemplate = templates.find((t) => String(t.id) === String(selectedTemplateId));
+	const selectedTemplate = templates.find((tmpl) => String(tmpl.id) === String(selectedTemplateId));
 	const templateInfo = React.useMemo(() => {
 		if (!selectedTemplate) return null;
 		return {
@@ -165,28 +113,13 @@ export function Receipt({ resource }: Props) {
 	const { print, isPrinting } = usePrint({
 		receiptData: receiptData ?? undefined,
 		html: renderedHtml ?? undefined,
-		receiptUrl: templateReceiptUrl || receiptURL,
+		receiptUrl: templateReceiptUrl || baseReceiptURL,
 		printerProfile: useSystemDialog ? undefined : (resolvedPrinter ?? undefined),
 		templateEngine: selectedTemplateEngine ?? undefined,
 		templateXml:
 			selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
+		iframeRef,
 	});
-
-	// Retry fiscal submission
-	const http = useRestHttpClient();
-	const [isRetrying, setIsRetrying] = React.useState(false);
-	const handleFiscalRetry = React.useCallback(async () => {
-		if (!orderId || isRetrying) return;
-		setIsRetrying(true);
-		try {
-			await http.post(`/receipts/${orderId}/fiscal/retry`, {});
-			refetch();
-		} catch {
-			// Error handled by HTTP client
-		} finally {
-			setIsRetrying(false);
-		}
-	}, [http, orderId, isRetrying, refetch]);
 
 	/**
 	 * Allow auto print for checkout
@@ -243,37 +176,11 @@ export function Receipt({ resource }: Props) {
 					<ModalTitle>
 						<Text>{t('common.receipt')}</Text>
 					</ModalTitle>
-					{hasSnapshot && (
-						<ToggleGroup
-							type="single"
-							value={selectedMode}
-							onValueChange={(val) => {
-								if (val) setSelectedMode(val as ReceiptMode);
-							}}
-							size="sm"
-						>
-							<ToggleGroupItem value="fiscal">
-								<Text>{t('receipt.fiscal', 'Fiscal')}</Text>
-							</ToggleGroupItem>
-							<ToggleGroupItem value="live">
-								<Text>{t('receipt.live', 'Live')}</Text>
-							</ToggleGroupItem>
-						</ToggleGroup>
-					)}
 				</ModalHeader>
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<ErrorBoundary>
 						<VStack className="h-full gap-2">
-							<ReceiptModeBadge mode={activeMode} />
 							<SyncingBadge isSyncing={isSyncing} />
-							{submissionStatus && (
-								<FiscalStatus
-									status={submissionStatus}
-									onRetry={
-										submissionStatus === 'failed' && !isRetrying ? handleFiscalRetry : undefined
-									}
-								/>
-							)}
 							<TemplateSwitcher
 								templates={templates}
 								selectedId={selectedTemplateId}
@@ -291,7 +198,7 @@ export function Receipt({ resource }: Props) {
 								ref={iframeRef as never}
 								{...(renderedHtml != null
 									? { srcDoc: renderedHtml }
-									: { src: templateReceiptUrl || receiptURL })}
+									: { src: templateReceiptUrl || baseReceiptURL || '' })}
 								onLoad={handleLoad}
 								onMessage={() => {}}
 								className="flex-1"
@@ -318,11 +225,7 @@ export function Receipt({ resource }: Props) {
 					) : (
 						<ModalAction disabled>{t('receipt.email_receipt')}</ModalAction>
 					)}
-					<ModalAction
-						testID="receipt-print-button"
-						onPress={() => print()}
-						loading={isPrinting || isLoadingReceipt}
-					>
+					<ModalAction testID="receipt-print-button" onPress={() => print()} loading={isPrinting}>
 						{t('receipt.print_receipt')}
 					</ModalAction>
 				</ModalFooter>

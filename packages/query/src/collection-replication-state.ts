@@ -33,6 +33,7 @@ type ProductTagCollection = import('@wcpos/database').ProductTagCollection;
 type OrderCollection = import('@wcpos/database').OrderCollection;
 type CustomerCollection = import('@wcpos/database').CustomerCollection;
 type TaxRateCollection = import('@wcpos/database').TaxRateCollection;
+type TemplateCollection = import('@wcpos/database').TemplateCollection;
 
 type Collection =
 	| ProductCollection
@@ -41,7 +42,8 @@ type Collection =
 	| ProductTagCollection
 	| OrderCollection
 	| CustomerCollection
-	| TaxRateCollection;
+	| TaxRateCollection
+	| TemplateCollection;
 
 interface CollectionReplicationConfig<Collection> {
 	collection: Collection;
