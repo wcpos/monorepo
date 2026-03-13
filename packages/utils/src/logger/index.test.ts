@@ -167,5 +167,21 @@ describe('logger/index', () => {
 			};
 			expect(() => setDatabase(mockCollection)).not.toThrow();
 		});
+
+		it('should prune log entries older than 30 days on init', async () => {
+			const mockRemove = jest.fn().mockResolvedValue([{ id: '1' }, { id: '2' }]);
+			const mockFind = jest.fn().mockReturnValue({ remove: mockRemove });
+			const mockCollection = { insert: jest.fn(), find: mockFind };
+
+			setDatabase(mockCollection);
+
+			// Let the microtask (find().remove().then()) settle
+			await Promise.resolve();
+
+			expect(mockFind).toHaveBeenCalledWith({
+				selector: { timestamp: { $lt: expect.any(Number) } },
+			});
+			expect(mockRemove).toHaveBeenCalled();
+		});
 	});
 });
