@@ -13,12 +13,12 @@ export interface IndexedDBSnapshot {
 			[storeName: string]: {
 				keyPath: string | string[] | null;
 				autoIncrement: boolean;
-				indexes: Array<{
+				indexes: {
 					name: string;
 					keyPath: string | string[];
 					unique: boolean;
 					multiEntry: boolean;
-				}>;
+				}[];
 				records: any[];
 			};
 		};
@@ -36,12 +36,29 @@ export interface SavedAuthState {
 /**
  * Restore an IndexedDB snapshot into the current page.
  *
- * Creates databases with the exact same version, object stores, indexes,
- * and records as the original. Must be called after page.goto() so the
- * page has an origin for IndexedDB.
+ * Deletes any existing databases first to avoid VersionError when the app
+ * has already created databases at a higher schema version. Then recreates
+ * databases with the exact version, object stores, indexes, and records
+ * from the snapshot.
+ *
+ * Must be called after page.goto() so the page has an origin for IndexedDB.
  */
 export async function restoreIndexedDB(page: Page, snapshot: IndexedDBSnapshot): Promise<void> {
 	await page.evaluate(async (data: IndexedDBSnapshot) => {
+		// Delete any existing databases that we're about to restore.
+		// This prevents VersionError when the app's JS has already created
+		// databases at a different version than the snapshot.
+		const existingDbs = await indexedDB.databases();
+		for (const dbInfo of existingDbs) {
+			if (dbInfo.name && dbInfo.name in data) {
+				await new Promise<void>((resolve) => {
+					const req = indexedDB.deleteDatabase(dbInfo.name!);
+					req.onsuccess = () => resolve();
+					req.onerror = () => resolve(); // proceed even if delete fails
+				});
+			}
+		}
+
 		for (const [dbName, dbData] of Object.entries(data)) {
 			const storeConfigs = dbData.stores;
 
@@ -97,10 +114,7 @@ export async function restoreIndexedDB(page: Page, snapshot: IndexedDBSnapshot):
 /**
  * Restore localStorage from a saved state.
  */
-export async function restoreLocalStorage(
-	page: Page,
-	data: Record<string, string>
-): Promise<void> {
+export async function restoreLocalStorage(page: Page, data: Record<string, string>): Promise<void> {
 	await page.evaluate((ls: Record<string, string>) => {
 		for (const [key, value] of Object.entries(ls)) {
 			localStorage.setItem(key, value);
