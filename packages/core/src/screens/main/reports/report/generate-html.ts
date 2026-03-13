@@ -219,7 +219,7 @@ export function generateZReportHTML(data: ReportData): string {
 			${row('Total Net Sales:', netSales)}
 			${row('Total Tax Collected:', totalTax)}
 			${row('Total Sales:', total, true)}
-			${refundTotal ? row(`${t.totalRefunds}:`, refundTotal) : ''}
+			${refundTotal.length > 0 ? row(`${t.totalRefunds}:`, refundTotal) : ''}
 			${row('Total Discounts:', discountTotal)}
 			<div class="br"></div>
 

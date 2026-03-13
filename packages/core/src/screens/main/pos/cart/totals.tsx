@@ -90,7 +90,7 @@ export function Totals() {
 	const hasTotals =
 		hasSubtotal || hasSaleDiscount || hasCoupons || hasShipping || hasFee || hasTax || hasRefunds;
 	const refundTotal = hasRefunds
-		? refunds.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0)
+		? (refunds ?? []).reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0)
 		: 0;
 	const netPayment = parseFloat(orderTotal ?? '0') - refundTotal;
 
@@ -165,7 +165,7 @@ export function Totals() {
 							/>
 						</ErrorBoundary>
 					) : null}
-					{hasRefunds && (
+					{hasRefunds && refunds && (
 						<>
 							{refunds.map((refund) => {
 								const refundAmount = Math.abs(parseFloat(refund.total || '0'));
