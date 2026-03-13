@@ -197,7 +197,7 @@ export const useCartLines = () => {
 
 			// Always apply discounts to line items (even if coupon amounts haven't changed,
 			// the line items may have been reset by a quantity/price change)
-			const discountedLineItems = computeDiscountedLineItems(allLineItems, allPerItemDiscounts);
+			const discountedLineItems = computeDiscountedLineItems(allLineItems, allPerItemDiscounts, pricesIncludeTax);
 
 			// Merge updated local coupons back into full list to preserve synced coupons
 			const updatedByCode = new Map(updatedCouponLines.map((cl: any) => [cl.code, cl]));

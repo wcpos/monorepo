@@ -189,7 +189,7 @@ export const useAddCoupon = () => {
 
 				const discountedLineItems = computeDiscountedLineItems(latestOrder.line_items || [], [
 					discountResult.perItem,
-				]);
+				], pricesIncludeTax);
 				const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
 					discountResult.perItem,
 					lineItems,

@@ -132,10 +132,12 @@ export function computeDiscountedLineItems<
 		product_id?: number | null;
 		total?: string;
 		total_tax?: string;
+		subtotal?: string;
+		subtotal_tax?: string;
 		taxes?: { id?: number; subtotal?: string; total?: string; [key: string]: any }[];
 		[key: string]: any;
 	},
->(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][]): T[] {
+>(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][], pricesIncludeTax = false): T[] {
 	if (allPerItemDiscounts.length === 0) return lineItems;
 
 	const discountMap = new Map<number, number>();
@@ -169,7 +171,19 @@ export function computeDiscountedLineItems<
 		const currentTotalTax = parseFloat(item.total_tax || '0');
 
 		const productTotal = totalByProductId.get(pid) || currentTotal;
-		const itemDiscount = totalDiscountForProduct * (currentTotal / productTotal);
+		let itemDiscount = totalDiscountForProduct * (currentTotal / productTotal);
+
+		// When prices include tax, the discount amount is tax-inclusive but line item
+		// totals are stored ex-tax. Extract the tax portion before subtracting.
+		if (pricesIncludeTax) {
+			const subtotal = parseFloat(item.subtotal || '0');
+			const subtotalTax = parseFloat(item.subtotal_tax || '0');
+			const effectiveTaxRate = subtotal > 0 ? subtotalTax / subtotal : 0;
+			if (effectiveTaxRate > 0) {
+				itemDiscount = itemDiscount / (1 + effectiveTaxRate);
+			}
+		}
+
 		const newTotal = Math.max(0, currentTotal - itemDiscount);
 		const ratio = currentTotal > 0 ? newTotal / currentTotal : 0;
 		const newTotalTax = currentTotalTax * ratio;
