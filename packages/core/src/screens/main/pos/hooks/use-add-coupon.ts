@@ -105,7 +105,7 @@ export const useAddCoupon = () => {
 					return {
 						product_id: item.product_id,
 						quantity: qty,
-						price: parseFloat(item.subtotal || '0') / qty,
+						price: parseFloat(item.total || '0') / qty,
 						subtotal: item.subtotal || '0',
 						total: item.total || '0',
 						categories: product?.categories || [],
