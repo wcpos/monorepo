@@ -44,8 +44,8 @@ importers:
         specifier: ^1.11.0
         version: 1.13.6
       better-sqlite3:
-        specifier: 12.6.2
-        version: 12.6.2
+        specifier: 12.8.0
+        version: 12.8.0
       electron-log:
         specifier: ^5.4.3
         version: 5.4.3
@@ -117,8 +117,8 @@ importers:
         specifier: ^9.2.1
         version: 9.2.1
       electron:
-        specifier: 40.8.0
-        version: 40.8.0
+        specifier: 41.0.2
+        version: 41.0.2
       electron-debug:
         specifier: ^4.1.0
         version: 4.1.0
@@ -6051,8 +6051,8 @@ packages:
     resolution: {integrity: sha512-aVNobHnJqLiUelTaHat9DZ1qM2w0C0Eym4LPI/3JxOnSokGVdsl1T1kN7TFvsEAD8G47A6VKQ0TVHqbBnYMJlQ==}
     engines: {node: '>=12.0.0'}
 
-  better-sqlite3@12.6.2:
-    resolution: {integrity: sha512-8VYKM3MjCa9WcaSAI3hzwhmyHVlH8tiGFwf0RlTsZPWJ1I5MkzjiudCo4KC4DxOaL/53A5B1sI/IbldNFDbsKA==}
+  better-sqlite3@12.8.0:
+    resolution: {integrity: sha512-RxD2Vd96sQDjQr20kdP+F+dK/1OUNiVOl200vKBZY8u0vTwysfolF6Hq+3ZK2+h8My9YvZhHsF+RSGZW2VYrPQ==}
     engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x}
 
   big-integer@1.6.52:
@@ -7044,8 +7044,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@40.8.0:
-    resolution: {integrity: sha512-WoPq0Nr9Yx3g7T6VnJXdwa/rr2+VRyH3a+K+ezfMKBlf6WjxE/LmhMQabKbb6yjm9RbZhJBRcYyoLph421O2mQ==}
+  electron@41.0.2:
+    resolution: {integrity: sha512-raotm/aO8kOs1jD8SI8ssJ7EKciQOY295AOOprl1TxW7B0At8m5Ae7qNU1xdMxofiHMR8cNEGi9PKD3U+yT/mA==}
     engines: {node: '>= 12.20.55'}
     hasBin: true
 
@@ -19287,7 +19287,7 @@ snapshots:
     dependencies:
       open: 8.4.2
 
-  better-sqlite3@12.6.2:
+  better-sqlite3@12.8.0:
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3
@@ -20407,7 +20407,7 @@ snapshots:
       - supports-color
     optional: true
 
-  electron@40.8.0:
+  electron@41.0.2:
     dependencies:
       '@electron/get': 2.0.3
       '@types/node': 24.12.0
