@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
 import { v4 as uuidv4 } from 'uuid';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -8,14 +7,12 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { calculateCouponDiscount } from './coupon-discount';
 import {
-	applyPerItemDiscountsToLineItems,
 	calculateCouponDiscountTaxSplit,
 	computeDiscountedLineItems,
 	convertDiscountsToExTax,
 	isProductOnSale,
 } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
-import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useCollection } from '../../hooks/use-collection';
@@ -36,16 +33,10 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
 export const useAddCoupon = () => {
 	const { localPatch } = useLocalMutation();
 	const t = useT();
-	const { store } = useAppState();
 	const { currentOrder } = useCurrentOrder();
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
 	const { rates: taxRates, pricesIncludeTax } = useTaxRates();
-	const woocommerceSequential = useObservableEagerState(
-		(store as any).woocommerce_calc_discounts_sequentially$
-	);
-	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
-	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
 
 	const orderLogger = React.useMemo(
 		() =>
@@ -144,42 +135,11 @@ export const useAddCoupon = () => {
 					exclude_sale_items: couponData.exclude_sale_items || false,
 				};
 
-				let discountItems = couponLineItems;
-				if (calcDiscountsSequentially && appliedCouponLines.length > 0) {
-					for (const appliedCouponLine of appliedCouponLines) {
-						const appliedCoupon = await couponCollection
-							.findOne({ selector: { code: appliedCouponLine.code } })
-							.exec();
-						if (!appliedCoupon) continue;
-
-						const appliedCouponData = appliedCoupon.toJSON();
-						const appliedResult = calculateCouponDiscount(
-							{
-								discount_type: appliedCouponData.discount_type as any,
-								amount: appliedCouponData.amount || '0',
-								limit_usage_to_x_items: appliedCouponData.limit_usage_to_x_items ?? null,
-								product_ids: [...(appliedCouponData.product_ids || [])],
-								excluded_product_ids: [...(appliedCouponData.excluded_product_ids || [])],
-								product_categories: [...(appliedCouponData.product_categories || [])],
-								excluded_product_categories: [
-									...(appliedCouponData.excluded_product_categories || []),
-								],
-								exclude_sale_items: appliedCouponData.exclude_sale_items || false,
-							},
-							discountItems
-						);
-
-						const exTaxPerItem = convertDiscountsToExTax(
-							appliedResult.perItem,
-							lineItems,
-							appliedCouponData.discount_type || '',
-							pricesIncludeTax
-						);
-						discountItems = applyPerItemDiscountsToLineItems(discountItems, exTaxPerItem);
-					}
-				}
-
-				const discountResult = calculateCouponDiscount(couponConfig, discountItems);
+				// Sequential replay is unnecessary: couponLineItems.price is derived
+				// from item.total which already reflects previously applied coupons.
+				// Each new coupon naturally sees prices reduced by prior coupons,
+				// matching WooCommerce's recalculate_coupons() behavior.
+				const discountResult = calculateCouponDiscount(couponConfig, couponLineItems);
 
 				// 6. Normalize discounts to ex-tax, then apply to line items and coupon line
 				const exTaxPerItem = convertDiscountsToExTax(
@@ -276,7 +236,6 @@ export const useAddCoupon = () => {
 			localPatch,
 			t,
 			orderLogger,
-			calcDiscountsSequentially,
 			taxRates,
 			pricesIncludeTax,
 		]
