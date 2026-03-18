@@ -13,17 +13,17 @@ export async function printFromUrl(
 	let html: string;
 	try {
 		const response = await fetch(url, { signal: controller.signal });
-		clearTimeout(timeoutId);
 		if (!response.ok) {
 			throw new Error(`Failed to fetch receipt: ${response.status}`);
 		}
 		html = await response.text();
 	} catch (err) {
-		clearTimeout(timeoutId);
-		if (err instanceof DOMException && err.name === 'AbortError') {
+		if (err instanceof Error && err.name === 'AbortError') {
 			throw new Error(`Receipt fetch timed out after ${FETCH_TIMEOUT_MS}ms`);
 		}
 		throw err;
+	} finally {
+		clearTimeout(timeoutId);
 	}
 
 	await printHtml(html);
