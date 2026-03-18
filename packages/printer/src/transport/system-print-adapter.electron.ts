@@ -49,9 +49,9 @@ export class SystemPrintAdapter implements PrinterTransport {
 				cleanup();
 				resolve();
 			});
-			const unsubError = ipc.on(errorChannel, (_error: unknown) => {
+			const unsubError = ipc.on(errorChannel, (error: unknown) => {
 				cleanup();
-				reject(new Error(`Electron print failed: ${String(_error)}`));
+				reject(new Error(`Electron print failed: ${String(error)}`));
 			});
 
 			// Send HTML as a data URL so the existing handler can load it

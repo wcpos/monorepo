@@ -23,8 +23,8 @@ interface PrinterSwitcherProps {
 
 /**
  * Dropdown for selecting which printer to send the current print job to.
- * Shows all configured printers plus "Auto (routed)" and "System Dialog" options.
- * Hidden when no printers are configured (system dialog is implicit).
+ * Shows all configured printers plus an "Auto" option that routes to the resolved printer.
+ * Hidden when no printers are configured.
  */
 export function PrinterSwitcher({
 	printers,
