@@ -19,3 +19,7 @@ updates:
         dependency-type: "development"
         patterns:
           - "*"
+      production-dependencies:
+        dependency-type: "production"
+        patterns:
+          - "*"
