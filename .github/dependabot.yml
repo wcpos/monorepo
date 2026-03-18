@@ -14,6 +14,30 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # Expo/React Native ecosystem — managed via `npx expo install`
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "@expo/*"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      - dependency-name: "@react-native/*"
+      - dependency-name: "@react-native-community/*"
+      - dependency-name: "@shopify/react-native-skia"
+      - dependency-name: "jest-expo"
+      - dependency-name: "react-native-nitro-modules"
+      # React is pinned to Expo's required version via pnpm overrides
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      # Avoid surprise major version bumps for test tooling
+      - dependency-name: "jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "jest-environment-jsdom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "jsdom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: "development"
