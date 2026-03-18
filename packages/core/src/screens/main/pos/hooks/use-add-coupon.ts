@@ -149,10 +149,8 @@ export const useAddCoupon = () => {
 					pricesIncludeTax
 				);
 
-				const latestOrder = currentOrder.getLatest();
-
 				// Bail if cart changed during async coupon lookups to avoid stale writes
-				if (latestOrder !== order) {
+				if (currentOrder.getLatest() !== order) {
 					return {
 						success: false,
 						error: t('pos_cart.cart_changed', {
@@ -161,7 +159,7 @@ export const useAddCoupon = () => {
 					};
 				}
 
-				const discountedLineItems = computeDiscountedLineItems(latestOrder.line_items || [], [
+				const discountedLineItems = computeDiscountedLineItems(order.line_items || [], [
 					exTaxPerItem,
 				]);
 				const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
@@ -176,10 +174,10 @@ export const useAddCoupon = () => {
 					}[]
 				);
 				const patchResult = await localPatch({
-					document: latestOrder,
+					document: order,
 					data: {
 						coupon_lines: [
-							...(latestOrder.coupon_lines || []),
+							...(order.coupon_lines || []),
 							{
 								code: couponData.code,
 								discount,
