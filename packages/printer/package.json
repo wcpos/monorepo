@@ -12,8 +12,8 @@
     "p-queue": "^8.1.0"
   },
   "devDependencies": {
-    "jsdom": "^26.1.0",
-    "vitest": "^4.0.18"
+    "jsdom": "^29.0.0",
+    "vitest": "^4.1.0"
   },
   "peerDependencies": {
     "expo-print": ">=55.0.0",
