@@ -40,7 +40,7 @@ jobs:
   deploy:
     name: 🚀 Deploy
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    if: github.actor != 'dependabot[bot]' && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
       is_production: ${{ steps.get-url.outputs.is_production }}
