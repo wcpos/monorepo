@@ -38,19 +38,8 @@ export function TemplateSwitcher({
 		return null;
 	}
 
-	/**
-	 * Build a display label that includes the badge info, since SelectItem
-	 * renders its label through SelectPrimitive.ItemText rather than children.
-	 */
 	function buildLabel(tmpl: TemplateDocument): string {
-		const title = tmpl.title ?? '';
-		if (tmpl.offline_capable) {
-			return `${title}  —  ${t('receipt.badge_offline', 'Offline')}`;
-		}
-		if (isOffline) {
-			return `${title}  —  ${t('receipt.requires_internet', 'Requires internet')}`;
-		}
-		return `${title}  —  ${t('receipt.badge_php', 'PHP')}`;
+		return tmpl.title ?? '';
 	}
 
 	const selectedStringId = selectedId != null ? String(selectedId) : undefined;

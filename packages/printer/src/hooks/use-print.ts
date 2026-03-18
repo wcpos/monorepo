@@ -71,6 +71,10 @@ function printUrlViaElectron(url: string): Promise<void> {
 		const afterChannel = `onAfterPrint-${jobId}`;
 		const errorChannel = `onPrintError-${jobId}`;
 
+		// ipc.on() returns an unsubscribe function (preload doesn't expose removeListener)
+		let unsubAfter: (() => void) | undefined;
+		let unsubError: (() => void) | undefined;
+
 		const timeoutId = setTimeout(() => {
 			cleanup();
 			reject(new Error(`Electron print timed out after ${FETCH_TIMEOUT_MS}ms`));
@@ -78,21 +82,18 @@ function printUrlViaElectron(url: string): Promise<void> {
 
 		const cleanup = () => {
 			clearTimeout(timeoutId);
-			ipc.removeListener(afterChannel, onAfter);
-			ipc.removeListener(errorChannel, onError);
+			unsubAfter?.();
+			unsubError?.();
 		};
 
-		const onAfter = () => {
+		unsubAfter = ipc.on(afterChannel, () => {
 			cleanup();
 			resolve();
-		};
-		const onError = (_event: unknown, error?: unknown) => {
+		});
+		unsubError = ipc.on(errorChannel, (_event: unknown, error?: unknown) => {
 			cleanup();
 			reject(new Error(`Electron print failed: ${String(error ?? 'unknown error')}`));
-		};
-
-		ipc.once(afterChannel, onAfter);
-		ipc.once(errorChannel, onError);
+		});
 
 		ipc.send('print-external-url', {
 			externalURL: url,

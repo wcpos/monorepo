@@ -345,6 +345,7 @@
 	"coupons.select_discount_type": "Select discount type",
 	"coupons.select_status": "Select status",
 	"coupons.status": "Status",
+	"coupons.trash": "Trash",
 	"customers.add_customer": "Add Customer",
 	"customers.are_you_sure_you_want_to": "Are you sure you want to delete this user? Deleting a user is permanent, there is no Trash for WordPress users.",
 	"customers.confirm": "Confirm",

@@ -16,8 +16,8 @@ interface Props {
 export function FilterBar({ query }: Props) {
 	return (
 		<HStack className="w-full flex-wrap">
-			<DiscountTypePill query={query} />
 			<StatusPill query={query} />
+			<DiscountTypePill query={query} />
 			<DateRangePill query={query} />
 		</HStack>
 	);
