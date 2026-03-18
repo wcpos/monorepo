@@ -1,4 +1,4 @@
-const FETCH_TIMEOUT_MS = 10_000;
+import { FETCH_TIMEOUT_MS } from './constants';
 
 /**
  * Default (web + native) implementation: fetch the URL and print the HTML.

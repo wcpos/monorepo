@@ -1,4 +1,4 @@
-const FETCH_TIMEOUT_MS = 10_000;
+import { FETCH_TIMEOUT_MS } from './constants';
 
 interface ElectronIpc {
 	send: (channel: string, args: unknown) => void;
