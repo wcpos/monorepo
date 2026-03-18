@@ -21,8 +21,6 @@ interface TemplateSwitcherProps {
 
 /**
  * Dropdown for switching between active receipt templates.
- * Each item label includes an indicator: "Offline" for logicless templates,
- * "PHP" for legacy templates, or "Requires internet" for PHP templates when offline.
  * PHP templates are disabled when offline.
  * Hidden entirely if only one template is available.
  */

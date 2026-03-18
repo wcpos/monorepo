@@ -33,9 +33,13 @@ export function DataTableHeader({
 
 	if (disableSort) {
 		return (
-			<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
-				{header}
-			</Text>
+			<HStack
+				className={`h-full w-full justify-center ${align === 'right' ? 'items-end' : align === 'center' ? 'items-center' : 'items-start'}`}
+			>
+				<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
+					{header}
+				</Text>
+			</HStack>
 		);
 	}
 
