@@ -13,7 +13,7 @@ type LogDocument = import('@wcpos/database').LogDocument;
  */
 export function Date({ row }: CellContext<{ document: LogDocument }, 'timestamp'>) {
 	const item = row.original.document;
-	const dateFormatted = useDateFormat(item.timestamp != null ? String(item.timestamp) : '');
+	const dateFormatted = useDateFormat(item.timestamp ?? '');
 
 	return <Text>{dateFormatted}</Text>;
 }

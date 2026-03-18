@@ -29,10 +29,10 @@ export function StatusPill({ query }: Props) {
 
 	const items = React.useMemo(
 		() => [
-			{ value: 'publish', label: t('common.published') },
-			{ value: 'draft', label: t('common.draft') },
-			{ value: 'pending', label: t('common.pending') },
-			{ value: 'trash', label: t('common.trash') },
+			{ value: 'publish', label: t('coupons.publish') },
+			{ value: 'draft', label: t('coupons.draft') },
+			{ value: 'pending', label: t('coupons.pending') },
+			{ value: 'trash', label: t('coupons.trash') },
 		],
 		[t]
 	);
