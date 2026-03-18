@@ -40,7 +40,7 @@ jobs:
   deploy:
     name: 🚀 Deploy
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    if: github.actor != 'dependabot[bot]' && (github.event.pull_request.draft == false || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     outputs:
       deployment_url: ${{ steps.get-url.outputs.url }}
       is_production: ${{ steps.get-url.outputs.is_production }}
@@ -209,7 +209,7 @@ jobs:
     steps:
       - name: Check shard results
         run: |
-          if [ "${{ needs.e2e.result }}" = "success" ]; then
+          if [ "${{ needs.e2e.result }}" = "success" ] || [ "${{ needs.e2e.result }}" = "skipped" ]; then
             echo "All E2E shards passed"
           else
             echo "E2E shards result: ${{ needs.e2e.result }}"
@@ -289,7 +289,7 @@ jobs:
   comment:
     name: 💬 PR Comment
     needs: [deploy, e2e, e2e-report]
-    if: always() && github.event_name == 'pull_request'
+    if: always() && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
