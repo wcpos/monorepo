@@ -1,5 +1,6 @@
 export { encodeReceipt } from './encoder/encode-receipt';
 export type { EncodeReceiptOptions } from './encoder/encode-receipt';
+export { formatReceiptData } from './encoder/format-receipt-data';
 export { mapReceiptData } from './encoder/map-receipt-data';
 export type { ReceiptData } from './encoder/types';
 export {
