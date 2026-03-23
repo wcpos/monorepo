@@ -81,6 +81,32 @@ jest.mock('./use-calculate-line-item-tax-and-totals', () => ({
 	}),
 }));
 
+// Mock useTaxRates
+jest.mock('../../contexts/tax-rates', () => ({
+	useTaxRates: () => ({
+		rates: [],
+		pricesIncludeTax: false,
+	}),
+}));
+
+// Mock useCollection
+jest.mock('../../hooks/use-collection', () => ({
+	useCollection: () => ({
+		collection: {
+			findOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) }),
+			find: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }),
+		},
+	}),
+}));
+
+// Mock coupon-recalculate
+jest.mock('./coupon-recalculate', () => ({
+	recalculateCoupons: jest.fn().mockImplementation(({ lineItems, couponLines }) => ({
+		lineItems,
+		couponLines,
+	})),
+}));
+
 // Mock useLineItemData
 jest.mock('./use-line-item-data', () => ({
 	useLineItemData: () => ({
