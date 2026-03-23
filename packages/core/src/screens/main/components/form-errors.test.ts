@@ -58,7 +58,7 @@ describe('FormErrors error pipeline', () => {
 	 * The zodResolver returns { errors, values } — we can call it directly
 	 * to see what error structure React Hook Form would receive.
 	 */
-	// Cast needed: project uses Zod v3, @hookform/resolvers v5 expects Zod v4
+	// Cast needed for direct resolver invocation in tests
 	const resolver = zodResolver(formSchema as never) as never as (
 		values: unknown,
 		context: unknown,
