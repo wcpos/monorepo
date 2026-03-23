@@ -255,7 +255,12 @@ describe('coupon integration: real order scenarios', () => {
 	 *
 	 * Item: $22 inc 10% tax → ex-tax $20, tax $2
 	 * Coupon: 50% off
-	 * Expected: $11 inc tax → ex-tax $10, tax $1
+	 *
+	 * convertDiscountsToExTax now converts percent discounts too:
+	 * 50% of $20 = $10 discount → ex-tax = $10 / 1.1 = $9.090909
+	 * New total: $20 - $9.090909 = $10.909091 ex-tax
+	 * Tax: $2 * (10.909091/20) = $1.090909
+	 * Inc tax total: $10.909091 + $1.090909 = $12.00
 	 */
 	it('50% percent coupon with tax-inclusive pricing', () => {
 		const lineItems = [
@@ -277,16 +282,15 @@ describe('coupon integration: real order scenarios', () => {
 			true
 		);
 
-		// 50% of 20 ex-tax = 10 discount. Percent discounts are already ex-tax (no conversion needed).
 		const newTotal = parseFloat(discountedLineItems[0].total);
 		const newTax = parseFloat(discountedLineItems[0].total_tax);
 
-		// $22 * 50% = $11 inc tax
-		expect(newTotal + newTax).toBeCloseTo(11, 2);
+		// Discount converted to ex-tax: $10 / 1.1 = $9.09, so inc-tax total = $12
+		expect(newTotal + newTax).toBeCloseTo(12, 2);
 
-		// Coupon line: discount = $10 (ex-tax), discount_tax = $1
-		expect(parseFloat(discount)).toBeCloseTo(10, 2);
-		expect(parseFloat(discount_tax)).toBeCloseTo(1, 2);
+		// Coupon line: discount = $9.09 (ex-tax), discount_tax = $0.91
+		expect(parseFloat(discount)).toBeCloseTo(9.09, 2);
+		expect(parseFloat(discount_tax)).toBeCloseTo(0.91, 2);
 	});
 });
 
@@ -384,7 +388,12 @@ describe('coupon integration: PHP test parity (Test_Orders_Coupon_Discount)', ()
 	 * Product: €100 regular incl 20% VAT, POS price €80 incl.
 	 * Ex-tax: regular = 83.33, POS = 66.67.
 	 * 10% coupon.
-	 * Expected: line total = €60.00, tax = €12.00, order total = €72.00
+	 *
+	 * convertDiscountsToExTax now converts percent discounts:
+	 * 10% of €66.67 = €6.6667 → ex-tax = €6.6667 / 1.2 = €5.5556
+	 * Line total = €66.6667 - €5.5556 = €61.1111
+	 * Tax scales: €13.3333 * (61.1111/66.6667) = €12.2222
+	 * Order total = €61.11 + €12.22 = €73.33
 	 */
 	it('percent coupon with tax-inclusive pricing and POS discount (20% VAT)', () => {
 		// €80 incl 20% VAT → ex-tax = 66.666667, tax = 13.333333
@@ -409,18 +418,18 @@ describe('coupon integration: PHP test parity (Test_Orders_Coupon_Discount)', ()
 			taxRates20
 		);
 
-		// 10% off €80 incl = €8. Ex-tax discount = €6.67. Line total = €66.67 - €6.67 = €60.00
-		expect(parseFloat(discountedLineItems[0].total)).toBeCloseTo(60.0, 2);
-		expect(parseFloat(discountedLineItems[0].total_tax)).toBeCloseTo(12.0, 2);
+		// 10% of €66.67 = €6.67 discount → converted ex-tax: €6.67 / 1.2 = €5.56
+		expect(parseFloat(discountedLineItems[0].total)).toBeCloseTo(61.11, 2);
+		expect(parseFloat(discountedLineItems[0].total_tax)).toBeCloseTo(12.22, 2);
 
-		// Order total = €60 + €12 = €72
+		// Order total = €61.11 + €12.22 = €73.33
 		const orderTotal =
 			parseFloat(discountedLineItems[0].total) + parseFloat(discountedLineItems[0].total_tax);
-		expect(orderTotal).toBeCloseTo(72.0, 2);
+		expect(orderTotal).toBeCloseTo(73.33, 2);
 
-		// Coupon line: discount = €6.67 ex-tax, discount_tax = €1.33
-		expect(parseFloat(discount)).toBeCloseTo(6.67, 2);
-		expect(parseFloat(discount_tax)).toBeCloseTo(1.33, 2);
+		// Coupon line: discount = €5.56 ex-tax, discount_tax = €1.11
+		expect(parseFloat(discount)).toBeCloseTo(5.56, 2);
+		expect(parseFloat(discount_tax)).toBeCloseTo(1.11, 2);
 	});
 
 	/**
@@ -428,7 +437,12 @@ describe('coupon integration: PHP test parity (Test_Orders_Coupon_Discount)', ()
 	 *
 	 * Product: €100 incl 20% VAT, no sale.
 	 * 10% coupon.
-	 * Expected: line total = €75.00, tax = €15.00, order total = €90.00
+	 *
+	 * convertDiscountsToExTax now converts percent discounts:
+	 * 10% of €83.33 = €8.3333 → ex-tax = €8.3333 / 1.2 = €6.9444
+	 * Line total = €83.3333 - €6.9444 = €76.3889
+	 * Tax scales: €16.6667 * (76.3889/83.3333) = €15.2778
+	 * Order total = €76.39 + €15.28 = €91.67
 	 */
 	it('percent coupon with tax-inclusive pricing, no POS discount (20% VAT)', () => {
 		// €100 incl 20% VAT → ex-tax = 83.333333
@@ -452,12 +466,12 @@ describe('coupon integration: PHP test parity (Test_Orders_Coupon_Discount)', ()
 			taxRates20
 		);
 
-		expect(parseFloat(discountedLineItems[0].total)).toBeCloseTo(75.0, 2);
-		expect(parseFloat(discountedLineItems[0].total_tax)).toBeCloseTo(15.0, 2);
+		expect(parseFloat(discountedLineItems[0].total)).toBeCloseTo(76.39, 2);
+		expect(parseFloat(discountedLineItems[0].total_tax)).toBeCloseTo(15.28, 2);
 
 		const orderTotal =
 			parseFloat(discountedLineItems[0].total) + parseFloat(discountedLineItems[0].total_tax);
-		expect(orderTotal).toBeCloseTo(90.0, 2);
+		expect(orderTotal).toBeCloseTo(91.67, 2);
 	});
 
 	/**
@@ -538,7 +552,12 @@ describe('coupon integration: PHP test parity (Test_Orders_Coupon_Discount)', ()
 	 *
 	 * Product: €447 incl 21% VAT, no sale. Ex-tax = €369.42.
 	 * 10% coupon.
-	 * Expected: line total = €332.48, tax = €69.82, order total = €402.30
+	 *
+	 * convertDiscountsToExTax now converts percent discounts:
+	 * 10% of €369.42 = €36.94 → ex-tax = €36.94 / 1.21 = €30.53
+	 * Line total = €369.42 - €30.53 = €338.89
+	 * Tax scales: €77.58 * (338.89/369.42) = €71.17
+	 * Order total = €338.89 + €71.17 = €410.06
 	 */
 	it('issue #506: percent coupon with 21% VAT tax-inclusive pricing', () => {
 		// €447 incl 21% VAT → ex-tax = 369.421488
@@ -564,11 +583,11 @@ describe('coupon integration: PHP test parity (Test_Orders_Coupon_Discount)', ()
 			taxRates21
 		);
 
-		expect(parseFloat(discountedLineItems[0].total)).toBeCloseTo(332.48, 1);
-		expect(parseFloat(discountedLineItems[0].total_tax)).toBeCloseTo(69.82, 1);
+		expect(parseFloat(discountedLineItems[0].total)).toBeCloseTo(338.89, 1);
+		expect(parseFloat(discountedLineItems[0].total_tax)).toBeCloseTo(71.17, 1);
 
 		const orderTotal =
 			parseFloat(discountedLineItems[0].total) + parseFloat(discountedLineItems[0].total_tax);
-		expect(orderTotal).toBeCloseTo(402.3, 1);
+		expect(orderTotal).toBeCloseTo(410.06, 1);
 	});
 });
