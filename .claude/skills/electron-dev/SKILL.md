@@ -1,7 +1,7 @@
 ---
 name: electron-dev
 user-invocable: true
-description: Use when the user wants to spin up Electron dev from a worktree with logs visible in a Terminal window.
+description: Use when the user wants to spin up Electron dev from a worktree with logs visible in a Terminal window. Requires macOS.
 allowed-tools:
   - Bash
   - Read
@@ -90,7 +90,7 @@ cat > /tmp/launch-electron-dev.sh << SCRIPT
 #!/usr/bin/env bash
 osascript <<'APPLESCRIPT'
 tell application "Terminal"
-  do script "cd $WORKTREE_PATH && pnpm --filter @wcpos/app-electron dev"
+  do script "cd \"$WORKTREE_PATH\" && pnpm --filter @wcpos/app-electron dev"
   activate
 end tell
 APPLESCRIPT
