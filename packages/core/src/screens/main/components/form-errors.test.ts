@@ -20,32 +20,8 @@ import * as path from 'path';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
+import { flattenErrors } from './flatten-errors';
 import { metaDataSchema } from './meta-data-schema';
-
-/**
- * Recreate the flattenErrors logic from FormErrors to test it directly.
- * This is the exact same algorithm used in form-errors.tsx.
- */
-function flattenErrors(
-	errors: Record<string, unknown>,
-	errorPath = '',
-	result: { path: string; message: string }[] = []
-): { path: string; message: string }[] {
-	Object.keys(errors).forEach((key) => {
-		const error = errors[key] as Record<string, unknown> | undefined;
-		const currentPath = errorPath ? `${errorPath}.${key}` : key;
-
-		if (error && typeof error === 'object') {
-			if (error.message) {
-				result.push({ path: currentPath, message: String(error.message) });
-			} else {
-				flattenErrors(error as Record<string, unknown>, currentPath, result);
-			}
-		}
-	});
-
-	return result;
-}
 
 const formSchema = z.object({
 	name: z.string().optional(),
