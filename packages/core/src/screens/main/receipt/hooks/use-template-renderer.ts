@@ -89,6 +89,12 @@ export function useTemplateRenderer({
 		[normalisedReceiptData]
 	);
 
+	// Single source of truth for the data shape passed to thermal templates
+	const thermalData = React.useMemo(
+		() => formattedReceiptData ?? normalisedReceiptData ?? receiptData,
+		[formattedReceiptData, normalisedReceiptData, receiptData]
+	);
+
 	const preRenderedCache = React.useMemo(() => {
 		const cache = new Map<string | number, string>();
 		if (!receiptData) return cache;
@@ -97,7 +103,6 @@ export function useTemplateRenderer({
 			if (tmpl.offline_capable && tmpl.content) {
 				try {
 					if (tmpl.engine === 'thermal') {
-						const thermalData = formattedReceiptData ?? normalisedReceiptData ?? receiptData;
 						cache.set(
 							tmpl.id,
 							renderThermalPreview(tmpl.content, thermalData as Record<string, any>)
@@ -111,7 +116,7 @@ export function useTemplateRenderer({
 			}
 		}
 		return cache;
-	}, [templates, receiptData, normalisedReceiptData, formattedReceiptData]);
+	}, [templates, receiptData, thermalData]);
 
 	// Determine output
 	let renderedHtml: string | null = null;
@@ -126,7 +131,6 @@ export function useTemplateRenderer({
 			if (data && selectedTemplate.content) {
 				try {
 					if (selectedTemplate.engine === 'thermal') {
-						const thermalData = formattedReceiptData ?? normalisedReceiptData ?? data;
 						renderedHtml = renderThermalPreview(
 							selectedTemplate.content,
 							thermalData as Record<string, any>
