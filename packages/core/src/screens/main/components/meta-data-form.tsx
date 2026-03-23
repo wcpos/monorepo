@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form';
-import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
@@ -15,18 +14,7 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../contexts/translations';
 
-/**
- *
- */
-export const metaDataSchema = z.array(
-	z.object({
-		id: z.number().optional(),
-		key: z.string(),
-		value: z.string().nullable(),
-		display_key: z.string().optional(),
-		display_value: z.string().optional(),
-	})
-);
+export { metaDataSchema } from './meta-data-schema';
 
 interface MetaDataFormProps {
 	name?: string;

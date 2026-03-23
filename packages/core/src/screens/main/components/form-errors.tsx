@@ -1,47 +1,26 @@
 import React from 'react';
 import { View } from 'react-native';
 
-import { useFormContext } from 'react-hook-form';
+import { useFormState } from 'react-hook-form';
 
 import { Text } from '@wcpos/components/text';
 
+import { flattenErrors } from './flatten-errors';
 import { useT } from '../../../contexts/translations';
 
 /**
  * TODO: this should probably be in the components package, but we need to extract useT first.
  * TODO: translate zod error messages using z.setErrorMap
+ *
+ * NOTE: useFormState (not useFormContext) is required here. useFormContext().formState
+ * relies on the parent component re-rendering to propagate updated errors. If the parent
+ * doesn't read formState.errors itself, it won't re-render when validation fails and
+ * this component would never show errors. useFormState sets up its own subscription
+ * so it re-renders independently when errors change.
  */
 export function FormErrors() {
 	const t = useT();
-	const {
-		formState: { errors },
-	} = useFormContext();
-
-	/**
-	 *
-	 */
-	const flattenErrors = (
-		errors: Record<string, unknown>,
-		path = '',
-		result: { path: string; message: string }[] = []
-	): { path: string; message: string }[] => {
-		Object.keys(errors).forEach((key) => {
-			const error = errors[key] as Record<string, unknown> | undefined;
-			const currentPath = path ? `${path}.${key}` : key;
-
-			if (error && typeof error === 'object') {
-				if (error.message) {
-					// It's a field error
-					result.push({ path: currentPath, message: String(error.message) });
-				} else {
-					// It's a nested object, recurse into it
-					flattenErrors(error as Record<string, unknown>, currentPath, result);
-				}
-			}
-		});
-
-		return result;
-	};
+	const { errors } = useFormState();
 
 	const errorMessages = flattenErrors(errors);
 
