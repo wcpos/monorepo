@@ -18,6 +18,8 @@ export interface CouponDiscountConfig {
 export interface PerItemDiscount {
 	product_id: number;
 	discount: number;
+	/** Stable index into the source line-items array for per-line matching */
+	lineIndex?: number;
 }
 
 export interface DiscountResult {
@@ -133,7 +135,7 @@ function calculatePercentDiscount(
 		const itemTotal = item.price * item.quantity;
 		const discount = round(itemTotal * (percent / 100), 6);
 		const cappedDiscount = Math.min(discount, itemTotal);
-		perItem.push({ product_id: item.product_id, discount: cappedDiscount });
+		perItem.push({ product_id: item.product_id, discount: cappedDiscount, lineIndex: item.lineIndex });
 		totalDiscount += cappedDiscount;
 	}
 
@@ -163,12 +165,12 @@ function calculateFixedCartDiscount(amount: number, items: CouponLineItem[]): Di
 			// Last item gets the remainder to handle rounding residuals
 			const discount = Math.max(0, round(cappedAmount - distributed, 6));
 			const cappedDiscount = Math.min(discount, itemTotal);
-			perItem.push({ product_id: item.product_id, discount: cappedDiscount });
+			perItem.push({ product_id: item.product_id, discount: cappedDiscount, lineIndex: item.lineIndex });
 			distributed += cappedDiscount;
 		} else {
 			const proportion = itemTotal / cartTotal;
 			const discount = round(cappedAmount * proportion, 6);
-			perItem.push({ product_id: item.product_id, discount: Math.min(discount, itemTotal) });
+			perItem.push({ product_id: item.product_id, discount: Math.min(discount, itemTotal), lineIndex: item.lineIndex });
 			distributed += discount;
 		}
 	}
@@ -194,7 +196,7 @@ function calculateFixedProductDiscount(
 	for (const item of targetItems) {
 		const perUnitDiscount = Math.min(amount, item.price);
 		const discount = round(perUnitDiscount * item.quantity, 6);
-		perItem.push({ product_id: item.product_id, discount });
+		perItem.push({ product_id: item.product_id, discount, lineIndex: item.lineIndex });
 		totalDiscount += discount;
 	}
 

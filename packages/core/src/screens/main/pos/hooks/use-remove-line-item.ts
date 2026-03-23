@@ -51,15 +51,29 @@ export const useRemoveLineItem = () => {
 				updatedLines = [...items, itemToRestore];
 			}
 
-			// Perform the patch to restore the item
-			await localPatch({
-				document: order,
-				data: {
-					[type]: updatedLines,
-				},
-			});
+			// If restoring a line_items entry and order has active coupons,
+			// recalculate coupons to keep discounts consistent (mirrors removal path).
+			const activeCouponLines = (order.coupon_lines || []).filter((cl: any) => cl.code != null);
+
+			if (type === 'line_items' && activeCouponLines.length > 0) {
+				const result = await recalculate(updatedLines as any, order.coupon_lines || []);
+				await localPatch({
+					document: order,
+					data: {
+						line_items: result.lineItems,
+						coupon_lines: result.couponLines,
+					},
+				});
+			} else {
+				await localPatch({
+					document: order,
+					data: {
+						[type]: updatedLines,
+					},
+				});
+			}
 		},
-		[currentOrder, localPatch]
+		[currentOrder, localPatch, recalculate]
 	);
 
 	/**

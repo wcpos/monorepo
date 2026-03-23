@@ -13,6 +13,8 @@ export interface CouponLineItem {
 	total: string;
 	categories: { id: number }[];
 	on_sale: boolean;
+	/** Stable index into the source line-items array for per-line matching */
+	lineIndex?: number;
 }
 
 export interface CouponRestrictions {
@@ -53,7 +55,7 @@ export function isLineItemOnSale(
 	if (!meta?.value) return false;
 	try {
 		const posData = JSON.parse(meta.value);
-		if (!posData.price || !posData.regular_price) return false;
+		if (posData.price == null || posData.regular_price == null) return false;
 		const price = parseFloat(posData.price);
 		const regularPrice = parseFloat(posData.regular_price);
 		if (isNaN(price) || isNaN(regularPrice) || regularPrice <= 0) return false;
@@ -131,7 +133,10 @@ export function convertDiscountsToExTax(
 
 	return perItem.map((entry) => {
 		if (entry.discount <= 0) return entry;
-		const li = lineItems.find((item) => item.product_id === entry.product_id);
+		const li =
+			entry.lineIndex != null
+				? lineItems[entry.lineIndex]
+				: lineItems.find((item) => item.product_id === entry.product_id);
 		const subtotal = parseFloat(li?.subtotal || '0');
 		const subtotalTax = parseFloat(li?.subtotal_tax || '0');
 		const rate = subtotal > 0 ? subtotalTax / subtotal : 0;
@@ -193,39 +198,62 @@ export function computeDiscountedLineItems<
 >(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][]): T[] {
 	if (allPerItemDiscounts.length === 0) return lineItems;
 
-	const discountMap = new Map<number, number>();
+	// Check if any discount entry carries lineIndex for per-line matching
+	const hasLineIndex = allPerItemDiscounts.some((perItem) =>
+		perItem.some((d) => d.lineIndex != null)
+	);
+
+	// Per-line discount map: lineIndex -> total discount
+	const lineDiscountMap = new Map<number, number>();
+	// Per-product discount map (fallback): product_id -> total discount
+	const productDiscountMap = new Map<number, number>();
 	for (const perItemDiscounts of allPerItemDiscounts) {
-		for (const { product_id, discount } of perItemDiscounts) {
-			discountMap.set(product_id, (discountMap.get(product_id) || 0) + discount);
+		for (const { product_id, discount, lineIndex } of perItemDiscounts) {
+			if (hasLineIndex && lineIndex != null) {
+				lineDiscountMap.set(lineIndex, (lineDiscountMap.get(lineIndex) || 0) + discount);
+			} else {
+				productDiscountMap.set(product_id, (productDiscountMap.get(product_id) || 0) + discount);
+			}
 		}
 	}
 
-	if (discountMap.size === 0) return lineItems;
+	if (lineDiscountMap.size === 0 && productDiscountMap.size === 0) return lineItems;
 
 	// Sum totals per product_id for proportional distribution when multiple
-	// line items share the same product_id
+	// line items share the same product_id (only needed for product_id fallback)
 	const totalByProductId = new Map<number, number>();
-	for (const item of lineItems) {
-		const pid = item.product_id;
-		if (pid == null || !discountMap.has(pid)) continue;
-		totalByProductId.set(pid, (totalByProductId.get(pid) || 0) + parseFloat(item.total || '0'));
+	if (!hasLineIndex) {
+		for (const item of lineItems) {
+			const pid = item.product_id;
+			if (pid == null || !productDiscountMap.has(pid)) continue;
+			totalByProductId.set(pid, (totalByProductId.get(pid) || 0) + parseFloat(item.total || '0'));
+		}
 	}
 
-	return lineItems.map((item) => {
-		const pid = item.product_id;
-		if (pid == null || !discountMap.has(pid)) return item;
+	return lineItems.map((item, idx) => {
+		let totalDiscountForItem: number;
 
-		const totalDiscountForProduct = discountMap.get(pid)!;
-		if (totalDiscountForProduct <= 0) return item;
+		if (hasLineIndex) {
+			totalDiscountForItem = lineDiscountMap.get(idx) || 0;
+			if (totalDiscountForItem <= 0) return item;
+		} else {
+			const pid = item.product_id;
+			if (pid == null || !productDiscountMap.has(pid)) return item;
+			const totalDiscountForProduct = productDiscountMap.get(pid)!;
+			if (totalDiscountForProduct <= 0) return item;
+			const currentTotal = parseFloat(item.total || '0');
+			const productTotal = totalByProductId.get(pid) || currentTotal;
+			totalDiscountForItem = totalDiscountForProduct * (currentTotal / productTotal);
+		}
+
+		if (totalDiscountForItem <= 0) return item;
 
 		const currentTotal = parseFloat(item.total || '0');
 		if (currentTotal <= 0) return item;
 
 		const currentTotalTax = parseFloat(item.total_tax || '0');
 
-		const productTotal = totalByProductId.get(pid) || currentTotal;
-		const itemDiscount = totalDiscountForProduct * (currentTotal / productTotal);
-		const newTotal = Math.max(0, currentTotal - itemDiscount);
+		const newTotal = Math.max(0, currentTotal - totalDiscountForItem);
 		const ratio = currentTotal > 0 ? newTotal / currentTotal : 0;
 		const newTotalTax = currentTotalTax * ratio;
 
@@ -260,7 +288,10 @@ export function calculateCouponDiscountTaxSplit(
 	for (const entry of perItemDiscounts) {
 		if (entry.discount <= 0) continue;
 
-		const lineItem = lineItems.find((item) => item.product_id === entry.product_id);
+		const lineItem =
+			entry.lineIndex != null
+				? lineItems[entry.lineIndex]
+				: lineItems.find((item) => item.product_id === entry.product_id);
 		const taxClass = isEmpty(lineItem?.tax_class) ? 'standard' : lineItem!.tax_class!;
 		const applicableRates = taxRates.filter((r) => r.class === taxClass);
 

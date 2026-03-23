@@ -128,8 +128,9 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 	// get_subtotal() return pos_data.price during coupon recalculation.
 	const buildCouponLineItems = (items: typeof resetItems): CouponLineItem[] =>
 		items
-			.filter((item) => item.product_id != null)
-			.map((item) => {
+			.map((item, lineIndex) => ({ item, lineIndex }))
+			.filter(({ item }) => item.product_id != null)
+			.map(({ item, lineIndex }) => {
 				const qty = item.quantity ?? 1;
 				const posData = parsePosData(item);
 
@@ -146,6 +147,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 				}
 
 				return {
+					lineIndex,
 					product_id: item.product_id!,
 					quantity: qty,
 					price: qty > 0 ? basePrice / qty : 0,
@@ -166,7 +168,11 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 	const updatedCouponLines = activeCouponLines.map((cl) => {
 		const config = couponConfigs.get(cl.code.toLowerCase());
 		if (!config) {
-			return cl;
+			return {
+				...cl,
+				discount: '0',
+				discount_tax: '0',
+			};
 		}
 
 		const discountResult = calculateCouponDiscount(config, currentItems);
@@ -180,10 +186,16 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 
 		allPerItemDiscounts.push(exTaxPerItem);
 
-		// If sequential mode, reduce prices for next coupon
+		// If sequential mode, reduce prices for next coupon using pre-conversion
+		// discounts (discountResult.perItem) since currentItems.price is still in
+		// the original coupon-price domain (tax-inclusive when pricesIncludeTax).
+		// exTaxPerItem is only for writing back order totals.
 		if (calcDiscountsSequentially) {
 			currentItems = currentItems.map((item) => {
-				const discount = exTaxPerItem.find((d) => d.product_id === item.product_id);
+				const discount =
+					item.lineIndex != null
+						? discountResult.perItem.find((d) => d.lineIndex === item.lineIndex)
+						: discountResult.perItem.find((d) => d.product_id === item.product_id);
 				if (!discount || discount.discount <= 0) return item;
 				const qty = item.quantity || 1;
 				return {

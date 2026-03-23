@@ -42,19 +42,23 @@ export const useRecalculateCoupons = () => {
 			const couponConfigs = new Map<string, CouponDiscountConfig>();
 			for (const code of activeCodes) {
 				const couponDoc = await couponCollection.findOne({ selector: { code } }).exec();
-				if (couponDoc) {
-					const cd = couponDoc.toJSON();
-					couponConfigs.set(code, {
-						discount_type: cd.discount_type as any,
-						amount: cd.amount || '0',
-						limit_usage_to_x_items: cd.limit_usage_to_x_items ?? null,
-						product_ids: [...(cd.product_ids || [])],
-						excluded_product_ids: [...(cd.excluded_product_ids || [])],
-						product_categories: [...(cd.product_categories || [])],
-						excluded_product_categories: [...(cd.excluded_product_categories || [])],
-						exclude_sale_items: cd.exclude_sale_items || false,
-					});
+				if (!couponDoc) {
+					// Abort recalculation when an active coupon is missing from the
+					// local collection — proceeding would silently drop that coupon's
+					// discount and drift totals. Return items unchanged.
+					return { lineItems, couponLines };
 				}
+				const cd = couponDoc.toJSON();
+				couponConfigs.set(code, {
+					discount_type: cd.discount_type as any,
+					amount: cd.amount || '0',
+					limit_usage_to_x_items: cd.limit_usage_to_x_items ?? null,
+					product_ids: [...(cd.product_ids || [])],
+					excluded_product_ids: [...(cd.excluded_product_ids || [])],
+					product_categories: [...(cd.product_categories || [])],
+					excluded_product_categories: [...(cd.excluded_product_categories || [])],
+					exclude_sale_items: cd.exclude_sale_items || false,
+				});
 			}
 
 			// Build product categories map
