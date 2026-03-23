@@ -1,5 +1,7 @@
 import * as z from 'zod';
 
+import { metaDataSchema } from '../meta-data-schema';
+
 export const couponFormSchema = z.object({
 	code: z.string().min(1),
 	amount: z.string().optional().default(''),
@@ -14,15 +16,5 @@ export const couponFormSchema = z.object({
 	minimum_amount: z.string().optional().default(''),
 	maximum_amount: z.string().optional().default(''),
 	email_restrictions: z.array(z.string()).optional().default([]),
-	meta_data: z
-		.array(
-			z.object({
-				id: z.number().optional(),
-				key: z.string(),
-				value: z.string().nullable(),
-				display_key: z.string().optional(),
-				display_value: z.string().optional(),
-			})
-		)
-		.optional(),
+	meta_data: metaDataSchema.optional(),
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 
-import { useFormContext } from 'react-hook-form';
+import { useFormState } from 'react-hook-form';
 
 import { Text } from '@wcpos/components/text';
 
@@ -10,12 +10,16 @@ import { useT } from '../../../contexts/translations';
 /**
  * TODO: this should probably be in the components package, but we need to extract useT first.
  * TODO: translate zod error messages using z.setErrorMap
+ *
+ * NOTE: useFormState (not useFormContext) is required here. useFormContext().formState
+ * relies on the parent component re-rendering to propagate updated errors. If the parent
+ * doesn't read formState.errors itself, it won't re-render when validation fails and
+ * this component would never show errors. useFormState sets up its own subscription
+ * so it re-renders independently when errors change.
  */
 export function FormErrors() {
 	const t = useT();
-	const {
-		formState: { errors },
-	} = useFormContext();
+	const { errors } = useFormState();
 
 	/**
 	 *
