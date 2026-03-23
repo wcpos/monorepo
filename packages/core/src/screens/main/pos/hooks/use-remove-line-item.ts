@@ -64,6 +64,16 @@ export const useRemoveLineItem = () => {
 						coupon_lines: result.couponLines,
 					},
 				});
+			} else if (type === 'coupon_lines') {
+				// Restoring a coupon — recalculate line_items with the restored coupon
+				const result = await recalculate(order.line_items || [], updatedLines as any);
+				await localPatch({
+					document: order,
+					data: {
+						line_items: result.lineItems,
+						coupon_lines: result.couponLines,
+					},
+				});
 			} else {
 				await localPatch({
 					document: order,
@@ -122,7 +132,17 @@ export const useRemoveLineItem = () => {
 			if (type === 'line_items' && activeCouponLines.length > 0) {
 				const result = await recalculate(updatedLines as any, order.coupon_lines || []);
 
-				localPatch({
+				await localPatch({
+					document: order,
+					data: {
+						line_items: result.lineItems,
+						coupon_lines: result.couponLines,
+					},
+				});
+			} else if (type === 'coupon_lines') {
+				// Removing a coupon — recalculate line_items without this coupon
+				const result = await recalculate(order.line_items || [], updatedLines as any);
+				await localPatch({
 					document: order,
 					data: {
 						line_items: result.lineItems,
@@ -130,8 +150,8 @@ export const useRemoveLineItem = () => {
 					},
 				});
 			} else {
-				// Original behavior for non-line_items or no coupons
-				localPatch({
+				// Original behavior for fee_lines/shipping_lines or no coupons
+				await localPatch({
 					document: order,
 					data: {
 						[type]: updatedLines,

@@ -67,9 +67,10 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 	const resetItems = lineItems.map((item) => {
 		const posData = parsePosData(item);
 
-		if (posData?.price != null) {
+		const parsedPosPrice = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
+		if (Number.isFinite(parsedPosPrice)) {
 			const qty = item.quantity ?? 1;
-			const posTotal = parseFloat(posData.price) * qty;
+			const posTotal = parsedPosPrice * qty;
 
 			const subtotal = parseFloat(item.subtotal || '0');
 			const subtotalTax = parseFloat(item.subtotal_tax || '0');
@@ -142,7 +143,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 
 				// Use the reset item's total (ex-tax POS price) as the coupon base
 				let basePrice: number;
-				if (posData?.price != null) {
+				const posPriceParsed = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
+				if (Number.isFinite(posPriceParsed)) {
 					// The reset step already computed ex-tax total from POS price
 					basePrice = parseFloat(item.total || '0');
 				} else {
@@ -208,13 +210,12 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 			});
 		}
 
-		const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
-			exTaxPerItem,
-			resetItems,
-			taxRates
-		);
+		const { discount } = calculateCouponDiscountTaxSplit(exTaxPerItem, resetItems, taxRates);
 
-		return { ...cl, discount, discount_tax };
+		// Keep discount_tax as '0' until client-side tax-line redistribution ships.
+		// WooCommerce recalculates coupon tax on sync; writing it client-side without
+		// updating order tax lines would cause inconsistent totals offline.
+		return { ...cl, discount, discount_tax: '0' };
 	});
 
 	// Step 4: Apply all discounts to line items

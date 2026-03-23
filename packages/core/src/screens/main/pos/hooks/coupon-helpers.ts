@@ -198,18 +198,13 @@ export function computeDiscountedLineItems<
 >(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][]): T[] {
 	if (allPerItemDiscounts.length === 0) return lineItems;
 
-	// Check if any discount entry carries lineIndex for per-line matching
-	const hasLineIndex = allPerItemDiscounts.some((perItem) =>
-		perItem.some((d) => d.lineIndex != null)
-	);
-
 	// Per-line discount map: lineIndex -> total discount
 	const lineDiscountMap = new Map<number, number>();
-	// Per-product discount map (fallback): product_id -> total discount
+	// Per-product discount map (fallback for entries without lineIndex): product_id -> total discount
 	const productDiscountMap = new Map<number, number>();
 	for (const perItemDiscounts of allPerItemDiscounts) {
 		for (const { product_id, discount, lineIndex } of perItemDiscounts) {
-			if (hasLineIndex && lineIndex != null) {
+			if (lineIndex != null) {
 				lineDiscountMap.set(lineIndex, (lineDiscountMap.get(lineIndex) || 0) + discount);
 			} else {
 				productDiscountMap.set(product_id, (productDiscountMap.get(product_id) || 0) + discount);
@@ -220,9 +215,9 @@ export function computeDiscountedLineItems<
 	if (lineDiscountMap.size === 0 && productDiscountMap.size === 0) return lineItems;
 
 	// Sum totals per product_id for proportional distribution when multiple
-	// line items share the same product_id (only needed for product_id fallback)
+	// line items share the same product_id (only needed for product_id-keyed discounts)
 	const totalByProductId = new Map<number, number>();
-	if (!hasLineIndex) {
+	if (productDiscountMap.size > 0) {
 		for (const item of lineItems) {
 			const pid = item.product_id;
 			if (pid == null || !productDiscountMap.has(pid)) continue;
@@ -231,19 +226,18 @@ export function computeDiscountedLineItems<
 	}
 
 	return lineItems.map((item, idx) => {
-		let totalDiscountForItem: number;
+		// Sum discount from per-line map (if this index has one)
+		let totalDiscountForItem = lineDiscountMap.get(idx) || 0;
 
-		if (hasLineIndex) {
-			totalDiscountForItem = lineDiscountMap.get(idx) || 0;
-			if (totalDiscountForItem <= 0) return item;
-		} else {
-			const pid = item.product_id;
-			if (pid == null || !productDiscountMap.has(pid)) return item;
+		// Also add any product-level discount share
+		const pid = item.product_id;
+		if (pid != null && productDiscountMap.has(pid)) {
 			const totalDiscountForProduct = productDiscountMap.get(pid)!;
-			if (totalDiscountForProduct <= 0) return item;
-			const currentTotal = parseFloat(item.total || '0');
-			const productTotal = totalByProductId.get(pid) || currentTotal;
-			totalDiscountForItem = totalDiscountForProduct * (currentTotal / productTotal);
+			if (totalDiscountForProduct > 0) {
+				const currentTotal = parseFloat(item.total || '0');
+				const productTotal = totalByProductId.get(pid) || currentTotal;
+				totalDiscountForItem += totalDiscountForProduct * (currentTotal / productTotal);
+			}
 		}
 
 		if (totalDiscountForItem <= 0) return item;
