@@ -38,6 +38,32 @@ export function isProductOnSale(
 }
 
 /**
+ * Determines whether a POS line item is "on sale" by comparing price to
+ * regular_price in the _woocommerce_pos_data meta.
+ *
+ * This mirrors the server-side check in Orders.php::is_pos_discounted_item_on_sale().
+ * Must be used instead of isProductOnSale() when building CouponLineItems,
+ * because the cashier may have changed the price in the cart.
+ */
+export function isLineItemOnSale(
+	item: { meta_data?: { key?: string; value?: string }[] } | null | undefined
+): boolean {
+	if (!item?.meta_data) return false;
+	const meta = item.meta_data.find((m) => m.key === '_woocommerce_pos_data');
+	if (!meta?.value) return false;
+	try {
+		const posData = JSON.parse(meta.value);
+		if (!posData.price || !posData.regular_price) return false;
+		const price = parseFloat(posData.price);
+		const regularPrice = parseFloat(posData.regular_price);
+		if (isNaN(price) || isNaN(regularPrice) || regularPrice <= 0) return false;
+		return price < regularPrice;
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Filters line items to those eligible for a given coupon based on its restrictions.
  * Mirrors the WooCommerce coupon product/category restriction logic.
  */

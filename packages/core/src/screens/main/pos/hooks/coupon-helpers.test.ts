@@ -13,6 +13,7 @@ import {
 	type CouponLineItem,
 	type CouponRestrictions,
 	getEligibleItems,
+	isLineItemOnSale,
 	isProductOnSale,
 } from './coupon-helpers';
 
@@ -81,6 +82,80 @@ describe('coupon-helpers', () => {
 
 		it('should return false when price is undefined', () => {
 			expect(isProductOnSale({ regular_price: '20' })).toBe(false);
+		});
+	});
+
+	describe('isLineItemOnSale', () => {
+		it('should return true when pos_data price < regular_price', () => {
+			const item = {
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({ price: '16', regular_price: '18' }),
+					},
+				],
+			};
+			expect(isLineItemOnSale(item)).toBe(true);
+		});
+
+		it('should return false when pos_data price == regular_price', () => {
+			const item = {
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({ price: '18', regular_price: '18' }),
+					},
+				],
+			};
+			expect(isLineItemOnSale(item)).toBe(false);
+		});
+
+		it('should return false when no _woocommerce_pos_data meta exists', () => {
+			const item = {
+				meta_data: [{ key: 'some_other_key', value: '{}' }],
+			};
+			expect(isLineItemOnSale(item)).toBe(false);
+		});
+
+		it('should return false when pos_data JSON is invalid', () => {
+			const item = {
+				meta_data: [{ key: '_woocommerce_pos_data', value: 'not-valid-json' }],
+			};
+			expect(isLineItemOnSale(item)).toBe(false);
+		});
+
+		it('should return false when price or regular_price is missing from pos_data', () => {
+			const missingPrice = {
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({ regular_price: '18' }),
+					},
+				],
+			};
+			expect(isLineItemOnSale(missingPrice)).toBe(false);
+
+			const missingRegularPrice = {
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({ price: '16' }),
+					},
+				],
+			};
+			expect(isLineItemOnSale(missingRegularPrice)).toBe(false);
+		});
+
+		it('should return false for null item', () => {
+			expect(isLineItemOnSale(null)).toBe(false);
+		});
+
+		it('should return false for undefined item', () => {
+			expect(isLineItemOnSale(undefined)).toBe(false);
+		});
+
+		it('should return false when meta_data is missing', () => {
+			expect(isLineItemOnSale({})).toBe(false);
 		});
 	});
 
