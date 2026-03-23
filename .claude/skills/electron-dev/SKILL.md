@@ -17,24 +17,34 @@ Spins up the Electron app from an isolated worktree with logs in a visible Termi
 
 Run each step sequentially. Do NOT skip steps. Do NOT use `run_in_background`.
 
-### 1. Pull latest
+### 1. Fetch latest main
+
+Fetch only — do NOT pull or merge into the current branch:
 
 ```bash
-git pull origin main
+git fetch origin main
 ```
 
 ### 2. Create worktree
 
 ```bash
-git worktree add .worktrees/electron-dev -b electron-dev-session
+git worktree add .worktrees/electron-dev origin/main -b electron-dev-session
 ```
 
-If the branch already exists, remove the old worktree first:
+If the branch already exists, check for uncommitted work before removing:
 
 ```bash
-git worktree remove .worktrees/electron-dev --force 2>/dev/null
-git branch -D electron-dev-session 2>/dev/null
-git worktree add .worktrees/electron-dev -b electron-dev-session
+# Check if the existing worktree has uncommitted changes
+if git -C .worktrees/electron-dev status --porcelain 2>/dev/null | grep -q .; then
+  echo "ERROR: .worktrees/electron-dev has uncommitted changes. Stash or commit them first." && exit 1
+fi
+# Check if the branch has commits not merged into main
+if git log origin/main..electron-dev-session --oneline 2>/dev/null | grep -q .; then
+  echo "ERROR: electron-dev-session has unmerged commits. Merge or back them up first." && exit 1
+fi
+git worktree remove .worktrees/electron-dev 2>/dev/null
+git branch -d electron-dev-session 2>/dev/null
+git worktree add .worktrees/electron-dev origin/main -b electron-dev-session
 ```
 
 ### 3. Init electron submodule and pull latest
