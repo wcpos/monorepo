@@ -178,11 +178,11 @@ describe('recalculateCoupons', () => {
 			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(1.6, 2);
 			// subtotal should remain $18 (unchanged)
 			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(18, 2);
-			// total should be $18 - $1.60 = $16.40
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(16.4, 2);
+			// total should be $16 (POS price) - $1.60 = $14.40
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(14.4, 2);
 		});
 
-		it('should reset total to subtotal when all coupons are removed', () => {
+		it('should reset total to POS price when all coupons are removed', () => {
 			// POS price $16, regular $18, no coupons
 			const result = recalculateCoupons(
 				makeInput({
@@ -192,8 +192,8 @@ describe('recalculateCoupons', () => {
 				})
 			);
 
-			// No coupons: total resets to subtotal = $18
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(18, 2);
+			// No coupons: total resets to POS price = $16 (not regular $18)
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(16, 2);
 		});
 
 		it('should apply percentage coupon correctly to mixed items', () => {
@@ -210,11 +210,11 @@ describe('recalculateCoupons', () => {
 			// 10% of $16 = $1.60, 10% of $20 = $2.00, total coupon = $3.60
 			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(3.6, 2);
 
-			// Item A: subtotal=$18, total = $18 - $1.60 = $16.40
+			// Item A: subtotal=$18, total = $16 (POS price) - $1.60 = $14.40
 			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(18, 2);
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(16.4, 2);
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(14.4, 2);
 
-			// Item B: subtotal=$20, total = $20 - $2.00 = $18.00
+			// Item B: subtotal=$20, total = $20 (POS price) - $2.00 = $18.00
 			expect(parseFloat(result.lineItems[1].subtotal!)).toBeCloseTo(20, 2);
 			expect(parseFloat(result.lineItems[1].total!)).toBeCloseTo(18, 2);
 		});
@@ -241,8 +241,8 @@ describe('recalculateCoupons', () => {
 
 			// Item is on sale, coupon should not apply
 			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(0, 2);
-			// Total should stay at subtotal (reset, no discount applied)
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(18, 2);
+			// Total should stay at POS price (reset, no discount applied)
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(16, 2);
 		});
 
 		it('should NOT exclude non-discounted item when exclude_sale_items is true', () => {
@@ -359,8 +359,8 @@ describe('recalculateCoupons', () => {
 
 			// $5 discount from $16 base
 			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(5, 2);
-			// Total = $18 (subtotal reset) - $5 = $13
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(13, 2);
+			// Total = $16 (POS price reset) - $5 = $11
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(11, 2);
 		});
 	});
 });
