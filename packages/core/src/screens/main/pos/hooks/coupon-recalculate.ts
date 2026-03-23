@@ -123,9 +123,15 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		return { lineItems: resetItems, couponLines };
 	}
 
-	// Step 2: Build CouponLineItems from POS price (the coupon base price)
-	// This mirrors the server's subtotal filter in Orders.php which makes
-	// get_subtotal() return pos_data.price during coupon recalculation.
+	// Step 2: Build CouponLineItems using the ex-tax POS price as the coupon base.
+	//
+	// On the server, WC_Discounts::set_items_from_order() uses get_subtotal() + get_subtotal_tax()
+	// (tax-inclusive) and calculates percent discounts on that. But downstream functions like
+	// convertDiscountsToExTax skip percent coupons assuming the base was already ex-tax.
+	//
+	// To keep the client pipeline consistent, we use the ex-tax POS price here. The percent
+	// discount is then calculated on ex-tax (matching the server's final ex-tax result),
+	// and convertDiscountsToExTax correctly skips it.
 	const buildCouponLineItems = (items: typeof resetItems): CouponLineItem[] =>
 		items
 			.map((item, lineIndex) => ({ item, lineIndex }))
@@ -134,16 +140,13 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 				const qty = item.quantity ?? 1;
 				const posData = parsePosData(item);
 
+				// Use the reset item's total (ex-tax POS price) as the coupon base
 				let basePrice: number;
 				if (posData?.price != null) {
-					const posPrice = parseFloat(posData.price) * qty;
-					// If prices include tax, POS price is already tax-inclusive
-					// which matches WC's set_items_from_order: subtotal + subtotal_tax
-					basePrice = posPrice;
+					// The reset step already computed ex-tax total from POS price
+					basePrice = parseFloat(item.total || '0');
 				} else {
-					const subtotal = parseFloat(item.subtotal || '0');
-					const subtotalTax = parseFloat(item.subtotal_tax || '0');
-					basePrice = pricesIncludeTax ? subtotal + subtotalTax : subtotal;
+					basePrice = parseFloat(item.subtotal || '0');
 				}
 
 				return {
