@@ -81,6 +81,21 @@ jest.mock('./use-calculate-line-item-tax-and-totals', () => ({
 	}),
 }));
 
+// Mock useAppState (needed by use-recalculate-coupons)
+jest.mock('../../../../contexts/app-state', () => ({
+	useAppState: () => ({
+		store: {
+			woocommerce_calc_discounts_sequentially$: { subscribe: jest.fn() },
+			calc_discounts_sequentially$: { subscribe: jest.fn() },
+		},
+	}),
+}));
+
+// Mock observable-hooks (needed by use-recalculate-coupons)
+jest.mock('observable-hooks', () => ({
+	useObservableEagerState: jest.fn().mockReturnValue('no'),
+}));
+
 // Mock useTaxRates
 jest.mock('../../contexts/tax-rates', () => ({
 	useTaxRates: () => ({

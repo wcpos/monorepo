@@ -1,6 +1,9 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+
 import { recalculateCoupons, type RecalculateResult } from './coupon-recalculate';
+import { useAppState } from '../../../../contexts/app-state';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useCollection } from '../../hooks/use-collection';
 
@@ -17,6 +20,13 @@ type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_li
  * necessary context, and returns the recalculated result.
  */
 export const useRecalculateCoupons = () => {
+	const { store } = useAppState();
+	const woocommerceSequential = useObservableEagerState(
+		(store as any).woocommerce_calc_discounts_sequentially$
+	);
+	const legacySequential = useObservableEagerState((store as any).calc_discounts_sequentially$);
+	const calcDiscountsSequentially = woocommerceSequential === 'yes' || legacySequential === 'yes';
+
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
 	const { rates: taxRates, pricesIncludeTax } = useTaxRates();
@@ -68,12 +78,12 @@ export const useRecalculateCoupons = () => {
 				couponLines,
 				couponConfigs,
 				pricesIncludeTax,
-				calcDiscountsSequentially: false, // WC default
+				calcDiscountsSequentially,
 				taxRates: taxRates as any,
 				productCategories,
 			});
 		},
-		[couponCollection, productCollection, taxRates, pricesIncludeTax]
+		[couponCollection, productCollection, taxRates, pricesIncludeTax, calcDiscountsSequentially]
 	);
 
 	return { recalculate };
