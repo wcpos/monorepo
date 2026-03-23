@@ -85,7 +85,7 @@ export function useTemplateRenderer({
 
 	// Format currency fields so the preview matches the printed ESC/POS output
 	const formattedReceiptData = React.useMemo(
-		() => (normalisedReceiptData ? formatReceiptData(normalisedReceiptData as any) : null),
+		() => (normalisedReceiptData ? formatReceiptData(normalisedReceiptData) : null),
 		[normalisedReceiptData]
 	);
 

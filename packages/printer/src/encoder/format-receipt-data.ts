@@ -21,7 +21,7 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 				currency,
 			}).format(value);
 		} catch {
-			return value.toFixed(2);
+			return currency ? `${currency} ${value.toFixed(2)}` : value.toFixed(2);
 		}
 	};
 
