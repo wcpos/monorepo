@@ -11,63 +11,67 @@ const SIMPLE_TEMPLATE = `<receipt paper-width="48">
   {{#lines}}
   <row>
     <col width="36">{{name}}</col>
-    <col width="12" align="right">{{line_total_incl}}</col>
+    <col width="12" align="right">{{line_total_incl_display}}</col>
   </row>
   {{/lines}}
   <line />
   <row>
     <col width="36"><bold>TOTAL</bold></col>
-    <col width="12" align="right"><bold>{{totals.grand_total_incl}}</bold></col>
+    <col width="12" align="right"><bold>{{totals.grand_total_incl_display}}</bold></col>
   </row>
   <cut />
 </receipt>`;
 
 describe('renderThermalPreview', () => {
+	const formattedData = formatReceiptData(sampleReceiptData);
+
 	it('produces HTML string with store name', () => {
-		const html = renderThermalPreview(SIMPLE_TEMPLATE, sampleReceiptData);
+		const html = renderThermalPreview(SIMPLE_TEMPLATE, formattedData);
 		expect(typeof html).toBe('string');
 		expect(html).toContain('My Test Store');
 	});
 
 	it('renders line items via Mustache sections', () => {
-		const html = renderThermalPreview(SIMPLE_TEMPLATE, sampleReceiptData);
+		const html = renderThermalPreview(SIMPLE_TEMPLATE, formattedData);
 		expect(html).toContain('Widget A');
 		expect(html).toContain('Gadget B');
 	});
 
-	it('renders totals', () => {
-		const html = renderThermalPreview(SIMPLE_TEMPLATE, sampleReceiptData);
+	it('renders formatted totals', () => {
+		const html = renderThermalPreview(SIMPLE_TEMPLATE, formattedData);
 		expect(html).toContain('TOTAL');
-		expect(html).toContain('25');
+		expect(html).toContain('$25.00');
 	});
 
 	it('accepts Record<string, any> data shape', () => {
-		const html = renderThermalPreview(SIMPLE_TEMPLATE, sampleReceiptData as Record<string, any>);
+		const html = renderThermalPreview(SIMPLE_TEMPLATE, formattedData as Record<string, any>);
 		expect(html).toContain('My Test Store');
 	});
 });
 
 describe('encodeThermalTemplate', () => {
+	const formattedData = formatReceiptData(sampleReceiptData);
+
 	it('produces Uint8Array', () => {
-		const bytes = encodeThermalTemplate(SIMPLE_TEMPLATE, sampleReceiptData);
+		const bytes = encodeThermalTemplate(SIMPLE_TEMPLATE, formattedData);
 		expect(bytes).toBeInstanceOf(Uint8Array);
 		expect(bytes.length).toBeGreaterThan(0);
 	});
 
 	it('includes store name in encoded output', () => {
-		const bytes = encodeThermalTemplate(SIMPLE_TEMPLATE, sampleReceiptData);
+		const bytes = encodeThermalTemplate(SIMPLE_TEMPLATE, formattedData);
 		const decoded = new TextDecoder().decode(bytes);
 		expect(decoded).toContain('My Test Store');
 	});
 
 	it('includes line items', () => {
-		const bytes = encodeThermalTemplate(SIMPLE_TEMPLATE, sampleReceiptData);
+		const bytes = encodeThermalTemplate(SIMPLE_TEMPLATE, formattedData);
 		const decoded = new TextDecoder().decode(bytes);
 		expect(decoded).toContain('Widget A');
 	});
 
 	it('accepts encoder options', () => {
-		const bytes = encodeThermalTemplate(SIMPLE_TEMPLATE, sampleReceiptData, {
+		const bytes = encodeThermalTemplate(SIMPLE_TEMPLATE, formattedData, {
 			language: 'star-prnt',
 			columns: 32,
 		});
@@ -85,14 +89,14 @@ describe('star-width columns integration', () => {
   <text>{{name}}</text>
   <row>
     <col width="6">x{{qty}}</col>
-    <col width="*">@ {{unit_price_incl}}</col>
-    <col width="10" align="right">{{line_total_incl}}</col>
+    <col width="*">@ {{unit_price_incl_display}}</col>
+    <col width="10" align="right">{{line_total_incl_display}}</col>
   </row>
   {{/lines}}
   <line />
   <row>
     <col width="*">TOTAL</col>
-    <col width="10" align="right">{{totals.grand_total_incl}}</col>
+    <col width="10" align="right">{{totals.grand_total_incl_display}}</col>
   </row>
 </receipt>`;
 

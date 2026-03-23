@@ -41,6 +41,11 @@ function resolveStarColumns(cols: readonly ColNode[], totalColumns: number): num
 	}
 
 	const remaining = Math.max(0, totalColumns - fixedTotal);
+	if (fixedTotal > totalColumns && starCount > 0) {
+		console.warn(
+			`resolveStarColumns: fixed columns (${fixedTotal}) exceed total width (${totalColumns})`
+		);
+	}
 	const starWidth = starCount > 0 ? Math.floor(remaining / starCount) : 0;
 	const starRemainder = starCount > 0 ? remaining - starWidth * starCount : 0;
 

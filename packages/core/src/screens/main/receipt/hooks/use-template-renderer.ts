@@ -3,7 +3,7 @@ import * as React from 'react';
 import Mustache from 'mustache';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { mapReceiptData, renderThermalPreview } from '@wcpos/printer';
+import { formatReceiptData, mapReceiptData, renderThermalPreview } from '@wcpos/printer';
 import type { TemplateDocument } from '@wcpos/database';
 
 import { useActiveTemplates } from './use-active-templates';
@@ -83,6 +83,12 @@ export function useTemplateRenderer({
 		[receiptData]
 	);
 
+	// Format currency fields so the preview matches the printed ESC/POS output
+	const formattedReceiptData = React.useMemo(
+		() => (normalisedReceiptData ? formatReceiptData(normalisedReceiptData as any) : null),
+		[normalisedReceiptData]
+	);
+
 	const preRenderedCache = React.useMemo(() => {
 		const cache = new Map<string | number, string>();
 		if (!receiptData) return cache;
@@ -91,12 +97,10 @@ export function useTemplateRenderer({
 			if (tmpl.offline_capable && tmpl.content) {
 				try {
 					if (tmpl.engine === 'thermal') {
+						const thermalData = formattedReceiptData ?? normalisedReceiptData ?? receiptData;
 						cache.set(
 							tmpl.id,
-							renderThermalPreview(
-								tmpl.content,
-								(normalisedReceiptData ?? receiptData) as Record<string, any>
-							)
+							renderThermalPreview(tmpl.content, thermalData as Record<string, any>)
 						);
 					} else {
 						cache.set(tmpl.id, Mustache.render(tmpl.content, receiptData));
@@ -107,7 +111,7 @@ export function useTemplateRenderer({
 			}
 		}
 		return cache;
-	}, [templates, receiptData, normalisedReceiptData]);
+	}, [templates, receiptData, normalisedReceiptData, formattedReceiptData]);
 
 	// Determine output
 	let renderedHtml: string | null = null;
@@ -122,9 +126,10 @@ export function useTemplateRenderer({
 			if (data && selectedTemplate.content) {
 				try {
 					if (selectedTemplate.engine === 'thermal') {
+						const thermalData = formattedReceiptData ?? normalisedReceiptData ?? data;
 						renderedHtml = renderThermalPreview(
 							selectedTemplate.content,
-							(normalisedReceiptData ?? data) as Record<string, any>
+							thermalData as Record<string, any>
 						);
 					} else {
 						renderedHtml = Mustache.render(selectedTemplate.content, data);

@@ -11,39 +11,53 @@ describe('formatReceiptData', () => {
 		expect(sampleReceiptData).toEqual(original);
 	});
 
-	it('formats line item prices as currency strings', () => {
+	it('adds _display variants for line item prices', () => {
 		const result = formatReceiptData(sampleReceiptData);
 		const line = result.lines[0];
-		expect(line.unit_price_incl).toBe('$5.00');
-		expect(line.line_total_incl).toBe('$10.00');
+		expect(line.unit_price_incl_display).toBe('$5.00');
+		expect(line.line_total_incl_display).toBe('$10.00');
 	});
 
-	it('formats totals as currency strings', () => {
+	it('preserves original numeric line item fields', () => {
 		const result = formatReceiptData(sampleReceiptData);
-		expect(result.totals.subtotal_incl).toBe('$25.00');
-		expect(result.totals.grand_total_incl).toBe('$25.00');
-		expect(result.totals.tax_total).toBe('$2.27');
+		const line = result.lines[0];
+		expect(line.unit_price_incl).toBe(5.0);
+		expect(line.line_total_incl).toBe(10.0);
 	});
 
-	it('formats payment amounts', () => {
+	it('adds _display variants for totals', () => {
 		const result = formatReceiptData(sampleReceiptData);
-		expect(result.payments[0].amount).toBe('$25.00');
-		expect(result.payments[0].tendered).toBe('$30.00');
-		expect(result.payments[0].change).toBe('$5.00');
+		expect(result.totals.subtotal_incl_display).toBe('$25.00');
+		expect(result.totals.grand_total_incl_display).toBe('$25.00');
+		expect(result.totals.tax_total_display).toBe('$2.27');
 	});
 
-	it('formats tax summary amounts', () => {
+	it('preserves original numeric totals', () => {
 		const result = formatReceiptData(sampleReceiptData);
-		expect(result.tax_summary[0].tax_amount).toBe('$2.27');
+		expect(result.totals.subtotal_incl).toBe(25.0);
+		expect(result.totals.grand_total_incl).toBe(25.0);
+		expect(result.totals.tax_total).toBe(2.27);
 	});
 
-	it('formats fee and discount amounts', () => {
+	it('adds _display variants for payment amounts', () => {
+		const result = formatReceiptData(sampleReceiptData);
+		expect(result.payments[0].amount_display).toBe('$25.00');
+		expect(result.payments[0].tendered_display).toBe('$30.00');
+		expect(result.payments[0].change_display).toBe('$5.00');
+	});
+
+	it('adds _display variants for tax summary', () => {
+		const result = formatReceiptData(sampleReceiptData);
+		expect(result.tax_summary[0].tax_amount_display).toBe('$2.27');
+	});
+
+	it('adds _display variants for fees and discounts', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.fees = [{ label: 'Service Fee', total_incl: 2.5, total_excl: 2.27 }];
 		data.discounts = [{ label: '10% Off', total_incl: 5.0, total_excl: 4.55 }];
 		const result = formatReceiptData(data);
-		expect(result.fees[0].total_incl).toBe('$2.50');
-		expect(result.discounts[0].total_incl).toBe('$5.00');
+		expect(result.fees[0].total_incl_display).toBe('$2.50');
+		expect(result.discounts[0].total_incl_display).toBe('$5.00');
 	});
 
 	it('uses locale from presentation_hints', () => {
@@ -51,9 +65,9 @@ describe('formatReceiptData', () => {
 		data.meta.currency = 'EUR';
 		data.presentation_hints.locale = 'de-DE';
 		const result = formatReceiptData(data);
-		// German locale — just check it's a string and not a raw number
-		expect(typeof result.totals.grand_total_incl).toBe('string');
-		expect(result.totals.grand_total_incl).not.toBe('25');
+		// German locale — verify EUR symbol and comma decimal separator
+		expect(result.totals.grand_total_incl_display).toMatch(/[€]|EUR/);
+		expect(result.totals.grand_total_incl_display).toContain(',');
 	});
 
 	it('preserves non-numeric fields unchanged', () => {
@@ -64,10 +78,13 @@ describe('formatReceiptData', () => {
 		expect(result.lines[0].name).toBe('Widget A');
 	});
 
-	it('handles zero values', () => {
+	it('preserves zero numeric values for Mustache section truthiness', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.totals.discount_total_incl = 0;
 		const result = formatReceiptData(data);
-		expect(result.totals.discount_total_incl).toBe('$0.00');
+		// Raw value stays 0 (falsy) so {{#totals.discount_total_incl}} correctly skips
+		expect(result.totals.discount_total_incl).toBe(0);
+		// Display variant still shows formatted currency
+		expect(result.totals.discount_total_incl_display).toBe('$0.00');
 	});
 });

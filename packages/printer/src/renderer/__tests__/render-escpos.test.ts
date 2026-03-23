@@ -51,18 +51,19 @@ describe('renderEscpos', () => {
 	});
 
 	it('respects columns option', () => {
-		const ast = parseXml('<receipt><text>Test</text></receipt>');
+		const ast = parseXml(
+			'<receipt><row><col width="*">Name</col><col width="10" align="right">$5.00</col></row></receipt>'
+		);
 		const result32 = renderEscpos(ast, { columns: 32 });
 		const result48 = renderEscpos(ast, { columns: 48 });
-		expect(result32.length).toBeGreaterThan(0);
-		expect(result48.length).toBeGreaterThan(0);
+		expect(decode(result32)).not.toEqual(decode(result48));
 	});
 
 	it('respects language option for StarPRNT', () => {
 		const ast = parseXml('<receipt><text>Star</text></receipt>');
-		const result = renderEscpos(ast, { language: 'star-prnt' });
-		expect(result).toBeInstanceOf(Uint8Array);
-		expect(result.length).toBeGreaterThan(0);
+		const escpos = renderEscpos(ast, { language: 'esc-pos' });
+		const star = renderEscpos(ast, { language: 'star-prnt' });
+		expect(Array.from(star)).not.toEqual(Array.from(escpos));
 	});
 
 	it('handles feed lines', () => {
