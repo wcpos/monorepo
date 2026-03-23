@@ -2,14 +2,10 @@ import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import { recalculateCoupons } from './coupon-recalculate';
+import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
-import { useTaxRates } from '../../contexts/tax-rates';
-import { useCollection } from '../../hooks/use-collection';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
-
-import type { CouponDiscountConfig } from './coupon-discount';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'remove']);
 
@@ -27,9 +23,7 @@ export const useRemoveLineItem = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
 	const t = useT();
-	const { collection: couponCollection } = useCollection('coupons');
-	const { collection: productCollection } = useCollection('products');
-	const { rates: taxRates, pricesIncludeTax } = useTaxRates();
+	const { recalculate } = useRecalculateCoupons();
 
 	/**
 	 *
@@ -112,50 +106,7 @@ export const useRemoveLineItem = () => {
 			const activeCouponLines = (order.coupon_lines || []).filter((cl: any) => cl.code != null);
 
 			if (type === 'line_items' && activeCouponLines.length > 0) {
-				// Filter to remaining valid line items (not nulled product_id)
-				const remainingLineItems = updatedLines.filter((item: any) => item.product_id != null);
-
-				// Build couponConfigs
-				const couponConfigs = new Map<string, CouponDiscountConfig>();
-				for (const cl of activeCouponLines) {
-					const code = (cl as any).code.toLowerCase();
-					const couponDoc = await couponCollection.findOne({ selector: { code } }).exec();
-					if (couponDoc) {
-						const cd = couponDoc.toJSON();
-						couponConfigs.set(code, {
-							discount_type: cd.discount_type as any,
-							amount: cd.amount || '0',
-							limit_usage_to_x_items: cd.limit_usage_to_x_items ?? null,
-							product_ids: [...(cd.product_ids || [])],
-							excluded_product_ids: [...(cd.excluded_product_ids || [])],
-							product_categories: [...(cd.product_categories || [])],
-							excluded_product_categories: [...(cd.excluded_product_categories || [])],
-							exclude_sale_items: cd.exclude_sale_items || false,
-						});
-					}
-				}
-
-				// Build product categories
-				const productCategories = new Map<number, { id: number }[]>();
-				const productIds = remainingLineItems.map((item: any) => item.product_id).filter(Boolean);
-				if (productIds.length > 0) {
-					const products = await productCollection
-						.find({ selector: { id: { $in: productIds } } })
-						.exec();
-					for (const p of products) {
-						productCategories.set(p.id, p.categories || []);
-					}
-				}
-
-				const result = recalculateCoupons({
-					lineItems: updatedLines as any,
-					couponLines: order.coupon_lines || [],
-					couponConfigs,
-					pricesIncludeTax,
-					calcDiscountsSequentially: false,
-					taxRates: taxRates as any,
-					productCategories,
-				});
+				const result = await recalculate(updatedLines as any, order.coupon_lines || []);
 
 				localPatch({
 					document: order,
@@ -203,16 +154,7 @@ export const useRemoveLineItem = () => {
 				// should we show a snackbar if the item was not found?
 			}
 		},
-		[
-			currentOrder,
-			localPatch,
-			t,
-			undoRemove,
-			couponCollection,
-			productCollection,
-			taxRates,
-			pricesIncludeTax,
-		]
+		[currentOrder, localPatch, t, undoRemove, recalculate]
 	);
 
 	return { removeLineItem };

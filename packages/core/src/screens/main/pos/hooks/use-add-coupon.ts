@@ -6,15 +6,13 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { isLineItemOnSale } from './coupon-helpers';
-import { recalculateCoupons } from './coupon-recalculate';
 import { validateCoupon } from './coupon-validation';
+import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
-import { useTaxRates } from '../../contexts/tax-rates';
 import { useCollection } from '../../hooks/use-collection';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
-import type { CouponDiscountConfig } from './coupon-discount';
 import type { CouponLineItem } from './coupon-helpers';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
@@ -32,7 +30,7 @@ export const useAddCoupon = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
-	const { rates: taxRates, pricesIncludeTax } = useTaxRates();
+	const { recalculate } = useRecalculateCoupons();
 
 	const orderLogger = React.useMemo(
 		() =>
@@ -118,42 +116,9 @@ export const useAddCoupon = () => {
 					return { success: false, error: validation.error };
 				}
 
-				// 5. Build coupon configs for all coupons (existing + new)
+				// 5. Create new coupon line and recalculate all coupons from scratch
 				const couponData = coupon.toJSON();
 
-				const buildCouponConfig = (data: any): CouponDiscountConfig => ({
-					discount_type: data.discount_type as any,
-					amount: data.amount || '0',
-					limit_usage_to_x_items: data.limit_usage_to_x_items ?? null,
-					product_ids: [...(data.product_ids || [])],
-					excluded_product_ids: [...(data.excluded_product_ids || [])],
-					product_categories: [...(data.product_categories || [])],
-					excluded_product_categories: [...(data.excluded_product_categories || [])],
-					exclude_sale_items: data.exclude_sale_items || false,
-				});
-
-				const couponConfigs = new Map<string, CouponDiscountConfig>();
-
-				// Add configs for existing coupons on the order
-				for (const cl of appliedCouponLines) {
-					const existingCouponDoc = await couponCollection
-						.findOne({ selector: { code: cl.code } })
-						.exec();
-					if (existingCouponDoc) {
-						couponConfigs.set(cl.code.toLowerCase(), buildCouponConfig(existingCouponDoc.toJSON()));
-					}
-				}
-
-				// Add config for the new coupon
-				couponConfigs.set(couponData.code.toLowerCase(), buildCouponConfig(couponData));
-
-				// 6. Build product categories map
-				const productCategories = new Map<number, { id: number }[]>();
-				for (const [pid, product] of productMap) {
-					productCategories.set(pid, product?.categories || []);
-				}
-
-				// 7. Create new coupon line and recalculate all coupons from scratch
 				const newCouponLine = {
 					code: couponData.code,
 					discount: '0',
@@ -173,15 +138,7 @@ export const useAddCoupon = () => {
 
 				const allCouponLines = [...(order.coupon_lines || []), newCouponLine];
 
-				const result = recalculateCoupons({
-					lineItems: order.line_items || [],
-					couponLines: allCouponLines,
-					couponConfigs,
-					pricesIncludeTax,
-					calcDiscountsSequentially: false,
-					taxRates: taxRates as any,
-					productCategories,
-				});
+				const result = await recalculate(order.line_items || [], allCouponLines);
 
 				const patchResult = await localPatch({
 					document: order,
@@ -232,16 +189,7 @@ export const useAddCoupon = () => {
 				};
 			}
 		},
-		[
-			couponCollection,
-			productCollection,
-			currentOrder,
-			localPatch,
-			t,
-			orderLogger,
-			taxRates,
-			pricesIncludeTax,
-		]
+		[couponCollection, productCollection, currentOrder, localPatch, t, orderLogger, recalculate]
 	);
 
 	return { addCoupon };
