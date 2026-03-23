@@ -41,6 +41,7 @@ jest.mock('../utils/build-receipt-data', () => ({
 jest.mock('@wcpos/printer', () => ({
 	renderThermalPreview: jest.fn(() => '<div>thermal preview</div>'),
 	mapReceiptData: jest.fn((data: Record<string, unknown>) => data),
+	formatReceiptData: jest.fn((data: Record<string, unknown>) => data),
 }));
 
 const defaultOptions = {
