@@ -124,15 +124,16 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		return { lineItems: resetItems, couponLines };
 	}
 
-	// Step 2: Build CouponLineItems using the ex-tax POS price as the coupon base.
+	// Step 2: Build CouponLineItems using tax-inclusive POS price as the coupon base.
 	//
-	// On the server, WC_Discounts::set_items_from_order() uses get_subtotal() + get_subtotal_tax()
-	// (tax-inclusive) and calculates percent discounts on that. But downstream functions like
-	// convertDiscountsToExTax skip percent coupons assuming the base was already ex-tax.
+	// WC_Discounts::set_items_from_order() uses get_subtotal() + get_subtotal_tax()
+	// (tax-inclusive) and calculates/caps discounts on the inclusive amount. The tax
+	// portion is then extracted by set_coupon_discount_amounts() afterward.
 	//
-	// To keep the client pipeline consistent, we use the ex-tax POS price here. The percent
-	// discount is then calculated on ex-tax (matching the server's final ex-tax result),
-	// and convertDiscountsToExTax correctly skips it.
+	// We mirror this: use inclusive prices here, and convertDiscountsToExTax handles
+	// the tax extraction for ALL discount types (including percent — the math is
+	// equivalent since percentage is linear, but fixed discounts MUST use inclusive
+	// prices for correct capping when the discount exceeds the item price).
 	const buildCouponLineItems = (items: typeof resetItems): CouponLineItem[] =>
 		items
 			.map((item, lineIndex) => ({ item, lineIndex }))
@@ -141,14 +142,16 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 				const qty = item.quantity ?? 1;
 				const posData = parsePosData(item);
 
-				// Use the reset item's total (ex-tax POS price) as the coupon base
+				// Use tax-inclusive POS price as the coupon base (matches WC)
 				let basePrice: number;
 				const posPriceParsed = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
 				if (Number.isFinite(posPriceParsed)) {
-					// The reset step already computed ex-tax total from POS price
-					basePrice = parseFloat(item.total || '0');
+					// POS price is tax-inclusive when pricesIncludeTax
+					basePrice = posPriceParsed * qty;
 				} else {
-					basePrice = parseFloat(item.subtotal || '0');
+					const subtotal = parseFloat(item.subtotal || '0');
+					const subtotalTax = parseFloat(item.subtotal_tax || '0');
+					basePrice = pricesIncludeTax ? subtotal + subtotalTax : subtotal;
 				}
 
 				return {

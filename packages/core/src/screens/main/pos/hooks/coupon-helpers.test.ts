@@ -658,14 +658,14 @@ describe('convertDiscountsToExTax', () => {
 		expect(result[0].discount).toBeCloseTo(4.545455, 4);
 	});
 
-	it('does NOT convert percent discounts (already ex-tax)', () => {
+	it('converts percent discounts to ex-tax when pricesIncludeTax', () => {
 		const perItem = [{ product_id: 1, discount: 10 }];
 		const lineItems = [{ product_id: 1, subtotal: '20', subtotal_tax: '2' }];
 
 		const result = convertDiscountsToExTax(perItem, lineItems, 'percent', true);
 
-		// Should be unchanged
-		expect(result[0].discount).toBe(10);
+		// 10% tax rate (2/20), discount 10 inclusive = 10 / 1.1 = 9.0909
+		expect(result[0].discount).toBeCloseTo(9.0909, 3);
 	});
 
 	it('returns discounts unchanged when pricesIncludeTax is false', () => {

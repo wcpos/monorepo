@@ -117,8 +117,10 @@ export function getEligibleItems(
 /**
  * Convert tax-inclusive per-item discounts to ex-tax amounts.
  *
- * Percent coupon discounts are already ex-tax (calculated from ex-tax prices),
- * so only fixed_cart and fixed_product discounts need conversion.
+ * When prices include tax, all coupon discounts (percent, fixed_cart, fixed_product)
+ * are calculated on tax-inclusive prices and must be converted to ex-tax.
+ * This mirrors WC's set_coupon_discount_amounts() which extracts tax from
+ * every discount type using WC_Tax::calc_tax().
  *
  * Each item's discount is divided by (1 + effective_tax_rate), where the rate
  * is derived from the order line item's subtotal_tax / subtotal.
@@ -129,7 +131,7 @@ export function convertDiscountsToExTax(
 	discountType: string,
 	pricesIncludeTax: boolean
 ): PerItemDiscount[] {
-	if (!pricesIncludeTax || discountType === 'percent') return perItem;
+	if (!pricesIncludeTax) return perItem;
 
 	return perItem.map((entry) => {
 		if (entry.discount <= 0) return entry;
