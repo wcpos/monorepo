@@ -158,7 +158,7 @@ export const useAddCoupon = () => {
 				}
 
 				const appliedCouponLine = result.couponLines.find(
-					(cl: any) => cl.code?.toLowerCase() === couponData.code.toLowerCase()
+					(cl: any) => cl.code?.toLowerCase() === couponData.code?.toLowerCase()
 				);
 				orderLogger.info(t('pos_cart.coupon_applied', { defaultValue: 'Coupon applied' }), {
 					context: {
