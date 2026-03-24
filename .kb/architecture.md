@@ -4,7 +4,7 @@
 
 WCPOS is a distributed system spanning multiple repos and services:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Client Apps                               │
 │  monorepo-v2 (React Native + Expo + Electron)                   │
@@ -40,7 +40,7 @@ WCPOS is a distributed system spanning multiple repos and services:
 
 React Native + Expo monorepo. pnpm workspaces + Turbo for task orchestration.
 
-```
+```text
 apps/
   main/          — Expo managed app (iOS, Android, Web via EAS)
   electron/      — Desktop app (Windows, macOS, Linux)
@@ -58,7 +58,7 @@ packages/
 
 ### Data Flow
 
-```
+```text
 WooCommerce REST API
        ↓ (Axios)
 Query & Replication Layer (packages/query)
