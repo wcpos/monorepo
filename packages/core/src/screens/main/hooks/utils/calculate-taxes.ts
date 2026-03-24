@@ -111,7 +111,21 @@ export function calculateTaxes({
 	amountIncludesTax: boolean;
 	dp?: number;
 }) {
-	const sortedRates = sortBy(rates, 'order');
+	// Sort rates matching WC_Tax::sort_rates_callback():
+	// 1. tax_rate_priority (ascending) — mapped to `order`
+	// 2. tax_rate_country: non-empty first
+	// 3. tax_rate_state: non-empty first
+	// 4. tax_rate_id (ascending) — mapped to `id`
+	const sortedRates = [...rates].sort((a, b) => {
+		if (a.order !== b.order) return a.order - b.order;
+		const aCountry = (a as any).country || '';
+		const bCountry = (b as any).country || '';
+		if ((aCountry !== '') !== (bCountry !== '')) return aCountry !== '' ? -1 : 1;
+		const aState = (a as any).state || '';
+		const bState = (b as any).state || '';
+		if ((aState !== '') !== (bState !== '')) return aState !== '' ? -1 : 1;
+		return a.id - b.id;
+	});
 	const roundingPrecision = getRoundingPrecision(dp);
 
 	const taxes = amountIncludesTax
