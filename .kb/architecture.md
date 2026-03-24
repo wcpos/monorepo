@@ -1,5 +1,7 @@
 # WCPOS — Architecture
 
+> Last updated: 2026-03-24
+
 ## Ecosystem Overview
 
 WCPOS is a distributed system spanning multiple repos and services:
@@ -62,9 +64,9 @@ packages/
 WooCommerce REST API
        ↓ (Axios)
 Query & Replication Layer (packages/query)
-  CollectionReplicationState — polls every 5 min, full audit every hour
+  CollectionReplicationState — polls every 5 min, full audit every hour (defaults as of 2026-03-24; see packages/query)
   QueryReplicationState      — pulls filtered subsets while component is mounted
-  SyncStateManager           — batches 1000 records, yields to event loop
+  SyncStateManager           — batches 1000 records, yields to event loop (defaults as of 2026-03-24; see packages/query)
        ↓
 RxDB Local Database (packages/database)
   Store DB (per store)  — products, orders, customers, tax rates, etc.
@@ -103,10 +105,10 @@ Each screen follows:
 
 ### Key Dependencies
 
-- RxDB 16.x — local reactive database
-- RxJS 7.x — observable state
-- Expo 55 — cross-platform framework
-- TanStack React Table — data tables
+- RxDB 16.x — local reactive database (as of 2026-03-24)
+- RxJS 7.x — observable state (as of 2026-03-24)
+- Expo 55 — cross-platform framework (as of 2026-03-24)
+- TanStack React Table 8.x — data tables (as of 2026-03-24)
 - Uniwind — CSS-in-JS styling
 - Axios — HTTP with replication backoff
 - i18next — internationalization
