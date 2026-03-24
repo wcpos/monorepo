@@ -1,6 +1,6 @@
 import sumBy from 'lodash/sumBy';
 
-import { roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
+import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -100,8 +100,12 @@ export function calculateOrderTotals({
 		const parsedSubtotalTax = parseNumber(item.subtotal_tax);
 		const parsedTotalTax = parseNumber(item.total_tax);
 
-		discount_total += parsedSubtotal - parsedTotal;
-		discount_tax += parsedSubtotalTax - parsedTotalTax;
+		// Round per-item differences to rounding precision before accumulating
+		// to avoid IEEE 754 artifacts (e.g., 4.5 - 4.275 = 0.22499...96 instead
+		// of 0.225). Uses WC's rounding precision rule: max(dp + 2, 6).
+		const roundingPrecision = getRoundingPrecision(dp);
+		discount_total += roundHalfUp(parsedSubtotal - parsedTotal, roundingPrecision);
+		discount_tax += roundHalfUp(parsedSubtotalTax - parsedTotalTax, roundingPrecision);
 		subtotal += parsedSubtotal;
 		subtotal_tax += parsedSubtotalTax;
 		total += parsedTotal;
@@ -180,12 +184,11 @@ export function calculateOrderTotals({
 		})
 		.filter((line): line is NonNullable<typeof line> => line !== null);
 
-	// cart_tax and total_tax: round the full-precision sum, not the sum of rounded values.
-	// This matches WC's update_taxes() which accumulates unrounded per-item taxes
-	// then rounds the final total.
-	const roundedCartTax = roundTaxTotal(fullPrecisionCartTax, dp, pricesIncludeTax);
-	const roundedShippingTax = roundTaxTotal(fullPrecisionShippingTax, dp, pricesIncludeTax);
-	const roundedTotalTax = roundedCartTax + roundedShippingTax;
+	// WC stores cart_tax and shipping_tax at full precision (array_sum of per-rate
+	// taxes), but rounds total_tax to dp. Match that behavior.
+	const roundedCartTax = fullPrecisionCartTax;
+	const roundedShippingTax = fullPrecisionShippingTax;
+	const roundedTotalTax = roundTaxTotal(roundedCartTax + roundedShippingTax, dp, pricesIncludeTax);
 
 	return {
 		/**
@@ -194,8 +197,8 @@ export function calculateOrderTotals({
 		discount_total: String(roundHalfUp(discount_total, dp)),
 		discount_tax: String(roundHalfUp(discount_tax, dp)),
 		shipping_total: String(roundHalfUp(shipping_total, dp)),
-		shipping_tax: String(roundHalfUp(roundedShippingTax, dp)),
-		cart_tax: String(roundHalfUp(roundedCartTax, dp)),
+		shipping_tax: String(roundHalfUp(roundedShippingTax, 6)),
+		cart_tax: String(roundHalfUp(roundedCartTax, 6)),
 		total: String(roundHalfUp(total + roundedTotalTax, dp)),
 		total_tax: String(roundHalfUp(roundedTotalTax, dp)),
 		tax_lines: filteredTaxLines,
