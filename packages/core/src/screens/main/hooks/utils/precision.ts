@@ -14,8 +14,10 @@
  */
 export function roundHalfUp(value: number, precision: number): number {
 	const factor = Math.pow(10, precision);
+	const sign = value < 0 ? -1 : 1;
 	// Use Number.EPSILON to handle floating point edge cases like 2.725 * 100 = 272.49999...
-	return Math.round((value + Number.EPSILON) * factor) / factor;
+	// Operate on absolute value so ties round away from zero (PHP ROUND_HALF_UP behavior)
+	return (sign * Math.round((Math.abs(value) + Number.EPSILON) * factor)) / factor;
 }
 
 /**

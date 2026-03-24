@@ -171,7 +171,7 @@ describe('calculateOrderTotals', () => {
 					total: '45.5',
 					subtotal_tax: '5.05',
 					total_tax: '4.55',
-					taxes: [],
+					taxes: [{ id: 1, total: '4.55' }],
 				},
 			];
 

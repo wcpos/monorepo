@@ -175,7 +175,9 @@ export function calculateOrderTotals({
 		})
 		.filter((line): line is NonNullable<typeof line> => line !== null);
 
-	cart_tax = sumBy(filteredTaxLines, (tl) => parseNumber(tl.tax_total));
+	const roundedCartTax = sumBy(filteredTaxLines, (tl) => parseNumber(tl.tax_total));
+	const roundedShippingTax = sumBy(filteredTaxLines, (tl) => parseNumber(tl.shipping_tax_total));
+	const roundedTotalTax = roundedCartTax + roundedShippingTax;
 
 	return {
 		/**
@@ -184,10 +186,10 @@ export function calculateOrderTotals({
 		discount_total: String(roundHalfUp(discount_total, dp)),
 		discount_tax: String(roundHalfUp(discount_tax, dp)),
 		shipping_total: String(roundHalfUp(shipping_total, dp)),
-		shipping_tax: String(roundHalfUp(shipping_tax, dp)),
-		cart_tax: String(roundHalfUp(cart_tax, dp)),
-		total: String(roundHalfUp(total + total_tax, dp)),
-		total_tax: String(roundHalfUp(total_tax, dp)),
+		shipping_tax: String(roundHalfUp(roundedShippingTax, dp)),
+		cart_tax: String(roundHalfUp(roundedCartTax, dp)),
+		total: String(roundHalfUp(total + roundedTotalTax, dp)),
+		total_tax: String(roundHalfUp(roundedTotalTax, dp)),
 		tax_lines: filteredTaxLines,
 		/**
 		 * Subtotals are not stored on the order document, but we need them to display in the cart

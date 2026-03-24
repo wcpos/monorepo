@@ -23,6 +23,7 @@ export const useCalculateShippingLineTaxAndTotals = () => {
 		(shippingLine: Partial<ShippingLine>) => {
 			const { amount, prices_include_tax, tax_status, tax_class } =
 				getShippingLineData(shippingLine);
+			const amountIncludesTax = prices_include_tax ?? pricesIncludeTax;
 			const dp = priceNumDecimals;
 			const roundingPrecision = getRoundingPrecision(dp);
 
@@ -30,17 +31,17 @@ export const useCalculateShippingLineTaxAndTotals = () => {
 				amount,
 				taxClass: tax_class,
 				taxStatus: tax_status,
-				amountIncludesTax: prices_include_tax,
+				amountIncludesTax,
 				shipping: true,
 			});
 
-			const total = prices_include_tax ? amount - tax.total : amount;
+			const total = amountIncludesTax ? amount - tax.total : amount;
 
 			// When roundAtSubtotal=false, round tax to dp per-item
 			// When roundAtSubtotal=true, leave at rounding precision
 			const roundedTotalTax = taxRoundAtSubtotal
 				? tax.total
-				: roundTaxTotal(tax.total, dp, pricesIncludeTax);
+				: roundTaxTotal(tax.total, dp, amountIncludesTax);
 
 			return {
 				...shippingLine,
@@ -49,7 +50,7 @@ export const useCalculateShippingLineTaxAndTotals = () => {
 				taxes: tax.taxes.map((t) => ({
 					...t,
 					total: String(
-						taxRoundAtSubtotal ? t.total : roundTaxTotal(t.total, dp, pricesIncludeTax)
+						taxRoundAtSubtotal ? t.total : roundTaxTotal(t.total, dp, amountIncludesTax)
 					),
 				})),
 			};

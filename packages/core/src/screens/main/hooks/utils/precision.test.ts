@@ -31,8 +31,8 @@ describe('precision utilities', () => {
 			expect(roundHalfUp(2.4, 0)).toBe(2);
 		});
 
-		it('handles negative numbers', () => {
-			expect(roundHalfUp(-2.725, 2)).toBe(-2.72);
+		it('handles negative numbers (ties away from zero, PHP parity)', () => {
+			expect(roundHalfUp(-2.725, 2)).toBe(-2.73);
 		});
 
 		it('rounds to 4 decimal places', () => {
