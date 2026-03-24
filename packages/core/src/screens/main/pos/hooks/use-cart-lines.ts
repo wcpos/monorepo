@@ -42,7 +42,7 @@ export const useCartLines = () => {
 	const { collection: productCollection } = useCollection('products');
 	const { localPatch } = useLocalMutation();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
-	const { rates: taxRates, pricesIncludeTax, priceNumDecimals } = useTaxRates();
+	const { rates: taxRates, pricesIncludeTax, priceNumDecimals, taxRoundAtSubtotal } = useTaxRates();
 	const woocommerceSequential = useObservableEagerState(
 		(store as any).woocommerce_calc_discounts_sequentially$
 	);
@@ -193,7 +193,8 @@ export const useCartLines = () => {
 							compound: boolean;
 							order: number;
 							class?: string;
-						}[]
+						}[],
+						{ pricesIncludeTax, taxRoundAtSubtotal, dp: priceNumDecimals }
 					);
 					updatedCouponLines.push({ ...cl, discount, discount_tax });
 				}

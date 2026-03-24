@@ -25,6 +25,10 @@ export interface RecalculateInput {
 	taxRates: { id: number; rate: string; compound: boolean; order: number; class?: string }[];
 	/** Product categories by product_id for coupon restriction checks */
 	productCategories: Map<number, { id: number }[]>;
+	/** Whether to round tax at subtotal level (default false = round per-item) */
+	taxRoundAtSubtotal?: boolean;
+	/** Price decimal places (default 2) */
+	dp?: number;
 }
 
 export interface RecalculateResult {
@@ -73,6 +77,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		calcDiscountsSequentially,
 		taxRates,
 		productCategories,
+		taxRoundAtSubtotal = false,
+		dp = 2,
 	} = input;
 
 	// Filter to active coupon lines (code is not null/undefined)
@@ -278,12 +284,14 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 			});
 		}
 
-		const { discount } = calculateCouponDiscountTaxSplit(exTaxPerItem, resetItems, taxRates);
+		const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
+			exTaxPerItem,
+			resetItems,
+			taxRates,
+			{ pricesIncludeTax, taxRoundAtSubtotal, dp }
+		);
 
-		// Keep discount_tax as '0' until client-side tax-line redistribution ships.
-		// WooCommerce recalculates coupon tax on sync; writing it client-side without
-		// updating order tax lines would cause inconsistent totals offline.
-		return { ...cl, discount, discount_tax: '0' };
+		return { ...cl, discount, discount_tax };
 	});
 
 	// Step 4: Apply all discounts to line items

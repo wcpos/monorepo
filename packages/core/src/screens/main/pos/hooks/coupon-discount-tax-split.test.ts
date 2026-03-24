@@ -42,18 +42,19 @@ describe('calculateCouponDiscountTaxSplit', () => {
 	describe('ex-tax discounts (prices include tax, already converted)', () => {
 		it('calculates tax on an ex-tax discount for a single item at 10%', () => {
 			// Original tax-inclusive discount was $1, converted to ex-tax: $1/1.1 = $0.909091
-			// Tax on $0.909091 at 10% = $0.090909
+			// Tax on $0.909091 at 10% = $0.090909, rounded per-item to 2dp = $0.09
 			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 0.909091 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
 			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
 			expect(parseFloat(result.discount)).toBeCloseTo(0.909091, 4);
-			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.090909, 4);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.09, 4);
 		});
 
 		it('calculates tax on ex-tax discounts across two items at 10%', () => {
 			// Original: $1/item tax-inclusive, ex-tax: $0.909091 each
+			// Per-item tax: $0.09 each (rounded to 2dp), total = $0.18
 			const perItem: PerItemDiscount[] = [
 				{ product_id: 66, discount: 0.909091 },
 				{ product_id: 69, discount: 0.909091 },
@@ -65,24 +66,25 @@ describe('calculateCouponDiscountTaxSplit', () => {
 
 			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
-			// Total ex-tax discount = $1.818182, tax = $0.181818
 			expect(parseFloat(result.discount)).toBeCloseTo(1.818182, 4);
-			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.181818, 4);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.18, 4);
 		});
 
 		it('calculates tax on an ex-tax percent discount at 10%', () => {
 			// Original: $30 tax-inclusive, ex-tax: $30/1.1 = $27.272727
+			// Tax = $2.727273, rounded per-item to 2dp = $2.73
 			const perItem: PerItemDiscount[] = [{ product_id: 1, discount: 27.272727 }];
 			const lineItems = [{ product_id: 1, tax_class: '' }];
 
 			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
 			expect(parseFloat(result.discount)).toBeCloseTo(27.272727, 4);
-			expect(parseFloat(result.discount_tax)).toBeCloseTo(2.727273, 4);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(2.73, 4);
 		});
 
 		it('calculates tax on ex-tax fixed_cart discount proportionally distributed', () => {
 			// Original: $6 + $4 = $10 tax-inclusive, ex-tax: $6/1.1 + $4/1.1 = $5.454545 + $3.636364
+			// Per-item tax: $0.55 + $0.36 = $0.91 (each rounded to 2dp)
 			const perItem: PerItemDiscount[] = [
 				{ product_id: 1, discount: 5.454545 },
 				{ product_id: 2, discount: 3.636364 },
@@ -94,9 +96,8 @@ describe('calculateCouponDiscountTaxSplit', () => {
 
 			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
-			// Total ex-tax = $9.090909, tax = $0.909091
 			expect(parseFloat(result.discount)).toBeCloseTo(9.090909, 4);
-			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.909091, 4);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.91, 4);
 		});
 	});
 
@@ -253,9 +254,9 @@ describe('calculateCouponDiscountTaxSplit', () => {
 
 			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, [standardRate10]);
 
-			// $99999.99 ex-tax, tax = $9999.999
+			// $99999.99 ex-tax, tax = $9999.999, rounded per-item to 2dp = $10000.00
 			expect(parseFloat(result.discount)).toBeCloseTo(99999.99, 2);
-			expect(parseFloat(result.discount_tax)).toBeCloseTo(9999.999, 2);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(10000, 2);
 		});
 
 		it('handles negative discount (should not occur but be safe)', () => {
@@ -293,9 +294,9 @@ describe('calculateCouponDiscountTaxSplit', () => {
 
 			const result = calculateCouponDiscountTaxSplit(perItem, lineItems, rates);
 
-			// Total ex-tax discount = $1.818182, tax = $0.181818
+			// Total ex-tax discount = $1.818182, per-item tax: $0.09 each, total = $0.18
 			expect(parseFloat(result.discount)).toBeCloseTo(1.818182, 4);
-			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.181818, 4);
+			expect(parseFloat(result.discount_tax)).toBeCloseTo(0.18, 4);
 
 			// When rounded to 2dp (as WC displays): 1.82 + 0.18 = 2.00
 			expect(

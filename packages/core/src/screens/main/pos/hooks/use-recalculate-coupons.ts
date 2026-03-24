@@ -29,7 +29,7 @@ export const useRecalculateCoupons = () => {
 
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
-	const { rates: taxRates, pricesIncludeTax } = useTaxRates();
+	const { rates: taxRates, pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxRates();
 
 	const recalculate = React.useCallback(
 		async (lineItems: LineItem[], couponLines: CouponLine[]): Promise<RecalculateResult> => {
@@ -85,9 +85,19 @@ export const useRecalculateCoupons = () => {
 				calcDiscountsSequentially,
 				taxRates: taxRates as any,
 				productCategories,
+				taxRoundAtSubtotal,
+				dp: priceNumDecimals,
 			});
 		},
-		[couponCollection, productCollection, taxRates, pricesIncludeTax, calcDiscountsSequentially]
+		[
+			couponCollection,
+			productCollection,
+			taxRates,
+			pricesIncludeTax,
+			calcDiscountsSequentially,
+			taxRoundAtSubtotal,
+			priceNumDecimals,
+		]
 	);
 
 	return { recalculate };
