@@ -140,6 +140,17 @@ export const useAddCoupon = () => {
 
 				const result = await recalculate(order.line_items || [], allCouponLines);
 
+				// Re-check freshness after async recalculate — the order may have
+				// changed during RxDB lookups inside recalculate()
+				if (currentOrder.getLatest() !== order) {
+					return {
+						success: false,
+						error: t('pos_cart.cart_changed', {
+							defaultValue: 'Cart changed during coupon application. Please try again.',
+						}),
+					};
+				}
+
 				const patchResult = await localPatch({
 					document: order,
 					data: {

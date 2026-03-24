@@ -43,10 +43,10 @@ export const useRecalculateCoupons = () => {
 			for (const code of activeCodes) {
 				const couponDoc = await couponCollection.findOne({ selector: { code } }).exec();
 				if (!couponDoc) {
-					// Abort recalculation when an active coupon is missing from the
-					// local collection — proceeding would silently drop that coupon's
-					// discount and drift totals. Return items unchanged.
-					return { lineItems, couponLines };
+					// Fail the recalculation when an active coupon is missing locally.
+					// Returning stale lineItems with mutated couponLines would persist
+					// mismatched discounts. Callers should catch and handle this.
+					throw new Error(`Coupon "${code}" not found in local collection`);
 				}
 				const cd = couponDoc.toJSON();
 				couponConfigs.set(code, {
