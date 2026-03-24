@@ -58,13 +58,16 @@ export const useRemoveCoupon = () => {
 
 			const result = await recalculate(order.line_items || [], updatedCouponLines);
 
-			await localPatch({
+			const patchResult = await localPatch({
 				document: order,
 				data: {
 					coupon_lines: result.couponLines,
 					line_items: result.lineItems,
 				},
 			});
+			if (!patchResult) {
+				return;
+			}
 
 			orderLogger.info(t('pos_cart.coupon_removed', { defaultValue: 'Coupon removed' }), {
 				showToast: true,
