@@ -86,6 +86,22 @@ export async function mergeStoresWithResponse({
 		// Upsert stores from the response (this handles both new and existing stores)
 		if (remoteStoresWithLocalID.length > 0) {
 			await userDB.stores.bulkInsert(remoteStoresWithLocalID); // will not overwrite existing data
+
+			// Always update wc_price_decimals from the server on every sync.
+			// This field is server-authoritative and used for tax/discount calculations.
+			// Unlike price_num_decimals (which users can override locally for display),
+			// wc_price_decimals must always match WC's wc_get_price_decimals().
+			for (let i = 0; i < remoteStoresWithLocalID.length; i++) {
+				const remoteStore = remoteStores[i];
+				const localID = remoteStoresWithLocalID[i].localID;
+				const localStore = await userDB.stores.findOne(localID).exec();
+				if (localStore && remoteStore.price_num_decimals != null) {
+					await localStore.incrementalPatch({
+						wc_price_decimals: remoteStore.price_num_decimals,
+					});
+				}
+			}
+
 			appLogger.debug('Upserted stores from response', {
 				context: {
 					storeIds: remoteStoresWithLocalID.map((store) => store.id),

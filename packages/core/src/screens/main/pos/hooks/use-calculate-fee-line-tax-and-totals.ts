@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import round from 'lodash/round';
-
 import { useFeeLineData } from './use-fee-line-data';
+import { useTaxRates } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
+import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
@@ -13,6 +13,7 @@ type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>
  * Returns the updated fee line object.
  */
 export const useCalculateFeeLineTaxAndTotals = () => {
+	const { pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxRates();
 	const { calculateTaxesFromValue } = useCalculateTaxesFromValue();
 	const { getFeeLineData } = useFeeLineData();
 	const { currentOrder } = useCurrentOrder();
@@ -57,6 +58,8 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 		(feeLine: Partial<FeeLine>) => {
 			const { amount, percent, prices_include_tax, percent_of_cart_total_with_tax } =
 				getFeeLineData(feeLine);
+			const dp = priceNumDecimals;
+			const roundingPrecision = getRoundingPrecision(dp);
 			let value = amount;
 
 			if (percent) {
@@ -72,17 +75,32 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 
 			const total = prices_include_tax ? value - tax.total : value;
 
+			// When roundAtSubtotal=false, round tax to dp per-item
+			// When roundAtSubtotal=true, leave at rounding precision
+			const roundedTotalTax = taxRoundAtSubtotal
+				? tax.total
+				: roundTaxTotal(tax.total, dp, pricesIncludeTax);
+
 			return {
 				...feeLine,
-				total: String(round(total, 6)),
-				total_tax: String(round(tax.total, 6)),
-				taxes: tax.taxes.map((tax) => ({
-					...tax,
-					total: String(round(tax.total, 6)),
+				total: String(roundHalfUp(total, roundingPrecision)),
+				total_tax: String(roundedTotalTax),
+				taxes: tax.taxes.map((t) => ({
+					...t,
+					total: String(
+						taxRoundAtSubtotal ? t.total : roundTaxTotal(t.total, dp, pricesIncludeTax)
+					),
 				})),
 			};
 		},
-		[calculatePercentAmount, calculateTaxesFromValue, getFeeLineData]
+		[
+			calculatePercentAmount,
+			calculateTaxesFromValue,
+			getFeeLineData,
+			priceNumDecimals,
+			pricesIncludeTax,
+			taxRoundAtSubtotal,
+		]
 	);
 
 	return { calculateFeeLineTaxesAndTotals };

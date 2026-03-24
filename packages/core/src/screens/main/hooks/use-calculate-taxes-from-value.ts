@@ -9,7 +9,7 @@ import { useTaxRates } from '../contexts/tax-rates';
  *
  */
 export const useCalculateTaxesFromValue = () => {
-	const { rates, calcTaxes, pricesIncludeTax } = useTaxRates();
+	const { rates, calcTaxes, pricesIncludeTax, priceNumDecimals } = useTaxRates();
 
 	/**
 	 * Returns a function that calculates the tax for a given value
@@ -48,9 +48,10 @@ export const useCalculateTaxesFromValue = () => {
 				amount,
 				rates: appliedRates as { id: number; rate: string; compound: boolean; order: number }[],
 				amountIncludesTax,
+				dp: priceNumDecimals,
 			});
 		},
-		[calcTaxes, pricesIncludeTax, rates]
+		[calcTaxes, priceNumDecimals, pricesIncludeTax, rates]
 	);
 
 	return {

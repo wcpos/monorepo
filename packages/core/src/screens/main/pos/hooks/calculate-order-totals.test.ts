@@ -409,7 +409,7 @@ describe('calculateOrderTotals', () => {
 	});
 
 	describe('rounding', () => {
-		it('rounds values to 6 decimal places', () => {
+		it('rounds values to dp decimal places (default 2)', () => {
 			const lineItems = [
 				{
 					subtotal: '33.333333333',
@@ -425,9 +425,78 @@ describe('calculateOrderTotals', () => {
 				taxRates: mockTaxRates,
 			});
 
-			// Should be rounded to 6 decimal places
-			expect(result.subtotal).toBe('33.333333');
-			expect(result.subtotal_tax).toBe('3.333333');
+			// Now rounds to dp (default 2) to match WooCommerce
+			expect(result.subtotal).toBe('33.33');
+			expect(result.subtotal_tax).toBe('3.33');
+		});
+
+		it('rounds to custom dp when specified', () => {
+			const lineItems = [
+				{
+					subtotal: '33.333333333',
+					total: '33.333333333',
+					subtotal_tax: '3.3333333333',
+					total_tax: '3.3333333333',
+					taxes: [{ id: 1, total: '3.3333333333' }],
+				},
+			];
+
+			const result = calculateOrderTotals({
+				lineItems: lineItems as any,
+				taxRates: mockTaxRates,
+				dp: 4,
+			});
+
+			expect(result.subtotal).toBe('33.3333');
+			expect(result.subtotal_tax).toBe('3.3333');
+		});
+
+		it('dp=0 (JPY): rounds to whole numbers', () => {
+			const lineItems = [
+				{
+					subtotal: '1000',
+					total: '900',
+					subtotal_tax: '100',
+					total_tax: '90',
+					taxes: [{ id: 1, total: '90' }],
+				},
+			];
+			const shippingLines = [{ total: '500', total_tax: '50', taxes: [{ id: 1, total: '50' }] }];
+
+			const result = calculateOrderTotals({
+				lineItems: lineItems as any,
+				shippingLines: shippingLines as any,
+				taxRates: mockTaxRates,
+				dp: 0,
+			});
+
+			expect(result.subtotal).toBe('1000');
+			expect(result.discount_total).toBe('100');
+			expect(result.shipping_total).toBe('500');
+			expect(result.total_tax).toBe('140');
+			expect(result.total).toBe('1540');
+		});
+
+		it('dp=3: rounds to 3 decimal places', () => {
+			const lineItems = [
+				{
+					subtotal: '9.999',
+					total: '9.999',
+					subtotal_tax: '0.9999',
+					total_tax: '0.9999',
+					taxes: [{ id: 1, total: '0.9999' }],
+				},
+			];
+
+			const result = calculateOrderTotals({
+				lineItems: lineItems as any,
+				taxRates: mockTaxRates,
+				dp: 3,
+			});
+
+			expect(result.subtotal).toBe('9.999');
+			expect(result.subtotal_tax).toBe('1');
+			expect(result.total).toBe('10.999');
 		});
 	});
 });

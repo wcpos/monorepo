@@ -1,23 +1,29 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import round from 'lodash/round';
 import uniq from 'lodash/uniq';
 
 import { useLineItemData } from './use-line-item-data';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
+import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type Tax = { id: number; total: number };
 
 /**
  * Consolidates unique taxes by combining subtotal and total tax values.
+ *
+ * When roundAtSubtotal=false, each per-rate tax is rounded to dp before output.
+ * When roundAtSubtotal=true, taxes are left at full precision (deferred to order totals).
  */
 const consolidateTaxes = (
 	subtotalTaxes: { taxes: Tax[] },
 	totalTaxes: { taxes: Tax[] },
-	noSubtotal: boolean
+	noSubtotal: boolean,
+	dp: number,
+	pricesIncludeTax: boolean,
+	roundAtSubtotal: boolean
 ) => {
 	const uniqueTaxIds = uniq([
 		...subtotalTaxes.taxes.map((tax) => tax.id),
@@ -28,10 +34,19 @@ const consolidateTaxes = (
 		const subtotalTax = find(subtotalTaxes.taxes, { id }) || { total: 0 };
 		const totalTax = find(totalTaxes.taxes, { id }) || { total: 0 };
 
+		// When roundAtSubtotal=false, round each per-rate tax to dp (matches WC per-item rounding)
+		// When roundAtSubtotal=true, leave at rounding precision (deferred to order totals)
+		const roundedSubtotalTax = roundAtSubtotal
+			? subtotalTax.total
+			: roundTaxTotal(subtotalTax.total, dp, pricesIncludeTax);
+		const roundedTotalTax = roundAtSubtotal
+			? totalTax.total
+			: roundTaxTotal(totalTax.total, dp, pricesIncludeTax);
+
 		return {
 			id,
-			subtotal: noSubtotal ? '' : String(round(subtotalTax.total, 6)),
-			total: String(round(totalTax.total, 6)),
+			subtotal: noSubtotal ? '' : String(roundedSubtotalTax),
+			total: String(roundedTotalTax),
 		};
 	});
 };
@@ -40,7 +55,7 @@ const consolidateTaxes = (
  * Custom hook to calculate line item tax and totals.
  */
 export const useCalculateLineItemTaxAndTotals = () => {
-	const { pricesIncludeTax } = useTaxRates();
+	const { pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxRates();
 	const { calculateTaxesFromValue } = useCalculateTaxesFromValue();
 	const { getLineItemData } = useLineItemData();
 
@@ -51,6 +66,8 @@ export const useCalculateLineItemTaxAndTotals = () => {
 		(lineItem: Partial<LineItem>) => {
 			const { price, regular_price, tax_status } = getLineItemData(lineItem);
 			const quantity = lineItem.quantity ?? 0;
+			const dp = priceNumDecimals;
+			const roundingPrecision = getRoundingPrecision(dp);
 
 			// Calculate total and subtotal based on quantity
 			const total = price * quantity;
@@ -78,6 +95,15 @@ export const useCalculateLineItemTaxAndTotals = () => {
 				amountIncludesTax: pricesIncludeTax,
 			});
 
+			// When roundAtSubtotal=false, round total_tax to dp (per-item rounding)
+			// When roundAtSubtotal=true, leave at rounding precision
+			const roundedTotalTax = taxRoundAtSubtotal
+				? totalTaxResult.total
+				: roundTaxTotal(totalTaxResult.total, dp, pricesIncludeTax);
+			const roundedSubtotalTax = taxRoundAtSubtotal
+				? subtotalTaxResult.total
+				: roundTaxTotal(subtotalTaxResult.total, dp, pricesIncludeTax);
+
 			// Calculate total and subtotal excluding tax
 			const totalExclTax = pricesIncludeTax ? total - totalTaxResult.total : total;
 			const subtotalExclTax = pricesIncludeTax ? subtotal - subtotalTaxResult.total : subtotal;
@@ -86,19 +112,35 @@ export const useCalculateLineItemTaxAndTotals = () => {
 			const priceWithoutTax = pricesIncludeTax ? price - perUnitTaxResult.total : price;
 
 			// Consolidate taxes
-			const taxes = consolidateTaxes(subtotalTaxResult, totalTaxResult, false);
+			const taxes = consolidateTaxes(
+				subtotalTaxResult,
+				totalTaxResult,
+				false,
+				dp,
+				pricesIncludeTax,
+				taxRoundAtSubtotal
+			);
 
+			// Line-level values (total, subtotal, price) are stored at rounding precision (6dp)
+			// to match WC's internal storage. WC stores these "unrounded" via wc_format_decimal()
+			// and the POS API returns them at dp=6. Only order-level totals get rounded to dp.
 			return {
 				...lineItem,
-				price: round(priceWithoutTax, 6), // WC REST API always uses price without tax
-				total: String(round(totalExclTax, 6)),
-				subtotal: String(round(subtotalExclTax, 6)),
-				total_tax: String(round(totalTaxResult.total, 6)),
-				subtotal_tax: String(round(subtotalTaxResult.total, 6)),
+				price: roundHalfUp(priceWithoutTax, roundingPrecision),
+				total: String(roundHalfUp(totalExclTax, roundingPrecision)),
+				subtotal: String(roundHalfUp(subtotalExclTax, roundingPrecision)),
+				total_tax: String(roundedTotalTax),
+				subtotal_tax: String(roundedSubtotalTax),
 				taxes,
 			};
 		},
-		[calculateTaxesFromValue, getLineItemData, pricesIncludeTax]
+		[
+			calculateTaxesFromValue,
+			getLineItemData,
+			priceNumDecimals,
+			pricesIncludeTax,
+			taxRoundAtSubtotal,
+		]
 	);
 
 	return { calculateLineItemTaxesAndTotals };

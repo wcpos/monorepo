@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 5,
+	version: 6,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -167,6 +167,13 @@ export const storesLiteral = {
 		price_num_decimals: {
 			title: 'Number of Decimals',
 			description: 'This sets the number of decimals of displayed prices.',
+			type: 'number',
+			default: 2,
+		},
+		wc_price_decimals: {
+			title: 'WC Price Decimals (server-authoritative)',
+			description:
+				'The server-side wc_get_price_decimals() value used for tax/discount calculations. Not user-editable.',
 			type: 'number',
 			default: 2,
 		},

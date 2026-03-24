@@ -1,5 +1,8 @@
-import round from 'lodash/round';
-
+import {
+	addNumberPrecision,
+	removeNumberPrecision,
+	roundDiscount,
+} from '../../hooks/utils/precision';
 import { getEligibleItems } from './coupon-helpers';
 
 import type { CouponLineItem } from './coupon-helpers';
@@ -31,12 +34,15 @@ export interface DiscountResult {
  * - fixed_cart: fixed amount distributed proportionally across eligible items
  * - fixed_product: fixed amount per unit of each eligible item
  *
- * Reuses the eligibility filtering from coupon-helpers to stay consistent
- * with the validation layer.
+ * All calculations use cent-precision math with Math.floor() and penny distribution
+ * to match WooCommerce's WC_Discounts class exactly.
+ *
+ * @param dp - Price decimal places (wc_get_price_decimals), default 2
  */
 export function calculateCouponDiscount(
 	config: CouponDiscountConfig,
-	items: CouponLineItem[]
+	items: CouponLineItem[],
+	dp = 2
 ): DiscountResult {
 	const amount = parseFloat(config.amount) || 0;
 	if (amount === 0 || items.length === 0) {
@@ -69,11 +75,11 @@ export function calculateCouponDiscount(
 
 	switch (config.discount_type) {
 		case 'percent':
-			return calculatePercentDiscount(amount, eligible, config.limit_usage_to_x_items);
+			return calculatePercentDiscount(amount, eligible, config.limit_usage_to_x_items, dp);
 		case 'fixed_cart':
-			return calculateFixedCartDiscount(amount, eligible);
+			return calculateFixedCartDiscount(amount, eligible, dp);
 		case 'fixed_product':
-			return calculateFixedProductDiscount(amount, eligible, config.limit_usage_to_x_items);
+			return calculateFixedProductDiscount(amount, eligible, config.limit_usage_to_x_items, dp);
 		default:
 			return { totalDiscount: 0, perItem: [] };
 	}
@@ -115,88 +121,194 @@ function selectTopPricedUnits(
 }
 
 /**
- * Percent discount: apply percentage to each eligible item's total.
- * When limit_usage_to_x_items is set, only the N highest-priced units
- * receive the discount (matching WooCommerce behavior).
+ * WC: WC_Discounts::apply_coupon_percent
+ *
+ * Percentage discount: shift to cents, floor() per-item, then distribute remainder
+ * 1 cent at a time to most-expensive items first.
  */
 function calculatePercentDiscount(
 	percent: number,
 	items: CouponLineItem[],
-	limitToXItems: number | null
+	limitToXItems: number | null,
+	dp: number
 ): DiscountResult {
 	const targetItems = selectTopPricedUnits(items, limitToXItems);
 
+	// Compute per-item discount in cents using floor
+	const itemDiscountsCents: { item: CouponLineItem; discountCents: number; index: number }[] = [];
+	let totalDiscountCents = 0;
+
+	for (let i = 0; i < targetItems.length; i++) {
+		const item = targetItems[i];
+		const itemTotalCents = addNumberPrecision(item.price * item.quantity, dp);
+		const discountCents = Math.floor(itemTotalCents * (percent / 100));
+		// Cap at item total
+		const cappedCents = Math.min(discountCents, itemTotalCents);
+		itemDiscountsCents.push({ item, discountCents: cappedCents, index: i });
+		totalDiscountCents += cappedCents;
+	}
+
+	// Calculate exact total discount and distribute remainder
+	const exactTotalCents = targetItems.reduce((sum, item) => {
+		const itemTotalCents = addNumberPrecision(item.price * item.quantity, dp);
+		return sum + itemTotalCents * (percent / 100);
+	}, 0);
+	const expectedTotalCents = roundDiscount(exactTotalCents, 0);
+
+	applyCouponRemainder(itemDiscountsCents, expectedTotalCents - totalDiscountCents, dp);
+
+	// Convert back from cents
 	const perItem: PerItemDiscount[] = [];
 	let totalDiscount = 0;
-
-	for (const item of targetItems) {
-		const itemTotal = item.price * item.quantity;
-		const discount = round(itemTotal * (percent / 100), 6);
-		const cappedDiscount = Math.min(discount, itemTotal);
-		perItem.push({ product_id: item.product_id, discount: cappedDiscount });
-		totalDiscount += cappedDiscount;
-	}
-
-	return { totalDiscount: round(totalDiscount, 6), perItem };
-}
-
-/**
- * Fixed cart discount: distribute the fixed amount proportionally across
- * eligible items based on their share of the eligible cart total.
- * The last item receives the remainder to avoid rounding drift.
- */
-function calculateFixedCartDiscount(amount: number, items: CouponLineItem[]): DiscountResult {
-	const cartTotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-	if (cartTotal === 0) {
-		return { totalDiscount: 0, perItem: [] };
-	}
-
-	const cappedAmount = Math.min(amount, cartTotal);
-	const perItem: PerItemDiscount[] = [];
-	let distributed = 0;
-
-	for (let i = 0; i < items.length; i++) {
-		const item = items[i];
-		const itemTotal = item.price * item.quantity;
-
-		if (i === items.length - 1) {
-			// Last item gets the remainder to handle rounding residuals
-			const discount = Math.max(0, round(cappedAmount - distributed, 6));
-			const cappedDiscount = Math.min(discount, itemTotal);
-			perItem.push({ product_id: item.product_id, discount: cappedDiscount });
-			distributed += cappedDiscount;
-		} else {
-			const proportion = itemTotal / cartTotal;
-			const discount = round(cappedAmount * proportion, 6);
-			perItem.push({ product_id: item.product_id, discount: Math.min(discount, itemTotal) });
-			distributed += discount;
-		}
-	}
-
-	return { totalDiscount: round(distributed, 6), perItem };
-}
-
-/**
- * Fixed product discount: apply a fixed amount per unit of each eligible item.
- * Per-unit discount is capped at the item's unit price so the total never goes negative.
- * When limit_usage_to_x_items is set, only the N highest-priced units receive the discount.
- */
-function calculateFixedProductDiscount(
-	amount: number,
-	items: CouponLineItem[],
-	limitToXItems: number | null
-): DiscountResult {
-	const targetItems = selectTopPricedUnits(items, limitToXItems);
-
-	const perItem: PerItemDiscount[] = [];
-	let totalDiscount = 0;
-
-	for (const item of targetItems) {
-		const perUnitDiscount = Math.min(amount, item.price);
-		const discount = round(perUnitDiscount * item.quantity, 6);
+	for (const { item, discountCents } of itemDiscountsCents) {
+		const discount = removeNumberPrecision(discountCents, dp);
 		perItem.push({ product_id: item.product_id, discount });
 		totalDiscount += discount;
 	}
 
-	return { totalDiscount: round(totalDiscount, 6), perItem };
+	return { totalDiscount: roundDiscount(totalDiscount, dp), perItem };
+}
+
+/**
+ * WC: WC_Discounts::apply_coupon_fixed_cart
+ *
+ * Fixed cart discount: floor(amountInCents / itemCount) per item,
+ * then distribute remainder via applyCouponRemainder.
+ */
+function calculateFixedCartDiscount(
+	amount: number,
+	items: CouponLineItem[],
+	dp: number
+): DiscountResult {
+	// WC filters out zero-price items before counting (apply_coupon_fixed_cart)
+	const discountableItems = items.filter((item) => item.price > 0);
+	if (discountableItems.length === 0) {
+		return { totalDiscount: 0, perItem: [] };
+	}
+
+	const cartTotalCents = discountableItems.reduce(
+		(sum, item) => sum + addNumberPrecision(item.price * item.quantity, dp),
+		0
+	);
+	if (cartTotalCents === 0) {
+		return { totalDiscount: 0, perItem: [] };
+	}
+
+	const amountCents = addNumberPrecision(
+		Math.min(amount, removeNumberPrecision(cartTotalCents, dp)),
+		dp
+	);
+
+	// Count total discountable units (WC: array_sum(wp_list_pluck($items_to_apply, 'quantity')))
+	const totalItemCount = discountableItems.reduce((sum, item) => sum + item.quantity, 0);
+
+	// Per-item discount = floor(amount in cents / total item count)
+	const perItemCents = Math.floor(amountCents / totalItemCount);
+
+	const itemDiscountsCents: { item: CouponLineItem; discountCents: number; index: number }[] = [];
+	let totalDiscountCents = 0;
+
+	for (let i = 0; i < discountableItems.length; i++) {
+		const item = discountableItems[i];
+		const itemTotalCents = addNumberPrecision(item.price * item.quantity, dp);
+		const discountCents = Math.min(perItemCents * item.quantity, itemTotalCents);
+		itemDiscountsCents.push({ item, discountCents, index: i });
+		totalDiscountCents += discountCents;
+	}
+
+	// Distribute remainder
+	applyCouponRemainder(itemDiscountsCents, amountCents - totalDiscountCents, dp);
+
+	// Convert back from cents
+	const perItem: PerItemDiscount[] = [];
+	let totalDiscount = 0;
+	for (const { item, discountCents } of itemDiscountsCents) {
+		const discount = removeNumberPrecision(discountCents, dp);
+		perItem.push({ product_id: item.product_id, discount });
+		totalDiscount += discount;
+	}
+
+	return { totalDiscount: roundDiscount(totalDiscount, dp), perItem };
+}
+
+/**
+ * WC: WC_Discounts::apply_coupon_fixed_product
+ *
+ * Fixed product discount: floor(perUnitInCents * qty) per line item,
+ * then distribute remainder.
+ */
+function calculateFixedProductDiscount(
+	amount: number,
+	items: CouponLineItem[],
+	limitToXItems: number | null,
+	dp: number
+): DiscountResult {
+	const targetItems = selectTopPricedUnits(items, limitToXItems);
+
+	const amountCents = addNumberPrecision(amount, dp);
+
+	const itemDiscountsCents: { item: CouponLineItem; discountCents: number }[] = [];
+
+	for (let i = 0; i < targetItems.length; i++) {
+		const item = targetItems[i];
+		const itemPriceCents = addNumberPrecision(item.price, dp);
+		const perUnitCents = Math.min(amountCents, itemPriceCents);
+		const discountCents = Math.floor(perUnitCents * item.quantity);
+		itemDiscountsCents.push({ item, discountCents });
+	}
+
+	// Convert back from cents
+	const perItem: PerItemDiscount[] = [];
+	let totalDiscount = 0;
+	for (const { item, discountCents } of itemDiscountsCents) {
+		const discount = removeNumberPrecision(discountCents, dp);
+		perItem.push({ product_id: item.product_id, discount });
+		totalDiscount += discount;
+	}
+
+	return { totalDiscount: roundDiscount(totalDiscount, dp), perItem };
+}
+
+/**
+ * WC: WC_Discounts::apply_coupon_remainder
+ *
+ * After floor(), total discount may be less than the intended amount.
+ * Distribute the remainder 1 cent at a time to the most expensive items first.
+ *
+ * Items are sorted by price descending, then for each item we loop through
+ * its quantity, adding 1 cent per unit until the remainder is exhausted.
+ */
+function applyCouponRemainder(
+	itemDiscounts: { item: CouponLineItem; discountCents: number; index: number }[],
+	remainderCents: number,
+	dp: number
+): void {
+	if (remainderCents <= 0) return;
+
+	// Sort by price descending (most expensive items get the penny first)
+	const sorted = [...itemDiscounts].sort((a, b) => b.item.price - a.item.price);
+
+	let remaining = remainderCents;
+
+	for (const entry of sorted) {
+		const itemPriceCents = addNumberPrecision(entry.item.price, dp);
+
+		for (let unit = 0; unit < entry.item.quantity; unit++) {
+			if (remaining <= 0) return;
+
+			// Can this unit absorb 1 more cent? Check against item price
+			const currentPerUnit = entry.discountCents / entry.item.quantity;
+			if (currentPerUnit < itemPriceCents) {
+				const addCent = Math.min(1, remaining);
+				// Find the original entry and update it
+				const original = itemDiscounts.find((d) => d.index === entry.index);
+				if (original) {
+					original.discountCents += addCent;
+					remaining -= addCent;
+				}
+			}
+
+			if (remaining <= 0) return;
+		}
+	}
 }

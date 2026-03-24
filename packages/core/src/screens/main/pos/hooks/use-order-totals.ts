@@ -14,7 +14,7 @@ import { useCurrentOrder } from '../contexts/current-order';
  */
 export const useOrderTotals = () => {
 	const { currentOrder } = useCurrentOrder();
-	const { allRates, taxRoundAtSubtotal } = useTaxRates();
+	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxRates();
 	const { localPatch } = useLocalMutation();
 	const { line_items, fee_lines, shipping_lines, coupon_lines } = useCartLines();
 
@@ -29,10 +29,21 @@ export const useOrderTotals = () => {
 			couponLines: coupon_lines,
 			taxRates: allRates, // NOTE: rates are not used for calc, just to get the tax rate label
 			taxRoundAtSubtotal,
+			dp: priceNumDecimals,
+			pricesIncludeTax,
 		});
 
 		return totals;
-	}, [line_items, fee_lines, shipping_lines, coupon_lines, allRates, taxRoundAtSubtotal]);
+	}, [
+		line_items,
+		fee_lines,
+		shipping_lines,
+		coupon_lines,
+		allRates,
+		taxRoundAtSubtotal,
+		priceNumDecimals,
+		pricesIncludeTax,
+	]);
 
 	/**
 	 *

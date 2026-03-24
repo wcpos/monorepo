@@ -19,6 +19,7 @@ interface TaxRatesContextProps {
 	calcTaxes: boolean;
 	pricesIncludeTax: boolean;
 	taxRoundAtSubtotal: boolean;
+	priceNumDecimals: number;
 	taxBasedOn: 'base' | 'shipping' | 'billing';
 	location: {
 		country: string;
@@ -61,6 +62,9 @@ export function TaxRatesProvider({ children, taxQuery, order }: TaxRatesProvider
 	const taxRoundAtSubtotal = useObservableEagerState(
 		store.tax_round_at_subtotal$.pipe(map((val) => val === 'yes'))
 	);
+	// Use wc_price_decimals (server-authoritative) for calculations, NOT price_num_decimals
+	// (which users can override locally for display formatting).
+	const priceNumDecimals = useObservableEagerState(store.wc_price_decimals$) as number;
 
 	/**
 	 * Tax Based On
@@ -144,6 +148,7 @@ export function TaxRatesProvider({ children, taxQuery, order }: TaxRatesProvider
 				calcTaxes: calcTaxes as boolean,
 				pricesIncludeTax: pricesIncludeTax as boolean,
 				taxRoundAtSubtotal: taxRoundAtSubtotal as boolean,
+				priceNumDecimals: (priceNumDecimals ?? 2) as number,
 				taxBasedOn: taxBasedOn as 'base' | 'shipping' | 'billing',
 				location,
 				taxQuery, // pass through for easy access

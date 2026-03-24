@@ -1,5 +1,6 @@
-import round from 'lodash/round';
 import sumBy from 'lodash/sumBy';
+
+import { roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -14,6 +15,8 @@ interface Props {
 	couponLines?: CouponLine[];
 	taxRates?: TaxRateDocument[];
 	taxRoundAtSubtotal?: boolean;
+	dp?: number;
+	pricesIncludeTax?: boolean;
 }
 
 interface TaxLine {
@@ -41,7 +44,15 @@ function parseNumber(value: any): number {
 }
 
 /**
- * @TODO - rounding?!
+ * Calculate order totals from line items, fees, shipping, and coupons.
+ *
+ * When taxRoundAtSubtotal=true, tax values on individual lines are at rounding precision
+ * and the final aggregated tax_total/shipping_tax_total is rounded to dp once.
+ *
+ * When taxRoundAtSubtotal=false (default), taxes were already rounded per-item to dp.
+ *
+ * @param dp - Price decimal places (default 2)
+ * @param pricesIncludeTax - Whether prices include tax (affects rounding mode)
  */
 export function calculateOrderTotals({
 	lineItems = [],
@@ -50,6 +61,8 @@ export function calculateOrderTotals({
 	couponLines = [],
 	taxRates = [],
 	taxRoundAtSubtotal = false,
+	dp = 2,
+	pricesIncludeTax = false,
 }: Props) {
 	let discount_total = 0;
 	let discount_tax = 0;
@@ -139,44 +152,54 @@ export function calculateOrderTotals({
 
 	// Sum the tax totals for cart_tax before converting to string
 	const taxLinesArray = Object.values(taxLines) || [];
-	cart_tax += sumBy(taxLinesArray, 'tax_total');
 
+	// When roundAtSubtotal=true, per-rate taxes are at rounding precision.
+	// Round the aggregated totals to dp now.
 	const filteredTaxLines = taxLinesArray
 		.map((taxLine) => {
-			if (taxLine.tax_total === 0 && taxLine.shipping_tax_total === 0) {
+			let { tax_total, shipping_tax_total } = taxLine;
+
+			if (taxRoundAtSubtotal) {
+				tax_total = roundTaxTotal(tax_total, dp, pricesIncludeTax);
+				shipping_tax_total = roundTaxTotal(shipping_tax_total, dp, pricesIncludeTax);
+			}
+
+			if (tax_total === 0 && shipping_tax_total === 0) {
 				return null;
 			}
 			return {
 				...taxLine,
-				tax_total: String(round(taxLine.tax_total, 6)),
-				shipping_tax_total: String(round(taxLine.shipping_tax_total, 6)),
+				tax_total: String(roundHalfUp(tax_total, dp)),
+				shipping_tax_total: String(roundHalfUp(shipping_tax_total, dp)),
 			};
 		})
 		.filter((line): line is NonNullable<typeof line> => line !== null);
+
+	cart_tax = sumBy(filteredTaxLines, (tl) => parseNumber(tl.tax_total));
 
 	return {
 		/**
 		 * These properties are stored on the order document
 		 */
-		discount_total: String(round(discount_total, 6)),
-		discount_tax: String(round(discount_tax, 6)),
-		shipping_total: String(round(shipping_total, 6)),
-		shipping_tax: String(round(shipping_tax, 6)),
-		cart_tax: String(round(cart_tax, 6)),
-		total: String(round(total + total_tax, 6)),
-		total_tax: String(round(total_tax, 6)),
+		discount_total: String(roundHalfUp(discount_total, dp)),
+		discount_tax: String(roundHalfUp(discount_tax, dp)),
+		shipping_total: String(roundHalfUp(shipping_total, dp)),
+		shipping_tax: String(roundHalfUp(shipping_tax, dp)),
+		cart_tax: String(roundHalfUp(cart_tax, dp)),
+		total: String(roundHalfUp(total + total_tax, dp)),
+		total_tax: String(roundHalfUp(total_tax, dp)),
 		tax_lines: filteredTaxLines,
 		/**
 		 * Subtotals are not stored on the order document, but we need them to display in the cart
 		 */
-		subtotal: String(round(subtotal, 6)),
-		subtotal_tax: String(round(subtotal_tax, 6)),
+		subtotal: String(roundHalfUp(subtotal, dp)),
+		subtotal_tax: String(roundHalfUp(subtotal_tax, dp)),
 		/**
 		 * Need to add fee_total to display in the cart, to match the WC Admin display
 		 */
-		fee_total: String(round(fee_total, 6)),
-		fee_tax: String(round(fee_tax, 6)),
-		coupon_total: String(round(coupon_total, 6)),
-		coupon_tax: String(round(coupon_tax, 6)),
+		fee_total: String(roundHalfUp(fee_total, dp)),
+		fee_tax: String(roundHalfUp(fee_tax, dp)),
+		coupon_total: String(roundHalfUp(coupon_total, dp)),
+		coupon_tax: String(roundHalfUp(coupon_tax, dp)),
 	};
 }
