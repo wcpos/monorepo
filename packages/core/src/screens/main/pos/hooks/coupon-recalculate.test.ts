@@ -342,7 +342,75 @@ describe('recalculateCoupons', () => {
 	});
 
 	// -----------------------------------------------------------------------
-	// Group 6: Fixed product on POS price
+	// Group 6: Duplicate product_id lines
+	// -----------------------------------------------------------------------
+	describe('duplicate product_id lines', () => {
+		it('should apply percent coupon per-line without smearing across same product_id', () => {
+			// Two lines with same product_id=1 but different POS prices
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [
+						makePosLineItem(1, 100, 100), // line 0: $100
+						makePosLineItem(1, 50, 50), // line 1: $50 (same product)
+					],
+					couponLines: [makeCouponLine('ten')],
+					couponConfigs: new Map([['ten', makeConfig({ discount_type: 'percent', amount: '10' })]]),
+				})
+			);
+
+			// 10% of $100 = $10, 10% of $50 = $5, total = $15
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(15, 2);
+			// Line 0: $100 - $10 = $90
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(90, 2);
+			// Line 1: $50 - $5 = $45
+			expect(parseFloat(result.lineItems[1].total!)).toBeCloseTo(45, 2);
+		});
+	});
+
+	// -----------------------------------------------------------------------
+	// Group 7: Tax-inclusive percent coupons
+	// -----------------------------------------------------------------------
+	describe('tax-inclusive percent coupons', () => {
+		it('should convert percent discount to ex-tax when pricesIncludeTax is true', () => {
+			// Item $110 inclusive (= $100 ex-tax + $10 tax, 10% rate)
+			// subtotal = $100 (ex-tax), subtotal_tax = $10
+			const item = {
+				product_id: 1,
+				quantity: 1,
+				subtotal: '100',
+				subtotal_tax: '10',
+				total: '100',
+				total_tax: '10',
+				taxes: [{ id: 1, subtotal: '10', total: '10' }],
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({
+							price: '110', // tax-inclusive POS price
+							regular_price: '110',
+							tax_status: 'taxable',
+						}),
+					},
+				],
+			} as unknown as LineItem;
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [item],
+					couponLines: [makeCouponLine('ten')],
+					couponConfigs: new Map([['ten', makeConfig({ discount_type: 'percent', amount: '10' })]]),
+					pricesIncludeTax: true,
+					taxRates: [{ id: 1, rate: '10', compound: false, order: 1, class: 'standard' }],
+				})
+			);
+
+			// 10% of $110 inclusive = $11, ex-tax = $11 / 1.1 = $10
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(10, 2);
+		});
+	});
+
+	// -----------------------------------------------------------------------
+	// Group 8: Fixed product on POS price
 	// -----------------------------------------------------------------------
 	describe('fixed product on POS-discounted item', () => {
 		it('should apply $5 fixed_product using POS price ($16) as base', () => {

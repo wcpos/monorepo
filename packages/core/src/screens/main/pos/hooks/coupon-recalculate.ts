@@ -8,7 +8,6 @@ import {
 import {
 	calculateCouponDiscountTaxSplit,
 	computeDiscountedLineItems,
-	convertDiscountsToExTax,
 	type CouponLineItem,
 } from './coupon-helpers';
 import { parsePosData } from './utils';
@@ -212,15 +211,29 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		// Cap each per-item discount by the remaining item value after
 		// prior coupons. This prevents over-allocation when stacking
 		// large-value coupons (e.g., fixed500cart + percent coupon).
+		//
+		// In sequential mode, currentItems prices are already reduced by prior
+		// coupons, so item.price * item.quantity IS the remaining value — using
+		// cumulativeDiscounts would double-count. In non-sequential mode, all
+		// coupons see the original price, so we track cumulative discounts to cap.
 		for (const entry of discountResult.perItem) {
 			const idx = entry.lineIndex ?? -1;
 			const item = currentItems.find((i) => i.lineIndex === idx);
 			if (!item) continue;
 			const itemTotal = item.price * item.quantity;
-			const cumulative = cumulativeDiscounts.get(idx) || 0;
-			const remaining = Math.max(0, itemTotal - cumulative);
+			let remaining: number;
+			if (calcDiscountsSequentially) {
+				// Prices already reduced — itemTotal is the true remaining value
+				remaining = itemTotal;
+			} else {
+				const cumulative = cumulativeDiscounts.get(idx) || 0;
+				remaining = Math.max(0, itemTotal - cumulative);
+			}
 			entry.discount = Math.min(entry.discount, remaining);
-			cumulativeDiscounts.set(idx, cumulative + entry.discount);
+			if (!calcDiscountsSequentially) {
+				const cumulative = cumulativeDiscounts.get(idx) || 0;
+				cumulativeDiscounts.set(idx, cumulative + entry.discount);
+			}
 		}
 
 		// Recalculate totalDiscount after capping

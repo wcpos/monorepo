@@ -172,6 +172,54 @@ export function computeDiscountedLineItems<
 >(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][]): T[] {
 	if (allPerItemDiscounts.length === 0) return lineItems;
 
+	// Check whether any discount entry uses lineIndex — if so, prefer per-line
+	// matching over product_id aggregation to preserve per-line precision when
+	// the same product_id appears on multiple lines at different prices.
+	const hasLineIndex = allPerItemDiscounts.some((list) => list.some((e) => e.lineIndex != null));
+
+	if (hasLineIndex) {
+		// Per-line matching: aggregate discounts by lineIndex
+		const discountByLine = new Map<number, number>();
+		for (const perItemDiscounts of allPerItemDiscounts) {
+			for (const entry of perItemDiscounts) {
+				if (entry.lineIndex != null) {
+					discountByLine.set(
+						entry.lineIndex,
+						(discountByLine.get(entry.lineIndex) || 0) + entry.discount
+					);
+				}
+			}
+		}
+
+		if (discountByLine.size === 0) return lineItems;
+
+		return lineItems.map((item, idx) => {
+			const lineDiscount = discountByLine.get(idx);
+			if (!lineDiscount || lineDiscount <= 0) return item;
+
+			const currentTotal = parseFloat(item.total || '0');
+			if (currentTotal <= 0) return item;
+
+			const currentTotalTax = parseFloat(item.total_tax || '0');
+			const newTotal = Math.max(0, currentTotal - lineDiscount);
+			const ratio = currentTotal > 0 ? newTotal / currentTotal : 0;
+			const newTotalTax = currentTotalTax * ratio;
+
+			const taxes = (item.taxes || []).map((tax) => ({
+				...tax,
+				total: String(round(parseFloat(tax.total || '0') * ratio, 6)),
+			}));
+
+			return {
+				...item,
+				total: String(round(newTotal, 6)),
+				total_tax: String(round(newTotalTax, 6)),
+				taxes,
+			} as T;
+		});
+	}
+
+	// Fallback: aggregate by product_id (original behavior for callers without lineIndex)
 	const discountMap = new Map<number, number>();
 	for (const perItemDiscounts of allPerItemDiscounts) {
 		for (const { product_id, discount } of perItemDiscounts) {
