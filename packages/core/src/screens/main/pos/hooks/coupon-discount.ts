@@ -21,6 +21,8 @@ export interface CouponDiscountConfig {
 export interface PerItemDiscount {
 	product_id: number;
 	discount: number;
+	/** Stable index into the source line-items array for per-line matching */
+	lineIndex?: number;
 }
 
 export interface DiscountResult {
@@ -162,7 +164,7 @@ function calculatePercentDiscount(
 	let totalDiscount = 0;
 	for (const { item, discountCents } of itemDiscountsCents) {
 		const discount = removeNumberPrecision(discountCents, dp);
-		perItem.push({ product_id: item.product_id, discount });
+		perItem.push({ product_id: item.product_id, discount, lineIndex: item.lineIndex });
 		totalDiscount += discount;
 	}
 
@@ -224,7 +226,7 @@ function calculateFixedCartDiscount(
 	let totalDiscount = 0;
 	for (const { item, discountCents } of itemDiscountsCents) {
 		const discount = removeNumberPrecision(discountCents, dp);
-		perItem.push({ product_id: item.product_id, discount });
+		perItem.push({ product_id: item.product_id, discount, lineIndex: item.lineIndex });
 		totalDiscount += discount;
 	}
 
@@ -262,7 +264,7 @@ function calculateFixedProductDiscount(
 	let totalDiscount = 0;
 	for (const { item, discountCents } of itemDiscountsCents) {
 		const discount = removeNumberPrecision(discountCents, dp);
-		perItem.push({ product_id: item.product_id, discount });
+		perItem.push({ product_id: item.product_id, discount, lineIndex: item.lineIndex });
 		totalDiscount += discount;
 	}
 

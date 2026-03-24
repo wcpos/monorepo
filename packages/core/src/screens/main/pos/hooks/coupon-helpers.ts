@@ -13,6 +13,8 @@ export interface CouponLineItem {
 	total: string;
 	categories: { id: number }[];
 	on_sale: boolean;
+	/** Stable index into the source line-items array for per-line matching */
+	lineIndex?: number;
 }
 
 export interface CouponRestrictions {
