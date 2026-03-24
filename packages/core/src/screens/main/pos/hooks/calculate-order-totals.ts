@@ -100,8 +100,10 @@ export function calculateOrderTotals({
 		const parsedSubtotalTax = parseNumber(item.subtotal_tax);
 		const parsedTotalTax = parseNumber(item.total_tax);
 
-		discount_total += parsedSubtotal - parsedTotal;
-		discount_tax += parsedSubtotalTax - parsedTotalTax;
+		// Round per-item differences to 6dp before accumulating to avoid
+		// IEEE 754 artifacts (e.g., 4.5 - 4.275 = 0.22499...96 instead of 0.225).
+		discount_total += roundHalfUp(parsedSubtotal - parsedTotal, 6);
+		discount_tax += roundHalfUp(parsedSubtotalTax - parsedTotalTax, 6);
 		subtotal += parsedSubtotal;
 		subtotal_tax += parsedSubtotalTax;
 		total += parsedTotal;
