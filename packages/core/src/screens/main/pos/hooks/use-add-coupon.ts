@@ -5,16 +5,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { calculateCouponDiscount } from './coupon-discount';
-import {
-	calculateCouponDiscountTaxSplit,
-	computeDiscountedLineItems,
-	convertDiscountsToExTax,
-	isProductOnSale,
-} from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
+import { useRecalculateCoupons } from './use-recalculate-coupons';
+import { parsePosData } from './utils';
 import { useT } from '../../../../contexts/translations';
-import { useTaxRates } from '../../contexts/tax-rates';
 import { useCollection } from '../../hooks/use-collection';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -36,7 +30,7 @@ export const useAddCoupon = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
-	const { rates: taxRates, pricesIncludeTax, priceNumDecimals } = useTaxRates();
+	const { recalculate } = useRecalculateCoupons();
 
 	const orderLogger = React.useMemo(
 		() =>
@@ -90,9 +84,19 @@ export const useAddCoupon = () => {
 				const productMap = new Map(products.map((p: any) => [p.id, p]));
 
 				// 4. Build validation context
+				// Use POS data to determine on_sale — this matches recalculateCoupons'
+				// isLineItemOnSale() so validation and replay agree on sale state.
 				const couponLineItems: CouponLineItem[] = lineItems.map((item: any) => {
 					const product = productMap.get(item.product_id);
 					const qty = item.quantity || 1;
+					const posData = parsePosData(item);
+					const posPrice = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
+					const posRegular =
+						posData?.regular_price != null ? parseFloat(String(posData.regular_price)) : NaN;
+					const onSale =
+						Number.isFinite(posPrice) && Number.isFinite(posRegular) && posRegular > 0
+							? posPrice < posRegular
+							: false;
 					return {
 						product_id: item.product_id,
 						quantity: qty,
@@ -100,7 +104,7 @@ export const useAddCoupon = () => {
 						subtotal: item.subtotal || '0',
 						total: item.total || '0',
 						categories: product?.categories || [],
-						on_sale: isProductOnSale(product),
+						on_sale: onSale,
 					};
 				});
 
@@ -122,36 +126,15 @@ export const useAddCoupon = () => {
 					return { success: false, error: validation.error };
 				}
 
-				// 5. Calculate discount
+				// 5. Create new coupon line and recalculate all coupons from scratch
 				const couponData = coupon.toJSON();
-				const couponConfig = {
-					discount_type: couponData.discount_type as any,
-					amount: couponData.amount || '0',
-					limit_usage_to_x_items: couponData.limit_usage_to_x_items ?? null,
-					product_ids: [...(couponData.product_ids || [])],
-					excluded_product_ids: [...(couponData.excluded_product_ids || [])],
-					product_categories: [...(couponData.product_categories || [])],
-					excluded_product_categories: [...(couponData.excluded_product_categories || [])],
-					exclude_sale_items: couponData.exclude_sale_items || false,
+
+				const newCouponLine = {
+					code: couponData.code,
+					discount: '0',
+					discount_tax: '0',
+					meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidv4() }],
 				};
-
-				// Sequential replay is unnecessary: couponLineItems.price is derived
-				// from item.total which already reflects previously applied coupons.
-				// Each new coupon naturally sees prices reduced by prior coupons,
-				// matching WooCommerce's recalculate_coupons() behavior.
-				const discountResult = calculateCouponDiscount(
-					couponConfig,
-					couponLineItems,
-					priceNumDecimals
-				);
-
-				// 6. Normalize discounts to ex-tax, then apply to line items and coupon line
-				const exTaxPerItem = convertDiscountsToExTax(
-					discountResult.perItem,
-					lineItems,
-					couponConfig.discount_type,
-					pricesIncludeTax
-				);
 
 				// Bail if cart changed during async coupon lookups to avoid stale writes
 				if (currentOrder.getLatest() !== order) {
@@ -163,33 +146,32 @@ export const useAddCoupon = () => {
 					};
 				}
 
-				const discountedLineItems = computeDiscountedLineItems(order.line_items || [], [
-					exTaxPerItem,
-				]);
-				const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
-					exTaxPerItem,
-					lineItems,
-					taxRates as {
-						id: number;
-						rate: string;
-						compound: boolean;
-						order: number;
-						class?: string;
-					}[]
-				);
+				const allCouponLines = [...(order.coupon_lines || []), newCouponLine];
+
+				// Note: recalculate() re-queries coupon/product docs from RxDB, so
+				// there's a theoretical TOCTOU gap if a background sync changes docs
+				// between validateCoupon() and recalculate(). In practice the window
+				// is milliseconds and the server will re-validate on sync. A full fix
+				// would require passing pre-loaded docs into recalculate(), which we
+				// defer to avoid over-engineering.
+				const result = await recalculate(order.line_items || [], allCouponLines);
+
+				// Re-check freshness after async recalculate — the order may have
+				// changed during RxDB lookups inside recalculate()
+				if (currentOrder.getLatest() !== order) {
+					return {
+						success: false,
+						error: t('pos_cart.cart_changed', {
+							defaultValue: 'Cart changed during coupon application. Please try again.',
+						}),
+					};
+				}
+
 				const patchResult = await localPatch({
 					document: order,
 					data: {
-						coupon_lines: [
-							...(order.coupon_lines || []),
-							{
-								code: couponData.code,
-								discount,
-								discount_tax,
-								meta_data: [{ key: '_woocommerce_pos_uuid', value: uuidv4() }],
-							},
-						],
-						line_items: discountedLineItems,
+						coupon_lines: result.couponLines,
+						line_items: result.lineItems,
 					},
 				});
 
@@ -202,11 +184,14 @@ export const useAddCoupon = () => {
 					};
 				}
 
+				const appliedCouponLine = result.couponLines.find(
+					(cl: any) => cl.code?.toLowerCase() === couponData.code?.toLowerCase()
+				);
 				orderLogger.info(t('pos_cart.coupon_applied', { defaultValue: 'Coupon applied' }), {
 					context: {
 						couponCode: couponData.code,
 						discountType: couponData.discount_type,
-						discount: String(discountResult.totalDiscount),
+						discount: appliedCouponLine?.discount ?? '0',
 					},
 				});
 
@@ -231,17 +216,7 @@ export const useAddCoupon = () => {
 				};
 			}
 		},
-		[
-			couponCollection,
-			productCollection,
-			currentOrder,
-			localPatch,
-			t,
-			orderLogger,
-			taxRates,
-			pricesIncludeTax,
-			priceNumDecimals,
-		]
+		[couponCollection, productCollection, currentOrder, localPatch, t, orderLogger, recalculate]
 	);
 
 	return { addCoupon };
