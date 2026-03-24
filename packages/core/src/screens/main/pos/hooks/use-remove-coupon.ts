@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { getLogger } from '@wcpos/utils/logger';
 
-import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
+import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -14,12 +14,13 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart']);
  *
  * Removes the coupon from coupon_lines by code. For synced items (with id),
  * sets code to null to signal deletion to WooCommerce.
+ * After removal, recalculates all remaining coupon discounts from scratch.
  */
 export const useRemoveCoupon = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
-	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const t = useT();
+	const { recalculate } = useRecalculateCoupons();
 
 	const orderLogger = React.useMemo(
 		() =>
@@ -55,18 +56,13 @@ export const useRemoveCoupon = () => {
 
 			if (!removed) return;
 
-			// Reset line items to pre-coupon totals. If other coupons remain,
-			// use-cart-lines will detect the line item change and reapply them.
-			const resetLineItems = (order.line_items || []).map((item: any) => {
-				if (item.product_id === null) return item;
-				return calculateLineItemTaxesAndTotals(item);
-			});
+			const result = await recalculate(order.line_items || [], updatedCouponLines);
 
 			await localPatch({
 				document: order,
 				data: {
-					coupon_lines: updatedCouponLines,
-					line_items: resetLineItems,
+					coupon_lines: result.couponLines,
+					line_items: result.lineItems,
 				},
 			});
 
@@ -75,7 +71,7 @@ export const useRemoveCoupon = () => {
 				context: { couponCode },
 			});
 		},
-		[currentOrder, localPatch, calculateLineItemTaxesAndTotals, t, orderLogger]
+		[currentOrder, localPatch, t, orderLogger, recalculate]
 	);
 
 	return { removeCoupon };
