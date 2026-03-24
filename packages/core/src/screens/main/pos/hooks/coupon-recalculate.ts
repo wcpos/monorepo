@@ -173,6 +173,12 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 	// Sort by price descending (WC behavior)
 	currentItems.sort((a, b) => b.price - a.price);
 
+	// Track cumulative inclusive-price discounts per line item.
+	// WC's WC_Discounts::get_discounted_price_in_cents() caps each coupon's
+	// actual allocation by the remaining item value after prior coupons,
+	// regardless of sequential mode.
+	const cumulativeDiscounts = new Map<number, number>();
+
 	const updatedCouponLines = activeCouponLines.map((cl) => {
 		const config = couponConfigs.get(cl.code.toLowerCase());
 		if (!config) {
@@ -185,6 +191,23 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 
 		const discountResult = calculateCouponDiscount(config, currentItems);
 
+		// Cap each per-item discount by the remaining item value after
+		// prior coupons. This prevents over-allocation when stacking
+		// large-value coupons (e.g., fixed500cart + percent coupon).
+		for (const entry of discountResult.perItem) {
+			const idx = entry.lineIndex ?? -1;
+			const item = currentItems.find((i) => i.lineIndex === idx);
+			if (!item) continue;
+			const itemTotal = item.price * item.quantity;
+			const cumulative = cumulativeDiscounts.get(idx) || 0;
+			const remaining = Math.max(0, itemTotal - cumulative);
+			entry.discount = Math.min(entry.discount, remaining);
+			cumulativeDiscounts.set(idx, cumulative + entry.discount);
+		}
+
+		// Recalculate totalDiscount after capping
+		discountResult.totalDiscount = discountResult.perItem.reduce((sum, e) => sum + e.discount, 0);
+
 		const exTaxPerItem = convertDiscountsToExTax(
 			discountResult.perItem,
 			resetItems,
@@ -194,10 +217,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 
 		allPerItemDiscounts.push(exTaxPerItem);
 
-		// If sequential mode, reduce prices for next coupon using pre-conversion
-		// discounts (discountResult.perItem) since currentItems.price is still in
-		// the original coupon-price domain (tax-inclusive when pricesIncludeTax).
-		// exTaxPerItem is only for writing back order totals.
+		// In sequential mode, also reduce item prices so the next coupon's
+		// discount *calculation* (not just allocation) uses the reduced price.
 		if (calcDiscountsSequentially) {
 			currentItems = currentItems.map((item) => {
 				const discount =
