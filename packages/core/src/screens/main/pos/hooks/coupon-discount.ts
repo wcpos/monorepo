@@ -306,17 +306,17 @@ function applyCouponRemainder(
 		let distributed = false;
 
 		for (const entry of withCapacity) {
-			const itemPriceCents = addNumberPrecision(entry.item.price, dp);
+			const itemTotalCents = addNumberPrecision(entry.item.price * entry.item.quantity, dp);
 			const original = itemDiscounts.find((d) => d.index === entry.index);
 			if (!original) continue;
 
 			for (let unit = 0; unit < entry.item.quantity; unit++) {
 				if (remaining <= 0) return;
 
-				const currentPerUnit = original.discountCents / entry.item.quantity;
-				if (currentPerUnit < itemPriceCents) {
-					original.discountCents += 1;
-					remaining -= 1;
+				if (original.discountCents < itemTotalCents) {
+					const addCent = Math.min(1, remaining);
+					original.discountCents += addCent;
+					remaining -= addCent;
 					distributed = true;
 				}
 

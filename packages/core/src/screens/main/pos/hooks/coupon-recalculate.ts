@@ -212,7 +212,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 			};
 		}
 
-		const discountResult = calculateCouponDiscount(config, currentItems);
+		const discountResult = calculateCouponDiscount(config, currentItems, dp);
 
 		// Cap each per-item discount by the remaining item value after
 		// prior coupons. This prevents over-allocation when stacking
