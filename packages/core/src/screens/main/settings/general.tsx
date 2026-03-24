@@ -163,6 +163,7 @@ export function GeneralSettings() {
 					price_thousand_sep: data.price_thousand_sep,
 					price_decimal_sep: data.price_decimal_sep,
 					price_num_decimals: data.price_num_decimals,
+					wc_price_decimals: data.price_num_decimals,
 					// thousands_group_style: data.thousands_group_style,
 				},
 			});

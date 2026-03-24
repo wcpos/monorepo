@@ -1,17 +1,18 @@
 import * as React from 'react';
 
-import round from 'lodash/round';
-
 import { useShippingLineData } from './use-shipping-line-data';
+import { useTaxRates } from '../../contexts/tax-rates';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
+import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 
 /**
- * Take a fee line object and calculate the tax and totals.
- * Returns the updated fee line object.
+ * Take a shipping line object and calculate the tax and totals.
+ * Returns the updated shipping line object.
  */
 export const useCalculateShippingLineTaxAndTotals = () => {
+	const { pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxRates();
 	const { calculateTaxesFromValue } = useCalculateTaxesFromValue();
 	const { getShippingLineData } = useShippingLineData();
 
@@ -22,28 +23,45 @@ export const useCalculateShippingLineTaxAndTotals = () => {
 		(shippingLine: Partial<ShippingLine>) => {
 			const { amount, prices_include_tax, tax_status, tax_class } =
 				getShippingLineData(shippingLine);
+			const amountIncludesTax = prices_include_tax ?? pricesIncludeTax;
+			const dp = priceNumDecimals;
+			const roundingPrecision = getRoundingPrecision(dp);
 
 			const tax = calculateTaxesFromValue({
 				amount,
 				taxClass: tax_class,
 				taxStatus: tax_status,
-				amountIncludesTax: prices_include_tax,
+				amountIncludesTax,
 				shipping: true,
 			});
 
-			const total = prices_include_tax ? amount - tax.total : amount;
+			const total = amountIncludesTax ? amount - tax.total : amount;
+
+			// When roundAtSubtotal=false, round tax to dp per-item
+			// When roundAtSubtotal=true, leave at rounding precision
+			const roundedTotalTax = taxRoundAtSubtotal
+				? tax.total
+				: roundTaxTotal(tax.total, dp, amountIncludesTax);
 
 			return {
 				...shippingLine,
-				total: String(round(total, 6)),
-				total_tax: String(round(tax.total, 6)),
-				taxes: tax.taxes.map((tax) => ({
-					...tax,
-					total: String(round(tax.total, 6)),
+				total: String(roundHalfUp(total, roundingPrecision)),
+				total_tax: String(roundedTotalTax),
+				taxes: tax.taxes.map((t) => ({
+					...t,
+					total: String(
+						taxRoundAtSubtotal ? t.total : roundTaxTotal(t.total, dp, amountIncludesTax)
+					),
 				})),
 			};
 		},
-		[calculateTaxesFromValue, getShippingLineData]
+		[
+			calculateTaxesFromValue,
+			getShippingLineData,
+			priceNumDecimals,
+			pricesIncludeTax,
+			taxRoundAtSubtotal,
+		]
 	);
 
 	return { calculateShippingLineTaxesAndTotals };

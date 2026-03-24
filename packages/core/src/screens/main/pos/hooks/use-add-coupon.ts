@@ -36,7 +36,7 @@ export const useAddCoupon = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
-	const { rates: taxRates, pricesIncludeTax } = useTaxRates();
+	const { rates: taxRates, pricesIncludeTax, priceNumDecimals } = useTaxRates();
 
 	const orderLogger = React.useMemo(
 		() =>
@@ -139,7 +139,11 @@ export const useAddCoupon = () => {
 				// from item.total which already reflects previously applied coupons.
 				// Each new coupon naturally sees prices reduced by prior coupons,
 				// matching WooCommerce's recalculate_coupons() behavior.
-				const discountResult = calculateCouponDiscount(couponConfig, couponLineItems);
+				const discountResult = calculateCouponDiscount(
+					couponConfig,
+					couponLineItems,
+					priceNumDecimals
+				);
 
 				// 6. Normalize discounts to ex-tax, then apply to line items and coupon line
 				const exTaxPerItem = convertDiscountsToExTax(
@@ -236,6 +240,7 @@ export const useAddCoupon = () => {
 			orderLogger,
 			taxRates,
 			pricesIncludeTax,
+			priceNumDecimals,
 		]
 	);
 

@@ -96,6 +96,12 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 				: [];
 			return oldDoc;
 		},
+		6(oldDoc: StoreDocumentType) {
+			// Initialize wc_price_decimals from the existing price_num_decimals
+			// (best available value until next server sync)
+			oldDoc.wc_price_decimals = oldDoc.price_num_decimals ?? 2;
+			return oldDoc;
+		},
 	},
 };
 

@@ -42,7 +42,7 @@ export const useCartLines = () => {
 	const { collection: productCollection } = useCollection('products');
 	const { localPatch } = useLocalMutation();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
-	const { rates: taxRates, pricesIncludeTax } = useTaxRates();
+	const { rates: taxRates, pricesIncludeTax, priceNumDecimals } = useTaxRates();
 	const woocommerceSequential = useObservableEagerState(
 		(store as any).woocommerce_calc_discounts_sequentially$
 	);
@@ -169,7 +169,8 @@ export const useCartLines = () => {
 						excluded_product_categories: [...(couponData.excluded_product_categories || [])],
 						exclude_sale_items: couponData.exclude_sale_items || false,
 					},
-					discountItems
+					discountItems,
+					priceNumDecimals
 				);
 
 				const exTaxPerItem = convertDiscountsToExTax(

@@ -32,6 +32,11 @@ const makeUserDB = () => ({
 	stores: {
 		bulkInsert: jest.fn().mockResolvedValue(undefined),
 		bulkRemove: jest.fn().mockResolvedValue(undefined),
+		findOne: jest.fn().mockReturnValue({
+			exec: jest.fn().mockResolvedValue({
+				incrementalPatch: jest.fn().mockResolvedValue(undefined),
+			}),
+		}),
 	},
 });
 
