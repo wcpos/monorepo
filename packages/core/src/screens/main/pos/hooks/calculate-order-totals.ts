@@ -1,6 +1,6 @@
 import sumBy from 'lodash/sumBy';
 
-import { roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
+import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from '../../hooks/utils/precision';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -100,10 +100,12 @@ export function calculateOrderTotals({
 		const parsedSubtotalTax = parseNumber(item.subtotal_tax);
 		const parsedTotalTax = parseNumber(item.total_tax);
 
-		// Round per-item differences to 6dp before accumulating to avoid
-		// IEEE 754 artifacts (e.g., 4.5 - 4.275 = 0.22499...96 instead of 0.225).
-		discount_total += roundHalfUp(parsedSubtotal - parsedTotal, 6);
-		discount_tax += roundHalfUp(parsedSubtotalTax - parsedTotalTax, 6);
+		// Round per-item differences to rounding precision before accumulating
+		// to avoid IEEE 754 artifacts (e.g., 4.5 - 4.275 = 0.22499...96 instead
+		// of 0.225). Uses WC's rounding precision rule: max(dp + 2, 6).
+		const roundingPrecision = getRoundingPrecision(dp);
+		discount_total += roundHalfUp(parsedSubtotal - parsedTotal, roundingPrecision);
+		discount_tax += roundHalfUp(parsedSubtotalTax - parsedTotalTax, roundingPrecision);
 		subtotal += parsedSubtotal;
 		subtotal_tax += parsedSubtotalTax;
 		total += parsedTotal;
