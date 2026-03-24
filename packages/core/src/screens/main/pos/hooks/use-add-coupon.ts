@@ -5,9 +5,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { isProductOnSale } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
+import { parsePosData } from './utils';
 import { useT } from '../../../../contexts/translations';
 import { useCollection } from '../../hooks/use-collection';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -84,9 +84,19 @@ export const useAddCoupon = () => {
 				const productMap = new Map(products.map((p: any) => [p.id, p]));
 
 				// 4. Build validation context
+				// Use POS data to determine on_sale — this matches recalculateCoupons'
+				// isLineItemOnSale() so validation and replay agree on sale state.
 				const couponLineItems: CouponLineItem[] = lineItems.map((item: any) => {
 					const product = productMap.get(item.product_id);
 					const qty = item.quantity || 1;
+					const posData = parsePosData(item);
+					const posPrice = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
+					const posRegular =
+						posData?.regular_price != null ? parseFloat(String(posData.regular_price)) : NaN;
+					const onSale =
+						Number.isFinite(posPrice) && Number.isFinite(posRegular) && posRegular > 0
+							? posPrice < posRegular
+							: false;
 					return {
 						product_id: item.product_id,
 						quantity: qty,
@@ -94,7 +104,7 @@ export const useAddCoupon = () => {
 						subtotal: item.subtotal || '0',
 						total: item.total || '0',
 						categories: product?.categories || [],
-						on_sale: isProductOnSale(product),
+						on_sale: onSale,
 					};
 				});
 
