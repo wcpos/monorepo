@@ -1,6 +1,5 @@
 import forEach from 'lodash/forEach';
 import reverse from 'lodash/reverse';
-import sortBy from 'lodash/sortBy';
 import sumBy from 'lodash/sumBy';
 import toNumber from 'lodash/toNumber';
 
