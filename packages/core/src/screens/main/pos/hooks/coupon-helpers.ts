@@ -107,7 +107,10 @@ export function convertDiscountsToExTax(
 
 	return perItem.map((entry) => {
 		if (entry.discount <= 0) return entry;
-		const li = lineItems.find((item) => item.product_id === entry.product_id);
+		const li =
+			entry.lineIndex != null
+				? lineItems[entry.lineIndex]
+				: lineItems.find((item) => item.product_id === entry.product_id);
 		const subtotal = parseFloat(li?.subtotal || '0');
 		const subtotalTax = parseFloat(li?.subtotal_tax || '0');
 		const rate = subtotal > 0 ? subtotalTax / subtotal : 0;

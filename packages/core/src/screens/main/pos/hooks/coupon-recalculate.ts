@@ -226,12 +226,25 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		// Recalculate totalDiscount after capping
 		discountResult.totalDiscount = discountResult.perItem.reduce((sum, e) => sum + e.discount, 0);
 
-		const exTaxPerItem = convertDiscountsToExTax(
-			discountResult.perItem,
-			resetItems,
-			config.discount_type,
-			pricesIncludeTax
-		);
+		// Convert inclusive discounts to ex-tax. We always convert ALL types here
+		// (including percent) because recalculateCoupons uses inclusive prices as
+		// the coupon base. The shared convertDiscountsToExTax skips percent since
+		// use-add-coupon already works with ex-tax prices — but we can't use that
+		// shortcut here.
+		const exTaxPerItem = pricesIncludeTax
+			? discountResult.perItem.map((entry) => {
+					if (entry.discount <= 0) return entry;
+					const li =
+						entry.lineIndex != null
+							? resetItems[entry.lineIndex]
+							: resetItems.find((item) => item.product_id === entry.product_id);
+					const subtotal = parseFloat(li?.subtotal || '0');
+					const subtotalTax = parseFloat(li?.subtotal_tax || '0');
+					const rate = subtotal > 0 ? subtotalTax / subtotal : 0;
+					if (rate <= 0) return entry;
+					return { ...entry, discount: round(entry.discount / (1 + rate), 6) };
+				})
+			: discountResult.perItem;
 
 		allPerItemDiscounts.push(exTaxPerItem);
 
