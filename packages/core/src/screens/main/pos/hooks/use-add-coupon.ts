@@ -148,6 +148,12 @@ export const useAddCoupon = () => {
 
 				const allCouponLines = [...(order.coupon_lines || []), newCouponLine];
 
+				// Note: recalculate() re-queries coupon/product docs from RxDB, so
+				// there's a theoretical TOCTOU gap if a background sync changes docs
+				// between validateCoupon() and recalculate(). In practice the window
+				// is milliseconds and the server will re-validate on sync. A full fix
+				// would require passing pre-loaded docs into recalculate(), which we
+				// defer to avoid over-engineering.
 				const result = await recalculate(order.line_items || [], allCouponLines);
 
 				// Re-check freshness after async recalculate — the order may have
