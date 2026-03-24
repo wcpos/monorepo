@@ -153,30 +153,38 @@ export function calculateOrderTotals({
 	// Sum the tax totals for cart_tax before converting to string
 	const taxLinesArray = Object.values(taxLines) || [];
 
-	// When roundAtSubtotal=true, per-rate taxes are at rounding precision.
-	// Round the aggregated totals to dp now.
+	// When taxRoundAtSubtotal=true, WC keeps per-rate taxes at full precision
+	// and only rounds the final aggregated total (cart_tax, total_tax).
+	// When taxRoundAtSubtotal=false, taxes were already rounded per-item.
+	//
+	// For tax_lines display we always round to dp. But for cart_tax/total_tax
+	// we sum at full precision first, then round — matching WC's update_taxes().
+	const fullPrecisionCartTax = taxLinesArray.reduce((sum, tl) => sum + tl.tax_total, 0);
+	const fullPrecisionShippingTax = taxLinesArray.reduce(
+		(sum, tl) => sum + tl.shipping_tax_total,
+		0
+	);
+
 	const filteredTaxLines = taxLinesArray
 		.map((taxLine) => {
-			let { tax_total, shipping_tax_total } = taxLine;
-
-			if (taxRoundAtSubtotal) {
-				tax_total = roundTaxTotal(tax_total, dp, pricesIncludeTax);
-				shipping_tax_total = roundTaxTotal(shipping_tax_total, dp, pricesIncludeTax);
-			}
+			const { tax_total, shipping_tax_total } = taxLine;
 
 			if (tax_total === 0 && shipping_tax_total === 0) {
 				return null;
 			}
 			return {
 				...taxLine,
-				tax_total: String(roundHalfUp(tax_total, dp)),
-				shipping_tax_total: String(roundHalfUp(shipping_tax_total, dp)),
+				tax_total: String(roundTaxTotal(tax_total, dp, pricesIncludeTax)),
+				shipping_tax_total: String(roundTaxTotal(shipping_tax_total, dp, pricesIncludeTax)),
 			};
 		})
 		.filter((line): line is NonNullable<typeof line> => line !== null);
 
-	const roundedCartTax = sumBy(filteredTaxLines, (tl) => parseNumber(tl.tax_total));
-	const roundedShippingTax = sumBy(filteredTaxLines, (tl) => parseNumber(tl.shipping_tax_total));
+	// cart_tax and total_tax: round the full-precision sum, not the sum of rounded values.
+	// This matches WC's update_taxes() which accumulates unrounded per-item taxes
+	// then rounds the final total.
+	const roundedCartTax = roundTaxTotal(fullPrecisionCartTax, dp, pricesIncludeTax);
+	const roundedShippingTax = roundTaxTotal(fullPrecisionShippingTax, dp, pricesIncludeTax);
 	const roundedTotalTax = roundedCartTax + roundedShippingTax;
 
 	return {
