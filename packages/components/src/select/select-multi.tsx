@@ -7,12 +7,7 @@ import * as Slot from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Checkbox } from '../checkbox';
-import {
-	getDisplayLabel,
-	getDisplayLabelEllipsis,
-	isSelectedIn,
-	toggleMultiValue,
-} from '../lib/multi-select';
+import { getDisplayLabel, getDisplayLabelEllipsis, toggleMultiValue } from '../lib/multi-select';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -51,18 +46,20 @@ function SelectMultiRoot({
 		onChange: onValueChangeProp,
 	});
 
-	const [open, onOpenChange] = useControllableState<boolean>({
+	const [open, setOpen] = useControllableState<boolean>({
 		prop: openProp,
 		defaultProp: false,
 		onChange: onOpenChangeProp,
 	});
+
+	const onOpenChange = React.useCallback((value: boolean) => setOpen(value), [setOpen]);
 
 	const selectedValues: DefinedOption[] = (value ?? []).filter(
 		(v): v is DefinedOption => v !== undefined
 	);
 
 	const isSelected = React.useCallback(
-		(targetValue: string) => isSelectedIn(selectedValues, targetValue, true),
+		(targetValue: string) => selectedValues.some((option) => option.value === targetValue),
 		[selectedValues]
 	);
 
@@ -74,7 +71,7 @@ function SelectMultiRoot({
 				onValueChange: onValueChange as (options: Option[]) => void,
 				isSelected,
 				open: open ?? false,
-				onOpenChange: onOpenChange as (open: boolean) => void,
+				onOpenChange,
 				disabled,
 			}}
 		>
@@ -90,7 +87,7 @@ function SelectMultiTrigger({
 	...props
 }: PopoverPrimitive.TriggerProps) {
 	const { disabled: rootDisabled } = useMultiSelectContext();
-	const disabled = disabledProp ?? rootDisabled;
+	const disabled = Boolean(rootDisabled || disabledProp);
 
 	return (
 		<PopoverPrimitive.Trigger
@@ -179,7 +176,13 @@ function SelectMultiItem({
 	className?: string;
 	children?: React.ReactNode;
 }) {
-	const { onValueChange, isSelected, value: currentValue } = useMultiSelectContext();
+	const {
+		onValueChange,
+		isSelected,
+		value: currentValue,
+		disabled: rootDisabled,
+	} = useMultiSelectContext();
+	const itemDisabled = Boolean(rootDisabled || disabled);
 	const selected = isSelected(value);
 
 	const handlePress = React.useCallback(() => {
@@ -192,10 +195,10 @@ function SelectMultiItem({
 			onPress={handlePress}
 			className={cn(
 				'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent relative flex w-full flex-row items-center gap-2 rounded-sm py-1.5 pr-2 pl-2',
-				disabled && 'web:pointer-events-none opacity-50',
+				itemDisabled && 'web:pointer-events-none opacity-50',
 				className
 			)}
-			disabled={disabled}
+			disabled={itemDisabled}
 			{...props}
 		>
 			<Checkbox
