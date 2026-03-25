@@ -209,8 +209,10 @@ export function calculateOrderTotals({
 		discount_total: String(roundHalfUp(discount_total, dp)),
 		discount_tax: String(roundTaxTotal(discount_tax, dp, pricesIncludeTax)),
 		shipping_total: String(roundHalfUp(shipping_total, dp)),
-		shipping_tax: String(roundTaxTotal(roundedShippingTax, dp, pricesIncludeTax, 6)),
-		cart_tax: String(roundTaxTotal(roundedCartTax, dp, pricesIncludeTax, 6)),
+		shipping_tax: String(
+			roundTaxTotal(roundedShippingTax, dp, pricesIncludeTax, getRoundingPrecision(dp))
+		),
+		cart_tax: String(roundTaxTotal(roundedCartTax, dp, pricesIncludeTax, getRoundingPrecision(dp))),
 		total: String(roundHalfUp(total + roundedTotalTax, dp)),
 		total_tax: String(roundTaxTotal(roundedTotalTax, dp, pricesIncludeTax)),
 		tax_lines: filteredTaxLines,
