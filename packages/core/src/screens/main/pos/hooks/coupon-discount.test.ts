@@ -863,12 +863,16 @@ describe('coupon-discount — parity regressions', () => {
 
 			const result = calculateCouponDiscount(config, items);
 
-			// WC distributes $10 across BOTH items (not just the $2 music item)
+			// WC distributes $10 across BOTH items: floor(1000/2) = 500 cents each,
+			// but item 2 ($2) caps at 200, remainder (300) flows to item 1.
+			// Result: item 1 = $8, item 2 = $2.
 			expect(result.totalDiscount).toBe(10);
-			// Both items should receive discount
-			expect(result.perItem.length).toBe(2);
-			expect(result.perItem.find((p) => p.product_id === 1)!.discount).toBeGreaterThan(0);
-			expect(result.perItem.find((p) => p.product_id === 2)!.discount).toBeGreaterThan(0);
+			expect(result.perItem).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ product_id: 1, discount: 8 }),
+					expect.objectContaining({ product_id: 2, discount: 2 }),
+				])
+			);
 		});
 
 		it('still rejects fixed_cart when NO items match categories', () => {

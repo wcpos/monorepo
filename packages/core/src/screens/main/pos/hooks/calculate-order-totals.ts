@@ -113,11 +113,24 @@ export function calculateOrderTotals({
 
 		discount_total += roundedItemSubtotal - roundedItemTotal;
 
-		// WC accumulates discount_tax from per-rate (subtotal_tax - total_tax) differences.
-		// Pre-round to rounding precision (6dp) to snap IEEE 754 float subtraction
-		// artifacts (e.g., 4.5 - 4.275 = 0.22499... instead of 0.225) before the
-		// final round to dp.
-		discount_tax += roundHalfUp(parsedSubtotalTax - parsedTotalTax, getRoundingPrecision(dp));
+		// WC accumulates discount_tax per tax rate from the taxes[] array,
+		// NOT from the collapsed subtotal_tax/total_tax. This matters for
+		// multi-rate items where round(a+b, 6) ≠ round(a, 6) + round(b, 6).
+		// Pre-round each per-rate difference to rounding precision (6dp) to
+		// snap IEEE 754 float artifacts (e.g., 4.5 - 4.275 = 0.22499...).
+		const hasPerRateSubtotals =
+			Array.isArray(item.taxes) && item.taxes.length > 0 && item.taxes[0].subtotal != null;
+		if (hasPerRateSubtotals) {
+			item.taxes!.forEach((tax) => {
+				const subtotalTaxForRate = parseNumber(tax.subtotal);
+				const totalTaxForRate = parseNumber(tax.total);
+				discount_tax += roundHalfUp(subtotalTaxForRate - totalTaxForRate, getRoundingPrecision(dp));
+			});
+		} else {
+			// Fallback: use line-level subtotal_tax/total_tax when per-rate subtotals
+			// are not available (e.g., taxes array missing or without subtotal field).
+			discount_tax += roundHalfUp(parsedSubtotalTax - parsedTotalTax, getRoundingPrecision(dp));
+		}
 
 		// Use per-item-rounded values for subtotal/total (matches WC's calculate_totals)
 		subtotal += roundedItemSubtotal;
@@ -138,18 +151,28 @@ export function calculateOrderTotals({
 		}
 	});
 
+	// Helper: accumulate per-rate taxes into taxLines with conditional rounding.
+	// Shared by fee and shipping lines to avoid the same parity bug as lineItems.
+	const accumulateTaxes = (
+		taxes: any[] | undefined,
+		target: 'tax_total' | 'shipping_tax_total'
+	) => {
+		if (!Array.isArray(taxes)) return;
+		taxes.forEach((tax) => {
+			const taxAmount = parseNumber(tax.total);
+			taxLines[tax.id ?? 0][target] += taxRoundAtSubtotal
+				? taxAmount
+				: roundTaxTotal(taxAmount, dp, pricesIncludeTax);
+		});
+	};
+
 	// Calculate fee totals
 	feeLines.forEach((line) => {
 		fee_total += parseNumber(line.total);
 		fee_tax += parseNumber(line.total_tax);
 		total += parseNumber(line.total);
 		total_tax += parseNumber(line.total_tax);
-
-		if (Array.isArray(line.taxes)) {
-			line.taxes.forEach((tax) => {
-				taxLines[tax.id ?? 0].tax_total += parseNumber(tax.total);
-			});
-		}
+		accumulateTaxes(line.taxes, 'tax_total');
 	});
 
 	// Calculate shipping totals
@@ -158,12 +181,7 @@ export function calculateOrderTotals({
 		shipping_tax += parseNumber(line.total_tax);
 		total += parseNumber(line.total);
 		total_tax += parseNumber(line.total_tax);
-
-		if (Array.isArray(line.taxes)) {
-			line.taxes.forEach((tax) => {
-				taxLines[tax.id ?? 0].shipping_tax_total += parseNumber(tax.total);
-			});
-		}
+		accumulateTaxes(line.taxes, 'shipping_tax_total');
 	});
 
 	// Accumulate coupon totals for display purposes only.

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { enrichCategoriesWithAncestors } from './coupon-helpers';
+import { buildEnrichedProductCategories } from './coupon-helpers';
 import { recalculateCoupons, type RecalculateResult } from './coupon-recalculate';
 import { useAppState } from '../../../../contexts/app-state';
 import { useTaxRates } from '../../contexts/tax-rates';
@@ -80,14 +80,10 @@ export const useRecalculateCoupons = () => {
 				}
 
 				// Enrich with ancestor categories from the category tree
-				const allCategoryDocs = await categoryCollection.find().exec();
-				const categoryParentMap = new Map<number, number>();
-				for (const doc of allCategoryDocs) {
-					if (doc.id != null && doc.parent != null) {
-						categoryParentMap.set(doc.id as number, doc.parent as number);
-					}
-				}
-				productCategories = enrichCategoriesWithAncestors(productCategories, categoryParentMap);
+				productCategories = await buildEnrichedProductCategories(
+					productCategories,
+					categoryCollection
+				);
 			}
 
 			return recalculateCoupons({

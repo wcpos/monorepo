@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { enrichCategoriesWithAncestors } from './coupon-helpers';
+import { buildEnrichedProductCategories } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { parsePosData } from './utils';
@@ -93,16 +93,9 @@ export const useAddCoupon = () => {
 						productCategoriesMap.set(p.id as number, (p.categories || []) as { id: number }[]);
 					}
 				}
-				const allCategoryDocs = await categoryCollection.find().exec();
-				const categoryParentMap = new Map<number, number>();
-				for (const doc of allCategoryDocs) {
-					if (doc.id != null && doc.parent != null) {
-						categoryParentMap.set(doc.id as number, doc.parent as number);
-					}
-				}
-				productCategoriesMap = enrichCategoriesWithAncestors(
+				productCategoriesMap = await buildEnrichedProductCategories(
 					productCategoriesMap,
-					categoryParentMap
+					categoryCollection
 				);
 
 				// 4. Build validation context
@@ -238,7 +231,16 @@ export const useAddCoupon = () => {
 				};
 			}
 		},
-		[couponCollection, productCollection, currentOrder, localPatch, t, orderLogger, recalculate]
+		[
+			couponCollection,
+			productCollection,
+			categoryCollection,
+			currentOrder,
+			localPatch,
+			t,
+			orderLogger,
+			recalculate,
+		]
 	);
 
 	return { addCoupon };
