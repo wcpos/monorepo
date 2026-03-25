@@ -10,6 +10,7 @@ import { Platform } from '@wcpos/utils/platform';
 
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
+import { isSelectedIn } from './utils/multi-select';
 import { defaultFilter } from './utils/filter';
 import { cn } from '../lib/utils';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
@@ -41,15 +42,18 @@ function useComboboxRootContext() {
 
 function Combobox<T = undefined>({
 	children,
+	multiple,
 	value: valueProp,
 	defaultValue,
 	onValueChange: onValueChangeProp,
 	...props
 }: ComboboxRootProps<T>) {
-	const [value, onValueChange] = useControllableState<Option<any> | undefined>({
-		prop: valueProp as Option<any> | undefined,
-		defaultProp: defaultValue as Option<any> | undefined,
-		onChange: onValueChangeProp as ((value: Option<any> | undefined) => void) | undefined,
+	const [value, onValueChange] = useControllableState<Option<any> | Option<any>[] | undefined>({
+		prop: valueProp as Option<any> | Option<any>[] | undefined,
+		defaultProp: defaultValue as Option<any> | Option<any>[] | undefined,
+		onChange: onValueChangeProp as
+			| ((value: Option<any> | Option<any>[] | undefined) => void)
+			| undefined,
 	});
 	const [filterValue, setFilterValue] = React.useState('');
 
@@ -57,21 +61,20 @@ function Combobox<T = undefined>({
 		setFilterValue('');
 	}, []);
 
+	const isSelected = React.useCallback(
+		(targetValue: string) => isSelectedIn(value, targetValue, !!multiple),
+		[multiple, value]
+	);
+
 	return (
 		<ComboboxRootContext.Provider
 			value={{
+				multiple: !!multiple,
 				value,
 				onValueChange,
+				isSelected,
 				filterValue,
 				onFilterChange: setFilterValue,
-				// open,
-				// onOpenChange,
-				// disabled,
-				// contentLayout,
-				// nativeID,
-				// setContentLayout,
-				// setTriggerPosition,
-				// triggerPosition,
 			}}
 		>
 			<PopoverPrimitive.Root onOpenChange={handleOpenChange}>{children}</PopoverPrimitive.Root>
