@@ -187,9 +187,22 @@ export const convertProductToLineItemWithoutTax = (
 	 */
 	const new_meta_data = [...meta_data];
 
+	const posData: Record<string, unknown> = { price, regular_price, tax_status };
+
+	// Include optional POS-specific fields if present (used by misc products)
+	if ((product as any).virtual != null) {
+		posData.virtual = (product as any).virtual;
+	}
+	if ((product as any).downloadable != null) {
+		posData.downloadable = (product as any).downloadable;
+	}
+	if ((product as any)._pos_category != null) {
+		posData.category = (product as any)._pos_category;
+	}
+
 	new_meta_data.push({
 		key: '_woocommerce_pos_data',
-		value: JSON.stringify({ price, regular_price, tax_status }),
+		value: JSON.stringify(posData),
 	});
 
 	/**
