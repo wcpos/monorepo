@@ -50,6 +50,35 @@ const makePosLineItem = (
 		],
 	}) as unknown as LineItem;
 
+/** Create a misc product line item (product_id=0) with optional category in pos_data */
+const makeMiscLineItem = (
+	price: number,
+	regularPrice: number,
+	category: { id: number; name: string } | null = null,
+	qty = 1,
+	taxStatus = 'taxable'
+): LineItem =>
+	({
+		product_id: 0,
+		quantity: qty,
+		subtotal: String(price * qty),
+		subtotal_tax: '0',
+		total: String(price * qty),
+		total_tax: '0',
+		taxes: [],
+		meta_data: [
+			{
+				key: '_woocommerce_pos_data',
+				value: JSON.stringify({
+					price: String(price),
+					regular_price: String(regularPrice),
+					tax_status: taxStatus,
+					category,
+				}),
+			},
+		],
+	}) as unknown as LineItem;
+
 /** Create a coupon line */
 const makeCouponLine = (code: string): CouponLine =>
 	({
@@ -505,6 +534,150 @@ describe('recalculateCoupons', () => {
 			// Should reset to 16 * 2 = 32, not stay at 36 (18 * 2)
 			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(32, 2);
 			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(32, 2);
+		});
+	});
+
+	// -----------------------------------------------------------------------
+	// Misc product category matching
+	// -----------------------------------------------------------------------
+	describe('misc product category matching', () => {
+		it('should apply category-restricted coupon to misc product with matching category', () => {
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [makeMiscLineItem(20, 20, { id: 5, name: 'Clothing' })],
+					couponLines: [makeCouponLine('catcoupon')],
+					couponConfigs: new Map([
+						[
+							'catcoupon',
+							makeConfig({
+								discount_type: 'percent',
+								amount: '10',
+								product_categories: [5],
+							}),
+						],
+					]),
+				})
+			);
+
+			// 10% of $20 = $2 discount
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(2, 2);
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(18, 2);
+		});
+
+		it('should NOT apply category-restricted coupon to misc product with non-matching category', () => {
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [makeMiscLineItem(20, 20, { id: 99, name: 'Electronics' })],
+					couponLines: [makeCouponLine('catcoupon')],
+					couponConfigs: new Map([
+						[
+							'catcoupon',
+							makeConfig({
+								discount_type: 'percent',
+								amount: '10',
+								product_categories: [5],
+							}),
+						],
+					]),
+				})
+			);
+
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(0, 2);
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(20, 2);
+		});
+
+		it('should NOT apply category-restricted coupon to misc product with no category', () => {
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [makeMiscLineItem(20, 20, null)],
+					couponLines: [makeCouponLine('catcoupon')],
+					couponConfigs: new Map([
+						[
+							'catcoupon',
+							makeConfig({
+								discount_type: 'percent',
+								amount: '10',
+								product_categories: [5],
+							}),
+						],
+					]),
+				})
+			);
+
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(0, 2);
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(20, 2);
+		});
+
+		it('should exclude misc product when its category is in excluded_product_categories', () => {
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [makeMiscLineItem(20, 20, { id: 5, name: 'Clothing' })],
+					couponLines: [makeCouponLine('excl')],
+					couponConfigs: new Map([
+						[
+							'excl',
+							makeConfig({
+								discount_type: 'percent',
+								amount: '10',
+								excluded_product_categories: [5],
+							}),
+						],
+					]),
+				})
+			);
+
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(0, 2);
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(20, 2);
+		});
+
+		it('should apply category coupon only to the misc product with the matching category', () => {
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [
+						makeMiscLineItem(20, 20, { id: 5, name: 'Clothing' }),
+						makeMiscLineItem(30, 30, { id: 10, name: 'Food' }),
+					],
+					couponLines: [makeCouponLine('catcoupon')],
+					couponConfigs: new Map([
+						[
+							'catcoupon',
+							makeConfig({
+								discount_type: 'percent',
+								amount: '10',
+								product_categories: [5],
+							}),
+						],
+					]),
+				})
+			);
+
+			// Only the first item ($20 with category 5) gets the discount
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(2, 2);
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(18, 2);
+			// Second item ($30 with category 10) is unaffected
+			expect(parseFloat(result.lineItems[1].total!)).toBeCloseTo(30, 2);
+		});
+
+		it('should apply unrestricted coupon to misc products regardless of category', () => {
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [makeMiscLineItem(20, 20, null)],
+					couponLines: [makeCouponLine('flat')],
+					couponConfigs: new Map([
+						[
+							'flat',
+							makeConfig({
+								discount_type: 'percent',
+								amount: '10',
+							}),
+						],
+					]),
+				})
+			);
+
+			// 10% of $20 = $2 discount (no category restriction)
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(2, 2);
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(18, 2);
 		});
 	});
 });
