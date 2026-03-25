@@ -1,4 +1,4 @@
-import type { Option } from '../types';
+import type { Option } from '../combobox/types';
 
 export function isSelectedIn(
 	value: Option<any> | Option<any>[] | undefined,
@@ -50,4 +50,23 @@ export function getDisplayLabel(
 		return `${truncated} +${remaining}`;
 	}
 	return truncated;
+}
+
+export function getDisplayLabelEllipsis(
+	selectedValues: Option<any>[],
+	placeholder: string,
+	maxLength = 24
+): string {
+	if (selectedValues.length === 0) {
+		return placeholder;
+	}
+
+	const labels = selectedValues.map((v) => v.label);
+	const fullLabel = labels.join(', ');
+
+	if (fullLabel.length <= maxLength) {
+		return fullLabel;
+	}
+
+	return fullLabel.slice(0, maxLength - 1) + '\u2026';
 }

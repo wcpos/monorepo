@@ -10,7 +10,7 @@ import { Platform } from '@wcpos/utils/platform';
 
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
-import { getDisplayLabel, isSelectedIn, toggleMultiValue } from './utils/multi-select';
+import { getDisplayLabel, isSelectedIn, toggleMultiValue } from '../lib/multi-select';
 import { defaultFilter } from './utils/filter';
 import { cn } from '../lib/utils';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
