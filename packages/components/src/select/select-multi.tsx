@@ -78,9 +78,7 @@ function SelectMultiRoot({
 				disabled,
 			}}
 		>
-			<PopoverPrimitive.Root open={open ?? false} onOpenChange={onOpenChange}>
-				{children}
-			</PopoverPrimitive.Root>
+			<PopoverPrimitive.Root onOpenChange={onOpenChange}>{children}</PopoverPrimitive.Root>
 		</SelectMultiContext.Provider>
 	);
 }
@@ -118,7 +116,7 @@ function SelectMultiValue({
 
 	const displayText = React.useMemo(() => {
 		const getter = truncationStyle === 'ellipsis' ? getDisplayLabelEllipsis : getDisplayLabel;
-		return getter(value, placeholder, maxDisplayLength);
+		return getter(value as DefinedOption[], placeholder, maxDisplayLength);
 	}, [value, placeholder, maxDisplayLength, truncationStyle]);
 
 	const hasValue = value.length > 0;
