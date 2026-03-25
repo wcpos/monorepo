@@ -218,41 +218,45 @@ export function EditLineItemForm({ uuid, item }: Props) {
 						)}
 					/>
 				</HStack>
-				<HStack className="gap-4">
-					<FormField
-						control={form.control}
-						name="virtual"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormSwitch label={t('common.virtual')} {...field} />
-							</View>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="downloadable"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormSwitch label={t('common.downloadable')} {...field} />
-							</View>
-						)}
-					/>
-				</HStack>
-				<FormField
-					control={form.control}
-					name="categories"
-					render={({ field: { onChange } }) => (
-						<CategorySelect
-							onValueChange={(option) => {
-								if (option) {
-									onChange([{ id: Number(option.value), name: option.label }]);
-								} else {
-									onChange([]);
-								}
-							}}
+				{item.product_id === 0 && (
+					<>
+						<HStack className="gap-4">
+							<FormField
+								control={form.control}
+								name="virtual"
+								render={({ field }) => (
+									<View className="flex-1">
+										<FormSwitch label={t('common.virtual')} {...field} />
+									</View>
+								)}
+							/>
+							<FormField
+								control={form.control}
+								name="downloadable"
+								render={({ field }) => (
+									<View className="flex-1">
+										<FormSwitch label={t('common.downloadable')} {...field} />
+									</View>
+								)}
+							/>
+						</HStack>
+						<FormField
+							control={form.control}
+							name="categories"
+							render={({ field: { onChange } }) => (
+								<CategorySelect
+									onValueChange={(option) => {
+										if (option) {
+											onChange([{ id: Number(option.value), name: option.label }]);
+										} else {
+											onChange([]);
+										}
+									}}
+								/>
+							)}
 						/>
-					)}
-				/>
+					</>
+				)}
 				<MetaDataForm withDisplayValues />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.close')}</DialogClose>

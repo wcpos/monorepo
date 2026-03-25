@@ -76,7 +76,7 @@ export function AddMiscProduct() {
 				price: isEmpty(price) ? '0' : price,
 				sku,
 				regular_price: isEmpty(price) ? '0' : price,
-				tax_status: tax_status ? 'taxable' : 'none',
+				tax_status,
 				tax_class: tax_class === 'standard' ? '' : tax_class,
 				virtual: virtual ?? false,
 				downloadable: downloadable ?? false,

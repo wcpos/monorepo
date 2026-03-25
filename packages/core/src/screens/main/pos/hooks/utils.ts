@@ -189,15 +189,13 @@ export const convertProductToLineItemWithoutTax = (
 
 	const posData: Record<string, unknown> = { price, regular_price, tax_status };
 
-	// Include optional POS-specific fields if present (used by misc products)
-	if ((product as any).virtual != null) {
-		posData.virtual = (product as any).virtual;
-	}
-	if ((product as any).downloadable != null) {
-		posData.downloadable = (product as any).downloadable;
-	}
-	if ((product as any)._pos_categories != null) {
-		posData.categories = (product as any)._pos_categories;
+	// Include misc product fields in pos_data (only for misc products, id === 0)
+	if (product.id === 0) {
+		posData.virtual = product.virtual ?? false;
+		posData.downloadable = product.downloadable ?? false;
+		if ((product as any)._pos_categories != null) {
+			posData.categories = (product as any)._pos_categories;
+		}
 	}
 
 	new_meta_data.push({
