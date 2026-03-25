@@ -13,6 +13,7 @@ import {
 	ComboboxTrigger,
 	ComboboxValue,
 } from '@wcpos/components/combobox';
+import type { ComboboxSingleRootProps } from '@wcpos/components/combobox';
 
 import { CurrenciesProvider, useCurrencies } from '../../../contexts/currencies';
 import { useT } from '../../../contexts/translations';
@@ -20,7 +21,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-function CurrencySelectBase({ value, ...props }: React.ComponentProps<typeof Combobox>) {
+function CurrencySelectBase({ value, ...props }: ComboboxSingleRootProps) {
 	const t = useT();
 	const allCurrencies = useCurrencies();
 
@@ -72,7 +73,7 @@ function CurrencySelectBase({ value, ...props }: React.ComponentProps<typeof Com
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export function CurrencySelect(props: React.ComponentProps<typeof Combobox>) {
+export function CurrencySelect(props: ComboboxSingleRootProps) {
 	return (
 		<CurrenciesProvider>
 			<CurrencySelectBase {...props} />
