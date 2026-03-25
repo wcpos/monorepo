@@ -7,21 +7,44 @@ import { Option, Select } from '../select';
 import type { FormItemProps } from './common';
 
 /**
- * NOTE: select is a bit different from the other form components
- * - the value will come in as a string and go out as a string, but
- * - the select component expects an object with value and label
+ * Single-select: value is a string, converted to/from Option internally.
+ * Multi-select: value is Option[], passed through directly.
  */
+type FormSelectProps = (
+	| (FormItemProps<string> & { multiple?: false })
+	| (FormItemProps<Option[]> & { multiple: true })
+) &
+	Omit<Partial<React.ComponentProps<typeof Select>>, 'value' | 'onValueChange' | 'multiple'>;
+
 export function FormSelect({
 	label,
 	description,
 	onChange,
 	value,
+	multiple,
 	customComponent: Component = Select,
 	...props
-}: FormItemProps<string> &
-	Omit<Partial<React.ComponentProps<typeof Select>>, 'value' | 'onValueChange'>) {
+}: FormSelectProps) {
 	const [open, setOpen] = React.useState(false);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
+
+	const selectValue = React.useMemo(() => {
+		if (multiple) {
+			return (value as Option[] | undefined) ?? [];
+		}
+		return typeof value === 'string' ? { value, label: value } : value;
+	}, [multiple, value]);
+
+	const handleValueChange = React.useCallback(
+		(val: any) => {
+			if (multiple) {
+				onChange?.(val ?? []);
+			} else {
+				onChange?.(val?.value || '');
+			}
+		},
+		[multiple, onChange]
+	);
 
 	return (
 		<FormItem>
@@ -36,8 +59,9 @@ export function FormSelect({
 				aria-invalid={!!error}
 				open={open}
 				onOpenChange={setOpen}
-				value={typeof value === 'string' ? { value, label: value } : value}
-				onValueChange={(val: Option) => onChange?.(val?.value || '')}
+				multiple={multiple as any}
+				value={selectValue as any}
+				onValueChange={handleValueChange}
 				{...props}
 			/>
 			{!!description && <FormDescription>{description}</FormDescription>}
