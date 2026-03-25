@@ -10,6 +10,7 @@ import {
 	ComboboxItem,
 	ComboboxItemText,
 	ComboboxList,
+	type ComboboxSingleRootProps,
 	ComboboxTrigger,
 	ComboboxValue,
 } from '@wcpos/components/combobox';
@@ -20,7 +21,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-function CountryComboboxBase({ value, disabled, ...props }: React.ComponentProps<typeof Combobox>) {
+function CountryComboboxBase({ value, disabled, ...props }: ComboboxSingleRootProps) {
 	const allCountries = useCountries();
 	const t = useT();
 
@@ -71,7 +72,7 @@ function CountryComboboxBase({ value, disabled, ...props }: React.ComponentProps
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export function CountryCombobox(props: React.ComponentProps<typeof Combobox>) {
+export function CountryCombobox(props: ComboboxSingleRootProps) {
 	return (
 		<CountriesProvider>
 			<CountryComboboxBase {...props} />

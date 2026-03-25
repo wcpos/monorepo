@@ -16,6 +16,8 @@ export type {
 	ComboboxEmptyProps,
 	ComboboxRootContextType,
 	ComboboxRootProps,
+	ComboboxSingleRootProps,
+	ComboboxMultiRootProps,
 	ComboboxTriggerProps,
 	ComboboxValueProps,
 	ComboboxInputProps,

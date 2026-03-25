@@ -10,6 +10,7 @@ import {
 	ComboboxItem,
 	ComboboxItemText,
 	ComboboxList,
+	type ComboboxSingleRootProps,
 	ComboboxTrigger,
 	ComboboxValue,
 } from '@wcpos/components/combobox';
@@ -20,7 +21,7 @@ import { useLocale } from '../../../hooks/use-locale';
 /**
  *
  */
-export function LanguageSelect({ value, ...props }: React.ComponentProps<typeof Combobox>) {
+export function LanguageSelect({ value, ...props }: ComboboxSingleRootProps) {
 	const { locales } = useLocale();
 	const t = useT();
 

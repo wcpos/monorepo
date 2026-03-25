@@ -8,6 +8,7 @@ import {
 	ComboboxItem,
 	ComboboxItemText,
 	ComboboxList,
+	type ComboboxSingleRootProps,
 	ComboboxTrigger,
 	ComboboxValue,
 } from '@wcpos/components/combobox';
@@ -18,7 +19,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-function StateComboboxBase({ value, disabled, ...props }: React.ComponentProps<typeof Combobox>) {
+function StateComboboxBase({ value, disabled, ...props }: ComboboxSingleRootProps) {
 	const t = useT();
 	const states = useStates();
 	const options = React.useMemo(
@@ -78,7 +79,7 @@ function StateComboboxBase({ value, disabled, ...props }: React.ComponentProps<t
 export function StateCombobox({
 	countryCode,
 	...props
-}: React.ComponentProps<typeof Combobox> & { countryCode?: string }) {
+}: ComboboxSingleRootProps & { countryCode?: string }) {
 	return (
 		<StatesProvider countryCode={countryCode ?? ''}>
 			<StateComboboxBase {...props} />

@@ -10,6 +10,7 @@ import { Platform } from '@wcpos/utils/platform';
 
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
+import { getDisplayLabel, isSelectedIn, toggleMultiValue } from './utils/multi-select';
 import { defaultFilter } from './utils/filter';
 import { cn } from '../lib/utils';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
@@ -41,37 +42,44 @@ function useComboboxRootContext() {
 
 function Combobox<T = undefined>({
 	children,
+	multiple,
 	value: valueProp,
 	defaultValue,
 	onValueChange: onValueChangeProp,
+	onOpenChange: onOpenChangeProp,
 	...props
 }: ComboboxRootProps<T>) {
-	const [value, onValueChange] = useControllableState<Option<any> | undefined>({
-		prop: valueProp as Option<any> | undefined,
-		defaultProp: defaultValue as Option<any> | undefined,
-		onChange: onValueChangeProp as ((value: Option<any> | undefined) => void) | undefined,
+	const [value, onValueChange] = useControllableState<Option<any> | Option<any>[] | undefined>({
+		prop: valueProp as Option<any> | Option<any>[] | undefined,
+		defaultProp: defaultValue as Option<any> | Option<any>[] | undefined,
+		onChange: onValueChangeProp as
+			| ((value: Option<any> | Option<any>[] | undefined) => void)
+			| undefined,
 	});
 	const [filterValue, setFilterValue] = React.useState('');
 
-	const handleOpenChange = React.useCallback((open: boolean) => {
-		setFilterValue('');
-	}, []);
+	const handleOpenChange = React.useCallback(
+		(open: boolean) => {
+			setFilterValue('');
+			onOpenChangeProp?.(open);
+		},
+		[onOpenChangeProp]
+	);
+
+	const isSelected = React.useCallback(
+		(targetValue: string) => isSelectedIn(value, targetValue, !!multiple),
+		[multiple, value]
+	);
 
 	return (
 		<ComboboxRootContext.Provider
 			value={{
+				multiple: !!multiple,
 				value,
 				onValueChange,
+				isSelected,
 				filterValue,
 				onFilterChange: setFilterValue,
-				// open,
-				// onOpenChange,
-				// disabled,
-				// contentLayout,
-				// nativeID,
-				// setContentLayout,
-				// setTriggerPosition,
-				// triggerPosition,
 			}}
 		>
 			<PopoverPrimitive.Root onOpenChange={handleOpenChange}>{children}</PopoverPrimitive.Root>
@@ -89,9 +97,27 @@ function ComboboxTrigger({ className, disabled, ...props }: PopoverPrimitive.Tri
 	);
 }
 
-function ComboboxValue({ asChild, placeholder, className, ...props }: ComboboxValueProps) {
-	const { value } = useComboboxRootContext();
+function ComboboxValue({
+	asChild,
+	placeholder,
+	className,
+	maxDisplayLength = 24,
+	...props
+}: ComboboxValueProps) {
+	const { multiple, value } = useComboboxRootContext();
 	const Component = asChild ? Slot.Text : Text;
+
+	const displayText = React.useMemo(() => {
+		if (multiple) {
+			const selectedValues = (value as Option<any>[] | undefined) ?? [];
+			return getDisplayLabel(selectedValues, placeholder, maxDisplayLength);
+		}
+		return (value as Option<any> | undefined)?.label ?? placeholder;
+	}, [multiple, value, placeholder, maxDisplayLength]);
+
+	const hasValue = multiple
+		? ((value as Option<any>[] | undefined)?.length ?? 0) > 0
+		: (value as Option<any> | undefined)?.value !== undefined;
 
 	return (
 		<View
@@ -102,13 +128,9 @@ function ComboboxValue({ asChild, placeholder, className, ...props }: ComboboxVa
 		>
 			<View className="flex-1">
 				<TextClassContext.Provider
-					value={cn(
-						'text-sm',
-						value?.value ? 'text-foreground' : 'text-muted-foreground',
-						className
-					)}
+					value={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground', className)}
 				>
-					<Component {...props}>{value?.label ?? placeholder}</Component>
+					<Component {...props}>{displayText}</Component>
 				</TextClassContext.Provider>
 			</View>
 			<Icon name="chevronDown" />
@@ -247,14 +269,21 @@ function ComboboxEmpty({ children, className, ...props }: ComboboxEmptyProps) {
 	);
 }
 
-function ComboboxItem({ value, label, item, className, ...props }: ComboboxItemProps) {
-	const { onValueChange } = useComboboxRootContext();
+function ComboboxItem({ value, label, item, className, children, ...props }: ComboboxItemProps) {
+	const { multiple, onValueChange, isSelected, value: currentValue } = useComboboxRootContext();
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
+	const selected = isSelected(value);
 
 	const handlePress = React.useCallback(() => {
-		onValueChange({ value, label, item });
-		onOpenChange(false);
-	}, [onValueChange, value, label, item, onOpenChange]);
+		if (multiple) {
+			const currentArray = (currentValue as Option<any>[] | undefined) ?? [];
+			onValueChange(toggleMultiValue(currentArray, { value, label, item }));
+			// Popover stays open in multi-select mode
+		} else {
+			onValueChange({ value, label, item });
+			onOpenChange(false);
+		}
+	}, [multiple, onValueChange, value, label, item, onOpenChange, currentValue]);
 
 	return (
 		<VirtualizedListPrimitive.Item>
@@ -262,11 +291,19 @@ function ComboboxItem({ value, label, item, className, ...props }: ComboboxItemP
 				onPress={handlePress}
 				className={cn(
 					'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex w-full flex-row items-center rounded-sm px-2 py-1.5',
+					multiple && 'pl-8',
 					props.disabled && 'web:pointer-events-none opacity-50',
 					className
 				)}
 				{...props}
-			/>
+			>
+				{multiple && (
+					<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+						{selected && <Icon name="check" className="text-popover-foreground" />}
+					</View>
+				)}
+				{children}
+			</Pressable>
 		</VirtualizedListPrimitive.Item>
 	);
 }
