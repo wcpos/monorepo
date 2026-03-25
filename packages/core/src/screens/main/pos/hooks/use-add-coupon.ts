@@ -155,6 +155,14 @@ export const useAddCoupon = () => {
 				// would require passing pre-loaded docs into recalculate(), which we
 				// defer to avoid over-engineering.
 				const result = await recalculate(order.line_items || [], allCouponLines);
+				if (!result) {
+					return {
+						success: false,
+						error: t('pos_cart.coupon_apply_failed', {
+							defaultValue: 'Failed to apply coupon. Please try again.',
+						}),
+					};
+				}
 
 				// Re-check freshness after async recalculate — the order may have
 				// changed during RxDB lookups inside recalculate()
