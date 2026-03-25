@@ -78,7 +78,7 @@ function SelectMultiRoot({
 				disabled,
 			}}
 		>
-			<PopoverPrimitive.Root onOpenChange={onOpenChange}>{children}</PopoverPrimitive.Root>
+			<PopoverPrimitive.Root open={open ?? false} onOpenChange={onOpenChange}>{children}</PopoverPrimitive.Root>
 		</SelectMultiContext.Provider>
 	);
 }

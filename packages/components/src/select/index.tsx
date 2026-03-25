@@ -77,10 +77,17 @@ function SelectValue({
 	);
 }
 
-function SelectTrigger({ className, children, ...props }: SelectPrimitive.TriggerProps) {
+function SelectTrigger({ className, children, asChild, ...props }: SelectPrimitive.TriggerProps) {
 	const isMulti = React.useContext(MultiModeContext);
 
 	if (isMulti) {
+		if (asChild) {
+			return (
+				<SelectMultiTrigger asChild className={className} {...(props as any)}>
+					{children}
+				</SelectMultiTrigger>
+			);
+		}
 		return (
 			<SelectMultiTrigger
 				className={cn(
@@ -98,6 +105,7 @@ function SelectTrigger({ className, children, ...props }: SelectPrimitive.Trigge
 
 	return (
 		<SelectPrimitiveTrigger
+			asChild={asChild}
 			className={cn(
 				'web:ring-offset-background web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 text-muted-foreground border-border bg-card flex h-10 flex-row items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm [&>span]:line-clamp-1',
 				props.disabled && 'web:cursor-not-allowed opacity-50',
