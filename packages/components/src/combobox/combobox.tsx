@@ -46,6 +46,7 @@ function Combobox<T = undefined>({
 	value: valueProp,
 	defaultValue,
 	onValueChange: onValueChangeProp,
+	onOpenChange: onOpenChangeProp,
 	...props
 }: ComboboxRootProps<T>) {
 	const [value, onValueChange] = useControllableState<Option<any> | Option<any>[] | undefined>({
@@ -57,9 +58,13 @@ function Combobox<T = undefined>({
 	});
 	const [filterValue, setFilterValue] = React.useState('');
 
-	const handleOpenChange = React.useCallback((open: boolean) => {
-		setFilterValue('');
-	}, []);
+	const handleOpenChange = React.useCallback(
+		(open: boolean) => {
+			setFilterValue('');
+			onOpenChangeProp?.(open);
+		},
+		[onOpenChangeProp]
+	);
 
 	const isSelected = React.useCallback(
 		(targetValue: string) => isSelectedIn(value, targetValue, !!multiple),
@@ -112,7 +117,7 @@ function ComboboxValue({
 
 	const hasValue = multiple
 		? ((value as Option<any>[] | undefined)?.length ?? 0) > 0
-		: !!(value as Option<any> | undefined)?.value;
+		: (value as Option<any> | undefined)?.value !== undefined;
 
 	return (
 		<View

@@ -37,11 +37,11 @@ export function FormCombobox({
 	}, [multiple, value]);
 
 	const handleValueChange = React.useCallback(
-		(val: any) => {
+		(val: Option | Option[] | undefined) => {
 			if (multiple) {
-				onChange?.(val ?? []);
+				onChange?.((val as Option[] | undefined) ?? []);
 			} else {
-				onChange?.(val?.value);
+				onChange?.((val as Option | undefined)?.value);
 			}
 		},
 		[multiple, onChange]
