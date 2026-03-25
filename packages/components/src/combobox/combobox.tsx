@@ -10,7 +10,7 @@ import { Platform } from '@wcpos/utils/platform';
 
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
-import { isSelectedIn } from './utils/multi-select';
+import { isSelectedIn, toggleMultiValue } from './utils/multi-select';
 import { defaultFilter } from './utils/filter';
 import { cn } from '../lib/utils';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
@@ -250,14 +250,21 @@ function ComboboxEmpty({ children, className, ...props }: ComboboxEmptyProps) {
 	);
 }
 
-function ComboboxItem({ value, label, item, className, ...props }: ComboboxItemProps) {
-	const { onValueChange } = useComboboxRootContext();
+function ComboboxItem({ value, label, item, className, children, ...props }: ComboboxItemProps) {
+	const { multiple, onValueChange, isSelected, value: currentValue } = useComboboxRootContext();
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
+	const selected = isSelected(value);
 
 	const handlePress = React.useCallback(() => {
-		onValueChange({ value, label, item });
-		onOpenChange(false);
-	}, [onValueChange, value, label, item, onOpenChange]);
+		if (multiple) {
+			const currentArray = (currentValue as Option<any>[] | undefined) ?? [];
+			onValueChange(toggleMultiValue(currentArray, { value, label, item }));
+			// Popover stays open in multi-select mode
+		} else {
+			onValueChange({ value, label, item });
+			onOpenChange(false);
+		}
+	}, [multiple, onValueChange, value, label, item, onOpenChange, currentValue]);
 
 	return (
 		<VirtualizedListPrimitive.Item>
@@ -265,11 +272,19 @@ function ComboboxItem({ value, label, item, className, ...props }: ComboboxItemP
 				onPress={handlePress}
 				className={cn(
 					'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex w-full flex-row items-center rounded-sm px-2 py-1.5',
+					multiple && 'pl-8',
 					props.disabled && 'web:pointer-events-none opacity-50',
 					className
 				)}
 				{...props}
-			/>
+			>
+				{multiple && (
+					<View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+						{selected && <Icon name="check" className="text-popover-foreground" />}
+					</View>
+				)}
+				{children}
+			</Pressable>
 		</VirtualizedListPrimitive.Item>
 	);
 }
