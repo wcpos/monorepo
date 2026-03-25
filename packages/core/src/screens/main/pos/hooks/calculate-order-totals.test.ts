@@ -621,3 +621,126 @@ describe('coupon line calculations', () => {
 		expect(result.coupon_tax).toBe('0');
 	});
 });
+
+/**
+ * Parity regression tests — specific scenarios that caught bugs during
+ * integration testing against WooCommerce servers.
+ */
+describe('calculateOrderTotals — parity regressions', () => {
+	describe('dev-free: per-item tax rounding when taxRoundAtSubtotal=false', () => {
+		// Bug: two items with per-rate taxes 1.633 and 1.634.
+		// WC rounds each to dp before summing into tax_lines → 1.63 + 1.63 = 3.26.
+		// Client was summing unrounded → 3.267, rounding to 3.27.
+		it('rounds per-rate taxes before summing into tax_lines', () => {
+			const lineItems = [
+				{
+					subtotal: '18',
+					total: '16.33',
+					subtotal_tax: '1.8',
+					total_tax: '1.633',
+					taxes: [{ id: 6, subtotal: '1.8', total: '1.633' }],
+				},
+				{
+					subtotal: '18',
+					total: '16.34',
+					subtotal_tax: '1.8',
+					total_tax: '1.634',
+					taxes: [{ id: 6, subtotal: '1.8', total: '1.634' }],
+				},
+			];
+
+			const result = calculateOrderTotals({
+				lineItems: lineItems as any,
+				taxRates: [{ id: 6, name: 'US Tax', rate: '10', compound: false }] as any,
+				taxRoundAtSubtotal: false,
+				pricesIncludeTax: false,
+				couponLines: [{ discount: '3.33', discount_tax: '0.34' }] as any,
+			});
+
+			// Per-item rounded: round(1.633, 2) = 1.63, round(1.634, 2) = 1.63
+			// Sum = 3.26, NOT 3.27
+			expect(result.total_tax).toBe('3.26');
+			expect(result.tax_lines).toEqual(
+				expect.arrayContaining([expect.objectContaining({ rate_id: 6, tax_total: '3.26' })])
+			);
+		});
+
+		it('keeps full precision when taxRoundAtSubtotal=true', () => {
+			const lineItems = [
+				{
+					subtotal: '18',
+					total: '16.33',
+					subtotal_tax: '1.8',
+					total_tax: '1.633',
+					taxes: [{ id: 6, subtotal: '1.8', total: '1.633' }],
+				},
+				{
+					subtotal: '18',
+					total: '16.34',
+					subtotal_tax: '1.8',
+					total_tax: '1.634',
+					taxes: [{ id: 6, subtotal: '1.8', total: '1.634' }],
+				},
+			];
+
+			const result = calculateOrderTotals({
+				lineItems: lineItems as any,
+				taxRates: [{ id: 6, name: 'US Tax', rate: '10', compound: false }] as any,
+				taxRoundAtSubtotal: true,
+				pricesIncludeTax: false,
+			});
+
+			// Full precision sum: 1.633 + 1.634 = 3.267 → round final = 3.27
+			expect(result.total_tax).toBe('3.27');
+		});
+	});
+
+	describe('dev-free: discount_tax uses coupon line values', () => {
+		// Bug: discount_tax from subtotal_tax - total_tax gives 4.5 - 4.275 = 0.22499...,
+		// which rounds to 0.22. But the server uses coupon line discount_tax = 0.23
+		// (computed from literal 0.225 → round = 0.23).
+		it('uses coupon_tax for discount_tax when coupon lines present', () => {
+			const lineItems = [
+				{
+					subtotal: '45',
+					total: '42.75',
+					subtotal_tax: '4.5',
+					total_tax: '4.275',
+					taxes: [{ id: 6, subtotal: '4.5', total: '4.275' }],
+				},
+			];
+
+			const result = calculateOrderTotals({
+				lineItems: lineItems as any,
+				taxRates: [{ id: 6, name: 'US Tax', rate: '10', compound: false }] as any,
+				couponLines: [{ discount: '2.25', discount_tax: '0.23' }] as any,
+				taxRoundAtSubtotal: false,
+				pricesIncludeTax: false,
+			});
+
+			// Should use coupon line discount_tax (0.23), not the float-subtracted 0.22
+			expect(result.discount_tax).toBe('0.23');
+		});
+
+		it('falls back to per-rate subtraction when no coupon lines', () => {
+			const lineItems = [
+				{
+					subtotal: '100',
+					total: '90',
+					subtotal_tax: '10',
+					total_tax: '9',
+					taxes: [{ id: 6, subtotal: '10', total: '9' }],
+				},
+			];
+
+			const result = calculateOrderTotals({
+				lineItems: lineItems as any,
+				taxRates: [{ id: 6, name: 'Tax', rate: '10', compound: false }] as any,
+				taxRoundAtSubtotal: false,
+				pricesIncludeTax: false,
+			});
+
+			expect(result.discount_tax).toBe('1');
+		});
+	});
+});

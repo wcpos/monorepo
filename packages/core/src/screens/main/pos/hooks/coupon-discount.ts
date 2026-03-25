@@ -79,7 +79,12 @@ export function calculateCouponDiscount(
 		case 'percent':
 			return calculatePercentDiscount(amount, eligible, config.limit_usage_to_x_items, dp);
 		case 'fixed_cart':
-			return calculateFixedCartDiscount(amount, eligible, dp);
+			// WC: fixed_cart distributes across ALL items, not just category-eligible ones.
+			// product_categories/product_ids restrictions only affect validation (the
+			// eligible.length === 0 early return above), not which items receive the discount.
+			// This matches WC_Discounts::get_items_to_apply_coupon() where is_valid_for_cart()
+			// returns true for fixed_cart, bypassing per-item product checks.
+			return calculateFixedCartDiscount(amount, items, dp);
 		case 'fixed_product':
 			return calculateFixedProductDiscount(amount, eligible, config.limit_usage_to_x_items, dp);
 		default:

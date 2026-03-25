@@ -113,8 +113,7 @@ export function calculateOrderTotals({
 
 		discount_total += roundedItemSubtotal - roundedItemTotal;
 
-		// WC computes discount_tax by summing raw per-rate taxes from get_taxes()
-		// (full precision, NOT per-item rounded) then subtracting.
+		// Accumulate per-rate discount tax as a fallback (used when no coupon lines).
 		discount_tax += parsedSubtotalTax - parsedTotalTax;
 
 		// Use per-item-rounded values for subtotal/total (matches WC's calculate_totals)
@@ -125,7 +124,13 @@ export function calculateOrderTotals({
 
 		if (Array.isArray(item.taxes)) {
 			item.taxes.forEach((tax) => {
-				taxLines[tax.id ?? 0].tax_total += parseNumber(tax.total);
+				const taxAmount = parseNumber(tax.total);
+				// When taxRoundAtSubtotal=false, WC rounds each per-item per-rate tax
+				// to dp before summing into tax_lines (matching update_taxes() behavior).
+				// When true, taxes accumulate at full precision and round only at the end.
+				taxLines[tax.id ?? 0].tax_total += taxRoundAtSubtotal
+					? taxAmount
+					: roundTaxTotal(taxAmount, dp, pricesIncludeTax);
 			});
 		}
 	});
@@ -207,7 +212,13 @@ export function calculateOrderTotals({
 		 * These properties are stored on the order document
 		 */
 		discount_total: String(roundHalfUp(discount_total, dp)),
-		discount_tax: String(roundTaxTotal(discount_tax, dp, pricesIncludeTax)),
+		// When coupon lines are present, use the sum of coupon discount_tax values.
+		// WC computes order.discount_tax from the coupon application (literal discount * rate),
+		// not from the subtotal_tax - total_tax difference which can suffer from IEEE 754
+		// float subtraction errors (e.g., 4.5 - 4.275 = 0.22499... instead of 0.225).
+		discount_tax: String(
+			roundTaxTotal(coupon_tax > 0 ? coupon_tax : discount_tax, dp, pricesIncludeTax)
+		),
 		shipping_total: String(roundHalfUp(shipping_total, dp)),
 		shipping_tax: String(
 			roundTaxTotal(roundedShippingTax, dp, pricesIncludeTax, getRoundingPrecision(dp))
