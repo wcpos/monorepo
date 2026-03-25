@@ -2,6 +2,7 @@ import isEmpty from 'lodash/isEmpty';
 import round from 'lodash/round';
 
 import { calculateTaxes } from '../../hooks/utils/calculate-taxes';
+import { roundTaxTotal } from '../../hooks/utils/precision';
 
 import type { PerItemDiscount } from './coupon-discount';
 
@@ -275,19 +276,43 @@ export function computeDiscountedLineItems<
  *
  * Expects ex-tax discount amounts (use convertDiscountsToExTax first).
  * Tax is calculated per-item using each line item's tax class, then summed.
+ *
+ * When taxRoundAtSubtotal is false (default), each item's tax is rounded to dp
+ * before accumulation — matching WC's set_coupon_discount_amounts() which calls
+ * wc_round_tax_total() per-item.
  */
 export function calculateCouponDiscountTaxSplit(
 	perItemDiscounts: PerItemDiscount[],
-	lineItems: { product_id?: number | null; tax_class?: string }[],
-	taxRates: { id: number; rate: string; compound: boolean; order: number; class?: string }[]
+	lineItems: { product_id?: number | null; tax_class?: string; tax_status?: string }[],
+	taxRates: { id: number; rate: string; compound: boolean; order: number; class?: string }[],
+	options?: {
+		pricesIncludeTax?: boolean;
+		taxRoundAtSubtotal?: boolean;
+		dp?: number;
+	}
 ): { discount: string; discount_tax: string } {
+	const pricesIncludeTax = options?.pricesIncludeTax ?? false;
+	const taxRoundAtSubtotal = options?.taxRoundAtSubtotal ?? false;
+	const dp = options?.dp ?? 2;
+
 	let totalDiscount = 0;
 	let totalDiscountTax = 0;
 
 	for (const entry of perItemDiscounts) {
 		if (entry.discount <= 0) continue;
 
-		const lineItem = lineItems.find((item) => item.product_id === entry.product_id);
+		const lineItem =
+			entry.lineIndex != null
+				? lineItems[entry.lineIndex]
+				: lineItems.find((item) => item.product_id === entry.product_id);
+
+		// WC: skip non-taxable items (tax_status !== 'taxable')
+		const taxStatus = (lineItem as any)?.tax_status ?? 'taxable';
+		if (taxStatus !== 'taxable') {
+			totalDiscount += entry.discount;
+			continue;
+		}
+
 		const taxClass = isEmpty(lineItem?.tax_class) ? 'standard' : lineItem!.tax_class!;
 		const applicableRates = taxRates.filter((r) => r.class === taxClass);
 
@@ -303,8 +328,14 @@ export function calculateCouponDiscountTaxSplit(
 				amountIncludesTax: false,
 			});
 
+			// WC rounds per-item tax to dp when not rounding at subtotal level.
+			// Uses HALF_DOWN when prices include tax, HALF_UP otherwise.
+			const perItemTax = taxRoundAtSubtotal
+				? taxResult.total
+				: roundTaxTotal(taxResult.total, dp, pricesIncludeTax);
+
 			totalDiscount += entry.discount;
-			totalDiscountTax += taxResult.total;
+			totalDiscountTax += perItemTax;
 		} else {
 			totalDiscount += entry.discount;
 		}

@@ -98,7 +98,8 @@ function applyCoupon(
 	const { discount, discount_tax } = calculateCouponDiscountTaxSplit(
 		exTaxPerItem,
 		lineItems,
-		rates
+		rates,
+		{ pricesIncludeTax }
 	);
 
 	return { discountedLineItems, discount, discount_tax, discountResult };
@@ -162,9 +163,11 @@ describe('coupon integration: real order scenarios', () => {
 		// The coupon distributes $10 total across items
 		expect(discountResult.totalDiscount).toBeCloseTo(10, 4);
 
-		// Coupon line: discount + discount_tax should equal $10 (tax-inclusive)
+		// Coupon line: discount + discount_tax ≈ $10 (tax-inclusive).
+		// Per-item tax rounding (matching WC's wc_round_tax_total) produces a
+		// ~0.009 gap here — WC itself has the same rounding artefact.
 		const couponTotal = parseFloat(discount) + parseFloat(discount_tax);
-		expect(couponTotal).toBeCloseTo(10, 2);
+		expect(couponTotal).toBeCloseTo(10, 1);
 
 		// Each line item total + tax should be reduced
 		const grandTotal = discountedLineItems.reduce((sum, item) => {

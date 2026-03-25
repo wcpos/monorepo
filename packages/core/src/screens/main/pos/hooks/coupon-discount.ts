@@ -277,8 +277,9 @@ function calculateFixedProductDiscount(
  * After floor(), total discount may be less than the intended amount.
  * Distribute the remainder 1 cent at a time to the most expensive items first.
  *
- * Items are sorted by price descending, then for each item we loop through
- * its quantity, adding 1 cent per unit until the remainder is exhausted.
+ * Uses iterative redistribution: when a cheap item caps at its full price,
+ * the excess flows back to items with remaining capacity. This mirrors WC's
+ * recursive apply_coupon_fixed_cart() → apply_coupon_fixed_product() pattern.
  */
 function applyCouponRemainder(
 	itemDiscounts: { item: CouponLineItem; discountCents: number; index: number }[],
@@ -287,30 +288,43 @@ function applyCouponRemainder(
 ): void {
 	if (remainderCents <= 0) return;
 
-	// Sort by price descending (most expensive items get the penny first)
-	const sorted = [...itemDiscounts].sort((a, b) => b.item.price - a.item.price);
-
 	let remaining = remainderCents;
 
-	for (const entry of sorted) {
-		const itemPriceCents = addNumberPrecision(entry.item.price, dp);
+	// Iterative redistribution: keep distributing until remainder = 0
+	// or no item can absorb more.
+	while (remaining > 0) {
+		// Filter to items with remaining capacity, sorted by price descending
+		const withCapacity = [...itemDiscounts]
+			.filter((entry) => {
+				const itemTotalCents = addNumberPrecision(entry.item.price * entry.item.quantity, dp);
+				return entry.discountCents < itemTotalCents;
+			})
+			.sort((a, b) => b.item.price - a.item.price);
 
-		for (let unit = 0; unit < entry.item.quantity; unit++) {
-			if (remaining <= 0) return;
+		if (withCapacity.length === 0) break;
 
-			// Can this unit absorb 1 more cent? Check against item price
-			const currentPerUnit = entry.discountCents / entry.item.quantity;
-			if (currentPerUnit < itemPriceCents) {
-				const addCent = Math.min(1, remaining);
-				// Find the original entry and update it
-				const original = itemDiscounts.find((d) => d.index === entry.index);
-				if (original) {
+		let distributed = false;
+
+		for (const entry of withCapacity) {
+			const itemTotalCents = addNumberPrecision(entry.item.price * entry.item.quantity, dp);
+			const original = itemDiscounts.find((d) => d.index === entry.index);
+			if (!original) continue;
+
+			for (let unit = 0; unit < entry.item.quantity; unit++) {
+				if (remaining <= 0) return;
+
+				if (original.discountCents < itemTotalCents) {
+					const addCent = Math.min(1, remaining);
 					original.discountCents += addCent;
 					remaining -= addCent;
+					distributed = true;
 				}
-			}
 
-			if (remaining <= 0) return;
+				if (remaining <= 0) return;
+			}
 		}
+
+		// If a full pass distributed nothing, no item can absorb more
+		if (!distributed) break;
 	}
 }
