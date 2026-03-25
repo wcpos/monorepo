@@ -10,6 +10,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@wcpos/components/select';
+import type { SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../contexts/translations';
@@ -18,7 +19,7 @@ import { useExtraData } from '../contexts/extra-data';
 /**
  *
  */
-export function TaxClassSelect({ value, ...props }: React.ComponentProps<typeof Select>) {
+export function TaxClassSelect({ value, ...props }: SelectSingleRootProps) {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 	const { extraData } = useExtraData();

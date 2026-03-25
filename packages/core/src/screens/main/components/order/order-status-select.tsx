@@ -7,6 +7,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@wcpos/components/select';
+import type { SelectSingleRootProps } from '@wcpos/components/select';
 
 import { useT } from '../../../../contexts/translations';
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
@@ -14,7 +15,7 @@ import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 /**
  *
  */
-export function OrderStatusSelect({ value, ...props }: React.ComponentProps<typeof Select>) {
+export function OrderStatusSelect({ value, ...props }: SelectSingleRootProps) {
 	const t = useT();
 	const { items } = useOrderStatusLabel();
 

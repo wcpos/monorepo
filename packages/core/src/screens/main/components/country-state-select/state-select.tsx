@@ -7,6 +7,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@wcpos/components/select';
+import type { SelectSingleRootProps } from '@wcpos/components/select';
 
 import { StatesProvider, useStates } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
@@ -14,7 +15,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-export function StateSelectBase({ value, ...props }: React.ComponentProps<typeof Select>) {
+export function StateSelectBase({ value, ...props }: Omit<SelectSingleRootProps, 'children'>) {
 	const t = useT();
 	const states = useStates();
 	const options: { label: string; value: string }[] = React.useMemo(
@@ -71,7 +72,7 @@ export function StateSelectBase({ value, ...props }: React.ComponentProps<typeof
 export function StateSelect({
 	countryCode,
 	...props
-}: React.ComponentProps<typeof Select> & { countryCode: string }) {
+}: Omit<SelectSingleRootProps, 'children'> & { countryCode: string }) {
 	return (
 		<StatesProvider countryCode={countryCode}>
 			<StateSelectBase {...props} />

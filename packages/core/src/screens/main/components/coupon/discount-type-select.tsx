@@ -8,11 +8,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@wcpos/components/select';
+import type { SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../contexts/translations';
 
-export function DiscountTypeSelect({ value, ...props }: React.ComponentProps<typeof Select>) {
+export function DiscountTypeSelect({ value, ...props }: SelectSingleRootProps) {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 
