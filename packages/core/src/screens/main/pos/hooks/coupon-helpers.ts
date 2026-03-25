@@ -90,6 +90,48 @@ export function getEligibleItems(
 }
 
 /**
+ * Build a product categories map enriched with ancestor category IDs.
+ *
+ * WooCommerce's wc_get_product_cat_ids() includes ALL ancestor categories
+ * (via get_ancestors()) when checking coupon category restrictions. The POS
+ * REST API only returns directly-assigned categories on product documents.
+ * This function bridges the gap by walking up the category tree.
+ *
+ * @param productCategories - Map of product_id → directly-assigned categories
+ * @param categoryParentMap - Map of category_id → parent_id (from products/categories collection)
+ * @returns Enriched map with ancestor categories included
+ */
+export function enrichCategoriesWithAncestors(
+	productCategories: Map<number, { id: number }[]>,
+	categoryParentMap: Map<number, number>
+): Map<number, { id: number }[]> {
+	if (categoryParentMap.size === 0) return productCategories;
+
+	const enriched = new Map<number, { id: number }[]>();
+
+	for (const [productId, categories] of productCategories) {
+		const allCategoryIds = new Set<number>();
+
+		for (const cat of categories) {
+			allCategoryIds.add(cat.id);
+			// Walk up the parent chain
+			let parentId = categoryParentMap.get(cat.id);
+			while (parentId && parentId > 0 && !allCategoryIds.has(parentId)) {
+				allCategoryIds.add(parentId);
+				parentId = categoryParentMap.get(parentId);
+			}
+		}
+
+		enriched.set(
+			productId,
+			Array.from(allCategoryIds).map((id) => ({ id }))
+		);
+	}
+
+	return enriched;
+}
+
+/**
  * Convert tax-inclusive per-item discounts to ex-tax amounts.
  *
  * Percent coupon discounts are already ex-tax (calculated from ex-tax prices),

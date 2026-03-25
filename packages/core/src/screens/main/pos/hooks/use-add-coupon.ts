@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import { enrichCategoriesWithAncestors } from './coupon-helpers';
 import { validateCoupon } from './coupon-validation';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { parsePosData } from './utils';
@@ -30,6 +31,7 @@ export const useAddCoupon = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
+	const { collection: categoryCollection } = useCollection('products/categories');
 	const { recalculate } = useRecalculateCoupons();
 
 	const orderLogger = React.useMemo(
@@ -83,6 +85,26 @@ export const useAddCoupon = () => {
 						: [];
 				const productMap = new Map(products.map((p: any) => [p.id, p]));
 
+				// Build ancestor-enriched category map for coupon restriction matching.
+				// WC's wc_get_product_cat_ids() includes parent categories.
+				let productCategoriesMap = new Map<number, { id: number }[]>();
+				for (const p of products) {
+					if (p.id != null) {
+						productCategoriesMap.set(p.id as number, (p.categories || []) as { id: number }[]);
+					}
+				}
+				const allCategoryDocs = await categoryCollection.find().exec();
+				const categoryParentMap = new Map<number, number>();
+				for (const doc of allCategoryDocs) {
+					if (doc.id != null && doc.parent != null) {
+						categoryParentMap.set(doc.id as number, doc.parent as number);
+					}
+				}
+				productCategoriesMap = enrichCategoriesWithAncestors(
+					productCategoriesMap,
+					categoryParentMap
+				);
+
 				// 4. Build validation context
 				// Use POS data to determine on_sale — this matches recalculateCoupons'
 				// isLineItemOnSale() so validation and replay agree on sale state.
@@ -103,16 +125,7 @@ export const useAddCoupon = () => {
 						price: parseFloat(item.total || '0') / qty,
 						subtotal: item.subtotal || '0',
 						total: item.total || '0',
-						categories: (() => {
-							if (item.product_id !== 0) {
-								return product?.categories || [];
-							}
-							// For misc products, read categories from pos_data
-							if (Array.isArray(posData?.categories) && posData.categories.length > 0) {
-								return posData.categories.map((c: { id: number }) => ({ id: c.id }));
-							}
-							return [];
-						})(),
+						categories: productCategoriesMap.get(item.product_id) || product?.categories || [],
 						on_sale: onSale,
 					};
 				});
@@ -164,14 +177,6 @@ export const useAddCoupon = () => {
 				// would require passing pre-loaded docs into recalculate(), which we
 				// defer to avoid over-engineering.
 				const result = await recalculate(order.line_items || [], allCouponLines);
-				if (!result) {
-					return {
-						success: false,
-						error: t('pos_cart.coupon_apply_failed', {
-							defaultValue: 'Failed to apply coupon. Please try again.',
-						}),
-					};
-				}
 
 				// Re-check freshness after async recalculate — the order may have
 				// changed during RxDB lookups inside recalculate()

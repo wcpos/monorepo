@@ -12,6 +12,7 @@ import {
 	convertDiscountsToExTax,
 	type CouponLineItem,
 	type CouponRestrictions,
+	enrichCategoriesWithAncestors,
 	getEligibleItems,
 	isProductOnSale,
 } from './coupon-helpers';
@@ -626,5 +627,115 @@ describe('convertDiscountsToExTax', () => {
 
 		expect(result[0].discount).toBeCloseTo(4.545455, 4); // 5 / 1.10
 		expect(result[1].discount).toBeCloseTo(2.608696, 4); // 3 / 1.15
+	});
+});
+
+describe('enrichCategoriesWithAncestors', () => {
+	// Category tree:
+	// Clothing (5) → Tshirts (10), Hoodies (11)
+	// Accessories (6) → Belts (12)
+	// Music (7)
+	const categoryParentMap = new Map<number, number>([
+		[5, 0], // Clothing (root)
+		[6, 0], // Accessories (root)
+		[7, 0], // Music (root)
+		[10, 5], // Tshirts → Clothing
+		[11, 5], // Hoodies → Clothing
+		[12, 6], // Belts → Accessories
+	]);
+
+	it('adds parent categories to products in child categories', () => {
+		const productCategories = new Map<number, { id: number }[]>([
+			[1, [{ id: 10 }]], // Product 1 in Tshirts
+		]);
+
+		const result = enrichCategoriesWithAncestors(productCategories, categoryParentMap);
+		const cats = result
+			.get(1)!
+			.map((c) => c.id)
+			.sort((a, b) => a - b);
+
+		// Should include both Tshirts (10) and Clothing (5)
+		expect(cats).toEqual([5, 10]);
+	});
+
+	it('adds full ancestor chain for deeply nested categories', () => {
+		// Imagine SubTshirts (20) → Tshirts (10) → Clothing (5)
+		const deepParentMap = new Map(categoryParentMap);
+		deepParentMap.set(20, 10);
+
+		const productCategories = new Map<number, { id: number }[]>([[1, [{ id: 20 }]]]);
+
+		const result = enrichCategoriesWithAncestors(productCategories, deepParentMap);
+		const cats = result
+			.get(1)!
+			.map((c) => c.id)
+			.sort((a, b) => a - b);
+
+		expect(cats).toEqual([5, 10, 20]);
+	});
+
+	it('does not duplicate categories already present', () => {
+		const productCategories = new Map<number, { id: number }[]>([
+			[1, [{ id: 10 }, { id: 5 }]], // Already has both Tshirts and Clothing
+		]);
+
+		const result = enrichCategoriesWithAncestors(productCategories, categoryParentMap);
+		const cats = result
+			.get(1)!
+			.map((c) => c.id)
+			.sort((a, b) => a - b);
+
+		expect(cats).toEqual([5, 10]);
+	});
+
+	it('handles root categories (no parent to add)', () => {
+		const productCategories = new Map<number, { id: number }[]>([
+			[1, [{ id: 7 }]], // Music (root)
+		]);
+
+		const result = enrichCategoriesWithAncestors(productCategories, categoryParentMap);
+		const cats = result.get(1)!.map((c) => c.id);
+
+		expect(cats).toEqual([7]);
+	});
+
+	it('handles multiple categories per product', () => {
+		const productCategories = new Map<number, { id: number }[]>([
+			[1, [{ id: 10 }, { id: 12 }]], // Tshirts + Belts
+		]);
+
+		const result = enrichCategoriesWithAncestors(productCategories, categoryParentMap);
+		const cats = result
+			.get(1)!
+			.map((c) => c.id)
+			.sort((a, b) => a - b);
+
+		// Tshirts(10) + Clothing(5) + Belts(12) + Accessories(6)
+		expect(cats).toEqual([5, 6, 10, 12]);
+	});
+
+	it('returns unchanged map when categoryParentMap is empty', () => {
+		const productCategories = new Map<number, { id: number }[]>([[1, [{ id: 10 }]]]);
+
+		const result = enrichCategoriesWithAncestors(productCategories, new Map());
+		expect(result.get(1)).toEqual([{ id: 10 }]);
+	});
+
+	it('protects against circular parent references', () => {
+		const circularMap = new Map<number, number>([
+			[10, 11],
+			[11, 10], // Circular!
+		]);
+
+		const productCategories = new Map<number, { id: number }[]>([[1, [{ id: 10 }]]]);
+
+		// Should not infinite loop
+		const result = enrichCategoriesWithAncestors(productCategories, circularMap);
+		const cats = result
+			.get(1)!
+			.map((c) => c.id)
+			.sort((a, b) => a - b);
+		expect(cats).toEqual([10, 11]);
 	});
 });
