@@ -4,57 +4,15 @@ import { useObservableState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import { getVariablePrices } from './get-variable-prices';
 import { PriceWithTax } from './price-with-tax';
 
 import type { CellContext } from '@tanstack/react-table';
-
-const uiLogger = getLogger(['wcpos', 'ui', 'product']);
+import type { VariablePrices } from './get-variable-prices';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
-
-/**
- *
- */
-function getVariablePrices(metaData: { key?: string; value?: string }[] | undefined) {
-	if (!metaData) {
-		uiLogger.error('metaData is not defined', {
-			context: {
-				errorCode: ERROR_CODES.MISSING_REQUIRED_FIELD,
-			},
-		});
-		return null;
-	}
-
-	const metaDataEntry = metaData.find(
-		(m: { key?: string; value?: string }) => m.key === '_woocommerce_pos_variable_prices'
-	);
-
-	if (!metaDataEntry) {
-		uiLogger.error("No '_woocommerce_pos_variable_prices' key found in metaData", {
-			context: {
-				errorCode: ERROR_CODES.MISSING_REQUIRED_FIELD,
-			},
-		});
-		return null;
-	}
-
-	try {
-		const variablePrices = JSON.parse(metaDataEntry.value ?? '');
-		return variablePrices;
-	} catch (error) {
-		uiLogger.error("Unable to parse '_woocommerce_pos_variable_prices' value into JSON", {
-			context: {
-				errorCode: ERROR_CODES.INVALID_DATA_TYPE,
-				value: metaDataEntry.value,
-				error: error instanceof Error ? error.message : String(error),
-			},
-		});
-		return null;
-	}
-}
+type PriceKey = keyof VariablePrices;
 
 /**
  *
@@ -76,19 +34,18 @@ export function VariableProductPrice({
 		| { key?: string; value?: string }[]
 		| undefined;
 	const variablePrices = getVariablePrices(metaData);
+	const key = column.id as PriceKey;
 
-	/**
-	 * No variable prices found?!
-	 */
-	if (variablePrices && !variablePrices[column.id]) {
+	if (!variablePrices || !variablePrices[key]) {
 		return null;
 	}
 
-	// min and max exist by are equal
-	if (variablePrices[column.id].min === variablePrices[column.id].max) {
+	const range = variablePrices[key];
+
+	if (range.min === range.max) {
 		return (
 			<PriceWithTax
-				price={variablePrices[column.id].max}
+				price={range.max}
 				taxStatus={taxStatus ?? 'none'}
 				taxClass={taxClass ?? ''}
 				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
@@ -96,18 +53,17 @@ export function VariableProductPrice({
 		);
 	}
 
-	// default, min and max are different
 	return (
 		<HStack className="flex-wrap justify-end gap-1">
 			<PriceWithTax
-				price={variablePrices[column.id].min}
+				price={range.min}
 				taxStatus={taxStatus ?? 'none'}
 				taxClass={taxClass ?? ''}
 				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
 			/>
 			<Text> - </Text>
 			<PriceWithTax
-				price={variablePrices[column.id].max}
+				price={range.max}
 				taxStatus={taxStatus ?? 'none'}
 				taxClass={taxClass ?? ''}
 				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
