@@ -7,11 +7,19 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
-import { Form, FormField, FormInput, FormRadioGroup, FormSelect } from '@wcpos/components/form';
+import {
+	Form,
+	FormField,
+	FormInput,
+	FormRadioGroup,
+	FormSelect,
+	FormSwitch,
+} from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
+import { CategorySelect } from '../../../../components/product/category-select';
 import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
@@ -20,6 +28,7 @@ import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { useLineItemData } from '../../../hooks/use-line-item-data';
 import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
+import { parsePosData } from '../../../hooks/utils';
 
 /**
  *
@@ -32,6 +41,9 @@ const formSchema = z.object({
 	regular_price: z.number().optional(),
 	tax_status: z.enum(['taxable', 'none']),
 	tax_class: z.string().optional(),
+	virtual: z.boolean().default(false),
+	downloadable: z.boolean().default(false),
+	category: z.object({ id: z.number(), name: z.string() }).nullable().default(null),
 	meta_data: metaDataSchema,
 });
 
@@ -49,6 +61,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 	const { onOpenChange } = useRootContext();
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price, tax_status } = getLineItemData(item);
+	const posData = parsePosData(item);
 
 	/**
 	 *
@@ -65,6 +78,9 @@ export function EditLineItemForm({ uuid, item }: Props) {
 			regular_price: toNumber(regular_price),
 			tax_status,
 			tax_class: item.tax_class === '' ? 'standard' : item.tax_class,
+			virtual: posData?.virtual ?? false,
+			downloadable: posData?.downloadable ?? false,
+			category: posData?.category ?? null,
 			meta_data: item.meta_data as FormValues['meta_data'],
 		},
 	});
@@ -83,6 +99,9 @@ export function EditLineItemForm({ uuid, item }: Props) {
 				tax_status: data.tax_status,
 				tax_class: data.tax_class === 'standard' ? '' : data.tax_class,
 				meta_data: data.meta_data as never,
+				virtual: data.virtual,
+				downloadable: data.downloadable,
+				category: data.category,
 			});
 			onOpenChange(false);
 		},
@@ -199,6 +218,41 @@ export function EditLineItemForm({ uuid, item }: Props) {
 						)}
 					/>
 				</HStack>
+				<HStack className="gap-4">
+					<FormField
+						control={form.control}
+						name="virtual"
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormSwitch label={t('common.virtual')} {...field} />
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="downloadable"
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormSwitch label={t('common.downloadable')} {...field} />
+							</View>
+						)}
+					/>
+				</HStack>
+				<FormField
+					control={form.control}
+					name="category"
+					render={({ field: { onChange } }) => (
+						<CategorySelect
+							onValueChange={(option) => {
+								if (option) {
+									onChange({ id: Number(option.value), name: option.label });
+								} else {
+									onChange(null);
+								}
+							}}
+						/>
+					)}
+				/>
 				<MetaDataForm withDisplayValues />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.close')}</DialogClose>
