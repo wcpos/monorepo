@@ -111,8 +111,10 @@ export function CategorySearch() {
  *
  */
 export function CategorySelect({
+	value,
 	onValueChange,
 }: {
+	value?: import('@wcpos/components/combobox').Option;
 	onValueChange?: (option: import('@wcpos/components/combobox').Option | undefined) => void;
 }) {
 	const t = useT();
@@ -121,7 +123,7 @@ export function CategorySelect({
 	 *
 	 */
 	return (
-		<Combobox onValueChange={onValueChange}>
+		<Combobox value={value} onValueChange={onValueChange}>
 			<ComboboxTrigger>
 				<ComboboxValue placeholder={t('common.select_category')} />
 			</ComboboxTrigger>

@@ -103,7 +103,16 @@ export const useAddCoupon = () => {
 						price: parseFloat(item.total || '0') / qty,
 						subtotal: item.subtotal || '0',
 						total: item.total || '0',
-						categories: product?.categories || [],
+						categories: (() => {
+							if (item.product_id !== 0) {
+								return product?.categories || [];
+							}
+							// For misc products, read categories from pos_data
+							if (Array.isArray(posData?.categories) && posData.categories.length > 0) {
+								return posData.categories.map((c: { id: number }) => ({ id: c.id }));
+							}
+							return [];
+						})(),
 						on_sale: onSale,
 					};
 				});

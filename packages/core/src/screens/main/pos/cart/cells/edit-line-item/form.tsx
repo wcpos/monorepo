@@ -243,8 +243,13 @@ export function EditLineItemForm({ uuid, item }: Props) {
 						<FormField
 							control={form.control}
 							name="categories"
-							render={({ field: { onChange } }) => (
+							render={({ field: { onChange, value } }) => (
 								<CategorySelect
+									value={
+										value?.[0]?.id
+											? { value: String(value[0].id), label: value[0].name }
+											: undefined
+									}
 									onValueChange={(option) => {
 										if (option) {
 											onChange([{ id: Number(option.value), name: option.label }]);
