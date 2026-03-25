@@ -64,7 +64,7 @@ export const useCalculateLineItemTaxAndTotals = () => {
 	 */
 	const calculateLineItemTaxesAndTotals = React.useCallback(
 		(lineItem: Partial<LineItem>) => {
-			const { price, regular_price, tax_status } = getLineItemData(lineItem);
+			const { price, tax_status } = getLineItemData(lineItem);
 			const quantity = lineItem.quantity ?? 0;
 			const dp = priceNumDecimals;
 			const roundingPrecision = getRoundingPrecision(dp);
