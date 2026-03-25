@@ -826,3 +826,105 @@ describe('coupon-discount', () => {
 		});
 	});
 });
+
+/**
+ * Parity regression tests — specific WooCommerce behaviors discovered during
+ * integration testing that differ from naive expectations.
+ */
+describe('coupon-discount — parity regressions', () => {
+	describe('fixed_cart bypasses product_categories filter (WC parity)', () => {
+		// WC's get_items_to_apply_coupon() has: !is_valid_for_product() && !is_valid_for_cart()
+		// For fixed_cart, is_valid_for_cart() returns true, so ALL items pass regardless
+		// of category restrictions. Categories only affect validation (can coupon be used?).
+		const musicCategoryId = 42;
+		const clothingCategoryId = 15;
+
+		it('distributes fixed_cart across ALL items, not just category-matching ones', () => {
+			const config = createConfig({
+				discount_type: 'fixed_cart',
+				amount: '10',
+				product_categories: [musicCategoryId],
+			});
+
+			const items = [
+				createItem({
+					product_id: 1,
+					price: 18,
+					quantity: 1,
+					categories: [{ id: clothingCategoryId }], // NOT in music
+				}),
+				createItem({
+					product_id: 2,
+					price: 2,
+					quantity: 1,
+					categories: [{ id: musicCategoryId }], // In music — validates the coupon
+				}),
+			];
+
+			const result = calculateCouponDiscount(config, items);
+
+			// WC distributes $10 across BOTH items: floor(1000/2) = 500 cents each,
+			// but item 2 ($2) caps at 200, remainder (300) flows to item 1.
+			// Result: item 1 = $8, item 2 = $2.
+			expect(result.totalDiscount).toBe(10);
+			expect(result.perItem).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ product_id: 1, discount: 8 }),
+					expect.objectContaining({ product_id: 2, discount: 2 }),
+				])
+			);
+		});
+
+		it('still rejects fixed_cart when NO items match categories', () => {
+			const config = createConfig({
+				discount_type: 'fixed_cart',
+				amount: '10',
+				product_categories: [musicCategoryId],
+			});
+
+			const items = [
+				createItem({
+					product_id: 1,
+					price: 18,
+					quantity: 1,
+					categories: [{ id: clothingCategoryId }],
+				}),
+			];
+
+			const result = calculateCouponDiscount(config, items);
+
+			// No eligible items → coupon rejected entirely
+			expect(result.totalDiscount).toBe(0);
+			expect(result.perItem).toEqual([]);
+		});
+
+		it('percent coupon still filters by category (only fixed_cart bypasses)', () => {
+			const config = createConfig({
+				discount_type: 'percent',
+				amount: '50',
+				product_categories: [musicCategoryId],
+			});
+
+			const items = [
+				createItem({
+					product_id: 1,
+					price: 18,
+					quantity: 1,
+					categories: [{ id: clothingCategoryId }],
+				}),
+				createItem({
+					product_id: 2,
+					price: 2,
+					quantity: 1,
+					categories: [{ id: musicCategoryId }],
+				}),
+			];
+
+			const result = calculateCouponDiscount(config, items);
+
+			// Only music item gets 50% discount = $1
+			expect(result.totalDiscount).toBe(1);
+			expect(result.perItem).toEqual([expect.objectContaining({ product_id: 2, discount: 1 })]);
+		});
+	});
+});

@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
+import { buildEnrichedProductCategories } from './coupon-helpers';
 import { recalculateCoupons, type RecalculateResult } from './coupon-recalculate';
 import { useAppState } from '../../../../contexts/app-state';
 import { useTaxRates } from '../../contexts/tax-rates';
@@ -29,10 +30,11 @@ export const useRecalculateCoupons = () => {
 
 	const { collection: couponCollection } = useCollection('coupons');
 	const { collection: productCollection } = useCollection('products');
+	const { collection: categoryCollection } = useCollection('products/categories');
 	const { rates: taxRates, pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxRates();
 
 	const recalculate = React.useCallback(
-		async (lineItems: LineItem[], couponLines: CouponLine[]): Promise<RecalculateResult | null> => {
+		async (lineItems: LineItem[], couponLines: CouponLine[]): Promise<RecalculateResult> => {
 			// Filter to active coupon codes
 			const activeCodes = couponLines
 				.filter((cl): cl is CouponLine & { code: string } => cl.code != null)
@@ -43,9 +45,10 @@ export const useRecalculateCoupons = () => {
 			for (const code of activeCodes) {
 				const couponDoc = await couponCollection.findOne({ selector: { code } }).exec();
 				if (!couponDoc) {
-					// Can't safely recalculate when an active coupon is missing locally —
-					// returning partial data would persist mismatched discounts.
-					return null;
+					// Fail the recalculation when an active coupon is missing locally.
+					// Returning stale lineItems with mutated couponLines would persist
+					// mismatched discounts. Callers should catch and handle this.
+					throw new Error(`Coupon "${code}" not found in local collection`);
 				}
 				const cd = couponDoc.toJSON();
 				couponConfigs.set(code, {
@@ -60,8 +63,9 @@ export const useRecalculateCoupons = () => {
 				});
 			}
 
-			// Build product categories map
-			const productCategories = new Map<number, { id: number }[]>();
+			// Build product categories map, enriched with ancestor categories.
+			// WC's wc_get_product_cat_ids() includes ancestors; we must match.
+			let productCategories = new Map<number, { id: number }[]>();
 			const productIds = lineItems
 				.map((item) => item.product_id)
 				.filter((id): id is number => id != null);
@@ -74,6 +78,12 @@ export const useRecalculateCoupons = () => {
 						productCategories.set(p.id, (p.categories || []) as { id: number }[]);
 					}
 				}
+
+				// Enrich with ancestor categories from the category tree
+				productCategories = await buildEnrichedProductCategories(
+					productCategories,
+					categoryCollection
+				);
 			}
 
 			return recalculateCoupons({
@@ -91,6 +101,7 @@ export const useRecalculateCoupons = () => {
 		[
 			couponCollection,
 			productCollection,
+			categoryCollection,
 			taxRates,
 			pricesIncludeTax,
 			calcDiscountsSequentially,

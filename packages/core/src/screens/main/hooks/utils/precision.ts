@@ -8,16 +8,58 @@
  */
 
 /**
+ * Return a fixed-point decimal string for a non-negative finite number.
+ * Handles values that `String()` renders in scientific notation (e.g. 1.5e-7).
+ * For normal decimals, `String()` already returns fixed-point notation.
+ */
+function toDecimalString(n: number): string {
+	const s = String(n);
+	if (!s.includes('e') && !s.includes('E')) return s;
+	// toFixed(20) is the max JS allows; trailing zeros are harmless here
+	// because the caller only inspects digits up to `precision`.
+	return n.toFixed(20);
+}
+
+/**
  * Equivalent to PHP's round() with PHP_ROUND_HALF_UP (mode 1).
  * This is the default rounding in most languages, including JS Math.round for positive numbers,
  * but we need an explicit implementation that handles arbitrary precision.
  */
 export function roundHalfUp(value: number, precision: number): number {
-	const factor = Math.pow(10, precision);
+	if (!Number.isFinite(value) || value === 0) return value;
+
 	const sign = value < 0 ? -1 : 1;
-	// Use Number.EPSILON to handle floating point edge cases like 2.725 * 100 = 272.49999...
-	// Operate on absolute value so ties round away from zero (PHP ROUND_HALF_UP behavior)
-	return (sign * Math.round((Math.abs(value) + Number.EPSILON) * factor)) / factor;
+	const abs = Math.abs(value);
+	const factor = Math.pow(10, precision);
+
+	// Baseline: PHP's core algorithm — floor(shifted + 0.5).
+	// This handles non-midpoint cases correctly even when float subtraction
+	// produces values like 2 - 1.33 = 0.6699999999999999 (shifted * 100 = 67 exact).
+	const shifted = abs * factor;
+	let result = Math.floor(shifted + 0.5);
+
+	// Fix for true midpoints where float multiplication lands just below .5.
+	// Example: 19.275 * 100 = 1927.4999999998 → floor(+0.5) = 1927 (wrong).
+	// But String(19.275) = "19.275" — the '5' at the 3rd decimal proves it IS
+	// a true midpoint. PHP's round() correctly returns 19.28 for these cases.
+	//
+	// We detect true midpoints via the shortest decimal representation:
+	// if the digit at `precision` is exactly 5 with no trailing non-zero digits,
+	// force round up (away from zero).
+	const str = toDecimalString(abs);
+	const dot = str.indexOf('.');
+	if (dot !== -1) {
+		const decimals = str.slice(dot + 1);
+		if (precision < decimals.length && decimals[precision] === '5') {
+			const rest = decimals.slice(precision + 1);
+			if (rest === '' || /^0*$/.test(rest)) {
+				// True midpoint — ensure we round UP (HALF_UP)
+				result = Math.floor(shifted) + 1;
+			}
+		}
+	}
+
+	return (sign * result) / factor;
 }
 
 /**
@@ -30,18 +72,32 @@ export function roundHalfUp(value: number, precision: number): number {
  * - Discount rounding (WC_DISCOUNT_ROUNDING_MODE = PHP_ROUND_HALF_DOWN)
  */
 export function roundHalfDown(value: number, precision: number): number {
+	if (!Number.isFinite(value) || value === 0) return value;
+
+	const sign = value < 0 ? -1 : 1;
+	const abs = Math.abs(value);
 	const factor = Math.pow(10, precision);
-	const shifted = value * factor;
-	// Check if we're at a midpoint (exactly .5 after shift)
-	// Use a small epsilon to detect "close to .5" due to floating point
-	const epsilon = 1e-8;
-	const remainder = Math.abs(shifted - Math.floor(shifted) - 0.5);
-	if (remainder < epsilon) {
-		// At midpoint — round toward zero (down for positive, up for negative)
-		return (value >= 0 ? Math.floor(shifted) : Math.ceil(shifted)) / factor;
+
+	// Baseline: floor(shifted + 0.5) — standard rounding (half up).
+	const shifted = abs * factor;
+	let result = Math.floor(shifted + 0.5);
+
+	// For true midpoints (detected via shortest decimal), round DOWN toward zero.
+	// Same detection as roundHalfUp but opposite action at the midpoint.
+	const str = toDecimalString(abs);
+	const dot = str.indexOf('.');
+	if (dot !== -1) {
+		const decimals = str.slice(dot + 1);
+		if (precision < decimals.length && decimals[precision] === '5') {
+			const rest = decimals.slice(precision + 1);
+			if (rest === '' || /^0*$/.test(rest)) {
+				// True midpoint — round DOWN (toward zero, HALF_DOWN)
+				result = Math.floor(shifted);
+			}
+		}
 	}
-	// Not at midpoint — use standard rounding
-	return Math.round(shifted) / factor;
+
+	return (sign * result) / factor;
 }
 
 /**

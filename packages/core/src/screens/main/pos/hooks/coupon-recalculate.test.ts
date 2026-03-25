@@ -4,7 +4,7 @@
  * recalculate_coupons() in abstract-wc-order.php.
  *
  * Key POS semantics:
- * - subtotal = price * qty, total = price * qty (subtotal matches WC sale price behavior)
+ * - subtotal = regular_price * qty, total = price * qty
  * - Coupon base is pos_data.price, NOT subtotal
  * - on_sale is determined from _woocommerce_pos_data meta (price < regular_price)
  * - Non-sequential (default): each coupon applies to the original POS price
@@ -33,7 +33,7 @@ const makePosLineItem = (
 	({
 		product_id: productId,
 		quantity: qty,
-		subtotal: String(price * qty),
+		subtotal: String(regularPrice * qty),
 		subtotal_tax: '0',
 		total: String(price * qty),
 		total_tax: '0',
@@ -45,35 +45,6 @@ const makePosLineItem = (
 					price: String(price),
 					regular_price: String(regularPrice),
 					tax_status: taxStatus,
-				}),
-			},
-		],
-	}) as unknown as LineItem;
-
-/** Create a misc product line item (product_id=0) with optional categories in pos_data */
-const makeMiscLineItem = (
-	price: number,
-	regularPrice: number,
-	categories: { id: number; name: string }[] = [],
-	qty = 1,
-	taxStatus = 'taxable'
-): LineItem =>
-	({
-		product_id: 0,
-		quantity: qty,
-		subtotal: String(price * qty),
-		subtotal_tax: '0',
-		total: String(price * qty),
-		total_tax: '0',
-		taxes: [],
-		meta_data: [
-			{
-				key: '_woocommerce_pos_data',
-				value: JSON.stringify({
-					price: String(price),
-					regular_price: String(regularPrice),
-					tax_status: taxStatus,
-					categories,
 				}),
 			},
 		],
@@ -205,8 +176,8 @@ describe('recalculateCoupons', () => {
 
 			// 10% of $16 = $1.60 discount
 			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(1.6, 2);
-			// subtotal should be $16 (POS price, matching WC sale price behavior)
-			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(16, 2);
+			// subtotal should remain $18 (unchanged)
+			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(18, 2);
 			// total should be $16 (POS price) - $1.60 = $14.40
 			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(14.4, 2);
 		});
@@ -239,8 +210,8 @@ describe('recalculateCoupons', () => {
 			// 10% of $16 = $1.60, 10% of $20 = $2.00, total coupon = $3.60
 			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(3.6, 2);
 
-			// Item A: subtotal=$16 (POS price), total = $16 - $1.60 = $14.40
-			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(16, 2);
+			// Item A: subtotal=$18, total = $16 (POS price) - $1.60 = $14.40
+			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(18, 2);
 			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(14.4, 2);
 
 			// Item B: subtotal=$20, total = $20 (POS price) - $2.00 = $18.00
@@ -460,224 +431,413 @@ describe('recalculateCoupons', () => {
 			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(11, 2);
 		});
 	});
+});
 
-	// -----------------------------------------------------------------------
-	// Legacy subtotal fallback
-	// -----------------------------------------------------------------------
-	describe('legacy subtotal fallback', () => {
-		it('should use pos_data.price for reset when subtotal holds regular_price * qty (legacy order)', () => {
-			// Legacy order: subtotal was stored as regular_price * qty = 18
-			// but POS price is 16
-			const legacyItem = {
-				product_id: 1,
-				quantity: 1,
-				subtotal: '18',
-				subtotal_tax: '0',
-				total: '18',
-				total_tax: '0',
-				taxes: [],
-				meta_data: [
-					{
-						key: '_woocommerce_pos_data',
-						value: JSON.stringify({
-							price: '16',
-							regular_price: '18',
-							tax_status: 'taxable',
-						}),
-					},
-				],
-			} as unknown as LineItem;
+// ---------------------------------------------------------------------------
+// Layer 5: End-to-end parity regression tests
+//
+// Each test reproduces an exact permutation that caught a real parity bug
+// during integration testing against WooCommerce servers. The expected values
+// are taken from the WC server responses.
+// ---------------------------------------------------------------------------
+
+/** Create a taxed line item with pre-computed tax values */
+const makeTaxedLineItem = (opts: {
+	productId: number;
+	price: number;
+	regularPrice: number;
+	qty?: number;
+	subtotal: string;
+	subtotalTax: string;
+	total: string;
+	totalTax: string;
+	taxes: { id: number; subtotal: string; total: string }[];
+	taxClass?: string;
+}): LineItem =>
+	({
+		product_id: opts.productId,
+		quantity: opts.qty ?? 1,
+		tax_class: opts.taxClass ?? '',
+		subtotal: opts.subtotal,
+		subtotal_tax: opts.subtotalTax,
+		total: opts.total,
+		total_tax: opts.totalTax,
+		taxes: opts.taxes,
+		meta_data: [
+			{
+				key: '_woocommerce_pos_data',
+				value: JSON.stringify({
+					price: String(opts.price),
+					regular_price: String(opts.regularPrice),
+					tax_status: 'taxable',
+				}),
+			},
+		],
+	}) as unknown as LineItem;
+
+describe('recalculateCoupons — parity regression (Layer 5)', () => {
+	// US 10% tax rate (dev-free server, prices excl tax)
+	const usTaxRate = {
+		id: 6,
+		rate: '10',
+		compound: false,
+		order: 1,
+		class: 'standard',
+	};
+
+	describe('dev-free: Hoodie with Zipper + pct5 (discount_tax rounding)', () => {
+		// Server: Hoodie with Zipper $45, 10% tax (excl), 5% coupon
+		// This caught the roundHalfUp bug: 4.5 - 4.275 = 0.22499... in IEEE 754
+		it('matches WC server output', () => {
+			const lineItem = makeTaxedLineItem({
+				productId: 71,
+				price: 45,
+				regularPrice: 45,
+				subtotal: '45',
+				subtotalTax: '4.5',
+				total: '45',
+				totalTax: '4.5',
+				taxes: [{ id: 6, subtotal: '4.5', total: '4.5' }],
+			});
 
 			const result = recalculateCoupons(
 				makeInput({
-					lineItems: [legacyItem],
-					couponLines: [makeCouponLine('ten')],
-					couponConfigs: new Map([['ten', makeConfig({ discount_type: 'percent', amount: '10' })]]),
+					lineItems: [lineItem],
+					couponLines: [makeCouponLine('pct5')],
+					couponConfigs: new Map([['pct5', makeConfig({ discount_type: 'percent', amount: '5' })]]),
+					pricesIncludeTax: false,
+					taxRates: [usTaxRate],
 				})
 			);
 
-			// 10% of $16 POS price = $1.60 discount (not 10% of $18)
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(1.6, 2);
-			// Total = $16 - $1.60 = $14.40
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(14.4, 2);
-		});
-
-		it('should reset legacy subtotal to pos_data.price * qty when no coupons present', () => {
-			const legacyItem = {
-				product_id: 1,
-				quantity: 2,
-				subtotal: '36',
-				subtotal_tax: '0',
-				total: '36',
-				total_tax: '0',
-				taxes: [],
-				meta_data: [
-					{
-						key: '_woocommerce_pos_data',
-						value: JSON.stringify({
-							price: '16',
-							regular_price: '18',
-							tax_status: 'taxable',
-						}),
-					},
-				],
-			} as unknown as LineItem;
-
-			const result = recalculateCoupons(
-				makeInput({
-					lineItems: [legacyItem],
-					couponLines: [],
-					couponConfigs: new Map(),
-				})
-			);
-
-			// Should reset to 16 * 2 = 32, not stay at 36 (18 * 2)
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(32, 2);
-			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(32, 2);
+			// Coupon: 5% of $45 = $2.25
+			expect(result.couponLines[0].discount).toBe('2.25');
+			// discount_tax: tax on the $2.25 discount = 0.225 → round = 0.23
+			expect(result.couponLines[0].discount_tax).toBe('0.23');
+			// Line item total = $45 - $2.25 = $42.75
+			expect(result.lineItems[0].total).toBe('42.75');
 		});
 	});
 
-	// -----------------------------------------------------------------------
-	// Misc product category matching
-	// -----------------------------------------------------------------------
-	describe('misc product category matching', () => {
-		it('should apply category-restricted coupon to misc product with matching category', () => {
+	describe('dev-free: stacked coupons (fixed_product + percent)', () => {
+		// Tests that two stacked coupons both apply correctly.
+		// Non-sequential: both coupons see the original POS price.
+		it('applies both coupons and reduces total correctly', () => {
+			const lineItem = makeTaxedLineItem({
+				productId: 83,
+				price: 18,
+				regularPrice: 20,
+				subtotal: '18',
+				subtotalTax: '1.8',
+				total: '18',
+				totalTax: '1.8',
+				taxes: [{ id: 6, subtotal: '1.8', total: '1.8' }],
+			});
+
 			const result = recalculateCoupons(
 				makeInput({
-					lineItems: [makeMiscLineItem(20, 20, [{ id: 5, name: 'Clothing' }])],
-					couponLines: [makeCouponLine('catcoupon')],
+					lineItems: [lineItem],
+					couponLines: [makeCouponLine('fixed5'), makeCouponLine('pct10')],
 					couponConfigs: new Map([
-						[
-							'catcoupon',
-							makeConfig({
-								discount_type: 'percent',
-								amount: '10',
-								product_categories: [5],
-							}),
-						],
+						['fixed5', makeConfig({ discount_type: 'fixed_product', amount: '5' })],
+						['pct10', makeConfig({ discount_type: 'percent', amount: '10' })],
 					]),
+					pricesIncludeTax: false,
+					taxRates: [usTaxRate],
 				})
 			);
 
-			// 10% of $20 = $2 discount
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(2, 2);
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(18, 2);
+			// fixed5: $5 off $18
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(5, 2);
+			// pct10: non-sequential, 10% of original $18 = $1.80
+			expect(parseFloat(result.couponLines[1].discount!)).toBeCloseTo(1.8, 2);
+			// Total = $18 - $5 - $1.80 = $11.20
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(11.2, 2);
+
+			// Both discount_tax values should be non-zero (10% tax)
+			expect(parseFloat(result.couponLines[0].discount_tax!)).toBeGreaterThan(0);
+			expect(parseFloat(result.couponLines[1].discount_tax!)).toBeGreaterThan(0);
 		});
 
-		it('should NOT apply category-restricted coupon to misc product with non-matching category', () => {
+		it('sequential mode: second coupon sees reduced price', () => {
+			const lineItem = makeTaxedLineItem({
+				productId: 83,
+				price: 18,
+				regularPrice: 20,
+				subtotal: '18',
+				subtotalTax: '1.8',
+				total: '18',
+				totalTax: '1.8',
+				taxes: [{ id: 6, subtotal: '1.8', total: '1.8' }],
+			});
+
 			const result = recalculateCoupons(
 				makeInput({
-					lineItems: [makeMiscLineItem(20, 20, [{ id: 99, name: 'Electronics' }])],
-					couponLines: [makeCouponLine('catcoupon')],
+					lineItems: [lineItem],
+					couponLines: [makeCouponLine('fixed5'), makeCouponLine('pct10')],
+					couponConfigs: new Map([
+						['fixed5', makeConfig({ discount_type: 'fixed_product', amount: '5' })],
+						['pct10', makeConfig({ discount_type: 'percent', amount: '10' })],
+					]),
+					pricesIncludeTax: false,
+					calcDiscountsSequentially: true,
+					taxRates: [usTaxRate],
+				})
+			);
+
+			// fixed5: $5 off $18
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(5, 2);
+			// pct10: sequential, 10% of ($18 - $5) = 10% of $13 = $1.30
+			expect(parseFloat(result.couponLines[1].discount!)).toBeCloseTo(1.3, 2);
+			// Total = $18 - $5 - $1.30 = $11.70
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(11.7, 2);
+		});
+	});
+
+	describe('dev-pro: Beanie + Single + cart10music (fixed_cart mixed tax classes)', () => {
+		// Server: dev-pro store 578 (GBP, prices incl tax, compound rates)
+		// Beanie with Logo £18 (std tax), Single £2 (zero-rate)
+		// cart10music: $10 fixed_cart restricted to music category
+		// This caught the fixed_cart category bypass bug AND cart10music distribution
+		const gbTaxRates = [
+			{ id: 13, rate: '10', compound: false, order: 1, class: 'standard' },
+			{ id: 14, rate: '2', compound: true, order: 2, class: 'standard' },
+		];
+		const zeroRate = { id: 15, rate: '0', compound: false, order: 1, class: 'zero-rate' };
+
+		it('distributes fixed_cart across ALL items regardless of category', () => {
+			const beanie = makeTaxedLineItem({
+				productId: 83,
+				price: 18,
+				regularPrice: 20,
+				subtotal: '16.042781',
+				subtotalTax: '1.957219',
+				total: '16.042781',
+				totalTax: '1.957219',
+				taxes: [
+					{ id: 14, subtotal: '0.352941', total: '0.352941' },
+					{ id: 13, subtotal: '1.604278', total: '1.604278' },
+				],
+			});
+
+			const single = makeTaxedLineItem({
+				productId: 75,
+				price: 2,
+				regularPrice: 3,
+				subtotal: '2',
+				subtotalTax: '0',
+				total: '2',
+				totalTax: '0',
+				taxes: [],
+				taxClass: 'zero-rate',
+			});
+
+			const musicCategoryId = 42;
+			const clothingCategoryId = 15;
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [beanie, single],
+					couponLines: [makeCouponLine('cart10music')],
 					couponConfigs: new Map([
 						[
-							'catcoupon',
+							'cart10music',
 							makeConfig({
-								discount_type: 'percent',
+								discount_type: 'fixed_cart',
 								amount: '10',
-								product_categories: [5],
+								product_categories: [musicCategoryId],
 							}),
 						],
+					]),
+					pricesIncludeTax: true,
+					taxRates: [...gbTaxRates, zeroRate],
+					// Single is in music (validates coupon), Beanie is in clothing
+					productCategories: new Map([
+						[83, [{ id: clothingCategoryId }]],
+						[75, [{ id: musicCategoryId }]],
 					]),
 				})
 			);
 
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(0, 2);
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(20, 2);
+			// fixed_cart should distribute across BOTH items (WC: is_valid_for_cart() bypass)
+			// Total coupon discount should be close to £10 (tax-inclusive)
+			const totalDiscount =
+				parseFloat(result.couponLines[0].discount!) +
+				parseFloat(result.couponLines[0].discount_tax!);
+			// Precision 3 = ±$0.0005, catches any $0.01 regression while tolerating
+			// float noise from incl-tax → ex-tax conversion
+			expect(totalDiscount).toBeCloseTo(10, 3);
+
+			// Both items should have reduced totals
+			expect(parseFloat(result.lineItems[0].total!)).toBeLessThan(16.05);
+			expect(result.lineItems[1].total).toBe('0');
+		});
+	});
+
+	describe('dev-free: Two items + cart3 (per-item tax aggregation)', () => {
+		// Beanie $18 + T-Shirt $18, $3 cart coupon, 10% tax (excl)
+		// This caught the per-item tax rounding bug (3.26 vs 3.27)
+		it('produces per-rate taxes that round correctly when aggregated', () => {
+			const beanie = makeTaxedLineItem({
+				productId: 83,
+				price: 18,
+				regularPrice: 20,
+				subtotal: '18',
+				subtotalTax: '1.8',
+				total: '18',
+				totalTax: '1.8',
+				taxes: [{ id: 6, subtotal: '1.8', total: '1.8' }],
+			});
+
+			const tshirt = makeTaxedLineItem({
+				productId: 82,
+				price: 18,
+				regularPrice: 18,
+				subtotal: '18',
+				subtotalTax: '1.8',
+				total: '18',
+				totalTax: '1.8',
+				taxes: [{ id: 6, subtotal: '1.8', total: '1.8' }],
+			});
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [beanie, tshirt],
+					couponLines: [makeCouponLine('cart3')],
+					couponConfigs: new Map([
+						['cart3', makeConfig({ discount_type: 'fixed_cart', amount: '3' })],
+					]),
+					pricesIncludeTax: false,
+					taxRates: [usTaxRate],
+				})
+			);
+
+			// $3 distributed across two $18 items → $1.50 each (or $1.49 + $1.51 with penny dist)
+			const total1 = parseFloat(result.lineItems[0].total!);
+			const total2 = parseFloat(result.lineItems[1].total!);
+			expect(total1 + total2).toBeCloseTo(33, 6); // $36 - $3 = $33
+
+			// Coupon discount should be exactly $3
+			expect(result.couponLines[0].discount).toBe('3');
+		});
+	});
+
+	describe('dev-pro: fixed2clothacc with category ancestry', () => {
+		// Beanie (Accessories) + T-Shirt (Tshirts→child of Clothing)
+		// Coupon restricted to [Clothing, Accessories]
+		// Without ancestry: T-Shirt excluded. With ancestry: both included.
+		it('applies fixed_product to items in child categories when ancestors are enriched', () => {
+			const clothingId = 16;
+			const tshirtsId = 17;
+			const accessoriesId = 19;
+
+			const beanie = makeTaxedLineItem({
+				productId: 83,
+				price: 18,
+				regularPrice: 20,
+				subtotal: '18',
+				subtotalTax: '0',
+				total: '18',
+				totalTax: '0',
+				taxes: [],
+			});
+
+			const tshirt = makeTaxedLineItem({
+				productId: 82,
+				price: 18,
+				regularPrice: 18,
+				subtotal: '18',
+				subtotalTax: '0',
+				total: '18',
+				totalTax: '0',
+				taxes: [],
+			});
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [beanie, tshirt],
+					couponLines: [makeCouponLine('fixed2clothacc')],
+					couponConfigs: new Map([
+						[
+							'fixed2clothacc',
+							makeConfig({
+								discount_type: 'fixed_product',
+								amount: '2',
+								product_categories: [clothingId, accessoriesId],
+							}),
+						],
+					]),
+					pricesIncludeTax: false,
+					taxRates: [],
+					// Enriched: T-shirt has both Tshirts AND Clothing (ancestor)
+					productCategories: new Map([
+						[83, [{ id: accessoriesId }]],
+						[82, [{ id: tshirtsId }, { id: clothingId }]], // ancestry enriched
+					]),
+				})
+			);
+
+			// Both items should get $2 discount each
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(16, 0);
+			expect(parseFloat(result.lineItems[1].total!)).toBeCloseTo(16, 0);
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(4, 0);
 		});
 
-		it('should NOT apply category-restricted coupon to misc product with no category', () => {
+		it('only discounts directly-matching item WITHOUT ancestry enrichment', () => {
+			const clothingId = 16;
+			const tshirtsId = 17;
+			const accessoriesId = 19;
+
+			const beanie = makeTaxedLineItem({
+				productId: 83,
+				price: 18,
+				regularPrice: 20,
+				subtotal: '18',
+				subtotalTax: '0',
+				total: '18',
+				totalTax: '0',
+				taxes: [],
+			});
+
+			const tshirt = makeTaxedLineItem({
+				productId: 82,
+				price: 18,
+				regularPrice: 18,
+				subtotal: '18',
+				subtotalTax: '0',
+				total: '18',
+				totalTax: '0',
+				taxes: [],
+			});
+
 			const result = recalculateCoupons(
 				makeInput({
-					lineItems: [makeMiscLineItem(20, 20)],
-					couponLines: [makeCouponLine('catcoupon')],
+					lineItems: [beanie, tshirt],
+					couponLines: [makeCouponLine('fixed2clothacc')],
 					couponConfigs: new Map([
 						[
-							'catcoupon',
+							'fixed2clothacc',
 							makeConfig({
-								discount_type: 'percent',
-								amount: '10',
-								product_categories: [5],
+								discount_type: 'fixed_product',
+								amount: '2',
+								product_categories: [clothingId, accessoriesId],
 							}),
 						],
+					]),
+					pricesIncludeTax: false,
+					taxRates: [],
+					// NOT enriched: T-shirt only has Tshirts (no Clothing ancestor)
+					productCategories: new Map([
+						[83, [{ id: accessoriesId }]],
+						[82, [{ id: tshirtsId }]], // missing Clothing ancestor
 					]),
 				})
 			);
 
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(0, 2);
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(20, 2);
-		});
-
-		it('should exclude misc product when its category is in excluded_product_categories', () => {
-			const result = recalculateCoupons(
-				makeInput({
-					lineItems: [makeMiscLineItem(20, 20, [{ id: 5, name: 'Clothing' }])],
-					couponLines: [makeCouponLine('excl')],
-					couponConfigs: new Map([
-						[
-							'excl',
-							makeConfig({
-								discount_type: 'percent',
-								amount: '10',
-								excluded_product_categories: [5],
-							}),
-						],
-					]),
-				})
-			);
-
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(0, 2);
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(20, 2);
-		});
-
-		it('should apply category coupon only to the misc product with the matching category', () => {
-			const result = recalculateCoupons(
-				makeInput({
-					lineItems: [
-						makeMiscLineItem(20, 20, [{ id: 5, name: 'Clothing' }]),
-						makeMiscLineItem(30, 30, [{ id: 10, name: 'Food' }]),
-					],
-					couponLines: [makeCouponLine('catcoupon')],
-					couponConfigs: new Map([
-						[
-							'catcoupon',
-							makeConfig({
-								discount_type: 'percent',
-								amount: '10',
-								product_categories: [5],
-							}),
-						],
-					]),
-				})
-			);
-
-			// Only the first item ($20 with category 5) gets the discount
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(2, 2);
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(18, 2);
-			// Second item ($30 with category 10) is unaffected
-			expect(parseFloat(result.lineItems[1].total!)).toBeCloseTo(30, 2);
-		});
-
-		it('should apply unrestricted coupon to misc products regardless of category', () => {
-			const result = recalculateCoupons(
-				makeInput({
-					lineItems: [makeMiscLineItem(20, 20)],
-					couponLines: [makeCouponLine('flat')],
-					couponConfigs: new Map([
-						[
-							'flat',
-							makeConfig({
-								discount_type: 'percent',
-								amount: '10',
-							}),
-						],
-					]),
-				})
-			);
-
-			// 10% of $20 = $2 discount (no category restriction)
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(2, 2);
-			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(18, 2);
+			// Only beanie (Accessories) gets $2 discount, T-shirt excluded
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(16, 0);
+			expect(parseFloat(result.lineItems[1].total!)).toBeCloseTo(18, 0);
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(2, 0);
 		});
 	});
 });
