@@ -333,6 +333,15 @@ export const parsePosData = (item: CartLine) => {
 /**
  * Calculate price and regular price based on tax inclusion and quantity.
  */
+/**
+ * Derive per-unit price and regularPrice from stored line item totals.
+ *
+ * Note: After the subtotal parity change, subtotal = price * qty (not
+ * regular_price * qty), so `regularPrice` here will equal `price` when
+ * no coupons are applied. For POS items, `extractLineItemData` overrides
+ * both values from `_woocommerce_pos_data` meta, which is the authoritative
+ * source for per-unit prices.
+ */
 export const extractLineItemPrices = (item: LineItem, pricesIncludeTax: boolean) => {
 	const quantity = item.quantity ?? 0;
 	const total = toNumber(item.total ?? 0);
