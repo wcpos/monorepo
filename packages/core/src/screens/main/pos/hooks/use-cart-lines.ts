@@ -92,29 +92,17 @@ export const useCartLines = () => {
 		const allCouponLines = freshOrder.coupon_lines || [];
 		const hasActiveCoupons = allCouponLines.some((cl) => cl.code != null);
 		if (hasActiveCoupons) {
-			try {
-				const result = await recalculate(freshOrder.line_items || [], allCouponLines);
-				// Bail if order changed during async replay to avoid overwriting concurrent edits
-				if (currentOrder.getLatest() !== freshOrder) return;
-				await localPatch({
-					document: freshOrder,
-					data: {
-						coupon_lines: result.couponLines,
-						line_items: result.lineItems,
-					},
-				});
-			} catch (error) {
-				// recalculate throws when a coupon is missing locally — bail silently
-				// to avoid overwriting totals with partial data
-				const isMissingCoupon =
-					error instanceof Error && error.message.includes('not found in local collection');
-				if (!isMissingCoupon) {
-					throw error;
-				}
-				if (__DEV__) {
-					console.debug('[useCartLines] coupon recalculate skipped:', error.message);
-				}
-			}
+			const result = await recalculate(freshOrder.line_items || [], allCouponLines);
+			if (!result) return; // coupon missing locally — bail to avoid partial data
+			// Bail if order changed during async replay to avoid overwriting concurrent edits
+			if (currentOrder.getLatest() !== freshOrder) return;
+			await localPatch({
+				document: freshOrder,
+				data: {
+					coupon_lines: result.couponLines,
+					line_items: result.lineItems,
+				},
+			});
 		}
 	});
 

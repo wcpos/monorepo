@@ -57,6 +57,7 @@ export const useRemoveCoupon = () => {
 			if (!removed) return;
 
 			const result = await recalculate(order.line_items || [], updatedCouponLines);
+			if (!result) return;
 
 			const patchResult = await localPatch({
 				document: order,

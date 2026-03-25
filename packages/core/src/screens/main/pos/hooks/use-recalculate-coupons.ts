@@ -32,7 +32,7 @@ export const useRecalculateCoupons = () => {
 	const { rates: taxRates, pricesIncludeTax, taxRoundAtSubtotal, priceNumDecimals } = useTaxRates();
 
 	const recalculate = React.useCallback(
-		async (lineItems: LineItem[], couponLines: CouponLine[]): Promise<RecalculateResult> => {
+		async (lineItems: LineItem[], couponLines: CouponLine[]): Promise<RecalculateResult | null> => {
 			// Filter to active coupon codes
 			const activeCodes = couponLines
 				.filter((cl): cl is CouponLine & { code: string } => cl.code != null)
@@ -43,10 +43,9 @@ export const useRecalculateCoupons = () => {
 			for (const code of activeCodes) {
 				const couponDoc = await couponCollection.findOne({ selector: { code } }).exec();
 				if (!couponDoc) {
-					// Fail the recalculation when an active coupon is missing locally.
-					// Returning stale lineItems with mutated couponLines would persist
-					// mismatched discounts. Callers should catch and handle this.
-					throw new Error(`Coupon "${code}" not found in local collection`);
+					// Can't safely recalculate when an active coupon is missing locally —
+					// returning partial data would persist mismatched discounts.
+					return null;
 				}
 				const cd = couponDoc.toJSON();
 				couponConfigs.set(code, {
