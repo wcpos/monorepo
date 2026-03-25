@@ -90,7 +90,7 @@ export const useCartLines = () => {
 		// - Correct tax-inclusive/exclusive rounding
 		const freshOrder = currentOrder.getLatest();
 		const allCouponLines = freshOrder.coupon_lines || [];
-		const hasActiveCoupons = allCouponLines.some((cl: any) => cl.code != null);
+		const hasActiveCoupons = allCouponLines.some((cl) => cl.code != null);
 		if (hasActiveCoupons) {
 			try {
 				const result = await recalculate(freshOrder.line_items || [], allCouponLines);
@@ -103,9 +103,17 @@ export const useCartLines = () => {
 						line_items: result.lineItems,
 					},
 				});
-			} catch {
+			} catch (error) {
 				// recalculate throws when a coupon is missing locally — bail silently
 				// to avoid overwriting totals with partial data
+				const isMissingCoupon =
+					error instanceof Error && error.message.includes('not found in local collection');
+				if (!isMissingCoupon) {
+					throw error;
+				}
+				if (__DEV__) {
+					console.debug('[useCartLines] coupon recalculate skipped:', error.message);
+				}
 			}
 		}
 	});
