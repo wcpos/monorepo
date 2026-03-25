@@ -15,6 +15,9 @@ interface Changes extends Partial<Omit<LineItem, 'price'>> {
 	price?: number;
 	regular_price?: number;
 	tax_status?: string;
+	virtual?: boolean;
+	downloadable?: boolean;
+	category?: { id: number; name: string } | null;
 }
 
 /**
@@ -49,7 +52,8 @@ export const useUpdateLineItem = () => {
 				const prevData = getLineItemData(lineItem);
 
 				// extract the meta_data from the changes
-				const { price, regular_price, tax_status, ...rest } = changes;
+				const { price, regular_price, tax_status, virtual, downloadable, category, ...rest } =
+					changes;
 
 				// merge the previous line data with the rest of the changes
 				let updatedItem = { ...lineItem, ...rest };
@@ -59,6 +63,9 @@ export const useUpdateLineItem = () => {
 					price: price ?? prevData.price,
 					regular_price: regular_price ?? prevData.regular_price,
 					tax_status: tax_status ?? prevData.tax_status,
+					...(virtual !== undefined && { virtual }),
+					...(downloadable !== undefined && { downloadable }),
+					...(category !== undefined && { category }),
 				});
 
 				updatedItem = calculateLineItemTaxesAndTotals(updatedItem);
