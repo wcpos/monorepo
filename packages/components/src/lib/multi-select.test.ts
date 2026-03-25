@@ -1,6 +1,11 @@
-import { getDisplayLabel, isSelectedIn, toggleMultiValue } from './multi-select';
+import {
+	getDisplayLabel,
+	getDisplayLabelEllipsis,
+	isSelectedIn,
+	toggleMultiValue,
+} from './multi-select';
 
-import type { Option } from '../types';
+import type { Option } from '../combobox/types';
 
 describe('multi-select utils', () => {
 	const apple: Option = { value: 'apple', label: 'Apple' };
@@ -63,7 +68,7 @@ describe('multi-select utils', () => {
 		});
 	});
 
-	describe('getDisplayLabel', () => {
+	describe('getDisplayLabel (+N truncation)', () => {
 		it('returns placeholder when no items selected', () => {
 			expect(getDisplayLabel([], 'Select...')).toBe('Select...');
 		});
@@ -86,6 +91,26 @@ describe('multi-select utils', () => {
 			expect(getDisplayLabel([longName, apple], 'Select...', 10)).toBe(
 				'Very Long Category Name +1'
 			);
+		});
+	});
+
+	describe('getDisplayLabelEllipsis', () => {
+		it('returns placeholder when no items selected', () => {
+			expect(getDisplayLabelEllipsis([], 'Select...')).toBe('Select...');
+		});
+
+		it('returns full label when it fits', () => {
+			expect(getDisplayLabelEllipsis([apple], 'Select...', 50)).toBe('Apple');
+		});
+
+		it('truncates with ellipsis when labels overflow', () => {
+			const items = [apple, banana, cherry];
+			// "Apple, Banana, Cherry" = 21 chars, maxLength = 15
+			expect(getDisplayLabelEllipsis(items, 'Select...', 15)).toBe('Apple, Banana,\u2026');
+		});
+
+		it('returns comma-separated labels when they fit', () => {
+			expect(getDisplayLabelEllipsis([apple, banana], 'Select...', 50)).toBe('Apple, Banana');
 		});
 	});
 });

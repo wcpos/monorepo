@@ -10,6 +10,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@wcpos/components/select';
+import type { SelectSingleRootProps } from '@wcpos/components/select';
 import { Text } from '@wcpos/components/text';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -18,7 +19,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export function ThousandsStyleSelect({ value, ...props }: React.ComponentProps<typeof Select>) {
+export function ThousandsStyleSelect({ value, ...props }: SelectSingleRootProps) {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 	const { store } = useAppState();

@@ -7,16 +7,15 @@ import { HStack } from '@wcpos/components/hstack';
 import type { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
-	DropdownMenu,
-	DropdownMenuCheckboxItem,
-	DropdownMenuContent,
-	DropdownMenuTrigger,
-} from '@wcpos/components/dropdown-menu';
-import { Text } from '@wcpos/components/text';
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@wcpos/components/select';
+import type { Option } from '@wcpos/components/select';
 
 import { useT } from '../../../contexts/translations';
-
-const MAX_LABEL_LENGTH = 24;
 
 export const DEFAULT_LOG_LEVELS = ['error', 'warn', 'info', 'success'];
 
@@ -38,67 +37,44 @@ export function FilterBar({ query }: { query: Query<any> }) {
 	);
 
 	/**
-	 * Extract selected values from the selector
-	 * The selector can be:
-	 * - undefined (no filter)
-	 * - { $in: ['info', 'error'] } (multi-select)
-	 * - 'info' (single value, from clicking a pill)
+	 * Extract selected values from the selector and convert to Option[]
 	 */
-	const selectedValues = React.useMemo(() => {
-		if (!selector) return [];
-		if (typeof selector === 'string') return [selector];
-		if (selector.$in) return selector.$in as string[];
-		return [];
-	}, [selector]);
+	const selectedOptions = React.useMemo(() => {
+		let values: string[] = [];
+		if (!selector) {
+			values = [];
+		} else if (typeof selector === 'string') {
+			values = [selector];
+		} else if (selector.$in) {
+			values = selector.$in as string[];
+		}
+		return items.filter((item) => values.includes(item.value));
+	}, [selector, items]);
 
-	const isActive = selectedValues.length > 0;
+	const isActive = selectedOptions.length > 0;
 
 	/**
-	 * Toggle a level in the filter
+	 * Sync selected options back to query
 	 */
-	const handleToggle = React.useCallback(
-		(value: string) => {
-			const newValues = selectedValues.includes(value)
-				? selectedValues.filter((v) => v !== value)
-				: [...selectedValues, value];
-
-			if (newValues.length === 0) {
+	const handleValueChange = React.useCallback(
+		(options: Option[]) => {
+			const defined = options.filter((o): o is NonNullable<Option> => o !== undefined);
+			if (defined.length === 0) {
 				query.removeWhere('level').exec();
 			} else {
-				query.where('level').in(newValues).exec();
+				query
+					.where('level')
+					.in(defined.map((o) => o.value))
+					.exec();
 			}
 		},
-		[query, selectedValues]
+		[query]
 	);
-
-	/**
-	 * Get display label for the pill
-	 * Shows comma-separated level names, truncated if too long
-	 */
-	const displayLabel = React.useMemo(() => {
-		if (selectedValues.length === 0) {
-			return t('logs.log_level');
-		}
-
-		// Get labels in the order they appear in items array
-		const labels = items
-			.filter((item) => selectedValues.includes(item.value))
-			.map((item) => item.label);
-
-		const fullLabel = labels.join(', ');
-
-		if (fullLabel.length <= MAX_LABEL_LENGTH) {
-			return fullLabel;
-		}
-
-		// Truncate and add ellipsis
-		return fullLabel.slice(0, MAX_LABEL_LENGTH - 1) + '…';
-	}, [items, selectedValues, t]);
 
 	return (
 		<HStack className="w-full flex-wrap">
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
+			<Select multiple value={selectedOptions} onValueChange={handleValueChange}>
+				<SelectTrigger asChild>
 					<ButtonPill
 						size="xs"
 						leftIcon="tags"
@@ -106,21 +82,17 @@ export function FilterBar({ query }: { query: Query<any> }) {
 						removable={isActive}
 						onRemove={() => query.removeWhere('level').exec()}
 					>
-						<ButtonText>{displayLabel}</ButtonText>
+						<ButtonText>
+							<SelectValue placeholder={t('logs.log_level')} truncationStyle="ellipsis" />
+						</ButtonText>
 					</ButtonPill>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent>
+				</SelectTrigger>
+				<SelectContent>
 					{items.map((item) => (
-						<DropdownMenuCheckboxItem
-							key={item.value}
-							checked={selectedValues.includes(item.value)}
-							onCheckedChange={() => handleToggle(item.value)}
-						>
-							<Text>{item.label}</Text>
-						</DropdownMenuCheckboxItem>
+						<SelectItem key={item.value} value={item.value} label={item.label} />
 					))}
-				</DropdownMenuContent>
-			</DropdownMenu>
+				</SelectContent>
+			</Select>
 		</HStack>
 	);
 }
