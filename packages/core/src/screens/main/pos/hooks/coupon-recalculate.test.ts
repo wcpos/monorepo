@@ -50,11 +50,11 @@ const makePosLineItem = (
 		],
 	}) as unknown as LineItem;
 
-/** Create a misc product line item (product_id=0) with optional category in pos_data */
+/** Create a misc product line item (product_id=0) with optional categories in pos_data */
 const makeMiscLineItem = (
 	price: number,
 	regularPrice: number,
-	category: { id: number; name: string } | null = null,
+	categories: { id: number; name: string }[] = [],
 	qty = 1,
 	taxStatus = 'taxable'
 ): LineItem =>
@@ -73,7 +73,7 @@ const makeMiscLineItem = (
 					price: String(price),
 					regular_price: String(regularPrice),
 					tax_status: taxStatus,
-					category,
+					categories,
 				}),
 			},
 		],
@@ -544,7 +544,7 @@ describe('recalculateCoupons', () => {
 		it('should apply category-restricted coupon to misc product with matching category', () => {
 			const result = recalculateCoupons(
 				makeInput({
-					lineItems: [makeMiscLineItem(20, 20, { id: 5, name: 'Clothing' })],
+					lineItems: [makeMiscLineItem(20, 20, [{ id: 5, name: 'Clothing' }])],
 					couponLines: [makeCouponLine('catcoupon')],
 					couponConfigs: new Map([
 						[
@@ -567,7 +567,7 @@ describe('recalculateCoupons', () => {
 		it('should NOT apply category-restricted coupon to misc product with non-matching category', () => {
 			const result = recalculateCoupons(
 				makeInput({
-					lineItems: [makeMiscLineItem(20, 20, { id: 99, name: 'Electronics' })],
+					lineItems: [makeMiscLineItem(20, 20, [{ id: 99, name: 'Electronics' }])],
 					couponLines: [makeCouponLine('catcoupon')],
 					couponConfigs: new Map([
 						[
@@ -589,7 +589,7 @@ describe('recalculateCoupons', () => {
 		it('should NOT apply category-restricted coupon to misc product with no category', () => {
 			const result = recalculateCoupons(
 				makeInput({
-					lineItems: [makeMiscLineItem(20, 20, null)],
+					lineItems: [makeMiscLineItem(20, 20)],
 					couponLines: [makeCouponLine('catcoupon')],
 					couponConfigs: new Map([
 						[
@@ -611,7 +611,7 @@ describe('recalculateCoupons', () => {
 		it('should exclude misc product when its category is in excluded_product_categories', () => {
 			const result = recalculateCoupons(
 				makeInput({
-					lineItems: [makeMiscLineItem(20, 20, { id: 5, name: 'Clothing' })],
+					lineItems: [makeMiscLineItem(20, 20, [{ id: 5, name: 'Clothing' }])],
 					couponLines: [makeCouponLine('excl')],
 					couponConfigs: new Map([
 						[
@@ -634,8 +634,8 @@ describe('recalculateCoupons', () => {
 			const result = recalculateCoupons(
 				makeInput({
 					lineItems: [
-						makeMiscLineItem(20, 20, { id: 5, name: 'Clothing' }),
-						makeMiscLineItem(30, 30, { id: 10, name: 'Food' }),
+						makeMiscLineItem(20, 20, [{ id: 5, name: 'Clothing' }]),
+						makeMiscLineItem(30, 30, [{ id: 10, name: 'Food' }]),
 					],
 					couponLines: [makeCouponLine('catcoupon')],
 					couponConfigs: new Map([
@@ -661,7 +661,7 @@ describe('recalculateCoupons', () => {
 		it('should apply unrestricted coupon to misc products regardless of category', () => {
 			const result = recalculateCoupons(
 				makeInput({
-					lineItems: [makeMiscLineItem(20, 20, null)],
+					lineItems: [makeMiscLineItem(20, 20)],
 					couponLines: [makeCouponLine('flat')],
 					couponConfigs: new Map([
 						[

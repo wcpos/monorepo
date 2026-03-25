@@ -34,7 +34,7 @@ const formSchema = z.object({
 	tax_class: z.string().optional(),
 	virtual: z.boolean().default(false),
 	downloadable: z.boolean().default(false),
-	category: z.object({ id: z.number(), name: z.string() }).nullable().default(null),
+	categories: z.array(z.object({ id: z.number(), name: z.string() })).default([]),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -60,7 +60,7 @@ export function AddMiscProduct() {
 			tax_class: 'standard',
 			virtual: false,
 			downloadable: false,
-			category: null,
+			categories: [],
 		},
 	});
 
@@ -69,7 +69,7 @@ export function AddMiscProduct() {
 	 */
 	const handleAdd = React.useCallback(
 		(data: FormValues) => {
-			const { name, price, sku, tax_status, tax_class, virtual, downloadable, category } = data;
+			const { name, price, sku, tax_status, tax_class, virtual, downloadable, categories } = data;
 			addProduct({
 				id: 0,
 				name: isEmpty(name) ? t('common.product') : name,
@@ -80,7 +80,7 @@ export function AddMiscProduct() {
 				tax_class: tax_class === 'standard' ? '' : tax_class,
 				virtual: virtual ?? false,
 				downloadable: downloadable ?? false,
-				_pos_category: category,
+				_pos_categories: categories,
 			});
 			onOpenChange(false);
 		},
@@ -183,14 +183,14 @@ export function AddMiscProduct() {
 				</HStack>
 				<FormField
 					control={form.control}
-					name="category"
+					name="categories"
 					render={({ field: { onChange } }) => (
 						<CategorySelect
 							onValueChange={(option) => {
 								if (option) {
-									onChange({ id: Number(option.value), name: option.label });
+									onChange([{ id: Number(option.value), name: option.label }]);
 								} else {
-									onChange(null);
+									onChange([]);
 								}
 							}}
 						/>

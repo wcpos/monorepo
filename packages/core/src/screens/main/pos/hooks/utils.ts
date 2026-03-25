@@ -196,8 +196,8 @@ export const convertProductToLineItemWithoutTax = (
 	if ((product as any).downloadable != null) {
 		posData.downloadable = (product as any).downloadable;
 	}
-	if ((product as any)._pos_category != null) {
-		posData.category = (product as any)._pos_category;
+	if ((product as any)._pos_categories != null) {
+		posData.categories = (product as any)._pos_categories;
 	}
 
 	new_meta_data.push({

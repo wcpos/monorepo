@@ -43,7 +43,7 @@ const formSchema = z.object({
 	tax_class: z.string().optional(),
 	virtual: z.boolean().default(false),
 	downloadable: z.boolean().default(false),
-	category: z.object({ id: z.number(), name: z.string() }).nullable().default(null),
+	categories: z.array(z.object({ id: z.number(), name: z.string() })).default([]),
 	meta_data: metaDataSchema,
 });
 
@@ -80,7 +80,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 			tax_class: item.tax_class === '' ? 'standard' : item.tax_class,
 			virtual: posData?.virtual ?? false,
 			downloadable: posData?.downloadable ?? false,
-			category: posData?.category ?? null,
+			categories: posData?.categories ?? [],
 			meta_data: item.meta_data as FormValues['meta_data'],
 		},
 	});
@@ -101,7 +101,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 				meta_data: data.meta_data as never,
 				virtual: data.virtual,
 				downloadable: data.downloadable,
-				category: data.category,
+				categories: data.categories,
 			});
 			onOpenChange(false);
 		},
@@ -240,14 +240,14 @@ export function EditLineItemForm({ uuid, item }: Props) {
 				</HStack>
 				<FormField
 					control={form.control}
-					name="category"
+					name="categories"
 					render={({ field: { onChange } }) => (
 						<CategorySelect
 							onValueChange={(option) => {
 								if (option) {
-									onChange({ id: Number(option.value), name: option.label });
+									onChange([{ id: Number(option.value), name: option.label }]);
 								} else {
-									onChange(null);
+									onChange([]);
 								}
 							}}
 						/>

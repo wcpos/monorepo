@@ -168,10 +168,10 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 						if (item.product_id !== 0) {
 							return productCategories.get(item.product_id!) || [];
 						}
-						// For misc products (product_id === 0), read category from pos_data
+						// For misc products (product_id === 0), read categories from pos_data
 						const pd = parsePosData(item);
-						if (pd?.category?.id != null) {
-							return [{ id: pd.category.id }];
+						if (Array.isArray(pd?.categories) && pd.categories.length > 0) {
+							return pd.categories.map((c: { id: number }) => ({ id: c.id }));
 						}
 						return [];
 					})(),
