@@ -64,14 +64,14 @@ export const useCalculateLineItemTaxAndTotals = () => {
 	 */
 	const calculateLineItemTaxesAndTotals = React.useCallback(
 		(lineItem: Partial<LineItem>) => {
-			const { price, regular_price, tax_status } = getLineItemData(lineItem);
+			const { price, tax_status } = getLineItemData(lineItem);
 			const quantity = lineItem.quantity ?? 0;
 			const dp = priceNumDecimals;
 			const roundingPrecision = getRoundingPrecision(dp);
 
 			// Calculate total and subtotal based on quantity
 			const total = price * quantity;
-			const subtotal = regular_price * quantity;
+			const subtotal = price * quantity;
 
 			// Calculate taxes for total and subtotal
 			const totalTaxResult = calculateTaxesFromValue({

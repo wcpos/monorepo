@@ -4,7 +4,7 @@
  * recalculate_coupons() in abstract-wc-order.php.
  *
  * Key POS semantics:
- * - subtotal = regular_price * qty, total = price * qty
+ * - subtotal = price * qty, total = price * qty (subtotal matches WC sale price behavior)
  * - Coupon base is pos_data.price, NOT subtotal
  * - on_sale is determined from _woocommerce_pos_data meta (price < regular_price)
  * - Non-sequential (default): each coupon applies to the original POS price
@@ -33,7 +33,7 @@ const makePosLineItem = (
 	({
 		product_id: productId,
 		quantity: qty,
-		subtotal: String(regularPrice * qty),
+		subtotal: String(price * qty),
 		subtotal_tax: '0',
 		total: String(price * qty),
 		total_tax: '0',
@@ -176,8 +176,8 @@ describe('recalculateCoupons', () => {
 
 			// 10% of $16 = $1.60 discount
 			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(1.6, 2);
-			// subtotal should remain $18 (unchanged)
-			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(18, 2);
+			// subtotal should be $16 (POS price, matching WC sale price behavior)
+			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(16, 2);
 			// total should be $16 (POS price) - $1.60 = $14.40
 			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(14.4, 2);
 		});
@@ -210,8 +210,8 @@ describe('recalculateCoupons', () => {
 			// 10% of $16 = $1.60, 10% of $20 = $2.00, total coupon = $3.60
 			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(3.6, 2);
 
-			// Item A: subtotal=$18, total = $16 (POS price) - $1.60 = $14.40
-			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(18, 2);
+			// Item A: subtotal=$16 (POS price), total = $16 - $1.60 = $14.40
+			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(16, 2);
 			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(14.4, 2);
 
 			// Item B: subtotal=$20, total = $20 (POS price) - $2.00 = $18.00
@@ -429,6 +429,82 @@ describe('recalculateCoupons', () => {
 			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(5, 2);
 			// Total = $16 (POS price reset) - $5 = $11
 			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(11, 2);
+		});
+	});
+
+	// -----------------------------------------------------------------------
+	// Legacy subtotal fallback
+	// -----------------------------------------------------------------------
+	describe('legacy subtotal fallback', () => {
+		it('should use pos_data.price for reset when subtotal holds regular_price * qty (legacy order)', () => {
+			// Legacy order: subtotal was stored as regular_price * qty = 18
+			// but POS price is 16
+			const legacyItem = {
+				product_id: 1,
+				quantity: 1,
+				subtotal: '18',
+				subtotal_tax: '0',
+				total: '18',
+				total_tax: '0',
+				taxes: [],
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({
+							price: '16',
+							regular_price: '18',
+							tax_status: 'taxable',
+						}),
+					},
+				],
+			} as unknown as LineItem;
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [legacyItem],
+					couponLines: [makeCouponLine('ten')],
+					couponConfigs: new Map([['ten', makeConfig({ discount_type: 'percent', amount: '10' })]]),
+				})
+			);
+
+			// 10% of $16 POS price = $1.60 discount (not 10% of $18)
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(1.6, 2);
+			// Total = $16 - $1.60 = $14.40
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(14.4, 2);
+		});
+
+		it('should reset legacy subtotal to pos_data.price * qty when no coupons present', () => {
+			const legacyItem = {
+				product_id: 1,
+				quantity: 2,
+				subtotal: '36',
+				subtotal_tax: '0',
+				total: '36',
+				total_tax: '0',
+				taxes: [],
+				meta_data: [
+					{
+						key: '_woocommerce_pos_data',
+						value: JSON.stringify({
+							price: '16',
+							regular_price: '18',
+							tax_status: 'taxable',
+						}),
+					},
+				],
+			} as unknown as LineItem;
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [legacyItem],
+					couponLines: [],
+					couponConfigs: new Map(),
+				})
+			);
+
+			// Should reset to 16 * 2 = 32, not stay at 36 (18 * 2)
+			expect(parseFloat(result.lineItems[0].total!)).toBeCloseTo(32, 2);
+			expect(parseFloat(result.lineItems[0].subtotal!)).toBeCloseTo(32, 2);
 		});
 	});
 });

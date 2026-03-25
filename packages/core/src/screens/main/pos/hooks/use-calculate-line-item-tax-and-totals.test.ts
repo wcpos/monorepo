@@ -66,12 +66,12 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				price: 100,
 				total: '200',
 				total_tax: '40',
-				subtotal: '240',
-				subtotal_tax: '48',
+				subtotal: '200',
+				subtotal_tax: '40',
 				taxes: [
 					{
 						id: 1,
-						subtotal: '48',
+						subtotal: '40',
 						total: '40',
 					},
 				],
@@ -119,12 +119,12 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				price: 83.333333, // rounding precision (6dp), not dp
 				total: '166.666667', // rounding precision (6dp)
 				total_tax: '33.33', // rounded to dp when roundAtSubtotal=false
-				subtotal: '200',
-				subtotal_tax: '40',
+				subtotal: '166.666667',
+				subtotal_tax: '33.33',
 				taxes: [
 					{
 						id: 1,
-						subtotal: '40',
+						subtotal: '33.33',
 						total: '33.33',
 					},
 				],
@@ -171,13 +171,13 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				tax_class: 'standard',
 				price: 20.833333,
 				total: '62.5',
-				subtotal: '75',
-				subtotal_tax: '15',
+				subtotal: '62.5',
+				subtotal_tax: '12.5',
 				total_tax: '12.5',
 				taxes: [
 					{
 						id: 1,
-						subtotal: '15',
+						subtotal: '12.5',
 						total: '12.5',
 					},
 				],
@@ -224,16 +224,16 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 				tax_class: 'standard',
 				price: 100, // Price remains same as prices exclude tax
 				total: '100', // price * quantity
-				subtotal: '120', // regular_price * quantity
+				subtotal: '100', // price * quantity (same as total)
 				total_tax: '20', // 20% tax on total (100)
 				taxes: [
 					{
 						id: 1,
-						subtotal: '24', // subtotal tax on 120
+						subtotal: '20', // subtotal tax on 100
 						total: '20', // total tax on 100
 					},
 				],
-				subtotal_tax: '24',
+				subtotal_tax: '20',
 			});
 		});
 	});
@@ -272,9 +272,9 @@ describe('useCalculateLineItemTaxAndTotals', () => {
 
 				expect(calculated.price).toBe(1000);
 				expect(calculated.total).toBe('1000');
-				expect(calculated.subtotal).toBe('1200');
+				expect(calculated.subtotal).toBe('1000');
 				expect(calculated.total_tax).toBe('100');
-				expect(calculated.subtotal_tax).toBe('120');
+				expect(calculated.subtotal_tax).toBe('100');
 			});
 		});
 
