@@ -8,6 +8,19 @@
  */
 
 /**
+ * Return a fixed-point decimal string for a non-negative finite number.
+ * Handles values that `String()` renders in scientific notation (e.g. 1.5e-7).
+ * For normal decimals, `String()` already returns fixed-point notation.
+ */
+function toDecimalString(n: number): string {
+	const s = String(n);
+	if (!s.includes('e') && !s.includes('E')) return s;
+	// toFixed(20) is the max JS allows; trailing zeros are harmless here
+	// because the caller only inspects digits up to `precision`.
+	return n.toFixed(20);
+}
+
+/**
  * Equivalent to PHP's round() with PHP_ROUND_HALF_UP (mode 1).
  * This is the default rounding in most languages, including JS Math.round for positive numbers,
  * but we need an explicit implementation that handles arbitrary precision.
@@ -33,7 +46,7 @@ export function roundHalfUp(value: number, precision: number): number {
 	// We detect true midpoints via the shortest decimal representation:
 	// if the digit at `precision` is exactly 5 with no trailing non-zero digits,
 	// force round up (away from zero).
-	const str = String(abs);
+	const str = toDecimalString(abs);
 	const dot = str.indexOf('.');
 	if (dot !== -1) {
 		const decimals = str.slice(dot + 1);
@@ -71,7 +84,7 @@ export function roundHalfDown(value: number, precision: number): number {
 
 	// For true midpoints (detected via shortest decimal), round DOWN toward zero.
 	// Same detection as roundHalfUp but opposite action at the midpoint.
-	const str = String(abs);
+	const str = toDecimalString(abs);
 	const dot = str.indexOf('.');
 	if (dot !== -1) {
 		const decimals = str.slice(dot + 1);

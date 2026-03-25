@@ -88,6 +88,10 @@ describe('precision utilities — PHP parity', () => {
 
 			// 4dp precision
 			[1.23456, 4, 1.2346],
+
+			// Scientific notation midpoints (String(1.5e-7) = "1.5e-7")
+			[1.5e-7, 7, 2e-7],
+			[5e-3, 2, 0.01],
 		];
 
 		it.each(cases)('roundHalfUp(%s, %i) = %s', (input, precision, expected) => {
@@ -153,6 +157,10 @@ describe('precision utilities — PHP parity', () => {
 			// Large values
 			[999.995, 2, 999.99],
 			[1000.005, 2, 1000],
+
+			// Scientific notation midpoints — must round DOWN, not fall back to HALF_UP
+			[1.5e-7, 7, 1e-7],
+			[5e-3, 2, 0],
 		];
 
 		it.each(cases)('roundHalfDown(%s, %i) = %s', (input, precision, expected) => {
