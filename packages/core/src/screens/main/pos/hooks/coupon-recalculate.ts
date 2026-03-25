@@ -163,7 +163,18 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 					price: qty > 0 ? basePrice / qty : 0,
 					subtotal: item.subtotal || '0',
 					total: item.total || '0',
-					categories: productCategories.get(item.product_id!) || [],
+					categories: (() => {
+						// For regular products, use the product categories map
+						if (item.product_id !== 0) {
+							return productCategories.get(item.product_id!) || [];
+						}
+						// For misc products (product_id === 0), read category from pos_data
+						const pd = parsePosData(item);
+						if (pd?.category?.id != null) {
+							return [{ id: pd.category.id }];
+						}
+						return [];
+					})(),
 					on_sale: isLineItemOnSale(item),
 				};
 			});
