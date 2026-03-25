@@ -10,7 +10,7 @@ import { Platform } from '@wcpos/utils/platform';
 
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
-import { isSelectedIn, toggleMultiValue } from './utils/multi-select';
+import { getDisplayLabel, isSelectedIn, toggleMultiValue } from './utils/multi-select';
 import { defaultFilter } from './utils/filter';
 import { cn } from '../lib/utils';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
@@ -92,9 +92,27 @@ function ComboboxTrigger({ className, disabled, ...props }: PopoverPrimitive.Tri
 	);
 }
 
-function ComboboxValue({ asChild, placeholder, className, ...props }: ComboboxValueProps) {
-	const { value } = useComboboxRootContext();
+function ComboboxValue({
+	asChild,
+	placeholder,
+	className,
+	maxDisplayLength = 24,
+	...props
+}: ComboboxValueProps) {
+	const { multiple, value } = useComboboxRootContext();
 	const Component = asChild ? Slot.Text : Text;
+
+	const displayText = React.useMemo(() => {
+		if (multiple) {
+			const selectedValues = (value as Option<any>[] | undefined) ?? [];
+			return getDisplayLabel(selectedValues, placeholder, maxDisplayLength);
+		}
+		return (value as Option<any> | undefined)?.label ?? placeholder;
+	}, [multiple, value, placeholder, maxDisplayLength]);
+
+	const hasValue = multiple
+		? ((value as Option<any>[] | undefined)?.length ?? 0) > 0
+		: !!(value as Option<any> | undefined)?.value;
 
 	return (
 		<View
@@ -105,13 +123,9 @@ function ComboboxValue({ asChild, placeholder, className, ...props }: ComboboxVa
 		>
 			<View className="flex-1">
 				<TextClassContext.Provider
-					value={cn(
-						'text-sm',
-						value?.value ? 'text-foreground' : 'text-muted-foreground',
-						className
-					)}
+					value={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground', className)}
 				>
-					<Component {...props}>{value?.label ?? placeholder}</Component>
+					<Component {...props}>{displayText}</Component>
 				</TextClassContext.Provider>
 			</View>
 			<Icon name="chevronDown" />

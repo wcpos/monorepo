@@ -46,6 +46,8 @@ type ComboboxValueProps = {
 	placeholder: string;
 	asChild?: boolean;
 	className?: string;
+	/** Max character length before truncating with "+N" count. Default: 24. Only used in multi-select mode. */
+	maxDisplayLength?: number;
 };
 
 type ComboboxInputProps = {
