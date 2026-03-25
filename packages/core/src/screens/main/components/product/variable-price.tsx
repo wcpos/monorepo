@@ -9,8 +9,10 @@ import { getVariablePrices } from './get-variable-prices';
 import { PriceWithTax } from './price-with-tax';
 
 import type { CellContext } from '@tanstack/react-table';
+import type { VariablePrices } from './get-variable-prices';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
+type PriceKey = keyof VariablePrices;
 
 /**
  *
@@ -32,19 +34,18 @@ export function VariableProductPrice({
 		| { key?: string; value?: string }[]
 		| undefined;
 	const variablePrices = getVariablePrices(metaData);
+	const key = column.id as PriceKey;
 
-	/**
-	 * No variable prices found?!
-	 */
-	if (variablePrices && !variablePrices[column.id]) {
+	if (!variablePrices || !variablePrices[key]) {
 		return null;
 	}
 
-	// min and max exist by are equal
-	if (variablePrices[column.id].min === variablePrices[column.id].max) {
+	const range = variablePrices[key];
+
+	if (range.min === range.max) {
 		return (
 			<PriceWithTax
-				price={variablePrices[column.id].max}
+				price={range.max}
 				taxStatus={taxStatus ?? 'none'}
 				taxClass={taxClass ?? ''}
 				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
@@ -52,18 +53,17 @@ export function VariableProductPrice({
 		);
 	}
 
-	// default, min and max are different
 	return (
 		<HStack className="flex-wrap justify-end gap-1">
 			<PriceWithTax
-				price={variablePrices[column.id].min}
+				price={range.min}
 				taxStatus={taxStatus ?? 'none'}
 				taxClass={taxClass ?? ''}
 				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}
 			/>
 			<Text> - </Text>
 			<PriceWithTax
-				price={variablePrices[column.id].max}
+				price={range.max}
 				taxStatus={taxStatus ?? 'none'}
 				taxClass={taxClass ?? ''}
 				taxDisplay={column.columnDef.meta?.show?.('tax') ? 'text' : 'tooltip'}

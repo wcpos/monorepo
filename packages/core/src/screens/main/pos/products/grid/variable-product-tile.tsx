@@ -106,6 +106,8 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 	const variablePrices = getVariablePrices(
 		metaData as { key?: string; value?: string }[] | undefined
 	);
+	const price = useObservableEagerState(product.price$!);
+	const regularPrice = useObservableEagerState(product.regular_price$!);
 	const onSale = useObservableEagerState(product.on_sale$!);
 	const taxStatus = useObservableEagerState(product.tax_status$!);
 	const taxClass = useObservableEagerState(product.tax_class$!);
@@ -156,27 +158,52 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 									{name}
 								</Text>
 							)}
-							{gridFields.price && variablePrices && (
+							{gridFields.price && (
 								<>
-									{showOnSale ? (
-										<VStack space="xs">
-											<VariablePriceRange
-												prices={variablePrices.regular_price}
-												taxStatus={safeTaxStatus}
-												taxClass={taxClass ?? ''}
-												taxDisplay={taxDisplay}
-												strikethrough
-											/>
+									{variablePrices ? (
+										showOnSale ? (
+											<VStack space="xs">
+												<VariablePriceRange
+													prices={variablePrices.regular_price}
+													taxStatus={safeTaxStatus}
+													taxClass={taxClass ?? ''}
+													taxDisplay={taxDisplay}
+													strikethrough
+												/>
+												<VariablePriceRange
+													prices={variablePrices.price}
+													taxStatus={safeTaxStatus}
+													taxClass={taxClass ?? ''}
+													taxDisplay={taxDisplay}
+												/>
+											</VStack>
+										) : (
 											<VariablePriceRange
 												prices={variablePrices.price}
 												taxStatus={safeTaxStatus}
 												taxClass={taxClass ?? ''}
 												taxDisplay={taxDisplay}
 											/>
+										)
+									) : showOnSale ? (
+										<VStack space="xs">
+											<PriceWithTax
+												price={regularPrice ?? ''}
+												taxStatus={safeTaxStatus}
+												taxClass={taxClass ?? ''}
+												taxDisplay={taxDisplay}
+												strikethrough
+											/>
+											<PriceWithTax
+												price={price ?? ''}
+												taxStatus={safeTaxStatus}
+												taxClass={taxClass ?? ''}
+												taxDisplay={taxDisplay}
+											/>
 										</VStack>
 									) : (
-										<VariablePriceRange
-											prices={variablePrices.price}
+										<PriceWithTax
+											price={price ?? ''}
 											taxStatus={safeTaxStatus}
 											taxClass={taxClass ?? ''}
 											taxDisplay={taxDisplay}

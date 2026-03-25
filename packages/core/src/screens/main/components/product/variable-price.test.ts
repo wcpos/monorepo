@@ -38,6 +38,36 @@ describe('getVariablePrices', () => {
 		expect(result).toBeNull();
 	});
 
+	it('returns null when parsed JSON is missing required price range keys', () => {
+		const metaData = [
+			{
+				key: '_woocommerce_pos_variable_prices',
+				value: JSON.stringify({
+					price: { min: '10', max: '20' },
+					// regular_price intentionally missing
+					sale_price: { min: '', max: '' },
+				}),
+			},
+		];
+		const result = getVariablePrices(metaData);
+		expect(result).toBeNull();
+	});
+
+	it('returns null when parsed JSON has wrong types for min/max', () => {
+		const metaData = [
+			{
+				key: '_woocommerce_pos_variable_prices',
+				value: JSON.stringify({
+					price: { min: 10, max: 20 },
+					regular_price: { min: 10, max: 20 },
+					sale_price: { min: 0, max: 0 },
+				}),
+			},
+		];
+		const result = getVariablePrices(metaData);
+		expect(result).toBeNull();
+	});
+
 	it('handles empty sale_price values (no variations on sale)', () => {
 		const metaData = [
 			{
