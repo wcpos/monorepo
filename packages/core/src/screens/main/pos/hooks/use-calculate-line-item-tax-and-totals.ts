@@ -71,7 +71,7 @@ export const useCalculateLineItemTaxAndTotals = () => {
 
 			// Calculate total and subtotal based on quantity
 			const total = price * quantity;
-			const subtotal = regular_price * quantity;
+			const subtotal = price * quantity;
 
 			// Calculate taxes for total and subtotal
 			const totalTaxResult = calculateTaxesFromValue({
