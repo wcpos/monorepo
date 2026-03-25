@@ -80,19 +80,43 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		(cl): cl is CouponLine & { code: string } => cl.code != null
 	);
 
-	// Step 1: Reset — set total back to subtotal (pre-coupon state).
-	// After the subtotal parity change, subtotal already holds price * qty (ex-tax),
-	// so this correctly resets to the POS price. Previously, a complex POS-data path
-	// was needed because subtotal held regular_price * qty.
-	const resetItems = lineItems.map((item) => ({
-		...item,
-		total: item.subtotal,
-		total_tax: item.subtotal_tax,
-		taxes: (item.taxes || []).map((tax) => ({
-			...tax,
-			total: tax.subtotal ?? tax.total,
-		})),
-	}));
+	// Step 1: Reset — set total back to pre-coupon state.
+	// After the subtotal parity change, subtotal already holds price * qty (ex-tax).
+	// However, legacy orders (created before this change) stored subtotal as
+	// regular_price * qty. For those lines we fall back to pos_data.price * qty
+	// so that removing/replaying coupons doesn't inflate the base back to regular price.
+	const resetItems = lineItems.map((item) => {
+		const qty = item.quantity ?? 1;
+		const posData = parsePosData(item);
+		const posPriceParsed = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
+
+		let resetSubtotal = item.subtotal;
+		if (Number.isFinite(posPriceParsed) && posData?.regular_price != null) {
+			const regularPrice = parseFloat(String(posData.regular_price));
+			const storedSubtotal = parseFloat(item.subtotal || '0');
+			const expectedPosSubtotal = posPriceParsed * qty;
+			// Legacy detection: subtotal matches regular_price * qty but not pos price * qty
+			if (
+				Number.isFinite(regularPrice) &&
+				posPriceParsed < regularPrice &&
+				Math.abs(storedSubtotal - regularPrice * qty) < 0.001 &&
+				Math.abs(storedSubtotal - expectedPosSubtotal) > 0.001
+			) {
+				resetSubtotal = String(expectedPosSubtotal);
+			}
+		}
+
+		return {
+			...item,
+			total: resetSubtotal,
+			subtotal: resetSubtotal,
+			total_tax: item.subtotal_tax,
+			taxes: (item.taxes || []).map((tax) => ({
+				...tax,
+				total: tax.subtotal ?? tax.total,
+			})),
+		};
+	});
 
 	// If no active coupons, return reset items
 	if (activeCouponLines.length === 0) {
