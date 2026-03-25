@@ -10,6 +10,7 @@ import {
 	computeDiscountedLineItems,
 	type CouponLineItem,
 } from './coupon-helpers';
+import { calculateTaxes } from '../../hooks/utils/calculate-taxes';
 import { parsePosData } from './utils';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
@@ -98,32 +99,37 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 			const qty = item.quantity ?? 1;
 			const posTotal = parsedPosPrice * qty;
 
-			const subtotal = parseFloat(item.subtotal || '0');
-			const subtotalTax = parseFloat(item.subtotal_tax || '0');
+			// Determine which tax rates apply to this item's tax class
+			const normalizedClass =
+				item.tax_class === '' || item.tax_class == null ? 'standard' : item.tax_class;
+			const itemRates = taxRates.filter((r) => (r.class || 'standard') === normalizedClass);
 
-			let exTaxTotal: number;
-			let taxTotal: number;
+			// Use calculateTaxes for exact WC-matching decomposition.
+			// This replaces the ratio shortcut which diverged from WC on compound rates.
+			const taxResult = calculateTaxes({
+				amount: posTotal,
+				rates: itemRates.map((r) => ({
+					id: r.id,
+					rate: r.rate,
+					compound: r.compound,
+					order: r.order,
+				})),
+				amountIncludesTax: pricesIncludeTax,
+				dp,
+			});
 
-			if (pricesIncludeTax && subtotal > 0) {
-				// POS price is tax-inclusive; derive tax using the ratio from subtotal
-				const taxRatio = subtotalTax / (subtotal + subtotalTax);
-				taxTotal = posTotal * taxRatio;
-				exTaxTotal = posTotal - taxTotal;
-			} else {
-				exTaxTotal = posTotal;
-				// Scale total_tax proportionally: (posTotal / subtotal) * subtotal_tax
-				taxTotal =
-					subtotal > 0 ? (posTotal / subtotal) * subtotalTax : parseFloat(item.total_tax || '0');
-			}
+			const taxTotal = taxResult.total;
+			const exTaxTotal = pricesIncludeTax ? posTotal - taxTotal : posTotal;
 
-			// Distribute per-rate taxes proportionally
-			const taxes = (item.taxes || []).map((tax) => ({
-				...tax,
-				total:
-					subtotalTax > 0
-						? String(round(parseFloat(tax.subtotal || '0') * (taxTotal / subtotalTax), 6))
-						: (tax.subtotal ?? tax.total),
-			}));
+			// Per-rate taxes from calculateTaxes (already decomposed correctly)
+			const taxes = taxResult.taxes.map((tax) => {
+				const origTax = (item.taxes || []).find((t) => t.id === tax.id);
+				return {
+					...(origTax || { id: tax.id }),
+					subtotal: origTax?.subtotal ?? String(tax.total),
+					total: String(tax.total),
+				};
+			});
 
 			return {
 				...item,
@@ -245,11 +251,8 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		// Recalculate totalDiscount after capping
 		discountResult.totalDiscount = discountResult.perItem.reduce((sum, e) => sum + e.discount, 0);
 
-		// Convert inclusive discounts to ex-tax. We always convert ALL types here
-		// (including percent) because recalculateCoupons uses inclusive prices as
-		// the coupon base. The shared convertDiscountsToExTax skips percent since
-		// use-add-coupon already works with ex-tax prices — but we can't use that
-		// shortcut here.
+		// Convert inclusive discounts to ex-tax using calculateTaxes for exact
+		// WC-matching compound rate decomposition (replaces ratio shortcut).
 		const exTaxPerItem = pricesIncludeTax
 			? discountResult.perItem.map((entry) => {
 					if (entry.discount <= 0) return entry;
@@ -257,11 +260,28 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 						entry.lineIndex != null
 							? resetItems[entry.lineIndex]
 							: resetItems.find((item) => item.product_id === entry.product_id);
-					const subtotal = parseFloat(li?.subtotal || '0');
-					const subtotalTax = parseFloat(li?.subtotal_tax || '0');
-					const rate = subtotal > 0 ? subtotalTax / subtotal : 0;
-					if (rate <= 0) return entry;
-					return { ...entry, discount: round(entry.discount / (1 + rate), 6) };
+					if (!li) return entry;
+
+					// Get the applicable tax rates for this item's tax class
+					const itemTaxClass =
+						li.tax_class === '' || li.tax_class == null ? 'standard' : li.tax_class;
+					const itemRates = taxRates.filter((r) => (r.class || 'standard') === itemTaxClass);
+					if (itemRates.length === 0) return entry;
+
+					// Decompose the inclusive discount into tax + ex-tax using WC's algorithm
+					const taxResult = calculateTaxes({
+						amount: entry.discount,
+						rates: itemRates.map((r) => ({
+							id: r.id,
+							rate: r.rate,
+							compound: r.compound,
+							order: r.order,
+						})),
+						amountIncludesTax: true,
+						dp,
+					});
+					const exTaxDiscount = entry.discount - taxResult.total;
+					return { ...entry, discount: round(exTaxDiscount, 6) };
 				})
 			: discountResult.perItem;
 
