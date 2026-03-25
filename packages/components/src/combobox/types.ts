@@ -9,21 +9,36 @@ export interface Option<T = undefined> {
 }
 
 interface ComboboxRootContextType {
-	value: Option<any> | undefined;
-	onValueChange: (option: Option<any> | undefined) => void;
+	multiple: boolean;
+	value: Option<any> | Option<any>[] | undefined;
+	onValueChange: (option: Option<any> | Option<any>[] | undefined) => void;
+	isSelected: (value: string) => boolean;
 	disabled?: boolean;
 	filterValue: string;
 	onFilterChange: (text: string) => void;
 }
 
-type ComboboxRootProps<T = undefined> = {
+type ComboboxSingleRootProps<T = undefined> = {
 	children: React.ReactNode;
+	multiple?: false;
 	value?: Option<T>;
 	defaultValue?: Option<T>;
 	onValueChange?: (option: Option<T> | undefined) => void;
 	onOpenChange?: (open: boolean) => void;
 	disabled?: boolean;
 };
+
+type ComboboxMultiRootProps<T = undefined> = {
+	children: React.ReactNode;
+	multiple: true;
+	value?: Option<T>[];
+	defaultValue?: Option<T>[];
+	onValueChange?: (options: Option<T>[]) => void;
+	onOpenChange?: (open: boolean) => void;
+	disabled?: boolean;
+};
+
+type ComboboxRootProps<T = undefined> = ComboboxSingleRootProps<T> | ComboboxMultiRootProps<T>;
 
 type ComboboxTriggerProps = object;
 
@@ -64,6 +79,8 @@ type ComboboxItemTextProps = {
 
 export type {
 	ComboboxRootProps,
+	ComboboxSingleRootProps,
+	ComboboxMultiRootProps,
 	ComboboxTriggerProps,
 	ComboboxValueProps,
 	ComboboxInputProps,
