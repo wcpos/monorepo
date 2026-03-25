@@ -7,13 +7,21 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { DialogAction, DialogClose, DialogFooter, useRootContext } from '@wcpos/components/dialog';
-import { Form, FormField, FormInput, FormRadioGroup, FormSelect } from '@wcpos/components/form';
+import {
+	Form,
+	FormField,
+	FormInput,
+	FormRadioGroup,
+	FormSelect,
+	FormSwitch,
+} from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
+import { CategorySelect } from '../../components/product/category-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
 import { useAddProduct } from '../hooks/use-add-product';
@@ -24,6 +32,9 @@ const formSchema = z.object({
 	sku: z.string().optional(),
 	tax_status: z.enum(['taxable', 'none']),
 	tax_class: z.string().optional(),
+	virtual: z.boolean().default(false),
+	downloadable: z.boolean().default(false),
+	category: z.object({ id: z.number(), name: z.string() }).nullable().default(null),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -47,6 +58,9 @@ export function AddMiscProduct() {
 			sku: '',
 			tax_status: 'taxable',
 			tax_class: 'standard',
+			virtual: false,
+			downloadable: false,
+			category: null,
 		},
 	});
 
@@ -55,7 +69,7 @@ export function AddMiscProduct() {
 	 */
 	const handleAdd = React.useCallback(
 		(data: FormValues) => {
-			const { name, price, sku, tax_status, tax_class } = data;
+			const { name, price, sku, tax_status, tax_class, virtual, downloadable, category } = data;
 			addProduct({
 				id: 0,
 				name: isEmpty(name) ? t('common.product') : name,
@@ -64,6 +78,9 @@ export function AddMiscProduct() {
 				regular_price: isEmpty(price) ? '0' : price,
 				tax_status: tax_status ? 'taxable' : 'none',
 				tax_class: tax_class === 'standard' ? '' : tax_class,
+				virtual: virtual ?? false,
+				downloadable: downloadable ?? false,
+				_pos_category: category,
 			});
 			onOpenChange(false);
 		},
@@ -144,6 +161,41 @@ export function AddMiscProduct() {
 						)}
 					/>
 				</HStack>
+				<HStack className="gap-4">
+					<FormField
+						control={form.control}
+						name="virtual"
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormSwitch label={t('common.virtual')} {...field} />
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="downloadable"
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormSwitch label={t('common.downloadable')} {...field} />
+							</View>
+						)}
+					/>
+				</HStack>
+				<FormField
+					control={form.control}
+					name="category"
+					render={({ field: { onChange } }) => (
+						<CategorySelect
+							onValueChange={(option) => {
+								if (option) {
+									onChange({ id: Number(option.value), name: option.label });
+								} else {
+									onChange(null);
+								}
+							}}
+						/>
+					)}
+				/>
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.cancel')}</DialogClose>
 					<DialogAction testID="add-to-cart-submit" onPress={onAdd}>
