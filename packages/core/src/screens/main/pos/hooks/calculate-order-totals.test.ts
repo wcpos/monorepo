@@ -695,11 +695,11 @@ describe('calculateOrderTotals — parity regressions', () => {
 		});
 	});
 
-	describe('dev-free: discount_tax uses coupon line values', () => {
-		// Bug: discount_tax from subtotal_tax - total_tax gives 4.5 - 4.275 = 0.22499...,
-		// which rounds to 0.22. But the server uses coupon line discount_tax = 0.23
-		// (computed from literal 0.225 → round = 0.23).
-		it('uses coupon_tax for discount_tax when coupon lines present', () => {
+	describe('dev-free: discount_tax with float subtraction artifacts', () => {
+		// Bug: 4.5 - 4.275 = 0.22499... in IEEE 754 (not 0.225).
+		// Fix: pre-round to WC rounding precision (6dp) before rounding to dp.
+		// This snaps 0.22499... → 0.225 → round(0.225, 2) = 0.23.
+		it('pre-rounds discount_tax to rounding precision (single coupon)', () => {
 			const lineItems = [
 				{
 					subtotal: '45',
@@ -713,34 +713,36 @@ describe('calculateOrderTotals — parity regressions', () => {
 			const result = calculateOrderTotals({
 				lineItems: lineItems as any,
 				taxRates: [{ id: 6, name: 'US Tax', rate: '10', compound: false }] as any,
-				couponLines: [{ discount: '2.25', discount_tax: '0.23' }] as any,
 				taxRoundAtSubtotal: false,
 				pricesIncludeTax: false,
 			});
 
-			// Should use coupon line discount_tax (0.23), not the float-subtracted 0.22
+			// 4.5 - 4.275 = 0.22499... → 6dp: 0.225 → 2dp: 0.23
 			expect(result.discount_tax).toBe('0.23');
 		});
 
-		it('falls back to per-rate subtraction when no coupon lines', () => {
+		it('preserves stacked coupon discount_tax (no over-rounding)', () => {
+			// prod8 + pct12 on Beanie ($18): total_tax = 0.687
+			// discount_tax = 1.8 - 0.687 = 1.113 → 6dp: 1.113 → 2dp: 1.11
 			const lineItems = [
 				{
-					subtotal: '100',
-					total: '90',
-					subtotal_tax: '10',
-					total_tax: '9',
-					taxes: [{ id: 6, subtotal: '10', total: '9' }],
+					subtotal: '18',
+					total: '6.87',
+					subtotal_tax: '1.8',
+					total_tax: '0.687',
+					taxes: [{ id: 6, subtotal: '1.8', total: '0.687' }],
 				},
 			];
 
 			const result = calculateOrderTotals({
 				lineItems: lineItems as any,
-				taxRates: [{ id: 6, name: 'Tax', rate: '10', compound: false }] as any,
+				taxRates: [{ id: 6, name: 'US Tax', rate: '10', compound: false }] as any,
 				taxRoundAtSubtotal: false,
 				pricesIncludeTax: false,
 			});
 
-			expect(result.discount_tax).toBe('1');
+			// 1.8 - 0.687 = 1.113 → 6dp: 1.113 → 2dp: 1.11 (NOT 1.12)
+			expect(result.discount_tax).toBe('1.11');
 		});
 	});
 });

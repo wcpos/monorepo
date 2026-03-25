@@ -113,8 +113,11 @@ export function calculateOrderTotals({
 
 		discount_total += roundedItemSubtotal - roundedItemTotal;
 
-		// Accumulate per-rate discount tax as a fallback (used when no coupon lines).
-		discount_tax += parsedSubtotalTax - parsedTotalTax;
+		// WC accumulates discount_tax from per-rate (subtotal_tax - total_tax) differences.
+		// Pre-round to rounding precision (6dp) to snap IEEE 754 float subtraction
+		// artifacts (e.g., 4.5 - 4.275 = 0.22499... instead of 0.225) before the
+		// final round to dp.
+		discount_tax += roundHalfUp(parsedSubtotalTax - parsedTotalTax, getRoundingPrecision(dp));
 
 		// Use per-item-rounded values for subtotal/total (matches WC's calculate_totals)
 		subtotal += roundedItemSubtotal;
@@ -212,13 +215,7 @@ export function calculateOrderTotals({
 		 * These properties are stored on the order document
 		 */
 		discount_total: String(roundHalfUp(discount_total, dp)),
-		// When coupon lines are present, use the sum of coupon discount_tax values.
-		// WC computes order.discount_tax from the coupon application (literal discount * rate),
-		// not from the subtotal_tax - total_tax difference which can suffer from IEEE 754
-		// float subtraction errors (e.g., 4.5 - 4.275 = 0.22499... instead of 0.225).
-		discount_tax: String(
-			roundTaxTotal(coupon_tax > 0 ? coupon_tax : discount_tax, dp, pricesIncludeTax)
-		),
+		discount_tax: String(roundTaxTotal(discount_tax, dp, pricesIncludeTax)),
 		shipping_total: String(roundHalfUp(shipping_total, dp)),
 		shipping_tax: String(
 			roundTaxTotal(roundedShippingTax, dp, pricesIncludeTax, getRoundingPrecision(dp))
