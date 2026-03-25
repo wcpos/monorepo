@@ -664,11 +664,11 @@ describe('recalculateCoupons — parity regression (Layer 5)', () => {
 			const totalDiscount =
 				parseFloat(result.couponLines[0].discount!) +
 				parseFloat(result.couponLines[0].discount_tax!);
-			expect(totalDiscount).toBeCloseTo(10, 0);
+			expect(totalDiscount).toBeCloseTo(10, 2);
 
 			// Both items should have reduced totals
 			expect(parseFloat(result.lineItems[0].total!)).toBeLessThan(16.05);
-			expect(parseFloat(result.lineItems[1].total!)).toBe(0);
+			expect(parseFloat(result.lineItems[1].total!)).toBeCloseTo(0, 2);
 		});
 	});
 
@@ -713,10 +713,10 @@ describe('recalculateCoupons — parity regression (Layer 5)', () => {
 			// $3 distributed across two $18 items → $1.50 each (or $1.49 + $1.51 with penny dist)
 			const total1 = parseFloat(result.lineItems[0].total!);
 			const total2 = parseFloat(result.lineItems[1].total!);
-			expect(total1 + total2).toBeCloseTo(33, 0); // $36 - $3 = $33
+			expect(total1 + total2).toBeCloseTo(33, 2); // $36 - $3 = $33
 
 			// Coupon discount should be $3
-			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(3, 1);
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(3, 2);
 		});
 	});
 
