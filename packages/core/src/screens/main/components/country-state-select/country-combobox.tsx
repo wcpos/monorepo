@@ -10,10 +10,10 @@ import {
 	ComboboxItem,
 	ComboboxItemText,
 	ComboboxList,
+	type ComboboxSingleRootProps,
 	ComboboxTrigger,
 	ComboboxValue,
 } from '@wcpos/components/combobox';
-import type { ComboboxSingleRootProps } from '@wcpos/components/combobox';
 
 import { CountriesProvider, useCountries } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
