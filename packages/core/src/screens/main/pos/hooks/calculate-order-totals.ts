@@ -94,21 +94,33 @@ export function calculateOrderTotals({
 	}, {});
 
 	// Calculate line item totals
+	//
+	// WC computes order totals using get_cart_subtotal_for_order() / get_cart_total_for_order(),
+	// which call get_rounded_items_total() → round_item_subtotal(). When taxRoundAtSubtotal
+	// is false (default), each item is rounded to dp (cents) before summing. When true, items
+	// are kept at full precision. This per-item rounding affects discount_total and order.total.
 	lineItems.forEach((item) => {
 		const parsedSubtotal = parseNumber(item.subtotal);
 		const parsedTotal = parseNumber(item.total);
 		const parsedSubtotalTax = parseNumber(item.subtotal_tax);
 		const parsedTotalTax = parseNumber(item.total_tax);
 
-		// Round per-item differences to rounding precision before accumulating
-		// to avoid IEEE 754 artifacts (e.g., 4.5 - 4.275 = 0.22499...96 instead
-		// of 0.225). Uses WC's rounding precision rule: max(dp + 2, 6).
-		const roundingPrecision = getRoundingPrecision(dp);
-		discount_total += roundHalfUp(parsedSubtotal - parsedTotal, roundingPrecision);
-		discount_tax += roundHalfUp(parsedSubtotalTax - parsedTotalTax, roundingPrecision);
-		subtotal += parsedSubtotal;
+		// Per-item rounded values matching WC's get_rounded_items_total()
+		const roundedItemSubtotal = taxRoundAtSubtotal
+			? parsedSubtotal
+			: roundHalfUp(parsedSubtotal, dp);
+		const roundedItemTotal = taxRoundAtSubtotal ? parsedTotal : roundHalfUp(parsedTotal, dp);
+
+		discount_total += roundedItemSubtotal - roundedItemTotal;
+
+		// WC computes discount_tax by summing raw per-rate taxes from get_taxes()
+		// (full precision, NOT per-item rounded) then subtracting.
+		discount_tax += parsedSubtotalTax - parsedTotalTax;
+
+		// Use per-item-rounded values for subtotal/total (matches WC's calculate_totals)
+		subtotal += roundedItemSubtotal;
 		subtotal_tax += parsedSubtotalTax;
-		total += parsedTotal;
+		total += roundedItemTotal;
 		total_tax += parsedTotalTax;
 
 		if (Array.isArray(item.taxes)) {
@@ -195,12 +207,12 @@ export function calculateOrderTotals({
 		 * These properties are stored on the order document
 		 */
 		discount_total: String(roundHalfUp(discount_total, dp)),
-		discount_tax: String(roundHalfUp(discount_tax, dp)),
+		discount_tax: String(roundTaxTotal(discount_tax, dp, pricesIncludeTax)),
 		shipping_total: String(roundHalfUp(shipping_total, dp)),
-		shipping_tax: String(roundHalfUp(roundedShippingTax, 6)),
-		cart_tax: String(roundHalfUp(roundedCartTax, 6)),
+		shipping_tax: String(roundTaxTotal(roundedShippingTax, dp, pricesIncludeTax, 6)),
+		cart_tax: String(roundTaxTotal(roundedCartTax, dp, pricesIncludeTax, 6)),
 		total: String(roundHalfUp(total + roundedTotalTax, dp)),
-		total_tax: String(roundHalfUp(roundedTotalTax, dp)),
+		total_tax: String(roundTaxTotal(roundedTotalTax, dp, pricesIncludeTax)),
 		tax_lines: filteredTaxLines,
 		/**
 		 * Subtotals are not stored on the order document, but we need them to display in the cart
