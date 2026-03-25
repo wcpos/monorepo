@@ -64,7 +64,7 @@ function isLineItemOnSale(
  *
  * Algorithm:
  * 1. Reset line item totals to subtotals (pre-coupon state)
- * 2. Build discount items using POS price as base
+ * 2. Build discount items using POS price as base (mirrors server subtotal filter)
  * 3. Apply each coupon in order, capping by remaining item value
  * 4. Update line item totals and coupon line discount amounts
  */
@@ -86,36 +86,57 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 		(cl): cl is CouponLine & { code: string } => cl.code != null
 	);
 
-	// Step 1: Reset — set total back to pre-coupon state.
-	// After the subtotal parity change, subtotal already holds price * qty (ex-tax).
-	// However, legacy orders (created before this change) stored subtotal as
-	// regular_price * qty. For those lines we fall back to pos_data.price * qty
-	// so that removing/replaying coupons doesn't inflate the base back to regular price.
+	// Step 1: Reset — set total to POS price (mirrors server's filtered subtotal).
+	// On the server, WC's recalculate_coupons() does $item->set_total($item->get_subtotal()),
+	// but WCPOS filters get_subtotal() to return the POS price during recalculation.
+	// The raw subtotal holds regular_price * qty; we need pos_data.price * qty instead.
 	const resetItems = lineItems.map((item) => {
-		const qty = item.quantity ?? 1;
 		const posData = parsePosData(item);
-		const posPriceParsed = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
 
-		let resetSubtotal = item.subtotal;
-		if (Number.isFinite(posPriceParsed) && posData?.regular_price != null) {
-			const regularPrice = parseFloat(String(posData.regular_price));
-			const storedSubtotal = parseFloat(item.subtotal || '0');
-			const expectedPosSubtotal = posPriceParsed * qty;
-			// Legacy detection: subtotal matches regular_price * qty but not pos price * qty
-			if (
-				Number.isFinite(regularPrice) &&
-				posPriceParsed < regularPrice &&
-				Math.abs(storedSubtotal - regularPrice * qty) < 0.001 &&
-				Math.abs(storedSubtotal - expectedPosSubtotal) > 0.001
-			) {
-				resetSubtotal = String(expectedPosSubtotal);
+		const parsedPosPrice = posData?.price != null ? parseFloat(String(posData.price)) : NaN;
+		if (Number.isFinite(parsedPosPrice)) {
+			const qty = item.quantity ?? 1;
+			const posTotal = parsedPosPrice * qty;
+
+			const subtotal = parseFloat(item.subtotal || '0');
+			const subtotalTax = parseFloat(item.subtotal_tax || '0');
+
+			let exTaxTotal: number;
+			let taxTotal: number;
+
+			if (pricesIncludeTax && subtotal > 0) {
+				// POS price is tax-inclusive; derive tax using the ratio from subtotal
+				const taxRatio = subtotalTax / (subtotal + subtotalTax);
+				taxTotal = posTotal * taxRatio;
+				exTaxTotal = posTotal - taxTotal;
+			} else {
+				exTaxTotal = posTotal;
+				// Scale total_tax proportionally: (posTotal / subtotal) * subtotal_tax
+				taxTotal =
+					subtotal > 0 ? (posTotal / subtotal) * subtotalTax : parseFloat(item.total_tax || '0');
 			}
+
+			// Distribute per-rate taxes proportionally
+			const taxes = (item.taxes || []).map((tax) => ({
+				...tax,
+				total:
+					subtotalTax > 0
+						? String(round(parseFloat(tax.subtotal || '0') * (taxTotal / subtotalTax), 6))
+						: (tax.subtotal ?? tax.total),
+			}));
+
+			return {
+				...item,
+				total: String(round(exTaxTotal, 6)),
+				total_tax: String(round(taxTotal, 6)),
+				taxes,
+			};
 		}
 
+		// No POS data — standard reset (total = subtotal)
 		return {
 			...item,
-			total: resetSubtotal,
-			subtotal: resetSubtotal,
+			total: item.subtotal,
 			total_tax: item.subtotal_tax,
 			taxes: (item.taxes || []).map((tax) => ({
 				...tax,
@@ -163,17 +184,7 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 					price: qty > 0 ? basePrice / qty : 0,
 					subtotal: item.subtotal || '0',
 					total: item.total || '0',
-					categories: (() => {
-						// For regular products, use the product categories map
-						if (item.product_id !== 0) {
-							return productCategories.get(item.product_id!) || [];
-						}
-						// For misc products (product_id === 0), read categories from pos_data
-						if (Array.isArray(posData?.categories) && posData.categories.length > 0) {
-							return posData.categories.map((c: { id: number }) => ({ id: c.id }));
-						}
-						return [];
-					})(),
+					categories: productCategories.get(item.product_id!) || [],
 					on_sale: isLineItemOnSale(item),
 				};
 			});
