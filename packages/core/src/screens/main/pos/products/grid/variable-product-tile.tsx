@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
+import { HStack } from '@wcpos/components/hstack';
 import { Image } from '@wcpos/components/image';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
@@ -11,6 +12,7 @@ import { VStack } from '@wcpos/components/vstack';
 
 import { VariationsPopover } from '../cells/variations-popover';
 import { useT } from '../../../../../contexts/translations';
+import { getVariablePrices } from '../../../components/product/get-variable-prices';
 import { PriceWithTax } from '../../../components/product/price-with-tax';
 import { useImageAttachment } from '../../../hooks/use-image-attachment';
 import { useAddVariation } from '../../hooks/use-add-variation';
@@ -42,6 +44,54 @@ interface VariableProductTileProps {
 	gridFields: GridFields;
 }
 
+interface VariablePriceRangeProps {
+	prices: { min: string; max: string };
+	taxStatus: 'taxable' | 'shipping' | 'none';
+	taxClass: string;
+	taxDisplay: 'text' | 'none';
+	strikethrough?: boolean;
+}
+
+function VariablePriceRange({
+	prices,
+	taxStatus,
+	taxClass,
+	taxDisplay,
+	strikethrough,
+}: VariablePriceRangeProps) {
+	if (prices.min === prices.max) {
+		return (
+			<PriceWithTax
+				price={prices.min}
+				taxStatus={taxStatus}
+				taxClass={taxClass}
+				taxDisplay={taxDisplay}
+				strikethrough={strikethrough}
+			/>
+		);
+	}
+
+	return (
+		<HStack className="flex-wrap gap-1">
+			<PriceWithTax
+				price={prices.min}
+				taxStatus={taxStatus}
+				taxClass={taxClass}
+				taxDisplay={taxDisplay}
+				strikethrough={strikethrough}
+			/>
+			<Text className={strikethrough ? 'line-through' : ''}>-</Text>
+			<PriceWithTax
+				price={prices.max}
+				taxStatus={taxStatus}
+				taxClass={taxClass}
+				taxDisplay={taxDisplay}
+				strikethrough={strikethrough}
+			/>
+		</HStack>
+	);
+}
+
 export function VariableProductTile({ product, gridFields }: VariableProductTileProps) {
 	const t = useT();
 	const { addVariation } = useAddVariation();
@@ -52,8 +102,10 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 	const images = useObservableEagerState(product.images$!);
 	const imageURL = get(images, [0, 'src'], undefined);
 	const { uri, error } = useImageAttachment(product, imageURL ?? '');
-	const price = useObservableEagerState(product.price$!);
-	const regularPrice = useObservableEagerState(product.regular_price$!);
+	const metaData = useObservableEagerState(product.meta_data$!);
+	const variablePrices = getVariablePrices(
+		metaData as { key?: string; value?: string }[] | undefined
+	);
 	const onSale = useObservableEagerState(product.on_sale$!);
 	const taxStatus = useObservableEagerState(product.tax_status$!);
 	const taxClass = useObservableEagerState(product.tax_class$!);
@@ -104,27 +156,27 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 									{name}
 								</Text>
 							)}
-							{gridFields.price && (
+							{gridFields.price && variablePrices && (
 								<>
 									{showOnSale ? (
 										<VStack space="xs">
-											<PriceWithTax
-												price={regularPrice ?? ''}
+											<VariablePriceRange
+												prices={variablePrices.regular_price}
 												taxStatus={safeTaxStatus}
 												taxClass={taxClass ?? ''}
 												taxDisplay={taxDisplay}
 												strikethrough
 											/>
-											<PriceWithTax
-												price={price ?? ''}
+											<VariablePriceRange
+												prices={variablePrices.price}
 												taxStatus={safeTaxStatus}
 												taxClass={taxClass ?? ''}
 												taxDisplay={taxDisplay}
 											/>
 										</VStack>
 									) : (
-										<PriceWithTax
-											price={price ?? ''}
+										<VariablePriceRange
+											prices={variablePrices.price}
 											taxStatus={safeTaxStatus}
 											taxClass={taxClass ?? ''}
 											taxDisplay={taxDisplay}
