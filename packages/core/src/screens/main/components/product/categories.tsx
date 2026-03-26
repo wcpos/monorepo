@@ -35,7 +35,12 @@ export function ProductCategories({
 					variant="ghost-primary"
 					size="xs"
 					key={index}
-					onPress={() => query.where('categories').elemMatch({ id: cat.id }).exec()}
+					onPress={() =>
+						query
+							.removeWhere('categories')
+							.and([{ $or: [{ categories: { $elemMatch: { id: cat.id } } }] }])
+							.exec()
+					}
 				>
 					<ButtonText numberOfLines={1} decodeHtml>
 						{cat.name}

@@ -1,6 +1,8 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
+import { useObservableEagerState } from 'observable-hooks';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
@@ -22,20 +24,64 @@ interface Props {
 }
 
 /**
+ * Extract category IDs from the query selector, handling both formats:
+ * - Direct: selector.categories.$elemMatch.id (single from ProductCategories)
+ * - $and/$or: selector.$and[].{$or[].categories.$elemMatch.id} (multi from CategoryPill)
+ */
+function getCategoryIdsFromQuery(query: Query<ProductCollection>): number[] {
+	const directId = query.getElemMatchId('categories');
+	if (directId !== undefined) {
+		return [directId];
+	}
+
+	const selector = query.currentRxQuery?.mangoQuery?.selector as Record<string, any> | undefined;
+	if (selector?.$and) {
+		for (const condition of selector.$and) {
+			if (Array.isArray(condition.$or)) {
+				const ids: number[] = [];
+				for (const clause of condition.$or) {
+					const id = clause?.categories?.$elemMatch?.id;
+					if (id !== undefined) ids.push(id);
+				}
+				if (ids.length > 0) return ids;
+			}
+		}
+	}
+
+	return [];
+}
+
+/**
  *
  */
 export function CategoryPill({ query }: Props) {
 	const t = useT();
-	const [selected, setSelected] = React.useState<Option[]>([]);
 	const [options, setOptions] = React.useState<HierarchicalOption[]>([]);
+
+	const activeCategoryIds$ = React.useMemo(
+		() =>
+			query.rxQuery$.pipe(
+				map(() => getCategoryIdsFromQuery(query)),
+				distinctUntilChanged((a, b) => a.length === b.length && a.every((v, i) => v === b[i]))
+			),
+		[query]
+	);
+	const activeCategoryIds = useObservableEagerState(activeCategoryIds$);
+
+	const selected = React.useMemo<Option[]>(() => {
+		if (!activeCategoryIds || activeCategoryIds.length === 0) return [];
+		return activeCategoryIds.map((id) => {
+			const opt = options.find((o) => o.value === String(id));
+			return { value: String(id), label: opt?.label ?? String(id) };
+		});
+	}, [activeCategoryIds, options]);
 
 	const isActive = selected.length > 0;
 
 	const handleChange = React.useCallback(
-		(options: Option[]) => {
-			setSelected(options);
-			if (options.length > 0) {
-				const orConditions = options.map((opt) => ({
+		(newSelection: Option[]) => {
+			if (newSelection.length > 0) {
+				const orConditions = newSelection.map((opt) => ({
 					categories: { $elemMatch: { id: toNumber(opt.value) } },
 				}));
 				query
@@ -50,7 +96,6 @@ export function CategoryPill({ query }: Props) {
 	);
 
 	const handleRemove = React.useCallback(() => {
-		setSelected([]);
 		query.removeWhere('categories').exec();
 	}, [query]);
 
