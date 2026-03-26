@@ -20,7 +20,7 @@ import * as VirtualizedListPrimitive from '../virtualized-list';
 import type { FlatTreeItem } from '../lib/use-hierarchy';
 import type { TreeComboboxProps } from './types';
 
-type ComboboxOption = { value: string; label: string };
+type ComboboxOption<T = undefined> = { value: string; label: string; item?: T };
 
 function TreeCombobox<T = undefined>({
 	options,
@@ -89,10 +89,18 @@ function TreeCombobox<T = undefined>({
 		[multiple, value]
 	);
 
+	const toOption = React.useCallback(
+		(id: string, fallbackLabel: string): ComboboxOption<T> => {
+			const node = hierarchy.nodeMap.get(id);
+			return { value: id, label: node?.label ?? fallbackLabel, item: node?.item };
+		},
+		[hierarchy.nodeMap]
+	);
+
 	const handleSelect = React.useCallback(
 		(itemValue: string, itemLabel: string, onOpenChange: (open: boolean) => void) => {
 			if (multiple) {
-				const currentValues = (value as ComboboxOption[] | undefined) ?? [];
+				const currentValues = (value as ComboboxOption<T>[] | undefined) ?? [];
 				if (cascadeSelection) {
 					const next = applyCascadeToggle(currentValues, itemValue, hierarchy.nodeMap);
 					onValueChange(next as any);
@@ -101,15 +109,15 @@ function TreeCombobox<T = undefined>({
 					if (exists) {
 						onValueChange(currentValues.filter((v) => v.value !== itemValue) as any);
 					} else {
-						onValueChange([...currentValues, { value: itemValue, label: itemLabel }] as any);
+						onValueChange([...currentValues, toOption(itemValue, itemLabel)] as any);
 					}
 				}
 			} else {
-				onValueChange({ value: itemValue, label: itemLabel } as any);
+				onValueChange(toOption(itemValue, itemLabel) as any);
 				onOpenChange(false);
 			}
 		},
-		[multiple, value, onValueChange, cascadeSelection, hierarchy.nodeMap]
+		[multiple, value, onValueChange, cascadeSelection, hierarchy.nodeMap, toOption]
 	);
 
 	// Display text
@@ -146,6 +154,7 @@ function TreeCombobox<T = undefined>({
 					<Text
 						className={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground')}
 						numberOfLines={1}
+						decodeHtml
 					>
 						{displayText}
 					</Text>
@@ -214,7 +223,9 @@ function TreeComboboxContent<T>({
 	const renderTreeItem = React.useCallback(
 		({ item: flatItem }: { item: FlatTreeItem<T> }) => {
 			const handlePress = () => {
-				if (!parentSelectable && flatItem.hasChildren) {
+				const structuralHasChildren =
+					hierarchy.nodeMap.get(flatItem.value)?.hasChildren ?? flatItem.hasChildren;
+				if (!parentSelectable && structuralHasChildren) {
 					hierarchy.toggle(flatItem.value);
 					return;
 				}

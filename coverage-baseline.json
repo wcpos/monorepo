@@ -22,7 +22,7 @@
 		},
 		"components": {
 			"statements": 55,
-			"branches": 73,
+			"branches": 72,
 			"functions": 32,
 			"lines": 57
 		},

@@ -53,7 +53,20 @@ export function buildTree<T>(
 ): BuildTreeResult<T> {
 	const maxDepth = config?.maxDepth ?? Infinity;
 	const nodeMap = new Map<string, TreeNode<T>>();
-	const childrenMap = new Map<string, TreeNode<T>[]>();
+
+	// Helper: build childrenMap from current parentId values in nodeMap
+	function buildChildrenMap(): Map<string, TreeNode<T>[]> {
+		const map = new Map<string, TreeNode<T>[]>();
+		for (const node of nodeMap.values()) {
+			if (node.parentId && nodeMap.has(node.parentId)) {
+				if (!map.has(node.parentId)) {
+					map.set(node.parentId, []);
+				}
+				map.get(node.parentId)!.push(node);
+			}
+		}
+		return map;
+	}
 
 	// First pass: create all nodes (skip duplicates)
 	for (const option of options) {
@@ -70,15 +83,8 @@ export function buildTree<T>(
 		nodeMap.set(option.value, node);
 	}
 
-	// Second pass: build parent-child relationships
-	for (const node of nodeMap.values()) {
-		if (node.parentId && nodeMap.has(node.parentId)) {
-			if (!childrenMap.has(node.parentId)) {
-				childrenMap.set(node.parentId, []);
-			}
-			childrenMap.get(node.parentId)!.push(node);
-		}
-	}
+	// Second pass: build parent-child relationships (before cycle detection)
+	let childrenMap = buildChildrenMap();
 
 	// Detect circular references by computing depths
 	const visited = new Set<string>();
@@ -128,6 +134,9 @@ export function buildTree<T>(
 	for (const node of nodeMap.values()) {
 		computeDepth(node);
 	}
+
+	// Rebuild childrenMap after cycle detection (parentId may have changed)
+	childrenMap = buildChildrenMap();
 
 	// Third pass: assign children and apply maxDepth
 	for (const node of nodeMap.values()) {
