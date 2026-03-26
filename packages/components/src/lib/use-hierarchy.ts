@@ -253,6 +253,83 @@ export function applyCascadeToggle<T>(
 	});
 }
 
+// --- filterTree ---
+
+export function filterTree<T>(
+	tree: TreeNode<T>[],
+	nodeMap: Map<string, TreeNode<T>>,
+	query: string,
+	mode: 'tree' | 'flat'
+): FlatTreeItem<T>[] {
+	if (!query.trim()) return [];
+
+	const lowerQuery = query.toLowerCase();
+
+	// Find all matching node IDs
+	const matchIds = new Set<string>();
+	for (const node of nodeMap.values()) {
+		if (node.label.toLowerCase().includes(lowerQuery)) {
+			matchIds.add(node.value);
+		}
+	}
+
+	if (matchIds.size === 0) return [];
+
+	if (mode === 'flat') {
+		// Flat mode: return matches as a flat list at depth 0.
+		// hasChildren is false because flat results have no expand/collapse — they're
+		// displayed as a simple list with breadcrumb text for context.
+		const results: FlatTreeItem<T>[] = [];
+		for (const id of matchIds) {
+			const node = nodeMap.get(id)!;
+			results.push({
+				value: node.value,
+				label: node.label,
+				item: node.item,
+				depth: 0,
+				hasChildren: false,
+				isExpanded: false,
+				parentId: node.parentId,
+			});
+		}
+		return results;
+	}
+
+	// Tree mode: include ancestors of matches to preserve hierarchy
+	const visibleIds = new Set<string>(matchIds);
+	for (const id of matchIds) {
+		let current = nodeMap.get(id);
+		while (current?.parentId) {
+			visibleIds.add(current.parentId);
+			current = nodeMap.get(current.parentId);
+		}
+	}
+
+	// Walk tree in order, only including visible nodes (all auto-expanded)
+	const result: FlatTreeItem<T>[] = [];
+	function walk(nodes: TreeNode<T>[]) {
+		for (const node of nodes) {
+			if (!visibleIds.has(node.value)) continue;
+			const hasVisibleChildren = node.children.some((c) => visibleIds.has(c.value));
+			result.push({
+				value: node.value,
+				label: node.label,
+				item: node.item,
+				depth: node.depth,
+				hasChildren: hasVisibleChildren,
+				isExpanded: hasVisibleChildren,
+				parentId: node.parentId,
+			});
+			if (hasVisibleChildren) {
+				walk(node.children);
+			}
+		}
+	}
+	walk(tree);
+
+	return result;
+}
+
 // --- getVisibleItems ---
 
 export function getVisibleItems<T>(

@@ -1,6 +1,7 @@
 import {
 	applyCascadeToggle,
 	buildTree,
+	filterTree,
 	getAncestorIds,
 	getBreadcrumb,
 	getDescendantIds,
@@ -264,5 +265,62 @@ describe('applyCascadeToggle', () => {
 		expect(values).toContain('5');
 		expect(values).toContain('4'); // D auto-selected (E is its only child)
 		expect(values).not.toContain('1'); // A unaffected
+	});
+});
+
+describe('filterTree', () => {
+	const flat: HierarchicalOption[] = [
+		{ value: '1', label: 'Clothing' },
+		{ value: '2', label: 'Shirts', parentId: '1' },
+		{ value: '3', label: 'T-Shirts', parentId: '2' },
+		{ value: '4', label: 'Dress Shirts', parentId: '2' },
+		{ value: '5', label: 'Accessories' },
+		{ value: '6', label: 'Hats', parentId: '5' },
+	];
+	const { tree, nodeMap } = buildTree(flat);
+
+	describe('tree mode', () => {
+		it('returns matches with ancestor chain', () => {
+			const items = filterTree(tree, nodeMap, 'shirt', 'tree');
+			const values = items.map((i) => i.value);
+			expect(values).toContain('1'); // ancestor
+			expect(values).toContain('2'); // match
+			expect(values).toContain('3'); // match
+			expect(values).toContain('4'); // match
+			expect(values).not.toContain('5'); // unrelated
+		});
+
+		it('preserves depth in results', () => {
+			const items = filterTree(tree, nodeMap, 'shirt', 'tree');
+			const tShirts = items.find((i) => i.value === '3');
+			expect(tShirts?.depth).toBe(2);
+		});
+
+		it('returns empty array for no matches', () => {
+			expect(filterTree(tree, nodeMap, 'zzzzz', 'tree')).toHaveLength(0);
+		});
+	});
+
+	describe('flat mode', () => {
+		it('returns only matching items at depth 0', () => {
+			const items = filterTree(tree, nodeMap, 'shirt', 'flat');
+			// Flat mode: all results at depth 0, hasChildren false (no expand/collapse in flat results)
+			expect(items.every((i) => i.depth === 0)).toBe(true);
+			expect(items.every((i) => !i.hasChildren)).toBe(true);
+			const values = items.map((i) => i.value);
+			expect(values).toContain('2');
+			expect(values).toContain('3');
+			expect(values).toContain('4');
+			expect(values).not.toContain('1'); // ancestor, not a match
+		});
+
+		it('returns empty array for no matches', () => {
+			expect(filterTree(tree, nodeMap, 'zzzzz', 'flat')).toHaveLength(0);
+		});
+	});
+
+	it('returns empty array for empty query', () => {
+		expect(filterTree(tree, nodeMap, '', 'tree')).toHaveLength(0);
+		expect(filterTree(tree, nodeMap, '', 'flat')).toHaveLength(0);
 	});
 });
