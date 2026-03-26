@@ -102,7 +102,9 @@ function TreeCombobox<T = undefined>({
 			if (multiple) {
 				const currentValues = (value as ComboboxOption<T>[] | undefined) ?? [];
 				if (cascadeSelection) {
-					const next = applyCascadeToggle(currentValues, itemValue, hierarchy.nodeMap);
+					const next = applyCascadeToggle(currentValues, itemValue, hierarchy.nodeMap).map(
+						(option) => toOption(option.value, option.label)
+					);
 					onValueChange(next as any);
 				} else {
 					const exists = currentValues.some((v) => v.value === itemValue);
