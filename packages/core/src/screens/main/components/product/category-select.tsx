@@ -111,6 +111,9 @@ export function CategorySearch() {
 /**
  * Loads categories via useQuery and passes them as HierarchicalOption[] to a callback.
  * Intended to be rendered inside TreeComboboxContent so it only mounts when the popover opens.
+ *
+ * @param onOptionsLoaded Must be a stable reference (e.g. setState) — an unstable
+ *   callback will cause infinite re-renders via the useEffect dependency.
  */
 function CategoryTreeLoaderInner({
 	onOptionsLoaded,
