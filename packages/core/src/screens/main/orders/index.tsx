@@ -19,6 +19,7 @@ import { UISettingsForm } from './ui-settings-form';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
+import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { DateCell } from '../components/date';
 import { Cashier } from '../components/order/cashier';
 import { CreatedVia } from '../components/order/created-via';
@@ -126,7 +127,7 @@ export function OrdersScreen() {
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
-						<Suspense>
+						<Suspense fallback={<DataTableSkeleton id="orders" />}>
 							<DataTable<OrderDocument>
 								id="orders"
 								query={query!}

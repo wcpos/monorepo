@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
-import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
+
+import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
 
 /** Helper to navigate to Orders page and wait for load */
 async function navigateToOrders(page: Page) {
@@ -82,7 +83,9 @@ test.describe('Orders Page (Pro)', () => {
 		const countEl = screen.getByTestId('data-table-count');
 		const hasOrders = await countEl
 			.isVisible({ timeout: 15_000 })
-			.then(async (visible) => visible && /[1-9]/.test(await countEl.textContent() ?? ''))
+			.then(
+				async (visible) => visible && /Showing\s+[1-9]/.test((await countEl.textContent()) ?? '')
+			)
 			.catch(() => false);
 
 		if (!hasOrders) {

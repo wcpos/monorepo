@@ -27,6 +27,7 @@ import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
 import { DataTable, DataTableFooter, defaultRenderItem } from '../components/data-table';
+import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { DateCell } from '../components/date';
 import { ProductCategories } from '../components/product/categories';
 import { FilterBar } from '../components/product/filter-bar';
@@ -304,7 +305,7 @@ export function Products() {
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
-						<Suspense>
+						<Suspense fallback={<DataTableSkeleton id="products" />}>
 							<DataTable<ProductDocument>
 								id="products"
 								query={query!}

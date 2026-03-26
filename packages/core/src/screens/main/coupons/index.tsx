@@ -28,6 +28,7 @@ import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { useProAccess } from '../contexts/pro-access';
 import { DataTable } from '../components/data-table';
+import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { TextCell } from '../components/text-cell';
 import { DateCell } from '../components/date';
 import { QuerySearchInput } from '../components/query-search-input';
@@ -133,7 +134,7 @@ export function CouponsScreen() {
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
-						<Suspense>
+						<Suspense fallback={<DataTableSkeleton id="coupons" />}>
 							<DataTable
 								id="coupons"
 								query={query!}

@@ -1,5 +1,6 @@
 import { CanceledError } from 'axios';
-import { Subject } from 'rxjs';
+import { firstValueFrom, Subject } from 'rxjs';
+import { filter, skip } from 'rxjs/operators';
 
 import { httpClientMock, parseWpError } from './__mocks__/http';
 import { getLogger } from './__mocks__/logger';
@@ -7,6 +8,38 @@ import { createStoreDatabase, createSyncDatabase } from './helpers/db';
 import { CollectionReplicationState } from '../src/collection-replication-state';
 
 import type { RxDatabase } from 'rxdb';
+
+/**
+ * Helper: start a replication and wait for the full sync cycle to complete.
+ * firstSync resolves after audit but before data sync. This helper waits
+ * for active$ to go true->false twice (once for audit, once for data sync),
+ * or settles after no activity for a tick.
+ */
+async function startAndWaitForFullCycle(replicationState: CollectionReplicationState<any>) {
+	return new Promise<void>((resolve) => {
+		let wasActive = false;
+		let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
+		const sub = replicationState.active$.subscribe((active) => {
+			if (active) {
+				wasActive = true;
+				if (settleTimer) {
+					clearTimeout(settleTimer);
+					settleTimer = null;
+				}
+			} else if (wasActive) {
+				// Active went false after being true — schedule resolve after a tick
+				// to allow any subsequent active=true transitions (e.g. sync() after audit)
+				settleTimer = setTimeout(() => {
+					sub.unsubscribe();
+					resolve();
+				}, 50);
+			}
+		});
+
+		replicationState.start();
+	});
+}
 
 // Get the mock logger instance (same object returned by getLogger())
 const mockLogger = getLogger();
@@ -130,8 +163,7 @@ describe('CollectionReplicationState', () => {
 			errorSubject: new Subject<Error>(),
 		});
 
-		replicationState.start();
-		await replicationState.firstSync;
+		await startAndWaitForFullCycle(replicationState);
 
 		expect(httpClientMock.post).toHaveBeenCalledWith(
 			'products',
@@ -181,8 +213,7 @@ describe('CollectionReplicationState', () => {
 			errorSubject: new Subject<Error>(),
 		});
 
-		replicationState.start();
-		await replicationState.firstSync;
+		await startAndWaitForFullCycle(replicationState);
 
 		expect(httpClientMock.post).toHaveBeenCalledWith(
 			'products',
@@ -320,8 +351,7 @@ describe('CollectionReplicationState', () => {
 			errorSubject: new Subject<Error>(),
 		});
 
-		replicationState.start();
-		await replicationState.firstSync;
+		await startAndWaitForFullCycle(replicationState);
 
 		const sync = await syncDatabase.collections.products.find().exec();
 
@@ -616,9 +646,14 @@ describe('CollectionReplicationState', () => {
 		});
 
 		it('logs error with invalid response data (non-array)', async () => {
-			httpClientMock.__setMockResponse('get', 'products', { error: 'bad' }, {
-				params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
-			});
+			httpClientMock.__setMockResponse(
+				'get',
+				'products',
+				{ error: 'bad' },
+				{
+					params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
+				}
+			);
 
 			const replicationState = new CollectionReplicationState({
 				collection: storeDatabase.collections.products,
@@ -834,11 +869,7 @@ describe('CollectionReplicationState', () => {
 				{ id: 4, status: 'SYNCED', endpoint: 'products' },
 			]);
 
-			httpClientMock.__setMockResponse('post', 'products', [
-				{ id: 1 },
-				{ id: 2 },
-				{ id: 3 },
-			]);
+			httpClientMock.__setMockResponse('post', 'products', [{ id: 1 }, { id: 2 }, { id: 3 }]);
 
 			const replicationState = new CollectionReplicationState({
 				collection: storeDatabase.collections.products,
@@ -1043,9 +1074,7 @@ describe('CollectionReplicationState', () => {
 				endpoint: 'products',
 			});
 
-			(httpClientMock as any).patch = jest.fn().mockRejectedValue(
-				new CanceledError('auth cancel')
-			);
+			(httpClientMock as any).patch = jest.fn().mockRejectedValue(new CanceledError('auth cancel'));
 			(mockLogger.error as jest.Mock).mockClear();
 			(mockLogger.debug as jest.Mock).mockClear();
 
@@ -1245,4 +1274,50 @@ describe('CollectionReplicationState', () => {
 	 * - single endpoint (products/:id/variations) for fetching a single variable product's variations
 	 */
 	describe('variations', () => {});
+
+	it('resolves firstSync after audit, before data sync completes', async () => {
+		// Set up remote IDs that will need to be synced
+		const remoteIds = [
+			{ id: 1, date_modified_gmt: '2024-01-01T00:00:00' },
+			{ id: 2, date_modified_gmt: '2024-01-01T00:00:00' },
+			{ id: 3, date_modified_gmt: '2024-01-01T00:00:00' },
+		];
+
+		// Mock fetchAllRemoteIds to return the IDs
+		httpClientMock.__setMockResponse('get', 'products', remoteIds, {
+			params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
+		});
+
+		// Mock fetchRemoteByIDs to be slow (simulate network delay)
+		let dataSyncStarted = false;
+		httpClientMock.post.mockImplementation(async (url: string, data: any) => {
+			dataSyncStarted = true;
+			// Simulate slow network — if firstSync waits for this, the test is slow
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+			return { data: [] };
+		});
+
+		const replicationState = new CollectionReplicationState({
+			collection: storeDatabase.collections.products,
+			syncCollection: syncDatabase.collections.products,
+			httpClient: httpClientMock,
+			endpoint: 'products',
+		});
+
+		replicationState.start();
+
+		// firstSync should resolve before the data sync finishes
+		await replicationState.firstSync;
+
+		// At this point, the audit is done (sync state populated)
+		const syncDocs = await syncDatabase.collections.products.find().exec();
+		expect(syncDocs.length).toBe(remoteIds.length);
+
+		// The data sync should NOT have started yet (or just started) —
+		// firstSync resolved after audit, before update() -> sync() -> POST
+		expect(dataSyncStarted).toBe(false);
+
+		// Clean up
+		await replicationState.cancel();
+	});
 });

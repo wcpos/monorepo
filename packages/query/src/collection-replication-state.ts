@@ -293,6 +293,14 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			});
 
 			await this.syncStateManager.processFullAudit(response.data);
+
+			// Resolve firstSync after audit — query replications can now start
+			// fetching data in parallel with the collection sync below
+			if (this.firstSyncResolver) {
+				this.firstSyncResolver();
+				this.firstSyncResolver = null;
+			}
+
 			this.subjects.active.next(false);
 			await this.syncStateManager.removeStaleRecords();
 			await this.update();
@@ -332,7 +340,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			});
 		} finally {
 			this.subjects.active.next(false);
-
+			// Fallback: resolve firstSync on error too, so query replications aren't stuck
 			if (this.firstSyncResolver) {
 				this.firstSyncResolver();
 				this.firstSyncResolver = null;

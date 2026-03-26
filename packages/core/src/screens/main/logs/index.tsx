@@ -18,6 +18,7 @@ import { DEFAULT_LOG_LEVELS, FilterBar } from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
+import { DataTableSkeleton } from '../components/data-table/skeleton';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 import { TextCell } from '../components/text-cell';
@@ -95,7 +96,7 @@ export function LogsScreen() {
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
-						<Suspense>
+						<Suspense fallback={<DataTableSkeleton id="logs" />}>
 							<DataTable<LogDocument>
 								id="logs"
 								query={query!}

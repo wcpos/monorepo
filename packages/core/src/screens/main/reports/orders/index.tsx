@@ -13,6 +13,7 @@ import { TableHeaderSelect } from './header-select';
 import { TableRowSelect } from './row-select';
 import { useT } from '../../../../contexts/translations';
 import { DataTable, DataTableHeader, type RenderHeaderProps } from '../../components/data-table';
+import { DataTableSkeleton } from '../../components/data-table/skeleton';
 import { DateCell } from '../../components/date';
 import { Cashier } from '../../components/order/cashier';
 import { CreatedVia } from '../../components/order/created-via';
@@ -176,7 +177,7 @@ export function Orders() {
 				</CardHeader>
 				<CardContent className="border-border flex-1 border-t p-0">
 					<ErrorBoundary>
-						<Suspense>
+						<Suspense fallback={<DataTableSkeleton id="reports-orders" />}>
 							<DataTable<OrderDocument>
 								id="reports-orders"
 								query={query}
