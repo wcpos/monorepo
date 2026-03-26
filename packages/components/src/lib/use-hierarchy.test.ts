@@ -1,4 +1,5 @@
 import {
+	applyCascadeToggle,
 	buildTree,
 	getAncestorIds,
 	getBreadcrumb,
@@ -209,5 +210,59 @@ describe('utility functions', () => {
 		it('returns empty array for unknown id', () => {
 			expect(getAncestorIds('999', nodeMap)).toEqual([]);
 		});
+	});
+});
+
+describe('applyCascadeToggle', () => {
+	// A > B > C, D > E
+	const flat: HierarchicalOption[] = [
+		{ value: '1', label: 'A' },
+		{ value: '2', label: 'B', parentId: '1' },
+		{ value: '3', label: 'C', parentId: '2' },
+		{ value: '4', label: 'D' },
+		{ value: '5', label: 'E', parentId: '4' },
+	];
+	const { nodeMap } = buildTree(flat);
+	const toOpt = (id: string) => ({ value: id, label: nodeMap.get(id)!.label });
+
+	it('selecting a parent selects all descendants', () => {
+		const result = applyCascadeToggle([], '1', nodeMap);
+		const values = result.map((o) => o.value);
+		expect(values).toContain('1');
+		expect(values).toContain('2');
+		expect(values).toContain('3');
+	});
+
+	it('deselecting a parent deselects all descendants', () => {
+		const current = [toOpt('1'), toOpt('2'), toOpt('3')];
+		const result = applyCascadeToggle(current, '1', nodeMap);
+		expect(result).toHaveLength(0);
+	});
+
+	it('selecting last sibling auto-selects parent (bubble up)', () => {
+		const current = [toOpt('3')]; // C selected
+		const result = applyCascadeToggle(current, '2', nodeMap); // toggle B on
+		const values = result.map((o) => o.value);
+		expect(values).toContain('2'); // B selected
+		expect(values).toContain('3'); // C stays selected
+		// A should be auto-selected: its only direct child B is selected, and B's subtree is fully selected
+		expect(values).toContain('1');
+	});
+
+	it('deselecting a child deselects ancestors that were fully selected', () => {
+		const current = [toOpt('1'), toOpt('2'), toOpt('3')]; // all selected
+		const result = applyCascadeToggle(current, '3', nodeMap); // deselect C
+		const values = result.map((o) => o.value);
+		expect(values).not.toContain('3'); // C removed
+		expect(values).not.toContain('2'); // B removed (no longer fully selected subtree)
+		expect(values).not.toContain('1'); // A removed (no longer fully selected subtree)
+	});
+
+	it('selecting a leaf does not affect unrelated branches', () => {
+		const result = applyCascadeToggle([], '5', nodeMap); // select E
+		const values = result.map((o) => o.value);
+		expect(values).toContain('5');
+		expect(values).toContain('4'); // D auto-selected (E is its only child)
+		expect(values).not.toContain('1'); // A unaffected
 	});
 });

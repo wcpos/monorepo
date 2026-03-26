@@ -196,6 +196,63 @@ export function getAncestorIds<T>(id: string, nodeMap: Map<string, TreeNode<T>>)
 	return result;
 }
 
+// --- applyCascadeToggle ---
+
+/**
+ * Apply cascade toggle logic for multi-select with hierarchy.
+ * Selecting a node selects all descendants. Deselecting removes all descendants.
+ * Auto-selects ancestors when all their descendants become selected (bubble up).
+ * Auto-deselects ancestors when any descendant is removed.
+ */
+export function applyCascadeToggle<T>(
+	current: { value: string; label: string }[],
+	toggleId: string,
+	nodeMap: Map<string, TreeNode<T>>
+): { value: string; label: string }[] {
+	const currentSet = new Set(current.map((o) => o.value));
+	const isDeselecting = currentSet.has(toggleId);
+	const descendantIds = getDescendantIds(toggleId, nodeMap);
+	const allIds = [toggleId, ...descendantIds];
+
+	let nextSet: Set<string>;
+
+	if (isDeselecting) {
+		// Remove self + all descendants
+		const toRemove = new Set(allIds);
+		nextSet = new Set([...currentSet].filter((id) => !toRemove.has(id)));
+
+		// Bubble up: deselect any ancestor that was fully selected
+		const ancestorIds = getAncestorIds(toggleId, nodeMap);
+		for (const ancestorId of ancestorIds) {
+			nextSet.delete(ancestorId);
+		}
+	} else {
+		// Add self + all descendants
+		nextSet = new Set(currentSet);
+		for (const id of allIds) {
+			nextSet.add(id);
+		}
+
+		// Bubble up: auto-select ancestors whose full subtree is now selected
+		const ancestorIds = getAncestorIds(toggleId, nodeMap);
+		for (const ancestorId of ancestorIds) {
+			const allDescendants = getDescendantIds(ancestorId, nodeMap);
+			const allSelected = allDescendants.every((id) => nextSet.has(id));
+			if (allSelected) {
+				nextSet.add(ancestorId);
+			}
+		}
+	}
+
+	// Convert back to options array, preserving original objects where possible
+	const currentMap = new Map(current.map((o) => [o.value, o]));
+	return Array.from(nextSet).map((id) => {
+		if (currentMap.has(id)) return currentMap.get(id)!;
+		const node = nodeMap.get(id);
+		return { value: id, label: node?.label ?? '' };
+	});
+}
+
 // --- getVisibleItems ---
 
 export function getVisibleItems<T>(
