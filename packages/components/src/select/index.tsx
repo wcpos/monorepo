@@ -27,6 +27,7 @@ import type { Option, SelectRootProps, SelectValueProps } from './types';
 const MultiModeContext = React.createContext<boolean>(false);
 
 const SelectWidthContext = React.createContext<number | undefined>(undefined);
+const SelectLayoutContext = React.createContext<((e: any) => void) | undefined>(undefined);
 
 function Select({ multiple, ...props }: SelectRootProps) {
 	const { width: triggerWidth, onLayout } = useLayoutWidth();
@@ -47,8 +48,6 @@ function Select({ multiple, ...props }: SelectRootProps) {
 		</SelectWidthContext.Provider>
 	);
 }
-
-const SelectLayoutContext = React.createContext<((e: any) => void) | undefined>(undefined);
 
 const useRootContext = SelectPrimitive.useRootContext;
 

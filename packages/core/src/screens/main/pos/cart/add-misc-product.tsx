@@ -19,7 +19,6 @@ import {
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
 import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
-import type { Option } from '@wcpos/components/combobox/types';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
