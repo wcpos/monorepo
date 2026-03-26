@@ -324,3 +324,40 @@ describe('filterTree', () => {
 		expect(filterTree(tree, nodeMap, '', 'flat')).toHaveLength(0);
 	});
 });
+
+// Note: useHierarchy is a React hook and cannot be tested directly in a node
+// environment without jsdom + renderHook. The hook is thin composition of the
+// pure functions tested above. For integration testing, see component tests.
+// Here we verify the pure function composition that the hook would perform.
+
+describe('useHierarchy composition (pure function verification)', () => {
+	const flat: HierarchicalOption[] = [
+		{ value: '1', label: 'Clothing' },
+		{ value: '2', label: 'Shirts', parentId: '1' },
+		{ value: '3', label: 'T-Shirts', parentId: '2' },
+		{ value: '4', label: 'Accessories' },
+	];
+
+	it('defaultExpanded="all" produces correct visible items', () => {
+		const { tree, nodeMap } = buildTree(flat);
+		const allParentIds = new Set<string>();
+		for (const node of nodeMap.values()) {
+			if (node.hasChildren) allParentIds.add(node.value);
+		}
+		const items = getVisibleItems(tree, allParentIds);
+		expect(items).toHaveLength(4); // all visible
+	});
+
+	it('filterTree integrates with buildTree correctly', () => {
+		const { tree, nodeMap } = buildTree(flat);
+		const results = filterTree(tree, nodeMap, 'shirt', 'tree');
+		expect(results.length).toBeGreaterThan(0);
+		expect(results.some((r) => r.value === '2')).toBe(true); // Shirts matches
+	});
+
+	it('applyCascadeToggle integrates with buildTree correctly', () => {
+		const { nodeMap } = buildTree(flat);
+		const result = applyCascadeToggle([], '1', nodeMap);
+		expect(result.map((o) => o.value).sort()).toEqual(['1', '2', '3']);
+	});
+});

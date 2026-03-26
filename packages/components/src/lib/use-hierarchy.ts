@@ -1,3 +1,5 @@
+import { useCallback, useMemo, useState } from 'react';
+
 // --- Types ---
 
 export interface HierarchicalOption<T = undefined> {
@@ -358,4 +360,128 @@ export function getVisibleItems<T>(
 
 	walk(tree);
 	return result;
+}
+
+// --- useHierarchy hook ---
+
+export interface HierarchyState<T = undefined> {
+	tree: TreeNode<T>[];
+	nodeMap: Map<string, TreeNode<T>>;
+	expandedIds: Set<string>;
+	toggle: (id: string) => void;
+	expandAll: () => void;
+	collapseAll: () => void;
+	visibleItems: FlatTreeItem<T>[];
+	filteredItems: FlatTreeItem<T>[];
+	getDescendantIds: (id: string) => string[];
+	getAncestorIds: (id: string) => string[];
+	getBreadcrumb: (id: string) => string;
+	getDepth: (id: string) => number;
+}
+
+export function useHierarchy<T = undefined>(
+	options: HierarchicalOption<T>[],
+	config?: HierarchyConfig
+): HierarchyState<T> {
+	const {
+		maxDepth,
+		defaultExpanded = 'none',
+		expandedIds: controlledExpandedIds,
+		onExpandChange,
+		searchMode = 'tree',
+		filterValue,
+		breadcrumbSeparator = ' > ',
+	} = config ?? {};
+
+	// Build tree (memoized on options + maxDepth)
+	const { tree, nodeMap } = useMemo(() => buildTree(options, { maxDepth }), [options, maxDepth]);
+
+	// Uncontrolled expand state. useState initializer runs once on mount.
+	const [internalExpandedIds, setInternalExpandedIds] = useState<Set<string>>(() => {
+		if (defaultExpanded === 'all') {
+			const parentIds = new Set<string>();
+			for (const opt of options) {
+				if (opt.parentId) parentIds.add(opt.parentId);
+			}
+			return parentIds;
+		}
+		if (defaultExpanded === 'none') return new Set<string>();
+		return new Set(defaultExpanded);
+	});
+
+	const isControlled = controlledExpandedIds !== undefined;
+	const expandedIds = isControlled ? new Set(controlledExpandedIds) : internalExpandedIds;
+
+	const toggle = useCallback(
+		(id: string) => {
+			const next = new Set(expandedIds);
+			if (next.has(id)) {
+				next.delete(id);
+			} else {
+				next.add(id);
+			}
+			if (isControlled) {
+				onExpandChange?.(Array.from(next));
+			} else {
+				setInternalExpandedIds(next);
+				onExpandChange?.(Array.from(next));
+			}
+		},
+		[expandedIds, isControlled, onExpandChange]
+	);
+
+	const expandAll = useCallback(() => {
+		const all = new Set<string>();
+		for (const node of nodeMap.values()) {
+			if (node.hasChildren) all.add(node.value);
+		}
+		if (isControlled) {
+			onExpandChange?.(Array.from(all));
+		} else {
+			setInternalExpandedIds(all);
+			onExpandChange?.(Array.from(all));
+		}
+	}, [nodeMap, isControlled, onExpandChange]);
+
+	const collapseAll = useCallback(() => {
+		if (isControlled) {
+			onExpandChange?.([]);
+		} else {
+			setInternalExpandedIds(new Set());
+			onExpandChange?.([]);
+		}
+	}, [isControlled, onExpandChange]);
+
+	const visibleItems = useMemo(() => getVisibleItems(tree, expandedIds), [tree, expandedIds]);
+
+	const filteredItems = useMemo(() => {
+		if (!filterValue?.trim()) return [] as FlatTreeItem<T>[];
+		return filterTree(tree, nodeMap, filterValue, searchMode);
+	}, [tree, nodeMap, filterValue, searchMode]);
+
+	const boundGetBreadcrumb = useCallback(
+		(id: string) => getBreadcrumb(id, nodeMap, breadcrumbSeparator),
+		[nodeMap, breadcrumbSeparator]
+	);
+	const boundGetDescendantIds = useCallback(
+		(id: string) => getDescendantIds(id, nodeMap),
+		[nodeMap]
+	);
+	const boundGetAncestorIds = useCallback((id: string) => getAncestorIds(id, nodeMap), [nodeMap]);
+	const boundGetDepth = useCallback((id: string) => nodeMap.get(id)?.depth ?? -1, [nodeMap]);
+
+	return {
+		tree,
+		nodeMap,
+		expandedIds,
+		toggle,
+		expandAll,
+		collapseAll,
+		visibleItems,
+		filteredItems,
+		getDescendantIds: boundGetDescendantIds,
+		getAncestorIds: boundGetAncestorIds,
+		getBreadcrumb: boundGetBreadcrumb,
+		getDepth: boundGetDepth,
+	};
 }
