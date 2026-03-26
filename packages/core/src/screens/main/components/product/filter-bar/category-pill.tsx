@@ -1,70 +1,84 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import { Combobox, ComboboxContent, ComboboxTrigger } from '@wcpos/components/combobox';
+import {
+	TreeCombobox,
+	TreeComboboxContent,
+	TreeComboboxTrigger,
+} from '@wcpos/components/tree-combobox';
 import { Query } from '@wcpos/query';
+import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { Option } from '@wcpos/components/combobox/types';
 
 import { useT } from '../../../../../contexts/translations';
-import { CategorySearch } from '../category-select';
+import { CategoryTreeLoader } from '../category-select';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 
 interface Props {
 	query: Query<ProductCollection>;
-	resource: ObservableResource<import('@wcpos/database').ProductCategoryDocument>;
-	selectedID?: number;
 }
 
 /**
  *
  */
-export function CategoryPill({ query, resource, selectedID }: Props) {
-	const category = useObservableSuspense(resource);
+export function CategoryPill({ query }: Props) {
 	const t = useT();
-	const isActive = !!selectedID;
+	const [selected, setSelected] = React.useState<Option[]>([]);
+	const [options, setOptions] = React.useState<HierarchicalOption[]>([]);
 
-	/**
-	 * @NOTE - we need to convert the value to a number because the value is a string
-	 */
-	const handleSelect = React.useCallback(
-		(option: import('@wcpos/components/combobox').Option | undefined) => {
-			if (!option) return;
-			query
-				.where('categories')
-				.elemMatch({ id: toNumber(option.value) })
-				.exec();
+	const isActive = selected.length > 0;
+
+	const handleChange = React.useCallback(
+		(options: Option[]) => {
+			setSelected(options);
+			if (options.length > 0) {
+				const orConditions = options.map((opt) => ({
+					categories: { $elemMatch: { id: toNumber(opt.value) } },
+				}));
+				query
+					.removeWhere('categories')
+					.and([{ $or: orConditions }])
+					.exec();
+			} else {
+				query.removeWhere('categories').exec();
+			}
 		},
 		[query]
 	);
 
-	/**
-	 *
-	 */
+	const handleRemove = React.useCallback(() => {
+		setSelected([]);
+		query.removeWhere('categories').exec();
+	}, [query]);
+
+	const displayText = React.useMemo(() => {
+		if (selected.length === 0) return t('common.category');
+		if (selected.length === 1) return selected[0].label;
+		return `${selected[0].label} +${selected.length - 1}`;
+	}, [selected, t]);
+
 	return (
-		<Combobox onValueChange={handleSelect}>
-			<ComboboxTrigger asChild>
+		<TreeCombobox options={options} multiple value={selected} onValueChange={handleChange}>
+			<TreeComboboxTrigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() =>
-						query.where('categories').removeElemMatch('categories', { id: category?.id }).exec()
-					}
+					onRemove={handleRemove}
 				>
-					<ButtonText decodeHtml>
-						{isActive
-							? category?.name || t('common.id_2', { id: selectedID })
-							: t('common.category')}
-					</ButtonText>
+					<ButtonText decodeHtml>{displayText}</ButtonText>
 				</ButtonPill>
-			</ComboboxTrigger>
-			<ComboboxContent>
-				<CategorySearch />
-			</ComboboxContent>
-		</Combobox>
+			</TreeComboboxTrigger>
+			<TreeComboboxContent
+				searchPlaceholder={t('common.search_categories')}
+				emptyMessage={t('common.no_category_found')}
+			>
+				<CategoryTreeLoader onOptionsLoaded={setOptions} />
+			</TreeComboboxContent>
+		</TreeCombobox>
 	);
 }

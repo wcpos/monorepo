@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 
 import { useObservableSuspense } from 'observable-hooks';
 
@@ -16,6 +16,7 @@ import {
 import { Suspense } from '@wcpos/components/suspense';
 import { useT } from '@wcpos/core/contexts/translations';
 import { useQuery } from '@wcpos/query';
+import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 
 /**
  *
@@ -104,6 +105,55 @@ export function CategorySearch() {
 				<CategoryList query={query} />
 			</Suspense>
 		</>
+	);
+}
+
+/**
+ * Loads categories via useQuery and passes them as HierarchicalOption[] to a callback.
+ * Intended to be rendered inside TreeComboboxContent so it only mounts when the popover opens.
+ */
+function CategoryTreeLoaderInner({
+	onOptionsLoaded,
+}: {
+	onOptionsLoaded: (options: HierarchicalOption[]) => void;
+}) {
+	const categoryQuery = useQuery({
+		queryKeys: ['products/categories'],
+		collectionName: 'products/categories',
+		initialParams: {
+			sort: [{ name: 'asc' }],
+		},
+		greedy: true,
+	});
+
+	const result = useObservableSuspense(categoryQuery!.resource) as {
+		hits: { id: string; document: { id?: number; name?: string; parent?: number } }[];
+	};
+
+	const options = React.useMemo<HierarchicalOption[]>(
+		() =>
+			result.hits.map(({ document: doc }) => ({
+				value: String(doc.id),
+				label: doc.name ?? '',
+				parentId: doc.parent && doc.parent > 0 ? String(doc.parent) : undefined,
+			})),
+		[result.hits]
+	);
+
+	React.useEffect(() => {
+		onOptionsLoaded(options);
+	}, [options, onOptionsLoaded]);
+
+	return null;
+}
+
+export function CategoryTreeLoader(props: {
+	onOptionsLoaded: (options: HierarchicalOption[]) => void;
+}) {
+	return (
+		<Suspense>
+			<CategoryTreeLoaderInner {...props} />
+		</Suspense>
 	);
 }
 

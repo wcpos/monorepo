@@ -14,12 +14,15 @@ import {
 	FormRadioGroup,
 	FormSelect,
 	FormSwitch,
+	FormTreeCombobox,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
+import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { Option } from '@wcpos/components/combobox/types';
 
 import { useT } from '../../../../../../contexts/translations';
-import { CategorySelect } from '../../../../components/product/category-select';
+import { CategoryTreeLoader } from '../../../../components/product/category-select';
 import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
@@ -29,6 +32,8 @@ import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-gro
 import { useLineItemData } from '../../../hooks/use-line-item-data';
 import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
 import { parsePosData } from '../../../hooks/utils';
+
+const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
 
 /**
  *
@@ -43,7 +48,7 @@ const formSchema = z.object({
 	tax_class: z.string().optional(),
 	virtual: z.boolean().default(false),
 	downloadable: z.boolean().default(false),
-	categories: z.array(z.object({ id: z.number(), name: z.string() })).default([]),
+	categories: z.array(categoryOptionSchema).default([]),
 	meta_data: metaDataSchema,
 });
 
@@ -62,6 +67,7 @@ export function EditLineItemForm({ uuid, item }: Props) {
 	const { getLineItemData } = useLineItemData();
 	const { price, regular_price, tax_status } = getLineItemData(item);
 	const posData = parsePosData(item);
+	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
 
 	/**
 	 *
@@ -80,7 +86,11 @@ export function EditLineItemForm({ uuid, item }: Props) {
 			tax_class: item.tax_class === '' ? 'standard' : item.tax_class,
 			virtual: posData?.virtual ?? false,
 			downloadable: posData?.downloadable ?? false,
-			categories: posData?.categories ?? [],
+			categories:
+				posData?.categories?.map((c: { id: number; name: string }) => ({
+					value: String(c.id),
+					label: c.name,
+				})) ?? [],
 			meta_data: item.meta_data as FormValues['meta_data'],
 		},
 	});
@@ -101,7 +111,10 @@ export function EditLineItemForm({ uuid, item }: Props) {
 				meta_data: data.meta_data as never,
 				virtual: data.virtual,
 				downloadable: data.downloadable,
-				categories: data.categories,
+				categories: data.categories.map((opt) => ({
+					id: Number(opt.value),
+					name: opt.label,
+				})),
 			});
 			onOpenChange(false);
 		},
@@ -125,6 +138,25 @@ export function EditLineItemForm({ uuid, item }: Props) {
 					name="name"
 					render={({ field }) => <FormInput label={t('common.name')} {...field} />}
 				/>
+				{item.product_id === 0 && (
+					<FormField
+						control={form.control}
+						name="categories"
+						render={({ field }) => (
+							<FormTreeCombobox
+								label={t('common.categories')}
+								options={categoryOptions}
+								cascadeSelection={false}
+								placeholder={t('common.select_category')}
+								searchPlaceholder={t('common.search_categories')}
+								emptyMessage={t('common.no_category_found')}
+								{...field}
+							>
+								<CategoryTreeLoader onOptionsLoaded={setCategoryOptions} />
+							</FormTreeCombobox>
+						)}
+					/>
+				)}
 				<HStack className="gap-4">
 					<FormField
 						control={form.control}
@@ -220,46 +252,18 @@ export function EditLineItemForm({ uuid, item }: Props) {
 				</HStack>
 				{item.product_id === 0 && (
 					<>
-						<HStack className="gap-4">
+						<VStack>
 							<FormField
 								control={form.control}
 								name="virtual"
-								render={({ field }) => (
-									<View className="flex-1">
-										<FormSwitch label={t('common.virtual')} {...field} />
-									</View>
-								)}
+								render={({ field }) => <FormSwitch label={t('products.virtual')} {...field} />}
 							/>
 							<FormField
 								control={form.control}
 								name="downloadable"
-								render={({ field }) => (
-									<View className="flex-1">
-										<FormSwitch label={t('common.downloadable')} {...field} />
-									</View>
-								)}
+								render={({ field }) => <FormSwitch label={t('products.downloadable')} {...field} />}
 							/>
-						</HStack>
-						<FormField
-							control={form.control}
-							name="categories"
-							render={({ field: { onChange, value } }) => (
-								<CategorySelect
-									value={
-										value?.[0]?.id
-											? { value: String(value[0].id), label: value[0].name }
-											: undefined
-									}
-									onValueChange={(option) => {
-										if (option) {
-											onChange([{ id: Number(option.value), name: option.label }]);
-										} else {
-											onChange([]);
-										}
-									}}
-								/>
-							)}
-						/>
+						</VStack>
 					</>
 				)}
 				<MetaDataForm withDisplayValues />

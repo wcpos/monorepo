@@ -14,17 +14,22 @@ import {
 	FormRadioGroup,
 	FormSelect,
 	FormSwitch,
+	FormTreeCombobox,
 } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { VStack } from '@wcpos/components/vstack';
+import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
+import type { Option } from '@wcpos/components/combobox/types';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
-import { CategorySelect } from '../../components/product/category-select';
+import { CategoryTreeLoader } from '../../components/product/category-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
 import { useAddProduct } from '../hooks/use-add-product';
+
+const categoryOptionSchema = z.object({ value: z.string(), label: z.string() });
 
 const formSchema = z.object({
 	name: z.string().optional(),
@@ -34,7 +39,7 @@ const formSchema = z.object({
 	tax_class: z.string().optional(),
 	virtual: z.boolean().default(false),
 	downloadable: z.boolean().default(false),
-	categories: z.array(z.object({ id: z.number(), name: z.string() })).default([]),
+	categories: z.array(categoryOptionSchema).default([]),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -46,6 +51,7 @@ export function AddMiscProduct() {
 	const t = useT();
 	const { addProduct } = useAddProduct();
 	const { onOpenChange } = useRootContext();
+	const [categoryOptions, setCategoryOptions] = React.useState<HierarchicalOption[]>([]);
 
 	/**
 	 *
@@ -80,7 +86,10 @@ export function AddMiscProduct() {
 				tax_class: tax_class === 'standard' ? '' : tax_class,
 				virtual: virtual ?? false,
 				downloadable: downloadable ?? false,
-				_pos_categories: categories,
+				_pos_categories: categories.map((opt) => ({
+					id: Number(opt.value),
+					name: opt.label,
+				})),
 			});
 			onOpenChange(false);
 		},
@@ -104,6 +113,23 @@ export function AddMiscProduct() {
 					name="name"
 					render={({ field }) => (
 						<FormInput label={t('common.name')} placeholder={t('common.product')} {...field} />
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="categories"
+					render={({ field }) => (
+						<FormTreeCombobox
+							label={t('common.categories')}
+							options={categoryOptions}
+							cascadeSelection={false}
+							placeholder={t('common.select_category')}
+							searchPlaceholder={t('common.search_categories')}
+							emptyMessage={t('common.no_category_found')}
+							{...field}
+						>
+							<CategoryTreeLoader onOptionsLoaded={setCategoryOptions} />
+						</FormTreeCombobox>
 					)}
 				/>
 				<HStack className="gap-4">
@@ -161,44 +187,18 @@ export function AddMiscProduct() {
 						)}
 					/>
 				</HStack>
-				<HStack className="gap-4">
+				<VStack>
 					<FormField
 						control={form.control}
 						name="virtual"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormSwitch label={t('common.virtual')} {...field} />
-							</View>
-						)}
+						render={({ field }) => <FormSwitch label={t('products.virtual')} {...field} />}
 					/>
 					<FormField
 						control={form.control}
 						name="downloadable"
-						render={({ field }) => (
-							<View className="flex-1">
-								<FormSwitch label={t('common.downloadable')} {...field} />
-							</View>
-						)}
+						render={({ field }) => <FormSwitch label={t('products.downloadable')} {...field} />}
 					/>
-				</HStack>
-				<FormField
-					control={form.control}
-					name="categories"
-					render={({ field: { onChange, value } }) => (
-						<CategorySelect
-							value={
-								value?.[0]?.id ? { value: String(value[0].id), label: value[0].name } : undefined
-							}
-							onValueChange={(option) => {
-								if (option) {
-									onChange([{ id: Number(option.value), name: option.label }]);
-								} else {
-									onChange([]);
-								}
-							}}
-						/>
-					)}
-				/>
+				</VStack>
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.cancel')}</DialogClose>
 					<DialogAction testID="add-to-cart-submit" onPress={onAdd}>

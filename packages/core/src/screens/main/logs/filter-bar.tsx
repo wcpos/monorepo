@@ -6,13 +6,7 @@ import { map } from 'rxjs/operators';
 import { HStack } from '@wcpos/components/hstack';
 import type { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@wcpos/components/select';
 import type { Option } from '@wcpos/components/select';
 
 import { useT } from '../../../contexts/translations';
@@ -71,6 +65,11 @@ export function FilterBar({ query }: { query: Query<any> }) {
 		[query]
 	);
 
+	const displayText = React.useMemo(() => {
+		if (selectedOptions.length === 0) return t('logs.log_level');
+		return selectedOptions.map((o) => o.label).join(', ');
+	}, [selectedOptions, t]);
+
 	return (
 		<HStack className="w-full flex-wrap">
 			<Select multiple value={selectedOptions} onValueChange={handleValueChange}>
@@ -82,9 +81,7 @@ export function FilterBar({ query }: { query: Query<any> }) {
 						removable={isActive}
 						onRemove={() => query.removeWhere('level').exec()}
 					>
-						<ButtonText>
-							<SelectValue placeholder={t('logs.log_level')} truncationStyle="ellipsis" />
-						</ButtonText>
+						<ButtonText>{displayText}</ButtonText>
 					</ButtonPill>
 				</SelectTrigger>
 				<SelectContent>

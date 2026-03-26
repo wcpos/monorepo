@@ -14,7 +14,6 @@ import { Text } from '@wcpos/components/text';
 import { useT } from '../../../../../contexts/translations';
 
 export function LanguageSelect({ value, ...props }: SelectSingleRootProps) {
-	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 
 	const options = React.useMemo(
@@ -34,14 +33,10 @@ export function LanguageSelect({ value, ...props }: SelectSingleRootProps) {
 
 	return (
 		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
-			<SelectTrigger
-				onLayout={(ev) => {
-					setSelectTriggerWidth(ev.nativeEvent.layout.width);
-				}}
-			>
+			<SelectTrigger>
 				<SelectValue placeholder={t('settings.select_language', 'Select printer language')} />
 			</SelectTrigger>
-			<SelectContent style={{ width: selectTriggerWidth }}>
+			<SelectContent matchWidth>
 				<SelectGroup>
 					{options.map((option) => (
 						<SelectItem key={option.value} label={option.label} value={option.value}>
