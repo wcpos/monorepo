@@ -315,6 +315,7 @@ describe('Performance: Time To First Result (TTFR)', () => {
 			measuring = false;
 			await measurePromise;
 
+			expect(delays.length).toBeGreaterThan(0);
 			const maxDelay = Math.max(...delays);
 			const avgDelay = delays.reduce((a, b) => a + b, 0) / delays.length;
 			const sorted = [...delays].sort((a, b) => a - b);

@@ -12,6 +12,14 @@ import { UISettingID, useUISettings } from '../../contexts/ui-settings';
 import { DataTableHeader } from './header';
 import { getColumnStyle } from './index';
 
+type SkeletonColumn = {
+	key: string;
+	show: boolean;
+	width?: number;
+	flex?: number;
+	align?: 'left' | 'right' | 'center';
+};
+
 interface Props {
 	id: UISettingID;
 }
@@ -23,7 +31,7 @@ interface Props {
 export function DataTableSkeleton({ id }: Props) {
 	const { uiSettings, getUILabel } = useUISettings(id);
 	const uiColumns = useObservableEagerState(
-		uiSettings.columns$ as import('rxjs').Observable<Record<string, unknown>[]>
+		uiSettings.columns$ as import('rxjs').Observable<SkeletonColumn[]>
 	);
 
 	return (
@@ -31,8 +39,8 @@ export function DataTableSkeleton({ id }: Props) {
 			<TableHeader>
 				<TableRow>
 					{uiColumns
-						.filter((c: any) => c.show)
-						.map((c: any) => (
+						.filter((c) => c.show)
+						.map((c) => (
 							<TableHead key={c.key} style={getColumnStyle(c)}>
 								<DataTableHeader
 									columnId={c.key}
