@@ -135,11 +135,13 @@ function CategoryTreeLoaderInner({
 
 	const options = React.useMemo<HierarchicalOption[]>(
 		() =>
-			result.hits.map(({ document: doc }) => ({
-				value: String(doc.id),
-				label: doc.name ?? '',
-				parentId: doc.parent && doc.parent > 0 ? String(doc.parent) : undefined,
-			})),
+			result.hits
+				.filter(({ document: doc }) => doc.id != null)
+				.map(({ document: doc }) => ({
+					value: String(doc.id),
+					label: doc.name ?? '',
+					parentId: doc.parent && doc.parent > 0 ? String(doc.parent) : undefined,
+				})),
 		[result.hits]
 	);
 
