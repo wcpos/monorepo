@@ -151,3 +151,33 @@ export function buildTree<T>(
 
 	return { tree: roots, nodeMap };
 }
+
+// --- getVisibleItems ---
+
+export function getVisibleItems<T>(
+	tree: TreeNode<T>[],
+	expandedIds: Set<string>
+): FlatTreeItem<T>[] {
+	const result: FlatTreeItem<T>[] = [];
+
+	function walk(nodes: TreeNode<T>[]) {
+		for (const node of nodes) {
+			const isExpanded = expandedIds.has(node.value) && node.hasChildren;
+			result.push({
+				value: node.value,
+				label: node.label,
+				item: node.item,
+				depth: node.depth,
+				hasChildren: node.hasChildren,
+				isExpanded,
+				parentId: node.parentId,
+			});
+			if (isExpanded) {
+				walk(node.children);
+			}
+		}
+	}
+
+	walk(tree);
+	return result;
+}

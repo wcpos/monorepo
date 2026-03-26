@@ -1,4 +1,4 @@
-import { buildTree } from './use-hierarchy';
+import { buildTree, getVisibleItems } from './use-hierarchy';
 
 import type { HierarchicalOption } from './use-hierarchy';
 
@@ -98,5 +98,53 @@ describe('buildTree', () => {
 		expect(clothing.children).toHaveLength(1);
 		expect(clothing.children[0].children).toHaveLength(0);
 		expect(clothing.children[0].hasChildren).toBe(false);
+	});
+});
+
+describe('getVisibleItems', () => {
+	const flat: HierarchicalOption[] = [
+		{ value: '1', label: 'Clothing' },
+		{ value: '2', label: 'Shirts', parentId: '1' },
+		{ value: '3', label: 'T-Shirts', parentId: '2' },
+		{ value: '4', label: 'Accessories' },
+		{ value: '5', label: 'Hats', parentId: '4' },
+	];
+
+	it('shows only roots when nothing is expanded', () => {
+		const { tree } = buildTree(flat);
+		const items = getVisibleItems(tree, new Set());
+		expect(items).toHaveLength(2);
+		expect(items[0].value).toBe('1');
+		expect(items[1].value).toBe('4');
+	});
+
+	it('shows children when parent is expanded', () => {
+		const { tree } = buildTree(flat);
+		const items = getVisibleItems(tree, new Set(['1']));
+		expect(items).toHaveLength(3);
+		expect(items[0].value).toBe('1');
+		expect(items[0].isExpanded).toBe(true);
+		expect(items[1].value).toBe('2');
+		expect(items[1].isExpanded).toBe(false);
+		expect(items[2].value).toBe('4');
+	});
+
+	it('shows deeply nested children when all ancestors expanded', () => {
+		const { tree } = buildTree(flat);
+		const items = getVisibleItems(tree, new Set(['1', '2']));
+		expect(items).toHaveLength(4);
+		expect(items[2].value).toBe('3');
+	});
+
+	it('preserves depth on FlatTreeItems', () => {
+		const { tree } = buildTree(flat);
+		const items = getVisibleItems(tree, new Set(['1', '2']));
+		expect(items[0].depth).toBe(0);
+		expect(items[1].depth).toBe(1);
+		expect(items[2].depth).toBe(2);
+	});
+
+	it('returns empty array for empty tree', () => {
+		expect(getVisibleItems([], new Set())).toHaveLength(0);
 	});
 });
