@@ -15,7 +15,6 @@ export interface HierarchyConfig {
 	expandedIds?: string[];
 	onExpandChange?: (ids: string[]) => void;
 	parentSelectable?: boolean;
-	cascadeSelection?: boolean;
 	searchMode?: 'flat' | 'tree';
 	filterValue?: string;
 	breadcrumbSeparator?: string;
@@ -399,9 +398,11 @@ export function useHierarchy<T = undefined>(
 	// Uncontrolled expand state. useState initializer runs once on mount.
 	const [internalExpandedIds, setInternalExpandedIds] = useState<Set<string>>(() => {
 		if (defaultExpanded === 'all') {
+			// Build tree inside initializer to get accurate hasChildren from nodeMap
+			const { nodeMap: initNodeMap } = buildTree(options, { maxDepth });
 			const parentIds = new Set<string>();
-			for (const opt of options) {
-				if (opt.parentId) parentIds.add(opt.parentId);
+			for (const node of initNodeMap.values()) {
+				if (node.hasChildren) parentIds.add(node.value);
 			}
 			return parentIds;
 		}
@@ -410,24 +411,36 @@ export function useHierarchy<T = undefined>(
 	});
 
 	const isControlled = controlledExpandedIds !== undefined;
-	const expandedIds = isControlled ? new Set(controlledExpandedIds) : internalExpandedIds;
+	const controlledExpandedSet = useMemo(
+		() => (controlledExpandedIds ? new Set(controlledExpandedIds) : undefined),
+		[controlledExpandedIds]
+	);
+	const expandedIds = isControlled ? controlledExpandedSet! : internalExpandedIds;
 
 	const toggle = useCallback(
 		(id: string) => {
-			const next = new Set(expandedIds);
-			if (next.has(id)) {
-				next.delete(id);
-			} else {
-				next.add(id);
-			}
 			if (isControlled) {
+				const next = new Set(controlledExpandedSet);
+				if (next.has(id)) {
+					next.delete(id);
+				} else {
+					next.add(id);
+				}
 				onExpandChange?.(Array.from(next));
 			} else {
-				setInternalExpandedIds(next);
-				onExpandChange?.(Array.from(next));
+				setInternalExpandedIds((prev) => {
+					const next = new Set(prev);
+					if (next.has(id)) {
+						next.delete(id);
+					} else {
+						next.add(id);
+					}
+					onExpandChange?.(Array.from(next));
+					return next;
+				});
 			}
 		},
-		[expandedIds, isControlled, onExpandChange]
+		[isControlled, controlledExpandedSet, onExpandChange]
 	);
 
 	const expandAll = useCallback(() => {
@@ -444,10 +457,11 @@ export function useHierarchy<T = undefined>(
 	}, [nodeMap, isControlled, onExpandChange]);
 
 	const collapseAll = useCallback(() => {
+		const empty = new Set<string>();
 		if (isControlled) {
 			onExpandChange?.([]);
 		} else {
-			setInternalExpandedIds(new Set());
+			setInternalExpandedIds(empty);
 			onExpandChange?.([]);
 		}
 	}, [isControlled, onExpandChange]);

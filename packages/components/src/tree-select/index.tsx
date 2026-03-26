@@ -1,9 +1,11 @@
 import * as React from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+
+import { Platform } from '@wcpos/utils/platform';
 
 import { Checkbox } from '../checkbox';
 import { applyCascadeToggle, useHierarchy } from '../lib/use-hierarchy';
@@ -15,6 +17,8 @@ import type { FlatTreeItem, TreeNode } from '../lib/use-hierarchy';
 import type { TreeSelectMultiProps, TreeSelectProps, TreeSelectSingleProps } from './types';
 
 type SelectOption = { value: string; label: string };
+
+const SCROLL_VIEW_MAX_HEIGHT = { maxHeight: 300 } as const;
 
 // ─── TreeSelect ──────────────────────────────────────────────────────────
 
@@ -69,12 +73,12 @@ function TreeSelectSingle<T>({
 				<TextClassContext.Provider
 					value={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground')}
 				>
-					<Text>{displayText}</Text>
+					<Text decodeHtml>{displayText}</Text>
 				</TextClassContext.Provider>
 			</PopoverPrimitive.Trigger>
 
 			<TreeSelectContent portalHost={portalHost}>
-				<ScrollView style={{ maxHeight: 300 }}>
+				<ScrollView style={SCROLL_VIEW_MAX_HEIGHT}>
 					{hierarchy.visibleItems.map((item) => {
 						const isSelected = value?.value === item.value;
 						const isSelectable = parentSelectable || !item.hasChildren;
@@ -139,7 +143,6 @@ function TreeSelectMulti<T>({
 		expandedIds: expandedIdsProp,
 		onExpandChange,
 		parentSelectable,
-		cascadeSelection,
 	});
 
 	const selectedValues = value ?? [];
@@ -181,12 +184,14 @@ function TreeSelectMulti<T>({
 				<TextClassContext.Provider
 					value={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground')}
 				>
-					<Text numberOfLines={1}>{displayText}</Text>
+					<Text numberOfLines={1} decodeHtml>
+						{displayText}
+					</Text>
 				</TextClassContext.Provider>
 			</PopoverPrimitive.Trigger>
 
 			<TreeSelectContent portalHost={portalHost}>
-				<ScrollView style={{ maxHeight: 300 }}>
+				<ScrollView style={SCROLL_VIEW_MAX_HEIGHT}>
 					{hierarchy.visibleItems.map((item) => {
 						const selected = isSelected(item.value);
 						const isSelectable = parentSelectable || !item.hasChildren;
@@ -289,7 +294,10 @@ function TreeSelectSingleItem<T>({
 				)}
 				disabled={!isSelectable}
 			>
-				<Text className="web:group-focus:text-accent-foreground text-popover-foreground text-sm">
+				<Text
+					className="web:group-focus:text-accent-foreground text-popover-foreground text-sm"
+					decodeHtml
+				>
 					{item.label}
 				</Text>
 			</Pressable>
@@ -332,7 +340,10 @@ function TreeSelectMultiItem<T>({
 					onCheckedChange={() => handlePress()}
 					className="pointer-events-none"
 				/>
-				<Text className="web:group-focus:text-accent-foreground text-popover-foreground text-sm">
+				<Text
+					className="web:group-focus:text-accent-foreground text-popover-foreground text-sm"
+					decodeHtml
+				>
 					{item.label}
 				</Text>
 			</Pressable>

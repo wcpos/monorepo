@@ -1,13 +1,16 @@
 import * as React from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { Platform } from '@wcpos/utils/platform';
+
 import { Checkbox } from '../checkbox';
 import { Icon } from '../icon';
 import { Input } from '../input';
+import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
 import { applyCascadeToggle, useHierarchy } from '../lib/use-hierarchy';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
@@ -42,6 +45,16 @@ function TreeCombobox<T = undefined>({
 	cascadeSelection,
 }: TreeComboboxProps<T>) {
 	const [filterValue, setFilterValue] = React.useState('');
+	const [, startTransition] = React.useTransition();
+
+	const handleFilterChange = React.useCallback(
+		(text: string) => {
+			startTransition(() => {
+				setFilterValue(text);
+			});
+		},
+		[startTransition]
+	);
 
 	const hierarchy = useHierarchy(options, {
 		maxDepth,
@@ -149,7 +162,7 @@ function TreeCombobox<T = undefined>({
 				portalHost={portalHost}
 				searchPlaceholder={searchPlaceholder}
 				filterValue={filterValue}
-				onFilterChange={setFilterValue}
+				onFilterChange={handleFilterChange}
 				estimatedItemSize={estimatedItemSize}
 				emptyMessage={emptyMessage}
 				isSearching={isSearching}
@@ -195,6 +208,9 @@ function TreeComboboxContent<T>({
 }) {
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
 
+	// Enable arrow key navigation when combobox is open
+	useArrowKeyNavigation();
+
 	const renderTreeItem = React.useCallback(
 		({ item: flatItem }: { item: FlatTreeItem<T> }) => {
 			const handlePress = () => {
@@ -208,33 +224,37 @@ function TreeComboboxContent<T>({
 			const selected = isSelected(flatItem.value);
 
 			const defaultRender = () => (
-				<TreeItemRow item={flatItem} onToggle={hierarchy.toggle}>
-					<Pressable
-						onPress={handlePress}
-						className={cn(
-							'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex-1 flex-row items-center gap-2 rounded-sm px-2 py-1.5'
-						)}
-					>
-						{multiple && (
-							<Checkbox
-								checked={selected}
-								onCheckedChange={() => handlePress()}
-								className="pointer-events-none"
-							/>
-						)}
-						<View className="flex-1">
-							<Text className="text-popover-foreground text-sm">{flatItem.label}</Text>
-							{isSearching && searchMode === 'flat' && flatItem.parentId && (
-								<Text className="text-muted-foreground text-xs">
-									{hierarchy.getBreadcrumb(flatItem.value)}
-								</Text>
+				<VirtualizedListPrimitive.Item>
+					<TreeItemRow item={flatItem} onToggle={hierarchy.toggle}>
+						<Pressable
+							onPress={handlePress}
+							className={cn(
+								'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex-1 flex-row items-center gap-2 rounded-sm px-2 py-1.5'
 							)}
-						</View>
-						{!multiple && selected && (
-							<Icon name="check" className="text-popover-foreground" size="xs" />
-						)}
-					</Pressable>
-				</TreeItemRow>
+						>
+							{multiple && (
+								<Checkbox
+									checked={selected}
+									onCheckedChange={() => handlePress()}
+									className="pointer-events-none"
+								/>
+							)}
+							<View className="flex-1">
+								<Text className="text-popover-foreground text-sm" decodeHtml>
+									{flatItem.label}
+								</Text>
+								{isSearching && searchMode === 'flat' && flatItem.parentId && (
+									<Text className="text-muted-foreground text-xs" decodeHtml>
+										{hierarchy.getBreadcrumb(flatItem.value)}
+									</Text>
+								)}
+							</View>
+							{!multiple && selected && (
+								<Icon name="check" className="text-popover-foreground" size="xs" />
+							)}
+						</Pressable>
+					</TreeItemRow>
+				</VirtualizedListPrimitive.Item>
 			);
 
 			if (renderItem) return renderItem(flatItem, defaultRender);
@@ -276,7 +296,9 @@ function TreeComboboxContent<T>({
 										data={displayItems}
 										estimatedItemSize={estimatedItemSize}
 										renderItem={renderTreeItem as any}
-										parentProps={{ style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 } }}
+										parentProps={{
+											style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
+										}}
 									/>
 								</VirtualizedListPrimitive.Root>
 							) : (
