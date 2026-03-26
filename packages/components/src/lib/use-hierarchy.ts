@@ -152,6 +152,50 @@ export function buildTree<T>(
 	return { tree: roots, nodeMap };
 }
 
+// --- getBreadcrumb ---
+
+export function getBreadcrumb<T>(
+	id: string,
+	nodeMap: Map<string, TreeNode<T>>,
+	separator = ' > '
+): string {
+	const parts: string[] = [];
+	let current = nodeMap.get(id);
+	while (current) {
+		parts.unshift(current.label);
+		current = current.parentId ? nodeMap.get(current.parentId) : undefined;
+	}
+	return parts.join(separator);
+}
+
+// --- getDescendantIds ---
+
+export function getDescendantIds<T>(id: string, nodeMap: Map<string, TreeNode<T>>): string[] {
+	const node = nodeMap.get(id);
+	if (!node) return [];
+	const result: string[] = [];
+	function collect(children: TreeNode<T>[]) {
+		for (const child of children) {
+			result.push(child.value);
+			collect(child.children);
+		}
+	}
+	collect(node.children);
+	return result;
+}
+
+// --- getAncestorIds ---
+
+export function getAncestorIds<T>(id: string, nodeMap: Map<string, TreeNode<T>>): string[] {
+	const result: string[] = [];
+	let current = nodeMap.get(id);
+	while (current?.parentId) {
+		result.push(current.parentId);
+		current = nodeMap.get(current.parentId);
+	}
+	return result;
+}
+
 // --- getVisibleItems ---
 
 export function getVisibleItems<T>(

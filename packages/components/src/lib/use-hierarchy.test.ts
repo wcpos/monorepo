@@ -1,4 +1,10 @@
-import { buildTree, getVisibleItems } from './use-hierarchy';
+import {
+	buildTree,
+	getAncestorIds,
+	getBreadcrumb,
+	getDescendantIds,
+	getVisibleItems,
+} from './use-hierarchy';
 
 import type { HierarchicalOption } from './use-hierarchy';
 
@@ -146,5 +152,62 @@ describe('getVisibleItems', () => {
 
 	it('returns empty array for empty tree', () => {
 		expect(getVisibleItems([], new Set())).toHaveLength(0);
+	});
+});
+
+describe('utility functions', () => {
+	const flat: HierarchicalOption[] = [
+		{ value: '1', label: 'Clothing' },
+		{ value: '2', label: 'Shirts', parentId: '1' },
+		{ value: '3', label: 'T-Shirts', parentId: '2' },
+		{ value: '4', label: 'Accessories' },
+		{ value: '5', label: 'Hats', parentId: '4' },
+	];
+	const { nodeMap } = buildTree(flat);
+
+	describe('getBreadcrumb', () => {
+		it('returns label for root node', () => {
+			expect(getBreadcrumb('1', nodeMap)).toBe('Clothing');
+		});
+
+		it('returns full breadcrumb for nested node', () => {
+			expect(getBreadcrumb('3', nodeMap)).toBe('Clothing > Shirts > T-Shirts');
+		});
+
+		it('uses custom separator', () => {
+			expect(getBreadcrumb('3', nodeMap, ' / ')).toBe('Clothing / Shirts / T-Shirts');
+		});
+
+		it('returns empty string for unknown id', () => {
+			expect(getBreadcrumb('999', nodeMap)).toBe('');
+		});
+	});
+
+	describe('getDescendantIds', () => {
+		it('returns all descendants depth-first', () => {
+			expect(getDescendantIds('1', nodeMap)).toEqual(['2', '3']);
+		});
+
+		it('returns empty array for leaf node', () => {
+			expect(getDescendantIds('3', nodeMap)).toEqual([]);
+		});
+
+		it('returns empty array for unknown id', () => {
+			expect(getDescendantIds('999', nodeMap)).toEqual([]);
+		});
+	});
+
+	describe('getAncestorIds', () => {
+		it('returns all ancestors bottom-up', () => {
+			expect(getAncestorIds('3', nodeMap)).toEqual(['2', '1']);
+		});
+
+		it('returns empty array for root node', () => {
+			expect(getAncestorIds('1', nodeMap)).toEqual([]);
+		});
+
+		it('returns empty array for unknown id', () => {
+			expect(getAncestorIds('999', nodeMap)).toEqual([]);
+		});
 	});
 });
