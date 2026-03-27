@@ -9,6 +9,8 @@ import { useTaxRates } from '../../contexts/tax-rates';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../contexts/current-order';
 
+type Totals = ReturnType<typeof calculateOrderTotals>;
+
 /**
  *
  */
@@ -17,6 +19,8 @@ export const useOrderTotals = () => {
 	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxRates();
 	const { localPatch } = useLocalMutation();
 	const { line_items, fee_lines, shipping_lines, coupon_lines } = useCartLines();
+
+	const hasCoupons = coupon_lines.length > 0;
 
 	/**
 	 *
@@ -44,6 +48,23 @@ export const useOrderTotals = () => {
 		priceNumDecimals,
 		pricesIncludeTax,
 	]);
+
+	/**
+	 * When coupons are active, debounce the returned totals so transient
+	 * intermediate values (from pre-coupon calculation or server response)
+	 * don't flash in the UI. The component keeps showing the previous
+	 * correct value until the totals settle.
+	 */
+	const [stableTotals, setStableTotals] = React.useState<Totals>(totals);
+
+	React.useEffect(() => {
+		if (!hasCoupons) {
+			setStableTotals(totals);
+			return;
+		}
+		const timer = setTimeout(() => setStableTotals(totals), 50);
+		return () => clearTimeout(timer);
+	}, [totals, hasCoupons]);
 
 	/**
 	 *
@@ -92,5 +113,5 @@ export const useOrderTotals = () => {
 		});
 	}, [totals]);
 
-	return totals;
+	return hasCoupons ? stableTotals : totals;
 };

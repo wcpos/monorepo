@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservable, useObservableEagerState, useSubscription } from 'observable-hooks';
 import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
+import { calculateOrderTotals } from './calculate-order-totals';
 import { useFeeLineData } from './use-fee-line-data';
 import { useRecalculateCoupons } from './use-recalculate-coupons';
 import { useUpdateFeeLine } from './use-update-fee-line';
@@ -26,7 +27,7 @@ export const useCartLines = () => {
 	const { updateFeeLine } = useUpdateFeeLine();
 	const { localPatch } = useLocalMutation();
 	const { recalculate } = useRecalculateCoupons();
-	const { priceNumDecimals } = useTaxRates();
+	const { allRates, taxRoundAtSubtotal, priceNumDecimals, pricesIncludeTax } = useTaxRates();
 
 	/**
 	 * We need to filter out any items that have been 'removed', eg: product_id === null.
@@ -96,11 +97,36 @@ export const useCartLines = () => {
 			if (!result) return; // coupon missing locally — bail to avoid partial data
 			// Bail if order changed during async replay to avoid overwriting concurrent edits
 			if (currentOrder.getLatest() !== freshOrder) return;
+
+			// Compute order totals from the coupon-adjusted line items in the same
+			// tick. This prevents useOrderTotals from running with stale pre-coupon
+			// line items and flashing incorrect tax values.
+			const totals = calculateOrderTotals({
+				lineItems: result.lineItems.filter((item) => item.product_id !== null),
+				feeLines: (freshOrder.fee_lines || []).filter((item) => item.name !== null),
+				shippingLines: (freshOrder.shipping_lines || []).filter((item) => item.method_id !== null),
+				couponLines: result.couponLines.filter((item) => item.code != null),
+				taxRates: allRates,
+				taxRoundAtSubtotal,
+				dp: priceNumDecimals,
+				pricesIncludeTax,
+			});
+
 			await localPatch({
 				document: freshOrder,
 				data: {
 					coupon_lines: result.couponLines,
 					line_items: result.lineItems,
+					discount_tax: totals.discount_tax,
+					discount_total: totals.discount_total,
+					shipping_tax: totals.shipping_tax,
+					shipping_total: totals.shipping_total,
+					cart_tax: totals.cart_tax,
+					total_tax: totals.total_tax,
+					total: totals.total,
+					tax_lines: totals.tax_lines as NonNullable<
+						import('@wcpos/database').OrderDocument['tax_lines']
+					>,
 				},
 			});
 		}
