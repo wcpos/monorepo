@@ -71,6 +71,7 @@ export function calculateOrderTotals({
 	const activeLineItems = lineItems.filter((item) => item.product_id !== null);
 	const activeFeeLines = feeLines.filter((item) => item.name !== null);
 	const activeShippingLines = shippingLines.filter((item) => item.method_id !== null);
+	// Loose != null also excludes undefined, matching existing use-cart-lines patterns
 	const activeCouponLines = couponLines.filter((item) => item.code != null);
 
 	let discount_total = 0;

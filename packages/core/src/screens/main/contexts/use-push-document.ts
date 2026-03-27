@@ -86,9 +86,18 @@ export const usePushDocument = () => {
 
 	/**
 	 * Send document data to server (HTTP operation)
+	 *
+	 * @param suppressErrors - When true, skip toast/DB logging on failure (used
+	 *   for the first attempt when a retry is possible, so the user doesn't see
+	 *   a false "failed" toast if the retry succeeds).
 	 */
 	const sendToServer = React.useCallback(
-		async (endpoint: string, json: any, docId: number | string) => {
+		async (
+			endpoint: string,
+			json: any,
+			docId: number | string,
+			{ suppressErrors = false }: { suppressErrors?: boolean } = {}
+		) => {
 			try {
 				const response = await http.post(endpoint, json);
 				const data = get(response, 'data');
@@ -103,21 +112,23 @@ export const usePushDocument = () => {
 
 				return data;
 			} catch (err: any) {
-				// Extract the WooCommerce/WordPress error message from the response
-				const serverMessage = extractErrorMessage(
-					err?.response?.data,
-					t('common.failed_to_send_to_server')
-				);
-				syncLogger.error(serverMessage, {
-					showToast: true,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.CONNECTION_REFUSED,
-						documentId: docId,
-						endpoint,
-						error: err instanceof Error ? err.message : String(err),
-					},
-				});
+				if (!suppressErrors) {
+					// Extract the WooCommerce/WordPress error message from the response
+					const serverMessage = extractErrorMessage(
+						err?.response?.data,
+						t('common.failed_to_send_to_server')
+					);
+					syncLogger.error(serverMessage, {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.CONNECTION_REFUSED,
+							documentId: docId,
+							endpoint,
+							error: err instanceof Error ? err.message : String(err),
+						},
+					});
+				}
 				throw err;
 			}
 		},
@@ -186,9 +197,13 @@ export const usePushDocument = () => {
 			// Send to server, retrying once if stale deletion markers cause
 			// "order item ID not associated with the order" (the IDs were already
 			// deleted in a previous sync whose response didn't reach the client).
+			// Suppress toast/logging on first attempt so the user doesn't see a
+			// false "failed" notification if the retry succeeds.
 			let serverData: any;
 			try {
-				serverData = await sendToServer(endpoint, json, latestDoc.id as number | string);
+				serverData = await sendToServer(endpoint, json, latestDoc.id as number | string, {
+					suppressErrors: true,
+				});
 			} catch (err: any) {
 				const errorCode = extractWpErrorCode(err?.response?.data);
 				if (errorCode === 'woocommerce_rest_invalid_order_item_id') {
@@ -198,6 +213,21 @@ export const usePushDocument = () => {
 					const cleanedJson = stripDeletionMarkers(json);
 					serverData = await sendToServer(endpoint, cleanedJson, latestDoc.id as number | string);
 				} else {
+					// Non-retryable error — report now
+					const serverMessage = extractErrorMessage(
+						err?.response?.data,
+						t('common.failed_to_send_to_server')
+					);
+					syncLogger.error(serverMessage, {
+						showToast: true,
+						saveToDb: true,
+						context: {
+							errorCode: ERROR_CODES.CONNECTION_REFUSED,
+							documentId: latestDoc.id,
+							endpoint,
+							error: err instanceof Error ? err.message : String(err),
+						},
+					});
 					throw err;
 				}
 			}
@@ -205,6 +235,6 @@ export const usePushDocument = () => {
 			// Update local document with server response
 			return await updateLocalDocument(latestDoc, serverData);
 		},
-		[prepareDocumentData, sendToServer, updateLocalDocument]
+		[prepareDocumentData, sendToServer, updateLocalDocument, t]
 	);
 };
