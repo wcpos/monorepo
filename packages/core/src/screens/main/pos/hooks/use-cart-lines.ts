@@ -102,7 +102,7 @@ export const useCartLines = () => {
 			// tick. This prevents useOrderTotals from running with stale pre-coupon
 			// line items and flashing incorrect tax values.
 			const totals = calculateOrderTotals({
-				lineItems: result.lineItems,
+				lineItems: result.lineItems.filter((item) => item.product_id !== null),
 				feeLines: (freshOrder.fee_lines || []).filter((item) => item.name !== null),
 				shippingLines: (freshOrder.shipping_lines || []).filter((item) => item.method_id !== null),
 				couponLines: result.couponLines.filter((item) => item.code != null),
