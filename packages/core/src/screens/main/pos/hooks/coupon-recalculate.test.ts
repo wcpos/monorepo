@@ -840,4 +840,99 @@ describe('recalculateCoupons — parity regression (Layer 5)', () => {
 			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(2, 0);
 		});
 	});
+
+	// -----------------------------------------------------------------------
+	// Deleted items — order 57051 from dev-pro.wcpos.com
+	// -----------------------------------------------------------------------
+	describe('deleted items in input arrays', () => {
+		it('should exclude deleted line items (product_id: null) from coupon calculations', () => {
+			const activeItem = makePosLineItem(67, 55, 65);
+			const deletedItem = {
+				...makePosLineItem(99, 35, 45),
+				product_id: null,
+				id: 221488,
+			} as unknown as LineItem;
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [activeItem, deletedItem],
+					couponLines: [makeCouponLine('save10')],
+					couponConfigs: new Map([
+						['save10', makeConfig({ discount_type: 'percent', amount: '10' })],
+					]),
+				})
+			);
+
+			// 10% of $55 = $5.50 discount on Belt only
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(5.5, 1);
+			// Deleted item should still be in the array (preserved for server sync)
+			expect(result.lineItems[1].product_id).toBeNull();
+		});
+
+		it('should preserve deleted coupon lines (code: null) without recalculating them', () => {
+			const item = makePosLineItem(67, 55, 65);
+			const activeCoupon = makeCouponLine('save10');
+			const deletedCoupon = {
+				...makeCouponLine('old'),
+				code: null,
+				id: 221486,
+				discount: '5.00',
+				discount_tax: '1.00',
+			} as unknown as CouponLine;
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [item],
+					couponLines: [deletedCoupon, activeCoupon],
+					couponConfigs: new Map([
+						['save10', makeConfig({ discount_type: 'percent', amount: '10' })],
+					]),
+				})
+			);
+
+			// Active coupon should calculate correctly
+			expect(parseFloat(result.couponLines[1].discount!)).toBeCloseTo(5.5, 1);
+			// Deleted coupon should be preserved as-is (code still null)
+			expect(result.couponLines[0].code).toBeNull();
+			expect(result.couponLines[0].discount).toBe('5.00');
+		});
+
+		it('should handle mixed active and deleted items (order 57051 scenario)', () => {
+			const producto = makePosLineItem(0, 2, 2);
+			const hoodie = {
+				...makePosLineItem(99, 35, 45),
+				product_id: null,
+				id: 221488,
+			} as unknown as LineItem;
+			const belt = makePosLineItem(67, 55, 65);
+
+			const deletedPennyCoupon = {
+				code: null,
+				id: 221486,
+				discount: '0.00817',
+				discount_tax: '0.00183',
+				meta_data: [],
+			} as unknown as CouponLine;
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [producto, hoodie, belt],
+					couponLines: [deletedPennyCoupon, makeCouponLine('penny'), makeCouponLine('band25to75')],
+					couponConfigs: new Map([
+						['penny', makeConfig({ discount_type: 'fixed_cart', amount: '0.01' })],
+						['band25to75', makeConfig({ discount_type: 'percent', amount: '10' })],
+					]),
+				})
+			);
+
+			// Discount should only apply to active items: Producto ($2) + Belt ($55)
+			const totalDiscount = result.couponLines
+				.filter((cl) => cl.code != null)
+				.reduce((sum, cl) => sum + parseFloat(cl.discount || '0'), 0);
+
+			// ~$5.71 on $57, NOT ~$9.21 on $92
+			expect(totalDiscount).toBeLessThan(6);
+			expect(totalDiscount).toBeGreaterThan(5);
+		});
+	});
 });
