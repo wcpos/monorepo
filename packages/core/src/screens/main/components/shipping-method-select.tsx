@@ -22,7 +22,6 @@ import { useExtraData } from '../contexts/extra-data';
 export function ShippingMethodSelect({ value, ...props }: SelectSingleRootProps) {
 	const { extraData } = useExtraData();
 	const shippingMethods = useObservableEagerState(extraData.shippingMethods$);
-	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 
 	/**
@@ -49,14 +48,10 @@ export function ShippingMethodSelect({ value, ...props }: SelectSingleRootProps)
 	 */
 	return (
 		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
-			<SelectTrigger
-				onLayout={(ev) => {
-					setSelectTriggerWidth(ev.nativeEvent.layout.width);
-				}}
-			>
+			<SelectTrigger>
 				<SelectValue placeholder={t('common.select_shipping_method')} />
 			</SelectTrigger>
-			<SelectContent style={{ width: selectTriggerWidth }}>
+			<SelectContent matchWidth>
 				<SelectGroup>
 					{options.map((option) => (
 						<SelectItem key={option.value} label={option.label} value={option.value}>

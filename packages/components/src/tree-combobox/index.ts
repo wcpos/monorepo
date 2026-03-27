@@ -1,2 +1,12 @@
-export { TreeCombobox } from './tree-combobox';
-export type { TreeComboboxProps, TreeComboboxSingleProps, TreeComboboxMultiProps } from './types';
+export {
+	TreeCombobox,
+	TreeComboboxTrigger,
+	TreeComboboxContent,
+	useTreeComboboxContext,
+} from './tree-combobox';
+export type {
+	TreeComboboxProps,
+	TreeComboboxSingleProps,
+	TreeComboboxMultiProps,
+	TreeComboboxContentProps,
+} from './types';

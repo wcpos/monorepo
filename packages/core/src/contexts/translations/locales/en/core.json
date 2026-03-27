@@ -452,6 +452,8 @@
 	"products.no_product_found": "No product found",
 	"products.product_not_found": "Product not found",
 	"products.stock_quantity": "Stock Quantity",
+	"products.virtual": "Virtual",
+	"products.downloadable": "Downloadable",
 	"receipt.email_address": "Email Address",
 	"receipt.email_receipt": "Email Receipt",
 	"receipt.email_sent": "Email sent",

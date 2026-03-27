@@ -14,15 +14,53 @@ import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
 import { applyCascadeToggle, useHierarchy } from '../lib/use-hierarchy';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
-import { TreeItemRow } from '../tree-select/tree-item';
+import { INDENT_PX } from '../tree-select/tree-item';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 
 import type { FlatTreeItem } from '../lib/use-hierarchy';
-import type { TreeComboboxProps } from './types';
+import type { TreeComboboxContentProps, TreeComboboxProps } from './types';
 
 type ComboboxOption<T = undefined> = { value: string; label: string; item?: T };
 
+// --- Context ---
+
+interface TreeComboboxContextType {
+	hierarchy: ReturnType<typeof useHierarchy<any>>;
+	displayItems: FlatTreeItem<any>[];
+	isSearching: boolean;
+	isSelected: (value: string) => boolean;
+	selectItem: (value: string, label: string) => void;
+	multiple: boolean;
+	parentSelectable: boolean;
+	filterValue: string;
+	onFilterChange: (value: string) => void;
+	searchMode: 'tree' | 'flat';
+}
+
+interface TreeComboboxWidthContextType {
+	triggerWidth: number | undefined;
+	setTriggerWidth: (width: number) => void;
+}
+
+const TreeComboboxWidthContext = React.createContext<TreeComboboxWidthContextType>({
+	triggerWidth: undefined,
+	setTriggerWidth: () => {},
+});
+
+const TreeComboboxContext = React.createContext<TreeComboboxContextType | null>(null);
+
+function useTreeComboboxContext() {
+	const context = React.useContext(TreeComboboxContext);
+	if (!context) {
+		throw new Error('TreeCombobox compound components must be rendered inside TreeCombobox');
+	}
+	return context;
+}
+
+// --- Root ---
+
 function TreeCombobox<T = undefined>({
+	children,
 	options,
 	value: valueProp,
 	defaultValue,
@@ -34,17 +72,10 @@ function TreeCombobox<T = undefined>({
 	defaultExpanded = 'none',
 	expandedIds: controlledExpandedIds,
 	onExpandChange,
-	placeholder = 'Select...',
-	searchPlaceholder = 'Search...',
-	disabled,
-	portalHost,
-	className,
-	estimatedItemSize = 36,
-	emptyMessage = 'No results found',
-	renderItem,
-	cascadeSelection,
+	cascadeSelection = !!multiple,
 }: TreeComboboxProps<T>) {
 	const [filterValue, setFilterValue] = React.useState('');
+	const [triggerWidth, setTriggerWidth] = React.useState<number | undefined>();
 	const [, startTransition] = React.useTransition();
 
 	const handleFilterChange = React.useCallback(
@@ -68,7 +99,6 @@ function TreeCombobox<T = undefined>({
 	const isSearching = filterValue.trim().length > 0;
 	const displayItems = isSearching ? hierarchy.filteredItems : hierarchy.visibleItems;
 
-	// Value state
 	const [value, onValueChange] = useControllableState<
 		ComboboxOption | ComboboxOption[] | undefined
 	>({
@@ -97,8 +127,8 @@ function TreeCombobox<T = undefined>({
 		[hierarchy.nodeMap]
 	);
 
-	const handleSelect = React.useCallback(
-		(itemValue: string, itemLabel: string, onOpenChange: (open: boolean) => void) => {
+	const selectItem = React.useCallback(
+		(itemValue: string, itemLabel: string) => {
 			if (multiple) {
 				const currentValues = (value as ComboboxOption<T>[] | undefined) ?? [];
 				if (cascadeSelection) {
@@ -116,174 +146,177 @@ function TreeCombobox<T = undefined>({
 				}
 			} else {
 				onValueChange(toOption(itemValue, itemLabel) as any);
-				onOpenChange(false);
 			}
 		},
 		[multiple, value, onValueChange, cascadeSelection, hierarchy.nodeMap, toOption]
 	);
 
-	// Display text
-	const displayText = React.useMemo(() => {
-		if (multiple) {
-			const selected = (value as ComboboxOption[] | undefined) ?? [];
-			if (selected.length === 0) return placeholder;
-			const labels = selected.map((v) => v.label).join(', ');
-			if (labels.length <= 24) return labels;
-			return `${selected[0].label} +${selected.length - 1}`;
-		}
-		return (value as ComboboxOption | undefined)?.label ?? placeholder;
-	}, [multiple, value, placeholder]);
-
-	const hasValue = multiple
-		? ((value as ComboboxOption[] | undefined)?.length ?? 0) > 0
-		: (value as ComboboxOption | undefined) !== undefined;
-
 	const handleOpenChange = React.useCallback((open: boolean) => {
 		if (!open) setFilterValue('');
 	}, []);
 
+	const contextValue = React.useMemo<TreeComboboxContextType>(
+		() => ({
+			hierarchy,
+			displayItems,
+			isSearching,
+			isSelected,
+			selectItem,
+			multiple: !!multiple,
+			parentSelectable,
+			filterValue,
+			onFilterChange: handleFilterChange,
+			searchMode,
+		}),
+		[
+			hierarchy,
+			displayItems,
+			isSearching,
+			isSelected,
+			selectItem,
+			multiple,
+			parentSelectable,
+			filterValue,
+			handleFilterChange,
+			searchMode,
+		]
+	);
+
+	const widthContextValue = React.useMemo(
+		() => ({ triggerWidth, setTriggerWidth }),
+		[triggerWidth]
+	);
+
 	return (
 		<PopoverPrimitive.Root onOpenChange={handleOpenChange}>
-			<PopoverPrimitive.Trigger
-				disabled={disabled}
-				className={cn(
-					'border-border bg-card web:ring-offset-background h-10 w-full flex-row items-center rounded-md border px-2',
-					disabled && 'web:cursor-not-allowed opacity-50',
-					className
-				)}
-			>
-				<View className="flex-1">
-					<Text
-						className={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground')}
-						numberOfLines={1}
-						decodeHtml
-					>
-						{displayText}
-					</Text>
-				</View>
-				<Icon name="chevronDown" />
-			</PopoverPrimitive.Trigger>
-			<TreeComboboxContent
-				hierarchy={hierarchy}
-				displayItems={displayItems}
-				isSelected={isSelected}
-				handleSelect={handleSelect}
-				multiple={!!multiple}
-				parentSelectable={parentSelectable}
-				portalHost={portalHost}
-				searchPlaceholder={searchPlaceholder}
-				filterValue={filterValue}
-				onFilterChange={handleFilterChange}
-				estimatedItemSize={estimatedItemSize}
-				emptyMessage={emptyMessage}
-				isSearching={isSearching}
-				searchMode={searchMode}
-				renderItem={renderItem}
-			/>
+			<TreeComboboxContext.Provider value={contextValue}>
+				<TreeComboboxWidthContext.Provider value={widthContextValue}>
+					{children}
+				</TreeComboboxWidthContext.Provider>
+			</TreeComboboxContext.Provider>
 		</PopoverPrimitive.Root>
 	);
 }
 
+// --- Trigger ---
+
+function TreeComboboxTrigger({
+	className,
+	disabled,
+	onLayout,
+	...props
+}: PopoverPrimitive.TriggerProps) {
+	const { setTriggerWidth } = React.useContext(TreeComboboxWidthContext);
+
+	const handleLayout = React.useCallback(
+		(e: import('react-native').LayoutChangeEvent) => {
+			setTriggerWidth(e.nativeEvent.layout.width);
+			onLayout?.(e);
+		},
+		[setTriggerWidth, onLayout]
+	);
+
+	return (
+		<PopoverPrimitive.Trigger
+			className={cn(disabled && 'web:cursor-not-allowed opacity-50', className)}
+			disabled={disabled}
+			onLayout={handleLayout}
+			{...props}
+		/>
+	);
+}
+
+// --- Content ---
+
 function TreeComboboxContent<T>({
-	hierarchy,
-	displayItems,
-	isSelected,
-	handleSelect,
-	multiple,
-	parentSelectable,
+	children,
 	portalHost,
-	searchPlaceholder,
-	filterValue,
-	onFilterChange,
-	estimatedItemSize,
-	emptyMessage,
-	isSearching,
-	searchMode,
+	className,
+	matchWidth,
+	searchPlaceholder = 'Search...',
+	emptyMessage = 'No results found',
+	estimatedItemSize = 36,
 	renderItem,
-}: {
-	hierarchy: ReturnType<typeof useHierarchy<T>>;
-	displayItems: FlatTreeItem<T>[];
-	isSelected: (value: string) => boolean;
-	handleSelect: (value: string, label: string, onOpenChange: (open: boolean) => void) => void;
-	multiple: boolean;
-	parentSelectable: boolean;
-	portalHost?: string;
-	searchPlaceholder: string;
-	filterValue: string;
-	onFilterChange: (value: string) => void;
-	estimatedItemSize: number;
-	emptyMessage: string;
-	isSearching: boolean;
-	searchMode: 'tree' | 'flat';
-	renderItem?: TreeComboboxProps<T>['renderItem'];
-}) {
+}: TreeComboboxContentProps<T>) {
+	const ctx = useTreeComboboxContext();
+	const widthCtx = React.useContext(TreeComboboxWidthContext);
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
 
-	// Enable arrow key navigation when combobox is open
 	useArrowKeyNavigation();
 
 	const renderTreeItem = React.useCallback(
 		({ item: flatItem }: { item: FlatTreeItem<T> }) => {
+			const structuralHasChildren =
+				ctx.hierarchy.nodeMap.get(flatItem.value)?.hasChildren ?? flatItem.hasChildren;
+
 			const handlePress = () => {
-				const structuralHasChildren =
-					hierarchy.nodeMap.get(flatItem.value)?.hasChildren ?? flatItem.hasChildren;
-				if (!parentSelectable && structuralHasChildren) {
-					hierarchy.toggle(flatItem.value);
+				if (!ctx.parentSelectable && structuralHasChildren) {
+					ctx.hierarchy.toggle(flatItem.value);
 					return;
 				}
-				handleSelect(flatItem.value, flatItem.label, onOpenChange);
+				ctx.selectItem(flatItem.value, flatItem.label);
+				if (!ctx.multiple) onOpenChange(false);
 			};
 
-			const selected = isSelected(flatItem.value);
+			const handleToggle = () => {
+				ctx.hierarchy.toggle(flatItem.value);
+			};
+
+			const selected = ctx.isSelected(flatItem.value);
 
 			const defaultRender = () => (
 				<VirtualizedListPrimitive.Item>
-					<TreeItemRow item={flatItem} onToggle={hierarchy.toggle}>
+					<View className="flex flex-row items-center">
+						<View style={{ width: flatItem.depth * INDENT_PX }} />
 						<Pressable
 							onPress={handlePress}
-							className={cn(
-								'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex-1 flex-row items-center gap-2 rounded-sm px-2 py-1.5'
-							)}
+							className="web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex-1 flex-row items-center gap-2 rounded-sm px-2 py-1.5"
 						>
-							{multiple && (
+							{ctx.multiple ? (
 								<Checkbox
 									checked={selected}
 									onCheckedChange={() => handlePress()}
 									className="pointer-events-none"
 								/>
+							) : (
+								<View className="h-4 w-4 items-center justify-center">
+									{selected && <Icon name="check" className="text-popover-foreground" size="xs" />}
+								</View>
 							)}
 							<View className="flex-1">
 								<Text className="text-popover-foreground text-sm" decodeHtml>
 									{flatItem.label}
 								</Text>
-								{isSearching && searchMode === 'flat' && flatItem.parentId && (
+								{ctx.isSearching && ctx.searchMode === 'flat' && flatItem.parentId && (
 									<Text className="text-muted-foreground text-xs" decodeHtml>
-										{hierarchy.getBreadcrumb(flatItem.value)}
+										{ctx.hierarchy.getBreadcrumb(flatItem.value)}
 									</Text>
 								)}
 							</View>
-							{!multiple && selected && (
-								<Icon name="check" className="text-popover-foreground" size="xs" />
-							)}
 						</Pressable>
-					</TreeItemRow>
+						{flatItem.hasChildren ? (
+							<Pressable
+								onPress={handleToggle}
+								className="h-6 w-6 items-center justify-center"
+								hitSlop={4}
+							>
+								<Icon
+									name={flatItem.isExpanded ? 'chevronDown' : 'chevronRight'}
+									size="xs"
+									className="text-muted-foreground"
+								/>
+							</Pressable>
+						) : (
+							<View className="w-6" />
+						)}
+					</View>
 				</VirtualizedListPrimitive.Item>
 			);
 
-			if (renderItem) return renderItem(flatItem, defaultRender);
+			if (renderItem) return renderItem(flatItem as FlatTreeItem<T>, defaultRender);
 			return defaultRender();
 		},
-		[
-			parentSelectable,
-			multiple,
-			hierarchy,
-			handleSelect,
-			isSelected,
-			isSearching,
-			searchMode,
-			onOpenChange,
-			renderItem,
-		]
+		[ctx, onOpenChange, renderItem]
 	);
 
 	return (
@@ -292,21 +325,28 @@ function TreeComboboxContent<T>({
 				<Animated.View entering={FadeIn.duration(200)} exiting={FadeOut}>
 					<TextClassContext.Provider value="text-popover-foreground">
 						<PopoverPrimitive.Content
-							align="start"
+							align="center"
 							sideOffset={4}
-							className="border-border bg-popover web:animate-in web:zoom-in-95 web:fade-in-0 web:cursor-auto web:outline-none z-50 max-h-[300px] w-72 rounded-md border p-2 shadow-md"
+							style={
+								matchWidth && widthCtx.triggerWidth ? { width: widthCtx.triggerWidth } : undefined
+							}
+							className={cn(
+								'border-border bg-popover web:animate-in web:zoom-in-95 web:fade-in-0 web:cursor-auto web:outline-none z-50 max-h-[300px] w-72 rounded-md border p-2 shadow-md',
+								className
+							)}
 						>
+							{children}
 							<Input
 								autoFocus
-								value={filterValue}
-								onChangeText={onFilterChange}
+								value={ctx.filterValue}
+								onChangeText={ctx.onFilterChange}
 								placeholder={searchPlaceholder}
 								className="mb-2"
 							/>
-							{displayItems.length > 0 ? (
+							{ctx.displayItems.length > 0 ? (
 								<VirtualizedListPrimitive.Root className="flex-1">
 									<VirtualizedListPrimitive.List
-										data={displayItems}
+										data={ctx.displayItems}
 										estimatedItemSize={estimatedItemSize}
 										renderItem={renderTreeItem as any}
 										parentProps={{
@@ -315,7 +355,7 @@ function TreeComboboxContent<T>({
 									/>
 								</VirtualizedListPrimitive.Root>
 							) : (
-								isSearching && (
+								ctx.isSearching && (
 									<View className="px-2 py-1.5">
 										<Text className="text-popover-foreground text-sm">{emptyMessage}</Text>
 									</View>
@@ -329,4 +369,4 @@ function TreeComboboxContent<T>({
 	);
 }
 
-export { TreeCombobox };
+export { TreeCombobox, TreeComboboxTrigger, TreeComboboxContent, useTreeComboboxContext };

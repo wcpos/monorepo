@@ -17,7 +17,6 @@ import { useT } from '../../../contexts/translations';
  *
  */
 export function TaxBasedOnSelect({ value, ...props }: SelectSingleRootProps) {
-	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 
 	/**
@@ -45,14 +44,10 @@ export function TaxBasedOnSelect({ value, ...props }: SelectSingleRootProps) {
 	 */
 	return (
 		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
-			<SelectTrigger
-				onLayout={(ev) => {
-					setSelectTriggerWidth(ev.nativeEvent.layout.width);
-				}}
-			>
+			<SelectTrigger>
 				<SelectValue placeholder={t('common.select_tax_based_on')} />
 			</SelectTrigger>
-			<SelectContent style={{ width: selectTriggerWidth }}>
+			<SelectContent matchWidth>
 				<SelectGroup>
 					{options.map((option) => (
 						<SelectItem key={option.value} label={option.label} value={option.value}>

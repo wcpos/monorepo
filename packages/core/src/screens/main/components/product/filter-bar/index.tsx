@@ -9,6 +9,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
 import type { Query } from '@wcpos/query';
 
+import { BrandsPill } from './brands-pill';
 import { CategoryPill } from './category-pill';
 import { FeaturedPill } from './featured-pill';
 import { OnSalePill } from './on-sale-pill';
@@ -16,7 +17,6 @@ import { StockStatusPill } from './stock-status-pill';
 import { TagPill } from './tag-pill';
 import { usePullDocument } from '../../../contexts/use-pull-document';
 import { useCollection } from '../../../hooks/use-collection';
-import { BrandsPill } from './brands-pill';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 
@@ -29,41 +29,13 @@ interface Props {
  */
 export function FilterBar({ query }: Props) {
 	const pullDocument = usePullDocument();
-	const { collection: categoryCollection } = useCollection('products/categories');
 	const { collection: tagCollection } = useCollection('products/tags');
 	const { collection: brandCollection } = useCollection('products/brands');
-	const selectedCategoryID = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getElemMatchId('categories')))
-	);
 	const selectedTagID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getElemMatchId('tags')))
 	);
 	const selectedBrandID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getElemMatchId('brands')))
-	);
-
-	const selectedCategory$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([id]) => {
-					if (!id) {
-						return of(undefined);
-					}
-					return categoryCollection.findOne({ selector: { id } }).$.pipe(
-						tap((doc) => {
-							if (!isRxDocument(doc)) {
-								pullDocument(id, categoryCollection as any);
-							}
-						})
-					);
-				})
-			),
-		[selectedCategoryID]
-	);
-
-	const selectedCategoryResource = React.useMemo(
-		() => new ObservableResource(selectedCategory$),
-		[selectedCategory$]
 	);
 
 	const selectedTag$ = useObservable(
@@ -122,13 +94,7 @@ export function FilterBar({ query }: Props) {
 			<StockStatusPill query={query} />
 			<FeaturedPill query={query} />
 			<OnSalePill query={query} />
-			<Suspense>
-				<CategoryPill
-					query={query}
-					resource={selectedCategoryResource as any}
-					selectedID={selectedCategoryID}
-				/>
-			</Suspense>
+			<CategoryPill query={query} />
 			<Suspense>
 				<TagPill query={query} resource={selectedTagResource as any} selectedID={selectedTagID} />
 			</Suspense>

@@ -1713,4 +1713,239 @@ describe('Query', () => {
 			expect(firstSelector).toBe(emittedSelector);
 		});
 	});
+
+	describe('multi-category filtering', () => {
+		const categoryData = [
+			{
+				uuid: '1',
+				name: 'Album A',
+				categories: [{ id: 21, name: 'Music', slug: 'music' }],
+			},
+			{
+				uuid: '2',
+				name: 'Shirt B',
+				categories: [
+					{ id: 17, name: 'Clothing', slug: 'clothing' },
+					{ id: 21, name: 'Music', slug: 'music' },
+				],
+			},
+			{
+				uuid: '3',
+				name: 'Pants C',
+				categories: [{ id: 17, name: 'Clothing', slug: 'clothing' }],
+			},
+			{
+				uuid: '4',
+				name: 'Poster D',
+				categories: [{ id: 30, name: 'Posters', slug: 'posters' }],
+			},
+			{
+				uuid: '5',
+				name: 'Hat E',
+				categories: [
+					{ id: 17, name: 'Clothing', slug: 'clothing' },
+					{ id: 30, name: 'Posters', slug: 'posters' },
+				],
+			},
+		];
+
+		it('filters products matching ANY of multiple categories', async () => {
+			const { success } = await storeDatabase.collections.products.bulkInsert(categoryData);
+			expect(success.length).toBe(5);
+
+			const query = new Query({
+				collection: storeDatabase.collections.products,
+				initialParams: { sort: [{ name: 'asc' }] },
+			});
+
+			// Filter by categories 21 (Music) OR 30 (Posters)
+			// Wrap $or inside $and so removeWhere can find and remove it
+			query
+				.and([
+					{
+						$or: [
+							{ categories: { $elemMatch: { id: 21 } } },
+							{ categories: { $elemMatch: { id: 30 } } },
+						],
+					},
+				])
+				.exec();
+
+			return new Promise<void>((resolve) => {
+				query.result$.subscribe((result) => {
+					// Album A (21), Shirt B (17+21), Poster D (30), Hat E (17+30)
+					expect(result).toEqual(
+						expect.objectContaining({
+							count: 4,
+							hits: expect.arrayContaining([
+								expect.objectContaining({ id: '1' }),
+								expect.objectContaining({ id: '2' }),
+								expect.objectContaining({ id: '4' }),
+								expect.objectContaining({ id: '5' }),
+							]),
+						})
+					);
+					resolve();
+				});
+			});
+		});
+
+		it('clears multi-category filter with removeWhere', async () => {
+			const { success } = await storeDatabase.collections.products.bulkInsert(categoryData);
+			expect(success.length).toBe(5);
+
+			const query = new Query({
+				collection: storeDatabase.collections.products,
+				initialParams: { sort: [{ name: 'asc' }] },
+			});
+
+			// Apply filter
+			query
+				.and([
+					{
+						$or: [
+							{ categories: { $elemMatch: { id: 21 } } },
+							{ categories: { $elemMatch: { id: 30 } } },
+						],
+					},
+				])
+				.exec();
+
+			// Clear filter
+			query.removeWhere('categories').exec();
+
+			return new Promise<void>((resolve) => {
+				query.result$.subscribe((result) => {
+					// All 5 products should be returned
+					expect(result).toEqual(expect.objectContaining({ count: 5 }));
+					resolve();
+				});
+			});
+		});
+
+		it('replaces multi-category filter with a new selection', async () => {
+			const { success } = await storeDatabase.collections.products.bulkInsert(categoryData);
+			expect(success.length).toBe(5);
+
+			const query = new Query({
+				collection: storeDatabase.collections.products,
+				initialParams: { sort: [{ name: 'asc' }] },
+			});
+
+			// First selection: Music (21)
+			query
+				.and([
+					{
+						$or: [{ categories: { $elemMatch: { id: 21 } } }],
+					},
+				])
+				.exec();
+
+			// Change to: Clothing (17) OR Posters (30)
+			query
+				.removeWhere('categories')
+				.and([
+					{
+						$or: [
+							{ categories: { $elemMatch: { id: 17 } } },
+							{ categories: { $elemMatch: { id: 30 } } },
+						],
+					},
+				])
+				.exec();
+
+			return new Promise<void>((resolve) => {
+				query.result$.subscribe((result) => {
+					// Shirt B (17+21), Pants C (17), Poster D (30), Hat E (17+30)
+					expect(result).toEqual(
+						expect.objectContaining({
+							count: 4,
+							hits: expect.arrayContaining([
+								expect.objectContaining({ id: '2' }),
+								expect.objectContaining({ id: '3' }),
+								expect.objectContaining({ id: '4' }),
+								expect.objectContaining({ id: '5' }),
+							]),
+						})
+					);
+					resolve();
+				});
+			});
+		});
+
+		it('multi-category filter works alongside other filters', async () => {
+			const data = categoryData.map((item, i) => ({
+				...item,
+				stock_status: i % 2 === 0 ? 'instock' : 'outofstock',
+			}));
+
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({
+				collection: storeDatabase.collections.products,
+				initialParams: { sort: [{ name: 'asc' }] },
+			});
+
+			// Filter by stock_status AND (category 17 OR 21)
+			query.where('stock_status').equals('instock').exec();
+			query
+				.and([
+					{
+						$or: [
+							{ categories: { $elemMatch: { id: 17 } } },
+							{ categories: { $elemMatch: { id: 21 } } },
+						],
+					},
+				])
+				.exec();
+
+			return new Promise<void>((resolve) => {
+				query.result$.subscribe((result) => {
+					// instock items: uuid 1 (cat 21), uuid 3 (cat 17), uuid 5 (cat 17+30)
+					// Of those, matching cat 17 or 21: uuid 1, uuid 3, uuid 5
+					expect(result).toEqual(
+						expect.objectContaining({
+							count: 3,
+							hits: expect.arrayContaining([
+								expect.objectContaining({ id: '1' }),
+								expect.objectContaining({ id: '3' }),
+								expect.objectContaining({ id: '5' }),
+							]),
+						})
+					);
+					resolve();
+				});
+			});
+		});
+
+		it('single category filter still works via elemMatch', async () => {
+			const { success } = await storeDatabase.collections.products.bulkInsert(categoryData);
+			expect(success.length).toBe(5);
+
+			const query = new Query({
+				collection: storeDatabase.collections.products,
+				initialParams: { sort: [{ name: 'asc' }] },
+			});
+
+			query.where('categories').elemMatch({ id: 17 }).exec();
+
+			return new Promise<void>((resolve) => {
+				query.result$.subscribe((result) => {
+					// Shirt B (17+21), Pants C (17), Hat E (17+30)
+					expect(result).toEqual(
+						expect.objectContaining({
+							count: 3,
+							hits: expect.arrayContaining([
+								expect.objectContaining({ id: '2' }),
+								expect.objectContaining({ id: '3' }),
+								expect.objectContaining({ id: '5' }),
+							]),
+						})
+					);
+					resolve();
+				});
+			});
+		});
+	});
 });

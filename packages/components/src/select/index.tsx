@@ -14,6 +14,7 @@ import {
 } from './select-multi';
 import { Button } from '../button';
 import { Icon } from '../icon';
+import { useLayoutWidth } from '../lib/use-layout-width';
 import { cn } from '../lib/utils';
 
 import type { ButtonProps } from '../button';
@@ -25,18 +26,26 @@ import type { Option, SelectRootProps, SelectValueProps } from './types';
  */
 const MultiModeContext = React.createContext<boolean>(false);
 
+const SelectWidthContext = React.createContext<number | undefined>(undefined);
+const SelectLayoutContext = React.createContext<((e: any) => void) | undefined>(undefined);
+
 function Select({ multiple, ...props }: SelectRootProps) {
-	if (multiple) {
-		return (
-			<MultiModeContext.Provider value={true}>
-				<SelectMultiRoot {...(props as any)} multiple />
-			</MultiModeContext.Provider>
-		);
-	}
-	return (
+	const { width: triggerWidth, onLayout } = useLayoutWidth();
+
+	const content = multiple ? (
+		<MultiModeContext.Provider value={true}>
+			<SelectMultiRoot {...(props as any)} multiple />
+		</MultiModeContext.Provider>
+	) : (
 		<MultiModeContext.Provider value={false}>
 			<SelectPrimitive.Root {...(props as any)} />
 		</MultiModeContext.Provider>
+	);
+
+	return (
+		<SelectWidthContext.Provider value={triggerWidth}>
+			<SelectLayoutContext.Provider value={onLayout}>{content}</SelectLayoutContext.Provider>
+		</SelectWidthContext.Provider>
 	);
 }
 
@@ -77,13 +86,33 @@ function SelectValue({
 	);
 }
 
-function SelectTrigger({ className, children, asChild, ...props }: SelectPrimitive.TriggerProps) {
+function SelectTrigger({
+	className,
+	children,
+	asChild,
+	onLayout: onLayoutProp,
+	...props
+}: SelectPrimitive.TriggerProps) {
 	const isMulti = React.useContext(MultiModeContext);
+	const layoutHandler = React.useContext(SelectLayoutContext);
+
+	const handleLayout = React.useCallback(
+		(e: import('react-native').LayoutChangeEvent) => {
+			layoutHandler?.(e);
+			onLayoutProp?.(e);
+		},
+		[layoutHandler, onLayoutProp]
+	);
 
 	if (isMulti) {
 		if (asChild) {
 			return (
-				<SelectMultiTrigger asChild className={className} {...(props as any)}>
+				<SelectMultiTrigger
+					asChild
+					className={className}
+					onLayout={handleLayout}
+					{...(props as any)}
+				>
 					{children}
 				</SelectMultiTrigger>
 			);
@@ -95,6 +124,7 @@ function SelectTrigger({ className, children, asChild, ...props }: SelectPrimiti
 					props.disabled && 'web:cursor-not-allowed opacity-50',
 					className
 				)}
+				onLayout={handleLayout}
 				{...(props as any)}
 			>
 				<>{children}</>
@@ -111,6 +141,7 @@ function SelectTrigger({ className, children, asChild, ...props }: SelectPrimiti
 				props.disabled && 'web:cursor-not-allowed opacity-50',
 				className
 			)}
+			onLayout={handleLayout}
 			{...props}
 		>
 			<>{children}</>
@@ -127,9 +158,11 @@ function SelectSingleContent({
 	children,
 	position = 'popper',
 	portalHost,
+	matchWidth,
 	...props
-}: SelectPrimitive.ContentProps & { portalHost?: string }) {
+}: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean }) {
 	const { open } = SelectPrimitive.useRootContext();
+	const triggerWidth = React.useContext(SelectWidthContext);
 
 	if (!open) return null;
 
@@ -147,6 +180,7 @@ function SelectSingleContent({
 								: 'web:zoom-out-95 web:animate-out web:fade-out-0',
 							className
 						)}
+						style={matchWidth && triggerWidth ? { width: triggerWidth } : undefined}
 						position={position}
 						{...props}
 					>
@@ -166,19 +200,28 @@ function SelectSingleContent({
 	);
 }
 
-function SelectContent(props: SelectPrimitive.ContentProps & { portalHost?: string }) {
+function SelectContent({
+	matchWidth,
+	...props
+}: SelectPrimitive.ContentProps & { portalHost?: string; matchWidth?: boolean }) {
 	const isMulti = React.useContext(MultiModeContext);
+	const triggerWidth = React.useContext(SelectWidthContext);
 
 	if (isMulti) {
 		const { className, children, portalHost, ...rest } = props;
 		return (
-			<SelectMultiContent className={className} portalHost={portalHost} {...(rest as any)}>
+			<SelectMultiContent
+				className={className}
+				portalHost={portalHost}
+				style={matchWidth && triggerWidth ? { width: triggerWidth } : undefined}
+				{...(rest as any)}
+			>
 				{children}
 			</SelectMultiContent>
 		);
 	}
 
-	return <SelectSingleContent {...props} />;
+	return <SelectSingleContent matchWidth={matchWidth} {...props} />;
 }
 
 function SelectLabel({ className, ...props }: SelectPrimitive.LabelProps) {

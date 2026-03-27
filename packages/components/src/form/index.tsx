@@ -11,6 +11,7 @@ import { FormRadioGroup } from './radio-group';
 import { FormSelect } from './select';
 import { FormSwitch } from './switch';
 import { FormTextarea } from './textarea';
+import { FormTreeCombobox } from './tree-combobox';
 import { useFormChangeHandler } from './use-form-change-handler';
 
 import type { FormItemProps } from './common';
@@ -43,6 +44,7 @@ export {
 	FormSelect,
 	FormSwitch,
 	FormTextarea,
+	FormTreeCombobox,
 	useFormField,
 	useFormChangeHandler,
 	type FormItemProps,

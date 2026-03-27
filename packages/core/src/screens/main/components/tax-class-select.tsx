@@ -20,7 +20,6 @@ import { useExtraData } from '../contexts/extra-data';
  *
  */
 export function TaxClassSelect({ value, ...props }: SelectSingleRootProps) {
-	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 	const { extraData } = useExtraData();
 	const taxClasses = useObservableEagerState(extraData.taxClasses$);
@@ -52,14 +51,10 @@ export function TaxClassSelect({ value, ...props }: SelectSingleRootProps) {
 	 */
 	return (
 		<Select value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
-			<SelectTrigger
-				onLayout={(ev) => {
-					setSelectTriggerWidth(ev.nativeEvent.layout.width);
-				}}
-			>
+			<SelectTrigger>
 				<SelectValue placeholder={t('common.select_tax_class')} />
 			</SelectTrigger>
-			<SelectContent style={{ width: selectTriggerWidth }}>
+			<SelectContent matchWidth>
 				<SelectGroup>
 					{options.map((option) => (
 						<SelectItem key={option.value} label={option.label} value={option.value}>
