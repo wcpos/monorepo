@@ -70,13 +70,6 @@ export const useOrderTotals = () => {
 	 *
 	 */
 	useDeepCompareEffect(() => {
-		// When coupons are active, the coupon replay in useCartLines computes
-		// and patches totals atomically. Skip patching here to avoid writing
-		// stale pre-coupon totals.
-		if (hasCoupons) {
-			return;
-		}
-
 		const currentTotals = pick(currentOrder, [
 			'discount_tax',
 			'discount_total',
@@ -118,7 +111,7 @@ export const useOrderTotals = () => {
 				>,
 			},
 		});
-	}, [totals, hasCoupons]);
+	}, [totals]);
 
 	return hasCoupons ? stableTotals : totals;
 };
