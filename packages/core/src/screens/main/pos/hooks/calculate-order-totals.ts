@@ -64,6 +64,16 @@ export function calculateOrderTotals({
 	dp = 2,
 	pricesIncludeTax = false,
 }: Props) {
+	// Filter out items marked for deletion. WCPOS nulls a key field to signal
+	// the server should delete the item: product_id (line_items), name (fee_lines),
+	// method_id (shipping_lines), code (coupon_lines). These must never contribute
+	// to totals regardless of whether the caller pre-filters.
+	const activeLineItems = lineItems.filter((item) => item.product_id !== null);
+	const activeFeeLines = feeLines.filter((item) => item.name !== null);
+	const activeShippingLines = shippingLines.filter((item) => item.method_id !== null);
+	// Loose != null also excludes undefined, matching existing use-cart-lines patterns
+	const activeCouponLines = couponLines.filter((item) => item.code != null);
+
 	let discount_total = 0;
 	let discount_tax = 0;
 	let shipping_total = 0;
@@ -99,7 +109,7 @@ export function calculateOrderTotals({
 	// which call get_rounded_items_total() → round_item_subtotal(). When taxRoundAtSubtotal
 	// is false (default), each item is rounded to dp (cents) before summing. When true, items
 	// are kept at full precision. This per-item rounding affects discount_total and order.total.
-	lineItems.forEach((item) => {
+	activeLineItems.forEach((item) => {
 		const parsedSubtotal = parseNumber(item.subtotal);
 		const parsedTotal = parseNumber(item.total);
 		const parsedSubtotalTax = parseNumber(item.subtotal_tax);
@@ -167,7 +177,7 @@ export function calculateOrderTotals({
 	};
 
 	// Calculate fee totals
-	feeLines.forEach((line) => {
+	activeFeeLines.forEach((line) => {
 		fee_total += parseNumber(line.total);
 		fee_tax += parseNumber(line.total_tax);
 		total += parseNumber(line.total);
@@ -176,7 +186,7 @@ export function calculateOrderTotals({
 	});
 
 	// Calculate shipping totals
-	shippingLines.forEach((line) => {
+	activeShippingLines.forEach((line) => {
 		shipping_total += parseNumber(line.total);
 		shipping_tax += parseNumber(line.total_tax);
 		total += parseNumber(line.total);
@@ -187,7 +197,7 @@ export function calculateOrderTotals({
 	// Accumulate coupon totals for display purposes only.
 	// Coupon discounts are already reflected in line_items (subtotal vs total),
 	// so we must NOT re-adjust discount_total/total here.
-	couponLines.forEach((line) => {
+	activeCouponLines.forEach((line) => {
 		coupon_total += parseNumber(line.discount);
 		coupon_tax += parseNumber(line.discount_tax);
 	});

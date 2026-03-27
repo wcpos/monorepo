@@ -746,3 +746,197 @@ describe('calculateOrderTotals — parity regressions', () => {
 		});
 	});
 });
+
+/**
+ * Deleted-item tests — reproduce order 57051 from dev-pro.wcpos.com.
+ *
+ * WCPOS marks items for server deletion by nulling a key field:
+ *   line_items → product_id: null
+ *   fee_lines  → name: null
+ *   shipping_lines → method_id: null
+ *   coupon_lines → code: null
+ *
+ * These must NOT contribute to order totals.
+ */
+describe('calculateOrderTotals — deleted items (order 57051)', () => {
+	// Tax rates from the real order (VAT 20% compound + Surcharge 2% compound)
+	const taxRates = [
+		{ id: 10, name: 'VAT', rate: '20', compound: true },
+		{ id: 7, name: 'Surcharge', rate: '2', compound: true },
+	] as any;
+
+	// Active line items from the real order (filtered: product_id !== null)
+	const activeLineItems = [
+		{
+			// "Producto" — misc product (product_id: 0, NOT null)
+			product_id: 0,
+			quantity: 1,
+			subtotal: '1.633987',
+			subtotal_tax: '0.366013',
+			total: '0',
+			total_tax: '0',
+			taxes: [
+				{ id: 10, subtotal: '0.326797', total: '0' },
+				{ id: 7, subtotal: '0.039216', total: '0' },
+			],
+		},
+		{
+			// "Belt" — active product
+			product_id: 67,
+			quantity: 1,
+			subtotal: '44.934640',
+			subtotal_tax: '10.065359',
+			total: '40.024509',
+			total_tax: '8.965491',
+			taxes: [
+				{ id: 10, subtotal: '8.986928', total: '8.165' },
+				{ id: 7, subtotal: '1.078431', total: '0.80049' },
+			],
+		},
+	] as any;
+
+	// The deleted line item (Hoodie with Pocket — product_id: null)
+	const deletedLineItem = {
+		id: 221488,
+		product_id: null,
+		quantity: 1,
+		subtotal: '28.594772',
+		subtotal_tax: '6.405229',
+		total: '28.594772',
+		total_tax: '6.405228',
+		taxes: [
+			{ id: 10, subtotal: '5.718954', total: '5.833333' },
+			{ id: 7, subtotal: '0.686275', total: '0.571895' },
+		],
+	} as any;
+
+	// Active coupon lines (code !== null)
+	const activeCouponLines = [
+		{ code: 'penny', discount: '0.00817', discount_tax: '0.00183' },
+		{ code: 'band25to75', discount: '6.535948', discount_tax: '1.464052' },
+	] as any;
+
+	// The deleted coupon line (code: null)
+	const deletedCouponLine = {
+		id: 221486,
+		code: null,
+		discount: '0.00817',
+		discount_tax: '0.00183',
+	} as any;
+
+	it('calculates correct totals with only active items', () => {
+		const result = calculateOrderTotals({
+			lineItems: activeLineItems,
+			couponLines: activeCouponLines,
+			taxRates,
+			pricesIncludeTax: true,
+			dp: 2,
+		});
+
+		expect(result.total).toBe('48.98');
+		expect(result.total_tax).toBe('8.96');
+		expect(result.discount_total).toBe('6.54');
+		expect(result.discount_tax).toBe('1.47');
+	});
+
+	it('filters deleted line items (product_id: null) internally', () => {
+		const result = calculateOrderTotals({
+			lineItems: [...activeLineItems, deletedLineItem],
+			couponLines: activeCouponLines,
+			taxRates,
+			pricesIncludeTax: true,
+			dp: 2,
+		});
+
+		// Deleted Hoodie (total: 28.59, total_tax: 6.41) must NOT be included
+		expect(result.total).toBe('48.98');
+		expect(result.total_tax).toBe('8.96');
+		expect(result.discount_total).toBe('6.54');
+		expect(result.discount_tax).toBe('1.47');
+	});
+
+	it('filters deleted coupon lines (code: null) internally', () => {
+		const result = calculateOrderTotals({
+			lineItems: activeLineItems,
+			couponLines: [...activeCouponLines, deletedCouponLine],
+			taxRates,
+			pricesIncludeTax: true,
+			dp: 2,
+		});
+
+		expect(result.coupon_total).toBe('6.54');
+		expect(result.coupon_tax).toBe('1.47');
+		expect(result.total).toBe('48.98');
+	});
+
+	it('filters deleted fee lines (name: null)', () => {
+		const feeLines = [
+			{ name: 'Service Fee', total: '5', total_tax: '1', taxes: [{ id: 10, total: '1' }] },
+			{ id: 999, name: null, total: '10', total_tax: '2', taxes: [{ id: 10, total: '2' }] },
+		] as any;
+
+		const result = calculateOrderTotals({
+			lineItems: activeLineItems,
+			feeLines,
+			couponLines: activeCouponLines,
+			taxRates,
+			pricesIncludeTax: true,
+			dp: 2,
+		});
+
+		expect(result.fee_total).toBe('5');
+		expect(result.fee_tax).toBe('1');
+	});
+
+	it('filters deleted shipping lines (method_id: null)', () => {
+		const shippingLines = [
+			{
+				method_id: 'flat_rate',
+				total: '10',
+				total_tax: '2',
+				taxes: [{ id: 10, total: '2' }],
+			},
+			{
+				id: 888,
+				method_id: null,
+				total: '20',
+				total_tax: '4',
+				taxes: [{ id: 10, total: '4' }],
+			},
+		] as any;
+
+		const result = calculateOrderTotals({
+			lineItems: activeLineItems,
+			shippingLines,
+			couponLines: activeCouponLines,
+			taxRates,
+			pricesIncludeTax: true,
+			dp: 2,
+		});
+
+		expect(result.shipping_total).toBe('10');
+		expect(result.shipping_tax).toBe('2');
+	});
+
+	it('handles all deletion types simultaneously', () => {
+		const feeLines = [{ id: 777, name: null, total: '10', total_tax: '2', taxes: [] }] as any;
+		const shippingLines = [
+			{ id: 888, method_id: null, total: '20', total_tax: '4', taxes: [] },
+		] as any;
+
+		const result = calculateOrderTotals({
+			lineItems: [...activeLineItems, deletedLineItem],
+			feeLines,
+			shippingLines,
+			couponLines: [...activeCouponLines, deletedCouponLine],
+			taxRates,
+			pricesIncludeTax: true,
+			dp: 2,
+		});
+
+		expect(result.total).toBe('48.98');
+		expect(result.fee_total).toBe('0');
+		expect(result.shipping_total).toBe('0');
+		expect(result.coupon_total).toBe('6.54');
+	});
+});
