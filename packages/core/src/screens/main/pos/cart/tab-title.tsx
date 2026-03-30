@@ -16,9 +16,16 @@ interface Props {
  */
 export function CartTabTitle({ order }: Props) {
 	const total = useObservableEagerState(order.total$!);
+	const refunds = useObservableEagerState(order.refunds$!);
 	const currencySymbol = useObservableEagerState(order.currency_symbol$!);
 	const { format } = useCurrencyFormat({ currencySymbol: currencySymbol ?? '' });
 	const t = useT();
 
-	return <Text>{t('pos_cart.cart', { order_total: format(parseFloat(total ?? '0') || 0) })}</Text>;
+	const refundTotal = React.useMemo(
+		() => (refunds ?? []).reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0),
+		[refunds]
+	);
+	const displayTotal = parseFloat(total ?? '0') - refundTotal;
+
+	return <Text>{t('pos_cart.cart', { order_total: format(displayTotal || 0) })}</Text>;
 }

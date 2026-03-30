@@ -386,6 +386,7 @@
 	"orders.confirm_refund": "Confirm Refund",
 	"orders.confirm_refund_description": "Refund {amount} for Order #{number}?",
 	"orders.previously_refunded": "Previously Refunded",
+	"orders.net_payment": "Net Payment",
 	"orders.process_refund": "Process Refund",
 	"orders.search_orders": "Search Orders",
 	"pos.customer_assigned": "Customer assigned: {customerName}",

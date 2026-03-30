@@ -21,11 +21,18 @@ const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
 export function PayButton() {
 	const { currentOrder } = useCurrentOrder();
 	const total = useObservableEagerState(currentOrder.total$!);
+	const refunds = useObservableEagerState(currentOrder.refunds$!);
 	const { format } = useCurrentOrderCurrencyFormat();
 	const router = useRouter();
 	const [loading, setLoading] = React.useState(false);
 	const pushDocument = usePushDocument();
 	const t = useT();
+
+	const refundTotal = React.useMemo(
+		() => (refunds ?? []).reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0),
+		[refunds]
+	);
+	const displayTotal = parseFloat(total ?? '0') - refundTotal;
 
 	/**
 	 *
@@ -82,7 +89,7 @@ export function PayButton() {
 			loading={loading}
 		>
 			{t('pos_cart.checkout', {
-				order_total: format(parseFloat(total ?? '0') || 0),
+				order_total: format(displayTotal || 0),
 			})}
 		</Button>
 	);
