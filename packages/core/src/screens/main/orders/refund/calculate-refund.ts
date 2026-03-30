@@ -3,7 +3,6 @@ import { roundHalfUp } from '../../hooks/utils/precision';
 interface LineItemInput {
 	quantity: number;
 	total: string;
-	totalTax: string;
 	taxes: { id: number; total: string }[];
 	refundQty: number;
 }
@@ -60,5 +59,5 @@ export function calculateRefundTotal(input: {
 		total += parseFloat(customAmount) || 0;
 	}
 
-	return total.toFixed(2);
+	return roundHalfUp(total, 2).toFixed(2);
 }

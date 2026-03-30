@@ -29,7 +29,6 @@ import { calculateLineItemRefund, calculateRefundTotal } from './calculate-refun
 interface TestLineItem {
 	quantity: number;
 	total: string;
-	totalTax: string;
 	taxes: { id: number; total: string }[];
 	refundQty: number;
 }
@@ -37,7 +36,6 @@ interface TestLineItem {
 const createLineItem = (overrides: Partial<TestLineItem> = {}): TestLineItem => ({
 	quantity: 1,
 	total: '10.00',
-	totalTax: '0.00',
 	taxes: [],
 	refundQty: 0,
 	...overrides,
@@ -66,7 +64,6 @@ describe('A. Proportional refund — clean divisions', () => {
 			input: createLineItem({
 				quantity: 3,
 				total: '30.00',
-				totalTax: '6.00',
 				taxes: [{ id: 1, total: '6.00' }],
 				refundQty: 1,
 			}),
@@ -90,7 +87,6 @@ describe('A. Proportional refund — clean divisions', () => {
 			input: createLineItem({
 				quantity: 2,
 				total: '25.50',
-				totalTax: '5.10',
 				taxes: [{ id: 1, total: '5.10' }],
 				refundQty: 2,
 			}),
@@ -104,7 +100,6 @@ describe('A. Proportional refund — clean divisions', () => {
 			input: createLineItem({
 				quantity: 1,
 				total: '99.99',
-				totalTax: '10.00',
 				taxes: [{ id: 1, total: '10.00' }],
 				refundQty: 1,
 			}),
@@ -118,7 +113,6 @@ describe('A. Proportional refund — clean divisions', () => {
 			input: createLineItem({
 				quantity: 6,
 				total: '60.00',
-				totalTax: '12.00',
 				taxes: [{ id: 1, total: '12.00' }],
 				refundQty: 3,
 			}),
@@ -142,7 +136,6 @@ describe('A. Proportional refund — clean divisions', () => {
 			input: createLineItem({
 				quantity: 2,
 				total: '20.00',
-				totalTax: '0.00',
 				taxes: [],
 				refundQty: 1,
 			}),
@@ -153,7 +146,6 @@ describe('A. Proportional refund — clean divisions', () => {
 			input: createLineItem({
 				quantity: 2,
 				total: '20.00',
-				totalTax: '4.00',
 				taxes: [
 					{ id: 1, total: '3.00' },
 					{ id: 2, total: '1.00' },
@@ -239,7 +231,6 @@ describe('B. Rounding — WooCommerce parity (PHP HALF_UP)', () => {
 			input: createLineItem({
 				quantity: 3,
 				total: '30.00',
-				totalTax: '5.00',
 				taxes: [{ id: 1, total: '5.00' }],
 				refundQty: 1,
 			}),
@@ -276,7 +267,6 @@ describe('B. Rounding — WooCommerce parity (PHP HALF_UP)', () => {
 			input: createLineItem({
 				quantity: 4,
 				total: '40.00',
-				totalTax: '10.70',
 				taxes: [{ id: 1, total: '10.70' }],
 				refundQty: 1,
 			}),
@@ -389,7 +379,6 @@ describe('D. Zero / empty / degenerate inputs', () => {
 			createLineItem({
 				quantity: 2,
 				total: '0.00',
-				totalTax: '2.00',
 				taxes: [{ id: 1, total: '2.00' }],
 				refundQty: 1,
 			})
@@ -435,7 +424,6 @@ describe('E. Multiple tax rates', () => {
 			createLineItem({
 				quantity: 2,
 				total: '20.00',
-				totalTax: '8.00',
 				taxes: [
 					{ id: 1, total: '6.00' },
 					{ id: 2, total: '2.00' },
@@ -454,7 +442,6 @@ describe('E. Multiple tax rates', () => {
 			createLineItem({
 				quantity: 3,
 				total: '30.00',
-				totalTax: '11.75',
 				taxes: [
 					{ id: 1, total: '7.00' },
 					{ id: 2, total: '3.50' },
@@ -475,7 +462,6 @@ describe('E. Multiple tax rates', () => {
 			createLineItem({
 				quantity: 2,
 				total: '20.00',
-				totalTax: '4.00',
 				taxes: [
 					{ id: 1, total: '4.00' },
 					{ id: 2, total: '0.00' },
@@ -494,7 +480,6 @@ describe('E. Multiple tax rates', () => {
 			createLineItem({
 				quantity: 4,
 				total: '100.00',
-				totalTax: '25.00',
 				taxes: [
 					{ id: 1, total: '10.00' },
 					{ id: 2, total: '5.00' },
@@ -520,7 +505,6 @@ describe('E. Multiple tax rates', () => {
 			createLineItem({
 				quantity: 4,
 				total: '40.00',
-				totalTax: '16.00',
 				taxes: [
 					{ id: 1, total: '10.70' },
 					{ id: 2, total: '5.30' },

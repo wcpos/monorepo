@@ -5,7 +5,6 @@ describe('calculateLineItemRefund', () => {
 		const result = calculateLineItemRefund({
 			quantity: 3,
 			total: '30.00',
-			totalTax: '6.00',
 			taxes: [{ id: 1, total: '6.00' }],
 			refundQty: 1,
 		});
@@ -18,7 +17,6 @@ describe('calculateLineItemRefund', () => {
 		const result = calculateLineItemRefund({
 			quantity: 2,
 			total: '25.50',
-			totalTax: '5.10',
 			taxes: [{ id: 1, total: '5.10' }],
 			refundQty: 2,
 		});
@@ -31,7 +29,6 @@ describe('calculateLineItemRefund', () => {
 		const result = calculateLineItemRefund({
 			quantity: 3,
 			total: '30.00',
-			totalTax: '6.00',
 			taxes: [{ id: 1, total: '6.00' }],
 			refundQty: 0,
 		});
@@ -44,7 +41,6 @@ describe('calculateLineItemRefund', () => {
 		const result = calculateLineItemRefund({
 			quantity: 2,
 			total: '20.00',
-			totalTax: '4.00',
 			taxes: [
 				{ id: 1, total: '3.00' },
 				{ id: 2, total: '1.00' },
@@ -63,7 +59,6 @@ describe('calculateLineItemRefund', () => {
 		const result = calculateLineItemRefund({
 			quantity: 2,
 			total: '20.00',
-			totalTax: '4.00',
 			taxes: [{ id: 1, total: '4.00' }],
 			refundQty: 5,
 		});
@@ -76,7 +71,6 @@ describe('calculateLineItemRefund', () => {
 		const result = calculateLineItemRefund({
 			quantity: 2,
 			total: '20.00',
-			totalTax: '4.00',
 			taxes: [{ id: 1, total: '4.00' }],
 			refundQty: -3,
 		});
@@ -89,7 +83,6 @@ describe('calculateLineItemRefund', () => {
 		const result = calculateLineItemRefund({
 			quantity: 2,
 			total: '20.00',
-			totalTax: '0.00',
 			taxes: [],
 			refundQty: 1,
 		});
