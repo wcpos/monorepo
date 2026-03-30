@@ -213,7 +213,7 @@ describe('useOnEndReached', () => {
 
 		// distanceFromEnd = 2000 - (800 + 500) = 700, threshold = 100
 		// 700 > 100, so not triggered initially
-		expect(onEndReached).not.toHaveBeenCalledTimes(1);
+		expect(onEndReached).not.toHaveBeenCalled();
 
 		// Scroll to within threshold
 		(scrollElement as any).scrollTop = 1450;
