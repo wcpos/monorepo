@@ -168,7 +168,7 @@ function List<T>({
 		onEndReached,
 		onEndReachedThreshold,
 		data,
-		getTotalSize: () => rowVirtualizer.getTotalSize(),
+		totalSize,
 	});
 
 	// empty state

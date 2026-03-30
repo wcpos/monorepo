@@ -59,7 +59,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0.5,
 				data: [1],
-				getTotalSize: () => 1000,
+				totalSize: 1000,
 			})
 		);
 
@@ -80,7 +80,7 @@ describe('useOnEndReached', () => {
 				onEndReached: undefined,
 				onEndReachedThreshold: 0.5,
 				data: [1],
-				getTotalSize: () => 1000,
+				totalSize: 1000,
 			})
 		);
 	});
@@ -100,7 +100,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0.5,
 				data: [1, 2, 3],
-				getTotalSize: () => 1000,
+				totalSize: 1000,
 			})
 		);
 
@@ -124,7 +124,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0.5,
 				data: [1, 2, 3],
-				getTotalSize: () => 1000,
+				totalSize: 1000,
 			})
 		);
 
@@ -146,7 +146,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0.1,
 				data: [1, 2, 3],
-				getTotalSize: () => 2000,
+				totalSize: 2000,
 			})
 		);
 
@@ -173,7 +173,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0.5,
 				data: [1],
-				getTotalSize: () => 1000,
+				totalSize: 1000,
 			})
 		);
 
@@ -207,7 +207,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0.2,
 				data: [1, 2, 3],
-				getTotalSize: () => 2000,
+				totalSize: 2000,
 			})
 		);
 
@@ -249,7 +249,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0.5,
 				data: [1],
-				getTotalSize: () => 200, // Content shorter than container
+				totalSize: 200, // Content shorter than container
 			})
 		);
 
@@ -272,7 +272,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0.5,
 				data: [],
-				getTotalSize: () => 0,
+				totalSize: 0,
 			})
 		);
 
@@ -284,12 +284,12 @@ describe('useOnEndReached', () => {
 		expect(onEndReached).not.toHaveBeenCalled();
 	});
 
-	it('should not trigger short content check twice', () => {
+	it('should not re-trigger short content when data.length and totalSize are unchanged', () => {
 		const onEndReached = jest.fn();
 		const scrollElement = createMockScrollElement({
 			scrollTop: 0,
 			clientHeight: 500,
-			scrollHeight: 500, // No scrollable area, so scroll-based won't trigger
+			scrollHeight: 500,
 		} as any);
 
 		const { rerender } = renderHook(
@@ -300,7 +300,7 @@ describe('useOnEndReached', () => {
 					onEndReached,
 					onEndReachedThreshold: 0.5,
 					data,
-					getTotalSize: () => 200,
+					totalSize: 200,
 				}),
 			{ initialProps: { data: [1] as readonly any[] } }
 		);
@@ -309,20 +309,56 @@ describe('useOnEndReached', () => {
 			jest.runAllTimers();
 		});
 
-		// Short content check fires once
 		const callCount = onEndReached.mock.calls.length;
 		expect(callCount).toBeGreaterThanOrEqual(1);
 
-		// Re-render with same data length should not trigger again
-		// (hasTriggeredForShortContent is already true)
+		// Re-render with different data reference but same length and totalSize
 		rerender({ data: [2] });
 
 		act(() => {
 			jest.runAllTimers();
 		});
 
-		// data changed so the reset effect clears hasTriggeredForShortContent,
-		// allowing short content to fire again
+		// Short content effect doesn't re-run (data.length and totalSize unchanged)
+		expect(onEndReached).toHaveBeenCalledTimes(callCount);
+	});
+
+	it('should re-trigger short content check when more data arrives but still short', () => {
+		const onEndReached = jest.fn();
+		const scrollElement = createMockScrollElement({
+			scrollTop: 0,
+			clientHeight: 500,
+			scrollHeight: 500,
+		} as any);
+
+		const { rerender } = renderHook(
+			({ data, totalSize }) =>
+				useOnEndReached({
+					scrollElement,
+					horizontal: false,
+					onEndReached,
+					onEndReachedThreshold: 0.5,
+					data,
+					totalSize,
+				}),
+			{ initialProps: { data: [1] as readonly any[], totalSize: 200 } }
+		);
+
+		act(() => {
+			jest.runAllTimers();
+		});
+
+		const callCount = onEndReached.mock.calls.length;
+		expect(callCount).toBeGreaterThanOrEqual(1);
+
+		// More data arrives but content still doesn't fill viewport
+		rerender({ data: [1, 2, 3], totalSize: 300 });
+
+		act(() => {
+			jest.runAllTimers();
+		});
+
+		// data.length and totalSize both changed → effect re-runs → fires again
 		expect(onEndReached).toHaveBeenCalledTimes(callCount + 1);
 	});
 
@@ -337,7 +373,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0.5,
 				data: [1],
-				getTotalSize: () => 1000,
+				totalSize: 1000,
 			})
 		);
 
@@ -361,7 +397,7 @@ describe('useOnEndReached', () => {
 					onEndReached,
 					onEndReachedThreshold: 0.5,
 					data,
-					getTotalSize: () => 1000,
+					totalSize: 1000,
 				}),
 			{ initialProps: { data: [1] as readonly any[] } }
 		);
@@ -401,7 +437,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0,
 				data: [1, 2, 3],
-				getTotalSize: () => 1000,
+				totalSize: 1000,
 			})
 		);
 
@@ -423,7 +459,7 @@ describe('useOnEndReached', () => {
 				onEndReached,
 				onEndReachedThreshold: 0.5,
 				data: [1],
-				getTotalSize: () => 300, // Content narrower than container
+				totalSize: 300, // Content narrower than container
 			})
 		);
 
@@ -432,5 +468,52 @@ describe('useOnEndReached', () => {
 		});
 
 		expect(onEndReached).toHaveBeenCalled();
+	});
+
+	it('should trigger loadMore when estimated size fills viewport but measured size does not', () => {
+		const onEndReached = jest.fn();
+		const scrollElement = createMockScrollElement({
+			scrollTop: 0,
+			clientHeight: 700,
+			scrollHeight: 1000, // estimated content appears to overflow
+		} as any);
+
+		const data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as readonly any[];
+
+		// Simulate: virtualizer initially estimates 10 items × 100px = 1000px total
+		const { rerender } = renderHook(
+			({ totalSize }) =>
+				useOnEndReached({
+					scrollElement,
+					horizontal: false,
+					onEndReached,
+					onEndReachedThreshold: 0.1,
+					data,
+					totalSize,
+				}),
+			{
+				initialProps: { totalSize: 1000 },
+			}
+		);
+
+		act(() => {
+			jest.runAllTimers();
+		});
+
+		// Estimated 1000px > container 700px → short content check doesn't fire
+		// Scroll: distanceFromEnd = 1000 - (0 + 700) = 300, threshold = 70 → doesn't fire
+		expect(onEndReached).not.toHaveBeenCalled();
+
+		// After items are measured, actual total size is smaller than container.
+		// Same data, same length — only the virtualizer measurements changed.
+		rerender({ totalSize: 500 }); // actual: 10 items × 50px
+
+		act(() => {
+			jest.runAllTimers();
+		});
+
+		// totalSize changed from 1000 → 500, triggering the short content effect.
+		// 500px <= 700px → loadMore fires.
+		expect(onEndReached).toHaveBeenCalledTimes(1);
 	});
 });
