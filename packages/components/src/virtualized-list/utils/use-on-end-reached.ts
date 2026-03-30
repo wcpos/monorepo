@@ -8,7 +8,7 @@ interface UseOnEndReachedParams {
 	onEndReached?: () => void;
 	onEndReachedThreshold: number;
 	data: readonly any[];
-	getTotalSize: () => number;
+	totalSize: number;
 }
 
 export function useOnEndReached({
@@ -17,7 +17,7 @@ export function useOnEndReached({
 	onEndReached,
 	onEndReachedThreshold,
 	data,
-	getTotalSize,
+	totalSize,
 }: UseOnEndReachedParams) {
 	const endReachedRef = React.useRef(false);
 	const hasTriggeredForShortContent = React.useRef(false);
@@ -76,7 +76,10 @@ export function useOnEndReached({
 		endReachedRef.current = false;
 	}, [data, scrollElement, onEndReached]);
 
-	// Handle short content onEndReached
+	// Handle short content onEndReached.
+	// Uses totalSize as a value (not a function) so this re-runs when the virtualizer
+	// re-measures items. Without this, estimated sizes can make content appear to fill
+	// the viewport when the actual measured sizes don't — preventing loadMore from firing.
 	React.useEffect(() => {
 		if (!scrollElement || typeof onEndReached !== 'function' || data.length === 0) return;
 		if (hasTriggeredForShortContent.current) return;
@@ -84,10 +87,9 @@ export function useOnEndReached({
 		const container = scrollElement;
 		const checkContentSize = () => {
 			const containerSize = horizontal ? container.clientWidth : container.clientHeight;
-			const totalContentSize = getTotalSize();
 
 			// If virtualized content is smaller than container, trigger onEndReached
-			if (totalContentSize <= containerSize) {
+			if (totalSize <= containerSize) {
 				hasTriggeredForShortContent.current = true;
 				onEndReached();
 			}
@@ -95,5 +97,5 @@ export function useOnEndReached({
 
 		const timeoutId = setTimeout(checkContentSize, 0);
 		return () => clearTimeout(timeoutId);
-	}, [scrollElement, horizontal, onEndReached, data.length, getTotalSize]);
+	}, [scrollElement, horizontal, onEndReached, data.length, totalSize]);
 }
