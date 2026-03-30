@@ -12,6 +12,7 @@ import { useT } from '../../../../../contexts/translations';
 import { usePushDocument } from '../../../contexts/use-push-document';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useCurrentOrder } from '../../contexts/current-order';
+import { getNetPaymentTotal } from '../utils/get-net-payment-total';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout']);
 
@@ -28,11 +29,7 @@ export function PayButton() {
 	const pushDocument = usePushDocument();
 	const t = useT();
 
-	const refundTotal = React.useMemo(
-		() => (refunds ?? []).reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0),
-		[refunds]
-	);
-	const displayTotal = parseFloat(total ?? '0') - refundTotal;
+	const displayTotal = getNetPaymentTotal(total, refunds);
 
 	/**
 	 *
