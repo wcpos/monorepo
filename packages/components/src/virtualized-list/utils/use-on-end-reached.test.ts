@@ -289,7 +289,7 @@ describe('useOnEndReached', () => {
 		const scrollElement = createMockScrollElement({
 			scrollTop: 0,
 			clientHeight: 500,
-			scrollHeight: 500,
+			scrollHeight: 2000,
 		} as any);
 
 		const { rerender } = renderHook(
@@ -309,8 +309,7 @@ describe('useOnEndReached', () => {
 			jest.runAllTimers();
 		});
 
-		const callCount = onEndReached.mock.calls.length;
-		expect(callCount).toBeGreaterThanOrEqual(1);
+		expect(onEndReached).toHaveBeenCalledTimes(1);
 
 		// Re-render with different data reference but same length and totalSize
 		rerender({ data: [2] });
@@ -320,7 +319,7 @@ describe('useOnEndReached', () => {
 		});
 
 		// Short content effect doesn't re-run (data.length and totalSize unchanged)
-		expect(onEndReached).toHaveBeenCalledTimes(callCount);
+		expect(onEndReached).toHaveBeenCalledTimes(1);
 	});
 
 	it('should re-trigger short content check when more data arrives but still short', () => {
@@ -328,7 +327,7 @@ describe('useOnEndReached', () => {
 		const scrollElement = createMockScrollElement({
 			scrollTop: 0,
 			clientHeight: 500,
-			scrollHeight: 500,
+			scrollHeight: 2000,
 		} as any);
 
 		const { rerender } = renderHook(
@@ -348,8 +347,7 @@ describe('useOnEndReached', () => {
 			jest.runAllTimers();
 		});
 
-		const callCount = onEndReached.mock.calls.length;
-		expect(callCount).toBeGreaterThanOrEqual(1);
+		expect(onEndReached).toHaveBeenCalledTimes(1);
 
 		// More data arrives but content still doesn't fill viewport
 		rerender({ data: [1, 2, 3], totalSize: 300 });
@@ -359,7 +357,7 @@ describe('useOnEndReached', () => {
 		});
 
 		// data.length and totalSize both changed → effect re-runs → fires again
-		expect(onEndReached).toHaveBeenCalledTimes(callCount + 1);
+		expect(onEndReached).toHaveBeenCalledTimes(2);
 	});
 
 	it('should clean up event listener on unmount', () => {
