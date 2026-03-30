@@ -36,6 +36,7 @@ import { calculateLineItemRefund, calculateRefundTotal } from './calculate-refun
 import { useT } from '../../../../contexts/translations';
 import { usePullDocument } from '../../contexts/use-pull-document';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { roundHalfUp } from '../../hooks/utils/precision';
 
 const refundLogger = getLogger(['wcpos', 'mutations', 'refund']);
 
@@ -134,7 +135,6 @@ export function RefundOrderForm({ order }: Props) {
 			calculateLineItemRefund({
 				quantity: item.quantity,
 				total: item.total,
-				totalTax: item.total_tax,
 				taxes: item.taxes,
 				refundQty: item.refund_qty,
 			})
@@ -167,7 +167,6 @@ export function RefundOrderForm({ order }: Props) {
 				calculateLineItemRefund({
 					quantity: item.quantity,
 					total: item.total,
-					totalTax: item.total_tax,
 					taxes: item.taxes,
 					refundQty: item.refund_qty,
 				})
@@ -239,7 +238,7 @@ export function RefundOrderForm({ order }: Props) {
 				{/* Order summary */}
 				<HStack className="justify-between">
 					<Text className="text-muted-foreground">
-						{t('common.order_total')}: {order.currency_symbol}
+						{t('common.total')}: {order.currency_symbol}
 						{order.total}
 					</Text>
 					{previousRefundTotal > 0 && (
@@ -261,7 +260,7 @@ export function RefundOrderForm({ order }: Props) {
 								<Text>{t('common.price')}</Text>
 							</TableHead>
 							<TableHead className="flex-1">
-								<Text>{t('common.qty')}</Text>
+								<Text>{t('pos_cart.qty_abbrev')}</Text>
 							</TableHead>
 							<TableHead className="flex-1">
 								<Text>{t('orders.refund_qty')}</Text>
@@ -274,7 +273,9 @@ export function RefundOrderForm({ order }: Props) {
 					<TableBody>
 						{fields.map((field, index) => {
 							const unitPrice =
-								field.quantity > 0 ? (parseFloat(field.total) / field.quantity).toFixed(2) : '0.00';
+								field.quantity > 0
+									? roundHalfUp(parseFloat(field.total) / field.quantity, 2).toFixed(2)
+									: '0.00';
 							const itemRefund = lineItemRefunds[index];
 							const itemRefundWithTax = itemRefund
 								? (
