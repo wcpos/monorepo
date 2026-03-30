@@ -20,7 +20,7 @@ export function RefundOrderModal({ resource }: Props) {
 	if (!isRxDocument(order)) {
 		return (
 			<Modal>
-				<ModalContent size="lg">
+				<ModalContent size="xl">
 					<ModalHeader>
 						<ModalTitle>
 							<Text>{t('common.no_order_found')}</Text>
@@ -33,7 +33,7 @@ export function RefundOrderModal({ resource }: Props) {
 
 	return (
 		<Modal>
-			<ModalContent size="lg">
+			<ModalContent size="xl">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>{t('orders.refund_order', { number: order.id || '' })}</Text>

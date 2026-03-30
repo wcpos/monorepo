@@ -239,7 +239,7 @@ export function RefundOrderForm({ order }: Props) {
 				{/* Order summary */}
 				<HStack className="justify-between">
 					<Text className="text-muted-foreground">
-						{t('common.order_total')}: {order.currency_symbol}
+						{t('common.total')}: {order.currency_symbol}
 						{order.total}
 					</Text>
 					{previousRefundTotal > 0 && (
@@ -261,7 +261,7 @@ export function RefundOrderForm({ order }: Props) {
 								<Text>{t('common.price')}</Text>
 							</TableHead>
 							<TableHead className="flex-1">
-								<Text>{t('common.qty')}</Text>
+								<Text>{t('pos_cart.qty_abbrev')}</Text>
 							</TableHead>
 							<TableHead className="flex-1">
 								<Text>{t('orders.refund_qty')}</Text>
