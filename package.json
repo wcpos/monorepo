@@ -73,7 +73,7 @@
   },
   "devDependencies": {
     "glob": "^13.0.0",
-    "lint-staged": "^16.3.2"
+    "lint-staged": "^16.4.0"
   },
   "dependencies": {
     "turbo": "^2.8.14",
