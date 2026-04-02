@@ -1,3 +1,4 @@
+import * as refundCalc from './calculate-refund';
 import {
 	calculateLineItemRefund,
 	calculateRefundTotal,
@@ -269,5 +270,20 @@ describe('computeMaxRefundable', () => {
 		expect(
 			computeMaxRefundable('10.00', [{ total: '-3.33' }, { total: '-3.33' }, { total: '-3.33' }])
 		).toBe(0.01);
+	});
+});
+
+describe('formatLineItemRefundWithTax', () => {
+	it('uses half-up rounding for display totals', () => {
+		expect(typeof refundCalc.formatLineItemRefundWithTax).toBe('function');
+		expect(
+			refundCalc.formatLineItemRefundWithTax(
+				{
+					refund_total: '0.335',
+					refund_tax: [{ id: 1, refund_total: '0.670' }],
+				},
+				2
+			)
+		).toBe('1.01');
 	});
 });

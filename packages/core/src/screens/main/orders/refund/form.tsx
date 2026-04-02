@@ -37,6 +37,7 @@ import {
 	calculateLineItemRefund,
 	calculateRefundTotal,
 	computeMaxRefundable,
+	formatLineItemRefundWithTax,
 } from './calculate-refund';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -302,12 +303,7 @@ export function RefundOrderForm({ order }: Props) {
 									? roundHalfUp(parseFloat(field.total) / field.quantity, dp).toFixed(dp)
 									: (0).toFixed(dp);
 							const itemRefund = lineItemRefunds[index];
-							const itemRefundWithTax = itemRefund
-								? (
-										parseFloat(itemRefund.refund_total) +
-										itemRefund.refund_tax.reduce((s, t) => s + parseFloat(t.refund_total), 0)
-									).toFixed(dp)
-								: (0).toFixed(dp);
+							const itemRefundWithTax = formatLineItemRefundWithTax(itemRefund, dp);
 
 							return (
 								<TableRow key={field.id}>

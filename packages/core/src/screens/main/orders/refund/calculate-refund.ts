@@ -8,7 +8,7 @@ interface LineItemInput {
 	dp?: number;
 }
 
-interface LineItemRefund {
+export interface LineItemRefund {
 	refund_total: string;
 	refund_tax: { id: number; refund_total: string }[];
 }
@@ -63,6 +63,21 @@ export function calculateRefundTotal(input: {
 	}
 
 	return roundHalfUp(total, dp).toFixed(dp);
+}
+
+export function formatLineItemRefundWithTax(
+	itemRefund: LineItemRefund | undefined,
+	dp: number
+): string {
+	if (!itemRefund) {
+		return (0).toFixed(dp);
+	}
+
+	const totalWithTax =
+		parseFloat(itemRefund.refund_total) +
+		itemRefund.refund_tax.reduce((sum, tax) => sum + parseFloat(tax.refund_total), 0);
+
+	return roundHalfUp(totalWithTax, dp).toFixed(dp);
 }
 
 /**
