@@ -1,3 +1,4 @@
+import isEqual from 'lodash/isEqual';
 import set from 'lodash/set';
 
 import initialSettings from './initial-settings.json';
@@ -76,7 +77,7 @@ export const mergeWithInitalValues = async (
 				(initialColumn) => !currentValue.some((column) => column.key === initialColumn.key)
 			);
 			const nextColumns = [...mergedColumns, ...missingColumns];
-			const hasColumnDifferences = JSON.stringify(nextColumns) !== JSON.stringify(currentValue);
+			const hasColumnDifferences = !isEqual(nextColumns, currentValue);
 
 			if (hasColumnDifferences) {
 				await state.set(typedKey, () => nextColumns as UISettingSchema<typeof id>[typeof typedKey]);

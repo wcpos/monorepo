@@ -43,4 +43,74 @@ describe('mergeWithInitalValues', () => {
 			])
 		);
 	});
+
+	it('does not write state when columns are already semantically equal', async () => {
+		const currentState = {
+			sortBy: 'id',
+			sortDirection: 'asc',
+			autoShowReceipt: true,
+			autoPrintReceipt: false,
+			receiptOutputType: 'html',
+			openCashDrawer: false,
+			quickDiscounts: [5, 10, 15, 20],
+			columns: [
+				{
+					show: true,
+					align: 'center',
+					key: 'quantity',
+					display: [{ show: false, key: 'split' }],
+				},
+				{
+					hideLabel: true,
+					width: 56,
+					show: false,
+					key: 'image',
+				},
+				{
+					display: [{ show: false, key: 'sku' }],
+					flex: 3,
+					show: true,
+					key: 'name',
+				},
+				{ show: false, key: 'sku' },
+				{
+					display: [{ show: true, key: 'on_sale' }],
+					align: 'right',
+					show: true,
+					key: 'price',
+				},
+				{ align: 'right', show: false, key: 'regular_price' },
+				{
+					display: [{ show: false, key: 'tax' }],
+					align: 'right',
+					show: false,
+					key: 'subtotal',
+				},
+				{
+					display: [
+						{ show: false, key: 'tax' },
+						{ show: true, key: 'on_sale' },
+					],
+					align: 'right',
+					show: true,
+					key: 'total',
+				},
+				{
+					show: true,
+					hideLabel: true,
+					width: 60,
+					key: 'actions',
+				},
+			],
+		};
+
+		const state = {
+			get: () => currentState,
+			set: jest.fn(async () => undefined),
+		};
+
+		await mergeWithInitalValues('pos-cart', state as never);
+
+		expect(state.set).not.toHaveBeenCalled();
+	});
 });
