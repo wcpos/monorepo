@@ -133,6 +133,12 @@
         ]
       },
       {
+        "key": "image",
+        "show": false,
+        "width": 56,
+        "hideLabel": true
+      },
+      {
         "key": "name",
         "show": true,
         "flex": 3,

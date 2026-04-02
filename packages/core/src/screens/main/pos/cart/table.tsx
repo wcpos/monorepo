@@ -23,6 +23,7 @@ import { Actions } from './cells/actions';
 import { FeeAndShippingTotal } from './cells/fee-and-shipping-total';
 import { FeeName } from './cells/fee-name';
 import { FeePrice } from './cells/fee-price';
+import { LineItemImage } from './cells/image';
 import { Price } from './cells/price';
 import { ProductName } from './cells/product-name';
 import { ProductTotal } from './cells/product-total';
@@ -54,6 +55,7 @@ interface CartTableLine {
 const cells = {
 	line_items: {
 		actions: Actions,
+		image: LineItemImage,
 		name: ProductName,
 		price: Price,
 		regular_price: RegularPrice,
@@ -64,6 +66,7 @@ const cells = {
 	},
 	fee_lines: {
 		actions: Actions,
+		image: () => null,
 		name: FeeName,
 		price: FeePrice,
 		quantity: () => null,
@@ -73,6 +76,7 @@ const cells = {
 	},
 	shipping_lines: {
 		actions: Actions,
+		image: () => null,
 		name: ShippingTitle,
 		price: ShippingPrice,
 		quantity: () => null,

@@ -10,6 +10,7 @@ type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>
 type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 export type CartLine = LineItem | FeeLine | ShippingLine;
 type TaxStatus = 'taxable' | 'none';
+type LineItemImage = LineItem['image'];
 
 /**
  * Helper to coerce values to booleans.
@@ -24,6 +25,28 @@ const toBoolean = (value: any): boolean => {
  *
  */
 export const sanitizePrice = (price?: string) => (price && price !== '' ? String(price) : '0');
+
+const normalizeLineItemImage = (
+	image?: { id?: number | string | null; src?: string | null } | null
+): LineItemImage => {
+	const src = image?.src;
+
+	if (!src) {
+		return undefined;
+	}
+
+	const normalizedId =
+		typeof image?.id === 'number'
+			? image.id
+			: image?.id != null && image.id !== ''
+				? toNumber(image.id)
+				: undefined;
+
+	return {
+		src,
+		...(Number.isFinite(normalizedId) ? { id: normalizedId } : {}),
+	};
+};
 
 /**
  * Retrieves the UUID from a line item's meta data.
@@ -212,6 +235,7 @@ export const convertProductToLineItemWithoutTax = (
 		quantity: 1,
 		sku: product.sku,
 		tax_class: product.tax_class,
+		image: normalizeLineItemImage(product.images?.[0]),
 		meta_data: new_meta_data,
 	};
 };
@@ -281,6 +305,7 @@ export const convertVariationToLineItemWithoutTax = (
 		quantity: 1,
 		sku: variation.sku,
 		tax_class: variation.tax_class,
+		image: normalizeLineItemImage(variation.image) || normalizeLineItemImage(parent.images?.[0]),
 		meta_data: new_meta_data,
 	};
 };
