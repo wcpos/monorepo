@@ -1,3 +1,4 @@
+import isEqual from 'lodash/isEqual';
 import set from 'lodash/set';
 
 import initialSettings from './initial-settings.json';
@@ -25,8 +26,62 @@ export const mergeWithInitalValues = async (
 	// Loop through initial values and set them if they don't exist
 	for (const key of Object.keys(initial)) {
 		const typedKey = key as keyof typeof initial;
-		if (current[typedKey] === undefined) {
+		const currentValue = current[typedKey];
+		const initialValue = initial[typedKey];
+
+		if (currentValue === undefined) {
 			await state.set(typedKey, (val) => initial[typedKey]);
+			continue;
+		}
+
+		if (key === 'columns' && Array.isArray(currentValue) && Array.isArray(initialValue)) {
+			type ColumnConfig = {
+				key: string;
+				display?: { key: string; show?: boolean; hide?: boolean }[];
+				[key: string]: unknown;
+			};
+			type DisplayConfig = NonNullable<ColumnConfig['display']>[number];
+			const currentColumns = currentValue as ColumnConfig[];
+			const initialColumns = initialValue as ColumnConfig[];
+
+			const mergedColumns = currentColumns.map((currentColumn) => {
+				const initialColumn = initialColumns.find((column) => column.key === currentColumn.key);
+
+				if (!initialColumn) {
+					return currentColumn;
+				}
+
+				if (Array.isArray(initialColumn.display) && Array.isArray(currentColumn.display)) {
+					return {
+						...initialColumn,
+						...currentColumn,
+						display: [
+							...currentColumn.display,
+							...initialColumn.display.filter(
+								(initialDisplay: DisplayConfig) =>
+									!currentColumn.display?.some(
+										(display: DisplayConfig) => display.key === initialDisplay.key
+									)
+							),
+						],
+					};
+				}
+
+				return {
+					...initialColumn,
+					...currentColumn,
+				};
+			});
+
+			const missingColumns = initialColumns.filter(
+				(initialColumn) => !currentValue.some((column) => column.key === initialColumn.key)
+			);
+			const nextColumns = [...mergedColumns, ...missingColumns];
+			const hasColumnDifferences = !isEqual(nextColumns, currentValue);
+
+			if (hasColumnDifferences) {
+				await state.set(typedKey, () => nextColumns as UISettingSchema<typeof id>[typeof typedKey]);
+			}
 		}
 	}
 };

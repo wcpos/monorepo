@@ -263,6 +263,7 @@ describe('Utilities', () => {
 				price: '25.00',
 				regular_price: '30.00',
 				tax_status: 'taxable',
+				images: [{ id: 77, src: 'https://example.com/product.jpg' }],
 			} as ProductDocument;
 			const lineItem = convertProductToLineItemWithoutTax(product);
 
@@ -271,6 +272,7 @@ describe('Utilities', () => {
 			expect(lineItem.sku).toBe('SKU-123');
 			expect(lineItem.tax_class).toBe('reduced-rate');
 			expect(lineItem.quantity).toBe(1);
+			expect(lineItem.image).toEqual({ id: 77, src: 'https://example.com/product.jpg' });
 		});
 
 		it('should include _woocommerce_pos_data in meta_data', () => {
@@ -367,6 +369,7 @@ describe('Utilities', () => {
 			tax_status: 'taxable',
 			tax_class: 'standard',
 			sku: 'VAR-SKU',
+			image: { id: 201, src: 'https://example.com/variation.jpg' },
 			attributes: [
 				{ id: 1, name: 'Color', option: 'Red' },
 				{ id: 2, name: 'Size', option: 'Large' },
@@ -381,6 +384,20 @@ describe('Utilities', () => {
 			expect(lineItem.name).toBe('Variable Product');
 			expect(lineItem.sku).toBe('VAR-SKU');
 			expect(lineItem.quantity).toBe(1);
+			expect(lineItem.image).toEqual({ id: 201, src: 'https://example.com/variation.jpg' });
+		});
+
+		it('should fall back to the parent product image when the variation has no image', () => {
+			const parentWithImage = {
+				...parentProduct,
+				images: [{ id: 301, src: 'https://example.com/parent.jpg' }],
+			} as ProductDocument;
+			const lineItem = convertVariationToLineItemWithoutTax(
+				{ ...variation, image: null },
+				parentWithImage
+			);
+
+			expect(lineItem.image).toEqual({ id: 301, src: 'https://example.com/parent.jpg' });
 		});
 
 		it('should include variation attributes in meta_data when not provided', () => {

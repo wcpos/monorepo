@@ -44,6 +44,7 @@ export const useUILabel = () => {
 					openCashDrawer: t('receipt.open_cash_drawer', 'Open Cash Drawer on Print'),
 					quickDiscounts: t('common.quick_discounts'),
 					quantity: t('pos_cart.qty_abbrev'),
+					image: t('common.image'),
 					split: t('pos_cart.split_qty'),
 					name: t('common.name'),
 					sku: t('common.sku'),
