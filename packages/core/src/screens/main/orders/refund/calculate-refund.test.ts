@@ -1,4 +1,8 @@
-import { calculateLineItemRefund, calculateRefundTotal } from './calculate-refund';
+import {
+	calculateLineItemRefund,
+	calculateRefundTotal,
+	computeMaxRefundable,
+} from './calculate-refund';
 
 describe('calculateLineItemRefund', () => {
 	it('calculates proportional refund for a single unit', () => {
@@ -200,5 +204,70 @@ describe('calculateLineItemRefund with dp parameter', () => {
 			refundQty: 1,
 		});
 		expect(result.refund_total).toBe('3.33');
+	});
+});
+
+describe('calculateRefundTotal with dp parameter', () => {
+	it('dp=0: sums to whole number (JPY)', () => {
+		const result = calculateRefundTotal({
+			lineItemRefunds: [{ refund_total: '1000', refund_tax: [{ id: 1, refund_total: '100' }] }],
+			customAmount: '500',
+			dp: 0,
+		});
+		expect(result).toBe('1600');
+	});
+
+	it('dp=3: sums to three decimal places (KWD)', () => {
+		const result = calculateRefundTotal({
+			lineItemRefunds: [{ refund_total: '10.000', refund_tax: [{ id: 1, refund_total: '2.000' }] }],
+			customAmount: '3.000',
+			dp: 3,
+		});
+		expect(result).toBe('15.000');
+	});
+
+	it('dp=0: empty inputs returns "0"', () => {
+		const result = calculateRefundTotal({
+			lineItemRefunds: [],
+			customAmount: '',
+			dp: 0,
+		});
+		expect(result).toBe('0');
+	});
+
+	it('dp defaults to 2 when not provided', () => {
+		const result = calculateRefundTotal({
+			lineItemRefunds: [],
+			customAmount: '7.50',
+		});
+		expect(result).toBe('7.50');
+	});
+});
+
+describe('computeMaxRefundable', () => {
+	it('no previous refunds', () => {
+		expect(computeMaxRefundable('100.00', [])).toBe(100.0);
+	});
+
+	it('one previous partial refund', () => {
+		expect(computeMaxRefundable('100.00', [{ total: '-30.00' }])).toBe(70.0);
+	});
+
+	it('dp=0: whole number currency (JPY)', () => {
+		expect(computeMaxRefundable('10000', [], 0)).toBe(10000);
+	});
+
+	it('dp=0: with previous refund (JPY)', () => {
+		expect(computeMaxRefundable('10000', [{ total: '-3000' }], 0)).toBe(7000);
+	});
+
+	it('dp=3: three decimal places (KWD)', () => {
+		expect(computeMaxRefundable('100.000', [{ total: '-30.000' }], 3)).toBe(70.0);
+	});
+
+	it('fractional rounding with dp=2', () => {
+		expect(
+			computeMaxRefundable('10.00', [{ total: '-3.33' }, { total: '-3.33' }, { total: '-3.33' }])
+		).toBe(0.01);
 	});
 });

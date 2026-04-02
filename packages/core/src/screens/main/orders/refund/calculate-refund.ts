@@ -45,8 +45,9 @@ export function calculateLineItemRefund(input: LineItemInput): LineItemRefund {
 export function calculateRefundTotal(input: {
 	lineItemRefunds: LineItemRefund[];
 	customAmount: string;
+	dp?: number;
 }): string {
-	const { lineItemRefunds, customAmount } = input;
+	const { lineItemRefunds, customAmount, dp = 2 } = input;
 
 	let total = 0;
 
@@ -61,5 +62,18 @@ export function calculateRefundTotal(input: {
 		total += parseFloat(customAmount) || 0;
 	}
 
-	return roundHalfUp(total, 2).toFixed(2);
+	return roundHalfUp(total, dp).toFixed(dp);
+}
+
+/**
+ * Calculate the maximum refundable amount for an order,
+ * accounting for previous refunds.
+ */
+export function computeMaxRefundable(
+	orderTotal: string,
+	refunds: { total?: string }[],
+	dp: number = 2
+): number {
+	const previousTotal = refunds.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0);
+	return Number((parseFloat(orderTotal || '0') - previousTotal).toFixed(dp));
 }
