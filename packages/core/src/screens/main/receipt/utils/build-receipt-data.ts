@@ -75,17 +75,18 @@ function formatAddress(addr: Record<string, string | undefined>): string {
 	return parts.join(', ');
 }
 
-function computeSubtotal(lineItems: { subtotal?: string }[]): string {
+function computeSubtotal(lineItems: { subtotal?: string }[], dp: number = 2): string {
 	const sum = lineItems.reduce((acc, item) => {
 		const subtotal = Number(item.subtotal ?? 0);
 		return acc + (Number.isFinite(subtotal) ? subtotal : 0);
 	}, 0);
-	return sum.toFixed(2);
+	return sum.toFixed(dp);
 }
 
 export function buildReceiptData(
 	order: Record<string, any>,
-	store: Record<string, any>
+	store: Record<string, any>,
+	dp: number = 2
 ): ReceiptData {
 	const billing = order.billing || {};
 	const shipping = order.shipping || {};
@@ -126,10 +127,10 @@ export function buildReceiptData(
 			sku: item.sku || '',
 		})),
 		totals: {
-			subtotal: computeSubtotal(lineItems),
-			tax_total: order.total_tax || '0.00',
-			discount_total: order.discount_total || '0.00',
-			grand_total_incl: order.total || '0.00',
+			subtotal: computeSubtotal(lineItems, dp),
+			tax_total: order.total_tax || (0).toFixed(dp),
+			discount_total: order.discount_total || (0).toFixed(dp),
+			grand_total_incl: order.total || (0).toFixed(dp),
 		},
 		payments: [
 			{

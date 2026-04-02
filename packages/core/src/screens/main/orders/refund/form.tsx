@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
+import { useObservableEagerState } from 'observable-hooks';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -32,8 +33,16 @@ import { extractErrorMessage } from '@wcpos/hooks/use-http-client/parse-wp-error
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { calculateLineItemRefund, calculateRefundTotal } from './calculate-refund';
+import {
+	calculateLineItemRefund,
+	calculateRefundTotal,
+	computeMaxRefundable,
+	formatLineItemRefundWithTax,
+} from './calculate-refund';
+import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { TaxRatesContext } from '../../contexts/tax-rates/provider';
+import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
 import { usePullDocument } from '../../contexts/use-pull-document';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { roundHalfUp } from '../../hooks/utils/precision';
@@ -48,48 +57,61 @@ interface Props {
 
 const CASH_METHODS = ['pos_cash', 'cod', 'cash', 'cash_on_delivery'];
 
-const refundFormSchema = z
-	.object({
-		line_items: z.array(
-			z.object({
-				id: z.number(),
-				name: z.string(),
-				quantity: z.number(),
-				total: z.string(),
-				total_tax: z.string(),
-				taxes: z.array(z.object({ id: z.number(), total: z.string() })),
-				refund_qty: z.number().int().min(0),
-			})
-		),
-		custom_amount: z
-			.string()
-			.optional()
-			.default('')
-			.refine((v) => v === '' || /^\d+(\.\d{0,2})?$/.test(v), 'Invalid amount'),
-		reason: z.string().optional().default(''),
-		api_refund: z.boolean(),
-	})
-	.superRefine(({ line_items }, ctx) => {
-		line_items.forEach((item, index) => {
-			if (item.refund_qty > item.quantity) {
-				ctx.addIssue({
-					code: z.ZodIssueCode.custom,
-					message: 'Refund qty cannot exceed purchased qty',
-					path: ['line_items', index, 'refund_qty'],
-				});
-			}
-		});
-	});
+function createRefundFormSchema(dp: number) {
+	const decimalPattern = dp === 0 ? /^\d+$/ : new RegExp(`^\\d+(\\.\\d{0,${dp}})?$`);
 
-type RefundFormValues = z.infer<typeof refundFormSchema>;
+	return z
+		.object({
+			line_items: z.array(
+				z.object({
+					id: z.number(),
+					name: z.string(),
+					quantity: z.number(),
+					total: z.string(),
+					total_tax: z.string(),
+					taxes: z.array(z.object({ id: z.number(), total: z.string() })),
+					refund_qty: z.number().int().min(0),
+				})
+			),
+			custom_amount: z
+				.string()
+				.optional()
+				.default('')
+				.refine((v) => v === '' || decimalPattern.test(v), 'Invalid amount'),
+			reason: z.string().optional().default(''),
+			api_refund: z.boolean(),
+		})
+		.superRefine(({ line_items }, ctx) => {
+			line_items.forEach((item, index) => {
+				if (item.refund_qty > item.quantity) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message: 'Refund qty cannot exceed purchased qty',
+						path: ['line_items', index, 'refund_qty'],
+					});
+				}
+			});
+		});
+}
+
+type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 
 export function RefundOrderForm({ order }: Props) {
 	const t = useT();
+	const { store } = useAppState();
 	const http = useRestHttpClient();
 	const router = useRouter();
 	const pullDocument = usePullDocument();
+	const taxRates = React.useContext(TaxRatesContext);
+	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
+	const dp = resolvePriceNumDecimals({
+		contextDp: taxRates?.priceNumDecimals,
+		storeDp,
+	});
 	const [loading, setLoading] = React.useState(false);
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
+
+	const refundFormSchema = React.useMemo(() => createRefundFormSchema(dp), [dp]);
 
 	const isCashPayment = CASH_METHODS.includes(order.payment_method || '');
 
@@ -98,7 +120,7 @@ export function RefundOrderForm({ order }: Props) {
 		return order.refunds.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0);
 	}, [order.refunds]);
 
-	const maxRefundable = Number((parseFloat(order.total || '0') - previousRefundTotal).toFixed(2));
+	const maxRefundable = computeMaxRefundable(order.total || '0', order.refunds || [], dp);
 
 	const initialLineItems = React.useMemo(() => {
 		return (order.line_items || []).map((item) => ({
@@ -137,16 +159,18 @@ export function RefundOrderForm({ order }: Props) {
 				total: item.total,
 				taxes: item.taxes,
 				refundQty: item.refund_qty,
+				dp,
 			})
 		);
-	}, [watchedLineItems]);
+	}, [watchedLineItems, dp]);
 
 	const refundTotal = React.useMemo(() => {
 		return calculateRefundTotal({
 			lineItemRefunds,
 			customAmount: watchedCustomAmount || '',
+			dp,
 		});
-	}, [lineItemRefunds, watchedCustomAmount]);
+	}, [lineItemRefunds, watchedCustomAmount, dp]);
 
 	const refundTotalNum = parseFloat(refundTotal);
 	const isValid = refundTotalNum > 0 && refundTotalNum <= maxRefundable;
@@ -169,12 +193,14 @@ export function RefundOrderForm({ order }: Props) {
 					total: item.total,
 					taxes: item.taxes,
 					refundQty: item.refund_qty,
+					dp,
 				})
 			);
 
 			const freshRefundTotal = calculateRefundTotal({
 				lineItemRefunds: freshLineItemRefunds,
 				customAmount: values.custom_amount || '',
+				dp,
 			});
 
 			const refundLineItems = values.line_items
@@ -230,7 +256,7 @@ export function RefundOrderForm({ order }: Props) {
 		} finally {
 			setLoading(false);
 		}
-	}, [loading, form, http, order, pullDocument, router, t]);
+	}, [loading, form, http, order, pullDocument, router, t, dp]);
 
 	return (
 		<Form {...form}>
@@ -244,7 +270,7 @@ export function RefundOrderForm({ order }: Props) {
 					{previousRefundTotal > 0 && (
 						<Text className="text-muted-foreground">
 							{t('orders.previously_refunded')}: -{order.currency_symbol}
-							{previousRefundTotal.toFixed(2)}
+							{previousRefundTotal.toFixed(dp)}
 						</Text>
 					)}
 				</HStack>
@@ -274,15 +300,10 @@ export function RefundOrderForm({ order }: Props) {
 						{fields.map((field, index) => {
 							const unitPrice =
 								field.quantity > 0
-									? roundHalfUp(parseFloat(field.total) / field.quantity, 2).toFixed(2)
-									: '0.00';
+									? roundHalfUp(parseFloat(field.total) / field.quantity, dp).toFixed(dp)
+									: (0).toFixed(dp);
 							const itemRefund = lineItemRefunds[index];
-							const itemRefundWithTax = itemRefund
-								? (
-										parseFloat(itemRefund.refund_total) +
-										itemRefund.refund_tax.reduce((s, t) => s + parseFloat(t.refund_total), 0)
-									).toFixed(2)
-								: '0.00';
+							const itemRefundWithTax = formatLineItemRefundWithTax(itemRefund, dp);
 
 							return (
 								<TableRow key={field.id}>
@@ -316,7 +337,11 @@ export function RefundOrderForm({ order }: Props) {
 					control={form.control}
 					name="custom_amount"
 					render={({ field }) => (
-						<FormInput label={t('orders.custom_refund_amount')} placeholder="0.00" {...field} />
+						<FormInput
+							label={t('orders.custom_refund_amount')}
+							placeholder={(0).toFixed(dp)}
+							{...field}
+						/>
 					)}
 				/>
 

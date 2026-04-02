@@ -20,7 +20,11 @@
  * - Refund amounts stored as negative in WC but our API sends positive
  * - Tax refund is per-tax-rate, not a single total
  */
-import { calculateLineItemRefund, calculateRefundTotal } from './calculate-refund';
+import {
+	calculateLineItemRefund,
+	calculateRefundTotal,
+	computeMaxRefundable,
+} from './calculate-refund';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,18 +44,6 @@ const createLineItem = (overrides: Partial<TestLineItem> = {}): TestLineItem => 
 	refundQty: 0,
 	...overrides,
 });
-
-/**
- * Mirror of maxRefundable logic from form.tsx (lines 96-100).
- * WooCommerce validates refund amounts server-side against this same calculation.
- */
-function computeMaxRefundable(orderTotal: string, refunds: { total: string }[]): number {
-	const previousRefundTotal = refunds.reduce(
-		(sum, r) => sum + Math.abs(parseFloat(r.total || '0')),
-		0
-	);
-	return Number((parseFloat(orderTotal || '0') - previousRefundTotal).toFixed(2));
-}
 
 // ---------------------------------------------------------------------------
 // A. Proportional Line Item Refund — Clean Divisions
@@ -650,5 +642,199 @@ describe('G. maxRefundable — sequential refunds', () => {
 	it('handles positive total values in refunds array (Math.abs)', () => {
 		// WC sometimes stores refund totals as negative, sometimes positive
 		expect(computeMaxRefundable('100.00', [{ total: '50.00' }])).toBe(50.0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// H. dp=0 — Zero decimal currencies (JPY, KRW, VND)
+//
+// WooCommerce stores with wc_price_decimals=0 use whole-number amounts.
+// PHP: round($value, 0, PHP_ROUND_HALF_UP)
+// ---------------------------------------------------------------------------
+
+describe('H. dp=0 — Zero decimal currencies (JPY)', () => {
+	const dp = 0;
+
+	it('clean split: 1 of 3 from ¥3000', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '3000',
+			taxes: [{ id: 1, total: '300' }],
+			refundQty: 1,
+			dp,
+		});
+		expect(result.refund_total).toBe('1000');
+		expect(result.refund_tax).toEqual([{ id: 1, refund_total: '100' }]);
+	});
+
+	it('rounding: 1 of 3 from ¥1000 → 333.33 → 333', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '1000',
+			taxes: [],
+			refundQty: 1,
+			dp,
+		});
+		expect(result.refund_total).toBe('333');
+	});
+
+	it('rounding: 2 of 3 from ¥1000 → 666.67 → 667', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '1000',
+			taxes: [],
+			refundQty: 2,
+			dp,
+		});
+		expect(result.refund_total).toBe('667');
+	});
+
+	it('midpoint: 1 of 2 from ¥1001 → 500.5 → 501 (HALF_UP)', () => {
+		const result = calculateLineItemRefund({
+			quantity: 2,
+			total: '1001',
+			taxes: [],
+			refundQty: 1,
+			dp,
+		});
+		expect(result.refund_total).toBe('501');
+	});
+
+	it('full refund: ¥9999', () => {
+		const result = calculateLineItemRefund({
+			quantity: 1,
+			total: '9999',
+			taxes: [{ id: 1, total: '909' }],
+			refundQty: 1,
+			dp,
+		});
+		expect(result.refund_total).toBe('9999');
+		expect(result.refund_tax).toEqual([{ id: 1, refund_total: '909' }]);
+	});
+
+	it('zero refund returns "0" not "0.00"', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '3000',
+			taxes: [{ id: 1, total: '300' }],
+			refundQty: 0,
+			dp,
+		});
+		expect(result.refund_total).toBe('0');
+		expect(result.refund_tax).toEqual([{ id: 1, refund_total: '0' }]);
+	});
+
+	it('calculateRefundTotal with dp=0', () => {
+		const result = calculateRefundTotal({
+			lineItemRefunds: [
+				{ refund_total: '1000', refund_tax: [{ id: 1, refund_total: '100' }] },
+				{ refund_total: '500', refund_tax: [{ id: 1, refund_total: '50' }] },
+			],
+			customAmount: '200',
+			dp,
+		});
+		expect(result).toBe('1850');
+	});
+
+	it('computeMaxRefundable with dp=0', () => {
+		expect(computeMaxRefundable('10000', [{ total: '-3000' }, { total: '-2000' }], dp)).toBe(5000);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// I. dp=3 — Three decimal currencies (KWD, BHD, OMR)
+//
+// WooCommerce stores with wc_price_decimals=3 use three decimal places.
+// PHP: round($value, 3, PHP_ROUND_HALF_UP)
+// ---------------------------------------------------------------------------
+
+describe('I. dp=3 — Three decimal currencies (KWD)', () => {
+	const dp = 3;
+
+	it('clean split: 1 of 3 from 30.000 KWD', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '30.000',
+			taxes: [{ id: 1, total: '1.500' }],
+			refundQty: 1,
+			dp,
+		});
+		expect(result.refund_total).toBe('10.000');
+		expect(result.refund_tax).toEqual([{ id: 1, refund_total: '0.500' }]);
+	});
+
+	it('rounding: 1 of 7 from 10.000 KWD → 1.42857 → 1.429', () => {
+		const result = calculateLineItemRefund({
+			quantity: 7,
+			total: '10.000',
+			taxes: [],
+			refundQty: 1,
+			dp,
+		});
+		expect(result.refund_total).toBe('1.429');
+	});
+
+	it('rounding: 1 of 3 from 10.000 KWD → 3.33333 → 3.333', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '10.000',
+			taxes: [],
+			refundQty: 1,
+			dp,
+		});
+		expect(result.refund_total).toBe('3.333');
+	});
+
+	it('midpoint: qty=4 total="10.700" → 2.675 → 2.675 (exact at 3dp)', () => {
+		const result = calculateLineItemRefund({
+			quantity: 4,
+			total: '10.700',
+			taxes: [],
+			refundQty: 1,
+			dp,
+		});
+		expect(result.refund_total).toBe('2.675');
+	});
+
+	it('full refund with multiple taxes', () => {
+		const result = calculateLineItemRefund({
+			quantity: 1,
+			total: '50.000',
+			taxes: [
+				{ id: 1, total: '2.500' },
+				{ id: 2, total: '1.250' },
+			],
+			refundQty: 1,
+			dp,
+		});
+		expect(result.refund_total).toBe('50.000');
+		expect(result.refund_tax).toEqual([
+			{ id: 1, refund_total: '2.500' },
+			{ id: 2, refund_total: '1.250' },
+		]);
+	});
+
+	it('zero refund returns "0.000"', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '30.000',
+			taxes: [],
+			refundQty: 0,
+			dp,
+		});
+		expect(result.refund_total).toBe('0.000');
+	});
+
+	it('calculateRefundTotal with dp=3', () => {
+		const result = calculateRefundTotal({
+			lineItemRefunds: [{ refund_total: '10.000', refund_tax: [{ id: 1, refund_total: '0.500' }] }],
+			customAmount: '3.000',
+			dp,
+		});
+		expect(result).toBe('13.500');
+	});
+
+	it('computeMaxRefundable with dp=3', () => {
+		expect(computeMaxRefundable('100.000', [{ total: '-30.000' }], dp)).toBe(70.0);
 	});
 });

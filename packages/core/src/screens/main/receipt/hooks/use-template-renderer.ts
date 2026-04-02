@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import Mustache from 'mustache';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
 import { formatReceiptData, mapReceiptData, renderThermalPreview } from '@wcpos/printer';
@@ -10,6 +11,8 @@ import { useActiveTemplates } from './use-active-templates';
 import { useReceiptData } from './use-receipt-data';
 import { buildReceiptData } from '../utils/build-receipt-data';
 import { useAppState } from '../../../../contexts/app-state';
+import { TaxRatesContext } from '../../contexts/tax-rates/provider';
+import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
 
 import type { ReceiptData } from '../utils/build-receipt-data';
 import type { ReceiptMode } from './use-receipt-data';
@@ -43,6 +46,12 @@ export function useTemplateRenderer({
 }: UseTemplateRendererOptions): TemplateRendererResult {
 	const templates = useActiveTemplates();
 	const { store } = useAppState();
+	const taxRates = React.useContext(TaxRatesContext);
+	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
+	const dp = resolvePriceNumDecimals({
+		contextDp: taxRates?.priceNumDecimals,
+		storeDp,
+	});
 	const { status } = useOnlineStatus();
 	const isOffline = status !== 'online-website-available';
 
@@ -53,10 +62,10 @@ export function useTemplateRenderer({
 	const receiptData = React.useMemo(() => {
 		if (apiReceiptData) return apiReceiptData;
 		if (order && store) {
-			return buildReceiptData(order, store);
+			return buildReceiptData(order, store, dp);
 		}
 		return null;
-	}, [apiReceiptData, order, store]);
+	}, [apiReceiptData, order, store, dp]);
 
 	// Syncing: API fetch is in flight and we're still showing local data
 	const isSyncing = isLoading && !apiReceiptData;
