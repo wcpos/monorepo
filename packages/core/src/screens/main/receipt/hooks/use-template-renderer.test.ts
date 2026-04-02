@@ -2,18 +2,24 @@
  * @jest-environment jsdom
  */
 import { renderHook } from '@testing-library/react';
+import { BehaviorSubject } from 'rxjs';
 
 import { useTemplateRenderer } from './use-template-renderer';
 
 const mockUseReceiptData = jest.fn();
 const mockUseActiveTemplates = jest.fn(() => []);
-const mockUseAppState = jest.fn(() => ({ store: { name: 'Test Store' } }));
+const createStore = (dp = 2) => ({
+	name: 'Test Store',
+	wc_price_decimals$: new BehaviorSubject(dp),
+});
+const mockUseAppState = jest.fn(() => ({ store: createStore() }));
 const mockUseOnlineStatus = jest.fn(() => ({ status: 'online-website-available' }));
 const mockBuildReceiptData = jest.fn(
-	(order: Record<string, unknown>, store: Record<string, unknown>) => ({
+	(order: Record<string, unknown>, store: Record<string, unknown>, dp?: number) => ({
 		source: 'local',
 		order,
 		store,
+		dp,
 	})
 );
 
@@ -25,6 +31,19 @@ jest.mock('./use-active-templates', () => ({
 	useActiveTemplates: () => mockUseActiveTemplates(),
 }));
 
+jest.mock('../../contexts/tax-rates', () => ({
+	useTaxRates: () => {
+		throw new Error('useTaxRates must be called within TaxRatesProvider');
+	},
+}));
+
+jest.mock('../../contexts/tax-rates/provider', () => {
+	const React = jest.requireActual<typeof import('react')>('react');
+	return {
+		TaxRatesContext: React.createContext(null),
+	};
+});
+
 jest.mock('../../../../contexts/app-state', () => ({
 	useAppState: () => mockUseAppState(),
 }));
@@ -34,8 +53,8 @@ jest.mock('@wcpos/hooks/use-online-status', () => ({
 }));
 
 jest.mock('../utils/build-receipt-data', () => ({
-	buildReceiptData: (order: Record<string, unknown>, store: Record<string, unknown>) =>
-		mockBuildReceiptData(order, store),
+	buildReceiptData: (order: Record<string, unknown>, store: Record<string, unknown>, dp?: number) =>
+		mockBuildReceiptData(order, store, dp),
 }));
 
 jest.mock('@wcpos/printer', () => ({
@@ -56,7 +75,7 @@ describe('useTemplateRenderer', () => {
 		jest.clearAllMocks();
 		mockUseReceiptData.mockReturnValue({ data: null, isLoading: false });
 		mockUseActiveTemplates.mockReturnValue([]);
-		mockUseAppState.mockReturnValue({ store: { name: 'Test Store' } });
+		mockUseAppState.mockReturnValue({ store: createStore() });
 		mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
 	});
 
@@ -79,11 +98,36 @@ describe('useTemplateRenderer', () => {
 			expect(result.current.receiptData).toEqual({
 				source: 'local',
 				order: defaultOptions.order,
-				store: { name: 'Test Store' },
+				store: expect.objectContaining({ name: 'Test Store' }),
+				dp: 2,
 			});
-			expect(mockBuildReceiptData).toHaveBeenCalledWith(defaultOptions.order, {
-				name: 'Test Store',
+			expect(mockBuildReceiptData).toHaveBeenCalledWith(
+				defaultOptions.order,
+				{
+					name: 'Test Store',
+					wc_price_decimals$: expect.anything(),
+				},
+				2
+			);
+		});
+
+		it('falls back to store wc_price_decimals when TaxRatesProvider is absent', () => {
+			const store = createStore(3);
+			mockUseAppState.mockReturnValue({ store });
+
+			const { result } = renderHook(() => useTemplateRenderer(defaultOptions));
+
+			expect(result.current.receiptData).toEqual({
+				source: 'local',
+				order: defaultOptions.order,
+				store,
+				dp: 3,
 			});
+			expect(mockBuildReceiptData).toHaveBeenCalledWith(
+				defaultOptions.order,
+				expect.objectContaining({ name: 'Test Store' }),
+				3
+			);
 		});
 
 		it('returns null when no API data and no order', () => {

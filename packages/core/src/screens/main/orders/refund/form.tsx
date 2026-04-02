@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
+import { useObservableEagerState } from 'observable-hooks';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -37,8 +38,10 @@ import {
 	calculateRefundTotal,
 	computeMaxRefundable,
 } from './calculate-refund';
+import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { TaxRatesContext } from '../../contexts/tax-rates/provider';
+import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
 import { usePullDocument } from '../../contexts/use-pull-document';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { roundHalfUp } from '../../hooks/utils/precision';
@@ -94,10 +97,16 @@ type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 
 export function RefundOrderForm({ order }: Props) {
 	const t = useT();
+	const { store } = useAppState();
 	const http = useRestHttpClient();
 	const router = useRouter();
 	const pullDocument = usePullDocument();
-	const { priceNumDecimals: dp } = useTaxRates();
+	const taxRates = React.useContext(TaxRatesContext);
+	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
+	const dp = resolvePriceNumDecimals({
+		contextDp: taxRates?.priceNumDecimals,
+		storeDp,
+	});
 	const [loading, setLoading] = React.useState(false);
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
 
