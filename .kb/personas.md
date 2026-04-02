@@ -49,6 +49,24 @@ including marketing messaging and journey stages, see wcpos-brand/brand/audience
 - Error messages can be technical — include error codes, relevant IDs
 - The plugin should be a good citizen in the WordPress ecosystem (no global namespace pollution, standard hooks)
 
+## Global User Base — Currency & Locale Reality
+
+WCPOS is used in every region of the world. With ~6,000 active installations, users
+transact in the full range of currencies that WooCommerce supports, including:
+
+- **0 decimal places**: JPY (Japanese Yen), KRW (Korean Won), VND (Vietnamese Dong)
+- **2 decimal places**: USD, EUR, GBP, AUD, and most others
+- **3 decimal places**: KWD (Kuwaiti Dinar), BHD (Bahraini Dinar), OMR (Omani Rial)
+
+WooCommerce supports 0–8 decimal places via `wc_get_price_decimals()`.
+
+**Design implications:**
+- Never hardcode `2` as decimal precision in monetary calculations or display — always read from store config (`wc_price_decimals`)
+- Never assume which currencies, locales, or tax configurations users operate with
+- Never downgrade the priority of a currency/locale bug by claiming "no users are affected" — there is no telemetry to support that claim
+- Test monetary logic with dp=0, dp=2, and dp=3 at minimum
+- Use `Intl.NumberFormat` for display formatting when possible — it handles currency-specific precision automatically
+
 ## Anti-Personas (Don't Optimize For)
 
 - **Large retailers (100k+ products)** — WooCommerce itself struggles here; local sync at this scale is unsolved
