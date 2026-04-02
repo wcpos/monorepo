@@ -132,3 +132,73 @@ describe('calculateRefundTotal', () => {
 		expect(result).toBe('0.00');
 	});
 });
+
+describe('calculateLineItemRefund with dp parameter', () => {
+	it('dp=0: rounds to whole numbers (JPY)', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '3000',
+			taxes: [{ id: 1, total: '300' }],
+			refundQty: 1,
+			dp: 0,
+		});
+		expect(result.refund_total).toBe('1000');
+		expect(result.refund_tax).toEqual([{ id: 1, refund_total: '100' }]);
+	});
+
+	it('dp=0: rounding with HALF_UP (JPY)', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '1000',
+			taxes: [],
+			refundQty: 1,
+			dp: 0,
+		});
+		expect(result.refund_total).toBe('333');
+	});
+
+	it('dp=0: zero refund returns "0" not "0.00"', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '3000',
+			taxes: [{ id: 1, total: '300' }],
+			refundQty: 0,
+			dp: 0,
+		});
+		expect(result.refund_total).toBe('0');
+		expect(result.refund_tax).toEqual([{ id: 1, refund_total: '0' }]);
+	});
+
+	it('dp=3: three decimal places (KWD)', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '30.000',
+			taxes: [{ id: 1, total: '6.000' }],
+			refundQty: 1,
+			dp: 3,
+		});
+		expect(result.refund_total).toBe('10.000');
+		expect(result.refund_tax).toEqual([{ id: 1, refund_total: '2.000' }]);
+	});
+
+	it('dp=3: rounding at third decimal (KWD)', () => {
+		const result = calculateLineItemRefund({
+			quantity: 7,
+			total: '10.000',
+			taxes: [],
+			refundQty: 1,
+			dp: 3,
+		});
+		expect(result.refund_total).toBe('1.429');
+	});
+
+	it('dp defaults to 2 when not provided (backward compat)', () => {
+		const result = calculateLineItemRefund({
+			quantity: 3,
+			total: '10.00',
+			taxes: [],
+			refundQty: 1,
+		});
+		expect(result.refund_total).toBe('3.33');
+	});
+});

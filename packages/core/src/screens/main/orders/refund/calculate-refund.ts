@@ -5,6 +5,7 @@ interface LineItemInput {
 	total: string;
 	taxes: { id: number; total: string }[];
 	refundQty: number;
+	dp?: number;
 }
 
 interface LineItemRefund {
@@ -16,21 +17,22 @@ interface LineItemRefund {
  * Calculate proportional refund amounts for a line item based on refund quantity.
  */
 export function calculateLineItemRefund(input: LineItemInput): LineItemRefund {
-	const { quantity, total, taxes, refundQty } = input;
+	const { quantity, total, taxes, refundQty, dp = 2 } = input;
 
+	const zeroPad = (0).toFixed(dp);
 	const safeRefundQty = Math.min(Math.max(refundQty, 0), quantity);
 	if (safeRefundQty === 0 || quantity === 0) {
 		return {
-			refund_total: '0.00',
-			refund_tax: taxes.map((tax) => ({ id: tax.id, refund_total: '0.00' })),
+			refund_total: zeroPad,
+			refund_tax: taxes.map((tax) => ({ id: tax.id, refund_total: zeroPad })),
 		};
 	}
 
 	const ratio = safeRefundQty / quantity;
-	const refundTotal = roundHalfUp(parseFloat(total) * ratio, 2).toFixed(2);
+	const refundTotal = roundHalfUp(parseFloat(total) * ratio, dp).toFixed(dp);
 	const refundTax = taxes.map((tax) => ({
 		id: tax.id,
-		refund_total: roundHalfUp(parseFloat(tax.total) * ratio, 2).toFixed(2),
+		refund_total: roundHalfUp(parseFloat(tax.total) * ratio, dp).toFixed(dp),
 	}));
 
 	return { refund_total: refundTotal, refund_tax: refundTax };
