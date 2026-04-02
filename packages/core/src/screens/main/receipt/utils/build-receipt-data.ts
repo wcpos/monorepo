@@ -128,9 +128,9 @@ export function buildReceiptData(
 		})),
 		totals: {
 			subtotal: computeSubtotal(lineItems, dp),
-			tax_total: order.total_tax || '0.00',
-			discount_total: order.discount_total || '0.00',
-			grand_total_incl: order.total || '0.00',
+			tax_total: order.total_tax || (0).toFixed(dp),
+			discount_total: order.discount_total || (0).toFixed(dp),
+			grand_total_incl: order.total || (0).toFixed(dp),
 		},
 		payments: [
 			{
