@@ -22,8 +22,6 @@ export default function Root({ children }: { children: React.ReactNode }) {
 				<style dangerouslySetInnerHTML={{ __html: responsiveBackground }} />
 
 				{/* Add any additional <head> elements that you want globally available on web... */}
-
-				{/* Worker paths are hardcoded in packages/database — no global needed */}
 			</head>
 			<body>{children}</body>
 		</html>
