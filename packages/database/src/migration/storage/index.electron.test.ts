@@ -6,6 +6,10 @@ const mockGetRxStorageIpcRenderer = jest.fn((args: unknown) => ({
 	kind: 'ipc-renderer-storage',
 	args,
 }));
+const mockGetMemoryMappedRxStorage = jest.fn((args: unknown) => ({
+	kind: 'memory-mapped-storage',
+	args,
+}));
 const mockGetRxStorageSQLite = jest.fn((args: unknown) => ({
 	kind: 'sqlite-storage',
 	args,
@@ -13,6 +17,10 @@ const mockGetRxStorageSQLite = jest.fn((args: unknown) => ({
 
 jest.mock('rxdb/plugins/electron', () => ({
 	getRxStorageIpcRenderer: (args: unknown) => mockGetRxStorageIpcRenderer(args),
+}));
+
+jest.mock('rxdb-premium/plugins/storage-memory-mapped', () => ({
+	getMemoryMappedRxStorage: (args: unknown) => mockGetMemoryMappedRxStorage(args),
 }));
 
 jest.mock('rxdb-premium-old/plugins/storage-sqlite', () => ({
@@ -34,7 +42,7 @@ describe('electron storage migration helpers', () => {
 	it('exposes the electron migration labels and storage split', async () => {
 		const { getElectronNewStorage, getStorageMigrationConfig } = await import('./index.electron');
 
-		expect(getStorageMigrationConfig()).toEqual({
+		expect(getStorageMigrationConfig('user')).toEqual({
 			oldStorage: expect.objectContaining({
 				kind: 'sqlite-storage',
 				createStorageInstance: expect.any(Function),
@@ -44,6 +52,42 @@ describe('electron storage migration helpers', () => {
 			}),
 			sourceStorage: 'sqlite-ipc',
 			targetStorage: 'filesystem-node-ipc',
+		});
+		expect(getStorageMigrationConfig('store')).toEqual({
+			oldStorage: expect.objectContaining({
+				kind: 'sqlite-storage',
+				createStorageInstance: expect.any(Function),
+				args: {
+					sqliteBasics: expect.any(Object),
+				},
+			}),
+			sourceStorage: 'sqlite-ipc',
+			targetStorage: 'filesystem-node-ipc',
+		});
+		expect(getStorageMigrationConfig('fast-store')).toEqual({
+			oldStorage: {
+				kind: 'memory-mapped-storage',
+				args: {
+					storage: expect.objectContaining({
+						kind: 'sqlite-storage',
+						createStorageInstance: expect.any(Function),
+						args: {
+							sqliteBasics: expect.any(Object),
+						},
+					}),
+				},
+			},
+			sourceStorage: 'sqlite-ipc',
+			targetStorage: 'filesystem-node-ipc',
+		});
+		expect(mockGetMemoryMappedRxStorage).toHaveBeenCalledWith({
+			storage: expect.objectContaining({
+				kind: 'sqlite-storage',
+				createStorageInstance: expect.any(Function),
+				args: {
+					sqliteBasics: expect.any(Object),
+				},
+			}),
 		});
 
 		expect(getElectronNewStorage()).toEqual({

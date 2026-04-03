@@ -1,4 +1,5 @@
 import { getRxStorageIpcRenderer } from 'rxdb/plugins/electron';
+import { getMemoryMappedRxStorage } from 'rxdb-premium/plugins/storage-memory-mapped';
 
 import { getLegacyMigrationRxStorageSQLite } from './legacy-sqlite-storage';
 
@@ -7,6 +8,9 @@ import type {
 	SQLiteQueryWithParams,
 	SQLResultRow,
 } from 'rxdb-premium-old/plugins/storage-sqlite';
+import type { StorageMigrationConfig, StorageMigrationDatabaseKind } from './types';
+
+export { prepareOldDatabaseForStorageMigration } from './prepare-old-database';
 
 type ElectronBridgeIpcRenderer = {
 	invoke(channel: string, args: unknown): Promise<unknown>;
@@ -113,6 +117,12 @@ export function getElectronOldStorage() {
 	});
 }
 
+export function getElectronFastStoreOldStorage() {
+	return getMemoryMappedRxStorage({
+		storage: getElectronOldStorage() as any,
+	});
+}
+
 export function getElectronNewStorage() {
 	return getRxStorageIpcRenderer({
 		key: MAIN_STORAGE_KEY,
@@ -121,9 +131,12 @@ export function getElectronNewStorage() {
 	});
 }
 
-export function getStorageMigrationConfig() {
+export function getStorageMigrationConfig(
+	databaseKind: StorageMigrationDatabaseKind
+): StorageMigrationConfig {
 	return {
-		oldStorage: getElectronOldStorage(),
+		oldStorage:
+			databaseKind === 'fast-store' ? getElectronFastStoreOldStorage() : getElectronOldStorage(),
 		sourceStorage: 'sqlite-ipc',
 		targetStorage: 'filesystem-node-ipc',
 	};

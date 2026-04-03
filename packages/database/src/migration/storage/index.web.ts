@@ -1,11 +1,21 @@
 import { getRxStorageRemote } from 'rxdb-old/plugins/storage-remote';
+import { createBlobFromBase64 } from 'rxdb/plugins/utils';
 import { PROMISE_RESOLVE_VOID } from 'rxdb-old/plugins/utils';
 import { Subject } from 'rxjs';
 import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
 
 import type { MessageFromRemote } from 'rxdb-old/plugins/storage-remote';
+import type { StorageMigrationConfig, StorageMigrationDatabaseKind } from './types';
+
+export { prepareOldDatabaseForStorageMigration } from './prepare-old-database';
 
 type WorkerInput = string | (() => Worker);
+
+type LegacyRemoteAttachmentData = Blob | string;
+
+type LegacyRemoteStorageInstance = {
+	getAttachmentData?: (...args: unknown[]) => Promise<LegacyRemoteAttachmentData>;
+};
 
 interface OldWorkerStorageOptions {
 	mode?: 'storage' | 'database' | 'collection' | 'one';
@@ -51,6 +61,14 @@ function getOldRxStorageWorker({ mode, workerInput, workerOptions }: OldWorkerSt
 	});
 }
 
+async function normalizeLegacyAttachmentData(data: LegacyRemoteAttachmentData): Promise<Blob> {
+	if (data instanceof Blob) {
+		return data;
+	}
+
+	return createBlobFromBase64(data, '');
+}
+
 export function getWebStorageWorkerPaths() {
 	return {
 		legacyIndexedDbWorker: '/indexeddb.worker.js',
@@ -59,9 +77,32 @@ export function getWebStorageWorkerPaths() {
 }
 
 export function getWebOldStorage() {
-	return getOldRxStorageWorker({
+	const storage = getOldRxStorageWorker({
 		workerInput: getWebStorageWorkerPaths().legacyIndexedDbWorker,
 	});
+
+	if (typeof storage.createStorageInstance !== 'function') {
+		return storage;
+	}
+
+	const originalCreateStorageInstance = storage.createStorageInstance.bind(storage);
+	storage.createStorageInstance = (async (...args: unknown[]) => {
+		const instance = (await (
+			originalCreateStorageInstance as (...createArgs: unknown[]) => Promise<unknown>
+		)(...args)) as LegacyRemoteStorageInstance;
+
+		if (instance.getAttachmentData) {
+			const getAttachmentData = instance.getAttachmentData.bind(instance);
+			instance.getAttachmentData = async (...attachmentArgs: unknown[]) => {
+				const data = await getAttachmentData(...attachmentArgs);
+				return normalizeLegacyAttachmentData(data);
+			};
+		}
+
+		return instance;
+	}) as typeof storage.createStorageInstance;
+
+	return storage;
 }
 
 export function getWebNewStorage() {
@@ -70,7 +111,9 @@ export function getWebNewStorage() {
 	});
 }
 
-export function getStorageMigrationConfig() {
+export function getStorageMigrationConfig(
+	_databaseKind: StorageMigrationDatabaseKind
+): StorageMigrationConfig {
 	return {
 		oldStorage: getWebOldStorage(),
 		sourceStorage: 'indexeddb-worker',
