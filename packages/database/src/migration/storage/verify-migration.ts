@@ -19,7 +19,22 @@ interface VerifyStorageMigrationInput {
 	targetStorage: string;
 }
 
-const getMarkerData = (marker: any): StorageMigrationMeta | undefined => marker?.data ?? marker;
+const getMarkerData = (marker: any): StorageMigrationMeta | undefined => {
+	if (!marker) {
+		return undefined;
+	}
+
+	if (marker.data) {
+		return marker.data;
+	}
+
+	if (typeof marker.toJSON === 'function') {
+		const json = marker.toJSON();
+		return json?.data ?? json;
+	}
+
+	return marker;
+};
 
 const getMarkerStatus = (marker: any): StorageMigrationStatus | undefined =>
 	getMarkerData(marker)?.status;
