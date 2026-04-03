@@ -105,4 +105,20 @@ describe('populatePlugin', () => {
 		const output = await doc.toPopulatedJSON();
 		expect(output).toEqual(json);
 	});
+
+	it('creates unique nested test databases even when Date.now repeats', async () => {
+		const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1234567890);
+
+		try {
+			const firstCollection = await create(0);
+			const secondCollection = await create(0);
+
+			expect(firstCollection.database.name).not.toBe(secondCollection.database.name);
+
+			await firstCollection.database.remove();
+			await secondCollection.database.remove();
+		} finally {
+			nowSpy.mockRestore();
+		}
+	});
 });
