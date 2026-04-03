@@ -26,7 +26,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
 				<script
 					dangerouslySetInnerHTML={{
 						__html: `
-					window.idbWorker = "/indexeddb.worker.js";
+					window.rxdbWorker = "/opfs.worker.js";
 				`,
 					}}
 				/>

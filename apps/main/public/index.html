@@ -24,9 +24,9 @@
       }
     </style>
     <script>
-      // only define idbWorker when _not_ running under Electron
+      // only define rxdbWorker when _not_ running under Electron
       if (!navigator.userAgent.includes('Electron')) {
-        window.idbWorker = '/indexeddb.worker.js';
+        window.rxdbWorker = '/opfs.worker.js';
       }
     </script>
   </head>

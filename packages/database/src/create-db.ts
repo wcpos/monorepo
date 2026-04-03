@@ -16,20 +16,53 @@ import {
 	UserCollections,
 	userCollections,
 } from './collections';
+import { getStorageMigrationConfig } from './migration/storage';
+import {
+	getFastStoreDatabaseNames,
+	getStoreDatabaseNames,
+	getUserDatabaseNames,
+} from './migration/storage/database-names';
+import { runStorageMigration } from './migration/storage/run-storage-migration';
+import { verifyStorageMigration } from './migration/storage/verify-migration';
+
+import type { StorageMigrationDatabase } from './migration/storage/types';
 
 const dbLogger = getLogger(['wcpos', 'db', 'create']);
+
+const runPersistentStorageMigration = async (
+	database: StorageMigrationDatabase,
+	oldDatabaseName: string
+) => {
+	const { oldStorage, sourceStorage, targetStorage } = getStorageMigrationConfig();
+
+	await verifyStorageMigration({
+		database,
+		oldDatabaseName,
+		sourceStorage,
+		targetStorage,
+	});
+
+	await runStorageMigration({
+		database,
+		oldDatabaseName,
+		oldStorage: oldStorage as any,
+		sourceStorage,
+		targetStorage,
+	});
+};
 
 /**
  * Creates the User database
  */
 export const createUserDB = async () => {
-	const name = 'wcposusers_v2';
+	const { oldName: oldDatabaseName, newName: name } = getUserDatabaseNames();
 	try {
 		const db = await createRxDatabase<UserCollections>({
 			name,
 			...defaultConfig,
 		});
 		await db?.addCollections(userCollections);
+		await runPersistentStorageMigration(db, oldDatabaseName);
 		return db;
 	} catch (error) {
 		dbLogger.error('Failed to create user database', {
@@ -49,7 +82,7 @@ export const createUserDB = async () => {
  * creates the Store database
  */
 export const createStoreDB = async (id: string) => {
-	const name = `store_v2_${id}`; // Database name needs to start with a letter, id is a short uuid
+	const { oldName: oldDatabaseName, newName: name } = getStoreDatabaseNames(id); // Database name needs to start with a letter, id is a short uuid
 	try {
 		const db = await createRxDatabase<StoreCollections>({
 			name,
@@ -58,6 +91,7 @@ export const createStoreDB = async (id: string) => {
 			closeDuplicates: true, // Allow returning existing DB when switching back to a store
 		});
 		await db?.addCollections(storeCollections);
+		await runPersistentStorageMigration(db, oldDatabaseName);
 		return db;
 	} catch (error) {
 		dbLogger.error('Failed to create store database', {
@@ -77,7 +111,7 @@ export const createStoreDB = async (id: string) => {
  * creates the Sync State database
  */
 export const createFastStoreDB = async (id: string) => {
-	const name = `fast_store_v3_${id}`;
+	const { oldName: oldDatabaseName, newName: name } = getFastStoreDatabaseNames(id);
 	try {
 		const db = await createRxDatabase<SyncCollections>({
 			name,
@@ -86,6 +120,7 @@ export const createFastStoreDB = async (id: string) => {
 			closeDuplicates: true, // Allow returning existing DB when switching back to a store
 		});
 		await db?.addCollections(syncCollections);
+		await runPersistentStorageMigration(db, oldDatabaseName);
 		return db;
 	} catch (error) {
 		dbLogger.error('Failed to create fast store database', {

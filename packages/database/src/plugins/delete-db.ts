@@ -40,12 +40,11 @@ const deleteDBPlugin: RxPlugin = {
 	/**
 	 * you can add hooks to the hook-list
 	 * https://github.com/pubkey/rxdb/blob/master/src/hooks.ts
+	 *
+	 * Legacy IndexedDB cleanup hook retained for older migrations; deferred cleanup for the new
+	 * storage migration flow now runs from the migration verification step.
 	 */
 	hooks: {
-		/**
-		 * TODO - this doesn't work, the storage is recreated
-		 * I need to write a separate script which does clean up
-		 */
 		postRemoveRxDatabase: {
 			after: ({ storage, databaseName }: { storage: any; databaseName: string }) => {
 				if (storage?.name === 'indexeddb') {
