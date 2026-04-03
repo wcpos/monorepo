@@ -74,8 +74,8 @@ async function normalizeLegacyAttachmentData(data: LegacyRemoteAttachmentData): 
 
 export function getWebStorageWorkerPaths() {
 	return {
-		legacyIndexedDbWorker: '/indexeddb.worker.js',
-		targetOpfsWorker: '/opfs.worker.js',
+		legacyIndexedDbWorker: (globalThis as Record<string, any>).idbWorker ?? '/indexeddb.worker.js',
+		targetOpfsWorker: (globalThis as Record<string, any>).opfsWorker ?? '/opfs.worker.js',
 	};
 }
 

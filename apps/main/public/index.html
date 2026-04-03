@@ -23,6 +23,12 @@
         flex: 1;
       }
     </style>
+    <script>
+      // only define opfsWorker when _not_ running under Electron
+      if (!navigator.userAgent.includes('Electron')) {
+        window.opfsWorker = '/opfs.worker.js';
+      }
+    </script>
   </head>
 
   <body>
