@@ -100,7 +100,9 @@ describe('create-db migration wiring', () => {
 			const db = await factory(module);
 
 			expect(db?.name).toBe(newName);
-			expect(mockCreateRxDatabase).toHaveBeenCalledWith(expect.objectContaining({ name: newName }));
+			expect(mockCreateRxDatabase).toHaveBeenCalledWith(
+				expect.objectContaining({ name: newName, localDocuments: true })
+			);
 			expect(mockVerifyStorageMigration).toHaveBeenCalledWith(
 				expect.objectContaining({
 					database: expect.objectContaining({ name: newName }),

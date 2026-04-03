@@ -1,6 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { getRxStorageExpoAsync } from 'rxdb-premium/plugins/storage-filesystem-expo';
-import { getRxStorageSQLite } from 'rxdb-premium-old/plugins/storage-sqlite';
+
+import { getLegacyMigrationRxStorageSQLite } from './legacy-sqlite-storage';
 
 import type { SQLiteBasics } from 'rxdb-premium-old/plugins/storage-sqlite';
 
@@ -112,7 +113,7 @@ export function getNativeStorageKind() {
 }
 
 export function getNativeOldStorage() {
-	return getRxStorageSQLite({
+	return getLegacyMigrationRxStorageSQLite({
 		sqliteBasics: getSQLiteBasicsExpoSQLiteAsync(),
 	});
 }

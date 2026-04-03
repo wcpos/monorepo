@@ -35,12 +35,13 @@ describe('electron storage migration helpers', () => {
 		const { getElectronNewStorage, getStorageMigrationConfig } = await import('./index.electron');
 
 		expect(getStorageMigrationConfig()).toEqual({
-			oldStorage: {
+			oldStorage: expect.objectContaining({
 				kind: 'sqlite-storage',
+				createStorageInstance: expect.any(Function),
 				args: {
 					sqliteBasics: expect.any(Object),
 				},
-			},
+			}),
 			sourceStorage: 'sqlite-ipc',
 			targetStorage: 'filesystem-node-ipc',
 		});

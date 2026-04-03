@@ -60,6 +60,7 @@ export const createUserDB = async () => {
 		const db = await createRxDatabase<UserCollections>({
 			name,
 			...defaultConfig,
+			localDocuments: true,
 		});
 		await db?.addCollections(userCollections);
 		await runPersistentStorageMigration(db, oldDatabaseName);
@@ -88,6 +89,7 @@ export const createStoreDB = async (id: string) => {
 			name,
 			allowSlowCount: true,
 			...defaultConfig,
+			localDocuments: true,
 			closeDuplicates: true, // Allow returning existing DB when switching back to a store
 		});
 		await db?.addCollections(storeCollections);
@@ -117,6 +119,7 @@ export const createFastStoreDB = async (id: string) => {
 			name,
 			allowSlowCount: true,
 			...fastStorageConfig,
+			localDocuments: true,
 			closeDuplicates: true, // Allow returning existing DB when switching back to a store
 		});
 		await db?.addCollections(syncCollections);

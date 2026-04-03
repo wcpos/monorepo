@@ -1,5 +1,6 @@
 import { getRxStorageIpcRenderer } from 'rxdb/plugins/electron';
-import { getRxStorageSQLite } from 'rxdb-premium-old/plugins/storage-sqlite';
+
+import { getLegacyMigrationRxStorageSQLite } from './legacy-sqlite-storage';
 
 import type {
 	SQLiteBasics,
@@ -107,7 +108,7 @@ function getSQLiteIpcBasics(): SQLiteBasics<ElectronLegacyDatabase> {
 }
 
 export function getElectronOldStorage() {
-	return getRxStorageSQLite({
+	return getLegacyMigrationRxStorageSQLite({
 		sqliteBasics: getSQLiteIpcBasics(),
 	});
 }
