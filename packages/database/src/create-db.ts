@@ -17,19 +17,11 @@ import {
 	userCollections,
 } from './collections';
 import {
-	getStorageMigrationConfig,
-	prepareOldDatabaseForStorageMigration,
-} from './migration/storage';
-import {
 	getFastStoreDatabaseNames,
 	getStoreDatabaseNames,
 	getUserDatabaseNames,
 } from './migration/storage/database-names';
-import { runStorageMigration } from './migration/storage/run-storage-migration';
-import {
-	getMigrationLocalDocId,
-	verifyStorageMigration,
-} from './migration/storage/verify-migration';
+import { getMigrationLocalDocId } from './migration/storage/migration-local-doc-id';
 
 import type {
 	StorageMigrationDatabase,
@@ -39,12 +31,29 @@ import type {
 
 const dbLogger = getLogger(['wcpos', 'db', 'create']);
 
+/**
+ * Lazy-loads and runs the storage migration pipeline.
+ *
+ * All rxdb-old / migration-storage imports are deferred to dynamic import()
+ * so they are code-split out of the initial bundle. They are only fetched
+ * when a migration actually needs to run (i.e. first launch after upgrade).
+ */
 const runPersistentStorageMigration = async (
 	databaseKind: StorageMigrationDatabaseKind,
 	database: StorageMigrationDatabase,
 	oldDatabaseName: string,
 	collections?: Record<string, any>
 ) => {
+	const [
+		{ getStorageMigrationConfig, prepareOldDatabaseForStorageMigration },
+		{ runStorageMigration },
+		{ verifyStorageMigration },
+	] = await Promise.all([
+		import('./migration/storage'),
+		import('./migration/storage/run-storage-migration'),
+		import('./migration/storage/verify-migration'),
+	]);
+
 	const { oldStorage, sourceStorage, targetStorage } = getStorageMigrationConfig(databaseKind);
 
 	await verifyStorageMigration({
@@ -101,6 +110,16 @@ type PersistentDatabase = StorageMigrationDatabase & {
 	addCollections: (...args: any[]) => Promise<any>;
 };
 
+/**
+ * If a previous storage migration failed, destroy the partially-migrated target
+ * database and recreate it from scratch. This intentionally causes data loss in
+ * the new database — the assumption is that the old database still contains the
+ * authoritative copy and migration will be retried on the next launch.
+ *
+ * If the old database has already been cleaned up (migration was partially
+ * successful), data for this database is unrecoverable and will be re-synced
+ * from the server on next login.
+ */
 const resetFailedMigrationTargetIfNeeded = async ({
 	database,
 	name,
@@ -116,6 +135,10 @@ const resetFailedMigrationTargetIfNeeded = async ({
 	if (getMigrationMarkerStatus(migrationMarker) !== 'failed') {
 		return database;
 	}
+
+	dbLogger.warn(`Storage migration previously failed for "${name}" — resetting target database`, {
+		context: { databaseName: name },
+	});
 
 	await database.close();
 	await removeRxDatabase(name, config.storage as any, config.multiInstance ?? true);

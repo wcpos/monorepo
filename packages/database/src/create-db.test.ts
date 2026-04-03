@@ -65,6 +65,7 @@ const mockGetStorageMigrationConfig = jest.fn((_databaseKind?: unknown) => ({
 }));
 const mockLogger = {
 	error: jest.fn(),
+	warn: jest.fn(),
 };
 
 jest.mock('rxdb', () => ({
@@ -98,6 +99,9 @@ jest.mock('./migration/storage/run-storage-migration', () => ({
 jest.mock('./migration/storage/verify-migration', () => ({
 	verifyStorageMigration: (args: { database: { name: string } }) =>
 		mockVerifyStorageMigration(args),
+}));
+
+jest.mock('./migration/storage/migration-local-doc-id', () => ({
 	getMigrationLocalDocId: (databaseName: string) => `storage-migration::${databaseName}`,
 }));
 

@@ -23,12 +23,7 @@
         flex: 1;
       }
     </style>
-    <script>
-      // only define rxdbWorker when _not_ running under Electron
-      if (!navigator.userAgent.includes('Electron')) {
-        window.rxdbWorker = '/opfs.worker.js';
-      }
-    </script>
+    <!-- Worker paths are hardcoded in packages/database — no global needed -->
   </head>
 
   <body>

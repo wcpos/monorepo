@@ -28,8 +28,8 @@ function getOldRxStorageWorker({ mode, workerInput, workerOptions }: OldWorkerSt
 		identifier: `rx-storage-worker-${String(workerInput)}`,
 		mode,
 		messageChannelCreator() {
-			const worker =
-				typeof workerInput === 'function' ? workerInput() : new Worker(workerInput, workerOptions);
+			const ownsWorker = typeof workerInput !== 'function';
+			const worker = ownsWorker ? new Worker(workerInput, workerOptions) : workerInput();
 
 			if (!(worker instanceof Worker)) {
 				throw new Error('no Worker given');
@@ -54,6 +54,9 @@ function getOldRxStorageWorker({ mode, workerInput, workerOptions }: OldWorkerSt
 				close() {
 					worker.removeEventListener('message', handleMessage);
 					worker.removeEventListener('error', handleError);
+					if (ownsWorker) {
+						worker.terminate();
+					}
 					return PROMISE_RESOLVE_VOID;
 				},
 			});

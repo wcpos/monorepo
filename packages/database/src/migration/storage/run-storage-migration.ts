@@ -1,6 +1,7 @@
 import { migrateStorage } from 'rxdb/plugins/migration-storage';
 
 import { logStorageMigration, logStorageMigrationError } from './log-migration';
+import { getMigrationLocalDocId } from './migration-local-doc-id';
 
 import type {
 	RunStorageMigrationInput,
@@ -8,19 +9,17 @@ import type {
 	StorageMigrationStatus,
 } from './types';
 
+export { getMigrationLocalDocId } from './migration-local-doc-id';
+
 type RunStorageMigrationWithPreparationInput = RunStorageMigrationInput & {
 	prepareOldDatabase?: () => Promise<void> | void;
 };
 
-const MIGRATION_LOCAL_DOC_PREFIX = 'storage-migration::';
 const MIGRATION_RUN_OWNER_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 // A pending marker is only considered stale after this lease expires.
 const PENDING_MARKER_STALE_AFTER_MS = 15 * 60 * 1000;
 
 const SKIP_STATUSES: StorageMigrationStatus[] = ['cleanup-pending', 'complete'];
-
-export const getMigrationLocalDocId = (databaseName: string) =>
-	`${MIGRATION_LOCAL_DOC_PREFIX}${databaseName}`;
 
 export const shouldRunStorageMigration = ({
 	oldName,

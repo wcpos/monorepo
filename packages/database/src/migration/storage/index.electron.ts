@@ -31,17 +31,15 @@ function getIpcRenderer(): ElectronBridgeIpcRenderer {
 	return (window as unknown as Window & { ipcRenderer: ElectronBridgeIpcRenderer }).ipcRenderer;
 }
 
-const waitForIpcRenderer = new Promise<void>((resolve) => {
-	const interval = 50;
-	const check = () => {
-		if (typeof window !== 'undefined' && getIpcRenderer()) {
-			resolve();
-		} else {
-			setTimeout(check, interval);
+async function waitForIpcRenderer(timeout = IPC_TIMEOUT): Promise<void> {
+	const startedAt = Date.now();
+	while (typeof window === 'undefined' || !getIpcRenderer()) {
+		if (Date.now() - startedAt >= timeout) {
+			throw new Error(`ipcRenderer was not available after ${timeout}ms`);
 		}
-	};
-	check();
-});
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+}
 
 async function invokeWithTimeout<T>(
 	channel: string,
@@ -62,18 +60,18 @@ async function invokeWithTimeout<T>(
 function getSQLiteIpcBasics(): SQLiteBasics<ElectronLegacyDatabase> {
 	return {
 		open: async (name: string) => {
-			await waitForIpcRenderer;
-			const result = await getIpcRenderer().invoke(SQLITE_CHANNEL, {
+			await waitForIpcRenderer();
+			const result = await invokeWithTimeout<ElectronLegacyDatabase | null>(SQLITE_CHANNEL, {
 				type: 'open',
 				name,
 			});
 			if (!result) {
 				throw new Error(`No result returned for open: ${name}`);
 			}
-			return result as ElectronLegacyDatabase;
+			return result;
 		},
 		all: async (db: ElectronLegacyDatabase, queryWithParams: SQLiteQueryWithParams) => {
-			await waitForIpcRenderer;
+			await waitForIpcRenderer();
 			const result = await invokeWithTimeout<SQLResultRow[]>(SQLITE_CHANNEL, {
 				type: 'all',
 				name: db.name,
@@ -85,7 +83,7 @@ function getSQLiteIpcBasics(): SQLiteBasics<ElectronLegacyDatabase> {
 			return result;
 		},
 		run: async (db: ElectronLegacyDatabase, queryWithParams: SQLiteQueryWithParams) => {
-			await waitForIpcRenderer;
+			await waitForIpcRenderer();
 			await invokeWithTimeout<void>(SQLITE_CHANNEL, {
 				type: 'run',
 				name: db.name,
@@ -93,16 +91,16 @@ function getSQLiteIpcBasics(): SQLiteBasics<ElectronLegacyDatabase> {
 			});
 		},
 		setPragma: async (db: ElectronLegacyDatabase, pragma: string, value: string) => {
-			await waitForIpcRenderer;
-			await getIpcRenderer().invoke(SQLITE_CHANNEL, {
+			await waitForIpcRenderer();
+			await invokeWithTimeout<void>(SQLITE_CHANNEL, {
 				type: 'run',
 				name: db.name,
 				sql: { query: 'PRAGMA ' + pragma + ' = ' + value, params: [] },
 			});
 		},
 		close: async (db: ElectronLegacyDatabase) => {
-			await waitForIpcRenderer;
-			await getIpcRenderer().invoke(SQLITE_CHANNEL, {
+			await waitForIpcRenderer();
+			await invokeWithTimeout<void>(SQLITE_CHANNEL, {
 				type: 'close',
 				name: db.name,
 			});

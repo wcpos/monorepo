@@ -4,7 +4,6 @@ import * as SQLite from 'expo-sqlite';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { closeAllDatabases, dbCache } from './adapters/default';
 import { closeAllLegacyNativeDatabases } from './migration/storage';
 import {
 	APP_DATABASE_PREFIXES,
@@ -91,8 +90,9 @@ const deleteLegacySQLiteDatabases = async () => {
 			}
 		}
 	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		dbLogger.debug(`Could not access SQLite database directory: ${errorMessage}`);
+		throw new Error(
+			`Failed to enumerate SQLite database directory: ${error instanceof Error ? error.message : String(error)}`
+		);
 	}
 
 	return deletedCount;
@@ -118,10 +118,6 @@ const deleteFilesystemDatabases = () => {
 export const clearAllDB = async (): Promise<ClearDBResult> => {
 	try {
 		dbLogger.debug('Starting to clear all application databases');
-		// Expo filesystem/OPFS storage does not use the old SQLite-style connection cache here.
-		dbLogger.debug(`Closing ${dbCache.size} cached database connections`);
-		await closeAllDatabases();
-		// The only explicit native handles we still close are legacy SQLite migration connections.
 		dbLogger.debug('Closing cached legacy SQLite migration connections');
 		await closeAllLegacyNativeDatabases();
 

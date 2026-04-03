@@ -11,13 +11,13 @@ export { prepareOldDatabaseForStorageMigration } from './prepare-old-database';
 const NATIVE_STORAGE_KIND = 'expo-filesystem' as const;
 const legacyDbCache = new Map<string, any>();
 
-async function withDatabaseRetry<T>(db: any, operation: () => Promise<T>): Promise<T> {
+async function withDatabaseRetry<T>(db: any, operation: (activeDb: any) => Promise<T>): Promise<T> {
 	const maxRetries = 3;
 	let lastError: unknown;
 
 	for (let attempt = 0; attempt < maxRetries; attempt++) {
 		try {
-			return await operation();
+			return await operation(db);
 		} catch (error) {
 			lastError = error;
 			const errorMessage = error instanceof Error ? error.message : String(error);
@@ -72,13 +72,19 @@ function getSQLiteBasicsExpoSQLiteAsync(): SQLiteBasics<any> {
 			return db;
 		},
 		all: async (db, queryObject) => {
-			return withDatabaseRetry(db, () => db.getAllAsync(queryObject.query, queryObject.params));
+			return withDatabaseRetry(db, (activeDb) =>
+				activeDb.getAllAsync(queryObject.query, queryObject.params)
+			);
 		},
 		run: async (db, queryObject) => {
-			return withDatabaseRetry(db, () => db.runAsync(queryObject.query, queryObject.params));
+			return withDatabaseRetry(db, (activeDb) =>
+				activeDb.runAsync(queryObject.query, queryObject.params)
+			);
 		},
 		setPragma: async (db, pragmaKey, pragmaValue) => {
-			return withDatabaseRetry(db, () => db.execAsync(`PRAGMA ${pragmaKey} = ${pragmaValue}`));
+			return withDatabaseRetry(db, (activeDb) =>
+				activeDb.execAsync(`PRAGMA ${pragmaKey} = ${pragmaValue}`)
+			);
 		},
 		close: async (db) => {
 			for (const [key, cachedDb] of legacyDbCache.entries()) {

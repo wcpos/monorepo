@@ -1,6 +1,6 @@
 import { cleanupOldDatabase } from './cleanup';
 import { logStorageMigration, logStorageMigrationError } from './log-migration';
-import { getMigrationLocalDocId } from './run-storage-migration';
+import { getMigrationLocalDocId } from './migration-local-doc-id';
 
 import type {
 	StorageMigrationDatabase,
@@ -8,7 +8,7 @@ import type {
 	StorageMigrationStatus,
 } from './types';
 
-export { getMigrationLocalDocId } from './run-storage-migration';
+export { getMigrationLocalDocId } from './migration-local-doc-id';
 
 const STORAGE_MIGRATION_MODULE_LOADED_AT = Date.now();
 
