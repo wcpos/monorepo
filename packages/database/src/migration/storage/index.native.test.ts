@@ -1,7 +1,7 @@
 const mockCloseAsync = jest.fn();
 const mockGetAllAsync = jest.fn();
 const mockExecAsync = jest.fn();
-const mockOpenDatabaseAsync = jest.fn(async () => ({
+const mockOpenDatabaseAsync = jest.fn(async (_name: string, _options?: unknown) => ({
 	closeAsync: mockCloseAsync,
 	getAllAsync: mockGetAllAsync,
 	execAsync: mockExecAsync,
@@ -9,7 +9,12 @@ const mockOpenDatabaseAsync = jest.fn(async () => ({
 }));
 const mockDeleteDatabaseAsync = jest.fn();
 const mockGetRxStorageExpoAsync = jest.fn(() => ({ name: 'expo-filesystem-storage' }));
-const mockGetRxStorageSQLite = jest.fn(() => ({ name: 'sqlite-storage' }));
+const mockGetRxStorageSQLite = jest.fn(
+	(config: { sqliteBasics: { open(name: string): Promise<unknown> } }) => ({
+		name: 'sqlite-storage',
+		config,
+	})
+);
 const mockLogger = {
 	debug: jest.fn(),
 	info: jest.fn(),
@@ -37,8 +42,8 @@ class MockDirectory {
 }
 
 jest.mock('expo-sqlite', () => ({
-	openDatabaseAsync: (...args: unknown[]) => mockOpenDatabaseAsync(...args),
-	deleteDatabaseAsync: (...args: unknown[]) => mockDeleteDatabaseAsync(...args),
+	openDatabaseAsync: (name: string, options?: unknown) => mockOpenDatabaseAsync(name, options),
+	deleteDatabaseAsync: (name: string) => mockDeleteDatabaseAsync(name),
 	defaultDatabaseDirectory: 'sqlite-dir',
 }));
 
@@ -54,7 +59,8 @@ jest.mock('rxdb-premium/plugins/storage-filesystem-expo', () => ({
 }));
 
 jest.mock('rxdb-premium-old/plugins/storage-sqlite', () => ({
-	getRxStorageSQLite: (...args: unknown[]) => mockGetRxStorageSQLite(...args),
+	getRxStorageSQLite: (config: { sqliteBasics: { open(name: string): Promise<unknown> } }) =>
+		mockGetRxStorageSQLite(config),
 }));
 
 jest.mock('@wcpos/utils/logger', () => ({
@@ -83,8 +89,12 @@ describe('native storage migration configuration', () => {
 		const { getNativeOldStorage, closeAllLegacyNativeDatabases } = await import('./index');
 
 		getNativeOldStorage();
-		const sqliteBasics = mockGetRxStorageSQLite.mock.calls[0][0].sqliteBasics;
-		await sqliteBasics.open('wcposusers_v2');
+		const sqliteStorageArgs = mockGetRxStorageSQLite.mock.calls[0]?.[0] as
+			| { sqliteBasics: { open(name: string): Promise<unknown> } }
+			| undefined;
+
+		expect(sqliteStorageArgs).toBeDefined();
+		await sqliteStorageArgs!.sqliteBasics.open('wcposusers_v2');
 
 		await closeAllLegacyNativeDatabases();
 

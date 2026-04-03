@@ -40,7 +40,7 @@ const mockLoggerInstance = (getLogger as jest.Mock).mock.results[0].value as {
 
 function createMockStorageInstance(overrides: Partial<RxStorageInstance<any, any, any, any>> = {}) {
 	return {
-		schema: { primaryKey: 'id' },
+		schema: { version: 0, type: 'object', properties: {}, primaryKey: 'id' },
 		findDocumentsById: jest.fn(),
 		bulkWrite: jest.fn(),
 		query: jest.fn(),
@@ -274,7 +274,7 @@ describe('wrappedErrorHandlerStorage', () => {
 
 			const result = await wrappedInstance.bulkWrite(writes as any, 'ctx');
 
-			expect(result.error[0].documentInDb).toEqual(writes[0].document);
+			expect((result.error[0] as any).documentInDb).toEqual(writes[0].document);
 		});
 
 		it('should use previous as documentInDb when previous exists', async () => {
@@ -289,12 +289,17 @@ describe('wrappedErrorHandlerStorage', () => {
 
 			const result = await wrappedInstance.bulkWrite(writes as any, 'ctx');
 
-			expect(result.error[0].documentInDb).toEqual(prev);
+			expect((result.error[0] as any).documentInDb).toEqual(prev);
 		});
 
 		it('should handle composite primary keys in error response', async () => {
 			const compositeInstance = createMockStorageInstance({
-				schema: { primaryKey: { key: 'syncId', fields: ['endpoint', 'id'], separator: '|' } },
+				schema: {
+					version: 0,
+					type: 'object',
+					properties: {},
+					primaryKey: { key: 'syncId', fields: ['endpoint', 'id'], separator: '|' },
+				},
 				bulkWrite: jest.fn().mockRejectedValue(new Error('CONFLICT')),
 			});
 			const storage = createMockStorage(compositeInstance);

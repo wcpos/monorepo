@@ -54,7 +54,7 @@ const deleteKnownSQLiteDatabase = async (dbName: string) => {
 
 const deleteLegacySQLiteDatabases = async () => {
 	let deletedCount = 0;
-	const knownDatabases = Object.values(USER_DATABASE_NAMES);
+	const knownDatabases: string[] = Object.values(USER_DATABASE_NAMES);
 
 	for (const dbName of knownDatabases) {
 		if (await deleteKnownSQLiteDatabase(dbName)) {

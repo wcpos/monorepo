@@ -4,7 +4,6 @@ import { ScrollViewStyleReset } from 'expo-router/html';
 // web page during static rendering.
 // The contents of this function only run in Node.js environments and
 // do not have access to the DOM or browser APIs.
-// eslint-disable-next-line import/no-default-export
 export default function Root({ children }: { children: React.ReactNode }) {
 	return (
 		<html lang="en">
