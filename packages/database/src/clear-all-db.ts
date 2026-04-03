@@ -90,9 +90,8 @@ const deleteLegacySQLiteDatabases = async () => {
 			}
 		}
 	} catch (error) {
-		throw new Error(
-			`Failed to enumerate SQLite database directory: ${error instanceof Error ? error.message : String(error)}`
-		);
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		dbLogger.debug(`Could not access SQLite database directory: ${errorMessage}`);
 	}
 
 	return deletedCount;
