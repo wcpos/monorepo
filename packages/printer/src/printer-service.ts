@@ -38,7 +38,7 @@ export class PrinterService {
 		// Evict stale transport
 		const stale = this.transports.get(profile.id);
 		if (stale) {
-			stale.disconnect?.();
+			await stale.disconnect?.();
 			this.transports.delete(profile.id);
 			this.transportKeys.delete(profile.id);
 		}
