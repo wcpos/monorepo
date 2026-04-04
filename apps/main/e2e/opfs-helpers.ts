@@ -38,7 +38,11 @@ export async function exportOPFS(page: Page): Promise<OPFSSnapshot> {
 					await traverseDir(handle as FileSystemDirectoryHandle, path);
 				} else if (handle.kind === 'file') {
 					const file = await (handle as FileSystemFileHandle).getFile();
-					if (file.size === 0) continue; // skip empty files
+					if (file.size === 0) {
+						// Preserve empty files so restore can recreate the exact tree.
+						snapshot[path] = '';
+						continue;
+					}
 					const buffer = await file.arrayBuffer();
 					const bytes = new Uint8Array(buffer);
 					// Convert to base64
@@ -73,7 +77,12 @@ export async function restoreOPFS(page: Page, snapshot: OPFSSnapshot): Promise<v
 		// Clear existing OPFS content
 		// @ts-ignore
 		for await (const [name] of root.entries()) {
-			await root.removeEntry(name, { recursive: true }).catch(() => {});
+			try {
+				await root.removeEntry(name, { recursive: true });
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				throw new Error(`Failed to remove OPFS entry "${name}" during restore: ${message}`);
+			}
 		}
 
 		// Write all files from snapshot
