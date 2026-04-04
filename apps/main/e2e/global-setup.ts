@@ -18,6 +18,14 @@ const STUB_UPLOADS_IN_CROSS_ORIGIN_E2E = process.env.E2E_STUB_UPLOADS !== 'false
 const TRANSPARENT_PNG_BASE64 =
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sM7nDUAAAAASUVORK5CYII=';
 
+async function blockScriptRequests(route: import('@playwright/test').Route) {
+	if (route.request().resourceType() === 'script') {
+		await route.abort();
+		return;
+	}
+	await route.fallback();
+}
+
 function shouldStubCrossOriginUploads(storeUrl: string, baseURL: string): boolean {
 	try {
 		const storeOrigin = new URL(storeUrl).origin;
@@ -132,7 +140,7 @@ async function setupVariant(
 		// Open a new page with JS blocked so no OPFS worker starts, then
 		// navigate to the origin to scope OPFS access correctly.
 		const exportPage = await context.newPage();
-		await exportPage.route('**/*.js', (route) => route.abort());
+		await exportPage.route('**/*', blockScriptRequests);
 		await exportPage.goto(baseURL);
 
 		// Export OPFS files and localStorage from the main thread.

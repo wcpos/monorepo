@@ -62,6 +62,40 @@ async function hasReachedPos(page: Page, timeout = 0): Promise<boolean> {
 	return false;
 }
 
+async function blockScriptRequests(route: import('@playwright/test').Route) {
+	if (route.request().resourceType() === 'script') {
+		await route.abort();
+		return;
+	}
+	await route.fallback();
+}
+
+async function waitForRxdbPersistenceSignal(page: Page, timeoutMs = 15_000): Promise<boolean> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (await hasReachedPos(page, 0)) {
+			return true;
+		}
+
+		const userButtonReady = await page
+			.evaluate(() => {
+				const button = document.querySelector('[data-testid="wp-user-button"]');
+				if (!button) return false;
+				const ariaDisabled = button.getAttribute('aria-disabled');
+				const hasDisabledAttr = button.hasAttribute('disabled');
+				return ariaDisabled !== 'true' && !hasDisabledAttr;
+			})
+			.catch(() => false);
+		if (userButtonReady) {
+			return true;
+		}
+
+		await page.waitForTimeout(250);
+	}
+
+	return false;
+}
+
 /**
  * Authenticate the current page with the test store via OAuth.
  *
@@ -222,8 +256,14 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		console.log('[auth] Cashier API call not detected within timeout, proceeding anyway...');
 	}
 
-	// Give RxDB time to write stores to OPFS after the API response
-	await page.waitForTimeout(5_000);
+	// Poll for auth-readiness instead of a fixed sleep so we continue as soon as
+	// persisted state is usable (or time out with a clear log).
+	const persisted = await waitForRxdbPersistenceSignal(page);
+	console.log(
+		persisted
+			? '[auth] RxDB persistence signal detected, continuing.'
+			: '[auth] RxDB persistence signal not detected before timeout, proceeding anyway.'
+	);
 	console.log(`[auth] Page URL after auth: ${page.url()}`);
 
 	// Click the wp-user-button pill to trigger login(), but tolerate cases where
@@ -396,7 +436,7 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 			try {
 				// Block JavaScript so the OPFS worker never starts — createSyncAccessHandle
 				// grants exclusive access, so we must restore files before any worker runs.
-				await page.route('**/*.js', (route) => route.abort());
+				await page.route('**/*', blockScriptRequests);
 				await page.goto('/');
 
 				// Restore OPFS and localStorage while JS is blocked (no worker running)
@@ -404,7 +444,7 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 				await restoreLocalStorage(page, state.localStorage);
 
 				// Unblock JS and reload so the app picks up the restored OPFS state
-				await page.unroute('**/*.js');
+				await page.unroute('**/*', blockScriptRequests);
 				await page.reload();
 
 				// App should skip auth and go straight to POS
@@ -416,7 +456,7 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 				});
 			} catch (e) {
 				// Ensure the JS-blocking route is removed so the fallback can load scripts
-				await page.unroute('**/*.js');
+				await page.unroute('**/*', blockScriptRequests).catch(() => {});
 				console.warn('[posPage] Saved state invalid/expired; falling back to OAuth.', e);
 				await authenticateWithStore(page, testInfo);
 			}
