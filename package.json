@@ -44,6 +44,18 @@
       "@react-navigation/drawer": "^7.5.0",
       "tar": "^7.5.11"
     },
+    "packageExtensions": {
+      "rxdb-premium-old@16.21.1": {
+        "dependencies": {
+          "rxdb": "16.21.1"
+        }
+      },
+      "rxdb-premium@16.21.1": {
+        "dependencies": {
+          "rxdb": "16.21.1"
+        }
+      }
+    },
     "onlyBuiltDependencies": [
       "@shopify/react-native-skia",
       "@tailwindcss/oxide",
@@ -69,7 +81,7 @@
     ]
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx}": "eslint --fix"
+    "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
   },
   "devDependencies": {
     "glob": "^13.0.0",

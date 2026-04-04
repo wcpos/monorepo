@@ -43,7 +43,7 @@ export const generateNested = (
  * Generate a unique database name
  */
 function generateUniqueDbName(baseName: string): string {
-	return `${baseName}_${Date.now()}`;
+	return `${baseName}_${Date.now()}_${randomToken(8)}`;
 }
 
 export async function create(

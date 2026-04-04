@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+
 import { authenticatedTest as test } from './fixtures';
 
 /** Helper to add the first simple product to the cart. Works in both grid and table view. */
@@ -38,10 +39,15 @@ async function setPosCartSetting(
 	key: 'autoShowReceipt' | 'autoPrintReceipt',
 	value: boolean
 ) {
+	const storeDbPrefixes = ['store_v2_', 'store_v3_'] as const;
+
 	await page.evaluate(
-		async ({ key, value }) => {
+		async ({ key, value, storeDbPrefixes }) => {
 			const dbs = await indexedDB.databases();
-			const dbInfo = dbs.find((db) => db.name?.startsWith('store_v2_') && db.version);
+			const dbInfo = dbs.find(
+				(db) =>
+					db.name && storeDbPrefixes.some((prefix) => db.name!.startsWith(prefix)) && db.version
+			);
 			if (!dbInfo?.name || !dbInfo.version) {
 				throw new Error('Store database not found');
 			}
@@ -115,7 +121,7 @@ async function setPosCartSetting(
 
 			db.close();
 		},
-		{ key, value }
+		{ key, value, storeDbPrefixes }
 	);
 }
 
@@ -321,11 +327,12 @@ test.describe('POS Cart - Multiple Orders', () => {
 		// The new order button is a TabsTrigger with a plus icon
 		// It's a tab element with value="new" containing an Icon with name="plus"
 		// The tooltip text is "Open new order"
-		const newOrderTab = page.getByRole('tab').filter({ has: page.locator('svg') }).last().or(
-			page.locator('[role="tab"]').filter({ hasText: '+' })
-		).or(
-			page.locator('[data-state]').filter({ has: page.locator('[name="plus"]') })
-		);
+		const newOrderTab = page
+			.getByRole('tab')
+			.filter({ has: page.locator('svg') })
+			.last()
+			.or(page.locator('[role="tab"]').filter({ hasText: '+' }))
+			.or(page.locator('[data-state]').filter({ has: page.locator('[name="plus"]') }));
 
 		await expect(newOrderTab).toBeVisible({ timeout: 15_000 });
 		await newOrderTab.click();
@@ -398,9 +405,9 @@ test.describe('POS Checkout', () => {
 		const receiptPrintButton = page.getByTestId('receipt-print-button');
 		const receiptCloseButton = page.getByTestId('receipt-close-button');
 		const posScreen = page.getByTestId('search-products');
-		await expect(
-			receiptPrintButton.or(receiptCloseButton).or(posScreen)
-		).toBeVisible({ timeout: 60_000 });
+		await expect(receiptPrintButton.or(receiptCloseButton).or(posScreen)).toBeVisible({
+			timeout: 60_000,
+		});
 	});
 
 	test('should auto print receipt after checkout when enabled', async ({ posPage: page }) => {

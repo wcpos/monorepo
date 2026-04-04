@@ -107,6 +107,7 @@ export const config = [
 	{
 		files: [
 			'app/**/*.{ts,tsx}', // Expo Router requires default exports
+			'**/app/**/*.{ts,tsx}', // Same Expo Router convention when linting from repo root
 			'app.config.ts', // Expo config
 			'**/*.config.{ts,js}', // Config files (playwright, etc.)
 			'**/*.stories.{ts,tsx}', // Storybook

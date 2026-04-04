@@ -67,7 +67,6 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		},
 
 		plugins: [
-			'expo-sqlite',
 			[
 				'expo-router',
 				{

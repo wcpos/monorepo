@@ -1,12 +1,19 @@
-import { Directory } from 'expo-file-system';
+import { Directory, Paths } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { closeAllDatabases, dbCache } from './adapters/default';
+import { closeAllLegacyNativeDatabases } from './migration/storage';
+import {
+	APP_DATABASE_PREFIXES,
+	isKnownAppDatabaseName,
+	USER_DATABASE_NAMES,
+} from './migration/storage/database-names';
 
 const dbLogger = getLogger(['wcpos', 'db', 'clear']);
+const EXPO_OPFS_ROOT = new Directory(Paths.document, '.expo-opfs');
+const RXDB_DIRECTORY_PREFIX = 'rxdb-';
 
 export interface ClearDBResult {
 	success: boolean;
@@ -14,111 +21,112 @@ export interface ClearDBResult {
 	databasesDeleted: number;
 }
 
-/**
- * Completely wipes all SQLite databases used by the app
- *
- * This function:
- * 1. Closes all open database connections first (required before deletion)
- * 2. Uses Expo SQLite's built-in deleteDatabaseAsync for known databases
- * 3. Falls back to directory listing + deletion for unknown databases
- *
- * Note: The "temporary" database uses in-memory storage and doesn't need SQLite deletion.
- *
- * Based on the Expo SQLite docs: https://docs.expo.dev/versions/latest/sdk/sqlite/
- *
- * @returns Promise<ClearDBResult> - Information about the clearing operation
- */
+const toFilesystemSafeName = (value: string) => value.replace(/\//g, '__');
+
+const isKnownAppFilesystemEntry = (name: string) =>
+	APP_DATABASE_PREFIXES.map(toFilesystemSafeName).some((prefix) =>
+		name.startsWith(`${RXDB_DIRECTORY_PREFIX}${prefix}`)
+	);
+
+const isMissingSQLiteDatabaseError = (error: unknown) => {
+	const message = error instanceof Error ? error.message : String(error);
+	const normalizedMessage = message.toLowerCase();
+
+	return normalizedMessage.includes('not exist') || normalizedMessage.includes('no such');
+};
+
+const deleteKnownSQLiteDatabase = async (dbName: string) => {
+	try {
+		dbLogger.debug(`Attempting to delete SQLite database: ${dbName}`);
+		await SQLite.deleteDatabaseAsync(dbName);
+		return true;
+	} catch (error) {
+		if (isMissingSQLiteDatabaseError(error)) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			dbLogger.debug(`SQLite database ${dbName} was already absent: ${errorMessage}`);
+			return false;
+		}
+
+		throw error;
+	}
+};
+
+const deleteLegacySQLiteDatabases = async () => {
+	let deletedCount = 0;
+	const knownDatabases: string[] = Object.values(USER_DATABASE_NAMES);
+
+	for (const dbName of knownDatabases) {
+		if (await deleteKnownSQLiteDatabase(dbName)) {
+			deletedCount++;
+		}
+	}
+
+	try {
+		const databaseDirectory = new Directory(SQLite.defaultDatabaseDirectory);
+		dbLogger.debug(`Checking SQLite database directory: ${databaseDirectory.uri}`);
+
+		if (!databaseDirectory.exists) {
+			dbLogger.debug('SQLite database directory does not exist');
+			return deletedCount;
+		}
+
+		const contents = databaseDirectory.list();
+		const fileNames = contents.map((item) => item.name);
+		const appDatabaseFiles = fileNames.filter((file) => {
+			if (file.endsWith('-wal') || file.endsWith('-shm')) {
+				return false;
+			}
+
+			return isKnownAppDatabaseName(file);
+		});
+
+		for (const fileName of appDatabaseFiles) {
+			if (knownDatabases.includes(fileName)) {
+				continue;
+			}
+
+			if (await deleteKnownSQLiteDatabase(fileName)) {
+				deletedCount++;
+			}
+		}
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		dbLogger.debug(`Could not access SQLite database directory: ${errorMessage}`);
+	}
+
+	return deletedCount;
+};
+
+const deleteFilesystemDatabases = () => {
+	if (!EXPO_OPFS_ROOT.exists) {
+		dbLogger.debug('Expo OPFS root does not exist');
+		return 0;
+	}
+
+	const contents = EXPO_OPFS_ROOT.list();
+	const appEntries = contents.filter((item) => isKnownAppFilesystemEntry(item.name));
+
+	for (const entry of appEntries) {
+		dbLogger.debug(`Deleting filesystem-backed database entry: ${entry.name}`);
+		entry.delete();
+	}
+
+	return appEntries.length;
+};
+
 export const clearAllDB = async (): Promise<ClearDBResult> => {
 	try {
-		dbLogger.debug('Starting to clear all SQLite databases');
+		dbLogger.debug('Starting to clear all application databases');
+		dbLogger.debug('Closing cached legacy SQLite migration connections');
+		await closeAllLegacyNativeDatabases();
 
-		// Step 1: Close all open database connections first
-		// Databases must be closed before they can be deleted
-		dbLogger.debug(`Closing ${dbCache.size} cached database connections`);
-		await closeAllDatabases();
-
-		let deletedCount = 0;
-
-		// Step 2: Try to delete known database names from create-db.ts
-		// Note: "temporary" database uses memory storage, not SQLite, so it's not included
-		const knownDatabases = ['wcposusers_v2'];
-
-		for (const dbName of knownDatabases) {
-			try {
-				dbLogger.debug(`Attempting to delete known database: ${dbName}`);
-				await SQLite.deleteDatabaseAsync(dbName);
-				deletedCount++;
-				dbLogger.debug(`Successfully deleted database: ${dbName}`);
-			} catch (error) {
-				// Database might not exist, which is fine
-				const errorMessage = error instanceof Error ? error.message : String(error);
-				dbLogger.debug(
-					`Could not delete database ${dbName}: ${errorMessage || 'Database does not exist'}`
-				);
-			}
-		}
-
-		// Step 3: Try to find and delete store databases by checking the directory
-		// This handles the dynamic store_v2_{id} and fast_store_v3_{id} databases
-		try {
-			const databaseDirectory = SQLite.defaultDatabaseDirectory;
-			dbLogger.debug(`Checking database directory: ${databaseDirectory}`);
-
-			const directory = new Directory(databaseDirectory);
-
-			if (directory.exists) {
-				const contents = await directory.list();
-				const fileNames = contents.map((item) => item.name);
-				dbLogger.debug(`Found ${fileNames.length} files in database directory`);
-
-				// Filter for files that look like our app's databases
-				const appDatabaseFiles = fileNames.filter((file) => {
-					// Skip auxiliary files like -wal and -shm
-					if (file.endsWith('-wal') || file.endsWith('-shm')) {
-						return false;
-					}
-
-					// Include files that match our database naming patterns
-					return (
-						file.startsWith('wcposusers_') ||
-						file.startsWith('store_v2_') ||
-						file.startsWith('fast_store_v3_')
-					);
-				});
-
-				dbLogger.debug(
-					`Found ${appDatabaseFiles.length} app database files: ${JSON.stringify(appDatabaseFiles)}`
-				);
-
-				// Try to delete each database file using SQLite's method
-				for (const fileName of appDatabaseFiles) {
-					// Skip if we already tried this database
-					if (knownDatabases.includes(fileName)) {
-						continue;
-					}
-
-					try {
-						dbLogger.debug(`Attempting to delete discovered database: ${fileName}`);
-						await SQLite.deleteDatabaseAsync(fileName);
-						deletedCount++;
-						dbLogger.debug(`Successfully deleted database: ${fileName}`);
-					} catch (error) {
-						const errorMessage = error instanceof Error ? error.message : String(error);
-						dbLogger.debug(`Could not delete database ${fileName}: ${errorMessage}`);
-					}
-				}
-			} else {
-				dbLogger.debug('Database directory does not exist (no databases have been created yet)');
-			}
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			dbLogger.debug(`Could not access database directory: ${errorMessage}`);
-			// This is not a fatal error, we can still report success for known databases
-		}
+		const deletedSQLiteDatabases = await deleteLegacySQLiteDatabases();
+		const deletedFilesystemDatabases = deleteFilesystemDatabases();
+		const deletedCount = deletedSQLiteDatabases + deletedFilesystemDatabases;
 
 		const message =
 			deletedCount > 0
-				? `Successfully cleared ${deletedCount} databases`
+				? `Successfully cleared ${deletedCount} database entries`
 				: 'No databases found to clear (this might mean the app is already in a clean state)';
 
 		dbLogger.info(message);
