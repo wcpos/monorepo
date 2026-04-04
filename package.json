@@ -62,7 +62,6 @@
       "@zowe/secrets-for-zowe-sdk",
       "better-sqlite3",
       "core-js",
-      "eccrypto",
       "electron",
       "esbuild",
       "fs-xattr",
