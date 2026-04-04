@@ -35,8 +35,6 @@ function PulseTableRow({
 	className,
 	index = 0,
 	onRemove = () => {},
-	row,
-	table,
 	...viewProps
 }: PulseTableRowProps) {
 	// Get theme-aware colors
