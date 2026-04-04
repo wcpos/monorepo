@@ -219,7 +219,7 @@ jobs:
   e2e-report:
     name: 📊 Merge E2E Reports
     needs: [deploy, e2e]
-    if: always() && needs.e2e.result != 'skipped'
+    if: always() && (needs.e2e.result == 'success' || needs.e2e.result == 'failure')
     runs-on: ubuntu-latest
     outputs:
       result: ${{ needs.e2e.result }}
@@ -236,7 +236,18 @@ jobs:
           path: all-blob-reports
           merge-multiple: true
 
+      - name: 🔎 Check blob reports
+        id: check-blob-reports
+        run: |
+          if [ -d all-blob-reports ] && [ -n "$(find all-blob-reports -type f -print -quit)" ]; then
+            echo "has_reports=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No blob report artifacts found. Skipping report merge."
+            echo "has_reports=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 📊 Merge reports
+        if: steps.check-blob-reports.outputs.has_reports == 'true'
         run: npx playwright merge-reports --reporter=html,json ./all-blob-reports
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results.json
