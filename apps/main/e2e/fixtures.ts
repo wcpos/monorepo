@@ -211,17 +211,36 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	await expect(userButton).toBeEnabled({ timeout: 10_000 });
 
 	let loginSuccess = false;
+	const searchProducts = page.getByTestId('search-products');
 	for (let attempt = 1; attempt <= 5 && !loginSuccess; attempt++) {
 		console.log(`[auth] Clicking wp-user-button (attempt ${attempt})...`);
 		await userButton.click();
 
-		try {
-			await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 10_000 });
+		// Single-store users login immediately from the button press.
+		const reachedPosDirectly = await searchProducts.isVisible({ timeout: 2_000 }).catch(() => false);
+		if (reachedPosDirectly) {
 			loginSuccess = true;
-		} catch {
-			console.log(`[auth] Login attempt ${attempt} did not reach POS, retrying...`);
-			await page.waitForTimeout(2_000);
+			break;
 		}
+
+		// Multi-store users get a picker first; selecting an option triggers login().
+		const firstStoreOption = page.locator('[role="listbox"] [role="option"]').first();
+		const storePickerOpened = await firstStoreOption.isVisible({ timeout: 2_000 }).catch(() => false);
+		if (storePickerOpened) {
+			console.log('[auth] Store picker opened, selecting first store option...');
+			await firstStoreOption.click();
+
+			const reachedPosAfterStoreSelect = await searchProducts
+				.isVisible({ timeout: 10_000 })
+				.catch(() => false);
+			if (reachedPosAfterStoreSelect) {
+				loginSuccess = true;
+				break;
+			}
+		}
+
+		console.log(`[auth] Login attempt ${attempt} did not reach POS, retrying...`);
+		await page.waitForTimeout(2_000);
 	}
 
 	if (!loginSuccess) {
