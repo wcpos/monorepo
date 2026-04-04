@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 import { authenticatedTest as test } from './fixtures';
 
@@ -30,99 +30,43 @@ async function openCartMenuAndClick(page: Page, menuItemTestId: string) {
 	await menuItem.click();
 }
 
+async function isSwitchEnabled(toggle: Locator): Promise<boolean> {
+	return toggle.evaluate((node) => {
+		const element = node as HTMLElement & { checked?: boolean };
+		const ariaChecked = element.getAttribute('aria-checked');
+		if (ariaChecked !== null) {
+			return ariaChecked === 'true';
+		}
+
+		const dataState = element.getAttribute('data-state');
+		if (dataState !== null) {
+			return dataState === 'checked';
+		}
+
+		return element.checked === true;
+	});
+}
+
+async function ensureSwitchEnabled(toggle: Locator) {
+	await expect(toggle).toBeVisible({ timeout: 15_000 });
+	if (!(await isSwitchEnabled(toggle))) {
+		await toggle.click();
+	}
+	await expect.poll(() => isSwitchEnabled(toggle), { timeout: 10_000 }).toBe(true);
+}
+
 /**
- * Persist a POS cart UI setting directly in RxDB state.
- * This avoids locale-dependent UI selectors for toggles.
+ * Configure POS cart UI settings from the UI itself rather than mutating
+ * storage internals. This is resilient across storage backend migrations.
  */
-async function setPosCartSetting(
-	page: Page,
-	key: 'autoShowReceipt' | 'autoPrintReceipt',
-	value: boolean
-) {
-	const storeDbPrefixes = ['store_v2_', 'store_v3_'] as const;
+async function enableAutoReceiptSettings(page: Page) {
+	await page.getByTestId('cart-settings-button').click();
 
-	await page.evaluate(
-		async ({ key, value, storeDbPrefixes }) => {
-			const dbs = await indexedDB.databases();
-			const dbInfo = dbs.find(
-				(db) =>
-					db.name && storeDbPrefixes.some((prefix) => db.name!.startsWith(prefix)) && db.version
-			);
-			if (!dbInfo?.name || !dbInfo.version) {
-				throw new Error('Store database not found');
-			}
+	await ensureSwitchEnabled(page.getByTestId('cart-setting-auto-show-receipt').first());
+	await ensureSwitchEnabled(page.getByTestId('cart-setting-auto-print-receipt').first());
 
-			const db = await new Promise<IDBDatabase>((resolve, reject) => {
-				const req = indexedDB.open(dbInfo.name!, dbInfo.version);
-				req.onsuccess = () => resolve(req.result);
-				req.onerror = () => reject(req.error);
-			});
-
-			const storeName = Array.from(db.objectStoreNames).find(
-				(name) => name.startsWith('rx-state-pos-cart_v2-') && name.endsWith('-documents')
-			);
-			if (!storeName) {
-				db.close();
-				throw new Error('POS cart state store not found');
-			}
-
-			const readTx = db.transaction(storeName, 'readonly');
-			const records = await new Promise<any[]>((resolve, reject) => {
-				const req = readTx.objectStore(storeName).getAll();
-				req.onsuccess = () => resolve(req.result as any[]);
-				req.onerror = () => reject(req.error);
-			});
-
-			if (records.length === 0) {
-				db.close();
-				throw new Error('No POS cart state records found');
-			}
-
-			const numericIds = records
-				.map((record) => Number.parseInt(String(record.i), 10))
-				.filter((id) => Number.isFinite(id));
-			const nextNumericId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
-			const id = String(nextNumericId).padStart(14, '0');
-
-			const lwt = Date.now() + 0.01;
-			const lwtInt = Math.floor(lwt) - 1;
-			const lwtIntStr = lwtInt.toString().padStart(15, '0');
-			const lwtDecParts = lwt.toString().split('.');
-			const lwtDecStr = (lwtDecParts.length > 1 ? lwtDecParts[1] : '0')
-				.padEnd(2, '0')
-				.substring(0, 2);
-			const encodedLwt = lwtIntStr + lwtDecStr;
-
-			const lastRecord = records[records.length - 1];
-			const sId = lastRecord?.d?.sId || 'e2e';
-
-			const newRecord = {
-				i: id,
-				d: {
-					id,
-					sId,
-					ops: [{ k: key, v: value }],
-					_deleted: false,
-					_meta: { lwt },
-					_rev: `1-${sId}`,
-					_attachments: {},
-				},
-				i0: '0' + id,
-				i1: encodedLwt + id,
-				i2: '0' + encodedLwt,
-			};
-
-			const writeTx = db.transaction(storeName, 'readwrite');
-			writeTx.objectStore(storeName).put(newRecord);
-			await new Promise<void>((resolve, reject) => {
-				writeTx.oncomplete = () => resolve();
-				writeTx.onerror = () => reject(writeTx.error);
-			});
-
-			db.close();
-		},
-		{ key, value, storeDbPrefixes }
-	);
+	// Close settings dialog and continue with updated persisted UI settings.
+	await page.keyboard.press('Escape');
 }
 
 test.describe('POS Cart', () => {
@@ -411,8 +355,7 @@ test.describe('POS Checkout', () => {
 	});
 
 	test('should auto print receipt after checkout when enabled', async ({ posPage: page }) => {
-		await setPosCartSetting(page, 'autoShowReceipt', true);
-		await setPosCartSetting(page, 'autoPrintReceipt', true);
+		await enableAutoReceiptSettings(page);
 		await page.reload();
 		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 30_000 });
 

@@ -109,6 +109,7 @@ export function WpUser({ site, wpUser }: Props) {
 							removable
 							onRemove={() => setDeleteDialogOpened(true)}
 							disabled={isLoading}
+							testID="wp-user-button"
 						>
 							<ButtonText>{wpUser.display_name ? wpUser.display_name : 'No name?'}</ButtonText>
 						</ButtonPill>
@@ -133,6 +134,7 @@ export function WpUser({ site, wpUser }: Props) {
 					removable
 					onRemove={() => setDeleteDialogOpened(true)}
 					disabled={isLoading}
+					testID="wp-user-button"
 				>
 					<ButtonText>{wpUser.display_name ? wpUser.display_name : 'No name?'}</ButtonText>
 				</ButtonPill>

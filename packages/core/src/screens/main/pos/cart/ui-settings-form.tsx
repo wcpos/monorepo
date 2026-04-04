@@ -65,12 +65,24 @@ export function UISettingsForm() {
 					<FormField
 						control={form.control}
 						name="autoShowReceipt"
-						render={({ field }) => <FormSwitch label={getUILabel('autoShowReceipt')} {...field} />}
+						render={({ field }) => (
+							<FormSwitch
+								label={getUILabel('autoShowReceipt')}
+								testID="cart-setting-auto-show-receipt"
+								{...field}
+							/>
+						)}
 					/>
 					<FormField
 						control={form.control}
 						name="autoPrintReceipt"
-						render={({ field }) => <FormSwitch label={getUILabel('autoPrintReceipt')} {...field} />}
+						render={({ field }) => (
+							<FormSwitch
+								label={getUILabel('autoPrintReceipt')}
+								testID="cart-setting-auto-print-receipt"
+								{...field}
+							/>
+						)}
 					/>
 					<FormField
 						control={form.control}

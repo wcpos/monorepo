@@ -91,7 +91,7 @@ export function CartHeader() {
 				</ErrorBoundary>
 			</HStack>
 			<AddCartItemsMenu />
-			<UISettingsDialog title={t('pos_cart.cart_settings')}>
+			<UISettingsDialog title={t('pos_cart.cart_settings')} triggerTestID="cart-settings-button">
 				<UISettingsForm />
 			</UISettingsDialog>
 		</HStack>
