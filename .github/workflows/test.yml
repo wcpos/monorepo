@@ -52,6 +52,7 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+          skip-install-scripts: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
 
       - name: "\U0001F9F9 Run ESLint"
         run: pnpm lint
@@ -81,6 +82,7 @@ jobs:
           expo-token: ${{ secrets.EXPO_TOKEN }}
           rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
           uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+          skip-install-scripts: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
 
       - name: "\U0001F9EA Run tests for each package"
         run: |
