@@ -25,11 +25,9 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 	const meta = table.options.meta!;
 
 	const handleRemoveLineItem = React.useCallback(() => {
-		const rowRef = (meta.rowRefs.current as unknown as Map<string, Record<string, unknown>>).get(
-			uuid
-		);
-		if (rowRef && rowRef?.pulseRemove) {
-			(rowRef.pulseRemove as (cb: () => void) => void)(() => {
+		const rowRef = meta.rowRefs.current?.get(uuid);
+		if (rowRef) {
+			rowRef.pulseRemove(() => {
 				removeLineItem(uuid, type);
 			});
 		}
@@ -46,11 +44,9 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 
 	React.useEffect(() => {
 		if (isNew) {
-			const rowRef = (meta.rowRefs.current as unknown as Map<string, Record<string, unknown>>).get(
-				uuid
-			);
-			if (rowRef && rowRef?.pulseAdd) {
-				(rowRef.pulseAdd as (cb: () => void) => void)(() => {
+			const rowRef = meta.rowRefs.current?.get(uuid);
+			if (rowRef) {
+				rowRef.pulseAdd(() => {
 					meta.removeNewRowUUID(uuid);
 				});
 			}

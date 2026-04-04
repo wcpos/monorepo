@@ -123,3 +123,4 @@ export {
 	TableHeader,
 	TableRow,
 };
+export type { PulseTableRowRef } from './pulse-row';
