@@ -278,9 +278,9 @@ function getColumnStyle(meta: any): ViewStyle {
 }
 
 /**
- * Header cells use DataTableHeader which handles alignment internally via items-* classes.
- * Excluding alignItems here prevents it from conflicting with the header's flex-col
- * justify-center layout on Electron/web.
+ * Header cells use DataTableHeader which handles alignment internally via justify-* classes
+ * (horizontal) and items-center (vertical). Excluding alignItems here avoids conflicting
+ * with that layout on Electron/web.
  */
 function getHeaderStyle(meta: any): ViewStyle {
 	if (meta?.width) {
