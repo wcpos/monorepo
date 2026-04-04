@@ -35,7 +35,9 @@ function PulseTableRow({
 	className,
 	index = 0,
 	onRemove = () => {},
-	...props
+	row,
+	table,
+	...viewProps
 }: PulseTableRowProps) {
 	// Get theme-aware colors
 	const [tableRowColor, tableRowAltColor, successColor, errorColor] = useCSSVariable([
@@ -64,8 +66,8 @@ function PulseTableRow({
 
 	React.useImperativeHandle(ref, () => ({
 		pulseAdd(callback?: () => void) {
-			(props.table.options.meta as { scrollToRow?: (id: string) => void })?.scrollToRow?.(
-				props.row.id
+			(table.options.meta as { scrollToRow?: (id: string) => void })?.scrollToRow?.(
+				row.id
 			);
 			cancelAnimation(backgroundColor);
 			// Pulse to success color then back to base
@@ -89,13 +91,13 @@ function PulseTableRow({
 				}
 			});
 		},
-	}), [backgroundColor, baseColor, successColor, errorColor, props.row.id, props.table]);
+	}), [backgroundColor, baseColor, successColor, errorColor, row.id, table]);
 
 	return (
 		<Animated.View
 			className={cn('web:transition-colors web:data-[state=selected]:bg-muted flex-row', className)}
 			style={animatedStyle}
-			{...props}
+			{...viewProps}
 		/>
 	);
 }
