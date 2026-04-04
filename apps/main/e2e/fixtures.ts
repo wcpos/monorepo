@@ -4,6 +4,11 @@ import * as path from 'path';
 import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
 
 import { restoreIndexedDB, restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
+import {
+	extractSessionIdsFromDatabases,
+	findRxStateStoreTarget,
+	type IndexedDbDatabaseSnapshot,
+} from './session-state-helpers';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
@@ -176,14 +181,15 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	// Wait for the cashier validation API to complete — this is what populates
 	// the stores array that the user button needs to call login().
 	const cashierResponse = await cashierApiPromise;
+	let cashierBody: any = null;
 	if (cashierResponse) {
-		const body = await cashierResponse.json().catch(() => null);
-		const storeCount = Array.isArray(body?.stores) ? body.stores.length : 'N/A';
+		cashierBody = await cashierResponse.json().catch(() => null);
+		const storeCount = Array.isArray(cashierBody?.stores) ? cashierBody.stores.length : 'N/A';
 		console.log(
-			`[auth] Cashier API completed: ${cashierResponse.status()} — stores: ${storeCount}, keys: ${body ? Object.keys(body).join(',') : 'null'}`
+			`[auth] Cashier API completed: ${cashierResponse.status()} — stores: ${storeCount}, keys: ${cashierBody ? Object.keys(cashierBody).join(',') : 'null'}`
 		);
-		if (body?.stores) {
-			console.log(`[auth] Stores data: ${JSON.stringify(body.stores).substring(0, 200)}`);
+		if (cashierBody?.stores) {
+			console.log(`[auth] Stores data: ${JSON.stringify(cashierBody.stores).substring(0, 200)}`);
 		}
 	} else {
 		console.log('[auth] Cashier API call not detected within timeout, proceeding anyway...');
@@ -193,16 +199,51 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	await page.waitForTimeout(5_000);
 	console.log(`[auth] Page URL after auth: ${page.url()}`);
 
+	const tryUiLoginFallback = async () => {
+		const searchProducts = page.getByTestId('search-products');
+		const preferredName =
+			typeof cashierBody?.display_name === 'string' && cashierBody.display_name.trim().length > 0
+				? cashierBody.display_name.trim()
+				: null;
+		const namedUserButton = preferredName
+			? page.getByRole('button', { name: new RegExp(preferredName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') })
+			: null;
+		const precedingUserButton = page.getByTestId('add-user-button').locator('xpath=preceding::button[1]');
+		const userButton = namedUserButton ?? precedingUserButton;
+
+		try {
+			await expect(userButton.first()).toBeVisible({ timeout: 30_000 });
+			await expect(userButton.first()).toBeEnabled({ timeout: 30_000 });
+			await userButton.first().click();
+			console.log(
+				`[auth] Falling back to app login via user button${preferredName ? ` (${preferredName})` : ''}`
+			);
+
+			// If a store picker opens, choose the first store.
+			const storeOption = page.getByRole('option').first();
+			if (await storeOption.isVisible({ timeout: 3_000 }).catch(() => false)) {
+				await storeOption.click();
+			}
+
+			await expect(searchProducts).toBeVisible({ timeout: 60_000 });
+			await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, { timeout: 120_000 });
+			return true;
+		} catch (error) {
+			console.log(
+				`[auth] UI login fallback failed: ${error instanceof Error ? error.message : String(error)}`
+			);
+			return false;
+		}
+	};
+
 	// Read IDs from IndexedDB to write session state directly.
 	// The RxDB reactive observable (populateResource) doesn't reliably re-emit
 	// after stores are saved, so clicking the user button fails silently.
 	// Instead, we write session state to rx-state-v2 (replicating what login()
 	// does via appState.set('current', ...)), then reload so the app hydrates.
-	const ids = await page.evaluate(async () => {
+	const databases = await page.evaluate(async (): Promise<IndexedDbDatabaseSnapshot[]> => {
 		const dbs = await indexedDB.databases();
-		let siteID = '';
-		let wpCredentialsID = '';
-		let storeID = '';
+		const snapshots: IndexedDbDatabaseSnapshot[] = [];
 		for (const dbInfo of dbs) {
 			if (!dbInfo.name || !dbInfo.version) continue;
 			const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -210,43 +251,41 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 				req.onsuccess = () => resolve(req.result);
 				req.onerror = () => reject(req.error);
 			});
+			const stores: IndexedDbDatabaseSnapshot[number]['stores'] = [];
 			for (const name of Array.from(db.objectStoreNames)) {
-				if (name.startsWith('sites-') && name.endsWith('-documents')) {
-					const tx = db.transaction(name, 'readonly');
-					const recs = await new Promise<any[]>((resolve, reject) => {
-						const req = tx.objectStore(name).getAll();
-						req.onsuccess = () => resolve(req.result);
-						req.onerror = () => reject(req.error);
-					});
-					if (recs[0]) siteID = recs[0].d?.uuid || recs[0].i;
-				}
-				if (name.startsWith('wp_credentials-') && name.endsWith('-documents')) {
-					const tx = db.transaction(name, 'readonly');
-					const recs = await new Promise<any[]>((resolve, reject) => {
-						const req = tx.objectStore(name).getAll();
-						req.onsuccess = () => resolve(req.result);
-						req.onerror = () => reject(req.error);
-					});
-					if (recs[0]) wpCredentialsID = recs[0].d?.uuid || recs[0].i;
-				}
-				if (name.startsWith('stores-') && name.endsWith('-documents')) {
-					const tx = db.transaction(name, 'readonly');
-					const recs = await new Promise<any[]>((resolve, reject) => {
-						const req = tx.objectStore(name).getAll();
-						req.onsuccess = () => resolve(req.result);
-						req.onerror = () => reject(req.error);
-					});
-					if (recs[0]) storeID = recs[0].i;
-				}
+				const tx = db.transaction(name, 'readonly');
+				const records = await new Promise<unknown[]>((resolve, reject) => {
+					const req = tx.objectStore(name).getAll();
+					req.onsuccess = () => resolve(req.result);
+					req.onerror = () => reject(req.error);
+				});
+				stores.push({ name, records });
 			}
+			snapshots.push({ name: dbInfo.name, version: dbInfo.version, stores });
 			db.close();
 		}
-		return { siteID, wpCredentialsID, storeID };
+		return snapshots;
 	});
+	const ids = extractSessionIdsFromDatabases(databases);
+	const rxStateTarget = findRxStateStoreTarget(databases);
 	console.log(`[auth] IDs from IndexedDB: ${JSON.stringify(ids)}`);
 
+	if ((!ids.siteID || !ids.wpCredentialsID || !ids.storeID || !rxStateTarget) && (await tryUiLoginFallback())) {
+		return;
+	}
+
 	if (!ids.siteID || !ids.wpCredentialsID || !ids.storeID) {
-		throw new Error(`Missing IDs for session state: ${JSON.stringify(ids)}`);
+		const dbSummary = databases.map((db) => ({
+			name: db.name,
+			stores: db.stores.map((store) => store.name),
+		}));
+		throw new Error(
+			`Missing IDs for session state: ${JSON.stringify(ids)}; IndexedDB stores: ${JSON.stringify(dbSummary)}`
+		);
+	}
+
+	if (!rxStateTarget) {
+		throw new Error('Could not find rx-state-v2 object store in IndexedDB');
 	}
 
 	// Write session state to rx-state-v2 in IndexedDB.
@@ -257,58 +296,55 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	//   i2 = ['_deleted', '_meta.lwt'] (1 + 17 = 18 chars)
 	// The _meta.lwt encoding: (floor(lwt) - 1).padStart(15,'0') + decPart.padEnd(2,'0')
 	await page.evaluate(
-		async ({ siteID, wpCredentialsID, storeID }) => {
-			const dbs = await indexedDB.databases();
-			for (const dbInfo of dbs) {
-				if (!dbInfo.name || !dbInfo.version) continue;
-				const db = await new Promise<IDBDatabase>((resolve, reject) => {
-					const req = indexedDB.open(dbInfo.name!, dbInfo.version);
-					req.onsuccess = () => resolve(req.result);
-					req.onerror = () => reject(req.error);
-				});
-				const rxStateName = Array.from(db.objectStoreNames).find(
-					(n) => n.startsWith('rx-state-v2') && n.endsWith('-documents')
-				);
-				if (rxStateName) {
-					const id = '00000000000000';
-					const lwt = Date.now() + 0.01;
-					const lwtInt = Math.floor(lwt) - 1;
-					const lwtIntStr = lwtInt.toString().padStart(15, '0');
-					const lwtDecParts = lwt.toString().split('.');
-					const lwtDecStr = (lwtDecParts.length > 1 ? lwtDecParts[1] : '0')
-						.padEnd(2, '0')
-						.substring(0, 2);
-					const encodedLwt = lwtIntStr + lwtDecStr;
+		async ({ dbName, dbVersion, storeName, siteID, wpCredentialsID, storeID }) => {
+			const db = await new Promise<IDBDatabase>((resolve, reject) => {
+				const req = indexedDB.open(dbName, dbVersion);
+				req.onsuccess = () => resolve(req.result);
+				req.onerror = () => reject(req.error);
+			});
 
-					const record: any = {
-						i: id,
-						d: {
-							id,
-							sId: 'e2etest000',
-							ops: [{ k: 'current', v: { siteID, wpCredentialsID, storeID } }],
-							_deleted: false,
-							_meta: { lwt },
-							_rev: '1-e2etest000',
-							_attachments: {},
-						},
-						i0: '0' + id,
-						i1: encodedLwt + id,
-						i2: '0' + encodedLwt,
-					};
+			const id = '00000000000000';
+			const lwt = Date.now() + 0.01;
+			const lwtInt = Math.floor(lwt) - 1;
+			const lwtIntStr = lwtInt.toString().padStart(15, '0');
+			const lwtDecParts = lwt.toString().split('.');
+			const lwtDecStr = (lwtDecParts.length > 1 ? lwtDecParts[1] : '0')
+				.padEnd(2, '0')
+				.substring(0, 2);
+			const encodedLwt = lwtIntStr + lwtDecStr;
 
-					const tx = db.transaction(rxStateName, 'readwrite');
-					tx.objectStore(rxStateName).put(record);
-					await new Promise<void>((resolve, reject) => {
-						tx.oncomplete = () => resolve();
-						tx.onerror = () => reject(tx.error);
-					});
-					db.close();
-					return;
-				}
-				db.close();
-			}
+			const record: any = {
+				i: id,
+				d: {
+					id,
+					sId: 'e2etest000',
+					ops: [{ k: 'current', v: { siteID, wpCredentialsID, storeID } }],
+					_deleted: false,
+					_meta: { lwt },
+					_rev: '1-e2etest000',
+					_attachments: {},
+				},
+				i0: '0' + id,
+				i1: encodedLwt + id,
+				i2: '0' + encodedLwt,
+			};
+
+			const tx = db.transaction(storeName, 'readwrite');
+			tx.objectStore(storeName).put(record);
+			await new Promise<void>((resolve, reject) => {
+				tx.oncomplete = () => resolve();
+				tx.onerror = () => reject(tx.error);
+			});
+			db.close();
 		},
-		{ siteID: ids.siteID, wpCredentialsID: ids.wpCredentialsID, storeID: ids.storeID }
+		{
+			dbName: rxStateTarget.dbName,
+			dbVersion: rxStateTarget.dbVersion,
+			storeName: rxStateTarget.storeName,
+			siteID: ids.siteID,
+			wpCredentialsID: ids.wpCredentialsID,
+			storeID: ids.storeID,
+		}
 	);
 	console.log('[auth] Wrote session state to rx-state-v2');
 
