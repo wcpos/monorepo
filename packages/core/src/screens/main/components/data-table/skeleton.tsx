@@ -10,7 +10,7 @@ import { Loader } from '@wcpos/components/loader';
 
 import { UISettingID, useUISettings } from '../../contexts/ui-settings';
 import { DataTableHeader } from './header';
-import { getColumnStyle } from './index';
+import { getHeaderStyle } from './index';
 
 type SkeletonColumn = {
 	key: string;
@@ -41,7 +41,7 @@ export function DataTableSkeleton({ id }: Props) {
 					{uiColumns
 						.filter((c) => c.show)
 						.map((c) => (
-							<TableHead key={c.key} style={getColumnStyle(c)}>
+							<TableHead key={c.key} style={getHeaderStyle(c)}>
 								<DataTableHeader
 									columnId={c.key}
 									header={getUILabel(c.key)}

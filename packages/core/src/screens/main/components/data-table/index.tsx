@@ -289,5 +289,12 @@ function getHeaderStyle(meta: any): ViewStyle {
 	return { flexGrow: meta?.flex ?? 1, flexShrink: 0, flexBasis: '0%' };
 }
 
-export { DataTable, DataTableHeader, DataTableFooter, defaultRenderItem, getColumnStyle };
+export {
+	DataTable,
+	DataTableHeader,
+	DataTableFooter,
+	defaultRenderItem,
+	getColumnStyle,
+	getHeaderStyle,
+};
 export type { RenderHeaderProps, SortingChange };
