@@ -20,11 +20,6 @@ jest.mock('react-native', () => ({
 	StyleSheet: { create: (styles: any) => styles },
 }));
 
-// Mock html-entities
-jest.mock('html-entities', () => ({
-	decode: (str: string) => str.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>'),
-}));
-
 // Mock class-variance-authority
 jest.mock('class-variance-authority', () => ({
 	cva: (base: string) => () => base,
