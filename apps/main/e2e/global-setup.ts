@@ -1,9 +1,10 @@
-import { chromium, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { chromium } from '@playwright/test';
+
 import { authenticateWithStore } from './fixtures';
-import type { IndexedDBSnapshot } from './indexeddb-helpers';
+import { exportOPFS } from './opfs-helpers';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
@@ -15,78 +16,11 @@ const PRO_STORE_URL =
 	process.env.E2E_STORE_URL_PRO || process.env.E2E_STORE_URL || 'https://dev-pro.wcpos.com';
 
 /**
- * Export all IndexedDB databases from the page.
- *
- * Captures every database, object store (with schema metadata), and record.
- * This is a generic IndexedDB-level clone that works regardless of how RxDB
- * internally structures its data.
- */
-async function exportIndexedDB(page: Page): Promise<IndexedDBSnapshot> {
-	return page.evaluate(async () => {
-		const databases = await indexedDB.databases();
-		const snapshot: IndexedDBSnapshot = {};
-
-		for (const dbInfo of databases) {
-			if (!dbInfo.name || !dbInfo.version) continue;
-
-			const db = await new Promise<IDBDatabase>((resolve, reject) => {
-				const req = indexedDB.open(dbInfo.name!, dbInfo.version);
-				req.onsuccess = () => resolve(req.result);
-				req.onerror = () => reject(req.error);
-			});
-
-			const dbSnapshot: IndexedDBSnapshot[string] = {
-				version: db.version,
-				stores: {},
-			};
-
-			for (const storeName of Array.from(db.objectStoreNames)) {
-				const tx = db.transaction(storeName, 'readonly');
-				const store = tx.objectStore(storeName);
-
-				// Capture object store metadata
-				const indexes: Array<{
-					name: string;
-					keyPath: string | string[];
-					unique: boolean;
-					multiEntry: boolean;
-				}> = [];
-				for (const indexName of Array.from(store.indexNames)) {
-					const idx = store.index(indexName);
-					indexes.push({
-						name: idx.name,
-						keyPath: idx.keyPath as string | string[],
-						unique: idx.unique,
-						multiEntry: idx.multiEntry,
-					});
-				}
-
-				const records = await new Promise<any[]>((resolve, reject) => {
-					const req = store.getAll();
-					req.onsuccess = () => resolve(req.result);
-					req.onerror = () => reject(req.error);
-				});
-
-				dbSnapshot.stores[storeName] = {
-					keyPath: store.keyPath as string | string[] | null,
-					autoIncrement: store.autoIncrement,
-					indexes,
-					records,
-				};
-			}
-
-			db.close();
-			snapshot[dbInfo.name] = dbSnapshot;
-		}
-
-		return snapshot;
-	});
-}
-
-/**
  * Export localStorage from the page.
  */
-async function exportLocalStorage(page: Page): Promise<Record<string, string>> {
+async function exportLocalStorage(
+	page: import('@playwright/test').Page
+): Promise<Record<string, string>> {
 	return page.evaluate(() => {
 		const data: Record<string, string> = {};
 		for (let i = 0; i < localStorage.length; i++) {
@@ -101,6 +35,21 @@ async function exportLocalStorage(page: Page): Promise<Record<string, string>> {
 
 /**
  * Run auth for a single store variant, export state, and save to disk.
+ *
+ * After authenticateWithStore completes (POS visible, products loaded), we
+ * need to export the OPFS files that RxDB has written. The OPFS storage uses
+ * createSyncAccessHandle() for exclusive file access, so we cannot read the
+ * files while the app's OPFS worker is running.
+ *
+ * Strategy:
+ *   1. Close the auth page — this terminates the OPFS worker, releasing all
+ *      exclusive file handles.
+ *   2. Open a new page in the SAME browser context with JS blocked — the OPFS
+ *      partition is tied to the browser context + origin, so OPFS files from
+ *      step 1 are still accessible, but no new worker will start.
+ *   3. Navigate to the origin to establish the correct OPFS scope.
+ *   4. Read OPFS files from the main thread (no worker = no exclusive handles).
+ *   5. Read localStorage (shared across pages in the same context + origin).
  */
 async function setupVariant(
 	variant: StoreVariant,
@@ -114,15 +63,15 @@ async function setupVariant(
 		baseURL,
 		viewport: { width: 1280, height: 720 },
 	});
-	const page = await context.newPage();
+	const authPage = await context.newPage();
 
 	// Capture console output for debugging
-	page.on('console', (msg) => {
+	authPage.on('console', (msg) => {
 		if (msg.type() === 'error' || msg.type() === 'warning') {
 			console.log(`[global-setup] [${variant}] ${msg.type()}: ${msg.text()}`);
 		}
 	});
-	page.on('pageerror', (err) => {
+	authPage.on('pageerror', (err) => {
 		console.log(`[global-setup] [${variant}] PAGE ERROR: ${err.message}`);
 	});
 
@@ -137,34 +86,47 @@ async function setupVariant(
 	};
 
 	try {
-		await authenticateWithStore(page, testInfo as any);
+		await authenticateWithStore(authPage, testInfo as any);
 
 		console.log(`[global-setup] Auth complete for ${variant}, exporting state...`);
 
-		const indexedDB = await exportIndexedDB(page);
-		const localStorage = await exportLocalStorage(page);
+		// Close the auth page so the OPFS worker terminates and releases all
+		// exclusive file handles (createSyncAccessHandle). We keep the browser
+		// context open so the OPFS partition (tied to context+origin) persists.
+		await authPage.close();
 
-		const state = { indexedDB, localStorage };
+		// Open a new page with JS blocked so no OPFS worker starts, then
+		// navigate to the origin to scope OPFS access correctly.
+		const exportPage = await context.newPage();
+		await exportPage.route('**/*.js', (route) => route.abort());
+		await exportPage.goto(baseURL);
+
+		// Export OPFS files and localStorage from the main thread.
+		// No worker is running, so exclusive handles have been released.
+		const opfs = await exportOPFS(exportPage);
+		const localStorage = await exportLocalStorage(exportPage);
+
+		const state = { opfs, localStorage };
 		const statePath = path.join(AUTH_STATE_DIR, `${variant}.json`);
 		fs.writeFileSync(statePath, JSON.stringify(state));
 
-		console.log(
-			`[global-setup] Saved ${variant} state (${Object.keys(indexedDB).length} databases)`
-		);
+		console.log(`[global-setup] Saved ${variant} state (${Object.keys(opfs).length} OPFS files)`);
 	} catch (error) {
-		// Capture screenshot for debugging
-		const screenshotPath = path.join(AUTH_STATE_DIR, `${variant}-failure.png`);
-		await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
-		console.log(`[global-setup] Screenshot saved to ${screenshotPath}`);
-		console.log(`[global-setup] Page URL at failure: ${page.url()}`);
-		console.log(
-			`[global-setup] Page title: ${await page.title().catch(() => 'unknown')}`
-		);
-		// Log visible text for debugging (first 500 chars)
-		const bodyText = await page
-			.evaluate(() => document.body?.innerText?.substring(0, 500) || '')
-			.catch(() => '');
-		console.log(`[global-setup] Visible text: ${bodyText}`);
+		// Capture screenshot for debugging — use the auth page if still open
+		const screenshotPage = context.pages().at(-1);
+		if (screenshotPage) {
+			const screenshotPath = path.join(AUTH_STATE_DIR, `${variant}-failure.png`);
+			await screenshotPage.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+			console.log(`[global-setup] Screenshot saved to ${screenshotPath}`);
+			console.log(`[global-setup] Page URL at failure: ${screenshotPage.url()}`);
+			console.log(
+				`[global-setup] Page title: ${await screenshotPage.title().catch(() => 'unknown')}`
+			);
+			const bodyText = await screenshotPage
+				.evaluate(() => document.body?.innerText?.substring(0, 500) || '')
+				.catch(() => '');
+			console.log(`[global-setup] Visible text: ${bodyText}`);
+		}
 		throw error;
 	} finally {
 		await context.close();

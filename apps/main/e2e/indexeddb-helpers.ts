@@ -26,10 +26,14 @@ export interface IndexedDBSnapshot {
 }
 
 /**
- * Saved auth state for a store variant (IndexedDB + localStorage).
+ * Saved auth state for a store variant (OPFS files + localStorage).
+ *
+ * OPFS has replaced IndexedDB as the RxDB storage backend. The snapshot
+ * captures the raw OPFS file tree so it can be restored in a fresh browser
+ * context before the app's JS (and its OPFS worker) starts.
  */
 export interface SavedAuthState {
-	indexedDB: IndexedDBSnapshot;
+	opfs: import('./opfs-helpers').OPFSSnapshot;
 	localStorage: Record<string, string>;
 }
 

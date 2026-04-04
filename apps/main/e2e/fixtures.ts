@@ -3,7 +3,8 @@ import * as path from 'path';
 
 import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
 
-import { restoreIndexedDB, restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
+import { restoreOPFS } from './opfs-helpers';
+import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
@@ -43,6 +44,11 @@ export function getStoreVariant(testInfo: TestInfo): StoreVariant {
  * 2. Open it in a separate page and complete login
  * 3. Capture the callback redirect URL
  * 4. Send a postMessage to the main page to simulate the popup's callback
+ *
+ * After the cashier API validates the credentials and stores are written
+ * to OPFS, we click the wp-user-button pill to trigger login() which sets
+ * the session state. Unlike the old approach (writing directly to IndexedDB),
+ * this works with the OPFS storage backend.
  */
 export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	const storeUrl = getStoreUrl(testInfo);
@@ -189,135 +195,38 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		console.log('[auth] Cashier API call not detected within timeout, proceeding anyway...');
 	}
 
-	// Give RxDB time to save stores from the API response to IndexedDB
+	// Give RxDB time to write stores to OPFS after the API response
 	await page.waitForTimeout(5_000);
 	console.log(`[auth] Page URL after auth: ${page.url()}`);
 
-	// Read IDs from IndexedDB to write session state directly.
-	// The RxDB reactive observable (populateResource) doesn't reliably re-emit
-	// after stores are saved, so clicking the user button fails silently.
-	// Instead, we write session state to rx-state-v2 (replicating what login()
-	// does via appState.set('current', ...)), then reload so the app hydrates.
-	const ids = await page.evaluate(async () => {
-		const dbs = await indexedDB.databases();
-		let siteID = '';
-		let wpCredentialsID = '';
-		let storeID = '';
-		for (const dbInfo of dbs) {
-			if (!dbInfo.name || !dbInfo.version) continue;
-			const db = await new Promise<IDBDatabase>((resolve, reject) => {
-				const req = indexedDB.open(dbInfo.name!, dbInfo.version);
-				req.onsuccess = () => resolve(req.result);
-				req.onerror = () => reject(req.error);
-			});
-			for (const name of Array.from(db.objectStoreNames)) {
-				if (name.startsWith('sites-') && name.endsWith('-documents')) {
-					const tx = db.transaction(name, 'readonly');
-					const recs = await new Promise<any[]>((resolve, reject) => {
-						const req = tx.objectStore(name).getAll();
-						req.onsuccess = () => resolve(req.result);
-						req.onerror = () => reject(req.error);
-					});
-					if (recs[0]) siteID = recs[0].d?.uuid || recs[0].i;
-				}
-				if (name.startsWith('wp_credentials-') && name.endsWith('-documents')) {
-					const tx = db.transaction(name, 'readonly');
-					const recs = await new Promise<any[]>((resolve, reject) => {
-						const req = tx.objectStore(name).getAll();
-						req.onsuccess = () => resolve(req.result);
-						req.onerror = () => reject(req.error);
-					});
-					if (recs[0]) wpCredentialsID = recs[0].d?.uuid || recs[0].i;
-				}
-				if (name.startsWith('stores-') && name.endsWith('-documents')) {
-					const tx = db.transaction(name, 'readonly');
-					const recs = await new Promise<any[]>((resolve, reject) => {
-						const req = tx.objectStore(name).getAll();
-						req.onsuccess = () => resolve(req.result);
-						req.onerror = () => reject(req.error);
-					});
-					if (recs[0]) storeID = recs[0].i;
-				}
-			}
-			db.close();
-		}
-		return { siteID, wpCredentialsID, storeID };
-	});
-	console.log(`[auth] IDs from IndexedDB: ${JSON.stringify(ids)}`);
+	// Click the wp-user-button pill to trigger login().
+	//
+	// The WpUser component uses useObservableSuspense(wpUser.populateResource('stores')).
+	// The component only renders (suspense resolves) once the stores observable emits,
+	// so the button being visible implies stores are loaded. We retry a few times in
+	// case the OPFS worker hasn't flushed yet and the reactive chain hasn't settled.
+	console.log('[auth] Waiting for wp-user-button to appear...');
+	const userButton = page.getByTestId('wp-user-button').first();
+	await expect(userButton).toBeVisible({ timeout: 30_000 });
+	await expect(userButton).toBeEnabled({ timeout: 10_000 });
 
-	if (!ids.siteID || !ids.wpCredentialsID || !ids.storeID) {
-		throw new Error(`Missing IDs for session state: ${JSON.stringify(ids)}`);
+	let loginSuccess = false;
+	for (let attempt = 1; attempt <= 5 && !loginSuccess; attempt++) {
+		console.log(`[auth] Clicking wp-user-button (attempt ${attempt})...`);
+		await userButton.click();
+
+		try {
+			await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 10_000 });
+			loginSuccess = true;
+		} catch {
+			console.log(`[auth] Login attempt ${attempt} did not reach POS, retrying...`);
+			await page.waitForTimeout(2_000);
+		}
 	}
 
-	// Write session state to rx-state-v2 in IndexedDB.
-	// The rxdb-premium IndexedDB adapter stores records as {i, d, i0, i1, i2}
-	// where i0-i2 are pre-computed compound index strings required for queries:
-	//   i0 = ['_deleted', 'id']       (1 + 14 = 15 chars)
-	//   i1 = ['_meta.lwt', 'id']      (17 + 14 = 31 chars)
-	//   i2 = ['_deleted', '_meta.lwt'] (1 + 17 = 18 chars)
-	// The _meta.lwt encoding: (floor(lwt) - 1).padStart(15,'0') + decPart.padEnd(2,'0')
-	await page.evaluate(
-		async ({ siteID, wpCredentialsID, storeID }) => {
-			const dbs = await indexedDB.databases();
-			for (const dbInfo of dbs) {
-				if (!dbInfo.name || !dbInfo.version) continue;
-				const db = await new Promise<IDBDatabase>((resolve, reject) => {
-					const req = indexedDB.open(dbInfo.name!, dbInfo.version);
-					req.onsuccess = () => resolve(req.result);
-					req.onerror = () => reject(req.error);
-				});
-				const rxStateName = Array.from(db.objectStoreNames).find(
-					(n) => n.startsWith('rx-state-v2') && n.endsWith('-documents')
-				);
-				if (rxStateName) {
-					const id = '00000000000000';
-					const lwt = Date.now() + 0.01;
-					const lwtInt = Math.floor(lwt) - 1;
-					const lwtIntStr = lwtInt.toString().padStart(15, '0');
-					const lwtDecParts = lwt.toString().split('.');
-					const lwtDecStr = (lwtDecParts.length > 1 ? lwtDecParts[1] : '0')
-						.padEnd(2, '0')
-						.substring(0, 2);
-					const encodedLwt = lwtIntStr + lwtDecStr;
-
-					const record: any = {
-						i: id,
-						d: {
-							id,
-							sId: 'e2etest000',
-							ops: [{ k: 'current', v: { siteID, wpCredentialsID, storeID } }],
-							_deleted: false,
-							_meta: { lwt },
-							_rev: '1-e2etest000',
-							_attachments: {},
-						},
-						i0: '0' + id,
-						i1: encodedLwt + id,
-						i2: '0' + encodedLwt,
-					};
-
-					const tx = db.transaction(rxStateName, 'readwrite');
-					tx.objectStore(rxStateName).put(record);
-					await new Promise<void>((resolve, reject) => {
-						tx.oncomplete = () => resolve();
-						tx.onerror = () => reject(tx.error);
-					});
-					db.close();
-					return;
-				}
-				db.close();
-			}
-		},
-		{ siteID: ids.siteID, wpCredentialsID: ids.wpCredentialsID, storeID: ids.storeID }
-	);
-	console.log('[auth] Wrote session state to rx-state-v2');
-
-	// Reload so the app re-initializes and hydrates from rx-state-v2
-	console.log('[auth] Reloading page to hydrate session...');
-	await page.reload();
-
-	const searchProducts = page.getByTestId('search-products');
-	await expect(searchProducts).toBeVisible({ timeout: 60_000 });
+	if (!loginSuccess) {
+		throw new Error('Failed to reach POS after clicking wp-user-button 5 times');
+	}
 
 	// Wait for products to sync (use testID to avoid locale-dependent text)
 	await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, { timeout: 120_000 });
@@ -376,9 +285,18 @@ export async function navigateToPage(
 /**
  * Extended test fixture that provides an authenticated POS page.
  *
- * Instead of running the full OAuth flow per test, restores IndexedDB
- * state that was exported during globalSetup. This takes ~5s instead of
- * ~2-5 minutes per test.
+ * Instead of running the full OAuth flow per test, restores OPFS state
+ * (+ localStorage) that was exported during globalSetup. This takes ~5s
+ * instead of ~2-5 minutes per test.
+ *
+ * How it works:
+ *   1. Block all JS so the OPFS worker never starts.
+ *   2. Navigate to the origin so OPFS is scoped correctly.
+ *   3. Restore OPFS files from the on-disk snapshot — no worker is running
+ *      so there are no exclusive createSyncAccessHandle locks to contend with.
+ *   4. Restore localStorage.
+ *   5. Unblock JS and reload — the app starts fresh, the OPFS worker reads
+ *      the restored files, and the app hydrates the saved session.
  *
  * Falls back to the full OAuth flow if no saved state exists (e.g. when
  * running individual tests locally without globalSetup).
@@ -399,18 +317,16 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 
 		if (state) {
 			try {
-				// Block JavaScript so the app doesn't initialize RxDB (which would
-				// create databases at the current schema version) before we restore
-				// the snapshot. Without this, restoreIndexedDB hits a VersionError
-				// when the snapshot's version doesn't match the app's version.
+				// Block JavaScript so the OPFS worker never starts — createSyncAccessHandle
+				// grants exclusive access, so we must restore files before any worker runs.
 				await page.route('**/*.js', (route) => route.abort());
 				await page.goto('/');
 
-				// Restore IndexedDB and localStorage while JS is blocked
-				await restoreIndexedDB(page, state.indexedDB);
+				// Restore OPFS and localStorage while JS is blocked (no worker running)
+				await restoreOPFS(page, state.opfs);
 				await restoreLocalStorage(page, state.localStorage);
 
-				// Unblock JS and reload so the app picks up the restored state
+				// Unblock JS and reload so the app picks up the restored OPFS state
 				await page.unroute('**/*.js');
 				await page.reload();
 
