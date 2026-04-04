@@ -4,7 +4,6 @@ import PQueue from 'p-queue';
 import { encodeReceipt } from './encoder/encode-receipt';
 import { formatReceiptData } from './encoder/format-receipt-data';
 import { encodeThermalTemplate } from './renderer';
-import { NetworkAdapter } from './transport/network-adapter';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
 
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
@@ -25,8 +24,9 @@ export class PrinterService {
 	/**
 	 * Get or create a transport for the given profile.
 	 * Recreates the transport if the profile config has changed since last use.
+	 * NetworkAdapter is loaded lazily to avoid triggering NativeEventEmitter at import time.
 	 */
-	private getTransport(profile: PrinterProfile): PrinterTransport {
+	private async getTransport(profile: PrinterProfile): Promise<PrinterTransport> {
 		const key = transportKey(profile);
 		const cachedKey = this.transportKeys.get(profile.id);
 
@@ -50,6 +50,7 @@ export class PrinterService {
 				if (!profile.address) {
 					throw new Error('Network printer profile is missing an address');
 				}
+				const { NetworkAdapter } = await import('./transport/network-adapter');
 				transport = new NetworkAdapter(profile.address, profile.port, profile.vendor);
 				break;
 			}
@@ -87,7 +88,7 @@ export class PrinterService {
 				return;
 			}
 
-			const transport = this.getTransport(profile);
+			const transport = await this.getTransport(profile);
 			const encoderOptions = {
 				language: profile.language,
 				columns: profile.columns,
@@ -116,7 +117,7 @@ export class PrinterService {
 	 */
 	async printRaw(data: Uint8Array, profile: PrinterProfile): Promise<void> {
 		return this.queue.add(async () => {
-			const transport = this.getTransport(profile);
+			const transport = await this.getTransport(profile);
 			await transport.printRaw(data);
 		});
 	}
@@ -148,7 +149,7 @@ export class PrinterService {
 		}
 
 		return this.queue.add(async () => {
-			const transport = this.getTransport(profile);
+			const transport = await this.getTransport(profile);
 
 			// Import encoder dynamically to keep the test print self-contained
 			const ReceiptPrinterEncoder = (await import('@point-of-sale/receipt-printer-encoder'))

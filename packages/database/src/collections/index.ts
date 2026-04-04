@@ -340,6 +340,10 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 		4(oldDoc) {
 			return oldDoc;
 		},
+		// v5: Allow null line_items image for misc products without images
+		5(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 

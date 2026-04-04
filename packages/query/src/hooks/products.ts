@@ -24,6 +24,9 @@ const filterApiQueryParams = (params: Record<string, any>) => {
 		delete params.tags;
 	}
 
+	// stock_status is not a valid WooCommerce REST API filter param; filtering is done locally
+	delete params.stock_status;
+
 	return {
 		...params,
 		orderby,

@@ -1,5 +1,4 @@
-import * as React from 'react';
-import { Dimensions } from 'react-native';
+import { useWindowDimensions } from 'react-native';
 
 // Define the possible breakpoints
 export type Breakpoint = 'sm' | 'md' | 'lg';
@@ -15,11 +14,7 @@ const getBreakpoint = (width: number): Breakpoint => {
 	}
 };
 
-const subscribe = (callback: () => void) => {
-	const subscription = Dimensions.addEventListener('change', callback);
-	return () => subscription.remove();
+export const useBreakpoint = (): Breakpoint => {
+	const { width } = useWindowDimensions();
+	return getBreakpoint(width);
 };
-
-const getSnapshot = () => getBreakpoint(Dimensions.get('window').width);
-
-export const useBreakpoint = (): Breakpoint => React.useSyncExternalStore(subscribe, getSnapshot);

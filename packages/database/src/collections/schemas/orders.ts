@@ -1,6 +1,6 @@
 export const ordersLiteral = {
 	title: 'WooCommerce Order schema',
-	version: 4,
+	version: 5,
 	description: 'WooCommerce Order schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -371,7 +371,7 @@ export const ordersLiteral = {
 					},
 					image: {
 						description: 'Product image.',
-						type: 'object',
+						type: ['object', 'null'],
 						properties: {
 							id: {
 								description: 'Image ID.',
