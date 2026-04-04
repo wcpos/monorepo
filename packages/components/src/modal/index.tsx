@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { type GestureResponderEvent, Platform, ScrollView, StyleSheet, View } from 'react-native';
 
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { router } from 'expo-router';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -48,7 +48,7 @@ function ModalClose({ asChild, disabled, ...props }: SlottablePressableProps) {
 		onClose(false);
 	}
 
-	const Component = asChild ? Slot.Pressable : Button;
+	const Component = asChild ? Slot : Button;
 
 	return (
 		<Component
@@ -66,7 +66,7 @@ function ModalAction({
 	disabled,
 	...props
 }: SlottablePressableProps & Partial<ButtonProps>) {
-	const Component = asChild ? Slot.Pressable : Button;
+	const Component = asChild ? Slot : Button;
 
 	return (
 		<Component
@@ -199,7 +199,7 @@ function ModalFooter({ className, ...props }: React.ComponentPropsWithoutRef<typ
 }
 
 function ModalTitle({ className, asChild, ...props }: SlottableTextProps) {
-	const Component = asChild ? Slot.Text : Text;
+	const Component = asChild ? Slot : Text;
 
 	return (
 		<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">

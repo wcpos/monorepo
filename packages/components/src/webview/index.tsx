@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useAugmentedRef } from '@rn-primitives/hooks';
+import { useComposedRefs } from '@rn-primitives/hooks';
 import isString from 'lodash/isString';
 import { WebView as RNWebView, WebViewProps as RNWebViewProps } from 'react-native-webview';
 
@@ -15,30 +15,31 @@ export interface WebViewProps extends RNWebViewProps {
  * WebView component that automatically resizes to fill its parent container
  */
 function WebView({ ref, src, srcDoc, onMessage, ...props }: WebViewProps) {
-	/**
-	 * Add a postMessage function to the ref
-	 */
-	const augmentedRef = useAugmentedRef({
+	const localRef = React.useRef<RNWebView>(null);
+	const composedRef = useComposedRefs(ref, localRef);
+
+	React.useImperativeHandle(
 		ref,
-		methods: {
-			postMessage(message) {
-				// Inject JavaScript that calls window.postMessage with the message
-				augmentedRef.current?.injectJavaScript(`
-					(function() {
-						window.postMessage(${JSON.stringify(message)}, '*');
-						return true;
-					})();
-				`);
-			},
-		},
-	});
+		() =>
+			Object.assign(localRef.current ?? ({} as RNWebView), {
+				postMessage(message: any) {
+					localRef.current?.injectJavaScript(`
+						(function() {
+							window.postMessage(${JSON.stringify(message)}, '*');
+							return true;
+						})();
+					`);
+				},
+			}),
+		[]
+	);
 
 	// srcDoc (inline HTML) takes priority over src (URI)
 	const source = srcDoc != null ? { html: srcDoc } : { uri: src || '' };
 
 	return (
 		<RNWebView
-			ref={augmentedRef}
+			ref={composedRef}
 			source={source}
 			onMessage={(event) => {
 				/**

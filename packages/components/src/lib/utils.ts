@@ -4,7 +4,7 @@ import { twMerge } from 'tailwind-merge';
 /**
  *
  */
-export { useAugmentedRef, useControllableState } from '@rn-primitives/hooks';
+export { useComposedRefs, useControllableState } from '@rn-primitives/hooks';
 
 /**
  *

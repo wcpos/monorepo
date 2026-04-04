@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 
 import * as TooltipPrimitive from '@rn-primitives/tooltip';
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { cn } from '../lib/utils';
@@ -37,8 +37,8 @@ function TooltipTrigger({ children, asChild, ...props }: TooltipTriggerProps) {
 	const { showOnNative } = React.useContext(TooltipContext);
 
 	if (!showOnNative) {
-		// Forward props to children - use Slot.Pressable for asChild, Pressable otherwise
-		const Component = asChild ? Slot.Pressable : Pressable;
+		// Forward props to children - use generic Slot for asChild, Pressable otherwise
+		const Component = asChild ? Slot : Pressable;
 		return <Component {...props}>{children}</Component>;
 	}
 

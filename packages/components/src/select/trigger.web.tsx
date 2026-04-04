@@ -2,9 +2,9 @@ import * as React from 'react';
 import { type GestureResponderEvent, Pressable, type View } from 'react-native';
 
 import * as Select from '@radix-ui/react-select';
-import { useAugmentedRef } from '@rn-primitives/hooks';
+import { useComposedRefs } from '@rn-primitives/hooks';
 import * as SelectPrimitive from '@rn-primitives/select';
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
@@ -23,7 +23,7 @@ function Value({
 	...props
 }: SlottableTextProps & { placeholder: string }) {
 	const { value } = SelectPrimitive.useRootContext();
-	const Component = asChild ? Slot.Text : Text;
+	const Component = asChild ? Slot : Text;
 
 	return (
 		<TextClassContext.Provider
@@ -55,17 +55,19 @@ function Trigger({
 }: SelectPrimitive.TriggerProps & { ref?: React.Ref<View> }) {
 	const { open, onOpenChange } = SelectPrimitive.useRootContext();
 
-	const augmentedRef = useAugmentedRef<View>({
-		ref: ref ?? null,
-		methods: {
+	const localRef = React.useRef<View>(null);
+	const composedRef = useComposedRefs(ref, localRef);
+
+	React.useImperativeHandle(ref, () =>
+		Object.assign(localRef.current ?? ({} as View), {
 			open() {
 				onOpenChange(true);
 			},
 			close() {
 				onOpenChange(false);
 			},
-		},
-	});
+		})
+	);
 
 	/**
 	 * Only toggle for touch/pen — mouse opens via Radix's onPointerDown,
@@ -81,16 +83,10 @@ function Trigger({
 		}
 	}
 
-	const Component = asChild ? Slot.Pressable : Pressable;
+	const Component = asChild ? Slot : Pressable;
 	return (
 		<Select.Trigger disabled={disabled ?? undefined} asChild>
-			<Component
-				onPress={onPress}
-				ref={augmentedRef}
-				role="button"
-				disabled={disabled}
-				{...props}
-			/>
+			<Component onPress={onPress} ref={composedRef} role="button" disabled={disabled} {...props} />
 		</Select.Trigger>
 	);
 }

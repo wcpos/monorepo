@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 
 import { Platform } from '@wcpos/utils/platform';
 
@@ -105,7 +105,7 @@ function ComboboxValue({
 	...props
 }: ComboboxValueProps) {
 	const { multiple, value } = useComboboxRootContext();
-	const Component = asChild ? Slot.Text : Text;
+	const Component = asChild ? Slot : Text;
 
 	const displayText = React.useMemo(() => {
 		if (multiple) {

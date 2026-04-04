@@ -3,7 +3,7 @@ import { Platform, Pressable, StyleSheet } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Checkbox } from '../checkbox';
@@ -109,7 +109,7 @@ function SelectMultiValue({
 	...props
 }: SelectValueProps) {
 	const { value } = useMultiSelectContext();
-	const Component = asChild ? Slot.Text : Text;
+	const Component = asChild ? Slot : Text;
 
 	const displayText = React.useMemo(() => {
 		const getter = truncationStyle === 'ellipsis' ? getDisplayLabelEllipsis : getDisplayLabel;

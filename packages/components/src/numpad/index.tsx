@@ -7,7 +7,6 @@ import {
 	ViewStyle,
 } from 'react-native';
 
-import { useAugmentedRef } from '@rn-primitives/hooks';
 import toNumber from 'lodash/toNumber';
 
 import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
@@ -51,7 +50,8 @@ const Display = React.forwardRef<RNTextInput, InputProps>(
 			const timer = setTimeout(() => {
 				if (inputRef.current) {
 					inputRef.current?.focus();
-					(inputRef.current as unknown as HTMLInputElement)?.setSelectionRange(0, 100);
+					const webInput = inputRef.current as unknown as HTMLInputElement | undefined;
+					webInput?.setSelectionRange?.(0, 100);
 				}
 			}, 50);
 			return () => clearTimeout(timer);
@@ -94,6 +94,7 @@ function Key({ label, icon, onPress, discount }: NumpadKeyProps) {
 Key.displayName = 'NumpadKey';
 
 interface NumpadProps {
+	ref?: React.Ref<{ getValue: () => number } | null>;
 	initialValue?: number;
 	calculator?: boolean;
 	onChangeText?: (value: number) => void;
@@ -109,149 +110,153 @@ interface NumpadProps {
  * To avoid confusion, initialValue should be a number and it should emit a number rounded to precision (6)
  * - for the reducer we need to use strings, but at least we know that the deceimal separator is a dot
  */
-export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadProps>(
-	(
-		{
-			initialValue = 0,
-			calculator = false,
-			onChangeText,
-			decimalSeparator = '.',
-			onSubmitEditing,
-			discounts,
-			precision = 6,
-			columnSize = 45,
-			formatDisplay = (value) => String(value),
-		},
-		ref
-	) => {
-		const { currentOperand, addDigit, switchSign, deleteDigit, applyDiscount } = useCalculator({
-			initialValue: String(initialValue),
-			decimalSeparator,
-			precision,
-		});
-		const currentValue = toNumber(currentOperand);
-		const hasDiscounts = discounts && discounts.length > 0;
+function Numpad({
+	ref,
+	initialValue = 0,
+	calculator = false,
+	onChangeText,
+	decimalSeparator = '.',
+	onSubmitEditing,
+	discounts,
+	precision = 6,
+	columnSize = 45,
+	formatDisplay = (value) => String(value),
+}: NumpadProps) {
+	const { currentOperand, addDigit, switchSign, deleteDigit, applyDiscount } = useCalculator({
+		initialValue: String(initialValue),
+		decimalSeparator,
+		precision,
+	});
+	const currentValue = toNumber(currentOperand);
+	const hasDiscounts = discounts && discounts.length > 0;
 
-		/**
-		 * Allow external components to get the current value
-		 */
-		const augmentedRef = useAugmentedRef({
-			ref,
-			methods: {
-				getValue: () => currentValue,
-			},
-			deps: [currentValue],
-		});
+	const localRef = React.useRef<RNTextInput>(null);
 
-		/**
-		 *
-		 */
-		const handleKeyPress = React.useCallback(
-			(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-				let shouldReplace = false;
-				if (augmentedRef && augmentedRef.current) {
-					shouldReplace =
-						(augmentedRef.current as unknown as HTMLInputElement)?.selectionStart === 0;
-				}
-				const key = e.nativeEvent.key;
-				switch (key) {
-					case 'Backspace':
-						deleteDigit();
-						break;
-					case decimalSeparator:
-						addDigit('.', shouldReplace);
-						break;
-					default:
-						if (/^[0-9]$/.test(key)) {
-							addDigit(key, shouldReplace);
-						}
-				}
-			},
-			[augmentedRef, deleteDigit, decimalSeparator, addDigit]
-		);
+	React.useImperativeHandle(
+		ref,
+		() => ({
+			getValue: () => currentValue,
+		}),
+		[currentValue]
+	);
 
-		/**
-		 *
-		 */
-		const handleButtonPress = React.useCallback(
-			(key: string) => {
-				let shouldReplace = false;
-				if (augmentedRef && augmentedRef.current) {
-					shouldReplace =
-						(augmentedRef.current as unknown as HTMLInputElement)?.selectionStart === 0;
+	const handleSubmitEditing = React.useCallback(() => {
+		onChangeText?.(currentValue);
+		onSubmitEditing?.(String(currentValue));
+	}, [currentValue, onChangeText, onSubmitEditing]);
+
+	/**
+	 *
+	 */
+	const handleKeyPress = React.useCallback(
+		(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+			let shouldReplace = false;
+			if (localRef.current) {
+				const webInput = localRef.current as unknown as HTMLInputElement | undefined;
+				if (webInput?.selectionStart !== undefined) {
+					shouldReplace = webInput.selectionStart === 0;
 				}
-				switch (key) {
-					case '+/-':
-						switchSign();
-						break;
-					case decimalSeparator:
-						addDigit('.', shouldReplace);
-						break;
-					default:
+			}
+			const key = e.nativeEvent.key;
+			switch (key) {
+				case 'Backspace':
+					deleteDigit();
+					break;
+				case decimalSeparator:
+					addDigit('.', shouldReplace);
+					break;
+				default:
+					if (/^[0-9]$/.test(key)) {
 						addDigit(key, shouldReplace);
-				}
-				// after a button press, we want to focus the input
-				if (augmentedRef && augmentedRef.current) {
-					augmentedRef.current?.focus();
-					(augmentedRef.current as unknown as HTMLInputElement)?.setSelectionRange(100, 100);
-				}
-			},
-			[addDigit, augmentedRef, decimalSeparator, switchSign]
-		);
+					}
+			}
+		},
+		[deleteDigit, decimalSeparator, addDigit]
+	);
 
-		/**
-		 *
-		 */
-		return (
-			<VStack style={{ width: hasDiscounts ? '222px' : '146px' } as unknown as ViewStyle}>
-				<Display
-					ref={augmentedRef}
-					value={formatDisplay(currentValue)}
-					onSubmitEditing={() => onChangeText?.(currentValue)}
-					onKeyPress={handleKeyPress}
-					// selection={selection}
-					// onSelectionChange={setSelection}
-				/>
-				<HStack className="gap-1">
-					<View
-						className="grid grid-cols-3 gap-1"
-						style={{ width: '146px' } as unknown as ViewStyle}
-					>
-						{[
-							['1', '2', '3'],
-							['4', '5', '6'],
-							['7', '8', '9'],
-							['+/-', '0', decimalSeparator],
-						].map((row, rowIndex) =>
-							row.map((value, colIndex) => (
-								<Key
-									key={`${rowIndex}-${colIndex}`}
-									label={value === '+/-' ? undefined : value}
-									icon={value === '+/-' ? 'plusMinus' : undefined}
-									onPress={() => handleButtonPress(value)}
-								/>
-							))
-						)}
-					</View>
-					{hasDiscounts && (
-						<View
-							className="grid grid-cols-1 gap-1"
-							style={{ width: '72px' } as unknown as ViewStyle}
-						>
-							{discounts.map((discount) => (
-								<Button key={discount} variant="muted" onPress={() => applyDiscount(discount)}>
-									<HStack className="gap-0.5">
-										<Text>{String(discount)}</Text>
-										<Icon name="percent" />
-									</HStack>
-								</Button>
-							))}
-						</View>
+	/**
+	 *
+	 */
+	const handleButtonPress = React.useCallback(
+		(key: string) => {
+			let shouldReplace = false;
+			if (localRef.current) {
+				const webInput = localRef.current as unknown as HTMLInputElement | undefined;
+				if (webInput?.selectionStart !== undefined) {
+					shouldReplace = webInput.selectionStart === 0;
+				}
+			}
+			switch (key) {
+				case '+/-':
+					switchSign();
+					break;
+				case decimalSeparator:
+					addDigit('.', shouldReplace);
+					break;
+				default:
+					addDigit(key, shouldReplace);
+			}
+			// after a button press, we want to focus the input
+			if (localRef.current) {
+				localRef.current?.focus();
+				const webInput = localRef.current as unknown as HTMLInputElement | undefined;
+				webInput?.setSelectionRange?.(100, 100);
+			}
+		},
+		[addDigit, decimalSeparator, switchSign]
+	);
+
+	/**
+	 *
+	 */
+	return (
+		<VStack style={{ width: hasDiscounts ? '222px' : '146px' } as unknown as ViewStyle}>
+			<Display
+				ref={localRef}
+				value={formatDisplay(currentValue)}
+				onSubmitEditing={handleSubmitEditing}
+				onKeyPress={handleKeyPress}
+				// selection={selection}
+				// onSelectionChange={setSelection}
+			/>
+			<HStack className="gap-1">
+				<View className="grid grid-cols-3 gap-1" style={{ width: '146px' } as unknown as ViewStyle}>
+					{[
+						['1', '2', '3'],
+						['4', '5', '6'],
+						['7', '8', '9'],
+						['+/-', '0', decimalSeparator],
+					].map((row, rowIndex) =>
+						row.map((value, colIndex) => (
+							<Key
+								key={`${rowIndex}-${colIndex}`}
+								label={value === '+/-' ? undefined : value}
+								icon={value === '+/-' ? 'plusMinus' : undefined}
+								onPress={() => handleButtonPress(value)}
+							/>
+						))
 					)}
-				</HStack>
-			</VStack>
-		);
-	}
-);
+				</View>
+				{hasDiscounts && (
+					<View
+						className="grid grid-cols-1 gap-1"
+						style={{ width: '72px' } as unknown as ViewStyle}
+					>
+						{discounts.map((discount) => (
+							<Button key={discount} variant="muted" onPress={() => applyDiscount(discount)}>
+								<HStack className="gap-0.5">
+									<Text>{String(discount)}</Text>
+									<Icon name="percent" />
+								</HStack>
+							</Button>
+						))}
+					</View>
+				)}
+			</HStack>
+		</VStack>
+	);
+}
 
 Numpad.displayName = 'Numpad';
+
+export { Numpad };
