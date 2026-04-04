@@ -199,22 +199,54 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	await page.waitForTimeout(5_000);
 	console.log(`[auth] Page URL after auth: ${page.url()}`);
 
-	// Click the wp-user-button pill to trigger login().
-	//
-	// The WpUser component uses useObservableSuspense(wpUser.populateResource('stores')).
-	// The component only renders (suspense resolves) once the stores observable emits,
-	// so the button being visible implies stores are loaded. We retry a few times in
-	// case the OPFS worker hasn't flushed yet and the reactive chain hasn't settled.
-	console.log('[auth] Waiting for wp-user-button to appear...');
-	const userButton = page.getByTestId('wp-user-button').first();
-	await expect(userButton).toBeVisible({ timeout: 30_000 });
-	await expect(userButton).toBeEnabled({ timeout: 10_000 });
-
-	let loginSuccess = false;
+	// Click the wp-user-button pill to trigger login(), but tolerate cases where
+	// the app has already transitioned to POS before the button can be clicked.
 	const searchProducts = page.getByTestId('search-products');
+	let loginSuccess = await searchProducts.isVisible({ timeout: 3_000 }).catch(() => false);
+	if (loginSuccess) {
+		console.log('[auth] POS already visible after auth callback, skipping wp-user-button click.');
+	}
+
+	const userButton = page.getByTestId('wp-user-button').first();
 	for (let attempt = 1; attempt <= 5 && !loginSuccess; attempt++) {
+		const reachedPosBeforeClick = await searchProducts.isVisible({ timeout: 1_000 }).catch(() => false);
+		if (reachedPosBeforeClick) {
+			console.log('[auth] POS became visible before click, continuing...');
+			loginSuccess = true;
+			break;
+		}
+
+		const userButtonVisible = await userButton.isVisible({ timeout: 5_000 }).catch(() => false);
+		if (!userButtonVisible) {
+			console.log(`[auth] wp-user-button not visible (attempt ${attempt}), waiting for POS...`);
+			const reachedPosWithoutClick = await searchProducts.isVisible({ timeout: 5_000 }).catch(() => false);
+			if (reachedPosWithoutClick) {
+				loginSuccess = true;
+				break;
+			}
+			continue;
+		}
+
+		const userButtonEnabled = await userButton.isEnabled({ timeout: 5_000 }).catch(() => false);
+		if (!userButtonEnabled) {
+			console.log(`[auth] wp-user-button disabled (attempt ${attempt}), retrying...`);
+			await page.waitForTimeout(2_000);
+			continue;
+		}
+
 		console.log(`[auth] Clicking wp-user-button (attempt ${attempt})...`);
-		await userButton.click();
+		const clicked = await userButton
+			.click({ timeout: 5_000 })
+			.then(() => true)
+			.catch((error) => {
+				console.log(
+					`[auth] wp-user-button click failed (attempt ${attempt}): ${error instanceof Error ? error.message : String(error)}`
+				);
+				return false;
+			});
+		if (!clicked) {
+			continue;
+		}
 
 		// Single-store users login immediately from the button press.
 		const reachedPosDirectly = await searchProducts.isVisible({ timeout: 2_000 }).catch(() => false);
@@ -244,7 +276,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	}
 
 	if (!loginSuccess) {
-		throw new Error('Failed to reach POS after clicking wp-user-button 5 times');
+		throw new Error('Failed to reach POS during auth bootstrap (wp-user-button/store picker)');
 	}
 
 	// Wait for products to sync (use testID to avoid locale-dependent text)
