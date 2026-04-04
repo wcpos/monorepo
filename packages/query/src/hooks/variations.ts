@@ -53,6 +53,9 @@ const filterApiQueryParams = (params: Record<string, any>) => {
 		orderby = 'date';
 	}
 
+	// stock_status is not a valid WooCommerce REST API filter param; filtering is done locally
+	delete params.stock_status;
+
 	return {
 		...params,
 		attributes: undefined, // there is no attributes filter in the API (@TODO)
