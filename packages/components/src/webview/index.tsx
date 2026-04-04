@@ -8,7 +8,7 @@ export type WebViewHandle = Omit<RNWebView, 'postMessage'> & {
 };
 
 export interface WebViewProps extends RNWebViewProps {
-	ref: React.RefObject<WebViewHandle>;
+	ref?: React.Ref<WebViewHandle>;
 	src?: string;
 	srcDoc?: string;
 	onMessage: (event: { nativeEvent: { data: any } }) => void;
