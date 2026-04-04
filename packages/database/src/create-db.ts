@@ -120,17 +120,17 @@ type PersistentDatabase = StorageMigrationDatabase & {
  * successful), data for this database is unrecoverable and will be re-synced
  * from the server on next login.
  */
-const resetFailedMigrationTargetIfNeeded = async ({
+const resetFailedMigrationTargetIfNeeded = async <T extends PersistentDatabase>({
 	database,
 	name,
 	config,
 	recreate,
 }: {
-	database: PersistentDatabase;
+	database: T;
 	name: string;
 	config: PersistentDatabaseConfig;
-	recreate: () => Promise<PersistentDatabase>;
-}) => {
+	recreate: () => Promise<T>;
+}): Promise<T> => {
 	const migrationMarker = await database.getLocal(getMigrationLocalDocId(name));
 	if (getMigrationMarkerStatus(migrationMarker) !== 'failed') {
 		return database;
