@@ -20,6 +20,9 @@ inputs:
   uniwind-auth-token:
     description: Uniwind auth token to authenticate with
     required: false
+  skip-install-scripts:
+    description: Skip package lifecycle scripts during pnpm install
+    default: "false"
 
 runs:
   using: "composite"
@@ -63,7 +66,12 @@ runs:
     - name: 📦 Install dependencies
       env:
         UNIWIND_AUTH_TOKEN: ${{ inputs.uniwind-auth-token }}
-      run: pnpm install --no-frozen-lockfile
+      run: |
+        if [ "${{ inputs.skip-install-scripts }}" = "true" ]; then
+          pnpm install --no-frozen-lockfile --ignore-scripts
+        else
+          pnpm install --no-frozen-lockfile
+        fi
       shell: bash
 
     - name: ♻️ Restore cache

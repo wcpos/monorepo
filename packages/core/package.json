@@ -45,7 +45,7 @@
 		"date-fns": "4.1.0",
 		"html-entities": "2.6.0",
 		"i18next": "^25.8.17",
-		"lodash": "^4.17.21",
+		"lodash": "^4.18.1",
 		"mustache": "^4.2.0",
 		"observable-hooks": "4.2.4",
 		"react-error-boundary": "^6.0.2",
