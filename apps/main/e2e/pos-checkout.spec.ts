@@ -40,6 +40,51 @@ async function setPosCartSetting(
 	value: boolean
 ) {
 	const storeDbPrefixes = ['store_v2_', 'store_v3_'] as const;
+	await expect
+		.poll(
+			() =>
+				page
+					.evaluate(
+						async ({ storeDbPrefixes }) => {
+							const dbs = await indexedDB.databases();
+							const dbInfo = dbs.find(
+								(db) =>
+									db.name &&
+									storeDbPrefixes.some((prefix) => db.name!.startsWith(prefix)) &&
+									db.version
+							);
+							if (!dbInfo?.name || !dbInfo.version) return false;
+
+							const db = await new Promise<IDBDatabase>((resolve, reject) => {
+								const req = indexedDB.open(dbInfo.name!, dbInfo.version);
+								req.onsuccess = () => resolve(req.result);
+								req.onerror = () => reject(req.error);
+							});
+
+							try {
+								const storeName = Array.from(db.objectStoreNames).find(
+									(name) => name.startsWith('rx-state-pos-cart_v2-') && name.endsWith('-documents')
+								);
+								if (!storeName) return false;
+
+								const tx = db.transaction(storeName, 'readonly');
+								const count = await new Promise<number>((resolve, reject) => {
+									const req = tx.objectStore(storeName).count();
+									req.onsuccess = () => resolve(req.result);
+									req.onerror = () => reject(req.error);
+								});
+
+								return count > 0;
+							} finally {
+								db.close();
+							}
+						},
+						{ storeDbPrefixes }
+					)
+					.catch(() => false),
+			{ timeout: 30_000 }
+		)
+		.toBe(true);
 
 	await page.evaluate(
 		async ({ key, value, storeDbPrefixes }) => {

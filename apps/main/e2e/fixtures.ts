@@ -70,27 +70,51 @@ async function blockScriptRequests(route: import('@playwright/test').Route) {
 	await route.fallback();
 }
 
-async function waitForRxdbPersistenceSignal(page: Page, timeoutMs = 15_000): Promise<boolean> {
+async function waitForRxdbPersistenceSignal(page: Page, timeoutMs = 30_000): Promise<boolean> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
-		if (await hasReachedPos(page, 0)) {
-			return true;
-		}
+		const persisted = await page
+			.evaluate(async () => {
+				const dbs = await indexedDB.databases();
+				const dbInfo = dbs.find(
+					(db) =>
+						db.name &&
+						(db.name.startsWith('store_v2_') || db.name.startsWith('store_v3_')) &&
+						db.version
+				);
+				if (!dbInfo?.name || !dbInfo.version) return false;
 
-		const userButtonReady = await page
-			.evaluate(() => {
-				const button = document.querySelector('[data-testid="wp-user-button"]');
-				if (!button) return false;
-				const ariaDisabled = button.getAttribute('aria-disabled');
-				const hasDisabledAttr = button.hasAttribute('disabled');
-				return ariaDisabled !== 'true' && !hasDisabledAttr;
+				const db = await new Promise<IDBDatabase>((resolve, reject) => {
+					const req = indexedDB.open(dbInfo.name!, dbInfo.version);
+					req.onsuccess = () => resolve(req.result);
+					req.onerror = () => reject(req.error);
+				});
+
+				try {
+					const stores = Array.from(db.objectStoreNames).filter((name) =>
+						name.endsWith('-documents')
+					);
+					for (const storeName of stores) {
+						const tx = db.transaction(storeName, 'readonly');
+						const count = await new Promise<number>((resolve, reject) => {
+							const req = tx.objectStore(storeName).count();
+							req.onsuccess = () => resolve(req.result);
+							req.onerror = () => reject(req.error);
+						});
+						if (count > 0) return true;
+					}
+
+					return false;
+				} finally {
+					db.close();
+				}
 			})
 			.catch(() => false);
-		if (userButtonReady) {
+		if (persisted) {
 			return true;
 		}
 
-		await page.waitForTimeout(250);
+		await page.waitForTimeout(500);
 	}
 
 	return false;
