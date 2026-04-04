@@ -204,7 +204,7 @@ jobs:
   e2e-gate:
     name: 🎭 E2E Tests
     needs: [e2e]
-    if: always()
+    if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
       - name: Check shard results
