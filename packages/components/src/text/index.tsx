@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Text as RNText } from 'react-native';
 
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 import { SlottableTextProps } from '@rn-primitives/types';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { decode } from 'html-entities';
@@ -27,7 +27,7 @@ export type TextProps = SlottableTextProps &
 
 function Text({ className, variant, asChild = false, children, decodeHtml, ...props }: TextProps) {
 	const textClass = React.useContext(TextClassContext);
-	const Component = asChild ? Slot.Text : RNText;
+	const Component = asChild ? Slot : RNText;
 
 	const processedChildren =
 		decodeHtml && typeof children === 'string' ? decode(children) : children;

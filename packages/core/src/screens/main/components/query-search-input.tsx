@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useAugmentedRef } from '@rn-primitives/hooks';
+import { useComposedRefs } from '@rn-primitives/hooks';
 import { useSubscription } from 'observable-hooks';
 
 import { Input } from '@wcpos/components/input';
@@ -17,25 +17,8 @@ interface Props extends InputProps {
  */
 export function QuerySearchInput({ query, ref, ...props }: Props) {
 	const [search, setSearch] = React.useState('');
-
-	/**
-	 * If barcode detection is enabled, we need to augment the ref to include a setSearch method.
-	 */
-	const augmentedRef = useAugmentedRef({
-		ref: ref ?? null,
-		methods: {
-			setSearch: (search: string) => setSearch(search),
-			onSearch: (search: string) => onSearch(search),
-		},
-		deps: [],
-	});
-
-	/**
-	 * Hack: I need to clear the search field when the collection is reset
-	 */
-	useSubscription(query.cancel$, () => {
-		setSearch('');
-	});
+	const localRef = React.useRef(null);
+	const composedRef = useComposedRefs(ref, localRef);
 
 	/**
 	 *
@@ -49,7 +32,24 @@ export function QuerySearchInput({ query, ref, ...props }: Props) {
 	);
 
 	/**
+	 * If barcode detection is enabled, we need to augment the ref to include a setSearch method.
+	 */
+	React.useImperativeHandle(ref, () =>
+		Object.assign(localRef.current ?? {}, {
+			setSearch: (search: string) => setSearch(search),
+			onSearch: (search: string) => onSearch(search),
+		})
+	);
+
+	/**
+	 * Hack: I need to clear the search field when the collection is reset
+	 */
+	useSubscription(query.cancel$, () => {
+		setSearch('');
+	});
+
+	/**
 	 *
 	 */
-	return <Input ref={augmentedRef} value={search} onChangeText={onSearch} clearable {...props} />;
+	return <Input ref={composedRef} value={search} onChangeText={onSearch} clearable {...props} />;
 }

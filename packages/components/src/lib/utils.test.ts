@@ -2,7 +2,7 @@
 import { cn, getFlexAlign, getTailwindJustifyClass } from './utils';
 
 jest.mock('@rn-primitives/hooks', () => ({
-	useAugmentedRef: jest.fn(),
+	useComposedRefs: jest.fn(),
 	useControllableState: jest.fn(),
 }));
 

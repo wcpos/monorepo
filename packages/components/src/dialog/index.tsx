@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Platform, ScrollView, ScrollViewProps, StyleSheet, View, ViewProps } from 'react-native';
 
 import * as DialogPrimitive from '@rn-primitives/dialog';
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -65,7 +65,7 @@ function DialogOverlayNative({ className, children, ...props }: DialogPrimitive.
 function DialogClose({ asChild, ...props }: DialogPrimitive.CloseProps) {
 	return (
 		<DialogPrimitive.Close asChild>
-			{asChild ? <Slot.Pressable {...props} /> : <Button variant="outline" {...props} />}
+			{asChild ? <Slot {...props} /> : <Button variant="outline" {...props} />}
 		</DialogPrimitive.Close>
 	);
 }
@@ -169,7 +169,7 @@ function DialogDescription({ className, ...props }: DialogPrimitive.DescriptionP
  * DialogTitle with proper text color for all themes
  */
 function DialogTitle({ className, asChild, ...props }: SlottableTextProps) {
-	const Component = asChild ? Slot.Text : Text;
+	const Component = asChild ? Slot : Text;
 
 	return (
 		<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
@@ -196,7 +196,7 @@ function DialogBody({ className, ...props }: ScrollViewProps) {
  */
 function DialogAction({ asChild, disabled, ...props }: SlottablePressableProps) {
 	return asChild ? (
-		<Slot.Pressable
+		<Slot
 			aria-disabled={disabled ?? undefined}
 			role="button"
 			disabled={disabled ?? undefined}

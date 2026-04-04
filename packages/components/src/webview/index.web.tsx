@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 
-import { useAugmentedRef } from '@rn-primitives/hooks';
+import { useComposedRefs } from '@rn-primitives/hooks';
 import { WebViewProps as RNWebViewProps } from 'react-native-webview';
 
 import { cn } from '../lib/utils';
@@ -29,17 +29,16 @@ function WebView({
 }: WebViewProps) {
 	const [loading, setLoading] = React.useState(true);
 
-	/**
-	 * Add a postMessage function to the ref
-	 */
-	const augmentedRef = useAugmentedRef<HTMLIFrameElement>({
-		ref,
-		methods: {
-			postMessage(message) {
-				augmentedRef.current?.contentWindow?.postMessage(message, '*');
+	const localRef = React.useRef<HTMLIFrameElement>(null);
+	const composedRef = useComposedRefs(ref, localRef);
+
+	React.useImperativeHandle(ref, () =>
+		Object.assign(localRef.current ?? ({} as HTMLIFrameElement), {
+			postMessage(message: any) {
+				localRef.current?.contentWindow?.postMessage(message, '*');
 			},
-		},
-	});
+		})
+	);
 
 	/**
 	 * Attach message listener
@@ -88,7 +87,7 @@ function WebView({
 	return (
 		<View className={cn('relative', className)}>
 			<iframe
-				ref={augmentedRef}
+				ref={composedRef}
 				src={(source && 'uri' in source ? source.uri : undefined) || src}
 				srcDoc={srcDoc}
 				onLoad={handleLoaded}

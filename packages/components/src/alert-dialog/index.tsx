@@ -3,7 +3,7 @@ import type { GestureResponderEvent, ViewProps } from 'react-native';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Button, type ButtonProps } from '../button';
@@ -93,7 +93,7 @@ function AlertDialogFooter({ className, ...props }: ViewProps) {
 }
 
 function AlertDialogTitle({ className, asChild, ...props }: AlertDialogPrimitive.TitleProps) {
-	const Component = asChild ? Slot.Text : Text;
+	const Component = asChild ? Slot : Text;
 
 	return (
 		<TextClassContext.Provider value="text-lg text-foreground font-semibold leading-none">
@@ -109,7 +109,7 @@ function AlertDialogDescription({
 	asChild,
 	...props
 }: AlertDialogPrimitive.DescriptionProps) {
-	const Component = asChild ? Slot.Text : Text;
+	const Component = asChild ? Slot : Text;
 
 	return (
 		<TextClassContext.Provider value="text-base text-foreground leading-5">
@@ -126,7 +126,7 @@ function AlertDialogAction({
 	...props
 }: AlertDialogPrimitive.ActionProps & Partial<ButtonProps>) {
 	return asChild ? (
-		<Slot.Pressable
+		<Slot
 			aria-disabled={disabled ?? undefined}
 			role="button"
 			disabled={disabled ?? undefined}
@@ -148,7 +148,7 @@ function AlertDialogCancel({ asChild, disabled, ...props }: AlertDialogPrimitive
 	}
 
 	return asChild ? (
-		<Slot.Pressable
+		<Slot
 			onPress={onPress}
 			aria-disabled={disabled ?? undefined}
 			role="button"

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { type GestureResponderEvent, Pressable, View } from 'react-native';
 
 import { useControllableState } from '@rn-primitives/hooks';
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 
 import type { CollapsibleContentProps, CollapsibleRootProps, RootContext } from './types';
 import type { SlottablePressableProps, SlottableViewProps, ViewRef } from '@rn-primitives/types';
@@ -25,7 +25,7 @@ function Root({
 		onChange: onOpenChangeProp,
 	});
 
-	const Component = asChild ? Slot.View : View;
+	const Component = asChild ? Slot : View;
 	return (
 		<CollapsibleContext.Provider
 			value={{
@@ -64,7 +64,7 @@ function Trigger({
 		onPressProp?.(ev);
 	}
 
-	const Component = asChild ? Slot.Pressable : Pressable;
+	const Component = asChild ? Slot : Pressable;
 	return (
 		<Component
 			nativeID={nativeID}
@@ -95,7 +95,7 @@ function Content({
 		}
 	}
 
-	const Component = asChild ? Slot.View : View;
+	const Component = asChild ? Slot : View;
 	return (
 		<Component
 			ref={ref}

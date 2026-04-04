@@ -2,8 +2,8 @@ import * as React from 'react';
 import { type GestureResponderEvent, Pressable, View } from 'react-native';
 
 import * as Collapsible from '@radix-ui/react-collapsible';
-import { useAugmentedRef, useControllableState } from '@rn-primitives/hooks';
-import * as Slot from '@rn-primitives/slot';
+import { useComposedRefs, useControllableState } from '@rn-primitives/hooks';
+import { Slot } from '@rn-primitives/slot';
 
 import type {
 	PressableRef,
@@ -41,26 +41,23 @@ function Root({
 		defaultProp: defaultOpen,
 		onChange: onOpenChangeProp,
 	});
-	const augmentedRef = useAugmentedRef<ViewRef>({ ref: ref ?? null });
+	const localRef = React.useRef<ViewRef>(null);
+	const composedRef = useComposedRefs(ref, localRef);
 
 	React.useLayoutEffect(() => {
-		if (augmentedRef.current) {
-			setDataset(
-				augmentedRef.current as unknown as HTMLDivElement,
-				'state',
-				open ? 'open' : 'closed'
-			);
+		if (localRef.current) {
+			setDataset(localRef.current as unknown as HTMLDivElement, 'state', open ? 'open' : 'closed');
 		}
-	}, [open, augmentedRef]);
+	}, [open]);
 
 	React.useLayoutEffect(() => {
-		if (augmentedRef.current) {
-			const el = augmentedRef.current as unknown as HTMLDivElement;
+		if (localRef.current) {
+			const el = localRef.current as unknown as HTMLDivElement;
 			setDataset(el, 'disabled', disabled ? 'true' : undefined);
 		}
-	}, [disabled, augmentedRef]);
+	}, [disabled]);
 
-	const Component = asChild ? Slot.View : View;
+	const Component = asChild ? Slot : View;
 	return (
 		<CollapsibleContext.Provider
 			value={{
@@ -75,7 +72,7 @@ function Root({
 				onOpenChange={onOpenChange}
 				disabled={disabled}
 			>
-				<Component ref={ref ?? null} {...viewProps} />
+				<Component ref={composedRef} {...viewProps} />
 			</Collapsible.Root>
 		</CollapsibleContext.Provider>
 	);
@@ -99,41 +96,36 @@ function Trigger({
 	...props
 }: SlottablePressableProps & { ref?: React.Ref<PressableRef> }) {
 	const { disabled, open, onOpenChange } = useCollapsibleContext();
-	const augmentedRef = useAugmentedRef<PressableRef>({ ref: ref ?? null });
+	const localRef = React.useRef<PressableRef>(null);
+	const composedRef = useComposedRefs(ref, localRef);
 
 	React.useLayoutEffect(() => {
-		if (augmentedRef.current) {
+		if (localRef.current) {
 			setDataset(
-				augmentedRef.current as unknown as HTMLButtonElement,
+				localRef.current as unknown as HTMLButtonElement,
 				'state',
 				open ? 'open' : 'closed'
 			);
 		}
-	}, [open, augmentedRef]);
+	}, [open]);
 
 	React.useLayoutEffect(() => {
-		if (augmentedRef.current) {
-			const el = augmentedRef.current as unknown as HTMLButtonElement;
+		if (localRef.current) {
+			const el = localRef.current as unknown as HTMLButtonElement;
 			setElementType(el, 'button');
 			setDataset(el, 'disabled', disabled ? 'true' : undefined);
 		}
-	}, [disabled, augmentedRef]);
+	}, [disabled]);
 
 	function onPress(ev: GestureResponderEvent) {
 		onPressProp?.(ev);
 		onOpenChange(!open);
 	}
 
-	const Component = asChild ? Slot.Pressable : Pressable;
+	const Component = asChild ? Slot : Pressable;
 	return (
 		<Collapsible.Trigger disabled={disabled} asChild>
-			<Component
-				ref={augmentedRef}
-				role="button"
-				onPress={onPress}
-				disabled={disabled}
-				{...props}
-			/>
+			<Component ref={composedRef} role="button" onPress={onPress} disabled={disabled} {...props} />
 		</Collapsible.Trigger>
 	);
 }
@@ -144,23 +136,20 @@ function Content({
 	forceMount,
 	...props
 }: SlottableViewProps & CollapsibleContentProps & { ref?: React.Ref<ViewRef> }) {
-	const augmentedRef = useAugmentedRef<ViewRef>({ ref: ref ?? null });
+	const localRef = React.useRef<ViewRef>(null);
+	const composedRef = useComposedRefs(ref, localRef);
 	const { open } = useCollapsibleContext();
 
 	React.useLayoutEffect(() => {
-		if (augmentedRef.current) {
-			setDataset(
-				augmentedRef.current as unknown as HTMLDivElement,
-				'state',
-				open ? 'open' : 'closed'
-			);
+		if (localRef.current) {
+			setDataset(localRef.current as unknown as HTMLDivElement, 'state', open ? 'open' : 'closed');
 		}
-	}, [open, augmentedRef]);
+	}, [open]);
 
-	const Component = asChild ? Slot.View : View;
+	const Component = asChild ? Slot : View;
 	return (
 		<Collapsible.Content forceMount={forceMount} asChild>
-			<Component ref={augmentedRef} {...props} />
+			<Component ref={composedRef} {...props} />
 		</Collapsible.Content>
 	);
 }

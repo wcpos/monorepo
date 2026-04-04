@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 import * as TablePrimitive from '@rn-primitives/table';
 import { useCSSVariable } from 'uniwind';
 
@@ -66,7 +66,7 @@ function TableRow({
 	index = 0,
 	...props
 }: SlottableViewProps & { index?: number }) {
-	const Component = asChild ? Slot.View : View;
+	const Component = asChild ? Slot : View;
 	// Use theme-aware colors for alternating rows
 	const [tableRowColor, tableRowAltColor] = useCSSVariable([
 		'--color-table-row',

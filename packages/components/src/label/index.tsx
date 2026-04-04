@@ -3,7 +3,7 @@ import { Pressable } from 'react-native';
 import type { ViewStyle } from 'react-native';
 
 import * as LabelPrimitive from '@rn-primitives/label';
-import * as Slot from '@rn-primitives/slot';
+import { Slot } from '@rn-primitives/slot';
 
 import { cn } from '../lib/utils';
 
@@ -22,7 +22,7 @@ function Root({
 	asChild,
 	...props
 }: Omit<SlottablePressableProps, 'children' | 'hitSlop' | 'style'> & LabelRootProps) {
-	const Component = asChild ? Slot.Pressable : Pressable;
+	const Component = asChild ? Slot : Pressable;
 	return <Component {...props} />;
 }
 
