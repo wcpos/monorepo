@@ -36,6 +36,33 @@ export function getStoreVariant(testInfo: TestInfo): StoreVariant {
 }
 
 /**
+ * Determine whether the app has left the /connect flow and reached POS.
+ *
+ * We cannot rely on a single selector (`search-products`) because layout/state
+ * can vary between environments and hydration timing. Route transition away from
+ * /connect is the most stable signal, with UI markers as a fallback.
+ */
+async function hasReachedPos(page: Page, timeout = 0): Promise<boolean> {
+	const onPosRoute = await page
+		.waitForURL((url) => !url.pathname.startsWith('/connect'), { timeout })
+		.then(() => true)
+		.catch(() => false);
+
+	if (onPosRoute) return true;
+
+	const posMarkers = [
+		page.getByTestId('search-products').first(),
+		page.getByTestId('data-table-count').first(),
+	];
+	for (const marker of posMarkers) {
+		const visible = await marker.isVisible({ timeout: 500 }).catch(() => false);
+		if (visible) return true;
+	}
+
+	return false;
+}
+
+/**
  * Authenticate the current page with the test store via OAuth.
  *
  * expo-auth-session opens a popup for OAuth and uses postMessage to
@@ -201,15 +228,14 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 
 	// Click the wp-user-button pill to trigger login(), but tolerate cases where
 	// the app has already transitioned to POS before the button can be clicked.
-	const searchProducts = page.getByTestId('search-products');
-	let loginSuccess = await searchProducts.isVisible({ timeout: 3_000 }).catch(() => false);
+	let loginSuccess = await hasReachedPos(page, 3_000);
 	if (loginSuccess) {
 		console.log('[auth] POS already visible after auth callback, skipping wp-user-button click.');
 	}
 
 	const userButton = page.getByTestId('wp-user-button').first();
 	for (let attempt = 1; attempt <= 5 && !loginSuccess; attempt++) {
-		const reachedPosBeforeClick = await searchProducts.isVisible({ timeout: 1_000 }).catch(() => false);
+		const reachedPosBeforeClick = await hasReachedPos(page, 1_000);
 		if (reachedPosBeforeClick) {
 			console.log('[auth] POS became visible before click, continuing...');
 			loginSuccess = true;
@@ -219,7 +245,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		const userButtonVisible = await userButton.isVisible({ timeout: 5_000 }).catch(() => false);
 		if (!userButtonVisible) {
 			console.log(`[auth] wp-user-button not visible (attempt ${attempt}), waiting for POS...`);
-			const reachedPosWithoutClick = await searchProducts.isVisible({ timeout: 5_000 }).catch(() => false);
+			const reachedPosWithoutClick = await hasReachedPos(page, 5_000);
 			if (reachedPosWithoutClick) {
 				loginSuccess = true;
 				break;
@@ -249,7 +275,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		}
 
 		// Single-store users login immediately from the button press.
-		const reachedPosDirectly = await searchProducts.isVisible({ timeout: 2_000 }).catch(() => false);
+		const reachedPosDirectly = await hasReachedPos(page, 10_000);
 		if (reachedPosDirectly) {
 			loginSuccess = true;
 			break;
@@ -257,14 +283,14 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 
 		// Multi-store users get a picker first; selecting an option triggers login().
 		const firstStoreOption = page.locator('[role="listbox"] [role="option"]').first();
-		const storePickerOpened = await firstStoreOption.isVisible({ timeout: 2_000 }).catch(() => false);
+		const storePickerOpened = await firstStoreOption
+			.isVisible({ timeout: 2_000 })
+			.catch(() => false);
 		if (storePickerOpened) {
 			console.log('[auth] Store picker opened, selecting first store option...');
 			await firstStoreOption.click();
 
-			const reachedPosAfterStoreSelect = await searchProducts
-				.isVisible({ timeout: 10_000 })
-				.catch(() => false);
+			const reachedPosAfterStoreSelect = await hasReachedPos(page, 10_000);
 			if (reachedPosAfterStoreSelect) {
 				loginSuccess = true;
 				break;

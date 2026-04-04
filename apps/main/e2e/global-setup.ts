@@ -14,6 +14,19 @@ const FREE_STORE_URL =
 	process.env.E2E_STORE_URL_FREE || process.env.E2E_STORE_URL || 'https://dev-free.wcpos.com';
 const PRO_STORE_URL =
 	process.env.E2E_STORE_URL_PRO || process.env.E2E_STORE_URL || 'https://dev-pro.wcpos.com';
+const STUB_UPLOADS_IN_CROSS_ORIGIN_E2E = process.env.E2E_STUB_UPLOADS !== 'false';
+const TRANSPARENT_PNG_BASE64 =
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sM7nDUAAAAASUVORK5CYII=';
+
+function shouldStubCrossOriginUploads(storeUrl: string, baseURL: string): boolean {
+	try {
+		const storeOrigin = new URL(storeUrl).origin;
+		const appOrigin = new URL(baseURL).origin;
+		return STUB_UPLOADS_IN_CROSS_ORIGIN_E2E && storeOrigin !== appOrigin;
+	} catch {
+		return false;
+	}
+}
 
 /**
  * Export localStorage from the page.
@@ -63,6 +76,27 @@ async function setupVariant(
 		baseURL,
 		viewport: { width: 1280, height: 720 },
 	});
+
+	// In CI preview deployments, app origin differs from dev-* store origins.
+	// Product-image attachment fetches then fail CORS and spam errors. For auth
+	// bootstrap, those uploads are non-critical, so fulfill them with a tiny
+	// image payload to keep bootstrap deterministic across environments.
+	if (shouldStubCrossOriginUploads(storeUrl, baseURL)) {
+		console.log(
+			`[global-setup] Installing uploads stub for cross-origin auth bootstrap (${new URL(storeUrl).origin} -> ${new URL(baseURL).origin})`
+		);
+		await context.route('**/wp-content/uploads/**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'image/png',
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Cache-Control': 'public, max-age=60',
+				},
+				body: Buffer.from(TRANSPARENT_PNG_BASE64, 'base64'),
+			});
+		});
+	}
 	const authPage = await context.newPage();
 
 	// Capture console output for debugging
