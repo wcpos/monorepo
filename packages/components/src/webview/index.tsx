@@ -1,11 +1,14 @@
 import * as React from 'react';
 
-import { useComposedRefs } from '@rn-primitives/hooks';
 import isString from 'lodash/isString';
 import { WebView as RNWebView, WebViewProps as RNWebViewProps } from 'react-native-webview';
 
+export type WebViewHandle = Omit<RNWebView, 'postMessage'> & {
+	postMessage(message: any): void;
+};
+
 export interface WebViewProps extends RNWebViewProps {
-	ref: React.RefObject<RNWebView>;
+	ref?: React.Ref<WebViewHandle>;
 	src?: string;
 	srcDoc?: string;
 	onMessage: (event: { nativeEvent: { data: any } }) => void;
@@ -16,7 +19,6 @@ export interface WebViewProps extends RNWebViewProps {
  */
 function WebView({ ref, src, srcDoc, onMessage, ...props }: WebViewProps) {
 	const localRef = React.useRef<RNWebView>(null);
-	const composedRef = useComposedRefs(ref, localRef);
 
 	React.useImperativeHandle(
 		ref,
@@ -39,7 +41,7 @@ function WebView({ ref, src, srcDoc, onMessage, ...props }: WebViewProps) {
 
 	return (
 		<RNWebView
-			ref={composedRef}
+			ref={localRef}
 			source={source}
 			onMessage={(event) => {
 				/**
@@ -79,7 +81,7 @@ export { WebView };
  *
  * ```tsx
  * const MyComponent = () => {
- *   const webViewRef = React.useRef<RNWebView>(null);
+ *   const webViewRef = React.useRef<WebViewHandle>(null);
  *
  *   const handleSendMessage = () => {
  *     // Using the augmented postMessage method

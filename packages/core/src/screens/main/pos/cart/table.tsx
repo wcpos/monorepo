@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView } from 'react-native';
 
 import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import find from 'lodash/find';
@@ -17,6 +17,7 @@ import {
 	TableHeader,
 	TableRow,
 } from '@wcpos/components/table';
+import type { PulseTableRowRef } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 
 import { Actions } from './cells/actions';
@@ -111,7 +112,7 @@ export function CartTable() {
 	const { uiSettings, getUILabel } = useUISettings('pos-cart');
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
-	const rowRefs = React.useRef<Map<string, React.RefObject<View>>>(new Map());
+	const rowRefs = React.useRef<Map<string, PulseTableRowRef | null>>(new Map());
 	const rowLayouts = React.useRef<Map<string, { y: number; height: number }>>(new Map());
 	const scrollViewRef = React.useRef<ScrollView>(null);
 	const { currentOrder } = useCurrentOrder();
@@ -284,7 +285,7 @@ export function CartTable() {
 						return (
 							<PulseTableRow
 								ref={(ref) => {
-									rowRefs.current.set(row.id, ref as unknown as React.RefObject<View>);
+									rowRefs.current.set(row.id, ref);
 								}}
 								key={row.id}
 								index={index}

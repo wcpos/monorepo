@@ -106,6 +106,12 @@ function DataTable<TData>({
 		[patchUI, query]
 	);
 
+	const handleEndReached = React.useCallback(() => {
+		if (query.infiniteScroll) {
+			query.loadMore();
+		}
+	}, [query]);
+
 	const table = useReactTableWrapper({
 		columns,
 		data: deferredResult.hits,
@@ -135,7 +141,7 @@ function DataTable<TData>({
 				{table.getHeaderGroups().map((headerGroup) => (
 					<TableRow key={headerGroup.id}>
 						{headerGroup.headers.map((header) => (
-							<TableHead key={header.id} style={getColumnStyle(header.column.columnDef.meta)}>
+							<TableHead key={header.id} style={getHeaderStyle(header.column.columnDef.meta)}>
 								{renderHeader ? (
 									renderHeader({
 										...header,
@@ -172,11 +178,7 @@ function DataTable<TData>({
 					parentComponent={TableBody as unknown as typeof import('react-native').View}
 					getItemType={getItemType}
 					onEndReachedThreshold={0.1}
-					onEndReached={() => {
-						if (query.infiniteScroll) {
-							query.loadMore();
-						}
-					}}
+					onEndReached={handleEndReached}
 					ListEmptyComponent={() => (
 						<TableRow className="justify-center p-2">
 							<Text testID="no-data-message">
@@ -275,5 +277,24 @@ function getColumnStyle(meta: any): ViewStyle {
 	};
 }
 
-export { DataTable, DataTableHeader, DataTableFooter, defaultRenderItem, getColumnStyle };
+/**
+ * Header cells use DataTableHeader which handles alignment internally via justify-* classes
+ * (horizontal) and items-center (vertical). Excluding alignItems here avoids conflicting
+ * with that layout on Electron/web.
+ */
+function getHeaderStyle(meta: any): ViewStyle {
+	if (meta?.width) {
+		return { flexGrow: 0, flexShrink: 0, flexBasis: meta.width };
+	}
+	return { flexGrow: meta?.flex ?? 1, flexShrink: 0, flexBasis: '0%' };
+}
+
+export {
+	DataTable,
+	DataTableHeader,
+	DataTableFooter,
+	defaultRenderItem,
+	getColumnStyle,
+	getHeaderStyle,
+};
 export type { RenderHeaderProps, SortingChange };

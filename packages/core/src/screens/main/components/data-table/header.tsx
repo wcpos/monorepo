@@ -34,7 +34,7 @@ export function DataTableHeader({
 	if (disableSort) {
 		return (
 			<HStack
-				className={`h-full w-full justify-center ${align === 'right' ? 'items-end' : align === 'center' ? 'items-center' : 'items-start'}`}
+				className={`h-full w-full items-center ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}
 			>
 				<Text className={'text-muted-foreground font-medium'} numberOfLines={1}>
 					{header}
@@ -45,7 +45,7 @@ export function DataTableHeader({
 
 	return (
 		<Pressable
-			className={`h-full w-full justify-center ${align === 'right' ? 'items-end' : align === 'center' ? 'items-center' : 'items-start'}`}
+			className={`h-full w-full items-center ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}
 			onPress={() =>
 				onSortingChange({
 					sortBy: sortField,
