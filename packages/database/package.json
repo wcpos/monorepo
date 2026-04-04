@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "fast-text-encoding": "^1.0.6",
-    "lodash": "^4.17.21",
+    "lodash": "^4.18.1",
     "observable-hooks": "4.2.4",
     "rxdb": "17.0.0",
     "rxdb-old": "npm:rxdb@16.21.1",
