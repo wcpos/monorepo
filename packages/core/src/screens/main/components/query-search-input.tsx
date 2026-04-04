@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { TextInput as RNTextInput } from 'react-native';
 
 import { useComposedRefs } from '@rn-primitives/hooks';
 import { useSubscription } from 'observable-hooks';
@@ -35,7 +36,7 @@ export function QuerySearchInput({ query, ref, ...props }: Props) {
 	 * If barcode detection is enabled, we need to augment the ref to include a setSearch method.
 	 */
 	React.useImperativeHandle(ref, () =>
-		Object.assign(localRef.current ?? {}, {
+		Object.assign(localRef.current ?? ({} as RNTextInput), {
 			setSearch: (search: string) => setSearch(search),
 			onSearch: (search: string) => onSearch(search),
 		})
