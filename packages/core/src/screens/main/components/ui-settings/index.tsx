@@ -35,12 +35,13 @@ const useDialogContext = () => {
 interface Props {
 	title: string;
 	children: React.ReactNode;
+	triggerTestID?: string;
 }
 
 /**
  *
  */
-function UISettingsDialog({ title, children }: Props) {
+function UISettingsDialog({ title, children, triggerTestID }: Props) {
 	const [openDialog, setOpenDialog] = React.useState(false);
 	const t = useT();
 	const buttonPressHandlerRef = React.useRef<(() => void) | null>(null);
@@ -62,7 +63,7 @@ function UISettingsDialog({ title, children }: Props) {
 			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
 				<Tooltip>
 					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
-						<IconButton name="sliders" />
+						<IconButton name="sliders" testID={triggerTestID} />
 					</TooltipTrigger>
 					<TooltipContent>
 						<Text>{title}</Text>
