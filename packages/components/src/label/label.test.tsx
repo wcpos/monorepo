@@ -56,7 +56,7 @@ describe('Label component', () => {
 		const onPress = jest.fn();
 		render(
 			<Label asChild onPress={onPress}>
-				<button>Click me</button>
+				<span>Click me</span>
 			</Label>
 		);
 		fireEvent.click(screen.getByRole('button'));
