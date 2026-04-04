@@ -51,4 +51,15 @@ describe('Label component', () => {
 		fireEvent.click(screen.getByRole('button'));
 		expect(onPress).toHaveBeenCalled();
 	});
+
+	it('handles onPress when asChild is true', () => {
+		const onPress = jest.fn();
+		render(
+			<Label asChild onPress={onPress}>
+				<button>Click me</button>
+			</Label>
+		);
+		fireEvent.click(screen.getByRole('button'));
+		expect(onPress).toHaveBeenCalled();
+	});
 });

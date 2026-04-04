@@ -137,12 +137,17 @@ function AlertDialogAction({
 	);
 }
 
-function AlertDialogCancel({ asChild, disabled, ...props }: AlertDialogPrimitive.CancelProps) {
+function AlertDialogCancel({
+	asChild,
+	disabled,
+	onPress: userOnPress,
+	...props
+}: AlertDialogPrimitive.CancelProps) {
 	const { onOpenChange } = AlertDialogPrimitive.useRootContext();
 
 	function onPress(ev: GestureResponderEvent) {
-		if (props?.onPress) {
-			props.onPress(ev);
+		if (userOnPress) {
+			userOnPress(ev);
 		}
 		onOpenChange(false);
 	}

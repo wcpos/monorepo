@@ -7,7 +7,6 @@ import {
 	ViewStyle,
 } from 'react-native';
 
-import { useComposedRefs } from '@rn-primitives/hooks';
 import toNumber from 'lodash/toNumber';
 
 import { useMergedRef } from '@wcpos/hooks/use-merged-ref';
@@ -94,7 +93,7 @@ function Key({ label, icon, onPress, discount }: NumpadKeyProps) {
 Key.displayName = 'NumpadKey';
 
 interface NumpadProps {
-	ref?: React.Ref<React.ElementRef<typeof Display>>;
+	ref?: React.Ref<{ getValue: () => number } | null>;
 	initialValue?: number;
 	calculator?: boolean;
 	onChangeText?: (value: number) => void;
@@ -131,16 +130,19 @@ function Numpad({
 	const hasDiscounts = discounts && discounts.length > 0;
 
 	const localRef = React.useRef<RNTextInput>(null);
-	const composedRef = useComposedRefs(ref, localRef);
 
 	React.useImperativeHandle(
 		ref,
-		() =>
-			Object.assign(localRef.current ?? ({} as RNTextInput), {
-				getValue: () => currentValue,
-			}),
+		() => ({
+			getValue: () => currentValue,
+		}),
 		[currentValue]
 	);
+
+	const handleSubmitEditing = React.useCallback(() => {
+		onChangeText?.(currentValue);
+		onSubmitEditing?.(String(currentValue));
+	}, [currentValue, onChangeText, onSubmitEditing]);
 
 	/**
 	 *
@@ -202,9 +204,9 @@ function Numpad({
 	return (
 		<VStack style={{ width: hasDiscounts ? '222px' : '146px' } as unknown as ViewStyle}>
 			<Display
-				ref={composedRef}
+				ref={localRef}
 				value={formatDisplay(currentValue)}
-				onSubmitEditing={() => onChangeText?.(currentValue)}
+				onSubmitEditing={handleSubmitEditing}
 				onKeyPress={handleKeyPress}
 				// selection={selection}
 				// onSelectionChange={setSelection}

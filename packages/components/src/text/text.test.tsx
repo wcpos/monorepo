@@ -51,13 +51,13 @@ describe('Text component', () => {
 	});
 
 	it('decodes HTML entities when decodeHtml is true', () => {
-		render(<Text decodeHtml>Tom &amp; Jerry</Text>);
+		render(<Text decodeHtml>{'Tom &amp; Jerry'}</Text>);
 		expect(screen.getByText('Tom & Jerry')).toBeInTheDocument();
 	});
 
 	it('does not decode HTML when decodeHtml is false', () => {
-		render(<Text>Raw text</Text>);
-		expect(screen.getByText('Raw text')).toBeInTheDocument();
+		render(<Text>{'Raw &amp; text'}</Text>);
+		expect(screen.getByText('Raw &amp; text')).toBeInTheDocument();
 	});
 
 	it('renders with asChild using Slot', () => {

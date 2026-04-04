@@ -32,12 +32,15 @@ function WebView({
 	const localRef = React.useRef<HTMLIFrameElement>(null);
 	const composedRef = useComposedRefs(ref, localRef);
 
-	React.useImperativeHandle(ref, () =>
-		Object.assign(localRef.current ?? ({} as HTMLIFrameElement), {
-			postMessage(message: any) {
-				localRef.current?.contentWindow?.postMessage(message, '*');
-			},
-		})
+	React.useImperativeHandle(
+		ref,
+		() =>
+			Object.assign(localRef.current ?? ({} as HTMLIFrameElement), {
+				postMessage(message: any) {
+					localRef.current?.contentWindow?.postMessage(message, '*');
+				},
+			}),
+		[]
 	);
 
 	/**

@@ -18,17 +18,20 @@ function WebView({ ref, src, srcDoc, onMessage, ...props }: WebViewProps) {
 	const localRef = React.useRef<RNWebView>(null);
 	const composedRef = useComposedRefs(ref, localRef);
 
-	React.useImperativeHandle(ref, () =>
-		Object.assign(localRef.current ?? ({} as RNWebView), {
-			postMessage(message: any) {
-				localRef.current?.injectJavaScript(`
-					(function() {
-						window.postMessage(${JSON.stringify(message)}, '*');
-						return true;
-					})();
-				`);
-			},
-		})
+	React.useImperativeHandle(
+		ref,
+		() =>
+			Object.assign(localRef.current ?? ({} as RNWebView), {
+				postMessage(message: any) {
+					localRef.current?.injectJavaScript(`
+						(function() {
+							window.postMessage(${JSON.stringify(message)}, '*');
+							return true;
+						})();
+					`);
+				},
+			}),
+		[]
 	);
 
 	// srcDoc (inline HTML) takes priority over src (URI)

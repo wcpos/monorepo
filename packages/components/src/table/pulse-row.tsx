@@ -62,8 +62,6 @@ function PulseTableRow({
 		};
 	});
 
-	const localRef = React.useRef<Animated.View>(null);
-
 	React.useImperativeHandle(ref, () => ({
 		pulseAdd(callback?: () => void) {
 			(props.table.options.meta as { scrollToRow?: (id: string) => void })?.scrollToRow?.(
@@ -91,11 +89,10 @@ function PulseTableRow({
 				}
 			});
 		},
-	}));
+	}), [backgroundColor, baseColor, successColor, errorColor, props.row.id, props.table]);
 
 	return (
 		<Animated.View
-			ref={localRef}
 			className={cn('web:transition-colors web:data-[state=selected]:bg-muted flex-row', className)}
 			style={animatedStyle}
 			{...props}

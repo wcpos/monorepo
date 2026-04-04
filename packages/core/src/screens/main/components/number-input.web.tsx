@@ -116,7 +116,6 @@ export function NumberInput({
 			<PopoverContent side={placement as 'top' | 'bottom'} className="w-auto p-2">
 				<VStack className="gap-1">
 					<Numpad
-						// @ts-expect-error: ref only needs getValue() but Numpad expects full TextInput ref
 						ref={numpadRef}
 						initialValue={toNumber(value)}
 						onChangeText={handleChange}
