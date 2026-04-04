@@ -35,6 +35,8 @@ function PulseTableRow({
 	className,
 	index = 0,
 	onRemove = () => {},
+	row,
+	table,
 	...viewProps
 }: PulseTableRowProps) {
 	// Get theme-aware colors
@@ -54,7 +56,7 @@ function PulseTableRow({
 	// Update base color when theme colors change (baseColor already derives from index)
 	React.useEffect(() => {
 		backgroundColor.value = baseColor;
-	}, [baseColor]);
+	}, [baseColor, backgroundColor]);
 
 	const animatedStyle = useAnimatedStyle(() => {
 		return {
@@ -62,34 +64,36 @@ function PulseTableRow({
 		};
 	});
 
-	React.useImperativeHandle(ref, () => ({
-		pulseAdd(callback?: () => void) {
-			(table.options.meta as { scrollToRow?: (id: string) => void })?.scrollToRow?.(
-				row.id
-			);
-			cancelAnimation(backgroundColor);
-			// Pulse to success color then back to base
-			backgroundColor.value = withSequence(
-				withTiming(successColor, { duration: 400 }),
-				withTiming(baseColor, { duration: 400 }, (finished) => {
+	React.useImperativeHandle(
+		ref,
+		() => ({
+			pulseAdd(callback?: () => void) {
+				(table.options.meta as { scrollToRow?: (id: string) => void })?.scrollToRow?.(row.id);
+				cancelAnimation(backgroundColor);
+				// Pulse to success color then back to base
+				backgroundColor.value = withSequence(
+					withTiming(successColor, { duration: 400 }),
+					withTiming(baseColor, { duration: 400 }, (finished) => {
+						'worklet';
+						if (finished && callback) {
+							scheduleOnRN(callback);
+						}
+					})
+				);
+			},
+			pulseRemove(callback?: () => void) {
+				cancelAnimation(backgroundColor);
+				// Pulse to error color
+				backgroundColor.value = withTiming(errorColor, { duration: 400 }, (finished) => {
 					'worklet';
 					if (finished && callback) {
 						scheduleOnRN(callback);
 					}
-				})
-			);
-		},
-		pulseRemove(callback?: () => void) {
-			cancelAnimation(backgroundColor);
-			// Pulse to error color
-			backgroundColor.value = withTiming(errorColor, { duration: 400 }, (finished) => {
-				'worklet';
-				if (finished && callback) {
-					scheduleOnRN(callback);
-				}
-			});
-		},
-	}), [backgroundColor, baseColor, successColor, errorColor, row.id, table]);
+				});
+			},
+		}),
+		[backgroundColor, baseColor, successColor, errorColor, row.id, table]
+	);
 
 	return (
 		<Animated.View
