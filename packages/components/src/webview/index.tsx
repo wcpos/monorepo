@@ -81,7 +81,7 @@ export { WebView };
  *
  * ```tsx
  * const MyComponent = () => {
- *   const webViewRef = React.useRef<RNWebView>(null);
+ *   const webViewRef = React.useRef<WebViewHandle>(null);
  *
  *   const handleSendMessage = () => {
  *     // Using the augmented postMessage method
