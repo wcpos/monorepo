@@ -70,54 +70,19 @@ async function blockScriptRequests(route: import('@playwright/test').Route) {
 	await route.fallback();
 }
 
-async function waitForRxdbPersistenceSignal(page: Page, timeoutMs = 30_000): Promise<boolean> {
-	const deadline = Date.now() + timeoutMs;
-	while (Date.now() < deadline) {
-		const persisted = await page
-			.evaluate(async () => {
-				const dbs = await indexedDB.databases();
-				const dbInfo = dbs.find(
-					(db) =>
-						db.name &&
-						(db.name.startsWith('store_v2_') || db.name.startsWith('store_v3_')) &&
-						db.version
-				);
-				if (!dbInfo?.name || !dbInfo.version) return false;
-
-				const db = await new Promise<IDBDatabase>((resolve, reject) => {
-					const req = indexedDB.open(dbInfo.name!, dbInfo.version);
-					req.onsuccess = () => resolve(req.result);
-					req.onerror = () => reject(req.error);
-				});
-
-				try {
-					const stores = Array.from(db.objectStoreNames).filter((name) =>
-						name.endsWith('-documents')
-					);
-					for (const storeName of stores) {
-						const tx = db.transaction(storeName, 'readonly');
-						const count = await new Promise<number>((resolve, reject) => {
-							const req = tx.objectStore(storeName).count();
-							req.onsuccess = () => resolve(req.result);
-							req.onerror = () => reject(req.error);
-						});
-						if (count > 0) return true;
-					}
-
-					return false;
-				} finally {
-					db.close();
-				}
-			})
-			.catch(() => false);
-		if (persisted) {
-			return true;
-		}
-
-		await page.waitForTimeout(500);
-	}
-
-	return false;
+/**
+ * Wait for RxDB to flush pending writes to OPFS after the cashier API response.
+ *
+ * The OPFS worker uses createSyncAccessHandle() internally and flushes
+ * asynchronously. We cannot poll OPFS files from the main thread while the
+ * worker holds exclusive access, so we use a fixed wait instead.
+ *
+ * NOTE: The previous implementation polled IndexedDB for store_v2_* / store_v3_*
+ * databases, but those databases live in OPFS (not IndexedDB) after the v17
+ * storage migration. That approach always timed out (30s wasted per run).
+ */
+async function waitForOPFSPersistence(page: Page): Promise<void> {
+	await page.waitForTimeout(5_000);
 }
 
 /**
@@ -280,14 +245,8 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		console.log('[auth] Cashier API call not detected within timeout, proceeding anyway...');
 	}
 
-	// Poll for auth-readiness instead of a fixed sleep so we continue as soon as
-	// persisted state is usable (or time out with a clear log).
-	const persisted = await waitForRxdbPersistenceSignal(page);
-	console.log(
-		persisted
-			? '[auth] RxDB persistence signal detected, continuing.'
-			: '[auth] RxDB persistence signal not detected before timeout, proceeding anyway.'
-	);
+	// Give RxDB time to flush pending writes to OPFS after the cashier API response.
+	await waitForOPFSPersistence(page);
 	console.log(`[auth] Page URL after auth: ${page.url()}`);
 
 	// Click the wp-user-button pill to trigger login(), but tolerate cases where
