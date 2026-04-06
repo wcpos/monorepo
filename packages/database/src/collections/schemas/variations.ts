@@ -1,6 +1,6 @@
 export const variationsLiteral = {
 	title: 'WooCommerce Product Variation schema',
-	version: 5,
+	version: 6,
 	description: 'WooCommerce Product Variation schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -35,7 +35,6 @@ export const variationsLiteral = {
 		},
 		permalink: {
 			type: 'string',
-			format: 'uri',
 		},
 		sku: {
 			type: 'string',
@@ -219,7 +218,6 @@ export const variationsLiteral = {
 				},
 				src: {
 					type: 'string',
-					format: 'uri',
 				},
 				name: {
 					type: 'string',

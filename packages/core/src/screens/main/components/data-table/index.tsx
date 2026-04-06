@@ -158,7 +158,6 @@ function DataTable<TData>({
 										sortBy={sortBy}
 										sortDirection={sortDirection}
 										onSortingChange={handleSortingChange}
-										align={header.column.columnDef.meta?.align}
 									/>
 								)}
 							</TableHead>
@@ -277,16 +276,21 @@ function getColumnStyle(meta: any): ViewStyle {
 	};
 }
 
-/**
- * Header cells use DataTableHeader which handles alignment internally via justify-* classes
- * (horizontal) and items-center (vertical). Excluding alignItems here avoids conflicting
- * with that layout on Electron/web.
- */
 function getHeaderStyle(meta: any): ViewStyle {
 	if (meta?.width) {
-		return { flexGrow: 0, flexShrink: 0, flexBasis: meta.width };
+		return {
+			flexGrow: 0,
+			flexShrink: 0,
+			flexBasis: meta.width,
+			alignItems: getFlexAlign(meta.align || 'left'),
+		};
 	}
-	return { flexGrow: meta?.flex ?? 1, flexShrink: 0, flexBasis: '0%' };
+	return {
+		flexGrow: meta?.flex ?? 1,
+		flexShrink: 0,
+		flexBasis: '0%',
+		alignItems: getFlexAlign(meta?.align || 'left'),
+	};
 }
 
 export {

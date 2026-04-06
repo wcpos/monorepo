@@ -1,6 +1,6 @@
 export const productsLiteral = {
 	title: 'WooCommerce Product schema',
-	version: 4,
+	version: 5,
 	description: 'WooCommerce Product schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -26,7 +26,6 @@ export const productsLiteral = {
 		},
 		permalink: {
 			type: 'string',
-			format: 'uri',
 		},
 		date_created: {
 			type: 'string',
@@ -356,7 +355,6 @@ export const productsLiteral = {
 					},
 					src: {
 						type: 'string',
-						format: 'uri',
 					},
 					name: {
 						type: 'string',
