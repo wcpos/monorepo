@@ -214,7 +214,7 @@ describe('Query', () => {
 			query.rxQuery$.subscribe(spy);
 			expect(spy).toHaveBeenCalledWith(
 				expect.objectContaining({
-					mangoQuery: { selector: { stock_status: 'instock' }, sort: [{ name: 'asc' }] },
+					mangoQuery: { selector: { stock_status: { $eq: 'instock' } }, sort: [{ name: 'asc' }] },
 				})
 			);
 
@@ -278,7 +278,10 @@ describe('Query', () => {
 			query.rxQuery$.subscribe(spy);
 			expect(spy).toHaveBeenCalledWith(
 				expect.objectContaining({
-					mangoQuery: { selector: { stock_status: 'outofstock' }, sort: [{ name: 'asc' }] },
+					mangoQuery: {
+						selector: { stock_status: { $eq: 'outofstock' } },
+						sort: [{ name: 'asc' }],
+					},
 				})
 			);
 
