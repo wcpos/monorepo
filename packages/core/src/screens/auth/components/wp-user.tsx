@@ -68,9 +68,27 @@ export function WpUser({ site, wpUser }: Props) {
 		if (processedResponseRef.current === responseKey) return;
 
 		if (response.type === 'success') {
+			if (!response.params) {
+				authLogger.error('Re-authentication succeeded without credentials', {
+					showToast: true,
+					context: { siteName: site.name, response },
+				});
+				return;
+			}
+
 			processedResponseRef.current = responseKey;
-			requestStateManager.setAuthFailed(false);
-			handleLoginSuccess({ params: response.params } as any);
+			void (async () => {
+				try {
+					await handleLoginSuccess({ params: response.params } as any);
+					requestStateManager.setAuthFailed(false);
+				} catch (error) {
+					processedResponseRef.current = null;
+					authLogger.error('Failed to finish re-authentication', {
+						showToast: true,
+						context: { siteName: site.name, error },
+					});
+				}
+			})();
 		} else if (response.type === 'error') {
 			authLogger.error(`Re-authentication failed: ${response.error}`, {
 				showToast: true,
