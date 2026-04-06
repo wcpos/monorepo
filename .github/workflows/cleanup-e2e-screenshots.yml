@@ -18,8 +18,8 @@ jobs:
 
           # Find and delete all e2e-screenshots releases for this PR
           gh release list --repo "${{ github.repository }}" --limit 100 \
+            --json tagName -q '.[].tagName' \
             | grep "e2e-screenshots-pr${PR_NUMBER}-" \
-            | awk '{print $1}' \
             | while read -r TAG; do
                 echo "Deleting release: $TAG"
                 gh release delete "$TAG" --repo "${{ github.repository }}" --yes --cleanup-tag
