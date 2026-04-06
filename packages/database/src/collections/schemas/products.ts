@@ -1,6 +1,6 @@
 export const productsLiteral = {
 	title: 'WooCommerce Product schema',
-	version: 4,
+	version: 5,
 	description: 'WooCommerce Product schema',
 	type: 'object',
 	primaryKey: 'uuid',

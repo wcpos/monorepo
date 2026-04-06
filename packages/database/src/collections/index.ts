@@ -176,6 +176,10 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 		4(oldDoc) {
 			return oldDoc;
 		},
+		// v5: Removed format: 'uri' from image.src and permalink (RxDB v17 strict validation)
+		5(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
@@ -229,6 +233,10 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 		5(oldDoc) {
 			return oldDoc;
 		},
+		// v6: Removed format: 'uri' from image.src and permalink (RxDB v17 strict validation)
+		6(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
@@ -251,6 +259,10 @@ const categories: RxCollectionCreator<ProductCategoryDocumentType> = {
 			return oldDoc;
 		},
 		2(oldDoc) {
+			return oldDoc;
+		},
+		// v3: Removed format: 'uri' from image.src (RxDB v17 strict validation)
+		3(oldDoc) {
 			return oldDoc;
 		},
 	},
@@ -286,6 +298,12 @@ const brands: RxCollectionCreator<ProductBrandDocumentType> = {
 	schema: productBrandSchema,
 	options: {
 		searchFields: ['name'],
+	},
+	migrationStrategies: {
+		// v1: Removed format: 'uri' from image.src (RxDB v17 strict validation)
+		1(oldDoc) {
+			return oldDoc;
+		},
 	},
 };
 
