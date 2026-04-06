@@ -1,0 +1,26 @@
+name: Cleanup E2E Screenshots
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 🗑️ Delete E2E screenshot releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+
+          # Find and delete all e2e-screenshots releases for this PR
+          gh release list --repo "${{ github.repository }}" --limit 100 \
+            | grep "e2e-screenshots-pr${PR_NUMBER}-" \
+            | awk '{print $1}' \
+            | while read -r TAG; do
+                echo "Deleting release: $TAG"
+                gh release delete "$TAG" --repo "${{ github.repository }}" --yes --cleanup-tag
+              done
