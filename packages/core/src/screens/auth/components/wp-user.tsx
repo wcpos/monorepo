@@ -21,12 +21,15 @@ import {
 	SelectItem,
 	SelectPrimitiveTrigger,
 } from '@wcpos/components/select';
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
 import { useUserValidation } from '../../../hooks/use-user-validation';
+import { useLoginHandler } from '../hooks/use-login-handler';
 
 const authLogger = getLogger(['wcpos', 'auth', 'user']);
 
@@ -51,6 +54,31 @@ export function WpUser({ site, wpUser }: Props) {
 	);
 	const t = useT();
 	const { isValid, isLoading } = useUserValidation({ site, wpUser });
+	const { handleLoginSuccess } = useLoginHandler(site);
+	const processedResponseRef = React.useRef<string | null>(null);
+	const { response, promptAsync } = useWcposAuth({
+		site: { wcpos_login_url: site.wcpos_login_url ?? '', name: site.name ?? '' },
+	});
+
+	// Process OAuth response after re-authentication
+	React.useEffect(() => {
+		if (!response) return;
+
+		const responseKey = response.params?.access_token || response.error || response.type;
+		if (processedResponseRef.current === responseKey) return;
+
+		if (response.type === 'success') {
+			processedResponseRef.current = responseKey;
+			requestStateManager.setAuthFailed(false);
+			handleLoginSuccess({ params: response.params } as any);
+		} else if (response.type === 'error') {
+			authLogger.error(`Re-authentication failed: ${response.error}`, {
+				showToast: true,
+				context: { siteName: site.name, response },
+			});
+			processedResponseRef.current = responseKey;
+		}
+	}, [response, handleLoginSuccess, site.name]);
 
 	/**
 	 *
@@ -96,9 +124,21 @@ export function WpUser({ site, wpUser }: Props) {
 	/**
 	 *
 	 */
+	const buttonLabel = wpUser.display_name ? wpUser.display_name : 'No name?';
+
 	return (
 		<View>
-			{Array.isArray(stores) && stores.length > 1 ? (
+			{!isValid && !isLoading ? (
+				<ButtonPill
+					size="xs"
+					onPress={() => promptAsync()}
+					removable
+					onRemove={() => setDeleteDialogOpened(true)}
+					testID="wp-user-button"
+				>
+					<ButtonText>{buttonLabel}</ButtonText>
+				</ButtonPill>
+			) : Array.isArray(stores) && stores.length > 1 ? (
 				<Select
 					onValueChange={(option) => option && handleLogin(option.value)}
 					disabled={!isValid || isLoading}
@@ -111,7 +151,7 @@ export function WpUser({ site, wpUser }: Props) {
 							disabled={isLoading}
 							testID="wp-user-button"
 						>
-							<ButtonText>{wpUser.display_name ? wpUser.display_name : 'No name?'}</ButtonText>
+							<ButtonText>{buttonLabel}</ButtonText>
 						</ButtonPill>
 					</SelectPrimitiveTrigger>
 					<SelectContent>
@@ -136,7 +176,7 @@ export function WpUser({ site, wpUser }: Props) {
 					disabled={isLoading}
 					testID="wp-user-button"
 				>
-					<ButtonText>{wpUser.display_name ? wpUser.display_name : 'No name?'}</ButtonText>
+					<ButtonText>{buttonLabel}</ButtonText>
 				</ButtonPill>
 			)}
 

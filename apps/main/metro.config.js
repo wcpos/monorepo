@@ -9,25 +9,34 @@ const { withUniwindConfig } = require('uniwind/metro');
 
 let config = getDefaultConfig(__dirname);
 
-// rxdb-premium/plugins/shared has both CJS and ESM builds. Metro resolves the package
-// export to CJS (via the "require" condition), but the storage modules use relative ESM
-// imports (../../plugins/shared/version-check.js). This creates two separate module
-// instances with independent `o` flags, so calling disableVersionCheck() on the CJS
-// copy doesn't disable the check in the ESM copy that the storage code actually runs.
+// rxdb and rxdb-premium ship both CJS and ESM builds. Metro resolves bare-specifier
+// imports (e.g. `rxdb/plugins/utils`, `rxdb-premium/plugins/shared`) via the "require"
+// export condition → CJS, while internal relative imports within the ESM builds stay ESM.
+// This creates two separate module instances with independent state:
 //
-// Fix: redirect the package export to the ESM build so both import paths resolve to the
-// same module instance and disableVersionCheck() works correctly.
+// 1. `disableVersionCheck()` / `setPremiumFlag()` called via CJS don't affect the ESM
+//    copies that storage and collection code actually use.
+// 2. `RXDB_UTILS_GLOBAL` (a plain module-scoped object) is duplicated, so
+//    setPremiumFlag() sets it on one copy while hasPremiumFlag() checks the other.
+//
+// Fix: redirect both package exports to their ESM builds so all import paths resolve to
+// the same module instances.
 const rxdbPremiumESMShared = path.join(
 	path.dirname(require.resolve('rxdb-premium/package.json')),
 	'dist/esm/plugins/shared/index.js'
 );
+const rxdbESMUtils = path.join(
+	path.dirname(require.resolve('rxdb/package.json')),
+	'dist/esm/plugins/utils/index.js'
+);
 
-// Redirect rxdb-premium/plugins/shared to ESM so disableVersionCheck() and storage
-// modules share one module instance (fixes SNH version mismatch in Metro bundles).
 const _baseResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
 	if (moduleName === 'rxdb-premium/plugins/shared') {
 		return { type: 'sourceFile', filePath: rxdbPremiumESMShared };
+	}
+	if (moduleName === 'rxdb/plugins/utils') {
+		return { type: 'sourceFile', filePath: rxdbESMUtils };
 	}
 	if (_baseResolveRequest) {
 		return _baseResolveRequest(context, moduleName, platform);

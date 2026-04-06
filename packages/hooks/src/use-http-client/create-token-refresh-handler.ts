@@ -315,14 +315,44 @@ export const createTokenRefreshHandler = ({
 					},
 				});
 
-				return await retryWithNewToken(
-					originalConfig,
-					freshToken,
-					site.use_jwt_as_param,
-					retryRequest
-				);
+				try {
+					return await retryWithNewToken(
+						originalConfig,
+						freshToken,
+						site.use_jwt_as_param,
+						retryRequest
+					);
+				} catch (retryError: any) {
+					// If the retry STILL fails with 401/403 after a successful token refresh,
+					// the issue isn't an expired token. Mark auth as failed to prevent
+					// infinite refresh loops (each refresh saves a new access_token which
+					// triggers re-validation via observable, which hits 403 again, etc.)
+					const retryStatus = retryError?.response?.status;
+					if (retryStatus === 401 || retryStatus === 403) {
+						tokenLogger.warn(
+							'Request still unauthorized after token refresh - please log in again',
+							{
+								showToast: true,
+								saveToDb: true,
+								context: {
+									errorCode: ERROR_CODES.REFRESH_TOKEN_INVALID,
+									userId: wpUser.id,
+									siteUrl: site.url,
+									originalUrl: originalConfig.url,
+									retryStatus,
+								},
+							}
+						);
+
+						requestStateManager.setAuthFailed(true);
+						(error as any).isRefreshTokenInvalid = true;
+						(error as any).refreshTokenInvalid = true;
+						throw error;
+					}
+					throw retryError;
+				}
 			} catch (refreshError) {
-				// Error was already processed in handleRefreshError
+				// Error was already processed in handleRefreshError or retry catch above
 				throw refreshError;
 			}
 		},
