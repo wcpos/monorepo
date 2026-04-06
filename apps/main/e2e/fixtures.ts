@@ -454,9 +454,17 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 						// if OPFS cleanup throws (stale auth keys block the fallback).
 						localStorage.clear();
 						const root = await navigator.storage.getDirectory();
+						const errors: string[] = [];
 						// @ts-expect-error — FileSystemDirectoryHandle.entries() async iterable not typed in lib.dom
 						for await (const [name] of root.entries()) {
-							await root.removeEntry(name, { recursive: true });
+							try {
+								await root.removeEntry(name, { recursive: true });
+							} catch (err) {
+								errors.push(`${name}: ${err instanceof Error ? err.message : String(err)}`);
+							}
+						}
+						if (errors.length) {
+							throw new Error(`Failed to remove OPFS entries: ${errors.join('; ')}`);
 						}
 					})
 					.catch((err) => {
