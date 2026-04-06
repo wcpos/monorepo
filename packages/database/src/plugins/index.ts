@@ -8,6 +8,7 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
+import { RxDBPipelinePlugin } from 'rxdb/plugins/pipeline';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
 import { disableVersionCheck, setPremiumFlag } from 'rxdb-premium/plugins/shared';
@@ -53,8 +54,10 @@ addRxPlugin(RxDBAttachmentsPlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
 addRxPlugin(RxDBStatePlugin);
 addRxPlugin(RxDBCleanupPlugin);
+// FlexSearch internally calls collection.addPipeline(), so RxDBPipelinePlugin
+// must be registered alongside it. Removing either breaks full-text search. (#291)
 addRxPlugin(RxDBFlexSearchPlugin);
-// addRxPlugin(RxDBPipelinePlugin);
+addRxPlugin(RxDBPipelinePlugin);
 
 // custom plugins
 addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestResponse
