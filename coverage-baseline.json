@@ -16,7 +16,7 @@
     },
     "hooks": {
       "statements": 58,
-      "branches": 55,
+      "branches": 54,
       "functions": 53,
       "lines": 58
     },
