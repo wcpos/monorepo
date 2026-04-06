@@ -54,6 +54,8 @@ addRxPlugin(RxDBAttachmentsPlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
 addRxPlugin(RxDBStatePlugin);
 addRxPlugin(RxDBCleanupPlugin);
+// FlexSearch internally calls collection.addPipeline(), so RxDBPipelinePlugin
+// must be registered alongside it. Removing either breaks full-text search. (#291)
 addRxPlugin(RxDBFlexSearchPlugin);
 addRxPlugin(RxDBPipelinePlugin);
 
