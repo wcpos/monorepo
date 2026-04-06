@@ -441,6 +441,28 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 				// Ensure the JS-blocking route is removed so the fallback can load scripts
 				await page.unroute('**/*', blockScriptRequests).catch(() => {});
 				console.warn('[posPage] Saved state invalid/expired; falling back to OAuth.', e);
+
+				// The OPFS worker is running and holds exclusive createSyncAccessHandle()
+				// locks. Block JS and reload to terminate it before clearing state.
+				await page.route('**/*', blockScriptRequests);
+				await page.reload();
+
+				// Clear all persisted state so authenticateWithStore sees first-launch
+				await page
+					.evaluate(async () => {
+						const root = await navigator.storage.getDirectory();
+						// @ts-expect-error — FileSystemDirectoryHandle.entries() async iterable not typed in lib.dom
+						for await (const [name] of root.entries()) {
+							await root.removeEntry(name, { recursive: true });
+						}
+						localStorage.clear();
+					})
+					.catch((err) => {
+						console.warn('[posPage] Failed to clear OPFS/localStorage:', err);
+					});
+
+				// Unblock JS before re-authenticating
+				await page.unroute('**/*', blockScriptRequests).catch(() => {});
 				await authenticateWithStore(page, testInfo);
 			}
 		} else {
