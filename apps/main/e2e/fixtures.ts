@@ -450,12 +450,14 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 				// Clear all persisted state so authenticateWithStore sees first-launch
 				await page
 					.evaluate(async () => {
+						// Clear localStorage first — it's synchronous and must happen even
+						// if OPFS cleanup throws (stale auth keys block the fallback).
+						localStorage.clear();
 						const root = await navigator.storage.getDirectory();
 						// @ts-expect-error — FileSystemDirectoryHandle.entries() async iterable not typed in lib.dom
 						for await (const [name] of root.entries()) {
 							await root.removeEntry(name, { recursive: true });
 						}
-						localStorage.clear();
 					})
 					.catch((err) => {
 						console.warn('[posPage] Failed to clear OPFS/localStorage:', err);
