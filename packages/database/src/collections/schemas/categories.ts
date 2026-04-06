@@ -61,7 +61,6 @@ export const categoriesLiteral = {
 				},
 				src: {
 					type: 'string',
-					format: 'uri',
 					description: 'Image URL.',
 				},
 				title: {

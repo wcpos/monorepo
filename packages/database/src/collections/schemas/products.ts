@@ -26,7 +26,6 @@ export const productsLiteral = {
 		},
 		permalink: {
 			type: 'string',
-			format: 'uri',
 		},
 		date_created: {
 			type: 'string',
@@ -356,7 +355,6 @@ export const productsLiteral = {
 					},
 					src: {
 						type: 'string',
-						format: 'uri',
 					},
 					name: {
 						type: 'string',

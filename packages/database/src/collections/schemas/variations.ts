@@ -35,7 +35,6 @@ export const variationsLiteral = {
 		},
 		permalink: {
 			type: 'string',
-			format: 'uri',
 		},
 		sku: {
 			type: 'string',
@@ -219,7 +218,6 @@ export const variationsLiteral = {
 				},
 				src: {
 					type: 'string',
-					format: 'uri',
 				},
 				name: {
 					type: 'string',
