@@ -1,6 +1,8 @@
 [submodule "apps/electron"]
 	path = apps/electron
 	url = https://github.com/wcpos/electron.git
+	branch = main
 [submodule "apps/web"]
 	path = apps/web
 	url = https://github.com/wcpos/web-bundle
+	branch = main

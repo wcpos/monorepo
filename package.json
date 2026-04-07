@@ -27,6 +27,7 @@
     "preinstall": "pnpm ignored-builds || true",
     "expo:install": "pnpm --filter main exec expo install",
     "extract:translations": "node scripts/extract-js-strings.js",
+    "postinstall": "git submodule update --init --remote",
     "prepare": "git config core.hooksPath .githooks"
   },
   "packageManager": "pnpm@10.31.0",
