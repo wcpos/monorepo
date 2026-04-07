@@ -5,7 +5,9 @@ node_modules
 .turbo
 .translations
 .worktrees
+.claude/
 docs/
+apps/main/web-build-atlas/
 
 # Playwright
 /test-results/
