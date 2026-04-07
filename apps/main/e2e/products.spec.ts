@@ -197,10 +197,11 @@ test.describe('Products Page (Pro)', () => {
 		expect(initialBeanieY).not.toBe(initialBeanieWithLogoY);
 		const initialSortDirection = Math.sign(initialBeanieY - initialBeanieWithLogoY);
 
-		// Click the sortable header button (columnheader wrapper is not always the interactive target).
-		const productHeader = screen.getByRole('button', { name: /product/i }).first();
-		await expect(productHeader).toBeVisible({ timeout: 15_000 });
-		await productHeader.click();
+		// Columnheader wraps an inner Pressable; click its text node to hit the interactive control.
+		const productHeader = screen.getByRole('columnheader', { name: /product/i }).first();
+		const productSortControl = productHeader.getByText(/product/i).first();
+		await expect(productSortControl).toBeVisible({ timeout: 15_000 });
+		await productSortControl.click();
 
 		const getSortDirection = async () => {
 			const [beanieY, beanieWithLogoY] = await getRowOrder();
@@ -211,7 +212,7 @@ test.describe('Products Page (Pro)', () => {
 			await expect.poll(getSortDirection, { timeout: 8_000 }).toBe(initialSortDirection * -1);
 		} catch {
 			// First click can set the current sort direction instead of toggling it.
-			await productHeader.click();
+			await productSortControl.click();
 			await expect.poll(getSortDirection, { timeout: 15_000 }).toBe(initialSortDirection * -1);
 		}
 	});
