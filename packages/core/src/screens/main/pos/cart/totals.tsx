@@ -1,5 +1,3 @@
-import * as React from 'react';
-
 import toNumber from 'lodash/toNumber';
 import { useObservableEagerState } from 'observable-hooks';
 
@@ -14,12 +12,10 @@ import { Taxes } from './totals/taxes';
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
 import { useTaxInclOrExcl } from '../../hooks/use-tax-incl-or-excl';
-import { useTaxRates } from '../../contexts/tax-rates';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
 import { useOrderTotals } from '../hooks/use-order-totals';
 import { useRemoveCoupon } from '../hooks/use-remove-coupon';
-import { parsePosData } from '../hooks/utils';
 
 /**
  *
@@ -39,10 +35,9 @@ export function Totals() {
 		shipping_tax,
 		shipping_total,
 	} = useOrderTotals();
-	const { line_items, coupon_lines } = useCartLines();
+	const { coupon_lines } = useCartLines();
 	const { removeCoupon } = useRemoveCoupon();
 	const { currentOrder } = useCurrentOrder();
-	const { pricesIncludeTax } = useTaxRates();
 	const refunds = useObservableEagerState(currentOrder.refunds$!);
 	const orderTotal = useObservableEagerState(currentOrder.total$!);
 
@@ -74,44 +69,9 @@ export function Totals() {
 	const displayShippingTotal =
 		inclOrExcl === 'incl' ? shippingTotalNumber + shippingTaxNumber : shippingTotalNumber;
 
-	// POS discount: computed from _woocommerce_pos_data meta (regular_price - price)
-	// per unit, not from discount_total (which now only contains coupon discounts).
-	const { posDiscountExTax, posDiscountTax } = React.useMemo(() => {
-		let exTax = 0;
-		let tax = 0;
-		for (const item of line_items) {
-			const posData = parsePosData(item);
-			if (!posData) continue;
-			const posPrice = parseFloat(posData.price);
-			const regularPrice = parseFloat(posData.regular_price);
-			if (isNaN(posPrice) || isNaN(regularPrice) || regularPrice <= posPrice) continue;
-			const qty = item.quantity ?? 0;
-			if (qty <= 0) continue;
-			const priceDiff = (regularPrice - posPrice) * qty;
-			const itemSubtotal = toNumber(item.subtotal);
-			const itemSubtotalTax = toNumber(item.subtotal_tax);
-			if (pricesIncludeTax) {
-				const taxRate = itemSubtotal > 0 ? itemSubtotalTax / itemSubtotal : 0;
-				const diffExTax = taxRate > 0 ? priceDiff / (1 + taxRate) : priceDiff;
-				exTax += diffExTax;
-				tax += priceDiff - diffExTax;
-			} else {
-				const taxRate = itemSubtotal > 0 ? itemSubtotalTax / itemSubtotal : 0;
-				exTax += priceDiff;
-				tax += priceDiff * taxRate;
-			}
-		}
-		return { posDiscountExTax: exTax, posDiscountTax: tax };
-	}, [line_items, pricesIncludeTax]);
-
-	const hasSaleDiscount = posDiscountExTax > 0.001;
-	const displaySaleDiscount =
-		inclOrExcl === 'incl' ? posDiscountExTax + posDiscountTax : posDiscountExTax;
-
 	const hasCoupons = coupon_lines.length > 0;
 	const hasRefunds = Boolean(refunds && refunds.length > 0);
-	const hasTotals =
-		hasSubtotal || hasSaleDiscount || hasCoupons || hasShipping || hasFee || hasTax || hasRefunds;
+	const hasTotals = hasSubtotal || hasCoupons || hasShipping || hasFee || hasTax || hasRefunds;
 	const refundTotal = hasRefunds
 		? (refunds ?? []).reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0)
 		: 0;
@@ -125,15 +85,6 @@ export function Totals() {
 						<Text className="grow">{t('common.subtotal')}:</Text>
 						<Text>{format(displaySubtotal)}</Text>
 					</HStack>
-					{
-						// Sale discounts (non-coupon)
-						hasSaleDiscount && (
-							<HStack>
-								<Text className="grow">{t('pos_cart.discount')}:</Text>
-								<Text>{format(-1 * displaySaleDiscount)}</Text>
-							</HStack>
-						)
-					}
 					{
 						// Coupon pills
 						coupon_lines.map((coupon) => {
