@@ -145,6 +145,14 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				if (existingSite) {
 					// Update existing site
 					await existingSite.incrementalPatch(parsedData);
+
+					// Ensure site is in user's sites array (may be missing if previously removed)
+					const currentSites: string[] = user.getLatest().sites ?? [];
+					if (!currentSites.includes(siteData.uuid)) {
+						await user.incrementalUpdate({ $push: { sites: siteData.uuid } });
+						siteLogger.debug(`Re-added site to user: ${siteData.name}`);
+					}
+
 					siteLogger.debug(`Updated site: ${siteData.name}`);
 					return existingSite.getLatest();
 				} else {
