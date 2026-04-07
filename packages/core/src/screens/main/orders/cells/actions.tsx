@@ -86,8 +86,9 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 
 		await localPatch({ document: order, data: { status: 'pos-open', meta_data } });
 		router.push({
-			pathname: '/cart' + (order.uuid ? `/${order.uuid}` : ''),
-		});
+			pathname: '/cart/[...orderId]',
+			params: { orderId: order.uuid ? [order.uuid] : [] },
+		} as any);
 	}, [localPatch, router, order, store.id, wpCredentials.id]);
 
 	/**

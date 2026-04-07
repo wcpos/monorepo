@@ -30,7 +30,7 @@ export function VoidButton() {
 		async (orderJson: Record<string, unknown>) => {
 			try {
 				await currentOrder.collection.insert(orderJson);
-				router.setParams({ orderID: orderJson.uuid as string });
+				router.setParams({ orderId: [orderJson.uuid as string] });
 			} catch (err) {
 				cartLogger.error('Failed to restore order', {
 					showToast: true,

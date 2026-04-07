@@ -73,7 +73,7 @@ export function CurrentOrderProvider({
 			setInternalOrderId(orderId || undefined);
 
 			// Also sync to URL for bookmarking/refresh/history purposes
-			router.setParams({ orderId: orderId || undefined });
+			router.setParams({ orderId: orderId ? [orderId] : undefined });
 
 			// On web, update the browser URL for nice URLs
 			// Run after setParams completes to override the query param URL
