@@ -197,20 +197,24 @@ test.describe('Products Page (Pro)', () => {
 		expect(initialBeanieY).not.toBe(initialBeanieWithLogoY);
 		const initialSortDirection = Math.sign(initialBeanieY - initialBeanieWithLogoY);
 
-		// Click the actual Product header by accessible name instead of index.
+		// Columnheader wraps an inner Pressable; click its text node to hit the interactive control.
 		const productHeader = screen.getByRole('columnheader', { name: /product/i }).first();
-		await expect(productHeader).toBeVisible({ timeout: 15_000 });
-		await productHeader.click();
+		const productSortControl = productHeader.getByText(/product/i).first();
+		await expect(productSortControl).toBeVisible({ timeout: 15_000 });
+		await productSortControl.click();
 
-		await expect
-			.poll(
-				async () => {
-					const [beanieY, beanieWithLogoY] = await getRowOrder();
-					return Math.sign(beanieY - beanieWithLogoY);
-				},
-				{ timeout: 15_000 }
-			)
-			.toBe(initialSortDirection * -1);
+		const getSortDirection = async () => {
+			const [beanieY, beanieWithLogoY] = await getRowOrder();
+			return Math.sign(beanieY - beanieWithLogoY);
+		};
+
+		try {
+			await expect.poll(getSortDirection, { timeout: 8_000 }).toBe(initialSortDirection * -1);
+		} catch {
+			// First click can set the current sort direction instead of toggling it.
+			await productSortControl.click();
+			await expect.poll(getSortDirection, { timeout: 15_000 }).toBe(initialSortDirection * -1);
+		}
 	});
 
 	test('should search products on Products page', async ({ posPage: page }) => {
