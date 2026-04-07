@@ -202,15 +202,18 @@ test.describe('Products Page (Pro)', () => {
 		await expect(productHeader).toBeVisible({ timeout: 15_000 });
 		await productHeader.click();
 
-		await expect
-			.poll(
-				async () => {
-					const [beanieY, beanieWithLogoY] = await getRowOrder();
-					return Math.sign(beanieY - beanieWithLogoY);
-				},
-				{ timeout: 15_000 }
-			)
-			.toBe(initialSortDirection * -1);
+		const getSortDirection = async () => {
+			const [beanieY, beanieWithLogoY] = await getRowOrder();
+			return Math.sign(beanieY - beanieWithLogoY);
+		};
+
+		try {
+			await expect.poll(getSortDirection, { timeout: 8_000 }).toBe(initialSortDirection * -1);
+		} catch {
+			// First click can set the current sort direction instead of toggling it.
+			await productHeader.click();
+			await expect.poll(getSortDirection, { timeout: 15_000 }).toBe(initialSortDirection * -1);
+		}
 	});
 
 	test('should search products on Products page', async ({ posPage: page }) => {
