@@ -78,7 +78,10 @@
     "ignoredBuiltDependencies": [
       "@firebase/util",
       "electron-winstaller"
-    ]
+    ],
+    "patchedDependencies": {
+      "expo-opfs": "patches/expo-opfs.patch"
+    }
   },
   "lint-staged": {
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
