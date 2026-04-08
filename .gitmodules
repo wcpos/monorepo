@@ -6,3 +6,6 @@
 	path = apps/web
 	url = https://github.com/wcpos/web-bundle
 	branch = main
+[submodule ".wiki"]
+	path = .wiki
+	url = https://github.com/wcpos/wiki.git

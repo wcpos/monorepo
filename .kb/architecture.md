@@ -1,3 +1,4 @@
+<!-- DEPRECATED: This file is no longer maintained. See .wiki/ for current content. -->
 # WCPOS — Architecture
 
 > Last updated: 2026-03-24

@@ -1,3 +1,4 @@
+<!-- DEPRECATED: This file is no longer maintained. See .wiki/ for current content. -->
 # Subtotal Parity: Use POS Price as Subtotal to Match WC Sale Price Behavior
 
 **Issue:** https://github.com/wcpos/monorepo/issues/231
