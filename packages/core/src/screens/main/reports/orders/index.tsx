@@ -73,6 +73,7 @@ const renderHeader = (props: RenderHeaderProps) => {
 			sortBy={props.sortBy}
 			sortDirection={props.sortDirection}
 			onSortingChange={props.onSortingChange}
+			align={props.column.columnDef.meta?.align}
 		/>
 	);
 };
