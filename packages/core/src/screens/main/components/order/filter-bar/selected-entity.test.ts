@@ -9,7 +9,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { firstValueFrom, NEVER, of, Subject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 
-import { createSelectedEntity$ } from './selected-entity';
+import { createSelectedEntity$ } from '../../filter-bar/selected-entity';
 
 describe('createSelectedEntity$', () => {
 	it('emits a placeholder immediately when a cashier id exists but the lookup query has not resolved yet', async () => {
