@@ -362,24 +362,30 @@ export async function navigateToPage(
 	route: 'pos' | 'products' | 'orders' | 'coupons' | 'customers' | 'reports' | 'logs' | 'support'
 ) {
 	const idx = DRAWER_INDEX[route];
-	const allButtons = page.locator('button');
-	const count = await allButtons.count();
-	const sidebarButtons: import('@playwright/test').Locator[] = [];
+	let lastSidebarCount = 0;
 
-	for (let i = 0; i < count; i++) {
-		const btn = allButtons.nth(i);
-		const box = await btn.boundingBox();
-		if (box && box.x < 60 && box.width < 60) {
-			sidebarButtons.push(btn);
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		const buttonHandles = await page.locator('button').elementHandles();
+		const sidebarButtons: typeof buttonHandles = [];
+
+		for (const button of buttonHandles) {
+			const box = await button.boundingBox().catch(() => null);
+			if (box && box.x < 60 && box.width < 60) {
+				sidebarButtons.push(button);
+			}
 		}
+
+		lastSidebarCount = sidebarButtons.length;
+		if (idx < sidebarButtons.length) {
+			await sidebarButtons[idx].click();
+			await page.waitForTimeout(2_000);
+			return;
+		}
+
+		await page.waitForTimeout(500);
 	}
 
-	if (idx >= sidebarButtons.length) {
-		throw new Error(`Sidebar button index ${idx} out of range (found ${sidebarButtons.length})`);
-	}
-
-	await sidebarButtons[idx].click();
-	await page.waitForTimeout(2_000);
+	throw new Error(`Sidebar button index ${idx} out of range (found ${lastSidebarCount})`);
 }
 
 /**
