@@ -7,7 +7,7 @@ React Native + Expo cross-platform POS client app.
 This repo includes the WCPOS wiki as a submodule at `.wiki/`. Pull latest before reading:
 
 ```bash
-git submodule update --remote .wiki
+git submodule update --init --remote .wiki
 ```
 
 Relevant wiki pages:
