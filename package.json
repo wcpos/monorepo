@@ -24,10 +24,10 @@
     "hooks": "pnpm --filter @wcpos/hooks",
     "query": "pnpm --filter @wcpos/query",
     "utils": "pnpm --filter @wcpos/utils",
-    "preinstall": "pnpm ignored-builds || true",
+    "preinstall": "pnpm ignored-builds || true; git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git submodule update --init --remote || true",
     "expo:install": "pnpm --filter main exec expo install",
     "extract:translations": "node scripts/extract-js-strings.js",
-    "postinstall": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git submodule update --init --remote && git add apps/electron apps/web || true",
+    "postinstall": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git add apps/electron apps/web || true",
     "prepare": "git config core.hooksPath .githooks"
   },
   "packageManager": "pnpm@10.31.0",
