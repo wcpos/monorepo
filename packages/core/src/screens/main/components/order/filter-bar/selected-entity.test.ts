@@ -47,4 +47,13 @@ describe('createSelectedEntity$', () => {
 
 		await expect(firstValueFrom(selected$)).resolves.toBeNull();
 	});
+
+	it('emits a placeholder when a selected id exists but the lookup query is unavailable', async () => {
+		const selected$ = createSelectedEntity$({
+			id: '42',
+			result$: undefined as any,
+		});
+
+		await expect(firstValueFrom(selected$)).resolves.toEqual({ id: '42' });
+	});
 });

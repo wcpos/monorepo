@@ -81,7 +81,7 @@ export function FilterBar({
 		() =>
 			createSelectedEntity$({
 				id: customerID as string | number | null | undefined,
-				result$: customerQuery!.result$,
+				result$: customerQuery?.result$,
 				guestCustomer,
 			}),
 		[customerID, customerQuery, guestCustomer]
@@ -102,7 +102,7 @@ export function FilterBar({
 		() =>
 			createSelectedEntity$({
 				id: cashierID as string | number | null | undefined,
-				result$: cashierQuery!.result$,
+				result$: cashierQuery?.result$,
 			}),
 		[cashierID, cashierQuery]
 	);

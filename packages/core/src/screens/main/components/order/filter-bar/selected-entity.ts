@@ -12,7 +12,7 @@ interface QueryResult<T> {
 
 interface CreateSelectedEntityOptions<T> {
 	id: string | number | null | undefined;
-	result$: Observable<QueryResult<T>>;
+	result$?: Observable<QueryResult<T>>;
 	guestCustomer?: T;
 }
 
@@ -27,6 +27,10 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 
 	if (id === null || id === undefined || id === '') {
 		return of(null);
+	}
+
+	if (!result$) {
+		return of({ id } as T);
 	}
 
 	return result$.pipe(

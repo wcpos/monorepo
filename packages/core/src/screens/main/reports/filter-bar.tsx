@@ -80,7 +80,7 @@ export function FilterBar() {
 		() =>
 			createSelectedEntity$({
 				id: customerID,
-				result$: customerQuery!.result$,
+				result$: customerQuery?.result$,
 				guestCustomer,
 			}),
 		[customerID, customerQuery, guestCustomer]
@@ -101,7 +101,7 @@ export function FilterBar() {
 		() =>
 			createSelectedEntity$({
 				id: cashierID,
-				result$: cashierQuery!.result$,
+				result$: cashierQuery?.result$,
 			}),
 		[cashierID, cashierQuery]
 	);
