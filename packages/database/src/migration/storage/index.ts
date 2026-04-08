@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { getRxStorageExpoAsync } from 'rxdb-premium/plugins/storage-filesystem-expo';
+import { getRxStorageExpoSync } from 'rxdb-premium/plugins/storage-filesystem-expo';
 
 import { getLegacyMigrationRxStorageSQLite } from './legacy-sqlite-storage';
 
@@ -128,7 +128,7 @@ export function getNativeOldStorage() {
 }
 
 export function getNativeNewStorage() {
-	return getRxStorageExpoAsync();
+	return getRxStorageExpoSync();
 }
 
 export function getStorageMigrationConfig(
