@@ -1,4 +1,12 @@
-import { firstValueFrom, NEVER, of } from 'rxjs';
+/**
+ * @jest-environment jsdom
+ */
+
+import * as React from 'react';
+
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { firstValueFrom, NEVER, of, Subject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 
 import { createSelectedEntity$ } from './selected-entity';
@@ -10,7 +18,11 @@ describe('createSelectedEntity$', () => {
 			result$: NEVER,
 		});
 
-		await expect(firstValueFrom(selected$)).resolves.toEqual({ id: '42' });
+		await expect(firstValueFrom(selected$)).resolves.toEqual({
+			id: '42',
+			__isLoading: true,
+			first_name: 'Loading...',
+		});
 	});
 
 	it('emits a placeholder first, then the resolved customer document when the lookup query completes', async () => {
@@ -23,7 +35,7 @@ describe('createSelectedEntity$', () => {
 		});
 
 		await expect(firstValueFrom(selected$.pipe(take(2), toArray()))).resolves.toEqual([
-			{ id: 7 },
+			{ id: 7, __isLoading: true, first_name: 'Loading...' },
 			{ id: 7, name: 'Ada' },
 		]);
 	});
@@ -54,6 +66,40 @@ describe('createSelectedEntity$', () => {
 			result$: undefined as any,
 		});
 
-		await expect(firstValueFrom(selected$)).resolves.toEqual({ id: '42' });
+		await expect(firstValueFrom(selected$)).resolves.toEqual({
+			id: '42',
+			__isLoading: true,
+			first_name: 'Loading...',
+		});
+	});
+
+	it('emits loading then resolved values through ObservableResource and Suspense', async () => {
+		const result$ = new Subject<any>();
+		const selected$ = createSelectedEntity$({
+			id: 7,
+			result$,
+		});
+		const resource = new ObservableResource(selected$);
+		const wrapper = ({ children }: { children: React.ReactNode }) =>
+			React.createElement(React.Suspense, { fallback: null }, children);
+
+		const { result } = renderHook(() => useObservableSuspense(resource), { wrapper });
+
+		expect(result.current).toEqual({
+			id: 7,
+			__isLoading: true,
+			first_name: 'Loading...',
+		});
+
+		act(() => {
+			result$.next({
+				count: 1,
+				hits: [{ document: { id: 7, name: 'Ada' } }],
+			});
+		});
+
+		await waitFor(() => {
+			expect(result.current).toEqual({ id: 7, name: 'Ada' });
+		});
 	});
 });

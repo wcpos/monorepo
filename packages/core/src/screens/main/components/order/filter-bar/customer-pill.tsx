@@ -18,6 +18,8 @@ interface CustomerPillProps {
 	customerID?: number;
 }
 
+type CustomerWithLoadingMarker = CustomerDocument & { __isLoading?: boolean };
+
 /**
  *
  */
@@ -25,6 +27,7 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 	let customer = useObservableSuspense(resource);
 	const { format } = useCustomerNameFormat();
 	const t = useT();
+	const isCustomerLoading = (customer as CustomerWithLoadingMarker | null)?.__isLoading;
 
 	/**
 	 * @FIXME - if the customers are cleared, it's possible that the customer will be null
@@ -51,7 +54,13 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 					removable={!!customer}
 					onRemove={() => query.removeWhere('customer_id').exec()}
 				>
-					<ButtonText>{customer ? format(customer) : t('common.select_customer')}</ButtonText>
+					<ButtonText>
+						{isCustomerLoading
+							? 'Loading...'
+							: customer
+								? format(customer)
+								: t('common.select_customer')}
+					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>
 			<ComboboxContent>

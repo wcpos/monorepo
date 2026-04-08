@@ -16,6 +16,22 @@ interface CreateSelectedEntityOptions<T> {
 	guestCustomer?: T;
 }
 
+interface LoadingSelectedEntity {
+	id: string | number;
+	__isLoading: true;
+	first_name: string;
+}
+
+function createLoadingEntity<T extends { id?: string | number }>(
+	id: string | number
+): T & LoadingSelectedEntity {
+	return {
+		id,
+		__isLoading: true,
+		first_name: 'Loading...',
+	} as unknown as T & LoadingSelectedEntity;
+}
+
 export function createSelectedEntity$<T extends { id?: string | number }>({
 	id,
 	result$,
@@ -30,7 +46,7 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 	}
 
 	if (!result$) {
-		return of({ id } as T);
+		return of(createLoadingEntity<T>(id));
 	}
 
 	return result$.pipe(
@@ -41,6 +57,6 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 
 			return null;
 		}),
-		startWith({ id } as T)
+		startWith(createLoadingEntity<T>(id))
 	);
 }
