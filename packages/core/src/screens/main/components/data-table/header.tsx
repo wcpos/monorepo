@@ -16,6 +16,7 @@ interface Props {
 	sortBy: string;
 	sortDirection: 'asc' | 'desc';
 	onSortingChange: (sort: SortingChange) => void;
+	align?: 'left' | 'right' | 'center';
 }
 
 export function DataTableHeader({
@@ -25,9 +26,12 @@ export function DataTableHeader({
 	sortBy,
 	sortDirection,
 	onSortingChange,
+	align = 'left',
 }: Props) {
 	const sortField = getSortField(columnId);
 	const isSorted = sortBy === sortField;
+	const contentAlignment =
+		align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start';
 
 	if (disableSort) {
 		return (
@@ -39,7 +43,8 @@ export function DataTableHeader({
 
 	return (
 		<Pressable
-			className="max-w-full"
+			className="max-w-full justify-center"
+			style={{ flex: 1, alignSelf: 'stretch', alignItems: contentAlignment }}
 			onPress={() =>
 				onSortingChange({
 					sortBy: sortField,

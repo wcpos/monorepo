@@ -158,6 +158,7 @@ function DataTable<TData>({
 										sortBy={sortBy}
 										sortDirection={sortDirection}
 										onSortingChange={handleSortingChange}
+										align={header.column.columnDef.meta?.align}
 									/>
 								)}
 							</TableHead>
