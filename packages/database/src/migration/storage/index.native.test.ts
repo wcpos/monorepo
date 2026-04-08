@@ -8,7 +8,7 @@ const mockOpenDatabaseAsync = jest.fn(async (_name: string, _options?: unknown) 
 	runAsync: jest.fn(),
 }));
 const mockDeleteDatabaseAsync = jest.fn();
-const mockGetRxStorageExpoAsync = jest.fn(() => ({ name: 'expo-filesystem-storage' }));
+const mockGetRxStorageExpoSync = jest.fn(() => ({ name: 'expo-filesystem-storage' }));
 const mockGetRxStorageSQLite = jest.fn(
 	(config: { sqliteBasics: { open(name: string): Promise<unknown> } }) => ({
 		name: 'sqlite-storage',
@@ -55,7 +55,7 @@ jest.mock('expo-file-system', () => ({
 }));
 
 jest.mock('rxdb-premium/plugins/storage-filesystem-expo', () => ({
-	getRxStorageExpoAsync: () => mockGetRxStorageExpoAsync(),
+	getRxStorageExpoSync: () => mockGetRxStorageExpoSync(),
 }));
 
 jest.mock('rxdb-premium-old/plugins/storage-sqlite', () => ({
