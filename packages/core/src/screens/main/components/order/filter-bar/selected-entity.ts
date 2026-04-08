@@ -55,6 +55,10 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 				return result.hits[0].document;
 			}
 
+			if (result.count === 0) {
+				return { id } as T;
+			}
+
 			return null;
 		}),
 		startWith(createLoadingEntity<T>(id))
