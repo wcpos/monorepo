@@ -12,12 +12,12 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 	if (!currency) {
 		console.warn('formatReceiptData: missing currency in meta, formatting may be incomplete');
 	}
-	const locale = data.presentation_hints?.locale || 'en-US';
+	const normalizedLocale = (data.presentation_hints?.locale || 'en-US').trim().replace(/_/g, '-');
 	const displayTax = data.presentation_hints?.display_tax === 'excl' ? 'excl' : 'incl';
 
 	const fmt = (value: number): string => {
 		try {
-			return new Intl.NumberFormat(locale, {
+			return new Intl.NumberFormat(normalizedLocale || 'en-US', {
 				style: 'currency',
 				currency,
 			}).format(value);

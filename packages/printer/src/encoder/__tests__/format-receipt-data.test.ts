@@ -77,6 +77,14 @@ describe('formatReceiptData', () => {
 		expect(result.totals.grand_total_incl_display).toContain(',');
 	});
 
+	it('normalizes underscore locale tags from presentation_hints', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.meta.currency = 'EUR';
+		data.presentation_hints.locale = ' de_DE ';
+		const result = formatReceiptData(data);
+		expect(result.totals.grand_total_incl_display).toContain(',');
+	});
+
 	it('preserves non-numeric fields unchanged', () => {
 		const result = formatReceiptData(sampleReceiptData);
 		expect(result.store.name).toBe('My Test Store');
