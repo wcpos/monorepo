@@ -4,8 +4,7 @@ import { View } from 'react-native';
 import { endOfDay, startOfDay } from 'date-fns';
 import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
-import { map, startWith, switchMap } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 
 import { Card } from '@wcpos/components/card';
 import { HStack } from '@wcpos/components/hstack';
@@ -20,6 +19,7 @@ import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
+import { createSelectedEntity$ } from '../components/filter-bar/selected-entity';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
 /**
@@ -48,9 +48,9 @@ export function FilterBar() {
 	 *
 	 */
 	React.useEffect(() => {
-		if (customerID !== null && customerID !== undefined) {
-			customerQuery!
-				.where('id')
+		if (customerID !== null && customerID !== undefined && customerID !== 0) {
+			customerQuery
+				?.where('id')
 				.equals(toNumber(customerID as number))
 				.exec();
 		}
@@ -69,7 +69,7 @@ export function FilterBar() {
 	 */
 	React.useEffect(() => {
 		if (cashierID) {
-			cashierQuery!.where('id').equals(toNumber(cashierID)).exec();
+			cashierQuery?.where('id').equals(toNumber(cashierID)).exec();
 		}
 	}, [cashierID, cashierQuery]);
 
@@ -77,24 +77,13 @@ export function FilterBar() {
 	 *
 	 */
 	const selectedCustomer$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([id]) => {
-					if (id === 0) {
-						return of(guestCustomer);
-					}
-					if (!id) {
-						return of(null);
-					}
-					return customerQuery!.result$.pipe(
-						map((result) => {
-							if (result.count === 1) return result.hits[0].document;
-						}),
-						startWith({ id: customerID })
-					);
-				})
-			),
-		[customerID]
+		() =>
+			createSelectedEntity$({
+				id: customerID,
+				result$: customerQuery?.result$,
+				guestCustomer,
+			}),
+		[customerID, customerQuery, guestCustomer]
 	);
 
 	/**
@@ -109,21 +98,12 @@ export function FilterBar() {
 	 *
 	 */
 	const selectedCashier$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([id]) => {
-					if (!id) {
-						return of(null);
-					}
-					return cashierQuery!.result$.pipe(
-						map((result) => {
-							if (result.count === 1) return result.hits[0].document;
-						}),
-						startWith({ id: cashierID })
-					);
-				})
-			),
-		[cashierID]
+		() =>
+			createSelectedEntity$({
+				id: cashierID,
+				result$: cashierQuery?.result$,
+			}),
+		[cashierID, cashierQuery]
 	);
 
 	/**

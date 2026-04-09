@@ -26,6 +26,8 @@ interface CashierPillProps {
 	cashierID?: number;
 }
 
+type CashierWithLoadingMarker = CustomerDocument & { __isLoading?: boolean };
+
 /**
  * Cashier Search
  */
@@ -83,6 +85,7 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 	let cashier = useObservableSuspense(resource);
 	const { format } = useCustomerNameFormat();
 	const t = useT();
+	const isCashierLoading = (cashier as CashierWithLoadingMarker | null)?.__isLoading;
 
 	/**
 	 * @FIXME - if the customers are cleared, it's possible that the cashier will be null
@@ -116,7 +119,13 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 					removable={!!cashier}
 					onRemove={() => query.removeElemMatch('meta_data', { key: '_pos_user' }).exec()}
 				>
-					<ButtonText>{cashier ? format(cashier) : t('common.select_cashier')}</ButtonText>
+					<ButtonText>
+						{isCashierLoading
+							? t('common.loading')
+							: cashier
+								? format(cashier)
+								: t('common.select_cashier')}
+					</ButtonText>
 				</ButtonPill>
 			</ComboboxTrigger>
 			<ComboboxContent>

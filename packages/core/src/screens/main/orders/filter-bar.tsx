@@ -2,8 +2,7 @@ import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
-import { map, switchMap } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
@@ -15,6 +14,7 @@ import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
+import { createSelectedEntity$ } from '../components/filter-bar/selected-entity';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
 /**
@@ -78,23 +78,13 @@ export function FilterBar({
 	 *
 	 */
 	const selectedCustomer$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([id]) => {
-					if ((id as unknown) === 0) {
-						return of(guestCustomer);
-					}
-					if (!id) {
-						return of(null);
-					}
-					return customerQuery!.result$.pipe(
-						map((result) => {
-							if (result.count === 1) return result.hits[0].document;
-						})
-					);
-				})
-			),
-		[customerID]
+		() =>
+			createSelectedEntity$({
+				id: customerID as string | number | null | undefined,
+				result$: customerQuery?.result$,
+				guestCustomer,
+			}),
+		[customerID, customerQuery, guestCustomer]
 	);
 
 	/**
@@ -109,20 +99,12 @@ export function FilterBar({
 	 *
 	 */
 	const selectedCashier$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([id]) => {
-					if (!id) {
-						return of(null);
-					}
-					return cashierQuery!.result$.pipe(
-						map((result) => {
-							if (result.count === 1) return result.hits[0].document;
-						})
-					);
-				})
-			),
-		[cashierID]
+		() =>
+			createSelectedEntity$({
+				id: cashierID as string | number | null | undefined,
+				result$: cashierQuery?.result$,
+			}),
+		[cashierID, cashierQuery]
 	);
 
 	/**
