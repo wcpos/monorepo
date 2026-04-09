@@ -49,6 +49,15 @@ describe('Hook Filters', () => {
 			expect(result.created_via).toBe('checkout');
 		});
 
+		it('should preserve guest customer_id 0 when converting to the WooCommerce customer param', () => {
+			const result = filterOrderParams({
+				customer_id: { $eq: 0 },
+			});
+
+			expect(result.customer).toBe(0);
+			expect(result.customer_id).toBeUndefined();
+		});
+
 		it('should extract pos_cashier and pos_store from $and meta_data', () => {
 			const result = filterOrderParams({
 				$and: [

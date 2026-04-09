@@ -1,19 +1,4 @@
-/**
- *
- */
-const unwrapEqSelector = (value: unknown) => {
-	if (
-		value &&
-		typeof value === 'object' &&
-		!Array.isArray(value) &&
-		Object.keys(value).length === 1 &&
-		'$eq' in value
-	) {
-		return (value as { $eq: unknown }).$eq;
-	}
-
-	return value;
-};
+import { unwrapEqSelector } from '../utils';
 
 /**
  *
@@ -37,7 +22,7 @@ const filterApiQueryParams = (params: Record<string, any>) => {
 	 * Customer filter is customer_id in POS, but customer in WC API
 	 * so we need to convert it
 	 */
-	if (params.customer_id) {
+	if (Object.prototype.hasOwnProperty.call(params, 'customer_id')) {
 		params.customer = params.customer_id;
 		delete params.customer_id;
 	}

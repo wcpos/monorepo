@@ -14,6 +14,7 @@ import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
+import { normalizeSelectedCustomerID } from '../components/order/filter-bar/customer-filter-utils';
 import { createSelectedEntity$ } from '../components/filter-bar/selected-entity';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
@@ -29,13 +30,10 @@ export function FilterBar({
 	const rawCustomerID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
 	);
-	const customerID = React.useMemo(() => {
-		if (rawCustomerID === null || rawCustomerID === undefined || rawCustomerID === '') {
-			return undefined;
-		}
-
-		return toNumber(rawCustomerID as string | number);
-	}, [rawCustomerID]);
+	const customerID = React.useMemo(
+		() => normalizeSelectedCustomerID(rawCustomerID as string | number | null | undefined),
+		[rawCustomerID]
+	);
 	const cashierID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
 	);
@@ -48,7 +46,7 @@ export function FilterBar({
 		queryKeys: ['customers', 'orders-customer-filter', customerID ?? 'none'],
 		collectionName: 'customers',
 		initialParams:
-			customerID !== null && customerID !== undefined && customerID !== 0
+			customerID !== undefined && customerID !== 0
 				? {
 						selector: { id: customerID },
 					}

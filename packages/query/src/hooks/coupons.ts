@@ -1,16 +1,4 @@
-const unwrapEqSelector = (value: unknown) => {
-	if (
-		value &&
-		typeof value === 'object' &&
-		!Array.isArray(value) &&
-		Object.keys(value).length === 1 &&
-		'$eq' in value
-	) {
-		return (value as { $eq: unknown }).$eq;
-	}
-
-	return value;
-};
+import { unwrapEqSelector } from '../utils';
 
 const filterApiQueryParams = (params: Record<string, unknown>) => {
 	for (const [key, value] of Object.entries(params)) {

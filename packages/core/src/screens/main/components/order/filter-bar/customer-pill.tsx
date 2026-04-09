@@ -9,9 +9,9 @@ import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-import { extractNameFromJSON } from '../../../hooks/use-customer-name-format/helpers';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerSearch } from '../../customer-select';
+import { resolveCustomerPillEntity } from './customer-filter-utils';
 
 interface CustomerPillProps {
 	query: Query<CustomerCollection>;
@@ -48,21 +48,10 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 		setSelectedCustomer((current) => (current?.id === customerID ? current : null));
 	}, [customerID, isActive]);
 
-	const customerEntity = React.useMemo(() => {
-		if (!isActive) {
-			return null;
-		}
-
-		if (customer && (customer.id === 0 || !!extractNameFromJSON(customer))) {
-			return customer;
-		}
-
-		if (selectedCustomer?.id === customerID) {
-			return selectedCustomer;
-		}
-
-		return customer ?? null;
-	}, [customer, customerID, isActive, selectedCustomer]);
+	const customerEntity = React.useMemo(
+		() => resolveCustomerPillEntity({ customer, selectedCustomer, customerID, isActive }),
+		[customer, customerID, isActive, selectedCustomer]
+	);
 	const isLoading = isActive && !!isCustomerLoading;
 
 	/**
