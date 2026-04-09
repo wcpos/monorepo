@@ -367,18 +367,18 @@ export class SyncStateManager {
 				status: 'SYNCED',
 			}));
 			await this.syncCollection.bulkUpsert(synced);
+		}
 
-			if (result.error.length > 0) {
-				syncLogger.error('Error inserting documents', {
-					showToast: false,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.INSERT_FAILED,
-						collection: this.collection.name,
-						errors: result.error,
-					},
-				});
-			}
+		if (result.error.length > 0) {
+			syncLogger.error('Error inserting documents', {
+				showToast: false,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.INSERT_FAILED,
+					collection: this.collection.name,
+					errors: result.error,
+				},
+			});
 		}
 		return result;
 	}
@@ -397,18 +397,18 @@ export class SyncStateManager {
 				status: 'SYNCED',
 			}));
 			await this.syncCollection.bulkUpsert(synced);
+		}
 
-			if (result.error.length > 0) {
-				syncLogger.error('Error upserting documents', {
-					showToast: false,
-					saveToDb: true,
-					context: {
-						errorCode: ERROR_CODES.DB_UPSERT_FAILED,
-						collection: this.collection.name,
-						errors: result.error,
-					},
-				});
-			}
+		if (result.error.length > 0) {
+			syncLogger.error('Error upserting documents', {
+				showToast: false,
+				saveToDb: true,
+				context: {
+					errorCode: ERROR_CODES.DB_UPSERT_FAILED,
+					collection: this.collection.name,
+					errors: result.error,
+				},
+			});
 		}
 		return result;
 	}

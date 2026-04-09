@@ -1,5 +1,5 @@
 import { CanceledError } from 'axios';
-import { firstValueFrom, Subject } from 'rxjs';
+import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { filter, skip } from 'rxjs/operators';
 
 import { httpClientMock, parseWpError } from './__mocks__/http';
@@ -146,6 +146,90 @@ describe('CollectionReplicationState', () => {
 		await new Promise((resolve) => setTimeout(resolve, 600));
 
 		expect(spy).toHaveBeenCalledWith(3);
+	});
+
+	it('debounces count recomputation before re-running count queries', async () => {
+		jest.useFakeTimers();
+
+		const flushMicrotasks = async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		};
+
+		const remoteChanges = new Subject<void>();
+		const localChanges = new Subject<void>();
+		let remoteCount = 2;
+		let localCount = 1;
+		let countQueryRuns = 0;
+
+		const createCountableCollection = (
+			name: string,
+			changes$: Subject<void>,
+			getCount: () => number
+		) => ({
+			name,
+			eventBulks$: changes$.asObservable(),
+			count: jest.fn(() => ({
+				$: new Observable<number>((subscriber) => {
+					const emit = () => {
+						countQueryRuns++;
+						subscriber.next(getCount());
+					};
+
+					emit();
+					const sub = changes$.subscribe(() => emit());
+					return () => sub.unsubscribe();
+				}),
+				exec: async () => {
+					countQueryRuns++;
+					return getCount();
+				},
+			})),
+			parseRestResponse: (data: any) => data,
+		});
+
+		const replicationState = new CollectionReplicationState({
+			collection: createCountableCollection('products', localChanges, () => localCount) as any,
+			syncCollection: createCountableCollection(
+				'sync-products',
+				remoteChanges,
+				() => remoteCount
+			) as any,
+			httpClient: httpClientMock,
+			endpoint: 'products',
+		});
+
+		try {
+			await flushMicrotasks();
+			expect(countQueryRuns).toBe(2);
+
+			remoteCount = 3;
+			localCount = 2;
+			remoteChanges.next();
+			localChanges.next();
+
+			remoteCount = 4;
+			localCount = 3;
+			remoteChanges.next();
+			localChanges.next();
+
+			remoteCount = 5;
+			localCount = 4;
+			remoteChanges.next();
+			localChanges.next();
+
+			await flushMicrotasks();
+			expect(countQueryRuns).toBe(2);
+
+			jest.advanceTimersByTime(500);
+			await flushMicrotasks();
+
+			expect(countQueryRuns).toBe(4);
+			expect(replicationState.subjects.total.getValue()).toBe(9);
+		} finally {
+			await replicationState.cancel();
+			jest.useRealTimers();
+		}
 	});
 
 	it('will request the first page of records on the first sync', async () => {
