@@ -69,6 +69,20 @@ describe('createSelectedEntity$', () => {
 		]);
 	});
 
+	it('keeps the id fallback when the lookup omits count and returns zero hits', async () => {
+		const selected$ = createSelectedEntity$({
+			id: 7,
+			result$: of({
+				hits: [],
+			}),
+		});
+
+		await expect(firstValueFrom(selected$.pipe(take(2), toArray()))).resolves.toEqual([
+			{ id: 7, __isLoading: true, first_name: 'Loading...' },
+			{ id: 7 },
+		]);
+	});
+
 	it('returns the guest customer when the selected id is 0', async () => {
 		const guestCustomer = { id: 0, name: 'Guest' };
 		const selected$ = createSelectedEntity$({

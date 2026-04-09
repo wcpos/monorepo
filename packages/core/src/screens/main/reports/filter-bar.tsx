@@ -49,8 +49,8 @@ export function FilterBar() {
 	 */
 	React.useEffect(() => {
 		if (customerID !== null && customerID !== undefined) {
-			customerQuery!
-				.where('id')
+			customerQuery
+				?.where('id')
 				.equals(toNumber(customerID as number))
 				.exec();
 		}
@@ -69,7 +69,7 @@ export function FilterBar() {
 	 */
 	React.useEffect(() => {
 		if (cashierID) {
-			cashierQuery!.where('id').equals(toNumber(cashierID)).exec();
+			cashierQuery?.where('id').equals(toNumber(cashierID)).exec();
 		}
 	}, [cashierID, cashierQuery]);
 

@@ -55,7 +55,7 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 				return result.hits[0].document;
 			}
 
-			if (result.count === 0) {
+			if (result.count === 0 || (result.count === undefined && result.hits.length === 0)) {
 				return { id } as T;
 			}
 
