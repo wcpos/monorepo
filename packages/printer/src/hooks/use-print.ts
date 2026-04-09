@@ -19,6 +19,8 @@ interface UsePrintOptions {
 	printerProfile?: PrinterProfile;
 	/** XML template content for thermal engine templates */
 	templateXml?: string;
+	/** Decimal places for the built-in thermal encoder path */
+	decimals?: number;
 	/** Engine type of the selected template */
 	templateEngine?: string;
 	/** Ref to the receipt iframe — used to extract HTML when fetch is blocked by CORS */
@@ -72,6 +74,7 @@ export function usePrint(options: UsePrintOptions) {
 			receiptUrl,
 			printerProfile,
 			templateXml,
+			decimals,
 			templateEngine,
 			iframeRef,
 			onBeforePrint,
@@ -93,9 +96,9 @@ export function usePrint(options: UsePrintOptions) {
 				// Direct thermal printing — normalise shape then encode and send bytes
 				const normalised = mapReceiptData(receiptData as Record<string, any>);
 				if (templateEngine === 'thermal' && templateXml) {
-					await service.printReceipt(normalised, printerProfile, undefined, templateXml);
+					await service.printReceipt(normalised, printerProfile, undefined, templateXml, decimals);
 				} else {
-					await service.printReceipt(normalised, printerProfile);
+					await service.printReceipt(normalised, printerProfile, undefined, undefined, decimals);
 				}
 			} else {
 				// System print fallback — need HTML content

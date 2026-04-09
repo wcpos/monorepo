@@ -16,6 +16,10 @@ describe('formatReceiptData', () => {
 		const line = result.lines[0];
 		expect(line.unit_price_incl_display).toBe('$5.00');
 		expect(line.line_total_incl_display).toBe('$10.00');
+		expect(line.unit_price_display).toBe('$5.00');
+		expect(line.line_subtotal_display).toBe('$10.00');
+		expect(line.discounts_display).toBe('$0.00');
+		expect(line.line_total_display).toBe('$10.00');
 	});
 
 	it('preserves original numeric line item fields', () => {
@@ -30,6 +34,9 @@ describe('formatReceiptData', () => {
 		expect(result.totals.subtotal_incl_display).toBe('$25.00');
 		expect(result.totals.grand_total_incl_display).toBe('$25.00');
 		expect(result.totals.tax_total_display).toBe('$2.27');
+		expect(result.totals.subtotal_display).toBe('$25.00');
+		expect(result.totals.discount_total_display).toBe('$0.00');
+		expect(result.totals.grand_total_display).toBe('$25.00');
 	});
 
 	it('preserves original numeric totals', () => {

@@ -32,22 +32,54 @@ const offlineReceiptData = {
 			name: 'Widget A',
 			quantity: 2,
 			price: 5.0,
+			unit_price: '5.00',
+			unit_price_incl: '5.00',
+			unit_price_excl: '4.55',
 			total: '10.00',
+			line_subtotal: '10.00',
+			line_subtotal_incl: '10.00',
+			line_subtotal_excl: '9.09',
+			discounts: '0.00',
+			discounts_incl: '0.00',
+			discounts_excl: '0.00',
+			line_total: '10.00',
+			line_total_incl: '10.00',
+			line_total_excl: '9.09',
 			sku: 'SKU-001',
+			meta: [{ key: 'size', value: 'M' }],
 		},
 		{
 			name: 'Gadget B',
 			quantity: 1,
 			price: 15.0,
+			unit_price: '15.00',
+			unit_price_incl: '15.00',
+			unit_price_excl: '13.64',
 			total: '15.00',
+			line_subtotal: '15.00',
+			line_subtotal_incl: '15.00',
+			line_subtotal_excl: '13.64',
+			discounts: '0.00',
+			discounts_incl: '0.00',
+			discounts_excl: '0.00',
+			line_total: '15.00',
+			line_total_incl: '15.00',
+			line_total_excl: '13.64',
 			sku: 'SKU-002',
+			meta: [],
 		},
 	],
 	totals: {
 		subtotal: '25.00',
+		subtotal_incl: '25.00',
+		subtotal_excl: '22.73',
 		tax_total: '2.27',
 		discount_total: '0.00',
+		discount_total_incl: '0.00',
+		discount_total_excl: '0.00',
+		grand_total: '25.00',
 		grand_total_incl: '25.00',
+		grand_total_excl: '22.73',
 	},
 	payments: [
 		{
@@ -59,6 +91,12 @@ const offlineReceiptData = {
 	fiscal: {
 		submission_status: '',
 		fiscal_id: '',
+	},
+	presentation_hints: {
+		display_tax: 'incl',
+		prices_entered_with_tax: true,
+		rounding_mode: 'round',
+		locale: 'en-US',
 	},
 };
 
@@ -135,12 +173,18 @@ describe('mapReceiptData', () => {
 			expect(first.sku).toBe('SKU-001');
 			expect(first.line_total_incl).toBe(10);
 			expect(first.unit_price_incl).toBe(5); // 10 / 2
+			expect(first.unit_price).toBe(5);
+			expect(first.line_subtotal).toBe(10);
+			expect(first.discounts).toBe(0);
+			expect(first.line_total).toBe(10);
+			expect(first.meta).toEqual([{ key: 'size', value: 'M' }]);
 
 			const second = mapped.lines[1];
 			expect(second.name).toBe('Gadget B');
 			expect(second.qty).toBe(1);
 			expect(second.line_total_incl).toBe(15);
 			expect(second.unit_price_incl).toBe(15); // 15 / 1
+			expect(second.unit_price).toBe(15);
 		});
 
 		it('maps totals from string values', () => {
@@ -152,6 +196,9 @@ describe('mapReceiptData', () => {
 			expect(mapped.totals.grand_total_excl).toBeCloseTo(22.73, 2);
 			expect(mapped.totals.paid_total).toBe(25);
 			expect(mapped.totals.change_total).toBe(0);
+			expect(mapped.totals.subtotal).toBe(25);
+			expect(mapped.totals.discount_total).toBe(0);
+			expect(mapped.totals.grand_total).toBe(25);
 		});
 
 		it('maps payments with method used as both id and title', () => {

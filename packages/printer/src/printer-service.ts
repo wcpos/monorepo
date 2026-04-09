@@ -75,7 +75,8 @@ export class PrinterService {
 		receiptData: ReceiptData,
 		profile?: PrinterProfile,
 		html?: string,
-		templateXml?: string
+		templateXml?: string,
+		decimals?: number
 	): Promise<void> {
 		return this.queue.add(async () => {
 			if (!profile || profile.connectionType === 'system') {
@@ -104,6 +105,7 @@ export class PrinterService {
 					...encoderOptions,
 					cut: profile.autoCut,
 					openDrawer: profile.autoOpenDrawer,
+					decimals,
 				};
 				bytes = encodeReceipt(receiptData, encodeOpts);
 			}
