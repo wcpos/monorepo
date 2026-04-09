@@ -87,12 +87,42 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 	const t = useT();
 	const isCashierLoading = (cashier as CashierWithLoadingMarker | null)?.__isLoading;
 
+	React.useEffect(() => {
+		uiLogger.info('cashier pill state', {
+			context: {
+				cashierID,
+				selectedCashier: query.getMetaDataElemMatchValue('_pos_user'),
+				selectedStore: query.getMetaDataElemMatchValue('_pos_store'),
+				selector: query.currentRxQuery?.mangoQuery?.selector,
+			},
+		});
+	}, [cashierID, query]);
+
 	/**
 	 * @FIXME - if the customers are cleared, it's possible that the cashier will be null
 	 */
 	if (!cashier && cashierID) {
 		cashier = { id: cashierID } as CustomerDocument;
 	}
+
+	const handleRemove = React.useCallback(() => {
+		uiLogger.info('cashier remove pressed', {
+			context: {
+				cashierID,
+				beforeSelector: query.currentRxQuery?.mangoQuery?.selector,
+			},
+		});
+
+		query.removeElemMatch('meta_data', { key: '_pos_user' }).exec();
+
+		uiLogger.info('cashier remove applied', {
+			context: {
+				cashierIDAfter: query.getMetaDataElemMatchValue('_pos_user'),
+				storeIDAfter: query.getMetaDataElemMatchValue('_pos_store'),
+				afterSelector: query.currentRxQuery?.mangoQuery?.selector,
+			},
+		});
+	}, [cashierID, query]);
 
 	/**
 	 * value is always a string when dealing with comboboxes
@@ -117,7 +147,7 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 					leftIcon="userCrown"
 					variant={cashier ? undefined : 'muted'}
 					removable={!!cashier}
-					onRemove={() => query.removeElemMatch('meta_data', { key: '_pos_user' }).exec()}
+					onRemove={handleRemove}
 				>
 					<ButtonText>
 						{isCashierLoading
