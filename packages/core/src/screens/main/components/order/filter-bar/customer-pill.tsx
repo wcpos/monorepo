@@ -9,6 +9,7 @@ import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
+import { extractNameFromJSON } from '../../../hooks/use-customer-name-format/helpers';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerSearch } from '../../customer-select';
 
@@ -29,6 +30,7 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 	const t = useT();
 	const isCustomerLoading = (customer as CustomerWithLoadingMarker | null)?.__isLoading;
 	const isActive = customerID !== null && customerID !== undefined;
+	const [selectedCustomer, setSelectedCustomer] = React.useState<CustomerDocument | null>(null);
 
 	/**
 	 * @FIXME - if the customers are cleared, it's possible that the customer will be null
@@ -36,16 +38,41 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 	if (!customer && isActive) {
 		customer = { id: customerID } as CustomerDocument;
 	}
-	const customerEntity = isActive ? customer : null;
+
+	React.useEffect(() => {
+		if (!isActive) {
+			setSelectedCustomer(null);
+			return;
+		}
+
+		setSelectedCustomer((current) => (current?.id === customerID ? current : null));
+	}, [customerID, isActive]);
+
+	const customerEntity = React.useMemo(() => {
+		if (!isActive) {
+			return null;
+		}
+
+		if (customer && (customer.id === 0 || !!extractNameFromJSON(customer))) {
+			return customer;
+		}
+
+		if (selectedCustomer?.id === customerID) {
+			return selectedCustomer;
+		}
+
+		return customer ?? null;
+	}, [customer, customerID, isActive, selectedCustomer]);
 	const isLoading = isActive && !!isCustomerLoading;
 
 	/**
 	 *
 	 */
 	return (
-		<Combobox
+		<Combobox<CustomerDocument>
 			onValueChange={(option) => {
 				if (!option) return;
+				setSelectedCustomer(option.item ?? null);
 				query.where('customer_id').equals(toNumber(option.value)).exec();
 			}}
 		>

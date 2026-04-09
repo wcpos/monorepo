@@ -45,18 +45,15 @@ export function FilterBar({
 	 *
 	 */
 	const customerQuery = useQuery({
-		queryKeys: ['customers', 'customer-filter'],
+		queryKeys: ['customers', 'orders-customer-filter', customerID ?? 'none'],
 		collectionName: 'customers',
+		initialParams:
+			customerID !== null && customerID !== undefined && customerID !== 0
+				? {
+						selector: { id: customerID },
+					}
+				: undefined,
 	});
-
-	/**
-	 * NOTE: customerID can be 0 which is a valid customer ID
-	 */
-	React.useEffect(() => {
-		if (customerID !== null && customerID !== undefined) {
-			customerQuery?.where('id').equals(customerID).exec();
-		}
-	}, [customerID, customerQuery]);
 
 	/**
 	 *

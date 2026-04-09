@@ -22,5 +22,10 @@ describe('reports filter-bar query guards', () => {
 
 		expect(reportsFilterBar).toContain('const rawCustomerID = useObservableEagerState(');
 		expect(reportsFilterBar).toContain('return toNumber(rawCustomerID as string | number);');
+		expect(reportsFilterBar).toContain(
+			"queryKeys: ['customers', 'reports-customer-filter', customerID ?? 'none']"
+		);
+		expect(reportsFilterBar).toContain('selector: { id: customerID }');
+		expect(reportsFilterBar).not.toContain("queryKeys: ['customers', 'customer-filter']");
 	});
 });

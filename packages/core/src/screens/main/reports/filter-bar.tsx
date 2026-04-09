@@ -47,18 +47,15 @@ export function FilterBar() {
 	 *
 	 */
 	const customerQuery = useQuery({
-		queryKeys: ['customers', 'customer-filter'],
+		queryKeys: ['customers', 'reports-customer-filter', customerID ?? 'none'],
 		collectionName: 'customers',
+		initialParams:
+			customerID !== null && customerID !== undefined && customerID !== 0
+				? {
+						selector: { id: customerID },
+					}
+				: undefined,
 	});
-
-	/**
-	 *
-	 */
-	React.useEffect(() => {
-		if (customerID !== null && customerID !== undefined && customerID !== 0) {
-			customerQuery?.where('id').equals(customerID).exec();
-		}
-	}, [customerID, customerQuery]);
 
 	/**
 	 *
