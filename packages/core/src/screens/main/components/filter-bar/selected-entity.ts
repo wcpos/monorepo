@@ -51,7 +51,7 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 
 	return result$.pipe(
 		map((result) => {
-			if (result.count === 1) {
+			if (result.count === 1 || (result.count === undefined && result.hits.length === 1)) {
 				return result.hits[0].document;
 			}
 

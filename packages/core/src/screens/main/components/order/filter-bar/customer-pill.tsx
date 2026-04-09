@@ -56,7 +56,7 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 				>
 					<ButtonText>
 						{isCustomerLoading
-							? 'Loading...'
+							? t('common.loading')
 							: customer
 								? format(customer)
 								: t('common.select_customer')}

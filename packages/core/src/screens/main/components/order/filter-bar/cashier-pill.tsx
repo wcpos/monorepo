@@ -121,7 +121,7 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 				>
 					<ButtonText>
 						{isCashierLoading
-							? 'Loading...'
+							? t('common.loading')
 							: cashier
 								? format(cashier)
 								: t('common.select_cashier')}

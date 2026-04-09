@@ -125,6 +125,7 @@
 	"common.guest": "Guest",
 	"common.id": "ID",
 	"common.id_2": "ID: {id}",
+	"common.loading": "Loading...",
 	"common.image": "Image",
 	"common.in_stock": "In Stock",
 	"common.including_tax": "Including tax",

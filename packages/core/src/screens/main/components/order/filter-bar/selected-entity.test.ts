@@ -40,6 +40,20 @@ describe('createSelectedEntity$', () => {
 		]);
 	});
 
+	it('resolves a single hit even when the query result omits count', async () => {
+		const selected$ = createSelectedEntity$({
+			id: 7,
+			result$: of({
+				hits: [{ document: { id: 7, name: 'Ada' } }],
+			}),
+		});
+
+		await expect(firstValueFrom(selected$.pipe(take(2), toArray()))).resolves.toEqual([
+			{ id: 7, __isLoading: true, first_name: 'Loading...' },
+			{ id: 7, name: 'Ada' },
+		]);
+	});
+
 	it('keeps the id fallback when the lookup completes with zero hits', async () => {
 		const selected$ = createSelectedEntity$({
 			id: 7,
