@@ -2,7 +2,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 import type { SyncCollection } from '@wcpos/database';
 
-import { yieldToEventLoop } from './yield';
+import { processInChunks, yieldToEventLoop } from './yield';
 
 import type { RxCollection, RxDocument } from 'rxdb';
 
@@ -46,7 +46,7 @@ export class SyncStateManager {
 	 * between batches to prevent UI blocking.
 	 */
 	public async processFullAudit(serverState: ServerRecord[]) {
-		const batchSize = 1000;
+		const batchSize = 5000;
 		let skip = 0;
 		let hasMore = true;
 		let batchCount = 0;
@@ -179,10 +179,10 @@ export class SyncStateManager {
 			}));
 
 		if (newRecords.length > 0) {
-			// Process new records in small chunks with yielding to keep UI responsive
-			// Smaller chunks = more yields = smoother UI, but slightly slower overall
-			// 500 is a good balance for IndexedDB writes
-			const newRecordChunkSize = 500;
+			// Process new records in chunks with yielding to keep UI responsive.
+			// Larger chunks reduce DB transaction overhead and reactive query triggers,
+			// which matters more than yield frequency for 60k+ record audits.
+			const newRecordChunkSize = 2000;
 			const totalChunks = Math.ceil(newRecords.length / newRecordChunkSize);
 
 			for (let i = 0; i < newRecords.length; i += newRecordChunkSize) {
@@ -286,7 +286,11 @@ export class SyncStateManager {
 	}
 
 	/**
-	 * Internal implementation of processServerResponse (called within mutex lock)
+	 * Internal implementation of processServerResponse (called within mutex lock).
+	 *
+	 * For small batches (≤100 docs, the common case for query sync and remote mutations),
+	 * processes in a single operation. For large batches, chunks the work with yielding
+	 * to prevent UI blocking on slower devices.
 	 */
 	private async _processServerResponseInternal(response: any[]) {
 		const primaryPath = this.collection.schema.primaryPath;
@@ -294,37 +298,10 @@ export class SyncStateManager {
 		const localDocs = await this.collection.findByIds(Array.from(responseMap.keys())).exec();
 
 		if (localDocs.size === 0) {
-			const result = await this.collection.bulkInsert(response);
-			if (result.success.length > 0) {
-				syncLogger.info(`Synced new ${this.collection.name}`, {
-					saveToDb: true,
-					context: { ids: result.success.map((doc: any) => doc.id) },
-				});
-
-				const synced = result.success.map((doc: any) => ({
-					id: doc.id,
-					endpoint: this.endpoint,
-					status: 'SYNCED',
-				}));
-				await this.syncCollection.bulkUpsert(synced);
-
-				if (result.error.length > 0) {
-					syncLogger.error('Error inserting documents', {
-						showToast: false,
-						saveToDb: true,
-						context: {
-							errorCode: ERROR_CODES.INSERT_FAILED,
-							collection: this.collection.name,
-							errors: result.error,
-						},
-					});
-				}
-			}
-
-			return result;
+			return this._bulkWithChunking(response, (chunk) => this._doBulkInsert(chunk));
 		}
 
-		// If the local docs exist, we need to make sure we are not overwriting a newer date_modified_gmt
+		// Filter out remote docs older than local versions
 		const skipped: any[] = [];
 
 		for (const [, localDoc] of localDocs) {
@@ -340,35 +317,100 @@ export class SyncStateManager {
 		}
 
 		if (responseMap.size > 0) {
-			const result = await this.collection.bulkUpsert(Array.from(responseMap.values()));
-			if (result.success.length > 0) {
-				syncLogger.info(`Synced ${this.collection.name}`, {
-					saveToDb: true,
-					context: { ids: result.success.map((doc: any) => doc.id) },
-				});
-
-				const synced = result.success.map((doc: any) => ({
-					id: doc.id,
-					endpoint: this.endpoint,
-					status: 'SYNCED',
-				}));
-				await this.syncCollection.bulkUpsert(synced);
-
-				if (result.error.length > 0) {
-					syncLogger.error('Error upserting documents', {
-						showToast: false,
-						saveToDb: true,
-						context: {
-							errorCode: ERROR_CODES.DB_UPSERT_FAILED,
-							collection: this.collection.name,
-							errors: result.error,
-						},
-					});
-				}
-			}
-
-			return result;
+			return this._bulkWithChunking(Array.from(responseMap.values()), (chunk) =>
+				this._doBulkUpsert(chunk)
+			);
 		}
+	}
+
+	/**
+	 * Generic chunking wrapper: for small batches (≤BULK_CHUNK_SIZE), calls the
+	 * operation directly. For larger batches, splits into chunks with yielding
+	 * between each to keep the UI responsive.
+	 */
+	private static readonly BULK_CHUNK_SIZE = 100;
+
+	private async _bulkWithChunking(
+		docs: any[],
+		operation: (chunk: any[]) => Promise<{ success: any[]; error: any[] }>
+	) {
+		if (docs.length <= SyncStateManager.BULK_CHUNK_SIZE) {
+			return operation(docs);
+		}
+
+		const combinedResult: { success: any[]; error: any[] } = { success: [], error: [] };
+		await processInChunks(
+			docs,
+			async (chunk) => {
+				const result = await operation(chunk);
+				if (result) {
+					combinedResult.success.push(...result.success);
+					combinedResult.error.push(...result.error);
+				}
+			},
+			SyncStateManager.BULK_CHUNK_SIZE
+		);
+		return combinedResult;
+	}
+
+	private async _doBulkInsert(docs: any[]) {
+		const result = await this.collection.bulkInsert(docs);
+		if (result.success.length > 0) {
+			syncLogger.info(`Synced new ${this.collection.name}`, {
+				saveToDb: true,
+				context: { ids: result.success.map((doc: any) => doc.id) },
+			});
+
+			const synced = result.success.map((doc: any) => ({
+				id: doc.id,
+				endpoint: this.endpoint,
+				status: 'SYNCED',
+			}));
+			await this.syncCollection.bulkUpsert(synced);
+
+			if (result.error.length > 0) {
+				syncLogger.error('Error inserting documents', {
+					showToast: false,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.INSERT_FAILED,
+						collection: this.collection.name,
+						errors: result.error,
+					},
+				});
+			}
+		}
+		return result;
+	}
+
+	private async _doBulkUpsert(docs: any[]) {
+		const result = await this.collection.bulkUpsert(docs);
+		if (result.success.length > 0) {
+			syncLogger.info(`Synced ${this.collection.name}`, {
+				saveToDb: true,
+				context: { ids: result.success.map((doc: any) => doc.id) },
+			});
+
+			const synced = result.success.map((doc: any) => ({
+				id: doc.id,
+				endpoint: this.endpoint,
+				status: 'SYNCED',
+			}));
+			await this.syncCollection.bulkUpsert(synced);
+
+			if (result.error.length > 0) {
+				syncLogger.error('Error upserting documents', {
+					showToast: false,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.DB_UPSERT_FAILED,
+						collection: this.collection.name,
+						errors: result.error,
+					},
+				});
+			}
+		}
+		return result;
 	}
 
 	/**

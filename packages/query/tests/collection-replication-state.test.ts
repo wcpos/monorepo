@@ -142,6 +142,9 @@ describe('CollectionReplicationState', () => {
 		replicationState.start();
 		await replicationState.firstSync;
 
+		// Wait for debounced totalCount$ to propagate
+		await new Promise((resolve) => setTimeout(resolve, 600));
+
 		expect(spy).toHaveBeenCalledWith(3);
 	});
 

@@ -1,7 +1,14 @@
 import { isCancel } from 'axios';
 import isEmpty from 'lodash/isEmpty';
 import { BehaviorSubject, combineLatest, interval, Observable } from 'rxjs';
-import { distinctUntilChanged, filter, map, startWith, switchMap } from 'rxjs/operators';
+import {
+	debounceTime,
+	distinctUntilChanged,
+	filter,
+	map,
+	startWith,
+	switchMap,
+} from 'rxjs/operators';
 
 import { parseWpError } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { getLogger } from '@wcpos/utils/logger';
@@ -204,6 +211,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		const totalCount$ = (
 			combineLatest([remoteCount$, newLocalCount$]) as unknown as Observable<[number, number]>
 		).pipe(
+			// Debounce during bulk audit: prevents count query from re-running on every
+			// 500-record chunk write, which was causing ~127 expensive count queries
+			// over the growing sync collection during a 63k-order audit.
+			debounceTime(500),
 			map(([remoteCount, newLocalCount]) => {
 				syncLogger.debug('totalCount$ computed', {
 					context: {
