@@ -16,6 +16,10 @@ describe('formatReceiptData', () => {
 		const line = result.lines[0];
 		expect(line.unit_price_incl_display).toBe('$5.00');
 		expect(line.line_total_incl_display).toBe('$10.00');
+		expect(line.unit_price_display).toBe('$5.00');
+		expect(line.line_subtotal_display).toBe('$10.00');
+		expect(line.discounts_display).toBe('$0.00');
+		expect(line.line_total_display).toBe('$10.00');
 	});
 
 	it('preserves original numeric line item fields', () => {
@@ -30,6 +34,9 @@ describe('formatReceiptData', () => {
 		expect(result.totals.subtotal_incl_display).toBe('$25.00');
 		expect(result.totals.grand_total_incl_display).toBe('$25.00');
 		expect(result.totals.tax_total_display).toBe('$2.27');
+		expect(result.totals.subtotal_display).toBe('$25.00');
+		expect(result.totals.discount_total_display).toBe('$0.00');
+		expect(result.totals.grand_total_display).toBe('$25.00');
 	});
 
 	it('preserves original numeric totals', () => {
@@ -68,6 +75,43 @@ describe('formatReceiptData', () => {
 		// German locale — verify EUR symbol and comma decimal separator
 		expect(result.totals.grand_total_incl_display).toMatch(/[€]|EUR/);
 		expect(result.totals.grand_total_incl_display).toContain(',');
+	});
+
+	it('normalizes underscore locale tags from presentation_hints', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.meta.currency = 'EUR';
+		data.presentation_hints.locale = ' de_DE ';
+		const result = formatReceiptData(data);
+		expect(result.totals.grand_total_incl_display).toContain(',');
+	});
+
+	it('uses prices_entered_with_tax fallback for display aliases when tax display is hidden', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.presentation_hints.display_tax = 'hidden';
+		data.presentation_hints.prices_entered_with_tax = false;
+		delete data.lines[0].unit_price;
+		delete data.lines[0].line_subtotal;
+		delete data.lines[0].discounts;
+		delete data.lines[0].line_total;
+		delete data.totals.subtotal;
+		delete data.totals.discount_total;
+		delete data.totals.grand_total;
+		data.fees = [{ label: 'Service Fee', total_incl: 2.5, total_excl: 2.27 }];
+		data.shipping = [{ label: 'Flat Rate', total_incl: 3.5, total_excl: 3.18 }];
+		data.discounts = [{ label: 'Promo', total_incl: 1.5, total_excl: 1.36 }];
+
+		const result = formatReceiptData(data);
+
+		expect(result.lines[0].unit_price_display).toBe('$4.55');
+		expect(result.lines[0].line_subtotal_display).toBe('$9.09');
+		expect(result.lines[0].discounts_display).toBe('$0.00');
+		expect(result.lines[0].line_total_display).toBe('$9.09');
+		expect(result.fees[0].total_display).toBe('$2.27');
+		expect(result.shipping[0].total_display).toBe('$3.18');
+		expect(result.discounts[0].total_display).toBe('$1.36');
+		expect(result.totals.subtotal_display).toBe('$22.73');
+		expect(result.totals.discount_total_display).toBe('$0.00');
+		expect(result.totals.grand_total_display).toBe('$22.73');
 	});
 
 	it('preserves non-numeric fields unchanged', () => {

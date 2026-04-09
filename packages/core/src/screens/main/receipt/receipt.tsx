@@ -43,8 +43,11 @@ import { PrinterSwitcher } from './printer-switcher';
 import { SyncingBadge } from './syncing-badge';
 import { TemplateSwitcher } from './template-switcher';
 import { useResolvedPrinter } from './hooks/use-resolved-printer';
+import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { useUISettings } from '../contexts/ui-settings';
+import { TaxRatesContext } from '../contexts/tax-rates/provider';
+import { resolvePriceNumDecimals } from '../contexts/tax-rates/resolve-price-num-decimals';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
@@ -59,6 +62,13 @@ export function Receipt({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
+	const { store } = useAppState();
+	const taxRates = React.useContext(TaxRatesContext);
+	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
+	const dp = resolvePriceNumDecimals({
+		contextDp: taxRates?.priceNumDecimals,
+		storeDp,
+	});
 
 	// Get the WC order ID for the receipts API
 	const orderId = useObservableEagerState(order.id$ ?? of(undefined as number | undefined));
@@ -115,6 +125,7 @@ export function Receipt({ resource }: Props) {
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || baseReceiptURL,
 		printerProfile: useSystemDialog ? undefined : (resolvedPrinter ?? undefined),
+		decimals: dp,
 		templateEngine: selectedTemplateEngine ?? undefined,
 		templateXml:
 			selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
