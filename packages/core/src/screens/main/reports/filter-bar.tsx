@@ -28,9 +28,16 @@ import { useGuestCustomer } from '../hooks/use-guest-customer';
 export function FilterBar() {
 	const { query } = useReports();
 	const guestCustomer = useGuestCustomer();
-	const customerID = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('customer_id') as number | undefined))
+	const rawCustomerID = useObservableEagerState(
+		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
 	);
+	const customerID = React.useMemo(() => {
+		if (rawCustomerID === null || rawCustomerID === undefined || rawCustomerID === '') {
+			return undefined;
+		}
+
+		return toNumber(rawCustomerID as string | number);
+	}, [rawCustomerID]);
 	const cashierID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
 	) as string | undefined;
@@ -49,10 +56,7 @@ export function FilterBar() {
 	 */
 	React.useEffect(() => {
 		if (customerID !== null && customerID !== undefined && customerID !== 0) {
-			customerQuery
-				?.where('id')
-				.equals(toNumber(customerID as number))
-				.exec();
+			customerQuery?.where('id').equals(customerID).exec();
 		}
 	}, [customerID, customerQuery]);
 

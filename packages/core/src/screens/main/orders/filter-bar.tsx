@@ -26,9 +26,16 @@ export function FilterBar({
 	query: import('@wcpos/query').Query<import('@wcpos/database').OrderCollection>;
 }) {
 	const guestCustomer = useGuestCustomer();
-	const customerID = useObservableEagerState(
+	const rawCustomerID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
 	);
+	const customerID = React.useMemo(() => {
+		if (rawCustomerID === null || rawCustomerID === undefined || rawCustomerID === '') {
+			return undefined;
+		}
+
+		return toNumber(rawCustomerID as string | number);
+	}, [rawCustomerID]);
 	const cashierID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
 	);
@@ -47,10 +54,7 @@ export function FilterBar({
 	 */
 	React.useEffect(() => {
 		if (customerID !== null && customerID !== undefined) {
-			customerQuery
-				?.where('id')
-				.equals(customerID as unknown as number)
-				.exec();
+			customerQuery?.where('id').equals(customerID).exec();
 		}
 	}, [customerID, customerQuery]);
 
@@ -130,11 +134,7 @@ export function FilterBar({
 		<HStack className="w-full flex-wrap">
 			<StatusPill query={query} />
 			<Suspense>
-				<CustomerPill
-					resource={customerResource}
-					query={query}
-					customerID={customerID as number | undefined}
-				/>
+				<CustomerPill resource={customerResource} query={query} customerID={customerID} />
 			</Suspense>
 			<Suspense>
 				<CashierPill

@@ -16,4 +16,11 @@ describe('reports filter-bar query guards', () => {
 
 		expect(reportsFilterBar).toContain('customerID !== 0');
 	});
+
+	it('normalizes the selected customer id before creating the selected customer state', () => {
+		const reportsFilterBar = readFileSync(join(__dirname, 'filter-bar.tsx'), 'utf8');
+
+		expect(reportsFilterBar).toContain('const rawCustomerID = useObservableEagerState(');
+		expect(reportsFilterBar).toContain('return toNumber(rawCustomerID as string | number);');
+	});
 });
