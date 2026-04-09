@@ -248,6 +248,17 @@ describe('Query', () => {
 			expect(query.currentRxQuery.other.queryBuilderPath).toBe('stock_status');
 		});
 
+		it('unwraps simple $eq selectors via getSelector', () => {
+			const query = new Query({
+				collection: storeDatabase.collections.products,
+				initialParams: {},
+			});
+
+			query.where('stock_status').equals('instock').exec();
+
+			expect(query.getSelector('stock_status')).toBe('instock');
+		});
+
 		/**
 		 *
 		 */

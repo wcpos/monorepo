@@ -351,6 +351,15 @@ function ButtonPill({
 	removeAccessibilityLabel,
 	...props
 }: ButtonPillProps) {
+	const handleRemovePress = React.useCallback(
+		(event: any) => {
+			event?.preventDefault?.();
+			event?.stopPropagation?.();
+			onRemove?.();
+		},
+		[onRemove]
+	);
+
 	// NOTE: props (including onPress) must be spread onto the label Button.
 	// Slot-based wrappers like DialogTrigger asChild inject onPress to control
 	// open/close state — stripping it breaks that composition pattern.
@@ -362,7 +371,7 @@ function ButtonPill({
 				variant={props.variant}
 				size={props.size}
 				leftIcon="xmark"
-				onPress={onRemove}
+				onPress={handleRemovePress}
 				accessibilityLabel={removeAccessibilityLabel ?? 'Remove'}
 			/>
 		</ButtonGroup>
