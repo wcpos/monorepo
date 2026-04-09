@@ -184,6 +184,11 @@ describe('buildReceiptData', () => {
 		expect(result.totals.subtotal).toBe('10.00');
 	});
 
+	it('formats tax_total using the requested decimal precision', () => {
+		const result = buildReceiptData({ ...mockOrder, total_tax: '2.5' }, mockStore, 3);
+		expect(result.totals.tax_total).toBe('2.500');
+	});
+
 	it('adds display aliases and hints for tax-inclusive cart display', () => {
 		const result = buildReceiptData(aliasOrder, inclStore);
 		const line = result.lines[0];

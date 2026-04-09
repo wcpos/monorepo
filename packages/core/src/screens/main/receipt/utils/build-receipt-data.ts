@@ -234,7 +234,7 @@ export function buildReceiptData(
 			subtotal: getDisplayValue({ incl: subtotalIncl, excl: subtotalExcl, displayTax }).toFixed(dp),
 			subtotal_incl: subtotalIncl.toFixed(dp),
 			subtotal_excl: subtotalExcl.toFixed(dp),
-			tax_total: order.total_tax || (0).toFixed(dp),
+			tax_total: toNum(order.total_tax).toFixed(dp),
 			discount_total: getDisplayValue({
 				incl: discountTotalIncl,
 				excl: discountTotalExcl,

@@ -113,9 +113,9 @@ function mapLine(
 	index: number,
 	displayTax: 'incl' | 'excl' | 'hidden'
 ): ReceiptLineItem {
-	const qty = toNum(src.quantity);
-	const price = toNum(src.price);
-	const total = toNum(src.total);
+	const qty = toNum(src.qty ?? src.quantity);
+	const price = toNum(src.price ?? src.unit_price ?? src.unit_price_incl ?? src.unit_price_excl);
+	const total = toNum(src.line_total ?? src.total ?? src.line_total_incl ?? src.line_total_excl);
 	const unitPriceFallback = qty > 0 ? total / qty : price;
 	const unitPriceIncl = toNum(src.unit_price_incl ?? src.unit_price ?? unitPriceFallback);
 	const unitPriceExcl = toNum(src.unit_price_excl ?? src.unit_price ?? unitPriceFallback);
@@ -153,7 +153,25 @@ function mapLine(
 				key: toStr(entry.key),
 				value: toStr(entry.value),
 			})),
-		taxes: [],
+		taxes: toArr(src.taxes)
+			.filter((entry): entry is Record<string, any> => !!entry && typeof entry === 'object')
+			.map((entry) => ({
+				code: toStr(entry.code),
+				amount: toNum(entry.amount),
+			})),
+	};
+}
+
+function mapFeeLike(src: Record<string, any>, displayTax: 'incl' | 'excl' | 'hidden'): ReceiptFee {
+	const totalIncl = toNum(src.total_incl ?? src.total);
+	const totalExcl = 'total_excl' in src ? toNum(src.total_excl) : totalIncl - toNum(src.total_tax);
+	const total = displayTax === 'excl' ? totalExcl : totalIncl;
+
+	return {
+		label: toStr(src.label ?? src.name ?? src.title),
+		total,
+		total_incl: totalIncl,
+		total_excl: totalExcl,
 	};
 }
 
@@ -185,23 +203,31 @@ function mapTotals(
 		grand_total: grandTotal,
 		grand_total_incl: grandTotalIncl,
 		grand_total_excl: grandTotalExcl,
-		paid_total: grandTotalIncl,
-		change_total: 0,
+		paid_total: 'paid_total' in src ? toNum(src.paid_total) : grandTotalIncl,
+		change_total: 'change_total' in src ? toNum(src.change_total) : 0,
 	};
 }
 
 function mapPayment(src: Record<string, any>): ReceiptPayment {
 	return {
-		method_id: toStr(src.method),
-		method_title: toStr(src.method),
+		method_id: toStr(src.method_id ?? src.method),
+		method_title: toStr(src.method_title ?? src.method),
 		amount: toNum(src.amount),
-		reference: toStr(src.transaction_id),
+		reference: toStr(src.reference ?? src.transaction_id),
+		tendered: 'tendered' in src ? toNum(src.tendered) : undefined,
+		change: 'change' in src ? toNum(src.change) : undefined,
 	};
 }
 
 function mapFiscal(src: Record<string, any>): ReceiptFiscal {
 	return {
-		immutable_id: toStr(src.fiscal_id) || undefined,
+		immutable_id: toStr(src.immutable_id ?? src.fiscal_id) || undefined,
+		receipt_number: toStr(src.receipt_number) || undefined,
+		sequence: 'sequence' in src ? toNum(src.sequence) : undefined,
+		hash: toStr(src.hash) || undefined,
+		qr_payload: toStr(src.qr_payload) || undefined,
+		tax_agency_code: toStr(src.tax_agency_code) || undefined,
+		signed_at: toStr(src.signed_at) || undefined,
 	};
 }
 
@@ -210,9 +236,75 @@ function mapPresentationHints(src: Record<string, any>): ReceiptPresentationHint
 
 	return {
 		display_tax: resolveDisplayTax(src),
-		prices_entered_with_tax: !!src.prices_entered_with_tax,
+		prices_entered_with_tax:
+			'prices_entered_with_tax' in src ? !!src.prices_entered_with_tax : true,
 		rounding_mode: toStr(src.rounding_mode) || 'round',
 		locale: locale || 'en-US',
+	};
+}
+
+function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData {
+	const base = emptyReceiptData();
+	const presentationHints = mapPresentationHints(
+		data.presentation_hints && typeof data.presentation_hints === 'object'
+			? (data.presentation_hints as Record<string, any>)
+			: {}
+	);
+	const displayTax = presentationHints.display_tax;
+
+	return {
+		meta: {
+			...base.meta,
+			...(data.meta ?? {}),
+		},
+		store: {
+			...base.store,
+			...(data.store ?? {}),
+			address_lines: Array.isArray(data.store?.address_lines)
+				? data.store.address_lines.map((line) => toStr(line))
+				: base.store.address_lines,
+		},
+		cashier: {
+			...base.cashier,
+			...(data.cashier ?? {}),
+		},
+		customer: {
+			...base.customer,
+			...(data.customer ?? {}),
+		},
+		lines: toArr(data.lines).map((item, i) =>
+			mapLine(item && typeof item === 'object' ? (item as Record<string, any>) : {}, i, displayTax)
+		),
+		fees: toArr(data.fees).map((item) =>
+			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
+		),
+		shipping: toArr(data.shipping).map((item) =>
+			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
+		),
+		discounts: toArr(data.discounts).map((item) =>
+			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
+		),
+		totals: mapTotals(
+			data.totals && typeof data.totals === 'object' ? (data.totals as Record<string, any>) : {},
+			displayTax
+		),
+		tax_summary: toArr(data.tax_summary)
+			.filter((entry): entry is Record<string, any> => !!entry && typeof entry === 'object')
+			.map((entry) => ({
+				code: toStr(entry.code),
+				rate: toNum(entry.rate),
+				label: toStr(entry.label),
+				taxable_amount_excl: toNum(entry.taxable_amount_excl),
+				tax_amount: toNum(entry.tax_amount),
+				taxable_amount_incl: toNum(entry.taxable_amount_incl),
+			})),
+		payments: toArr(data.payments).map((p) =>
+			mapPayment(p && typeof p === 'object' ? (p as Record<string, any>) : {})
+		),
+		fiscal: mapFiscal(
+			data.fiscal && typeof data.fiscal === 'object' ? (data.fiscal as Record<string, any>) : {}
+		),
+		presentation_hints: presentationHints,
 	};
 }
 
@@ -232,7 +324,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 
 	// Pass through data that already matches the canonical shape.
 	if (isCanonicalShape(data)) {
-		return data as ReceiptData;
+		return normalizeCanonicalReceiptData(data as Partial<ReceiptData>);
 	}
 
 	const meta = data.meta && typeof data.meta === 'object' ? data.meta : {};
@@ -254,9 +346,15 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 		lines: toArr(data.lines).map((item, i) =>
 			mapLine(item && typeof item === 'object' ? (item as Record<string, any>) : {}, i, displayTax)
 		),
-		fees: [] as ReceiptFee[],
-		shipping: [] as ReceiptFee[],
-		discounts: [] as ReceiptDiscount[],
+		fees: toArr(data.fees).map((item) =>
+			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
+		),
+		shipping: toArr(data.shipping).map((item) =>
+			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
+		),
+		discounts: toArr(data.discounts).map((item) =>
+			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
+		) as ReceiptDiscount[],
 		totals: mapTotals(totals, displayTax),
 		tax_summary: [] as ReceiptTaxSummaryItem[],
 		payments: toArr(data.payments).map((p) =>

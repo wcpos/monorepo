@@ -100,11 +100,54 @@ const offlineReceiptData = {
 	},
 };
 
+const offlineReceiptDataWithAdjustments = {
+	...offlineReceiptData,
+	fees: [{ label: 'Service Fee', total_incl: '2.00', total_excl: '1.82' }],
+	shipping: [{ label: 'Shipping', total: '3.00', total_excl: '2.73', total_incl: '3.00' }],
+	discounts: [{ label: 'Promo', total_incl: '1.50', total_excl: '1.36' }],
+};
+
 describe('mapReceiptData', () => {
 	describe('passthrough for canonical shape', () => {
-		it('returns canonical data as-is when it already matches the encoder shape', () => {
-			const result = mapReceiptData(sampleReceiptData as Record<string, any>);
-			expect(result).toBe(sampleReceiptData);
+		it('normalizes canonical data so aliases and defaults are available', () => {
+			const legacyCanonical = {
+				...sampleReceiptData,
+				lines: sampleReceiptData.lines.map(
+					({ unit_price, line_subtotal, discounts, line_total, ...line }) => line
+				),
+				fees: [{ label: 'Service Fee', total_incl: 2, total_excl: 1.82 }],
+				shipping: [{ label: 'Shipping', total_incl: 3, total_excl: 2.73 }],
+				discounts: [{ label: 'Promo', total_incl: 1.5, total_excl: 1.36 }],
+				totals: {
+					...sampleReceiptData.totals,
+					subtotal: undefined,
+					discount_total: undefined,
+					grand_total: undefined,
+				},
+				presentation_hints: undefined,
+			};
+			const result = mapReceiptData(legacyCanonical as Record<string, any>);
+
+			expect(result).not.toBe(legacyCanonical);
+			expect(result.lines[0].unit_price).toBe(5);
+			expect(result.lines[0].line_subtotal).toBe(10);
+			expect(result.lines[0].discounts).toBe(0);
+			expect(result.lines[0].line_total).toBe(10);
+			expect(result.totals.subtotal).toBe(25);
+			expect(result.totals.discount_total).toBe(0);
+			expect(result.totals.grand_total).toBe(25);
+			expect(result.presentation_hints).toEqual({
+				display_tax: 'incl',
+				prices_entered_with_tax: true,
+				rounding_mode: 'round',
+				locale: 'en-US',
+			});
+			expect(result.fees[0]).toEqual({
+				label: 'Service Fee',
+				total: 2,
+				total_incl: 2,
+				total_excl: 1.82,
+			});
 		});
 
 		it('detects canonical shape when both meta and totals markers are present', () => {
@@ -113,8 +156,10 @@ describe('mapReceiptData', () => {
 				totals: { subtotal_incl: 10 },
 			};
 			const result = mapReceiptData(data);
-			// Should pass through (same reference) because isCanonicalShape returns true
-			expect(result).toBe(data);
+			expect(result.meta.schema_version).toBe(1);
+			expect(result.meta.order_id).toBe(5);
+			expect(result.totals.subtotal_incl).toBe(10);
+			expect(result.presentation_hints.display_tax).toBe('incl');
 		});
 
 		it('does not treat partial canonical markers as canonical', () => {
@@ -226,6 +271,20 @@ describe('mapReceiptData', () => {
 			expect(mapped.shipping).toEqual([]);
 			expect(mapped.discounts).toEqual([]);
 			expect(mapped.tax_summary).toEqual([]);
+		});
+
+		it('maps fees, shipping, and discounts with display-aware totals', () => {
+			const mappedWithAdjustments = mapReceiptData(offlineReceiptDataWithAdjustments);
+
+			expect(mappedWithAdjustments.fees).toEqual([
+				{ label: 'Service Fee', total: 2, total_incl: 2, total_excl: 1.82 },
+			]);
+			expect(mappedWithAdjustments.shipping).toEqual([
+				{ label: 'Shipping', total: 3, total_incl: 3, total_excl: 2.73 },
+			]);
+			expect(mappedWithAdjustments.discounts).toEqual([
+				{ label: 'Promo', total: 1.5, total_incl: 1.5, total_excl: 1.36 },
+			]);
 		});
 	});
 
