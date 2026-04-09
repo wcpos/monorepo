@@ -17,6 +17,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { useT } from '../../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
+import { getSelectedPillState } from './selected-pill-state';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'filter']);
 const CASHIER_FILTER_DEBUG_TAG = '[cashier-filter-debug]';
@@ -106,6 +107,12 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 		cashier = { id: cashierID } as CustomerDocument;
 	}
 
+	const pillState = getSelectedPillState({
+		selectedID: cashierID,
+		entity: cashier,
+		isLoading: !!isCashierLoading,
+	});
+
 	const handleRemove = React.useCallback(() => {
 		uiLogger.info(`${CASHIER_FILTER_DEBUG_TAG} cashier remove pressed`, {
 			context: {
@@ -146,15 +153,15 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 				<ButtonPill
 					size="xs"
 					leftIcon="userCrown"
-					variant={cashier ? undefined : 'muted'}
-					removable={!!cashier}
+					variant={pillState.isActive ? undefined : 'muted'}
+					removable={pillState.isActive}
 					onRemove={handleRemove}
 				>
 					<ButtonText>
-						{isCashierLoading
+						{pillState.isLoading
 							? t('common.loading')
-							: cashier
-								? format(cashier)
+							: pillState.entity
+								? format(pillState.entity)
 								: t('common.select_cashier')}
 					</ButtonText>
 				</ButtonPill>

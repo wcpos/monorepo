@@ -11,6 +11,7 @@ import { Query } from '@wcpos/query';
 import { useT } from '../../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerSearch } from '../../customer-select';
+import { getSelectedPillState } from './selected-pill-state';
 
 interface CustomerPillProps {
 	query: Query<CustomerCollection>;
@@ -36,6 +37,12 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 		customer = { id: customerID } as CustomerDocument;
 	}
 
+	const pillState = getSelectedPillState({
+		selectedID: customerID,
+		entity: customer,
+		isLoading: !!isCustomerLoading,
+	});
+
 	/**
 	 *
 	 */
@@ -50,15 +57,15 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 				<ButtonPill
 					size="xs"
 					leftIcon="user"
-					variant={customer ? undefined : 'muted'}
-					removable={!!customer}
+					variant={pillState.isActive ? undefined : 'muted'}
+					removable={pillState.isActive}
 					onRemove={() => query.removeWhere('customer_id').exec()}
 				>
 					<ButtonText>
-						{isCustomerLoading
+						{pillState.isLoading
 							? t('common.loading')
-							: customer
-								? format(customer)
+							: pillState.entity
+								? format(pillState.entity)
 								: t('common.select_customer')}
 					</ButtonText>
 				</ButtonPill>
