@@ -10,4 +10,10 @@ describe('reports filter-bar query guards', () => {
 		expect(reportsFilterBar).toContain('customerQuery?.');
 		expect(reportsFilterBar).toContain('cashierQuery?.');
 	});
+
+	it('skips the customer lookup when the selected customer is the guest customer', () => {
+		const reportsFilterBar = readFileSync(join(__dirname, 'filter-bar.tsx'), 'utf8');
+
+		expect(reportsFilterBar).toContain('customerID !== 0');
+	});
 });

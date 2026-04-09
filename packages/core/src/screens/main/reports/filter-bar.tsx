@@ -48,7 +48,7 @@ export function FilterBar() {
 	 *
 	 */
 	React.useEffect(() => {
-		if (customerID !== null && customerID !== undefined) {
+		if (customerID !== null && customerID !== undefined && customerID !== 0) {
 			customerQuery
 				?.where('id')
 				.equals(toNumber(customerID as number))
