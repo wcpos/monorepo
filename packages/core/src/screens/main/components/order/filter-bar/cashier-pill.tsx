@@ -19,6 +19,7 @@ import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
 
 const uiLogger = getLogger(['wcpos', 'ui', 'filter']);
+const CASHIER_FILTER_DEBUG_TAG = '[cashier-filter-debug]';
 
 interface CashierPillProps {
 	query: Query<CustomerCollection>;
@@ -88,7 +89,7 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 	const isCashierLoading = (cashier as CashierWithLoadingMarker | null)?.__isLoading;
 
 	React.useEffect(() => {
-		uiLogger.info('cashier pill state', {
+		uiLogger.info(`${CASHIER_FILTER_DEBUG_TAG} cashier pill state`, {
 			context: {
 				cashierID,
 				selectedCashier: query.getMetaDataElemMatchValue('_pos_user'),
@@ -106,7 +107,7 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 	}
 
 	const handleRemove = React.useCallback(() => {
-		uiLogger.info('cashier remove pressed', {
+		uiLogger.info(`${CASHIER_FILTER_DEBUG_TAG} cashier remove pressed`, {
 			context: {
 				cashierID,
 				beforeSelector: query.currentRxQuery?.mangoQuery?.selector,
@@ -115,7 +116,7 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 
 		query.removeElemMatch('meta_data', { key: '_pos_user' }).exec();
 
-		uiLogger.info('cashier remove applied', {
+		uiLogger.info(`${CASHIER_FILTER_DEBUG_TAG} cashier remove applied`, {
 			context: {
 				cashierIDAfter: query.getMetaDataElemMatchValue('_pos_user'),
 				storeIDAfter: query.getMetaDataElemMatchValue('_pos_store'),
