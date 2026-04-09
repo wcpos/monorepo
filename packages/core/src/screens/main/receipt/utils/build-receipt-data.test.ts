@@ -100,6 +100,14 @@ const exclStore = {
 	locale: 'en_US',
 };
 
+const orderLevelDiscountOrder = {
+	...aliasOrder,
+	total: '22.00',
+	total_tax: '4.00',
+	discount_total: '7.00',
+	discount_tax: '1.00',
+};
+
 describe('buildReceiptData', () => {
 	it('maps meta section from order', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
@@ -209,5 +217,21 @@ describe('buildReceiptData', () => {
 		expect(result.totals.grand_total).toBe('20.00');
 		expect(result.presentation_hints.display_tax).toBe('excl');
 		expect(result.presentation_hints.prices_entered_with_tax).toBe(false);
+	});
+
+	it('uses order-level discount totals when they differ from summed line discounts', () => {
+		const inclResult = buildReceiptData(orderLevelDiscountOrder, inclStore);
+		const exclResult = buildReceiptData(orderLevelDiscountOrder, exclStore);
+
+		expect(inclResult.lines[0].discounts).toBe('6.00');
+		expect(exclResult.lines[0].discounts).toBe('5.00');
+
+		expect(inclResult.totals.discount_total).toBe('8.00');
+		expect(inclResult.totals.discount_total_incl).toBe('8.00');
+		expect(inclResult.totals.discount_total_excl).toBe('7.00');
+
+		expect(exclResult.totals.discount_total).toBe('7.00');
+		expect(exclResult.totals.discount_total_incl).toBe('8.00');
+		expect(exclResult.totals.discount_total_excl).toBe('7.00');
 	});
 });

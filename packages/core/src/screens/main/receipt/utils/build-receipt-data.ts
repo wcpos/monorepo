@@ -186,8 +186,19 @@ export function buildReceiptData(
 
 	const subtotalExcl = mappedLines.reduce((sum, line) => sum + toNum(line.line_subtotal_excl), 0);
 	const subtotalIncl = mappedLines.reduce((sum, line) => sum + toNum(line.line_subtotal_incl), 0);
-	const discountTotalExcl = mappedLines.reduce((sum, line) => sum + toNum(line.discounts_excl), 0);
-	const discountTotalIncl = mappedLines.reduce((sum, line) => sum + toNum(line.discounts_incl), 0);
+	const lineDiscountTotalExcl = mappedLines.reduce(
+		(sum, line) => sum + toNum(line.discounts_excl),
+		0
+	);
+	const lineDiscountTotalIncl = mappedLines.reduce(
+		(sum, line) => sum + toNum(line.discounts_incl),
+		0
+	);
+	const discountTotalExcl =
+		order.discount_total != null ? toNum(order.discount_total) : lineDiscountTotalExcl;
+	const discountTax = toNum(order.discount_tax);
+	const discountTotalIncl =
+		order.discount_total != null ? discountTotalExcl + discountTax : lineDiscountTotalIncl;
 	const grandTotalIncl = toNum(order.total);
 	const grandTotalExcl = grandTotalIncl - toNum(order.total_tax);
 
