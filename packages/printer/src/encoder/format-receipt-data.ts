@@ -1,5 +1,15 @@
 import type { ReceiptData } from './types';
 
+function resolveDisplayValueSide(data: ReceiptData): 'incl' | 'excl' {
+	const hints = data.presentation_hints;
+
+	if (hints?.display_tax === 'incl' || hints?.display_tax === 'excl') {
+		return hints.display_tax;
+	}
+
+	return hints?.prices_entered_with_tax === false ? 'excl' : 'incl';
+}
+
 /**
  * Format all numeric currency fields in ReceiptData, adding locale-aware
  * `_display` variants while preserving the original numeric values for
@@ -13,7 +23,7 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		console.warn('formatReceiptData: missing currency in meta, formatting may be incomplete');
 	}
 	const normalizedLocale = (data.presentation_hints?.locale || 'en-US').trim().replace(/_/g, '-');
-	const displayTax = data.presentation_hints?.display_tax === 'excl' ? 'excl' : 'incl';
+	const displayTax = resolveDisplayValueSide(data);
 
 	const fmt = (value: number): string => {
 		try {

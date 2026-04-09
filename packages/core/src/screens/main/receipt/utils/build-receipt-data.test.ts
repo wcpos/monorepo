@@ -108,6 +108,13 @@ const orderLevelDiscountOrder = {
 	discount_tax: '1.00',
 };
 
+const orderWithAdjustments = {
+	...aliasOrder,
+	fee_lines: [{ name: 'Service Fee', total: '2.00', total_tax: '0.20' }],
+	shipping_lines: [{ method_title: 'Flat Rate', total: '3.00', total_tax: '0.30' }],
+	coupon_lines: [{ code: 'SPRING', discount: '1.50', discount_tax: '0.15' }],
+};
+
 describe('buildReceiptData', () => {
 	it('maps meta section from order', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
@@ -238,5 +245,30 @@ describe('buildReceiptData', () => {
 		expect(exclResult.totals.discount_total).toBe('7.00');
 		expect(exclResult.totals.discount_total_incl).toBe('8.00');
 		expect(exclResult.totals.discount_total_excl).toBe('7.00');
+	});
+
+	it('serializes fee, shipping, and coupon rows for offline templates', () => {
+		const inclResult = buildReceiptData(orderWithAdjustments, inclStore);
+		const exclResult = buildReceiptData(orderWithAdjustments, exclStore);
+
+		expect(inclResult.fees).toEqual([
+			{ label: 'Service Fee', total: '2.20', total_incl: '2.20', total_excl: '2.00' },
+		]);
+		expect(inclResult.shipping).toEqual([
+			{ label: 'Flat Rate', total: '3.30', total_incl: '3.30', total_excl: '3.00' },
+		]);
+		expect(inclResult.discounts).toEqual([
+			{ label: 'SPRING', total: '1.65', total_incl: '1.65', total_excl: '1.50' },
+		]);
+
+		expect(exclResult.fees).toEqual([
+			{ label: 'Service Fee', total: '2.00', total_incl: '2.20', total_excl: '2.00' },
+		]);
+		expect(exclResult.shipping).toEqual([
+			{ label: 'Flat Rate', total: '3.00', total_incl: '3.30', total_excl: '3.00' },
+		]);
+		expect(exclResult.discounts).toEqual([
+			{ label: 'SPRING', total: '1.50', total_incl: '1.65', total_excl: '1.50' },
+		]);
 	});
 });

@@ -108,10 +108,20 @@ function resolveDisplayTax(src: Record<string, any>): 'incl' | 'excl' | 'hidden'
 	return value === 'excl' || value === 'hidden' ? value : 'incl';
 }
 
+function resolveDisplayValueSide(
+	src: Pick<ReceiptPresentationHints, 'display_tax' | 'prices_entered_with_tax'>
+): 'incl' | 'excl' {
+	if (src.display_tax === 'incl' || src.display_tax === 'excl') {
+		return src.display_tax;
+	}
+
+	return src.prices_entered_with_tax ? 'incl' : 'excl';
+}
+
 function mapLine(
 	src: Record<string, any>,
 	index: number,
-	displayTax: 'incl' | 'excl' | 'hidden'
+	displayTax: 'incl' | 'excl'
 ): ReceiptLineItem {
 	const qty = toNum(src.qty ?? src.quantity);
 	const price = toNum(src.price ?? src.unit_price ?? src.unit_price_incl ?? src.unit_price_excl);
@@ -162,7 +172,7 @@ function mapLine(
 	};
 }
 
-function mapFeeLike(src: Record<string, any>, displayTax: 'incl' | 'excl' | 'hidden'): ReceiptFee {
+function mapFeeLike(src: Record<string, any>, displayTax: 'incl' | 'excl'): ReceiptFee {
 	const totalIncl = toNum(src.total_incl ?? src.total);
 	const totalExcl = 'total_excl' in src ? toNum(src.total_excl) : totalIncl - toNum(src.total_tax);
 	const total = displayTax === 'excl' ? totalExcl : totalIncl;
@@ -175,10 +185,20 @@ function mapFeeLike(src: Record<string, any>, displayTax: 'incl' | 'excl' | 'hid
 	};
 }
 
-function mapTotals(
-	src: Record<string, any>,
-	displayTax: 'incl' | 'excl' | 'hidden'
-): ReceiptTotals {
+function mapDiscountLike(src: Record<string, any>, displayTax: 'incl' | 'excl'): ReceiptDiscount {
+	const totalIncl = toNum(src.total_incl ?? src.total);
+	const totalExcl = 'total_excl' in src ? toNum(src.total_excl) : totalIncl - toNum(src.total_tax);
+	const total = displayTax === 'excl' ? totalExcl : totalIncl;
+
+	return {
+		label: toStr(src.label ?? src.name ?? src.title),
+		total,
+		total_incl: totalIncl,
+		total_excl: totalExcl,
+	};
+}
+
+function mapTotals(src: Record<string, any>, displayTax: 'incl' | 'excl'): ReceiptTotals {
 	const subtotalIncl = toNum(src.subtotal_incl ?? src.subtotal);
 	const subtotalExcl =
 		'subtotal_excl' in src ? toNum(src.subtotal_excl) : subtotalIncl - toNum(src.tax_total);
@@ -250,7 +270,7 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			? (data.presentation_hints as Record<string, any>)
 			: {}
 	);
-	const displayTax = presentationHints.display_tax;
+	const displayTax = resolveDisplayValueSide(presentationHints);
 
 	return {
 		meta: {
@@ -282,7 +302,10 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
 		),
 		discounts: toArr(data.discounts).map((item) =>
-			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
+			mapDiscountLike(
+				item && typeof item === 'object' ? (item as Record<string, any>) : {},
+				displayTax
+			)
 		),
 		totals: mapTotals(
 			data.totals && typeof data.totals === 'object' ? (data.totals as Record<string, any>) : {},
@@ -336,7 +359,8 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 		data.presentation_hints && typeof data.presentation_hints === 'object'
 			? data.presentation_hints
 			: {};
-	const displayTax = resolveDisplayTax(presentationHints);
+	const normalizedHints = mapPresentationHints(presentationHints);
+	const displayTax = resolveDisplayValueSide(normalizedHints);
 
 	return {
 		meta: mapMeta(meta),
@@ -353,15 +377,18 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
 		),
 		discounts: toArr(data.discounts).map((item) =>
-			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
-		) as ReceiptDiscount[],
+			mapDiscountLike(
+				item && typeof item === 'object' ? (item as Record<string, any>) : {},
+				displayTax
+			)
+		),
 		totals: mapTotals(totals, displayTax),
 		tax_summary: [] as ReceiptTaxSummaryItem[],
 		payments: toArr(data.payments).map((p) =>
 			mapPayment(p && typeof p === 'object' ? (p as Record<string, any>) : {})
 		),
 		fiscal: mapFiscal(fiscal),
-		presentation_hints: mapPresentationHints(presentationHints),
+		presentation_hints: normalizedHints,
 	};
 }
 

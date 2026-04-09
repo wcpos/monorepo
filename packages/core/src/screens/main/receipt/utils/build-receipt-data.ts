@@ -62,6 +62,13 @@ interface ReceiptTotals {
 	grand_total_excl: string;
 }
 
+interface ReceiptAdjustment {
+	label: string;
+	total: string;
+	total_incl: string;
+	total_excl: string;
+}
+
 interface ReceiptPayment {
 	method: string;
 	amount: string;
@@ -85,6 +92,9 @@ export interface ReceiptData {
 	store: ReceiptStore;
 	customer: ReceiptCustomer;
 	lines: ReceiptLine[];
+	fees: ReceiptAdjustment[];
+	shipping: ReceiptAdjustment[];
+	discounts: ReceiptAdjustment[];
 	totals: ReceiptTotals;
 	payments: ReceiptPayment[];
 	fiscal: ReceiptFiscal;
@@ -117,6 +127,23 @@ function getDisplayValue({
 	displayTax: 'incl' | 'excl';
 }) {
 	return displayTax === 'incl' ? incl : excl;
+}
+
+function mapAdjustment(
+	label: string,
+	excl: number,
+	tax: number,
+	displayTax: 'incl' | 'excl',
+	dp: number
+): ReceiptAdjustment {
+	const incl = excl + tax;
+
+	return {
+		label,
+		total: getDisplayValue({ incl, excl, displayTax }).toFixed(dp),
+		total_incl: incl.toFixed(dp),
+		total_excl: excl.toFixed(dp),
+	};
 }
 
 export function buildReceiptData(
@@ -201,6 +228,29 @@ export function buildReceiptData(
 		order.discount_total != null ? discountTotalExcl + discountTax : lineDiscountTotalIncl;
 	const grandTotalIncl = toNum(order.total);
 	const grandTotalExcl = grandTotalIncl - toNum(order.total_tax);
+	const mappedFees: ReceiptAdjustment[] = (order.fee_lines || []).map((line: Record<string, any>) =>
+		mapAdjustment(String(line.name || ''), toNum(line.total), toNum(line.total_tax), displayTax, dp)
+	);
+	const mappedShipping: ReceiptAdjustment[] = (order.shipping_lines || []).map(
+		(line: Record<string, any>) =>
+			mapAdjustment(
+				String(line.method_title || line.method_id || ''),
+				toNum(line.total),
+				toNum(line.total_tax),
+				displayTax,
+				dp
+			)
+	);
+	const mappedDiscounts: ReceiptAdjustment[] = (order.coupon_lines || []).map(
+		(line: Record<string, any>) =>
+			mapAdjustment(
+				String(line.code || ''),
+				toNum(line.discount),
+				toNum(line.discount_tax),
+				displayTax,
+				dp
+			)
+	);
 
 	return {
 		meta: {
@@ -230,6 +280,9 @@ export function buildReceiptData(
 			shipping_address: formatAddress(shipping),
 		},
 		lines: mappedLines,
+		fees: mappedFees,
+		shipping: mappedShipping,
+		discounts: mappedDiscounts,
 		totals: {
 			subtotal: getDisplayValue({ incl: subtotalIncl, excl: subtotalExcl, displayTax }).toFixed(dp),
 			subtotal_incl: subtotalIncl.toFixed(dp),

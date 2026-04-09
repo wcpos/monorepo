@@ -150,6 +150,43 @@ describe('mapReceiptData', () => {
 			});
 		});
 
+		it('falls back to prices_entered_with_tax when display_tax is hidden', () => {
+			const legacyCanonical = {
+				...sampleReceiptData,
+				lines: sampleReceiptData.lines.map(
+					({ unit_price, line_subtotal, discounts, line_total, ...line }) => line
+				),
+				fees: [{ label: 'Service Fee', total_incl: 2, total_excl: 1.82 }],
+				shipping: [{ label: 'Shipping', total_incl: 3, total_excl: 2.73 }],
+				discounts: [{ label: 'Promo', total_incl: 1.5, total_excl: 1.36 }],
+				totals: {
+					...sampleReceiptData.totals,
+					subtotal: undefined,
+					discount_total: undefined,
+					grand_total: undefined,
+				},
+				presentation_hints: {
+					display_tax: 'hidden',
+					prices_entered_with_tax: false,
+					rounding_mode: 'round',
+					locale: 'en-US',
+				},
+			};
+
+			const result = mapReceiptData(legacyCanonical as Record<string, any>);
+
+			expect(result.presentation_hints.display_tax).toBe('hidden');
+			expect(result.lines[0].unit_price).toBe(sampleReceiptData.lines[0].unit_price_excl);
+			expect(result.lines[0].line_subtotal).toBe(sampleReceiptData.lines[0].line_subtotal_excl);
+			expect(result.lines[0].line_total).toBe(sampleReceiptData.lines[0].line_total_excl);
+			expect(result.fees[0].total).toBe(1.82);
+			expect(result.shipping[0].total).toBe(2.73);
+			expect(result.discounts[0].total).toBe(1.36);
+			expect(result.totals.subtotal).toBe(sampleReceiptData.totals.subtotal_excl);
+			expect(result.totals.discount_total).toBe(sampleReceiptData.totals.discount_total_excl);
+			expect(result.totals.grand_total).toBe(sampleReceiptData.totals.grand_total_excl);
+		});
+
 		it('detects canonical shape when both meta and totals markers are present', () => {
 			const data = {
 				meta: { schema_version: 1, order_id: 5 },
