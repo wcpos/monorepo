@@ -1,7 +1,14 @@
 import { isCancel } from 'axios';
 import isEmpty from 'lodash/isEmpty';
 import { BehaviorSubject, combineLatest, interval, Observable } from 'rxjs';
-import { distinctUntilChanged, filter, map, startWith, switchMap } from 'rxjs/operators';
+import {
+	debounceTime,
+	distinctUntilChanged,
+	filter,
+	map,
+	startWith,
+	switchMap,
+} from 'rxjs/operators';
 
 import { parseWpError } from '@wcpos/hooks/use-http-client/parse-wp-error';
 import { getLogger } from '@wcpos/utils/logger';
@@ -119,6 +126,22 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	}
 
 	private setupSubscriptions() {
+		const createDebouncedCount$ = (
+			collection: {
+				eventBulks$: Observable<unknown>;
+				count: (query: { selector: Record<string, unknown> }) => { exec: () => Promise<number> };
+			},
+			selector: Record<string, unknown>
+		) =>
+			collection.eventBulks$.pipe(
+				// Debounce the upstream write/change stream so count queries only run
+				// after a burst of writes settles instead of on every chunk write.
+				debounceTime(500),
+				startWith(null),
+				switchMap(() => collection.count({ selector }).exec()),
+				distinctUntilChanged()
+			);
+
 		const polling$ = this.paused$.pipe(
 			switchMap((paused) => (paused ? [] : interval(this.pollingInterval).pipe(startWith(0)))),
 			filter(() => !this.subjects.paused.getValue())
@@ -184,22 +207,14 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			});
 		}
 
-		const remoteCount$ = this.syncStateManager.syncCollection
-			.count({
-				selector: {
-					endpoint: { $eq: this.endpoint },
-					id: { $exists: true },
-				},
-			})
-			.$.pipe(distinctUntilChanged());
+		const remoteCount$ = createDebouncedCount$(this.syncStateManager.syncCollection as any, {
+			endpoint: { $eq: this.endpoint },
+			id: { $exists: true },
+		});
 
-		const newLocalCount$ = this.collection
-			.count({
-				selector: {
-					id: { $exists: false },
-				},
-			})
-			.$.pipe(distinctUntilChanged());
+		const newLocalCount$ = createDebouncedCount$(this.collection as any, {
+			id: { $exists: false },
+		});
 
 		const totalCount$ = (
 			combineLatest([remoteCount$, newLocalCount$]) as unknown as Observable<[number, number]>

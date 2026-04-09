@@ -1,7 +1,10 @@
 import type { StoreDatabase, SyncDatabase } from '@wcpos/database';
 
+import { ERROR_CODES, getLogger } from './__mocks__/logger';
 import { SyncStateManager } from '../src/sync-state';
 import { createStoreDatabase, createSyncDatabase } from './helpers/db';
+
+const mockLogger = getLogger();
 
 describe('SyncStateManager', () => {
 	let syncDB: SyncDatabase;
@@ -16,6 +19,7 @@ describe('SyncStateManager', () => {
 			collection: storeDB.collections.products,
 			endpoint: 'products',
 		});
+		jest.clearAllMocks();
 	});
 
 	afterEach(async () => {
@@ -201,5 +205,55 @@ describe('SyncStateManager', () => {
 		]);
 
 		await syncStateManager.removeStaleRecords();
+	});
+
+	it('logs bulk insert errors even when an entire chunk fails', async () => {
+		const insertError = { documentId: 'products-1' };
+		jest.spyOn(storeDB.collections.products, 'bulkInsert').mockResolvedValue({
+			success: [],
+			error: [insertError],
+		} as any);
+
+		await (syncStateManager as any)._doBulkInsert([
+			{ id: 1, date_modified_gmt: '2024-10-17T17:54:59' },
+		]);
+
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			'Error inserting documents',
+			expect.objectContaining({
+				showToast: false,
+				saveToDb: true,
+				context: expect.objectContaining({
+					errorCode: ERROR_CODES.INSERT_FAILED,
+					collection: storeDB.collections.products.name,
+					errors: [insertError],
+				}),
+			})
+		);
+	});
+
+	it('logs bulk upsert errors even when an entire chunk fails', async () => {
+		const upsertError = { documentId: 'products-1' };
+		jest.spyOn(storeDB.collections.products, 'bulkUpsert').mockResolvedValue({
+			success: [],
+			error: [upsertError],
+		} as any);
+
+		await (syncStateManager as any)._doBulkUpsert([
+			{ id: 1, date_modified_gmt: '2024-10-17T17:54:59' },
+		]);
+
+		expect(mockLogger.error).toHaveBeenCalledWith(
+			'Error upserting documents',
+			expect.objectContaining({
+				showToast: false,
+				saveToDb: true,
+				context: expect.objectContaining({
+					errorCode: ERROR_CODES.DB_UPSERT_FAILED,
+					collection: storeDB.collections.products.name,
+					errors: [upsertError],
+				}),
+			})
+		);
 	});
 });

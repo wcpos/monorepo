@@ -182,13 +182,18 @@ describe('Manager', () => {
 
 		it('should emit on total$ after collection swap and re-registration', async () => {
 			// Setup mock response for sync
-			httpClientMock.__setMockResponse('get', 'products', [
-				{ id: 1, date_modified_gmt: '2024-01-01T00:00:00' },
-				{ id: 2, date_modified_gmt: '2024-01-01T00:00:00' },
-				{ id: 3, date_modified_gmt: '2024-01-01T00:00:00' },
-			], {
-				params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
-			});
+			httpClientMock.__setMockResponse(
+				'get',
+				'products',
+				[
+					{ id: 1, date_modified_gmt: '2024-01-01T00:00:00' },
+					{ id: 2, date_modified_gmt: '2024-01-01T00:00:00' },
+					{ id: 3, date_modified_gmt: '2024-01-01T00:00:00' },
+				],
+				{
+					params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
+				}
+			);
 
 			// Register query
 			manager.registerQuery({
@@ -208,6 +213,9 @@ describe('Manager', () => {
 			// Start replication and wait for first sync
 			replication.start();
 			await replication.firstSync;
+
+			// Wait for debounced totalCount$ to propagate
+			await new Promise((resolve) => setTimeout(resolve, 600));
 
 			// Should have emitted the total (3 remote IDs)
 			expect(totalValues).toContain(3);
@@ -326,12 +334,7 @@ describe('Manager', () => {
 			expect(firstManager).toBe(manager);
 
 			// Create a new manager with a different locale
-			const secondManager = Manager.getInstance(
-				storeDatabase,
-				syncDatabase,
-				httpClientMock,
-				'fr'
-			);
+			const secondManager = Manager.getInstance(storeDatabase, syncDatabase, httpClientMock, 'fr');
 
 			// Should be a different instance
 			expect(secondManager).not.toBe(firstManager);
@@ -345,11 +348,7 @@ describe('Manager', () => {
 		it('should cancel old instance when localDB changes', async () => {
 			const newStoreDatabase = await createStoreDatabase();
 			try {
-				const secondManager = Manager.getInstance(
-					newStoreDatabase,
-					syncDatabase,
-					httpClientMock
-				);
+				const secondManager = Manager.getInstance(newStoreDatabase, syncDatabase, httpClientMock);
 				expect(secondManager).not.toBe(manager);
 				manager = secondManager;
 			} finally {
@@ -595,7 +594,7 @@ describe('Manager', () => {
 			});
 
 			const secondReplication = manager.replicationStates.get('products');
-			
+
 			// Key check: the replication should now reference the NEW collection
 			const newCollection = storeDatabase.collections.products;
 			expect(secondReplication.collection).toBe(newCollection);
