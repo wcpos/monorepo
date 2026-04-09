@@ -11,7 +11,6 @@ import { Query } from '@wcpos/query';
 import { useT } from '../../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerSearch } from '../../customer-select';
-import { getSelectedPillState } from './selected-pill-state';
 
 interface CustomerPillProps {
 	query: Query<CustomerCollection>;
@@ -29,19 +28,16 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 	const { format } = useCustomerNameFormat();
 	const t = useT();
 	const isCustomerLoading = (customer as CustomerWithLoadingMarker | null)?.__isLoading;
+	const isActive = customerID !== null && customerID !== undefined;
 
 	/**
 	 * @FIXME - if the customers are cleared, it's possible that the customer will be null
 	 */
-	if (!customer && customerID) {
+	if (!customer && isActive) {
 		customer = { id: customerID } as CustomerDocument;
 	}
-
-	const pillState = getSelectedPillState({
-		selectedID: customerID,
-		entity: customer,
-		isLoading: !!isCustomerLoading,
-	});
+	const customerEntity = isActive ? customer : null;
+	const isLoading = isActive && !!isCustomerLoading;
 
 	/**
 	 *
@@ -57,15 +53,15 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 				<ButtonPill
 					size="xs"
 					leftIcon="user"
-					variant={pillState.isActive ? undefined : 'muted'}
-					removable={pillState.isActive}
+					variant={isActive ? undefined : 'muted'}
+					removable={isActive}
 					onRemove={() => query.removeWhere('customer_id').exec()}
 				>
 					<ButtonText>
-						{pillState.isLoading
+						{isLoading
 							? t('common.loading')
-							: pillState.entity
-								? format(pillState.entity)
+							: customerEntity
+								? format(customerEntity)
 								: t('common.select_customer')}
 					</ButtonText>
 				</ButtonPill>

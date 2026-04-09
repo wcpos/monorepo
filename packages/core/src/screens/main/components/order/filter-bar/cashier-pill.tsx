@@ -12,15 +12,10 @@ import {
 import { Suspense } from '@wcpos/components/suspense';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query, useQuery } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
-import { getSelectedPillState } from './selected-pill-state';
-
-const uiLogger = getLogger(['wcpos', 'ui', 'filter']);
-const CASHIER_FILTER_DEBUG_TAG = '[cashier-filter-debug]';
 
 interface CashierPillProps {
 	query: Query<CustomerCollection>;
@@ -88,49 +83,20 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 	const { format } = useCustomerNameFormat();
 	const t = useT();
 	const isCashierLoading = (cashier as CashierWithLoadingMarker | null)?.__isLoading;
-
-	React.useEffect(() => {
-		uiLogger.info(`${CASHIER_FILTER_DEBUG_TAG} cashier pill state`, {
-			context: {
-				cashierID,
-				selectedCashier: query.getMetaDataElemMatchValue('_pos_user'),
-				selectedStore: query.getMetaDataElemMatchValue('_pos_store'),
-				selector: query.currentRxQuery?.mangoQuery?.selector,
-			},
-		});
-	}, [cashierID, query]);
+	const isActive = cashierID !== null && cashierID !== undefined;
 
 	/**
 	 * @FIXME - if the customers are cleared, it's possible that the cashier will be null
 	 */
-	if (!cashier && cashierID) {
+	if (!cashier && isActive) {
 		cashier = { id: cashierID } as CustomerDocument;
 	}
-
-	const pillState = getSelectedPillState({
-		selectedID: cashierID,
-		entity: cashier,
-		isLoading: !!isCashierLoading,
-	});
+	const cashierEntity = isActive ? cashier : null;
+	const isLoading = isActive && !!isCashierLoading;
 
 	const handleRemove = React.useCallback(() => {
-		uiLogger.info(`${CASHIER_FILTER_DEBUG_TAG} cashier remove pressed`, {
-			context: {
-				cashierID,
-				beforeSelector: query.currentRxQuery?.mangoQuery?.selector,
-			},
-		});
-
 		query.removeElemMatch('meta_data', { key: '_pos_user' }).exec();
-
-		uiLogger.info(`${CASHIER_FILTER_DEBUG_TAG} cashier remove applied`, {
-			context: {
-				cashierIDAfter: query.getMetaDataElemMatchValue('_pos_user'),
-				storeIDAfter: query.getMetaDataElemMatchValue('_pos_store'),
-				afterSelector: query.currentRxQuery?.mangoQuery?.selector,
-			},
-		});
-	}, [cashierID, query]);
+	}, [query]);
 
 	/**
 	 * value is always a string when dealing with comboboxes
@@ -141,7 +107,6 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 		<Combobox
 			onValueChange={(option) => {
 				if (!option) return;
-				uiLogger.debug('value', { context: { value: option.value } });
 				query
 					.removeElemMatch('meta_data', { key: '_pos_user' }) // clear any previous value
 					.where('meta_data')
@@ -153,15 +118,15 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 				<ButtonPill
 					size="xs"
 					leftIcon="userCrown"
-					variant={pillState.isActive ? undefined : 'muted'}
-					removable={pillState.isActive}
+					variant={isActive ? undefined : 'muted'}
+					removable={isActive}
 					onRemove={handleRemove}
 				>
 					<ButtonText>
-						{pillState.isLoading
+						{isLoading
 							? t('common.loading')
-							: pillState.entity
-								? format(pillState.entity)
+							: cashierEntity
+								? format(cashierEntity)
 								: t('common.select_cashier')}
 					</ButtonText>
 				</ButtonPill>
