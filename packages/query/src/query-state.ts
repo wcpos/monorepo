@@ -6,7 +6,7 @@ import isEqual from 'lodash/isEqual';
 import pick from 'lodash/pick';
 import set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
-import { BehaviorSubject, from, ReplaySubject } from 'rxjs';
+import { BehaviorSubject, from, ReplaySubject, Subject } from 'rxjs';
 import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
@@ -135,6 +135,7 @@ export class Query<T extends RxCollection>
 	public readonly subjects = {
 		rxQuery: new BehaviorSubject<RxQuery | undefined>(undefined),
 		result: new ReplaySubject<QueryResult<T>>(1),
+		loadMore: new Subject<void>(),
 	};
 
 	/**
@@ -142,6 +143,7 @@ export class Query<T extends RxCollection>
 	 */
 	public readonly rxQuery$ = this.subjects.rxQuery.asObservable();
 	public readonly result$ = this.subjects.result.asObservable();
+	public readonly loadMore$ = this.subjects.loadMore.asObservable();
 
 	public currentRxQuery: RxQuery;
 	public findSubscriptionStarted = false;
@@ -230,6 +232,7 @@ export class Query<T extends RxCollection>
 		}
 		this.currentPage++;
 		this.exec();
+		this.subjects.loadMore.next();
 	}
 
 	protected resetPagination(): void {

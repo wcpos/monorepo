@@ -505,6 +505,21 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				queryReplication.start();
 			})
 		);
+
+		queryState.addSub(
+			'query-pagination',
+			queryState.loadMore$.subscribe(() => {
+				const activeQueryReplication = this.activeQueryReplications.get(queryState.id);
+				if (!activeQueryReplication) {
+					queryLogger.debug('Skipping query nextPage - no active replication', {
+						context: { queryId: queryState.id, collection: (collection as any).name },
+					});
+					return;
+				}
+
+				activeQueryReplication.nextPage();
+			})
+		);
 	}
 
 	/**

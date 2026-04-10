@@ -308,6 +308,14 @@ describe('Manager', () => {
 			expect(result.per_page).toBe(10);
 		});
 
+		it('should not widen per_page from the local query limit', () => {
+			const result = manager.getApiQueryParams({
+				limit: 160,
+				sort: [{ name: 'asc' }],
+			});
+			expect(result.per_page).toBe(10);
+		});
+
 		it('should handle selector with id.$in and other keys together', () => {
 			const result = manager.getApiQueryParams({
 				selector: { id: { $in: [10, 20] }, status: 'publish', uuid: 'skip-me' } as any,
@@ -424,6 +432,56 @@ describe('Manager', () => {
 			// Same replication object — dedup guard should prevent pause/start
 			expect(startSpy).not.toHaveBeenCalled();
 			expect(pauseSpy).not.toHaveBeenCalled();
+		});
+
+		it('should request the next page on the existing replication when infinite-scroll loadMore keeps the same endpoint', async () => {
+			const regSpy = jest.spyOn(manager, 'registerQueryReplication');
+
+			const query = manager.registerQuery({
+				queryKeys: ['infiniteScrollLimitTest'],
+				collectionName: 'products',
+				initialParams: { sort: [{ name: 'asc' }] },
+				infiniteScroll: true,
+				pageSize: 10,
+			});
+
+			await new Promise<void>((resolve) => {
+				const check = () => {
+					if (regSpy.mock.calls.length >= 1) {
+						resolve();
+					} else {
+						setTimeout(check, 5);
+					}
+				};
+				check();
+			});
+
+			const initialEndpoint = regSpy.mock.calls.at(-1)?.[0]?.queryEndpoint;
+			expect(initialEndpoint).toContain('per_page=10');
+
+			const key = manager.stringify(['infiniteScrollLimitTest']);
+			const replication = manager.activeQueryReplications.get(key);
+			expect(replication).toBeDefined();
+
+			const nextPageSpy = jest.spyOn(replication, 'nextPage');
+			const callCountBefore = regSpy.mock.calls.length;
+			query.loadMore();
+
+			await new Promise<void>((resolve) => {
+				const check = () => {
+					if (regSpy.mock.calls.length > callCountBefore) {
+						resolve();
+					} else {
+						setTimeout(check, 5);
+					}
+				};
+				check();
+			});
+
+			const repeatedEndpoint = regSpy.mock.calls.at(-1)?.[0]?.queryEndpoint;
+			expect(repeatedEndpoint).toBe(initialEndpoint);
+			expect(repeatedEndpoint).toContain('per_page=10');
+			expect(nextPageSpy).toHaveBeenCalledTimes(1);
 		});
 	});
 

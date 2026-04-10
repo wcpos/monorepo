@@ -228,7 +228,9 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	 *
 	 */
 	nextPage() {
-		this.run();
+		return this.run().catch(() => {
+			// Errors are already logged in run() and its sub-methods
+		});
 	}
 
 	/**
