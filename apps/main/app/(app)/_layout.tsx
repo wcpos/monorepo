@@ -5,9 +5,12 @@ import { useCSSVariable } from 'uniwind';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { useAppState } from '@wcpos/core/contexts/app-state';
+import { useAppInfo } from '@wcpos/core/hooks/use-app-info';
 import { useLocale } from '@wcpos/core/hooks/use-locale';
+import { useSiteInfo } from '@wcpos/core/hooks/use-site-info';
 import { ExtraDataProvider } from '@wcpos/core/screens/main/contexts/extra-data';
 import { UISettingsProvider } from '@wcpos/core/screens/main/contexts/ui-settings';
+import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { useRestHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client';
 import { OnlineStatusProvider } from '@wcpos/hooks/use-online-status';
@@ -80,6 +83,15 @@ export default function AppLayout() {
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$) as string;
 	const { collection: logCollection } = useCollection('logs');
 	setDatabase(logCollection);
+
+	// Fetch fresh site data (versions, license) on mount
+	useSiteInfo({ site });
+
+	// Block UI if the PHP plugin is older than the app
+	const { compatibility } = useAppInfo();
+	if (compatibility && !compatibility.wcposVersionPass) {
+		return <UpgradeRequired />;
+	}
 
 	if (!wpAPIURL) {
 		throw new Error('No WP API URL');
