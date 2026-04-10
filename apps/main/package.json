@@ -41,7 +41,6 @@
     "expo-image": "~55.0.6",
     "expo-linking": "~55.0.7",
     "expo-localization": "~55.0.8",
-    "expo-opfs": "1.0.8",
     "expo-print": "~55.0.8",
     "expo-router": "~55.0.4",
     "expo-splash-screen": "~55.0.10",

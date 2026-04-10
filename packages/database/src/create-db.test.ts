@@ -127,21 +127,21 @@ describe('create-db migration wiring', () => {
 		[
 			'createUserDB',
 			'wcposusers_v2',
-			'wcposusers_v3',
+			'wcposusers_v4',
 			'user',
 			async (module: typeof import('./create-db')) => module.createUserDB(),
 		],
 		[
 			'createStoreDB',
 			'store_v2_abc123',
-			'store_v3_abc123',
+			'store_v4_abc123',
 			'store',
 			async (module: typeof import('./create-db')) => module.createStoreDB('abc123'),
 		],
 		[
 			'createFastStoreDB',
 			'fast_store_v3_abc123',
-			'fast_store_v4_abc123',
+			'fast_store_v5_abc123',
 			'fast-store',
 			async (module: typeof import('./create-db')) => module.createFastStoreDB('abc123'),
 		],
@@ -208,18 +208,18 @@ describe('create-db migration wiring', () => {
 	});
 
 	it('recreates the fast-store target database before retrying a failed migration marker', async () => {
-		localMarkerQueues.set('fast_store_v4_abc123', [{ data: { status: 'failed' } }, null]);
+		localMarkerQueues.set('fast_store_v5_abc123', [{ data: { status: 'failed' } }, null]);
 
 		const module = await import('./create-db');
 
 		const db = await module.createFastStoreDB('abc123');
-		const [firstDatabase, secondDatabase] = createdDatabases.get('fast_store_v4_abc123') ?? [];
+		const [firstDatabase, secondDatabase] = createdDatabases.get('fast_store_v5_abc123') ?? [];
 
 		expect(db).toBe(secondDatabase);
 		expect(firstDatabase?.close).toHaveBeenCalledTimes(1);
 		expect(firstDatabase?.addCollections).not.toHaveBeenCalled();
 		expect(mockRemoveRxDatabase).toHaveBeenCalledWith(
-			'fast_store_v4_abc123',
+			'fast_store_v5_abc123',
 			{ name: 'fast-storage' },
 			false
 		);
@@ -227,7 +227,7 @@ describe('create-db migration wiring', () => {
 		expect(mockCreateRxDatabase).toHaveBeenNthCalledWith(
 			1,
 			expect.objectContaining({
-				name: 'fast_store_v4_abc123',
+				name: 'fast_store_v5_abc123',
 				allowSlowCount: true,
 				localDocuments: true,
 				closeDuplicates: true,
@@ -237,7 +237,7 @@ describe('create-db migration wiring', () => {
 		expect(mockCreateRxDatabase).toHaveBeenNthCalledWith(
 			2,
 			expect.objectContaining({
-				name: 'fast_store_v4_abc123',
+				name: 'fast_store_v5_abc123',
 				allowSlowCount: true,
 				localDocuments: true,
 				closeDuplicates: true,
@@ -258,13 +258,13 @@ describe('create-db migration wiring', () => {
 			})
 		);
 		expect(events).toEqual([
-			'close:fast_store_v4_abc123',
-			'remove:fast_store_v4_abc123',
-			'add:fast_store_v4_abc123',
-			'verify:fast_store_v4_abc123',
-			'migrate:fast_store_v4_abc123:start',
+			'close:fast_store_v5_abc123',
+			'remove:fast_store_v5_abc123',
+			'add:fast_store_v5_abc123',
+			'verify:fast_store_v5_abc123',
+			'migrate:fast_store_v5_abc123:start',
 			'prepare:fast_store_v3_abc123',
-			'migrate:fast_store_v4_abc123:end',
+			'migrate:fast_store_v5_abc123:end',
 		]);
 	});
 });

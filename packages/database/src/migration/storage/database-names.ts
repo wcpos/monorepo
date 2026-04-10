@@ -1,15 +1,23 @@
 export const USER_DATABASE_NAMES = {
 	oldName: 'wcposusers_v2',
-	newName: 'wcposusers_v3',
+	newName: 'wcposusers_v4',
 } as const;
 
-export const STORE_DATABASE_PREFIXES = ['store_v2_', 'store_v3_'] as const;
-export const FAST_STORE_DATABASE_PREFIXES = ['fast_store_v3_', 'fast_store_v4_'] as const;
+export const STORE_DATABASE_PREFIXES = ['store_v2_', 'store_v4_'] as const;
+export const FAST_STORE_DATABASE_PREFIXES = ['fast_store_v3_', 'fast_store_v5_'] as const;
 
+/**
+ * All known app database prefixes (including the skipped filesystem-era v3/v4
+ * versions) so that clearAllDB can clean up every generation.
+ */
 export const APP_DATABASE_PREFIXES = [
 	'wcposusers_',
-	...STORE_DATABASE_PREFIXES,
-	...FAST_STORE_DATABASE_PREFIXES,
+	'store_v2_',
+	'store_v3_',
+	'store_v4_',
+	'fast_store_v3_',
+	'fast_store_v4_',
+	'fast_store_v5_',
 ] as const;
 
 const matchesAnyPrefix = (value: string, prefixes: readonly string[]) =>
@@ -27,9 +35,11 @@ export const getFastStoreDatabaseNames = (id: string) => ({
 	newName: `${FAST_STORE_DATABASE_PREFIXES[1]}${id}`,
 });
 
-export const isStoreDatabaseName = (value: string) =>
-	matchesAnyPrefix(value, STORE_DATABASE_PREFIXES);
+const ALL_STORE_PREFIXES = ['store_v2_', 'store_v3_', 'store_v4_'] as const;
+const ALL_FAST_STORE_PREFIXES = ['fast_store_v3_', 'fast_store_v4_', 'fast_store_v5_'] as const;
+
+export const isStoreDatabaseName = (value: string) => matchesAnyPrefix(value, ALL_STORE_PREFIXES);
 export const isFastStoreDatabaseName = (value: string) =>
-	matchesAnyPrefix(value, FAST_STORE_DATABASE_PREFIXES);
+	matchesAnyPrefix(value, ALL_FAST_STORE_PREFIXES);
 export const isKnownAppDatabaseName = (value: string) =>
 	matchesAnyPrefix(value, APP_DATABASE_PREFIXES);
