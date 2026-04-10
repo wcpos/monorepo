@@ -22,7 +22,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { PrinterService } from '@wcpos/printer';
+import { PrinterService, probeVendor } from '@wcpos/printer';
 import type { PrinterProfile } from '@wcpos/printer';
 
 import { LanguageSelect } from './components/language-select';
@@ -129,6 +129,8 @@ export function PrinterDialog({
 			form.reset({ ...DEFAULT_VALUES, name: autoName });
 		}
 		setTestError(null);
+		setDetectedVendor(null);
+		manualVendorRef.current = false;
 	}, [open, printer, form, printerCount, t]);
 
 	/**
@@ -136,6 +138,7 @@ export function PrinterDialog({
 	 */
 	const vendor = form.watch('vendor');
 	const prevVendorRef = React.useRef(vendor);
+	const manualVendorRef = React.useRef(false);
 	React.useEffect(() => {
 		if (vendor !== prevVendorRef.current) {
 			prevVendorRef.current = vendor;
@@ -144,6 +147,43 @@ export function PrinterDialog({
 			form.setValue('port', defaults.port);
 		}
 	}, [vendor, form]);
+
+	/**
+	 * Auto-detect vendor when IP address changes.
+	 */
+	const address = form.watch('address');
+	const [probing, setProbing] = React.useState(false);
+	const [detectedVendor, setDetectedVendor] = React.useState<string | null>(null);
+	React.useEffect(() => {
+		if (!address || !/^\d{1,3}(\.\d{1,3}){3}$/.test(address.trim())) {
+			setDetectedVendor(null);
+			return;
+		}
+		if (manualVendorRef.current) return;
+
+		const timer = setTimeout(() => {
+			let cancelled = false;
+			setProbing(true);
+			probeVendor(address.trim()).then((result) => {
+				if (cancelled) return;
+				setProbing(false);
+				if (result) {
+					setDetectedVendor(result);
+					form.setValue('vendor', result);
+					const defaults = vendorDefaults(result);
+					form.setValue('language', defaults.language);
+					form.setValue('port', defaults.port);
+					prevVendorRef.current = result;
+				} else {
+					setDetectedVendor(null);
+				}
+			});
+			return () => {
+				cancelled = true;
+			};
+		}, 500);
+		return () => clearTimeout(timer);
+	}, [address, form]);
 
 	/**
 	 * Build a temporary PrinterProfile from the current form values.
@@ -332,17 +372,32 @@ export function PrinterDialog({
 								)}
 							/>
 
-							<FormField
-								control={form.control}
-								name="address"
-								render={({ field }) => (
-									<FormInput
-										label={t('settings.printer_address', 'IP Address')}
-										placeholder="192.168.1.100"
-										{...field}
-									/>
+							<VStack className="gap-1">
+								<FormField
+									control={form.control}
+									name="address"
+									render={({ field }) => (
+										<FormInput
+											label={t('settings.printer_address', 'IP Address')}
+											placeholder="192.168.1.100"
+											{...field}
+										/>
+									)}
+								/>
+								{probing && (
+									<Text className="text-muted-foreground text-xs">
+										{t('settings.detecting_printer', 'Detecting printer...')}
+									</Text>
 								)}
-							/>
+								{!probing && detectedVendor && (
+									<Text className="text-xs text-green-600">
+										{t('settings.detected_vendor', 'Detected: %s').replace(
+											'%s',
+											detectedVendor === 'epson' ? 'Epson' : 'Star'
+										)}
+									</Text>
+								)}
+							</VStack>
 
 							<Collapsible defaultOpen={hasNonDefaultAdvanced}>
 								<CollapsibleTrigger>
@@ -362,7 +417,11 @@ export function PrinterDialog({
 															customComponent={VendorSelect}
 															label={t('settings.printer_vendor', 'Vendor')}
 															value={value}
-															onChange={onChange}
+															onChange={(v: string) => {
+																manualVendorRef.current = true;
+																setDetectedVendor(null);
+																onChange(v);
+															}}
 															{...rest}
 														/>
 													</View>

@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import { Toast } from '@wcpos/components/toast';
 import {
 	Select,
@@ -264,94 +265,137 @@ export function PrintingSettings() {
 			{/* Printers section */}
 			<VStack className="gap-2">
 				<Text className="text-sm font-semibold">{t('settings.printers', 'Printers')}</Text>
-				<Table>
-					<TableHeader>
-						<TableRow>
-							<TableHead>
-								<Text>{t('common.name', 'Name')}</Text>
-							</TableHead>
-							<TableHead>
-								<Text>{t('settings.connection_type', 'Connection')}</Text>
-							</TableHead>
-							<TableHead>
-								<Text>{t('common.actions', 'Actions')}</Text>
-							</TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{printers.map((profile, index) => (
-							<TableRow key={profile.id} index={index}>
-								<TableCell>
-									<HStack className="items-center gap-2">
-										<Text>{profile.name}</Text>
-										{profile.isDefault && (
-											<View className="bg-primary rounded px-2 py-0.5">
-												<Text className="text-primary-foreground text-xs">
-													{t('common.default', 'Default')}
-												</Text>
-											</View>
-										)}
-									</HStack>
-								</TableCell>
-								<TableCell>
-									<Text className="text-muted-foreground text-sm">{connectionLabel(profile)}</Text>
-								</TableCell>
-								<TableCell>
-									<HStack className="gap-2">
-										{!profile.isBuiltIn && (
-											<Button
-												variant="outline"
-												size="sm"
-												onPress={() => {
-													setEditingPrinter(profile);
-													setDialogOpen(true);
-												}}
-											>
-												<Text>{t('common.edit', 'Edit')}</Text>
-											</Button>
-										)}
-										<Button
-											variant="outline"
-											size="sm"
-											loading={testingPrinterIds.has(profile.id)}
-											onPress={() => handleTestPrint(profile)}
-										>
-											<Text>{t('settings.test_print', 'Test')}</Text>
-										</Button>
-										{!profile.isDefault && (
-											<Button
-												variant="outline"
-												size="sm"
-												onPress={() => handleSetDefault(profile.id)}
-											>
-												<Text>{t('settings.set_default', 'Set Default')}</Text>
-											</Button>
-										)}
-										{!profile.isBuiltIn && (
-											<Button
-												variant="destructive"
-												size="sm"
-												onPress={() => handleDelete(profile.id)}
-											>
-												<Text>{t('common.delete', 'Delete')}</Text>
-											</Button>
-										)}
-									</HStack>
-								</TableCell>
-							</TableRow>
-						))}
-					</TableBody>
-				</Table>
-				<View className="flex-row">
-					<Button
-						onPress={() => {
-							setEditingPrinter(undefined);
-							setDialogOpen(true);
-						}}
-					>
-						<Text>{t('settings.add_printer', 'Add Printer')}</Text>
-					</Button>
-				</View>
+				{printers.filter((p) => !p.isBuiltIn).length === 0 ? (
+					<View className="border-border items-center rounded-lg border border-dashed p-8">
+						<VStack className="max-w-sm items-center gap-3">
+							<Icon name="receipt" size="xl" className="text-muted-foreground" />
+							<Text className="text-center font-medium">
+								{t('settings.no_printers_configured', 'No printers configured')}
+							</Text>
+							<Text className="text-muted-foreground text-center text-sm">
+								{t(
+									'settings.no_printers_body',
+									"Add a network printer to print receipts directly. You only need the printer's IP address — we'll detect the rest automatically."
+								)}
+							</Text>
+							{Platform.OS === 'web' && (
+								<Text className="text-muted-foreground text-center text-xs">
+									{t(
+										'settings.web_printer_note',
+										'Web browsers support Epson and Star printers. For other brands, use the desktop app.'
+									)}
+								</Text>
+							)}
+							<Button
+								onPress={() => {
+									setEditingPrinter(undefined);
+									setDialogOpen(true);
+								}}
+							>
+								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
+							</Button>
+							<Text className="text-muted-foreground text-xs">
+								{t(
+									'settings.system_dialog_note',
+									'You can always use the System Print Dialog without adding a printer.'
+								)}
+							</Text>
+						</VStack>
+					</View>
+				) : (
+					<>
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>
+										<Text>{t('common.name', 'Name')}</Text>
+									</TableHead>
+									<TableHead>
+										<Text>{t('settings.connection_type', 'Connection')}</Text>
+									</TableHead>
+									<TableHead>
+										<Text>{t('common.actions', 'Actions')}</Text>
+									</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{printers.map((profile, index) => (
+									<TableRow key={profile.id} index={index}>
+										<TableCell>
+											<HStack className="items-center gap-2">
+												<Text>{profile.name}</Text>
+												{profile.isDefault && (
+													<View className="bg-primary rounded px-2 py-0.5">
+														<Text className="text-primary-foreground text-xs">
+															{t('common.default', 'Default')}
+														</Text>
+													</View>
+												)}
+											</HStack>
+										</TableCell>
+										<TableCell>
+											<Text className="text-muted-foreground text-sm">
+												{connectionLabel(profile)}
+											</Text>
+										</TableCell>
+										<TableCell>
+											<HStack className="gap-2">
+												{!profile.isBuiltIn && (
+													<Button
+														variant="outline"
+														size="sm"
+														onPress={() => {
+															setEditingPrinter(profile);
+															setDialogOpen(true);
+														}}
+													>
+														<Text>{t('common.edit', 'Edit')}</Text>
+													</Button>
+												)}
+												<Button
+													variant="outline"
+													size="sm"
+													loading={testingPrinterIds.has(profile.id)}
+													onPress={() => handleTestPrint(profile)}
+												>
+													<Text>{t('settings.test_print', 'Test')}</Text>
+												</Button>
+												{!profile.isDefault && (
+													<Button
+														variant="outline"
+														size="sm"
+														onPress={() => handleSetDefault(profile.id)}
+													>
+														<Text>{t('settings.set_default', 'Set Default')}</Text>
+													</Button>
+												)}
+												{!profile.isBuiltIn && (
+													<Button
+														variant="destructive"
+														size="sm"
+														onPress={() => handleDelete(profile.id)}
+													>
+														<Text>{t('common.delete', 'Delete')}</Text>
+													</Button>
+												)}
+											</HStack>
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+						<View className="flex-row">
+							<Button
+								onPress={() => {
+									setEditingPrinter(undefined);
+									setDialogOpen(true);
+								}}
+							>
+								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
+							</Button>
+						</View>
+					</>
+				)}
 			</VStack>
 
 			<PrinterDialog
