@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 
 import {
 	Select,
@@ -16,17 +17,19 @@ import { useT } from '../../../../../contexts/translations';
 export function VendorSelect({ value, ...props }: SelectSingleRootProps) {
 	const t = useT();
 
-	const options = React.useMemo(
-		() => [
+	const options = React.useMemo(() => {
+		const items = [
 			{ value: 'epson', label: 'Epson' },
 			{ value: 'star', label: 'Star Micronics' },
-			{
+		];
+		if (Platform.OS !== 'web') {
+			items.push({
 				value: 'generic',
 				label: t('settings.printer_vendor_generic', 'Generic'),
-			},
-		],
-		[t]
-	);
+			});
+		}
+		return items;
+	}, [t]);
 
 	const selectedLabel =
 		options.find((option) => option.value === value?.value)?.label ??

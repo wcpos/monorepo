@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as z from 'zod';
 
 import { Button } from '@wcpos/components/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import {
 	Dialog,
 	DialogBody,
@@ -17,12 +18,13 @@ import {
 } from '@wcpos/components/dialog';
 import { Form, FormField, FormInput, FormSelect, FormSwitch } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { PrinterService } from '@wcpos/printer';
 import type { PrinterProfile } from '@wcpos/printer';
 
-import { ConnectionTypeSelect } from './components/connection-type-select';
 import { LanguageSelect } from './components/language-select';
 import { PaperWidthSelect } from './components/paper-width-select';
 import { VendorSelect } from './components/vendor-select';
@@ -30,72 +32,127 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { FormErrors } from '../../components/form-errors';
 
-const addPrinterSchema = z
-	.object({
-		name: z.string().min(1),
-		connectionType: z.enum(['network', 'system']).default('network'),
-		address: z.string().optional(),
-		port: z.coerce.number().int().min(1).max(65535).default(9100),
-		vendor: z.enum(['epson', 'star', 'generic']).default('generic'),
-		language: z.enum(['esc-pos', 'star-prnt', 'star-line']).default('esc-pos'),
-		columns: z.coerce.number().default(48),
-		autoPrint: z.boolean().default(false),
-		autoCut: z.boolean().default(true),
-		autoOpenDrawer: z.boolean().default(false),
-		isDefault: z.boolean().default(true),
-	})
-	.superRefine((data, ctx) => {
-		if (data.connectionType === 'network' && (!data.address || !data.address.trim())) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: 'IP address is required for network printers',
-				path: ['address'],
-			});
-		}
-	});
+const isWeb = Platform.OS === 'web';
 
-type AddPrinterFormData = z.infer<typeof addPrinterSchema>;
+const printerSchema = z.object({
+	name: z.string().min(1),
+	address: z.string().min(1, 'IP address is required'),
+	port: z.coerce.number().int().min(1).max(65535).default(9100),
+	vendor: z.enum(['epson', 'star', 'generic']).default(isWeb ? 'epson' : 'generic'),
+	language: z.enum(['esc-pos', 'star-prnt', 'star-line']).default('esc-pos'),
+	columns: z.coerce.number().default(48),
+	autoPrint: z.boolean().default(false),
+	autoCut: z.boolean().default(true),
+	autoOpenDrawer: z.boolean().default(false),
+	isDefault: z.boolean().default(true),
+});
 
-interface AddPrinterProps {
+type PrinterFormData = z.infer<typeof printerSchema>;
+
+const DEFAULT_VALUES: PrinterFormData = {
+	name: '',
+	address: '',
+	port: 9100,
+	vendor: isWeb ? 'epson' : 'generic',
+	language: 'esc-pos',
+	columns: 48,
+	autoPrint: false,
+	autoCut: true,
+	autoOpenDrawer: false,
+	isDefault: true,
+};
+
+/**
+ * Derive sensible defaults for language and port based on the selected vendor.
+ */
+function vendorDefaults(vendor: string) {
+	switch (vendor) {
+		case 'epson':
+			return { language: 'esc-pos' as const, port: isWeb ? 8008 : 9100 };
+		case 'star':
+			return { language: 'star-line' as const, port: 9100 };
+		default:
+			return { language: 'esc-pos' as const, port: 9100 };
+	}
+}
+
+interface PrinterDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	onSave: () => void;
+	printer?: PrinterProfile;
+	printerCount?: number;
 }
 
-export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
+export function PrinterDialog({
+	open,
+	onOpenChange,
+	onSave,
+	printer,
+	printerCount = 0,
+}: PrinterDialogProps) {
 	const t = useT();
 	const { storeDB } = useAppState();
 	const [testLoading, setTestLoading] = React.useState(false);
+	const [saveLoading, setSaveLoading] = React.useState(false);
 	const [testError, setTestError] = React.useState<string | null>(null);
 	const printerService = React.useMemo(() => new PrinterService(), []);
+	const isEditing = !!printer;
 
-	const form = useForm<AddPrinterFormData>({
-		resolver: zodResolver(addPrinterSchema as never) as never,
-		defaultValues: {
-			name: '',
-			connectionType: 'network',
-			address: '',
-			port: 9100,
-			vendor: 'generic',
-			language: 'esc-pos',
-			columns: 48,
-			autoPrint: false,
-			autoCut: true,
-			autoOpenDrawer: false,
-			isDefault: true,
-		},
+	const form = useForm<PrinterFormData>({
+		resolver: zodResolver(printerSchema as never) as never,
+		defaultValues: DEFAULT_VALUES,
 	});
 
-	const connectionType = form.watch('connectionType');
+	/**
+	 * Reset form when dialog opens — pre-populate for editing or set defaults for adding.
+	 */
+	React.useEffect(() => {
+		if (open && printer) {
+			form.reset({
+				name: printer.name,
+				address: printer.address ?? '',
+				port: printer.port ?? 9100,
+				vendor: printer.vendor ?? 'generic',
+				language: printer.language ?? 'esc-pos',
+				columns: printer.columns ?? 48,
+				autoPrint: printer.autoPrint ?? false,
+				autoCut: printer.autoCut ?? true,
+				autoOpenDrawer: printer.autoOpenDrawer ?? false,
+				isDefault: printer.isDefault ?? false,
+			});
+		} else if (open) {
+			const autoName =
+				printerCount > 0
+					? `${t('settings.receipt_printer', 'Receipt Printer')} ${printerCount + 1}`
+					: t('settings.receipt_printer', 'Receipt Printer');
+			form.reset({ ...DEFAULT_VALUES, name: autoName });
+		}
+		setTestError(null);
+	}, [open, printer, form, printerCount, t]);
 
 	/**
-	 * Build a temporary PrinterProfile from the current form values for test printing.
+	 * Auto-derive language and port when vendor changes.
+	 */
+	const vendor = form.watch('vendor');
+	const prevVendorRef = React.useRef(vendor);
+	React.useEffect(() => {
+		if (vendor !== prevVendorRef.current) {
+			prevVendorRef.current = vendor;
+			const defaults = vendorDefaults(vendor);
+			form.setValue('language', defaults.language);
+			form.setValue('port', defaults.port);
+		}
+	}, [vendor, form]);
+
+	/**
+	 * Build a temporary PrinterProfile from the current form values.
 	 */
 	const buildProfile = React.useCallback(
-		(data: AddPrinterFormData): PrinterProfile => ({
-			id: 'test-' + Date.now(),
+		(data: PrinterFormData): PrinterProfile => ({
+			id: printer?.id ?? 'test-' + Date.now(),
 			name: data.name || 'Test',
-			connectionType: data.connectionType,
+			connectionType: 'network',
 			vendor: data.vendor,
 			address: data.address,
 			port: data.port,
@@ -107,7 +164,7 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 			isDefault: data.isDefault,
 			isBuiltIn: false,
 		}),
-		[]
+		[printer?.id]
 	);
 
 	/**
@@ -120,33 +177,40 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 		setTestError(null);
 		try {
 			await printerService.testPrint(profile);
+			Toast.show({
+				title: t('settings.test_print_sent', 'Test print sent to %s').replace(
+					'%s',
+					data.name || 'printer'
+				),
+				type: 'success',
+			});
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			setTestError(message);
 		} finally {
 			setTestLoading(false);
 		}
-	}, [form, buildProfile, printerService]);
+	}, [form, buildProfile, printerService, t]);
 
 	/**
-	 * Save the printer profile to the RxDB collection.
+	 * Persist the printer profile to the database.
 	 */
-	const handleSave = React.useCallback(
-		async (data: AddPrinterFormData) => {
+	const persistProfile = React.useCallback(
+		async (data: PrinterFormData) => {
 			const collection = storeDB.collections.printer_profiles;
 
-			// Clear existing defaults before inserting a new default
 			if (data.isDefault) {
 				const existingDefaults = await collection.find({ selector: { isDefault: true } }).exec();
 				for (const doc of existingDefaults) {
-					await doc.patch({ isDefault: false });
+					if (doc.id !== printer?.id) {
+						await doc.patch({ isDefault: false });
+					}
 				}
 			}
 
-			await collection.insert({
-				id: uuidv4(),
+			const profileData = {
 				name: data.name,
-				connectionType: data.connectionType,
+				connectionType: 'network' as const,
 				vendor: data.vendor,
 				address: data.address || '',
 				port: data.port,
@@ -156,23 +220,106 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 				autoCut: data.autoCut,
 				autoOpenDrawer: data.autoOpenDrawer,
 				isDefault: data.isDefault,
-			});
+			};
+
+			if (printer) {
+				const doc = await collection.findOne(printer.id).exec();
+				if (doc) {
+					await doc.patch(profileData);
+				}
+			} else {
+				await collection.insert({ id: uuidv4(), ...profileData });
+			}
+		},
+		[storeDB, printer]
+	);
+
+	/**
+	 * Save with auto-validation: test print first, then persist.
+	 * On failure, show the error and offer "Save Anyway".
+	 */
+	const handleSave = React.useCallback(
+		async (data: PrinterFormData) => {
+			const profile = buildProfile(data);
+			setSaveLoading(true);
+			setTestError(null);
+
+			try {
+				await printerService.testPrint(profile);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				setTestError(message);
+				setSaveLoading(false);
+				return; // Don't persist — user can click "Save Anyway"
+			}
+
+			await persistProfile(data);
+			setSaveLoading(false);
 			form.reset();
+			Toast.show({
+				title: t('settings.printer_saved', 'Printer saved'),
+				type: 'success',
+			});
 			onSave();
 		},
-		[storeDB, form, onSave]
+		[buildProfile, printerService, persistProfile, form, onSave, t]
 	);
+
+	/**
+	 * Save without testing — escape hatch when the test print fails.
+	 */
+	const handleSaveAnyway = React.useCallback(async () => {
+		const data = form.getValues();
+		const result = printerSchema.safeParse(data);
+		if (!result.success) return;
+
+		setSaveLoading(true);
+		await persistProfile(result.data);
+		setSaveLoading(false);
+		form.reset();
+		onSave();
+	}, [form, persistProfile, onSave]);
+
+	/**
+	 * Check if any advanced field has a non-default value (to auto-open the collapsible when editing).
+	 */
+	const hasNonDefaultAdvanced = React.useMemo(() => {
+		if (!printer) return false;
+		return (
+			(printer.vendor ?? 'generic') !== DEFAULT_VALUES.vendor ||
+			(printer.port ?? 9100) !== DEFAULT_VALUES.port ||
+			(printer.language ?? 'esc-pos') !== DEFAULT_VALUES.language ||
+			(printer.columns ?? 48) !== DEFAULT_VALUES.columns
+		);
+	}, [printer]);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent size="lg">
 				<DialogHeader>
-					<DialogTitle>{t('settings.add_printer', 'Add Printer')}</DialogTitle>
+					<DialogTitle>
+						{isEditing
+							? t('settings.edit_printer', 'Edit Printer')
+							: t('settings.add_printer', 'Add Printer')}
+					</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
 					<Form {...form}>
 						<VStack className="gap-4">
 							<FormErrors />
+
+							{isWeb && (
+								<View className="bg-muted flex-row items-start gap-2 rounded-md p-3">
+									<Icon name="circleInfo" size="sm" className="text-muted-foreground mt-0.5" />
+									<Text className="text-muted-foreground flex-1 text-sm">
+										{t(
+											'settings.web_printer_limitation',
+											'Web browsers can only print directly to Epson and Star Micronics network printers. For other printers, use the desktop app or the System Print Dialog.'
+										)}
+									</Text>
+								</View>
+							)}
+
 							<FormField
 								control={form.control}
 								name="name"
@@ -184,101 +331,94 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 									/>
 								)}
 							/>
-							<HStack className="gap-4">
-								<FormField
-									control={form.control}
-									name="connectionType"
-									render={({ field: { value, onChange, ...rest } }) => (
-										<View className="flex-1">
-											<FormSelect
-												customComponent={ConnectionTypeSelect}
-												label={t('settings.connection_type', 'Connection Type')}
-												value={value}
-												onChange={onChange}
-												{...rest}
-											/>
-										</View>
-									)}
-								/>
-								<FormField
-									control={form.control}
-									name="vendor"
-									render={({ field: { value, onChange, ...rest } }) => (
-										<View className="flex-1">
-											<FormSelect
-												customComponent={VendorSelect}
-												label={t('settings.printer_vendor', 'Vendor')}
-												value={value}
-												onChange={onChange}
-												{...rest}
-											/>
-										</View>
-									)}
-								/>
-							</HStack>
-							{connectionType === 'network' && (
-								<HStack className="gap-4">
-									<FormField
-										control={form.control}
-										name="address"
-										render={({ field }) => (
-											<View className="flex-1">
-												<FormInput
-													label={t('settings.printer_address', 'IP Address')}
-													placeholder="192.168.1.100"
-													{...field}
-												/>
-											</View>
-										)}
+
+							<FormField
+								control={form.control}
+								name="address"
+								render={({ field }) => (
+									<FormInput
+										label={t('settings.printer_address', 'IP Address')}
+										placeholder="192.168.1.100"
+										{...field}
 									/>
-									<FormField
-										control={form.control}
-										name="port"
-										render={({ field: { value, ...rest } }) => (
-											<View className="flex-1">
-												<FormInput
-													label={t('settings.printer_port', 'Port')}
-													type="numeric"
-													value={value != null ? String(value) : undefined}
-													{...rest}
-												/>
-											</View>
-										)}
-									/>
-								</HStack>
-							)}
-							<HStack className="gap-4">
-								<FormField
-									control={form.control}
-									name="language"
-									render={({ field: { value, onChange, ...rest } }) => (
-										<View className="flex-1">
-											<FormSelect
-												customComponent={LanguageSelect}
-												label={t('settings.printer_language', 'Printer Language')}
-												value={value}
-												onChange={onChange}
-												{...rest}
+								)}
+							/>
+
+							<Collapsible defaultOpen={hasNonDefaultAdvanced}>
+								<CollapsibleTrigger>
+									<Text className="text-sm font-medium">
+										{t('settings.advanced_settings', 'Advanced Settings')}
+									</Text>
+								</CollapsibleTrigger>
+								<CollapsibleContent>
+									<VStack className="gap-4 pt-2">
+										<HStack className="gap-4">
+											<FormField
+												control={form.control}
+												name="vendor"
+												render={({ field: { value, onChange, ...rest } }) => (
+													<View className="flex-1">
+														<FormSelect
+															customComponent={VendorSelect}
+															label={t('settings.printer_vendor', 'Vendor')}
+															value={value}
+															onChange={onChange}
+															{...rest}
+														/>
+													</View>
+												)}
 											/>
-										</View>
-									)}
-								/>
-								<FormField
-									control={form.control}
-									name="columns"
-									render={({ field: { value, onChange, ...rest } }) => (
-										<View className="flex-1">
-											<FormSelect
-												customComponent={PaperWidthSelect}
-												label={t('settings.paper_width', 'Paper Width')}
-												value={value != null ? String(value) : undefined}
-												onChange={(val: string) => onChange(Number(val))}
-												{...rest}
+											<FormField
+												control={form.control}
+												name="port"
+												render={({ field: { value, ...rest } }) => (
+													<View className="flex-1">
+														<FormInput
+															label={t('settings.printer_port', 'Port')}
+															type="numeric"
+															value={value != null ? String(value) : undefined}
+															{...rest}
+														/>
+													</View>
+												)}
 											/>
-										</View>
-									)}
-								/>
-							</HStack>
+										</HStack>
+										<HStack className="gap-4">
+											<FormField
+												control={form.control}
+												name="language"
+												render={({ field: { value, onChange, ...rest } }) => (
+													<View className="flex-1">
+														<FormSelect
+															customComponent={LanguageSelect}
+															label={t('settings.printer_language', 'Printer Language')}
+															value={value}
+															onChange={onChange}
+															{...rest}
+														/>
+													</View>
+												)}
+											/>
+											<FormField
+												control={form.control}
+												name="columns"
+												render={({ field: { value, onChange, ...rest } }) => (
+													<View className="flex-1">
+														<FormSelect
+															customComponent={PaperWidthSelect}
+															label={t('settings.paper_width', 'Paper Width')}
+															value={value != null ? String(value) : undefined}
+															onChange={(val: string) => onChange(Number(val))}
+															{...rest}
+														/>
+													</View>
+												)}
+											/>
+										</HStack>
+									</VStack>
+								</CollapsibleContent>
+							</Collapsible>
+
 							<VStack className="gap-2">
 								<FormField
 									control={form.control}
@@ -322,15 +462,31 @@ export function AddPrinter({ open, onOpenChange, onSave }: AddPrinterProps) {
 					</Form>
 				</DialogBody>
 				<DialogFooter>
-					{testError && <Text className="text-destructive text-sm">{testError}</Text>}
-					<Button variant="outline" onPress={handleTestPrint} loading={testLoading}>
-						<Text>{t('settings.test_print', 'Test Print')}</Text>
-					</Button>
-					<Button onPress={form.handleSubmit(handleSave)}>
-						<Text>{t('common.save', 'Save')}</Text>
-					</Button>
+					<VStack className="w-full gap-2">
+						{testError && (
+							<VStack className="gap-1">
+								<Text className="text-destructive text-sm">{testError}</Text>
+								<Button variant="ghost" size="sm" className="self-start" onPress={handleSaveAnyway}>
+									<Text className="text-muted-foreground text-xs">
+										{t('settings.save_anyway', 'Save without testing')}
+									</Text>
+								</Button>
+							</VStack>
+						)}
+						<HStack className="justify-end gap-2">
+							<Button variant="outline" onPress={handleTestPrint} loading={testLoading}>
+								<Text>{t('settings.test_print', 'Test Print')}</Text>
+							</Button>
+							<Button onPress={form.handleSubmit(handleSave)} loading={saveLoading}>
+								<Text>{t('common.save', 'Save')}</Text>
+							</Button>
+						</HStack>
+					</VStack>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);
 }
+
+/** @deprecated Use PrinterDialog instead */
+export const AddPrinter = PrinterDialog;

@@ -34,7 +34,7 @@ import type {
 } from '@wcpos/database';
 
 import { useEnsureSystemPrinter } from './use-ensure-system-printer';
-import { AddPrinter } from '../printer/add-printer';
+import { PrinterDialog } from '../printer/add-printer';
 import { toPrinterProfile } from '../printer/use-default-printer-profile';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
 import { useAppState } from '../../../../contexts/app-state';
@@ -46,6 +46,7 @@ export function PrintingSettings() {
 	const t = useT();
 	const { storeDB } = useAppState();
 	const [dialogOpen, setDialogOpen] = React.useState(false);
+	const [editingPrinter, setEditingPrinter] = React.useState<PrinterProfile | undefined>();
 	const [testingPrinterIds, setTestingPrinterIds] = React.useState<Set<string>>(new Set());
 	const printerService = React.useMemo(() => new PrinterService(), []);
 	const templates = useActiveTemplates();
@@ -297,6 +298,18 @@ export function PrintingSettings() {
 								</TableCell>
 								<TableCell>
 									<HStack className="gap-2">
+										{!profile.isBuiltIn && (
+											<Button
+												variant="outline"
+												size="sm"
+												onPress={() => {
+													setEditingPrinter(profile);
+													setDialogOpen(true);
+												}}
+											>
+												<Text>{t('common.edit', 'Edit')}</Text>
+											</Button>
+										)}
 										<Button
 											variant="outline"
 											size="sm"
@@ -330,16 +343,26 @@ export function PrintingSettings() {
 					</TableBody>
 				</Table>
 				<View className="flex-row">
-					<Button onPress={() => setDialogOpen(true)}>
+					<Button
+						onPress={() => {
+							setEditingPrinter(undefined);
+							setDialogOpen(true);
+						}}
+					>
 						<Text>{t('settings.add_printer', 'Add Printer')}</Text>
 					</Button>
 				</View>
 			</VStack>
 
-			<AddPrinter
+			<PrinterDialog
 				open={dialogOpen}
 				onOpenChange={setDialogOpen}
-				onSave={() => setDialogOpen(false)}
+				onSave={() => {
+					setDialogOpen(false);
+					setEditingPrinter(undefined);
+				}}
+				printer={editingPrinter}
+				printerCount={printers.filter((p) => !p.isBuiltIn).length}
 			/>
 		</VStack>
 	);
