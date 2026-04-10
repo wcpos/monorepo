@@ -79,9 +79,7 @@
       "@firebase/util",
       "electron-winstaller"
     ],
-    "patchedDependencies": {
-      "expo-opfs": "patches/expo-opfs.patch"
-    }
+    "patchedDependencies": {}
   },
   "lint-staged": {
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"

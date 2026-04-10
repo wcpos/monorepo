@@ -8,7 +8,6 @@ const mockOpenDatabaseAsync = jest.fn(async (_name: string, _options?: unknown) 
 	runAsync: jest.fn(),
 }));
 const mockDeleteDatabaseAsync = jest.fn();
-const mockGetRxStorageExpoAsync = jest.fn(() => ({ name: 'expo-filesystem-storage' }));
 const mockGetRxStorageSQLite = jest.fn(
 	(config: { sqliteBasics: { open(name: string): Promise<unknown> } }) => ({
 		name: 'sqlite-storage',
@@ -54,8 +53,9 @@ jest.mock('expo-file-system', () => ({
 	},
 }));
 
-jest.mock('rxdb-premium/plugins/storage-filesystem-expo', () => ({
-	getRxStorageExpoAsync: () => mockGetRxStorageExpoAsync(),
+jest.mock('rxdb-premium/plugins/storage-sqlite', () => ({
+	getRxStorageSQLite: (config: { sqliteBasics: { open(name: string): Promise<unknown> } }) =>
+		mockGetRxStorageSQLite(config),
 }));
 
 jest.mock('rxdb-premium-old/plugins/storage-sqlite', () => ({
@@ -79,10 +79,10 @@ describe('native storage migration configuration', () => {
 		jest.resetModules();
 	});
 
-	it('returns expo-filesystem as the target native storage kind', async () => {
+	it('returns expo-sqlite as the target native storage kind', async () => {
 		const { getNativeStorageKind } = await import('./index');
 
-		expect(getNativeStorageKind()).toBe('expo-filesystem');
+		expect(getNativeStorageKind()).toBe('expo-sqlite');
 	});
 
 	it('closes cached legacy sqlite connections before cleanup', async () => {

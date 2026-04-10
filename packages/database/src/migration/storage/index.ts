@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { getRxStorageExpoAsync } from 'rxdb-premium/plugins/storage-filesystem-expo';
+import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 
 import { getLegacyMigrationRxStorageSQLite } from './legacy-sqlite-storage';
 
@@ -8,7 +8,7 @@ import type { StorageMigrationConfig, StorageMigrationDatabaseKind } from './typ
 
 export { prepareOldDatabaseForStorageMigration } from './prepare-old-database';
 
-const NATIVE_STORAGE_KIND = 'expo-filesystem' as const;
+const NATIVE_STORAGE_KIND = 'expo-sqlite' as const;
 const legacyDbCache = new Map<string, any>();
 
 async function withDatabaseRetry<T>(db: any, operation: (activeDb: any) => Promise<T>): Promise<T> {
@@ -128,7 +128,9 @@ export function getNativeOldStorage() {
 }
 
 export function getNativeNewStorage() {
-	return getRxStorageExpoAsync();
+	return getRxStorageSQLite({
+		sqliteBasics: getSQLiteBasicsExpoSQLiteAsync(),
+	});
 }
 
 export function getStorageMigrationConfig(
@@ -137,6 +139,6 @@ export function getStorageMigrationConfig(
 	return {
 		oldStorage: getNativeOldStorage(),
 		sourceStorage: 'expo-sqlite',
-		targetStorage: 'expo-filesystem',
+		targetStorage: 'expo-sqlite',
 	};
 }
