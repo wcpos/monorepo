@@ -12,13 +12,10 @@ import {
 import { Suspense } from '@wcpos/components/suspense';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import { Query, useQuery } from '@wcpos/query';
-import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
-
-const uiLogger = getLogger(['wcpos', 'ui', 'filter']);
 
 interface CashierPillProps {
 	query: Query<CustomerCollection>;
@@ -86,13 +83,20 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 	const { format } = useCustomerNameFormat();
 	const t = useT();
 	const isCashierLoading = (cashier as CashierWithLoadingMarker | null)?.__isLoading;
+	const isActive = cashierID !== null && cashierID !== undefined;
 
 	/**
 	 * @FIXME - if the customers are cleared, it's possible that the cashier will be null
 	 */
-	if (!cashier && cashierID) {
+	if (!cashier && isActive) {
 		cashier = { id: cashierID } as CustomerDocument;
 	}
+	const cashierEntity = isActive ? cashier : null;
+	const isLoading = isActive && !!isCashierLoading;
+
+	const handleRemove = React.useCallback(() => {
+		query.removeElemMatch('meta_data', { key: '_pos_user' }).exec();
+	}, [query]);
 
 	/**
 	 * value is always a string when dealing with comboboxes
@@ -103,7 +107,6 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 		<Combobox
 			onValueChange={(option) => {
 				if (!option) return;
-				uiLogger.debug('value', { context: { value: option.value } });
 				query
 					.removeElemMatch('meta_data', { key: '_pos_user' }) // clear any previous value
 					.where('meta_data')
@@ -115,15 +118,15 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 				<ButtonPill
 					size="xs"
 					leftIcon="userCrown"
-					variant={cashier ? undefined : 'muted'}
-					removable={!!cashier}
-					onRemove={() => query.removeElemMatch('meta_data', { key: '_pos_user' }).exec()}
+					variant={isActive ? undefined : 'muted'}
+					removable={isActive}
+					onRemove={handleRemove}
 				>
 					<ButtonText>
-						{isCashierLoading
+						{isLoading
 							? t('common.loading')
-							: cashier
-								? format(cashier)
+							: cashierEntity
+								? format(cashierEntity)
 								: t('common.select_cashier')}
 					</ButtonText>
 				</ButtonPill>

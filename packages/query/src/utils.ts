@@ -15,6 +15,20 @@ export function isArrayOfIntegers(value: unknown) {
 	return Array.isArray(value) && value.every((item) => Number.isInteger(item));
 }
 
+export function unwrapEqSelector<T = unknown>(value: T): T | unknown {
+	if (
+		value &&
+		typeof value === 'object' &&
+		!Array.isArray(value) &&
+		Object.keys(value).length === 1 &&
+		'$eq' in value
+	) {
+		return (value as { $eq: unknown }).$eq;
+	}
+
+	return value;
+}
+
 /**
  * eg: customers?orderby=last_name&order=asc&per_page=10&role=all
  */

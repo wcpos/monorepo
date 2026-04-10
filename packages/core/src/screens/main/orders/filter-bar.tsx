@@ -14,6 +14,7 @@ import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
+import { normalizeSelectedCustomerID } from '../components/order/filter-bar/customer-filter-utils';
 import { createSelectedEntity$ } from '../components/filter-bar/selected-entity';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
@@ -26,8 +27,12 @@ export function FilterBar({
 	query: import('@wcpos/query').Query<import('@wcpos/database').OrderCollection>;
 }) {
 	const guestCustomer = useGuestCustomer();
-	const customerID = useObservableEagerState(
+	const rawCustomerID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
+	);
+	const customerID = React.useMemo(
+		() => normalizeSelectedCustomerID(rawCustomerID as string | number | null | undefined),
+		[rawCustomerID]
 	);
 	const cashierID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
@@ -38,21 +43,15 @@ export function FilterBar({
 	 *
 	 */
 	const customerQuery = useQuery({
-		queryKeys: ['customers', 'customer-filter'],
+		queryKeys: ['customers', 'orders-customer-filter', customerID ?? 'none'],
 		collectionName: 'customers',
+		initialParams:
+			customerID !== undefined && customerID !== 0
+				? {
+						selector: { id: customerID },
+					}
+				: undefined,
 	});
-
-	/**
-	 * NOTE: customerID can be 0 which is a valid customer ID
-	 */
-	React.useEffect(() => {
-		if (customerID !== null && customerID !== undefined) {
-			customerQuery
-				?.where('id')
-				.equals(customerID as unknown as number)
-				.exec();
-		}
-	}, [customerID, customerQuery]);
 
 	/**
 	 *
@@ -130,11 +129,7 @@ export function FilterBar({
 		<HStack className="w-full flex-wrap">
 			<StatusPill query={query} />
 			<Suspense>
-				<CustomerPill
-					resource={customerResource}
-					query={query}
-					customerID={customerID as number | undefined}
-				/>
+				<CustomerPill resource={customerResource} query={query} customerID={customerID} />
 			</Suspense>
 			<Suspense>
 				<CashierPill

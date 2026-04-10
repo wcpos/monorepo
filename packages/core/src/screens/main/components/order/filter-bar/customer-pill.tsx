@@ -11,6 +11,7 @@ import { Query } from '@wcpos/query';
 import { useT } from '../../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerSearch } from '../../customer-select';
+import { resolveCustomerPillEntity } from './customer-filter-utils';
 
 interface CustomerPillProps {
 	query: Query<CustomerCollection>;
@@ -28,21 +29,39 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 	const { format } = useCustomerNameFormat();
 	const t = useT();
 	const isCustomerLoading = (customer as CustomerWithLoadingMarker | null)?.__isLoading;
+	const isActive = customerID !== null && customerID !== undefined;
+	const [selectedCustomer, setSelectedCustomer] = React.useState<CustomerDocument | null>(null);
 
 	/**
 	 * @FIXME - if the customers are cleared, it's possible that the customer will be null
 	 */
-	if (!customer && customerID) {
+	if (!customer && isActive) {
 		customer = { id: customerID } as CustomerDocument;
 	}
+
+	React.useEffect(() => {
+		if (!isActive) {
+			setSelectedCustomer(null);
+			return;
+		}
+
+		setSelectedCustomer((current) => (current?.id === customerID ? current : null));
+	}, [customerID, isActive]);
+
+	const customerEntity = React.useMemo(
+		() => resolveCustomerPillEntity({ customer, selectedCustomer, customerID, isActive }),
+		[customer, customerID, isActive, selectedCustomer]
+	);
+	const isLoading = isActive && !!isCustomerLoading;
 
 	/**
 	 *
 	 */
 	return (
-		<Combobox
+		<Combobox<CustomerDocument>
 			onValueChange={(option) => {
 				if (!option) return;
+				setSelectedCustomer(option.item ?? null);
 				query.where('customer_id').equals(toNumber(option.value)).exec();
 			}}
 		>
@@ -50,15 +69,15 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 				<ButtonPill
 					size="xs"
 					leftIcon="user"
-					variant={customer ? undefined : 'muted'}
-					removable={!!customer}
+					variant={isActive ? undefined : 'muted'}
+					removable={isActive}
 					onRemove={() => query.removeWhere('customer_id').exec()}
 				>
 					<ButtonText>
-						{isCustomerLoading
+						{isLoading
 							? t('common.loading')
-							: customer
-								? format(customer)
+							: customerEntity
+								? format(customerEntity)
 								: t('common.select_customer')}
 					</ButtonText>
 				</ButtonPill>

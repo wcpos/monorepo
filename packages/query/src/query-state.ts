@@ -766,9 +766,21 @@ export class Query<T extends RxCollection>
 	 * @returns The selector value, or `undefined` if not found.
 	 */
 	public getSelector(path: string): MangoQuerySelector<any> | undefined {
-		return get(this.currentRxQuery, ['mangoQuery', 'selector', path]) as
+		const selector = get(this.currentRxQuery, ['mangoQuery', 'selector', path]) as
 			| MangoQuerySelector<any>
 			| undefined;
+
+		if (
+			selector &&
+			typeof selector === 'object' &&
+			!Array.isArray(selector) &&
+			Object.keys(selector).length === 1 &&
+			'$eq' in selector
+		) {
+			return (selector as { $eq: MangoQuerySelector<any> }).$eq;
+		}
+
+		return selector;
 	}
 
 	/**

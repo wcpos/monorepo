@@ -3,8 +3,8 @@ import { filterApiQueryParams as filterCustomerParams } from '../src/hooks/custo
 import { filterApiQueryParams as filterCouponParams } from '../src/hooks/coupons';
 import {
 	filterApiQueryParams as filterVariationParams,
-	preQueryParams,
 	postQueryResult,
+	preQueryParams,
 } from '../src/hooks/variations';
 
 describe('Hook Filters', () => {
@@ -33,6 +33,28 @@ describe('Hook Filters', () => {
 		it('should convert customer_id to customer', () => {
 			const result = filterOrderParams({ customer_id: 42 });
 			expect(result.customer).toBe(42);
+			expect(result.customer_id).toBeUndefined();
+		});
+
+		it('should unwrap $eq selectors for simple WooCommerce API params', () => {
+			const result = filterOrderParams({
+				status: { $eq: 'completed' },
+				customer_id: { $eq: 42 },
+				created_via: { $eq: 'checkout' },
+			});
+
+			expect(result.status).toBe('completed');
+			expect(result.customer).toBe(42);
+			expect(result.customer_id).toBeUndefined();
+			expect(result.created_via).toBe('checkout');
+		});
+
+		it('should preserve guest customer_id 0 when converting to the WooCommerce customer param', () => {
+			const result = filterOrderParams({
+				customer_id: { $eq: 0 },
+			});
+
+			expect(result.customer).toBe(0);
 			expect(result.customer_id).toBeUndefined();
 		});
 
@@ -143,6 +165,16 @@ describe('Hook Filters', () => {
 		it('should pass through other orderby values unchanged', () => {
 			const result = filterCouponParams({ orderby: 'code' });
 			expect(result.orderby).toBe('code');
+		});
+
+		it('should unwrap $eq selectors for coupon filter params', () => {
+			const result = filterCouponParams({
+				status: { $eq: 'draft' },
+				discount_type: { $eq: 'fixed_cart' },
+			});
+
+			expect(result.status).toBe('draft');
+			expect(result.discount_type).toBe('fixed_cart');
 		});
 	});
 

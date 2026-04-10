@@ -248,6 +248,17 @@ describe('Query', () => {
 			expect(query.currentRxQuery.other.queryBuilderPath).toBe('stock_status');
 		});
 
+		it('unwraps simple $eq selectors via getSelector', () => {
+			const query = new Query({
+				collection: storeDatabase.collections.products,
+				initialParams: {},
+			});
+
+			query.where('stock_status').equals('instock').exec();
+
+			expect(query.getSelector('stock_status')).toBe('instock');
+		});
+
 		/**
 		 *
 		 */
@@ -824,6 +835,34 @@ describe('Query', () => {
 					resolve();
 				});
 			});
+		});
+
+		it('removes a cashier meta_data filter after re-selecting cashier while preserving store filter', () => {
+			const query = new Query({
+				collection: storeDatabase.collections.products,
+				initialParams: {
+					selector: {
+						$and: [
+							{ meta_data: { $elemMatch: { key: '_pos_user', value: '1' } } },
+							{ meta_data: { $elemMatch: { key: '_pos_store', value: '153' } } },
+						],
+					},
+				},
+			});
+
+			query
+				.removeElemMatch('meta_data', { key: '_pos_user' })
+				.where('meta_data')
+				.multipleElemMatch({ key: '_pos_user', value: '5' })
+				.exec();
+
+			expect(query.getMetaDataElemMatchValue('_pos_user')).toBe('5');
+			expect(query.getMetaDataElemMatchValue('_pos_store')).toBe('153');
+
+			query.removeElemMatch('meta_data', { key: '_pos_user' }).exec();
+
+			expect(query.getMetaDataElemMatchValue('_pos_user')).toBeUndefined();
+			expect(query.getMetaDataElemMatchValue('_pos_store')).toBe('153');
 		});
 
 		/**

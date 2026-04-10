@@ -1,7 +1,13 @@
+import { unwrapEqSelector } from '../utils';
+
 /**
  *
  */
 const filterApiQueryParams = (params: Record<string, any>) => {
+	for (const [key, value] of Object.entries(params)) {
+		params[key] = unwrapEqSelector(value);
+	}
+
 	let orderby = params.orderby;
 
 	if (orderby === 'date_created' || orderby === 'date_created_gmt') {
@@ -16,7 +22,7 @@ const filterApiQueryParams = (params: Record<string, any>) => {
 	 * Customer filter is customer_id in POS, but customer in WC API
 	 * so we need to convert it
 	 */
-	if (params.customer_id) {
+	if (Object.prototype.hasOwnProperty.call(params, 'customer_id')) {
 		params.customer = params.customer_id;
 		delete params.customer_id;
 	}

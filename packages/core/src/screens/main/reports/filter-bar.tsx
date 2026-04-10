@@ -19,6 +19,7 @@ import { CustomerPill } from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
+import { normalizeSelectedCustomerID } from '../components/order/filter-bar/customer-filter-utils';
 import { createSelectedEntity$ } from '../components/filter-bar/selected-entity';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
@@ -28,8 +29,12 @@ import { useGuestCustomer } from '../hooks/use-guest-customer';
 export function FilterBar() {
 	const { query } = useReports();
 	const guestCustomer = useGuestCustomer();
-	const customerID = useObservableEagerState(
-		query.rxQuery$.pipe(map(() => query.getSelector('customer_id') as number | undefined))
+	const rawCustomerID = useObservableEagerState(
+		query.rxQuery$.pipe(map(() => query.getSelector('customer_id')))
+	);
+	const customerID = React.useMemo(
+		() => normalizeSelectedCustomerID(rawCustomerID as string | number | null | undefined),
+		[rawCustomerID]
 	);
 	const cashierID = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
@@ -40,21 +45,15 @@ export function FilterBar() {
 	 *
 	 */
 	const customerQuery = useQuery({
-		queryKeys: ['customers', 'customer-filter'],
+		queryKeys: ['customers', 'reports-customer-filter', customerID ?? 'none'],
 		collectionName: 'customers',
+		initialParams:
+			customerID !== undefined && customerID !== 0
+				? {
+						selector: { id: customerID },
+					}
+				: undefined,
 	});
-
-	/**
-	 *
-	 */
-	React.useEffect(() => {
-		if (customerID !== null && customerID !== undefined && customerID !== 0) {
-			customerQuery
-				?.where('id')
-				.equals(toNumber(customerID as number))
-				.exec();
-		}
-	}, [customerID, customerQuery]);
 
 	/**
 	 *
