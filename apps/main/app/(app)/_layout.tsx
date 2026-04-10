@@ -87,9 +87,11 @@ export default function AppLayout() {
 	// Fetch fresh site data (versions, license) on mount
 	useSiteInfo({ site });
 
-	// Block UI if the PHP plugin is older than the app
-	const { compatibility } = useAppInfo();
-	if (compatibility && !compatibility.wcposVersionPass) {
+	// Block UI if the PHP plugin is older than the app.
+	// Only gate once wcposVersion is populated — before the fetch completes (or if it
+	// fails, e.g. offline) we fail open so we don't block compatible users.
+	const { compatibility, site: siteVersionInfo } = useAppInfo();
+	if (siteVersionInfo?.wcposVersion && !compatibility?.wcposVersionPass) {
 		return <UpgradeRequired />;
 	}
 
