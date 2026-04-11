@@ -17,6 +17,7 @@ export { usePrinterDiscovery } from './hooks/use-printer-discovery';
 export { resolvePrinter } from './resolve-printer';
 export type { TemplateInfo, ResolvePrinterOptions } from './resolve-printer';
 export { detectMismatch } from './detect-mismatch';
+export { probeVendor } from './utils/probe-vendor';
 export type {
 	PrinterTransport,
 	PrinterProfile,
