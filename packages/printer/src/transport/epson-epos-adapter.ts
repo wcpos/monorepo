@@ -1,196 +1,132 @@
-import type { PrinterTransport } from "../types";
+import type { PrinterTransport } from '../types';
+
+const EPOS_PRINT_NS = 'http://www.epson-pos.com/schemas/2011/03/epos-print';
+const SOAP_NS = 'http://schemas.xmlsoap.org/soap/envelope/';
 
 /**
- * Global type declarations for the Epson ePOS SDK.
+ * Epson ePOS HTTP adapter for web browsers.
  *
- * The SDK is not published on npm and cannot be bundled. It must be loaded
- * via a `<script>` tag that exposes `window.epson.ePOSDevice`.
+ * Communicates with Epson TM-series printers using the built-in HTTP
+ * endpoint at `/cgi-bin/epos/service.cgi`. This is a simple SOAP/XML
+ * interface — no external SDK required.
  *
- * Download the SDK from Epson:
- *   https://download.epson-biz.com/modules/pos/index.php?page=single_soft&cid=6679
+ * The printer must have ePOS enabled in its network settings (this is
+ * the default on most TM-T88/TM-m series printers).
  *
- * Then add it to your HTML:
- *   <script src="/path/to/epos-2.27.0.js"></script>
- */
-interface EpsonePOSDevice {
-  connect(ip: string, port: number, callback: (status: string) => void): void;
-  createDevice(
-    id: string,
-    type: number,
-    options: Record<string, unknown>,
-    callback: (printer: EpsonPrinter | null, retcode: string) => void,
-  ): void;
-  disconnect(): void;
-  DEVICE_TYPE_PRINTER: number;
-}
-
-interface EpsonPrinter {
-  addCommand(data: string): void;
-  send(): void;
-  onreceive:
-    | ((response: { success: boolean; code: string; status: number }) => void)
-    | null;
-  onerror: ((error: { status: number; responseText: string }) => void) | null;
-}
-
-/**
- * Epson ePOS adapter for web browsers.
+ * **Ports:**
+ * - HTTP:  80 (default) or 8008
+ * - HTTPS: 443 (default) or 8043
  *
- * Wraps the Epson ePOS JavaScript SDK which communicates with Epson
- * TM-series printers over WebSocket (port 8008 for ws, 8043 for wss).
- *
- * **Prerequisites:**
- * The Epson ePOS SDK must be loaded globally before using this adapter.
- * Add the SDK script tag to your HTML page:
- *
- *   <script src="/path/to/epos-2.27.0.js"></script>
- *
- * The SDK is available from Epson's developer portal:
- *   https://download.epson-biz.com/modules/pos/index.php?page=single_soft&cid=6679
- *
- * **Connection behavior:**
- * The adapter lazily connects on the first print call and reuses the
- * connection for subsequent prints. Call disconnect() to clean up.
+ * **CORS / mixed-content notes:**
+ * Epson printers with ePOS support respond with `Access-Control-Allow-Origin: *`.
+ * However, if the POS app is served over HTTPS and the printer only has a
+ * self-signed certificate, the browser will reject the connection. Navigate
+ * to `https://<printer-ip>` first and accept the certificate, or access the
+ * POS app over HTTP.
  */
 export class EpsonEposAdapter implements PrinterTransport {
-  readonly name = "epson-epos-web";
+	readonly name = 'epson-epos-http';
 
-  private device: EpsonePOSDevice | null = null;
-  private printer: EpsonPrinter | null = null;
-  private connecting: Promise<void> | null = null;
+	private deviceId: string;
+	private baseUrl: string;
 
-  /**
-   * @param host - Printer IP address or hostname (e.g., "192.168.1.100")
-   * @param port - WebSocket port. Defaults to 8043 (wss). Use 8008 for ws.
-   */
-  constructor(
-    private host: string,
-    private port: number = 8043,
-  ) {}
+	/**
+	 * @param host   - Printer IP address or hostname
+	 * @param port   - HTTP(S) port. 8043/443 → HTTPS, anything else → HTTP.
+	 * @param deviceId - ePOS device ID, typically "local_printer"
+	 */
+	constructor(host: string, port: number = 8008, deviceId: string = 'local_printer') {
+		this.deviceId = deviceId;
 
-  async printRaw(data: Uint8Array): Promise<void> {
-    await this.ensureConnected();
+		const protocol = port === 8043 || port === 443 ? 'https' : 'http';
+		this.baseUrl = `${protocol}://${host}:${port}`;
+	}
 
-    // Convert bytes to a string of char codes (the SDK's addCommand format).
-    // Process in chunks to avoid call stack limits on large receipts.
-    const CHUNK_SIZE = 8192;
-    const chunks: string[] = [];
-    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-      const chunk = data.subarray(i, i + CHUNK_SIZE);
-      chunks.push(
-        String.fromCharCode.apply(null, chunk as unknown as number[]),
-      );
-    }
-    const rawString = chunks.join("");
+	async printRaw(data: Uint8Array): Promise<void> {
+		const hex = uint8ArrayToHex(data);
+		await this.sendEposPrint(`<command>${hex}</command>`);
+	}
 
-    return new Promise<void>((resolve, reject) => {
-      this.printer!.onreceive = (response) => {
-        this.printer!.onreceive = null;
-        this.printer!.onerror = null;
+	async printHtml(_html: string): Promise<void> {
+		throw new Error('EpsonEposAdapter does not support HTML printing.');
+	}
 
-        if (response.success) {
-          resolve();
-        } else {
-          reject(new Error(`Epson print failed with code: ${response.code}`));
-        }
-      };
+	async disconnect(): Promise<void> {
+		// HTTP is stateless — nothing to clean up
+	}
 
-      this.printer!.onerror = (error) => {
-        this.printer!.onreceive = null;
-        this.printer!.onerror = null;
-        reject(
-          new Error(
-            `Epson print error (status ${error.status}): ${error.responseText}`,
-          ),
-        );
-      };
+	private async sendEposPrint(innerXml: string): Promise<void> {
+		const url =
+			`${this.baseUrl}/cgi-bin/epos/service.cgi` +
+			`?devid=${encodeURIComponent(this.deviceId)}&timeout=10000`;
 
-      this.printer!.addCommand(rawString);
-      this.printer!.send();
-    });
-  }
+		const body = [
+			'<?xml version="1.0" encoding="utf-8"?>',
+			`<s:Envelope xmlns:s="${SOAP_NS}">`,
+			'<s:Body>',
+			`<epos-print xmlns="${EPOS_PRINT_NS}">`,
+			innerXml,
+			'</epos-print>',
+			'</s:Body>',
+			'</s:Envelope>',
+		].join('');
 
-  async printHtml(_html: string): Promise<void> {
-    throw new Error("EpsonEposAdapter does not support HTML printing.");
-  }
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 15_000);
 
-  async disconnect(): Promise<void> {
-    // Wait for any in-progress connection attempt to complete
-    if (this.connecting) {
-      try {
-        await this.connecting;
-      } catch {
-        // Connection failed, proceed with cleanup
-      }
-    }
-    if (this.device) {
-      this.device.disconnect();
-      this.device = null;
-      this.printer = null;
-    }
-  }
+		let response: Response;
+		try {
+			response = await fetch(url, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'text/xml; charset=utf-8',
+					'If-Modified-Since': 'Thu, 01 Jan 1970 00:00:00 GMT',
+					SOAPAction: '""',
+				},
+				body,
+				signal: controller.signal,
+			});
+		} catch (error) {
+			if (error instanceof DOMException && error.name === 'AbortError') {
+				throw new Error(
+					`Epson ePOS request timed out. Check that the printer is reachable at ${this.baseUrl}`
+				);
+			}
+			throw new Error(
+				`Could not connect to Epson printer at ${this.baseUrl}. ` +
+					"Check the IP address and ensure ePOS is enabled in the printer's network settings. " +
+					"If using HTTPS, you may need to accept the printer's self-signed certificate " +
+					`by visiting ${this.baseUrl} in your browser first.`
+			);
+		} finally {
+			clearTimeout(timeoutId);
+		}
 
-  /**
-   * Lazily connect to the printer and create the device handle.
-   * Reuses an existing connection if already established.
-   */
-  private async ensureConnected(): Promise<void> {
-    if (this.printer) return;
-    if (this.connecting) return this.connecting;
+		if (!response.ok) {
+			const text = await response.text().catch(() => '');
+			throw new Error(`Epson ePOS HTTP ${response.status}: ${text || response.statusText}`);
+		}
 
-    this.connecting = this.doConnect().finally(() => {
-      this.connecting = null;
-    });
-    return this.connecting;
-  }
+		const responseText = await response.text();
+		const doc = new DOMParser().parseFromString(responseText, 'text/xml');
+		const resp = doc.getElementsByTagNameNS(EPOS_PRINT_NS, 'response')[0];
 
-  private async doConnect(): Promise<void> {
-    const epson = (window as any).epson;
-    if (!epson?.ePOSDevice) {
-      throw new Error(
-        "Epson ePOS SDK not loaded. Add the ePOS SDK script to your HTML page before " +
-          "using the Epson adapter. Download from: " +
-          "https://download.epson-biz.com/modules/pos/index.php?page=single_soft&cid=6679",
-      );
-    }
+		if (!resp) {
+			throw new Error('Unexpected Epson ePOS response from printer');
+		}
 
-    this.device = new epson.ePOSDevice() as EpsonePOSDevice;
+		const success = resp.getAttribute('success');
+		if (success !== 'true' && success !== '1') {
+			const code = resp.getAttribute('code') || 'unknown';
+			throw new Error(`Epson print failed (code: ${code})`);
+		}
+	}
+}
 
-    // Step 1: open WebSocket connection to the printer
-    await new Promise<void>((resolve, reject) => {
-      this.device!.connect(this.host, this.port, (status: string) => {
-        if (status === "OK" || status === "SSL_CONNECT_OK") {
-          resolve();
-        } else {
-          this.device = null;
-          reject(new Error(`Epson connection failed: ${status}`));
-        }
-      });
-    });
-
-    // Step 2: create a printer device handle
-    // Wrap in try-catch so a createDevice failure disconnects the socket
-    // from Step 1, preventing orphaned WebSocket connections on retry.
-    try {
-      this.printer = await new Promise<EpsonPrinter>((resolve, reject) => {
-        this.device!.createDevice(
-          "local_printer",
-          this.device!.DEVICE_TYPE_PRINTER,
-          { crypto: this.port === 8043, buffer: false },
-          (printer, retcode) => {
-            if (retcode === "OK" && printer) {
-              resolve(printer);
-            } else {
-              reject(new Error(`Epson device creation failed: ${retcode}`));
-            }
-          },
-        );
-      });
-    } catch (error) {
-      this.device?.disconnect();
-      this.device = null;
-      this.printer = null;
-      throw error;
-    }
-  }
+function uint8ArrayToHex(bytes: Uint8Array): string {
+	const parts: string[] = [];
+	for (let i = 0; i < bytes.length; i++) {
+		parts.push(bytes[i].toString(16).padStart(2, '0'));
+	}
+	return parts.join('');
 }
