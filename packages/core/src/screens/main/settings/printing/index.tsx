@@ -26,8 +26,8 @@ import {
 } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { PrinterService, resolvePrinter } from '@wcpos/printer';
-import type { PrinterProfile } from '@wcpos/printer';
+import { PrinterService, resolvePrinter, usePrinterDiscovery } from '@wcpos/printer';
+import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
 import type {
 	PrinterProfileDocument,
 	TemplateDocument,
@@ -51,6 +51,10 @@ export function PrintingSettings() {
 	const [testingPrinterIds, setTestingPrinterIds] = React.useState<Set<string>>(new Set());
 	const printerService = React.useMemo(() => new PrinterService(), []);
 	const templates = useActiveTemplates();
+	const discovery = usePrinterDiscovery();
+	const [prefilledPrinter, setPrefilledPrinter] = React.useState<
+		Partial<DiscoveredPrinter> | undefined
+	>();
 
 	useEnsureSystemPrinter(storeDB);
 
@@ -286,14 +290,48 @@ export function PrintingSettings() {
 									)}
 								</Text>
 							)}
-							<Button
-								onPress={() => {
-									setEditingPrinter(undefined);
-									setDialogOpen(true);
-								}}
-							>
-								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
-							</Button>
+							<HStack className="gap-2">
+								<Button
+									onPress={() => {
+										setPrefilledPrinter(undefined);
+										setEditingPrinter(undefined);
+										setDialogOpen(true);
+									}}
+								>
+									<Text>{t('settings.add_printer', 'Add Printer')}</Text>
+								</Button>
+								{Platform.OS !== 'web' && (
+									<Button
+										variant="outline"
+										onPress={() => discovery.startScan()}
+										loading={discovery.isScanning}
+									>
+										<Text>{t('settings.scan_network', 'Scan Network')}</Text>
+									</Button>
+								)}
+							</HStack>
+							{discovery.printers.length > 0 && (
+								<VStack className="gap-1">
+									{discovery.printers.map((dp) => (
+										<HStack key={dp.id} className="items-center gap-2">
+											<Text className="text-sm">
+												{dp.name} ({dp.address})
+											</Text>
+											<Button
+												variant="outline"
+												size="sm"
+												onPress={() => {
+													setPrefilledPrinter(dp);
+													setEditingPrinter(undefined);
+													setDialogOpen(true);
+												}}
+											>
+												<Text>{t('common.add', 'Add')}</Text>
+											</Button>
+										</HStack>
+									))}
+								</VStack>
+							)}
 							<Text className="text-muted-foreground text-xs">
 								{t(
 									'settings.system_dialog_note',
@@ -384,16 +422,61 @@ export function PrintingSettings() {
 								))}
 							</TableBody>
 						</Table>
-						<View className="flex-row">
+						<HStack className="gap-2">
 							<Button
 								onPress={() => {
+									setPrefilledPrinter(undefined);
 									setEditingPrinter(undefined);
 									setDialogOpen(true);
 								}}
 							>
 								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
 							</Button>
-						</View>
+							{Platform.OS !== 'web' && (
+								<Button
+									variant="outline"
+									onPress={() => discovery.startScan()}
+									loading={discovery.isScanning}
+								>
+									<Text>{t('settings.scan_network', 'Scan Network')}</Text>
+								</Button>
+							)}
+						</HStack>
+						{discovery.error && (
+							<Text className="text-muted-foreground text-xs">{discovery.error}</Text>
+						)}
+						{discovery.printers.length > 0 && (
+							<VStack className="gap-1">
+								<Text className="text-muted-foreground text-xs font-medium">
+									{t('settings.discovered_printers', 'Discovered printers:')}
+								</Text>
+								{discovery.printers.map((dp) => (
+									<HStack key={dp.id} className="items-center gap-2">
+										<Text className="text-sm">
+											{dp.name} ({dp.address})
+										</Text>
+										{dp.vendor && dp.vendor !== 'generic' && (
+											<View className="bg-muted rounded px-1.5 py-0.5">
+												<Text className="text-muted-foreground text-xs">
+													{dp.vendor === 'epson' ? 'Epson' : 'Star'}
+												</Text>
+											</View>
+										)}
+										<Button
+											variant="outline"
+											size="sm"
+											onPress={() => {
+												setPrefilledPrinter(dp);
+												setEditingPrinter(undefined);
+												setDialogOpen(true);
+											}}
+										>
+											<Text>{t('common.add', 'Add')}</Text>
+										</Button>
+									</HStack>
+								))}
+							</VStack>
+						)}
 					</>
 				)}
 			</VStack>
@@ -404,9 +487,11 @@ export function PrintingSettings() {
 				onSave={() => {
 					setDialogOpen(false);
 					setEditingPrinter(undefined);
+					setPrefilledPrinter(undefined);
 				}}
 				printer={editingPrinter}
 				printerCount={printers.filter((p) => !p.isBuiltIn).length}
+				prefill={prefilledPrinter}
 			/>
 		</VStack>
 	);
