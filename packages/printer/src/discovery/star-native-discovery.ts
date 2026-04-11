@@ -11,10 +11,7 @@ export async function discover(): Promise<DiscoveredPrinter[]> {
 	const { StarDeviceDiscoveryManagerFactory, InterfaceType } =
 		await import('react-native-star-io10');
 
-	const manager = await StarDeviceDiscoveryManagerFactory.create([
-		InterfaceType.Lan,
-		InterfaceType.Bluetooth,
-	]);
+	const manager = await StarDeviceDiscoveryManagerFactory.create([InterfaceType.Lan]);
 
 	const printers: DiscoveredPrinter[] = [];
 
