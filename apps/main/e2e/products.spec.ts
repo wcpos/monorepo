@@ -175,27 +175,29 @@ test.describe('Products Page (Pro)', () => {
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
 
-		// Use deterministic fixture data known to contain two distinct product names.
+		// Use deterministic fixture data known to include multiple hoodie products.
 		const searchInput = screen.getByTestId('search-products');
-		await searchInput.fill('beanie');
+		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
 
-		const beanieRow = screen.getByRole('button', { name: /^Beanie$/ }).first();
-		const beanieWithLogoRow = screen.getByRole('button', { name: /Beanie with Logo/i }).first();
-		await expect(beanieRow).toBeVisible({ timeout: 30_000 });
-		await expect(beanieWithLogoRow).toBeVisible({ timeout: 30_000 });
+		const hoodieWithPocketRow = screen.getByRole('button', { name: /Hoodie with Pocket/i }).first();
+		const hoodieWithZipperRow = screen.getByRole('button', { name: /Hoodie with Zipper/i }).first();
+		await expect(hoodieWithPocketRow).toBeVisible({ timeout: 30_000 });
+		await expect(hoodieWithZipperRow).toBeVisible({ timeout: 30_000 });
 
 		const getRowOrder = async () => {
 			return Promise.all(
-				[beanieRow, beanieWithLogoRow].map(async (row) => (await row.boundingBox())?.y ?? -1)
+				[hoodieWithPocketRow, hoodieWithZipperRow].map(
+					async (row) => (await row.boundingBox())?.y ?? -1
+				)
 			);
 		};
 
-		const [initialBeanieY, initialBeanieWithLogoY] = await getRowOrder();
-		expect(initialBeanieY).toBeGreaterThan(0);
-		expect(initialBeanieWithLogoY).toBeGreaterThan(0);
-		expect(initialBeanieY).not.toBe(initialBeanieWithLogoY);
-		const initialSortDirection = Math.sign(initialBeanieY - initialBeanieWithLogoY);
+		const [initialHoodieWithPocketY, initialHoodieWithZipperY] = await getRowOrder();
+		expect(initialHoodieWithPocketY).toBeGreaterThan(0);
+		expect(initialHoodieWithZipperY).toBeGreaterThan(0);
+		expect(initialHoodieWithPocketY).not.toBe(initialHoodieWithZipperY);
+		const initialSortDirection = Math.sign(initialHoodieWithPocketY - initialHoodieWithZipperY);
 
 		// Columnheader wraps an inner Pressable; click its text node to hit the interactive control.
 		const productHeader = screen.getByRole('columnheader', { name: /product/i }).first();
