@@ -24,8 +24,12 @@ export class NetworkAdapter implements PrinterTransport {
 	constructor(host: string, port: number = 9100, vendor?: string) {
 		switch (vendor) {
 			case 'epson':
-				// Default to HTTP port 8008 when the user hasn't changed from 9100
-				this.delegate = new EpsonEposAdapter(host, port === 9100 ? 8008 : port);
+				{
+					const secureOrigin =
+						typeof window !== 'undefined' && window.location.protocol === 'https:';
+					const epsonPort = port === 9100 ? (secureOrigin ? 8043 : 8008) : port;
+					this.delegate = new EpsonEposAdapter(host, epsonPort);
+				}
 				break;
 			case 'star':
 				{

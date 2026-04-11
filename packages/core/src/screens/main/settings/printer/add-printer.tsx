@@ -67,8 +67,11 @@ const DEFAULT_VALUES: PrinterFormData = {
  */
 function vendorDefaults(vendor: string) {
 	switch (vendor) {
-		case 'epson':
-			return { language: 'esc-pos' as const, port: isWeb ? 8008 : 9100 };
+		case 'epson': {
+			const secureOrigin =
+				isWeb && typeof window !== 'undefined' && window.location.protocol === 'https:';
+			return { language: 'esc-pos' as const, port: isWeb ? (secureOrigin ? 8043 : 8008) : 9100 };
+		}
 		case 'star':
 			return { language: 'star-line' as const, port: 9100 };
 		default:
@@ -109,7 +112,7 @@ export function PrinterDialog({
 	 */
 	React.useEffect(() => {
 		if (open && printer) {
-			form.reset({
+			const nextValues = {
 				name: printer.name,
 				address: printer.address ?? '',
 				port: printer.port ?? 9100,
@@ -120,13 +123,17 @@ export function PrinterDialog({
 				autoCut: printer.autoCut ?? true,
 				autoOpenDrawer: printer.autoOpenDrawer ?? false,
 				isDefault: printer.isDefault ?? false,
-			});
+			};
+			prevVendorRef.current = nextValues.vendor;
+			form.reset(nextValues);
 		} else if (open) {
 			const autoName =
 				printerCount > 0
 					? `${t('settings.receipt_printer', 'Receipt Printer')} ${printerCount + 1}`
 					: t('settings.receipt_printer', 'Receipt Printer');
-			form.reset({ ...DEFAULT_VALUES, name: autoName });
+			const nextValues = { ...DEFAULT_VALUES, name: autoName };
+			prevVendorRef.current = nextValues.vendor;
+			form.reset(nextValues);
 		}
 		setTestError(null);
 	}, [open, printer, form, printerCount, t]);
@@ -253,14 +260,17 @@ export function PrinterDialog({
 				return; // Don't persist — user can click "Save Anyway"
 			}
 
-			await persistProfile(data);
-			setSaveLoading(false);
-			form.reset();
-			Toast.show({
-				title: t('settings.printer_saved', 'Printer saved'),
-				type: 'success',
-			});
-			onSave();
+			try {
+				await persistProfile(data);
+				form.reset();
+				Toast.show({
+					title: t('settings.printer_saved', 'Printer saved'),
+					type: 'success',
+				});
+				onSave();
+			} finally {
+				setSaveLoading(false);
+			}
 		},
 		[buildProfile, printerService, persistProfile, form, onSave, t]
 	);
@@ -274,10 +284,13 @@ export function PrinterDialog({
 		if (!result.success) return;
 
 		setSaveLoading(true);
-		await persistProfile(result.data);
-		setSaveLoading(false);
-		form.reset();
-		onSave();
+		try {
+			await persistProfile(result.data);
+			form.reset();
+			onSave();
+		} finally {
+			setSaveLoading(false);
+		}
 	}, [form, persistProfile, onSave]);
 
 	/**

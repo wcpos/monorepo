@@ -111,7 +111,11 @@ export class EpsonEposAdapter implements PrinterTransport {
 		const successMatch = responseText.match(/success\s*=\s*"([^"]*)"/);
 		const codeMatch = responseText.match(/code\s*=\s*"([^"]*)"/);
 
-		if (successMatch && successMatch[1] !== 'true' && successMatch[1] !== '1') {
+		if (!successMatch) {
+			throw new Error('Unexpected Epson ePOS response from printer');
+		}
+
+		if (successMatch[1] !== 'true' && successMatch[1] !== '1') {
 			const code = codeMatch?.[1] || 'unknown';
 			throw new Error(`Epson print failed (code: ${code})`);
 		}
