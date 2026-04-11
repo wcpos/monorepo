@@ -104,6 +104,11 @@ export function PrinterDialog({
 		defaultValues: DEFAULT_VALUES,
 	});
 
+	const [probing, setProbing] = React.useState(false);
+	const [detectedVendor, setDetectedVendor] = React.useState<string | null>(null);
+	const manualVendorRef = React.useRef(false);
+	const probeRequestIdRef = React.useRef(0);
+
 	/**
 	 * Reset form when dialog opens — pre-populate for editing or set defaults for adding.
 	 */
@@ -129,6 +134,8 @@ export function PrinterDialog({
 			form.reset({ ...DEFAULT_VALUES, name: autoName });
 		}
 		setTestError(null);
+		probeRequestIdRef.current += 1;
+		setProbing(false);
 		setDetectedVendor(null);
 		manualVendorRef.current = false;
 	}, [open, printer, form, printerCount, t]);
@@ -138,7 +145,6 @@ export function PrinterDialog({
 	 */
 	const vendor = form.watch('vendor');
 	const prevVendorRef = React.useRef(vendor);
-	const manualVendorRef = React.useRef(false);
 	React.useEffect(() => {
 		if (vendor !== prevVendorRef.current) {
 			prevVendorRef.current = vendor;
@@ -152,37 +158,47 @@ export function PrinterDialog({
 	 * Auto-detect vendor when IP address changes.
 	 */
 	const address = form.watch('address');
-	const [probing, setProbing] = React.useState(false);
-	const [detectedVendor, setDetectedVendor] = React.useState<string | null>(null);
 	React.useEffect(() => {
-		if (!address || !/^\d{1,3}(\.\d{1,3}){3}$/.test(address.trim())) {
+		const trimmedAddress = address?.trim() ?? '';
+		const requestId = ++probeRequestIdRef.current;
+
+		if (!trimmedAddress || !/^\d{1,3}(\.\d{1,3}){3}$/.test(trimmedAddress)) {
 			setDetectedVendor(null);
+			setProbing(false);
 			return;
 		}
-		if (manualVendorRef.current) return;
+		if (manualVendorRef.current) {
+			setProbing(false);
+			return;
+		}
 
 		const timer = setTimeout(() => {
-			let cancelled = false;
 			setProbing(true);
-			probeVendor(address.trim()).then((result) => {
-				if (cancelled) return;
-				setProbing(false);
-				if (result) {
-					setDetectedVendor(result);
-					form.setValue('vendor', result);
-					const defaults = vendorDefaults(result);
-					form.setValue('language', defaults.language);
-					form.setValue('port', defaults.port);
-					prevVendorRef.current = result;
-				} else {
-					setDetectedVendor(null);
-				}
-			});
-			return () => {
-				cancelled = true;
-			};
+			probeVendor(trimmedAddress)
+				.then((result) => {
+					if (probeRequestIdRef.current !== requestId) {
+						return;
+					}
+					if (result) {
+						setDetectedVendor(result);
+						form.setValue('vendor', result);
+						const defaults = vendorDefaults(result);
+						form.setValue('language', defaults.language);
+						form.setValue('port', defaults.port);
+						prevVendorRef.current = result;
+					} else {
+						setDetectedVendor(null);
+					}
+				})
+				.finally(() => {
+					if (probeRequestIdRef.current === requestId) {
+						setProbing(false);
+					}
+				});
 		}, 500);
-		return () => clearTimeout(timer);
+		return () => {
+			clearTimeout(timer);
+		};
 	}, [address, form]);
 
 	/**
@@ -419,6 +435,8 @@ export function PrinterDialog({
 															value={value}
 															onChange={(v: string) => {
 																manualVendorRef.current = true;
+																probeRequestIdRef.current += 1;
+																setProbing(false);
 																setDetectedVendor(null);
 																onChange(v);
 															}}

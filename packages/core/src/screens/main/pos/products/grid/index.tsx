@@ -47,7 +47,20 @@ export function ProductGrid({ query }: ProductGridProps) {
 	 * Chunk flat product list into rows of N
 	 */
 	const rows = React.useMemo(() => {
-		const products = deferredResult.hits.map((hit: { document: ProductDocument }) => hit.document);
+		const products = deferredResult.hits.reduce<ProductDocument[]>(
+			(acc, hit: { document: ProductDocument }) => {
+				try {
+					// Replication can briefly leave deferred hits pointing at stale RxDB docs.
+					// Skip those entries so the grid keeps rendering while sync catches up.
+					void hit.document.name;
+					acc.push(hit.document as ProductDocument);
+				} catch {
+					// no-op
+				}
+				return acc;
+			},
+			[]
+		);
 		const chunked: ProductDocument[][] = [];
 		for (let i = 0; i < products.length; i += gridColumns) {
 			chunked.push(products.slice(i, i + gridColumns));
