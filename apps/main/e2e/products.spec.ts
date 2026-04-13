@@ -1,5 +1,6 @@
 import { expect } from '@playwright/test';
-import { authenticatedTest as test, getStoreVariant, navigateToPage } from './fixtures';
+
+import { getStoreVariant, navigateToPage, authenticatedTest as test } from './fixtures';
 
 /**
  * Product browsing and search in the POS panel (both free and pro).
@@ -56,9 +57,7 @@ test.describe('Products in POS', () => {
 		const countEl = page.getByTestId('data-table-count');
 		const noResults = page.getByTestId('no-data-message');
 
-		const hasResults = await countEl
-			.isVisible()
-			.catch(() => false);
+		const hasResults = await countEl.isVisible().catch(() => false);
 		const hasNoResults = await noResults.isVisible().catch(() => false);
 		expect(hasResults || hasNoResults).toBeTruthy();
 	});
@@ -93,7 +92,10 @@ test.describe('Products in POS', () => {
 		await page.waitForTimeout(1_500);
 
 		const hasResults = await countEl.isVisible().catch(() => false);
-		const noResults = await page.getByTestId('no-data-message').isVisible().catch(() => false);
+		const noResults = await page
+			.getByTestId('no-data-message')
+			.isVisible()
+			.catch(() => false);
 		expect(hasResults || noResults).toBeTruthy();
 
 		if (hasResults) {
@@ -206,8 +208,8 @@ test.describe('Products Page (Pro)', () => {
 		await productSortControl.click();
 
 		const getSortDirection = async () => {
-			const [beanieY, beanieWithLogoY] = await getRowOrder();
-			return Math.sign(beanieY - beanieWithLogoY);
+			const [hoodieWithPocketY, hoodieWithZipperY] = await getRowOrder();
+			return Math.sign(hoodieWithPocketY - hoodieWithZipperY);
 		};
 
 		try {
@@ -231,9 +233,7 @@ test.describe('Products Page (Pro)', () => {
 		const countEl = screen.getByTestId('data-table-count');
 		const noResults = screen.getByTestId('no-data-message');
 
-		const hasResults = await countEl
-			.isVisible()
-			.catch(() => false);
+		const hasResults = await countEl.isVisible().catch(() => false);
 		const hasNoResults = await noResults.isVisible().catch(() => false);
 		expect(hasResults || hasNoResults).toBeTruthy();
 	});
@@ -271,9 +271,7 @@ test.describe('Products Page (Pro)', () => {
 		await expect(variationActionsMenu.first()).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should show variation actions menu with edit/sync/delete', async ({
-		posPage: page,
-	}) => {
+	test('should show variation actions menu with edit/sync/delete', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
@@ -297,9 +295,7 @@ test.describe('Products Page (Pro)', () => {
 		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
 	});
 
-	test('should collapse expanded variable product on Products page', async ({
-		posPage: page,
-	}) => {
+	test('should collapse expanded variable product on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
 		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
