@@ -48,6 +48,9 @@ importers:
       better-sqlite3:
         specifier: 12.8.0
         version: 12.8.0
+      bonjour-service:
+        specifier: ^1.3.0
+        version: 1.3.0
       electron-log:
         specifier: ^5.4.3
         version: 5.4.3
@@ -61,8 +64,8 @@ importers:
         specifier: 17.1.0
         version: 17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
       rxdb-premium:
-        specifier: 17.1.0
-        version: 17.1.0(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2)
+        specifier: 17.0.0
+        version: 17.0.0(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -10892,6 +10895,12 @@ packages:
     resolution: {integrity: sha512-/XargZat09lGNbJKEcWzuRwB8OeG/Zp0PG70njVNMjlAAAyCHCH080j0kH+/tCmKAfj6sehMj18Ritq0+sOZ0w==}
     peerDependencies:
       rxdb: 16.21.1
+      rxjs: '*'
+
+  rxdb-premium@17.0.0:
+    resolution: {integrity: sha512-oGcuvWgW8iNU90jiXV4pLH4Mi9j3bEHEkxak8gZSouHNnUH848zN+kmqe45UhDFpio+cj8LuGKoAvKQcpk0/xg==}
+    peerDependencies:
+      rxdb: 17.0.0
       rxjs: '*'
 
   rxdb-premium@17.1.0:
@@ -25181,6 +25190,22 @@ snapshots:
       '@koa/cors': 5.0.0
       array-push-at-sort-position: 4.0.1
       async-test-util: 2.2.1
+      eth-crypto: 3.1.0
+      flexsearch: 0.7.43
+      percom: 1.1.3
+      rxdb: 17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
+      rxjs: 7.8.2
+      web-locks: 0.0.8
+      web-worker: 1.5.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  rxdb-premium@17.0.0(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2):
+    dependencies:
+      '@koa/cors': 5.0.0
+      array-push-at-sort-position: 4.0.1
+      async-test-util: 2.5.0
       eth-crypto: 3.1.0
       flexsearch: 0.7.43
       percom: 1.1.3
