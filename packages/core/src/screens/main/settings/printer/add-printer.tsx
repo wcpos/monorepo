@@ -85,6 +85,13 @@ interface PrinterDialogProps {
 	onSave: () => void;
 	printer?: PrinterProfile;
 	printerCount?: number;
+	/** Pre-fill from a discovered printer (for adding, not editing) */
+	prefill?: {
+		name?: string;
+		address?: string;
+		port?: number;
+		vendor?: 'epson' | 'star' | 'generic';
+	};
 }
 
 export function PrinterDialog({
@@ -93,6 +100,7 @@ export function PrinterDialog({
 	onSave,
 	printer,
 	printerCount = 0,
+	prefill,
 }: PrinterDialogProps) {
 	const t = useT();
 	const { storeDB } = useAppState();
@@ -131,6 +139,20 @@ export function PrinterDialog({
 			};
 			prevVendorRef.current = nextValues.vendor;
 			form.reset(nextValues);
+		} else if (open && prefill) {
+			const defaults = prefill.vendor
+				? vendorDefaults(prefill.vendor)
+				: { language: DEFAULT_VALUES.language, port: DEFAULT_VALUES.port };
+			const nextValues = {
+				...DEFAULT_VALUES,
+				name: prefill.name || DEFAULT_VALUES.name,
+				address: prefill.address || '',
+				port: prefill.port ?? defaults.port,
+				vendor: prefill.vendor ?? DEFAULT_VALUES.vendor,
+				language: defaults.language,
+			};
+			prevVendorRef.current = nextValues.vendor;
+			form.reset(nextValues);
 		} else if (open) {
 			const autoName =
 				printerCount > 0
@@ -145,7 +167,7 @@ export function PrinterDialog({
 		setProbing(false);
 		setDetectedVendor(null);
 		manualVendorRef.current = false;
-	}, [open, printer, form, printerCount, t]);
+	}, [open, printer, prefill, form, printerCount, t]);
 
 	/**
 	 * Auto-derive language and port when vendor changes.
