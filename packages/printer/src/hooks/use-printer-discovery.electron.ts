@@ -76,11 +76,12 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 				action: 'start',
 			})) as DiscoveredPrinter[];
 			setPrinters((prev) => {
-				// Merge discovered with manually-added (manual entries take precedence)
-				const manualIds = new Set(prev.filter((p) => !p.id.includes(':')).map((p) => p.id));
-				const merged = [...prev];
+				// Keep manually-added printers (id format: "address:port")
+				// Discovered printers use prefixed ids like "mdns-host" or "epson-addr"
+				const manualPrinters = prev.filter((p) => p.id.includes(':'));
+				const merged = [...manualPrinters];
 				for (const discovered of result) {
-					if (!manualIds.has(discovered.id) && !merged.some((p) => p.id === discovered.id)) {
+					if (!merged.some((p) => p.id === discovered.id)) {
 						merged.push(discovered);
 					}
 				}
