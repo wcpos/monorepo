@@ -310,6 +310,9 @@ export function PrintingSettings() {
 									</Button>
 								)}
 							</HStack>
+							{discovery.error && (
+								<Text className="text-muted-foreground text-xs">{discovery.error}</Text>
+							)}
 							{discovery.printers.length > 0 && (
 								<VStack className="gap-1">
 									{discovery.printers.map((dp) => (
