@@ -84,11 +84,13 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		setIsScanning(true);
 		setError(null);
 
+		let sdkAvailable = false;
 		let foundAny = false;
 
 		// Try Epson native discovery
 		try {
 			const { discover } = await import('../discovery/epson-native-discovery');
+			sdkAvailable = true;
 			const epsonPrinters = await discover();
 			if (epsonPrinters.length > 0) {
 				foundAny = true;
@@ -101,6 +103,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		// Try Star native discovery
 		try {
 			const { discover } = await import('../discovery/star-native-discovery');
+			sdkAvailable = true;
 			const starPrinters = await discover();
 			if (starPrinters.length > 0) {
 				foundAny = true;
@@ -110,10 +113,12 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 			// react-native-star-io10 not installed — skip
 		}
 
-		if (!foundAny) {
+		if (!sdkAvailable) {
 			setError(
 				'No printer SDKs available. Install react-native-esc-pos-printer or react-native-star-io10 for automatic discovery.'
 			);
+		} else if (!foundAny) {
+			setError('No printers found on the network.');
 		}
 
 		setIsScanning(false);
