@@ -320,6 +320,13 @@ export function PrintingSettings() {
 											<Text className="text-sm">
 												{dp.name} ({dp.address})
 											</Text>
+											{dp.vendor && dp.vendor !== 'generic' && (
+												<View className="bg-muted rounded px-1.5 py-0.5">
+													<Text className="text-muted-foreground text-xs">
+														{dp.vendor === 'epson' ? 'Epson' : 'Star'}
+													</Text>
+												</View>
+											)}
 											<Button
 												variant="outline"
 												size="sm"
