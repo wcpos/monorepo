@@ -289,6 +289,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					showToast: true,
 					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
 				});
+				setSiteData(null);
+				setEndpoints(null);
 				setError(errorMsg);
 				setStatus('error');
 				throw new Error(errorMsg);
