@@ -127,7 +127,26 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					throw error;
 				}
 
-				// Handle network/connection errors
+				// If we got an HTTP response, the server is reachable but the REST API
+				// returned something unexpected — a plugin or server config is likely
+				// interfering (e.g. Force Login, Disable REST API, caching, etc.)
+				const errorResponse = get(error, ['response']);
+				if (errorResponse) {
+					const status = get(errorResponse, 'status');
+					const serverMessage = get(errorResponse, ['data', 'message']);
+					const errorMsg = serverMessage || t('auth.rest_api_restricted');
+					discoveryLogger.error(errorMsg, {
+						showToast: true,
+						context: {
+							errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+							wpApiUrl,
+							httpStatus: status,
+						},
+					});
+					throw new ApiDiscoveryError(errorMsg);
+				}
+
+				// No response at all — network/connection error
 				discoveryLogger.error(
 					`Failed to connect to ${wpApiUrl}: ${error instanceof Error ? error.message : String(error)}`,
 					{

@@ -6,39 +6,17 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Input } from '@wcpos/components/input';
 import { Label } from '@wcpos/components/label';
+import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
-import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../contexts/translations';
 import { useSiteConnect } from '../hooks/use-site-connect';
 
-const siteLogger = getLogger(['wcpos', 'auth', 'site']);
-
 export function UrlInput() {
-	const { onConnect, loading, error } = useSiteConnect();
+	const { onConnect, loading, error, reset } = useSiteConnect();
 	const [url, setURL] = React.useState('');
 	const t = useT();
 
-	/**
-	 * NOTE: We don't show a toast here because specific error messages are already
-	 * displayed by the hooks (use-url-discovery, use-api-discovery, use-auth-testing).
-	 * We only log for debugging and database persistence purposes.
-	 */
-	React.useEffect(() => {
-		if (error) {
-			siteLogger.error(error || t('common.error'), {
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.INVALID_URL_FORMAT,
-				},
-			});
-		}
-	}, [error, t]);
-
-	/**
-	 *
-	 */
 	return (
 		<VStack>
 			<Label nativeID="woo-store">{t('auth.enter_the_url_of_your_woocommerce') + ':'}</Label>
@@ -47,13 +25,11 @@ export function UrlInput() {
 					aria-labelledby="woo-store"
 					type="url"
 					value={url}
-					onChangeText={setURL}
+					onChangeText={(text) => {
+						setURL(text);
+						if (error) reset();
+					}}
 					onSubmitEditing={() => onConnect(url)}
-					// onKeyPress={(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-					// 	if (e.nativeEvent.key === 'Enter') {
-					// 		onConnect(url);
-					// 	}
-					// }}
 					clearable
 					className="flex-1"
 					autoCorrect={false}
@@ -62,6 +38,7 @@ export function UrlInput() {
 					<ButtonText>{t('auth.connect')}</ButtonText>
 				</Button>
 			</HStack>
+			{error ? <Text className="text-destructive text-sm">{error}</Text> : null}
 		</VStack>
 	);
 }

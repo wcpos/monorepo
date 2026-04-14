@@ -225,9 +225,6 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				setStatus('discovering-url');
 
 				const wpApiUrl = await urlDiscovery.discoverWpApiUrl(url);
-				if (!wpApiUrl) {
-					throw new Error(urlDiscovery.error || t('auth.failed_to_discover_wordpress_api'));
-				}
 
 				// Step 2: Discover and validate API endpoints
 				updateProgress(2, t('auth.validating_api_endpoints'));
