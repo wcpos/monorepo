@@ -231,9 +231,6 @@ export const useSiteConnect = (): UseSiteConnectReturn => {
 				setStatus('discovering-api');
 
 				const apiResult = await apiDiscovery.discoverApiEndpoints(wpApiUrl);
-				if (!apiResult) {
-					throw new Error(apiDiscovery.error || t('auth.failed_to_discover_api_endpoints'));
-				}
 
 				// Step 3: Test authorization methods
 				updateProgress(3, t('auth.testing_authorization_methods'));

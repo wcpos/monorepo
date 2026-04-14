@@ -71,7 +71,7 @@ interface UseApiDiscoveryReturn {
 	endpoints: ApiEndpoints | null;
 	discoverApiEndpoints: (
 		wpApiUrl: string
-	) => Promise<{ siteData: WpJsonResponse; endpoints: ApiEndpoints } | null>;
+	) => Promise<{ siteData: WpJsonResponse; endpoints: ApiEndpoints }>;
 }
 
 /**
@@ -127,15 +127,35 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					throw error;
 				}
 
-				// If we got an HTTP response, the server is reachable but the REST API
-				// returned something unexpected — a plugin or server config is likely
-				// interfering (e.g. Force Login, Disable REST API, caching, etc.)
 				const errorResponse = get(error, ['response']);
 				if (errorResponse) {
 					const status = get(errorResponse, 'status');
-					const serverMessage = get(errorResponse, ['data', 'message']);
-					const errorMsg = serverMessage || t('auth.rest_api_restricted');
-					discoveryLogger.error(errorMsg, {
+					const contentType = get(errorResponse, ['headers', 'content-type']);
+					const isRestrictedApi =
+						(status === 401 || status === 403) &&
+						typeof contentType === 'string' &&
+						contentType.includes('application/json');
+
+					if (isRestrictedApi) {
+						// A security plugin (e.g. Force Login) is blocking REST API access
+						const serverMessage = get(errorResponse, ['data', 'message']);
+						const errorMsg =
+							typeof serverMessage === 'string' && serverMessage.length > 0
+								? serverMessage
+								: t('auth.rest_api_restricted');
+						discoveryLogger.error(errorMsg, {
+							showToast: true,
+							context: {
+								errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
+								wpApiUrl,
+								httpStatus: status,
+							},
+						});
+						throw new ApiDiscoveryError(errorMsg);
+					}
+
+					// Server responded but not with the expected WP REST API format
+					discoveryLogger.error(t('auth.bad_api_response'), {
 						showToast: true,
 						context: {
 							errorCode: ERROR_CODES.INVALID_RESPONSE_FORMAT,
@@ -143,7 +163,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 							httpStatus: status,
 						},
 					});
-					throw new ApiDiscoveryError(errorMsg);
+					throw new ApiDiscoveryError(t('auth.bad_api_response'));
 				}
 
 				// No response at all — network/connection error
@@ -262,9 +282,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 	 * Main discovery function
 	 */
 	const discoverApiEndpoints = React.useCallback(
-		async (
-			wpApiUrl: string
-		): Promise<{ siteData: WpJsonResponse; endpoints: ApiEndpoints } | null> => {
+		async (wpApiUrl: string): Promise<{ siteData: WpJsonResponse; endpoints: ApiEndpoints }> => {
 			if (!wpApiUrl || wpApiUrl.trim() === '') {
 				const errorMsg = t('auth.wordpress_api_url_is_required');
 				discoveryLogger.error(errorMsg, {
@@ -272,7 +290,8 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
 				});
 				setError(errorMsg);
-				return null;
+				setStatus('error');
+				throw new Error(errorMsg);
 			}
 
 			setStatus('discovering');
@@ -307,7 +326,7 @@ export const useApiDiscovery = (): UseApiDiscoveryReturn => {
 						: t('auth.failed_to_discover_api_endpoints');
 				setError(errorMessage);
 				setStatus('error');
-				return null;
+				throw err instanceof Error ? err : new Error(errorMessage);
 			}
 		},
 		[fetchApiIndex, validateApiRequirements, validateAuthEndpoints, buildEndpoints, t]
