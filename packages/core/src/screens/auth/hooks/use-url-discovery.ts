@@ -17,8 +17,31 @@ interface UseUrlDiscoveryReturn {
 	status: UrlDiscoveryStatus;
 	error: string | null;
 	wpApiUrl: string | null;
-	discoverWpApiUrl: (url: string) => Promise<string | null>;
+	discoverWpApiUrl: (url: string) => Promise<string>;
 }
+
+/**
+ * Extract wp-json URL from a Link header string
+ */
+const extractWpApiUrlFromLink = (link: string | undefined): string | null => {
+	if (!link) return null;
+	const parsed = parseLinkHeader(link);
+	return get(parsed, ['https://api.w.org/', 'url']) || null;
+};
+
+/**
+ * Check if an Axios error response looks like the WordPress REST API.
+ * HEAD responses have no body, so we check status + content-type header.
+ * A 401/403 from /wp-json/ with content-type application/json is the WP REST API
+ * (e.g. Force Login plugin blocking unauthenticated access).
+ */
+const isWpRestApiError = (err: unknown): boolean => {
+	const status = get(err, ['response', 'status']);
+	if (status !== 401 && status !== 403) return false;
+
+	const contentType: unknown = get(err, ['response', 'headers', 'content-type']);
+	return typeof contentType === 'string' && contentType.includes('application/json');
+};
 
 /**
  * Hook for discovering WordPress API URL from a given site URL
@@ -49,39 +72,28 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				const response = await http.head(normalizedUrl);
 
 				if (!response) {
-					throw new Error(t('auth.url_not_found'));
-				}
-
-				const link = get(response, ['headers', 'link']);
-				if (!link) {
 					return null;
 				}
 
-				// Parse the link header
-				const parsed = parseLinkHeader(link);
-				const wpApiUrl = get(parsed, ['https://api.w.org/', 'url']);
-
-				if (wpApiUrl) {
-					return wpApiUrl;
-				}
-
-				return null;
-			} catch {
-				return null;
+				return extractWpApiUrlFromLink(get(response, ['headers', 'link']));
+			} catch (err: unknown) {
+				// Check error response headers for Link header
+				const link = get(err, ['response', 'headers', 'link']);
+				return extractWpApiUrlFromLink(link);
 			}
 		},
-		[http, t]
+		[http]
 	);
 
 	/**
 	 * Fallback method: try standard WordPress API path
+	 * A 401/403 with a WP REST API error body proves the REST API exists
 	 */
 	const tryFallbackDiscovery = React.useCallback(
 		async (normalizedUrl: string): Promise<string | null> => {
-			try {
-				const fallbackUrl = `${normalizedUrl}/wp-json/`;
+			const fallbackUrl = `${normalizedUrl}/wp-json/`;
 
-				// Just do a HEAD request to check if the endpoint exists
+			try {
 				const response = await http.head(fallbackUrl);
 
 				if (response && response.status === 200) {
@@ -89,7 +101,12 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 				}
 
 				return null;
-			} catch {
+			} catch (err: unknown) {
+				// A WP REST API error (e.g. rest_unauthorized) proves the endpoint exists
+				if (isWpRestApiError(err)) {
+					return fallbackUrl;
+				}
+
 				return null;
 			}
 		},
@@ -100,7 +117,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 	 * Main discovery function
 	 */
 	const discoverWpApiUrl = React.useCallback(
-		async (url: string): Promise<string | null> => {
+		async (url: string): Promise<string> => {
 			if (!url || url.trim() === '') {
 				const errorMsg = t('auth.url_is_required');
 				discoveryLogger.error(errorMsg, {
@@ -108,7 +125,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 					context: { errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS },
 				});
 				setError(errorMsg);
-				return null;
+				throw new Error(errorMsg);
 			}
 
 			setStatus('discovering');
@@ -139,7 +156,7 @@ export const useUrlDiscovery = (): UseUrlDiscoveryReturn => {
 					err instanceof Error ? err.message : t('auth.failed_to_discover_wordpress_api');
 				setError(errorMessage);
 				setStatus('error');
-				return null;
+				throw err;
 			}
 		},
 		[normalizeUrl, tryLinkHeaderDiscovery, tryFallbackDiscovery, t]

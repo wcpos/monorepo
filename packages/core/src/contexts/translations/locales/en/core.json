@@ -21,6 +21,7 @@
 	"auth.saving_site_configuration": "Saving site configuration...",
 	"auth.server_does_not_support_any_authorization": "Server does not support any authorization method",
 	"auth.site_connected_successfully": "Site connected successfully!",
+	"auth.rest_api_restricted": "The WordPress REST API on this site requires authentication. A security plugin may be blocking public access to the REST API.",
 	"auth.site_does_not_seem_to_be": "Site does not seem to be a WordPress site",
 	"auth.testing_authorization_methods": "Testing authorization methods...",
 	"auth.url_is_required": "URL is required",
