@@ -27,6 +27,35 @@ async function generateHashId(dataObject: {
 }
 
 /**
+ * Normalize a store payload coming from the server so it matches the current
+ * schema regardless of which plugin version emitted it.
+ *
+ * Pre-v1.9.0 plugins emitted `opening_hours` as a single freeform string.
+ * v1.9.0+ emits `opening_hours` as an array of day entries plus an optional
+ * `opening_hours_notes` string. To keep both shapes acceptable without
+ * bifurcating the schema, we coerce string-shaped opening_hours into the
+ * new shape here: text goes into `opening_hours_notes`, structured array
+ * becomes empty.
+ */
+function normalizeStorePayload<T extends { id: number; [key: string]: any }>(store: T): T {
+	const out: any = { ...store };
+
+	if (typeof out.opening_hours === 'string') {
+		const legacyText = out.opening_hours;
+		out.opening_hours = [];
+		// Don't clobber notes if the server already sent one alongside.
+		if (!out.opening_hours_notes) {
+			out.opening_hours_notes = legacyText;
+		}
+	} else if (out.opening_hours != null && !Array.isArray(out.opening_hours)) {
+		// Any other unexpected shape — drop to default rather than error.
+		out.opening_hours = [];
+	}
+
+	return out;
+}
+
+/**
  * Merge remote stores data with local stores, handling additions, updates, and removals
  */
 export async function mergeStoresWithResponse({
@@ -46,18 +75,21 @@ export async function mergeStoresWithResponse({
 		// Get current stores populated from wpUser
 		const currentStores: StoreDocument[] = await wpUser.populate('stores');
 
-		// Generate localIDs for remote stores and prepare for upsert
+		// Generate localIDs for remote stores and prepare for upsert.
+		// Normalize first so payloads from older plugin versions still validate
+		// against the current schema (see normalizeStorePayload).
 		const remoteStoresWithLocalID = await Promise.all(
 			remoteStores.map(async (store) => {
+				const normalized = normalizeStorePayload(store);
 				const localID = await generateHashId({
 					user: user.uuid,
 					siteID,
 					wpCredentialsID: wpUser.uuid ?? '',
-					storeID: store.id,
+					storeID: normalized.id,
 				});
 
 				return {
-					...store,
+					...normalized,
 					localID,
 				};
 			})
@@ -85,7 +117,70 @@ export async function mergeStoresWithResponse({
 
 		// Upsert stores from the response (this handles both new and existing stores)
 		if (remoteStoresWithLocalID.length > 0) {
-			await userDB.stores.bulkInsert(remoteStoresWithLocalID); // will not overwrite existing data
+			const bulkResult: any = await userDB.stores.bulkInsert(remoteStoresWithLocalID);
+			if (bulkResult?.error?.length) {
+				// bulkInsert resolves successfully even when every doc failed — the caller
+				// has to inspect `error` or it looks like the merge worked.
+				// Partition errors: 409 (conflict) means the doc already exists, which is
+				// expected on re-sync — log at debug, don't toast. Everything else (422
+				// validation, write errors, etc.) gets surfaced to the user.
+				const conflicts: any[] = [];
+				const failures: any[] = [];
+				for (const err of bulkResult.error) {
+					if (err?.status === 409) {
+						conflicts.push(err);
+					} else {
+						failures.push(err);
+					}
+				}
+
+				if (conflicts.length > 0) {
+					appLogger.debug('[stores] bulkInsert conflicts (doc already exists)', {
+						context: {
+							conflictCount: conflicts.length,
+							conflictDocIds: conflicts.map((c) => c?.documentId),
+						},
+					});
+				}
+
+				if (failures.length > 0) {
+					const summaries = failures.map((err: any) => {
+						const validationErrors: { message?: string; path?: string }[] =
+							err?.parameters?.errors ??
+							err?.parameters?.validationErrors ??
+							err?.validationErrors ??
+							[];
+						const detail =
+							validationErrors
+								.map((v) => (v.path ? `${v.path}: ${v.message}` : v.message))
+								.filter(Boolean)
+								.join('; ') ||
+							err?.message ||
+							`status ${err?.status ?? 'unknown'}`;
+						return { documentId: err?.documentId, detail };
+					});
+					const toastMessage = `Failed to save ${summaries.length} store${summaries.length === 1 ? '' : 's'}: ${summaries
+						.map((s: { detail: string }) => s.detail)
+						.join(' | ')}`;
+					appLogger.error(toastMessage, {
+						showToast: true,
+						context: {
+							errorCode: 'STORE_VALIDATION_FAILED',
+							failures: summaries,
+							// Include the raw first error for deep debugging
+							rawFirstError: JSON.stringify(failures[0] ?? null, (_k, v) =>
+								v instanceof Error ? { name: v.name, message: v.message, stack: v.stack } : v
+							),
+						},
+					});
+				}
+			}
+			appLogger.debug('[stores] bulkInsert result', {
+				context: {
+					successCount: bulkResult?.success?.length ?? 0,
+					errorCount: bulkResult?.error?.length ?? 0,
+				},
+			});
 
 			// Always update wc_price_decimals from the server on every sync.
 			// This field is server-authoritative and used for tax/discount calculations.
@@ -112,15 +207,23 @@ export async function mergeStoresWithResponse({
 
 		// Update wpUser.stores with the new array of localIDs
 		const newStoreLocalIDs = remoteStoresWithLocalID.map((store) => store.localID);
+		appLogger.debug('[stores] about to patch wpUser.stores', {
+			context: {
+				wpUserUuid: wpUser.uuid,
+				newStoreLocalIDs,
+				before: (wpUser as unknown as { stores?: string[] }).stores,
+			},
+		});
 		await wpUser.incrementalPatch({
 			stores: newStoreLocalIDs,
 		});
 
-		appLogger.debug('Successfully merged stores with response', {
+		appLogger.debug('[stores] Successfully merged stores with response', {
 			context: {
 				totalRemoteStores: remoteStores.length,
 				removedStores: storesToRemove.length,
 				finalStoreCount: newStoreLocalIDs.length,
+				wpUserStoresAfter: (wpUser.getLatest() as unknown as { stores?: string[] }).stores,
 			},
 		});
 

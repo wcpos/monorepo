@@ -1,3 +1,11 @@
+import {
+	getQueueMetrics,
+	globalQueue,
+	pauseQueue,
+	resumeQueue,
+	scheduleRequest,
+} from './request-queue';
+
 const mockError = jest.fn();
 const mockDebug = jest.fn();
 
@@ -24,14 +32,6 @@ jest.mock('./request-state-manager', () => ({
 		onWake: mockOnWake,
 	},
 }));
-
-import {
-	getQueueMetrics,
-	globalQueue,
-	pauseQueue,
-	resumeQueue,
-	scheduleRequest,
-} from './request-queue';
 
 describe('request-queue', () => {
 	beforeEach(() => {

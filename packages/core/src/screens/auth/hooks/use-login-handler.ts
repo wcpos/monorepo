@@ -104,11 +104,23 @@ export const useLoginHandler = (
 						date_modified_gmt: credentialsData.date_modified_gmt,
 					});
 
-					authLogger.debug(`Updated credentials for ${credentialsData.display_name}`);
+					authLogger.debug(`[stores] Updated credentials for ${credentialsData.display_name}`, {
+						context: {
+							wpUserUuid: credentialsData.uuid,
+							userId: credentialsData.id,
+							existingStores: (existingCredentials as unknown as { stores?: string[] }).stores,
+						},
+					});
 				} else {
 					// Create new credentials
 					await userDB.wp_credentials.insert(credentialsData);
-					authLogger.debug(`Created credentials for ${credentialsData.display_name}`);
+					authLogger.debug(`[stores] Created credentials for ${credentialsData.display_name}`, {
+						context: {
+							wpUserUuid: credentialsData.uuid,
+							userId: credentialsData.id,
+							initialStores: credentialsData.stores,
+						},
+					});
 				}
 
 				// Link credentials to site if not already linked

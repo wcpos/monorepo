@@ -102,6 +102,16 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.wc_price_decimals = oldDoc.price_num_decimals ?? 2;
 			return oldDoc;
 		},
+		7(oldDoc: any) {
+			// opening_hours: pre-v1.9.0 plugin emitted a freeform string;
+			// v1.9.0+ emits an array (inner shape varies across stores, so no
+			// item-level constraint — see schema comment). Reset to [] on
+			// migrate since the old string form isn't meaningful structured
+			// data; preserve any pre-existing notes if present.
+			oldDoc.opening_hours = [];
+			oldDoc.opening_hours_notes = oldDoc.opening_hours_notes ?? '';
+			return oldDoc;
+		},
 	},
 };
 
@@ -118,6 +128,19 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 	schema: wpCredentialsSchema,
 	migrationStrategies: {
 		1(oldDoc) {
+			return oldDoc;
+		},
+		2(oldDoc) {
+			// Added optional `role` field — no transformation needed.
+			return oldDoc;
+		},
+		3(oldDoc: any) {
+			// `role` (string) → `roles` (string[]). Cashiers can have multiple
+			// WordPress roles. Preserve the existing value as a single-element
+			// array when present.
+			const legacyRole = oldDoc.role;
+			oldDoc.roles = typeof legacyRole === 'string' && legacyRole.length > 0 ? [legacyRole] : [];
+			delete oldDoc.role;
 			return oldDoc;
 		},
 	},
