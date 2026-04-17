@@ -12,11 +12,21 @@ permissions:
 
 jobs:
   bump:
+    # Gate the whole job to main so a non-main workflow_dispatch can't
+    # publish arbitrary branch state to main via the push step below.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Serialize overlapping runs (cron + manual dispatch) so they don't
+    # race at push time and fail with non-fast-forward errors.
+    concurrency:
+      group: bump-submodules-main
+      cancel-in-progress: false
     steps:
       - name: Checkout monorepo (with submodules)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          # Pin to main — belt-and-braces with the job-level `if` above.
+          ref: refs/heads/main
           submodules: true
           fetch-depth: 0
           # Default token is fine for pushing a chore commit. If branch
@@ -52,7 +62,13 @@ jobs:
       - name: Commit and push
         if: steps.bump.outputs.changed == 'true'
         run: |
+          set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git commit -m "chore(submodules): bump .wiki @ ${{ steps.bump.outputs.wiki_sha }}, apps/electron @ ${{ steps.bump.outputs.electron_sha }}"
+          # If main advanced between checkout and push (e.g. another
+          # workflow merged a PR), rebase onto it so the push is a
+          # fast-forward rather than rejected as non-ff.
+          git fetch origin main
+          git rebase origin/main
           git push origin HEAD:main
