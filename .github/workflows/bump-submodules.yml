@@ -1,0 +1,74 @@
+name: Bump Submodules
+
+on:
+  schedule:
+    # Daily at 06:00 UTC — quiet window, low chance of clashing with
+    # active development pushes.
+    - cron: '0 6 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    # Gate the whole job to main so a non-main workflow_dispatch can't
+    # publish arbitrary branch state to main via the push step below.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Serialize overlapping runs (cron + manual dispatch) so they don't
+    # race at push time and fail with non-fast-forward errors.
+    concurrency:
+      group: bump-submodules-main
+      cancel-in-progress: false
+    steps:
+      - name: Checkout monorepo (with submodules)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # Pin to main — belt-and-braces with the job-level `if` above.
+          ref: refs/heads/main
+          submodules: true
+          fetch-depth: 0
+          # Default token is fine for pushing a chore commit. If branch
+          # protection blocks direct pushes to main, swap in a GitHub App
+          # token with bypass rights (see update-translations.yml).
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update submodules to latest remote main
+        id: bump
+        run: |
+          set -euo pipefail
+
+          # .wiki does not declare `branch` in .gitmodules → fall back to the
+          # default branch by pulling origin HEAD explicitly.
+          git -C .wiki fetch origin
+          git -C .wiki checkout origin/HEAD
+
+          # apps/electron tracks `main` per .gitmodules.
+          git submodule update --remote --checkout apps/electron
+
+          git add .wiki apps/electron
+          if git diff --staged --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No submodule updates."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git -C .wiki rev-parse --short HEAD > /tmp/wiki-sha
+            git -C apps/electron rev-parse --short HEAD > /tmp/electron-sha
+            echo "wiki_sha=$(cat /tmp/wiki-sha)" >> "$GITHUB_OUTPUT"
+            echo "electron_sha=$(cat /tmp/electron-sha)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(submodules): bump .wiki @ ${{ steps.bump.outputs.wiki_sha }}, apps/electron @ ${{ steps.bump.outputs.electron_sha }}"
+          # If main advanced between checkout and push (e.g. another
+          # workflow merged a PR), rebase onto it so the push is a
+          # fast-forward rather than rejected as non-ff.
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
