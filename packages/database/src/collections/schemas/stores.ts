@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 6,
+	version: 7,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -63,7 +63,16 @@ export const storesLiteral = {
 		},
 		opening_hours: {
 			title: 'Opening hours',
+			description:
+				'Opening hours as emitted by the server. Shape is server-authoritative and has varied across plugin versions (string pre-v1.9.0, object/array items v1.9.0+), so no item-level constraint is enforced here — string payloads are coerced to [] by normalizeStorePayload at the ingest boundary.',
+			type: 'array',
+			default: [],
+		},
+		opening_hours_notes: {
+			title: 'Opening hours notes',
+			description: 'Freeform notes about opening hours.',
 			type: 'string',
+			default: '',
 		},
 		personal_notes: {
 			title: 'Personal notes',

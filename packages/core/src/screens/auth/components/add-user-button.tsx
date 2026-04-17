@@ -1,10 +1,11 @@
 import React from 'react';
+import { Pressable, View } from 'react-native';
 
-import { IconButton } from '@wcpos/components/icon-button';
+import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/tooltip';
 import { getLogger } from '@wcpos/utils/logger';
 
+import { useT } from '../../../contexts/translations';
 import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
 import { useLoginHandler } from '../hooks/use-login-handler';
 
@@ -12,20 +13,24 @@ const authLogger = getLogger(['wcpos', 'auth', 'user']);
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
+	hasExistingUsers: boolean;
 }
 
-export function AddUserButton({ site }: Props) {
-	const { handleLoginSuccess, isProcessing, error } = useLoginHandler(site);
+export function AddUserButton({ site, hasExistingUsers }: Props) {
+	const { handleLoginSuccess, isProcessing } = useLoginHandler(site);
 	const processedResponseRef = React.useRef<string | null>(null);
+	const t = useT();
 
 	const { isReady, response, promptAsync } = useWcposAuth({
-		site: { wcpos_login_url: site.wcpos_login_url ?? '', name: site.name ?? '' },
+		site: {
+			wcpos_login_url: site.wcpos_login_url ?? '',
+			name: site.name ?? '',
+		},
 	});
 
 	React.useEffect(() => {
 		if (!response) return;
 
-		// Create a unique key to prevent double-processing
 		const responseKey = response.params?.access_token || response.error || response.type;
 		if (processedResponseRef.current === responseKey) {
 			return;
@@ -48,25 +53,22 @@ export function AddUserButton({ site }: Props) {
 	}, [response, handleLoginSuccess, site.name]);
 
 	return (
-		<Tooltip>
-			<TooltipTrigger asChild>
-				<IconButton
-					testID="add-user-button"
-					name="circlePlus"
-					size="xl"
-					disabled={!isReady || isProcessing}
-					onPress={() => promptAsync()}
-				/>
-			</TooltipTrigger>
-			<TooltipContent>
-				<Text>
-					{isProcessing
-						? 'Processing login...'
-						: error
-							? `Error: ${error}`
-							: `Login to ${site.name}`}
-				</Text>
-			</TooltipContent>
-		</Tooltip>
+		<Pressable
+			testID="add-user-button"
+			disabled={!isReady || isProcessing}
+			onPress={() => promptAsync()}
+			className="border-border active:bg-primary/5 web:cursor-pointer web:transition-colors web:hover:border-primary/40 web:hover:bg-primary/5 flex-row items-center gap-3 rounded-lg border border-dashed p-3"
+		>
+			<View className="bg-primary/10 h-9 w-9 items-center justify-center rounded-full">
+				<Icon name="plus" size="sm" variant="primary" />
+			</View>
+			<Text className="text-muted-foreground text-sm font-medium">
+				{isProcessing
+					? t('common.loading') + '...'
+					: hasExistingUsers
+						? t('auth.add_another_user', { _tags: 'core' })
+						: t('auth.sign_in_with_wordpress', { _tags: 'core' })}
+			</Text>
+		</Pressable>
 	);
 }

@@ -52,6 +52,19 @@ function handleStorageError(methodName: string, error: unknown): boolean {
 		return true;
 	}
 
+	// JSON parse errors -- corrupted data in SQLite
+	if (error instanceof SyntaxError && message.includes('is not valid JSON')) {
+		storageLogger.error(`Corrupted JSON in storage for ${methodName}: ${message}`, {
+			showToast: true,
+			saveToDb: true,
+			context: {
+				errorCode: ERROR_CODES.STORAGE_ERROR,
+				method: methodName,
+			},
+		});
+		return true;
+	}
+
 	// Worker communication failures
 	if (message.includes('could not requestRemote')) {
 		storageLogger.error(`Storage worker error in ${methodName}`, {

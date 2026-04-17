@@ -91,17 +91,32 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 
 		// Only validate if we have the required data
 		if (!apiUrl || !userId || !accessToken) {
-			appLogger.debug('Skipping user validation - missing required data', {
+			appLogger.debug('[stores] SKIPPING user validation — missing required data', {
 				context: {
 					hasApiUrl: !!apiUrl,
+					apiUrl,
 					hasUserId: !!userId,
+					userId,
 					hasAccessToken: !!accessToken,
+					siteUrl,
+					siteUuid: site.uuid,
 				},
 			});
 			setIsValid(false);
 			setError('Missing required user or site data');
 			return;
 		}
+
+		appLogger.debug('[stores] useUserValidation effect running', {
+			context: {
+				userId,
+				apiUrl,
+				siteUrl,
+				siteUuid: site.uuid,
+				wpUserUuid: wpUser.uuid,
+				currentWpUserStores: (wpUser as unknown as { stores?: string[] }).stores,
+			},
+		});
 
 		const validateUser = async () => {
 			validationInProgress.current = true;
@@ -144,7 +159,20 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						},
 					});
 
+					appLogger.debug('[stores] GET cashier endpoint', {
+						context: { endpoint, userId, siteUrl },
+					});
 					const response = await httpClient.get(endpoint, requestConfig);
+					appLogger.debug('[stores] cashier response received', {
+						context: {
+							status: response?.status,
+							hasData: !!response?.data,
+							dataStoresType: typeof response?.data?.stores,
+							dataStoresLength: Array.isArray(response?.data?.stores)
+								? response.data.stores.length
+								: undefined,
+						},
+					});
 
 					// Check if response is successful
 					if (!response || response.status < 200 || response.status >= 300) {
@@ -234,6 +262,16 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 						}
 					});
 
+					// Roles can come as an array of slugs (`roles`) or a legacy single
+					// string (`role`) from older plugin versions. Normalize to array.
+					if (Array.isArray(data.roles)) {
+						updateData.roles = data.roles.filter(
+							(r: unknown): r is string => typeof r === 'string' && r.length > 0
+						);
+					} else if (typeof data.role === 'string' && data.role.length > 0) {
+						updateData.roles = [data.role];
+					}
+
 					// Update user data if we have fields to update
 					if (Object.keys(updateData).length > 0) {
 						await wpUser.incrementalPatch(updateData);
@@ -247,12 +285,29 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 
 					// Merge stores if present in response
 					if (data.stores && Array.isArray(data.stores)) {
+						appLogger.debug('Merging stores from cashier response', {
+							context: {
+								userId,
+								siteUuid: site.uuid,
+								remoteStoreCount: data.stores.length,
+								remoteStoreIds: data.stores.map((s: any) => s?.id),
+							},
+						});
 						await mergeStoresWithResponse({
 							userDB,
 							wpUser,
 							remoteStores: data.stores,
 							user: { uuid: user.uuid ?? '' },
 							siteID: site.uuid ?? '',
+						});
+					} else {
+						appLogger.debug('Cashier response has no stores array — skipping merge', {
+							context: {
+								userId,
+								siteUuid: site.uuid,
+								dataKeys: Object.keys(data ?? {}),
+								storesType: typeof data?.stores,
+							},
 						});
 					}
 				} catch (error) {
@@ -275,9 +330,22 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 				// Update local database with fetched data
 				await updateUserInDB(data);
 
+				appLogger.debug('[stores] validation complete, wpUser.stores after patch', {
+					context: {
+						wpUserUuid: wpUser.uuid,
+						storesAfter: (wpUser.getLatest() as unknown as { stores?: string[] }).stores,
+					},
+				});
 				setIsValid(true);
 			} catch (error) {
 				const errorMsg = error instanceof Error ? error.message : String(error);
+				appLogger.error('[stores] validation FAILED', {
+					context: {
+						error: errorMsg,
+						userId,
+						siteUrl,
+					},
+				});
 				setError(errorMsg);
 				setIsValid(false);
 			} finally {
