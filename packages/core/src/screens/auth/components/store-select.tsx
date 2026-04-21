@@ -183,6 +183,7 @@ export function StoreSelect({
 
 			{/* Login Button */}
 			<Button
+				testID="open-pos-button"
 				onPress={() => {
 					if (resolvedStore?.localID) onLogin(resolvedStore.localID);
 				}}

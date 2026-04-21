@@ -249,14 +249,20 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	await waitForOPFSPersistence(page);
 	console.log(`[auth] Page URL after auth: ${page.url()}`);
 
-	// Click the wp-user-button pill to trigger login(), but tolerate cases where
-	// the app has already transitioned to POS before the button can be clicked.
+	// The redesigned connect screen splits login into two steps:
+	//   1. Click wp-user-button (ListItem) — selects the user, which mounts
+	//      StoreSelect below with a RadioGroup of stores + an "Open POS" button.
+	//      Single-store users have their store auto-selected; multi-store users
+	//      pick a RadioGroupItem (handled below by selecting the first option).
+	//   2. Click open-pos-button — this is what actually calls login() and
+	//      transitions the router out of /connect.
 	let loginSuccess = await hasReachedPos(page, 3_000);
 	if (loginSuccess) {
-		console.log('[auth] POS already visible after auth callback, skipping wp-user-button click.');
+		console.log('[auth] POS already visible after auth callback, skipping auth UI.');
 	}
 
 	const userButton = page.getByTestId('wp-user-button').first();
+	const openPosButton = page.getByTestId('open-pos-button').first();
 	for (let attempt = 1; attempt <= 5 && !loginSuccess; attempt++) {
 		const reachedPosBeforeClick = await hasReachedPos(page, 1_000);
 		if (reachedPosBeforeClick) {
@@ -265,6 +271,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 			break;
 		}
 
+		// Step 1: select the wp-user (no-op if already selected/visible).
 		const userButtonVisible = await userButton.isVisible({ timeout: 5_000 }).catch(() => false);
 		if (!userButtonVisible) {
 			console.log(`[auth] wp-user-button not visible (attempt ${attempt}), waiting for POS...`);
@@ -276,15 +283,8 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 			continue;
 		}
 
-		const userButtonEnabled = await userButton.isEnabled({ timeout: 5_000 }).catch(() => false);
-		if (!userButtonEnabled) {
-			console.log(`[auth] wp-user-button disabled (attempt ${attempt}), retrying...`);
-			await page.waitForTimeout(2_000);
-			continue;
-		}
-
-		console.log(`[auth] Clicking wp-user-button (attempt ${attempt})...`);
-		const clicked = await userButton
+		console.log(`[auth] Clicking wp-user-button to select user (attempt ${attempt})...`);
+		const userClicked = await userButton
 			.click({ timeout: 5_000 })
 			.then(() => true)
 			.catch((error) => {
@@ -293,31 +293,58 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 				);
 				return false;
 			});
-		if (!clicked) {
+		if (!userClicked) {
 			continue;
 		}
 
-		// Single-store users login immediately from the button press.
-		const reachedPosDirectly = await hasReachedPos(page, 10_000);
-		if (reachedPosDirectly) {
-			loginSuccess = true;
-			break;
+		// Step 2: wait for the Open POS button to become enabled. It is gated
+		// on: stores resolved + store selected + user validation passed.
+		// Single-store users have the store auto-selected; for multi-store
+		// variants, pick the first radio option to satisfy the store gate.
+		const openPosVisible = await openPosButton.isVisible({ timeout: 10_000 }).catch(() => false);
+		if (!openPosVisible) {
+			console.log(`[auth] open-pos-button not visible (attempt ${attempt}), retrying...`);
+			await page.waitForTimeout(2_000);
+			continue;
 		}
 
-		// Multi-store users get a picker first; selecting an option triggers login().
-		const firstStoreOption = page.locator('[role="listbox"] [role="option"]').first();
-		const storePickerOpened = await firstStoreOption
-			.isVisible({ timeout: 2_000 })
-			.catch(() => false);
-		if (storePickerOpened) {
-			console.log('[auth] Store picker opened, selecting first store option...');
-			await firstStoreOption.click();
-
-			const reachedPosAfterStoreSelect = await hasReachedPos(page, 10_000);
-			if (reachedPosAfterStoreSelect) {
-				loginSuccess = true;
-				break;
+		const openPosEnabled = await openPosButton.isEnabled({ timeout: 2_000 }).catch(() => false);
+		if (!openPosEnabled) {
+			// Multi-store: no auto-selection — select the first store option.
+			const firstStoreOption = page
+				.locator('[role="radiogroup"] [role="radio"], [role="radiogroup"] input[type="radio"]')
+				.first();
+			const hasOption = await firstStoreOption.isVisible({ timeout: 2_000 }).catch(() => false);
+			if (hasOption) {
+				console.log('[auth] Selecting first store radio option...');
+				await firstStoreOption.click().catch(() => null);
+			} else {
+				console.log('[auth] open-pos-button still disabled and no store radio found, waiting...');
+				await page.waitForTimeout(2_000);
+				continue;
 			}
+		}
+
+		// Wait for the enabled state to settle, then click Open POS.
+		await expect(openPosButton).toBeEnabled({ timeout: 10_000 });
+		console.log(`[auth] Clicking open-pos-button (attempt ${attempt})...`);
+		const openClicked = await openPosButton
+			.click({ timeout: 5_000 })
+			.then(() => true)
+			.catch((error) => {
+				console.log(
+					`[auth] open-pos-button click failed (attempt ${attempt}): ${error instanceof Error ? error.message : String(error)}`
+				);
+				return false;
+			});
+		if (!openClicked) {
+			continue;
+		}
+
+		const reachedPos = await hasReachedPos(page, 15_000);
+		if (reachedPos) {
+			loginSuccess = true;
+			break;
 		}
 
 		console.log(`[auth] Login attempt ${attempt} did not reach POS, retrying...`);
@@ -325,7 +352,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	}
 
 	if (!loginSuccess) {
-		throw new Error('Failed to reach POS during auth bootstrap (wp-user-button/store picker)');
+		throw new Error('Failed to reach POS during auth bootstrap (wp-user-button/open-pos-button)');
 	}
 
 	// Wait for products to sync (use testID to avoid locale-dependent text)
