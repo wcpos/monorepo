@@ -15,6 +15,7 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { ListItem } from '@wcpos/components/list-item';
 import { Loader } from '@wcpos/components/loader';
 import { StatusBadge } from '@wcpos/components/status-badge';
+import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useLoginHandler } from '../hooks/use-login-handler';
@@ -80,6 +81,13 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 			void (async () => {
 				try {
 					await handleLoginSuccess({ params: response.params } as any);
+					// Re-auth can be reached after a pre-flight AUTH_REQUIRED block;
+					// clear the flag so subsequent requests aren't rejected despite
+					// the newly-saved tokens (mirrors auth-error-handler.ts:203).
+					if (response.params?.access_token) {
+						requestStateManager.setRefreshedToken(response.params.access_token);
+					}
+					requestStateManager.setAuthFailed(false);
 				} catch (error) {
 					processedResponseRef.current = null;
 					authLogger.error('Failed to finish re-authentication', {
@@ -138,7 +146,11 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 				testID="wp-user-button"
 				onPress={onSelect}
 				selected={isSelected}
-				variant={showReauth ? 'warning' : undefined}
+				// ListItem gives explicit `variant` priority over `selected` styling,
+				// so only apply the warning variant to unselected expired rows —
+				// otherwise the currently-selected expired user loses its selected
+				// highlight despite driving StoreSelect below.
+				variant={showReauth && !isSelected ? 'warning' : undefined}
 				leading={
 					<Avatar
 						source={wpUser.avatar_url ? { uri: wpUser.avatar_url } : undefined}
