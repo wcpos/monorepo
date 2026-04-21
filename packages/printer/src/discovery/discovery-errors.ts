@@ -16,6 +16,10 @@ function stringifyError(error: unknown): string {
 	return String(error);
 }
 
+function toVendorLabel(vendor: NativeDiscoveryVendor): string {
+	return vendor === 'epson' ? 'Epson' : 'Star';
+}
+
 export function classifyDiscoveryFailure(
 	vendor: NativeDiscoveryVendor,
 	error: unknown
@@ -37,7 +41,7 @@ export function classifyDiscoveryFailure(
 
 	if (
 		normalized.includes('turbomoduleregistry.getenforcing') ||
-		normalized.includes('could not be found') ||
+		normalized.includes('registered in the native binary') ||
 		normalized.includes('nativeeventemitter') ||
 		normalized.includes('requires a non-null argument')
 	) {
@@ -56,24 +60,19 @@ export function classifyDiscoveryFailure(
 }
 
 export function formatDiscoveryFailureMessage(failures: DiscoveryFailure[]): string | null {
-	const packageMissing = failures.filter((failure) => failure.kind === 'package-missing');
 	const nativeMissing = failures.filter((failure) => failure.kind === 'native-module-missing');
 	const scanFailed = failures.filter((failure) => failure.kind === 'scan-failed');
 
 	if (nativeMissing.length > 0) {
-		const vendors = nativeMissing
-			.map((failure) => (failure.vendor === 'epson' ? 'Epson' : 'Star'))
-			.join(' and ');
+		const vendors = Array.from(
+			new Set(nativeMissing.map((failure) => toVendorLabel(failure.vendor)))
+		).join(' and ');
 
 		return `${vendors} printer discovery is installed in JavaScript but missing from the native app binary. Rebuild the iOS/Android development build after installing native printer SDKs.`;
 	}
 
-	if (packageMissing.length === failures.length && failures.length > 0) {
-		return 'No printer SDKs available. Install react-native-esc-pos-printer or react-native-star-io10 for automatic discovery.';
-	}
-
 	if (scanFailed.length > 0) {
-		const vendor = scanFailed[0]?.vendor === 'epson' ? 'Epson' : 'Star';
+		const vendor = toVendorLabel(scanFailed[0]?.vendor ?? 'epson');
 		return `${vendor} printer discovery failed: ${scanFailed[0]?.message ?? 'Unknown error'}`;
 	}
 

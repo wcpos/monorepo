@@ -102,8 +102,8 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 				foundAny = true;
 				setPrinters((prev) => mergePrinters(prev, epsonPrinters));
 			}
-		} catch (error) {
-			failures.push(classifyDiscoveryFailure('epson', error));
+		} catch (err) {
+			failures.push(classifyDiscoveryFailure('epson', err));
 		}
 
 		// Try Star native discovery
@@ -115,12 +115,12 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 				foundAny = true;
 				setPrinters((prev) => mergePrinters(prev, starPrinters));
 			}
-		} catch (error) {
-			failures.push(classifyDiscoveryFailure('star', error));
+		} catch (err) {
+			failures.push(classifyDiscoveryFailure('star', err));
 		}
 
 		const failureMessage = formatDiscoveryFailureMessage(failures);
-		if (failureMessage) {
+		if (!foundAny && failureMessage) {
 			setError(failureMessage);
 		} else if (!sdkAvailable) {
 			setError(

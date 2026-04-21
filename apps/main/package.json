@@ -54,7 +54,7 @@
     "react-native": "~0.83.2",
     "react-native-device-info": "^15.0.1",
     "react-native-edge-to-edge": "^1.6.2",
-    "react-native-esc-pos-printer": "^4.5.0",
+    "react-native-esc-pos-printer": "4.5.0",
     "react-native-gesture-handler": "~2.30.0",
     "react-native-keyboard-controller": "1.20.7",
     "react-native-reanimated": "~4.2.1",

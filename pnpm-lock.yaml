@@ -19,6 +19,11 @@ overrides:
 
 packageExtensionsChecksum: sha256-EMen4+1NnTMb6PkUt5YTKBLEs4BAWQPcwvdmpWcA5oA=
 
+patchedDependencies:
+  react-native-esc-pos-printer@4.5.0:
+    hash: 47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db
+    path: patches/react-native-esc-pos-printer@4.5.0.patch
+
 importers:
 
   .:
@@ -254,8 +259,8 @@ importers:
         specifier: ^1.6.2
         version: 1.8.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       react-native-esc-pos-printer:
-        specifier: ^4.5.0
-        version: 4.5.0(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
+        specifier: 4.5.0
+        version: 4.5.0(patch_hash=47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       react-native-gesture-handler:
         specifier: ~2.30.0
         version: 2.30.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
@@ -830,7 +835,7 @@ importers:
         version: 9.1.2
       react-native-esc-pos-printer:
         specifier: '>=4.0.0'
-        version: 4.5.0(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
+        version: 4.5.0(patch_hash=47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       react-native-star-io10:
         specifier: '>=1.0.0'
         version: 1.10.3(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
@@ -24590,7 +24595,7 @@ snapshots:
 
   react-native-esc-pos-printer-sdk@2.31.1: {}
 
-  react-native-esc-pos-printer@4.5.0(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5):
+  react-native-esc-pos-printer@4.5.0(patch_hash=47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5):
     dependencies:
       buffer: 6.0.3
       p-queue: 7.4.1
