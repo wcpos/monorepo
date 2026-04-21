@@ -1,23 +1,22 @@
-import {
-	getQueueMetrics,
-	globalQueue,
-	pauseQueue,
-	resumeQueue,
-	scheduleRequest,
-} from './request-queue';
-
-const mockError = jest.fn();
-const mockDebug = jest.fn();
-
-jest.mock('@wcpos/utils/logger', () => ({
-	getLogger: jest.fn(() => ({
-		debug: mockDebug,
-		info: jest.fn(),
-		warn: jest.fn(),
-		error: mockError,
-		success: jest.fn(),
-	})),
-}));
+// Mock factories MUST inline their jest.fn() creations. jest.mock calls are
+// hoisted above the module's top-level statements, so referencing an
+// outer-scope `const mockFn = jest.fn()` from inside a factory hits a TDZ
+// error at import time.
+jest.mock('@wcpos/utils/logger', () => {
+	const debug = jest.fn();
+	const error = jest.fn();
+	return {
+		getLogger: jest.fn(() => ({
+			debug,
+			info: jest.fn(),
+			warn: jest.fn(),
+			error,
+			success: jest.fn(),
+		})),
+		__debug: debug,
+		__error: error,
+	};
+});
 
 jest.mock('@wcpos/utils/logger/error-codes', () => ({
 	ERROR_CODES: {
@@ -25,13 +24,30 @@ jest.mock('@wcpos/utils/logger/error-codes', () => ({
 	},
 }));
 
-const mockOnWake = jest.fn();
-
 jest.mock('./request-state-manager', () => ({
 	requestStateManager: {
-		onWake: mockOnWake,
+		onWake: jest.fn(),
 	},
 }));
+
+/* eslint-disable import/first -- mocks must precede the code under test */
+import {
+	getQueueMetrics,
+	globalQueue,
+	pauseQueue,
+	resumeQueue,
+	scheduleRequest,
+} from './request-queue';
+import { requestStateManager } from './request-state-manager';
+/* eslint-enable import/first */
+
+const loggerMock = jest.requireMock('@wcpos/utils/logger') as {
+	__debug: jest.Mock;
+	__error: jest.Mock;
+};
+const mockDebug = loggerMock.__debug;
+const mockError = loggerMock.__error;
+const mockOnWake = requestStateManager.onWake as jest.Mock;
 
 describe('request-queue', () => {
 	beforeEach(() => {

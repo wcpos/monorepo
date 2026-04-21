@@ -57,7 +57,7 @@ export function Sites({ user }: SitesProps) {
 	// Single site: render directly without accordion
 	if (sites.length === 1) {
 		return (
-			<Card className="w-full">
+			<Card className="w-full" testID="logged-in-users-label">
 				<ErrorBoundary>
 					<Site user={user} site={sites[0]} />
 				</ErrorBoundary>
@@ -67,7 +67,7 @@ export function Sites({ user }: SitesProps) {
 
 	// Multiple sites: use accordion
 	return (
-		<Card className="w-full">
+		<Card className="w-full" testID="logged-in-users-label">
 			<Text className="text-muted-foreground px-4 pt-4 text-xs font-semibold tracking-wider uppercase">
 				{t('auth.your_sites', { _tags: 'core' })}
 			</Text>
