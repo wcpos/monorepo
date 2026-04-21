@@ -123,7 +123,14 @@ export function StoreSelect({
 	// not be allowed to enter the POS with stale credentials. `isValid` starts
 	// optimistic (true) and flips false only once validation finishes reporting
 	// a failure, so we also block while validation is still in flight.
-	const canLogin = stores.length > 0 && !!selectedStoreId && isValid && !isValidating;
+	// Also require that the selected store actually exists in the resolved list,
+	// so a stale `selectedStoreId` held by the parent (e.g. from a prior user)
+	// can't slip a missing store ID into `onLogin`.
+	const resolvedStore = React.useMemo(
+		() => stores.find((s) => s.localID === selectedStoreId) ?? null,
+		[stores, selectedStoreId]
+	);
+	const canLogin = !!resolvedStore && isValid && !isValidating;
 
 	return (
 		<VStack space="md">
@@ -177,7 +184,7 @@ export function StoreSelect({
 			{/* Login Button */}
 			<Button
 				onPress={() => {
-					if (selectedStoreId) onLogin(selectedStoreId);
+					if (resolvedStore?.localID) onLogin(resolvedStore.localID);
 				}}
 				disabled={!canLogin}
 				size="lg"

@@ -37,9 +37,16 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 		}
 
 		if (response.type === 'success') {
+			if (!response.params) {
+				authLogger.error('Login succeeded without credentials', {
+					showToast: true,
+					context: { siteName: site.name, response },
+				});
+				return;
+			}
 			authLogger.debug(`Login successful for site: ${site.name}`);
 			processedResponseRef.current = responseKey;
-			handleLoginSuccess({ params: response.params } as any);
+			void handleLoginSuccess({ params: response.params });
 		} else if (response.type === 'error') {
 			authLogger.error(`Login failed: ${response.error}`, {
 				showToast: true,
@@ -52,12 +59,26 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 		}
 	}, [response, handleLoginSuccess, site.name]);
 
+	const disabled = !isReady || isProcessing;
+
+	const handlePress = React.useCallback(() => {
+		// Clear the dedupe key so that a retry of the same login attempt (which
+		// may surface the same error / token) is not silently swallowed by the
+		// guard in the effect above.
+		processedResponseRef.current = null;
+		promptAsync();
+	}, [promptAsync]);
+
 	return (
 		<Pressable
 			testID="add-user-button"
-			disabled={!isReady || isProcessing}
-			onPress={() => promptAsync()}
-			className="border-border active:bg-primary/5 web:cursor-pointer web:transition-colors web:hover:border-primary/40 web:hover:bg-primary/5 flex-row items-center gap-3 rounded-lg border border-dashed p-3"
+			disabled={disabled}
+			onPress={handlePress}
+			className={
+				disabled
+					? 'border-border web:cursor-not-allowed flex-row items-center gap-3 rounded-lg border border-dashed p-3 opacity-60'
+					: 'border-border active:bg-primary/5 web:cursor-pointer web:transition-colors web:hover:border-primary/40 web:hover:bg-primary/5 flex-row items-center gap-3 rounded-lg border border-dashed p-3'
+			}
 		>
 			<View className="bg-primary/10 h-9 w-9 items-center justify-center rounded-full">
 				<Icon name="plus" size="sm" variant="primary" />

@@ -77,16 +77,15 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 				return;
 			}
 
+			const params = response.params;
 			processedResponseRef.current = responseKey;
 			void (async () => {
 				try {
-					await handleLoginSuccess({ params: response.params } as any);
+					await handleLoginSuccess({ params });
 					// Re-auth can be reached after a pre-flight AUTH_REQUIRED block;
 					// clear the flag so subsequent requests aren't rejected despite
 					// the newly-saved tokens (mirrors auth-error-handler.ts:203).
-					if (response.params?.access_token) {
-						requestStateManager.setRefreshedToken(response.params.access_token);
-					}
+					requestStateManager.setRefreshedToken(params.access_token);
 					requestStateManager.setAuthFailed(false);
 				} catch (error) {
 					processedResponseRef.current = null;
@@ -106,16 +105,12 @@ export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 	}, [response, handleLoginSuccess, site.name]);
 
 	const handleRemoveWpUser = React.useCallback(async () => {
-		try {
-			await wpUser.incrementalRemove();
-			await site.incrementalUpdate({
-				$pullAll: {
-					wp_credentials: [wpUser.uuid],
-				},
-			});
-		} catch (err) {
-			throw err;
-		}
+		await wpUser.incrementalRemove();
+		await site.incrementalUpdate({
+			$pullAll: {
+				wp_credentials: [wpUser.uuid],
+			},
+		});
 	}, [wpUser, site]);
 
 	const trailing = isLoading ? (
