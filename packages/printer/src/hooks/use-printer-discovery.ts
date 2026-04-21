@@ -94,15 +94,27 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 			let foundAny = false;
 			const failures = [] as ReturnType<typeof classifyDiscoveryFailure>[];
 
-			const discoveryVendors = ['epson', 'star'] as const;
-			const discoveryResults = await Promise.allSettled([
-				import('../discovery/epson-native-discovery').then(({ discover }) => discover()),
-				import('../discovery/star-native-discovery').then(({ discover }) => discover()),
-			]);
+			const discoveryTasks = [
+				{
+					vendor: 'epson' as const,
+					promise: import('../discovery/epson-native-discovery').then(({ discover }) => discover()),
+				},
+				{
+					vendor: 'star' as const,
+					promise: import('../discovery/star-native-discovery').then(({ discover }) => discover()),
+				},
+			];
+			const discoveryResults = await Promise.all(
+				discoveryTasks.map(async ({ vendor, promise }) => ({
+					vendor,
+					result: await promise.then(
+						(value) => ({ status: 'fulfilled' as const, value }),
+						(reason) => ({ status: 'rejected' as const, reason })
+					),
+				}))
+			);
 
-			for (const [index, result] of discoveryResults.entries()) {
-				const vendor = discoveryVendors[index];
-
+			for (const { vendor, result } of discoveryResults) {
 				if (result.status === 'fulfilled') {
 					sdkAvailable = true;
 
