@@ -89,48 +89,50 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		setIsScanning(true);
 		setError(null);
 
-		let sdkAvailable = false;
-		let foundAny = false;
-		const failures = [] as ReturnType<typeof classifyDiscoveryFailure>[];
-
-		// Try Epson native discovery
 		try {
-			const { discover } = await import('../discovery/epson-native-discovery');
-			sdkAvailable = true;
-			const epsonPrinters = await discover();
-			if (epsonPrinters.length > 0) {
-				foundAny = true;
-				setPrinters((prev) => mergePrinters(prev, epsonPrinters));
+			let sdkAvailable = false;
+			let foundAny = false;
+			const failures = [] as ReturnType<typeof classifyDiscoveryFailure>[];
+
+			// Try Epson native discovery
+			try {
+				const { discover } = await import('../discovery/epson-native-discovery');
+				sdkAvailable = true;
+				const epsonPrinters = await discover();
+				if (epsonPrinters.length > 0) {
+					foundAny = true;
+					setPrinters((prev) => mergePrinters(prev, epsonPrinters));
+				}
+			} catch (err) {
+				failures.push(classifyDiscoveryFailure('epson', err));
 			}
-		} catch (err) {
-			failures.push(classifyDiscoveryFailure('epson', err));
-		}
 
-		// Try Star native discovery
-		try {
-			const { discover } = await import('../discovery/star-native-discovery');
-			sdkAvailable = true;
-			const starPrinters = await discover();
-			if (starPrinters.length > 0) {
-				foundAny = true;
-				setPrinters((prev) => mergePrinters(prev, starPrinters));
+			// Try Star native discovery
+			try {
+				const { discover } = await import('../discovery/star-native-discovery');
+				sdkAvailable = true;
+				const starPrinters = await discover();
+				if (starPrinters.length > 0) {
+					foundAny = true;
+					setPrinters((prev) => mergePrinters(prev, starPrinters));
+				}
+			} catch (err) {
+				failures.push(classifyDiscoveryFailure('star', err));
 			}
-		} catch (err) {
-			failures.push(classifyDiscoveryFailure('star', err));
-		}
 
-		const failureMessage = formatDiscoveryFailureMessage(failures);
-		if (!foundAny && failureMessage) {
-			setError(failureMessage);
-		} else if (!sdkAvailable) {
-			setError(
-				'No printer SDKs available. Install react-native-esc-pos-printer or react-native-star-io10 for automatic discovery.'
-			);
-		} else if (!foundAny) {
-			setError('No printers found on the network.');
+			const failureMessage = formatDiscoveryFailureMessage(failures);
+			if (!foundAny && failureMessage) {
+				setError(failureMessage);
+			} else if (!sdkAvailable) {
+				setError(
+					'No printer SDKs available. Install react-native-esc-pos-printer or react-native-star-io10 for automatic discovery.'
+				);
+			} else if (!foundAny) {
+				setError('No printers found on the network.');
+			}
+		} finally {
+			setIsScanning(false);
 		}
-
-		setIsScanning(false);
 	}, []);
 
 	const stopScan = React.useCallback(() => {
