@@ -1,0 +1,39 @@
+diff --git a/lib/commonjs/printer/Printer.js b/lib/commonjs/printer/Printer.js
+index 7da66d14c8564d9e8cadd75e810177e60d6d2151..f15c858edccf5a5577256d9fdd35329d641de45c 100644
+--- a/lib/commonjs/printer/Printer.js
++++ b/lib/commonjs/printer/Printer.js
+@@ -24,7 +24,7 @@ class Printer {
+     Printer.instances.set(target, this);
+   }
+   initQueue() {
+-    const PQueue = require('p-queue/dist').default;
++    const PQueue = require('p-queue').default;
+     this.queue = new PQueue({
+       concurrency: 1
+     });
+diff --git a/lib/module/printer/Printer.js b/lib/module/printer/Printer.js
+index 5130cad96e06c4de0bf3566223fa9d65925c7992..10e5c24ad3370bc68c1951eb789b44bc4a4b7291 100644
+--- a/lib/module/printer/Printer.js
++++ b/lib/module/printer/Printer.js
+@@ -20,7 +20,7 @@ export class Printer {
+     Printer.instances.set(target, this);
+   }
+   initQueue() {
+-    const PQueue = require('p-queue/dist').default;
++    const PQueue = require('p-queue').default;
+     this.queue = new PQueue({
+       concurrency: 1
+     });
+diff --git a/src/printer/Printer.ts b/src/printer/Printer.ts
+index fe5abee0295478ea801099c8c66226adb35c18a6..43831b9a4f7f60216ef543947282351a9f20b160 100644
+--- a/src/printer/Printer.ts
++++ b/src/printer/Printer.ts
+@@ -49,7 +49,7 @@ export class Printer {
+   }
+ 
+   initQueue() {
+-    const PQueue = require('p-queue/dist').default;
++    const PQueue = require('p-queue').default;
+     this.queue = new PQueue({ concurrency: 1 });
+   }
+ 

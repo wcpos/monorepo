@@ -1,5 +1,10 @@
 import * as React from 'react';
 
+import {
+	classifyDiscoveryFailure,
+	formatDiscoveryFailureMessage,
+} from '../discovery/discovery-errors';
+
 import type { DiscoveredPrinter } from '../types';
 
 interface UsePrinterDiscoveryResult {
@@ -86,6 +91,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 
 		let sdkAvailable = false;
 		let foundAny = false;
+		const failures = [] as ReturnType<typeof classifyDiscoveryFailure>[];
 
 		// Try Epson native discovery
 		try {
@@ -96,8 +102,8 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 				foundAny = true;
 				setPrinters((prev) => mergePrinters(prev, epsonPrinters));
 			}
-		} catch {
-			// react-native-esc-pos-printer not installed — skip
+		} catch (error) {
+			failures.push(classifyDiscoveryFailure('epson', error));
 		}
 
 		// Try Star native discovery
@@ -109,11 +115,14 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 				foundAny = true;
 				setPrinters((prev) => mergePrinters(prev, starPrinters));
 			}
-		} catch {
-			// react-native-star-io10 not installed — skip
+		} catch (error) {
+			failures.push(classifyDiscoveryFailure('star', error));
 		}
 
-		if (!sdkAvailable) {
+		const failureMessage = formatDiscoveryFailureMessage(failures);
+		if (failureMessage) {
+			setError(failureMessage);
+		} else if (!sdkAvailable) {
 			setError(
 				'No printer SDKs available. Install react-native-esc-pos-printer or react-native-star-io10 for automatic discovery.'
 			);
