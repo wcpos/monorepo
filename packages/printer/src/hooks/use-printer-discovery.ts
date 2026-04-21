@@ -94,30 +94,25 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 			let foundAny = false;
 			const failures = [] as ReturnType<typeof classifyDiscoveryFailure>[];
 
-			// Try Epson native discovery
-			try {
-				const { discover } = await import('../discovery/epson-native-discovery');
-				sdkAvailable = true;
-				const epsonPrinters = await discover();
-				if (epsonPrinters.length > 0) {
-					foundAny = true;
-					setPrinters((prev) => mergePrinters(prev, epsonPrinters));
-				}
-			} catch (err) {
-				failures.push(classifyDiscoveryFailure('epson', err));
-			}
+			const discoveryVendors = ['epson', 'star'] as const;
+			const discoveryResults = await Promise.allSettled([
+				import('../discovery/epson-native-discovery').then(({ discover }) => discover()),
+				import('../discovery/star-native-discovery').then(({ discover }) => discover()),
+			]);
 
-			// Try Star native discovery
-			try {
-				const { discover } = await import('../discovery/star-native-discovery');
-				sdkAvailable = true;
-				const starPrinters = await discover();
-				if (starPrinters.length > 0) {
-					foundAny = true;
-					setPrinters((prev) => mergePrinters(prev, starPrinters));
+			for (const [index, result] of discoveryResults.entries()) {
+				const vendor = discoveryVendors[index];
+
+				if (result.status === 'fulfilled') {
+					sdkAvailable = true;
+
+					if (result.value.length > 0) {
+						foundAny = true;
+						setPrinters((prev) => mergePrinters(prev, result.value));
+					}
+				} else {
+					failures.push(classifyDiscoveryFailure(vendor, result.reason));
 				}
-			} catch (err) {
-				failures.push(classifyDiscoveryFailure('star', err));
 			}
 
 			const failureMessage = formatDiscoveryFailureMessage(failures);
