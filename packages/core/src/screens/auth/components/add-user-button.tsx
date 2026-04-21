@@ -64,7 +64,7 @@ export function AddUserButton({ site, hasExistingUsers }: Props) {
 			</View>
 			<Text className="text-muted-foreground text-sm font-medium">
 				{isProcessing
-					? t('common.loading') + '...'
+					? t('common.loading')
 					: hasExistingUsers
 						? t('auth.add_another_user', { _tags: 'core' })
 						: t('auth.sign_in_with_wordpress', { _tags: 'core' })}

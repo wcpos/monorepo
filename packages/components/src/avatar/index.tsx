@@ -149,10 +149,11 @@ Avatar.displayName = 'Avatar';
  * "Paul Kilmurray" → "PK"; "Admin" → "AD"; "" → "?".
  */
 export function getInitials(name: string | null | undefined): string {
-	if (!name) return '?';
-	const parts = name.trim().split(/\s+/);
+	const trimmed = (name ?? '').trim();
+	if (!trimmed) return '?';
+	const parts = trimmed.split(/\s+/);
 	if (parts.length >= 2) {
 		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 	}
-	return name.slice(0, 2).toUpperCase();
+	return trimmed.slice(0, 2).toUpperCase();
 }

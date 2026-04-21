@@ -39,6 +39,7 @@ interface SitesProps {
 }
 
 export function Sites({ user }: SitesProps) {
+	const t = useT();
 	const sites = useObservableSuspense(
 		(
 			user as unknown as {
@@ -68,7 +69,7 @@ export function Sites({ user }: SitesProps) {
 	return (
 		<Card className="w-full">
 			<Text className="text-muted-foreground px-4 pt-4 text-xs font-semibold tracking-wider uppercase">
-				Your Sites
+				{t('auth.your_sites', { _tags: 'core' })}
 			</Text>
 			<Accordion type="single" collapsible defaultValue={sites[0].uuid}>
 				{sites.map((site, index) => (
@@ -127,7 +128,7 @@ function AccordionSite({
 							<SiteHeader site={site} />
 							{userCount > 0 && (
 								<StatusBadge
-									label={`${userCount} ${userCount === 1 ? 'user' : 'users'}`}
+									label={`${userCount} ${userCount === 1 ? t('auth.user', { _tags: 'core' }) : t('auth.users', { _tags: 'core' })}`}
 									variant="info"
 								/>
 							)}
