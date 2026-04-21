@@ -22,11 +22,18 @@ jest.mock('@wcpos/utils/logger', () => ({
 	}),
 }));
 
-const makeWpUser = (stores: any[] = []) => ({
-	uuid: 'wp-user-uuid',
-	populate: jest.fn().mockResolvedValue(stores),
-	incrementalPatch: jest.fn().mockResolvedValue(undefined),
-});
+const makeWpUser = (stores: any[] = []) => {
+	const wpUser: any = {
+		uuid: 'wp-user-uuid',
+		stores: [],
+		populate: jest.fn().mockResolvedValue(stores),
+		incrementalPatch: jest.fn().mockResolvedValue(undefined),
+	};
+	// RxDocument#getLatest returns the latest doc revision; tests reuse the
+	// same mock instance so a self-reference is a faithful stand-in.
+	wpUser.getLatest = jest.fn(() => wpUser);
+	return wpUser;
+};
 
 const makeUserDB = () => ({
 	stores: {
@@ -157,5 +164,90 @@ describe('mergeStoresWithResponse', () => {
 				siteID: 'site-1',
 			})
 		).rejects.toThrow('DB error');
+	});
+
+	it('should exclude non-409 failed doc IDs from wpUser.stores', async () => {
+		const userDB = makeUserDB();
+		// Echo: persist the first store, fail the second with a 422.
+		userDB.stores.bulkInsert.mockImplementation(async (docs: any[]) => ({
+			success: [docs[0]],
+			error: [
+				{
+					documentId: docs[1].localID,
+					status: 422,
+					message: 'Validation failed',
+				},
+			],
+		}));
+		const wpUser = makeWpUser([]);
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores: [{ id: 1 }, { id: 2 }],
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		const goodLocalID = insertedDocs[0].localID;
+		const badLocalID = insertedDocs[1].localID;
+		const patchCall = wpUser.incrementalPatch.mock.calls[0][0];
+		expect(patchCall.stores).toContain(goodLocalID);
+		expect(patchCall.stores).not.toContain(badLocalID);
+	});
+
+	it('should preserve 409 conflicts (already-exists) in wpUser.stores', async () => {
+		const userDB = makeUserDB();
+		// All inserts fail with 409 — doc already exists on re-sync.
+		userDB.stores.bulkInsert.mockImplementation(async (docs: any[]) => ({
+			success: [],
+			error: docs.map((d: any) => ({ documentId: d.localID, status: 409 })),
+		}));
+		const wpUser = makeWpUser([]);
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores: [{ id: 1 }],
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		const localID = insertedDocs[0].localID;
+		const patchCall = wpUser.incrementalPatch.mock.calls[0][0];
+		expect(patchCall.stores).toContain(localID);
+	});
+
+	it('should fall back to document.localID when the error omits documentId', async () => {
+		const userDB = makeUserDB();
+		// Some failure modes surface the raw doc rather than documentId.
+		userDB.stores.bulkInsert.mockImplementation(async (docs: any[]) => ({
+			success: [docs[0]],
+			error: [
+				{
+					status: 500,
+					message: 'Storage error',
+					document: { localID: docs[1].localID },
+				},
+			],
+		}));
+		const wpUser = makeWpUser([]);
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores: [{ id: 1 }, { id: 2 }],
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		const goodLocalID = insertedDocs[0].localID;
+		const badLocalID = insertedDocs[1].localID;
+		const patchCall = wpUser.incrementalPatch.mock.calls[0][0];
+		expect(patchCall.stores).toContain(goodLocalID);
+		expect(patchCall.stores).not.toContain(badLocalID);
 	});
 });

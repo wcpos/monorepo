@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { ScrollView } from 'react-native';
 
 import { Card } from '@wcpos/components/card';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
@@ -18,7 +18,16 @@ export function Connect() {
 
 	return (
 		<KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-			<View className="h-full w-full items-center justify-center p-2">
+			<ScrollView
+				style={{ flex: 1 }}
+				contentContainerStyle={{
+					flexGrow: 1,
+					alignItems: 'center',
+					justifyContent: 'center',
+					padding: 8,
+				}}
+				keyboardShouldPersistTaps="handled"
+			>
 				<VStack space="lg" className="w-full max-w-[460px] items-center">
 					<Logo width={120} height={120} />
 					<Card className="w-full p-4">
@@ -31,7 +40,7 @@ export function Connect() {
 					</ErrorBoundary>
 					<DemoButton />
 				</VStack>
-			</View>
+			</ScrollView>
 		</KeyboardAvoidingView>
 	);
 }

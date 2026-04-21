@@ -228,8 +228,9 @@ function Button({
 		>
 			<Pressable
 				className={cn(
-					disabled && 'web:pointer-events-none opacity-50',
-					buttonVariants({ variant, size, className })
+					buttonVariants({ variant, size, className }),
+					disabled &&
+						'web:pointer-events-none web:cursor-not-allowed web:hover:opacity-50 opacity-50 active:opacity-50'
 				)}
 				role="button"
 				{...props}

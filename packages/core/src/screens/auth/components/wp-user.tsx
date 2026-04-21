@@ -1,8 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
-
-import get from 'lodash/get';
-import { useObservableSuspense } from 'observable-hooks';
 
 import {
 	AlertDialog,
@@ -14,53 +10,58 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { ButtonPill, ButtonText } from '@wcpos/components/button';
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectPrimitiveTrigger,
-} from '@wcpos/components/select';
+import { Avatar, getInitials } from '@wcpos/components/avatar';
+import { Button, ButtonText } from '@wcpos/components/button';
+import { ListItem } from '@wcpos/components/list-item';
+import { Loader } from '@wcpos/components/loader';
+import { StatusBadge } from '@wcpos/components/status-badge';
 import { requestStateManager } from '@wcpos/hooks/use-http-client';
 import { getLogger } from '@wcpos/utils/logger';
-import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
-import { useAppState } from '../../../contexts/app-state';
-import { useT } from '../../../contexts/translations';
-import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
-import { useUserValidation } from '../../../hooks/use-user-validation';
 import { useLoginHandler } from '../hooks/use-login-handler';
+import { useT } from '../../../contexts/translations';
+import { useUserValidation } from '../../../hooks/use-user-validation';
+import { useWcposAuth } from '../../../hooks/use-wcpos-auth';
 
 const authLogger = getLogger(['wcpos', 'auth', 'user']);
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
 	wpUser: import('@wcpos/database').WPCredentialsDocument;
+	isSelected: boolean;
+	onSelect: () => void;
 }
 
-export function WpUser({ site, wpUser }: Props) {
-	const { login } = useAppState();
+export function WpUser({ site, wpUser, isSelected, onSelect }: Props) {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
-	const stores = useObservableSuspense(
-		(
-			wpUser as unknown as {
-				populateResource: (
-					key: string
-				) => import('observable-hooks').ObservableResource<
-					import('@wcpos/database').StoreDocument[]
-				>;
-			}
-		).populateResource('stores')
-	);
 	const t = useT();
 	const { isValid, isLoading } = useUserValidation({ site, wpUser });
 	const { handleLoginSuccess } = useLoginHandler(site);
 	const processedResponseRef = React.useRef<string | null>(null);
 	const { response, promptAsync } = useWcposAuth({
-		site: { wcpos_login_url: site.wcpos_login_url ?? '', name: site.name ?? '' },
+		site: {
+			wcpos_login_url: site.wcpos_login_url ?? '',
+			name: site.name ?? '',
+		},
 	});
 
-	// Process OAuth response after re-authentication
+	const displayName = wpUser.display_name || 'Unknown User';
+	const initials = getInitials(displayName);
+	const avatarVariant = isValid ? 'success' : 'warning';
+	const showReauth = !isLoading && !isValid;
+	const roleLabel = React.useMemo(() => {
+		const roles = (wpUser as unknown as { roles?: string[] }).roles;
+		if (!Array.isArray(roles) || roles.length === 0) return undefined;
+		const humanize = (slug: string) =>
+			slug
+				.split(/[_\-\s]+/)
+				.filter(Boolean)
+				.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+				.join(' ');
+		return roles.map(humanize).join(', ');
+	}, [wpUser]);
+
+	// Handle re-authentication OAuth response
 	React.useEffect(() => {
 		if (!response) return;
 
@@ -76,10 +77,15 @@ export function WpUser({ site, wpUser }: Props) {
 				return;
 			}
 
+			const params = response.params;
 			processedResponseRef.current = responseKey;
 			void (async () => {
 				try {
-					await handleLoginSuccess({ params: response.params } as any);
+					await handleLoginSuccess({ params });
+					// Re-auth can be reached after a pre-flight AUTH_REQUIRED block;
+					// clear the flag so subsequent requests aren't rejected despite
+					// the newly-saved tokens (mirrors auth-error-handler.ts:203).
+					requestStateManager.setRefreshedToken(params.access_token);
 					requestStateManager.setAuthFailed(false);
 				} catch (error) {
 					processedResponseRef.current = null;
@@ -98,105 +104,62 @@ export function WpUser({ site, wpUser }: Props) {
 		}
 	}, [response, handleLoginSuccess, site.name]);
 
-	/**
-	 *
-	 */
-	const handleLogin = React.useCallback(
-		async (storeID: string) => {
-			if (!storeID) {
-				authLogger.error(t('auth.no_store_selected'), {
-					showToast: true,
-					context: {
-						errorCode: ERROR_CODES.MISSING_REQUIRED_PARAMETERS,
-						siteId: site.uuid,
-						userId: wpUser.uuid,
-					},
-				});
-				return;
-			}
-			login({
-				siteID: site.uuid,
-				wpCredentialsID: wpUser.uuid,
-				storeID,
-			});
-		},
-		[login, site.uuid, t, wpUser.uuid]
-	);
-
-	/**
-	 * Remove user
-	 */
 	const handleRemoveWpUser = React.useCallback(async () => {
-		try {
-			await wpUser.incrementalRemove();
-			await site.incrementalUpdate({
-				$pullAll: {
-					wp_credentials: [wpUser.uuid],
-				},
-			});
-		} catch (err) {
-			throw err;
-		}
+		await wpUser.incrementalRemove();
+		await site.incrementalUpdate({
+			$pullAll: {
+				wp_credentials: [wpUser.uuid],
+			},
+		});
 	}, [wpUser, site]);
 
-	/**
-	 *
-	 */
-	const buttonLabel = wpUser.display_name ? wpUser.display_name : 'No name?';
+	const trailing = isLoading ? (
+		<Loader size="xs" variant="muted" />
+	) : showReauth ? (
+		<Button
+			size="xs"
+			variant="outline-warning"
+			onPress={(e) => {
+				e.stopPropagation();
+				promptAsync();
+			}}
+		>
+			<ButtonText>{t('auth.re_authenticate', { _tags: 'core' })}</ButtonText>
+		</Button>
+	) : (
+		<StatusBadge
+			label={
+				isValid ? t('common.logged_in', { _tags: 'core' }) : t('common.expired', { _tags: 'core' })
+			}
+			variant={isValid ? 'success' : 'warning'}
+		/>
+	);
 
 	return (
-		<View>
-			{!isValid && !isLoading ? (
-				<ButtonPill
-					size="xs"
-					onPress={() => promptAsync()}
-					removable
-					onRemove={() => setDeleteDialogOpened(true)}
-					testID="wp-user-button"
-				>
-					<ButtonText>{buttonLabel}</ButtonText>
-				</ButtonPill>
-			) : Array.isArray(stores) && stores.length > 1 ? (
-				<Select
-					onValueChange={(option) => option && handleLogin(option.value)}
-					disabled={!isValid || isLoading}
-				>
-					<SelectPrimitiveTrigger asChild>
-						<ButtonPill
-							size="xs"
-							removable
-							onRemove={() => setDeleteDialogOpened(true)}
-							disabled={isLoading}
-							testID="wp-user-button"
-						>
-							<ButtonText>{buttonLabel}</ButtonText>
-						</ButtonPill>
-					</SelectPrimitiveTrigger>
-					<SelectContent>
-						{stores.map((store) => (
-							<SelectItem
-								key={store.localID}
-								label={store.name ?? ''}
-								value={store.localID ?? ''}
-							/>
-						))}
-					</SelectContent>
-				</Select>
-			) : (
-				<ButtonPill
-					size="xs"
-					onPress={() => {
-						const storeID = get(stores, [0, 'localID']) as string | undefined;
-						if (storeID) handleLogin(storeID);
-					}}
-					removable
-					onRemove={() => setDeleteDialogOpened(true)}
-					disabled={isLoading}
-					testID="wp-user-button"
-				>
-					<ButtonText>{buttonLabel}</ButtonText>
-				</ButtonPill>
-			)}
+		<>
+			<ListItem
+				testID="wp-user-button"
+				onPress={onSelect}
+				selected={isSelected}
+				// ListItem gives explicit `variant` priority over `selected` styling,
+				// so only apply the warning variant to unselected expired rows —
+				// otherwise the currently-selected expired user loses its selected
+				// highlight despite driving StoreSelect below.
+				variant={showReauth && !isSelected ? 'warning' : undefined}
+				leading={
+					<Avatar
+						source={wpUser.avatar_url ? { uri: wpUser.avatar_url } : undefined}
+						fallback={initials}
+						variant={avatarVariant}
+						size="md"
+					/>
+				}
+				title={displayName}
+				subtitle={roleLabel}
+				trailing={trailing}
+				removable
+				onRemove={() => setDeleteDialogOpened(true)}
+			/>
 
 			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
 				<AlertDialogContent>
@@ -210,6 +173,6 @@ export function WpUser({ site, wpUser }: Props) {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
-		</View>
+		</>
 	);
 }

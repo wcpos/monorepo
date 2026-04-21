@@ -9,7 +9,7 @@ import {
 } from 'observable-hooks';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { Avatar } from '@wcpos/components/avatar';
+import { Avatar, getInitials } from '@wcpos/components/avatar';
 import { Button, ButtonText } from '@wcpos/components/button';
 import {
 	DropdownMenu,
@@ -106,10 +106,7 @@ export function UserMenu() {
 			<DropdownMenuTrigger asChild>
 				<Button className="text-sidebar-foreground rounded-none bg-transparent px-2 hover:bg-white/10">
 					<HStack>
-						<Avatar
-							source={{ uri }}
-							// placeholder="PK"
-						/>
+						<Avatar source={{ uri }} fallback={getInitials(wpCredentials?.display_name)} />
 						{screenSize !== 'sm' ? (
 							<ButtonText className="text-sidebar-foreground">
 								{wpCredentials?.display_name}

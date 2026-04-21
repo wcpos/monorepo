@@ -42,7 +42,17 @@ function AccordionItem({ className, value, ...props }: AccordionPrimitive.ItemPr
 
 const Trigger = Platform.OS === 'web' ? View : Pressable;
 
-function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.TriggerProps) {
+function AccordionTrigger({
+	className,
+	headerClassName,
+	children,
+	chevronPosition = 'right',
+	...props
+}: AccordionPrimitive.TriggerProps & {
+	chevronPosition?: 'left' | 'right';
+	/** ClassName applied to the outer AccordionPrimitive.Header wrapper (useful for flex sizing). */
+	headerClassName?: string;
+}) {
 	const { isExpanded } = AccordionPrimitive.useItemContext();
 
 	const progress = useDerivedValue(() =>
@@ -53,9 +63,15 @@ function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.
 		opacity: interpolate(progress.value, [0, 1], [1, 0.8], Extrapolation.CLAMP),
 	}));
 
+	const chevron = (
+		<Animated.View style={chevronStyle}>
+			<Icon name="chevronDown" className={'text-foreground shrink-0'} />
+		</Animated.View>
+	);
+
 	return (
-		<TextClassContext.Provider value="font-medium web:group-hover:underline">
-			<AccordionPrimitive.Header className="flex">
+		<TextClassContext.Provider value="font-medium">
+			<AccordionPrimitive.Header className={cn('flex', headerClassName)}>
 				<AccordionPrimitive.Trigger {...props} asChild>
 					<Trigger
 						className={cn(
@@ -63,10 +79,11 @@ function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.
 							className
 						)}
 					>
-						<>{children}</>
-						<Animated.View style={chevronStyle}>
-							<Icon name="chevronDown" className={'text-foreground shrink-0'} />
-						</Animated.View>
+						<>
+							{chevronPosition === 'left' && chevron}
+							{children}
+							{chevronPosition === 'right' && chevron}
+						</>
 					</Trigger>
 				</AccordionPrimitive.Trigger>
 			</AccordionPrimitive.Header>
