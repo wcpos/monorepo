@@ -58,6 +58,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 			},
 			package: isDev ? 'com.wcpos.main.dev' : isAdhoc ? 'com.wcpos.main.adhoc' : 'com.wcpos.main',
 			versionCode: 1,
+			permissions: [
+				...new Set([
+					...(config.android?.permissions ?? []),
+					'android.permission.ACCESS_COARSE_LOCATION',
+					'android.permission.ACCESS_FINE_LOCATION',
+					'android.permission.BLUETOOTH_CONNECT',
+					'android.permission.BLUETOOTH_SCAN',
+				]),
+			],
 		},
 
 		web: {

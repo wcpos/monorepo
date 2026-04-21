@@ -69,6 +69,7 @@
       "keccak",
       "macos-alias",
       "protobufjs",
+      "react-native-esc-pos-printer",
       "rxdb",
       "rxdb-premium",
       "secp256k1",
@@ -79,7 +80,9 @@
       "@firebase/util",
       "electron-winstaller"
     ],
-    "patchedDependencies": {}
+    "patchedDependencies": {
+      "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
+    }
   },
   "lint-staged": {
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"

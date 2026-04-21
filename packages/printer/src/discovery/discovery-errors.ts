@@ -1,0 +1,80 @@
+export type NativeDiscoveryVendor = 'epson' | 'star';
+
+export type DiscoveryFailureKind = 'package-missing' | 'native-module-missing' | 'scan-failed';
+
+export interface DiscoveryFailure {
+	vendor: NativeDiscoveryVendor;
+	kind: DiscoveryFailureKind;
+	message: string;
+}
+
+function stringifyError(error: unknown): string {
+	if (error instanceof Error) {
+		return error.message;
+	}
+
+	return String(error);
+}
+
+function toVendorLabel(vendor: NativeDiscoveryVendor): string {
+	return vendor === 'epson' ? 'Epson' : 'Star';
+}
+
+export function classifyDiscoveryFailure(
+	vendor: NativeDiscoveryVendor,
+	error: unknown
+): DiscoveryFailure {
+	const message = stringifyError(error);
+	const normalized = message.toLowerCase();
+
+	if (
+		normalized.includes('cannot find module') ||
+		normalized.includes('module not found') ||
+		normalized.includes('unable to resolve module')
+	) {
+		return {
+			vendor,
+			kind: 'package-missing',
+			message,
+		};
+	}
+
+	if (
+		normalized.includes('turbomoduleregistry.getenforcing') ||
+		normalized.includes('registered in the native binary') ||
+		normalized.includes('nativeeventemitter') ||
+		normalized.includes('requires a non-null argument')
+	) {
+		return {
+			vendor,
+			kind: 'native-module-missing',
+			message,
+		};
+	}
+
+	return {
+		vendor,
+		kind: 'scan-failed',
+		message,
+	};
+}
+
+export function formatDiscoveryFailureMessage(failures: DiscoveryFailure[]): string | null {
+	const nativeMissing = failures.filter((failure) => failure.kind === 'native-module-missing');
+	const scanFailed = failures.filter((failure) => failure.kind === 'scan-failed');
+
+	if (nativeMissing.length > 0) {
+		const vendors = Array.from(
+			new Set(nativeMissing.map((failure) => toVendorLabel(failure.vendor)))
+		).join(' and ');
+
+		return `${vendors} printer discovery is installed in JavaScript but missing from the native app binary. Rebuild the iOS/Android development build after installing native printer SDKs.`;
+	}
+
+	if (scanFailed.length > 0) {
+		const vendor = toVendorLabel(scanFailed[0]?.vendor ?? 'epson');
+		return `${vendor} printer discovery failed: ${scanFailed[0]?.message ?? 'Unknown error'}`;
+	}
+
+	return null;
+}
