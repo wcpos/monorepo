@@ -105,11 +105,18 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 		7(oldDoc: any) {
 			// opening_hours: pre-v1.9.0 plugin emitted a freeform string;
 			// v1.9.0+ emits an array (inner shape varies across stores, so no
-			// item-level constraint — see schema comment). Reset to [] on
-			// migrate since the old string form isn't meaningful structured
-			// data; preserve any pre-existing notes if present.
+			// item-level constraint — see schema comment). Move the legacy
+			// string into opening_hours_notes so user-visible content isn't
+			// lost, then normalize opening_hours to [].
+			const legacyNotes =
+				typeof oldDoc.opening_hours_notes === 'string' ? oldDoc.opening_hours_notes : '';
+			if (typeof oldDoc.opening_hours === 'string') {
+				const legacyText = oldDoc.opening_hours;
+				oldDoc.opening_hours_notes = legacyNotes ? `${legacyNotes}\n\n${legacyText}` : legacyText;
+			} else {
+				oldDoc.opening_hours_notes = legacyNotes;
+			}
 			oldDoc.opening_hours = [];
-			oldDoc.opening_hours_notes = oldDoc.opening_hours_notes ?? '';
 			return oldDoc;
 		},
 	},
@@ -137,9 +144,16 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 		3(oldDoc: any) {
 			// `role` (string) → `roles` (string[]). Cashiers can have multiple
 			// WordPress roles. Preserve the existing value as a single-element
-			// array when present.
-			const legacyRole = oldDoc.role;
-			oldDoc.roles = typeof legacyRole === 'string' && legacyRole.length > 0 ? [legacyRole] : [];
+			// array when present. Idempotent: if `roles` is already a valid
+			// array, keep it and just drop any lingering `role`.
+			if (Array.isArray(oldDoc.roles)) {
+				oldDoc.roles = oldDoc.roles.filter(
+					(r: unknown): r is string => typeof r === 'string' && r.length > 0
+				);
+			} else {
+				const legacyRole = oldDoc.role;
+				oldDoc.roles = typeof legacyRole === 'string' && legacyRole.length > 0 ? [legacyRole] : [];
+			}
 			delete oldDoc.role;
 			return oldDoc;
 		},
