@@ -22,11 +22,18 @@ jest.mock('@wcpos/utils/logger', () => ({
 	}),
 }));
 
-const makeWpUser = (stores: any[] = []) => ({
-	uuid: 'wp-user-uuid',
-	populate: jest.fn().mockResolvedValue(stores),
-	incrementalPatch: jest.fn().mockResolvedValue(undefined),
-});
+const makeWpUser = (stores: any[] = []) => {
+	const wpUser: any = {
+		uuid: 'wp-user-uuid',
+		stores: [],
+		populate: jest.fn().mockResolvedValue(stores),
+		incrementalPatch: jest.fn().mockResolvedValue(undefined),
+	};
+	// RxDocument#getLatest returns the latest doc revision; tests reuse the
+	// same mock instance so a self-reference is a faithful stand-in.
+	wpUser.getLatest = jest.fn(() => wpUser);
+	return wpUser;
+};
 
 const makeUserDB = () => ({
 	stores: {

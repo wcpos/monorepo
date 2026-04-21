@@ -116,6 +116,11 @@ export async function mergeStoresWithResponse({
 		}
 
 		// Upsert stores from the response (this handles both new and existing stores)
+		// `failedDocIds` collects localIDs for non-conflict bulkInsert errors so we
+		// can exclude them from wpUser.stores — otherwise a 422/write failure would
+		// leave wpUser pointing at a missing store doc and StoreSelect would
+		// silently drop it.
+		const failedDocIds = new Set<string>();
 		if (remoteStoresWithLocalID.length > 0) {
 			const bulkResult: any = await userDB.stores.bulkInsert(remoteStoresWithLocalID);
 			if (bulkResult?.error?.length) {
@@ -131,6 +136,9 @@ export async function mergeStoresWithResponse({
 						conflicts.push(err);
 					} else {
 						failures.push(err);
+						if (err?.documentId) {
+							failedDocIds.add(err.documentId);
+						}
 					}
 				}
 
@@ -205,8 +213,11 @@ export async function mergeStoresWithResponse({
 			});
 		}
 
-		// Update wpUser.stores with the new array of localIDs
-		const newStoreLocalIDs = remoteStoresWithLocalID.map((store) => store.localID);
+		// Update wpUser.stores with the new array of localIDs, excluding any docs
+		// that failed to persist above.
+		const newStoreLocalIDs = remoteStoresWithLocalID
+			.map((store) => store.localID)
+			.filter((localID) => !failedDocIds.has(localID));
 		appLogger.debug('[stores] about to patch wpUser.stores', {
 			context: {
 				wpUserUuid: wpUser.uuid,
