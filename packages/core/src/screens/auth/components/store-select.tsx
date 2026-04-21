@@ -15,10 +15,12 @@ import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { useT } from '../../../contexts/translations';
+import { useUserValidation } from '../../../hooks/use-user-validation';
 
 const storeLogger = getLogger(['wcpos', 'auth', 'stores']);
 
 interface StoreSelectProps {
+	site: import('@wcpos/database').SiteDocument;
 	wpUser: WPCredentialsDocument;
 	selectedStoreId: string | null;
 	onStoreSelect: (storeId: string | null) => void;
@@ -29,9 +31,16 @@ interface StoreSelectProps {
  * Store selection and login button — separated because it uses Suspense
  * to resolve the stores population from the selected user.
  */
-export function StoreSelect({ wpUser, selectedStoreId, onStoreSelect, onLogin }: StoreSelectProps) {
+export function StoreSelect({
+	site,
+	wpUser,
+	selectedStoreId,
+	onStoreSelect,
+	onLogin,
+}: StoreSelectProps) {
 	const t = useT();
 	const [stores, setStores] = React.useState<StoreDocument[]>([]);
+	const { isValid, isLoading: isValidating } = useUserValidation({ site, wpUser });
 
 	// Resolve stores reactively by combining wpUser.stores$ (the localID array)
 	// with a reactive query on the stores collection. The populate$ plugin uses
@@ -40,6 +49,10 @@ export function StoreSelect({ wpUser, selectedStoreId, onStoreSelect, onLogin }:
 	// parent (e.g. stale pointer from prior session → cashier re-creates doc
 	// with same hash, parent ids never change, populate$ never re-emits).
 	React.useEffect(() => {
+		// Clear previously-resolved stores synchronously so we don't briefly
+		// render the prior user's list while the new subscription spins up.
+		setStores([]);
+
 		const wpUserAny = wpUser as unknown as {
 			collection: { database: { stores: any } };
 			get$: (key: string) => import('rxjs').Observable<any>;
@@ -106,7 +119,11 @@ export function StoreSelect({ wpUser, selectedStoreId, onStoreSelect, onLogin }:
 		}
 	}, [stores, selectedStoreId, onStoreSelect]);
 
-	const canLogin = stores.length > 0 && !!selectedStoreId;
+	// Gate login on a validated user — an expired/invalid cashier session should
+	// not be allowed to enter the POS with stale credentials. `isValid` starts
+	// optimistic (true) and flips false only once validation finishes reporting
+	// a failure, so we also block while validation is still in flight.
+	const canLogin = stores.length > 0 && !!selectedStoreId && isValid && !isValidating;
 
 	return (
 		<VStack space="md">

@@ -79,6 +79,7 @@ export function WPUsers({ site }: WpUsersProps) {
 				<ErrorBoundary>
 					<Suspense>
 						<StoreSelect
+							site={site}
 							wpUser={selectedUser}
 							selectedStoreId={selectedStoreId}
 							onStoreSelect={setSelectedStoreId}
