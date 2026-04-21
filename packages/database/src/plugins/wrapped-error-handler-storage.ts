@@ -52,8 +52,15 @@ function handleStorageError(methodName: string, error: unknown): boolean {
 		return true;
 	}
 
-	// JSON parse errors -- corrupted data in SQLite
-	if (error instanceof SyntaxError && message.includes('is not valid JSON')) {
+	// JSON parse errors -- corrupted data in SQLite.
+	// Name check (not instanceof) because errors originating in Web Workers or
+	// other realms have a different SyntaxError constructor and would miss.
+	if (
+		error != null &&
+		typeof error === 'object' &&
+		(error as { name?: string }).name === 'SyntaxError' &&
+		message.includes('is not valid JSON')
+	) {
 		storageLogger.error(`Corrupted JSON in storage for ${methodName}: ${message}`, {
 			showToast: true,
 			saveToDb: true,
