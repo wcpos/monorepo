@@ -136,8 +136,14 @@ export async function mergeStoresWithResponse({
 						conflicts.push(err);
 					} else {
 						failures.push(err);
-						if (err?.documentId) {
-							failedDocIds.add(err.documentId);
+						// Errors usually carry `documentId`, but some failure modes (e.g.
+						// storage-level errors thrown before the doc id is attached) only
+						// expose the raw doc via `err.document.localID`. Fall back so we
+						// never leave wpUser.stores pointing at an unpersisted id.
+						const failedId: string | undefined =
+							err?.documentId ?? err?.document?.localID ?? err?.id;
+						if (failedId) {
+							failedDocIds.add(failedId);
 						}
 					}
 				}
