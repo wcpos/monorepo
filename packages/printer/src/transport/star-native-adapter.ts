@@ -105,6 +105,11 @@ export class StarNativeAdapter implements PrinterTransport {
 			this._nativeInterfaceType
 		);
 		settings.interfaceType = resolvedInterfaceType;
+		// Enable settings.autoSwitchInterface when resolvedInterfaceType is
+		// InterfaceType.BluetoothLE, or as a legacy fallback when
+		// this._nativeInterfaceType was not preserved and
+		// this._connectionType === 'bluetooth', so older profiles/discovery
+		// records can still switch onto BLE-capable transports.
 		settings.autoSwitchInterface =
 			resolvedInterfaceType === InterfaceType.BluetoothLE ||
 			(!this._nativeInterfaceType && this._connectionType === 'bluetooth');
