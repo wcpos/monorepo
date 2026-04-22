@@ -80,7 +80,6 @@ export function EmailForm({ order }: Props) {
 	 *
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
-		// @ts-expect-error: zodResolver return type doesn't perfectly match useForm's Resolver generic
 		resolver: zodResolver(formSchema),
 		defaultValues: {
 			email: defaultEmail,
