@@ -80,7 +80,7 @@ export function EmailForm({ order }: Props) {
 	 *
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
+		resolver: zodResolver(formSchema as never) as never,
 		defaultValues: {
 			email: defaultEmail,
 			saveEmail: false,
