@@ -22,6 +22,17 @@ jobs:
       group: bump-submodules-main
       cancel-in-progress: false
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v2
+        with:
+          app-id: ${{ secrets.WCPOS_BOT_APP_ID }}
+          private-key: ${{ secrets.WCPOS_BOT_PRIVATE_KEY }}
+          owner: wcpos
+          repositories: |
+            monorepo
+            wiki
+
       - name: Checkout monorepo (with submodules)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -29,10 +40,9 @@ jobs:
           ref: refs/heads/main
           submodules: true
           fetch-depth: 0
-          # Default token is fine for pushing a chore commit. If branch
-          # protection blocks direct pushes to main, swap in a GitHub App
-          # token with bypass rights (see update-translations.yml).
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # .wiki is a private submodule in the same org; the default
+          # GITHUB_TOKEN is scoped to the current repository only.
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Update submodules to latest remote main
         id: bump
