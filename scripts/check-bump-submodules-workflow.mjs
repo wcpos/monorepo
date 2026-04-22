@@ -8,6 +8,18 @@ const checks = [
     pattern: /uses:\s*actions\/create-github-app-token@/m,
   },
   {
+    description: 'targets the wcpos owner',
+    pattern: /owner:\s*wcpos/m,
+  },
+  {
+    description: 'scopes token to monorepo repository',
+    pattern: /repositories:\s*\|[\s\S]*?\n\s*monorepo\s*$/m,
+  },
+  {
+    description: 'scopes token to wiki repository',
+    pattern: /repositories:\s*\|[\s\S]*?\n\s*wiki\s*$/m,
+  },
+  {
     description: 'uses the WCPOS bot app id secret',
     pattern: /app-id:\s*\$\{\{\s*secrets\.WCPOS_BOT_APP_ID\s*\}\}/m,
   },
