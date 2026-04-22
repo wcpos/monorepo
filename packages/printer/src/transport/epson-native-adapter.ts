@@ -1,5 +1,22 @@
 import type { PrinterTransport } from '../types';
 
+type NativeConnectionType = 'network' | 'bluetooth' | 'usb';
+
+function toEpsonTarget(address: string, connectionType: NativeConnectionType): string {
+	if (/^[A-Z]+:/i.test(address)) {
+		return address;
+	}
+
+	switch (connectionType) {
+		case 'network':
+			return `TCP:${address}`;
+		case 'bluetooth':
+			return `BT:${address}`;
+		case 'usb':
+			return `USB:${address}`;
+	}
+}
+
 /**
  * Epson native SDK adapter.
  * Uses react-native-esc-pos-printer for direct communication with Epson TM printers.
@@ -21,39 +38,64 @@ import type { PrinterTransport } from '../types';
  * works fine with Epson printers on port 9100.
  */
 export class EpsonNativeAdapter implements PrinterTransport {
-  readonly name = 'epson-native';
+	readonly name = 'epson-native';
+	private _printer: {
+		connect: (timeout?: number) => Promise<void>;
+		disconnect: () => Promise<void>;
+		addCommand: (data: Uint8Array) => Promise<void>;
+		sendData: (timeout?: number) => Promise<unknown>;
+	} | null = null;
 
-  constructor(
-    private _target: string, // Epson device target string from discovery
-  ) {}
+	constructor(
+		private _address: string,
+		private _connectionType: NativeConnectionType
+	) {}
 
-  async printRaw(_data: Uint8Array): Promise<void> {
-    // TODO: Implement when react-native-esc-pos-printer is installed
-    //
-    // import { Printer } from 'react-native-esc-pos-printer';
-    // const printer = new Printer({ target: this._target });
-    // await printer.connect();
-    // await printer.addCommand(Buffer.from(_data));
-    // await printer.send();
-    // await printer.disconnect();
-    throw new Error(
-      'Epson native printing requires react-native-esc-pos-printer. ' +
-        'Install the package and rebuild the dev client.',
-    );
-  }
+	private async getPrinter() {
+		if (this._printer) {
+			return this._printer;
+		}
 
-  async printHtml(_html: string): Promise<void> {
-    throw new Error(
-      'EpsonNativeAdapter does not support HTML printing. ' +
-        'Use SystemPrintAdapter for HTML output.',
-    );
-  }
+		const { Printer } = await import('react-native-esc-pos-printer');
 
-  async disconnect(): Promise<void> {
-    // TODO: Disconnect from Epson printer
-    //
-    // import { Printer } from 'react-native-esc-pos-printer';
-    // const printer = new Printer({ target: this._target });
-    // await printer.disconnect();
-  }
+		this._printer = new Printer({
+			target: toEpsonTarget(this._address, this._connectionType),
+			deviceName: 'WCPOS Epson Printer',
+		});
+
+		return this._printer;
+	}
+
+	async printRaw(data: Uint8Array): Promise<void> {
+		const printer = await this.getPrinter();
+
+		try {
+			await printer.connect();
+			await printer.addCommand(data);
+			await printer.sendData();
+		} finally {
+			await this.disconnect();
+		}
+	}
+
+	async printHtml(_html: string): Promise<void> {
+		throw new Error(
+			'EpsonNativeAdapter does not support HTML printing. ' +
+				'Use SystemPrintAdapter for HTML output.'
+		);
+	}
+
+	async disconnect(): Promise<void> {
+		if (!this._printer) {
+			return;
+		}
+
+		try {
+			await this._printer.disconnect();
+		} finally {
+			this._printer = null;
+		}
+	}
 }
+
+export { toEpsonTarget };

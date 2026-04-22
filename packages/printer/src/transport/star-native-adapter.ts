@@ -1,4 +1,39 @@
+import type { InterfaceType as StarInterfaceType } from 'react-native-star-io10';
 import type { PrinterTransport } from '../types';
+
+type NativeConnectionType = 'network' | 'bluetooth' | 'usb';
+
+type StarPrinterLike = {
+	open: () => Promise<void>;
+	printRawData: (data: number[]) => Promise<void>;
+	close: () => Promise<void>;
+	dispose?: () => Promise<void>;
+};
+
+function resolveStarInterfaceType(
+	interfaceType: {
+		Lan: StarInterfaceType;
+		Bluetooth: StarInterfaceType;
+		BluetoothLE?: StarInterfaceType;
+		Usb: StarInterfaceType;
+	},
+	connectionType: NativeConnectionType,
+	identifier: string
+): StarInterfaceType {
+	if (connectionType === 'network') {
+		return interfaceType.Lan;
+	}
+
+	if (connectionType === 'usb') {
+		return interfaceType.Usb;
+	}
+
+	if (/ble/i.test(identifier) && interfaceType.BluetoothLE) {
+		return interfaceType.BluetoothLE;
+	}
+
+	return interfaceType.Bluetooth;
+}
 
 /**
  * Star Micronics native SDK adapter.
@@ -21,50 +56,65 @@ import type { PrinterTransport } from '../types';
  * works fine with Star printers on port 9100.
  */
 export class StarNativeAdapter implements PrinterTransport {
-  readonly name = 'star-native';
+	readonly name = 'star-native';
+	private _printer: StarPrinterLike | null = null;
 
-  constructor(
-    private _connectionSettings: string, // Star connection identifier from discovery
-  ) {}
+	constructor(
+		private _identifier: string,
+		private _connectionType: NativeConnectionType
+	) {}
 
-  async printRaw(_data: Uint8Array): Promise<void> {
-    // TODO: Implement when react-native-star-io10 is installed
-    //
-    // import {
-    //   StarPrinter,
-    //   StarConnectionSettings,
-    //   InterfaceType,
-    // } from 'react-native-star-io10';
-    //
-    // const settings = new StarConnectionSettings();
-    // settings.identifier = this._connectionSettings;
-    // settings.interfaceType = InterfaceType.Lan; // or Bluetooth, Usb, etc.
-    //
-    // const printer = new StarPrinter(settings);
-    // await printer.open();
-    // await printer.print(_data);
-    // await printer.close();
-    throw new Error(
-      'Star native printing requires react-native-star-io10. ' +
-        'Install the package and rebuild the dev client.',
-    );
-  }
+	private async getPrinter(): Promise<StarPrinterLike> {
+		if (this._printer) {
+			return this._printer;
+		}
 
-  async printHtml(_html: string): Promise<void> {
-    throw new Error(
-      'StarNativeAdapter does not support HTML printing. ' +
-        'Use SystemPrintAdapter for HTML output.',
-    );
-  }
+		const { StarPrinter, StarConnectionSettings, InterfaceType } =
+			await import('react-native-star-io10');
 
-  async disconnect(): Promise<void> {
-    // TODO: Close Star printer connection
-    //
-    // import { StarPrinter, StarConnectionSettings } from 'react-native-star-io10';
-    // const settings = new StarConnectionSettings();
-    // settings.identifier = this._connectionSettings;
-    // const printer = new StarPrinter(settings);
-    // await printer.close();
-    // await printer.dispose();
-  }
+		const settings = new StarConnectionSettings();
+		settings.identifier = this._identifier;
+		settings.interfaceType = resolveStarInterfaceType(
+			InterfaceType,
+			this._connectionType,
+			this._identifier
+		);
+		settings.autoSwitchInterface = this._connectionType === 'bluetooth';
+
+		this._printer = new StarPrinter(settings) as StarPrinterLike;
+		return this._printer;
+	}
+
+	async printRaw(data: Uint8Array): Promise<void> {
+		const printer = await this.getPrinter();
+
+		try {
+			await printer.open();
+			await printer.printRawData(Array.from(data));
+		} finally {
+			await this.disconnect();
+		}
+	}
+
+	async printHtml(_html: string): Promise<void> {
+		throw new Error(
+			'StarNativeAdapter does not support HTML printing. ' +
+				'Use SystemPrintAdapter for HTML output.'
+		);
+	}
+
+	async disconnect(): Promise<void> {
+		if (!this._printer) {
+			return;
+		}
+
+		try {
+			await this._printer.close();
+			await this._printer.dispose?.();
+		} finally {
+			this._printer = null;
+		}
+	}
 }
+
+export { resolveStarInterfaceType };

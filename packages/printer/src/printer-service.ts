@@ -54,6 +54,28 @@ export class PrinterService {
 				transport = new NetworkAdapter(profile.address, profile.port, profile.vendor);
 				break;
 			}
+			case 'bluetooth':
+			case 'usb': {
+				if (!profile.address) {
+					throw new Error(`Native printer profile is missing an address for ${profile.name}`);
+				}
+
+				if (profile.vendor === 'epson') {
+					const { EpsonNativeAdapter } = await import('./transport/epson-native-adapter');
+					transport = new EpsonNativeAdapter(profile.address, profile.connectionType);
+					break;
+				}
+
+				if (profile.vendor === 'star') {
+					const { StarNativeAdapter } = await import('./transport/star-native-adapter');
+					transport = new StarNativeAdapter(profile.address, profile.connectionType);
+					break;
+				}
+
+				throw new Error(
+					`Unsupported native printer vendor for ${profile.connectionType}: ${profile.vendor}`
+				);
+			}
 			case 'system':
 				transport = new SystemPrintAdapter();
 				break;
