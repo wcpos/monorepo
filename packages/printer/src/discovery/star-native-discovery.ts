@@ -1,5 +1,40 @@
 import type { DiscoveredPrinter } from '../types';
 
+interface StarDiscoveryPrinter {
+	connectionSettings?: {
+		identifier?: string;
+		interfaceType?: string;
+	};
+	information?: {
+		model?: {
+			identifier?: string;
+		};
+	};
+}
+
+export function mapStarDiscoveryPrinter(printer: StarDiscoveryPrinter): DiscoveredPrinter {
+	const identifier = printer.connectionSettings?.identifier ?? '';
+	const interfaceType = printer.connectionSettings?.interfaceType ?? '';
+	const model = printer.information?.model?.identifier ?? 'Star Printer';
+
+	const normalizedInterfaceType = interfaceType.toLowerCase();
+	const connectionType = normalizedInterfaceType.includes('usb')
+		? ('usb' as const)
+		: normalizedInterfaceType.includes('bluetooth')
+			? ('bluetooth' as const)
+			: ('network' as const);
+
+	return {
+		id: `star-${identifier}`,
+		name: model,
+		connectionType,
+		address: identifier,
+		port: connectionType === 'network' ? 9100 : undefined,
+		vendor: 'star',
+		nativeInterfaceType: interfaceType || undefined,
+	};
+}
+
 /**
  * Discover Star printers using the react-native-star-io10 SDK.
  *
@@ -11,7 +46,12 @@ export async function discover(): Promise<DiscoveredPrinter[]> {
 	const { StarDeviceDiscoveryManagerFactory, InterfaceType } =
 		await import('react-native-star-io10');
 
-	const manager = await StarDeviceDiscoveryManagerFactory.create([InterfaceType.Lan]);
+	const manager = await StarDeviceDiscoveryManagerFactory.create([
+		InterfaceType.Lan,
+		InterfaceType.Bluetooth,
+		InterfaceType.BluetoothLE,
+		InterfaceType.Usb,
+	]);
 
 	const printers: DiscoveredPrinter[] = [];
 
@@ -19,21 +59,10 @@ export async function discover(): Promise<DiscoveredPrinter[]> {
 		manager.discoveryTime = 10_000;
 
 		manager.onPrinterFound = (printer: any) => {
-			const identifier = printer.connectionSettings?.identifier ?? '';
-			const interfaceType = printer.connectionSettings?.interfaceType ?? '';
-			const model = printer.information?.model?.identifier ?? 'Star Printer';
-
-			const connectionType =
-				interfaceType === 'Bluetooth' ? ('bluetooth' as const) : ('network' as const);
-
-			printers.push({
-				id: `star-${identifier}`,
-				name: model,
-				connectionType,
-				address: identifier,
-				port: connectionType === 'network' ? 9100 : undefined,
-				vendor: 'star',
-			});
+			const discoveredPrinter = mapStarDiscoveryPrinter(printer);
+			if (!printers.some((existing) => existing.id === discoveredPrinter.id)) {
+				printers.push(discoveredPrinter);
+			}
 		};
 
 		manager.onDiscoveryFinished = () => {

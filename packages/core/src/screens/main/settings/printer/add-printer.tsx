@@ -27,6 +27,7 @@ import type { PrinterProfile } from '@wcpos/printer';
 
 import { LanguageSelect } from './components/language-select';
 import { PaperWidthSelect } from './components/paper-width-select';
+import { buildPrinterProfileFields, type PrinterDialogPrefill } from './profile-config';
 import { VendorSelect } from './components/vendor-select';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -86,12 +87,7 @@ interface PrinterDialogProps {
 	printer?: PrinterProfile;
 	printerCount?: number;
 	/** Pre-fill from a discovered printer (for adding, not editing) */
-	prefill?: {
-		name?: string;
-		address?: string;
-		port?: number;
-		vendor?: 'epson' | 'star' | 'generic';
-	};
+	prefill?: PrinterDialogPrefill;
 }
 
 export function PrinterDialog({
@@ -234,22 +230,22 @@ export function PrinterDialog({
 	 * Build a temporary PrinterProfile from the current form values.
 	 */
 	const buildProfile = React.useCallback(
-		(data: PrinterFormData): PrinterProfile => ({
-			id: printer?.id ?? 'test-' + Date.now(),
-			name: data.name || 'Test',
-			connectionType: 'network',
-			vendor: data.vendor,
-			address: data.address,
-			port: data.port,
-			language: data.language,
-			columns: data.columns,
-			autoPrint: data.autoPrint,
-			autoCut: data.autoCut,
-			autoOpenDrawer: data.autoOpenDrawer,
-			isDefault: data.isDefault,
-			isBuiltIn: false,
-		}),
-		[printer?.id]
+		(data: PrinterFormData): PrinterProfile => {
+			const fields = buildPrinterProfileFields(
+				{
+					...data,
+					name: data.name || 'Test',
+				},
+				{ printer, prefill }
+			);
+
+			return {
+				id: printer?.id ?? 'test-' + Date.now(),
+				...fields,
+				isBuiltIn: printer?.isBuiltIn ?? false,
+			};
+		},
+		[printer, prefill]
 	);
 
 	/**
@@ -293,19 +289,7 @@ export function PrinterDialog({
 				}
 			}
 
-			const profileData = {
-				name: data.name,
-				connectionType: 'network' as const,
-				vendor: data.vendor,
-				address: data.address || '',
-				port: data.port,
-				language: data.language,
-				columns: data.columns,
-				autoPrint: data.autoPrint,
-				autoCut: data.autoCut,
-				autoOpenDrawer: data.autoOpenDrawer,
-				isDefault: data.isDefault,
-			};
+			const profileData = buildPrinterProfileFields(data, { printer, prefill });
 
 			if (printer) {
 				const doc = await collection.findOne(printer.id).exec();
@@ -316,7 +300,7 @@ export function PrinterDialog({
 				await collection.insert({ id: uuidv4(), ...profileData });
 			}
 		},
-		[storeDB, printer]
+		[storeDB, printer, prefill]
 	);
 
 	/**

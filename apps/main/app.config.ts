@@ -4,10 +4,18 @@ import packageJson from './package.json';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
 	const easProfile = process.env.EAS_BUILD_PROFILE ?? 'production';
+	const iosInfoPlist = config.ios?.infoPlist ?? {};
+	const bonjourServices = Array.isArray(iosInfoPlist.NSBonjourServices)
+		? iosInfoPlist.NSBonjourServices
+		: [];
+	const externalAccessoryProtocols = Array.isArray(
+		iosInfoPlist.UISupportedExternalAccessoryProtocols
+	)
+		? iosInfoPlist.UISupportedExternalAccessoryProtocols
+		: [];
 
 	const isDev = easProfile === 'development';
 	const isAdhoc = easProfile === 'adhoc';
-	const isProd = easProfile === 'production';
 
 	// Set env var for web builds (used by @wcpos/utils/app-info)
 	process.env.EXPO_PUBLIC_APP_VERSION = packageJson.version;
@@ -40,13 +48,22 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 					: 'com.wcpos.main',
 			buildNumber: '1',
 			infoPlist: {
-				...config.ios?.infoPlist,
+				...iosInfoPlist,
 				ITSAppUsesNonExemptEncryption: false,
+				NSBluetoothAlwaysUsageDescription:
+					iosInfoPlist.NSBluetoothAlwaysUsageDescription ??
+					'WCPOS uses Bluetooth to discover and connect to supported receipt printers.',
 				// Local network access for printer discovery
 				NSLocalNetworkUsageDescription:
+					iosInfoPlist.NSLocalNetworkUsageDescription ??
 					'WCPOS needs local network access to discover and connect to receipt printers.',
 				// Bonjour services for printer discovery
-				NSBonjourServices: ['_ipp._tcp', '_ipps._tcp', '_pdl-datastream._tcp'],
+				NSBonjourServices: Array.from(
+					new Set([...bonjourServices, '_ipp._tcp', '_ipps._tcp', '_pdl-datastream._tcp'])
+				),
+				UISupportedExternalAccessoryProtocols: Array.from(
+					new Set([...externalAccessoryProtocols, 'jp.star-m.starpro', 'com.epson.escpos'])
+				),
 			},
 		},
 
@@ -63,8 +80,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 					...(config.android?.permissions ?? []),
 					'android.permission.ACCESS_COARSE_LOCATION',
 					'android.permission.ACCESS_FINE_LOCATION',
+					'android.permission.BLUETOOTH',
+					'android.permission.BLUETOOTH_ADMIN',
 					'android.permission.BLUETOOTH_CONNECT',
 					'android.permission.BLUETOOTH_SCAN',
+					'android.permission.INTERNET',
 				]),
 			],
 		},
@@ -76,6 +96,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 		},
 
 		plugins: [
+			'./plugins/with-printer-support',
 			[
 				'expo-router',
 				{

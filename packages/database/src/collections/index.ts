@@ -546,6 +546,10 @@ const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 			oldDoc.isBuiltIn = false;
 			return oldDoc;
 		},
+		2(oldDoc) {
+			// v2: Added nativeInterfaceType for vendor-native transports
+			return oldDoc;
+		},
 	},
 };
 

@@ -12,7 +12,7 @@ import type { PrinterProfile, PrinterTransport } from './types';
 
 /** Cache key that captures config-relevant fields so stale transports are evicted. */
 function transportKey(profile: PrinterProfile): string {
-	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}`;
+	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}:${profile.nativeInterfaceType ?? ''}`;
 }
 
 export class PrinterService {
@@ -53,6 +53,32 @@ export class PrinterService {
 				const { NetworkAdapter } = await import('./transport/network-adapter');
 				transport = new NetworkAdapter(profile.address, profile.port, profile.vendor);
 				break;
+			}
+			case 'bluetooth':
+			case 'usb': {
+				if (!profile.address) {
+					throw new Error(`Native printer profile is missing an address for ${profile.name}`);
+				}
+
+				if (profile.vendor === 'epson') {
+					const { EpsonNativeAdapter } = await import('./transport/epson-native-adapter');
+					transport = new EpsonNativeAdapter(profile.address, profile.connectionType);
+					break;
+				}
+
+				if (profile.vendor === 'star') {
+					const { StarNativeAdapter } = await import('./transport/star-native-adapter');
+					transport = new StarNativeAdapter(
+						profile.address,
+						profile.connectionType,
+						profile.nativeInterfaceType
+					);
+					break;
+				}
+
+				throw new Error(
+					`Unsupported native printer vendor for ${profile.connectionType}: ${profile.vendor}`
+				);
 			}
 			case 'system':
 				transport = new SystemPrintAdapter();
