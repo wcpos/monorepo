@@ -11,6 +11,8 @@
 			"@wcpos/database": ["packages/database/src/index"],
 			"@wcpos/database/*": ["packages/database/src/*"],
 			"@wcpos/hooks/*": ["packages/hooks/src/*"],
+			"@wcpos/printer": ["packages/printer/src/index"],
+			"@wcpos/printer/*": ["packages/printer/src/*"],
 			"@wcpos/query": ["packages/query/src/index"],
 			"@wcpos/query/*": ["packages/query/src/*"],
 			"@wcpos/utils/*": ["packages/utils/src/*"],

@@ -12,7 +12,7 @@ import type { PrinterProfile, PrinterTransport } from './types';
 
 /** Cache key that captures config-relevant fields so stale transports are evicted. */
 function transportKey(profile: PrinterProfile): string {
-	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}`;
+	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}:${profile.nativeInterfaceType ?? ''}`;
 }
 
 export class PrinterService {
@@ -68,7 +68,11 @@ export class PrinterService {
 
 				if (profile.vendor === 'star') {
 					const { StarNativeAdapter } = await import('./transport/star-native-adapter');
-					transport = new StarNativeAdapter(profile.address, profile.connectionType);
+					transport = new StarNativeAdapter(
+						profile.address,
+						profile.connectionType,
+						profile.nativeInterfaceType
+					);
 					break;
 				}
 

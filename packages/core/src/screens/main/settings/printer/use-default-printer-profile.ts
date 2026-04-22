@@ -19,6 +19,7 @@ export function toPrinterProfile(doc: PrinterProfileDocument): PrinterProfile {
 		vendor: (doc.vendor ?? 'generic') as PrinterProfile['vendor'],
 		address: doc.address,
 		port: doc.port ?? 9100,
+		nativeInterfaceType: doc.nativeInterfaceType,
 		language: (doc.language ?? 'esc-pos') as PrinterProfile['language'],
 		columns: doc.columns ?? 48,
 		autoPrint: doc.autoPrint ?? false,

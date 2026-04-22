@@ -37,6 +37,8 @@ export interface DiscoveredPrinter {
 	address: string;
 	port?: number;
 	vendor?: 'epson' | 'star' | 'generic';
+	/** Vendor-native interface hint (for example Star BluetoothLE vs Bluetooth). */
+	nativeInterfaceType?: string;
 }
 
 /**
@@ -49,6 +51,8 @@ export interface PrinterProfile {
 	vendor: 'epson' | 'star' | 'generic';
 	address?: string;
 	port: number;
+	/** Persisted vendor-native interface hint used by native adapters. */
+	nativeInterfaceType?: string;
 	printerModel?: string;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns: number;

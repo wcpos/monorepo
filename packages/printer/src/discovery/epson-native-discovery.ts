@@ -36,8 +36,12 @@ export function mapEpsonDiscoveryDevice(device: EpsonDiscoveryDevice): Discovere
 		};
 	}
 
+	const bluetoothId = device.bdAddress
+		? `epson-bt:${device.bdAddress.toLowerCase()}`
+		: `epson-${normalizedTarget.toLowerCase()}`;
+
 	return {
-		id: `epson-${normalizedTarget.toLowerCase()}`,
+		id: bluetoothId,
 		name: device.deviceName || `Epson (${device.bdAddress || normalizedTarget})`,
 		connectionType: 'bluetooth',
 		address: normalizedTarget,

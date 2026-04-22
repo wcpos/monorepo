@@ -31,6 +31,7 @@ export function mapStarDiscoveryPrinter(printer: StarDiscoveryPrinter): Discover
 		address: identifier,
 		port: connectionType === 'network' ? 9100 : undefined,
 		vendor: 'star',
+		nativeInterfaceType: interfaceType || undefined,
 	};
 }
 

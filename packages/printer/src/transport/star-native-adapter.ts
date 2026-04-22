@@ -10,6 +10,10 @@ type StarPrinterLike = {
 	dispose?: () => Promise<void>;
 };
 
+function normalizeStarInterfaceType(interfaceType?: string): string | undefined {
+	return interfaceType?.toLowerCase().replace(/[^a-z]/g, '');
+}
+
 function resolveStarInterfaceType(
 	interfaceType: {
 		Lan: StarInterfaceType;
@@ -18,8 +22,27 @@ function resolveStarInterfaceType(
 		Usb: StarInterfaceType;
 	},
 	connectionType: NativeConnectionType,
-	identifier: string
+	identifier: string,
+	preservedInterfaceType?: string
 ): StarInterfaceType {
+	const normalizedInterfaceType = normalizeStarInterfaceType(preservedInterfaceType);
+
+	if (normalizedInterfaceType === 'lan') {
+		return interfaceType.Lan;
+	}
+
+	if (normalizedInterfaceType === 'usb') {
+		return interfaceType.Usb;
+	}
+
+	if (normalizedInterfaceType === 'bluetoothle' && interfaceType.BluetoothLE) {
+		return interfaceType.BluetoothLE;
+	}
+
+	if (normalizedInterfaceType === 'bluetooth') {
+		return interfaceType.Bluetooth;
+	}
+
 	if (connectionType === 'network') {
 		return interfaceType.Lan;
 	}
@@ -61,7 +84,8 @@ export class StarNativeAdapter implements PrinterTransport {
 
 	constructor(
 		private _identifier: string,
-		private _connectionType: NativeConnectionType
+		private _connectionType: NativeConnectionType,
+		private _nativeInterfaceType?: string
 	) {}
 
 	private async getPrinter(): Promise<StarPrinterLike> {
@@ -74,12 +98,16 @@ export class StarNativeAdapter implements PrinterTransport {
 
 		const settings = new StarConnectionSettings();
 		settings.identifier = this._identifier;
-		settings.interfaceType = resolveStarInterfaceType(
+		const resolvedInterfaceType = resolveStarInterfaceType(
 			InterfaceType,
 			this._connectionType,
-			this._identifier
+			this._identifier,
+			this._nativeInterfaceType
 		);
-		settings.autoSwitchInterface = this._connectionType === 'bluetooth';
+		settings.interfaceType = resolvedInterfaceType;
+		settings.autoSwitchInterface =
+			resolvedInterfaceType === InterfaceType.BluetoothLE ||
+			(!this._nativeInterfaceType && this._connectionType === 'bluetooth');
 
 		this._printer = new StarPrinter(settings) as StarPrinterLike;
 		return this._printer;

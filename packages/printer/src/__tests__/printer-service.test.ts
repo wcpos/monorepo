@@ -14,6 +14,11 @@ const { epsonNativePrintRawMock, starNativePrintRawMock } = vi.hoisted(() => ({
 	starNativePrintRawMock: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { epsonNativeCtorMock, starNativeCtorMock } = vi.hoisted(() => ({
+	epsonNativeCtorMock: vi.fn(),
+	starNativeCtorMock: vi.fn(),
+}));
+
 vi.mock('../encoder/encode-receipt', () => ({
 	encodeReceipt: encodeReceiptMock,
 }));
@@ -27,17 +32,27 @@ vi.mock('../transport/system-print-adapter', () => ({
 
 vi.mock('../transport/epson-native-adapter', () => ({
 	EpsonNativeAdapter: class {
+		constructor(...args: any[]) {
+			epsonNativeCtorMock(...args);
+		}
+
 		name = 'epson-native';
 		printRaw = epsonNativePrintRawMock;
 		printHtml = vi.fn().mockResolvedValue(undefined);
+		disconnect = vi.fn().mockResolvedValue(undefined);
 	},
 }));
 
 vi.mock('../transport/star-native-adapter', () => ({
 	StarNativeAdapter: class {
+		constructor(...args: any[]) {
+			starNativeCtorMock(...args);
+		}
+
 		name = 'star-native';
 		printRaw = starNativePrintRawMock;
 		printHtml = vi.fn().mockResolvedValue(undefined);
+		disconnect = vi.fn().mockResolvedValue(undefined);
 	},
 }));
 
@@ -46,6 +61,8 @@ describe('PrinterService', () => {
 		encodeReceiptMock.mockClear();
 		epsonNativePrintRawMock.mockClear();
 		starNativePrintRawMock.mockClear();
+		epsonNativeCtorMock.mockClear();
+		starNativeCtorMock.mockClear();
 	});
 
 	it('forwards decimals to encodeReceipt for default thermal printing', async () => {
@@ -131,5 +148,33 @@ describe('PrinterService', () => {
 
 		expect(starNativePrintRawMock).toHaveBeenCalledWith(new Uint8Array([0x1b, 0x40]));
 		expect(epsonNativePrintRawMock).not.toHaveBeenCalled();
+	});
+
+	it('passes preserved Star native interface types into the native adapter', async () => {
+		const service = new PrinterService();
+		const profile = {
+			id: 'star-ble-1',
+			name: 'Star BLE',
+			connectionType: 'bluetooth',
+			vendor: 'star',
+			address: '01:23:45:67:89:AB',
+			port: 9100,
+			language: 'star-prnt',
+			columns: 48,
+			autoPrint: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			isDefault: false,
+			isBuiltIn: false,
+			nativeInterfaceType: 'BluetoothLE',
+		} as PrinterProfile & { nativeInterfaceType: string };
+
+		await service.printRaw(new Uint8Array([0x1b, 0x40]), profile);
+
+		expect(starNativeCtorMock).toHaveBeenCalledWith(
+			'01:23:45:67:89:AB',
+			'bluetooth',
+			'BluetoothLE'
+		);
 	});
 });

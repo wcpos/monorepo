@@ -37,6 +37,7 @@ vi.mock('react-native-star-io10', () => ({
 	InterfaceType: {
 		Lan: 'Lan',
 		Bluetooth: 'Bluetooth',
+		BluetoothLE: 'BluetoothLE',
 		Usb: 'Usb',
 	},
 	StarConnectionSettings: StarConnectionSettingsMock,
@@ -96,6 +97,17 @@ describe('native printer adapters', () => {
 		expect(epsonDisconnectMock).toHaveBeenCalled();
 	});
 
+	it('EpsonNativeAdapter prefixes raw Bluetooth MAC addresses with BT', async () => {
+		const adapter = new EpsonNativeAdapter('AB:CD:EF:12:34:56', 'bluetooth');
+
+		await adapter.printRaw(new Uint8Array([0x1b, 0x40, 0x0a]));
+
+		expect(PrinterMock).toHaveBeenCalledWith({
+			target: 'BT:AB:CD:EF:12:34:56',
+			deviceName: 'WCPOS Epson Printer',
+		});
+	});
+
 	it('StarNativeAdapter opens the Star printer and sends raw byte arrays', async () => {
 		const adapter = new StarNativeAdapter('star-printer.local', 'network');
 
@@ -107,5 +119,15 @@ describe('native printer adapters', () => {
 		expect(starPrintRawDataMock).toHaveBeenCalledWith([0x1b, 0x40]);
 		expect(starCloseMock).toHaveBeenCalled();
 		expect(starDisposeMock).toHaveBeenCalled();
+	});
+
+	it('StarNativeAdapter preserves discovered BluetoothLE interface types', async () => {
+		const adapter = new (StarNativeAdapter as any)('01:23:45:67:89:AB', 'bluetooth', 'BluetoothLE');
+
+		await adapter.printRaw(new Uint8Array([0x1b, 0x40]));
+
+		expect(StarPrinterMock).toHaveBeenCalled();
+		expect(StarPrinterMock.mock.calls[0]?.[0]?.interfaceType).toBe('BluetoothLE');
+		expect(StarPrinterMock.mock.calls[0]?.[0]?.autoSwitchInterface).toBe(true);
 	});
 });

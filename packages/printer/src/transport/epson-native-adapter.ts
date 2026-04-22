@@ -3,7 +3,7 @@ import type { PrinterTransport } from '../types';
 type NativeConnectionType = 'network' | 'bluetooth' | 'usb';
 
 function toEpsonTarget(address: string, connectionType: NativeConnectionType): string {
-	if (/^[A-Z]+:/i.test(address)) {
+	if (/^(TCP|BT|USB):/i.test(address)) {
 		return address;
 	}
 
@@ -14,6 +14,10 @@ function toEpsonTarget(address: string, connectionType: NativeConnectionType): s
 			return `BT:${address}`;
 		case 'usb':
 			return `USB:${address}`;
+		default: {
+			const exhaustiveConnectionType: never = connectionType;
+			throw new Error(`Unknown Epson connection type: ${exhaustiveConnectionType}`);
+		}
 	}
 }
 

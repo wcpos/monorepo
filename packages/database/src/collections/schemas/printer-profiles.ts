@@ -1,6 +1,6 @@
 export const printerProfilesLiteral = {
 	title: 'Printer Profiles schema',
-	version: 1,
+	version: 2,
 	description: 'Local printer profiles for direct thermal printing',
 	type: 'object',
 	primaryKey: 'id',
@@ -30,6 +30,10 @@ export const printerProfilesLiteral = {
 		port: {
 			type: 'integer',
 			default: 9100,
+		},
+		nativeInterfaceType: {
+			type: 'string',
+			description: 'Vendor-native interface type hint, eg Star BluetoothLE vs Bluetooth',
 		},
 		printerModel: {
 			type: 'string',

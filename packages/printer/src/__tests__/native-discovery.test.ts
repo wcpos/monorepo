@@ -26,7 +26,7 @@ describe('native printer discovery helpers', () => {
 	it('maps Epson Bluetooth discovery targets to bluetooth printers without stripping the target prefix', () => {
 		expect(
 			mapEpsonDiscoveryDevice({
-				target: 'BT:01:23:45:67:89:AB',
+				target: 'BT:TM-M30-III',
 				deviceName: 'Epson TM-m30',
 				ipAddress: '',
 				macAddress: '',
@@ -36,9 +36,33 @@ describe('native printer discovery helpers', () => {
 			id: 'epson-bt:01:23:45:67:89:ab',
 			name: 'Epson TM-m30',
 			connectionType: 'bluetooth',
-			address: 'BT:01:23:45:67:89:AB',
+			address: 'BT:TM-M30-III',
 			port: undefined,
 			vendor: 'epson',
+		});
+	});
+
+	it('maps Star BluetoothLE discovery results without losing the native interface type', () => {
+		expect(
+			mapStarDiscoveryPrinter({
+				connectionSettings: {
+					identifier: '01:23:45:67:89:AB',
+					interfaceType: 'BluetoothLE',
+				},
+				information: {
+					model: {
+						identifier: 'mC-Print3',
+					},
+				},
+			})
+		).toEqual({
+			id: 'star-01:23:45:67:89:AB',
+			name: 'mC-Print3',
+			connectionType: 'bluetooth',
+			address: '01:23:45:67:89:AB',
+			port: undefined,
+			vendor: 'star',
+			nativeInterfaceType: 'BluetoothLE',
 		});
 	});
 
@@ -62,6 +86,7 @@ describe('native printer discovery helpers', () => {
 			address: 'usb:star-printer-1',
 			port: undefined,
 			vendor: 'star',
+			nativeInterfaceType: 'Usb',
 		});
 	});
 });
