@@ -49,13 +49,40 @@ describe('RxDBBackend', () => {
 	describe('read — cache behavior', () => {
 		it('returns cached translations immediately without fetching', () => {
 			const cached = { 'pos_cart.add_to_cart': 'Ajouter au panier' };
-			const backend = createBackend({ translationsState: { fr_CA: cached } });
+			const backend = createBackend({
+				translationsState: { [`fr_CA@${TRANSLATION_VERSION}`]: cached },
+			});
 
 			const callback = jest.fn();
 			backend.read('fr_CA', 'core', callback);
 
 			expect(callback).toHaveBeenCalledWith(null, cached);
 			expect(mockFetch).not.toHaveBeenCalled();
+		});
+
+		it('ignores stale unversioned cache entries and refetches translations', async () => {
+			const staleCached = { 'common.cancel': 'Ancienne traduction' };
+			const freshData = { 'common.cancel': 'Nouvelle traduction' };
+			mockFetchResponse(freshData);
+
+			const translationsState = {
+				fr_CA: staleCached,
+				set: jest.fn(),
+			};
+			const backend = createBackend({ translationsState });
+
+			const callback = jest.fn();
+			backend.read('fr_CA', 'core', callback);
+
+			await new Promise((r) => setTimeout(r, 0));
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(callback).toHaveBeenCalledWith(null, freshData);
+			expect(callback).not.toHaveBeenCalledWith(null, staleCached);
+			expect(translationsState.set).toHaveBeenCalledWith(
+				`fr_CA@${TRANSLATION_VERSION}`,
+				expect.any(Function)
+			);
 		});
 	});
 
@@ -75,7 +102,10 @@ describe('RxDBBackend', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 			expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/fr_CA/monorepo/core.json'));
 			expect(callback).toHaveBeenCalledWith(null, frCAData);
-			expect(translationsState.set).toHaveBeenCalledWith('fr_CA', expect.any(Function));
+			expect(translationsState.set).toHaveBeenCalledWith(
+				`fr_CA@${TRANSLATION_VERSION}`,
+				expect.any(Function)
+			);
 		});
 
 		it('falls back to base language (fr) when regional locale (fr_CA) is empty', async () => {
@@ -101,8 +131,11 @@ describe('RxDBBackend', () => {
 				expect.stringContaining('/fr/monorepo/core.json')
 			);
 			expect(callback).toHaveBeenCalledWith(null, frData);
-			// Caches under original key so we don't re-fetch fr_CA next time
-			expect(translationsState.set).toHaveBeenCalledWith('fr_CA', expect.any(Function));
+			// Caches under original language + version key so we don't re-fetch fr_CA next time
+			expect(translationsState.set).toHaveBeenCalledWith(
+				`fr_CA@${TRANSLATION_VERSION}`,
+				expect.any(Function)
+			);
 		});
 
 		it('falls back to base language (fr) when regional locale (fr_CA) returns 404', async () => {
