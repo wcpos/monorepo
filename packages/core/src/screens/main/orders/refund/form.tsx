@@ -43,8 +43,7 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { TaxRatesContext } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
-import { usePullDocument } from '../../contexts/use-pull-document';
-import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { useRefundMutation } from './use-refund-mutation';
 import { roundHalfUp } from '../../hooks/utils/precision';
 
 const refundLogger = getLogger(['wcpos', 'mutations', 'refund']);
@@ -99,9 +98,8 @@ type RefundFormValues = z.infer<ReturnType<typeof createRefundFormSchema>>;
 export function RefundOrderForm({ order }: Props) {
 	const t = useT();
 	const { store } = useAppState();
-	const http = useRestHttpClient();
+	const refundMutation = useRefundMutation();
 	const router = useRouter();
-	const pullDocument = usePullDocument();
 	const taxRates = React.useContext(TaxRatesContext);
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
 	const dp = resolvePriceNumDecimals({
@@ -147,10 +145,19 @@ export function RefundOrderForm({ order }: Props) {
 		},
 	});
 
-	const { fields } = useFieldArray({ control: form.control, name: 'line_items' });
+	const { fields } = useFieldArray({
+		control: form.control,
+		name: 'line_items',
+	});
 
-	const watchedLineItems = useWatch({ control: form.control, name: 'line_items' });
-	const watchedCustomAmount = useWatch({ control: form.control, name: 'custom_amount' });
+	const watchedLineItems = useWatch({
+		control: form.control,
+		name: 'line_items',
+	});
+	const watchedCustomAmount = useWatch({
+		control: form.control,
+		name: 'custom_amount',
+	});
 
 	const lineItemRefunds = React.useMemo(() => {
 		return watchedLineItems.map((item) =>
@@ -217,17 +224,19 @@ export function RefundOrderForm({ order }: Props) {
 				})
 				.filter(Boolean);
 
-			const payload: Record<string, unknown> = {
+			await refundMutation({
+				order,
 				amount: freshRefundTotal,
 				reason: values.reason || '',
-				api_refund: values.api_refund,
-			};
-
-			if (refundLineItems.length > 0) {
-				payload.line_items = refundLineItems;
-			}
-
-			await http.post(`orders/${order.id}/refunds`, payload);
+				lineItems: refundLineItems as {
+					id: number;
+					quantity: number;
+					refund_total: string;
+					refund_tax: { id: number; refund_total: string }[];
+				}[],
+				refundViaGateway: values.api_refund,
+				isCashPayment,
+			});
 
 			refundLogger.success(t('orders.refund_processed', { amount: freshRefundTotal }), {
 				showToast: true,
@@ -237,9 +246,6 @@ export function RefundOrderForm({ order }: Props) {
 					amount: freshRefundTotal,
 				},
 			});
-
-			// Re-sync the order to pick up updated refunds array and totals
-			await pullDocument(order.id, order.collection as never);
 
 			router.back();
 		} catch (err: any) {
@@ -256,7 +262,7 @@ export function RefundOrderForm({ order }: Props) {
 		} finally {
 			setLoading(false);
 		}
-	}, [loading, form, http, order, pullDocument, router, t, dp]);
+	}, [loading, form, isCashPayment, order, refundMutation, router, t, dp]);
 
 	return (
 		<Form {...form}>
