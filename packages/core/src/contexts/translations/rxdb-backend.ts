@@ -1,4 +1,4 @@
-export const TRANSLATION_VERSION = '2026.2.10';
+export const TRANSLATION_VERSION = '2026.4.48';
 
 /**
  * Custom i18next backend that loads translations from jsDelivr CDN
@@ -40,8 +40,10 @@ export class RxDBBackend {
 	}
 
 	read(language: string, namespace: string, callback: (err: any, data?: any) => void) {
+		const cacheKey = `${language}@${TRANSLATION_VERSION}`;
+
 		// Return cached translations immediately if available
-		const cached = this.translationsState?.[language];
+		const cached = this.translationsState?.[cacheKey];
 		if (cached) {
 			callback(null, cached);
 			return;
@@ -51,7 +53,7 @@ export class RxDBBackend {
 		this.fetchTranslations(language, namespace)
 			.then((data) => {
 				if (data && Object.keys(data).length > 0) {
-					this.translationsState?.set(language, () => data);
+					this.translationsState?.set(cacheKey, () => data);
 					callback(null, data);
 					return;
 				}
@@ -65,8 +67,8 @@ export class RxDBBackend {
 
 				return this.fetchTranslations(baseLang, namespace).then((fallbackData) => {
 					if (fallbackData && Object.keys(fallbackData).length > 0) {
-						// Cache under the original language key so we don't re-fetch
-						this.translationsState?.set(language, () => fallbackData);
+						// Cache under the original language + version key so we don't re-fetch
+						this.translationsState?.set(cacheKey, () => fallbackData);
 						callback(null, fallbackData);
 					} else {
 						callback(null, {});
