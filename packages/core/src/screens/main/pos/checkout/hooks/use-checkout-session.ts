@@ -42,12 +42,12 @@ export function shouldUseContractCheckout(gateway?: GatewayContract | null) {
 		gateway &&
 		gateway.provider === 'wcpos' &&
 		gateway.pos_type === 'manual' &&
-		gateway.capabilities?.supports_checkout !== false
+		gateway.capabilities?.supports_checkout === true
 	);
 }
 
-export function createCheckoutIdempotencyKey(orderId: number, gatewayId: string) {
-	return `checkout-${orderId}-${gatewayId}-${Date.now()}`;
+export function createCheckoutIdempotencyKey(orderId: number, gatewayId: string, attemptId: string) {
+	return `checkout-${orderId}-${gatewayId}-${attemptId}`;
 }
 
 export function useCheckoutSession(order: OrderDocument) {
@@ -58,12 +58,15 @@ export function useCheckoutSession(order: OrderDocument) {
 	const router = useRouter();
 	const t = useT();
 	const [gateway, setGateway] = React.useState<GatewayContract | null>(null);
+	const [gatewayResolved, setGatewayResolved] = React.useState(false);
 	const [loading, setLoading] = React.useState(false);
 	const [error, setError] = React.useState<string | null>(null);
+	const checkoutAttemptIdRef = React.useRef<string | null>(null);
 
 	const gatewayId = React.useMemo(() => order.payment_method || 'pos_cash', [order.payment_method]);
 
 	const fetchGateway = React.useCallback(async () => {
+		setGatewayResolved(false);
 		try {
 			const response = await http.get('payment-gateways');
 			const gateways = Array.isArray(response?.data) ? response.data : [];
@@ -73,12 +76,18 @@ export function useCheckoutSession(order: OrderDocument) {
 		} catch {
 			setGateway(null);
 			return null;
+		} finally {
+			setGatewayResolved(true);
 		}
 	}, [gatewayId, http]);
 
 	React.useEffect(() => {
 		void fetchGateway();
 	}, [fetchGateway]);
+
+	React.useEffect(() => {
+		checkoutAttemptIdRef.current = null;
+	}, [gatewayId, order.id]);
 
 	const completeOrderFlow = React.useCallback(async () => {
 		await pullDocument(order.id!, order.collection as never);
@@ -98,31 +107,39 @@ export function useCheckoutSession(order: OrderDocument) {
 	}, [order, pullDocument, router, stockAdjustment, uiSettings.autoShowReceipt]);
 
 	const startCheckout = React.useCallback(async () => {
-		if (!order.id) return;
+		if (!order.id || !gatewayResolved) return;
 		setLoading(true);
 		setError(null);
 
 		const resolvedGateway = gateway || (await fetchGateway());
-		if (!shouldUseContractCheckout(resolvedGateway)) {
+		if (!resolvedGateway || !shouldUseContractCheckout(resolvedGateway)) {
 			setLoading(false);
 			return;
 		}
 
 		try {
-			await http.post(`payment-gateways/${resolvedGateway!.id}/bootstrap`, {
+			if (!checkoutAttemptIdRef.current) {
+				checkoutAttemptIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+			}
+
+			await http.post(`payment-gateways/${resolvedGateway.id}/bootstrap`, {
 				context: { order_id: order.id },
 			});
 
 			const response = await http.post(
 				`orders/${order.id}/checkout`,
 				{
-					gateway_id: resolvedGateway!.id,
+					gateway_id: resolvedGateway.id,
 					action: 'start',
 					payment_data: {},
 				},
 				{
 					headers: {
-						'X-WCPOS-Idempotency-Key': createCheckoutIdempotencyKey(order.id, resolvedGateway!.id),
+						'X-WCPOS-Idempotency-Key': createCheckoutIdempotencyKey(
+							order.id,
+							resolvedGateway.id,
+							checkoutAttemptIdRef.current
+						),
 					},
 				}
 			);
@@ -140,6 +157,8 @@ export function useCheckoutSession(order: OrderDocument) {
 				state = (poll?.data || {}) as CheckoutState;
 			}
 
+			checkoutAttemptIdRef.current = null;
+
 			if (state.status === 'completed') {
 				checkoutLogger.success(
 					t('pos_checkout.payment_completed_for_order', {
@@ -148,11 +167,11 @@ export function useCheckoutSession(order: OrderDocument) {
 					{
 						showToast: true,
 						saveToDb: true,
-						context: {
-							orderId: order.id,
-							gatewayId: resolvedGateway!.id,
-							checkoutId: state.checkout_id,
-						},
+							context: {
+								orderId: order.id,
+								gatewayId: resolvedGateway.id,
+								checkoutId: state.checkout_id,
+							},
 					}
 				);
 				await completeOrderFlow();
@@ -180,14 +199,21 @@ export function useCheckoutSession(order: OrderDocument) {
 		} finally {
 			setLoading(false);
 		}
-	}, [completeOrderFlow, fetchGateway, gateway, http, order, t]);
+	}, [completeOrderFlow, fetchGateway, gateway, gatewayResolved, http, order, t]);
+
+	const mode = !gatewayResolved
+		? 'pending'
+		: shouldUseContractCheckout(gateway)
+			? 'contract'
+			: 'webview';
 
 	return {
 		loading,
 		error,
 		gateway,
+		gatewayResolved,
 		gatewayId,
-		mode: shouldUseContractCheckout(gateway) ? 'contract' : 'webview',
+		mode,
 		startCheckout,
 	};
 }

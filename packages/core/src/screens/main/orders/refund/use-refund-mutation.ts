@@ -2,8 +2,12 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
+import { getLogger } from '@wcpos/utils/logger';
+
 import { usePullDocument } from '../../contexts/use-pull-document';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+
+const refundMutationLogger = getLogger(['wcpos', 'mutations', 'refund']);
 
 interface RefundLineItem {
 	id?: number;
@@ -84,6 +88,10 @@ export function useRefundMutation() {
 			refundViaGateway,
 			isCashPayment,
 		}: RefundMutationArgs) => {
+			if (!order.id) {
+				throw new Error('refund_requires_persisted_order');
+			}
+
 			const payload = buildRefundPayload({
 				amount,
 				reason,
@@ -94,11 +102,22 @@ export function useRefundMutation() {
 
 			const response = await http.post(`orders/${order.id}/refunds`, payload, {
 				headers: {
-					'X-WCPOS-Idempotency-Key': createRefundIdempotencyKey(order.id || 0),
+					'X-WCPOS-Idempotency-Key': createRefundIdempotencyKey(order.id),
 				},
 			});
 
-			await pullDocument(order.id!, order.collection as never);
+			try {
+				await pullDocument(order.id, order.collection as never);
+			} catch (error) {
+				refundMutationLogger.error('refund_refresh_failed', {
+					showToast: false,
+					saveToDb: true,
+					context: {
+						orderId: order.id,
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+			}
 
 			return response?.data;
 		},

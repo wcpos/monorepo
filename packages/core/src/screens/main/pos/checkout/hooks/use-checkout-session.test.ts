@@ -62,6 +62,16 @@ describe('shouldUseContractCheckout', () => {
 			})
 		).toBe(false);
 	});
+
+	it('requires an explicit supports_checkout capability to enter contract mode', () => {
+		expect(
+			shouldUseContractCheckout({
+				id: 'pos_cash',
+				provider: 'wcpos',
+				pos_type: 'manual',
+			})
+		).toBe(false);
+	});
 });
 
 describe('isTerminalCheckoutStatus', () => {
@@ -75,8 +85,8 @@ describe('isTerminalCheckoutStatus', () => {
 });
 
 describe('createCheckoutIdempotencyKey', () => {
-	it('includes the order and gateway identifiers', () => {
-		const key = createCheckoutIdempotencyKey(42, 'pos_cash');
-		expect(key).toMatch(/^checkout-42-pos_cash-\d+$/);
+	it('includes the order, gateway, and checkout attempt identifiers', () => {
+		const key = createCheckoutIdempotencyKey(42, 'pos_cash', 'attempt-abc123');
+		expect(key).toBe('checkout-42-pos_cash-attempt-abc123');
 	});
 });

@@ -26,6 +26,10 @@ jest.mock('../../contexts/use-pull-document', () => ({
 	usePullDocument: () => mockPullDocument,
 }));
 
+jest.mock('@wcpos/utils/logger', () => ({
+	getLogger: () => ({ error: jest.fn() }),
+}));
+
 describe('buildRefundPayload', () => {
 	it('maps non-gateway cash refunds to the cash destination', () => {
 		expect(
@@ -117,6 +121,55 @@ describe('useRefundMutation', () => {
 			})
 		);
 		expect(mockPullDocument).toHaveBeenCalledWith(77, order.collection);
+	});
+
+	it('returns a successful refund response even when the local refresh fails', async () => {
+		const order = {
+			id: 77,
+			collection: {},
+		};
+		mockPullDocument.mockRejectedValueOnce(new Error('refresh_failed'));
+
+		const { result } = renderHook(() => useRefundMutation());
+
+		let response: unknown;
+		await act(async () => {
+			response = await result.current({
+				order: order as never,
+				amount: '10.00',
+				reason: 'Counter refund',
+				lineItems: [],
+				refundViaGateway: false,
+				isCashPayment: false,
+			});
+		});
+
+		expect(response).toEqual({ refund_id: 123 });
+		expect(mockPost).toHaveBeenCalledTimes(1);
+		expect(mockPullDocument).toHaveBeenCalledWith(77, order.collection);
+	});
+
+	it('fails fast when attempting to refund an order without a persisted id', async () => {
+		const order = {
+			id: undefined,
+			collection: {},
+		};
+
+		const { result } = renderHook(() => useRefundMutation());
+
+		await expect(
+			result.current({
+				order: order as never,
+				amount: '10.00',
+				reason: 'Counter refund',
+				lineItems: [],
+				refundViaGateway: false,
+				isCashPayment: false,
+			})
+		).rejects.toThrow('refund_requires_persisted_order');
+
+		expect(mockPost).not.toHaveBeenCalled();
+		expect(mockPullDocument).not.toHaveBeenCalled();
 	});
 });
 
