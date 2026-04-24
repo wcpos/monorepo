@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getLogger } from '@wcpos/utils/logger';
 
 import { usePullDocument } from '../../contexts/use-pull-document';
+import { RefundDestination } from '../../hooks/payment-gateway-contract';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 const refundMutationLogger = getLogger(['wcpos', 'mutations', 'refund']);
@@ -21,8 +22,7 @@ interface BuildRefundPayloadArgs {
 	amount: string;
 	reason: string;
 	lineItems: RefundLineItem[];
-	refundViaGateway: boolean;
-	isCashPayment: boolean;
+	refundDestination: RefundDestination;
 }
 
 interface RefundMutationArgs extends BuildRefundPayloadArgs {
@@ -36,20 +36,13 @@ export function buildRefundPayload({
 	amount,
 	reason,
 	lineItems,
-	refundViaGateway,
-	isCashPayment,
+	refundDestination,
 }: BuildRefundPayloadArgs) {
-	const refund_destination = refundViaGateway
-		? 'original_method'
-		: isCashPayment
-			? 'cash'
-			: 'manual';
-
 	const payload: Record<string, unknown> = {
 		amount,
 		reason,
-		refund_destination,
-		api_refund: refundViaGateway,
+		refund_destination: refundDestination,
+		api_refund: refundDestination === 'original_method',
 	};
 
 	if (lineItems.length > 0) {
@@ -80,14 +73,7 @@ export function useRefundMutation() {
 	const pullDocument = usePullDocument();
 
 	return React.useCallback(
-		async ({
-			order,
-			amount,
-			reason,
-			lineItems,
-			refundViaGateway,
-			isCashPayment,
-		}: RefundMutationArgs) => {
+		async ({ order, amount, reason, lineItems, refundDestination }: RefundMutationArgs) => {
 			if (!order.id) {
 				throw new Error('refund_requires_persisted_order');
 			}
@@ -96,8 +82,7 @@ export function useRefundMutation() {
 				amount,
 				reason,
 				lineItems,
-				refundViaGateway,
-				isCashPayment,
+				refundDestination,
 			});
 
 			const response = await http.post(`orders/${order.id}/refunds`, payload, {
