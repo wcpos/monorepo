@@ -39,7 +39,7 @@ export function Checkout({ resource }: Props) {
 	const t = useT();
 	const webViewRef = React.useRef<WebViewHandle>(null);
 	const [legacyLoading, setLegacyLoading] = React.useState(false);
-	const { loading, mode, error, gatewayResolved, startCheckout } = useCheckoutSession(
+	const { loading, mode, error, startCheckout } = useCheckoutSession(
 		order as import('@wcpos/database').OrderDocument
 	);
 
@@ -117,7 +117,7 @@ export function Checkout({ resource }: Props) {
 						testID="process-payment-button"
 						onPress={handleProcessPayment}
 						loading={mode === 'contract' ? loading : legacyLoading}
-						disabled={!gatewayResolved || mode === 'pending' || (mode === 'contract' && Boolean(error))}
+						disabled={mode === 'pending' || (mode === 'contract' && loading)}
 					>
 						{t('pos_checkout.process_payment')}
 					</ModalAction>
