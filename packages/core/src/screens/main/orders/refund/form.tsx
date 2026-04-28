@@ -16,7 +16,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/alert-dialog';
-import { Form, FormField, FormInput, FormSwitch, FormTextarea } from '@wcpos/components/form';
+import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
 import {
@@ -39,11 +39,18 @@ import {
 	computeMaxRefundable,
 	formatLineItemRefundWithTax,
 } from './calculate-refund';
+import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
+import { useRefundMutation } from './use-refund-mutation';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { TaxRatesContext } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
-import { useRefundMutation } from './use-refund-mutation';
+import {
+	deriveRefundDestinationOptions,
+	RefundDestination,
+} from '../../hooks/payment-gateway-contract';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
+import { usePaymentGateways } from '../../hooks/use-payment-gateways';
 import { roundHalfUp } from '../../hooks/utils/precision';
 
 const refundLogger = getLogger(['wcpos', 'mutations', 'refund']);
@@ -53,8 +60,6 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 interface Props {
 	order: OrderDocument;
 }
-
-const CASH_METHODS = ['pos_cash', 'cod', 'cash', 'cash_on_delivery'];
 
 function createRefundFormSchema(dp: number) {
 	const decimalPattern = dp === 0 ? /^\d+$/ : new RegExp(`^\\d+(\\.\\d{0,${dp}})?$`);
@@ -78,7 +83,7 @@ function createRefundFormSchema(dp: number) {
 				.default('')
 				.refine((v) => v === '' || decimalPattern.test(v), 'Invalid amount'),
 			reason: z.string().optional().default(''),
-			api_refund: z.boolean(),
+			refund_destination: z.enum(['original_method', 'cash']).default('cash'),
 		})
 		.superRefine(({ line_items }, ctx) => {
 			line_items.forEach((item, index) => {
@@ -110,8 +115,14 @@ export function RefundOrderForm({ order }: Props) {
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
 
 	const refundFormSchema = React.useMemo(() => createRefundFormSchema(dp), [dp]);
-
-	const isCashPayment = CASH_METHODS.includes(order.payment_method || '');
+	const { gateway, error: gatewaysError } = usePaymentGateways(order.payment_method || '');
+	const { format } = useCurrencyFormat({
+		currencySymbol: order.currency_symbol || '',
+	});
+	const refundOptions = React.useMemo(() => deriveRefundDestinationOptions(gateway), [gateway]);
+	const defaultDestination: RefundDestination = refundOptions[0]?.enabled
+		? 'original_method'
+		: 'cash';
 
 	const previousRefundTotal = React.useMemo(() => {
 		if (!order.refunds?.length) return 0;
@@ -141,9 +152,15 @@ export function RefundOrderForm({ order }: Props) {
 			line_items: initialLineItems,
 			custom_amount: '',
 			reason: '',
-			api_refund: !isCashPayment,
+			refund_destination: defaultDestination,
 		},
 	});
+
+	React.useEffect(() => {
+		if (gatewaysError) {
+			form.setValue('refund_destination', 'cash');
+		}
+	}, [form, gatewaysError]);
 
 	const { fields } = useFieldArray({
 		control: form.control,
@@ -193,7 +210,6 @@ export function RefundOrderForm({ order }: Props) {
 		try {
 			const values = form.getValues();
 
-			// Recompute at submit time to avoid stale memoized values
 			const freshLineItemRefunds = values.line_items.map((item) =>
 				calculateLineItemRefund({
 					quantity: item.quantity,
@@ -234,8 +250,7 @@ export function RefundOrderForm({ order }: Props) {
 					refund_total: string;
 					refund_tax: { id: number; refund_total: string }[];
 				}[],
-				refundViaGateway: values.api_refund,
-				isCashPayment,
+				refundDestination: values.refund_destination,
 			});
 
 			refundLogger.success(t('orders.refund_processed', { amount: freshRefundTotal }), {
@@ -262,26 +277,22 @@ export function RefundOrderForm({ order }: Props) {
 		} finally {
 			setLoading(false);
 		}
-	}, [loading, form, isCashPayment, order, refundMutation, router, t, dp]);
+	}, [loading, form, order, refundMutation, router, t, dp]);
 
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
-				{/* Order summary */}
 				<HStack className="justify-between">
 					<Text className="text-muted-foreground">
-						{t('common.total')}: {order.currency_symbol}
-						{order.total}
+						{t('common.total')}: {format(parseFloat(order.total || '0'))}
 					</Text>
 					{previousRefundTotal > 0 && (
 						<Text className="text-muted-foreground">
-							{t('orders.previously_refunded')}: -{order.currency_symbol}
-							{previousRefundTotal.toFixed(dp)}
+							{t('orders.previously_refunded')}: {format(-previousRefundTotal)}
 						</Text>
 					)}
 				</HStack>
 
-				{/* Line items table */}
 				<Table>
 					<TableHeader>
 						<TableRow>
@@ -338,7 +349,6 @@ export function RefundOrderForm({ order }: Props) {
 					</TableBody>
 				</Table>
 
-				{/* Custom amount */}
 				<FormField
 					control={form.control}
 					name="custom_amount"
@@ -351,7 +361,6 @@ export function RefundOrderForm({ order }: Props) {
 					)}
 				/>
 
-				{/* Reason */}
 				<FormField
 					control={form.control}
 					name="reason"
@@ -364,21 +373,37 @@ export function RefundOrderForm({ order }: Props) {
 					)}
 				/>
 
-				{/* Gateway toggle */}
-				<FormField
-					control={form.control}
-					name="api_refund"
-					render={({ field }) => (
-						<FormSwitch
-							label={t('orders.refund_via_gateway', {
-								gateway: order.payment_method_title || order.payment_method || '',
-							})}
-							{...field}
-						/>
-					)}
-				/>
+				<VStack space="sm">
+					<Text>{t('orders.refund_destination')}</Text>
+					<RefundDestinationRadioGroup
+						value={form.watch('refund_destination')}
+						onValueChange={(next) => form.setValue('refund_destination', next)}
+						options={[
+							{
+								value: 'original_method',
+								label: t('orders.refund_to_original_method'),
+								description: refundOptions[0].enabled
+									? undefined
+									: t('orders.original_method_refund_unavailable'),
+								enabled: refundOptions[0].enabled,
+								testID: 'refund-destination-original_method',
+							},
+							{
+								value: 'cash',
+								label: t('orders.refund_to_cash'),
+								enabled: true,
+								testID: 'refund-destination-cash',
+							},
+						]}
+					/>
+				</VStack>
 
-				{/* Refund total */}
+				{gatewaysError ? (
+					<Text className="text-muted-foreground">
+						{t('orders.original_method_refund_lookup_failed')}
+					</Text>
+				) : null}
+
 				<HStack className="items-center justify-between border-t pt-4">
 					<Text className="text-lg font-bold">{t('orders.refund_total')}</Text>
 					<Text className="text-lg font-bold">
@@ -387,7 +412,6 @@ export function RefundOrderForm({ order }: Props) {
 					</Text>
 				</HStack>
 
-				{/* Footer */}
 				<ModalFooter className="px-0">
 					<ModalClose>{t('common.cancel')}</ModalClose>
 					<ModalAction loading={loading} disabled={!isValid} onPress={() => setConfirmOpen(true)}>
@@ -395,7 +419,6 @@ export function RefundOrderForm({ order }: Props) {
 					</ModalAction>
 				</ModalFooter>
 
-				{/* Confirmation dialog */}
 				<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
 					<AlertDialogContent>
 						<AlertDialogHeader>
