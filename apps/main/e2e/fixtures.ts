@@ -463,13 +463,13 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 				await page.unroute('**/*', blockScriptRequests);
 				await page.reload();
 
-				// App should skip auth and go straight to POS
-				// Use testIDs to avoid locale-dependent locators
-				const searchProducts = page.getByTestId('search-products');
-				await expect(searchProducts).toBeVisible({ timeout: 60_000 });
-				await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
-					timeout: 60_000,
-				});
+				// App should skip auth and go straight to POS. The POS landing view may
+				// render products as either a grid or a table, so validate either product
+				// marker instead of requiring the table-only count.
+				await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 60_000 });
+				const gridTile = page.getByTestId('product-tile').first();
+				const tableButton = page.getByTestId('add-to-cart-button').first();
+				await expect(gridTile.or(tableButton)).toBeVisible({ timeout: 60_000 });
 			} catch (e) {
 				// Ensure the JS-blocking route is removed so the fallback can load scripts
 				await page.unroute('**/*', blockScriptRequests).catch(() => {});

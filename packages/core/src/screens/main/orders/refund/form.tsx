@@ -355,6 +355,7 @@ export function RefundOrderForm({ order }: Props) {
 					render={({ field }) => (
 						<FormInput
 							label={t('orders.custom_refund_amount')}
+							testID="refund-custom-amount"
 							placeholder={(0).toFixed(dp)}
 							{...field}
 						/>
