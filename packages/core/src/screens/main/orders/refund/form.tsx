@@ -115,7 +115,11 @@ export function RefundOrderForm({ order }: Props) {
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
 
 	const refundFormSchema = React.useMemo(() => createRefundFormSchema(dp), [dp]);
-	const { gateway, error: gatewaysError } = usePaymentGateways(order.payment_method || '');
+	const {
+		gateway,
+		loading: gatewaysLoading,
+		error: gatewaysError,
+	} = usePaymentGateways(order.payment_method || '');
 	const { format } = useCurrencyFormat({
 		currencySymbol: order.currency_symbol || '',
 	});
@@ -157,10 +161,19 @@ export function RefundOrderForm({ order }: Props) {
 	});
 
 	React.useEffect(() => {
+		if (form.getFieldState('refund_destination').isDirty) {
+			return;
+		}
+
 		if (gatewaysError) {
 			form.setValue('refund_destination', 'cash');
+			return;
 		}
-	}, [form, gatewaysError]);
+
+		if (!gatewaysLoading) {
+			form.setValue('refund_destination', defaultDestination);
+		}
+	}, [defaultDestination, form, gatewaysError, gatewaysLoading]);
 
 	const { fields } = useFieldArray({
 		control: form.control,
@@ -378,7 +391,9 @@ export function RefundOrderForm({ order }: Props) {
 					<Text>{t('orders.refund_destination')}</Text>
 					<RefundDestinationRadioGroup
 						value={form.watch('refund_destination')}
-						onValueChange={(next) => form.setValue('refund_destination', next)}
+						onValueChange={(next) =>
+							form.setValue('refund_destination', next, { shouldDirty: true })
+						}
 						options={[
 							{
 								value: 'original_method',

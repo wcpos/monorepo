@@ -73,7 +73,11 @@ jest.mock('@wcpos/components/label', () => ({
 	Label: ({ children }: any) => <label>{children}</label>,
 }));
 jest.mock('@wcpos/components/radio-group', () => ({
-	RadioGroup: ({ children }: any) => <div role="radiogroup">{children}</div>,
+	RadioGroup: ({ children, value }: any) => (
+		<div role="radiogroup" data-value={value}>
+			{children}
+		</div>
+	),
 	RadioGroupItem: ({ value, disabled, testID }: any) => (
 		<input type="radio" value={value} disabled={disabled} data-testid={testID} />
 	),
@@ -145,6 +149,9 @@ describe('RefundOrderForm', () => {
 		expect(screen.getByText(/orders.previously_refunded: -€10.00/)).toBeInTheDocument();
 		await waitFor(() =>
 			expect(screen.getByLabelText('orders.refund_to_original_method')).toBeEnabled()
+		);
+		await waitFor(() =>
+			expect(screen.getByRole('radiogroup')).toHaveAttribute('data-value', 'original_method')
 		);
 		expect(screen.getByLabelText('orders.refund_to_cash')).toBeEnabled();
 	});
