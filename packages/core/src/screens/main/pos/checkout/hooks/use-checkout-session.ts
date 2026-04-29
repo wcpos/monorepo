@@ -6,23 +6,21 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../../contexts/translations';
+import {
+	PaymentGatewayContract,
+	supportsCheckoutContract,
+} from '../../../hooks/payment-gateway-contract';
 import { usePullDocument } from '../../../contexts/use-pull-document';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
+import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 const checkoutLogger = getLogger(['wcpos', 'pos', 'checkout', 'contract']);
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
-export interface GatewayContract {
-	id: string;
-	provider: string;
-	pos_type: string;
-	capabilities?: {
-		supports_checkout?: boolean;
-	};
-}
+export type GatewayContract = PaymentGatewayContract;
 
 interface CheckoutState {
 	checkout_id?: string | null;
@@ -38,15 +36,14 @@ export function isTerminalCheckoutStatus(status?: string) {
 }
 
 export function shouldUseContractCheckout(gateway?: GatewayContract | null) {
-	return Boolean(
-		gateway &&
-		gateway.provider === 'wcpos' &&
-		gateway.pos_type === 'manual' &&
-		gateway.capabilities?.supports_checkout === true
-	);
+	return supportsCheckoutContract(gateway);
 }
 
-export function createCheckoutIdempotencyKey(orderId: number, gatewayId: string, attemptId: string) {
+export function createCheckoutIdempotencyKey(
+	orderId: number,
+	gatewayId: string,
+	attemptId: string
+) {
 	return `checkout-${orderId}-${gatewayId}-${attemptId}`;
 }
 
@@ -57,33 +54,28 @@ export function useCheckoutSession(order: OrderDocument) {
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
 	const t = useT();
-	const [gateway, setGateway] = React.useState<GatewayContract | null>(null);
-	const [gatewayResolved, setGatewayResolved] = React.useState(false);
 	const [loading, setLoading] = React.useState(false);
 	const [error, setError] = React.useState<string | null>(null);
 	const checkoutAttemptIdRef = React.useRef<string | null>(null);
 
 	const gatewayId = React.useMemo(() => order.payment_method || 'pos_cash', [order.payment_method]);
-
-	const fetchGateway = React.useCallback(async () => {
-		setGatewayResolved(false);
-		try {
-			const response = await http.get('payment-gateways');
-			const gateways = Array.isArray(response?.data) ? response.data : [];
-			const match = gateways.find((item: GatewayContract) => item.id === gatewayId) || null;
-			setGateway(match);
-			return match;
-		} catch {
-			setGateway(null);
-			return null;
-		} finally {
-			setGatewayResolved(true);
-		}
-	}, [gatewayId, http]);
+	const {
+		gateway,
+		loading: gatewayLoading,
+		error: gatewayError,
+		refetch,
+	} = usePaymentGateways(gatewayId);
+	const gatewayResolved = !gatewayLoading;
 
 	React.useEffect(() => {
-		void fetchGateway();
-	}, [fetchGateway]);
+		setError((current) => {
+			if (gatewayError) {
+				return 'payment_gateways_fetch_failed';
+			}
+
+			return current === 'payment_gateways_fetch_failed' ? null : current;
+		});
+	}, [gatewayError]);
 
 	React.useEffect(() => {
 		checkoutAttemptIdRef.current = null;
@@ -111,7 +103,11 @@ export function useCheckoutSession(order: OrderDocument) {
 		setLoading(true);
 		setError(null);
 
-		const resolvedGateway = gateway || (await fetchGateway());
+		let resolvedGateway = gateway;
+		if (!resolvedGateway) {
+			const gateways = await refetch();
+			resolvedGateway = gateways.find((item) => item.id === gatewayId) || null;
+		}
 		if (!resolvedGateway || !shouldUseContractCheckout(resolvedGateway)) {
 			setLoading(false);
 			return;
@@ -167,11 +163,11 @@ export function useCheckoutSession(order: OrderDocument) {
 					{
 						showToast: true,
 						saveToDb: true,
-							context: {
-								orderId: order.id,
-								gatewayId: resolvedGateway.id,
-								checkoutId: state.checkout_id,
-							},
+						context: {
+							orderId: order.id,
+							gatewayId: resolvedGateway.id,
+							checkoutId: state.checkout_id,
+						},
 					}
 				);
 				await completeOrderFlow();
@@ -199,7 +195,7 @@ export function useCheckoutSession(order: OrderDocument) {
 		} finally {
 			setLoading(false);
 		}
-	}, [completeOrderFlow, fetchGateway, gateway, gatewayResolved, http, order, t]);
+	}, [completeOrderFlow, gateway, gatewayId, gatewayResolved, http, order, refetch, t]);
 
 	const mode = !gatewayResolved
 		? 'pending'

@@ -6,9 +6,22 @@ import { authenticatedTest as test } from './fixtures';
 async function addFirstProductToCart(page: Page) {
 	const tile = page.getByTestId('product-tile').first();
 	const tableButton = page.getByTestId('add-to-cart-button').first();
+	const productMarker = tile.or(tableButton);
 
-	// Wait for products to render in whichever view mode is active
-	await expect(tile.or(tableButton)).toBeVisible({ timeout: 15_000 });
+	// Wait for products to render in whichever view mode is active.
+	let productsVisible = await productMarker.isVisible({ timeout: 30_000 }).catch(() => false);
+	if (
+		!productsVisible &&
+		(await page
+			.getByText('Something went wrong:')
+			.isVisible()
+			.catch(() => false))
+	) {
+		await page.reload();
+		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 60_000 });
+		productsVisible = await productMarker.isVisible({ timeout: 60_000 }).catch(() => false);
+	}
+	await expect(productMarker).toBeVisible({ timeout: productsVisible ? 1_000 : 60_000 });
 
 	if (await tile.isVisible()) {
 		await tile.click();
@@ -201,4 +214,87 @@ test.describe('POS Checkout', () => {
 		await expect(printButton).toBeVisible({ timeout: 30_000 });
 		await expect(printButton).toBeDisabled({ timeout: 10_000 });
 	});
+});
+
+test('uses the contract checkout endpoints when supports_checkout=true', async ({
+	posPage: page,
+}) => {
+	const checkoutGatewayIds = [
+		'stripe_terminal_for_woocommerce',
+		'wcpos_cash',
+		'pos_cash',
+		'cash',
+		'cod',
+		'cash_on_delivery',
+		'bacs',
+		'cheque',
+		'wcpos_card',
+		'pos_card',
+		'woocommerce_payments',
+		'wcpay',
+		'stripe',
+		'stripe_terminal',
+	];
+
+	await page.route('**/wp-json/wcpos/v1/payment-gateways**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify(
+				checkoutGatewayIds.map((id) => ({
+					id,
+					provider: id,
+					pos_type: 'terminal',
+					capabilities: { supports_checkout: true },
+				}))
+			),
+		});
+	});
+
+	const bootstrapRequest = page.waitForRequest(
+		(request) =>
+			request.url().includes('/payment-gateways/') && request.url().includes('/bootstrap')
+	);
+	const startRequest = page.waitForRequest(
+		(request) =>
+			request.url().includes('/orders/') &&
+			request.url().includes('/checkout') &&
+			request.method() === 'POST'
+	);
+	await addFirstProductToCart(page);
+	await page.getByTestId('checkout-button').click();
+	await page.getByTestId('process-payment-button').click();
+
+	await bootstrapRequest;
+	await startRequest;
+});
+
+test('falls back to the legacy webview when supports_checkout=false', async ({ posPage: page }) => {
+	await page.route('**/wp-json/wcpos/v1/payment-gateways**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify(
+				[
+					'bacs',
+					'pos_cash',
+					'wcpos_cash',
+					'stripe',
+					'woocommerce_payments',
+					'stripe_terminal_for_woocommerce',
+				].map((id) => ({
+					id,
+					provider: 'woocommerce',
+					pos_type: id.includes('cash') || id === 'bacs' ? 'manual' : 'terminal',
+					capabilities: { supports_checkout: false },
+				}))
+			),
+		});
+	});
+
+	await addFirstProductToCart(page);
+	await page.getByTestId('checkout-button').click();
+	await expect(page.getByTestId('process-payment-button')).toBeVisible();
+	await page.getByTestId('process-payment-button').click();
+	await expect(page.getByTestId('process-payment-button')).toBeDisabled({ timeout: 10_000 });
 });

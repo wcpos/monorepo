@@ -5,7 +5,7 @@ module.exports = {
 	displayName: '@wcpos/core',
 	preset: 'ts-jest',
 	transform: {
-		'^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
+		'^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: 'tsconfig.jest.json' }],
 	},
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
@@ -29,6 +29,7 @@ module.exports = {
 		'^expo-localization$': '<rootDir>/jest/__mocks__/expo-localization.js',
 		'^@wcpos/printer$': '<rootDir>/../printer/src/index.ts',
 		'^@wcpos/printer/(.*)$': '<rootDir>/../printer/src/$1',
+		'^@wcpos/components/(.*)$': '<rootDir>/../components/src/$1',
 		// Fallback for other @wcpos/utils imports
 		'^@wcpos/utils/(.*)$': '<rootDir>/../utils/src/$1',
 		'^@wcpos/database$': '<rootDir>/../database/src',
