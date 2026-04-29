@@ -5,13 +5,31 @@ import { getStoreVariant, authenticatedTest as test } from './fixtures';
 async function addFirstProductToCart(page: Page) {
 	const tile = page.getByTestId('product-tile').first();
 	const tableButton = page.getByTestId('add-to-cart-button').first();
+	const productMarker = tile.or(tableButton).first();
 
-	await expect(tile.or(tableButton)).toBeVisible({ timeout: 30_000 });
+	const hasCatalogProduct = await productMarker.isVisible({ timeout: 30_000 }).catch(() => false);
 
-	if (await tile.isVisible()) {
+	if (hasCatalogProduct && (await tile.isVisible())) {
 		await tile.click();
-	} else {
+	} else if (hasCatalogProduct) {
 		await tableButton.click();
+	} else {
+		const demoProduct = page.getByText(/^(Album|Beanie|Cap|Single)$/).first();
+		if (await demoProduct.isVisible({ timeout: 30_000 }).catch(() => false)) {
+			await demoProduct.click();
+		} else {
+			await page.getByTestId('add-cart-item-menu').click();
+			await page.getByTestId('menu-add-misc-product').click();
+			const dialog = page.getByRole('dialog');
+			await expect(dialog).toBeVisible({ timeout: 15_000 });
+			await dialog.getByRole('button', { name: /0/ }).click();
+			const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
+			await expect(numpad).toBeVisible({ timeout: 15_000 });
+			const numpadInput = numpad.locator('input');
+			await numpadInput.fill('15');
+			await page.getByTestId('numpad-done-button').click();
+			await page.getByTestId('add-to-cart-submit').click();
+		}
 	}
 	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
 }
@@ -38,7 +56,9 @@ async function createCompletedOrder(page: Page) {
 }
 
 async function interceptRefundDependencies(page: Page) {
+	const unsupportedProviderRefundGatewayId = 'unsupported_provider_refunds';
 	const gatewayIds = [
+		unsupportedProviderRefundGatewayId,
 		'stripe_terminal_for_woocommerce',
 		'wcpos_cash',
 		'pos_cash',
@@ -69,7 +89,7 @@ async function interceptRefundDependencies(page: Page) {
 					id,
 					title: id || 'Default payment gateway',
 					capabilities: {
-						supports_provider_refunds: !['', 'cash', 'pos_cash', 'wcpos_cash'].includes(id),
+						supports_provider_refunds: id !== unsupportedProviderRefundGatewayId,
 						supports_checkout: true,
 					},
 				}))
