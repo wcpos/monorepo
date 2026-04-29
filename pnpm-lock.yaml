@@ -64,10 +64,10 @@ importers:
         version: 26.0.4(typescript@5.9.3)
       rxdb:
         specifier: 17.1.0
-        version: 17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
+        version: 17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
       rxdb-premium:
         specifier: 17.1.0
-        version: 17.1.0(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2)
+        version: 17.1.0(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -128,13 +128,13 @@ importers:
         version: 1.10.0(encoding@0.1.13)
       '@wcpos/eslint-config':
         specifier: ^2.0.0
-        version: 2.2.0(eslint-config-expo@55.0.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.6.1)))(eslint-plugin-prettier@5.5.5(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(prettier@3.8.2))(eslint@9.39.4(jiti@2.6.1))(prettier-plugin-tailwindcss@0.7.2(prettier@3.8.2))(prettier@3.8.2)
+        version: 2.2.0(eslint-config-expo@55.0.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.6.1)))(eslint-plugin-prettier@5.5.5(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(prettier@3.8.2))(eslint@9.39.4(jiti@2.6.1))(prettier-plugin-tailwindcss@0.8.0(prettier@3.8.2))(prettier@3.8.2)
       concurrently:
         specifier: ^9.2.1
         version: 9.2.1
       electron:
-        specifier: 41.2.0
-        version: 41.2.0
+        specifier: 41.3.0
+        version: 41.3.0
       electron-debug:
         specifier: ^4.1.0
         version: 4.1.0
@@ -492,12 +492,15 @@ importers:
       react-native-webview:
         specifier: ~13.16.0
         version: 13.16.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
+      react-native-worklets:
+        specifier: ~0.7.2
+        version: 0.7.4(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       sonner-native:
-        specifier: ^0.24.0
-        version: 0.24.0(react-native-gesture-handler@2.30.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-reanimated@4.2.3(react-native-worklets@0.7.4(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-safe-area-context@5.6.2(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-screens@4.23.0(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-svg@15.15.3(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
+        specifier: ^0.25.0
+        version: 0.25.0(react-native-gesture-handler@2.30.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-reanimated@4.2.3(react-native-worklets@0.7.4(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-safe-area-context@5.6.2(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-screens@4.23.0(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-svg@15.15.3(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-worklets@0.7.4(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.5.0
@@ -619,6 +622,9 @@ importers:
       use-deep-compare-effect:
         specifier: ^1.8.1
         version: 1.8.1(react@19.2.5)
+      uuid:
+        specifier: 14.0.0
+        version: 14.0.0
       zod:
         specifier: ^4.1.3
         version: 4.3.6
@@ -694,22 +700,22 @@ importers:
         version: 4.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(rxjs@7.8.2)
       rxdb:
         specifier: 17.1.0
-        version: 17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
+        version: 17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
       rxdb-old:
         specifier: npm:rxdb@16.21.1
-        version: rxdb@16.21.1(rxjs@7.8.2)(socks@2.8.7)
+        version: rxdb@16.21.1(rxjs@7.8.2)(socks@2.8.8)
       rxdb-premium:
         specifier: 17.1.0
-        version: 17.1.0(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2)
+        version: 17.1.0(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2)
       rxdb-premium-old:
         specifier: npm:rxdb-premium@16.21.1
-        version: rxdb-premium@16.21.1(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2)
+        version: rxdb-premium@16.21.1(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
       uuid:
-        specifier: ^13.0.0
-        version: 13.0.0
+        specifier: ^14.0.0
+        version: 14.0.0
     devDependencies:
       '@faker-js/faker':
         specifier: ^10.0.0
@@ -752,8 +758,8 @@ importers:
         specifier: ^3.6.2
         version: 3.8.2
       prettier-plugin-tailwindcss:
-        specifier: ^0.7.0
-        version: 0.7.2(prettier@3.8.2)
+        specifier: ^0.8.0
+        version: 0.8.0(prettier@3.8.2)
 
   packages/hooks:
     dependencies:
@@ -860,13 +866,13 @@ importers:
         version: 4.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(rxjs@7.8.2)
       rxdb:
         specifier: 17.1.0
-        version: 17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
+        version: 17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
       uuid:
-        specifier: ^13.0.0
-        version: 13.0.0
+        specifier: ^14.0.0
+        version: 14.0.0
     devDependencies:
       '@testing-library/react':
         specifier: ^16.3.0
@@ -2819,8 +2825,8 @@ packages:
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
 
-  '@napi-rs/wasm-runtime@1.1.3':
-    resolution: {integrity: sha512-xK9sGVbJWYb08+mTJt3/YV24WxvxpXcXtP6B172paPZ+Ts69Re9dAr7lKwJoeIx8OoeuimEiRZ7umkiUVClmmQ==}
+  '@napi-rs/wasm-runtime@1.1.4':
+    resolution: {integrity: sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==}
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
@@ -7002,8 +7008,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@41.2.0:
-    resolution: {integrity: sha512-0OKLiymqfV0WK68RBXqAm3Myad2TpI5wwxLCBEUcH5Nugo3YfSk7p1Js/AL9266qTz5xZioUnxt9hG8FFwax0g==}
+  electron@41.3.0:
+    resolution: {integrity: sha512-2Q5aeocmFdeheZGDUTrAvSR3t+n0c3d104AJWWEnt7syJU0tE4VdibMYaPtQ47QuXSoUf0/xSsfUUvu/uSXIfg==}
     engines: {node: '>= 12.20.55'}
     hasBin: true
 
@@ -8127,6 +8133,10 @@ packages:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
 
+  hasown@2.0.3:
+    resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
+    engines: {node: '>= 0.4'}
+
   he@1.2.0:
     resolution: {integrity: sha512-F/1DnUGPopORZi0ni+CvrCgHQ5FyEAHRLSApuYWMmrbSwoN2Mn/7k+Gl38gJnR7yyDZk6WLXwiGod1JOWNDKGw==}
     hasBin: true
@@ -8393,8 +8403,8 @@ packages:
   invariant@2.2.4:
     resolution: {integrity: sha512-phJfQVBuaJM5raOpJjSfkiD6BpbCE4Ns//LaXl6wGYtUBY83nWS6Rf9tXm2e8VaK60JEjYldbPif/A2B1C2gNA==}
 
-  ip-address@10.1.0:
-    resolution: {integrity: sha512-XXADHxXmvT9+CRxhXg56LJovE+bmWnEWB78LB83VZTprKTmaC5QfruXocxzTZ2Kl0DNwKuBdlIhjL8LeY8Sf8Q==}
+  ip-address@10.1.1:
+    resolution: {integrity: sha512-1FMu8/N15Ck1BL551Jf42NYIoin2unWjLQ2Fze/DXryJRl5twqtwNHlO39qERGbIOcKYWHdgRryhOC+NG4eaLw==}
     engines: {node: '>= 12'}
 
   ipaddr.js@1.9.1:
@@ -10159,6 +10169,10 @@ packages:
     resolution: {integrity: sha512-OCVPnIObs4N29kxTjzLfUryOkvZEq+pf8jTF0lg8E7uETuWHA+v7j3c/xJmiqpX450191LlmZfUKkXxkTry7nA==}
     engines: {node: ^10 || ^12 || >=14}
 
+  postcss@8.5.12:
+    resolution: {integrity: sha512-W62t/Se6rA0Az3DfCL0AqJwXuKwBeYg6nOaIgzP+xZ7N5BFCI7DYi1qs6ygUYT6rvfi6t9k65UMLJC+PHZpDAA==}
+    engines: {node: ^10 || ^12 || >=14}
+
   postcss@8.5.9:
     resolution: {integrity: sha512-7a70Nsot+EMX9fFU3064K/kdHWZqGVY+BADLyXc8Dfv+mTLLVl6JzJpPaCZ2kQL9gIJvKXSLMHhqdRRjwQeFtw==}
     engines: {node: ^10 || ^12 || >=14}
@@ -10202,8 +10216,8 @@ packages:
     resolution: {integrity: sha512-SxToR7P8Y2lWmv/kTzVLC1t/GDI2WGjMwNhLLE9qtH8Q13C+aEmuRlzDst4Up4s0Wc8sF2M+J57iB3cMLqftfg==}
     engines: {node: '>=6.0.0'}
 
-  prettier-plugin-tailwindcss@0.7.2:
-    resolution: {integrity: sha512-LkphyK3Fw+q2HdMOoiEHWf93fNtYJwfamoKPl7UwtjFQdei/iIBoX11G6j706FzN3ymX9mPVi97qIY8328vdnA==}
+  prettier-plugin-tailwindcss@0.8.0:
+    resolution: {integrity: sha512-V8ITGH87yuBDF6JpEZTOVlUz/saAwqb8f3HRgUj8Lh+tGCcrmorhsLpYqzygwFwK0PE2Ib6Mv3M7T/uE2tZV1g==}
     engines: {node: '>=20.19'}
     peerDependencies:
       '@ianvs/prettier-plugin-sort-imports': '*'
@@ -11238,8 +11252,8 @@ packages:
     resolution: {integrity: sha512-Fgl0YPZ902wEsAyiQ+idGd1A7rSFx/ayC1CQVMw5P+EQx2V0SgpGtf6OKFhVjPflPUl9YMmEOnmfjCdMUsygww==}
     engines: {node: '>= 10'}
 
-  socks@2.8.7:
-    resolution: {integrity: sha512-HLpt+uLy/pxB+bum/9DzAgiKS8CX1EvbWxI4zlmgGCExImLdiad2iCwXT5Z4c9c3Eq8rP2318mPW2c+QbtjK8A==}
+  socks@2.8.8:
+    resolution: {integrity: sha512-NlGELfPrgX2f1TAAcz0WawlLn+0r3FyhhCRpFFK2CemXenPYvzMWWZINv3eDNo9ucdwme7oCHRY0Jnbs4aIkog==}
     engines: {node: '>= 10.0.0', npm: '>= 3.0.0'}
 
   solid-floating-ui@0.3.1:
@@ -11267,16 +11281,17 @@ packages:
     peerDependencies:
       solid-js: ^1.8
 
-  sonner-native@0.24.0:
-    resolution: {integrity: sha512-E94/NyGrL3HBd0E4BZHkYEJpMfrF/on2E2b+GckHTatSSZOyCWZnDVAALGZ7NfOl0Xl/P3IHchIa6Umb9Yqf/g==}
+  sonner-native@0.25.0:
+    resolution: {integrity: sha512-WJGsBCYRTHA0/L7L7nZOxsIPqbtv7hCNognh3vj5LE6Pw4RZkIfjUUQAqM4b69qOSYFTNsw4dPI3XPhQKyhrsQ==}
     peerDependencies:
       react: ~19.2.0
       react-native: ~0.83.2
       react-native-gesture-handler: ~2.30.0
-      react-native-reanimated: '>=3.10.1'
+      react-native-reanimated: ^4.1.1
       react-native-safe-area-context: ~5.6.2
-      react-native-screens: '>=3.31.1'
-      react-native-svg: '>=15.6.0'
+      react-native-screens: ^4.16.0
+      react-native-svg: ^15.12.1
+      react-native-worklets: ^0.6.1 || ^0.7.0
 
   sonner@2.0.7:
     resolution: {integrity: sha512-W6ZN4p58k8aDKA4XPcx2hpIQXBRAgyiWVkYhT7CvK6D3iAu7xjvVyhQHg2/iaKJZ1XVJ4r7XuwGL+WGEK37i9w==}
@@ -12011,16 +12026,18 @@ packages:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
 
-  uuid@13.0.0:
-    resolution: {integrity: sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==}
+  uuid@14.0.0:
+    resolution: {integrity: sha512-Qo+uWgilfSmAhXCMav1uYFynlQO7fMFiMVZsQqZRMIXp0O7rR7qjkj+cPvBHLgBqi960QCoo/PH2/6ZtVqKvrg==}
     hasBin: true
 
   uuid@7.0.3:
     resolution: {integrity: sha512-DPSke0pXhTZgoF/d+WSt2QaKMCFSfx7QegxEWT+JOuHF5aWrKEn0G+ztjuJg/gG8/ItK+rbPCD/yNv8yyih6Cg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   v8-compile-cache-lib@3.0.1:
@@ -15642,7 +15659,7 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@napi-rs/wasm-runtime@1.1.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)':
+  '@napi-rs/wasm-runtime@1.1.4(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)':
     dependencies:
       '@emnapi/core': 1.9.2
       '@emnapi/runtime': 1.9.2
@@ -17409,7 +17426,7 @@ snapshots:
     dependencies:
       '@emnapi/core': 1.9.2
       '@emnapi/runtime': 1.9.2
-      '@napi-rs/wasm-runtime': 1.1.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
+      '@napi-rs/wasm-runtime': 1.1.4(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
     optional: true
 
   '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.15':
@@ -18167,7 +18184,7 @@ snapshots:
 
   '@types/mute-stream@0.0.4':
     dependencies:
-      '@types/node': 25.6.0
+      '@types/node': 22.19.17
 
   '@types/mysql@2.15.27':
     dependencies:
@@ -18290,7 +18307,7 @@ snapshots:
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 25.6.0
+      '@types/node': 24.12.2
     optional: true
 
   '@typescript-eslint/eslint-plugin@8.58.1(@typescript-eslint/parser@8.58.1(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)':
@@ -18516,7 +18533,7 @@ snapshots:
 
   '@vscode/sudo-prompt@9.3.2': {}
 
-  '@wcpos/eslint-config@2.2.0(eslint-config-expo@55.0.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.6.1)))(eslint-plugin-prettier@5.5.5(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(prettier@3.8.2))(eslint@9.39.4(jiti@2.6.1))(prettier-plugin-tailwindcss@0.7.2(prettier@3.8.2))(prettier@3.8.2)':
+  '@wcpos/eslint-config@2.2.0(eslint-config-expo@55.0.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3))(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.6.1)))(eslint-plugin-prettier@5.5.5(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(prettier@3.8.2))(eslint@9.39.4(jiti@2.6.1))(prettier-plugin-tailwindcss@0.8.0(prettier@3.8.2))(prettier@3.8.2)':
     dependencies:
       eslint: 9.39.4(jiti@2.6.1)
       eslint-config-expo: 55.0.0(eslint@9.39.4(jiti@2.6.1))(typescript@5.9.3)
@@ -18524,7 +18541,7 @@ snapshots:
       eslint-plugin-prettier: 5.5.5(@types/eslint@9.6.1)(eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.6.1)))(eslint@9.39.4(jiti@2.6.1))(prettier@3.8.2)
       eslint-plugin-react-compiler: 19.1.0-rc.2(eslint@9.39.4(jiti@2.6.1))
       prettier: 3.8.2
-      prettier-plugin-tailwindcss: 0.7.2(prettier@3.8.2)
+      prettier-plugin-tailwindcss: 0.8.0(prettier@3.8.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -20286,7 +20303,7 @@ snapshots:
       - supports-color
     optional: true
 
-  electron@41.2.0:
+  electron@41.3.0:
     dependencies:
       '@electron/get': 2.0.3
       '@types/node': 24.12.2
@@ -21562,7 +21579,7 @@ snapshots:
       call-bound: 1.0.4
       define-properties: 1.2.1
       functions-have-names: 1.2.3
-      hasown: 2.0.2
+      hasown: 2.0.3
       is-callable: 1.2.7
 
   functions-have-names@1.2.3: {}
@@ -21619,7 +21636,7 @@ snapshots:
       get-proto: 1.0.1
       gopd: 1.2.0
       has-symbols: 1.1.0
-      hasown: 2.0.2
+      hasown: 2.0.3
       math-intrinsics: 1.1.0
 
   get-nonce@1.0.1: {}
@@ -21804,6 +21821,10 @@ snapshots:
       minimalistic-assert: 1.0.1
 
   hasown@2.0.2:
+    dependencies:
+      function-bind: 1.1.2
+
+  hasown@2.0.3:
     dependencies:
       function-bind: 1.1.2
 
@@ -22096,7 +22117,7 @@ snapshots:
     dependencies:
       loose-envify: 1.4.0
 
-  ip-address@10.1.0: {}
+  ip-address@10.1.1: {}
 
   ipaddr.js@1.9.1: {}
 
@@ -22239,7 +22260,7 @@ snapshots:
       call-bound: 1.0.4
       gopd: 1.2.0
       has-tostringtag: 1.0.2
-      hasown: 2.0.2
+      hasown: 2.0.3
 
   is-set@2.0.3: {}
 
@@ -23803,13 +23824,13 @@ snapshots:
       '@types/whatwg-url': 11.0.5
       whatwg-url: 14.2.0
 
-  mongodb@6.21.0(socks@2.8.7):
+  mongodb@6.21.0(socks@2.8.8):
     dependencies:
       '@mongodb-js/saslprep': 1.4.6
       bson: 6.10.4
       mongodb-connection-string-url: 3.0.2
     optionalDependencies:
-      socks: 2.8.7
+      socks: 2.8.8
 
   morgan@1.10.1:
     dependencies:
@@ -24347,6 +24368,12 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
+  postcss@8.5.12:
+    dependencies:
+      nanoid: 3.3.11
+      picocolors: 1.1.1
+      source-map-js: 1.2.1
+
   postcss@8.5.9:
     dependencies:
       nanoid: 3.3.11
@@ -24390,7 +24417,7 @@ snapshots:
     dependencies:
       fast-diff: 1.3.0
 
-  prettier-plugin-tailwindcss@0.7.2(prettier@3.8.2):
+  prettier-plugin-tailwindcss@0.8.0(prettier@3.8.2):
     dependencies:
       prettier: 3.8.2
 
@@ -25143,7 +25170,7 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
-  rxdb-premium@16.21.1(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2):
+  rxdb-premium@16.21.1(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2):
     dependencies:
       '@koa/cors': 5.0.0
       array-push-at-sort-position: 4.0.1
@@ -25151,7 +25178,7 @@ snapshots:
       eth-crypto: 3.1.0
       flexsearch: 0.7.43
       percom: 1.1.3
-      rxdb: 17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
+      rxdb: 17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
       rxjs: 7.8.2
       web-locks: 0.0.8
       web-worker: 1.5.0
@@ -25159,7 +25186,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  rxdb-premium@17.1.0(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2):
+  rxdb-premium@17.1.0(rxdb@17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2))(rxjs@7.8.2):
     dependencies:
       '@koa/cors': 5.0.0
       array-push-at-sort-position: 4.0.1
@@ -25167,7 +25194,7 @@ snapshots:
       eth-crypto: 3.1.0
       flexsearch: 0.7.43
       percom: 1.1.3
-      rxdb: 17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
+      rxdb: 17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2)
       rxjs: 7.8.2
       web-locks: 0.0.8
       web-worker: 1.5.0
@@ -25175,7 +25202,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  rxdb@16.21.1(rxjs@7.8.2)(socks@2.8.7):
+  rxdb@16.21.1(rxjs@7.8.2)(socks@2.8.8):
     dependencies:
       '@babel/runtime': 7.28.4
       '@types/clone': 2.1.4
@@ -25201,7 +25228,7 @@ snapshots:
       js-base64: 3.7.8
       jsonschema-key-compression: 1.7.0
       mingo: 6.5.6
-      mongodb: 6.21.0(socks@2.8.7)
+      mongodb: 6.21.0(socks@2.8.8)
       nats: 2.29.3
       oblivious-set: 1.4.0
       reconnecting-websocket: 4.4.0
@@ -25223,7 +25250,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  rxdb@17.1.0(mongodb@6.21.0(socks@2.8.7))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2):
+  rxdb@17.1.0(mongodb@6.21.0(socks@2.8.8))(nats@2.29.3)(react@19.2.5)(rxjs@7.8.2):
     dependencies:
       '@babel/runtime': 7.29.2
       '@types/clone': 2.1.4
@@ -25255,7 +25282,7 @@ snapshots:
       ws: 8.20.0
       z-schema: 12.1.0
     optionalDependencies:
-      mongodb: 6.21.0(socks@2.8.7)
+      mongodb: 6.21.0(socks@2.8.8)
       nats: 2.29.3
       react: 19.2.5
     transitivePeerDependencies:
@@ -25604,13 +25631,13 @@ snapshots:
     dependencies:
       agent-base: 6.0.2
       debug: 4.4.3
-      socks: 2.8.7
+      socks: 2.8.8
     transitivePeerDependencies:
       - supports-color
 
-  socks@2.8.7:
+  socks@2.8.8:
     dependencies:
-      ip-address: 10.1.0
+      ip-address: 10.1.1
       smart-buffer: 4.2.0
 
   solid-floating-ui@0.3.1(@floating-ui/dom@1.7.6)(solid-js@1.9.12):
@@ -25644,7 +25671,7 @@ snapshots:
       '@corvu/utils': 0.4.2(solid-js@1.9.12)
       solid-js: 1.9.12
 
-  sonner-native@0.24.0(react-native-gesture-handler@2.30.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-reanimated@4.2.3(react-native-worklets@0.7.4(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-safe-area-context@5.6.2(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-screens@4.23.0(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-svg@15.15.3(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5):
+  sonner-native@0.25.0(react-native-gesture-handler@2.30.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-reanimated@4.2.3(react-native-worklets@0.7.4(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-safe-area-context@5.6.2(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-screens@4.23.0(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-svg@15.15.3(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native-worklets@0.7.4(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5):
     dependencies:
       react: 19.2.5
       react-native: 0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5)
@@ -25653,6 +25680,7 @@ snapshots:
       react-native-safe-area-context: 5.6.2(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       react-native-screens: 4.23.0(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
       react-native-svg: 15.15.3(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
+      react-native-worklets: 0.7.4(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))(react@19.2.5)
 
   sonner@2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5):
     dependencies:
@@ -26422,7 +26450,7 @@ snapshots:
 
   utils-merge@1.0.1: {}
 
-  uuid@13.0.0: {}
+  uuid@14.0.0: {}
 
   uuid@7.0.3: {}
 
@@ -26475,7 +26503,7 @@ snapshots:
     dependencies:
       lightningcss: 1.30.1
       picomatch: 4.0.4
-      postcss: 8.5.9
+      postcss: 8.5.12
       rolldown: 1.0.0-rc.15
       tinyglobby: 0.2.16
     optionalDependencies:
