@@ -8,6 +8,11 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 	const [gateways, setGateways] = React.useState<PaymentGatewayContract[]>([]);
 	const [loading, setLoading] = React.useState(true);
 	const [error, setError] = React.useState<string | null>(null);
+	const gatewaysRef = React.useRef<PaymentGatewayContract[]>([]);
+
+	React.useEffect(() => {
+		gatewaysRef.current = gateways;
+	}, [gateways]);
 
 	const fetchGateways = React.useCallback(async () => {
 		setLoading(true);
@@ -15,12 +20,12 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 		try {
 			const response = await http.get('payment-gateways');
 			const next = Array.isArray(response?.data) ? response.data : [];
+			gatewaysRef.current = next;
 			setGateways(next);
 			return next;
 		} catch (err) {
-			setGateways([]);
 			setError(err instanceof Error ? err.message : 'payment_gateways_fetch_failed');
-			return [];
+			return gatewaysRef.current;
 		} finally {
 			setLoading(false);
 		}

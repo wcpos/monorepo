@@ -117,7 +117,11 @@ export function Checkout({ resource }: Props) {
 						testID="process-payment-button"
 						onPress={handleProcessPayment}
 						loading={mode === 'contract' ? loading : legacyLoading}
-						disabled={mode === 'pending' || (mode === 'contract' && loading)}
+						disabled={
+							mode === 'pending' ||
+							error === 'payment_gateways_fetch_failed' ||
+							(mode === 'contract' && loading)
+						}
 					>
 						{t('pos_checkout.process_payment')}
 					</ModalAction>

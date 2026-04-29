@@ -210,6 +210,7 @@ export function RefundOrderForm({ order }: Props) {
 	}, [lineItemRefunds, watchedCustomAmount, dp]);
 
 	const refundTotalNum = parseFloat(refundTotal);
+	const formattedRefundTotal = format(refundTotalNum);
 	const isValid = refundTotalNum > 0 && refundTotalNum <= maxRefundable;
 
 	const handleSubmit = React.useCallback(async () => {
@@ -422,10 +423,7 @@ export function RefundOrderForm({ order }: Props) {
 
 				<HStack className="items-center justify-between border-t pt-4">
 					<Text className="text-lg font-bold">{t('orders.refund_total')}</Text>
-					<Text className="text-lg font-bold">
-						{order.currency_symbol}
-						{refundTotal}
-					</Text>
+					<Text className="text-lg font-bold">{formattedRefundTotal}</Text>
 				</HStack>
 
 				<ModalFooter className="px-0">
@@ -441,7 +439,7 @@ export function RefundOrderForm({ order }: Props) {
 							<AlertDialogTitle>{t('orders.confirm_refund')}</AlertDialogTitle>
 							<AlertDialogDescription>
 								{t('orders.confirm_refund_description', {
-									amount: `${order.currency_symbol}${refundTotal}`,
+									amount: formattedRefundTotal,
 									number: order.id,
 								})}
 							</AlertDialogDescription>

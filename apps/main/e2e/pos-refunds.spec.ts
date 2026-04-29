@@ -38,7 +38,7 @@ async function createCompletedOrder(page: Page) {
 }
 
 async function interceptRefundDependencies(page: Page) {
-	const providerRefundGatewayIds = [
+	const gatewayIds = [
 		'stripe_terminal_for_woocommerce',
 		'wcpos_cash',
 		'pos_cash',
@@ -65,10 +65,13 @@ async function interceptRefundDependencies(page: Page) {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify(
-				providerRefundGatewayIds.map((id) => ({
+				gatewayIds.map((id) => ({
 					id,
 					title: id || 'Default payment gateway',
-					capabilities: { supports_provider_refunds: true, supports_checkout: true },
+					capabilities: {
+						supports_provider_refunds: !['', 'cash', 'pos_cash', 'wcpos_cash'].includes(id),
+						supports_checkout: true,
+					},
 				}))
 			),
 		});
@@ -76,8 +79,8 @@ async function interceptRefundDependencies(page: Page) {
 }
 
 async function openRefundModalForNewCompletedOrder(page: Page) {
-	const orderUuid = await createCompletedOrder(page);
 	await interceptRefundDependencies(page);
+	const orderUuid = await createCompletedOrder(page);
 	await page.goto(`/orders/refund/${orderUuid}`);
 	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({ timeout: 30_000 });
 	await page.getByTestId('refund-custom-amount').fill('10.00');
@@ -104,8 +107,12 @@ test.describe('POS refunds (Pro)', () => {
 		});
 
 		await openRefundModalForNewCompletedOrder(page);
+		await expect(page.getByTestId('refund-destination-original_method')).toBeChecked({
+			timeout: 15_000,
+		});
 		await expect(page.getByTestId('refund-destination-cash')).toBeVisible({ timeout: 15_000 });
 		await page.getByTestId('refund-destination-cash').click();
+		await expect(page.getByTestId('refund-destination-cash')).toBeChecked();
 		await page.getByRole('button', { name: 'Process Refund' }).click();
 		await expect(page.getByRole('alertdialog')).toBeVisible({ timeout: 10_000 });
 		await page.getByRole('button', { name: 'Process Refund' }).last().click();
@@ -131,9 +138,10 @@ test.describe('POS refunds (Pro)', () => {
 		});
 
 		await openRefundModalForNewCompletedOrder(page);
-		await expect(page.getByTestId('refund-destination-original_method')).toBeEnabled({
+		await expect(page.getByTestId('refund-destination-original_method')).toBeChecked({
 			timeout: 15_000,
 		});
+		await expect(page.getByTestId('refund-destination-original_method')).toBeEnabled();
 		await page.getByTestId('refund-destination-original_method').click();
 		await page.getByRole('button', { name: 'Process Refund' }).click();
 		await expect(page.getByRole('alertdialog')).toBeVisible({ timeout: 10_000 });

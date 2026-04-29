@@ -274,14 +274,21 @@ test('falls back to the legacy webview when supports_checkout=false', async ({ p
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			body: JSON.stringify([
-				{
-					id: 'bacs',
+			body: JSON.stringify(
+				[
+					'bacs',
+					'pos_cash',
+					'wcpos_cash',
+					'stripe',
+					'woocommerce_payments',
+					'stripe_terminal_for_woocommerce',
+				].map((id) => ({
+					id,
 					provider: 'woocommerce',
-					pos_type: 'manual',
+					pos_type: id.includes('cash') || id === 'bacs' ? 'manual' : 'terminal',
 					capabilities: { supports_checkout: false },
-				},
-			]),
+				}))
+			),
 		});
 	});
 

@@ -68,9 +68,13 @@ export function useCheckoutSession(order: OrderDocument) {
 	const gatewayResolved = !gatewayLoading;
 
 	React.useEffect(() => {
-		if (gatewayError) {
-			setError('payment_gateways_fetch_failed');
-		}
+		setError((current) => {
+			if (gatewayError) {
+				return 'payment_gateways_fetch_failed';
+			}
+
+			return current === 'payment_gateways_fetch_failed' ? null : current;
+		});
 	}, [gatewayError]);
 
 	React.useEffect(() => {
