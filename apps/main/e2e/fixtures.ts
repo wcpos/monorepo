@@ -463,13 +463,22 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 				await page.unroute('**/*', blockScriptRequests);
 				await page.reload();
 
-				// App should skip auth and go straight to POS
-				// Use testIDs to avoid locale-dependent locators
-				const searchProducts = page.getByTestId('search-products');
-				await expect(searchProducts).toBeVisible({ timeout: 60_000 });
-				await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
-					timeout: 60_000,
-				});
+				// App should skip auth and go straight to POS. The product catalog can be
+				// empty or still syncing, so the search UI is the readiness marker. If a
+				// product marker appears quickly, wait for it to settle without making an
+				// empty catalog fail authentication bootstrap. Give product-backed tests a
+				// chance to start after the initial sync, but do not make auth depend on it.
+				await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 60_000 });
+				const appError = page.getByText('Something went wrong:').first();
+				if (await appError.isVisible({ timeout: 1_000 }).catch(() => false)) {
+					throw new Error('Saved auth state restored into an app error; falling back to OAuth.');
+				}
+				const productMarker = page
+					.getByTestId('product-tile')
+					.first()
+					.or(page.getByTestId('add-to-cart-button').first())
+					.first();
+				await productMarker.waitFor({ state: 'visible', timeout: 60_000 }).catch(() => {});
 			} catch (e) {
 				// Ensure the JS-blocking route is removed so the fallback can load scripts
 				await page.unroute('**/*', blockScriptRequests).catch(() => {});

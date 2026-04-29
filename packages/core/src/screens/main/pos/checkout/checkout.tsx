@@ -23,6 +23,7 @@ import type { WebViewHandle } from '@wcpos/components/webview';
 
 import { PaymentWebview } from './components/payment-webview';
 import { CheckoutTitle } from './components/title';
+import { useCheckoutSession } from './hooks/use-checkout-session';
 import { useT } from '../../../../contexts/translations';
 
 interface Props {
@@ -37,17 +38,29 @@ export function Checkout({ resource }: Props) {
 	const orderNumber = useObservableEagerState(order.number$!);
 	const t = useT();
 	const webViewRef = React.useRef<WebViewHandle>(null);
-	const [loading, setLoading] = React.useState(false);
+	const [legacyLoading, setLegacyLoading] = React.useState(false);
+	const { loading, mode, error, startCheckout } = useCheckoutSession(
+		order as import('@wcpos/database').OrderDocument
+	);
 
 	/**
 	 *
 	 */
-	const handleProcessPayment = React.useCallback(() => {
-		setLoading(true);
+	const handleProcessPayment = React.useCallback(async () => {
+		if (mode === 'pending') {
+			return;
+		}
+
+		if (mode === 'contract') {
+			await startCheckout();
+			return;
+		}
+
+		setLegacyLoading(true);
 		if (webViewRef.current && webViewRef.current.postMessage) {
 			webViewRef.current.postMessage({ action: 'wcpos-process-payment' });
 		}
-	}, []);
+	}, [mode, startCheckout]);
 
 	/**
 	 *
@@ -84,7 +97,18 @@ export function Checkout({ resource }: Props) {
 				<ModalBody contentContainerStyle={{ height: '100%' }}>
 					<VStack className="flex-1">
 						<CheckoutTitle order={order} />
-						<PaymentWebview order={order} ref={webViewRef} setLoading={setLoading} />
+						{mode === 'webview' ? (
+							<PaymentWebview order={order} ref={webViewRef} setLoading={setLegacyLoading} />
+						) : (
+							<VStack space="sm">
+								{mode === 'pending' ? (
+									<Text>{t('common.loading')}</Text>
+								) : (
+									<Text>{t('pos_checkout.amount_to_pay')}</Text>
+								)}
+								{error && <Text className="text-destructive">{error}</Text>}
+							</VStack>
+						)}
 					</VStack>
 				</ModalBody>
 				<ModalFooter>
@@ -92,7 +116,12 @@ export function Checkout({ resource }: Props) {
 					<ModalAction
 						testID="process-payment-button"
 						onPress={handleProcessPayment}
-						loading={loading}
+						loading={mode === 'contract' ? loading : legacyLoading}
+						disabled={
+							mode === 'pending' ||
+							error === 'payment_gateways_fetch_failed' ||
+							(mode === 'contract' && loading)
+						}
 					>
 						{t('pos_checkout.process_payment')}
 					</ModalAction>
