@@ -1,0 +1,36 @@
+{
+	"name": "@wcpos/receipt-renderer",
+	"version": "0.1.0",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"browser": "./dist/index.js",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"test": "vitest run",
+		"lint": "eslint src --ext .ts",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"check:browser-import": "pnpm build && node scripts/check-browser-import.mjs"
+	},
+	"dependencies": {
+		"@point-of-sale/receipt-printer-encoder": "^3.0.3",
+		"dompurify": "^3.4.1",
+		"mustache": "^4.2.0"
+	},
+	"devDependencies": {
+		"jsdom": "^26.1.0",
+		"vitest": "^4.0.18",
+		"@types/mustache": "^4.2.6"
+	},
+	"sideEffects": false
+}
