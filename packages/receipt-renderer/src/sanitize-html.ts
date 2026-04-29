@@ -33,6 +33,17 @@ export function sanitizeHtml(html: string, options: SanitizeHtmlOptions = {}): s
 	return escapeHtml(html);
 }
 
+const URL_BEARING_ATTRIBUTES = new Set(['href', 'src', 'action', 'formaction', 'xlink:href']);
+
+function hasUnsafeProtocol(raw: string): boolean {
+	const normalized = raw.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+	return (
+		normalized.startsWith('javascript:') ||
+		normalized.startsWith('vbscript:') ||
+		normalized.startsWith('data:')
+	);
+}
+
 function sanitizeWithDomParser(html: string, options: SanitizeHtmlOptions): string {
 	const doc = new DOMParser().parseFromString(html, 'text/html');
 	const allowedExtraTags = new Set((options.addTags ?? []).map((tag) => tag.toLowerCase()));
@@ -56,7 +67,7 @@ function sanitizeWithDomParser(html: string, options: SanitizeHtmlOptions): stri
 				continue;
 			}
 
-			if ((name === 'href' || name === 'src') && /^javascript:/i.test(value)) {
+			if (URL_BEARING_ATTRIBUTES.has(name) && hasUnsafeProtocol(value)) {
 				el.removeAttribute(attr.name);
 			}
 		}

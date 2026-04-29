@@ -1,11 +1,10 @@
 {
   "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "strict": true,
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "types": ["vitest/globals"]
-  },
+	"compilerOptions": {
+		"strict": true,
+		"moduleResolution": "bundler",
+		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true
+	},
   "include": ["src/**/*", "scripts/**/*.mjs"]
 }

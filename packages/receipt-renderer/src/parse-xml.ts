@@ -169,5 +169,5 @@ function intAttr(el: Element, name: string, fallback: number): number {
 	const raw = el.getAttribute(name);
 	if (raw == null) return fallback;
 	const n = parseInt(raw, 10);
-	return Number.isNaN(n) ? fallback : n;
+	return Number.isNaN(n) || n <= 0 ? fallback : n;
 }
