@@ -29,9 +29,15 @@ export async function listBundledTemplates({
 	const templates: StudioTemplate[] = [];
 
 	for (const metadataFile of metadataFiles) {
-		const metadata = JSON.parse(
-			await readFile(path.join(dir, metadataFile), 'utf8')
-		) as GalleryMetadata;
+		const metadataPath = path.join(dir, metadataFile);
+		const metadataSource = await readFile(metadataPath, 'utf8');
+		let metadata: GalleryMetadata;
+		try {
+			metadata = JSON.parse(metadataSource) as GalleryMetadata;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			throw new Error(`Invalid gallery metadata JSON (${metadataPath}): ${message}`);
+		}
 		if (metadata.engine !== 'logicless' && metadata.engine !== 'thermal') continue;
 
 		const id = metadata.key ?? metadata.id ?? metadataFile.replace(/\.json$/, '');

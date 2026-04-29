@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
 
+import { render, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { App } from '../App';
 import {
 	buildTemplateViewModel,
 	bytesToDebugOutput,
@@ -8,6 +12,13 @@ import {
 } from '../studio-core';
 import { listBundledTemplates } from '../template-loader';
 import galleryFixture from '../../fixtures/gallery-default-receipt.json';
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+	globalThis.fetch = originalFetch;
+	vi.restoreAllMocks();
+});
 
 describe('template studio rendering harness', () => {
 	it('lists only bundled/gallery templates and excludes database templates', async () => {
@@ -108,5 +119,41 @@ describe('template studio rendering harness', () => {
 			hex: '1b 40 41 0a',
 			ascii: '.@A.',
 		});
+	});
+
+	it('sanitizes preview and diagnostic HTML before DOM insertion', async () => {
+		globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url === '/__studio/templates') {
+				return Response.json([
+					{
+						id: 'unsafe-template',
+						name: 'Unsafe template',
+						engine: 'logicless',
+						source: 'bundled-gallery',
+						content:
+							'<img src="x" onerror="window.__previewXss = true"><script>window.__scriptXss = true</script><p>Safe preview</p>',
+						previewHtml:
+							'<img src="x" onerror="window.__diagnosticXss = true"><script>window.__diagnosticScriptXss = true</script><p>Safe diagnostic</p>',
+					},
+				]);
+			}
+			if (url === '/__studio/fixtures') {
+				return Response.json([galleryFixture]);
+			}
+			return new Response(null, { status: 404 });
+		}) as typeof fetch;
+
+		const { container } = render(createElement(App));
+
+		await waitFor(() => {
+			expect(container.querySelector('.paper-frame')?.innerHTML).toContain('Safe preview');
+			expect(container.querySelector('.diagnostic-frame')?.innerHTML).toContain('Safe diagnostic');
+		});
+
+		expect(container.querySelector('.paper-frame script')).toBeNull();
+		expect(container.querySelector('.paper-frame [onerror]')).toBeNull();
+		expect(container.querySelector('.diagnostic-frame script')).toBeNull();
+		expect(container.querySelector('.diagnostic-frame [onerror]')).toBeNull();
 	});
 });

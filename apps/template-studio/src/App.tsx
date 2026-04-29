@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import { sanitizeHtml } from '@wcpos/receipt-renderer';
+
 import { fetchBundledTemplates, fetchFixtures, fetchWpPreview, paperWidths } from './studio-api';
 import { renderStudioTemplate, selectVisibleTemplate } from './studio-core';
 
@@ -40,6 +42,12 @@ export function App() {
 		selectedTemplate && selectedFixture
 			? renderStudioTemplate({ template: selectedTemplate, fixture: selectedFixture, paperWidth })
 			: null;
+	const previewHtml = sanitizeHtml(rendered?.html ?? '');
+	const diagnosticHtml = sanitizeHtml(
+		rendered?.kind === 'logicless'
+			? (rendered.diagnosticHtml ?? '<p>No preview_html diagnostic returned.</p>')
+			: '<p>No preview_html diagnostic returned.</p>'
+	);
 
 	async function loadWpTemplate() {
 		if (!wpTemplateId.trim()) return;
@@ -134,7 +142,7 @@ export function App() {
 			</aside>
 			<main className="preview-column">
 				<h2>{selectedTemplate?.name ?? 'No template selected'}</h2>
-				<div className="paper-frame" dangerouslySetInnerHTML={{ __html: rendered?.html ?? '' }} />
+				<div className="paper-frame" dangerouslySetInnerHTML={{ __html: previewHtml }} />
 			</main>
 			<aside className="diagnostics">
 				<h2>Diagnostics</h2>
@@ -143,9 +151,7 @@ export function App() {
 						<h3>PHP diagnostic output</h3>
 						<div
 							className="diagnostic-frame"
-							dangerouslySetInnerHTML={{
-								__html: rendered.diagnosticHtml ?? '<p>No preview_html diagnostic returned.</p>',
-							}}
+							dangerouslySetInnerHTML={{ __html: diagnosticHtml }}
 						/>
 					</>
 				) : null}
