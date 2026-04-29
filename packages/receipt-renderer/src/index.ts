@@ -1,21 +1,21 @@
 import Mustache from 'mustache';
 
-import { parseXml } from './parse-xml.js';
-import { renderEscpos } from './render-escpos.js';
-import { renderHtml } from './render-html.js';
-import { sanitizeHtml } from './sanitize-html.js';
+import { parseXml } from './parse-xml';
+import { renderEscpos } from './render-escpos';
+import { renderHtml } from './render-html';
+import { sanitizeHtml } from './sanitize-html';
 
-import type { EscposRenderOptions } from './render-escpos.js';
-import type { SanitizeHtmlOptions } from './sanitize-html.js';
+import type { EscposRenderOptions } from './render-escpos';
+import type { SanitizeHtmlOptions } from './sanitize-html';
 
-export { parseXml } from './parse-xml.js';
-export { renderHtml } from './render-html.js';
-export { renderEscpos } from './render-escpos.js';
-export { sanitizeHtml } from './sanitize-html.js';
-export type { HtmlRenderOptions } from './render-html.js';
-export type { EscposRenderOptions } from './render-escpos.js';
-export type { SanitizeHtmlOptions } from './sanitize-html.js';
-export type * from './types.js';
+export { parseXml } from './parse-xml';
+export { renderHtml } from './render-html';
+export { renderEscpos } from './render-escpos';
+export { sanitizeHtml } from './sanitize-html';
+export type { HtmlRenderOptions } from './render-html';
+export type { EscposRenderOptions } from './render-escpos';
+export type { SanitizeHtmlOptions } from './sanitize-html';
+export type * from './types';
 
 export interface LogiclessRenderOptions extends SanitizeHtmlOptions {
 	/** Disable sanitization only for trusted test/debug output. Defaults to true. */

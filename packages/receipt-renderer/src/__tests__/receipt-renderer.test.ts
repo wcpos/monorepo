@@ -84,9 +84,9 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).toContain('<div>Hello</div>');
 	});
 
-	it('falls back to defaults when numeric XML attributes are non-positive', () => {
+	it('falls back to defaults when numeric XML attributes are invalid', () => {
 		const ast = parseXml(
-			'<receipt paper-width="0"><feed lines="-1" /><qrcode size="0">code</qrcode></receipt>'
+			'<receipt paper-width="12px"><feed lines="3.5" /><qrcode size="1e3">code</qrcode></receipt>'
 		);
 		const html = renderHtml(ast);
 
@@ -111,7 +111,7 @@ describe('@wcpos/receipt-renderer exports', () => {
 		);
 		const html = renderHtml(ast);
 
-		expect(html).toContain('<img src=""');
+		expect(html).not.toContain('<img');
 	});
 
 	it('sanitizes style-affecting numeric fields when rendering HTML', () => {

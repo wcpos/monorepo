@@ -166,8 +166,9 @@ function parseRowChildren(row: Element): ColNode[] {
 }
 
 function intAttr(el: Element, name: string, fallback: number): number {
-	const raw = el.getAttribute(name);
+	const raw = el.getAttribute(name)?.trim();
 	if (raw == null) return fallback;
-	const n = parseInt(raw, 10);
-	return Number.isNaN(n) || n <= 0 ? fallback : n;
+	if (!/^[1-9]\d*$/.test(raw)) return fallback;
+	const n = Number(raw);
+	return Number.isSafeInteger(n) ? n : fallback;
 }

@@ -43,6 +43,7 @@ function renderNode(node: ThermalNode): string {
 			return `<div style="text-align: center; padding: 8px 0"><div style="width: ${safeInteger(node.size, 4, 1, 20) * 25}px; height: ${safeInteger(node.size, 4, 1, 20) * 25}px; border: 1px solid #000; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999">QR</div></div>`;
 		case 'image': {
 			const safeSrc = safeImageSrc(node.src);
+			if (!safeSrc) return '';
 			return `<div style="text-align: center; padding: 8px 0"><img src="${safeSrc}" style="max-width: ${safeInteger(node.width, 200, 1, 2000)}px; height: auto" /></div>`;
 		}
 		case 'cut':
