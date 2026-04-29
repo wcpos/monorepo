@@ -83,12 +83,13 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 }
 
 export function buildTemplateViewModel(input: RenderStudioTemplateInput): StudioSnapshotViewModel {
+	const resolvedPaperWidth = input.template.paperWidth ?? input.paperWidth;
 	const rendered = renderStudioTemplate(input);
 	return {
 		templateId: input.template.id,
 		fixtureId: input.fixture.id,
 		engine: input.template.engine,
-		paperWidth: input.paperWidth,
+		paperWidth: resolvedPaperWidth,
 		html: rendered.html,
 		escposHex: rendered.kind === 'thermal' ? rendered.escposHex : undefined,
 	};

@@ -2,6 +2,7 @@ import './install-dom-parser';
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { chromium } from 'playwright';
 
@@ -19,18 +20,19 @@ function pageHtml(renderedHtml: string): string {
 async function main() {
 	const fixture = JSON.parse(await fs.readFile(fixturePath, 'utf8')) as ReceiptFixture;
 	const templates = await listBundledTemplates({
-		templatesDir: new URL(`file://${galleryTemplatesDir}/`),
+		templatesDir: pathToFileURL(galleryTemplatesDir),
 	});
+	const expectedOutputs = new Set(templates.map((template) => `${template.id}.png`));
 	await fs.mkdir(galleryPreviewOutputDir, { recursive: true });
 	const browser = await chromium.launch();
-	const page = await browser.newPage({
-		viewport: { width: 360, height: 520 },
-		deviceScaleFactor: 1,
-	});
 	const stale: string[] = [];
 	const written: string[] = [];
 
 	try {
+		const page = await browser.newPage({
+			viewport: { width: 360, height: 520 },
+			deviceScaleFactor: 1,
+		});
 		for (const template of templates) {
 			const rendered = renderStudioTemplate({
 				template,
@@ -52,6 +54,16 @@ async function main() {
 				else {
 					await fs.writeFile(outputPath, image);
 					written.push(path.relative(process.cwd(), outputPath));
+				}
+			}
+		}
+		if (checkMode) {
+			const existingOutputs = (await fs.readdir(galleryPreviewOutputDir)).filter((file) =>
+				file.endsWith('.png')
+			);
+			for (const outputFile of existingOutputs) {
+				if (!expectedOutputs.has(outputFile)) {
+					stale.push(path.relative(process.cwd(), path.join(galleryPreviewOutputDir, outputFile)));
 				}
 			}
 		}

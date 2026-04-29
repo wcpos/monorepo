@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
@@ -31,7 +31,7 @@ function templateStudioPlugin(): Plugin {
 			server.middlewares.use('/__studio/templates', async (_request, response) => {
 				try {
 					const templates = await listBundledTemplates({
-						templatesDir: new URL(`file://${galleryTemplatesDir}/`),
+						templatesDir: pathToFileURL(galleryTemplatesDir),
 					});
 					response.setHeader('Content-Type', 'application/json');
 					response.end(JSON.stringify(templates));

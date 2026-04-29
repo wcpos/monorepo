@@ -34,16 +34,10 @@
 	},
 	"lines": [
 		{
-			"name": "Long product name for receipt wrapping",
-			"qty": 2,
-			"unit_price_incl": "$15.00",
-			"line_total_incl": "$30.00"
-		},
-		{
-			"name": "Coffee",
-			"qty": 1,
-			"unit_price_incl": "$12.50",
-			"line_total_incl": "$12.50"
+			"name": "Returned item",
+			"qty": -1,
+			"unit_price_incl": "-$24.00",
+			"line_total_incl": "-$24.00"
 		}
 	],
 	"items": [
@@ -55,17 +49,17 @@
 		}
 	],
 	"totals": {
-		"subtotal_incl": "$38.64",
-		"subtotal": "38.64",
-		"tax_total": "$3.86",
-		"grand_total_incl": "$42.50",
-		"grand_total": "42.50"
+		"subtotal_incl": "-$24.00",
+		"subtotal": "-20.00",
+		"tax_total": "-$4.00",
+		"grand_total_incl": "-$24.00",
+		"grand_total": "-24.00"
 	},
 	"tax_summary": [
 		{
 			"label": "VAT",
-			"rate": "10",
-			"tax_amount": "$3.86"
+			"rate": "20",
+			"tax_amount": "-$4.00"
 		}
 	],
 	"discounts": [],

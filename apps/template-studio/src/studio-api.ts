@@ -15,8 +15,9 @@ export async function fetchFixtures(): Promise<ReceiptFixture[]> {
 export async function fetchWpPreview(
 	templateId: string | number
 ): Promise<StudioTemplate & { receiptData: ReceiptFixture }> {
+	const encodedTemplateId = encodeURIComponent(String(templateId));
 	const response = await fetch(
-		`/wp-json/wcpos/v1/templates/${templateId}/preview?include_legacy_html=1`,
+		`/wp-json/wcpos/v1/templates/${encodedTemplateId}/preview?include_legacy_html=1`,
 		{
 			credentials: 'include',
 			headers: { 'X-WCPOS': '1' },
@@ -37,7 +38,7 @@ export async function fetchWpPreview(
 		source: 'wp-env',
 		content: payload.template_content,
 		previewHtml: payload.preview_html,
-		receiptData: { id: `wp-env-${payload.template_id}`, ...payload.receipt_data },
+		receiptData: { ...payload.receipt_data, id: `wp-env-${payload.template_id}` },
 	};
 }
 

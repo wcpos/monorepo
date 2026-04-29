@@ -2,6 +2,7 @@ import './install-dom-parser';
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { buildTemplateViewModel, type PaperWidth, type ReceiptFixture } from '../src/studio-core';
 import { listBundledTemplates } from '../src/template-loader';
@@ -26,13 +27,27 @@ function snapshotName(templateId: string, fixtureId: string, paperWidth: PaperWi
 
 async function main() {
 	const [templates, fixtures] = await Promise.all([
-		listBundledTemplates({ templatesDir: new URL(`file://${galleryTemplatesDir}/`) }),
+		listBundledTemplates({ templatesDir: pathToFileURL(galleryTemplatesDir) }),
 		readFixtures(),
 	]);
 	const curatedTemplates = templates.filter((template) => curatedTemplateIds.has(template.id));
 	const curatedFixtures = fixtures.filter((fixture) => curatedFixtureIds.has(fixture.id));
-	if (curatedTemplates.length === 0 || curatedFixtures.length === 0) {
-		throw new Error('No curated snapshot inputs found. Check gallery templates and fixtures.');
+	const missingTemplateIds = [...curatedTemplateIds].filter(
+		(id) => !curatedTemplates.some((template) => template.id === id)
+	);
+	const missingFixtureIds = [...curatedFixtureIds].filter(
+		(id) => !curatedFixtures.some((fixture) => fixture.id === id)
+	);
+	if (missingTemplateIds.length > 0 || missingFixtureIds.length > 0) {
+		throw new Error(
+			[
+				'Missing curated snapshot inputs.',
+				missingTemplateIds.length > 0 ? `Templates: ${missingTemplateIds.join(', ')}` : '',
+				missingFixtureIds.length > 0 ? `Fixtures: ${missingFixtureIds.join(', ')}` : '',
+			]
+				.filter(Boolean)
+				.join(' ')
+		);
 	}
 
 	await fs.mkdir(curatedSnapshotDir, { recursive: true });

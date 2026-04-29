@@ -34,16 +34,10 @@
 	},
 	"lines": [
 		{
-			"name": "Long product name for receipt wrapping",
-			"qty": 2,
-			"unit_price_incl": "$15.00",
-			"line_total_incl": "$30.00"
-		},
-		{
-			"name": "Coffee",
-			"qty": 1,
-			"unit_price_incl": "$12.50",
-			"line_total_incl": "$12.50"
+			"name": "Taxed product",
+			"qty": 4,
+			"unit_price_incl": "$22.20",
+			"line_total_incl": "$88.80"
 		}
 	],
 	"items": [
@@ -56,17 +50,17 @@
 		}
 	],
 	"totals": {
-		"subtotal_incl": "$38.64",
-		"subtotal": "38.64",
-		"tax_total": "$3.86",
-		"grand_total_incl": "$42.50",
-		"grand_total": "42.50"
+		"subtotal_incl": "$88.80",
+		"subtotal": "80.00",
+		"tax_total": "$8.80",
+		"grand_total_incl": "$88.80",
+		"grand_total": "88.80"
 	},
 	"tax_summary": [
 		{
-			"label": "VAT",
-			"rate": "10",
-			"tax_amount": "$3.86"
+			"label": "GST",
+			"rate": "11",
+			"tax_amount": "$8.80"
 		}
 	],
 	"discounts": [],
@@ -75,7 +69,7 @@
 	"payments": [
 		{
 			"method": "Cash",
-			"amount": "88.80",
+			"amount": "$88.80",
 			"method_title": "Cash"
 		}
 	],

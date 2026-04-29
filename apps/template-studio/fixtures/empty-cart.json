@@ -29,35 +29,16 @@
 	"customer": {
 		"name": "Walk-in Customer"
 	},
-	"lines": [
-		{
-			"name": "Long product name for receipt wrapping",
-			"qty": 2,
-			"unit_price_incl": "$15.00",
-			"line_total_incl": "$30.00"
-		},
-		{
-			"name": "Coffee",
-			"qty": 1,
-			"unit_price_incl": "$12.50",
-			"line_total_incl": "$12.50"
-		}
-	],
+	"lines": [],
 	"items": [],
 	"totals": {
-		"subtotal_incl": "$38.64",
-		"subtotal": "38.64",
-		"tax_total": "$3.86",
-		"grand_total_incl": "$42.50",
-		"grand_total": "42.50"
+		"subtotal_incl": "$0.00",
+		"subtotal": "0.00",
+		"tax_total": "$0.00",
+		"grand_total_incl": "$0.00",
+		"grand_total": "0.00"
 	},
-	"tax_summary": [
-		{
-			"label": "VAT",
-			"rate": "10",
-			"tax_amount": "$3.86"
-		}
-	],
+	"tax_summary": [],
 	"discounts": [],
 	"shipping": [],
 	"fees": [],

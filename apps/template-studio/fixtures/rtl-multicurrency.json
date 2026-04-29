@@ -32,16 +32,16 @@
 	},
 	"lines": [
 		{
-			"name": "Long product name for receipt wrapping",
+			"name": "قهوة مختصة",
 			"qty": 2,
-			"unit_price_incl": "$15.00",
-			"line_total_incl": "$30.00"
+			"unit_price_incl": "١٠٫٠٠ €",
+			"line_total_incl": "٢٠٫٠٠ €"
 		},
 		{
-			"name": "Coffee",
+			"name": "هدية",
 			"qty": 1,
-			"unit_price_incl": "$12.50",
-			"line_total_incl": "$12.50"
+			"unit_price_incl": "١٠٣٫٤٥ €",
+			"line_total_incl": "١٠٣٫٤٥ €"
 		}
 	],
 	"items": [
@@ -57,17 +57,17 @@
 		}
 	],
 	"totals": {
-		"subtotal_incl": "$38.64",
-		"subtotal": "38.64",
-		"tax_total": "$3.86",
-		"grand_total_incl": "$42.50",
-		"grand_total": "42.50"
+		"subtotal_incl": "١١٠٫٢٢ €",
+		"subtotal": "١١٠٫٢٢ €",
+		"tax_total": "١٣٫٢٣ €",
+		"grand_total_incl": "١٢٣٫٤٥ €",
+		"grand_total": "١٢٣٫٤٥ €"
 	},
 	"tax_summary": [
 		{
 			"label": "VAT",
-			"rate": "10",
-			"tax_amount": "$3.86"
+			"rate": "12",
+			"tax_amount": "١٣٫٢٣ €"
 		}
 	],
 	"discounts": [],
