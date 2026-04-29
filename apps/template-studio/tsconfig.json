@@ -1,0 +1,26 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"jsx": "react-jsx",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"types": [
+			"vite/client",
+			"vitest/globals"
+		],
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"baseUrl": ".",
+		"paths": {
+			"@wcpos/receipt-renderer": [
+				"../../packages/receipt-renderer/src/index.ts"
+			]
+		}
+	},
+	"include": [
+		"src",
+		"scripts",
+		"vite.config.ts",
+		"vitest.config.ts"
+	]
+}

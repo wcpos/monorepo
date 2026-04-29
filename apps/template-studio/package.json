@@ -1,0 +1,33 @@
+{
+	"name": "@wcpos/template-studio",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite --host 0.0.0.0",
+		"build": "tsc -p tsconfig.json --noEmit && vite build",
+		"lint": "eslint src scripts --ext .ts,.tsx",
+		"test": "vitest run",
+		"test:snapshots": "tsx --tsconfig tsconfig.json scripts/run-snapshots.ts --check",
+		"generate:gallery-previews": "tsx --tsconfig tsconfig.json scripts/generate-gallery-previews.ts",
+		"check:gallery-previews": "tsx --tsconfig tsconfig.json scripts/generate-gallery-previews.ts --check"
+	},
+	"dependencies": {
+		"@wcpos/receipt-renderer": "workspace:*",
+		"@vitejs/plugin-react": "6.0.1",
+		"vite": "8.0.10",
+		"typescript": "^5.8.3",
+		"react": "~19.2.0",
+		"react-dom": "~19.2.0"
+	},
+	"devDependencies": {
+		"@testing-library/jest-dom": "6.9.1",
+		"@testing-library/react": "16.3.2",
+		"@types/react": "^19.2.13",
+		"@types/react-dom": "^19.2.3",
+		"playwright": "1.59.1",
+		"tsx": "^4.21.0",
+		"vitest": "^4.0.18",
+		"jsdom": "^26.1.0"
+	}
+}
