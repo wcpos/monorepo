@@ -112,7 +112,11 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		window.open = (url?: string | URL, ...args: any[]) => {
 			if (url && url.toString().includes('wcpos')) {
 				(window as any).__capturedAuthUrl = url.toString();
-				return { closed: false, close: () => {}, location: { href: '' } } as any;
+				return {
+					closed: false,
+					close: () => {},
+					location: { href: '' },
+				} as any;
 			}
 			return origOpen.call(window, url, ...args);
 		};
@@ -120,24 +124,26 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 
 	console.log('[auth] Navigating to /');
 	await page.goto('/');
-	await expect(page.getByRole('button', { name: 'Enter Demo Store' })).toBeVisible({
+	await expect(page.getByTestId('enter-demo-store-button')).toBeVisible({
 		timeout: 60_000,
 	});
 	console.log('[auth] Enter Demo Store button visible');
 
 	// Type the store URL and connect
-	const urlInput = page.getByRole('textbox', { name: /Enter the URL/i });
+	const urlInput = page.getByTestId('store-url-input');
 	await urlInput.click();
 	await urlInput.fill(storeUrl);
 	await page.waitForTimeout(1_000);
 
-	const connectButton = page.getByRole('button', { name: 'Connect' });
+	const connectButton = page.getByTestId('connect-store-button');
 	await expect(connectButton).toBeEnabled({ timeout: 10_000 });
 	await connectButton.click();
 	console.log('[auth] Connect button clicked');
 
 	// Wait for the store to be discovered
-	await expect(page.getByTestId('logged-in-users-label')).toBeVisible({ timeout: 60_000 });
+	await expect(page.getByTestId('logged-in-users-label')).toBeVisible({
+		timeout: 60_000,
+	});
 	console.log('[auth] logged-in-users-label visible');
 
 	// Click the + button to trigger OAuth
@@ -356,7 +362,9 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	}
 
 	// Wait for products to sync (use testID to avoid locale-dependent text)
-	await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, { timeout: 120_000 });
+	await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
+		timeout: 120_000,
+	});
 }
 
 /**
@@ -468,8 +476,10 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 				// product marker appears quickly, wait for it to settle without making an
 				// empty catalog fail authentication bootstrap. Give product-backed tests a
 				// chance to start after the initial sync, but do not make auth depend on it.
-				await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 60_000 });
-				const appError = page.getByText('Something went wrong:').first();
+				await expect(page.getByTestId('search-products')).toBeVisible({
+					timeout: 60_000,
+				});
+				const appError = page.getByTestId('error-boundary-fallback').first();
 				if (await appError.isVisible({ timeout: 1_000 }).catch(() => false)) {
 					throw new Error('Saved auth state restored into an app error; falling back to OAuth.');
 				}

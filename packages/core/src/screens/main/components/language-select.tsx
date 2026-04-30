@@ -64,7 +64,12 @@ export function LanguageSelect({ value, ...props }: ComboboxSingleRootProps) {
 				<ComboboxList
 					data={options}
 					renderItem={({ item }) => (
-						<ComboboxItem value={String(item.value)} label={item.label} item={item}>
+						<ComboboxItem
+							testID={`language-option-${item.value}`}
+							value={String(item.value)}
+							label={item.label}
+							item={item}
+						>
 							<ComboboxItemText />
 						</ComboboxItem>
 					)}

@@ -4,6 +4,13 @@ import { fileURLToPath } from 'node:url';
 export const studioRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 export const monorepoRoot = path.resolve(studioRoot, '../..');
 
+/**
+ * Resolve the default woocommerce-pos plugin checkout path for a Template Studio checkout.
+ *
+ * Template Studio can run from the primary monorepo checkout or from a git worktree
+ * under `.worktrees`; this keeps the default pointing at the sibling plugin checkout
+ * in both layouts.
+ */
 export function resolveDefaultWooCommercePosRoot(root: string): string {
 	const resolvedRoot = path.resolve(root);
 	return resolvedRoot.includes(`${path.sep}.worktrees${path.sep}`)

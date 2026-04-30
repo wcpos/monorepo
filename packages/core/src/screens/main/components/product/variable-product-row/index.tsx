@@ -87,10 +87,12 @@ export function VariableProductRow({
 	/**
 	 * Render the row and the animated Variations component
 	 */
+	const stableId = item.original.document.slug ?? item.original.document.id ?? item.id;
+
 	return (
 		<VirtualizedList.Item>
 			<VariationRowProvider row={item} setRowExpanded={setRowExpanded}>
-				<TableRow index={index}>
+				<TableRow testID={stableId ? `data-table-row-${stableId}` : undefined} index={index}>
 					{item
 						.getVisibleCells()
 						.map(

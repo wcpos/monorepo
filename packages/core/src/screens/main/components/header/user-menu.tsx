@@ -104,7 +104,10 @@ export function UserMenu() {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button className="text-sidebar-foreground rounded-none bg-transparent px-2 hover:bg-white/10">
+				<Button
+					testID="user-menu-trigger"
+					className="text-sidebar-foreground rounded-none bg-transparent px-2 hover:bg-white/10"
+				>
 					<HStack>
 						<Avatar source={{ uri }} fallback={getInitials(wpCredentials?.display_name)} />
 						{screenSize !== 'sm' ? (

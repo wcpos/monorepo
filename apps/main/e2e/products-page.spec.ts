@@ -14,14 +14,20 @@ test.describe('Products Page (Pro)', () => {
 	test('should navigate to Products page and see product table', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByTestId('search-products')).toBeVisible({ timeout: 30_000 });
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('search-products')).toBeVisible({
+			timeout: 30_000,
+		});
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 	});
 
 	test('should show stock and price columns on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
 		const columnheaders = screen.getByRole('columnheader');
 		expect(await columnheaders.count()).toBeGreaterThanOrEqual(3);
@@ -32,19 +38,17 @@ test.describe('Products Page (Pro)', () => {
 	}) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
 		// Use deterministic fixture data known to include multiple hoodie products.
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
 		await page.waitForTimeout(1_500);
 
-		const hoodieWithPocketRow = screen
-			.getByRole('button', { name: /Hoodie with Pocket/i })
-			.first();
-		const hoodieWithZipperRow = screen
-			.getByRole('button', { name: /Hoodie with Zipper/i })
-			.first();
+		const hoodieWithPocketRow = screen.getByTestId('data-table-row-hoodie-with-pocket').first();
+		const hoodieWithZipperRow = screen.getByTestId('data-table-row-hoodie-with-zipper').first();
 		await expect(hoodieWithPocketRow).toBeVisible({ timeout: 30_000 });
 		await expect(hoodieWithZipperRow).toBeVisible({ timeout: 30_000 });
 
@@ -62,9 +66,7 @@ test.describe('Products Page (Pro)', () => {
 		expect(initialHoodieWithPocketY).not.toBe(initialHoodieWithZipperY);
 		const initialSortDirection = Math.sign(initialHoodieWithPocketY - initialHoodieWithZipperY);
 
-		// Columnheader wraps an inner Pressable; click its text node to hit the interactive control.
-		const productHeader = screen.getByRole('columnheader', { name: /product/i }).first();
-		const productSortControl = productHeader.getByText(/product/i).first();
+		const productSortControl = screen.getByTestId('data-table-header-name').first();
 		await expect(productSortControl).toBeVisible({ timeout: 15_000 });
 		await productSortControl.click();
 
@@ -85,7 +87,9 @@ test.describe('Products Page (Pro)', () => {
 	test('should search products on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
 		const searchInput = screen.getByTestId('search-products');
 		await searchInput.fill('hoodie');
@@ -102,19 +106,25 @@ test.describe('Products Page (Pro)', () => {
 	test('should show product actions menu', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
 		const actionsButton = screen.getByTestId('product-actions-button').first();
 		await expect(actionsButton).toBeVisible({ timeout: 15_000 });
 		await actionsButton.click();
 
-		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByRole('menuitem').first()).toBeVisible({
+			timeout: 15_000,
+		});
 	});
 
 	test('should expand variable product to show variations', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
 		// Search for a variable product
 		const searchInput = screen.getByTestId('search-products');
@@ -135,7 +145,9 @@ test.describe('Products Page (Pro)', () => {
 	test('should show variation actions menu with edit/sync/delete', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
 		// Search for a variable product and expand it
 		const searchInput = screen.getByTestId('search-products');
@@ -153,13 +165,17 @@ test.describe('Products Page (Pro)', () => {
 		await variationActionsMenu.click();
 
 		// The dropdown should show menu items (Edit, Sync, Delete)
-		await expect(page.getByRole('menuitem').first()).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByRole('menuitem').first()).toBeVisible({
+			timeout: 15_000,
+		});
 	});
 
 	test('should collapse expanded variable product on Products page', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
 		const screen = page.getByTestId('screen-products');
-		await expect(screen.getByTestId('data-table-count')).toBeVisible({ timeout: 60_000 });
+		await expect(screen.getByTestId('data-table-count')).toBeVisible({
+			timeout: 60_000,
+		});
 
 		// Search and expand
 		const searchInput = screen.getByTestId('search-products');
@@ -179,7 +195,9 @@ test.describe('Products Page (Pro)', () => {
 		await page.waitForTimeout(1_000);
 
 		// Variation actions should no longer be visible
-		await expect(variationActionsMenu.first()).not.toBeVisible({ timeout: 10_000 });
+		await expect(variationActionsMenu.first()).not.toBeVisible({
+			timeout: 10_000,
+		});
 	});
 });
 
@@ -194,12 +212,16 @@ test.describe('Products Page (Free)', () => {
 
 	test('should show upgrade overlay on Products', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('upgrade-title')).toBeVisible({
+			timeout: 30_000,
+		});
 	});
 
 	test('should show View Demo button on upgrade overlay', async ({ posPage: page }) => {
 		await navigateToPage(page, 'products');
-		await expect(page.getByTestId('upgrade-title')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('upgrade-title')).toBeVisible({
+			timeout: 30_000,
+		});
 		await expect(page.getByTestId('view-demo-button')).toBeVisible();
 	});
 });
