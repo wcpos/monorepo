@@ -228,7 +228,7 @@ test('uses the legacy webview for built-in POS gateways even when supports_check
 		contractCheckoutRequested = true;
 		await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
 	});
-	await page.route('**/wp-json/wcpos/v1/payment-gateways**', async (route) => {
+	await page.route('**/wp-json/wcpos/v1/payment-gateways{,?*}', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -252,7 +252,7 @@ test('uses the legacy webview for built-in POS gateways even when supports_check
 });
 
 test('falls back to the legacy webview when supports_checkout=false', async ({ posPage: page }) => {
-	await page.route('**/wp-json/wcpos/v1/payment-gateways**', async (route) => {
+	await page.route('**/wp-json/wcpos/v1/payment-gateways{,?*}', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',

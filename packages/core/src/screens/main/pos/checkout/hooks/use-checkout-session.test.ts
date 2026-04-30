@@ -69,6 +69,8 @@ describe('useCheckoutSession', () => {
 	it.each([
 		['pos_cash', 'manual'],
 		['pos_card', 'terminal'],
+		['wcpos_cash', 'manual'],
+		['wcpos_card', 'terminal'],
 	])(
 		'uses legacy webview mode for legacy POS gateway %s even when it advertises supports_checkout',
 		async (gatewayId, posType) => {
