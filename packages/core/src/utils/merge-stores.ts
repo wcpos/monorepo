@@ -37,8 +37,14 @@ async function generateHashId(dataObject: {
  * new shape here: text goes into `opening_hours_notes`, structured array
  * becomes empty.
  */
+const VALID_TAX_BASED_ON_VALUES = new Set(['shipping', 'billing', 'base']);
+
 function normalizeStorePayload<T extends { id: number; [key: string]: any }>(store: T): T {
 	const out: any = { ...store };
+
+	if (!VALID_TAX_BASED_ON_VALUES.has(out.tax_based_on)) {
+		out.tax_based_on = 'base';
+	}
 
 	if (typeof out.opening_hours === 'string') {
 		const legacyText = out.opening_hours;
