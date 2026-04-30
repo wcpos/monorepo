@@ -8,10 +8,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 
 import { RefundOrderForm } from './form';
 
+function mockWebProps({ testID, ...props }: any) {
+	return testID ? { ...props, 'data-testid': testID } : props;
+}
+
 jest.mock('@wcpos/components/alert-dialog', () => ({
 	AlertDialog: ({ children }: any) => <>{children}</>,
 	AlertDialogAction: ({ children, onPress, loading, ...props }: any) => (
-		<button onClick={onPress} {...props}>
+		<button onClick={onPress} {...mockWebProps(props)}>
 			{children}
 		</button>
 	),
@@ -32,13 +36,13 @@ jest.mock('@wcpos/components/form', () => ({
 	FormInput: ({ label, ...props }: any) => (
 		<label>
 			{label}
-			<input aria-label={label} {...props} />
+			<input aria-label={label} {...mockWebProps(props)} />
 		</label>
 	),
 	FormTextarea: ({ label, ...props }: any) => (
 		<label>
 			{label}
-			<textarea aria-label={label} {...props} />
+			<textarea aria-label={label} {...mockWebProps(props)} />
 		</label>
 	),
 }));
@@ -48,7 +52,7 @@ jest.mock('@wcpos/components/hstack', () => ({
 }));
 jest.mock('@wcpos/components/modal', () => ({
 	ModalAction: ({ children, onPress, loading, ...props }: any) => (
-		<button onClick={onPress} {...props}>
+		<button onClick={onPress} {...mockWebProps(props)}>
 			{children}
 		</button>
 	),

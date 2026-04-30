@@ -34,7 +34,10 @@ function LineItemMeta({ item }: { item: LineItem }) {
 			</CollapsibleTrigger>
 			<CollapsibleContent className="mt-2 gap-1">
 				{meta.map((entry, index) => (
-					<Text key={`${entry.id || entry.key || index}`} className="text-muted-foreground text-xs">
+					<Text
+						key={`${entry.id ?? entry.key ?? 'meta'}-${index}`}
+						className="text-muted-foreground text-xs"
+					>
 						{entry.display_key || entry.key}: {entry.display_value || String(entry.value ?? '')}
 					</Text>
 				))}
@@ -78,7 +81,7 @@ export function LineItemsSection({ order }: { order: OrderDocument }) {
 						</TableHeader>
 						<TableBody>
 							{lineItems.map((item, index) => (
-								<TableRow key={`${item.id || item.name || index}`} index={index}>
+								<TableRow key={`${item.id ?? item.name ?? 'line-item'}-${index}`} index={index}>
 									<TableCell className="flex-[2]">
 										<View>
 											<Text>{item.name || '—'}</Text>

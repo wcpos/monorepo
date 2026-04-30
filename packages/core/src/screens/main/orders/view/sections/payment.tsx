@@ -11,20 +11,28 @@ function formatDate(value?: string | null) {
 	const date = new Date(value);
 	return Number.isNaN(date.getTime())
 		? value
-		: new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+		: new Intl.DateTimeFormat(undefined, {
+				dateStyle: 'medium',
+				timeStyle: 'short',
+			}).format(date);
 }
 
 function Row({ label, value }: { label: string; value?: string | number | null }) {
 	return (
 		<View className="gap-1">
 			<Text className="text-muted-foreground text-xs uppercase">{label}</Text>
-			<Text>{value || '—'}</Text>
+			<Text>{value ?? '—'}</Text>
 		</View>
 	);
 }
 
 export function PaymentSection({ order }: { order: OrderDocument }) {
-	if (!order.date_paid && !order.payment_method_title && !order.transaction_id) {
+	if (
+		!order.date_paid &&
+		!order.payment_method_title &&
+		!order.payment_method &&
+		!order.transaction_id
+	) {
 		return null;
 	}
 

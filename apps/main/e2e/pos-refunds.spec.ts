@@ -133,9 +133,9 @@ test.describe('POS refunds (Pro)', () => {
 		await expect(page.getByTestId('refund-destination-cash')).toBeVisible({ timeout: 15_000 });
 		await page.getByTestId('refund-destination-cash').click();
 		await expect(page.getByTestId('refund-destination-cash')).toBeChecked();
-		await page.getByRole('button', { name: 'Process Refund' }).click();
+		await page.getByTestId('refund-process-button').click();
 		await expect(page.getByRole('alertdialog')).toBeVisible({ timeout: 10_000 });
-		await page.getByRole('button', { name: 'Process Refund' }).last().click();
+		await page.getByTestId('refund-confirm-button').click();
 
 		await expect.poll(() => refundPayload?.refund_destination, { timeout: 15_000 }).toBe('cash');
 		expect(refundPayload?.api_refund).toBe(false);
@@ -163,9 +163,9 @@ test.describe('POS refunds (Pro)', () => {
 		});
 		await expect(page.getByTestId('refund-destination-original_method')).toBeEnabled();
 		await page.getByTestId('refund-destination-original_method').click();
-		await page.getByRole('button', { name: 'Process Refund' }).click();
+		await page.getByTestId('refund-process-button').click();
 		await expect(page.getByRole('alertdialog')).toBeVisible({ timeout: 10_000 });
-		await page.getByRole('button', { name: 'Process Refund' }).last().click();
+		await page.getByTestId('refund-confirm-button').click();
 
 		await expect
 			.poll(() => refundPayload?.refund_destination, { timeout: 15_000 })
