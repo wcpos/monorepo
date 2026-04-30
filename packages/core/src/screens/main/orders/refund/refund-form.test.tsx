@@ -312,7 +312,10 @@ describe('RefundOrderForm', () => {
 		} as never;
 		mockGet.mockImplementation((url: string) => {
 			if (url === 'payment-gateways') return Promise.resolve({ data: [] });
-			return Promise.resolve({ data: (partiallyRefundedOrder as any).refunds });
+			return Promise.resolve({
+				data: (partiallyRefundedOrder as any).refunds,
+				headers: { 'x-wp-totalpages': '1' },
+			});
 		});
 
 		render(<RefundOrderForm order={partiallyRefundedOrder} />);

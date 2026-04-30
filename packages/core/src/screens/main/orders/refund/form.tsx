@@ -135,6 +135,11 @@ export function RefundOrderForm({ order }: Props) {
 		normalizeRefundDetails(order.refunds || [])
 	);
 	const [refundDetailsLoading, setRefundDetailsLoading] = React.useState(Boolean(order.id));
+	const refundsFallback = JSON.stringify(order.refunds || []);
+	const getRefundsFallback = React.useCallback(() => {
+		const refunds = JSON.parse(refundsFallback) as RefundDetail[];
+		return normalizeRefundDetails(Array.isArray(refunds) ? refunds : []);
+	}, [refundsFallback]);
 
 	const refundFormSchema = React.useMemo(() => createRefundFormSchema(dp), [dp]);
 	const {
@@ -157,7 +162,7 @@ export function RefundOrderForm({ order }: Props) {
 		let mounted = true;
 
 		if (!order.id) {
-			setRefundDetails(normalizeRefundDetails(order.refunds || []));
+			setRefundDetails(getRefundsFallback());
 			setRefundDetailsLoading(false);
 			return;
 		}
@@ -185,14 +190,14 @@ export function RefundOrderForm({ order }: Props) {
 			})
 			.catch(() => {
 				if (!mounted) return;
-				setRefundDetails(normalizeRefundDetails(order.refunds || []));
+				setRefundDetails(getRefundsFallback());
 				setRefundDetailsLoading(false);
 			});
 
 		return () => {
 			mounted = false;
 		};
-	}, [http, order.id, order.refunds]);
+	}, [getRefundsFallback, http, order.id]);
 
 	const previousRefundTotal = React.useMemo(() => {
 		if (!refundDetails.length) return 0;
