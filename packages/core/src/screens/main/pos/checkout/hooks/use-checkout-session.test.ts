@@ -66,6 +66,36 @@ describe('useCheckoutSession', () => {
 		expect(result.current.mode).toBe('contract');
 	});
 
+	it.each([
+		['pos_cash', 'manual'],
+		['pos_card', 'terminal'],
+		['wcpos_cash', 'manual'],
+		['wcpos_card', 'terminal'],
+	])(
+		'uses legacy webview mode for legacy POS gateway %s even when it advertises supports_checkout',
+		async (gatewayId, posType) => {
+			mockGet.mockResolvedValueOnce({
+				data: [
+					{
+						id: gatewayId,
+						provider: 'wcpos',
+						pos_type: posType,
+						capabilities: { supports_checkout: true },
+					},
+				],
+			});
+
+			const legacyOrder = {
+				...(order as Record<string, unknown>),
+				payment_method: gatewayId,
+			} as never;
+			const { result } = renderHook(() => useCheckoutSession(legacyOrder));
+
+			await waitFor(() => expect(result.current.gatewayResolved).toBe(true));
+			expect(result.current.mode).toBe('webview');
+		}
+	);
+
 	it('falls back to webview mode if the gateway fetch fails', async () => {
 		mockGet.mockRejectedValueOnce(new Error('boom'));
 

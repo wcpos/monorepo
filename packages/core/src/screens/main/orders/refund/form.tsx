@@ -551,8 +551,8 @@ export function RefundOrderForm({ order }: Props) {
 						<AlertDialogFooter>
 							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
 							<AlertDialogAction
-								testID="confirm-process-refund-button"
 								variant="destructive"
+								testID="confirm-process-refund-button"
 								onPress={handleSubmit}
 								disabled={loading}
 							>
