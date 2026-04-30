@@ -1,0 +1,16 @@
+{
+	"id": "long-product-names",
+	"i18n": { "order": "Order", "date": "Date", "cashier": "Cashier", "customer": "Customer", "subtotal": "Subtotal", "total": "Total", "payment": "Payment", "thank_you": "Thank you!" },
+	"store": { "name": "WCPOS Demo Store", "address": "123 Market Street", "address_lines": ["123 Market Street"], "phone": "+34 555 0101", "currency": "USD" },
+	"order": { "id": 1003, "number": "1003", "created": { "date": "2026-04-30", "datetime": "2026-04-30 11:00" }, "currency": "USD" },
+	"cashier": { "name": "Sam Cashier" },
+	"customer": { "name": "Grace Hopper", "email": "grace@example.com" },
+	"lines": [
+		{ "name": "Extremely long product name with options, modifiers, and engraving notes that should wrap cleanly", "sku": "LONG-001", "qty": 99, "unit_price_incl": "$10.10", "line_total_incl": "$999.90" },
+		{ "name": "Another product with a very long translated title", "sku": "LONG-002", "qty": 1, "unit_price_incl": "$999.99", "line_total_incl": "$999.99" }
+	],
+	"totals": { "subtotal_incl": "$1999.89", "tax_total": "$199.99", "grand_total_incl": "$2199.88" },
+	"tax_summary": [{ "label": "VAT", "rate": "10", "tax_amount": "$199.99" }],
+	"discounts": [], "shipping": [], "fees": [],
+	"payments": [{ "method": "Split tender", "method_title": "Split tender", "amount": "$2199.88" }]
+}

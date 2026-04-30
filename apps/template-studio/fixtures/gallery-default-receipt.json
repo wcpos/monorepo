@@ -1,0 +1,23 @@
+{
+	"id": "gallery-default-receipt",
+	"i18n": { "order": "Order", "date": "Date", "cashier": "Cashier", "customer": "Customer", "subtotal": "Subtotal", "total": "Total", "payment": "Payment", "thank_you": "Thank you!" },
+	"store": { "name": "WCPOS Demo Store", "address": "123 Market Street", "address_lines": ["123 Market Street", "Barcelona"], "phone": "+34 555 0101", "currency": "USD" },
+	"order": { "id": 1001, "number": "1001", "created": { "date": "2026-04-30", "datetime": "2026-04-30 10:15" }, "currency": "USD" },
+	"cashier": { "name": "Sam Cashier" },
+	"customer": { "name": "Ada Lovelace", "email": "ada@example.com" },
+	"lines": [
+		{ "name": "Long product name for receipt wrapping", "qty": 2, "unit_price_incl": "$15.00", "line_total_incl": "$30.00" },
+		{ "name": "Coffee", "qty": 1, "unit_price_incl": "$12.50", "line_total_incl": "$12.50" }
+	],
+	"items": [
+		{ "name": "Long product name for receipt wrapping", "quantity": 2, "total": "$30.00" },
+		{ "name": "Coffee", "quantity": 1, "total": "$12.50" }
+	],
+	"totals": { "subtotal_incl": "$38.64", "subtotal": "38.64", "tax_total": "$3.86", "grand_total_incl": "$42.50", "grand_total": "42.50" },
+	"tax_summary": [{ "label": "VAT", "rate": "10", "tax_amount": "$3.86" }],
+	"discounts": [],
+	"shipping": [],
+	"fees": [],
+	"payments": [{ "method": "Card", "method_title": "Card", "amount": "$42.50" }],
+	"presentation_hints": { "display_tax": "incl" }
+}
