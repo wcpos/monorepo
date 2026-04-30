@@ -115,6 +115,16 @@ test.describe('POS refunds (Pro)', () => {
 	test('submits refund_destination=cash for a non-cash order', async ({ posPage: page }) => {
 		let refundPayload: any = null;
 		await page.route('**/wp-json/wcpos/v1/orders/*/refunds**', async (route) => {
+			if (route.request().method() !== 'POST') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					headers: { 'x-wp-totalpages': '1' },
+					body: JSON.stringify([]),
+				});
+				return;
+			}
+
 			refundPayload = route.request().postDataJSON();
 			await route.fulfill({
 				status: 201,
@@ -150,6 +160,16 @@ test.describe('POS refunds (Pro)', () => {
 	}) => {
 		let refundPayload: any = null;
 		await page.route('**/wp-json/wcpos/v1/orders/*/refunds**', async (route) => {
+			if (route.request().method() !== 'POST') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					headers: { 'x-wp-totalpages': '1' },
+					body: JSON.stringify([]),
+				});
+				return;
+			}
+
 			refundPayload = route.request().postDataJSON();
 			await route.fulfill({
 				status: 201,
