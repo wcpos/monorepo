@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { App, buildPrintDocument } from '../App';
+import { App, preparePrintDocument } from '../App';
 import { fetchWpPreview, printRawTcp } from '../studio-api';
 import {
 	buildTemplateViewModel,
@@ -144,13 +144,14 @@ describe('template studio rendering harness', () => {
 		});
 	});
 
-	it('builds a print dialog shell without interpolating receipt HTML', () => {
-		const documentHtml = buildPrintDocument('80mm');
+	it('prepares a print dialog shell without interpolating receipt HTML', () => {
+		const printDocument = document.implementation.createHTMLDocument('');
 
-		expect(documentHtml).toContain('<title>WCPOS Template Studio Print</title>');
-		expect(documentHtml).toContain('@page { size: 80mm auto; margin: 0; }');
-		expect(documentHtml).toContain('<body></body>');
-		expect(documentHtml).not.toContain('<main><p>Receipt</p></main>');
+		preparePrintDocument(printDocument, '80mm');
+
+		expect(printDocument.title).toBe('WCPOS Template Studio Print');
+		expect(printDocument.head.textContent).toContain('@page { size: 80mm auto; margin: 0; }');
+		expect(printDocument.body.innerHTML).toBe('');
 	});
 
 	it('keeps generated barcode SVGs visible in the React preview frame', async () => {

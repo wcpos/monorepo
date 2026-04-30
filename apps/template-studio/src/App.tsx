@@ -117,9 +117,7 @@ export function App() {
 		};
 
 		printWindow.addEventListener('load', printReceipt, { once: true });
-		printWindow.document.open();
-		printWindow.document.write(buildPrintDocument(paperWidth));
-		printWindow.document.close();
+		preparePrintDocument(printWindow.document, paperWidth);
 
 		const receiptNode = previewFrameRef.current?.firstElementChild?.cloneNode(true);
 		if (receiptNode) {
@@ -279,21 +277,23 @@ export function App() {
 	);
 }
 
-export function buildPrintDocument(paperWidth: PaperWidth): string {
+export function preparePrintDocument(document: Document, paperWidth: PaperWidth): void {
 	const pageSize = paperWidth === 'a4' ? 'A4' : `${paperWidth} auto`;
-	return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8" />
-<title>WCPOS Template Studio Print</title>
-<style>
+	const meta = document.createElement('meta');
+	meta.setAttribute('charset', 'utf-8');
+
+	const title = document.createElement('title');
+	title.textContent = 'WCPOS Template Studio Print';
+
+	const style = document.createElement('style');
+	style.textContent = `
 @page { size: ${pageSize}; margin: 0; }
 html, body { margin: 0; padding: 0; background: #fff; }
 body { display: flex; justify-content: center; }
-</style>
-</head>
-<body></body>
-</html>`;
+`;
+
+	document.head.replaceChildren(meta, title, style);
+	document.body.replaceChildren();
 }
 
 function waitForImages(document: Document): Promise<void> {
