@@ -1,6 +1,19 @@
-# WooCommerce POS (monorepo-v2)
+# WCPOS Monorepo
 
 React Native + Expo cross-platform POS client app.
+
+## Local Agent Configuration
+
+This repository keeps project-specific agent configuration local to the repo:
+
+- `CLAUDE.md` — project overview and shared local agent policy.
+- `AGENTS.md` — Codex/agent entrypoint and local discovery instructions.
+- `.claude/rules/*.mdc` — local project rules.
+- `.claude/skills/*/SKILL.md` — local project skills.
+
+Do not move these local rules or skills to global `~/.claude`, `~/.codex`, or other global agent configuration without explicit user approval.
+
+Before substantial work, agents should read the local rules and discover local skills. If the user names a skill, check `.claude/skills` before falling back to global skill directories.
 
 ## Wiki
 
