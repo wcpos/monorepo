@@ -16,9 +16,9 @@ async function addFirstProductToCart(page: Page) {
 	} else {
 		await page.getByTestId('add-cart-item-menu').click();
 		await page.getByTestId('menu-add-misc-product').click();
-		const dialog = page.getByRole('dialog');
-		await expect(dialog).toBeVisible({ timeout: 15_000 });
-		await dialog.getByTestId('misc-product-price-input').click();
+		const priceInput = page.getByTestId('misc-product-price-input');
+		await expect(priceInput).toBeVisible({ timeout: 15_000 });
+		await priceInput.click();
 		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
 		await expect(numpad).toBeVisible({ timeout: 15_000 });
 		const numpadInput = numpad.locator('input');
@@ -139,7 +139,7 @@ test.describe('POS refunds (Pro)', () => {
 		await page.getByTestId('refund-destination-cash').click();
 		await expect(page.getByTestId('refund-destination-cash')).toBeChecked();
 		await page.getByTestId('process-refund-button').click();
-		await expect(page.getByRole('alertdialog')).toBeVisible({
+		await expect(page.getByTestId('confirm-process-refund-button')).toBeVisible({
 			timeout: 10_000,
 		});
 		await page.getByTestId('confirm-process-refund-button').click();
@@ -171,7 +171,7 @@ test.describe('POS refunds (Pro)', () => {
 		await expect(page.getByTestId('refund-destination-original_method')).toBeEnabled();
 		await page.getByTestId('refund-destination-original_method').click();
 		await page.getByTestId('process-refund-button').click();
-		await expect(page.getByRole('alertdialog')).toBeVisible({
+		await expect(page.getByTestId('confirm-process-refund-button')).toBeVisible({
 			timeout: 10_000,
 		});
 		await page.getByTestId('confirm-process-refund-button').click();

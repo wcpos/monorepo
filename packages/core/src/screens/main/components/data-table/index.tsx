@@ -210,7 +210,9 @@ function DataTable<TData>({
 function getRowTestID(item: any) {
 	const document = item?.original?.document;
 	const stableId = document?.slug ?? document?.id ?? item?.id;
-	return stableId ? `data-table-row-${stableId}` : undefined;
+	return stableId !== null && stableId !== undefined && stableId !== ''
+		? `data-table-row-${stableId}`
+		: undefined;
 }
 
 function defaultRenderItem({ item, index, table }: { item: any; index: number; table: any }) {

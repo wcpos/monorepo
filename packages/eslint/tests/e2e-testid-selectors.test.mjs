@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { ESLint } from "eslint";
@@ -56,11 +57,12 @@ function listE2EFiles(dir) {
 }
 
 test("repo e2e tests do not use localized selectors", async () => {
+  const e2eDir = fileURLToPath(new URL("../../../apps/main/e2e", import.meta.url));
   const eslint = new ESLint({
     baseConfig: config,
     overrideConfigFile: true,
   });
-  const results = await eslint.lintFiles(listE2EFiles("../../apps/main/e2e"));
+  const results = await eslint.lintFiles(listE2EFiles(e2eDir));
   const violations = results.flatMap((result) =>
     result.messages
       .filter(({ ruleId }) => ruleId === "no-restricted-syntax")
