@@ -1,3 +1,5 @@
+import { toSVG } from 'bwip-js';
+
 import type { ColNode, ReceiptNode, RowNode, ThermalNode } from './types.js';
 
 export type HtmlRenderOptions = object;
@@ -38,9 +40,9 @@ function renderNode(node: ThermalNode): string {
 			}
 			return '<hr style="border: none; border-top: 1px dashed #000; margin: 4px 0" />';
 		case 'barcode':
-			return `<div style="text-align: center; padding: 8px 0"><div style="background: repeating-linear-gradient(90deg, #000 0px, #000 2px, #fff 2px, #fff 4px); height: ${safeInteger(node.height, 40, 1, 600)}px; margin: 0 auto; width: 80%"></div><div style="font-size: 11px; margin-top: 4px">${escapeHtml(node.value)}</div></div>`;
+			return renderBarcode(node.barcodeType, node.value, node.height, 'barcode');
 		case 'qrcode':
-			return `<div style="text-align: center; padding: 8px 0"><div style="width: ${safeInteger(node.size, 4, 1, 20) * 25}px; height: ${safeInteger(node.size, 4, 1, 20) * 25}px; border: 1px solid #000; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #999">QR</div></div>`;
+			return renderQrCode(node.value, node.size);
 		case 'image': {
 			const safeSrc = safeImageSrc(node.src);
 			if (!safeSrc) return '';
@@ -56,6 +58,48 @@ function renderNode(node: ThermalNode): string {
 			return renderNodes(node.children);
 		default:
 			return '';
+	}
+}
+
+function renderBarcode(
+	barcodeType: string,
+	value: string,
+	height: number,
+	kind: 'barcode' | 'qrcode'
+): string {
+	const text = value.trim();
+	if (!text) return '';
+
+	try {
+		const svg = toSVG({
+			bcid: barcodeType.toLowerCase(),
+			text,
+			height: safeInteger(height, 40, 1, 600) / 10,
+			scale: 2,
+			includetext: kind === 'barcode',
+			textsize: 10,
+		});
+
+		return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${svg}</div>`;
+	} catch {
+		return `<div data-barcode-kind="${kind}" style="text-align: center; padding: 8px 0; color: #b91c1c">${escapeHtml(text)}</div>`;
+	}
+}
+
+function renderQrCode(value: string, size: number): string {
+	const text = value.trim();
+	if (!text) return '';
+
+	try {
+		const svg = toSVG({
+			bcid: 'qrcode',
+			text,
+			scale: safeInteger(size, 4, 1, 20),
+		});
+
+		return `<div data-barcode-kind="qrcode" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${svg}</div>`;
+	} catch {
+		return `<div data-barcode-kind="qrcode" style="text-align: center; padding: 8px 0; color: #b91c1c">${escapeHtml(text)}</div>`;
 	}
 }
 

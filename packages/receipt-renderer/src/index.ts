@@ -17,6 +17,35 @@ export type { EscposRenderOptions } from './render-escpos';
 export type { SanitizeHtmlOptions } from './sanitize-html';
 export type * from './types';
 
+export const thermalPreviewSanitizeOptions = {
+	addTags: ['svg', 'path'],
+	addAttributes: [
+		'viewBox',
+		'xmlns',
+		'd',
+		'fill',
+		'fill-rule',
+		'stroke',
+		'stroke-width',
+		'data-barcode-kind',
+		'data-barcode-value',
+	],
+} satisfies SanitizeHtmlOptions;
+
+export function sanitizeThermalPreviewHtml(
+	html: string,
+	options: SanitizeHtmlOptions = {}
+): string {
+	return sanitizeHtml(html, {
+		...options,
+		addTags: [...thermalPreviewSanitizeOptions.addTags, ...(options.addTags ?? [])],
+		addAttributes: [
+			...thermalPreviewSanitizeOptions.addAttributes,
+			...(options.addAttributes ?? []),
+		],
+	});
+}
+
 export interface LogiclessRenderOptions extends SanitizeHtmlOptions {
 	/** Disable sanitization only for trusted test/debug output. Defaults to true. */
 	sanitize?: boolean;
@@ -51,7 +80,7 @@ export function renderThermalPreview(
 	const resolved = Mustache.render(template, data);
 	const ast = parseXml(resolved);
 	const html = renderHtml(ast);
-	return options.sanitize === false ? html : sanitizeHtml(html, options);
+	return options.sanitize === false ? html : sanitizeThermalPreviewHtml(html, options);
 }
 
 /**

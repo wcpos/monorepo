@@ -3,9 +3,11 @@ import { createElement } from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { App } from '../App';
+import { App, buildPrintDocument } from '../App';
+import { fetchWpPreview, printRawTcp } from '../studio-api';
 import {
 	buildTemplateViewModel,
+	bytesToBase64,
 	bytesToDebugOutput,
 	renderStudioTemplate,
 	selectVisibleTemplate,
@@ -71,6 +73,95 @@ describe('template studio rendering harness', () => {
 		expect(view.html).toContain('WCPOS Demo Store');
 		expect(view.escposHex).toMatch(/1b 40/i);
 		expect(view.escposAscii).toContain('WCPOS Demo Store');
+		expect(view.escposBase64).toBe(bytesToBase64(new Uint8Array(Array.from(view.escposBytes))));
+	});
+
+	it('fetches real store preview data for a selected store URL and order', async () => {
+		globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+			expect(String(input)).toBe(
+				'/__studio/wp-preview?store_url=https%3A%2F%2Fstore.test&template_id=standard-receipt&order_id=1234'
+			);
+			return Response.json({
+				engine: 'thermal',
+				template_content: '<receipt><text>{{order.number}}</text></receipt>',
+				receipt_data: { order: { number: '1234' } },
+				template_id: 'standard-receipt',
+			});
+		}) as typeof fetch;
+
+		const preview = await fetchWpPreview({
+			storeUrl: 'https://store.test',
+			templateId: 'standard-receipt',
+			orderId: '1234',
+		});
+
+		expect(preview).toMatchObject({
+			id: 'standard-receipt',
+			engine: 'thermal',
+			source: 'wp-env',
+			receiptData: { id: 'store-standard-receipt-1234', order: { number: '1234' } },
+		});
+	});
+
+	it('posts ESC/POS bytes to the raw TCP print endpoint', async () => {
+		globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			expect(String(input)).toBe('/__studio/print/raw-tcp');
+			expect(init?.method).toBe('POST');
+			expect(init?.headers).toMatchObject({
+				'X-WCPOS-Template-Studio': '1',
+			});
+			expect(JSON.parse(String(init?.body))).toEqual({
+				host: '127.0.0.1',
+				port: 9100,
+				data: 'G0BB',
+			});
+			return Response.json({ ok: true, bytesWritten: 3 });
+		}) as typeof fetch;
+
+		await expect(printRawTcp({ host: '127.0.0.1', port: 9100, data: 'G0BB' })).resolves.toEqual({
+			ok: true,
+			bytesWritten: 3,
+		});
+	});
+
+	it('builds a print dialog document with the rendered receipt HTML', () => {
+		const documentHtml = buildPrintDocument('<main><p>Receipt</p></main>', '80mm');
+
+		expect(documentHtml).toContain('<title>WCPOS Template Studio Print</title>');
+		expect(documentHtml).toContain('@page { size: 80mm auto; margin: 0; }');
+		expect(documentHtml).toContain('<main><p>Receipt</p></main>');
+	});
+
+	it('keeps generated barcode SVGs visible in the React preview frame', async () => {
+		globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url === '/__studio/templates') {
+				return Response.json([
+					{
+						id: 'thermal-barcode-template',
+						name: 'Thermal barcode template',
+						engine: 'thermal',
+						source: 'bundled-gallery',
+						content:
+							'<receipt><barcode type="code128">{{order.number}}</barcode><qrcode>{{order.number}}</qrcode></receipt>',
+					},
+				]);
+			}
+			if (url === '/__studio/fixtures') {
+				return Response.json([galleryFixture]);
+			}
+			return new Response(null, { status: 404 });
+		}) as typeof fetch;
+
+		const { container } = render(createElement(App));
+
+		await waitFor(() => {
+			const preview = container.querySelector('.paper-frame')?.innerHTML ?? '';
+			expect(preview).toContain('<svg');
+			expect(preview).toContain('data-barcode-kind="barcode"');
+			expect(preview).toContain('data-barcode-kind="qrcode"');
+			expect(preview).toContain('stroke=');
+		});
 	});
 
 	it('creates stable snapshot view models without overbuilding drift reports', () => {
