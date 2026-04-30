@@ -22,7 +22,7 @@ import { useLocale } from '../../../hooks/use-locale';
  *
  */
 export function LanguageSelect({ value, ...props }: ComboboxSingleRootProps) {
-	const { locales } = useLocale();
+	const { locale, locales } = useLocale();
 	const t = useT();
 
 	/**
@@ -46,16 +46,22 @@ export function LanguageSelect({ value, ...props }: ComboboxSingleRootProps) {
 	/**
 	 *
 	 */
-	const label = React.useMemo(() => {
-		const selected = options.find((option) => option.value === value?.value);
+	const selectedValue = value?.value ?? locale;
+	const selectedOption = React.useMemo(() => {
+		const selected = options.find((option) => option.value === selectedValue);
 		return selected?.label;
-	}, [options, value]);
+	}, [options, selectedValue]);
 
 	/**
 	 *
 	 */
 	return (
-		<Combobox value={value ? { ...value, label: label ?? '' } : undefined} {...props}>
+		<Combobox
+			value={
+				selectedValue ? { value: selectedValue, label: selectedOption ?? selectedValue } : undefined
+			}
+			{...props}
+		>
 			<ComboboxTrigger testID="language-select-trigger">
 				<ComboboxValue placeholder={t('common.select_language')} />
 			</ComboboxTrigger>

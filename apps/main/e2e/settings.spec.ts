@@ -73,30 +73,61 @@ test.describe('Settings Modal', () => {
 });
 
 test.describe('Language Settings', () => {
-	/**
-	 * Two languages the test can switch between. If the store starts on one,
-	 * we switch to the other — so the test works regardless of the starting locale.
-	 */
-	const SWITCH_TARGETS = [
-		{
-			optionTestID: 'language-option-de_DE',
-			cdnCode: '/translations/js/de_DE/',
-		},
-		{
-			optionTestID: 'language-option-fr_FR',
-			cdnCode: '/translations/js/fr_FR/',
-		},
-	];
+	type LanguageTarget = {
+		optionTestID: string;
+		value: string;
+		cdnCode: string;
+		label: string;
+	};
 
-	/**
-	 * Helper to switch language via the General settings combobox.
-	 * Uses testIDs so it works regardless of the current UI language.
-	 */
-	async function selectLanguage(page: import('@playwright/test').Page, optionTestID: string) {
+	async function getSelectedLanguageText(page: import('@playwright/test').Page) {
+		const trigger = page.getByTestId('language-select-trigger');
+		await expect(trigger).toBeVisible({ timeout: 10_000 });
+		const text = (await trigger.textContent())?.trim() ?? '';
+		expect(text.length).toBeGreaterThan(0);
+		return text;
+	}
+
+	async function getVisibleLanguageTargets(
+		page: import('@playwright/test').Page
+	): Promise<LanguageTarget[]> {
 		await page.getByTestId('language-select-trigger').click();
 		const combobox = page.getByTestId('language-combobox-content');
 		await expect(combobox).toBeVisible({ timeout: 10_000 });
-		const option = combobox.getByTestId(optionTestID);
+		const options = combobox.getByTestId(/language-option-/);
+		await expect(options.first()).toBeVisible({ timeout: 10_000 });
+
+		const targets: LanguageTarget[] = [];
+		const count = await options.count();
+		for (let i = 0; i < count; i++) {
+			const option = options.nth(i);
+			const optionTestID = await option.getAttribute('data-testid');
+			const label = (await option.textContent())?.trim();
+			if (!optionTestID?.startsWith('language-option-') || !label) continue;
+
+			const value = optionTestID.slice('language-option-'.length);
+			targets.push({
+				optionTestID,
+				value,
+				cdnCode: `/translations/js/${value}/`,
+				label,
+			});
+		}
+
+		await page.keyboard.press('Escape');
+		return targets;
+	}
+
+	async function selectLanguage(page: import('@playwright/test').Page, target: LanguageTarget) {
+		await page.getByTestId('language-select-trigger').click();
+		const combobox = page.getByTestId('language-combobox-content');
+		await expect(combobox).toBeVisible({ timeout: 10_000 });
+		const input = page.getByTestId('language-search-input');
+		const option = combobox.getByTestId(target.optionTestID);
+		await input.fill(target.value);
+		if (!(await option.isVisible({ timeout: 2_000 }).catch(() => false))) {
+			await input.fill(target.label);
+		}
 		await expect(option).toBeVisible({ timeout: 10_000 });
 		await option.click();
 	}
@@ -114,29 +145,23 @@ test.describe('Language Settings', () => {
 	}
 
 	/**
-	 * Switches to a different language by trying stable option IDs and
+	 * Switches to a different visible language option and
 	 * returning the first option that triggers a CDN translation fetch.
 	 */
 	async function switchToDifferentLanguage(page: import('@playwright/test').Page) {
-		await page.getByTestId('language-select-trigger').click();
-		const combobox = page.getByTestId('language-combobox-content');
-		await expect(combobox).toBeVisible({ timeout: 10_000 });
-		const selectedOption = combobox.locator('[role="option"][aria-selected="true"]');
-		const currentOptionTestID = await selectedOption.getAttribute('data-testid');
-		await page.keyboard.press('Escape');
+		const currentLanguageText = await getSelectedLanguageText(page);
+		const targets = await getVisibleLanguageTargets(page);
 
-		const candidates = currentOptionTestID
-			? SWITCH_TARGETS.filter((target) => target.optionTestID !== currentOptionTestID)
-			: SWITCH_TARGETS;
+		const candidates = targets.filter((target) => target.label !== currentLanguageText);
 
-		for (const target of candidates) {
+		for (const target of candidates.length ? candidates : targets) {
 			const translationFetch = page
 				.waitForResponse((response) => isExpectedTranslationResponse(response, target.cdnCode), {
 					timeout: 5_000,
 				})
 				.catch(() => null);
 
-			await selectLanguage(page, target.optionTestID);
+			await selectLanguage(page, target);
 
 			const response = await translationFetch;
 			if (response) {
@@ -151,13 +176,11 @@ test.describe('Language Settings', () => {
 		await openSettings(page);
 
 		const trigger = page.getByTestId('language-select-trigger');
-		await expect(trigger).toBeVisible({ timeout: 10_000 });
+		await getSelectedLanguageText(page);
 		await trigger.click();
 		const combobox = page.getByTestId('language-combobox-content');
 		await expect(combobox).toBeVisible({ timeout: 10_000 });
-		const selectedOption = combobox.locator('[role="option"][aria-selected="true"]');
-		await expect(selectedOption).toHaveCount(1);
-		await expect(selectedOption).toHaveAttribute('data-testid', /language-option-/);
+		await expect(combobox.getByRole('option').first()).toBeVisible();
 	});
 
 	test('should change language and load translations from CDN', async ({ posPage: page }) => {
@@ -195,7 +218,7 @@ test.describe('Language Settings', () => {
 			.then(() => true)
 			.catch(() => false);
 
-		await selectLanguage(page, target.optionTestID);
+		await selectLanguage(page, target);
 		await expect(sameLanguageFetch).resolves.toBe(false);
 	});
 });

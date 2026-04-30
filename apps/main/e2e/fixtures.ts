@@ -389,7 +389,7 @@ const DRAWER_INDEX: Record<string, number> = {
 /**
  * Navigate to a drawer page by clicking the sidebar icon button.
  *
- * The drawer shows icon-only in permanent mode (lg screens), so we collect
+ * The drawer shows icon-only in permanent moe (lg screens), so we collect
  * all narrow buttons on the left edge and click by index.
  */
 export async function navigateToPage(
@@ -440,7 +440,7 @@ export async function navigateToPage(
  *      the restored files, and the app hydrates the saved session.
  *
  * Falls back to the full OAuth flow if no saved state exists (e.g. when
- * running individual tests locally without globalSetup).
+ * running individual tests locally without globalSetup)).
  */
 export const authenticatedTest = base.extend<{ posPage: Page }>({
 	posPage: async ({ page }, use, testInfo) => {
@@ -471,11 +471,9 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 				await page.unroute('**/*', blockScriptRequests);
 				await page.reload();
 
-				// App should skip auth and go straight to POS. The product catalog can be
-				// empty or still syncing, so the search UI is the readiness marker. If a
-				// product marker appears quickly, wait for it to settle without making an
-				// empty catalog fail authentication bootstrap. Give product-backed tests a
-				// chance to start after the initial sync, but do not make auth depend on it.
+				// App should skip auth and go straight to POS. Product-backed tests need
+				// the restored snapshot to render product rows; if the first load stalls,
+				// reload once before falling back to a fresh OAuth bootstrap.
 				await expect(page.getByTestId('search-products')).toBeVisible({
 					timeout: 60_000,
 				});
@@ -488,7 +486,33 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 					.first()
 					.or(page.getByTestId('add-to-cart-button').first())
 					.first();
-				await productMarker.waitFor({ state: 'visible', timeout: 60_000 }).catch(() => {});
+				let productsVisible = await productMarker
+					.waitFor({ state: 'visible', timeout: 15_000 })
+					.then(() => true)
+					.catch(() => false);
+				if (!productsVisible) {
+					const removeStockStatusFilter = page
+						.getByTestId('product-filter-stock-status')
+						.locator('xpath=following-sibling::*[1]');
+					const canRemoveStockStatusFilter = await removeStockStatusFilter
+						.waitFor({ state: 'visible', timeout: 1_000 })
+						.then(() => true)
+						.catch(() => false);
+					if (canRemoveStockStatusFilter) {
+						await removeStockStatusFilter.click();
+					}
+					productsVisible = await productMarker
+						.waitFor({ state: 'visible', timeout: 30_000 })
+						.then(() => true)
+						.catch(() => false);
+				}
+				if (!productsVisible) {
+					await page.reload();
+					await expect(page.getByTestId('search-products')).toBeVisible({
+						timeout: 60_000,
+					});
+					await productMarker.waitFor({ state: 'visible', timeout: 60_000 });
+				}
 			} catch (e) {
 				// Ensure the JS-blocking route is removed so the fallback can load scripts
 				await page.unroute('**/*', blockScriptRequests).catch(() => {});

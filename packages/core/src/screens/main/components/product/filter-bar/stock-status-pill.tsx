@@ -52,6 +52,7 @@ export function StockStatusPill({ query }: Props) {
 			<SelectPrimitiveTrigger asChild>
 				<ButtonPill
 					size="xs"
+					testID="product-filter-stock-status"
 					leftIcon="warehouseFull"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
