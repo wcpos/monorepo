@@ -62,6 +62,12 @@ export const config = [
 					memberSyntaxSortOrder: ['none', 'all', 'multiple', 'single'],
 				},
 			],
+			'import/no-unresolved': [
+				'error',
+				{
+					ignore: ['^uniwind$', '^uniwind/.+', '^rxdb-premium/.+', '^rxdb-premium-old/.+'],
+				},
+			],
 
 			// Catch deprecated reanimated imports that moved to react-native-worklets in v4
 			'no-restricted-imports': [

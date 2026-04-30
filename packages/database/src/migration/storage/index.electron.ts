@@ -1,4 +1,5 @@
 import { getRxStorageIpcRenderer } from 'rxdb/plugins/electron';
+// eslint-disable-next-line import/no-unresolved -- premium subpaths are resolved in licensed app builds.
 import { getMemoryMappedRxStorage } from 'rxdb-premium/plugins/storage-memory-mapped';
 
 import { getLegacyMigrationRxStorageSQLite } from './legacy-sqlite-storage';

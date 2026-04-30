@@ -10,7 +10,9 @@ import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { RxDBPipelinePlugin } from 'rxdb/plugins/pipeline';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
+// eslint-disable-next-line import/no-unresolved -- premium subpaths are resolved in licensed app builds.
 import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
+// eslint-disable-next-line import/no-unresolved -- premium subpaths are resolved in licensed app builds.
 import { disableVersionCheck, setPremiumFlag } from 'rxdb-premium/plugins/shared';
 
 import { RxDBAuditLogPlugin } from './audit-log';
