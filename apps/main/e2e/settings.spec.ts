@@ -80,11 +80,11 @@ test.describe('Language Settings', () => {
 	const SWITCH_TARGETS = [
 		{
 			optionTestID: 'language-option-de_DE',
-			cdnCode: '/de',
+			cdnCode: '/translations/js/de_DE/',
 		},
 		{
 			optionTestID: 'language-option-fr_FR',
-			cdnCode: '/fr',
+			cdnCode: '/translations/js/fr_FR/',
 		},
 	];
 
