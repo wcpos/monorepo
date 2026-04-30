@@ -428,7 +428,12 @@ export function RefundOrderForm({ order }: Props) {
 
 				<ModalFooter className="px-0">
 					<ModalClose>{t('common.cancel')}</ModalClose>
-					<ModalAction loading={loading} disabled={!isValid} onPress={() => setConfirmOpen(true)}>
+					<ModalAction
+						testID="process-refund-button"
+						loading={loading}
+						disabled={!isValid}
+						onPress={() => setConfirmOpen(true)}
+					>
 						{t('orders.process_refund')}
 					</ModalAction>
 				</ModalFooter>
@@ -446,7 +451,12 @@ export function RefundOrderForm({ order }: Props) {
 						</AlertDialogHeader>
 						<AlertDialogFooter>
 							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-							<AlertDialogAction variant="destructive" onPress={handleSubmit} disabled={loading}>
+							<AlertDialogAction
+								variant="destructive"
+								testID="confirm-process-refund-button"
+								onPress={handleSubmit}
+								disabled={loading}
+							>
 								{t('orders.process_refund')}
 							</AlertDialogAction>
 						</AlertDialogFooter>
