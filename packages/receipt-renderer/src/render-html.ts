@@ -1,4 +1,4 @@
-import { toSVG } from 'bwip-js';
+import { toSVG } from 'bwip-js/browser';
 
 import type { ColNode, ReceiptNode, RowNode, ThermalNode } from './types.js';
 
