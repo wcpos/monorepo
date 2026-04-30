@@ -53,15 +53,23 @@ jest.mock('expo-file-system', () => ({
 	},
 }));
 
-jest.mock('rxdb-premium/plugins/storage-sqlite', () => ({
-	getRxStorageSQLite: (config: { sqliteBasics: { open(name: string): Promise<unknown> } }) =>
-		mockGetRxStorageSQLite(config),
-}));
+jest.mock(
+	'rxdb-premium/plugins/storage-sqlite',
+	() => ({
+		getRxStorageSQLite: (config: { sqliteBasics: { open(name: string): Promise<unknown> } }) =>
+			mockGetRxStorageSQLite(config),
+	}),
+	{ virtual: true }
+);
 
-jest.mock('rxdb-premium-old/plugins/storage-sqlite', () => ({
-	getRxStorageSQLite: (config: { sqliteBasics: { open(name: string): Promise<unknown> } }) =>
-		mockGetRxStorageSQLite(config),
-}));
+jest.mock(
+	'rxdb-premium-old/plugins/storage-sqlite',
+	() => ({
+		getRxStorageSQLite: (config: { sqliteBasics: { open(name: string): Promise<unknown> } }) =>
+			mockGetRxStorageSQLite(config),
+	}),
+	{ virtual: true }
+);
 
 jest.mock('@wcpos/utils/logger', () => ({
 	getLogger: () => mockLogger,

@@ -8,9 +8,13 @@ const mockGetRxStorageRemote = jest.fn<any, [unknown]>((args) => ({
 }));
 const mockPrepareOldDatabaseForStorageMigration = jest.fn();
 
-jest.mock('rxdb-premium/plugins/storage-worker', () => ({
-	getRxStorageWorker: (args: unknown) => mockGetRxStorageWorker(args),
-}));
+jest.mock(
+	'rxdb-premium/plugins/storage-worker',
+	() => ({
+		getRxStorageWorker: (args: unknown) => mockGetRxStorageWorker(args),
+	}),
+	{ virtual: true }
+);
 
 jest.mock('rxdb-old/plugins/storage-remote', () => ({
 	getRxStorageRemote: (args: unknown) => mockGetRxStorageRemote(args),

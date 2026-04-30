@@ -19,13 +19,21 @@ jest.mock('rxdb/plugins/electron', () => ({
 	getRxStorageIpcRenderer: (args: unknown) => mockGetRxStorageIpcRenderer(args),
 }));
 
-jest.mock('rxdb-premium/plugins/storage-memory-mapped', () => ({
-	getMemoryMappedRxStorage: (args: unknown) => mockGetMemoryMappedRxStorage(args),
-}));
+jest.mock(
+	'rxdb-premium/plugins/storage-memory-mapped',
+	() => ({
+		getMemoryMappedRxStorage: (args: unknown) => mockGetMemoryMappedRxStorage(args),
+	}),
+	{ virtual: true }
+);
 
-jest.mock('rxdb-premium-old/plugins/storage-sqlite', () => ({
-	getRxStorageSQLite: (args: unknown) => mockGetRxStorageSQLite(args),
-}));
+jest.mock(
+	'rxdb-premium-old/plugins/storage-sqlite',
+	() => ({
+		getRxStorageSQLite: (args: unknown) => mockGetRxStorageSQLite(args),
+	}),
+	{ virtual: true }
+);
 
 describe('electron storage migration helpers', () => {
 	beforeEach(() => {
