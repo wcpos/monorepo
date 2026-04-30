@@ -26,6 +26,14 @@ export default function OrdersLayout() {
 				}}
 			/>
 			<Stack.Screen
+				name="(modals)/view/[orderId]"
+				options={{
+					presentation: 'containedTransparentModal',
+					animation: 'fade',
+					contentStyle: { backgroundColor: 'transparent' },
+				}}
+			/>
+			<Stack.Screen
 				name="(modals)/receipt/[orderId]"
 				options={{
 					presentation: 'containedTransparentModal',
