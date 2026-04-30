@@ -124,6 +124,16 @@ export function Actions({ row }: CellContext<{ document: OrderDocument }, 'actio
 					<DropdownMenuItem
 						onPress={() =>
 							router.push({
+								pathname: `/orders/view/${order.uuid}`,
+							})
+						}
+					>
+						<Icon name="eye" />
+						<Text>{t('common.view')}</Text>
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						onPress={() =>
+							router.push({
 								pathname: `/orders/edit/${order.uuid}`,
 							})
 						}

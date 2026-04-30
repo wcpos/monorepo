@@ -319,6 +319,7 @@
 	"common.valid": "Valid",
 	"common.value": "Value",
 	"common.variation": "Variation",
+	"common.view": "View",
 	"common.variation_found_for_term_one": "{count} variation found for \"{term}\"",
 	"common.variation_found_for_term_other": "{count} variations found for \"{term}\"",
 	"common.variants": "Variants",
