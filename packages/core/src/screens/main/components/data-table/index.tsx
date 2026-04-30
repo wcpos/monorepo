@@ -207,10 +207,16 @@ function DataTable<TData>({
 	);
 }
 
+function getRowTestID(item: any) {
+	const document = item?.original?.document;
+	const stableId = document?.slug ?? document?.id ?? item?.id;
+	return stableId ? `data-table-row-${stableId}` : undefined;
+}
+
 function defaultRenderItem({ item, index, table }: { item: any; index: number; table: any }) {
 	return (
 		<VirtualizedList.Item>
-			<TableRow index={index}>
+			<TableRow testID={getRowTestID(item)} index={index}>
 				{item.getVisibleCells().map((cell: any) => {
 					return (
 						<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>

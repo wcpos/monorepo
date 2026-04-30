@@ -13,22 +13,28 @@ async function addFirstProductToCart(page: Page) {
 	if (
 		!productsVisible &&
 		(await page
-			.getByText('Something went wrong:')
+			.getByTestId('error-boundary-fallback')
 			.isVisible()
 			.catch(() => false))
 	) {
 		await page.reload();
-		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 60_000 });
+		await expect(page.getByTestId('search-products')).toBeVisible({
+			timeout: 60_000,
+		});
 		productsVisible = await productMarker.isVisible({ timeout: 60_000 }).catch(() => false);
 	}
-	await expect(productMarker).toBeVisible({ timeout: productsVisible ? 1_000 : 60_000 });
+	await expect(productMarker).toBeVisible({
+		timeout: productsVisible ? 1_000 : 60_000,
+	});
 
 	if (await tile.isVisible()) {
 		await tile.click();
 	} else {
 		await tableButton.click();
 	}
-	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
+	await expect(page.getByTestId('checkout-button')).toBeVisible({
+		timeout: 10_000,
+	});
 }
 
 async function isSwitchEnabled(toggle: Locator): Promise<boolean> {
@@ -77,9 +83,13 @@ test.describe('POS Cart - Order Actions', () => {
 		await page.getByTestId('save-to-server-button').click();
 
 		// Wait for the save button to finish loading (loading state resolves when save completes)
-		await expect(page.getByTestId('save-to-server-button')).toBeEnabled({ timeout: 30_000 });
+		await expect(page.getByTestId('save-to-server-button')).toBeEnabled({
+			timeout: 30_000,
+		});
 		// Verify a success toast appeared (Sonner toast)
-		await expect(page.locator('[data-sonner-toast]').first()).toBeVisible({ timeout: 10_000 });
+		await expect(page.locator('[data-sonner-toast]').first()).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 
 	test('should add order note', async ({ posPage: page }) => {
@@ -168,7 +178,9 @@ test.describe('POS Checkout', () => {
 
 		await page.getByTestId('cancel-checkout-button').click();
 
-		await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('checkout-button')).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 
 	test('should complete an order', async ({ posPage: page }) => {
@@ -184,7 +196,9 @@ test.describe('POS Checkout', () => {
 		// After clicking process payment, the button enters loading state (disabled).
 		// Payment is processed via a WebView/iframe — this can be slow or fail in CI.
 		// Verify the button became disabled (payment was initiated).
-		await expect(page.getByTestId('process-payment-button')).toBeDisabled({ timeout: 10_000 });
+		await expect(page.getByTestId('process-payment-button')).toBeDisabled({
+			timeout: 10_000,
+		});
 
 		// Wait for the payment to complete: either the receipt appears or we return to POS
 		const receiptPrintButton = page.getByTestId('receipt-print-button');
@@ -198,7 +212,9 @@ test.describe('POS Checkout', () => {
 	test('should auto print receipt after checkout when enabled', async ({ posPage: page }) => {
 		await enableAutoReceiptSettings(page);
 		await page.reload();
-		await expect(page.getByTestId('search-products')).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByTestId('search-products')).toBeVisible({
+			timeout: 30_000,
+		});
 
 		await addFirstProductToCart(page);
 
@@ -296,5 +312,7 @@ test('falls back to the legacy webview when supports_checkout=false', async ({ p
 	await page.getByTestId('checkout-button').click();
 	await expect(page.getByTestId('process-payment-button')).toBeVisible();
 	await page.getByTestId('process-payment-button').click();
-	await expect(page.getByTestId('process-payment-button')).toBeDisabled({ timeout: 10_000 });
+	await expect(page.getByTestId('process-payment-button')).toBeDisabled({
+		timeout: 10_000,
+	});
 });

@@ -150,6 +150,7 @@ export function AddMiscProduct() {
 									customComponent={CurrencyInput}
 									label={t('common.price')}
 									placeholder="0"
+									testID="misc-product-price-input"
 									{...field}
 								/>
 							</View>

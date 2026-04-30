@@ -1,19 +1,24 @@
 import { expect } from '@playwright/test';
+
 import { authenticatedTest as test } from './fixtures';
 
 /**
  * Helper to open settings modal via user menu.
  */
 async function openSettings(page: import('@playwright/test').Page) {
-	await page.getByRole('button', { name: /Demo Cashier/i }).click();
+	await page.getByTestId('user-menu-trigger').click();
 	await page.getByTestId('settings-menu-item').click();
-	await expect(page.getByTestId('settings-tab-general')).toBeVisible({ timeout: 10_000 });
+	await expect(page.getByTestId('settings-tab-general')).toBeVisible({
+		timeout: 10_000,
+	});
 }
 
 test.describe('Settings Modal', () => {
 	test('should open settings and show tabs', async ({ posPage: page }) => {
 		await openSettings(page);
-		await expect(page.getByTestId('settings-tab-general')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('settings-tab-general')).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 
 	test('should show General settings tab', async ({ posPage: page }) => {
@@ -21,7 +26,9 @@ test.describe('Settings Modal', () => {
 		await page.getByTestId('settings-tab-general').click();
 		// General tab has form inputs (store name, language, currency, etc.)
 		const tabPanel = page.getByRole('tabpanel');
-		await expect(tabPanel.locator('input').first()).toBeVisible({ timeout: 10_000 });
+		await expect(tabPanel.locator('input').first()).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 
 	test('should show Tax settings tab', async ({ posPage: page }) => {
@@ -59,7 +66,9 @@ test.describe('Settings Modal', () => {
 
 		// Settings modal is a route-based modal; navigate back to close it
 		await page.goBack();
-		await expect(page.getByTestId('settings-tab-general')).not.toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('settings-tab-general')).not.toBeVisible({
+			timeout: 10_000,
+		});
 	});
 });
 
@@ -69,8 +78,18 @@ test.describe('Language Settings', () => {
 	 * we switch to the other — so the test works regardless of the starting locale.
 	 */
 	const SWITCH_TARGETS = [
-		{ search: 'German', option: 'German (Deutsch)', triggerText: 'German', cdnCode: '/de' },
-		{ search: 'French', option: 'French (Français)', triggerText: 'French', cdnCode: '/fr' },
+		{
+			search: 'German',
+			optionTestID: 'language-option-de_DE',
+			triggerText: 'German',
+			cdnCode: '/de',
+		},
+		{
+			search: 'French',
+			optionTestID: 'language-option-fr_FR',
+			triggerText: 'French',
+			cdnCode: '/fr',
+		},
 	];
 
 	/**
@@ -94,13 +113,12 @@ test.describe('Language Settings', () => {
 	async function selectLanguage(
 		page: import('@playwright/test').Page,
 		search: string,
-		optionText: string
+		optionTestID: string
 	) {
 		await page.getByTestId('language-select-trigger').click();
 		await page.getByTestId('language-search-input').fill(search);
 		await page.waitForTimeout(500);
-		// Scope to dropdown content so we don't match the trigger text
-		await page.getByTestId('language-combobox-content').getByText(optionText).click();
+		await page.getByTestId('language-combobox-content').getByTestId(optionTestID).click();
 	}
 
 	test('should have a language set in settings', async ({ posPage: page }) => {
@@ -128,13 +146,12 @@ test.describe('Language Settings', () => {
 			{ timeout: 15_000 }
 		);
 
-		await selectLanguage(page, target.search, target.option);
+		await selectLanguage(page, target.search, target.optionTestID);
 
 		// Verify the trigger updated (testID-anchored)
-		await expect(page.getByTestId('language-select-trigger')).toContainText(
-			target.triggerText,
-			{ timeout: 10_000 }
-		);
+		await expect(page.getByTestId('language-select-trigger')).toContainText(target.triggerText, {
+			timeout: 10_000,
+		});
 
 		// Verify translations were actually fetched from the CDN
 		const response = await translationFetch;
@@ -157,7 +174,7 @@ test.describe('Language Settings', () => {
 			{ timeout: 15_000 }
 		);
 
-		await selectLanguage(page, target.search, target.option);
+		await selectLanguage(page, target.search, target.optionTestID);
 		await translationFetch;
 
 		// Close settings modal
@@ -165,12 +182,13 @@ test.describe('Language Settings', () => {
 		await page.waitForTimeout(1_000);
 
 		// Reopen settings and verify the new language stuck (testID-anchored)
-		await page.getByRole('button', { name: /Demo Cashier/i }).click();
-		await expect(page.getByTestId('settings-menu-item')).toBeVisible({ timeout: 15_000 });
+		await page.getByTestId('user-menu-trigger').click();
+		await expect(page.getByTestId('settings-menu-item')).toBeVisible({
+			timeout: 15_000,
+		});
 		await page.getByTestId('settings-menu-item').click();
-		await expect(page.getByTestId('language-select-trigger')).toContainText(
-			target.triggerText,
-			{ timeout: 10_000 }
-		);
+		await expect(page.getByTestId('language-select-trigger')).toContainText(target.triggerText, {
+			timeout: 10_000,
+		});
 	});
 });
