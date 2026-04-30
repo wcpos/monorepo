@@ -197,6 +197,28 @@ describe('mergeStoresWithResponse', () => {
 		expect(patchCall.stores).not.toContain(badLocalID);
 	});
 
+	it('should coerce empty tax_based_on from legacy Pro stores to base', async () => {
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([]);
+		const remoteStores = [{ id: 1, name: 'Store 1', tax_based_on: '' }];
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores,
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		expect(insertedDocs[0]).toEqual(
+			expect.objectContaining({
+				id: 1,
+				tax_based_on: 'base',
+			})
+		);
+	});
+
 	it('should preserve 409 conflicts (already-exists) in wpUser.stores', async () => {
 		const userDB = makeUserDB();
 		// All inserts fail with 409 — doc already exists on re-sync.
