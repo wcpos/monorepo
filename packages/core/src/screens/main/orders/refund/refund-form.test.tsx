@@ -4,7 +4,7 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 
 import { RefundOrderForm } from './form';
 
@@ -126,7 +126,7 @@ const order = {
 	payment_method_title: 'Stripe Terminal',
 	refunds: [{ total: '-10.00' }],
 	line_items: [],
-} as never;
+} as any;
 
 describe('RefundOrderForm', () => {
 	beforeEach(() => {
@@ -134,13 +134,21 @@ describe('RefundOrderForm', () => {
 	});
 
 	it('formats the summary totals and enables original-method refunds when supported', async () => {
-		mockGet.mockResolvedValue({
-			data: [
-				{
-					id: 'stripe_terminal_for_woocommerce',
-					capabilities: { supports_provider_refunds: true },
-				},
-			],
+		mockGet.mockImplementation((url: string) => {
+			if (url === 'payment-gateways') {
+				return Promise.resolve({
+					data: [
+						{
+							id: 'stripe_terminal_for_woocommerce',
+							capabilities: { supports_provider_refunds: true },
+						},
+					],
+				});
+			}
+			return Promise.resolve({
+				data: order.refunds,
+				headers: { 'x-wp-totalpages': '1' },
+			});
 		});
 
 		render(<RefundOrderForm order={order} />);
@@ -148,7 +156,9 @@ describe('RefundOrderForm', () => {
 		await waitFor(() => expect(screen.getByText(/common.total: €155.00/)).toBeInTheDocument());
 		expect(screen.getByText(/orders.previously_refunded: -€10.00/)).toBeInTheDocument();
 		await waitFor(() =>
-			expect(screen.getByLabelText('orders.refund_to_original_method')).toBeEnabled()
+			expect(
+				screen.getByLabelText('orders.refund_to_original_method:Stripe Terminal')
+			).toBeEnabled()
 		);
 		await waitFor(() =>
 			expect(screen.getByRole('radiogroup')).toHaveAttribute('data-value', 'original_method')
@@ -164,7 +174,172 @@ describe('RefundOrderForm', () => {
 		await waitFor(() =>
 			expect(screen.getByText('orders.original_method_refund_lookup_failed')).toBeInTheDocument()
 		);
-		expect(screen.getByLabelText('orders.refund_to_original_method')).toBeDisabled();
+		expect(
+			screen.getByLabelText('orders.refund_to_original_method:Stripe Terminal')
+		).toBeDisabled();
 		expect(screen.getByLabelText('orders.refund_to_cash')).toBeEnabled();
+	});
+
+	it('labels original-method refunds with the order payment method title', async () => {
+		mockGet.mockImplementation((url: string) => {
+			if (url === 'payment-gateways') {
+				return Promise.resolve({
+					data: [
+						{
+							id: 'stripe_terminal_for_woocommerce',
+							capabilities: { supports_provider_refunds: true },
+						},
+					],
+				});
+			}
+			return Promise.resolve({
+				data: order.refunds,
+				headers: { 'x-wp-totalpages': '1' },
+			});
+		});
+
+		render(<RefundOrderForm order={order} />);
+
+		await waitFor(() =>
+			expect(
+				screen.getByLabelText('orders.refund_to_original_method:Stripe Terminal')
+			).toBeEnabled()
+		);
+	});
+
+	it('hides refund destination options for POS cash orders', async () => {
+		mockGet.mockResolvedValue({
+			data: [
+				{
+					id: 'pos_cash',
+					capabilities: { supports_provider_refunds: false },
+				},
+			],
+		});
+
+		render(<RefundOrderForm order={{ ...order, payment_method: 'pos_cash' } as never} />);
+
+		await waitFor(() =>
+			expect(screen.queryByText('orders.refund_destination')).not.toBeInTheDocument()
+		);
+		expect(screen.queryByTestId('refund-destination-original_method')).not.toBeInTheDocument();
+		expect(screen.queryByLabelText('orders.refund_to_cash')).not.toBeInTheDocument();
+	});
+
+	it('does not show gateway lookup warnings for POS cash orders', async () => {
+		mockGet.mockRejectedValue(new Error('boom'));
+
+		render(<RefundOrderForm order={{ ...order, payment_method: 'pos_cash' } as never} />);
+
+		await waitFor(() => expect(mockGet).toHaveBeenCalled());
+		expect(
+			screen.queryByText('orders.original_method_refund_lookup_failed')
+		).not.toBeInTheDocument();
+	});
+
+	it('uses fetched refund history amounts for the previously refunded total', async () => {
+		mockGet.mockImplementation((url: string) => {
+			if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+			return Promise.resolve({
+				data: [{ amount: '10.00' }, { amount: '15.00' }],
+				headers: { 'x-wp-totalpages': '1' },
+			});
+		});
+
+		render(<RefundOrderForm order={order} />);
+
+		await waitFor(() =>
+			expect(screen.getByText(/orders.previously_refunded: -€25.00/)).toBeInTheDocument()
+		);
+	});
+
+	it('holds line quantities at zero until detailed refund rows load', async () => {
+		const orderWithLine = {
+			...order,
+			line_items: [
+				{
+					id: 77,
+					name: 'Delayed item',
+					quantity: 2,
+					total: '20.00',
+					total_tax: '4.00',
+					taxes: [{ id: 1, total: '4.00' }],
+				},
+			],
+		} as never;
+		let resolveRefunds: (value: any) => void = () => {};
+		const refundsPromise = new Promise((resolve) => {
+			resolveRefunds = resolve;
+		});
+		mockGet.mockImplementation((url: string) => {
+			if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+			return refundsPromise;
+		});
+
+		render(<RefundOrderForm order={orderWithLine} />);
+
+		let row = screen.getByText('Delayed item').closest('tr') as HTMLElement;
+		expect(within(row).queryByText('2')).not.toBeInTheDocument();
+		expect(within(row).getAllByText('0').length).toBeGreaterThan(0);
+
+		resolveRefunds({ data: [], headers: { 'x-wp-totalpages': '1' } });
+
+		await waitFor(() => {
+			row = screen.getByText('Delayed item').closest('tr') as HTMLElement;
+			expect(within(row).getByText('2')).toBeInTheDocument();
+		});
+	});
+
+	it('displays tax-inclusive unit prices and remaining refundable quantity', async () => {
+		const partiallyRefundedOrder = {
+			...order,
+			line_items: [
+				{
+					id: 55,
+					name: 'Belt',
+					quantity: 2,
+					total: '84.16',
+					total_tax: '16.84',
+					taxes: [{ id: 1, total: '16.84' }],
+				},
+			],
+			refunds: [
+				{
+					total: '-50.50',
+					line_items: [{ id: 55, quantity: 1 }],
+				},
+			],
+		} as never;
+		mockGet.mockImplementation((url: string) => {
+			if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+			return Promise.resolve({ data: (partiallyRefundedOrder as any).refunds });
+		});
+
+		render(<RefundOrderForm order={partiallyRefundedOrder} />);
+
+		await waitFor(() => expect(screen.getByText('50.50')).toBeInTheDocument());
+		await waitFor(() => expect(screen.getByText('1')).toBeInTheDocument());
+	});
+
+	it('requests every refund page when the refunds endpoint is paginated', async () => {
+		mockGet.mockImplementation((url: string, config: any) => {
+			if (url === 'payment-gateways') return Promise.resolve({ data: [] });
+			if (config?.params?.page === 1) {
+				return Promise.resolve({
+					data: [],
+					headers: { 'x-wp-totalpages': '2' },
+				});
+			}
+			return Promise.resolve({ data: [], headers: { 'x-wp-totalpages': '2' } });
+		});
+
+		render(<RefundOrderForm order={order} />);
+
+		await waitFor(() =>
+			expect(mockGet).toHaveBeenCalledWith(
+				'orders/23858/refunds',
+				expect.objectContaining({ params: { page: 2, per_page: 100 } })
+			)
+		);
 	});
 });
