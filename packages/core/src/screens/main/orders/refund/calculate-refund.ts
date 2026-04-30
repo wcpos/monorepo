@@ -8,6 +8,17 @@ interface LineItemInput {
 	dp?: number;
 }
 
+type RefundLineItemLike = {
+	id?: number;
+	item_id?: number;
+	quantity?: number | string;
+	meta_data?: { key?: string; value?: unknown }[];
+};
+
+type RefundLike = {
+	line_items?: RefundLineItemLike[];
+};
+
 export interface LineItemRefund {
 	refund_total: string;
 	refund_tax: { id: number; refund_total: string }[];
@@ -91,4 +102,65 @@ export function computeMaxRefundable(
 ): number {
 	const previousTotal = refunds.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0);
 	return Number((parseFloat(orderTotal || '0') - previousTotal).toFixed(dp));
+}
+
+export function formatRefundUnitPrice(input: {
+	quantity: number;
+	total: string;
+	totalTax: string;
+	displayTax: 'incl' | 'excl';
+	dp: number;
+}): string {
+	const { quantity, total, totalTax, displayTax, dp } = input;
+	if (quantity <= 0) {
+		return (0).toFixed(dp);
+	}
+
+	const lineTotal = parseFloat(total) || 0;
+	const lineTax = displayTax === 'incl' ? parseFloat(totalTax) || 0 : 0;
+	return roundHalfUp((lineTotal + lineTax) / quantity, dp).toFixed(dp);
+}
+
+export function computeRemainingRefundQuantity(input: {
+	lineItemId: number;
+	quantity: number;
+	refunds?: RefundLike[] | null;
+}): number {
+	const { lineItemId, quantity, refunds } = input;
+	const refundedQuantity = (refunds || []).reduce((sum, refund) => {
+		const refundLineItems = Array.isArray(refund.line_items) ? refund.line_items : [];
+		return (
+			sum +
+			refundLineItems.reduce((lineSum, lineItem) => {
+				const refundLineItemId = getRefundLineOriginalId(lineItem);
+				if (refundLineItemId !== lineItemId) {
+					return lineSum;
+				}
+
+				return lineSum + Math.abs(Number(lineItem.quantity) || 0);
+			}, 0)
+		);
+	}, 0);
+
+	return Math.max(0, quantity - refundedQuantity);
+}
+
+function getRefundLineOriginalId(lineItem: RefundLineItemLike): number | undefined {
+	if (lineItem.item_id) {
+		return lineItem.item_id;
+	}
+
+	const refundedItemId = lineItem.meta_data?.find(
+		(meta) => meta.key === '_refunded_item_id'
+	)?.value;
+	if (typeof refundedItemId === 'number') {
+		return refundedItemId;
+	}
+
+	if (typeof refundedItemId === 'string') {
+		const parsed = Number(refundedItemId);
+		return Number.isFinite(parsed) ? parsed : undefined;
+	}
+
+	return lineItem.id;
 }

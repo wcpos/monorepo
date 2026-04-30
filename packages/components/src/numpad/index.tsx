@@ -84,8 +84,14 @@ interface NumpadKeyProps {
 }
 
 function Key({ label, icon, onPress, discount }: NumpadKeyProps) {
+	const keyId = label ?? (icon ? `icon-${icon}` : undefined);
 	return (
-		<Button variant="muted" onPress={onPress} rightIcon={discount ? 'percent' : undefined}>
+		<Button
+			testID={keyId ? `numpad-key-${keyId}` : undefined}
+			variant="muted"
+			onPress={onPress}
+			rightIcon={discount ? 'percent' : undefined}
+		>
 			{icon ? <Icon name={icon} /> : <ButtonText>{label}</ButtonText>}
 		</Button>
 	);

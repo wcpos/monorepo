@@ -22,6 +22,7 @@ export function UrlInput() {
 			<Label nativeID="woo-store">{t('auth.enter_the_url_of_your_woocommerce') + ':'}</Label>
 			<HStack>
 				<Input
+					testID="store-url-input"
 					aria-labelledby="woo-store"
 					type="url"
 					value={url}
@@ -34,7 +35,12 @@ export function UrlInput() {
 					className="flex-1"
 					autoCorrect={false}
 				/>
-				<Button onPress={() => onConnect(url)} disabled={isEmpty(url)} loading={loading}>
+				<Button
+					testID="connect-store-button"
+					onPress={() => onConnect(url)}
+					disabled={isEmpty(url)}
+					loading={loading}
+				>
 					<ButtonText>{t('auth.connect')}</ButtonText>
 				</Button>
 			</HStack>

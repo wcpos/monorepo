@@ -37,7 +37,9 @@ import {
 	calculateLineItemRefund,
 	calculateRefundTotal,
 	computeMaxRefundable,
+	computeRemainingRefundQuantity,
 	formatLineItemRefundWithTax,
+	formatRefundUnitPrice,
 } from './calculate-refund';
 import { RefundDestinationRadioGroup } from './refund-destination-radio-group';
 import { useRefundMutation } from './use-refund-mutation';
@@ -51,11 +53,20 @@ import {
 } from '../../hooks/payment-gateway-contract';
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 import { usePaymentGateways } from '../../hooks/use-payment-gateways';
-import { roundHalfUp } from '../../hooks/utils/precision';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 const refundLogger = getLogger(['wcpos', 'mutations', 'refund']);
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
+type RefundDetail = NonNullable<OrderDocument['refunds']>[number] & {
+	amount?: string | number | null;
+	line_items?: {
+		id?: number;
+		item_id?: number;
+		quantity?: number | string;
+		meta_data?: { key?: string; value?: unknown }[];
+	}[];
+};
 
 interface Props {
 	order: OrderDocument;
@@ -71,6 +82,7 @@ function createRefundFormSchema(dp: number) {
 					id: z.number(),
 					name: z.string(),
 					quantity: z.number(),
+					remaining_quantity: z.number(),
 					total: z.string(),
 					total_tax: z.string(),
 					taxes: z.array(z.object({ id: z.number(), total: z.string() })),
@@ -87,7 +99,7 @@ function createRefundFormSchema(dp: number) {
 		})
 		.superRefine(({ line_items }, ctx) => {
 			line_items.forEach((item, index) => {
-				if (item.refund_qty > item.quantity) {
+				if (item.refund_qty > item.remaining_quantity) {
 					ctx.addIssue({
 						code: z.ZodIssueCode.custom,
 						message: 'Refund qty cannot exceed purchased qty',
@@ -104,15 +116,30 @@ export function RefundOrderForm({ order }: Props) {
 	const t = useT();
 	const { store } = useAppState();
 	const refundMutation = useRefundMutation();
+	const http = useRestHttpClient();
 	const router = useRouter();
 	const taxRates = React.useContext(TaxRatesContext);
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
+	const taxDisplayCart = useObservableEagerState(store?.tax_display_cart$) as
+		| 'incl'
+		| 'excl'
+		| undefined;
+	const displayTax: 'incl' | 'excl' = taxDisplayCart === 'excl' ? 'excl' : 'incl';
 	const dp = resolvePriceNumDecimals({
 		contextDp: taxRates?.priceNumDecimals,
 		storeDp,
 	});
 	const [loading, setLoading] = React.useState(false);
 	const [confirmOpen, setConfirmOpen] = React.useState(false);
+	const [refundDetails, setRefundDetails] = React.useState<RefundDetail[]>(() =>
+		normalizeRefundDetails(order.refunds || [])
+	);
+	const [refundDetailsLoading, setRefundDetailsLoading] = React.useState(Boolean(order.id));
+	const refundsFallback = JSON.stringify(order.refunds || []);
+	const getRefundsFallback = React.useCallback(() => {
+		const refunds = JSON.parse(refundsFallback) as RefundDetail[];
+		return normalizeRefundDetails(Array.isArray(refunds) ? refunds : []);
+	}, [refundsFallback]);
 
 	const refundFormSchema = React.useMemo(() => createRefundFormSchema(dp), [dp]);
 	const {
@@ -124,22 +151,73 @@ export function RefundOrderForm({ order }: Props) {
 		currencySymbol: order.currency_symbol || '',
 	});
 	const refundOptions = React.useMemo(() => deriveRefundDestinationOptions(gateway), [gateway]);
-	const defaultDestination: RefundDestination = refundOptions[0]?.enabled
-		? 'original_method'
-		: 'cash';
+	const isPosCash = order.payment_method === 'pos_cash';
+	const defaultDestination: RefundDestination = isPosCash
+		? 'cash'
+		: refundOptions[0]?.enabled
+			? 'original_method'
+			: 'cash';
+
+	React.useEffect(() => {
+		let mounted = true;
+
+		if (!order.id) {
+			setRefundDetails(getRefundsFallback());
+			setRefundDetailsLoading(false);
+			return;
+		}
+
+		setRefundDetailsLoading(true);
+
+		void http
+			.get(`orders/${order.id}/refunds`, { params: { page: 1, per_page: 100 } })
+			.then(async (response) => {
+				if (!mounted) return;
+				const firstPage = Array.isArray(response?.data) ? response.data : [];
+				const totalPages = Number(response?.headers?.['x-wp-totalpages'] || 1) || 1;
+				const remainingPages = await Promise.all(
+					Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
+						http
+							.get(`orders/${order.id}/refunds`, {
+								params: { page: index + 2, per_page: 100 },
+							})
+							.then((pageResponse) => (Array.isArray(pageResponse?.data) ? pageResponse.data : []))
+					)
+				);
+				if (!mounted) return;
+				setRefundDetails(normalizeRefundDetails([...firstPage, ...remainingPages.flat()]));
+				setRefundDetailsLoading(false);
+			})
+			.catch(() => {
+				if (!mounted) return;
+				setRefundDetails(getRefundsFallback());
+				setRefundDetailsLoading(false);
+			});
+
+		return () => {
+			mounted = false;
+		};
+	}, [getRefundsFallback, http, order.id]);
 
 	const previousRefundTotal = React.useMemo(() => {
-		if (!order.refunds?.length) return 0;
-		return order.refunds.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0);
-	}, [order.refunds]);
+		if (!refundDetails.length) return 0;
+		return refundDetails.reduce((sum, r) => sum + Math.abs(parseFloat(r.total || '0')), 0);
+	}, [refundDetails]);
 
-	const maxRefundable = computeMaxRefundable(order.total || '0', order.refunds || [], dp);
+	const maxRefundable = computeMaxRefundable(order.total || '0', refundDetails, dp);
 
 	const initialLineItems = React.useMemo(() => {
 		return (order.line_items || []).map((item) => ({
 			id: item.id || 0,
 			name: item.name || '',
 			quantity: item.quantity || 0,
+			remaining_quantity: refundDetailsLoading
+				? 0
+				: computeRemainingRefundQuantity({
+						lineItemId: item.id || 0,
+						quantity: item.quantity || 0,
+						refunds: refundDetails,
+					}),
 			total: item.total || '0.00',
 			total_tax: item.total_tax || '0.00',
 			taxes: (item.taxes || []).map((tax) => ({
@@ -148,7 +226,7 @@ export function RefundOrderForm({ order }: Props) {
 			})),
 			refund_qty: 0,
 		}));
-	}, [order.line_items]);
+	}, [order.line_items, refundDetails, refundDetailsLoading]);
 
 	const form = useForm<RefundFormValues>({
 		resolver: zodResolver(refundFormSchema as never) as never,
@@ -159,6 +237,20 @@ export function RefundOrderForm({ order }: Props) {
 			refund_destination: defaultDestination,
 		},
 	});
+
+	React.useEffect(() => {
+		const currentLineItems = form.getValues('line_items') || [];
+		form.reset(
+			{
+				...form.getValues(),
+				line_items: initialLineItems.map((item, index) => ({
+					...item,
+					refund_qty: Math.min(currentLineItems[index]?.refund_qty || 0, item.remaining_quantity),
+				})),
+			},
+			{ keepDirty: true, keepTouched: true }
+		);
+	}, [form, initialLineItems]);
 
 	React.useEffect(() => {
 		if (form.getFieldState('refund_destination').isDirty) {
@@ -211,10 +303,10 @@ export function RefundOrderForm({ order }: Props) {
 
 	const refundTotalNum = parseFloat(refundTotal);
 	const formattedRefundTotal = format(refundTotalNum);
-	const isValid = refundTotalNum > 0 && refundTotalNum <= maxRefundable;
+	const isValid = !refundDetailsLoading && refundTotalNum > 0 && refundTotalNum <= maxRefundable;
 
 	const handleSubmit = React.useCallback(async () => {
-		if (loading) return;
+		if (loading || refundDetailsLoading) return;
 		if (!order.id) return;
 		const valid = await form.trigger();
 		if (!valid) return;
@@ -242,7 +334,7 @@ export function RefundOrderForm({ order }: Props) {
 
 			const refundLineItems = values.line_items
 				.map((item, index) => {
-					const clampedQty = Math.min(Math.max(item.refund_qty, 0), item.quantity);
+					const clampedQty = Math.min(Math.max(item.refund_qty, 0), item.remaining_quantity);
 					if (clampedQty === 0) return null;
 					const calc = freshLineItemRefunds[index];
 					return {
@@ -291,7 +383,7 @@ export function RefundOrderForm({ order }: Props) {
 		} finally {
 			setLoading(false);
 		}
-	}, [loading, form, order, refundMutation, router, t, dp]);
+	}, [loading, refundDetailsLoading, form, order, refundMutation, router, t, dp]);
 
 	return (
 		<Form {...form}>
@@ -329,10 +421,13 @@ export function RefundOrderForm({ order }: Props) {
 					</TableHeader>
 					<TableBody>
 						{fields.map((field, index) => {
-							const unitPrice =
-								field.quantity > 0
-									? roundHalfUp(parseFloat(field.total) / field.quantity, dp).toFixed(dp)
-									: (0).toFixed(dp);
+							const unitPrice = formatRefundUnitPrice({
+								quantity: field.quantity,
+								total: field.total,
+								totalTax: field.total_tax,
+								displayTax,
+								dp,
+							});
 							const itemRefund = lineItemRefunds[index];
 							const itemRefundWithTax = formatLineItemRefundWithTax(itemRefund, dp);
 
@@ -345,7 +440,7 @@ export function RefundOrderForm({ order }: Props) {
 										<Text>{unitPrice}</Text>
 									</TableCell>
 									<TableCell className="flex-1">
-										<Text>{field.quantity}</Text>
+										<Text>{field.remaining_quantity}</Text>
 									</TableCell>
 									<TableCell className="flex-1">
 										<FormField
@@ -388,34 +483,38 @@ export function RefundOrderForm({ order }: Props) {
 					)}
 				/>
 
-				<VStack space="sm">
-					<Text>{t('orders.refund_destination')}</Text>
-					<RefundDestinationRadioGroup
-						value={form.watch('refund_destination')}
-						onValueChange={(next) =>
-							form.setValue('refund_destination', next, { shouldDirty: true })
-						}
-						options={[
-							{
-								value: 'original_method',
-								label: t('orders.refund_to_original_method'),
-								description: refundOptions[0].enabled
-									? undefined
-									: t('orders.original_method_refund_unavailable'),
-								enabled: refundOptions[0].enabled,
-								testID: 'refund-destination-original_method',
-							},
-							{
-								value: 'cash',
-								label: t('orders.refund_to_cash'),
-								enabled: true,
-								testID: 'refund-destination-cash',
-							},
-						]}
-					/>
-				</VStack>
+				{!isPosCash ? (
+					<VStack space="sm">
+						<Text>{t('orders.refund_destination')}</Text>
+						<RefundDestinationRadioGroup
+							value={form.watch('refund_destination')}
+							onValueChange={(next) =>
+								form.setValue('refund_destination', next, { shouldDirty: true })
+							}
+							options={[
+								{
+									value: 'original_method',
+									label: t('orders.refund_to_original_method', {
+										gateway: order.payment_method_title || order.payment_method || '',
+									}),
+									description: refundOptions[0].enabled
+										? undefined
+										: t('orders.original_method_refund_unavailable'),
+									enabled: refundOptions[0].enabled,
+									testID: 'refund-destination-original_method',
+								},
+								{
+									value: 'cash' as const,
+									label: t('orders.refund_to_cash'),
+									enabled: true,
+									testID: 'refund-destination-cash',
+								},
+							]}
+						/>
+					</VStack>
+				) : null}
 
-				{gatewaysError ? (
+				{gatewaysError && !isPosCash ? (
 					<Text className="text-muted-foreground">
 						{t('orders.original_method_refund_lookup_failed')}
 					</Text>
@@ -429,7 +528,7 @@ export function RefundOrderForm({ order }: Props) {
 				<ModalFooter className="px-0">
 					<ModalClose>{t('common.cancel')}</ModalClose>
 					<ModalAction
-						testID="refund-process-button"
+						testID="process-refund-button"
 						loading={loading}
 						disabled={!isValid}
 						onPress={() => setConfirmOpen(true)}
@@ -452,8 +551,8 @@ export function RefundOrderForm({ order }: Props) {
 						<AlertDialogFooter>
 							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
 							<AlertDialogAction
+								testID="confirm-process-refund-button"
 								variant="destructive"
-								testID="refund-confirm-button"
 								onPress={handleSubmit}
 								disabled={loading}
 							>
@@ -465,4 +564,14 @@ export function RefundOrderForm({ order }: Props) {
 			</VStack>
 		</Form>
 	);
+}
+
+function normalizeRefundDetails(refunds: RefundDetail[]): RefundDetail[] {
+	return refunds.map((refund) => {
+		const total = refund.total ?? refund.amount;
+		return {
+			...refund,
+			total: total == null ? '0' : String(total),
+		};
+	});
 }
