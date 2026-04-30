@@ -30,7 +30,11 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 	 */
 	if (containerWidth < 200 || errorMessage.length > 1000) {
 		return (
-			<HStack className="bg-error items-start justify-between p-2" onLayout={handleLayout}>
+			<HStack
+				testID="error-boundary-fallback"
+				className="bg-error items-start justify-between p-2"
+				onLayout={handleLayout}
+			>
 				<Tooltip>
 					<TooltipTrigger>
 						<Icon name="triangleExclamation" size="4xl" className="text-error-foreground" />
@@ -51,7 +55,11 @@ export function Fallback({ error, resetErrorBoundary }: FallbackProps) {
 	 *
 	 */
 	return (
-		<HStack className="bg-error w-full items-start p-2" onLayout={handleLayout}>
+		<HStack
+			testID="error-boundary-fallback"
+			className="bg-error w-full items-start p-2"
+			onLayout={handleLayout}
+		>
 			<Icon name="triangleExclamation" size="4xl" className="text-error-foreground" />
 			<VStack className="w-full flex-1 gap-1">
 				<Text className="text-error-foreground font-bold">Something went wrong:</Text>

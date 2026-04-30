@@ -29,14 +29,17 @@ export function RefundDestinationRadioGroup({
 			<VStack space="sm">
 				{options.map((option) => (
 					<VStack key={option.value} className={option.enabled ? '' : 'opacity-50'}>
-						<Label nativeID={`refund-destination-${option.value}`}>
+						<Label
+							nativeID={`refund-destination-${option.value}`}
+							className="flex-row items-center gap-2"
+						>
 							<RadioGroupItem
 								value={option.value}
 								disabled={!option.enabled}
 								testID={option.testID}
 								aria-labelledby={`refund-destination-${option.value}`}
 							/>
-							{option.label}
+							<Text>{option.label}</Text>
 						</Label>
 						{option.description ? (
 							<Text className="text-muted-foreground text-sm">{option.description}</Text>

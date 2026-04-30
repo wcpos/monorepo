@@ -3,6 +3,8 @@ import {
 	calculateLineItemRefund,
 	calculateRefundTotal,
 	computeMaxRefundable,
+	computeRemainingRefundQuantity,
+	formatRefundUnitPrice,
 } from './calculate-refund';
 
 describe('calculateLineItemRefund', () => {
@@ -101,7 +103,10 @@ describe('calculateRefundTotal', () => {
 	it('sums line item refunds and custom amount', () => {
 		const result = calculateRefundTotal({
 			lineItemRefunds: [
-				{ refund_total: '10.00', refund_tax: [{ id: 1, refund_total: '2.00' }] },
+				{
+					refund_total: '10.00',
+					refund_tax: [{ id: 1, refund_total: '2.00' }],
+				},
 				{ refund_total: '5.00', refund_tax: [{ id: 1, refund_total: '1.00' }] },
 			],
 			customAmount: '3.00',
@@ -112,7 +117,12 @@ describe('calculateRefundTotal', () => {
 
 	it('returns just line item totals with taxes when no custom amount', () => {
 		const result = calculateRefundTotal({
-			lineItemRefunds: [{ refund_total: '10.00', refund_tax: [{ id: 1, refund_total: '2.00' }] }],
+			lineItemRefunds: [
+				{
+					refund_total: '10.00',
+					refund_tax: [{ id: 1, refund_total: '2.00' }],
+				},
+			],
 			customAmount: '',
 		});
 
@@ -220,7 +230,12 @@ describe('calculateRefundTotal with dp parameter', () => {
 
 	it('dp=3: sums to three decimal places (KWD)', () => {
 		const result = calculateRefundTotal({
-			lineItemRefunds: [{ refund_total: '10.000', refund_tax: [{ id: 1, refund_total: '2.000' }] }],
+			lineItemRefunds: [
+				{
+					refund_total: '10.000',
+					refund_tax: [{ id: 1, refund_total: '2.000' }],
+				},
+			],
 			customAmount: '3.000',
 			dp: 3,
 		});
@@ -285,5 +300,87 @@ describe('formatLineItemRefundWithTax', () => {
 				2
 			)
 		).toBe('1.01');
+	});
+});
+
+describe('formatRefundUnitPrice', () => {
+	it('includes tax when cart prices are displayed including tax', () => {
+		expect(
+			formatRefundUnitPrice({
+				quantity: 2,
+				total: '40.00',
+				totalTax: '8.00',
+				displayTax: 'incl',
+				dp: 2,
+			})
+		).toBe('24.00');
+	});
+
+	it('excludes tax when cart prices are displayed excluding tax', () => {
+		expect(
+			formatRefundUnitPrice({
+				quantity: 2,
+				total: '40.00',
+				totalTax: '8.00',
+				displayTax: 'excl',
+				dp: 2,
+			})
+		).toBe('20.00');
+	});
+});
+
+describe('computeRemainingRefundQuantity', () => {
+	it('subtracts previously refunded quantities for the same line item', () => {
+		expect(
+			computeRemainingRefundQuantity({
+				lineItemId: 123,
+				quantity: 2,
+				refunds: [
+					{
+						line_items: [{ id: 123, quantity: 1 }],
+					},
+				],
+			})
+		).toBe(1);
+	});
+
+	it('never returns a negative remaining quantity', () => {
+		expect(
+			computeRemainingRefundQuantity({
+				lineItemId: 123,
+				quantity: 1,
+				refunds: [{ line_items: [{ item_id: 123, quantity: 3 }] }],
+			})
+		).toBe(0);
+	});
+
+	it('uses WooCommerce refunded item metadata when refund line id differs from original item id', () => {
+		expect(
+			computeRemainingRefundQuantity({
+				lineItemId: 123,
+				quantity: 2,
+				refunds: [
+					{
+						line_items: [
+							{
+								id: 999,
+								quantity: 1,
+								meta_data: [{ key: '_refunded_item_id', value: '123' }],
+							},
+						],
+					},
+				],
+			})
+		).toBe(1);
+	});
+
+	it('prefers explicit item_id over refund line id', () => {
+		expect(
+			computeRemainingRefundQuantity({
+				lineItemId: 123,
+				quantity: 2,
+				refunds: [{ line_items: [{ id: 999, item_id: 123, quantity: 1 }] }],
+			})
+		).toBe(1);
 	});
 });
