@@ -118,7 +118,18 @@ test.describe('Language Settings', () => {
 	 * returning the first option that triggers a CDN translation fetch.
 	 */
 	async function switchToDifferentLanguage(page: import('@playwright/test').Page) {
-		for (const target of SWITCH_TARGETS) {
+		await page.getByTestId('language-select-trigger').click();
+		const combobox = page.getByTestId('language-combobox-content');
+		await expect(combobox).toBeVisible({ timeout: 10_000 });
+		const selectedOption = combobox.locator('[role="option"][aria-selected="true"]');
+		const currentOptionTestID = await selectedOption.getAttribute('data-testid');
+		await page.keyboard.press('Escape');
+
+		const candidates = currentOptionTestID
+			? SWITCH_TARGETS.filter((target) => target.optionTestID !== currentOptionTestID)
+			: SWITCH_TARGETS;
+
+		for (const target of candidates) {
 			const translationFetch = page
 				.waitForResponse(
 					(response) => isExpectedTranslationResponse(response, target.cdnCode),
