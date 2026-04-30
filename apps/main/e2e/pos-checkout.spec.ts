@@ -216,57 +216,39 @@ test.describe('POS Checkout', () => {
 	});
 });
 
-test('uses the contract checkout endpoints when supports_checkout=true', async ({
+test('uses the legacy webview for built-in POS gateways even when supports_checkout=true', async ({
 	posPage: page,
 }) => {
-	const checkoutGatewayIds = [
-		'stripe_terminal_for_woocommerce',
-		'wcpos_cash',
-		'pos_cash',
-		'cash',
-		'cod',
-		'cash_on_delivery',
-		'bacs',
-		'cheque',
-		'wcpos_card',
-		'pos_card',
-		'woocommerce_payments',
-		'wcpay',
-		'stripe',
-		'stripe_terminal',
-	];
-
+	let contractCheckoutRequested = false;
+	await page.route('**/wp-json/wcpos/v1/payment-gateways/**/bootstrap', async (route) => {
+		contractCheckoutRequested = true;
+		await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+	});
+	await page.route('**/wp-json/wcpos/v1/orders/**/checkout', async (route) => {
+		contractCheckoutRequested = true;
+		await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+	});
 	await page.route('**/wp-json/wcpos/v1/payment-gateways**', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			body: JSON.stringify(
-				checkoutGatewayIds.map((id) => ({
-					id,
-					provider: id,
-					pos_type: 'terminal',
+			body: JSON.stringify([
+				{
+					id: 'pos_cash',
+					provider: 'wcpos',
+					pos_type: 'manual',
 					capabilities: { supports_checkout: true },
-				}))
-			),
+				},
+			]),
 		});
 	});
 
-	const bootstrapRequest = page.waitForRequest(
-		(request) =>
-			request.url().includes('/payment-gateways/') && request.url().includes('/bootstrap')
-	);
-	const startRequest = page.waitForRequest(
-		(request) =>
-			request.url().includes('/orders/') &&
-			request.url().includes('/checkout') &&
-			request.method() === 'POST'
-	);
 	await addFirstProductToCart(page);
 	await page.getByTestId('checkout-button').click();
+	await expect(page.getByTestId('process-payment-button')).toBeVisible();
 	await page.getByTestId('process-payment-button').click();
-
-	await bootstrapRequest;
-	await startRequest;
+	await expect(page.getByTestId('process-payment-button')).toBeDisabled({ timeout: 10_000 });
+	expect(contractCheckoutRequested).toBe(false);
 });
 
 test('falls back to the legacy webview when supports_checkout=false', async ({ posPage: page }) => {

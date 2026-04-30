@@ -35,8 +35,10 @@ export function isTerminalCheckoutStatus(status?: string) {
 	return ['completed', 'failed', 'cancelled', 'awaiting_customer'].includes(status || '');
 }
 
+const LEGACY_WEBVIEW_GATEWAY_IDS = new Set(['pos_cash', 'pos_card', 'wcpos_cash', 'wcpos_card']);
+
 export function shouldUseContractCheckout(gateway?: GatewayContract | null) {
-	return supportsCheckoutContract(gateway);
+	return supportsCheckoutContract(gateway) && !LEGACY_WEBVIEW_GATEWAY_IDS.has(gateway?.id || '');
 }
 
 export function createCheckoutIdempotencyKey(
