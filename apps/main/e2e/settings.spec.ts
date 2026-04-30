@@ -131,10 +131,9 @@ test.describe('Language Settings', () => {
 
 		for (const target of candidates) {
 			const translationFetch = page
-				.waitForResponse(
-					(response) => isExpectedTranslationResponse(response, target.cdnCode),
-					{ timeout: 5_000 }
-				)
+				.waitForResponse((response) => isExpectedTranslationResponse(response, target.cdnCode), {
+					timeout: 5_000,
+				})
 				.catch(() => null);
 
 			await selectLanguage(page, target.optionTestID);
@@ -177,7 +176,9 @@ test.describe('Language Settings', () => {
 
 		// Close settings modal
 		await page.goBack();
-		await page.waitForTimeout(1_000);
+		await expect(page.getByTestId('settings-tab-general')).not.toBeVisible({
+			timeout: 10_000,
+		});
 
 		// Reopen settings and verify the new language stuck (testID-anchored)
 		await page.getByTestId('user-menu-trigger').click();
@@ -188,10 +189,9 @@ test.describe('Language Settings', () => {
 
 		// Re-select the same locale by stable option ID. If persisted, no CDN fetch should fire.
 		const sameLanguageFetch = page
-			.waitForResponse(
-				(response) => isExpectedTranslationResponse(response, target.cdnCode),
-				{ timeout: 5_000 }
-			)
+			.waitForResponse((response) => isExpectedTranslationResponse(response, target.cdnCode), {
+				timeout: 5_000,
+			})
 			.then(() => true)
 			.catch(() => false);
 

@@ -289,6 +289,8 @@ function ComboboxItem({ value, label, item, className, children, ...props }: Com
 		<VirtualizedListPrimitive.Item>
 			<Pressable
 				onPress={handlePress}
+				role="option"
+				aria-selected={selected}
 				className={cn(
 					'web:group web:cursor-default web:select-none web:hover:bg-accent/50 web:outline-none web:focus:bg-accent active:bg-accent flex w-full flex-row items-center rounded-sm px-2 py-1.5',
 					multiple && 'pl-8',
