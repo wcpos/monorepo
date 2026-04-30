@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { sanitizeHtml, sanitizeThermalPreviewHtml } from '@wcpos/receipt-renderer';
 
@@ -26,6 +26,7 @@ export function App() {
 	const [rawTcpHost, setRawTcpHost] = useState('127.0.0.1');
 	const [rawTcpPort, setRawTcpPort] = useState('9100');
 	const [status, setStatus] = useState('Loading bundled gallery templates…');
+	const previewFrameRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		Promise.all([fetchBundledTemplates(), fetchFixtures()])
@@ -99,11 +100,32 @@ export function App() {
 			setStatus('Print window was blocked. Allow popups for Template Studio.');
 			return;
 		}
+
+		let printed = false;
+		let fallbackTimer: number | undefined;
+		const printReceipt = () => {
+			if (printed) return;
+			printed = true;
+			printWindow.removeEventListener('load', printReceipt);
+			if (fallbackTimer !== undefined) printWindow.clearTimeout(fallbackTimer);
+			waitForImages(printWindow.document)
+				.finally(() => {
+					printWindow.focus();
+					printWindow.print();
+				})
+				.catch(() => undefined);
+		};
+
+		printWindow.addEventListener('load', printReceipt, { once: true });
 		printWindow.document.open();
-		printWindow.document.write(buildPrintDocument(previewHtml, paperWidth));
+		printWindow.document.write(buildPrintDocument(paperWidth));
 		printWindow.document.close();
-		printWindow.focus();
-		printWindow.print();
+
+		const receiptNode = previewFrameRef.current?.firstElementChild?.cloneNode(true);
+		if (receiptNode) {
+			printWindow.document.body.append(receiptNode);
+		}
+		fallbackTimer = printWindow.setTimeout(printReceipt, 1500);
 	}
 
 	async function sendToRawTcp() {
@@ -227,7 +249,11 @@ export function App() {
 			</aside>
 			<main className="preview-column">
 				<h2>{selectedTemplate?.name ?? 'No template selected'}</h2>
-				<div className="paper-frame" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+				<div
+					ref={previewFrameRef}
+					className="paper-frame"
+					dangerouslySetInnerHTML={{ __html: previewHtml }}
+				/>
 			</main>
 			<aside className="diagnostics">
 				<h2>Diagnostics</h2>
@@ -253,7 +279,7 @@ export function App() {
 	);
 }
 
-export function buildPrintDocument(receiptHtml: string, paperWidth: PaperWidth): string {
+export function buildPrintDocument(paperWidth: PaperWidth): string {
 	const pageSize = paperWidth === 'a4' ? 'A4' : `${paperWidth} auto`;
 	return `<!DOCTYPE html>
 <html>
@@ -266,6 +292,21 @@ html, body { margin: 0; padding: 0; background: #fff; }
 body { display: flex; justify-content: center; }
 </style>
 </head>
-<body>${receiptHtml}</body>
+<body></body>
 </html>`;
+}
+
+function waitForImages(document: Document): Promise<void> {
+	const pendingImages = Array.from(document.images).filter((image) => !image.complete);
+	if (pendingImages.length === 0) return Promise.resolve();
+
+	return Promise.all(
+		pendingImages.map(
+			(image) =>
+				new Promise<void>((resolve) => {
+					image.addEventListener('load', () => resolve(), { once: true });
+					image.addEventListener('error', () => resolve(), { once: true });
+				})
+		)
+	).then(() => undefined);
 }

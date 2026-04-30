@@ -17,7 +17,9 @@ export function isStoreOriginAllowed(storeUrl: string, allowedOrigins: readonly 
 }
 
 export function shouldForwardCookies(storeUrl: string, cookieOrigin: string): boolean {
-	return normalizeOrigin(storeUrl) === cookieOrigin;
+	const storeOrigin = normalizeOrigin(storeUrl);
+	const normalizedCookieOrigin = normalizeOrigin(cookieOrigin.trim());
+	return Boolean(storeOrigin) && storeOrigin === normalizedCookieOrigin;
 }
 
 export function isLoopbackAddress(address: string | undefined): boolean {

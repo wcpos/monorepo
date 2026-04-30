@@ -13,7 +13,7 @@ export async function fetchFixtures(): Promise<ReceiptFixture[]> {
 }
 
 export interface FetchWpPreviewInput {
-	storeUrl: string;
+	storeUrl?: string;
 	templateId: string | number;
 	orderId?: string | number;
 }
@@ -35,11 +35,15 @@ export async function fetchWpPreview({
 	orderId,
 }: FetchWpPreviewInput): Promise<StudioTemplate & { receiptData: ReceiptFixture }> {
 	const params = new URLSearchParams({
-		store_url: storeUrl,
 		template_id: String(templateId),
 	});
-	if (orderId !== undefined && orderId !== null && String(orderId).trim() !== '') {
-		params.set('order_id', String(orderId));
+	const normalizedStoreUrl = typeof storeUrl === 'string' ? storeUrl.trim() : '';
+	if (normalizedStoreUrl) {
+		params.set('store_url', normalizedStoreUrl);
+	}
+	const normalizedOrderId = orderId == null ? '' : String(orderId).trim();
+	if (normalizedOrderId) {
+		params.set('order_id', normalizedOrderId);
 	}
 
 	const response = await fetch(`/__studio/wp-preview?${params.toString()}`, {
@@ -63,7 +67,7 @@ export async function fetchWpPreview({
 		previewHtml: payload.preview_html,
 		receiptData: {
 			...payload.receipt_data,
-			id: `store-${payload.template_id}-${orderId ?? 'sample'}`,
+			id: `store-${payload.template_id}-${normalizedOrderId || 'sample'}`,
 		},
 	};
 }

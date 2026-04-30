@@ -22,6 +22,9 @@ describe('Template Studio dev-server security helpers', () => {
 		expect(shouldForwardCookies('http://localhost:8888/wp-admin', 'http://localhost:8888')).toBe(
 			true
 		);
+		expect(
+			shouldForwardCookies('http://localhost:8888/wp-admin', ' http://localhost:8888/path ')
+		).toBe(true);
 		expect(shouldForwardCookies('https://store.example/wp-admin', 'http://localhost:8888')).toBe(
 			false
 		);

@@ -29,6 +29,7 @@ const allowedStoreOrigins = allowedOriginsFromEnv(
 	wpProxyOrigin
 );
 const allowedPrintHosts = allowedHostsFromEnv(process.env.WCPOS_STUDIO_PRINT_HOSTS);
+const upstreamFetchTimeoutMs = 10_000;
 
 function templateStudioPlugin(): Plugin {
 	return {
@@ -101,14 +102,22 @@ function templateStudioPlugin(): Plugin {
 					target.searchParams.set('include_legacy_html', '1');
 					if (orderId) target.searchParams.set('order_id', orderId);
 
-					const upstream = await fetch(target, {
-						headers: {
-							'X-WCPOS': '1',
-							...(shouldForwardCookies(storeUrl, wpProxyOrigin)
-								? { cookie: request.headers.cookie ?? '' }
-								: {}),
-						},
-					});
+					const controller = new AbortController();
+					const timeout = setTimeout(() => controller.abort(), upstreamFetchTimeoutMs);
+					let upstream: Response;
+					try {
+						upstream = await fetch(target, {
+							signal: controller.signal,
+							headers: {
+								'X-WCPOS': '1',
+								...(shouldForwardCookies(storeUrl, wpProxyOrigin)
+									? { cookie: request.headers.cookie ?? '' }
+									: {}),
+							},
+						});
+					} finally {
+						clearTimeout(timeout);
+					}
 
 					response.statusCode = upstream.status;
 					response.setHeader(
@@ -117,7 +126,7 @@ function templateStudioPlugin(): Plugin {
 					);
 					response.end(await upstream.text());
 				} catch (error) {
-					response.statusCode = 500;
+					response.statusCode = isAbortError(error) ? 504 : 500;
 					response.end(error instanceof Error ? error.message : String(error));
 				}
 			});
@@ -165,12 +174,16 @@ function templateStudioPlugin(): Plugin {
 					response.setHeader('Content-Type', 'application/json');
 					response.end(JSON.stringify({ ok: true, bytesWritten }));
 				} catch (error) {
-					response.statusCode = 500;
+					response.statusCode = error instanceof SyntaxError ? 400 : 500;
 					response.end(error instanceof Error ? error.message : String(error));
 				}
 			});
 		},
 	};
+}
+
+function isAbortError(error: unknown): boolean {
+	return error instanceof Error && error.name === 'AbortError';
 }
 
 function readJsonBody(

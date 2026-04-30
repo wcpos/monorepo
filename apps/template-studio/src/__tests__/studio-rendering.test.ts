@@ -79,7 +79,7 @@ describe('template studio rendering harness', () => {
 	it('fetches real store preview data for a selected store URL and order', async () => {
 		globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
 			expect(String(input)).toBe(
-				'/__studio/wp-preview?store_url=https%3A%2F%2Fstore.test&template_id=standard-receipt&order_id=1234'
+				'/__studio/wp-preview?template_id=standard-receipt&store_url=https%3A%2F%2Fstore.test&order_id=1234'
 			);
 			return Response.json({
 				engine: 'thermal',
@@ -103,6 +103,26 @@ describe('template studio rendering harness', () => {
 		});
 	});
 
+	it('omits blank store URLs and trims order IDs for wp preview requests', async () => {
+		globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+			expect(String(input)).toBe('/__studio/wp-preview?template_id=standard-receipt&order_id=1234');
+			return Response.json({
+				engine: 'thermal',
+				template_content: '<receipt><text>{{order.number}}</text></receipt>',
+				receipt_data: { order: { number: '1234' } },
+				template_id: 'standard-receipt',
+			});
+		}) as typeof fetch;
+
+		const preview = await fetchWpPreview({
+			storeUrl: '   ',
+			templateId: 'standard-receipt',
+			orderId: ' 1234 ',
+		});
+
+		expect(preview.receiptData.id).toBe('store-standard-receipt-1234');
+	});
+
 	it('posts ESC/POS bytes to the raw TCP print endpoint', async () => {
 		globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 			expect(String(input)).toBe('/__studio/print/raw-tcp');
@@ -124,12 +144,13 @@ describe('template studio rendering harness', () => {
 		});
 	});
 
-	it('builds a print dialog document with the rendered receipt HTML', () => {
-		const documentHtml = buildPrintDocument('<main><p>Receipt</p></main>', '80mm');
+	it('builds a print dialog shell without interpolating receipt HTML', () => {
+		const documentHtml = buildPrintDocument('80mm');
 
 		expect(documentHtml).toContain('<title>WCPOS Template Studio Print</title>');
 		expect(documentHtml).toContain('@page { size: 80mm auto; margin: 0; }');
-		expect(documentHtml).toContain('<main><p>Receipt</p></main>');
+		expect(documentHtml).toContain('<body></body>');
+		expect(documentHtml).not.toContain('<main><p>Receipt</p></main>');
 	});
 
 	it('keeps generated barcode SVGs visible in the React preview frame', async () => {
