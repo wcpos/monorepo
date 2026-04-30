@@ -14,6 +14,7 @@ import { LineItemsSection } from './sections/line-items';
 import { PaymentSection } from './sections/payment';
 import { POSMetadataSection } from './sections/pos-metadata';
 import { RefundsFallback, RefundsSection, RefundsSkeleton } from './sections/refunds';
+import { useOrderRefunds } from './use-order-refunds';
 import { TotalsSection } from './sections/totals';
 import { useT } from '../../../../contexts/translations';
 
@@ -40,20 +41,6 @@ export function ViewOrderModal({ resource }: Props) {
 		);
 	}
 
-	const retryRefunds = () => setRefundsRetryKey((key) => key + 1);
-	function RefundsErrorFallback({ resetErrorBoundary }: { resetErrorBoundary: () => void }) {
-		return (
-			<RefundsFallback
-				refunds={order.refunds}
-				currencySymbol={order.currency_symbol}
-				onRetry={() => {
-					retryRefunds();
-					resetErrorBoundary();
-				}}
-			/>
-		);
-	}
-
 	return (
 		<Modal>
 			<ModalContent size="xl" className="h-full">
@@ -68,16 +55,63 @@ export function ViewOrderModal({ resource }: Props) {
 						<LineItemsSection order={order} />
 						<TotalsSection order={order} />
 						<PaymentSection order={order} />
-						<ErrorBoundary FallbackComponent={RefundsErrorFallback} resetKeys={[refundsRetryKey]}>
-							<React.Suspense fallback={<RefundsSkeleton />}>
-								<RefundsSection key={refundsRetryKey} order={order} />
-							</React.Suspense>
-						</ErrorBoundary>
+						<RefundsBoundary
+							key={refundsRetryKey}
+							order={order}
+							onRetry={() => setRefundsRetryKey((key) => key + 1)}
+						/>
 						<CustomerSection order={order} />
 						<POSMetadataSection order={order} />
 					</VStack>
 				</ModalBody>
 			</ModalContent>
 		</Modal>
+	);
+}
+
+function RefundsBoundary({
+	order,
+	onRetry,
+}: {
+	order: import('@wcpos/database').OrderDocument;
+	onRetry: () => void;
+}) {
+	if (!order.id) {
+		return <RefundsSection order={order} />;
+	}
+
+	return <RefundsResourceBoundary order={order} orderId={order.id} onRetry={onRetry} />;
+}
+
+function RefundsResourceBoundary({
+	order,
+	orderId,
+	onRetry,
+}: {
+	order: import('@wcpos/database').OrderDocument;
+	orderId: number;
+	onRetry: () => void;
+}) {
+	const resource = useOrderRefunds(orderId);
+
+	function RefundsErrorFallback({ resetErrorBoundary }: { resetErrorBoundary: () => void }) {
+		return (
+			<RefundsFallback
+				refunds={order.refunds}
+				currencySymbol={order.currency_symbol}
+				onRetry={() => {
+					onRetry();
+					resetErrorBoundary();
+				}}
+			/>
+		);
+	}
+
+	return (
+		<ErrorBoundary FallbackComponent={RefundsErrorFallback}>
+			<React.Suspense fallback={<RefundsSkeleton />}>
+				<RefundsSection order={order} resource={resource} />
+			</React.Suspense>
+		</ErrorBoundary>
 	);
 }

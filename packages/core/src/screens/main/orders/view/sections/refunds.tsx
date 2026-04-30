@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableSuspense } from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@wcpos/components/card';
@@ -15,7 +15,7 @@ import {
 } from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
 
-import { useOrderRefunds, WCRefund } from '../use-order-refunds';
+import { WCRefund } from '../use-order-refunds';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -158,8 +158,13 @@ export function RefundsFallback({
 	);
 }
 
-function RefundsDetail({ order, orderId }: { order: OrderDocument; orderId: number }) {
-	const resource = useOrderRefunds(orderId);
+function RefundsDetail({
+	order,
+	resource,
+}: {
+	order: OrderDocument;
+	resource: ObservableResource<WCRefund[]>;
+}) {
 	const refunds = useObservableSuspense(resource);
 
 	return (
@@ -198,7 +203,13 @@ function RefundsDetail({ order, orderId }: { order: OrderDocument; orderId: numb
 	);
 }
 
-export function RefundsSection({ order }: { order: OrderDocument }) {
+export function RefundsSection({
+	order,
+	resource,
+}: {
+	order: OrderDocument;
+	resource?: ObservableResource<WCRefund[]>;
+}) {
 	if (!order.id) {
 		return (
 			<Card>
@@ -212,5 +223,18 @@ export function RefundsSection({ order }: { order: OrderDocument }) {
 		);
 	}
 
-	return <RefundsDetail order={order} orderId={order.id} />;
+	if (!resource) {
+		return (
+			<Card>
+				<CardHeader>
+					<CardTitle>Refunds</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<Text className="text-muted-foreground">No refunds for this order.</Text>
+				</CardContent>
+			</Card>
+		);
+	}
+
+	return <RefundsDetail order={order} resource={resource} />;
 }
