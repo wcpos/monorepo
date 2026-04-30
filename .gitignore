@@ -5,7 +5,12 @@ node_modules
 .turbo
 .translations
 .worktrees
-.claude/
+# Ignore local Claude runtime state, but keep project rules and skills tracked.
+.claude/*
+!.claude/rules/
+!.claude/rules/**
+!.claude/skills/
+!.claude/skills/**
 docs/
 apps/main/web-build-atlas/
 

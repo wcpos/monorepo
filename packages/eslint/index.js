@@ -108,6 +108,38 @@ export const config = [
 			'import/no-default-export': 'error',
 		},
 	},
+
+	// E2E tests run against localized stores; selectors must be stable testIDs, not UI copy.
+	{
+		files: ['**/e2e/**/*.{ts,tsx,js,jsx}'],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: "CallExpression[callee.property.name='getByText']",
+					message: 'E2E tests must use getByTestId(), not localized visible text.',
+				},
+				{
+					selector: "CallExpression[callee.property.name='getByPlaceholder']",
+					message: 'E2E tests must use getByTestId(), not localized placeholders.',
+				},
+				{
+					selector: "CallExpression[callee.property.name='getByLabel']",
+					message: 'E2E tests must use getByTestId(), not localized labels.',
+				},
+				{
+					selector:
+						"CallExpression[callee.property.name='getByRole'] ObjectExpression Property[key.name='name']",
+					message: 'E2E tests must use getByTestId(), not localized role names.',
+				},
+
+				{
+					selector: "CallExpression[callee.property.name='locator'] Literal[value=/^text=/]",
+					message: 'E2E tests must use getByTestId(), not text locators.',
+				},
+			],
+		},
+	},
 	reactCompiler.configs.recommended,
 	// Files that legitimately need default exports
 	{

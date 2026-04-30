@@ -43,6 +43,7 @@ export function DataTableHeader({
 
 	return (
 		<Pressable
+			testID={`data-table-header-${columnId}`}
 			className="max-w-full justify-center"
 			style={{ flex: 1, alignSelf: 'stretch', alignItems: contentAlignment }}
 			onPress={() =>
@@ -52,7 +53,11 @@ export function DataTableHeader({
 				})
 			}
 		>
-			{({ hovered }: import('react-native').PressableStateCallbackType & { hovered?: boolean }) => {
+			{({
+				hovered,
+			}: import('react-native').PressableStateCallbackType & {
+				hovered?: boolean;
+			}) => {
 				const showIcon = hovered || isSorted;
 				return (
 					<HStack className="gap-1">
