@@ -1,5 +1,6 @@
 import { ensureRxStorageInstanceParamsAreCorrect } from 'rxdb/plugins/core';
 import { createBlobFromBase64 } from 'rxdb/plugins/utils';
+// eslint-disable-next-line import/no-unresolved -- premium subpaths are resolved in licensed app builds.
 import {
 	createSQLiteStorageInstance,
 	getRxStorageSQLite,

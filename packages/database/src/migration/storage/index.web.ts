@@ -2,6 +2,7 @@ import { getRxStorageRemote } from 'rxdb-old/plugins/storage-remote';
 import { createBlobFromBase64 } from 'rxdb/plugins/utils';
 import { PROMISE_RESOLVE_VOID } from 'rxdb-old/plugins/utils';
 import { Subject } from 'rxjs';
+// eslint-disable-next-line import/no-unresolved -- premium subpaths are resolved in licensed app builds.
 import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
 
 import type { MessageFromRemote } from 'rxdb-old/plugins/storage-remote';

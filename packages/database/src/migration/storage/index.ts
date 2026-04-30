@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+// eslint-disable-next-line import/no-unresolved -- premium subpaths are resolved in licensed app builds.
 import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 
 import { getLegacyMigrationRxStorageSQLite } from './legacy-sqlite-storage';

@@ -8,6 +8,7 @@
  */
 
 // Mock the FlexSearch plugin
+// eslint-disable-next-line import/no-unresolved -- premium subpaths are resolved in licensed app builds.
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import type { RxCollection } from 'rxdb';
