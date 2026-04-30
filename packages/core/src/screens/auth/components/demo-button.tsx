@@ -32,7 +32,10 @@ export function DemoButton() {
 	// Setup auth hook with demo user parameter
 	const { isReady, response, promptAsync } = useWcposAuth({
 		site: connectedSite
-			? { wcpos_login_url: connectedSite.wcpos_login_url ?? '', name: connectedSite.name ?? '' }
+			? {
+					wcpos_login_url: connectedSite.wcpos_login_url ?? '',
+					name: connectedSite.name ?? '',
+				}
 			: null,
 		extraParams: { user: 'demo' },
 	});
@@ -107,6 +110,7 @@ export function DemoButton() {
 
 	return (
 		<Button
+			testID="enter-demo-store-button"
 			onPress={handleDemoLogin}
 			disabled={loading}
 			variant="muted"

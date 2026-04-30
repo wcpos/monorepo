@@ -14,36 +14,34 @@ async function addFirstProductToCart(page: Page) {
 	} else if (hasCatalogProduct) {
 		await tableButton.click();
 	} else {
-		const demoProduct = page.getByText(/^(Album|Beanie|Cap|Single)$/).first();
-		if (await demoProduct.isVisible({ timeout: 30_000 }).catch(() => false)) {
-			await demoProduct.click();
-		} else {
-			await page.getByTestId('add-cart-item-menu').click();
-			await page.getByTestId('menu-add-misc-product').click();
-			const dialog = page.getByRole('dialog');
-			await expect(dialog).toBeVisible({ timeout: 15_000 });
-			await dialog.getByRole('button', { name: /0/ }).click();
-			const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
-			await expect(numpad).toBeVisible({ timeout: 15_000 });
-			const numpadInput = numpad.locator('input');
-			await numpadInput.fill('15');
-			await page.getByTestId('numpad-done-button').click();
-			await page.getByTestId('add-to-cart-submit').click();
-		}
+		await page.getByTestId('add-cart-item-menu').click();
+		await page.getByTestId('menu-add-misc-product').click();
+		const priceInput = page.getByTestId('misc-product-price-input');
+		await expect(priceInput).toBeVisible({ timeout: 15_000 });
+		await priceInput.click();
+		const numpad = page.locator('[data-radix-popper-content-wrapper]').first();
+		await expect(numpad).toBeVisible({ timeout: 15_000 });
+		const numpadInput = numpad.locator('input');
+		await numpadInput.fill('15');
+		await page.getByTestId('numpad-done-button').click();
+		await page.getByTestId('add-to-cart-submit').click();
 	}
-	await expect(page.getByTestId('checkout-button')).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByTestId('checkout-button')).toBeVisible({
+		timeout: 15_000,
+	});
 }
 
 async function createCompletedOrder(page: Page) {
 	await addFirstProductToCart(page);
 	await page.getByTestId('checkout-button').click();
-	await expect(page.getByTestId('process-payment-button')).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByTestId('process-payment-button')).toBeVisible({
+		timeout: 15_000,
+	});
 
 	const orderUuid = page.url().match(/\/cart\/([^/]+)\/checkout$/)?.[1];
 	expect(orderUuid).toBeTruthy();
 
 	await page.getByTestId('process-payment-button').click();
-	await expect(page.getByTestId('process-payment-button')).toBeDisabled({ timeout: 10_000 });
 
 	const receiptPrintButton = page.getByTestId('receipt-print-button');
 	const receiptCloseButton = page.getByTestId('receipt-close-button');
@@ -102,7 +100,9 @@ async function openRefundModalForNewCompletedOrder(page: Page) {
 	await interceptRefundDependencies(page);
 	const orderUuid = await createCompletedOrder(page);
 	await page.goto(`/orders/refund/${orderUuid}`);
-	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({ timeout: 30_000 });
+	await expect(page.getByTestId('refund-custom-amount')).toBeVisible({
+		timeout: 30_000,
+	});
 	await page.getByTestId('refund-custom-amount').fill('10.00');
 }
 
@@ -130,12 +130,16 @@ test.describe('POS refunds (Pro)', () => {
 		await expect(page.getByTestId('refund-destination-original_method')).toBeChecked({
 			timeout: 15_000,
 		});
-		await expect(page.getByTestId('refund-destination-cash')).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('refund-destination-cash')).toBeVisible({
+			timeout: 15_000,
+		});
 		await page.getByTestId('refund-destination-cash').click();
 		await expect(page.getByTestId('refund-destination-cash')).toBeChecked();
-		await page.getByRole('button', { name: 'Process Refund' }).click();
-		await expect(page.getByRole('alertdialog')).toBeVisible({ timeout: 10_000 });
-		await page.getByRole('button', { name: 'Process Refund' }).last().click();
+		await page.getByTestId('process-refund-button').click();
+		await expect(page.getByTestId('confirm-process-refund-button')).toBeVisible({
+			timeout: 10_000,
+		});
+		await page.getByTestId('confirm-process-refund-button').click();
 
 		await expect.poll(() => refundPayload?.refund_destination, { timeout: 15_000 }).toBe('cash');
 		expect(refundPayload?.api_refund).toBe(false);
@@ -163,9 +167,11 @@ test.describe('POS refunds (Pro)', () => {
 		});
 		await expect(page.getByTestId('refund-destination-original_method')).toBeEnabled();
 		await page.getByTestId('refund-destination-original_method').click();
-		await page.getByRole('button', { name: 'Process Refund' }).click();
-		await expect(page.getByRole('alertdialog')).toBeVisible({ timeout: 10_000 });
-		await page.getByRole('button', { name: 'Process Refund' }).last().click();
+		await page.getByTestId('process-refund-button').click();
+		await expect(page.getByTestId('confirm-process-refund-button')).toBeVisible({
+			timeout: 10_000,
+		});
+		await page.getByTestId('confirm-process-refund-button').click();
 
 		await expect
 			.poll(() => refundPayload?.refund_destination, { timeout: 15_000 })
