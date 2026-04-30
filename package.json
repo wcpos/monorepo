@@ -93,6 +93,6 @@
   },
   "dependencies": {
     "turbo": "^2.8.14",
-    "typescript": "^5.8.3"
+    "typescript": "^6.0.3"
   }
 }
