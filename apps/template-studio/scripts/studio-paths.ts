@@ -3,9 +3,15 @@ import { fileURLToPath } from 'node:url';
 
 export const studioRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 export const monorepoRoot = path.resolve(studioRoot, '../..');
-export const defaultWooCommercePosRoot = monorepoRoot.includes(`${path.sep}.worktrees${path.sep}`)
-	? path.resolve(monorepoRoot, '../../..', 'woocommerce-pos')
-	: path.resolve(monorepoRoot, '../woocommerce-pos');
+
+export function resolveDefaultWooCommercePosRoot(root: string): string {
+	const resolvedRoot = path.resolve(root);
+	return resolvedRoot.includes(`${path.sep}.worktrees${path.sep}`)
+		? path.resolve(resolvedRoot, '../../..', 'woocommerce-pos')
+		: path.resolve(resolvedRoot, '../woocommerce-pos');
+}
+
+export const defaultWooCommercePosRoot = resolveDefaultWooCommercePosRoot(monorepoRoot);
 export const wooCommercePosRoot = process.env.WCPOS_PLUGIN_ROOT ?? defaultWooCommercePosRoot;
 export const galleryTemplatesDir =
 	process.env.WCPOS_GALLERY_TEMPLATES_DIR ?? path.join(wooCommercePosRoot, 'templates/gallery');
