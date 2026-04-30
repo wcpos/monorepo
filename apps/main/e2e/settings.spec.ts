@@ -101,6 +101,18 @@ test.describe('Language Settings', () => {
 		await option.click();
 	}
 
+	function isExpectedTranslationResponse(
+		response: import('@playwright/test').Response,
+		cdnCode: string
+	) {
+		const url = new URL(response.url());
+		return (
+			url.hostname === 'cdn.jsdelivr.net' &&
+			url.pathname.includes(cdnCode) &&
+			response.status() === 200
+		);
+	}
+
 	/**
 	 * Switches to a different language by trying stable option IDs and
 	 * returning the first option that triggers a CDN translation fetch.
@@ -109,10 +121,7 @@ test.describe('Language Settings', () => {
 		for (const target of SWITCH_TARGETS) {
 			const translationFetch = page
 				.waitForResponse(
-					(response) =>
-						response.url().includes('jsdelivr.net') &&
-						response.url().includes(target.cdnCode) &&
-						response.status() === 200,
+					(response) => isExpectedTranslationResponse(response, target.cdnCode),
 					{ timeout: 5_000 }
 				)
 				.catch(() => null);
@@ -131,11 +140,14 @@ test.describe('Language Settings', () => {
 	test('should have a language set in settings', async ({ posPage: page }) => {
 		await openSettings(page);
 
-		// The trigger must show some language (not empty / not just the placeholder)
 		const trigger = page.getByTestId('language-select-trigger');
 		await expect(trigger).toBeVisible({ timeout: 10_000 });
-		const text = await trigger.textContent();
-		expect(text?.trim().length).toBeGreaterThan(0);
+		await trigger.click();
+		const combobox = page.getByTestId('language-combobox-content');
+		await expect(combobox).toBeVisible({ timeout: 10_000 });
+		const selectedOption = combobox.locator('[role="option"][aria-selected="true"]');
+		await expect(selectedOption).toHaveCount(1);
+		await expect(selectedOption).toHaveAttribute('data-testid', /language-option-/);
 	});
 
 	test('should change language and load translations from CDN', async ({ posPage: page }) => {
@@ -166,10 +178,7 @@ test.describe('Language Settings', () => {
 		// Re-select the same locale by stable option ID. If persisted, no CDN fetch should fire.
 		const sameLanguageFetch = page
 			.waitForResponse(
-				(response) =>
-					response.url().includes('jsdelivr.net') &&
-					response.url().includes(target.cdnCode) &&
-					response.status() === 200,
+				(response) => isExpectedTranslationResponse(response, target.cdnCode),
 				{ timeout: 5_000 }
 			)
 			.then(() => true)

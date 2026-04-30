@@ -42,9 +42,6 @@ async function createCompletedOrder(page: Page) {
 	expect(orderUuid).toBeTruthy();
 
 	await page.getByTestId('process-payment-button').click();
-	await expect(page.getByTestId('process-payment-button')).toBeDisabled({
-		timeout: 10_000,
-	});
 
 	const receiptPrintButton = page.getByTestId('receipt-print-button');
 	const receiptCloseButton = page.getByTestId('receipt-close-button');

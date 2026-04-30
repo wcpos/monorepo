@@ -57,7 +57,9 @@ function listE2EFiles(dir) {
 }
 
 test("repo e2e tests do not use localized selectors", async () => {
-  const e2eDir = fileURLToPath(new URL("../../../apps/main/e2e", import.meta.url));
+  const e2eDir = fileURLToPath(
+    new URL("../../../apps/main/e2e", import.meta.url),
+  );
   const eslint = new ESLint({
     baseConfig: config,
     overrideConfigFile: true,
