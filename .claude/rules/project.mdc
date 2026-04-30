@@ -1,0 +1,93 @@
+---
+description: Local WCPOS monorepo project rules for React, styling, tests, and naming
+alwaysApply: true
+---
+
+# Local Project Rules
+
+These rules are local to this repository. Do not copy them to global `~/.claude` or global Codex/Cursor configuration without explicit user approval.
+
+## React, TypeScript, and Logging
+
+Applies to `**/*.{ts,tsx}`.
+
+### Namespace Imports
+Always use namespace imports for React hooks: `React.useState`, `React.useRef`, etc. Never destructure hooks from `react`.
+
+### useEffect Rules
+- `useEffect` is a last resort. Prefer derived state, event handlers, or external stores such as React Query or RxJS.
+- If used, add a comment explaining why.
+- Never use `useEffect` to react to state you just set; handle that in the event handler.
+- Mount-only effects must use `[]` deps. Use a ref if you need a value without re-triggering.
+
+### Logging
+- No `console.log`; use `import { log } from '@wcpos/utils/logger'`.
+- Methods: `log.debug()`, `log.info()`, `log.warn()`, `log.error()`, `log.success()`.
+- Error codes: `import { ERROR_CODES } from '@wcpos/utils/logger/error-codes'`.
+
+### TypeScript
+- No `any`. Use strict types and generics.
+- Platform files resolve as `.web.ts`, `.electron.ts`, `.ts` for native.
+
+## Styling and Theming
+
+Applies to `**/*.tsx` and `**/global.css`.
+
+This project uses Uniwind with Tailwind CSS v4. Theme variables are defined in `apps/main/global.css` using OKLCH color space.
+
+### Semantic Color Classes
+Prefer semantic classes over hardcoded colors to preserve theme compatibility.
+
+| Class | Purpose |
+| --- | --- |
+| `bg-background` | Main app background |
+| `bg-card` | Card/elevated surfaces |
+| `bg-sidebar` | Navigation sidebar |
+| `bg-muted` | Muted elements/buttons |
+| `bg-table-header` | Data table headers |
+
+### Theme Switching and Native Issues
+- Use `Uniwind.setTheme('name')` or the `useUniwind()` hook.
+- Some native components do not update styles on theme switch due to CSS variable lag.
+- If styles look stuck, use `log.debug` to verify current theme state.
+- Prefer `className` over inline styles.
+
+### Status Bar
+Use `react-native-edge-to-edge` and match the status bar to the background context:
+
+```typescript
+import { SystemBars } from 'react-native-edge-to-edge';
+
+const { theme } = useUniwind();
+const style = theme === 'light' ? 'dark' : 'light';
+<SystemBars style={style} />;
+```
+
+### Typography
+Base font size: Web = 14px, Native = 16px. Use rem-based classes for proportional scaling: `text-xs`, `text-sm`, `text-base`, `text-lg`.
+
+## E2E Locator Rules
+
+Tests must be language-agnostic because demo stores may run in any locale.
+
+1. Prefer `getByTestId`; add `testID` props to components, which map to `data-testid` on web.
+2. Use structural locators such as `getByRole`, element counts, and attribute selectors.
+3. Avoid `getByText`; only use it for clicking dynamically-rendered list items, and document why in a comment.
+4. Verify network behavior with `waitForResponse` for API assertions rather than asserting translated text.
+5. Anchor text assertions to testID-located elements, e.g. `toContainText` on a `getByTestId` locator.
+
+## WCPOS Naming Convention
+
+Due to copyright considerations, use these product names:
+
+| Correct | Incorrect |
+| --- | --- |
+| WCPOS | WooCommerce POS |
+| WCPOS Pro | WooCommerce POS Pro |
+
+Guidelines:
+- In code, UI, and documentation, use `WCPOS` or `WCPOS Pro`.
+- WordPress.org slug exception: `woocommerce-pos` remains unchanged.
+- GitHub repository name exceptions: `woocommerce-pos` and `woocommerce-pos-pro` remain unchanged.
+- Existing database field exceptions: fields like `wcposVersion` and `wcposProVersion` remain unchanged.
+- ZIP filename exceptions: `woocommerce-pos.zip` and `woocommerce-pos-pro.zip` remain unchanged.
