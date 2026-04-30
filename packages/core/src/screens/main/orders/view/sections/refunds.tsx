@@ -183,7 +183,7 @@ function RefundsDetail({
 								</View>
 								<View>
 									<Text className="text-right font-semibold">
-										{formatMoney(refund.total, order.currency_symbol)}
+										{formatMoney(refund.amount ?? refund.total, order.currency_symbol)}
 									</Text>
 									<Text className="text-muted-foreground text-right">
 										By {refund.refunded_by || '—'}

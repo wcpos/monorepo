@@ -10,6 +10,7 @@ export interface WCRefund {
 	id?: number;
 	date_created?: string;
 	reason?: string;
+	amount?: string;
 	refunded_by?: number | string;
 	refunded_payment?: boolean;
 	total?: string;
