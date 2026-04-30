@@ -24,13 +24,14 @@
 	},
 	"dependencies": {
 		"@point-of-sale/receipt-printer-encoder": "^3.0.3",
+		"bwip-js": "4.10.1",
 		"dompurify": "^3.4.1",
 		"mustache": "^4.2.0"
 	},
 	"devDependencies": {
+		"@types/mustache": "^4.2.6",
 		"jsdom": "^26.1.0",
-		"vitest": "^4.0.18",
-		"@types/mustache": "^4.2.6"
+		"vitest": "^4.0.18"
 	},
 	"sideEffects": false
 }

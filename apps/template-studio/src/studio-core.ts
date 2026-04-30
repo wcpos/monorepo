@@ -39,6 +39,8 @@ export type StudioRenderResult =
 	| {
 			kind: 'thermal';
 			html: string;
+			escposBytes: Uint8Array;
+			escposBase64: string;
 			escposHex: string;
 			escposAscii: string;
 	  };
@@ -77,9 +79,19 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 	return {
 		kind: 'thermal',
 		html: renderThermalPreview(input.template.content, input.fixture),
+		escposBytes: bytes,
+		escposBase64: bytesToBase64(bytes),
 		escposHex: debug.hex,
 		escposAscii: debug.ascii,
 	};
+}
+
+export function bytesToBase64(bytes: Uint8Array): string {
+	let binary = '';
+	for (const byte of bytes) {
+		binary += String.fromCharCode(byte);
+	}
+	return btoa(binary);
 }
 
 export function buildTemplateViewModel(input: RenderStudioTemplateInput): StudioSnapshotViewModel {

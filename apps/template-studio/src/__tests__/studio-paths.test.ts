@@ -15,7 +15,7 @@ describe('template studio path defaults', () => {
 	it('resolves the sibling plugin checkout from a monorepo worktree checkout', () => {
 		expect(
 			resolveDefaultWooCommercePosRoot(
-				'/workspace/wcpos/monorepo-v2/.worktrees/template-studio-plugin-root'
+				'/workspace/wcpos/monorepo-v2/.worktrees/template-studio-print-lab'
 			)
 		).toBe(path.normalize('/workspace/wcpos/woocommerce-pos'));
 	});

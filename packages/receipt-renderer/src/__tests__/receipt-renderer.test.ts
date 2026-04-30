@@ -93,7 +93,7 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(ast.paperWidth).toBe(48);
 		expect(html).toContain('width: 48ch');
 		expect(html).toContain('height: 1.4em');
-		expect(html).toContain('width: 100px; height: 100px');
+		expect(html).toContain('data-barcode-kind="qrcode"');
 	});
 
 	it('renders thermal templates through Mustache, XML AST, and sanitized HTML', () => {
@@ -103,6 +103,24 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).toContain('Widget A');
 		expect(html).toContain('$15.00');
 		expect(html).toContain('✂');
+	});
+
+	it('renders barcode and QR preview images with the barcode library', () => {
+		const html = renderThermalPreview(
+			'<receipt><barcode type="code128">ABC-123</barcode><qrcode>https://example.test/receipt/1001</qrcode></receipt>',
+			{}
+		);
+
+		expect(html).toContain('<svg');
+		expect(html).toContain('data-barcode-kind="barcode"');
+		expect(html).toContain('data-barcode-kind="qrcode"');
+		expect(html).toMatch(/data-barcode-kind="qrcode"[\s\S]*<svg viewBox="0 0 (\d+) \1"/);
+		expect(html).toContain('data-barcode-value="ABC-123"');
+		expect(html).toContain('stroke=');
+		expect(html).toContain('stroke-width=');
+		expect(html).toContain('ABC-123');
+		expect(html).not.toContain('repeating-linear-gradient');
+		expect(html).not.toContain('>QR<');
 	});
 
 	it('rejects unsafe image data URIs in HTML rendering', () => {

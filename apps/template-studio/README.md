@@ -25,4 +25,15 @@ WCPOS_PLUGIN_ROOT=/path/to/woocommerce-pos/.worktrees/template-tuning pnpm dev
 
 The Vite dev server proxies `/wp-json` to `WCPOS_STUDIO_WP_URL` (default `http://localhost:8888`) and injects `X-WCPOS: 1`; browser requests keep cookie auth with `credentials: 'include'`.
 
+## Real store data and print testing
+
+Use the Store URL, Template ID, and Order ID fields to load real preview payloads from an allowed WCPOS store. The Studio dev server fetches `/wp-json/wcpos/v1/templates/{id}/preview` server-side and always sends `X-WCPOS: 1`. Browser cookies are forwarded only to the configured `WCPOS_STUDIO_WP_URL` origin (default `http://localhost:8888`) so arbitrary Store URLs cannot receive local auth cookies. To permit another store origin, start Studio with `WCPOS_STUDIO_STORE_ORIGINS=https://store.example`. Leave Order ID blank for sample preview data, use `latest` for the latest POS order, or enter a specific order ID.
+
+Print testing options:
+
+- **Print dialog** opens a print-sized browser document and calls `window.print()` so macOS/browser can target a desktop thermal-printer simulator.
+- **Send raw ESC/POS** sends thermal template bytes to a TCP simulator using the host and port fields, for example `127.0.0.1:9100`. The dev endpoint only accepts loopback browser clients and only targets loopback hosts by default; set `WCPOS_STUDIO_PRINT_HOSTS=127.0.0.1,printer.local` when your simulator uses another hostname. Raw TCP printing is only available for thermal templates because logicless templates are HTML-only.
+
+Thermal previews render barcode and QR nodes through `bwip-js`, matching the barcode library path used for browser preview output instead of placeholder bars.
+
 Preview image output defaults to `apps/template-studio/gallery-previews` for this PR. Set `WCPOS_GALLERY_PREVIEW_DIR=/path/to/woocommerce-pos/packages/template-gallery/src/assets/previews` when copying generated assets into the plugin gallery UI.
