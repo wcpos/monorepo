@@ -44,7 +44,7 @@ export function TotalsSection({ order }: { order: OrderDocument }) {
 	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
 
 	const subtotal = (order.line_items || []).reduce(
-		(sum, item) => sum + toNumber(item.subtotal || item.total),
+		(sum, item) => sum + toNumber(item.subtotal ?? item.total),
 		0
 	);
 	const discount = toNumber(order.discount_total);
