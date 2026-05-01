@@ -52,7 +52,7 @@ export function FieldsTree(props: FieldsTreeProps) {
 							<span>{section.label}</span>
 							{section.kind === 'array' && arrayCount !== null ? (
 								<span
-									className={`badge${arrayCount > 0 ? 'populated' : ''}`}
+									className={arrayCount > 0 ? 'badge populated' : 'badge'}
 									aria-label={`${arrayCount} items`}
 								>
 									[ {arrayCount} ]
