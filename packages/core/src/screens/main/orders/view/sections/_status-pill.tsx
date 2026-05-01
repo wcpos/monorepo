@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../contexts/translations';
+import { useOrderStatusLabel } from '../../../hooks/use-order-status-label';
 
 type Tone = 'success' | 'warning' | 'destructive' | 'muted';
 
@@ -21,16 +22,10 @@ const STATUS_TONE: Record<string, Tone> = {
 	'pos-partial': 'warning',
 };
 
-const STATUS_LABEL_KEYS: Record<string, string> = {
-	completed: 'orders.status.completed',
-	processing: 'orders.status.processing',
-	'on-hold': 'orders.status.on-hold',
-	pending: 'orders.status.pending',
-	refunded: 'orders.status.refunded',
+// Synthetic statuses that aren't returned by the WC order_statuses endpoint
+// (computed client-side or POS-specific) — fall back to local translations.
+const SYNTHETIC_STATUS_KEYS: Record<string, string> = {
 	'partially-refunded': 'orders.status.partially-refunded',
-	failed: 'orders.status.failed',
-	cancelled: 'orders.status.cancelled',
-	trash: 'orders.status.trash',
 	'pos-open': 'orders.status.pos-open',
 	'pos-partial': 'orders.status.pos-partial',
 };
@@ -60,14 +55,11 @@ const TONE_CLASSES: Record<Tone, { wrap: string; dot: string; text: string }> = 
 
 export function StatusPill({ status }: { status?: string | null }) {
 	const t = useT();
+	const { getLabel } = useOrderStatusLabel();
 	const key = (status || '').toLowerCase();
 	const tone = STATUS_TONE[key] ?? 'muted';
-	const labelKey = STATUS_LABEL_KEYS[key];
-	const label = labelKey
-		? t(labelKey)
-		: status
-			? status.charAt(0).toUpperCase() + status.slice(1)
-			: '—';
+	const syntheticKey = SYNTHETIC_STATUS_KEYS[key];
+	const label = !status ? '—' : syntheticKey ? t(syntheticKey) : getLabel(status);
 	const classes = TONE_CLASSES[tone];
 
 	return (
