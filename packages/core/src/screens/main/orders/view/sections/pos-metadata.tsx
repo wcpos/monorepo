@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Text } from '@wcpos/components/text';
 
 import { RailSection } from './_section';
+import { useT } from '../../../../../contexts/translations';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -25,6 +26,7 @@ function KV({ k, v }: { k: string; v?: string }) {
 }
 
 export function POSMetadataSection({ order, last }: { order: OrderDocument; last?: boolean }) {
+	const t = useT();
 	const cashier = getMetaValue(order.meta_data, '_pos_user');
 	const store = getMetaValue(order.meta_data, '_pos_store');
 	const channel = order.created_via;
@@ -32,11 +34,13 @@ export function POSMetadataSection({ order, last }: { order: OrderDocument; last
 	if (!cashier && !store && !channel && !order.id) return null;
 
 	return (
-		<RailSection title="Metadata" last={last}>
-			{order.id ? <KV k="Order ID" v={String(order.id)} /> : null}
-			<KV k="Cashier" v={cashier} />
-			<KV k="Store" v={store} />
-			<KV k="Channel" v={channel} />
+		<RailSection title={t('orders.metadata', { defaultValue: 'Metadata' })} last={last}>
+			{order.id ? (
+				<KV k={t('orders.order_id', { defaultValue: 'Order ID' })} v={String(order.id)} />
+			) : null}
+			<KV k={t('common.cashier')} v={cashier} />
+			<KV k={t('common.store')} v={store} />
+			<KV k={t('orders.channel', { defaultValue: 'Channel' })} v={channel} />
 		</RailSection>
 	);
 }

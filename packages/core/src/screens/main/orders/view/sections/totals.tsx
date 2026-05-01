@@ -1,23 +1,18 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import toNumber from 'lodash/toNumber';
+
 import { Text } from '@wcpos/components/text';
 
-import { formatMoney } from './_format';
 import { Section } from './_section';
+import { useT } from '../../../../../contexts/translations';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
-function asFloat(value: unknown) {
-	const n = parseFloat(String(value ?? '0'));
-	return Number.isFinite(n) ? n : 0;
-}
-
 function totalRefunded(order: OrderDocument) {
-	return (order.refunds || []).reduce((sum, refund) => {
-		const total = asFloat(refund.total);
-		return sum + Math.abs(total);
-	}, 0);
+	return (order.refunds || []).reduce((sum, refund) => sum + Math.abs(toNumber(refund.total)), 0);
 }
 
 function Row({
@@ -42,17 +37,19 @@ function Row({
 }
 
 export function TotalsSection({ order }: { order: OrderDocument }) {
-	const currency = order.currency_symbol;
+	const t = useT();
+	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
 
 	const subtotal = (order.line_items || []).reduce(
-		(sum, item) => sum + asFloat(item.subtotal || item.total),
+		(sum, item) => sum + toNumber(item.subtotal || item.total),
 		0
 	);
-	const discount = asFloat(order.discount_total);
-	const shipping = asFloat(order.shipping_total);
-	const fees = (order.fee_lines || []).reduce((sum, fee) => sum + asFloat(fee.total), 0);
-	const taxTotal = asFloat(order.total_tax);
+	const discount = toNumber(order.discount_total);
+	const shipping = toNumber(order.shipping_total);
+	const fees = (order.fee_lines || []).reduce((sum, fee) => sum + toNumber(fee.total), 0);
+	const taxTotal = toNumber(order.total_tax);
 	const refunded = totalRefunded(order);
+	const total = toNumber(order.total);
 
 	const couponLines = order.coupon_lines || [];
 	const shippingLines = order.shipping_lines || [];
@@ -67,14 +64,16 @@ export function TotalsSection({ order }: { order: OrderDocument }) {
 	const shippingMethod = shippingLines.length ? shippingLines[0]?.method_title : undefined;
 
 	return (
-		<Section title="Totals">
+		<Section title={t('orders.totals', { defaultValue: 'Totals' })}>
 			<View className="gap-0.5">
-				<Row label="Subtotal" value={formatMoney(subtotal, currency)} />
+				<Row label={t('common.subtotal')} value={format(subtotal)} />
 				{discount > 0 ? (
 					<Row
 						label={
 							<View className="flex-row items-center gap-2">
-								<Text className="text-muted-foreground text-sm">Discount</Text>
+								<Text className="text-muted-foreground text-sm">
+									{t('common.discount', { defaultValue: 'Discount' })}
+								</Text>
 								{couponLabel ? (
 									<View className="bg-primary/10 rounded px-1.5 py-0.5">
 										<Text className="text-primary text-[10px] font-medium tabular-nums">
@@ -84,31 +83,31 @@ export function TotalsSection({ order }: { order: OrderDocument }) {
 								) : null}
 							</View>
 						}
-						value={formatMoney(-discount, currency)}
+						value={format(-discount)}
 					/>
 				) : null}
 				{shippingLines.length || shipping > 0 ? (
 					<Row
 						label={
 							<View className="flex-row items-center gap-2">
-								<Text className="text-muted-foreground text-sm">Shipping</Text>
+								<Text className="text-muted-foreground text-sm">{t('common.shipping')}</Text>
 								{shippingMethod ? (
 									<Text className="text-muted-foreground/80 text-xs">· {shippingMethod}</Text>
 								) : null}
 							</View>
 						}
-						value={formatMoney(shipping, currency)}
+						value={format(shipping)}
 					/>
 				) : null}
-				{fees > 0 ? <Row label="Fees" value={formatMoney(fees, currency)} /> : null}
+				{fees > 0 ? <Row label={t('pos_cart.fees')} value={format(fees)} /> : null}
 				{taxTotal > 0 || taxLines.length ? (
-					<Row label="Tax" value={formatMoney(taxTotal, currency)} />
+					<Row label={t('common.tax')} value={format(taxTotal)} />
 				) : null}
 				{taxLines.map((line, index) => {
 					const subLabel =
 						line.label && line.rate_percent != null
 							? `${line.label} ${line.rate_percent}%`
-							: line.label || `Tax ${line.id ?? index + 1}`;
+							: line.label || `${t('common.tax')} ${line.id ?? index + 1}`;
 					return (
 						<View
 							key={`${line.id ?? line.label ?? 'tax'}-${index}`}
@@ -116,21 +115,21 @@ export function TotalsSection({ order }: { order: OrderDocument }) {
 						>
 							<Text className="text-muted-foreground/80 text-xs">{subLabel}</Text>
 							<Text className="text-foreground/80 text-xs tabular-nums">
-								{formatMoney(line.tax_total, currency)}
+								{format(toNumber(line.tax_total))}
 							</Text>
 						</View>
 					);
 				})}
 				{refunded > 0 ? (
-					<Row label="Refunded" value={formatMoney(-refunded, currency)} tone="destructive" />
+					<Row label={t('orders.refund')} value={format(-refunded)} tone="destructive" />
 				) : null}
 
 				<View className="border-border mt-2 flex-row items-baseline justify-between gap-3 border-t pt-3">
 					<Text className="text-foreground text-sm font-semibold">
-						{refunded > 0 ? 'Net total' : 'Total'}
+						{refunded > 0 ? t('orders.net_payment') : t('common.total')}
 					</Text>
 					<Text className="text-foreground text-lg font-semibold tracking-tight tabular-nums">
-						{formatMoney(asFloat(order.total) - refunded, currency)}
+						{format(total - refunded)}
 					</Text>
 				</View>
 			</View>

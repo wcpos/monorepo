@@ -17,6 +17,8 @@ const STATUS_TONE: Record<string, Tone> = {
 	failed: 'destructive',
 	cancelled: 'muted',
 	trash: 'muted',
+	'pos-open': 'warning',
+	'pos-partial': 'warning',
 };
 
 const STATUS_LABEL_KEYS: Record<string, string> = {

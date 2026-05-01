@@ -1,11 +1,15 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import toNumber from 'lodash/toNumber';
+
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 
-import { formatDate, formatMoney, formatTime } from './_format';
 import { StatusPill } from './_status-pill';
+import { useT } from '../../../../../contexts/translations';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useDateFormat } from '../../../hooks/use-date-format';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -16,8 +20,7 @@ function getMetaValue(metaData: { key?: string; value?: unknown }[] | undefined,
 
 function totalRefunded(order: OrderDocument) {
 	return (order.refunds || []).reduce((sum, refund) => {
-		const total = parseFloat(String(refund.total ?? '0'));
-		return Number.isFinite(total) ? sum + Math.abs(total) : sum;
+		return sum + Math.abs(toNumber(refund.total));
 	}, 0);
 }
 
@@ -28,22 +31,25 @@ interface Props {
 }
 
 export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
+	const t = useT();
+	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
+	const dateCreated = useDateFormat(order.date_created_gmt);
+	const datePaid = useDateFormat(order.date_paid_gmt);
+
 	const refundedAmount = totalRefunded(order);
-	const isPartialRefund =
-		refundedAmount > 0 && refundedAmount < parseFloat(String(order.total ?? '0'));
+	const total = toNumber(order.total);
+	const isPartialRefund = refundedAmount > 0 && refundedAmount < total;
 	const status = isPartialRefund ? 'partially-refunded' : order.status;
 
 	const cashier = getMetaValue(order.meta_data, '_pos_user');
 	const store = getMetaValue(order.meta_data, '_pos_store');
 	const paymentMethod = order.payment_method_title || order.payment_method;
 
-	const totalDisplay = formatMoney(order.total, order.currency_symbol);
-
 	return (
 		<View className="border-border bg-card border-b px-5 pt-5 pb-5 md:px-6 md:pt-6 md:pb-5">
 			{/* Eyebrow row: order number + via */}
 			<View className="mb-3 flex-row items-center gap-2 pr-8">
-				<Text className="text-muted-foreground text-xs">Order</Text>
+				<Text className="text-muted-foreground text-xs">{t('common.order')}</Text>
 				<Text className="text-foreground text-xs font-medium">
 					#{order.number || order.id || '—'}
 				</Text>
@@ -61,23 +67,25 @@ export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
 				<View className="min-w-0 flex-1 gap-1.5">
 					<View className="flex-row flex-wrap items-baseline gap-3">
 						<Text className="text-foreground text-3xl font-semibold tracking-tight tabular-nums md:text-4xl">
-							{totalDisplay}
+							{format(total)}
 						</Text>
 						<StatusPill status={status} />
 					</View>
 					<HeroSubtitle
-						order={order}
+						dateCreated={dateCreated}
+						datePaid={datePaid}
 						cashier={cashier}
 						store={store}
 						paymentMethod={paymentMethod}
 						refundedAmount={refundedAmount}
+						formatMoney={format}
 					/>
 				</View>
 
 				<View className="flex-row gap-2">
 					{onPrintReceipt ? (
 						<Button variant="outline" size="sm" onPress={onPrintReceipt} leftIcon="receipt">
-							<ButtonText>Print receipt</ButtonText>
+							<ButtonText>{t('receipt.print_receipt')}</ButtonText>
 						</Button>
 					) : null}
 					{onRefund ? (
@@ -87,7 +95,7 @@ export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
 							onPress={onRefund}
 							leftIcon="arrowRotateLeft"
 						>
-							<ButtonText>{refundedAmount > 0 ? 'Refund more' : 'Refund'}</ButtonText>
+							<ButtonText>{t('orders.refund')}</ButtonText>
 						</Button>
 					) : null}
 				</View>
@@ -97,27 +105,29 @@ export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
 }
 
 function HeroSubtitle({
-	order,
+	dateCreated,
+	datePaid,
 	cashier,
 	store,
 	paymentMethod,
 	refundedAmount,
+	formatMoney,
 }: {
-	order: OrderDocument;
+	dateCreated: string | null;
+	datePaid: string | null;
 	cashier?: string;
 	store?: string;
 	paymentMethod?: string;
 	refundedAmount: number;
+	formatMoney: (value: number) => string;
 }) {
+	const t = useT();
 	const parts: React.ReactNode[] = [];
 
-	if (order.date_created) {
+	if (dateCreated) {
 		parts.push(
-			<Text key="date" className="text-muted-foreground text-xs">
-				<Text className="text-foreground/80 text-xs font-medium">
-					{formatDate(order.date_created)}
-				</Text>
-				{` · ${formatTime(order.date_created)}`}
+			<Text key="date" className="text-foreground/80 text-xs font-medium">
+				{dateCreated}
 			</Text>
 		);
 	}
@@ -125,7 +135,8 @@ function HeroSubtitle({
 	if (cashier) {
 		parts.push(
 			<Text key="cashier" className="text-muted-foreground text-xs">
-				Cashier <Text className="text-foreground/80 text-xs font-medium">{cashier}</Text>
+				{t('common.cashier')}{' '}
+				<Text className="text-foreground/80 text-xs font-medium">{cashier}</Text>
 				{store ? (
 					<Text className="text-muted-foreground text-xs">
 						{' @ '}
@@ -136,18 +147,20 @@ function HeroSubtitle({
 		);
 	} else if (store) {
 		parts.push(
-			<Text key="store" className="text-muted-foreground text-xs">
-				<Text className="text-foreground/80 text-xs font-medium">{store}</Text>
+			<Text key="store" className="text-foreground/80 text-xs font-medium">
+				{store}
 			</Text>
 		);
 	}
 
 	if (paymentMethod) {
-		const paid = order.date_paid ? ` at ${formatTime(order.date_paid)}` : '';
 		parts.push(
 			<Text key="payment" className="text-muted-foreground text-xs">
-				Paid by <Text className="text-foreground/80 text-xs font-medium">{paymentMethod}</Text>
-				{paid}
+				{t('common.payment_method')}{' '}
+				<Text className="text-foreground/80 text-xs font-medium">{paymentMethod}</Text>
+				{datePaid ? (
+					<Text className="text-muted-foreground text-xs">{` · ${datePaid}`}</Text>
+				) : null}
 			</Text>
 		);
 	}
@@ -155,7 +168,7 @@ function HeroSubtitle({
 	if (refundedAmount > 0) {
 		parts.push(
 			<Text key="refunded" className="text-destructive text-xs font-medium">
-				{formatMoney(-refundedAmount, order.currency_symbol)} refunded
+				{formatMoney(-refundedAmount)} {t('orders.refund').toLowerCase()}
 			</Text>
 		);
 	}

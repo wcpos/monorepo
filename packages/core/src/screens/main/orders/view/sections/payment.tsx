@@ -1,23 +1,19 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import toNumber from 'lodash/toNumber';
+
 import { Text } from '@wcpos/components/text';
 
-import { formatTime } from './_format';
 import { RailSection } from './_section';
+import { useT } from '../../../../../contexts/translations';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useDateFormat } from '../../../hooks/use-date-format';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
-function asFloat(value: unknown) {
-	const n = parseFloat(String(value ?? '0'));
-	return Number.isFinite(n) ? n : 0;
-}
-
 function totalRefunded(order: OrderDocument) {
-	return (order.refunds || []).reduce((sum, refund) => {
-		const total = asFloat(refund.total);
-		return sum + Math.abs(total);
-	}, 0);
+	return (order.refunds || []).reduce((sum, refund) => sum + Math.abs(toNumber(refund.total)), 0);
 }
 
 function KV({
@@ -40,6 +36,10 @@ function KV({
 }
 
 export function PaymentSection({ order, last }: { order: OrderDocument; last?: boolean }) {
+	const t = useT();
+	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
+	const datePaid = useDateFormat(order.date_paid_gmt);
+
 	const method = order.payment_method_title || order.payment_method;
 	const refunded = totalRefunded(order);
 
@@ -48,17 +48,11 @@ export function PaymentSection({ order, last }: { order: OrderDocument; last?: b
 	}
 
 	return (
-		<RailSection title="Payment" last={last}>
-			<KV k="Method" v={method} />
-			<KV k="Transaction ID" v={order.transaction_id} />
-			<KV k="Captured" v={order.date_paid ? formatTime(order.date_paid) : undefined} />
-			{refunded > 0 ? (
-				<KV
-					k="Refunded"
-					v={`−${order.currency_symbol ?? ''}${refunded.toFixed(2)}`}
-					tone="destructive"
-				/>
-			) : null}
+		<RailSection title={t('common.payment_method')} last={last}>
+			<KV k={t('common.payment_method')} v={method} />
+			<KV k={t('common.transaction_id')} v={order.transaction_id} />
+			<KV k={t('orders.captured', { defaultValue: 'Captured' })} v={datePaid ?? undefined} />
+			{refunded > 0 ? <KV k={t('orders.refund')} v={format(-refunded)} tone="destructive" /> : null}
 		</RailSection>
 	);
 }
