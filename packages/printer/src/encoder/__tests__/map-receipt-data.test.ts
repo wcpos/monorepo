@@ -1,4 +1,5 @@
 import { mapReceiptData } from '../map-receipt-data';
+import { ReceiptDataSchema } from '../schema';
 import { sampleReceiptData } from './fixtures';
 
 import type { ReceiptData } from '../types';
@@ -428,5 +429,30 @@ describe('mapReceiptData', () => {
 			});
 			expect(result.fiscal.immutable_id).toBe('FISC-001');
 		});
+	});
+
+	describe('fiscal extra_fields', () => {
+		const cases: Array<[string, ReceiptData['fiscal']['extra_fields']]> = [
+			['empty array', []],
+			['array entries', [{ key: 'terminal_id', value: 'T-100' }]],
+			['empty record', {}],
+			['record entries', { terminal_id: 'T-100', sequence: 42 }],
+		];
+
+		for (const [label, extraFields] of cases) {
+			it(`accepts ${label}`, () => {
+				const data: ReceiptData = {
+					...sampleReceiptData,
+					fiscal: {
+						...sampleReceiptData.fiscal,
+						extra_fields: extraFields,
+					},
+				};
+
+				const mapped = mapReceiptData(data as Record<string, any>);
+				expect(mapped.fiscal.extra_fields).toEqual(extraFields);
+				expect(ReceiptDataSchema.safeParse(mapped).success).toBe(true);
+			});
+		}
 	});
 });

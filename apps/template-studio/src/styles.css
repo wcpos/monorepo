@@ -7,6 +7,7 @@
  */
 
 :root {
+	--ts-toolbar-height: 44px;
 	--ts-shell: #f7f6f2;
 	--ts-panel: #fbfaf6;
 	--ts-panel-alt: #f3eee5;
@@ -38,7 +39,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; }
+html, body { margin: 0; height: 100%; }
 button, input, select, textarea { font: inherit; color: inherit; }
 
 button {
@@ -74,8 +75,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 
 .studio-app {
 	display: grid;
-	grid-template-rows: 44px auto 1fr;
-	height: 100vh;
+	grid-template-rows: var(--ts-toolbar-height) auto 1fr;
+	min-height: 100vh;
+	min-height: 100dvh;
 }
 
 .studio-toolbar {
@@ -85,6 +87,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	padding: 0 16px;
 	background: var(--ts-panel);
 	border-bottom: 1px solid var(--ts-border);
+	position: sticky;
+	top: 0;
+	z-index: 10;
 }
 .studio-toolbar .brand {
 	display: flex;
@@ -137,6 +142,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 }
 
 .studio-body {
+	grid-row: 3;
 	display: grid;
 	grid-template-columns: 220px minmax(420px, 1fr) 320px;
 	min-height: 0;
@@ -149,6 +155,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	border-right: 1px solid var(--ts-border);
 	overflow-y: auto;
 	padding: 12px 0;
+	position: sticky;
+	top: var(--ts-toolbar-height);
+	align-self: start;
+	height: calc(100vh - var(--ts-toolbar-height));
+	height: calc(100dvh - var(--ts-toolbar-height));
 }
 .template-group { padding: 8px 0; }
 .template-group h3 {
@@ -195,9 +206,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 
 .stage {
 	background: var(--ts-stage);
-	overflow: auto;
 	display: grid;
-	place-items: center;
+	place-items: start center;
 	position: relative;
 	padding: 32px;
 }
@@ -259,6 +269,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	overflow-y: auto;
 	display: flex;
 	flex-direction: column;
+	position: sticky;
+	top: var(--ts-toolbar-height);
+	align-self: start;
+	height: calc(100vh - var(--ts-toolbar-height));
+	height: calc(100dvh - var(--ts-toolbar-height));
 }
 .section {
 	border-bottom: 1px solid var(--ts-border);

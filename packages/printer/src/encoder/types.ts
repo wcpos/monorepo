@@ -19,5 +19,9 @@ export type {
 	ReceiptPayment,
 	ReceiptFiscal,
 	ReceiptPresentationHints,
+	ReceiptDate,
+	ReceiptInfo,
+	ReceiptOrder,
+	ReceiptI18n,
 	ReceiptData,
 } from './schema';

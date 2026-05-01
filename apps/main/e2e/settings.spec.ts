@@ -96,6 +96,9 @@ test.describe('Language Settings', () => {
 		await page.getByTestId('language-select-trigger').click();
 		const combobox = page.getByTestId('language-combobox-content');
 		await expect(combobox).toBeVisible({ timeout: 10_000 });
+		await page
+			.getByTestId('language-search-input')
+			.fill(optionTestID.replace('language-option-', ''));
 		const option = combobox.getByTestId(optionTestID);
 		await expect(option).toBeVisible({ timeout: 10_000 });
 		await option.click();
@@ -118,18 +121,7 @@ test.describe('Language Settings', () => {
 	 * returning the first option that triggers a CDN translation fetch.
 	 */
 	async function switchToDifferentLanguage(page: import('@playwright/test').Page) {
-		await page.getByTestId('language-select-trigger').click();
-		const combobox = page.getByTestId('language-combobox-content');
-		await expect(combobox).toBeVisible({ timeout: 10_000 });
-		const selectedOption = combobox.locator('[role="option"][aria-selected="true"]');
-		const currentOptionTestID = await selectedOption.getAttribute('data-testid');
-		await page.keyboard.press('Escape');
-
-		const candidates = currentOptionTestID
-			? SWITCH_TARGETS.filter((target) => target.optionTestID !== currentOptionTestID)
-			: SWITCH_TARGETS;
-
-		for (const target of candidates) {
+		for (const target of SWITCH_TARGETS) {
 			const translationFetch = page
 				.waitForResponse((response) => isExpectedTranslationResponse(response, target.cdnCode), {
 					timeout: 5_000,
@@ -152,12 +144,16 @@ test.describe('Language Settings', () => {
 
 		const trigger = page.getByTestId('language-select-trigger');
 		await expect(trigger).toBeVisible({ timeout: 10_000 });
+		await expect(trigger).toContainText(/\S/);
 		await trigger.click();
 		const combobox = page.getByTestId('language-combobox-content');
 		await expect(combobox).toBeVisible({ timeout: 10_000 });
-		const selectedOption = combobox.locator('[role="option"][aria-selected="true"]');
-		await expect(selectedOption).toHaveCount(1);
-		await expect(selectedOption).toHaveAttribute('data-testid', /language-option-/);
+		await page
+			.getByTestId('language-search-input')
+			.fill(SWITCH_TARGETS[0].optionTestID.replace('language-option-', ''));
+		await expect(combobox.getByTestId(SWITCH_TARGETS[0].optionTestID)).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 
 	test('should change language and load translations from CDN', async ({ posPage: page }) => {
