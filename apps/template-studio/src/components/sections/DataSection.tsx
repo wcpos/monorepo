@@ -1,9 +1,20 @@
+import { useState } from 'react';
+
+import { FieldsTree } from './FieldsTree';
+
+import type { PathSegment } from '../../lib/path-utils';
 import type { ResolvedScenarios, ScenarioWeights } from '../../randomizer';
 
 interface DataSectionProps {
 	seedLabel: string;
 	onShuffle: () => void;
 	scenarios: ResolvedScenarios;
+	data: Record<string, unknown>;
+	pristine: Record<string, unknown>;
+	onChangePath: (path: PathSegment[], value: unknown) => void;
+	onAddItem: (path: PathSegment[]) => void;
+	onRemoveItem: (path: PathSegment[]) => void;
+	onRevertSection: (path: PathSegment[]) => void;
 }
 
 const SCENARIO_LABELS: Record<keyof ScenarioWeights, string> = {
@@ -19,7 +30,18 @@ const SCENARIO_LABELS: Record<keyof ScenarioWeights, string> = {
 	hasShipping: 'shipping',
 };
 
-export function DataSection({ seedLabel, onShuffle, scenarios }: DataSectionProps) {
+export function DataSection({
+	seedLabel,
+	onShuffle,
+	scenarios,
+	data,
+	pristine,
+	onChangePath,
+	onAddItem,
+	onRemoveItem,
+	onRevertSection,
+}: DataSectionProps) {
+	const [search, setSearch] = useState('');
 	const activeScenarios = (Object.keys(SCENARIO_LABELS) as (keyof ScenarioWeights)[]).filter(
 		(key) => scenarios[key]
 	);
@@ -43,10 +65,23 @@ export function DataSection({ seedLabel, onShuffle, scenarios }: DataSectionProp
 					))}
 				</div>
 			) : null}
-			<p className="section-placeholder">
-				Schema-driven editor with field-by-field controls is coming next. Shuffle to explore data
-				variations.
-			</p>
+			<input
+				type="search"
+				className="data-search"
+				placeholder="Search fields…"
+				value={search}
+				onChange={(event) => setSearch(event.target.value)}
+				aria-label="Search fields"
+			/>
+			<FieldsTree
+				data={data}
+				pristine={pristine}
+				search={search}
+				onChangePath={onChangePath}
+				onAddItem={onAddItem}
+				onRemoveItem={onRemoveItem}
+				onRevertSection={onRevertSection}
+			/>
 		</>
 	);
 }

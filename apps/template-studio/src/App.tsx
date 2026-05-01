@@ -9,10 +9,13 @@ import { WooCommerceSection } from './components/sections/WooCommerceSection';
 import { Stage } from './components/Stage';
 import { TemplateList } from './components/TemplateList';
 import { Toolbar } from './components/Toolbar';
+import { ARRAY_DEFAULTS } from './lib/field-meta';
+import { getAtPath, removeAtPath, setAtPath } from './lib/path-utils';
 import { createRandomReceipt, formatSeed } from './randomizer';
 import { fetchBundledTemplates, paperWidths } from './studio-api';
 import { renderStudioTemplate, selectVisibleTemplate } from './studio-core';
 
+import type { PathSegment } from './lib/path-utils';
 import type { PaperWidth, StudioTemplate } from './studio-core';
 
 const SECTION_STORAGE_KEY = 'wcpos-template-studio:sections';
@@ -106,12 +109,27 @@ export function App() {
 
 	const selectedTemplate = selectVisibleTemplate(templates, selectedTemplateId);
 	const randomReceipt = useMemo(() => createRandomReceipt({ seed }), [seed]);
-	const fixture = useMemo(
-		() => ({ ...randomReceipt.data, id: `random-${randomReceipt.seedHex}` }),
+	const pristineData = useMemo(
+		() => randomReceipt.data as unknown as Record<string, unknown>,
 		[randomReceipt]
 	);
+	const [workingData, setWorkingData] = useState<Record<string, unknown>>(pristineData);
+
+	useEffect(() => {
+		// Reset working data whenever the seed changes (Shuffle).
+		setWorkingData(pristineData);
+	}, [pristineData]);
+
+	const fixture = useMemo(
+		() => ({ ...workingData, id: `random-${randomReceipt.seedHex}` }),
+		[workingData, randomReceipt]
+	);
 	const rendered = selectedTemplate
-		? renderStudioTemplate({ template: selectedTemplate, fixture, paperWidth })
+		? renderStudioTemplate({
+				template: selectedTemplate,
+				fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
+				paperWidth,
+			})
 		: null;
 	const previewHtml =
 		rendered?.kind === 'thermal'
@@ -125,6 +143,30 @@ export function App() {
 
 	const toggleSection = (key: SectionKey) =>
 		setSections((current) => ({ ...current, [key]: !current[key] }));
+
+	const handleChangePath = (path: PathSegment[], value: unknown) => {
+		setWorkingData((current) => setAtPath(current, path, value));
+	};
+
+	const handleAddItem = (path: PathSegment[]) => {
+		const arrayKey = String(path[path.length - 1]);
+		const template = ARRAY_DEFAULTS[arrayKey];
+		if (template === undefined) return;
+		setWorkingData((current) => {
+			const existing = (getAtPath(current, path) as unknown[]) ?? [];
+			const next = [...existing, structuredClone(template)];
+			return setAtPath(current, path, next);
+		});
+	};
+
+	const handleRemoveItem = (path: PathSegment[]) => {
+		setWorkingData((current) => removeAtPath(current, path));
+	};
+
+	const handleRevertSection = (path: PathSegment[]) => {
+		const pristineSection = getAtPath(pristineData, path);
+		setWorkingData((current) => setAtPath(current, path, structuredClone(pristineSection)));
+	};
 
 	function openPrintDialog() {
 		if (!rendered) return;
@@ -196,6 +238,12 @@ export function App() {
 							seedLabel={formatSeed(randomReceipt.seed)}
 							onShuffle={shuffleSeed}
 							scenarios={randomReceipt.scenarios}
+							data={workingData}
+							pristine={pristineData}
+							onChangePath={handleChangePath}
+							onAddItem={handleAddItem}
+							onRemoveItem={handleRemoveItem}
+							onRevertSection={handleRevertSection}
 						/>
 					</CollapsibleSection>
 					<CollapsibleSection
