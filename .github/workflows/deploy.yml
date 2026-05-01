@@ -20,7 +20,11 @@ on:
   pull_request:
     types: [opened, synchronize, ready_for_review]
     paths:
+      # Deploy + E2E only run for changes that can affect apps/main. The
+      # template-studio is an internal designer tool that ships nothing to
+      # the deployed app, so its changes shouldn't trigger a full E2E run.
       - apps/**
+      - '!apps/template-studio/**'
       - packages/**
       - .github/workflows/deploy.yml
       - package.json
