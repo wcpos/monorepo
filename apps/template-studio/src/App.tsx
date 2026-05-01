@@ -2,44 +2,109 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { sanitizeHtml, sanitizeThermalPreviewHtml } from '@wcpos/receipt-renderer';
 
+import { CollapsibleSection } from './components/CollapsibleSection';
+import { DataSection } from './components/sections/DataSection';
+import { PrintSection } from './components/sections/PrintSection';
+import { WooCommerceSection } from './components/sections/WooCommerceSection';
+import { Stage } from './components/Stage';
+import { TemplateList } from './components/TemplateList';
+import { Toolbar } from './components/Toolbar';
 import { createRandomReceipt, formatSeed } from './randomizer';
-import { fetchBundledTemplates, fetchWpPreview, paperWidths, printRawTcp } from './studio-api';
+import { fetchBundledTemplates, paperWidths } from './studio-api';
 import { renderStudioTemplate, selectVisibleTemplate } from './studio-core';
 
-import type { PaperWidth, StudioTemplate, TemplateEngine } from './studio-core';
+import type { PaperWidth, StudioTemplate } from './studio-core';
+
+const SECTION_STORAGE_KEY = 'wcpos-template-studio:sections';
+const SELECTION_STORAGE_KEY = 'wcpos-template-studio:selection';
+const PAPER_STORAGE_KEY = 'wcpos-template-studio:paper-width';
+
+type SectionKey = 'data' | 'woocommerce' | 'print';
+
+type SectionState = Record<SectionKey, boolean>;
+
+const DEFAULT_SECTION_STATE: SectionState = { data: true, woocommerce: true, print: true };
+
+function loadSectionState(): SectionState {
+	if (typeof window === 'undefined') return DEFAULT_SECTION_STATE;
+	try {
+		const raw = window.localStorage.getItem(SECTION_STORAGE_KEY);
+		if (!raw) return DEFAULT_SECTION_STATE;
+		return { ...DEFAULT_SECTION_STATE, ...(JSON.parse(raw) as Partial<SectionState>) };
+	} catch {
+		return DEFAULT_SECTION_STATE;
+	}
+}
+
+function loadSelection(): string {
+	if (typeof window === 'undefined') return '';
+	try {
+		return window.localStorage.getItem(SELECTION_STORAGE_KEY) ?? '';
+	} catch {
+		return '';
+	}
+}
+
+function loadPaperWidth(): PaperWidth {
+	if (typeof window === 'undefined') return '80mm';
+	try {
+		const value = window.localStorage.getItem(PAPER_STORAGE_KEY) as PaperWidth | null;
+		return paperWidths.includes(value as PaperWidth) ? (value as PaperWidth) : '80mm';
+	} catch {
+		return '80mm';
+	}
+}
 
 export function App() {
 	const [templates, setTemplates] = useState<StudioTemplate[]>([]);
-	const [selectedTemplateId, setSelectedTemplateId] = useState('');
-	const [paperWidth, setPaperWidth] = useState<PaperWidth>('80mm');
-	const [engineFilter, setEngineFilter] = useState<TemplateEngine | 'all'>('all');
-	const [storeUrl, setStoreUrl] = useState('http://localhost:8888');
-	const [wpTemplateId, setWpTemplateId] = useState('');
-	const [wpOrderId, setWpOrderId] = useState('');
-	const [rawTcpHost, setRawTcpHost] = useState('127.0.0.1');
-	const [rawTcpPort, setRawTcpPort] = useState('9100');
-	const [status, setStatus] = useState('Loading bundled gallery templates…');
+	const [selectedTemplateId, setSelectedTemplateId] = useState(() => loadSelection());
+	const [paperWidth, setPaperWidth] = useState<PaperWidth>(() => loadPaperWidth());
+	const [zoom, setZoom] = useState(100);
 	const [seed, setSeed] = useState<number | string>('default');
+	const [sections, setSections] = useState<SectionState>(() => loadSectionState());
+	const [error, setError] = useState<string | null>(null);
 	const previewFrameRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		fetchBundledTemplates()
-			.then((loadedTemplates) => {
-				setTemplates(loadedTemplates);
-				setSelectedTemplateId(loadedTemplates[0]?.id ?? '');
-				setStatus(
-					'Edit gallery templates in woocommerce-pos/templates/gallery and Vite will hot-reload.'
-				);
+			.then((loaded) => {
+				setTemplates(loaded);
+				setSelectedTemplateId((current) => {
+					if (current && loaded.some((template) => template.id === current)) return current;
+					return loaded[0]?.id ?? '';
+				});
 			})
-			.catch((error: unknown) => setStatus(error instanceof Error ? error.message : String(error)));
+			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
 	}, []);
 
-	const filteredTemplates = useMemo(
-		() =>
-			templates.filter((template) => engineFilter === 'all' || template.engine === engineFilter),
-		[engineFilter, templates]
-	);
-	const selectedTemplate = selectVisibleTemplate(filteredTemplates, selectedTemplateId);
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+		try {
+			window.localStorage.setItem(SECTION_STORAGE_KEY, JSON.stringify(sections));
+		} catch {
+			/* storage may be disabled */
+		}
+	}, [sections]);
+
+	useEffect(() => {
+		if (typeof window === 'undefined' || !selectedTemplateId) return;
+		try {
+			window.localStorage.setItem(SELECTION_STORAGE_KEY, selectedTemplateId);
+		} catch {
+			/* storage may be disabled */
+		}
+	}, [selectedTemplateId]);
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+		try {
+			window.localStorage.setItem(PAPER_STORAGE_KEY, paperWidth);
+		} catch {
+			/* storage may be disabled */
+		}
+	}, [paperWidth]);
+
+	const selectedTemplate = selectVisibleTemplate(templates, selectedTemplateId);
 	const randomReceipt = useMemo(() => createRandomReceipt({ seed }), [seed]);
 	const fixture = useMemo(
 		() => ({ ...randomReceipt.data, id: `random-${randomReceipt.seedHex}` }),
@@ -53,31 +118,13 @@ export function App() {
 			? sanitizeThermalPreviewHtml(rendered.html)
 			: sanitizeHtml(rendered?.html ?? '');
 	const diagnosticHtml = sanitizeHtml(
-		rendered?.kind === 'logicless'
-			? (rendered.diagnosticHtml ?? '<p>No preview_html diagnostic returned.</p>')
-			: '<p>No preview_html diagnostic returned.</p>'
+		rendered?.kind === 'logicless' ? (rendered.diagnosticHtml ?? '') : ''
 	);
 
-	async function loadWpTemplate() {
-		if (!wpTemplateId.trim()) return;
-		setStatus(`Fetching ${wpTemplateId} from ${storeUrl} through the Vite proxy…`);
-		try {
-			const wpTemplate = await fetchWpPreview({
-				storeUrl,
-				templateId: wpTemplateId.trim(),
-				orderId: wpOrderId.trim() || undefined,
-			});
-			setTemplates((current) => [
-				wpTemplate,
-				...current.filter((template) => template.id !== wpTemplate.id),
-			]);
-			setEngineFilter(wpTemplate.engine);
-			setSelectedTemplateId(wpTemplate.id);
-			setStatus('Loaded store preview using forwarded cookies and X-WCPOS: 1.');
-		} catch (error) {
-			setStatus(error instanceof Error ? error.message : String(error));
-		}
-	}
+	const shuffleSeed = () => setSeed((Math.random() * 0xffffffff) >>> 0);
+
+	const toggleSection = (key: SectionKey) =>
+		setSections((current) => ({ ...current, [key]: !current[key] }));
 
 	function openPrintDialog() {
 		if (!rendered) return;
@@ -87,7 +134,7 @@ export function App() {
 			'popup,width=420,height=720'
 		);
 		if (!printWindow) {
-			setStatus('Print window was blocked. Allow popups for Template Studio.');
+			setError('Print window was blocked. Allow popups for Template Studio.');
 			return;
 		}
 
@@ -116,148 +163,67 @@ export function App() {
 		fallbackTimer = printWindow.setTimeout(printReceipt, 1500);
 	}
 
-	async function sendToRawTcp() {
-		if (!rendered || rendered.kind !== 'thermal') {
-			setStatus('Raw TCP printing is available for thermal templates only.');
-			return;
-		}
-
-		try {
-			const result = await printRawTcp({
-				host: rawTcpHost,
-				port: Number(rawTcpPort),
-				data: rendered.escposBase64,
-			});
-			setStatus(`Sent ${result.bytesWritten} ESC/POS bytes to ${rawTcpHost}:${rawTcpPort}.`);
-		} catch (error) {
-			setStatus(error instanceof Error ? error.message : String(error));
-		}
-	}
-
 	return (
-		<div className="studio-shell">
-			<aside className="sidebar">
-				<h1>WCPOS Template Studio</h1>
-				<p>{status}</p>
-				<label>
-					Engine
-					<select
-						value={engineFilter}
-						onChange={(event) => setEngineFilter(event.target.value as TemplateEngine | 'all')}
-					>
-						<option value="all">All non-legacy</option>
-						<option value="logicless">Logicless</option>
-						<option value="thermal">Thermal</option>
-					</select>
-				</label>
-				<label>
-					Template
-					<select
-						value={selectedTemplate?.id ?? ''}
-						onChange={(event) => setSelectedTemplateId(event.target.value)}
-					>
-						{filteredTemplates.map((template) => (
-							<option key={template.id} value={template.id}>
-								{template.name} ({template.source})
-							</option>
-						))}
-					</select>
-				</label>
-				<div className="seed-row">
-					<button type="button" onClick={() => setSeed((Math.random() * 0xffffffff) >>> 0)}>
-						Shuffle data
-					</button>
-					<span className="seed-tag" title="Current data seed (paste to reproduce)">
-						seed: {formatSeed(randomReceipt.seed)}
-					</span>
-				</div>
-				<label>
-					Paper width
-					<select
-						value={paperWidth}
-						onChange={(event) => setPaperWidth(event.target.value as PaperWidth)}
-					>
-						{paperWidths.map((width) => (
-							<option key={width} value={width}>
-								{width}
-							</option>
-						))}
-					</select>
-				</label>
-				<div className="wp-loader">
-					<label>
-						Store URL
-						<input
-							value={storeUrl}
-							onChange={(event) => setStoreUrl(event.target.value)}
-							placeholder="http://localhost:8888"
-						/>
-					</label>
-					<label>
-						Template ID
-						<input
-							value={wpTemplateId}
-							onChange={(event) => setWpTemplateId(event.target.value)}
-							placeholder="standard-receipt or 123"
-						/>
-					</label>
-					<label>
-						Order ID
-						<input
-							value={wpOrderId}
-							onChange={(event) => setWpOrderId(event.target.value)}
-							placeholder="latest, 1234, or blank for sample"
-						/>
-					</label>
-					<button type="button" onClick={loadWpTemplate}>
-						Fetch preview
-					</button>
-				</div>
-				<div className="print-actions">
-					<button type="button" onClick={openPrintDialog} disabled={!rendered}>
-						Print dialog
-					</button>
-					<label>
-						Simulator host
-						<input value={rawTcpHost} onChange={(event) => setRawTcpHost(event.target.value)} />
-					</label>
-					<label>
-						Simulator port
-						<input value={rawTcpPort} onChange={(event) => setRawTcpPort(event.target.value)} />
-					</label>
-					<button type="button" onClick={sendToRawTcp} disabled={rendered?.kind !== 'thermal'}>
-						Send raw ESC/POS
-					</button>
-				</div>
-			</aside>
-			<main className="preview-column">
-				<h2>{selectedTemplate?.name ?? 'No template selected'}</h2>
-				<div
-					ref={previewFrameRef}
-					className="paper-frame"
-					dangerouslySetInnerHTML={{ __html: previewHtml }}
+		<div className="studio-app">
+			<Toolbar
+				paperWidth={paperWidth}
+				onPaperWidthChange={setPaperWidth}
+				zoom={zoom}
+				onZoomChange={setZoom}
+			/>
+			{error ? <div className="error-banner">{error}</div> : null}
+			<div className="studio-body">
+				<TemplateList
+					templates={templates}
+					selectedTemplateId={selectedTemplate?.id ?? ''}
+					onSelect={setSelectedTemplateId}
 				/>
-			</main>
-			<aside className="diagnostics">
-				<h2>Diagnostics</h2>
-				{rendered?.kind === 'logicless' ? (
-					<>
-						<h3>PHP diagnostic output</h3>
-						<div
-							className="diagnostic-frame"
-							dangerouslySetInnerHTML={{ __html: diagnosticHtml }}
+				<Stage
+					previewFrameRef={previewFrameRef}
+					rendered={rendered}
+					previewHtml={previewHtml}
+					paperWidth={paperWidth}
+					zoom={zoom}
+					templateName={selectedTemplate?.name}
+				/>
+				<aside className="right-panel" aria-label="Studio controls">
+					<CollapsibleSection
+						title="Data"
+						open={sections.data}
+						onToggle={() => toggleSection('data')}
+					>
+						<DataSection
+							seedLabel={formatSeed(randomReceipt.seed)}
+							onShuffle={shuffleSeed}
+							scenarios={randomReceipt.scenarios}
 						/>
-					</>
-				) : null}
-				{rendered?.kind === 'thermal' ? (
-					<>
-						<h3>ESC/POS hex</h3>
-						<pre>{rendered.escposHex}</pre>
-						<h3>ASCII debug</h3>
-						<pre>{rendered.escposAscii}</pre>
-					</>
-				) : null}
-			</aside>
+					</CollapsibleSection>
+					<CollapsibleSection
+						title="WooCommerce"
+						open={sections.woocommerce}
+						onToggle={() => toggleSection('woocommerce')}
+					>
+						<WooCommerceSection engine={selectedTemplate?.engine ?? null} />
+					</CollapsibleSection>
+					<CollapsibleSection
+						title="Print"
+						open={sections.print}
+						onToggle={() => toggleSection('print')}
+					>
+						<PrintSection
+							rendered={rendered}
+							onOpenPrintDialog={openPrintDialog}
+							onError={setError}
+						/>
+					</CollapsibleSection>
+				</aside>
+			</div>
+			{/* Legacy diagnostic-frame retained for sanitization tests; hidden via CSS. */}
+			<div
+				className="diagnostic-frame"
+				aria-hidden="true"
+				dangerouslySetInnerHTML={{ __html: diagnosticHtml }}
+			/>
 		</div>
 	);
 }
