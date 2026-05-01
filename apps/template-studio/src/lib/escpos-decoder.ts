@@ -64,7 +64,7 @@ const ESC_RULES: Record<number, OpcodeRule> = {
 const GS_RULES: Record<number, OpcodeRule> = {
 	0x21: {
 		length: 3,
-		describe: ([n]) => `character size ${(n >> 4) & (0x0f + 1)}x${(n & 0x0f) + 1}`,
+		describe: ([n]) => `character size ${((n >> 4) & 0x0f) + 1}x${(n & 0x0f) + 1}`,
 	},
 	0x42: {
 		length: 3,
