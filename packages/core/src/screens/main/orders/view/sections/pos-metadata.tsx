@@ -1,40 +1,42 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@wcpos/components/card';
 import { Text } from '@wcpos/components/text';
-import type { OrderDocument } from '@wcpos/database';
+
+import { RailSection } from './_section';
+
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 function getMetaValue(metaData: { key?: string; value?: unknown }[] | undefined, key: string) {
 	const value = metaData?.find((item) => item.key === key)?.value;
 	return value == null || value === '' ? undefined : String(value);
 }
 
-function Row({ label, value }: { label: string; value?: string }) {
-	if (!value) return null;
+function KV({ k, v }: { k: string; v?: string }) {
+	if (!v) return null;
 	return (
-		<View className="gap-1">
-			<Text className="text-muted-foreground text-xs uppercase">{label}</Text>
-			<Text>{value}</Text>
+		<View className="flex-row items-baseline justify-between gap-3 py-1">
+			<Text className="text-muted-foreground text-xs">{k}</Text>
+			<Text className="text-foreground text-xs font-medium" numberOfLines={1}>
+				{v}
+			</Text>
 		</View>
 	);
 }
 
-export function POSMetadataSection({ order }: { order: OrderDocument }) {
+export function POSMetadataSection({ order, last }: { order: OrderDocument; last?: boolean }) {
 	const cashier = getMetaValue(order.meta_data, '_pos_user');
 	const store = getMetaValue(order.meta_data, '_pos_store');
+	const channel = order.created_via;
 
-	if (!cashier && !store) return null;
+	if (!cashier && !store && !channel && !order.id) return null;
 
 	return (
-		<Card>
-			<CardHeader>
-				<CardTitle>POS metadata</CardTitle>
-			</CardHeader>
-			<CardContent className="flex-row flex-wrap gap-6">
-				<Row label="Cashier" value={cashier} />
-				<Row label="Store" value={store} />
-			</CardContent>
-		</Card>
+		<RailSection title="Metadata" last={last}>
+			{order.id ? <KV k="Order ID" v={String(order.id)} /> : null}
+			<KV k="Cashier" v={cashier} />
+			<KV k="Store" v={store} />
+			<KV k="Channel" v={channel} />
+		</RailSection>
 	);
 }

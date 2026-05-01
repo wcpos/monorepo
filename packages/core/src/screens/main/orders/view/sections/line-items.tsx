@@ -1,116 +1,141 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@wcpos/components/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { Icon } from '@wcpos/components/icon';
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@wcpos/components/table';
+import { Image } from '@wcpos/components/image';
 import { Text } from '@wcpos/components/text';
 
+import { formatMoney } from './_format';
+import { Section } from './_section';
+
 type OrderDocument = import('@wcpos/database').OrderDocument;
-
-function formatMoney(value: unknown, currencySymbol?: string) {
-	const num = typeof value === 'number' ? value : parseFloat(String(value ?? '0'));
-	return Number.isFinite(num) ? `${currencySymbol ?? ''}${num.toFixed(2)}` : String(value ?? '—');
-}
 type LineItem = NonNullable<OrderDocument['line_items']>[number];
+type FeeLine = NonNullable<OrderDocument['fee_lines']>[number];
 
-function LineItemMeta({ item }: { item: LineItem }) {
-	const meta = item.meta_data || [];
-	if (!meta.length) return null;
+function getMetaValue(
+	metaData: { key?: string; value?: unknown; display_value?: unknown }[] | undefined
+) {
+	return (metaData || []).filter((entry) => entry.key && !String(entry.key).startsWith('_'));
+}
+
+function asFloat(value: unknown) {
+	const n = parseFloat(String(value ?? '0'));
+	return Number.isFinite(n) ? n : 0;
+}
+
+function LineItemRow({ item, currencySymbol }: { item: LineItem; currencySymbol?: string }) {
+	const subtotal = asFloat(item.subtotal);
+	const total = asFloat(item.total);
+	const discounted = subtotal > total;
+	const qty = item.quantity ?? 0;
+	const unit = qty > 0 ? subtotal / qty : asFloat(item.price);
+	const variations = getMetaValue(item.meta_data);
 
 	return (
-		<Collapsible>
-			<CollapsibleTrigger className="mt-2 flex-row items-center gap-1">
-				<Icon name="chevronDown" size="xs" />
-				<Text className="text-muted-foreground text-xs">Metadata</Text>
-			</CollapsibleTrigger>
-			<CollapsibleContent className="mt-2 gap-1">
-				{meta.map((entry, index) => (
-					<Text
-						key={`${entry.id ?? entry.key ?? 'meta'}-${index}`}
-						className="text-muted-foreground text-xs"
-					>
-						{entry.display_key || entry.key}: {entry.display_value || String(entry.value ?? '')}
+		<View className="border-border/60 flex-row gap-3 border-b py-3">
+			<View className="bg-muted h-11 w-11 overflow-hidden rounded">
+				{item.image?.src ? <Image source={{ uri: item.image.src }} className="h-11 w-11" /> : null}
+			</View>
+			<View className="min-w-0 flex-1 gap-1">
+				<Text className="text-foreground text-sm font-medium" numberOfLines={2}>
+					{item.name || '—'}
+				</Text>
+				{item.parent_name && item.parent_name !== item.name ? (
+					<Text className="text-muted-foreground text-xs">{item.parent_name}</Text>
+				) : null}
+				<View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
+					{item.sku ? (
+						<View className="bg-primary/10 rounded px-1.5 py-0.5">
+							<Text className="text-primary text-[10px] font-medium tabular-nums">{item.sku}</Text>
+						</View>
+					) : null}
+					{variations.map((entry, index) => (
+						<Text key={`${entry.key ?? 'meta'}-${index}`} className="text-muted-foreground text-xs">
+							<Text className="text-foreground/80 text-xs font-medium">
+								{String(entry.display_value ?? entry.value ?? '')}
+							</Text>
+						</Text>
+					))}
+				</View>
+			</View>
+			<View className="min-w-[88px] items-end">
+				<View className="flex-row items-baseline gap-1">
+					{discounted ? (
+						<Text className="text-muted-foreground/70 text-xs tabular-nums line-through">
+							{formatMoney(subtotal / Math.max(qty, 1), currencySymbol)}
+						</Text>
+					) : null}
+					<Text className="text-muted-foreground text-xs tabular-nums">
+						{qty} × {formatMoney(unit, currencySymbol)}
 					</Text>
-				))}
-			</CollapsibleContent>
-		</Collapsible>
+				</View>
+				<Text className="text-foreground text-sm font-medium tabular-nums">
+					{formatMoney(total, currencySymbol)}
+				</Text>
+				{discounted ? (
+					<View className="bg-success/10 mt-0.5 rounded px-1.5 py-0.5">
+						<Text className="text-success text-[10px] font-medium tabular-nums">
+							saved {formatMoney(subtotal - total, currencySymbol)}
+						</Text>
+					</View>
+				) : null}
+			</View>
+		</View>
+	);
+}
+
+function FeeRow({ fee, currencySymbol }: { fee: FeeLine; currencySymbol?: string }) {
+	return (
+		<View className="border-border/60 flex-row gap-3 border-b py-3">
+			<View className="bg-primary/10 h-11 w-11 items-center justify-center rounded">
+				<Text className="text-primary text-base font-semibold">+</Text>
+			</View>
+			<View className="min-w-0 flex-1 gap-1">
+				<Text className="text-foreground text-sm font-medium">{fee.name || 'Fee'}</Text>
+				<Text className="text-muted-foreground text-xs">
+					Fee
+					{fee.tax_status === 'taxable' ? ' · Taxable' : ''}
+				</Text>
+			</View>
+			<View className="min-w-[88px] items-end">
+				<Text className="text-muted-foreground text-xs">—</Text>
+				<Text className="text-foreground text-sm font-medium tabular-nums">
+					{formatMoney(fee.total, currencySymbol)}
+				</Text>
+			</View>
+		</View>
 	);
 }
 
 export function LineItemsSection({ order }: { order: OrderDocument }) {
 	const lineItems = order.line_items || [];
+	const fees = order.fee_lines || [];
+
+	if (!lineItems.length && !fees.length) {
+		return (
+			<Section title="Items">
+				<Text className="text-muted-foreground">No line items.</Text>
+			</Section>
+		);
+	}
 
 	return (
-		<Card>
-			<CardHeader>
-				<CardTitle>Line items</CardTitle>
-			</CardHeader>
-			<CardContent>
-				{lineItems.length ? (
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead className="flex-[2]">
-									<Text>Item</Text>
-								</TableHead>
-								<TableHead>
-									<Text>SKU</Text>
-								</TableHead>
-								<TableHead>
-									<Text>Qty</Text>
-								</TableHead>
-								<TableHead>
-									<Text>Unit</Text>
-								</TableHead>
-								<TableHead>
-									<Text>Tax</Text>
-								</TableHead>
-								<TableHead>
-									<Text>Total</Text>
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{lineItems.map((item, index) => (
-								<TableRow key={`${item.id ?? item.name ?? 'line-item'}-${index}`} index={index}>
-									<TableCell className="flex-[2]">
-										<View>
-											<Text>{item.name || '—'}</Text>
-											<LineItemMeta item={item} />
-										</View>
-									</TableCell>
-									<TableCell>
-										<Text>{item.sku || '—'}</Text>
-									</TableCell>
-									<TableCell>
-										<Text>{item.quantity ?? '—'}</Text>
-									</TableCell>
-									<TableCell>
-										<Text>{formatMoney(item.price, order.currency_symbol)}</Text>
-									</TableCell>
-									<TableCell>
-										<Text>{formatMoney(item.total_tax, order.currency_symbol)}</Text>
-									</TableCell>
-									<TableCell>
-										<Text>{formatMoney(item.total, order.currency_symbol)}</Text>
-									</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				) : (
-					<Text className="text-muted-foreground">No line items.</Text>
-				)}
-			</CardContent>
-		</Card>
+		<Section title="Items">
+			<View>
+				{lineItems.map((item, index) => (
+					<LineItemRow
+						key={`${item.id ?? item.name ?? 'line-item'}-${index}`}
+						item={item}
+						currencySymbol={order.currency_symbol}
+					/>
+				))}
+				{fees.map((fee, index) => (
+					<FeeRow
+						key={`${fee.id ?? fee.name ?? 'fee'}-${index}`}
+						fee={fee}
+						currencySymbol={order.currency_symbol}
+					/>
+				))}
+			</View>
+		</Section>
 	);
 }
