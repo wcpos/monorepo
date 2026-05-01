@@ -31,8 +31,27 @@ describe('escpos-decoder', () => {
 		expect(segments[0]?.decoded).toBe('GS 56 — partial cut');
 	});
 
+	it('does not consume the next byte after a 3-byte GS V cut command', () => {
+		const segments = decodeEscposBytes(new Uint8Array([0x1d, 0x56, 0x01, 0x41]));
+		expect(segments).toEqual([
+			{ offset: 0, hex: '1D 56 01', ascii: '.V.', decoded: 'GS 56 — partial cut' },
+			{ offset: 3, hex: '41', ascii: 'A', decoded: 'text: "A"' },
+		]);
+	});
+
 	it('flags unknown ESC opcodes', () => {
-		const segments = decodeEscposBytes(new Uint8Array([0x1b, 0xff]));
-		expect(segments[0]?.decoded).toBe('ESC ?');
+		const segments = decodeEscposBytes(new Uint8Array([0x1b, 0xff, 0x41]));
+		expect(segments).toEqual([
+			{ offset: 0, hex: '1B FF', ascii: '..', decoded: 'ESC FF ?' },
+			{ offset: 2, hex: '41', ascii: 'A', decoded: 'text: "A"' },
+		]);
+	});
+
+	it('flags unknown GS opcodes as one segment', () => {
+		const segments = decodeEscposBytes(new Uint8Array([0x1d, 0xff, 0x41]));
+		expect(segments).toEqual([
+			{ offset: 0, hex: '1D FF', ascii: '..', decoded: 'GS FF ?' },
+			{ offset: 2, hex: '41', ascii: 'A', decoded: 'text: "A"' },
+		]);
 	});
 });

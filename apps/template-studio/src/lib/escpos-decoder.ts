@@ -71,7 +71,13 @@ const GS_RULES: Record<number, OpcodeRule> = {
 		describe: ([on]) => (on ? 'invert on' : 'invert off'),
 	},
 	0x56: {
-		length: 4,
+		length: 0,
+		consume: (bytes, offset) => {
+			const m = bytes[offset + 2];
+			if (m === undefined) return 2;
+			if (m === 0 || m === 1 || m === 48 || m === 49) return 3;
+			return 4;
+		},
 		describe: ([m]) => {
 			if (m === 0 || m === 48) return 'full cut';
 			if (m === 1 || m === 49) return 'partial cut';
@@ -129,13 +135,19 @@ export function decodeEscposBytes(bytes: Uint8Array): DecodedByte[] {
 				i += length;
 				continue;
 			}
-			result.push({
-				offset: i,
-				hex: hex(byte),
-				ascii: '.',
-				decoded: 'ESC ?',
-			});
-			i += 1;
+			if (op !== undefined) {
+				const slice = [byte, op];
+				result.push({
+					offset: i,
+					hex: slice.map(hex).join(' '),
+					ascii: slice.map(printable).join(''),
+					decoded: `ESC ${hex(op)} ?`,
+				});
+				i += 2;
+			} else {
+				result.push({ offset: i, hex: hex(byte), ascii: '.', decoded: 'ESC ?' });
+				i += 1;
+			}
 			continue;
 		}
 
@@ -154,13 +166,19 @@ export function decodeEscposBytes(bytes: Uint8Array): DecodedByte[] {
 				i += length;
 				continue;
 			}
-			result.push({
-				offset: i,
-				hex: hex(byte),
-				ascii: '.',
-				decoded: 'GS ?',
-			});
-			i += 1;
+			if (op !== undefined) {
+				const slice = [byte, op];
+				result.push({
+					offset: i,
+					hex: slice.map(hex).join(' '),
+					ascii: slice.map(printable).join(''),
+					decoded: `GS ${hex(op)} ?`,
+				});
+				i += 2;
+			} else {
+				result.push({ offset: i, hex: hex(byte), ascii: '.', decoded: 'GS ?' });
+				i += 1;
+			}
 			continue;
 		}
 

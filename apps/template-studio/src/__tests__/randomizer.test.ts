@@ -67,6 +67,42 @@ describe('template-studio randomizer', () => {
 		expect(Math.round(sum * 100) / 100).toBe(result.data.totals.grand_total_incl);
 	});
 
+	it('keeps grand totals internally consistent when fees and shipping are present', () => {
+		const result = createRandomReceipt({
+			seed: 21,
+			overrides: {
+				emptyCart: false,
+				refund: false,
+				hasDiscounts: false,
+				hasFees: true,
+				hasShipping: true,
+				cartSize: 2,
+			},
+		});
+		const lineTotalExcl = result.data.lines.reduce(
+			(sum, line) => sum + (line.line_subtotal_excl ?? 0),
+			0
+		);
+		const feeTotalExcl = result.data.fees.reduce((sum, fee) => sum + fee.total_excl, 0);
+		const shippingTotalExcl = result.data.shipping.reduce((sum, item) => sum + item.total_excl, 0);
+		const discountTotalExcl = result.data.discounts.reduce((sum, item) => sum + item.total_excl, 0);
+		const expectedGrandExcl =
+			Math.round((lineTotalExcl + feeTotalExcl + shippingTotalExcl + discountTotalExcl) * 100) /
+			100;
+
+		expect(result.data.totals.grand_total_excl).toBe(expectedGrandExcl);
+		expect(result.data.totals.tax_total).toBe(
+			Math.round((result.data.totals.grand_total_incl - expectedGrandExcl) * 100) / 100
+		);
+		const summaryTax = result.data.tax_summary.reduce((sum, tax) => sum + tax.tax_amount, 0);
+		expect(Math.round(summaryTax * 100) / 100).toBe(result.data.totals.tax_total);
+	});
+
+	it('generates GMT order dates from UTC components', () => {
+		const result = createRandomReceipt({ seed: 'seed-utc' });
+		expect(result.data.meta.created_at_gmt).toMatch(/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/);
+	});
+
 	it('parses textual seeds via FNV fallback', () => {
 		const a = parseSeed('seed-rtl');
 		const b = parseSeed('seed-rtl');

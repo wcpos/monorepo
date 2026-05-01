@@ -10,6 +10,19 @@ function resolveDisplayValueSide(data: ReceiptData): 'incl' | 'excl' {
 	return hints?.prices_entered_with_tax === false ? 'excl' : 'incl';
 }
 
+const DEFAULT_I18N = {
+	order: 'Order',
+	date: 'Date',
+	cashier: 'Cashier',
+	customer: 'Customer',
+	subtotal: 'Subtotal',
+	total: 'Total',
+	tendered: 'Tendered',
+	change: 'Change',
+	thank_you: 'Thank you',
+	thank_you_purchase: 'Thank you for your purchase!',
+};
+
 /**
  * Format all numeric currency fields in ReceiptData, adding locale-aware
  * `_display` variants while preserving the original numeric values for
@@ -38,6 +51,12 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 
 	return {
 		...data,
+		i18n: DEFAULT_I18N,
+		order: {
+			id: data.meta.order_id,
+			number: data.meta.order_number,
+			created: { datetime: data.meta.created_at_gmt },
+		},
 		lines: data.lines.map((line) => ({
 			...line,
 			unit_price_display: fmt(

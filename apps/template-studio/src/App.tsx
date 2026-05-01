@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { sanitizeHtml, sanitizeThermalPreviewHtml } from '@wcpos/receipt-renderer';
 
@@ -126,15 +126,25 @@ export function App() {
 		() => ({ ...workingData, id: `random-${randomReceipt.seedHex}` }),
 		[workingData, randomReceipt]
 	);
-	const rendered = selectedTemplate
-		? renderStudioTemplate({
-				template: selectedTemplate,
-				fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
-				paperWidth,
-				printerModel: printerModel || undefined,
-				language,
-			})
-		: null;
+	const effectivePaperWidth = selectedTemplate?.paperWidth ?? paperWidth;
+	const { rendered, renderError } = useMemo(() => {
+		if (!selectedTemplate) return { rendered: null, renderError: null };
+		try {
+			return {
+				rendered: renderStudioTemplate({
+					template: selectedTemplate,
+					fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
+					paperWidth: effectivePaperWidth,
+					printerModel: printerModel || undefined,
+					language,
+				}),
+				renderError: null,
+			};
+		} catch (err) {
+			console.error('Template render failed', err);
+			return { rendered: null, renderError: err instanceof Error ? err.message : String(err) };
+		}
+	}, [selectedTemplate, fixture, effectivePaperWidth, printerModel, language]);
 	const previewHtml =
 		rendered?.kind === 'thermal'
 			? sanitizeThermalPreviewHtml(rendered.html)
@@ -143,7 +153,7 @@ export function App() {
 		rendered?.kind === 'logicless' ? (rendered.diagnosticHtml ?? '') : ''
 	);
 
-	const shuffleSeed = () => setSeed((Math.random() * 0xffffffff) >>> 0);
+	const shuffleSeed = useCallback(() => setSeed((Math.random() * 0xffffffff) >>> 0), []);
 
 	const toggleSection = (key: SectionKey) =>
 		setSections((current) => ({ ...current, [key]: !current[key] }));
@@ -172,7 +182,7 @@ export function App() {
 		setWorkingData((current) => setAtPath(current, path, structuredClone(pristineSection)));
 	};
 
-	function openPrintDialog() {
+	const openPrintDialog = useCallback(() => {
 		if (!rendered) return;
 		const printWindow = window.open(
 			'',
@@ -200,14 +210,14 @@ export function App() {
 		};
 
 		printWindow.addEventListener('load', printReceipt, { once: true });
-		preparePrintDocument(printWindow.document, paperWidth);
+		preparePrintDocument(printWindow.document, effectivePaperWidth);
 
 		const receiptNode = previewFrameRef.current?.firstElementChild?.cloneNode(true);
 		if (receiptNode) {
 			printWindow.document.body.append(receiptNode);
 		}
 		fallbackTimer = printWindow.setTimeout(printReceipt, 1500);
-	}
+	}, [effectivePaperWidth, rendered]);
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return;
@@ -239,7 +249,7 @@ export function App() {
 		};
 		window.addEventListener('keydown', handler);
 		return () => window.removeEventListener('keydown', handler);
-	});
+	}, [openPrintDialog, shuffleSeed]);
 
 	return (
 		<div className="studio-app">
@@ -249,7 +259,7 @@ export function App() {
 				zoom={zoom}
 				onZoomChange={setZoom}
 			/>
-			{error ? <div className="error-banner">{error}</div> : null}
+			{error || renderError ? <div className="error-banner">{error ?? renderError}</div> : null}
 			<div className="studio-body">
 				<TemplateList
 					templates={templates}
@@ -260,7 +270,7 @@ export function App() {
 					previewFrameRef={previewFrameRef}
 					rendered={rendered}
 					previewHtml={previewHtml}
-					paperWidth={paperWidth}
+					paperWidth={effectivePaperWidth}
 					zoom={zoom}
 					templateName={selectedTemplate?.name}
 				/>

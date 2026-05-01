@@ -17,15 +17,42 @@ const PAPER_CLASS: Record<PaperWidth, string> = {
 	a4: 'a4',
 };
 
-function countLines(html: string): number {
-	if (!html) return 0;
-	const text = html
-		.replace(/<br\s*\/?>(?!\s*<)/gi, '\n')
-		.replace(/<\/(p|div|tr|li|h\d)>/gi, '\n')
-		.replace(/<[^>]+>/g, '');
-	const trimmed = text.replace(/\r/g, '').trim();
-	if (!trimmed) return 0;
-	return trimmed.split(/\n+/).length;
+const LINE_BREAK_TAGS = new Set(['p', 'div', 'tr', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+const NON_VISIBLE_TAGS = new Set(['script', 'style', 'template', 'noscript']);
+
+export function countPreviewLines(html: string): number {
+	if (!html || typeof DOMParser === 'undefined') return 0;
+	const doc = new DOMParser().parseFromString(html, 'text/html');
+	const parts: string[] = [];
+
+	const collectVisibleText = (node: Node): void => {
+		if (node.nodeType === Node.TEXT_NODE) {
+			parts.push(node.textContent ?? '');
+			return;
+		}
+		if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) {
+			return;
+		}
+
+		const tagName =
+			node.nodeType === Node.ELEMENT_NODE ? (node as Element).tagName.toLowerCase() : '';
+		if (NON_VISIBLE_TAGS.has(tagName)) return;
+		if (tagName === 'br') {
+			parts.push('\n');
+			return;
+		}
+
+		for (const child of Array.from(node.childNodes)) {
+			collectVisibleText(child);
+		}
+		if (LINE_BREAK_TAGS.has(tagName)) parts.push('\n');
+	};
+
+	collectVisibleText(doc.body);
+	const text = parts.join('');
+	const normalized = text.replace(/\r/g, '');
+	if (normalized === '') return 0;
+	return normalized.split('\n').length;
 }
 
 function formatBytes(n: number): string {
@@ -41,7 +68,7 @@ export function Stage({
 	zoom,
 	templateName,
 }: StageProps) {
-	const lineCount = countLines(previewHtml);
+	const lineCount = countPreviewLines(previewHtml);
 	const sizeLabel =
 		rendered?.kind === 'thermal'
 			? `${formatBytes(rendered.escposBytes.length)} ESC/POS`

@@ -92,9 +92,11 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 		columns: number;
 		printerModel?: string;
 		language?: 'esc-pos' | 'star-prnt' | 'star-line';
+		enableCp932?: boolean;
 	} = { columns };
 	if (printerModel) encodeOptions.printerModel = printerModel;
 	if (language) encodeOptions.language = language;
+	if ((language ?? 'esc-pos') === 'esc-pos') encodeOptions.enableCp932 = true;
 	const result = renderForStudio({
 		template: template.content,
 		engine: 'thermal',

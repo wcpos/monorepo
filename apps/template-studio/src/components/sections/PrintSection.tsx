@@ -33,21 +33,37 @@ export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSect
 		return decodeEscposBytes(rendered.escposBytes);
 	}, [rendered]);
 
+	function getConnectionTarget() {
+		const normalizedHost = host.trim();
+		const normalizedPort = port.trim();
+		const parsedPort = Number.parseInt(normalizedPort, 10);
+		if (!normalizedHost) throw new Error('Printer host is required');
+		if (
+			!/^\d+$/.test(normalizedPort) ||
+			!Number.isInteger(parsedPort) ||
+			parsedPort < 1 ||
+			parsedPort > 65535
+		) {
+			throw new Error('Printer port must be between 1 and 65535');
+		}
+		return { host: normalizedHost, port: parsedPort };
+	}
+
 	async function sendToPrinter() {
 		if (!rendered || rendered.kind !== 'thermal') return;
 		setSending(true);
 		onError(null);
 		const start = performance.now();
 		try {
+			const target = getConnectionTarget();
 			const result = await printRawTcp({
-				host,
-				port: Number(port),
+				...target,
 				data: rendered.escposBase64,
 			});
 			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
 			setLastResult({
 				kind: 'success',
-				message: `${result.bytesWritten} bytes · ${elapsed}s · ${host}:${port}`,
+				message: `${result.bytesWritten} bytes · ${elapsed}s · ${target.host}:${target.port}`,
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -61,9 +77,9 @@ export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSect
 		setSending(true);
 		onError(null);
 		try {
+			const target = getConnectionTarget();
 			const result = await printRawTcp({
-				host,
-				port: Number(port),
+				...target,
 				data: bytesToBase64(TEST_CONNECTION_BYTES),
 			});
 			setLastResult({

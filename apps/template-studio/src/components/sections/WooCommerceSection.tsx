@@ -97,6 +97,12 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 		onLanguageChange,
 	} = props;
 	const isThermal = engine === 'thermal';
+	const currencyOptions = COMMON_CURRENCIES.includes(currency)
+		? COMMON_CURRENCIES
+		: [currency, ...COMMON_CURRENCIES].filter(Boolean);
+	const localeOptions = COMMON_LOCALES.includes(locale)
+		? COMMON_LOCALES
+		: [locale, ...COMMON_LOCALES].filter(Boolean);
 
 	return (
 		<div className="woo-section">
@@ -108,7 +114,7 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 						value={currency}
 						onChange={(event) => onChangePath(['meta', 'currency'], event.target.value)}
 					>
-						{COMMON_CURRENCIES.map((code) => (
+						{currencyOptions.map((code) => (
 							<option key={code} value={code}>
 								{code}
 							</option>
@@ -122,7 +128,7 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 						value={locale}
 						onChange={(event) => onChangePath(['presentation_hints', 'locale'], event.target.value)}
 					>
-						{COMMON_LOCALES.map((code) => (
+						{localeOptions.map((code) => (
 							<option key={code} value={code}>
 								{code}
 							</option>

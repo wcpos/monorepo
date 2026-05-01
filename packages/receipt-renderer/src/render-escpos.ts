@@ -1,4 +1,5 @@
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
+import iconv from 'iconv-lite';
 
 import type { ColNode, ReceiptNode, ThermalNode } from './types.js';
 
@@ -6,10 +7,22 @@ export interface EscposRenderOptions {
 	printerModel?: string;
 	language?: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns?: number;
+	enableCp932?: boolean;
 }
 
+const CP932_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]/;
+const FULL_WIDTH_TEXT_RE =
+	/[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/u;
+const KANJI_MODE_ON = [0x1c, 0x26];
+const KANJI_MODE_OFF = [0x1c, 0x2e];
+
 export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}): Uint8Array {
-	const { printerModel, language = 'esc-pos', columns = ast.paperWidth } = options;
+	const {
+		printerModel,
+		language = 'esc-pos',
+		columns = ast.paperWidth,
+		enableCp932 = false,
+	} = options;
 
 	const encoderOpts: Record<string, unknown> = { language, columns };
 	if (printerModel) {
@@ -19,9 +32,14 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 	const encoder = new ReceiptPrinterEncoder(encoderOpts);
 	encoder.initialize().codepage('auto');
 
-	walkNodes(encoder, ast.children, columns);
+	walkNodes(encoder, ast.children, columns, language === 'esc-pos' && enableCp932);
 
-	return encoder.encode();
+	const bytes = encoder.encode();
+	if (language !== 'esc-pos') return bytes;
+	const resetIndex = bytes.findIndex((byte, index) => byte === 0x1b && bytes[index + 1] === 0x40);
+	if (resetIndex > 0) return bytes.slice(resetIndex);
+	if (resetIndex === -1) return Uint8Array.from([0x1b, 0x40, ...bytes]);
+	return bytes;
 }
 
 /**
@@ -58,54 +76,69 @@ function resolveStarColumns(cols: readonly ColNode[], totalColumns: number): num
 	});
 }
 
-function walkNodes(encoder: ReceiptPrinterEncoder, nodes: ThermalNode[], columns: number): void {
+function walkNodes(
+	encoder: ReceiptPrinterEncoder,
+	nodes: ThermalNode[],
+	columns: number,
+	supportsCp932: boolean
+): void {
 	for (const node of nodes) {
-		walkNode(encoder, node, columns);
+		walkNode(encoder, node, columns, supportsCp932);
 	}
 }
 
-function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, columns: number): void {
+function walkNode(
+	encoder: ReceiptPrinterEncoder,
+	node: ThermalNode,
+	columns: number,
+	supportsCp932: boolean
+): void {
 	switch (node.type) {
 		case 'raw-text':
-			encoder.text(node.value);
+			writeText(encoder, node.value, supportsCp932);
 			break;
 		case 'text':
-			walkNodes(encoder, node.children, columns);
+			walkNodes(encoder, node.children, columns, supportsCp932);
 			encoder.newline();
 			break;
 		case 'bold':
 			encoder.bold(true);
-			walkNodes(encoder, node.children, columns);
+			walkNodes(encoder, node.children, columns, supportsCp932);
 			encoder.bold(false);
 			break;
 		case 'underline':
 			encoder.underline(true);
-			walkNodes(encoder, node.children, columns);
+			walkNodes(encoder, node.children, columns, supportsCp932);
 			encoder.underline(false);
 			break;
 		case 'invert':
 			encoder.invert(true);
-			walkNodes(encoder, node.children, columns);
+			walkNodes(encoder, node.children, columns, supportsCp932);
 			encoder.invert(false);
 			break;
 		case 'size':
 			encoder.size(node.width, node.height);
-			walkNodes(encoder, node.children, columns);
+			walkNodes(encoder, node.children, columns, supportsCp932);
 			encoder.size(1, 1);
 			break;
 		case 'align':
 			encoder.align(node.mode);
-			walkNodes(encoder, node.children, columns);
+			walkNodes(encoder, node.children, columns, supportsCp932);
 			encoder.align('left');
 			break;
 		case 'row': {
 			const resolvedWidths = resolveStarColumns(node.children, columns);
-			const colDefs = node.children.map((col, i) => ({
-				width: resolvedWidths[i],
-				align: col.align as 'left' | 'right',
-			}));
 			const rowData = node.children.map((col) => extractText(col.children));
-			encoder.table(colDefs, [rowData]);
+			if (supportsCp932 && rowData.some(containsJapaneseText)) {
+				writeText(encoder, formatRow(rowData, resolvedWidths, node.children), supportsCp932);
+				encoder.newline();
+			} else {
+				const colDefs = node.children.map((col, i) => ({
+					width: resolvedWidths[i],
+					align: col.align as 'left' | 'right',
+				}));
+				encoder.table(colDefs, [rowData]);
+			}
 			break;
 		}
 		case 'col':
@@ -136,9 +169,53 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, columns: nu
 			encoder.pulse();
 			break;
 		case 'receipt':
-			walkNodes(encoder, node.children, columns);
+			walkNodes(encoder, node.children, columns, supportsCp932);
 			break;
 	}
+}
+
+function writeText(encoder: ReceiptPrinterEncoder, value: string, supportsCp932: boolean): void {
+	if (!supportsCp932 || !containsJapaneseText(value)) {
+		encoder.text(value);
+		return;
+	}
+
+	encoder.raw([...KANJI_MODE_ON, ...iconv.encode(value, 'cp932'), ...KANJI_MODE_OFF]);
+}
+
+function containsJapaneseText(value: string): boolean {
+	return CP932_TEXT_RE.test(value);
+}
+
+function formatRow(values: string[], widths: number[], cols: readonly ColNode[]): string {
+	return values
+		.map((value, index) => {
+			const width = widths[index] ?? 0;
+			const clipped = truncateDisplay(value, width);
+			const padding = ' '.repeat(Math.max(0, width - displayWidth(clipped)));
+			return cols[index]?.align === 'right' ? `${padding}${clipped}` : `${clipped}${padding}`;
+		})
+		.join('');
+}
+
+function truncateDisplay(value: string, width: number): string {
+	let result = '';
+	let used = 0;
+	for (const char of value) {
+		const next = displayWidth(char);
+		if (used + next > width) break;
+		result += char;
+		used += next;
+	}
+	return result;
+}
+
+function displayWidth(value: string): number {
+	let width = 0;
+	for (const char of value) {
+		width += FULL_WIDTH_TEXT_RE.test(char) ? 2 : 1;
+	}
+	return width;
 }
 
 function extractText(nodes: ThermalNode[]): string {

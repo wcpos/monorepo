@@ -122,6 +122,21 @@ describe('formatReceiptData', () => {
 		expect(result.lines[0].name).toBe('Widget A');
 	});
 
+	it('adds gallery-template aliases for order metadata and labels', () => {
+		const result = formatReceiptData(sampleReceiptData);
+		expect(result.order).toMatchObject({
+			id: sampleReceiptData.meta.order_id,
+			number: sampleReceiptData.meta.order_number,
+			created: { datetime: sampleReceiptData.meta.created_at_gmt },
+		});
+		expect(result.i18n).toMatchObject({
+			order: 'Order',
+			date: 'Date',
+			subtotal: 'Subtotal',
+			total: 'Total',
+		});
+	});
+
 	it('preserves zero numeric values for Mustache section truthiness', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.totals.discount_total_incl = 0;

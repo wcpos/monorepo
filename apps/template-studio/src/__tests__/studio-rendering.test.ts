@@ -1,9 +1,10 @@
 import { createElement } from 'react';
 
 import { render, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App, preparePrintDocument } from '../App';
+import { countPreviewLines } from '../components/Stage';
 import { createRandomReceipt } from '../randomizer';
 import { fetchWpPreview, printRawTcp } from '../studio-api';
 import {
@@ -250,6 +251,18 @@ describe('template studio rendering harness', () => {
 			hex: '1b 40 41 0a',
 			ascii: '.@A.',
 		});
+	});
+
+	it('counts preview lines with inert DOM parsing instead of tag-stripping', () => {
+		const html = '<p>First</p>[<script>alert(1)</script><br><p>Second</p>';
+
+		expect(countPreviewLines(html)).toBe(4);
+	});
+
+	it('counts repeated blank lines in previews', () => {
+		const html = '<div>First<br><br>Second</div>';
+
+		expect(countPreviewLines(html)).toBe(4);
 	});
 
 	it('sanitizes preview and diagnostic HTML before DOM insertion', async () => {

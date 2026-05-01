@@ -351,12 +351,14 @@ function buildReceiptData(
 	const lines = buildLineItems(rand, pool, scenarios, taxRate, pricesEnteredWithTax, refundSign);
 	// An empty cart suppresses every other line-driven scenario so totals collapse to zero.
 	const populated = !scenarios.emptyCart;
-	const fees = populated && scenarios.hasFees ? buildFees(rand, refundSign) : [];
-	const shipping = populated && scenarios.hasShipping ? buildShipping(rand, refundSign) : [];
-	const discounts = populated && scenarios.hasDiscounts ? buildDiscounts(rand, refundSign) : [];
+	const fees = populated && scenarios.hasFees ? buildFees(rand, refundSign, taxRate) : [];
+	const shipping =
+		populated && scenarios.hasShipping ? buildShipping(rand, refundSign, taxRate) : [];
+	const discounts =
+		populated && scenarios.hasDiscounts ? buildDiscounts(rand, refundSign, taxRate) : [];
 
 	const totals = computeTotals(lines, fees, shipping, discounts);
-	const taxSummary = buildTaxSummary(lines, taxRate, pool.taxLabel);
+	const taxSummary = buildTaxSummary(lines, fees, shipping, discounts, taxRate, pool.taxLabel);
 	const payments = buildPayments(rand, scenarios, totals.grand_total_incl, orderCurrency);
 
 	const orderMeta = buildOrderMeta(rand, scenarios, orderCurrency, seed);
@@ -467,7 +469,11 @@ function seedFromRand(rand: () => number): number {
 	return Math.floor(rand() * 0xffffffff);
 }
 
-function buildFees(rand: () => number, refundSign: number): ReceiptFee[] {
+function taxableExcl(totalIncl: number, taxRate: number): number {
+	return round(totalIncl / (1 + taxRate / 100));
+}
+
+function buildFees(rand: () => number, refundSign: number, taxRate: number): ReceiptFee[] {
 	const labels = ['Service charge', 'Eco fee', 'Delivery fee'];
 	const count = 1 + Math.floor(rand() * 2);
 	return Array.from({ length: count }, (_, index) => {
@@ -476,24 +482,28 @@ function buildFees(rand: () => number, refundSign: number): ReceiptFee[] {
 			label: labels[index % labels.length] as string,
 			total,
 			total_incl: total,
-			total_excl: round(total / 1.1),
+			total_excl: taxableExcl(total, taxRate),
 		};
 	});
 }
 
-function buildShipping(rand: () => number, refundSign: number): ReceiptFee[] {
+function buildShipping(rand: () => number, refundSign: number, taxRate: number): ReceiptFee[] {
 	const total = round(rand() * 12 + 3) * refundSign;
 	return [
 		{
 			label: pickFrom(rand, ['Standard shipping', 'Local pickup', 'Same-day courier']),
 			total,
 			total_incl: total,
-			total_excl: round(total / 1.1),
+			total_excl: taxableExcl(total, taxRate),
 		},
 	];
 }
 
-function buildDiscounts(rand: () => number, refundSign: number): ReceiptDiscount[] {
+function buildDiscounts(
+	rand: () => number,
+	refundSign: number,
+	taxRate: number
+): ReceiptDiscount[] {
 	const codes = ['WELCOME10', 'LOYALTY5', 'SUMMER25', 'STAFF'];
 	const count = 1 + Math.floor(rand() * 2);
 	return Array.from({ length: count }, () => {
@@ -502,7 +512,7 @@ function buildDiscounts(rand: () => number, refundSign: number): ReceiptDiscount
 			label: pickFrom(rand, codes),
 			total: -total,
 			total_incl: -total,
-			total_excl: round(-total / 1.1),
+			total_excl: taxableExcl(-total, taxRate),
 		};
 	});
 }
@@ -515,12 +525,14 @@ function computeTotals(
 ): ReceiptTotals {
 	const lineSubInc = lines.reduce((sum, line) => sum + (line.line_subtotal_incl ?? 0), 0);
 	const lineSubExc = lines.reduce((sum, line) => sum + (line.line_subtotal_excl ?? 0), 0);
-	const feeTotal = fees.reduce((sum, fee) => sum + fee.total_incl, 0);
-	const shipTotal = shipping.reduce((sum, item) => sum + item.total_incl, 0);
+	const feeTotalIncl = fees.reduce((sum, fee) => sum + fee.total_incl, 0);
+	const feeTotalExcl = fees.reduce((sum, fee) => sum + fee.total_excl, 0);
+	const shipTotalIncl = shipping.reduce((sum, item) => sum + item.total_incl, 0);
+	const shipTotalExcl = shipping.reduce((sum, item) => sum + item.total_excl, 0);
 	const discountTotalIncl = discounts.reduce((sum, item) => sum + item.total_incl, 0);
 	const discountTotalExcl = discounts.reduce((sum, item) => sum + item.total_excl, 0);
-	const grandIncl = round(lineSubInc + feeTotal + shipTotal + discountTotalIncl);
-	const grandExcl = round(lineSubExc + feeTotal + shipTotal + discountTotalExcl);
+	const grandIncl = round(lineSubInc + feeTotalIncl + shipTotalIncl + discountTotalIncl);
+	const grandExcl = round(lineSubExc + feeTotalExcl + shipTotalExcl + discountTotalExcl);
 	return {
 		subtotal: round(lineSubInc),
 		subtotal_incl: round(lineSubInc),
@@ -539,12 +551,23 @@ function computeTotals(
 
 function buildTaxSummary(
 	lines: ReceiptLineItem[],
+	fees: ReceiptFee[],
+	shipping: ReceiptFee[],
+	discounts: ReceiptDiscount[],
 	taxRate: number,
 	taxLabel: string
 ): ReceiptTaxSummaryItem[] {
-	if (taxRate === 0 || lines.length === 0) return [];
-	const taxableExcl = lines.reduce((sum, line) => sum + (line.line_subtotal_excl ?? 0), 0);
-	const taxableIncl = lines.reduce((sum, line) => sum + (line.line_subtotal_incl ?? 0), 0);
+	const taxableExcl =
+		lines.reduce((sum, line) => sum + (line.line_subtotal_excl ?? 0), 0) +
+		fees.reduce((sum, fee) => sum + fee.total_excl, 0) +
+		shipping.reduce((sum, item) => sum + item.total_excl, 0) +
+		discounts.reduce((sum, item) => sum + item.total_excl, 0);
+	const taxableIncl =
+		lines.reduce((sum, line) => sum + (line.line_subtotal_incl ?? 0), 0) +
+		fees.reduce((sum, fee) => sum + fee.total_incl, 0) +
+		shipping.reduce((sum, item) => sum + item.total_incl, 0) +
+		discounts.reduce((sum, item) => sum + item.total_incl, 0);
+	if (taxRate === 0 || (taxableIncl === 0 && taxableExcl === 0)) return [];
 	return [
 		{
 			code: `vat-${taxRate}`,
@@ -613,7 +636,7 @@ function buildOrderMeta(
 	return {
 		schema_version: 1,
 		mode,
-		created_at_gmt: new Date(2025, 0, 1 + Math.floor(rand() * 730)).toISOString(),
+		created_at_gmt: new Date(Date.UTC(2025, 0, 1 + Math.floor(rand() * 730))).toISOString(),
 		order_id: orderId,
 		order_number: `${orderId}`,
 		currency,
