@@ -209,6 +209,38 @@ export function App() {
 		fallbackTimer = printWindow.setTimeout(printReceipt, 1500);
 	}
 
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+		const handler = (event: KeyboardEvent) => {
+			const target = event.target as HTMLElement | null;
+			const isTyping =
+				target?.tagName === 'INPUT' ||
+				target?.tagName === 'TEXTAREA' ||
+				target?.isContentEditable === true;
+			const meta = event.metaKey || event.ctrlKey;
+			if (meta && (event.key === 'p' || event.key === 'P')) {
+				event.preventDefault();
+				openPrintDialog();
+				return;
+			}
+			if (meta && (event.key === 'r' || event.key === 'R') && !event.shiftKey) {
+				event.preventDefault();
+				shuffleSeed();
+				return;
+			}
+			if (event.key === '/' && !meta && !isTyping) {
+				const search = document.querySelector<HTMLInputElement>('.data-search');
+				if (search) {
+					event.preventDefault();
+					search.focus();
+					search.select();
+				}
+			}
+		};
+		window.addEventListener('keydown', handler);
+		return () => window.removeEventListener('keydown', handler);
+	});
+
 	return (
 		<div className="studio-app">
 			<Toolbar
