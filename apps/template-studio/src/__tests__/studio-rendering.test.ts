@@ -42,7 +42,7 @@ describe('template studio rendering harness', () => {
 				name: 'Logicless sample',
 				engine: 'logicless',
 				source: 'bundled-gallery',
-				content: '<h1>{{store.name}}</h1><p>{{order.number}}</p>',
+				content: '<h1>{{store.name}}</h1><p>{{meta.order_number}}</p>',
 				previewHtml: '<h1>PHP diagnostic</h1>',
 			},
 			fixture: galleryFixture,
@@ -165,12 +165,52 @@ describe('template studio rendering harness', () => {
 						engine: 'thermal',
 						source: 'bundled-gallery',
 						content:
-							'<receipt><barcode type="code128">{{order.number}}</barcode><qrcode>{{order.number}}</qrcode></receipt>',
+							'<receipt><barcode type="code128">{{meta.order_number}}</barcode><qrcode>{{meta.order_number}}</qrcode></receipt>',
 					},
 				]);
 			}
 			if (url === '/__studio/fixtures') {
-				return Response.json([galleryFixture]);
+				// Use a canonical-shape fixture so meta.order_number survives mapReceiptData.
+				return Response.json([
+					{
+						id: 'gallery-default-receipt',
+						meta: {
+							schema_version: 1,
+							mode: 'live',
+							created_at_gmt: '2026-04-30',
+							order_id: 1001,
+							order_number: '1001',
+							currency: 'USD',
+						},
+						store: { name: 'WCPOS Demo Store', address_lines: [] },
+						cashier: { id: 0, name: 'Sam' },
+						customer: { id: 0, name: 'Ada' },
+						lines: [],
+						fees: [],
+						shipping: [],
+						discounts: [],
+						totals: {
+							subtotal_incl: 0,
+							subtotal_excl: 0,
+							discount_total_incl: 0,
+							discount_total_excl: 0,
+							tax_total: 0,
+							grand_total_incl: 0,
+							grand_total_excl: 0,
+							paid_total: 0,
+							change_total: 0,
+						},
+						tax_summary: [],
+						payments: [],
+						fiscal: {},
+						presentation_hints: {
+							display_tax: 'incl',
+							prices_entered_with_tax: true,
+							rounding_mode: 'round',
+							locale: 'en-US',
+						},
+					},
+				]);
 			}
 			return new Response(null, { status: 404 });
 		}) as typeof fetch;
@@ -193,7 +233,7 @@ describe('template studio rendering harness', () => {
 				name: 'Logicless sample',
 				engine: 'logicless',
 				source: 'bundled-gallery',
-				content: '<p>{{order.number}}</p>',
+				content: '<p>{{store.name}}</p>',
 			},
 			fixture: galleryFixture,
 			paperWidth: 'a4',
@@ -205,7 +245,7 @@ describe('template studio rendering harness', () => {
 			engine: 'logicless',
 			paperWidth: 'a4',
 		});
-		expect(model.html).toContain('1001');
+		expect(model.html).toContain('WCPOS Demo Store');
 	});
 
 	it('selects from the filtered template list instead of a hidden previous selection', () => {

@@ -2,6 +2,12 @@ export { encodeReceipt } from './encoder/encode-receipt';
 export type { EncodeReceiptOptions } from './encoder/encode-receipt';
 export { formatReceiptData } from './encoder/format-receipt-data';
 export { mapReceiptData } from './encoder/map-receipt-data';
+export { renderForStudio, buildTemplateData } from './encoder/render-for-studio';
+export type {
+	RenderForStudioOptions,
+	RenderForStudioResult,
+	StudioTemplateEngine,
+} from './encoder/render-for-studio';
 export type {
 	ReceiptData,
 	ReceiptStoreMeta,
