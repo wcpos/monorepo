@@ -13,7 +13,7 @@ export function CollapsibleSection({ title, open, onToggle, children }: Collapsi
 		<section className={`section ${title.toLowerCase()}-section`}>
 			<button
 				type="button"
-				className={`section-header${open ? 'open' : ''}`}
+				className={open ? 'section-header open' : 'section-header'}
 				aria-expanded={open}
 				aria-controls={sectionId}
 				onClick={onToggle}
