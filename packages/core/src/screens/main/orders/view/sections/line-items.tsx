@@ -27,7 +27,8 @@ function LineItemRow({ item, currencySymbol }: { item: LineItem; currencySymbol?
 	const total = asFloat(item.total);
 	const discounted = subtotal > total;
 	const qty = item.quantity ?? 0;
-	const unit = qty > 0 ? subtotal / qty : asFloat(item.price);
+	const originalUnit = qty > 0 ? subtotal / qty : asFloat(item.price);
+	const unit = qty > 0 ? (discounted ? total / qty : subtotal / qty) : asFloat(item.price);
 	const variations = getMetaValue(item.meta_data);
 
 	return (
@@ -61,7 +62,7 @@ function LineItemRow({ item, currencySymbol }: { item: LineItem; currencySymbol?
 				<View className="flex-row items-baseline gap-1">
 					{discounted ? (
 						<Text className="text-muted-foreground/70 text-xs tabular-nums line-through">
-							{formatMoney(subtotal / Math.max(qty, 1), currencySymbol)}
+							{formatMoney(originalUnit, currencySymbol)}
 						</Text>
 					) : null}
 					<Text className="text-muted-foreground text-xs tabular-nums">

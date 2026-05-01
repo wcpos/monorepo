@@ -3,6 +3,8 @@ import { View } from 'react-native';
 
 import { Text } from '@wcpos/components/text';
 
+import { useT } from '../../../../../contexts/translations';
+
 type Tone = 'success' | 'warning' | 'destructive' | 'muted';
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -17,16 +19,16 @@ const STATUS_TONE: Record<string, Tone> = {
 	trash: 'muted',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-	completed: 'Completed',
-	processing: 'Processing',
-	'on-hold': 'On hold',
-	pending: 'Pending payment',
-	refunded: 'Refunded',
-	'partially-refunded': 'Partially refunded',
-	failed: 'Failed',
-	cancelled: 'Cancelled',
-	trash: 'Trash',
+const STATUS_LABEL_KEYS: Record<string, string> = {
+	completed: 'orders.status.completed',
+	processing: 'orders.status.processing',
+	'on-hold': 'orders.status.on-hold',
+	pending: 'orders.status.pending',
+	refunded: 'orders.status.refunded',
+	'partially-refunded': 'orders.status.partially-refunded',
+	failed: 'orders.status.failed',
+	cancelled: 'orders.status.cancelled',
+	trash: 'orders.status.trash',
 };
 
 const TONE_CLASSES: Record<Tone, { wrap: string; dot: string; text: string }> = {
@@ -53,10 +55,15 @@ const TONE_CLASSES: Record<Tone, { wrap: string; dot: string; text: string }> = 
 };
 
 export function StatusPill({ status }: { status?: string | null }) {
+	const t = useT();
 	const key = (status || '').toLowerCase();
 	const tone = STATUS_TONE[key] ?? 'muted';
-	const label =
-		STATUS_LABEL[key] ?? (status ? status.charAt(0).toUpperCase() + status.slice(1) : '—');
+	const labelKey = STATUS_LABEL_KEYS[key];
+	const label = labelKey
+		? t(labelKey)
+		: status
+			? status.charAt(0).toUpperCase() + status.slice(1)
+			: '—';
 	const classes = TONE_CLASSES[tone];
 
 	return (

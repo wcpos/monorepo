@@ -23,7 +23,7 @@ interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
 }
 
-const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold', 'refunded'];
+const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold'];
 
 export function ViewOrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
@@ -47,7 +47,7 @@ export function ViewOrderModal({ resource }: Props) {
 		);
 	}
 
-	const handlePrintReceipt = order.id
+	const handlePrintReceipt = order.uuid
 		? () => router.push({ pathname: `/orders/receipt/${order.uuid}` })
 		: undefined;
 

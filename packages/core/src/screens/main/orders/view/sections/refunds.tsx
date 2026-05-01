@@ -24,7 +24,10 @@ function formatNegative(value: unknown, currencySymbol?: string) {
 }
 
 function refundTotal(refunds: WCRefund[] | LocalRefund[] | undefined) {
-	return (refunds || []).reduce((sum, refund) => sum + Math.abs(asFloat(refund.total)), 0);
+	return (refunds || []).reduce((sum, refund) => {
+		const value = 'amount' in refund ? (refund.amount ?? refund.total) : refund.total;
+		return sum + Math.abs(asFloat(value));
+	}, 0);
 }
 
 function RefundCard({ refund, currencySymbol }: { refund: WCRefund; currencySymbol?: string }) {

@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 
-import { formatDate, formatTime } from './_format';
+import { formatDate, formatMoney, formatTime } from './_format';
 import { StatusPill } from './_status-pill';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -37,9 +37,7 @@ export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
 	const store = getMetaValue(order.meta_data, '_pos_store');
 	const paymentMethod = order.payment_method_title || order.payment_method;
 
-	const currency = order.currency_symbol ?? '';
-	const total = parseFloat(String(order.total ?? '0'));
-	const totalDisplay = Number.isFinite(total) ? total.toFixed(2) : String(order.total ?? '');
+	const totalDisplay = formatMoney(order.total, order.currency_symbol);
 
 	return (
 		<View className="border-border bg-card border-b px-5 pt-5 pb-5 md:px-6 md:pt-6 md:pb-5">
@@ -63,7 +61,6 @@ export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
 				<View className="min-w-0 flex-1 gap-1.5">
 					<View className="flex-row flex-wrap items-baseline gap-3">
 						<Text className="text-foreground text-3xl font-semibold tracking-tight tabular-nums md:text-4xl">
-							<Text className="text-muted-foreground font-medium">{currency}</Text>
 							{totalDisplay}
 						</Text>
 						<StatusPill status={status} />
@@ -158,8 +155,7 @@ function HeroSubtitle({
 	if (refundedAmount > 0) {
 		parts.push(
 			<Text key="refunded" className="text-destructive text-xs font-medium">
-				−{order.currency_symbol ?? ''}
-				{refundedAmount.toFixed(2)} refunded
+				{formatMoney(-refundedAmount, order.currency_symbol)} refunded
 			</Text>
 		);
 	}
