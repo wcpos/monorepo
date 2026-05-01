@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
+import { decodeEscposBytes } from '../../lib/escpos-decoder';
+import { bytesToBase64 } from '../../studio-core';
 import { printRawTcp } from '../../studio-api';
 
 import type { StudioRenderResult } from '../../studio-core';
@@ -15,27 +17,58 @@ interface LastResult {
 	message: string;
 }
 
+const TEST_CONNECTION_BYTES = new Uint8Array([0x1b, 0x40]); // ESC @ — init printer
+
 export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSectionProps) {
 	const [host, setHost] = useState('127.0.0.1');
 	const [port, setPort] = useState('9100');
 	const [lastResult, setLastResult] = useState<LastResult | null>(null);
 	const [sending, setSending] = useState(false);
+	const [showInspector, setShowInspector] = useState(false);
 
 	const isThermal = rendered?.kind === 'thermal';
+
+	const decodedSegments = useMemo(() => {
+		if (rendered?.kind !== 'thermal') return [];
+		return decodeEscposBytes(rendered.escposBytes);
+	}, [rendered]);
 
 	async function sendToPrinter() {
 		if (!rendered || rendered.kind !== 'thermal') return;
 		setSending(true);
 		onError(null);
+		const start = performance.now();
 		try {
 			const result = await printRawTcp({
 				host,
 				port: Number(port),
 				data: rendered.escposBase64,
 			});
+			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
 			setLastResult({
 				kind: 'success',
-				message: `Sent ${result.bytesWritten} bytes to ${host}:${port}`,
+				message: `${result.bytesWritten} bytes · ${elapsed}s · ${host}:${port}`,
+			});
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			setLastResult({ kind: 'error', message });
+		} finally {
+			setSending(false);
+		}
+	}
+
+	async function testConnection() {
+		setSending(true);
+		onError(null);
+		try {
+			const result = await printRawTcp({
+				host,
+				port: Number(port),
+				data: bytesToBase64(TEST_CONNECTION_BYTES),
+			});
+			setLastResult({
+				kind: 'success',
+				message: `connection OK (${result.bytesWritten} bytes)`,
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -73,6 +106,9 @@ export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSect
 				/>
 			</div>
 			<div className="button-row">
+				<button type="button" onClick={testConnection} disabled={!isThermal || sending}>
+					Test connection
+				</button>
 				<button
 					type="button"
 					className="primary"
@@ -83,6 +119,33 @@ export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSect
 				</button>
 			</div>
 			{lastResult ? <p className={`last-result ${lastResult.kind}`}>{lastResult.message}</p> : null}
+			{isThermal ? (
+				<details
+					className="inspect-bytes"
+					open={showInspector}
+					onToggle={(event) => setShowInspector((event.target as HTMLDetailsElement).open)}
+				>
+					<summary>Inspect bytes</summary>
+					<div className="byte-table" role="table">
+						<div className="col-h" role="columnheader">
+							hex
+						</div>
+						<div className="col-h" role="columnheader">
+							ascii
+						</div>
+						<div className="col-h" role="columnheader">
+							decoded
+						</div>
+						{decodedSegments.map((segment) => (
+							<div key={segment.offset} className="byte-row" style={{ display: 'contents' }}>
+								<div className="hex">{segment.hex}</div>
+								<div className="ascii">{segment.ascii}</div>
+								<div className="decoded">{segment.decoded}</div>
+							</div>
+						))}
+					</div>
+				</details>
+			) : null}
 		</div>
 	);
 }
