@@ -65,6 +65,8 @@ export function App() {
 	const [zoom, setZoom] = useState(100);
 	const [seed, setSeed] = useState<number | string>('default');
 	const [sections, setSections] = useState<SectionState>(() => loadSectionState());
+	const [printerModel, setPrinterModel] = useState('');
+	const [language, setLanguage] = useState<'esc-pos' | 'star-prnt' | 'star-line'>('esc-pos');
 	const [error, setError] = useState<string | null>(null);
 	const previewFrameRef = useRef<HTMLDivElement>(null);
 
@@ -129,6 +131,8 @@ export function App() {
 				template: selectedTemplate,
 				fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
 				paperWidth,
+				printerModel: printerModel || undefined,
+				language,
 			})
 		: null;
 	const previewHtml =
@@ -251,7 +255,36 @@ export function App() {
 						open={sections.woocommerce}
 						onToggle={() => toggleSection('woocommerce')}
 					>
-						<WooCommerceSection engine={selectedTemplate?.engine ?? null} />
+						<WooCommerceSection
+							engine={selectedTemplate?.engine ?? null}
+							currency={
+								((workingData.meta as Record<string, unknown> | undefined)?.currency as string) ??
+								'USD'
+							}
+							locale={
+								((workingData.presentation_hints as Record<string, unknown> | undefined)
+									?.locale as string) ?? 'en_US'
+							}
+							displayTax={
+								((workingData.presentation_hints as Record<string, unknown> | undefined)
+									?.display_tax as string) ?? 'incl'
+							}
+							pricesEnteredWithTax={Boolean(
+								(workingData.presentation_hints as Record<string, unknown> | undefined)
+									?.prices_entered_with_tax
+							)}
+							roundingMode={
+								((workingData.presentation_hints as Record<string, unknown> | undefined)
+									?.rounding_mode as string) ?? 'per-line'
+							}
+							printerModel={printerModel}
+							language={language}
+							onChangePath={handleChangePath}
+							onPrinterModelChange={setPrinterModel}
+							onLanguageChange={(value) =>
+								setLanguage(value as 'esc-pos' | 'star-prnt' | 'star-line')
+							}
+						/>
 					</CollapsibleSection>
 					<CollapsibleSection
 						title="Print"

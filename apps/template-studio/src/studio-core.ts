@@ -24,6 +24,9 @@ export interface RenderStudioTemplateInput {
 	template: StudioTemplate;
 	fixture: ReceiptFixture;
 	paperWidth: PaperWidth;
+	/** Optional thermal encoder overrides surfaced through the WooCommerce panel. */
+	printerModel?: string;
+	language?: 'esc-pos' | 'star-prnt' | 'star-line';
 }
 
 export type StudioRenderResult =
@@ -68,7 +71,7 @@ export function selectVisibleTemplate(
  * Sanitization is on (default) for both engines, matching production.
  */
 export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRenderResult {
-	const { template, fixture, paperWidth } = input;
+	const { template, fixture, paperWidth, printerModel, language } = input;
 
 	if (template.engine === 'logicless') {
 		const result = renderForStudio({
@@ -85,11 +88,18 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 	}
 
 	const columns = paperWidthToColumns(template.paperWidth ?? paperWidth);
+	const encodeOptions: {
+		columns: number;
+		printerModel?: string;
+		language?: 'esc-pos' | 'star-prnt' | 'star-line';
+	} = { columns };
+	if (printerModel) encodeOptions.printerModel = printerModel;
+	if (language) encodeOptions.language = language;
 	const result = renderForStudio({
 		template: template.content,
 		engine: 'thermal',
 		data: fixture,
-		encodeOptions: { columns },
+		encodeOptions,
 	});
 
 	if (result.engine !== 'thermal') {
