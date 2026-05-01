@@ -7,6 +7,7 @@
  */
 
 :root {
+	--ts-toolbar-height: 44px;
 	--ts-shell: #f7f6f2;
 	--ts-panel: #fbfaf6;
 	--ts-panel-alt: #f3eee5;
@@ -74,8 +75,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 
 .studio-app {
 	display: grid;
-	grid-template-rows: 44px auto 1fr;
+	grid-template-rows: var(--ts-toolbar-height) auto 1fr;
 	min-height: 100vh;
+	min-height: 100dvh;
 }
 
 .studio-toolbar {
@@ -140,8 +142,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 }
 
 .studio-body {
+	grid-row: 3;
 	display: grid;
 	grid-template-columns: 220px minmax(420px, 1fr) 320px;
+	min-height: 0;
 }
 
 /* ─────────────────────────── Left panel ────────────────────────── */
@@ -152,9 +156,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	overflow-y: auto;
 	padding: 12px 0;
 	position: sticky;
-	top: 44px;
+	top: var(--ts-toolbar-height);
 	align-self: start;
-	height: calc(100vh - 44px);
+	height: calc(100vh - var(--ts-toolbar-height));
+	height: calc(100dvh - var(--ts-toolbar-height));
 }
 .template-group { padding: 8px 0; }
 .template-group h3 {
@@ -265,9 +270,10 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	display: flex;
 	flex-direction: column;
 	position: sticky;
-	top: 44px;
+	top: var(--ts-toolbar-height);
 	align-self: start;
-	height: calc(100vh - 44px);
+	height: calc(100vh - var(--ts-toolbar-height));
+	height: calc(100dvh - var(--ts-toolbar-height));
 }
 .section {
 	border-bottom: 1px solid var(--ts-border);

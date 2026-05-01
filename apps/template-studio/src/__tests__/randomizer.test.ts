@@ -42,6 +42,35 @@ describe('template-studio randomizer', () => {
 		expect(result.data.lines.every((line) => line.qty < 0)).toBe(true);
 	});
 
+	it('does not generate cash tendered/change for refund payments', () => {
+		const result = createRandomReceipt({
+			seed: 7,
+			overrides: { refund: true, emptyCart: false, multiPayment: false, cartSize: 1 },
+		});
+		const payment = result.data.payments[0];
+
+		expect(payment.method_id).toBe('cash');
+		expect(payment.amount).toBeLessThan(0);
+		expect(payment.tendered).toBeUndefined();
+		expect(payment.change).toBeUndefined();
+		expect(result.data.totals.paid_total).toBe(result.data.totals.grand_total_incl);
+		expect(result.data.totals.change_total).toBe(0);
+	});
+
+	it('does not emit payments for unpaid order modes', () => {
+		const result = createRandomReceipt({
+			seed: 1,
+			overrides: { refund: false, emptyCart: false, multiPayment: false, cartSize: 1 },
+		});
+
+		expect(['quote', 'kitchen']).toContain(result.data.meta.mode);
+		expect(result.data.payments).toEqual([]);
+		expect(result.data.totals.paid_total).toBe(0);
+		expect(result.data.totals.change_total).toBe(0);
+		expect(result.data.order?.paid.datetime).toBe('');
+		expect(result.data.order?.completed.datetime).toBe('');
+	});
+
 	it('honors RTL override (Arabic locale + SAR currency without multicurrency override)', () => {
 		const result = createRandomReceipt({
 			seed: 9,
@@ -102,6 +131,33 @@ describe('template-studio randomizer', () => {
 		// Mirrors PHP `current_time( 'mysql', true )` — `Y-m-d H:i:s`.
 		const result = createRandomReceipt({ seed: 'seed-utc' });
 		expect(result.data.meta.created_at_gmt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+	});
+
+	it('derives printed receipt dates from seeded order data', () => {
+		const result = createRandomReceipt({ seed: 'seed-printed' });
+		expect(result.data.receipt).toBeDefined();
+		expect(result.data.order).toBeDefined();
+		expect(result.data.receipt!.printed.datetime).toBe(result.data.order!.created.datetime);
+	});
+
+	it('keeps seeded date formatting stable across runtime time zones', () => {
+		const originalTimeZone = process.env.TZ;
+		try {
+			process.env.TZ = 'UTC';
+			const utc = createRandomReceipt({ seed: 'seed-timezone' });
+			process.env.TZ = 'Pacific/Honolulu';
+			const honolulu = createRandomReceipt({ seed: 'seed-timezone' });
+
+			expect(honolulu.data.meta.created_at_local).toBe(utc.data.meta.created_at_local);
+			expect(honolulu.data.receipt).toEqual(utc.data.receipt);
+			expect(honolulu.data.order).toEqual(utc.data.order);
+		} finally {
+			if (originalTimeZone === undefined) {
+				delete process.env.TZ;
+			} else {
+				process.env.TZ = originalTimeZone;
+			}
+		}
 	});
 
 	it('parses textual seeds via FNV fallback', () => {

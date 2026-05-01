@@ -217,6 +217,7 @@ interface LocalePool {
 	longProductNames: readonly string[];
 	currency: string;
 	locale: string;
+	timeZone: string;
 	taxLabel: string;
 	thankYouNote: string;
 }
@@ -280,6 +281,7 @@ const LATIN_POOL: LocalePool = {
 	],
 	currency: 'EUR',
 	locale: 'en_US',
+	timeZone: 'Europe/Madrid',
 	taxLabel: 'VAT',
 	thankYouNote: 'Thank you for your order!',
 };
@@ -297,6 +299,7 @@ const RTL_POOL: LocalePool = {
 	],
 	currency: 'SAR',
 	locale: 'ar_SA',
+	timeZone: 'Asia/Riyadh',
 	taxLabel: 'ضريبة القيمة المضافة',
 	thankYouNote: 'شكراً لزيارتكم!',
 };
@@ -311,6 +314,7 @@ const CJK_POOL: LocalePool = {
 	longProductNames: ['宇治抹茶を使った濃厚抹茶ロールケーキ（季節限定・要冷蔵・8切れ入り）'],
 	currency: 'JPY',
 	locale: 'ja_JP',
+	timeZone: 'Asia/Tokyo',
 	taxLabel: '消費税',
 	thankYouNote: 'またのご来店をお待ちしております。',
 };
@@ -365,8 +369,23 @@ function buildReceiptData(
 	const taxSummary = buildTaxSummary(lines, fees, shipping, discounts, taxRate, pool.taxLabel);
 
 	const orderCreated = pickOrderDate(rand, seed);
-	const orderMeta = buildOrderMeta(rand, scenarios, orderCurrency, seed, orderCreated, pool.locale);
-	const payments = buildPayments(rand, scenarios, totals.grand_total_incl, orderCurrency, totals);
+	const orderMeta = buildOrderMeta(
+		rand,
+		scenarios,
+		orderCurrency,
+		seed,
+		orderCreated,
+		pool.locale,
+		pool.timeZone
+	);
+	const payments = buildPayments(
+		rand,
+		scenarios,
+		orderMeta.mode,
+		totals.grand_total_incl,
+		orderCurrency,
+		totals
+	);
 	const presentationHints: ReceiptPresentationHints = {
 		display_tax: displayTax,
 		prices_entered_with_tax: pricesEnteredWithTax,
@@ -374,8 +393,8 @@ function buildReceiptData(
 		locale: pool.locale,
 	};
 	const fiscal: ReceiptFiscal = scenarios.fiscal ? buildFiscal(rand, orderMeta) : {};
-	const receiptInfo = buildReceiptInfo(rand, pool.locale);
-	const order = buildOrder(orderMeta, orderCreated, scenarios, pool.locale);
+	const receiptInfo = buildReceiptInfo(rand, pool.locale, pool.timeZone, orderCreated);
+	const order = buildOrder(orderMeta, orderCreated, scenarios, pool.locale, pool.timeZone);
 	const i18n = buildI18nLabels();
 
 	return {
@@ -406,49 +425,75 @@ function buildReceiptData(
  * 19 keys with comparable values from a JS Date. Templates can choose
  * whichever variant they need without diverging from the live receipt.
  */
-function buildDateObject(date: Date, locale: string): ReceiptDate {
+function buildDateObject(date: Date, locale: string, timeZone: string): ReceiptDate {
 	const intlLocale = locale.replace(/_/g, '-');
+	const baseDateOptions: Intl.DateTimeFormatOptions = {
+		timeZone,
+		calendar: 'gregory',
+		numberingSystem: 'latn',
+	};
 	const tryFormat = (options: Intl.DateTimeFormatOptions, fallback: () => string): string => {
 		try {
-			return new Intl.DateTimeFormat(intlLocale, options).format(date);
+			return new Intl.DateTimeFormat(intlLocale, { ...baseDateOptions, ...options }).format(date);
 		} catch {
 			return fallback();
 		}
 	};
-	const pad = (value: number, length = 2) => String(value).padStart(length, '0');
-	const year = date.getFullYear();
-	const month = date.getMonth() + 1;
-	const day = date.getDate();
+	const parts = new Intl.DateTimeFormat(intlLocale, {
+		...baseDateOptions,
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+	}).formatToParts(date);
+	const getPart = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+	const year = getPart('year');
+	const month = getPart('month');
+	const day = getPart('day');
+	const shortYear = year.slice(-2);
 
 	return {
 		datetime: tryFormat(
 			{ dateStyle: 'medium', timeStyle: 'short' },
-			() => `${date.toDateString()} ${date.toLocaleTimeString(intlLocale)}`
+			() =>
+				`${date.toLocaleDateString(intlLocale, baseDateOptions)} ${date.toLocaleTimeString(intlLocale, baseDateOptions)}`
 		),
-		date: tryFormat({ dateStyle: 'medium' }, () => date.toDateString()),
-		time: tryFormat({ timeStyle: 'short' }, () => date.toLocaleTimeString(intlLocale)),
+		date: tryFormat({ dateStyle: 'medium' }, () =>
+			date.toLocaleDateString(intlLocale, baseDateOptions)
+		),
+		time: tryFormat({ timeStyle: 'short' }, () =>
+			date.toLocaleTimeString(intlLocale, baseDateOptions)
+		),
 		datetime_short: tryFormat(
 			{ dateStyle: 'short', timeStyle: 'short' },
-			() => `${pad(month)}/${pad(day)}/${String(year).slice(-2)}`
+			() => `${month}/${day}/${shortYear}`
 		),
-		datetime_long: tryFormat({ dateStyle: 'long', timeStyle: 'short' }, () => date.toString()),
-		datetime_full: tryFormat({ dateStyle: 'full', timeStyle: 'short' }, () => date.toString()),
-		date_short: tryFormat(
-			{ dateStyle: 'short' },
-			() => `${pad(month)}/${pad(day)}/${String(year).slice(-2)}`
+		datetime_long: tryFormat(
+			{ dateStyle: 'long', timeStyle: 'short' },
+			() =>
+				`${date.toLocaleDateString(intlLocale, { ...baseDateOptions, dateStyle: 'long' })} ${date.toLocaleTimeString(intlLocale, baseDateOptions)}`
 		),
-		date_long: tryFormat({ dateStyle: 'long' }, () => date.toDateString()),
-		date_full: tryFormat({ dateStyle: 'full' }, () => date.toDateString()),
-		date_ymd: `${year}-${pad(month)}-${pad(day)}`,
-		date_dmy: `${pad(day)}/${pad(month)}/${year}`,
-		date_mdy: `${pad(month)}/${pad(day)}/${year}`,
+		datetime_full: tryFormat(
+			{ dateStyle: 'full', timeStyle: 'short' },
+			() =>
+				`${date.toLocaleDateString(intlLocale, { ...baseDateOptions, dateStyle: 'full' })} ${date.toLocaleTimeString(intlLocale, baseDateOptions)}`
+		),
+		date_short: tryFormat({ dateStyle: 'short' }, () => `${month}/${day}/${shortYear}`),
+		date_long: tryFormat({ dateStyle: 'long' }, () =>
+			date.toLocaleDateString(intlLocale, { ...baseDateOptions, dateStyle: 'long' })
+		),
+		date_full: tryFormat({ dateStyle: 'full' }, () =>
+			date.toLocaleDateString(intlLocale, { ...baseDateOptions, dateStyle: 'full' })
+		),
+		date_ymd: `${year}-${month}-${day}`,
+		date_dmy: `${day}/${month}/${year}`,
+		date_mdy: `${month}/${day}/${year}`,
 		weekday_short: tryFormat({ weekday: 'short' }, () => ''),
 		weekday_long: tryFormat({ weekday: 'long' }, () => ''),
-		day: pad(day),
-		month: pad(month),
+		day,
+		month,
 		month_short: tryFormat({ month: 'short' }, () => String(month)),
 		month_long: tryFormat({ month: 'long' }, () => String(month)),
-		year: String(year),
+		year,
 	};
 }
 
@@ -678,13 +723,23 @@ function buildTaxSummary(
 	];
 }
 
+/**
+ * Builds payment rows and reflects generated cash tender/change back onto the
+ * passed totals object so templates have one totals-level source for change.
+ */
 function buildPayments(
 	rand: () => number,
 	scenarios: ResolvedScenarios,
+	mode: ReceiptOrderMeta['mode'],
 	grandTotal: number,
 	currency: string,
 	totals: ReceiptTotals
 ): ReceiptPayment[] {
+	if (mode === 'quote' || mode === 'kitchen') {
+		totals.paid_total = 0;
+		totals.change_total = 0;
+		return [];
+	}
 	if (grandTotal === 0) return [];
 	const methods = [
 		{ id: 'card', title: 'Card' },
@@ -702,11 +757,13 @@ function buildPayments(
 			payment.reference = `**** **** **** ${1000 + Math.floor(rand() * 8999)}`;
 		} else if (method.id === 'cash') {
 			payment.reference = `${currency} cash drawer`;
-			// Round tendered up to the nearest "round number" so change is non-zero,
-			// matching how cash gets handed over in real life.
-			const tendered = Math.ceil(amount / 5) * 5;
-			payment.tendered = round(tendered);
-			payment.change = round(tendered - amount);
+			if (amount > 0) {
+				// Round tendered up to the nearest "round number" so change is non-zero,
+				// matching how cash gets handed over in real life.
+				const tendered = Math.ceil(amount / 5) * 5;
+				payment.tendered = round(tendered);
+				payment.change = round(tendered - amount);
+			}
 		}
 		return payment;
 	};
@@ -748,16 +805,23 @@ function buildOrderMeta(
 	currency: string,
 	seed: number,
 	createdAt: Date,
-	locale: string
+	locale: string,
+	timeZone: string
 ): ReceiptOrderMeta {
 	const orderId = 1000 + (seed % 9000);
 	const mode = scenarios.refund
 		? 'refund'
 		: pickFrom(rand, ['sale', 'sale', 'sale', 'quote', 'kitchen', 'invoice'] as const);
 	const createdAtGmt = createdAt.toISOString().replace('T', ' ').slice(0, 19);
+	const baseDateOptions: Intl.DateTimeFormatOptions = {
+		timeZone,
+		calendar: 'gregory',
+		numberingSystem: 'latn',
+	};
 	const localeFormatted = (() => {
 		try {
 			return new Intl.DateTimeFormat(locale.replace(/_/g, '-'), {
+				...baseDateOptions,
 				dateStyle: 'medium',
 				timeStyle: 'short',
 			}).format(createdAt);
@@ -799,10 +863,15 @@ function buildFiscal(rand: () => number, meta: ReceiptOrderMeta): ReceiptFiscal 
 	};
 }
 
-function buildReceiptInfo(rand: () => number, locale: string): ReceiptInfo {
+function buildReceiptInfo(
+	rand: () => number,
+	locale: string,
+	timeZone: string,
+	printedAt: Date
+): ReceiptInfo {
 	return {
 		mode: pickFrom(rand, ['live', 'preview', 'gallery'] as const),
-		printed: buildDateObject(new Date(), locale),
+		printed: buildDateObject(printedAt, locale, timeZone),
 	};
 }
 
@@ -810,7 +879,8 @@ function buildOrder(
 	meta: ReceiptOrderMeta,
 	createdAt: Date,
 	scenarios: ResolvedScenarios,
-	locale: string
+	locale: string,
+	timeZone: string
 ): ReceiptOrder {
 	// Paid/completed timestamps trail creation for typical sales; refunds fire
 	// the same day; quotes/kitchen never reach those states so we leave the
@@ -824,9 +894,9 @@ function buildOrder(
 		number: meta.order_number,
 		currency: meta.currency,
 		customer_note: meta.customer_note ?? '',
-		created: buildDateObject(createdAt, locale),
-		paid: paidAt ? buildDateObject(paidAt, locale) : emptyDateObject(),
-		completed: completedAt ? buildDateObject(completedAt, locale) : emptyDateObject(),
+		created: buildDateObject(createdAt, locale, timeZone),
+		paid: paidAt ? buildDateObject(paidAt, locale, timeZone) : emptyDateObject(),
+		completed: completedAt ? buildDateObject(completedAt, locale, timeZone) : emptyDateObject(),
 	};
 }
 
