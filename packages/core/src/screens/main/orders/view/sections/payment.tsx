@@ -13,7 +13,10 @@ import { useDateFormat } from '../../../hooks/use-date-format';
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 function totalRefunded(order: OrderDocument) {
-	return (order.refunds || []).reduce((sum, refund) => sum + Math.abs(toNumber(refund.total)), 0);
+	return (order.refunds || []).reduce((sum, refund) => {
+		const value = 'amount' in refund ? (refund.amount ?? refund.total) : refund.total;
+		return sum + Math.abs(toNumber(value));
+	}, 0);
 }
 
 function KV({
@@ -43,7 +46,7 @@ export function PaymentSection({ order, last }: { order: OrderDocument; last?: b
 	const method = order.payment_method_title || order.payment_method;
 	const refunded = totalRefunded(order);
 
-	if (!method && !order.transaction_id && !order.date_paid && refunded === 0) {
+	if (!method && !order.transaction_id && !datePaid && refunded === 0) {
 		return null;
 	}
 

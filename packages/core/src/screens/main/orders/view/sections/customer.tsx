@@ -15,9 +15,6 @@ type Address = NonNullable<OrderDocument['billing']> | NonNullable<OrderDocument
 function addressKey(address?: Address) {
 	if (!address) return '';
 	return [
-		address.first_name,
-		address.last_name,
-		address.company,
 		address.address_1,
 		address.address_2,
 		address.city,
@@ -25,6 +22,7 @@ function addressKey(address?: Address) {
 		address.postcode,
 		address.country,
 	]
+		.map((value) => value?.trim().toLowerCase())
 		.filter(Boolean)
 		.join('|');
 }

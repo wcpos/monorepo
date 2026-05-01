@@ -31,6 +31,8 @@ const STATUS_LABEL_KEYS: Record<string, string> = {
 	failed: 'orders.status.failed',
 	cancelled: 'orders.status.cancelled',
 	trash: 'orders.status.trash',
+	'pos-open': 'orders.status.pos-open',
+	'pos-partial': 'orders.status.pos-partial',
 };
 
 const TONE_CLASSES: Record<Tone, { wrap: string; dot: string; text: string }> = {

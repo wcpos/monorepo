@@ -20,7 +20,9 @@ function getMetaValue(metaData: { key?: string; value?: unknown }[] | undefined,
 
 function totalRefunded(order: OrderDocument) {
 	return (order.refunds || []).reduce((sum, refund) => {
-		return sum + Math.abs(toNumber(refund.total));
+		const value = 'amount' in refund ? (refund.amount ?? refund.total) : refund.total;
+		const total = parseFloat(String(value ?? '0'));
+		return Number.isFinite(total) ? sum + Math.abs(total) : sum;
 	}, 0);
 }
 
@@ -56,7 +58,7 @@ export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
 				{order.created_via ? (
 					<View className="bg-muted ml-1 rounded px-1.5 py-0.5">
 						<Text className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
-							via {order.created_via}
+							{t('orders.via', { defaultValue: 'via' })} {order.created_via}
 						</Text>
 					</View>
 				) : null}

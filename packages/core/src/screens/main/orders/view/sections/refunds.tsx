@@ -193,8 +193,7 @@ function RefundsDetail({
 			title={t('orders.refunds', { defaultValue: 'Refunds' })}
 			right={
 				<Text className="text-muted-foreground text-xs tabular-nums">
-					{refunds.length} {t('orders.refund').toLowerCase()}
-					{refunds.length === 1 ? '' : 's'} · {format(-total)}
+					{t('orders.refund_count', { count: refunds.length })} · {format(-total)}
 				</Text>
 			}
 		>
