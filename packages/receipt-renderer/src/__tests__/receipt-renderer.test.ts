@@ -179,6 +179,40 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(decoded).toContain('Widget A');
 	});
 
+	it('normalizes ESC/POS output to start with printer reset', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><align mode="center"><bold><size width="2" height="2">Store</size></bold></align></receipt>',
+			{},
+			{ columns: 48 }
+		);
+
+		expect(Array.from(bytes.slice(0, 2))).toEqual([0x1b, 0x40]);
+	});
+
+	it('encodes Japanese thermal text without question-mark substitutions', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>東京コーヒー商會</text><row><col width="24">抹茶ラテ</col><col width="24" align="right">100</col></row></receipt>',
+			{},
+			{ columns: 48, enableCp932: true }
+		);
+
+		expect(Array.from(bytes)).not.toContain(0x3f);
+		expect(Array.from(bytes)).toEqual(expect.arrayContaining([0x93, 0x8c, 0x96, 0x95]));
+	});
+
+	it('requires explicit CP932 opt-in for Japanese thermal text', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>東京</text></receipt>',
+			{},
+			{ columns: 48 }
+		);
+		const kanjiModeIndex = Array.from(bytes).findIndex(
+			(byte, index, all) => byte === 0x1c && all[index + 1] === 0x26
+		);
+
+		expect(kanjiModeIndex).toBe(-1);
+	});
+
 	it('renders existing ASTs to ESC/POS bytes', () => {
 		const ast = parseXml('<receipt><text>Hello ESC/POS</text></receipt>');
 		const bytes = renderEscpos(ast);

@@ -1,0 +1,167 @@
+import { useMemo, useState } from 'react';
+
+import { decodeEscposBytes } from '../../lib/escpos-decoder';
+import { bytesToBase64 } from '../../studio-core';
+import { printRawTcp } from '../../studio-api';
+
+import type { StudioRenderResult } from '../../studio-core';
+
+interface PrintSectionProps {
+	rendered: StudioRenderResult | null;
+	onOpenPrintDialog: () => void;
+	onError: (message: string | null) => void;
+}
+
+interface LastResult {
+	kind: 'success' | 'error';
+	message: string;
+}
+
+const TEST_CONNECTION_BYTES = new Uint8Array([0x1b, 0x40]); // ESC @ — init printer
+
+export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSectionProps) {
+	const [host, setHost] = useState('127.0.0.1');
+	const [port, setPort] = useState('9100');
+	const [lastResult, setLastResult] = useState<LastResult | null>(null);
+	const [sending, setSending] = useState(false);
+	const [showInspector, setShowInspector] = useState(false);
+
+	const isThermal = rendered?.kind === 'thermal';
+
+	const decodedSegments = useMemo(() => {
+		if (rendered?.kind !== 'thermal') return [];
+		return decodeEscposBytes(rendered.escposBytes);
+	}, [rendered]);
+
+	function getConnectionTarget() {
+		const normalizedHost = host.trim();
+		const normalizedPort = port.trim();
+		const parsedPort = Number.parseInt(normalizedPort, 10);
+		if (!normalizedHost) throw new Error('Printer host is required');
+		if (
+			!/^\d+$/.test(normalizedPort) ||
+			!Number.isInteger(parsedPort) ||
+			parsedPort < 1 ||
+			parsedPort > 65535
+		) {
+			throw new Error('Printer port must be between 1 and 65535');
+		}
+		return { host: normalizedHost, port: parsedPort };
+	}
+
+	async function sendToPrinter() {
+		if (!rendered || rendered.kind !== 'thermal') return;
+		setSending(true);
+		onError(null);
+		const start = performance.now();
+		try {
+			const target = getConnectionTarget();
+			const result = await printRawTcp({
+				...target,
+				data: rendered.escposBase64,
+			});
+			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
+			setLastResult({
+				kind: 'success',
+				message: `${result.bytesWritten} bytes · ${elapsed}s · ${target.host}:${target.port}`,
+			});
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			setLastResult({ kind: 'error', message });
+		} finally {
+			setSending(false);
+		}
+	}
+
+	async function testConnection() {
+		setSending(true);
+		onError(null);
+		try {
+			const target = getConnectionTarget();
+			const result = await printRawTcp({
+				...target,
+				data: bytesToBase64(TEST_CONNECTION_BYTES),
+			});
+			setLastResult({
+				kind: 'success',
+				message: `connection OK (${result.bytesWritten} bytes)`,
+			});
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			setLastResult({ kind: 'error', message });
+		} finally {
+			setSending(false);
+		}
+	}
+
+	return (
+		<div className="print-section">
+			<div className="button-row">
+				<button type="button" onClick={onOpenPrintDialog} disabled={!rendered}>
+					System print
+				</button>
+			</div>
+			<div className="row">
+				<label htmlFor="print-host">Host</label>
+				<input
+					id="print-host"
+					type="text"
+					value={host}
+					onChange={(event) => setHost(event.target.value)}
+					disabled={!isThermal}
+				/>
+			</div>
+			<div className="row">
+				<label htmlFor="print-port">Port</label>
+				<input
+					id="print-port"
+					type="text"
+					value={port}
+					onChange={(event) => setPort(event.target.value)}
+					disabled={!isThermal}
+				/>
+			</div>
+			<div className="button-row">
+				<button type="button" onClick={testConnection} disabled={!isThermal || sending}>
+					Test connection
+				</button>
+				<button
+					type="button"
+					className="primary"
+					onClick={sendToPrinter}
+					disabled={!isThermal || sending}
+				>
+					{sending ? 'Sending…' : 'Send to printer'}
+				</button>
+			</div>
+			{lastResult ? <p className={`last-result ${lastResult.kind}`}>{lastResult.message}</p> : null}
+			{isThermal ? (
+				<details
+					className="inspect-bytes"
+					open={showInspector}
+					onToggle={(event) => setShowInspector((event.target as HTMLDetailsElement).open)}
+				>
+					<summary>Inspect bytes</summary>
+					<div className="byte-table" role="table">
+						<div className="col-h" role="columnheader">
+							hex
+						</div>
+						<div className="col-h" role="columnheader">
+							ascii
+						</div>
+						<div className="col-h" role="columnheader">
+							decoded
+						</div>
+						{decodedSegments.map((segment) => (
+							<div key={segment.offset} className="byte-row" style={{ display: 'contents' }}>
+								<div className="hex">{segment.hex}</div>
+								<div className="ascii">{segment.ascii}</div>
+								<div className="decoded">{segment.decoded}</div>
+							</div>
+						))}
+					</div>
+				</details>
+			) : null}
+		</div>
+	);
+}

@@ -6,19 +6,39 @@ import { pathToFileURL } from 'node:url';
 
 import { chromium } from 'playwright';
 
-import { type ReceiptFixture, renderStudioTemplate } from '../src/studio-core';
+import { createRandomReceipt } from '../src/randomizer';
+import { renderStudioTemplate } from '../src/studio-core';
 import { listBundledTemplates } from '../src/template-loader';
-import { fixturesDir, galleryPreviewOutputDir, galleryTemplatesDir } from './studio-paths';
+import { galleryPreviewOutputDir, galleryTemplatesDir } from './studio-paths';
 
 const checkMode = process.argv.includes('--check');
-const fixturePath = path.join(fixturesDir, 'gallery-default-receipt.json');
+// Stable seed + zeroed edge cases keeps the gallery previews deterministic across runs.
+const galleryFixture = (() => {
+	const random = createRandomReceipt({
+		seed: 'gallery-default-receipt',
+		overrides: {
+			emptyCart: false,
+			refund: false,
+			rtl: false,
+			multicurrency: false,
+			multiPayment: false,
+			fiscal: false,
+			longNames: false,
+			hasDiscounts: false,
+			hasFees: false,
+			hasShipping: false,
+			cartSize: 3,
+		},
+	});
+	return { ...random.data, id: 'gallery-default-receipt' };
+})();
 
 function pageHtml(renderedHtml: string): string {
 	return `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#eef2f6;padding:24px;width:360px;box-sizing:border-box}.preview{background:white;box-shadow:0 12px 32px rgba(15,23,42,.18);border-radius:12px;overflow:hidden;min-height:420px;display:flex;align-items:flex-start;justify-content:center;padding:16px;box-sizing:border-box}table{max-width:100%}</style></head><body><main class="preview">${renderedHtml}</main></body></html>`;
 }
 
 async function main() {
-	const fixture = JSON.parse(await fs.readFile(fixturePath, 'utf8')) as ReceiptFixture;
+	const fixture = galleryFixture;
 	const templates = await listBundledTemplates({
 		templatesDir: pathToFileURL(galleryTemplatesDir),
 	});

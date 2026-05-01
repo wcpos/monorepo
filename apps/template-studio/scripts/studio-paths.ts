@@ -24,5 +24,4 @@ export const galleryTemplatesDir =
 	process.env.WCPOS_GALLERY_TEMPLATES_DIR ?? path.join(wooCommercePosRoot, 'templates/gallery');
 export const galleryPreviewOutputDir =
 	process.env.WCPOS_GALLERY_PREVIEW_DIR ?? path.join(studioRoot, 'gallery-previews');
-export const fixturesDir = path.join(studioRoot, 'fixtures');
 export const curatedSnapshotDir = path.join(studioRoot, 'snapshots/curated');

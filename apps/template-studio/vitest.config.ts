@@ -8,6 +8,9 @@ export default defineConfig({
 			'@wcpos/receipt-renderer': fileURLToPath(
 				new URL('../../packages/receipt-renderer/src/index.ts', import.meta.url)
 			),
+			'@wcpos/printer/encoder': fileURLToPath(
+				new URL('../../packages/printer/src/encoder/index.ts', import.meta.url)
+			),
 		},
 	},
 	test: {

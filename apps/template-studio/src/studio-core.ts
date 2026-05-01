@@ -1,8 +1,4 @@
-import {
-	encodeThermalTemplate,
-	renderLogiclessTemplate,
-	renderThermalPreview,
-} from '@wcpos/receipt-renderer';
+import { renderForStudio } from '@wcpos/printer/encoder';
 
 export type TemplateEngine = 'logicless' | 'thermal';
 export type TemplateSource = 'bundled-gallery' | 'wp-env';
@@ -28,6 +24,9 @@ export interface RenderStudioTemplateInput {
 	template: StudioTemplate;
 	fixture: ReceiptFixture;
 	paperWidth: PaperWidth;
+	/** Optional thermal encoder overrides surfaced through the WooCommerce panel. */
+	printerModel?: string;
+	language?: 'esc-pos' | 'star-prnt' | 'star-line';
 }
 
 export type StudioRenderResult =
@@ -35,6 +34,7 @@ export type StudioRenderResult =
 			kind: 'logicless';
 			html: string;
 			diagnosticHtml?: string;
+			data: Record<string, any>;
 	  }
 	| {
 			kind: 'thermal';
@@ -43,6 +43,7 @@ export type StudioRenderResult =
 			escposBase64: string;
 			escposHex: string;
 			escposAscii: string;
+			data: Record<string, any>;
 	  };
 
 export interface StudioSnapshotViewModel {
@@ -63,26 +64,59 @@ export function selectVisibleTemplate(
 	);
 }
 
+/**
+ * Render a Studio template through the canonical pipeline:
+ * `mapReceiptData → formatReceiptData → renderLogiclessTemplate / renderThermalPreview / encodeThermalTemplate`.
+ *
+ * Sanitization is on (default) for both engines, matching production.
+ */
 export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRenderResult {
-	if (input.template.engine === 'logicless') {
+	const { template, fixture, paperWidth, printerModel, language } = input;
+
+	if (template.engine === 'logicless') {
+		const result = renderForStudio({
+			template: template.content,
+			engine: 'logicless',
+			data: fixture,
+		});
 		return {
 			kind: 'logicless',
-			html: renderLogiclessTemplate(input.template.content, input.fixture),
-			diagnosticHtml: input.template.previewHtml,
+			html: result.html,
+			diagnosticHtml: template.previewHtml,
+			data: result.data,
 		};
 	}
 
-	const columns = paperWidthToColumns(input.template.paperWidth ?? input.paperWidth);
-	const bytes = encodeThermalTemplate(input.template.content, input.fixture, { columns });
-	const debug = bytesToDebugOutput(bytes);
+	const columns = paperWidthToColumns(template.paperWidth ?? paperWidth);
+	const encodeOptions: {
+		columns: number;
+		printerModel?: string;
+		language?: 'esc-pos' | 'star-prnt' | 'star-line';
+		enableCp932?: boolean;
+	} = { columns };
+	if (printerModel) encodeOptions.printerModel = printerModel;
+	if (language) encodeOptions.language = language;
+	if ((language ?? 'esc-pos') === 'esc-pos') encodeOptions.enableCp932 = true;
+	const result = renderForStudio({
+		template: template.content,
+		engine: 'thermal',
+		data: fixture,
+		encodeOptions,
+	});
 
+	if (result.engine !== 'thermal') {
+		throw new Error('renderForStudio returned unexpected engine for thermal template');
+	}
+
+	const debug = bytesToDebugOutput(result.bytes);
 	return {
 		kind: 'thermal',
-		html: renderThermalPreview(input.template.content, input.fixture),
-		escposBytes: bytes,
-		escposBase64: bytesToBase64(bytes),
+		html: result.html,
+		escposBytes: result.bytes,
+		escposBase64: bytesToBase64(result.bytes),
 		escposHex: debug.hex,
 		escposAscii: debug.ascii,
+		data: result.data,
 	};
 }
 
