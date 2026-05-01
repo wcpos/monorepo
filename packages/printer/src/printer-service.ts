@@ -1,4 +1,5 @@
 /// <reference path="./types/receipt-printer-encoder.d.ts" />
+import ReceiptPrinterEncoderImport from '@point-of-sale/receipt-printer-encoder';
 import PQueue from 'p-queue';
 
 import { encodeReceipt } from './encoder/encode-receipt';
@@ -9,6 +10,16 @@ import { SystemPrintAdapter } from './transport/system-print-adapter';
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
 import type { ReceiptData } from './encoder/types';
 import type { PrinterProfile, PrinterTransport } from './types';
+
+// Handle both ESM default-exported and CJS direct-exported shapes. The encoder
+// package's CJS build uses `module.exports = Class` (no `.default`), and a
+// dynamic `await import(...).default` returned undefined on Hermes/Metro,
+// causing `new undefined()` → "Cannot read property 'prototype' of undefined".
+// A static import goes through Babel's `_interopRequireDefault`; the `??` fallback
+// covers any environment where the import returns the class directly.
+const ReceiptPrinterEncoder =
+	(ReceiptPrinterEncoderImport as unknown as { default?: typeof ReceiptPrinterEncoderImport })
+		?.default ?? ReceiptPrinterEncoderImport;
 
 /** Cache key that captures config-relevant fields so stale transports are evicted. */
 function transportKey(profile: PrinterProfile): string {
@@ -178,10 +189,6 @@ export class PrinterService {
 
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
-
-			// Import encoder dynamically to keep the test print self-contained
-			const ReceiptPrinterEncoder = (await import('@point-of-sale/receipt-printer-encoder'))
-				.default;
 
 			const encoder = new ReceiptPrinterEncoder({
 				language: profile.language,
