@@ -16,7 +16,9 @@ export interface SectionMeta {
 }
 
 export const SECTIONS: SectionMeta[] = [
-	{ key: 'meta', label: 'Order', path: ['meta'], kind: 'object' },
+	{ key: 'receipt', label: 'Receipt', path: ['receipt'], kind: 'object' },
+	{ key: 'order', label: 'Order', path: ['order'], kind: 'object' },
+	{ key: 'meta', label: 'Meta', path: ['meta'], kind: 'object' },
 	{ key: 'store', label: 'Store', path: ['store'], kind: 'object' },
 	{ key: 'cashier', label: 'Cashier', path: ['cashier'], kind: 'object' },
 	{ key: 'customer', label: 'Customer', path: ['customer'], kind: 'object' },
@@ -34,17 +36,19 @@ export const SECTIONS: SectionMeta[] = [
 		path: ['presentation_hints'],
 		kind: 'object',
 	},
+	{ key: 'i18n', label: 'i18n', path: ['i18n'], kind: 'object' },
 ];
 
 /** Path strings → enum option list. Used by leaf renderer to show a select. */
 export const ENUM_OPTIONS: Record<string, readonly string[]> = {
 	'meta.mode': ['sale', 'refund', 'quote', 'kitchen', 'packing-slip', 'gift-receipt', 'invoice'],
-	'presentation_hints.display_tax': ['incl', 'excl', 'hidden'],
+	'receipt.mode': ['live', 'preview', 'gallery'],
+	'presentation_hints.display_tax': ['incl', 'excl', 'hidden', 'itemized', 'single'],
 	'presentation_hints.rounding_mode': ['per-line', 'per-total'],
 };
 
 /** Hidden paths — not rendered in tree (system fields). */
-export const HIDDEN_PATHS = new Set<string>(['id']);
+export const HIDDEN_PATHS = new Set<string>(['id', 'meta.schema_version']);
 
 const DEFAULT_LINE = {
 	key: 'new-line',

@@ -29,6 +29,10 @@ export type {
 	ReceiptPayment,
 	ReceiptFiscal,
 	ReceiptPresentationHints,
+	ReceiptDate,
+	ReceiptInfo,
+	ReceiptOrder,
+	ReceiptI18n,
 } from './types';
 export {
 	ReceiptDataSchema,
@@ -47,4 +51,8 @@ export {
 	ReceiptFiscalSchema,
 	ReceiptPresentationHintsSchema,
 	ReceiptDisplayTaxSchema,
+	ReceiptDateSchema,
+	ReceiptInfoSchema,
+	ReceiptOrderSchema,
+	ReceiptI18nSchema,
 } from './schema';

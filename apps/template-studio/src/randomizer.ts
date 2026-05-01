@@ -14,10 +14,14 @@ import type {
 	ReceiptCashier,
 	ReceiptCustomer,
 	ReceiptData,
+	ReceiptDate,
 	ReceiptDiscount,
 	ReceiptFee,
 	ReceiptFiscal,
+	ReceiptI18n,
+	ReceiptInfo,
 	ReceiptLineItem,
+	ReceiptOrder,
 	ReceiptOrderMeta,
 	ReceiptPayment,
 	ReceiptPresentationHints,
@@ -340,7 +344,7 @@ function buildReceiptData(
 		: pool.currency;
 	const taxRate = pickFrom(rand, [0, 5, 7, 10, 19, 20, 21]);
 	const pricesEnteredWithTax = rand() < 0.6;
-	const displayTax = pickFrom(rand, ['incl', 'excl', 'hidden'] as const);
+	const displayTax = pickFrom(rand, ['incl', 'excl', 'hidden', 'itemized', 'single'] as const);
 	const roundingMode = pickFrom(rand, ['per-line', 'per-total'] as const);
 	const refundSign = scenarios.refund ? -1 : 1;
 
@@ -359,9 +363,10 @@ function buildReceiptData(
 
 	const totals = computeTotals(lines, fees, shipping, discounts);
 	const taxSummary = buildTaxSummary(lines, fees, shipping, discounts, taxRate, pool.taxLabel);
-	const payments = buildPayments(rand, scenarios, totals.grand_total_incl, orderCurrency);
 
-	const orderMeta = buildOrderMeta(rand, scenarios, orderCurrency, seed);
+	const orderCreated = pickOrderDate(rand, seed);
+	const orderMeta = buildOrderMeta(rand, scenarios, orderCurrency, seed, orderCreated, pool.locale);
+	const payments = buildPayments(rand, scenarios, totals.grand_total_incl, orderCurrency, totals);
 	const presentationHints: ReceiptPresentationHints = {
 		display_tax: displayTax,
 		prices_entered_with_tax: pricesEnteredWithTax,
@@ -369,9 +374,14 @@ function buildReceiptData(
 		locale: pool.locale,
 	};
 	const fiscal: ReceiptFiscal = scenarios.fiscal ? buildFiscal(rand, orderMeta) : {};
+	const receiptInfo = buildReceiptInfo(rand, pool.locale);
+	const order = buildOrder(orderMeta, orderCreated, scenarios, pool.locale);
+	const i18n = buildI18nLabels();
 
 	return {
 		id: `random-${formatSeed(seed)}`,
+		receipt: receiptInfo,
+		order,
 		meta: orderMeta,
 		store,
 		cashier,
@@ -385,16 +395,92 @@ function buildReceiptData(
 		payments,
 		fiscal,
 		presentation_hints: presentationHints,
+		i18n,
 	};
 }
 
+/* ─────────────────────────── Date helpers ─────────────────────────── */
+
+/**
+ * Mirror of PHP `Receipt_Date_Formatter::from_timestamp()` — produces the same
+ * 19 keys with comparable values from a JS Date. Templates can choose
+ * whichever variant they need without diverging from the live receipt.
+ */
+function buildDateObject(date: Date, locale: string): ReceiptDate {
+	const intlLocale = locale.replace(/_/g, '-');
+	const tryFormat = (options: Intl.DateTimeFormatOptions, fallback: () => string): string => {
+		try {
+			return new Intl.DateTimeFormat(intlLocale, options).format(date);
+		} catch {
+			return fallback();
+		}
+	};
+	const pad = (value: number, length = 2) => String(value).padStart(length, '0');
+	const year = date.getFullYear();
+	const month = date.getMonth() + 1;
+	const day = date.getDate();
+
+	return {
+		datetime: tryFormat(
+			{ dateStyle: 'medium', timeStyle: 'short' },
+			() => `${date.toDateString()} ${date.toLocaleTimeString(intlLocale)}`
+		),
+		date: tryFormat({ dateStyle: 'medium' }, () => date.toDateString()),
+		time: tryFormat({ timeStyle: 'short' }, () => date.toLocaleTimeString(intlLocale)),
+		datetime_short: tryFormat(
+			{ dateStyle: 'short', timeStyle: 'short' },
+			() => `${pad(month)}/${pad(day)}/${String(year).slice(-2)}`
+		),
+		datetime_long: tryFormat({ dateStyle: 'long', timeStyle: 'short' }, () => date.toString()),
+		datetime_full: tryFormat({ dateStyle: 'full', timeStyle: 'short' }, () => date.toString()),
+		date_short: tryFormat(
+			{ dateStyle: 'short' },
+			() => `${pad(month)}/${pad(day)}/${String(year).slice(-2)}`
+		),
+		date_long: tryFormat({ dateStyle: 'long' }, () => date.toDateString()),
+		date_full: tryFormat({ dateStyle: 'full' }, () => date.toDateString()),
+		date_ymd: `${year}-${pad(month)}-${pad(day)}`,
+		date_dmy: `${pad(day)}/${pad(month)}/${year}`,
+		date_mdy: `${pad(month)}/${pad(day)}/${year}`,
+		weekday_short: tryFormat({ weekday: 'short' }, () => ''),
+		weekday_long: tryFormat({ weekday: 'long' }, () => ''),
+		day: pad(day),
+		month: pad(month),
+		month_short: tryFormat({ month: 'short' }, () => String(month)),
+		month_long: tryFormat({ month: 'long' }, () => String(month)),
+		year: String(year),
+	};
+}
+
+function pickOrderDate(rand: () => number, seed: number): Date {
+	// Stable per-seed: same seed always produces the same created date.
+	const offsetDays = ((seed >>> 0) % 730) + Math.floor(rand() * 5);
+	const base = Date.UTC(2025, 0, 1) + offsetDays * 86_400_000;
+	const hour = Math.floor(rand() * 14) + 8;
+	const minute = Math.floor(rand() * 60);
+	return new Date(base + hour * 3_600_000 + minute * 60_000);
+}
+
 function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
+	const hasHours = rand() < 0.7;
+	const openingDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+	const openingInline = openingDays.map((d) => `${d} 9:00–18:00`).join(', ');
+	const openingVertical = openingDays.map((d) => `${d}: 9:00–18:00`).join('\n');
 	return {
 		name: pickFrom(rand, pool.storeNames),
 		address_lines: [pickFrom(rand, pool.streets), pickFrom(rand, pool.cities)],
 		tax_id: rand() < 0.7 ? `TAX-${Math.floor(rand() * 1_000_000)}` : undefined,
 		phone: rand() < 0.6 ? `+34 555 ${Math.floor(rand() * 9000 + 1000)}` : undefined,
 		email: rand() < 0.5 ? 'hello@example.com' : undefined,
+		logo: rand() < 0.3 ? 'https://example.com/logo.png' : null,
+		opening_hours: hasHours ? 'Mon–Sat 9:00–18:00' : null,
+		opening_hours_vertical: hasHours ? openingVertical : null,
+		opening_hours_inline: hasHours ? openingInline : null,
+		opening_hours_notes: rand() < 0.2 ? 'Closed on public holidays' : null,
+		personal_notes: rand() < 0.25 ? 'Follow us @example' : null,
+		policies_and_conditions:
+			rand() < 0.4 ? 'Returns accepted within 30 days with this receipt.' : null,
+		footer_imprint: rand() < 0.2 ? 'VAT EU0000000000 · Reg. 12345' : null,
 	};
 }
 
@@ -445,6 +531,9 @@ function buildLineItems(
 			sku: rand() < 0.7 ? `SKU-${Math.floor(rand() * 9999)}` : undefined,
 			name,
 			qty,
+			unit_subtotal: unitInclTax,
+			unit_subtotal_incl: unitInclTax,
+			unit_subtotal_excl: unitExclTax,
 			unit_price: unitInclTax,
 			unit_price_incl: unitInclTax,
 			unit_price_excl: unitExclTax,
@@ -508,8 +597,17 @@ function buildDiscounts(
 	const count = 1 + Math.floor(rand() * 2);
 	return Array.from({ length: count }, () => {
 		const total = round(rand() * 6 + 1) * refundSign;
+		const code = pickFrom(rand, codes);
+		const extra =
+			rand() < 0.4
+				? pickFrom(
+						rand,
+						codes.filter((c) => c !== code)
+					)
+				: null;
 		return {
-			label: pickFrom(rand, codes),
+			label: code,
+			codes: extra ? `${code}, ${extra}` : code,
 			total: -total,
 			total_incl: -total,
 			total_excl: taxableExcl(-total, taxRate),
@@ -584,7 +682,8 @@ function buildPayments(
 	rand: () => number,
 	scenarios: ResolvedScenarios,
 	grandTotal: number,
-	currency: string
+	currency: string,
+	totals: ReceiptTotals
 ): ReceiptPayment[] {
 	if (grandTotal === 0) return [];
 	const methods = [
@@ -593,32 +692,52 @@ function buildPayments(
 		{ id: 'wallet', title: 'Wallet' },
 		{ id: 'bank_transfer', title: 'Bank transfer' },
 	] as const;
+	const buildOne = (method: (typeof methods)[number], amount: number): ReceiptPayment => {
+		const payment: ReceiptPayment = {
+			method_id: method.id,
+			method_title: method.title,
+			amount,
+		};
+		if (method.id === 'card') {
+			payment.reference = `**** **** **** ${1000 + Math.floor(rand() * 8999)}`;
+		} else if (method.id === 'cash') {
+			payment.reference = `${currency} cash drawer`;
+			// Round tendered up to the nearest "round number" so change is non-zero,
+			// matching how cash gets handed over in real life.
+			const tendered = Math.ceil(amount / 5) * 5;
+			payment.tendered = round(tendered);
+			payment.change = round(tendered - amount);
+		}
+		return payment;
+	};
 	if (!scenarios.multiPayment) {
 		const method = pickFrom(rand, methods);
-		return [
-			{
-				method_id: method.id,
-				method_title: method.title,
-				amount: grandTotal,
-				reference:
-					method.id === 'card' ? `**** **** **** ${1000 + Math.floor(rand() * 8999)}` : undefined,
-			},
-		];
+		const payment = buildOne(method, grandTotal);
+		// Reflect cash change at the totals level so templates have a single source.
+		if (method.id === 'cash' && payment.change !== undefined) {
+			totals.paid_total = payment.tendered ?? grandTotal;
+			totals.change_total = payment.change;
+		}
+		return [payment];
 	}
 	const splits = 2 + Math.floor(rand() * 2);
 	const result: ReceiptPayment[] = [];
 	let remaining = grandTotal;
+	let totalTendered = 0;
+	let totalChange = 0;
 	for (let index = 0; index < splits; index += 1) {
 		const isLast = index === splits - 1;
 		const amount = isLast ? round(remaining) : round(remaining * (0.3 + rand() * 0.4));
 		remaining = round(remaining - amount);
 		const method = pickFrom(rand, methods);
-		result.push({
-			method_id: method.id,
-			method_title: method.title,
-			amount,
-			reference: method.id === 'cash' ? `${currency} cash drawer` : undefined,
-		});
+		const payment = buildOne(method, amount);
+		totalTendered += payment.tendered ?? amount;
+		totalChange += payment.change ?? 0;
+		result.push(payment);
+	}
+	if (totalChange > 0) {
+		totals.paid_total = round(totalTendered);
+		totals.change_total = round(totalChange);
 	}
 	return result;
 }
@@ -627,30 +746,181 @@ function buildOrderMeta(
 	rand: () => number,
 	scenarios: ResolvedScenarios,
 	currency: string,
-	seed: number
+	seed: number,
+	createdAt: Date,
+	locale: string
 ): ReceiptOrderMeta {
 	const orderId = 1000 + (seed % 9000);
 	const mode = scenarios.refund
 		? 'refund'
 		: pickFrom(rand, ['sale', 'sale', 'sale', 'quote', 'kitchen', 'invoice'] as const);
+	const createdAtGmt = createdAt.toISOString().replace('T', ' ').slice(0, 19);
+	const localeFormatted = (() => {
+		try {
+			return new Intl.DateTimeFormat(locale.replace(/_/g, '-'), {
+				dateStyle: 'medium',
+				timeStyle: 'short',
+			}).format(createdAt);
+		} catch {
+			return createdAtGmt;
+		}
+	})();
 	return {
-		schema_version: 1,
+		schema_version: '1.2.0',
 		mode,
-		created_at_gmt: new Date(Date.UTC(2025, 0, 1 + Math.floor(rand() * 730))).toISOString(),
+		created_at_gmt: createdAtGmt,
+		created_at_local: localeFormatted,
 		order_id: orderId,
 		order_number: `${orderId}`,
 		currency,
+		customer_note:
+			rand() < 0.25
+				? pickFrom(rand, ['Please gift wrap', 'Leave at front desk', 'Call on arrival'])
+				: '',
 	};
 }
 
 function buildFiscal(rand: () => number, meta: ReceiptOrderMeta): ReceiptFiscal {
+	const isReprint = rand() < 0.2;
+	const hash = formatSeed(seedFromRand(rand)) + formatSeed(seedFromRand(rand));
 	return {
 		immutable_id: `IMM-${formatSeed(seedFromRand(rand))}-${meta.order_id}`,
 		receipt_number: `R-${meta.order_number}-${formatSeed(seedFromRand(rand))}`,
 		sequence: meta.order_id,
-		hash: formatSeed(seedFromRand(rand)) + formatSeed(seedFromRand(rand)),
+		hash,
+		signature_excerpt: hash.slice(0, 8).toUpperCase(),
 		qr_payload: `wcpos://receipt/${meta.order_number}/${formatSeed(seedFromRand(rand))}`,
 		tax_agency_code: 'AEAT',
 		signed_at: meta.created_at_gmt,
+		document_label: pickFrom(rand, ['Tax Invoice', 'Receipt', 'Fiscal Receipt'] as const),
+		is_reprint: isReprint,
+		reprint_count: isReprint ? 1 + Math.floor(rand() * 3) : 0,
+		extra_fields: {},
+	};
+}
+
+function buildReceiptInfo(rand: () => number, locale: string): ReceiptInfo {
+	return {
+		mode: pickFrom(rand, ['live', 'preview', 'gallery'] as const),
+		printed: buildDateObject(new Date(), locale),
+	};
+}
+
+function buildOrder(
+	meta: ReceiptOrderMeta,
+	createdAt: Date,
+	scenarios: ResolvedScenarios,
+	locale: string
+): ReceiptOrder {
+	// Paid/completed timestamps trail creation for typical sales; refunds fire
+	// the same day; quotes/kitchen never reach those states so we leave the
+	// dates empty (matching how PHP returns Receipt_Date_Formatter::empty()).
+	const isCompleted = meta.mode === 'sale' || meta.mode === 'invoice' || meta.mode === 'refund';
+	const paidAt = isCompleted ? new Date(createdAt.getTime() + 60_000) : null;
+	const completedAt = isCompleted ? new Date(createdAt.getTime() + 5 * 60_000) : null;
+	void scenarios;
+	return {
+		id: meta.order_id,
+		number: meta.order_number,
+		currency: meta.currency,
+		customer_note: meta.customer_note ?? '',
+		created: buildDateObject(createdAt, locale),
+		paid: paidAt ? buildDateObject(paidAt, locale) : emptyDateObject(),
+		completed: completedAt ? buildDateObject(completedAt, locale) : emptyDateObject(),
+	};
+}
+
+function emptyDateObject(): ReceiptDate {
+	return {
+		datetime: '',
+		date: '',
+		time: '',
+		datetime_short: '',
+		datetime_long: '',
+		datetime_full: '',
+		date_short: '',
+		date_long: '',
+		date_full: '',
+		date_ymd: '',
+		date_dmy: '',
+		date_mdy: '',
+		weekday_short: '',
+		weekday_long: '',
+		day: '',
+		month: '',
+		month_short: '',
+		month_long: '',
+		year: '',
+	};
+}
+
+/**
+ * English defaults mirroring `Receipt_I18n_Labels::get_labels()`. Designers see
+ * the same key set the PHP builder emits; the catchall in the schema lets
+ * extensions add more without breaking validation.
+ */
+function buildI18nLabels(): ReceiptI18n {
+	return {
+		order: 'Order',
+		date: 'Date',
+		invoice_no: 'Invoice No.',
+		reference: 'Reference',
+		cashier: 'Cashier',
+		customer: 'Customer',
+		customer_tax_id: 'Customer Tax ID',
+		prepared_for: 'Prepared For',
+		processed_by: 'Processed by',
+		bill_to: 'Bill To',
+		ship_to: 'Ship To',
+		billing_address: 'Billing Address',
+		item: 'Item',
+		sku: 'SKU',
+		qty: 'Qty',
+		unit_price: 'Unit Price',
+		unit_excl: 'Unit (excl.)',
+		total_excl: 'Total (excl.)',
+		discount: 'Discount',
+		packed: 'Packed',
+		subtotal: 'Subtotal',
+		subtotal_excl_tax: 'Subtotal (excl. tax)',
+		total: 'Total',
+		total_tax: 'Total Tax',
+		grand_total_incl_tax: 'Grand Total (incl. tax)',
+		tax: 'Tax',
+		paid: 'Paid',
+		tendered: 'Tendered',
+		change: 'Change',
+		tax_summary: 'Tax Summary',
+		taxable_excl: 'Taxable (excl.)',
+		tax_amount: 'Tax Amount',
+		taxable_incl: 'Taxable (incl.)',
+		invoice: 'Invoice',
+		tax_invoice: 'Tax Invoice',
+		quote: 'Quote',
+		receipt: 'Receipt',
+		gift_receipt: 'Gift Receipt',
+		credit_note: 'Credit Note',
+		packing_slip: 'Packing Slip',
+		returned_items: 'Returned Items',
+		amount: 'Amount',
+		total_refunded: 'Total Refunded',
+		customer_note: 'Customer Note',
+		terms_and_conditions: 'Terms & Conditions',
+		a_message_for_you: 'A message for you',
+		thank_you: 'Thank you!',
+		thank_you_purchase: 'Thank you for your purchase!',
+		thank_you_shopping: 'Thank you for shopping with us!',
+		thank_you_business: 'Thank you for your business.',
+		tax_invoice_retain: 'This is a tax invoice. Please retain for your records.',
+		gift_return_policy: 'Items may be returned or exchanged within 30 days with this receipt.',
+		quote_validity:
+			'This quote is valid for 30 days from the date of issue. Prices are subject to change after the validity period. This is not a receipt or confirmation of purchase.',
+		quote_not_receipt: 'This is a quote, not a receipt',
+		return_retain_receipt: 'Please retain this receipt for your records.',
+		kitchen: 'KITCHEN',
+		signature: 'Signature',
+		document_type: 'Document Type',
+		copy: 'Copy',
+		copy_number: 'Copy No.',
 	};
 }

@@ -4,13 +4,56 @@
  * Single source of truth for the ReceiptData contract. TypeScript types in
  * `./types.ts` are derived from these schemas via `z.infer<>`.
  *
- * Mirrors PHP `Receipt_Data_Builder` output and the `receipt_data` contract
- * used throughout the app.
+ * Mirrors PHP `Receipt_Data_Builder` output (see
+ * `woocommerce-pos/includes/Services/Receipt_Data_Builder.php`) and the
+ * `receipt_data` contract used throughout the app.
  */
 
 import * as z from 'zod';
 
 /* ──────────────── Sub-schemas ──────────────── */
+
+/**
+ * Multi-format date object produced by PHP `Receipt_Date_Formatter`. Every
+ * field is always present; values are empty strings when the source date is
+ * null. Templates pick whichever variant they need.
+ */
+export const ReceiptDateSchema = z.object({
+	datetime: z.string(),
+	date: z.string(),
+	time: z.string(),
+	datetime_short: z.string(),
+	datetime_long: z.string(),
+	datetime_full: z.string(),
+	date_short: z.string(),
+	date_long: z.string(),
+	date_full: z.string(),
+	date_ymd: z.string(),
+	date_dmy: z.string(),
+	date_mdy: z.string(),
+	weekday_short: z.string(),
+	weekday_long: z.string(),
+	day: z.string(),
+	month: z.string(),
+	month_short: z.string(),
+	month_long: z.string(),
+	year: z.string(),
+});
+
+export const ReceiptInfoSchema = z.object({
+	mode: z.string().describe('Receipt mode: live, preview, gallery, etc.'),
+	printed: ReceiptDateSchema.describe('When the receipt was printed/rendered'),
+});
+
+export const ReceiptOrderSchema = z.object({
+	id: z.number().int().describe('Numeric order ID'),
+	number: z.string().describe('Human-facing order number'),
+	currency: z.string().describe('Order currency code'),
+	customer_note: z.string().describe('Free-text note attached to the order'),
+	created: ReceiptDateSchema,
+	paid: ReceiptDateSchema,
+	completed: ReceiptDateSchema,
+});
 
 export const ReceiptStoreMetaSchema = z.object({
 	name: z.string().describe('Store display name'),
@@ -20,15 +63,43 @@ export const ReceiptStoreMetaSchema = z.object({
 	tax_id: z.string().optional().describe('Store VAT/tax identifier'),
 	phone: z.string().optional().describe('Store contact phone'),
 	email: z.string().optional().describe('Store contact email'),
+	logo: z.string().nullable().optional().describe('Store logo (URL or data URI)'),
+	opening_hours: z.string().nullable().optional().describe('Compact opening hours summary'),
+	opening_hours_vertical: z
+		.string()
+		.nullable()
+		.optional()
+		.describe('Multi-line opening hours block'),
+	opening_hours_inline: z
+		.string()
+		.nullable()
+		.optional()
+		.describe('Inline opening hours (comma-separated)'),
+	opening_hours_notes: z.string().nullable().optional().describe('Free-text notes about hours'),
+	personal_notes: z
+		.string()
+		.nullable()
+		.optional()
+		.describe('Personal notes printed on the receipt'),
+	policies_and_conditions: z
+		.string()
+		.nullable()
+		.optional()
+		.describe('Refund / exchange policy text'),
+	footer_imprint: z.string().nullable().optional().describe('Footer imprint / legal block'),
 });
 
 export const ReceiptOrderMetaSchema = z.object({
-	schema_version: z.number().int().describe('Receipt-data contract version'),
+	schema_version: z
+		.union([z.string(), z.number().int()])
+		.describe('Receipt-data contract version (PHP emits a SemVer string)'),
 	mode: z.string().describe('Receipt mode: sale, refund, quote, kitchen, etc.'),
 	created_at_gmt: z.string().describe('Order creation timestamp (ISO/GMT)'),
+	created_at_local: z.string().optional().describe('Order creation timestamp (local timezone)'),
 	order_id: z.number().int().describe('Numeric order identifier'),
 	order_number: z.string().describe('Human-facing order number'),
 	currency: z.string().describe('ISO 4217 currency code (e.g. USD, EUR, AED)'),
+	customer_note: z.string().optional().describe('Free-text note attached to the order'),
 });
 
 export const ReceiptCashierSchema = z.object({
@@ -37,7 +108,7 @@ export const ReceiptCashierSchema = z.object({
 });
 
 export const ReceiptCustomerSchema = z.object({
-	id: z.number().int().describe('Customer ID (0 = guest)'),
+	id: z.number().int().nullable().describe('Customer ID (null/0 = guest)'),
 	name: z.string().describe('Customer display name'),
 	billing_address: z.record(z.string(), z.string()).optional().describe('Billing address fields'),
 	shipping_address: z.record(z.string(), z.string()).optional().describe('Shipping address fields'),
@@ -59,7 +130,10 @@ export const ReceiptLineItemSchema = z.object({
 	sku: z.string().optional().describe('Product SKU'),
 	name: z.string().describe('Product / line display name'),
 	qty: z.number().describe('Quantity (negative for refund lines)'),
-	unit_price: z.number().optional().describe('Display-side unit price'),
+	unit_subtotal: z.number().optional().describe('Display-side per-unit subtotal (pre-discount)'),
+	unit_subtotal_incl: z.number().optional().describe('Per-unit subtotal tax-inclusive'),
+	unit_subtotal_excl: z.number().optional().describe('Per-unit subtotal tax-exclusive'),
+	unit_price: z.number().optional().describe('Display-side unit price (post-discount)'),
 	unit_price_incl: z.number().describe('Unit price tax-inclusive'),
 	unit_price_excl: z.number().describe('Unit price tax-exclusive'),
 	line_subtotal: z.number().optional().describe('Display-side line subtotal'),
@@ -84,6 +158,7 @@ export const ReceiptFeeSchema = z.object({
 
 export const ReceiptDiscountSchema = z.object({
 	label: z.string().describe('Discount label / coupon code'),
+	codes: z.string().optional().describe('Comma-joined coupon codes'),
 	total: z.number().optional().describe('Display-side discount amount'),
 	total_incl: z.number().describe('Discount total tax-inclusive'),
 	total_excl: z.number().describe('Discount total tax-exclusive'),
@@ -125,25 +200,114 @@ export const ReceiptPaymentSchema = z.object({
 export const ReceiptFiscalSchema = z.object({
 	immutable_id: z.string().optional().describe('Fiscal immutable identifier'),
 	receipt_number: z.string().optional().describe('Fiscal receipt number'),
-	sequence: z.number().int().optional().describe('Fiscal sequence number'),
+	sequence: z.number().int().nullable().optional().describe('Fiscal sequence number'),
 	hash: z.string().optional().describe('Fiscal hash signature'),
 	qr_payload: z.string().optional().describe('Fiscal QR code payload'),
 	tax_agency_code: z.string().optional().describe('Tax agency / authority code'),
 	signed_at: z.string().optional().describe('Fiscal signing timestamp'),
+	signature_excerpt: z
+		.string()
+		.optional()
+		.describe('Truncated signature for human-readable display'),
+	document_label: z.string().optional().describe('Document label (e.g. "Tax Invoice")'),
+	is_reprint: z.boolean().optional().describe('True if this is a reprint of an existing receipt'),
+	reprint_count: z
+		.number()
+		.int()
+		.optional()
+		.describe('How many times this receipt has been reprinted'),
+	extra_fields: z
+		.union([z.array(z.unknown()), z.record(z.string(), z.unknown())])
+		.optional()
+		.describe('Jurisdiction-specific extra fields'),
 });
 
-export const ReceiptDisplayTaxSchema = z.enum(['incl', 'excl', 'hidden']);
+export const ReceiptDisplayTaxSchema = z.enum(['incl', 'excl', 'hidden', 'itemized', 'single']);
 
 export const ReceiptPresentationHintsSchema = z.object({
-	display_tax: ReceiptDisplayTaxSchema.describe('Show prices including / excluding / no tax'),
+	display_tax: ReceiptDisplayTaxSchema.describe(
+		'Tax display mode: incl/excl drive price formatting; itemized/single mirror WC option'
+	),
 	prices_entered_with_tax: z.boolean().describe('Whether store prices were entered tax-inclusive'),
-	rounding_mode: z.string().describe('Rounding strategy: per-line | per-total'),
+	rounding_mode: z.string().describe('Rounding strategy: per-line | per-total | yes | no'),
 	locale: z.string().describe('Locale tag for formatting (e.g. en_US, ar_SA)'),
 });
+
+/**
+ * The i18n label dictionary mirrors `Receipt_I18n_Labels::get_labels()`. Keys
+ * are stable IDs (not free-form). Listed here so designers see what's
+ * available; extra keys are allowed because plugins/extensions may add more.
+ */
+export const ReceiptI18nSchema = z
+	.object({
+		order: z.string().optional(),
+		date: z.string().optional(),
+		invoice_no: z.string().optional(),
+		reference: z.string().optional(),
+		cashier: z.string().optional(),
+		customer: z.string().optional(),
+		customer_tax_id: z.string().optional(),
+		prepared_for: z.string().optional(),
+		processed_by: z.string().optional(),
+		bill_to: z.string().optional(),
+		ship_to: z.string().optional(),
+		billing_address: z.string().optional(),
+		item: z.string().optional(),
+		sku: z.string().optional(),
+		qty: z.string().optional(),
+		unit_price: z.string().optional(),
+		unit_excl: z.string().optional(),
+		total_excl: z.string().optional(),
+		discount: z.string().optional(),
+		packed: z.string().optional(),
+		subtotal: z.string().optional(),
+		subtotal_excl_tax: z.string().optional(),
+		total: z.string().optional(),
+		total_tax: z.string().optional(),
+		grand_total_incl_tax: z.string().optional(),
+		tax: z.string().optional(),
+		paid: z.string().optional(),
+		tendered: z.string().optional(),
+		change: z.string().optional(),
+		tax_summary: z.string().optional(),
+		taxable_excl: z.string().optional(),
+		tax_amount: z.string().optional(),
+		taxable_incl: z.string().optional(),
+		invoice: z.string().optional(),
+		tax_invoice: z.string().optional(),
+		quote: z.string().optional(),
+		receipt: z.string().optional(),
+		gift_receipt: z.string().optional(),
+		credit_note: z.string().optional(),
+		packing_slip: z.string().optional(),
+		returned_items: z.string().optional(),
+		amount: z.string().optional(),
+		total_refunded: z.string().optional(),
+		customer_note: z.string().optional(),
+		terms_and_conditions: z.string().optional(),
+		a_message_for_you: z.string().optional(),
+		thank_you: z.string().optional(),
+		thank_you_purchase: z.string().optional(),
+		thank_you_shopping: z.string().optional(),
+		thank_you_business: z.string().optional(),
+		tax_invoice_retain: z.string().optional(),
+		gift_return_policy: z.string().optional(),
+		quote_validity: z.string().optional(),
+		quote_not_receipt: z.string().optional(),
+		return_retain_receipt: z.string().optional(),
+		kitchen: z.string().optional(),
+		signature: z.string().optional(),
+		document_type: z.string().optional(),
+		copy: z.string().optional(),
+		copy_number: z.string().optional(),
+	})
+	.catchall(z.string());
 
 /* ──────────────── Top-level schema ──────────────── */
 
 export const ReceiptDataSchema = z.object({
+	receipt: ReceiptInfoSchema.optional(),
+	order: ReceiptOrderSchema.optional(),
 	meta: ReceiptOrderMetaSchema,
 	store: ReceiptStoreMetaSchema,
 	cashier: ReceiptCashierSchema,
@@ -157,10 +321,14 @@ export const ReceiptDataSchema = z.object({
 	payments: z.array(ReceiptPaymentSchema),
 	fiscal: ReceiptFiscalSchema,
 	presentation_hints: ReceiptPresentationHintsSchema,
+	i18n: ReceiptI18nSchema.optional(),
 });
 
 /* ──────────────── Derived TypeScript types ──────────────── */
 
+export type ReceiptDate = z.infer<typeof ReceiptDateSchema>;
+export type ReceiptInfo = z.infer<typeof ReceiptInfoSchema>;
+export type ReceiptOrder = z.infer<typeof ReceiptOrderSchema>;
 export type ReceiptStoreMeta = z.infer<typeof ReceiptStoreMetaSchema>;
 export type ReceiptOrderMeta = z.infer<typeof ReceiptOrderMetaSchema>;
 export type ReceiptCashier = z.infer<typeof ReceiptCashierSchema>;
@@ -173,4 +341,5 @@ export type ReceiptTaxSummaryItem = z.infer<typeof ReceiptTaxSummaryItemSchema>;
 export type ReceiptPayment = z.infer<typeof ReceiptPaymentSchema>;
 export type ReceiptFiscal = z.infer<typeof ReceiptFiscalSchema>;
 export type ReceiptPresentationHints = z.infer<typeof ReceiptPresentationHintsSchema>;
+export type ReceiptI18n = z.infer<typeof ReceiptI18nSchema>;
 export type ReceiptData = z.infer<typeof ReceiptDataSchema>;

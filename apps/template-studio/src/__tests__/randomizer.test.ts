@@ -98,9 +98,10 @@ describe('template-studio randomizer', () => {
 		expect(Math.round(summaryTax * 100) / 100).toBe(result.data.totals.tax_total);
 	});
 
-	it('generates GMT order dates from UTC components', () => {
+	it('generates GMT order dates in MySQL datetime format', () => {
+		// Mirrors PHP `current_time( 'mysql', true )` — `Y-m-d H:i:s`.
 		const result = createRandomReceipt({ seed: 'seed-utc' });
-		expect(result.data.meta.created_at_gmt).toMatch(/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/);
+		expect(result.data.meta.created_at_gmt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
 	});
 
 	it('parses textual seeds via FNV fallback', () => {

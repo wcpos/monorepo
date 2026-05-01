@@ -103,9 +103,14 @@ function mapCustomer(src: Record<string, any>): ReceiptCustomer {
 	};
 }
 
-function resolveDisplayTax(src: Record<string, any>): 'incl' | 'excl' | 'hidden' {
+type DisplayTax = 'incl' | 'excl' | 'hidden' | 'itemized' | 'single';
+
+function resolveDisplayTax(src: Record<string, any>): DisplayTax {
 	const value = src.display_tax;
-	return value === 'excl' || value === 'hidden' ? value : 'incl';
+	if (value === 'excl' || value === 'hidden' || value === 'itemized' || value === 'single') {
+		return value;
+	}
+	return 'incl';
 }
 
 function resolveDisplayValueSide(
@@ -118,11 +123,7 @@ function resolveDisplayValueSide(
 	return src.prices_entered_with_tax ? 'incl' : 'excl';
 }
 
-function mapLine(
-	src: Record<string, any>,
-	index: number,
-	displayTax: 'incl' | 'excl'
-): ReceiptLineItem {
+function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax): ReceiptLineItem {
 	const qty = toNum(src.qty ?? src.quantity);
 	const price = toNum(src.price ?? src.unit_price ?? src.unit_price_incl ?? src.unit_price_excl);
 	const total = toNum(src.line_total ?? src.total ?? src.line_total_incl ?? src.line_total_excl);
@@ -135,12 +136,13 @@ function mapLine(
 	const discountsExcl = toNum(src.discounts_excl ?? src.discounts);
 	const lineTotalIncl = toNum(src.line_total_incl ?? src.line_total ?? total);
 	const lineTotalExcl = toNum(src.line_total_excl ?? src.line_total ?? total);
-	const displayUnitPrice = displayTax === 'excl' ? unitPriceExcl : unitPriceIncl;
-	const displayLineSubtotal = displayTax === 'excl' ? lineSubtotalExcl : lineSubtotalIncl;
-	const displayDiscounts = displayTax === 'excl' ? discountsExcl : discountsIncl;
-	const displayLineTotal = displayTax === 'excl' ? lineTotalExcl : lineTotalIncl;
+	const useExclSide = displayTax === 'excl';
+	const displayUnitPrice = useExclSide ? unitPriceExcl : unitPriceIncl;
+	const displayLineSubtotal = useExclSide ? lineSubtotalExcl : lineSubtotalIncl;
+	const displayDiscounts = useExclSide ? discountsExcl : discountsIncl;
+	const displayLineTotal = useExclSide ? lineTotalExcl : lineTotalIncl;
 
-	return {
+	const line: ReceiptLineItem = {
 		key: toStr(src.key) || toStr(src.sku) || `line-${index}-${toStr(src.name).slice(0, 20)}`,
 		sku: toStr(src.sku),
 		name: toStr(src.name),
@@ -170,9 +172,21 @@ function mapLine(
 				amount: toNum(entry.amount),
 			})),
 	};
+
+	// Pass through pre-discount per-unit subtotals when the canonical shape
+	// supplies them — used by templates that want to display "was/now" pricing.
+	if ('unit_subtotal_incl' in src) line.unit_subtotal_incl = toNum(src.unit_subtotal_incl);
+	if ('unit_subtotal_excl' in src) line.unit_subtotal_excl = toNum(src.unit_subtotal_excl);
+	if ('unit_subtotal' in src) {
+		line.unit_subtotal = toNum(src.unit_subtotal);
+	} else if (line.unit_subtotal_incl !== undefined || line.unit_subtotal_excl !== undefined) {
+		line.unit_subtotal = useExclSide ? line.unit_subtotal_excl : line.unit_subtotal_incl;
+	}
+
+	return line;
 }
 
-function mapFeeLike(src: Record<string, any>, displayTax: 'incl' | 'excl'): ReceiptFee {
+function mapFeeLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptFee {
 	const totalIncl = toNum(src.total_incl ?? src.total);
 	const totalExcl = 'total_excl' in src ? toNum(src.total_excl) : totalIncl - toNum(src.total_tax);
 	const total = displayTax === 'excl' ? totalExcl : totalIncl;
@@ -185,20 +199,22 @@ function mapFeeLike(src: Record<string, any>, displayTax: 'incl' | 'excl'): Rece
 	};
 }
 
-function mapDiscountLike(src: Record<string, any>, displayTax: 'incl' | 'excl'): ReceiptDiscount {
+function mapDiscountLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptDiscount {
 	const totalIncl = toNum(src.total_incl ?? src.total);
 	const totalExcl = 'total_excl' in src ? toNum(src.total_excl) : totalIncl - toNum(src.total_tax);
 	const total = displayTax === 'excl' ? totalExcl : totalIncl;
 
-	return {
+	const discount: ReceiptDiscount = {
 		label: toStr(src.label ?? src.name ?? src.title),
 		total,
 		total_incl: totalIncl,
 		total_excl: totalExcl,
 	};
+	if ('codes' in src && src.codes != null) discount.codes = toStr(src.codes);
+	return discount;
 }
 
-function mapTotals(src: Record<string, any>, displayTax: 'incl' | 'excl'): ReceiptTotals {
+function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTotals {
 	const subtotalIncl = toNum(src.subtotal_incl ?? src.subtotal);
 	const subtotalExcl =
 		'subtotal_excl' in src ? toNum(src.subtotal_excl) : subtotalIncl - toNum(src.tax_total);
@@ -240,7 +256,7 @@ function mapPayment(src: Record<string, any>): ReceiptPayment {
 }
 
 function mapFiscal(src: Record<string, any>): ReceiptFiscal {
-	return {
+	const fiscal: ReceiptFiscal = {
 		immutable_id: toStr(src.immutable_id ?? src.fiscal_id) || undefined,
 		receipt_number: toStr(src.receipt_number) || undefined,
 		sequence: 'sequence' in src ? toNum(src.sequence) : undefined,
@@ -249,6 +265,16 @@ function mapFiscal(src: Record<string, any>): ReceiptFiscal {
 		tax_agency_code: toStr(src.tax_agency_code) || undefined,
 		signed_at: toStr(src.signed_at) || undefined,
 	};
+	if ('signature_excerpt' in src && src.signature_excerpt != null) {
+		fiscal.signature_excerpt = toStr(src.signature_excerpt);
+	}
+	if ('document_label' in src && src.document_label != null) {
+		fiscal.document_label = toStr(src.document_label);
+	}
+	if ('is_reprint' in src) fiscal.is_reprint = !!src.is_reprint;
+	if ('reprint_count' in src) fiscal.reprint_count = toNum(src.reprint_count);
+	if ('extra_fields' in src && src.extra_fields != null) fiscal.extra_fields = src.extra_fields;
+	return fiscal;
 }
 
 function mapPresentationHints(src: Record<string, any>): ReceiptPresentationHints {
@@ -272,7 +298,7 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 	);
 	const displayTax = resolveDisplayValueSide(presentationHints);
 
-	return {
+	const result: ReceiptData = {
 		meta: {
 			...base.meta,
 			...(data.meta ?? {}),
@@ -329,6 +355,15 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 		),
 		presentation_hints: presentationHints,
 	};
+
+	// Pass-through optional top-level keys (`receipt`, `order`, `i18n`) emitted
+	// by the PHP Receipt_Data_Builder. These are advisory — templates may use
+	// them but the encoder doesn't depend on them, so we copy as-is.
+	if (data.receipt !== undefined) result.receipt = data.receipt;
+	if (data.order !== undefined) result.order = data.order;
+	if (data.i18n !== undefined) result.i18n = data.i18n;
+
+	return result;
 }
 
 /**
