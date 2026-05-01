@@ -6,12 +6,6 @@ export async function fetchBundledTemplates(): Promise<StudioTemplate[]> {
 	return response.json();
 }
 
-export async function fetchFixtures(): Promise<ReceiptFixture[]> {
-	const response = await fetch('/__studio/fixtures', { credentials: 'include' });
-	if (!response.ok) throw new Error(`Failed to load fixtures: ${response.status}`);
-	return response.json();
-}
-
 export interface FetchWpPreviewInput {
 	storeUrl?: string;
 	templateId: string | number;

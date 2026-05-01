@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -21,7 +20,6 @@ const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const defaultWooCommercePosRoot = resolveDefaultWooCommercePosRoot(repoRoot);
 const wooCommercePosRoot = process.env.WCPOS_PLUGIN_ROOT ?? defaultWooCommercePosRoot;
 const galleryTemplatesDir = path.join(wooCommercePosRoot, 'templates/gallery');
-const fixturesDir = path.resolve(fileURLToPath(new URL('./fixtures', import.meta.url)));
 const wpProxyTarget = process.env.WCPOS_STUDIO_WP_URL ?? 'http://localhost:8888';
 const wpProxyOrigin = new URL(wpProxyTarget).origin;
 const allowedStoreOrigins = allowedOriginsFromEnv(
@@ -36,9 +34,8 @@ function templateStudioPlugin(): Plugin {
 		name: 'wcpos-template-studio-data',
 		configureServer(server) {
 			server.watcher.add(galleryTemplatesDir);
-			server.watcher.add(fixturesDir);
 			server.watcher.on('change', (file) => {
-				if (file.startsWith(galleryTemplatesDir) || file.startsWith(fixturesDir)) {
+				if (file.startsWith(galleryTemplatesDir)) {
 					server.ws.send({ type: 'full-reload' });
 				}
 			});
@@ -50,24 +47,6 @@ function templateStudioPlugin(): Plugin {
 					});
 					response.setHeader('Content-Type', 'application/json');
 					response.end(JSON.stringify(templates));
-				} catch (error) {
-					response.statusCode = 500;
-					response.end(error instanceof Error ? error.message : String(error));
-				}
-			});
-
-			server.middlewares.use('/__studio/fixtures', async (_request, response) => {
-				try {
-					const files = (await fs.readdir(fixturesDir))
-						.filter((file) => file.endsWith('.json'))
-						.sort();
-					const fixtures = await Promise.all(
-						files.map(async (file) =>
-							JSON.parse(await fs.readFile(path.join(fixturesDir, file), 'utf8'))
-						)
-					);
-					response.setHeader('Content-Type', 'application/json');
-					response.end(JSON.stringify(fixtures));
 				} catch (error) {
 					response.statusCode = 500;
 					response.end(error instanceof Error ? error.message : String(error));

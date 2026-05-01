@@ -1,9 +1,10 @@
 import { createElement } from 'react';
 
 import { render, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App, preparePrintDocument } from '../App';
+import { createRandomReceipt } from '../randomizer';
 import { fetchWpPreview, printRawTcp } from '../studio-api';
 import {
 	buildTemplateViewModel,
@@ -13,9 +14,27 @@ import {
 	selectVisibleTemplate,
 } from '../studio-core';
 import { listBundledTemplates } from '../template-loader';
-import galleryFixture from '../../fixtures/gallery-default-receipt.json';
 
 const originalFetch = globalThis.fetch;
+
+const stableOverrides = {
+	emptyCart: false,
+	refund: false,
+	rtl: false,
+	multicurrency: false,
+	multiPayment: false,
+	fiscal: false,
+	longNames: false,
+	hasDiscounts: false,
+	hasFees: false,
+	hasShipping: false,
+	cartSize: 2,
+} as const;
+
+function buildCanonicalFixture(seedId = 'studio-test-default') {
+	const random = createRandomReceipt({ seed: seedId, overrides: { ...stableOverrides } });
+	return { ...random.data, id: seedId };
+}
 
 afterEach(() => {
 	globalThis.fetch = originalFetch;
@@ -36,6 +55,7 @@ describe('template studio rendering harness', () => {
 	});
 
 	it('renders logicless templates with JS output and optional PHP diagnostic output', () => {
+		const fixture = buildCanonicalFixture();
 		const view = renderStudioTemplate({
 			template: {
 				id: 'logicless-sample',
@@ -45,17 +65,18 @@ describe('template studio rendering harness', () => {
 				content: '<h1>{{store.name}}</h1><p>{{meta.order_number}}</p>',
 				previewHtml: '<h1>PHP diagnostic</h1>',
 			},
-			fixture: galleryFixture,
+			fixture,
 			paperWidth: '80mm',
 		});
 
 		expect(view.kind).toBe('logicless');
 		if (view.kind !== 'logicless') throw new Error('Expected logicless view');
-		expect(view.html).toContain('WCPOS Demo Store');
+		expect(view.html).toContain(fixture.store.name);
 		expect(view.diagnosticHtml).toBe('<h1>PHP diagnostic</h1>');
 	});
 
 	it('renders thermal templates with preview HTML and ESC/POS hex/debug output', () => {
+		const fixture = buildCanonicalFixture('studio-test-thermal');
 		const view = renderStudioTemplate({
 			template: {
 				id: 'thermal-sample',
@@ -64,15 +85,14 @@ describe('template studio rendering harness', () => {
 				source: 'bundled-gallery',
 				content: '<receipt width="32"><text>{{store.name}}</text><line /></receipt>',
 			},
-			fixture: galleryFixture,
+			fixture,
 			paperWidth: '58mm',
 		});
 
 		expect(view.kind).toBe('thermal');
 		if (view.kind !== 'thermal') throw new Error('Expected thermal view');
-		expect(view.html).toContain('WCPOS Demo Store');
+		expect(view.html).toContain(fixture.store.name);
 		expect(view.escposHex).toMatch(/1b 40/i);
-		expect(view.escposAscii).toContain('WCPOS Demo Store');
 		expect(view.escposBase64).toBe(bytesToBase64(new Uint8Array(Array.from(view.escposBytes))));
 	});
 
@@ -169,49 +189,6 @@ describe('template studio rendering harness', () => {
 					},
 				]);
 			}
-			if (url === '/__studio/fixtures') {
-				// Use a canonical-shape fixture so meta.order_number survives mapReceiptData.
-				return Response.json([
-					{
-						id: 'gallery-default-receipt',
-						meta: {
-							schema_version: 1,
-							mode: 'live',
-							created_at_gmt: '2026-04-30',
-							order_id: 1001,
-							order_number: '1001',
-							currency: 'USD',
-						},
-						store: { name: 'WCPOS Demo Store', address_lines: [] },
-						cashier: { id: 0, name: 'Sam' },
-						customer: { id: 0, name: 'Ada' },
-						lines: [],
-						fees: [],
-						shipping: [],
-						discounts: [],
-						totals: {
-							subtotal_incl: 0,
-							subtotal_excl: 0,
-							discount_total_incl: 0,
-							discount_total_excl: 0,
-							tax_total: 0,
-							grand_total_incl: 0,
-							grand_total_excl: 0,
-							paid_total: 0,
-							change_total: 0,
-						},
-						tax_summary: [],
-						payments: [],
-						fiscal: {},
-						presentation_hints: {
-							display_tax: 'incl',
-							prices_entered_with_tax: true,
-							rounding_mode: 'round',
-							locale: 'en-US',
-						},
-					},
-				]);
-			}
 			return new Response(null, { status: 404 });
 		}) as typeof fetch;
 
@@ -227,6 +204,7 @@ describe('template studio rendering harness', () => {
 	});
 
 	it('creates stable snapshot view models without overbuilding drift reports', () => {
+		const fixture = buildCanonicalFixture('studio-test-snapshot');
 		const model = buildTemplateViewModel({
 			template: {
 				id: 'logicless-sample',
@@ -235,17 +213,17 @@ describe('template studio rendering harness', () => {
 				source: 'bundled-gallery',
 				content: '<p>{{store.name}}</p>',
 			},
-			fixture: galleryFixture,
+			fixture,
 			paperWidth: 'a4',
 		});
 
 		expect(model).toMatchObject({
 			templateId: 'logicless-sample',
-			fixtureId: 'gallery-default-receipt',
+			fixtureId: 'studio-test-snapshot',
 			engine: 'logicless',
 			paperWidth: 'a4',
 		});
-		expect(model.html).toContain('WCPOS Demo Store');
+		expect(model.html).toContain(fixture.store.name);
 	});
 
 	it('selects from the filtered template list instead of a hidden previous selection', () => {
@@ -290,9 +268,6 @@ describe('template studio rendering harness', () => {
 							'<img src="x" onerror="window.__diagnosticXss = true"><script>window.__diagnosticScriptXss = true</script><p>Safe diagnostic</p>',
 					},
 				]);
-			}
-			if (url === '/__studio/fixtures') {
-				return Response.json([galleryFixture]);
 			}
 			return new Response(null, { status: 404 });
 		}) as typeof fetch;

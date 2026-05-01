@@ -2,22 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { sanitizeHtml, sanitizeThermalPreviewHtml } from '@wcpos/receipt-renderer';
 
-import {
-	fetchBundledTemplates,
-	fetchFixtures,
-	fetchWpPreview,
-	paperWidths,
-	printRawTcp,
-} from './studio-api';
+import { createRandomReceipt, formatSeed } from './randomizer';
+import { fetchBundledTemplates, fetchWpPreview, paperWidths, printRawTcp } from './studio-api';
 import { renderStudioTemplate, selectVisibleTemplate } from './studio-core';
 
-import type { PaperWidth, ReceiptFixture, StudioTemplate, TemplateEngine } from './studio-core';
+import type { PaperWidth, StudioTemplate, TemplateEngine } from './studio-core';
 
 export function App() {
 	const [templates, setTemplates] = useState<StudioTemplate[]>([]);
-	const [fixtures, setFixtures] = useState<ReceiptFixture[]>([]);
 	const [selectedTemplateId, setSelectedTemplateId] = useState('');
-	const [selectedFixtureId, setSelectedFixtureId] = useState('gallery-default-receipt');
 	const [paperWidth, setPaperWidth] = useState<PaperWidth>('80mm');
 	const [engineFilter, setEngineFilter] = useState<TemplateEngine | 'all'>('all');
 	const [storeUrl, setStoreUrl] = useState('http://localhost:8888');
@@ -26,13 +19,13 @@ export function App() {
 	const [rawTcpHost, setRawTcpHost] = useState('127.0.0.1');
 	const [rawTcpPort, setRawTcpPort] = useState('9100');
 	const [status, setStatus] = useState('Loading bundled gallery templates…');
+	const [seed, setSeed] = useState<number | string>('default');
 	const previewFrameRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
-		Promise.all([fetchBundledTemplates(), fetchFixtures()])
-			.then(([loadedTemplates, loadedFixtures]) => {
+		fetchBundledTemplates()
+			.then((loadedTemplates) => {
 				setTemplates(loadedTemplates);
-				setFixtures(loadedFixtures);
 				setSelectedTemplateId(loadedTemplates[0]?.id ?? '');
 				setStatus(
 					'Edit gallery templates in woocommerce-pos/templates/gallery and Vite will hot-reload.'
@@ -47,12 +40,14 @@ export function App() {
 		[engineFilter, templates]
 	);
 	const selectedTemplate = selectVisibleTemplate(filteredTemplates, selectedTemplateId);
-	const selectedFixture =
-		fixtures.find((fixture) => fixture.id === selectedFixtureId) ?? fixtures[0];
-	const rendered =
-		selectedTemplate && selectedFixture
-			? renderStudioTemplate({ template: selectedTemplate, fixture: selectedFixture, paperWidth })
-			: null;
+	const randomReceipt = useMemo(() => createRandomReceipt({ seed }), [seed]);
+	const fixture = useMemo(
+		() => ({ ...randomReceipt.data, id: `random-${randomReceipt.seedHex}` }),
+		[randomReceipt]
+	);
+	const rendered = selectedTemplate
+		? renderStudioTemplate({ template: selectedTemplate, fixture, paperWidth })
+		: null;
 	const previewHtml =
 		rendered?.kind === 'thermal'
 			? sanitizeThermalPreviewHtml(rendered.html)
@@ -76,13 +71,8 @@ export function App() {
 				wpTemplate,
 				...current.filter((template) => template.id !== wpTemplate.id),
 			]);
-			setFixtures((current) => [
-				wpTemplate.receiptData,
-				...current.filter((fixture) => fixture.id !== wpTemplate.receiptData.id),
-			]);
 			setEngineFilter(wpTemplate.engine);
 			setSelectedTemplateId(wpTemplate.id);
-			setSelectedFixtureId(wpTemplate.receiptData.id);
 			setStatus('Loaded store preview using forwarded cookies and X-WCPOS: 1.');
 		} catch (error) {
 			setStatus(error instanceof Error ? error.message : String(error));
@@ -173,19 +163,14 @@ export function App() {
 						))}
 					</select>
 				</label>
-				<label>
-					Fixture
-					<select
-						value={selectedFixture?.id ?? ''}
-						onChange={(event) => setSelectedFixtureId(event.target.value)}
-					>
-						{fixtures.map((fixture) => (
-							<option key={fixture.id} value={fixture.id}>
-								{fixture.id}
-							</option>
-						))}
-					</select>
-				</label>
+				<div className="seed-row">
+					<button type="button" onClick={() => setSeed((Math.random() * 0xffffffff) >>> 0)}>
+						Shuffle data
+					</button>
+					<span className="seed-tag" title="Current data seed (paste to reproduce)">
+						seed: {formatSeed(randomReceipt.seed)}
+					</span>
+				</div>
 				<label>
 					Paper width
 					<select
