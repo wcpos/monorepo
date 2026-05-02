@@ -32,13 +32,17 @@ function ThemeOptionButton({
 }: {
 	option: ThemeOption;
 	activeTheme: string;
-	onPress: (name: string) => void;
+	onPress: (name: string) => Promise<void> | void;
 	t: ReturnType<typeof useT>;
 }) {
 	const isActive = activeTheme === option.name;
 	return (
 		<Pressable
-			onPress={() => onPress(option.name)}
+			onPress={() => {
+				void onPress(option.name);
+			}}
+			accessibilityRole="button"
+			accessibilityState={{ selected: isActive }}
 			className={`flex-1 items-center gap-2 rounded-lg border-2 p-3 ${
 				isActive ? 'border-primary bg-primary/10' : 'border-border bg-card'
 			}`}
@@ -75,6 +79,9 @@ function ThemeGrid({
 }) {
 	const { theme, hasAdaptiveThemes } = useUniwind();
 	const activeTheme = hasAdaptiveThemes ? 'system' : theme;
+	const activeThemeLabel = t(
+		themeOptions.find((option) => option.name === activeTheme)?.labelKey ?? activeTheme
+	);
 
 	return (
 		<>
@@ -109,7 +116,7 @@ function ThemeGrid({
 			<Text className="text-muted-foreground text-xs">
 				{hasAdaptiveThemes
 					? t('settings.following_system_theme')
-					: t('settings.current_theme', { theme })}
+					: t('settings.current_theme', { theme: activeThemeLabel })}
 			</Text>
 		</>
 	);
@@ -135,39 +142,39 @@ export function ThemeSettings() {
 		() => [
 			{
 				name: 'system',
-				labelKey: 'System',
+				labelKey: 'settings.theme.system',
 				icon: 'circleHalfStroke',
-				descriptionKey: 'Follow your device settings',
+				descriptionKey: 'settings.theme.system_description',
 			},
 			{
 				name: 'light',
-				labelKey: 'Light',
+				labelKey: 'settings.theme.light',
 				icon: 'sunBright',
-				descriptionKey: 'Clean and bright',
+				descriptionKey: 'settings.theme.light_description',
 			},
 			{
 				name: 'dark',
-				labelKey: 'Dark',
+				labelKey: 'settings.theme.dark',
 				icon: 'moon',
-				descriptionKey: 'Easy on the eyes',
+				descriptionKey: 'settings.theme.dark_description',
 			},
 			{
 				name: 'ocean',
-				labelKey: 'Ocean',
+				labelKey: 'settings.theme.ocean',
 				icon: 'water',
-				descriptionKey: 'Cool blues and teals',
+				descriptionKey: 'settings.theme.ocean_description',
 			},
 			{
 				name: 'sunset',
-				labelKey: 'Sunset',
+				labelKey: 'settings.theme.sunset',
 				icon: 'sunHaze',
-				descriptionKey: 'Warm oranges and purples',
+				descriptionKey: 'settings.theme.sunset_description',
 			},
 			{
 				name: 'monochrome',
-				labelKey: 'Monochrome',
+				labelKey: 'settings.theme.monochrome',
 				icon: 'circleHalf',
-				descriptionKey: 'High contrast grayscale',
+				descriptionKey: 'settings.theme.monochrome_description',
 			},
 		],
 		[]
@@ -179,14 +186,16 @@ export function ThemeSettings() {
 	 */
 	const handleThemeChange = React.useCallback(
 		async (themeName: string) => {
-			// Update Uniwind theme
-			Uniwind.setTheme(themeName as any);
+			try {
+				await localPatch({
+					document: store,
+					data: { theme: themeName },
+				});
 
-			// Persist to RxDB
-			await localPatch({
-				document: store,
-				data: { theme: themeName },
-			});
+				Uniwind.setTheme(themeName as any);
+			} catch (error) {
+				console.error('Failed to persist selected theme', error);
+			}
 		},
 		[localPatch, store]
 	);

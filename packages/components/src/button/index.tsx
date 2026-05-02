@@ -122,7 +122,7 @@ const buttonTextVariants = cva(
 				/**
 				 * Ghost buttons
 				 */
-				ghost: 'web:group-hover:text-accent-foreground',
+				ghost: 'web:group-hover:text-accent-foreground group-active:text-accent-foreground',
 				'ghost-primary':
 					'text-primary web:group-hover:text-primary-foreground group-active:text-primary-foreground',
 				'ghost-secondary':

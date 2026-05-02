@@ -155,11 +155,7 @@ function SwitchNative({ className, size = 'default', ref, ...props }: SwitchNati
 			className={cn(nativeSwitchVariants({ size }), props.disabled && 'opacity-50')}
 		>
 			<SwitchPrimitives.Root
-				className={cn(
-					nativeSwitchVariants({ size }),
-					props.checked ? 'bg-primary' : 'bg-card-header',
-					className
-				)}
+				className={cn(nativeSwitchVariants({ size }), 'bg-transparent', className)}
 				{...props}
 				ref={ref}
 			>
@@ -190,18 +186,26 @@ type SwitchWithLabelProps = React.ComponentProps<typeof Switch> & {
 	size?: 'xs' | 'sm' | 'lg';
 };
 
-function SwitchWithLabel({ label, size, ref, ...props }: SwitchWithLabelProps) {
-	const [checked, setChecked] = React.useState(props.checked || false);
+function SwitchWithLabel({ label, size, ref, onCheckedChange, ...props }: SwitchWithLabelProps) {
+	const isControlled = props.checked !== undefined;
+	const [internalChecked, setInternalChecked] = React.useState(props.checked ?? false);
+	const checked = isControlled ? props.checked! : internalChecked;
 
-	const handleToggle = () => {
-		setChecked((prevChecked) => !prevChecked);
-		props.onCheckedChange && props.onCheckedChange(!checked);
+	const handleToggle = (nextChecked: boolean) => {
+		if (!isControlled) {
+			setInternalChecked(nextChecked);
+		}
+		onCheckedChange?.(nextChecked);
 	};
 
 	return (
 		<HStack className="w-full">
 			<Switch ref={ref} {...props} checked={checked} onCheckedChange={handleToggle} size={size} />
-			<Label nativeID={props.nativeID} onPress={handleToggle} className="flex-1 shrink-0">
+			<Label
+				nativeID={props.nativeID}
+				onPress={() => handleToggle(!checked)}
+				className="flex-1 shrink-0"
+			>
 				{label}
 			</Label>
 		</HStack>

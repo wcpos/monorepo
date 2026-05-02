@@ -200,6 +200,9 @@ export default function DrawerLayout() {
 
 	const { license } = useAppInfo();
 	const [showUpgrade, setShowUpgrade] = React.useState(!license?.isPro);
+	React.useEffect(() => {
+		setShowUpgrade(!license?.isPro);
+	}, [license?.isPro]);
 	const { count: unreadErrorCount, markAsRead: markLogsAsRead } = useUnreadErrorCount();
 
 	return (
