@@ -22,57 +22,55 @@ import { VStack } from '../vstack';
 
 type TextInputKeyPressEvent = NativeSyntheticEvent<TextInputKeyPressEventData>;
 
-const Display = React.forwardRef<RNTextInput, InputProps>(
-	({ selection, onSelectionChange, className, disabled, ...props }, ref) => {
-		const inputRef = React.useRef<RNTextInput>(null);
-		const mergedRef = useMergedRef(ref, inputRef);
-		/**
-		 *
-		 */
-		const handleBackspacePress = React.useCallback(() => {
-			if (props.onKeyPress) {
-				props.onKeyPress({
-					nativeEvent: { key: 'Backspace' },
-				} as TextInputKeyPressEvent);
-			}
-			if (inputRef?.current) {
-				inputRef?.current.focus();
-			}
-		}, [props, inputRef]);
+function Display({ selection, onSelectionChange, className, disabled, ref, ...props }: InputProps) {
+	const inputRef = React.useRef<RNTextInput>(null);
+	const mergedRef = useMergedRef(ref ?? null, inputRef);
+	/**
+	 *
+	 */
+	const handleBackspacePress = React.useCallback(() => {
+		if (props.onKeyPress) {
+			props.onKeyPress({
+				nativeEvent: { key: 'Backspace' },
+			} as TextInputKeyPressEvent);
+		}
+		if (inputRef?.current) {
+			inputRef?.current.focus();
+		}
+	}, [props, inputRef]);
 
-		/**
-		 * Focus and select all text on mount
-		 *
-		 * @FIXME - the autofocus doesn't seem to work, perhaps it's not on the screen yet?
-		 * - so we use a timer to focus after a short delay
-		 */
-		React.useEffect(() => {
-			const timer = setTimeout(() => {
-				if (inputRef.current) {
-					inputRef.current?.focus();
-					const webInput = inputRef.current as unknown as HTMLInputElement | undefined;
-					webInput?.setSelectionRange?.(0, 100);
-				}
-			}, 50);
-			return () => clearTimeout(timer);
-		}, []);
+	/**
+	 * Focus and select all text on mount
+	 *
+	 * @FIXME - the autofocus doesn't seem to work, perhaps it's not on the screen yet?
+	 * - so we use a timer to focus after a short delay
+	 */
+	React.useEffect(() => {
+		const timer = setTimeout(() => {
+			if (inputRef.current) {
+				inputRef.current?.focus();
+				const webInput = inputRef.current as unknown as HTMLInputElement | undefined;
+				webInput?.setSelectionRange?.(0, 100);
+			}
+		}, 50);
+		return () => clearTimeout(timer);
+	}, []);
 
-		return (
-			<Input.Root className={className} disabled={disabled}>
-				<Input.InputField
-					ref={mergedRef}
-					type="numeric"
-					className={className}
-					placeholderTextColor={undefined}
-					{...props}
-				/>
-				<Input.Right className="pr-1">
-					<IconButton name="deleteLeft" onPress={handleBackspacePress} />
-				</Input.Right>
-			</Input.Root>
-		);
-	}
-);
+	return (
+		<Input.Root className={className} disabled={disabled}>
+			<Input.InputField
+				ref={mergedRef}
+				type="numeric"
+				className={className}
+				placeholderTextColor={undefined}
+				{...props}
+			/>
+			<Input.Right className="pr-1">
+				<IconButton name="deleteLeft" onPress={handleBackspacePress} />
+			</Input.Right>
+		</Input.Root>
+	);
+}
 
 Display.displayName = 'NumpadDisplay';
 

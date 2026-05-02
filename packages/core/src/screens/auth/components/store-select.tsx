@@ -5,10 +5,8 @@ import { of } from 'rxjs';
 import { distinctUntilChanged, switchMap, tap } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/button';
-import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
-import { Label } from '@wcpos/components/label';
-import { RadioGroup, RadioGroupItem } from '@wcpos/components/radio-group';
+import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { StoreDocument, WPCredentialsDocument } from '@wcpos/database';
@@ -158,22 +156,17 @@ export function StoreSelect({
 											: 'border-border web:hover:border-primary/40 web:hover:bg-primary/5'
 									}`}
 								>
-									<HStack space="sm" className="items-center">
-										<RadioGroupItem
-											value={store.localID ?? ''}
-											aria-labelledby={`store-${store.localID}`}
-										/>
-										<Label
-											nativeID={`store-${store.localID}`}
-											onPress={() => onStoreSelect(store.localID ?? null)}
-											className="flex-1 text-sm font-medium"
-										>
-											{store.name ?? t('common.default')}
-										</Label>
-										{store.id != null && (
-											<Text className="text-muted-foreground text-xs">#{store.id}</Text>
-										)}
-									</HStack>
+									<RadioGroupOption
+										value={store.localID ?? ''}
+										label={store.name ?? t('common.default')}
+										className="items-center"
+										labelClassName="text-sm font-medium"
+										right={
+											store.id != null ? (
+												<Text className="text-muted-foreground text-xs">#{store.id}</Text>
+											) : null
+										}
+									/>
 								</Pressable>
 							))}
 						</VStack>

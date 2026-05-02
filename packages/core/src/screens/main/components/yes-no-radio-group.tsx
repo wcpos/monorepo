@@ -1,10 +1,6 @@
 import * as React from 'react';
 
-import { useFormContext } from 'react-hook-form';
-
-import { HStack } from '@wcpos/components/hstack';
-import { Label } from '@wcpos/components/label';
-import { RadioGroup, RadioGroupItem } from '@wcpos/components/radio-group';
+import { RadioGroup, RadioGroupOption } from '@wcpos/components/radio-group';
 
 import { useT } from '../../../contexts/translations';
 
@@ -13,7 +9,6 @@ import { useT } from '../../../contexts/translations';
  */
 export function YesNoRadioGroup(props: React.ComponentProps<typeof RadioGroup> & { name: string }) {
 	const t = useT();
-	const { setValue } = useFormContext();
 
 	/**
 	 *
@@ -24,17 +19,7 @@ export function YesNoRadioGroup(props: React.ComponentProps<typeof RadioGroup> &
 				{ label: t('common.yes'), value: 'yes' },
 				{ label: t('common.no'), value: 'no' },
 			].map((option) => {
-				return (
-					<HStack key={option.value}>
-						<RadioGroupItem aria-labelledby={`label-for-${option.value}`} value={option.value} />
-						<Label
-							nativeID={`label-for-${option.value}`}
-							onPress={() => setValue(props.name, option.value)}
-						>
-							{option.label}
-						</Label>
-					</HStack>
-				);
+				return <RadioGroupOption key={option.value} value={option.value} label={option.label} />;
 			})}
 		</RadioGroup>
 	);

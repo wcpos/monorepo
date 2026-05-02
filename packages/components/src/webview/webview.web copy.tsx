@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 type WebViewProps = {
+	ref?: React.Ref<HTMLIFrameElement>;
 	src: string;
 	title?: string;
 	onMessage?: (event: MessageEvent) => void;
@@ -8,10 +9,7 @@ type WebViewProps = {
 	onError?: (event: React.SyntheticEvent<HTMLIFrameElement, Event>) => void;
 };
 
-function WebViewBase(
-	{ src, title, onError, onMessage, onLoad }: WebViewProps,
-	ref: React.Ref<HTMLIFrameElement>
-) {
+function WebView({ ref, src, title, onError, onMessage, onLoad }: WebViewProps) {
 	// React.useEffect(() => {
 	// 	if (typeof onMessage === 'function') {
 	// 		window.addEventListener('message', onMessage);
@@ -37,4 +35,4 @@ function WebViewBase(
 	);
 }
 
-export const WebView = React.forwardRef(WebViewBase);
+export { WebView };

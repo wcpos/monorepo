@@ -11,13 +11,16 @@ const CommandButton = SelectButton;
 
 interface CommandProps extends React.ComponentPropsWithoutRef<typeof View> {
 	children?: React.ReactNode;
+	ref?: React.Ref<View>;
 }
 
-const Command = React.forwardRef<View, CommandProps>(({ children, ...props }, ref) => (
-	<View ref={ref} {...props}>
-		{children}
-	</View>
-));
+function Command({ children, ref, ...props }: CommandProps) {
+	return (
+		<View ref={ref} {...props}>
+			{children}
+		</View>
+	);
+}
 Command.displayName = 'Command';
 
 interface CommandDialogProps extends DialogProps {
@@ -38,106 +41,110 @@ CommandDialog.displayName = 'CommandDialog';
 interface CommandInputProps extends React.ComponentPropsWithoutRef<typeof Input> {
 	value?: string;
 	onValueChange?: (value: string) => void;
+	ref?: React.Ref<TextInput>;
 }
 
-const CommandInput = React.forwardRef<TextInput, CommandInputProps>(
-	({ value, onValueChange, ...props }, ref) => {
-		return (
-			<View>
-				<Input ref={ref} value={value} onChangeText={onValueChange} clearable {...props} />
-			</View>
-		);
-	}
-);
+function CommandInput({ value, onValueChange, ref, ...props }: CommandInputProps) {
+	return (
+		<View>
+			<Input ref={ref} value={value} onChangeText={onValueChange} clearable {...props} />
+		</View>
+	);
+}
 CommandInput.displayName = 'CommandInput';
 
 interface CommandListProps extends React.ComponentPropsWithoutRef<typeof ScrollView> {
 	onEndReached?: () => void;
 	children?: React.ReactNode;
+	ref?: React.Ref<ScrollView>;
 }
 
-const CommandList = React.forwardRef<ScrollView, CommandListProps>(
-	({ onEndReached, children, ...props }, ref) => {
-		const handleScroll = React.useCallback(
-			(event: any) => {
-				const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-				const paddingToBottom = 20;
-				const isCloseToBottom =
-					layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
-				if (isCloseToBottom && onEndReached) {
-					onEndReached();
-				}
-			},
-			[onEndReached]
-		);
+function CommandList({ onEndReached, children, ref, ...props }: CommandListProps) {
+	const handleScroll = React.useCallback(
+		(event: any) => {
+			const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+			const paddingToBottom = 20;
+			const isCloseToBottom =
+				layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+			if (isCloseToBottom && onEndReached) {
+				onEndReached();
+			}
+		},
+		[onEndReached]
+	);
 
-		return (
-			<ScrollView ref={ref} onScroll={handleScroll} scrollEventThrottle={400} {...props}>
-				{children}
-			</ScrollView>
-		);
-	}
-);
+	return (
+		<ScrollView ref={ref} onScroll={handleScroll} scrollEventThrottle={400} {...props}>
+			{children}
+		</ScrollView>
+	);
+}
 CommandList.displayName = 'CommandList';
 
 interface CommandEmptyProps extends React.ComponentPropsWithoutRef<typeof Text> {
 	children?: React.ReactNode;
+	ref?: React.Ref<Text>;
 }
 
-const CommandEmpty = React.forwardRef<Text, CommandEmptyProps>(({ children, ...props }, ref) => (
-	<Text ref={ref} {...props}>
-		{children}
-	</Text>
-));
+function CommandEmpty({ children, ref, ...props }: CommandEmptyProps) {
+	return (
+		<Text ref={ref} {...props}>
+			{children}
+		</Text>
+	);
+}
 CommandEmpty.displayName = 'CommandEmpty';
 
 interface CommandGroupProps extends React.ComponentPropsWithoutRef<typeof View> {
 	children?: React.ReactNode;
+	ref?: React.Ref<View>;
 }
 
-const CommandGroup = React.forwardRef<View, CommandGroupProps>(({ children, ...props }, ref) => (
-	<View ref={ref} {...props}>
-		{children}
-	</View>
-));
+function CommandGroup({ children, ref, ...props }: CommandGroupProps) {
+	return (
+		<View ref={ref} {...props}>
+			{children}
+		</View>
+	);
+}
 CommandGroup.displayName = 'CommandGroup';
 
-type CommandSeparatorProps = React.ComponentPropsWithoutRef<typeof View>;
+type CommandSeparatorProps = React.ComponentPropsWithoutRef<typeof View> & {
+	ref?: React.Ref<View>;
+};
 
-const CommandSeparator = React.forwardRef<View, CommandSeparatorProps>(
-	({ className, ...props }, ref) => (
-		<View ref={ref} className={`bg-border h-px ${className ?? ''}`} {...props} />
-	)
-);
+function CommandSeparator({ className, ref, ...props }: CommandSeparatorProps) {
+	return <View ref={ref} className={`bg-border h-px ${className ?? ''}`} {...props} />;
+}
 CommandSeparator.displayName = 'CommandSeparator';
 
 interface CommandItemProps extends React.ComponentPropsWithoutRef<typeof Pressable> {
 	children?: React.ReactNode;
 	onSelect?: () => void;
+	ref?: React.Ref<React.ElementRef<typeof Pressable>>;
 }
 
-const CommandItem = React.forwardRef<React.ElementRef<typeof Pressable>, CommandItemProps>(
-	({ onSelect, children, ...props }, ref) => {
-		return (
-			<Pressable ref={ref} onPress={onSelect} {...props}>
-				{children}
-			</Pressable>
-		);
-	}
-);
+function CommandItem({ onSelect, children, ref, ...props }: CommandItemProps) {
+	return (
+		<Pressable ref={ref} onPress={onSelect} {...props}>
+			{children}
+		</Pressable>
+	);
+}
 CommandItem.displayName = 'CommandItem';
 
 interface CommandShortcutProps extends React.ComponentPropsWithoutRef<typeof Text> {
 	children?: React.ReactNode;
+	ref?: React.Ref<Text>;
 }
 
-const CommandShortcut = React.forwardRef<Text, CommandShortcutProps>(
-	({ children, ...props }, ref) => (
+function CommandShortcut({ children, ref, ...props }: CommandShortcutProps) {
+	return (
 		<Text ref={ref} {...props}>
 			{children}
 		</Text>
-	)
-);
+	);
+}
 CommandShortcut.displayName = 'CommandShortcut';
 
 // Dummy implementation of useCommandState since we don't have cmdk
