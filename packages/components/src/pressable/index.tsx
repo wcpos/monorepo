@@ -10,14 +10,13 @@ import {
 export type PressableProps = import('react-native').PressableProps & {
 	onHoverIn?: () => void;
 	onHoverOut?: () => void;
+	ref?: React.Ref<View>;
 };
 
 /**
  *
  */
-export const Pressable = React.forwardRef<View, PressableProps>((props, ref) => {
-	const { style, ...rest } = props;
-
+function Pressable({ ref, style, ...rest }: PressableProps) {
 	const resolvedStyle = React.useCallback(
 		(state: PressableStateCallbackType) => {
 			let finalStyle: StyleProp<ViewStyle> = [];
@@ -35,6 +34,8 @@ export const Pressable = React.forwardRef<View, PressableProps>((props, ref) => 
 	);
 
 	return <RNPressable style={resolvedStyle} ref={ref} {...rest} />;
-});
+}
 
 Pressable.displayName = 'Pressable';
+
+export { Pressable };

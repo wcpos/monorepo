@@ -3,25 +3,55 @@ import { View } from 'react-native';
 
 import * as RadioGroupPrimitive from '@rn-primitives/radio-group';
 
+import { HStack } from '../hstack';
+import { Label } from '../label';
 import { cn } from '../lib/utils';
+import { Text } from '../text';
+import { VStack } from '../vstack';
 
-const RadioGroup = React.forwardRef<
-	React.ElementRef<typeof RadioGroupPrimitive.Root>,
-	React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root>
->(({ className, ...props }, ref) => {
+type RadioGroupPrimitiveRootProps = React.ComponentProps<typeof RadioGroupPrimitive.Root>;
+type RadioGroupProps = Omit<RadioGroupPrimitiveRootProps, 'onValueChange'> & {
+	onValueChange?: RadioGroupPrimitiveRootProps['onValueChange'];
+};
+type RadioGroupContextValue = Pick<RadioGroupProps, 'value' | 'onValueChange' | 'disabled'>;
+
+const RadioGroupContext = React.createContext<RadioGroupContextValue | null>(null);
+const noopOnValueChange: NonNullable<RadioGroupProps['onValueChange']> = () => {};
+
+function useRadioGroupContext() {
+	const context = React.useContext(RadioGroupContext);
+	if (!context) {
+		throw new Error('RadioGroupOption must be rendered inside RadioGroup');
+	}
+	return context;
+}
+
+function RadioGroup({
+	className,
+	value,
+	onValueChange,
+	disabled = false,
+	...props
+}: RadioGroupProps) {
 	return (
-		<RadioGroupPrimitive.Root className={cn('web:grid gap-2', className)} {...props} ref={ref} />
+		<RadioGroupContext.Provider value={{ value, onValueChange, disabled }}>
+			<RadioGroupPrimitive.Root
+				className={cn('web:grid gap-2', className)}
+				value={value}
+				onValueChange={onValueChange ?? noopOnValueChange}
+				disabled={disabled}
+				{...props}
+			/>
+		</RadioGroupContext.Provider>
 	);
-});
-RadioGroup.displayName = RadioGroupPrimitive.Root.displayName;
+}
 
-const RadioGroupItem = React.forwardRef<
-	React.ElementRef<typeof RadioGroupPrimitive.Item>,
-	React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item>
->(({ className, ...props }, ref) => {
+function RadioGroupItem({
+	className,
+	...props
+}: React.ComponentProps<typeof RadioGroupPrimitive.Item>) {
 	return (
 		<RadioGroupPrimitive.Item
-			ref={ref}
 			className={cn(
 				'native:h-5 native:w-5 web:ring-offset-background web:focus:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2 border-primary text-primary aspect-square h-4 w-4 items-center justify-center rounded-full border',
 				props.disabled && 'web:cursor-not-allowed opacity-50',
@@ -34,7 +64,73 @@ const RadioGroupItem = React.forwardRef<
 			</RadioGroupPrimitive.Indicator>
 		</RadioGroupPrimitive.Item>
 	);
-});
-RadioGroupItem.displayName = RadioGroupPrimitive.Item.displayName;
+}
 
-export { RadioGroup, RadioGroupItem };
+type RadioGroupOptionProps = Omit<
+	React.ComponentProps<typeof RadioGroupPrimitive.Item>,
+	'aria-describedby' | 'aria-labelledby' | 'children' | 'className'
+> & {
+	label: React.ReactNode;
+	description?: React.ReactNode;
+	className?: string;
+	itemClassName?: string;
+	labelClassName?: string;
+	descriptionClassName?: string;
+	right?: React.ReactNode;
+};
+
+function RadioGroupOption({
+	className,
+	description,
+	descriptionClassName,
+	disabled = false,
+	itemClassName,
+	label,
+	labelClassName,
+	right,
+	value,
+	...props
+}: RadioGroupOptionProps) {
+	const { disabled: groupDisabled, onValueChange, value: selectedValue } = useRadioGroupContext();
+	const generatedID = React.useId().replace(/:/g, '');
+	const labelID = `radio-group-option-${generatedID}`;
+	const descriptionID = description ? `radio-group-option-description-${generatedID}` : undefined;
+	const isDisabled = groupDisabled || disabled;
+
+	return (
+		<HStack className={cn('items-start', isDisabled && 'opacity-50', className)} space="sm">
+			<RadioGroupItem
+				aria-describedby={descriptionID}
+				aria-labelledby={labelID}
+				disabled={isDisabled}
+				value={value}
+				className={itemClassName}
+				{...props}
+			/>
+			<VStack className="flex-1" space="xs">
+				<Label
+					nativeID={labelID}
+					className={labelClassName}
+					onPress={() => {
+						if (!isDisabled && value !== selectedValue) {
+							onValueChange?.(value);
+						}
+					}}
+				>
+					{label}
+				</Label>
+				{description ? (
+					<Text
+						nativeID={descriptionID}
+						className={cn('text-muted-foreground text-sm', descriptionClassName)}
+					>
+						{description}
+					</Text>
+				) : null}
+			</VStack>
+			{right}
+		</HStack>
+	);
+}
+
+export { RadioGroup, RadioGroupItem, RadioGroupOption };

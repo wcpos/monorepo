@@ -85,6 +85,19 @@ jest.mock('@wcpos/components/radio-group', () => ({
 	RadioGroupItem: ({ value, disabled, testID }: any) => (
 		<input type="radio" value={value} disabled={disabled} data-testid={testID} />
 	),
+	RadioGroupOption: ({ value, disabled, testID, label, description }: any) => (
+		<label>
+			{label}
+			<input
+				type="radio"
+				aria-label={label}
+				value={value}
+				disabled={disabled}
+				data-testid={testID}
+			/>
+			{description ? <span>{description}</span> : null}
+		</label>
+	),
 }));
 
 jest.mock('observable-hooks', () => ({

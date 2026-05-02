@@ -11,10 +11,13 @@ const HoverCard = HoverCardPrimitive.Root;
 
 const HoverCardTrigger = HoverCardPrimitive.Trigger;
 
-const HoverCardContent = React.forwardRef<
-	React.ElementRef<typeof HoverCardPrimitive.Content>,
-	React.ComponentPropsWithoutRef<typeof HoverCardPrimitive.Content>
->(({ className, align = 'center', sideOffset = 4, ...props }, ref) => {
+function HoverCardContent({
+	className,
+	align = 'center',
+	sideOffset = 4,
+	ref,
+	...props
+}: React.ComponentProps<typeof HoverCardPrimitive.Content>) {
 	const { open } = HoverCardPrimitive.useRootContext();
 	return (
 		<HoverCardPrimitive.Portal>
@@ -41,7 +44,7 @@ const HoverCardContent = React.forwardRef<
 			</HoverCardPrimitive.Overlay>
 		</HoverCardPrimitive.Portal>
 	);
-});
+}
 HoverCardContent.displayName = HoverCardPrimitive.Content.displayName;
 
 export { HoverCard, HoverCardContent, HoverCardTrigger };
