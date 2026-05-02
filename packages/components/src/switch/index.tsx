@@ -9,10 +9,10 @@ import Animated, {
 	useDerivedValue,
 	withTiming,
 } from 'react-native-reanimated';
+import { useCSSVariable } from 'uniwind';
 
 import { HStack } from '../hstack';
 import { Label } from '../label';
-import { useColorScheme } from '../lib/useColorScheme';
 import { cn } from '../lib/utils';
 
 const webSwitchVariants = cva(
@@ -59,36 +59,28 @@ const webThumbVariants = cva(
 	}
 );
 
-const SwitchWeb = React.forwardRef<
-	React.ElementRef<typeof SwitchPrimitives.Root>,
-	React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root> &
-		VariantProps<typeof webSwitchVariants>
->(({ className, size, ...props }, ref) => (
-	<SwitchPrimitives.Root
-		className={cn(
-			webSwitchVariants({ size, checked: !!props.checked }),
-			props.disabled && 'opacity-50',
-			className
-		)}
-		{...props}
-		ref={ref}
-	>
-		<SwitchPrimitives.Thumb className={cn(webThumbVariants({ size, checked: !!props.checked }))} />
-	</SwitchPrimitives.Root>
-));
+type SwitchWebProps = React.ComponentProps<typeof SwitchPrimitives.Root> &
+	VariantProps<typeof webSwitchVariants>;
+
+function SwitchWeb({ className, size, ref, ...props }: SwitchWebProps) {
+	return (
+		<SwitchPrimitives.Root
+			className={cn(
+				webSwitchVariants({ size, checked: !!props.checked }),
+				props.disabled && 'opacity-50',
+				className
+			)}
+			{...props}
+			ref={ref}
+		>
+			<SwitchPrimitives.Thumb
+				className={cn(webThumbVariants({ size, checked: !!props.checked }))}
+			/>
+		</SwitchPrimitives.Root>
+	);
+}
 
 SwitchWeb.displayName = 'SwitchWeb';
-
-const RGB_COLORS = {
-	light: {
-		primary: 'rgb(24, 24, 27)',
-		input: 'rgb(228, 228, 231)',
-	},
-	dark: {
-		primary: 'rgb(250, 250, 250)',
-		input: 'rgb(39, 39, 42)',
-	},
-} as const;
 
 const nativeSwitchVariants = cva('shrink-0 flex-row items-center rounded-full', {
 	variants: {
@@ -118,11 +110,16 @@ const nativeThumbVariants = cva('bg-background rounded-full shadow-sm', {
 	},
 });
 
-const SwitchNative = React.forwardRef<
-	SwitchPrimitives.RootRef,
-	SwitchPrimitives.RootProps & VariantProps<typeof nativeSwitchVariants>
->(({ className, size = 'default', ...props }, ref) => {
-	const { colorScheme } = useColorScheme();
+type SwitchNativeProps = SwitchPrimitives.RootProps &
+	VariantProps<typeof nativeSwitchVariants> & {
+		ref?: React.Ref<SwitchPrimitives.RootRef>;
+	};
+
+function SwitchNative({ className, size = 'default', ref, ...props }: SwitchNativeProps) {
+	const [inputColor, primaryColor] = useCSSVariable([
+		'--color-input',
+		'--color-primary',
+	]) as string[];
 
 	const getTranslateX = (size: string) => {
 		'worklet';
@@ -145,7 +142,7 @@ const SwitchNative = React.forwardRef<
 			backgroundColor: interpolateColor(
 				translateX.value,
 				[0, getTranslateX(effectiveSize)],
-				[RGB_COLORS[colorScheme].input, RGB_COLORS[colorScheme].primary]
+				[inputColor, primaryColor]
 			),
 		};
 	});
@@ -175,7 +172,7 @@ const SwitchNative = React.forwardRef<
 			</SwitchPrimitives.Root>
 		</Animated.View>
 	);
-});
+}
 
 SwitchNative.displayName = 'SwitchNative';
 
@@ -193,10 +190,7 @@ type SwitchWithLabelProps = React.ComponentProps<typeof Switch> & {
 	size?: 'xs' | 'sm' | 'lg';
 };
 
-const SwitchWithLabel = React.forwardRef<
-	React.ElementRef<typeof SwitchPrimitives.Root>,
-	SwitchWithLabelProps
->(({ label, size, ...props }, ref) => {
+function SwitchWithLabel({ label, size, ref, ...props }: SwitchWithLabelProps) {
 	const [checked, setChecked] = React.useState(props.checked || false);
 
 	const handleToggle = () => {
@@ -212,7 +206,7 @@ const SwitchWithLabel = React.forwardRef<
 			</Label>
 		</HStack>
 	);
-});
+}
 
 SwitchWithLabel.displayName = 'SwitchWithLabel';
 export { Switch, SwitchWithLabel };

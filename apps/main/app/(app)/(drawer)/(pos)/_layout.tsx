@@ -1,9 +1,9 @@
 import React from 'react';
+import { View } from 'react-native';
 
 import { Stack, useGlobalSearchParams, useSegments } from 'expo-router';
 import { ObservableResource, useObservableEagerState } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
-import { useCSSVariable } from 'uniwind';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
@@ -120,7 +120,6 @@ export default function POSLayout() {
 
 function POSStack() {
 	const { currentOrder } = useCurrentOrder();
-	const backgroundColor = useCSSVariable('--color-background');
 
 	/**
 	 *
@@ -132,31 +131,33 @@ function POSStack() {
 
 	return (
 		<TaxRatesProvider taxQuery={taxQuery!} order={currentOrder}>
-			<Stack
-				screenOptions={{
-					animation: 'none',
-					headerShown: false,
-					contentStyle: { backgroundColor: backgroundColor as string },
-				}}
-			>
-				<Stack.Screen name="index" />
-				<Stack.Screen
-					name="(modals)/cart/[orderId]/checkout"
-					options={{
-						presentation: 'containedTransparentModal',
-						animation: 'fade',
+			<View className="bg-background flex-1">
+				<Stack
+					screenOptions={{
+						animation: 'none',
+						headerShown: false,
 						contentStyle: { backgroundColor: 'transparent' },
 					}}
-				/>
-				<Stack.Screen
-					name="(modals)/cart/receipt/[orderId]"
-					options={{
-						presentation: 'containedTransparentModal',
-						animation: 'fade',
-						contentStyle: { backgroundColor: 'transparent' },
-					}}
-				/>
-			</Stack>
+				>
+					<Stack.Screen name="index" />
+					<Stack.Screen
+						name="(modals)/cart/[orderId]/checkout"
+						options={{
+							presentation: 'containedTransparentModal',
+							animation: 'fade',
+							contentStyle: { backgroundColor: 'transparent' },
+						}}
+					/>
+					<Stack.Screen
+						name="(modals)/cart/receipt/[orderId]"
+						options={{
+							presentation: 'containedTransparentModal',
+							animation: 'fade',
+							contentStyle: { backgroundColor: 'transparent' },
+						}}
+					/>
+				</Stack>
+			</View>
 			{/**
 			 * We need to have the named PortalHost inside the CurrentOrderProvider and TaxRatesProvider
 			 * so that dialogs like add/edit product etc can access the context

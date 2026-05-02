@@ -1,6 +1,7 @@
+import { View } from 'react-native';
+
 import { Stack } from 'expo-router';
 import { useObservableEagerState } from 'observable-hooks';
-import { useCSSVariable } from 'uniwind';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
@@ -25,7 +26,6 @@ export const unstable_settings = {
 function AppStack() {
 	const { storeDB, fastStoreDB } = useAppState();
 	const { locale } = useLocale();
-	const backgroundColor = useCSSVariable('--color-background');
 
 	/**
 	 * The http client now has access to online status context
@@ -35,44 +35,46 @@ function AppStack() {
 	return (
 		<QueryProvider localDB={storeDB} fastLocalDB={fastStoreDB} http={http} locale={locale}>
 			<UISettingsProvider>
-				<Stack
-					screenOptions={{
-						headerShown: false,
-						contentStyle: { backgroundColor: backgroundColor as string },
-					}}
-				>
-					<Stack.Screen name="(drawer)" />
-					<Stack.Screen
-						name="(modals)/settings"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
+				<View className="bg-background flex-1">
+					<Stack
+						screenOptions={{
+							headerShown: false,
 							contentStyle: { backgroundColor: 'transparent' },
 						}}
-					/>
-					<Stack.Screen
-						name="(modals)/tax-rates"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
-							contentStyle: { backgroundColor: 'transparent' },
-						}}
-					/>
-					{/* <Stack.Screen
-						name="(modals)/login"
-						options={{
-							presentation: 'containedTransparentModal',
-							animation: 'fade',
-							contentStyle: { backgroundColor: 'transparent' },
-						}}
-					/> */}
-				</Stack>
-				{/**
-				 * We need to have a PortalHost inside the UISettingsProvider
-				 */}
-				<ErrorBoundary>
-					<PortalHost />
-				</ErrorBoundary>
+					>
+						<Stack.Screen name="(drawer)" />
+						<Stack.Screen
+							name="(modals)/settings"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
+							}}
+						/>
+						<Stack.Screen
+							name="(modals)/tax-rates"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
+							}}
+						/>
+						{/* <Stack.Screen
+							name="(modals)/login"
+							options={{
+								presentation: 'containedTransparentModal',
+								animation: 'fade',
+								contentStyle: { backgroundColor: 'transparent' },
+							}}
+						/> */}
+					</Stack>
+					{/**
+					 * We need to have a PortalHost inside the UISettingsProvider
+					 */}
+					<ErrorBoundary>
+						<PortalHost />
+					</ErrorBoundary>
+				</View>
 			</UISettingsProvider>
 		</QueryProvider>
 	);

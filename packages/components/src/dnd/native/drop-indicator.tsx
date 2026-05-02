@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View, type ViewStyle } from 'react-native';
 
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { useCSSVariable } from 'uniwind';
 
 type Edge = 'top' | 'bottom' | 'left' | 'right';
 
@@ -10,7 +11,6 @@ interface DropIndicatorProps {
 	gap: number;
 }
 
-const INDICATOR_COLOR = '#2563eb'; // blue-600
 const INDICATOR_THICKNESS = 2;
 const DOT_SIZE = 8;
 
@@ -18,6 +18,7 @@ const DOT_SIZE = 8;
  * Visual indicator showing where a dragged item will be dropped
  */
 export function DropIndicator({ edge, gap }: DropIndicatorProps) {
+	const indicatorColor = useCSSVariable('--color-primary') as string;
 	const isHorizontal = edge === 'top' || edge === 'bottom';
 
 	// Calculate offset to position indicator between items
@@ -25,7 +26,7 @@ export function DropIndicator({ edge, gap }: DropIndicatorProps) {
 
 	const baseStyle: ViewStyle = {
 		position: 'absolute',
-		backgroundColor: INDICATOR_COLOR,
+		backgroundColor: indicatorColor,
 		zIndex: 10,
 	};
 
@@ -49,7 +50,7 @@ export function DropIndicator({ edge, gap }: DropIndicatorProps) {
 		height: DOT_SIZE,
 		borderRadius: DOT_SIZE / 2,
 		borderWidth: 2,
-		borderColor: INDICATOR_COLOR,
+		borderColor: indicatorColor,
 		backgroundColor: 'transparent',
 		...(isHorizontal
 			? {

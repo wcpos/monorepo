@@ -87,7 +87,7 @@ function PermanentDrawerItem({
 			size="xl"
 			className={cn(
 				'h-12 rounded-none border-x-4 border-transparent bg-transparent px-3',
-				focused ? 'border-l-primary' : 'hover:bg-white/10'
+				focused ? 'border-l-primary' : 'web:hover:bg-white/10'
 			)}
 		>
 			{icon?.({ focused })}
@@ -125,7 +125,7 @@ function StandardDrawerItem({
 			size="xl"
 			className={cn(
 				'h-12 items-start rounded-none border-x-4 border-transparent bg-transparent px-3',
-				focused ? 'border-l-primary' : 'hover:bg-white/10'
+				focused ? 'border-l-primary' : 'web:hover:bg-white/10'
 			)}
 			style={style}
 		>

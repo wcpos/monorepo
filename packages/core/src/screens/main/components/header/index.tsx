@@ -4,7 +4,6 @@ import { type LayoutChangeEvent, View } from 'react-native';
 import { useObservableState } from 'observable-hooks';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCSSVariable } from 'uniwind';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { HStack } from '@wcpos/components/hstack';
@@ -46,12 +45,6 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 	const [titleContainerWidth, setTitleContainerWidth] = React.useState(0);
 	const [titleTextWidth, setTitleTextWidth] = React.useState(0);
 
-	// Get theme-aware colors - header uses sidebar color to match drawer
-	const [sidebarColor, sidebarBorderColor] = useCSSVariable([
-		'--color-sidebar',
-		'--color-sidebar-border',
-	]) as string[];
-
 	const isSmallScreen = screenSize === 'sm';
 	const title = `${options.title} - ${storeName}`;
 
@@ -82,12 +75,8 @@ export function Header({ options, showUpgrade, setShowUpgrade }: Props) {
 		<ErrorBoundary>
 			<View id="titlebar">
 				<View
-					style={{
-						backgroundColor: sidebarColor,
-						paddingTop: insets.top,
-						borderBottomWidth: 1,
-						borderBottomColor: sidebarBorderColor,
-					}}
+					className="bg-sidebar border-sidebar-border border-b"
+					style={{ paddingTop: insets.top }}
 				>
 					<HStack className="h-10 items-center">
 						{/* Left section - measured for centering calculation */}

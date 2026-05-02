@@ -20,19 +20,61 @@ export const unstable_settings = {
 	initialRouteName: 'index',
 };
 
-export default function TabsLayout() {
-	const { screenSize } = useTheme();
-	const { uiSettings, patchUI } = useUISettings('pos-products');
-	const { bottom } = useSafeAreaInsets();
-
-	// Theme-aware colors for native tab bar styling
-	const [backgroundColor, cardColor, primaryColor, mutedForeground, borderColor] = useCSSVariable([
-		'--color-background',
+/**
+ * Tabs navigator wrapper consuming theme-aware colors via `useCSSVariable`.
+ * Isolated so `TabsLayout` itself does not subscribe to theme changes
+ * (which would re-render the entire navigator and cancel Uniwind's
+ * theme transition).
+ */
+function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => void } }) {
+	const [cardColor, primaryColor, mutedForeground, borderColor] = useCSSVariable([
 		'--color-card',
 		'--color-primary',
 		'--color-muted-foreground',
 		'--color-border',
 	]) as string[];
+
+	return (
+		<Tabs
+			screenOptions={{
+				headerShown: false,
+				sceneStyle: { backgroundColor: 'transparent' },
+				tabBarStyle: { backgroundColor: cardColor, borderTopColor: borderColor },
+				tabBarActiveTintColor: primaryColor,
+				tabBarInactiveTintColor: mutedForeground,
+			}}
+		>
+			<Tabs.Screen
+				name="index"
+				listeners={tabPressListener}
+				options={{
+					title: 'Products',
+					tabBarIcon: ({ focused }) => (
+						<Icon name="gifts" className={focused ? 'text-primary' : 'text-muted-foreground'} />
+					),
+				}}
+			/>
+			<Tabs.Screen
+				name="cart"
+				listeners={tabPressListener}
+				options={{
+					title: 'Cart',
+					tabBarIcon: ({ focused }) => (
+						<Icon
+							name="cartShopping"
+							className={focused ? 'text-primary' : 'text-muted-foreground'}
+						/>
+					),
+				}}
+			/>
+		</Tabs>
+	);
+}
+
+export default function TabsLayout() {
+	const { screenSize } = useTheme();
+	const { uiSettings, patchUI } = useUISettings('pos-products');
+	const { bottom } = useSafeAreaInsets();
 
 	const tabPressListener = React.useMemo(
 		() => ({
@@ -75,38 +117,8 @@ export default function TabsLayout() {
 	}
 
 	return (
-		<Tabs
-			screenOptions={{
-				headerShown: false,
-				sceneStyle: { backgroundColor },
-				tabBarStyle: { backgroundColor: cardColor, borderTopColor: borderColor },
-				tabBarActiveTintColor: primaryColor,
-				tabBarInactiveTintColor: mutedForeground,
-			}}
-		>
-			<Tabs.Screen
-				name="index"
-				listeners={tabPressListener}
-				options={{
-					title: 'Products',
-					tabBarIcon: ({ focused }) => (
-						<Icon name="gifts" className={focused ? 'text-primary' : 'text-muted-foreground'} />
-					),
-				}}
-			/>
-			<Tabs.Screen
-				name="cart"
-				listeners={tabPressListener}
-				options={{
-					title: 'Cart',
-					tabBarIcon: ({ focused }) => (
-						<Icon
-							name="cartShopping"
-							className={focused ? 'text-primary' : 'text-muted-foreground'}
-						/>
-					),
-				}}
-			/>
-		</Tabs>
+		<View className="bg-background flex-1">
+			<ThemedTabs tabPressListener={tabPressListener} />
+		</View>
 	);
 }

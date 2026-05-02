@@ -39,7 +39,7 @@ export function HeaderLeft() {
 		return (
 			<Button
 				onPress={handleOpenDrawer}
-				className="rounded-none bg-transparent px-3 hover:bg-white/10"
+				className="web:hover:bg-white/10 rounded-none bg-transparent px-3"
 			>
 				<Icon name="bars" className="text-sidebar-foreground" />
 			</Button>
@@ -52,7 +52,7 @@ export function HeaderLeft() {
 	return (
 		<Button
 			onPress={handleOpenDrawer}
-			className="rounded-none bg-transparent px-3 hover:bg-white/10"
+			className="web:hover:bg-white/10 rounded-none bg-transparent px-3"
 		>
 			<HStack className="gap-2">
 				<Icon name="bars" className="text-sidebar-foreground" />

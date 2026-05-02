@@ -106,7 +106,7 @@ export function UserMenu() {
 			<DropdownMenuTrigger asChild>
 				<Button
 					testID="user-menu-trigger"
-					className="text-sidebar-foreground rounded-none bg-transparent px-2 hover:bg-white/10"
+					className="text-sidebar-foreground web:hover:bg-white/10 rounded-none bg-transparent px-2"
 				>
 					<HStack>
 						<Avatar source={{ uri }} fallback={getInitials(wpCredentials?.display_name)} />
