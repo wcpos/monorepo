@@ -38,10 +38,10 @@ function PanelResizeHandle() {
 			/> */}
 			<View
 				className={cn(
-					'group-hover:border-border group-hover:bg-popover group-hover:animate-fadeIn absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 transform p-1 opacity-20 transition-opacity duration-200 ease-out group-hover:scale-95 group-hover:rounded-md group-hover:border group-hover:opacity-100 group-hover:shadow-md',
+					'web:group-hover:border-border web:group-hover:bg-popover web:group-hover:animate-fadeIn web:group-hover:scale-95 web:group-hover:rounded-md web:group-hover:border web:group-hover:opacity-100 web:group-hover:shadow-md absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 transform p-1 opacity-20 transition-opacity duration-200 ease-out',
 					direction === 'horizontal'
-						? 'group-hover:cursor-ew-resize'
-						: 'group-hover:cursor-ns-resize'
+						? 'web:group-hover:cursor-ew-resize'
+						: 'web:group-hover:cursor-ns-resize'
 				)}
 			>
 				<Icon

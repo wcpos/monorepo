@@ -1,5 +1,6 @@
+import { View } from 'react-native';
+
 import { Stack } from 'expo-router';
-import { useCSSVariable } from 'uniwind';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -7,32 +8,32 @@ export const unstable_settings = {
 };
 
 export default function ProductsLayout() {
-	const backgroundColor = useCSSVariable('--color-background');
-
 	return (
-		<Stack
-			screenOptions={{
-				headerShown: false,
-				contentStyle: { backgroundColor: backgroundColor as string },
-			}}
-		>
-			<Stack.Screen name="index" />
-			<Stack.Screen
-				name="(modals)/edit/product/[productId]"
-				options={{
-					presentation: 'containedTransparentModal',
-					animation: 'fade',
+		<View className="bg-background flex-1">
+			<Stack
+				screenOptions={{
+					headerShown: false,
 					contentStyle: { backgroundColor: 'transparent' },
 				}}
-			/>
-			<Stack.Screen
-				name="(modals)/edit/variation/[variationId]"
-				options={{
-					presentation: 'containedTransparentModal',
-					animation: 'fade',
-					contentStyle: { backgroundColor: 'transparent' },
-				}}
-			/>
-		</Stack>
+			>
+				<Stack.Screen name="index" />
+				<Stack.Screen
+					name="(modals)/edit/product/[productId]"
+					options={{
+						presentation: 'containedTransparentModal',
+						animation: 'fade',
+						contentStyle: { backgroundColor: 'transparent' },
+					}}
+				/>
+				<Stack.Screen
+					name="(modals)/edit/variation/[variationId]"
+					options={{
+						presentation: 'containedTransparentModal',
+						animation: 'fade',
+						contentStyle: { backgroundColor: 'transparent' },
+					}}
+				/>
+			</Stack>
+		</View>
 	);
 }

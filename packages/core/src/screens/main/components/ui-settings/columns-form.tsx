@@ -78,7 +78,7 @@ export function UISettingsColumnsForm({ columns, getUILabel }: UISettingsColumns
 	 * Render a single column item (shared between SortableList and simple list)
 	 */
 	const renderColumnItem = (column: ColumnField, columnIndex: number) => (
-		<VStack key={column.key} className="gap-0 rounded p-2 transition-shadow hover:shadow-md">
+		<VStack key={column.key} className="web:hover:shadow-md gap-0 rounded p-2 transition-shadow">
 			<HStack>
 				<DragHandle className="mr-2">
 					<Icon name="gripLinesVertical" size="xs" className="cursor-grab" />

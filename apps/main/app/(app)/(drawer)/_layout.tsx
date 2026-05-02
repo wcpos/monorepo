@@ -20,33 +20,38 @@ export const unstable_settings = {
 	initialRouteName: '(pos)',
 };
 
-export default function DrawerLayout() {
-	const { screenSize } = useTheme();
-	const t = useT();
-
+/**
+ * Drawer wrapper that consumes theme-aware colors via `useCSSVariable`.
+ * Isolated into its own component so that `DrawerLayout` does not subscribe
+ * to theme changes (which would re-render the entire navigator and cancel
+ * Uniwind's theme transition).
+ */
+function ThemedDrawer({
+	screenSize,
+	t,
+	showUpgrade,
+	setShowUpgrade,
+	unreadErrorCount,
+	markLogsAsRead,
+}: {
+	screenSize: string;
+	t: ReturnType<typeof useT>;
+	showUpgrade: boolean;
+	setShowUpgrade: () => void;
+	unreadErrorCount: number;
+	markLogsAsRead: () => void;
+}) {
 	// Get theme-aware colors for navigation
-	const [sidebarColor, sidebarBorderColor, backgroundColor] = useCSSVariable([
+	const [sidebarColor, sidebarBorderColor] = useCSSVariable([
 		'--color-sidebar',
 		'--color-sidebar-border',
-		'--color-background',
 	]) as string[];
-
-	//
-	const { license } = useAppInfo();
-	const [showUpgrade, setShowUpgrade] = React.useState(!license?.isPro);
-	const { count: unreadErrorCount, markAsRead: markLogsAsRead } = useUnreadErrorCount();
 
 	return (
 		<Drawer
 			screenOptions={{
 				header: (props) => {
-					return (
-						<Header
-							{...props}
-							showUpgrade={showUpgrade}
-							setShowUpgrade={() => setShowUpgrade(false)}
-						/>
-					);
+					return <Header {...props} showUpgrade={showUpgrade} setShowUpgrade={setShowUpgrade} />;
 				},
 				drawerType: screenSize === 'lg' ? 'permanent' : 'front',
 				drawerStyle: {
@@ -62,7 +67,7 @@ export default function DrawerLayout() {
 					paddingRight: 0,
 					paddingLeft: 0,
 				},
-				sceneStyle: { backgroundColor },
+				sceneStyle: { backgroundColor: 'transparent' },
 			}}
 			drawerContent={DrawerContent}
 		>
@@ -186,5 +191,30 @@ export default function DrawerLayout() {
 				}}
 			/>
 		</Drawer>
+	);
+}
+
+export default function DrawerLayout() {
+	const { screenSize } = useTheme();
+	const t = useT();
+
+	const { license } = useAppInfo();
+	const [showUpgrade, setShowUpgrade] = React.useState(!license?.isPro);
+	React.useEffect(() => {
+		setShowUpgrade(!license?.isPro);
+	}, [license?.isPro]);
+	const { count: unreadErrorCount, markAsRead: markLogsAsRead } = useUnreadErrorCount();
+
+	return (
+		<View className="bg-background flex-1">
+			<ThemedDrawer
+				screenSize={screenSize}
+				t={t}
+				showUpgrade={showUpgrade}
+				setShowUpgrade={() => setShowUpgrade(false)}
+				unreadErrorCount={unreadErrorCount}
+				markLogsAsRead={markLogsAsRead}
+			/>
+		</View>
 	);
 }

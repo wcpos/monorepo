@@ -104,9 +104,11 @@ CommandGroup.displayName = 'CommandGroup';
 
 type CommandSeparatorProps = React.ComponentPropsWithoutRef<typeof View>;
 
-const CommandSeparator = React.forwardRef<View, CommandSeparatorProps>((props, ref) => (
-	<View ref={ref} style={[{ height: 1, backgroundColor: '#e5e7eb' }]} {...props} />
-));
+const CommandSeparator = React.forwardRef<View, CommandSeparatorProps>(
+	({ className, ...props }, ref) => (
+		<View ref={ref} className={`bg-border h-px ${className ?? ''}`} {...props} />
+	)
+);
 CommandSeparator.displayName = 'CommandSeparator';
 
 interface CommandItemProps extends React.ComponentPropsWithoutRef<typeof Pressable> {

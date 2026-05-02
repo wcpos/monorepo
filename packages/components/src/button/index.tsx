@@ -61,21 +61,15 @@ const buttonVariants = cva(
 				 * Ghost buttons
 				 */
 				ghost: 'web:hover:bg-accent/90 web:hover:text-accent-foreground active:bg-accent',
-				'ghost-primary':
-					'bg-primary/15 web:hover:bg-primary active:bg-primary text-primary-foreground',
-				'ghost-secondary':
-					'bg-secondary/15 web:hover:bg-secondary active:bg-secondary text-secondary-foreground',
-				'ghost-muted': 'bg-muted/15 web:hover:bg-muted active:bg-muted text-muted-foreground',
-				'ghost-success':
-					'bg-success/15 web:hover:bg-success active:bg-success text-success-foreground',
-				'ghost-destructive':
-					'bg-destructive/15 web:hover:bg-destructive active:bg-destructive text-destructive-foreground',
-				'ghost-info': 'bg-info/15 web:hover:bg-info active:bg-info text-info-foreground',
-				'ghost-attention':
-					'bg-attention/15 web:hover:bg-attention active:bg-attention text-attention-foreground',
-				'ghost-warning':
-					'bg-warning/15 web:hover:bg-warning active:bg-warning text-warning-foreground',
-				'ghost-error': 'bg-error/15 web:hover:bg-error active:bg-error text-error-foreground',
+				'ghost-primary': 'bg-primary/15 web:hover:bg-primary active:bg-primary',
+				'ghost-secondary': 'bg-secondary/15 web:hover:bg-secondary active:bg-secondary',
+				'ghost-muted': 'bg-muted/15 web:hover:bg-muted active:bg-muted',
+				'ghost-success': 'bg-success/15 web:hover:bg-success active:bg-success',
+				'ghost-destructive': 'bg-destructive/15 web:hover:bg-destructive active:bg-destructive',
+				'ghost-info': 'bg-info/15 web:hover:bg-info active:bg-info',
+				'ghost-attention': 'bg-attention/15 web:hover:bg-attention active:bg-attention',
+				'ghost-warning': 'bg-warning/15 web:hover:bg-warning active:bg-warning',
+				'ghost-error': 'bg-error/15 web:hover:bg-error active:bg-error',
 			},
 			size: {
 				default: 'h-10 px-4 py-2',
@@ -128,16 +122,25 @@ const buttonTextVariants = cva(
 				/**
 				 * Ghost buttons
 				 */
-				ghost: 'group-hover:text-accent-foreground',
-				'ghost-primary': 'text-primary group-hover:text-primary-foreground',
-				'ghost-secondary': 'text-secondary group-hover:text-secondary-foreground',
-				'ghost-muted': 'text-muted group-hover:text-muted-foreground',
-				'ghost-success': 'text-success group-hover:text-success-foreground',
-				'ghost-destructive': 'text-destructive group-hover:text-destructive-foreground',
-				'ghost-info': 'text-info group-hover:text-info-foreground',
-				'ghost-attention': 'text-attention group-hover:text-attention-foreground',
-				'ghost-warning': 'text-warning group-hover:text-warning-foreground',
-				'ghost-error': 'text-error group-hover:text-error-foreground',
+				ghost: 'web:group-hover:text-accent-foreground group-active:text-accent-foreground',
+				'ghost-primary':
+					'text-primary web:group-hover:text-primary-foreground group-active:text-primary-foreground',
+				'ghost-secondary':
+					'text-secondary web:group-hover:text-secondary-foreground group-active:text-secondary-foreground',
+				'ghost-muted':
+					'text-muted web:group-hover:text-muted-foreground group-active:text-muted-foreground',
+				'ghost-success':
+					'text-success web:group-hover:text-success-foreground group-active:text-success-foreground',
+				'ghost-destructive':
+					'text-destructive web:group-hover:text-destructive-foreground group-active:text-destructive-foreground',
+				'ghost-info':
+					'text-info web:group-hover:text-info-foreground group-active:text-info-foreground',
+				'ghost-attention':
+					'text-attention web:group-hover:text-attention-foreground group-active:text-attention-foreground',
+				'ghost-warning':
+					'text-warning web:group-hover:text-warning-foreground group-active:text-warning-foreground',
+				'ghost-error':
+					'text-error web:group-hover:text-error-foreground group-active:text-error-foreground',
 			},
 			size: {
 				default: '',
