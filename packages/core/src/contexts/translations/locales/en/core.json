@@ -468,7 +468,7 @@
 	"pos_checkout.payment_completed_for_order": "Payment completed for order #{orderNumber}",
 	"pos_checkout.process_payment": "Process Payment",
 	"pos_products.a_list_of_product_meta_keys": "A list of product meta keys that should be copied to the cart",
-	"pos_products.combination_unavailable": "Combination not available",
+	"pos_products.combination_unavailable": "Variant not available",
 	"pos_products.in_stock": "{quantity} in stock",
 	"pos_products.out_of_stock": "{name} out of stock",
 	"pos_products.select_an_option": "Select an option",
