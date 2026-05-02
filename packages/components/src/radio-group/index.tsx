@@ -9,12 +9,14 @@ import { cn } from '../lib/utils';
 import { Text } from '../text';
 import { VStack } from '../vstack';
 
-type RadioGroupContextValue = Pick<
-	React.ComponentProps<typeof RadioGroupPrimitive.Root>,
-	'value' | 'onValueChange' | 'disabled'
->;
+type RadioGroupPrimitiveRootProps = React.ComponentProps<typeof RadioGroupPrimitive.Root>;
+type RadioGroupProps = Omit<RadioGroupPrimitiveRootProps, 'onValueChange'> & {
+	onValueChange?: RadioGroupPrimitiveRootProps['onValueChange'];
+};
+type RadioGroupContextValue = Pick<RadioGroupProps, 'value' | 'onValueChange' | 'disabled'>;
 
 const RadioGroupContext = React.createContext<RadioGroupContextValue | null>(null);
+const noopOnValueChange: NonNullable<RadioGroupProps['onValueChange']> = () => {};
 
 function useRadioGroupContext() {
 	const context = React.useContext(RadioGroupContext);
@@ -30,13 +32,13 @@ function RadioGroup({
 	onValueChange,
 	disabled = false,
 	...props
-}: React.ComponentProps<typeof RadioGroupPrimitive.Root>) {
+}: RadioGroupProps) {
 	return (
 		<RadioGroupContext.Provider value={{ value, onValueChange, disabled }}>
 			<RadioGroupPrimitive.Root
 				className={cn('web:grid gap-2', className)}
 				value={value}
-				onValueChange={onValueChange}
+				onValueChange={onValueChange ?? noopOnValueChange}
 				disabled={disabled}
 				{...props}
 			/>
@@ -89,7 +91,7 @@ function RadioGroupOption({
 	value,
 	...props
 }: RadioGroupOptionProps) {
-	const { disabled: groupDisabled, onValueChange } = useRadioGroupContext();
+	const { disabled: groupDisabled, onValueChange, value: selectedValue } = useRadioGroupContext();
 	const generatedID = React.useId().replace(/:/g, '');
 	const labelID = `radio-group-option-${generatedID}`;
 	const descriptionID = description ? `radio-group-option-description-${generatedID}` : undefined;
@@ -110,7 +112,7 @@ function RadioGroupOption({
 					nativeID={labelID}
 					className={labelClassName}
 					onPress={() => {
-						if (!isDisabled) {
+						if (!isDisabled && value !== selectedValue) {
 							onValueChange?.(value);
 						}
 					}}
