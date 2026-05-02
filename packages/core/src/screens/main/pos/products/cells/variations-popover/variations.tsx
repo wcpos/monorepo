@@ -4,8 +4,11 @@ import { useObservableEagerState, useObservableSuspense } from 'observable-hooks
 import { map } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
+import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { useReplicationState } from '@wcpos/query';
 
 import { VariationButtons } from './buttons';
 import { VariationSelect } from './select';
@@ -31,6 +34,8 @@ interface VariationPopoverProps {
  */
 export function Variations({ query, parent, addToCart }: VariationPopoverProps) {
 	const result = useObservableSuspense(query.resource);
+	const { active$ } = useReplicationState(query);
+	const loading = useObservableEagerState(active$);
 	const selectedAttributes = useObservableEagerState(
 		query.rxQuery$.pipe(map(() => query.getVariationMatches()))
 	);
@@ -114,13 +119,27 @@ export function Variations({ query, parent, addToCart }: VariationPopoverProps) 
 					)}
 				</VStack>
 			))}
-			{selectedVariation && (
+			{selectedVariation ? (
 				<Button testID="variation-popover-add-to-cart" onPress={handleAddToCart}>
 					<ButtonText>
 						{t('common.add_to_cart') + ': ' + format(selectedVariation.price)}
 					</ButtonText>
 				</Button>
-			)}
+			) : result.count === 0 ? (
+				loading ? (
+					<HStack testID="variation-popover-syncing" space="xs" className="justify-center">
+						<Icon name="arrowRotateRight" loading size="sm" />
+						<Text className="text-muted-foreground text-xs">{t('pos_products.syncing')}</Text>
+					</HStack>
+				) : (
+					<HStack testID="variation-popover-unavailable" space="xs" className="justify-center">
+						<Icon name="circleExclamation" size="sm" />
+						<Text className="text-muted-foreground text-xs">
+							{t('pos_products.combination_unavailable')}
+						</Text>
+					</HStack>
+				)
+			) : null}
 		</VStack>
 	);
 }
