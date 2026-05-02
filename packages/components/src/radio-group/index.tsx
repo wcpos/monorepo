@@ -66,7 +66,7 @@ function RadioGroupItem({
 
 type RadioGroupOptionProps = Omit<
 	React.ComponentProps<typeof RadioGroupPrimitive.Item>,
-	'aria-labelledby' | 'children' | 'className'
+	'aria-describedby' | 'aria-labelledby' | 'children' | 'className'
 > & {
 	label: React.ReactNode;
 	description?: React.ReactNode;
@@ -92,11 +92,13 @@ function RadioGroupOption({
 	const { disabled: groupDisabled, onValueChange } = useRadioGroupContext();
 	const generatedID = React.useId().replace(/:/g, '');
 	const labelID = `radio-group-option-${generatedID}`;
+	const descriptionID = description ? `radio-group-option-description-${generatedID}` : undefined;
 	const isDisabled = groupDisabled || disabled;
 
 	return (
 		<HStack className={cn('items-start', isDisabled && 'opacity-50', className)} space="sm">
 			<RadioGroupItem
+				aria-describedby={descriptionID}
 				aria-labelledby={labelID}
 				disabled={isDisabled}
 				value={value}
@@ -109,14 +111,17 @@ function RadioGroupOption({
 					className={labelClassName}
 					onPress={() => {
 						if (!isDisabled) {
-							onValueChange(value);
+							onValueChange?.(value);
 						}
 					}}
 				>
 					{label}
 				</Label>
 				{description ? (
-					<Text className={cn('text-muted-foreground text-sm', descriptionClassName)}>
+					<Text
+						nativeID={descriptionID}
+						className={cn('text-muted-foreground text-sm', descriptionClassName)}
+					>
 						{description}
 					</Text>
 				) : null}

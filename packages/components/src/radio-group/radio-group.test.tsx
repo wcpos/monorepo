@@ -20,8 +20,12 @@ jest.mock('@rn-primitives/slot', () => ({
 jest.mock('@rn-primitives/radio-group', () => ({
 	Root: ({ children, className, value }: any) =>
 		React.createElement('div', { className, 'data-value': value }, children),
-	Item: ({ children, className, disabled, onPress, value }: any) =>
-		React.createElement('button', { className, disabled, value, onClick: onPress }, children),
+	Item: ({ children, className, disabled, onPress, value, ...props }: any) =>
+		React.createElement(
+			'button',
+			{ className, disabled, value, onClick: onPress, ...props },
+			children
+		),
 	Indicator: (props: any) => React.createElement('span', props),
 }));
 
@@ -44,5 +48,33 @@ describe('RadioGroupOption', () => {
 
 		expect(onValueChange).toHaveBeenCalledWith('comfortable');
 		expect(screen.getByText('More relaxed spacing')).toBeInTheDocument();
+	});
+
+	it('does not throw when the label is pressed without an onValueChange handler', () => {
+		render(
+			<RadioGroup defaultValue="default">
+				<RadioGroupOption value="comfortable" label="Comfortable" />
+			</RadioGroup>
+		);
+
+		expect(() => fireEvent.click(screen.getByText('Comfortable'))).not.toThrow();
+	});
+
+	it('links the option description to the radio item', () => {
+		render(
+			<RadioGroup value="default">
+				<RadioGroupOption
+					value="comfortable"
+					label="Comfortable"
+					description="More relaxed spacing"
+				/>
+			</RadioGroup>
+		);
+
+		const radio = screen.getByRole('button');
+		const description = screen.getByText('More relaxed spacing');
+
+		expect(radio).toHaveAttribute('aria-describedby');
+		expect(description).toHaveAttribute('id', radio.getAttribute('aria-describedby'));
 	});
 });
