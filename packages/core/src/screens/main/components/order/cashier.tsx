@@ -4,10 +4,8 @@ import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { ButtonPill } from '@wcpos/components/button';
-import { useT } from '@wcpos/core/contexts/translations';
 
-import { useCollection } from '../../hooks/use-collection';
-import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
+import { useCashierLabel } from '../../hooks/use-cashier-label';
 
 import type { CellContext } from '@tanstack/react-table';
 
@@ -18,46 +16,21 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  */
 export function Cashier({ table, row }: CellContext<{ document: OrderDocument }, 'cashier'>) {
 	const order = row.original.document;
-	const { collection } = useCollection('customers');
 	const cashierID = useObservableEagerState(
 		order.meta_data$!.pipe(
 			map((meta) => meta?.find((m: { key?: string; value?: string }) => m.key === '_pos_user')),
 			map((m: { key?: string; value?: string } | undefined) => m?.value)
 		)
 	);
-	const [cashierName, setCashierName] = React.useState('');
-	const { format } = useCustomerNameFormat();
+	const cashier = useCashierLabel(cashierID);
 	const query = (
 		table.options.meta as unknown as { query: ReturnType<typeof import('@wcpos/query').useQuery> }
 	)?.query;
-	const t = useT();
 
 	/**
-	 * @TODO - it would be good to have a replication query which gets the cashier roles
-	 * But we'll just hack it for the moment
+	 * It's possible the order doesn't have a cashier, eg: web or admin orders.
 	 */
-	React.useEffect(() => {
-		async function fetchUser(id: number) {
-			if (!id) {
-				setCashierName(t('common.unknown'));
-				return;
-			}
-			const user = await collection.findOne({ selector: { id } }).exec();
-			if (user) {
-				setCashierName(format(user));
-			} else {
-				setCashierName('ID: ' + id);
-			}
-		}
-		if (cashierID) {
-			fetchUser(parseInt(cashierID, 10));
-		}
-	}, [cashierID, collection, format, t]);
-
-	/**
-	 * It's possible the order doesn't have a cashier, eg: web or admin orders
-	 */
-	if (!cashierID) {
+	if (cashier.id === undefined) {
 		return null;
 	}
 
@@ -68,11 +41,11 @@ export function Cashier({ table, row }: CellContext<{ document: OrderDocument },
 			onPress={() =>
 				query
 					?.where('meta_data')
-					.multipleElemMatch({ key: '_pos_user', value: String(cashierID) })
+					.multipleElemMatch({ key: '_pos_user', value: String(cashier.id) })
 					.exec()
 			}
 		>
-			{cashierName}
+			{cashier.label}
 		</ButtonPill>
 	);
 }

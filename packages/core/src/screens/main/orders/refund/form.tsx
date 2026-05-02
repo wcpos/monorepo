@@ -18,7 +18,7 @@ import {
 } from '@wcpos/components/alert-dialog';
 import { Form, FormField, FormInput, FormTextarea } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
-import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/modal';
+import { ModalAction, ModalClose } from '@wcpos/components/modal';
 import {
 	Table,
 	TableBody,
@@ -525,7 +525,7 @@ export function RefundOrderForm({ order }: Props) {
 					<Text className="text-lg font-bold">{formattedRefundTotal}</Text>
 				</HStack>
 
-				<ModalFooter className="px-0">
+				<HStack className="justify-end">
 					<ModalClose>{t('common.cancel')}</ModalClose>
 					<ModalAction
 						testID="process-refund-button"
@@ -535,33 +535,33 @@ export function RefundOrderForm({ order }: Props) {
 					>
 						{t('orders.process_refund')}
 					</ModalAction>
-				</ModalFooter>
-
-				<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-					<AlertDialogContent>
-						<AlertDialogHeader>
-							<AlertDialogTitle>{t('orders.confirm_refund')}</AlertDialogTitle>
-							<AlertDialogDescription>
-								{t('orders.confirm_refund_description', {
-									amount: formattedRefundTotal,
-									number: order.id,
-								})}
-							</AlertDialogDescription>
-						</AlertDialogHeader>
-						<AlertDialogFooter>
-							<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-							<AlertDialogAction
-								variant="destructive"
-								testID="confirm-process-refund-button"
-								onPress={handleSubmit}
-								disabled={loading}
-							>
-								{t('orders.process_refund')}
-							</AlertDialogAction>
-						</AlertDialogFooter>
-					</AlertDialogContent>
-				</AlertDialog>
+				</HStack>
 			</VStack>
+
+			<AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{t('orders.confirm_refund')}</AlertDialogTitle>
+						<AlertDialogDescription>
+							{t('orders.confirm_refund_description', {
+								amount: formattedRefundTotal,
+								number: order.id,
+							})}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+						<AlertDialogAction
+							variant="destructive"
+							testID="confirm-process-refund-button"
+							onPress={handleSubmit}
+							disabled={loading}
+						>
+							{t('orders.process_refund')}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</Form>
 	);
 }

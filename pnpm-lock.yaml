@@ -527,6 +527,9 @@ importers:
       html-entities:
         specifier: 2.6.0
         version: 2.6.0
+      localized-address-format:
+        specifier: 1.3.3
+        version: 1.3.3
       lodash:
         specifier: ^4.18.1
         version: 4.18.1
@@ -9554,6 +9557,9 @@ packages:
   loader-utils@2.0.4:
     resolution: {integrity: sha512-xXqpXoINfFhgua9xiqD8fPFHgkoq1mmmpE92WlDbm9rNRd/EbRb+Gqf908T2DMfuHjjJlksiK2RbHVOdD/MqSw==}
     engines: {node: '>=8.9.0'}
+
+  localized-address-format@1.3.3:
+    resolution: {integrity: sha512-oy8YUzVmTQeUYVw9wQEXLf0T2k6WgjTuXc+wMPLzHn+F8WujXczdm0Qm1uY8uAlnZSCjcmGxar3H8tTGWVfdaA==}
 
   locate-path@2.0.0:
     resolution: {integrity: sha512-NCI2kiDkyR7VeEKm27Kda/iQHyKJe1Bu0FlTbYp3CqJu+9IFe9bLyAjMxf5ZDDbEg+iMPzB5zYyUTSm8wVTKmA==}
@@ -24198,6 +24204,8 @@ snapshots:
       big.js: 5.2.2
       emojis-list: 3.0.0
       json5: 2.2.3
+
+  localized-address-format@1.3.3: {}
 
   locate-path@2.0.0:
     dependencies:
