@@ -435,7 +435,7 @@ function buildReceiptData(
 	const discounts =
 		populated && scenarios.hasDiscounts ? buildDiscounts(rand, refundSign, taxRate) : [];
 
-	const refunds = scenarios.refund ? buildRefunds(rand, lines, pool, taxRate) : [];
+	const refunds = populated && scenarios.refund ? buildRefunds(rand, lines, pool, taxRate) : [];
 	const totals = computeTotals(lines, fees, shipping, discounts, refunds);
 	const taxSummary = buildTaxSummary(lines, fees, shipping, discounts, taxRate, pool.taxLabel);
 
@@ -1045,7 +1045,13 @@ function buildPayments(
 				payment.change = round(tendered - amount);
 			}
 		} else if (method.id === 'bank_transfer') {
-			payment.transaction_id = `IBAN ES${Math.floor(rand() * 9000_0000_0000_0000) + 1000_0000_0000_0000}`;
+			const partA = Math.floor(rand() * 100_000_000)
+				.toString()
+				.padStart(8, '0');
+			const partB = Math.floor(rand() * 100_000_000)
+				.toString()
+				.padStart(8, '0');
+			payment.transaction_id = `IBAN ES${partA}${partB}`;
 		} else if (method.id === 'wallet') {
 			payment.transaction_id = `WAL-${formatSeed(seedFromRand(rand)).toUpperCase()}-${1000 + Math.floor(rand() * 8999)}`;
 		}

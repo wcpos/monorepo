@@ -42,6 +42,19 @@ describe('template-studio randomizer', () => {
 		expect(result.data.lines.every((line) => line.qty < 0)).toBe(true);
 	});
 
+	it('does not emit synthetic refunds for an empty cart', () => {
+		const result = createRandomReceipt({
+			seed: 7,
+			overrides: { refund: true, emptyCart: true },
+		});
+
+		expect(result.scenarios.refund).toBe(true);
+		expect(result.scenarios.emptyCart).toBe(true);
+		expect(result.data.lines).toEqual([]);
+		expect(result.data.refunds).toEqual([]);
+		expect(result.data.totals.refund_total).toBeUndefined();
+	});
+
 	it('does not generate cash tendered/change for refund payments', () => {
 		// Seed picked because it deterministically lands the single payment on
 		// `cash`; the assertion is about the cash-only branch suppressing

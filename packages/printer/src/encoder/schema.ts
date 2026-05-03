@@ -124,6 +124,7 @@ export const ReceiptLineItemTaxSchema = z.object({
 	code: z.string().describe('Tax rate code'),
 	rate: z.number().nullable().optional().describe('Tax rate percentage (nullable when unresolved)'),
 	label: z.string().optional().describe('Human-readable tax label (e.g. "VAT 20%")'),
+	compound: z.boolean().optional().describe('Whether this tax is compounded on top of others'),
 	amount: z.number().describe('Tax amount applied to this line'),
 });
 

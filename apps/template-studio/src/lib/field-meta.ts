@@ -85,6 +85,7 @@ const DEFAULT_PAYMENT = {
 
 const DEFAULT_LINE_META = { key: 'Attribute', value: '' };
 const DEFAULT_LINE_TAX = { code: 'TAX', rate: null, label: 'Tax', amount: 0 };
+const DEFAULT_REFUND_LINE = { name: 'Refunded item', qty: 1, total: 0 };
 const DEFAULT_REFUND = {
 	id: 0,
 	amount: 0,
@@ -92,7 +93,7 @@ const DEFAULT_REFUND = {
 	refunded_by_id: null,
 	refunded_by_name: '',
 	refunded_payment: false,
-	lines: [],
+	lines: [DEFAULT_REFUND_LINE],
 };
 
 /**

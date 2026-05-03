@@ -128,8 +128,12 @@ function resolveDisplayValueSide(
 function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax): ReceiptLineItem {
 	const qty = toNum(src.qty ?? src.quantity);
 	const price = toNum(src.price ?? src.unit_price ?? src.unit_price_incl ?? src.unit_price_excl);
-	const total = toNum(src.line_total ?? src.total ?? src.line_total_incl ?? src.line_total_excl);
-	const unitPriceFallback = qty > 0 ? total / qty : price;
+	const rawTotal = src.line_total ?? src.total ?? src.line_total_incl ?? src.line_total_excl;
+	const total = toNum(rawTotal);
+	const rawTotalNumber =
+		rawTotal == null ? NaN : typeof rawTotal === 'string' ? parseFloat(rawTotal) : Number(rawTotal);
+	const derivedUnitPrice = Number.isFinite(rawTotalNumber) && qty !== 0 ? total / qty : price;
+	const unitPriceFallback = Number.isFinite(derivedUnitPrice) ? derivedUnitPrice : price;
 	const unitPriceIncl = toNum(src.unit_price_incl ?? src.unit_price ?? unitPriceFallback);
 	const unitPriceExcl = toNum(src.unit_price_excl ?? src.unit_price ?? unitPriceFallback);
 	const lineSubtotalIncl = toNum(src.line_subtotal_incl ?? src.line_subtotal ?? total);
@@ -173,6 +177,7 @@ function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax
 				code: toStr(entry.code),
 				rate: entry.rate == null ? null : toNum(entry.rate),
 				label: 'label' in entry ? toStr(entry.label) : undefined,
+				compound: 'compound' in entry ? !!entry.compound : undefined,
 				amount: toNum(entry.amount),
 			})),
 	};
@@ -199,13 +204,14 @@ function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax
 
 function mapItemTaxes(
 	taxes: any[]
-): { code: string; rate?: number | null; label?: string; amount: number }[] {
+): { code: string; rate?: number | null; label?: string; compound?: boolean; amount: number }[] {
 	return taxes
 		.filter((tax: unknown): tax is Record<string, unknown> => !!tax && typeof tax === 'object')
 		.map((tax) => ({
 			code: toStr(tax.code ?? tax.rate_code ?? tax.id),
 			rate: tax.rate == null ? null : toNum(tax.rate),
 			label: 'label' in tax ? toStr(tax.label) : undefined,
+			compound: 'compound' in tax ? !!tax.compound : undefined,
 			amount: toNum(tax.amount ?? tax.tax_amount),
 		}))
 		.filter((tax) => tax.code.length > 0 || tax.amount !== 0);
@@ -300,11 +306,12 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 }
 
 function mapPayment(src: Record<string, any>): ReceiptPayment {
+	const transactionId = toStr(src.transaction_id);
 	return {
 		method_id: toStr(src.method_id ?? src.method),
 		method_title: toStr(src.method_title ?? src.method),
 		amount: toNum(src.amount),
-		transaction_id: toStr(src.transaction_id ?? src.reference),
+		transaction_id: transactionId || toStr(src.reference),
 		tendered: 'tendered' in src ? toNum(src.tendered) : undefined,
 		change: 'change' in src ? toNum(src.change) : undefined,
 	};
@@ -493,7 +500,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	const normalizedHints = mapPresentationHints(presentationHints);
 	const displayTax = resolveDisplayValueSide(normalizedHints);
 
-	return {
+	const result: ReceiptData = {
 		meta: mapMeta(meta),
 		store: mapStore(store),
 		cashier: { id: 0, name: '' } as ReceiptCashier,
@@ -524,6 +531,14 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 		fiscal: mapFiscal(fiscal),
 		presentation_hints: normalizedHints,
 	};
+
+	if (Array.isArray(data.refunds)) {
+		result.refunds = data.refunds
+			.filter((entry: unknown): entry is Record<string, any> => !!entry && typeof entry === 'object')
+			.map((entry) => mapRefund(entry));
+	}
+
+	return result;
 }
 
 /** Minimal valid ReceiptData with all required fields set to defaults. */

@@ -48,6 +48,7 @@ const offlineReceiptData = {
 			line_total_excl: '9.09',
 			sku: 'SKU-001',
 			meta: [{ key: 'size', value: 'M' }],
+			taxes: [{ code: 'VAT', rate: '10', label: 'VAT 10%', compound: true, amount: '0.91' }],
 		},
 		{
 			name: 'Gadget B',
@@ -109,7 +110,7 @@ const offlineReceiptDataWithAdjustments = {
 			total_incl: '2.00',
 			total_excl: '1.82',
 			meta: [null, {}, { display_key: 'Type', display_value: 'Handling' }],
-			taxes: [null, {}, { rate_code: 'VAT', tax_amount: '0.18' }],
+			taxes: [null, {}, { rate_code: 'VAT', tax_amount: '0.18', compound: true }],
 		},
 	],
 	shipping: [
@@ -123,6 +124,18 @@ const offlineReceiptDataWithAdjustments = {
 		},
 	],
 	discounts: [{ label: 'Promo', total_incl: '1.50', total_excl: '1.36' }],
+	refunds: [
+		null,
+		{
+			id: '10',
+			amount: '4.50',
+			reason: 'Customer return',
+			refunded_by_id: '7',
+			refunded_by_name: 'Sam',
+			refunded_payment: true,
+			lines: [{ name: 'Widget A', qty: '1', total: '4.50' }],
+		},
+	],
 };
 
 describe('mapReceiptData', () => {
@@ -278,6 +291,9 @@ describe('mapReceiptData', () => {
 			expect(first.discounts).toBe(0);
 			expect(first.line_total).toBe(10);
 			expect(first.meta).toEqual([{ key: 'size', value: 'M' }]);
+			expect(first.taxes).toEqual([
+				{ code: 'VAT', rate: 10, label: 'VAT 10%', compound: true, amount: 0.91 },
+			]);
 
 			const second = mapped.lines[1];
 			expect(second.name).toBe('Gadget B');
@@ -310,6 +326,34 @@ describe('mapReceiptData', () => {
 			expect(payment.transaction_id).toBe('txn-123');
 		});
 
+		it('maps payments transaction_id from legacy reference when transaction_id is missing', () => {
+			const result = mapReceiptData({
+				payments: [{ method: 'Card', amount: '10.00', reference: 'legacy-ref-1' }],
+			});
+
+			expect(result.payments[0]).toMatchObject({
+				method_id: 'Card',
+				method_title: 'Card',
+				amount: 10,
+				transaction_id: 'legacy-ref-1',
+			});
+		});
+
+		it('falls back to legacy reference when transaction_id is blank', () => {
+			const result = mapReceiptData({
+				payments: [
+					{
+						method: 'Card',
+						amount: '10.00',
+						transaction_id: '',
+						reference: 'legacy-ref-2',
+					},
+				],
+			});
+
+			expect(result.payments[0].transaction_id).toBe('legacy-ref-2');
+		});
+
 		it('maps fiscal with empty fiscal_id resulting in undefined immutable_id', () => {
 			expect(mapped.fiscal.immutable_id).toBeUndefined();
 		});
@@ -338,7 +382,9 @@ describe('mapReceiptData', () => {
 					total_incl: 2,
 					total_excl: 1.82,
 					meta: [{ key: 'Type', value: 'Handling' }],
-					taxes: [{ code: 'VAT', amount: 0.18 }],
+					taxes: [
+						{ code: 'VAT', rate: null, label: undefined, compound: true, amount: 0.18 },
+					],
 				},
 			]);
 			expect(mappedWithAdjustments.shipping).toEqual([
@@ -346,6 +392,17 @@ describe('mapReceiptData', () => {
 			]);
 			expect(mappedWithAdjustments.discounts).toEqual([
 				{ label: 'Promo', total: 1.5, total_incl: 1.5, total_excl: 1.36 },
+			]);
+			expect(mappedWithAdjustments.refunds).toEqual([
+				{
+					id: 10,
+					amount: 4.5,
+					reason: 'Customer return',
+					refunded_by_id: 7,
+					refunded_by_name: 'Sam',
+					refunded_payment: true,
+					lines: [{ name: 'Widget A', sku: undefined, qty: 1, total: 4.5 }],
+				},
 			]);
 		});
 	});
@@ -426,6 +483,33 @@ describe('mapReceiptData', () => {
 			});
 			// qty is 0, so unit_price should fall back to price (5)
 			expect(result.lines[0].unit_price_incl).toBe(5);
+		});
+
+		it('preserves price fallback when no line total is present', () => {
+			const result = mapReceiptData({
+				lines: [{ name: 'Priced Item', quantity: 2, price: 5 }],
+			});
+
+			expect(result.lines[0].unit_price_incl).toBe(5);
+			expect(result.lines[0].unit_price).toBe(5);
+		});
+
+		it('falls back to price when line total is not numeric', () => {
+			const result = mapReceiptData({
+				lines: [{ name: 'Priced Item', quantity: 2, price: 5, total: 'not a number' }],
+			});
+
+			expect(result.lines[0].unit_price_incl).toBe(5);
+			expect(result.lines[0].unit_price).toBe(5);
+		});
+
+		it('derives unit price for negative-quantity refund lines', () => {
+			const result = mapReceiptData({
+				lines: [{ name: 'Refunded Item', quantity: -2, price: 0, total: '-20.00' }],
+			});
+
+			expect(result.lines[0].unit_price_incl).toBe(10);
+			expect(result.lines[0].unit_price).toBe(10);
 		});
 	});
 
