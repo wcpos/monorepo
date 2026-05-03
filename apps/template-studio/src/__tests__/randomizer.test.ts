@@ -88,8 +88,13 @@ describe('template-studio randomizer', () => {
 		if (!completed) throw new Error('no completed status seed found in range');
 
 		expect(completed.data.payments.length).toBeGreaterThan(0);
-		expect(completed.data.order?.paid.datetime).not.toBe('');
-		expect(completed.data.order?.completed.datetime).not.toBe('');
+		const order = completed.data.order;
+		expect(order).toBeDefined();
+		if (!order) throw new Error('completed order data missing');
+		expect(order.paid).toBeDefined();
+		expect(order.completed).toBeDefined();
+		expect(order.paid.datetime).toBeTruthy();
+		expect(order.completed.datetime).toBeTruthy();
 	});
 
 	it('honors RTL override (Arabic locale + SAR currency without multicurrency override)', () => {
