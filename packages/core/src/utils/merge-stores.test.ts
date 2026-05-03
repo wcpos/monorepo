@@ -197,6 +197,110 @@ describe('mergeStoresWithResponse', () => {
 		expect(patchCall.stores).not.toContain(badLocalID);
 	});
 
+	it('should default tax_ids to [] when field is missing from server payload', async () => {
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([]);
+		// Payload from an older plugin that does not emit tax_ids at all.
+		const remoteStores = [{ id: 1, name: 'Store 1' }];
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores,
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		expect(insertedDocs[0]).toEqual(
+			expect.objectContaining({
+				id: 1,
+				tax_ids: [],
+			})
+		);
+	});
+
+	it('should default tax_ids to [] when the field is a non-array value', async () => {
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([]);
+		// Defensive: server emits an unexpected non-array shape.
+		const remoteStores = [{ id: 1, name: 'Store 1', tax_ids: 'invalid' }];
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores,
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		expect(insertedDocs[0]).toEqual(
+			expect.objectContaining({
+				id: 1,
+				tax_ids: [],
+			})
+		);
+	});
+
+	it('should preserve tax_ids array when server emits valid entries', async () => {
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([]);
+		const taxIds = [
+			{ type: 'VAT', value: 'DE123456789' },
+			{ type: 'ABN', value: '12345678901', country: 'AU', label: 'Australian Business Number' },
+		];
+		const remoteStores = [{ id: 1, name: 'Store 1', tax_ids: taxIds }];
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores,
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		expect(insertedDocs[0]).toEqual(
+			expect.objectContaining({
+				id: 1,
+				tax_ids: taxIds,
+			})
+		);
+	});
+
+	it('should drop malformed tax_ids entries and keep valid ones', async () => {
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([]);
+		const remoteStores = [
+			{
+				id: 1,
+				name: 'Store 1',
+				tax_ids: [
+					{ type: 'VAT', value: 'DE123456789' },
+					{}, // missing type/value
+					null, // not an object
+					{ type: 'eu_vat' }, // missing value
+					{ type: 'gb_vat', value: 'GB123', country: 'GB', label: 'VAT', extra: 'drop' },
+				],
+			},
+		];
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores,
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		expect(insertedDocs[0].tax_ids).toEqual([
+			{ type: 'VAT', value: 'DE123456789' },
+			{ type: 'gb_vat', value: 'GB123', country: 'GB', label: 'VAT' },
+		]);
+	});
+
 	it('should coerce empty tax_based_on from legacy Pro stores to base', async () => {
 		const userDB = makeUserDB();
 		const wpUser = makeWpUser([]);

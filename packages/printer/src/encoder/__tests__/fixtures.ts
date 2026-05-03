@@ -13,6 +13,7 @@ export const sampleReceiptData: ReceiptData = {
 		address_lines: ['123 Main Street', 'Suite 100'],
 		phone: '(555) 123-4567',
 		tax_id: 'TAX-12345',
+		tax_ids: [{ type: 'other', value: 'TAX-12345' }],
 	},
 	cashier: { id: 1, name: 'Jane' },
 	customer: { id: 2, name: 'John Doe' },

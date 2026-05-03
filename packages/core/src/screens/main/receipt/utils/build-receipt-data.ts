@@ -18,6 +18,8 @@ interface ReceiptStore {
 	address: string;
 	phone: string;
 	email: string;
+	tax_id?: string;
+	tax_ids?: { type: string; value: string; country?: string; label?: string }[];
 }
 
 interface ReceiptCustomer {
@@ -146,6 +148,12 @@ function mapAdjustment(
 	};
 }
 
+function derivePrimaryTaxId(taxIds: unknown): string {
+	if (!Array.isArray(taxIds) || taxIds.length === 0) return '';
+	const first = taxIds[0] as { value?: unknown };
+	return typeof first?.value === 'string' ? first.value : '';
+}
+
 export function buildReceiptData(
 	order: Record<string, any>,
 	store: Record<string, any>,
@@ -271,6 +279,8 @@ export function buildReceiptData(
 			}),
 			phone: store.phone || '',
 			email: store.email || '',
+			tax_id: derivePrimaryTaxId(store.tax_ids),
+			tax_ids: store.tax_ids ?? [],
 		},
 		customer: {
 			name: [billing.first_name, billing.last_name].filter(Boolean).join(' '),

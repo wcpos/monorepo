@@ -63,12 +63,23 @@ export const ReceiptOrderSchema = z.object({
 	completed: ReceiptDateSchema,
 });
 
+export const TaxIdSchema = z.object({
+	type: z
+		.string()
+		.describe('Tax ID type (e.g. "eu_vat", "de_steuernummer", "au_abn"; "other" for unknown)'),
+	value: z.string().describe('Tax ID value as displayed'),
+	country: z.string().optional().describe('ISO-3166 alpha-2 country code'),
+	label: z.string().optional().describe('Optional display label override'),
+});
+export type TaxId = z.infer<typeof TaxIdSchema>;
+
 export const ReceiptStoreMetaSchema = z.object({
 	name: z.string().describe('Store display name'),
 	address_lines: z
 		.array(z.string())
 		.describe('Address as ordered lines (street, city, postcode...)'),
 	tax_id: z.string().optional().describe('Store VAT/tax identifier'),
+	tax_ids: z.array(TaxIdSchema).optional().describe('Structured business identifiers'),
 	phone: z.string().optional().describe('Store contact phone'),
 	email: z.string().optional().describe('Store contact email'),
 	logo: z.string().nullable().optional().describe('Store logo (URL or data URI)'),
