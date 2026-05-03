@@ -82,5 +82,8 @@ describe('ReceiptDataSchema', () => {
 		delete stripped.store.tax_ids;
 		const result = ReceiptDataSchema.safeParse(stripped);
 		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.store).not.toHaveProperty('tax_ids');
+		}
 	});
 });

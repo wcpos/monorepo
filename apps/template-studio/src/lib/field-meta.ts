@@ -131,16 +131,16 @@ export const ARRAY_DEFAULTS: Record<string, unknown> = {
 export function arrayItemTitle(arrayKey: string, item: unknown, index: number): string {
 	if (item && typeof item === 'object') {
 		const record = item as Record<string, unknown>;
+		// tax_ids: prefer value (e.g. VAT number) over the type label.
+		if (arrayKey === 'tax_ids') {
+			const value = record.value as string | undefined;
+			if (typeof value === 'string' && value.length > 0) return value;
+		}
 		const name =
 			(record.name as string) ?? (record.label as string) ?? (record.method_title as string);
 		if (typeof name === 'string' && name.length > 0) return name;
 		const code = record.code as string | undefined;
 		if (code) return code;
-		// tax_ids: show value (e.g. VAT number) when available
-		if (arrayKey === 'tax_ids') {
-			const value = record.value as string | undefined;
-			if (typeof value === 'string' && value.length > 0) return value;
-		}
 	}
 	return `${arrayKey} #${index + 1}`;
 }

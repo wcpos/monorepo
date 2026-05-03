@@ -60,9 +60,25 @@ function normalizeStorePayload<T extends { id: number; [key: string]: any }>(sto
 
 	// tax_ids: server may omit the field entirely on older plugin versions.
 	// Coerce to [] so RxDB validation against the v8 schema doesn't reject
-	// otherwise-valid store payloads.
+	// otherwise-valid store payloads, and drop malformed entries (missing
+	// type/value strings) so a single bad row doesn't take down the whole doc.
 	if (!Array.isArray(out.tax_ids)) {
 		out.tax_ids = [];
+	} else {
+		out.tax_ids = out.tax_ids
+			.filter(
+				(entry: any) =>
+					entry &&
+					typeof entry === 'object' &&
+					typeof entry.type === 'string' &&
+					typeof entry.value === 'string'
+			)
+			.map((entry: any) => ({
+				type: entry.type,
+				value: entry.value,
+				...(typeof entry.country === 'string' ? { country: entry.country } : {}),
+				...(typeof entry.label === 'string' ? { label: entry.label } : {}),
+			}));
 	}
 
 	return out;

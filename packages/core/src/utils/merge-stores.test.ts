@@ -269,6 +269,38 @@ describe('mergeStoresWithResponse', () => {
 		);
 	});
 
+	it('should drop malformed tax_ids entries and keep valid ones', async () => {
+		const userDB = makeUserDB();
+		const wpUser = makeWpUser([]);
+		const remoteStores = [
+			{
+				id: 1,
+				name: 'Store 1',
+				tax_ids: [
+					{ type: 'VAT', value: 'DE123456789' },
+					{}, // missing type/value
+					null, // not an object
+					{ type: 'eu_vat' }, // missing value
+					{ type: 'gb_vat', value: 'GB123', country: 'GB', label: 'VAT', extra: 'drop' },
+				],
+			},
+		];
+
+		await mergeStoresWithResponse({
+			userDB: userDB as any,
+			wpUser: wpUser as any,
+			remoteStores,
+			user: { uuid: 'user-uuid' },
+			siteID: 'site-1',
+		});
+
+		const insertedDocs = userDB.stores.bulkInsert.mock.calls[0][0];
+		expect(insertedDocs[0].tax_ids).toEqual([
+			{ type: 'VAT', value: 'DE123456789' },
+			{ type: 'gb_vat', value: 'GB123', country: 'GB', label: 'VAT' },
+		]);
+	});
+
 	it('should coerce empty tax_based_on from legacy Pro stores to base', async () => {
 		const userDB = makeUserDB();
 		const wpUser = makeWpUser([]);
