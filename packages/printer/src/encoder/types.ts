@@ -25,6 +25,7 @@ export type {
 	ReceiptDate,
 	ReceiptInfo,
 	ReceiptOrder,
+	TaxId,
 	ReceiptI18n,
 	ReceiptData,
 } from './schema';
