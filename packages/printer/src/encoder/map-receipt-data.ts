@@ -71,7 +71,7 @@ function mapMeta(src: Record<string, any>): ReceiptOrderMeta {
 		order_id: 0, // Not available in the offline shape
 		order_number: toStr(src.order_number),
 		currency: toStr(src.currency),
-		wc_status: toStr(src.wc_status) || toStr(src.status) || undefined,
+		wc_status: toStr(src.wc_status ?? src.status) || undefined,
 		created_via: toStr(src.created_via) || undefined,
 	};
 }

@@ -446,7 +446,7 @@ function buildReceiptData(
 	const payments = buildPayments(rand, scenarios, totals.grand_total_incl, orderCurrency, totals);
 	if (refunds.length > 0) {
 		for (const payment of payments) {
-			payment.method_title = `Refund - ${payment.method_title}`;
+			payment.method_title = `Refund — ${payment.method_title}`;
 		}
 	}
 	const presentationHints: ReceiptPresentationHints = {
@@ -1252,7 +1252,7 @@ function buildI18nLabels(hasRefunds = false): ReceiptI18n {
 		packed: 'Packed',
 		subtotal: 'Subtotal',
 		subtotal_excl_tax: 'Subtotal (excl. tax)',
-		total: hasRefunds ? 'Total Refunded' : 'Total',
+		total: hasRefunds ? 'Refund Total' : 'Total',
 		total_tax: 'Total Tax',
 		grand_total_incl_tax: 'Grand Total (incl. tax)',
 		tax: 'Tax',

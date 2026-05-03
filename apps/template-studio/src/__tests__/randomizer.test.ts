@@ -78,9 +78,9 @@ describe('template-studio randomizer', () => {
 			overrides: { refund: true, emptyCart: false, cartSize: 2 },
 		});
 
-		expect(result.data.i18n.total).toBe(result.data.i18n.total_refunded);
+		expect(result.data.i18n.total).toBe('Refund Total');
 		expect(
-			result.data.payments.every((payment) => payment.method_title.startsWith('Refund - '))
+			result.data.payments.every((payment) => payment.method_title.startsWith('Refund — '))
 		).toBe(true);
 		expect(result.data.lines.every((line) => line.qty > 0 && line.line_total_incl >= 0)).toBe(true);
 	});
