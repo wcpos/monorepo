@@ -58,6 +58,13 @@ function normalizeStorePayload<T extends { id: number; [key: string]: any }>(sto
 		out.opening_hours = [];
 	}
 
+	// tax_ids: server may omit the field entirely on older plugin versions.
+	// Coerce to [] so RxDB validation against the v8 schema doesn't reject
+	// otherwise-valid store payloads.
+	if (!Array.isArray(out.tax_ids)) {
+		out.tax_ids = [];
+	}
+
 	return out;
 }
 

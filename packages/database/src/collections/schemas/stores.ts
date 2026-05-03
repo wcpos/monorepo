@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 7,
+	version: 8,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -85,6 +85,23 @@ export const storesLiteral = {
 		footer_imprint: {
 			title: 'Footer imprint',
 			type: 'string',
+		},
+		tax_ids: {
+			title: 'Tax IDs',
+			description:
+				'Structured business identifiers as emitted by the server (added in receipt schema 1.4.0). Each entry is { type, value, country?, label? }. Omitted by older plugin versions; defaulted to [] by normalizeStorePayload at ingest.',
+			type: 'array',
+			default: [],
+			items: {
+				type: 'object',
+				properties: {
+					type: { type: 'string' },
+					value: { type: 'string' },
+					country: { type: 'string' },
+					label: { type: 'string' },
+				},
+				required: ['type', 'value'],
+			},
 		},
 		default_customer: {
 			title: 'Default POS customer',

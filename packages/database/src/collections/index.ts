@@ -119,6 +119,13 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.opening_hours = [];
 			return oldDoc;
 		},
+		8(oldDoc: any) {
+			// Schema 1.4.0 introduced structured store.tax_ids[]. Older RxDB rows
+			// don't have it; default to an empty array. The next server sync will
+			// populate the real values when the plugin emits them.
+			oldDoc.tax_ids = Array.isArray(oldDoc.tax_ids) ? oldDoc.tax_ids : [];
+			return oldDoc;
+		},
 	},
 };
 
