@@ -307,7 +307,7 @@ describe('mapReceiptData', () => {
 			expect(payment.method_id).toBe('Cash');
 			expect(payment.method_title).toBe('Cash');
 			expect(payment.amount).toBe(25);
-			expect(payment.reference).toBe('txn-123');
+			expect(payment.transaction_id).toBe('txn-123');
 		});
 
 		it('maps fiscal with empty fiscal_id resulting in undefined immutable_id', () => {
@@ -456,7 +456,7 @@ describe('mapReceiptData', () => {
 	});
 
 	describe('fiscal extra_fields', () => {
-		const cases: Array<[string, ReceiptData['fiscal']['extra_fields']]> = [
+		const cases: [string, ReceiptData['fiscal']['extra_fields']][] = [
 			['empty array', []],
 			['array entries', [{ key: 'terminal_id', value: 'T-100' }]],
 			['empty record', {}],

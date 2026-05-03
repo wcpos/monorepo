@@ -122,6 +122,8 @@ export const ReceiptLineItemMetaSchema = z.object({
 
 export const ReceiptLineItemTaxSchema = z.object({
 	code: z.string().describe('Tax rate code'),
+	rate: z.number().nullable().optional().describe('Tax rate percentage (nullable when unresolved)'),
+	label: z.string().optional().describe('Human-readable tax label (e.g. "VAT 20%")'),
 	amount: z.number().describe('Tax amount applied to this line'),
 });
 
@@ -130,6 +132,7 @@ export const ReceiptLineItemSchema = z.object({
 	sku: z.string().optional().describe('Product SKU'),
 	name: z.string().describe('Product / line display name'),
 	qty: z.number().describe('Quantity (negative for refund lines)'),
+	qty_refunded: z.number().optional().describe('Quantity refunded (positive number)'),
 	unit_subtotal: z.number().optional().describe('Display-side per-unit subtotal (pre-discount)'),
 	unit_subtotal_incl: z.number().optional().describe('Per-unit subtotal tax-inclusive'),
 	unit_subtotal_excl: z.number().optional().describe('Per-unit subtotal tax-exclusive'),
@@ -145,6 +148,7 @@ export const ReceiptLineItemSchema = z.object({
 	line_total: z.number().optional().describe('Display-side line total'),
 	line_total_incl: z.number().describe('Line total tax-inclusive'),
 	line_total_excl: z.number().describe('Line total tax-exclusive'),
+	total_refunded: z.number().optional().describe('Total amount refunded for this line (positive)'),
 	meta: z.array(ReceiptLineItemMetaSchema).optional().describe('Variation/meta key-value pairs'),
 	taxes: z.array(ReceiptLineItemTaxSchema).describe('Per-rate tax breakdown'),
 });
@@ -163,16 +167,33 @@ export const ReceiptFeeSchema = z.object({
 	meta: z
 		.array(ReceiptLineItemMetaSchema)
 		.optional()
-		.describe('Fee/shipping meta key-value pairs (tracking codes, notes, etc.)'),
+		.describe('Fee meta key-value pairs (notes, etc.)'),
 	taxes: z
 		.array(ReceiptLineItemTaxSchema)
 		.optional()
-		.describe('Per-rate tax breakdown for this fee/shipping line'),
+		.describe('Per-rate tax breakdown for this fee'),
+});
+
+export const ReceiptShippingSchema = z.object({
+	label: z.string().describe('Shipping line label / method title'),
+	method_id: z.string().optional().describe('Shipping method id (e.g. flat_rate, free_shipping)'),
+	total: z.number().optional().describe('Display-side shipping total'),
+	total_incl: z.number().describe('Shipping total tax-inclusive'),
+	total_excl: z.number().describe('Shipping total tax-exclusive'),
+	meta: z
+		.array(ReceiptLineItemMetaSchema)
+		.optional()
+		.describe('Shipping meta key-value pairs (tracking codes, notes, etc.)'),
+	taxes: z
+		.array(ReceiptLineItemTaxSchema)
+		.optional()
+		.describe('Per-rate tax breakdown for this shipping line'),
 });
 
 export const ReceiptDiscountSchema = z.object({
 	label: z.string().describe('Discount label / coupon code'),
-	codes: z.string().optional().describe('Comma-joined coupon codes'),
+	code: z.string().optional().describe('Coupon code for this row (single code per row)'),
+	codes: z.string().optional().describe('Joined coupon codes (legacy / display fallback)'),
 	total: z.number().optional().describe('Display-side discount amount'),
 	total_incl: z.number().describe('Discount total tax-inclusive'),
 	total_excl: z.number().describe('Discount total tax-exclusive'),
@@ -191,24 +212,53 @@ export const ReceiptTotalsSchema = z.object({
 	grand_total_excl: z.number().describe('Grand total tax-exclusive'),
 	paid_total: z.number().describe('Sum of payments tendered'),
 	change_total: z.number().describe('Change returned to customer'),
+	refund_total: z
+		.number()
+		.optional()
+		.describe('Total amount refunded across all refunds (positive)'),
 });
 
 export const ReceiptTaxSummaryItemSchema = z.object({
 	code: z.string().describe('Tax rate code'),
-	rate: z.number().describe('Tax rate as percentage'),
+	rate: z.number().nullable().describe('Tax rate as percentage (null when unresolved)'),
 	label: z.string().describe('Tax rate display label'),
-	taxable_amount_excl: z.number().describe('Net amount taxed (excl)'),
+	compound: z.boolean().optional().describe('Whether this tax is compounded on top of others'),
+	taxable_amount_excl: z.number().nullable().describe('Net amount taxed (excl)'),
 	tax_amount: z.number().describe('Tax amount collected'),
-	taxable_amount_incl: z.number().describe('Gross amount taxed (incl)'),
+	taxable_amount_incl: z.number().nullable().describe('Gross amount taxed (incl)'),
 });
 
 export const ReceiptPaymentSchema = z.object({
 	method_id: z.string().describe('Payment method identifier'),
 	method_title: z.string().describe('Payment method display title'),
 	amount: z.number().describe('Amount applied to order'),
-	reference: z.string().optional().describe('Payment reference / txn id / last-4'),
+	transaction_id: z
+		.string()
+		.optional()
+		.describe('Gateway transaction ID (matches WC order get_transaction_id)'),
 	tendered: z.number().optional().describe('Amount tendered (cash)'),
 	change: z.number().optional().describe('Change returned (cash)'),
+});
+
+export const ReceiptRefundLineSchema = z.object({
+	name: z.string().describe('Refunded line item name'),
+	sku: z.string().optional().describe('Refunded line item SKU'),
+	qty: z.number().describe('Quantity refunded (positive)'),
+	total: z.number().describe('Refunded amount for this line (positive)'),
+});
+
+export const ReceiptRefundSchema = z.object({
+	id: z.number().int().describe('Refund record ID'),
+	date: ReceiptDateSchema.optional().describe('When the refund was created'),
+	amount: z.number().describe('Refund total (positive)'),
+	reason: z.string().optional().describe('Refund reason'),
+	refunded_by_id: z.number().int().nullable().optional().describe('User who issued the refund'),
+	refunded_by_name: z.string().optional().describe('Display name of user who issued the refund'),
+	refunded_payment: z
+		.boolean()
+		.optional()
+		.describe('Whether the gateway payment was also refunded'),
+	lines: z.array(ReceiptRefundLineSchema).describe('Line items included in this refund'),
 });
 
 export const ReceiptFiscalSchema = z.object({
@@ -328,11 +378,12 @@ export const ReceiptDataSchema = z.object({
 	customer: ReceiptCustomerSchema,
 	lines: z.array(ReceiptLineItemSchema),
 	fees: z.array(ReceiptFeeSchema),
-	shipping: z.array(ReceiptFeeSchema),
+	shipping: z.array(ReceiptShippingSchema),
 	discounts: z.array(ReceiptDiscountSchema),
 	totals: ReceiptTotalsSchema,
 	tax_summary: z.array(ReceiptTaxSummaryItemSchema),
 	payments: z.array(ReceiptPaymentSchema),
+	refunds: z.array(ReceiptRefundSchema).optional().describe('Refunds applied to this order'),
 	fiscal: ReceiptFiscalSchema,
 	presentation_hints: ReceiptPresentationHintsSchema,
 	i18n: ReceiptI18nSchema.optional(),
@@ -349,10 +400,13 @@ export type ReceiptCashier = z.infer<typeof ReceiptCashierSchema>;
 export type ReceiptCustomer = z.infer<typeof ReceiptCustomerSchema>;
 export type ReceiptLineItem = z.infer<typeof ReceiptLineItemSchema>;
 export type ReceiptFee = z.infer<typeof ReceiptFeeSchema>;
+export type ReceiptShipping = z.infer<typeof ReceiptShippingSchema>;
 export type ReceiptDiscount = z.infer<typeof ReceiptDiscountSchema>;
 export type ReceiptTotals = z.infer<typeof ReceiptTotalsSchema>;
 export type ReceiptTaxSummaryItem = z.infer<typeof ReceiptTaxSummaryItemSchema>;
 export type ReceiptPayment = z.infer<typeof ReceiptPaymentSchema>;
+export type ReceiptRefundLine = z.infer<typeof ReceiptRefundLineSchema>;
+export type ReceiptRefund = z.infer<typeof ReceiptRefundSchema>;
 export type ReceiptFiscal = z.infer<typeof ReceiptFiscalSchema>;
 export type ReceiptPresentationHints = z.infer<typeof ReceiptPresentationHintsSchema>;
 export type ReceiptI18n = z.infer<typeof ReceiptI18nSchema>;

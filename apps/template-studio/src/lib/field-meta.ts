@@ -29,6 +29,7 @@ export const SECTIONS: SectionMeta[] = [
 	{ key: 'totals', label: 'Totals', path: ['totals'], kind: 'object' },
 	{ key: 'tax_summary', label: 'Tax Summary', path: ['tax_summary'], kind: 'array' },
 	{ key: 'payments', label: 'Payments', path: ['payments'], kind: 'array' },
+	{ key: 'refunds', label: 'Refunds', path: ['refunds'], kind: 'array' },
 	{ key: 'fiscal', label: 'Fiscal', path: ['fiscal'], kind: 'object' },
 	{
 		key: 'presentation_hints',
@@ -83,7 +84,16 @@ const DEFAULT_PAYMENT = {
 };
 
 const DEFAULT_LINE_META = { key: 'Attribute', value: '' };
-const DEFAULT_LINE_TAX = { code: 'TAX', amount: 0 };
+const DEFAULT_LINE_TAX = { code: 'TAX', rate: null, label: 'Tax', amount: 0 };
+const DEFAULT_REFUND = {
+	id: 0,
+	amount: 0,
+	reason: '',
+	refunded_by_id: null,
+	refunded_by_name: '',
+	refunded_payment: false,
+	lines: [],
+};
 
 /**
  * Default item to insert when "+ Add" is clicked on an array section.
@@ -99,6 +109,7 @@ export const ARRAY_DEFAULTS: Record<string, unknown> = {
 	discounts: DEFAULT_DISCOUNT,
 	tax_summary: DEFAULT_TAX,
 	payments: DEFAULT_PAYMENT,
+	refunds: DEFAULT_REFUND,
 	meta: DEFAULT_LINE_META,
 	taxes: DEFAULT_LINE_TAX,
 };

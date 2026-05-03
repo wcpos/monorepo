@@ -25,6 +25,8 @@ import type {
 	ReceiptOrderMeta,
 	ReceiptPayment,
 	ReceiptPresentationHints,
+	ReceiptRefund,
+	ReceiptShipping,
 	ReceiptStoreMeta,
 	ReceiptTaxSummaryItem,
 	ReceiptTotals,
@@ -424,13 +426,17 @@ function buildReceiptData(
 	const lines = buildLineItems(rand, pool, scenarios, taxRate, pricesEnteredWithTax, refundSign);
 	// An empty cart suppresses every other line-driven scenario so totals collapse to zero.
 	const populated = !scenarios.emptyCart;
-	const fees = populated && scenarios.hasFees ? buildFees(rand, refundSign, taxRate) : [];
+	const fees =
+		populated && scenarios.hasFees ? buildFees(rand, refundSign, taxRate, pool.taxLabel) : [];
 	const shipping =
-		populated && scenarios.hasShipping ? buildShipping(rand, refundSign, taxRate) : [];
+		populated && scenarios.hasShipping
+			? buildShipping(rand, refundSign, taxRate, pool.taxLabel)
+			: [];
 	const discounts =
 		populated && scenarios.hasDiscounts ? buildDiscounts(rand, refundSign, taxRate) : [];
 
-	const totals = computeTotals(lines, fees, shipping, discounts);
+	const refunds = scenarios.refund ? buildRefunds(rand, lines, pool, taxRate) : [];
+	const totals = computeTotals(lines, fees, shipping, discounts, refunds);
 	const taxSummary = buildTaxSummary(lines, fees, shipping, discounts, taxRate, pool.taxLabel);
 
 	const orderCreated = pickOrderDate(rand, seed);
@@ -477,6 +483,7 @@ function buildReceiptData(
 		totals,
 		tax_summary: taxSummary,
 		payments,
+		refunds,
 		fiscal,
 		presentation_hints: presentationHints,
 		i18n,
@@ -705,8 +712,31 @@ function buildLineItems(
 			line_total_incl: lineSubInc,
 			line_total_excl: lineSubExc,
 			meta: buildLineMeta(rand, useLong),
-			taxes: taxRate > 0 ? [{ code: `vat-${taxRate}`, amount: taxAmount }] : [],
+			taxes:
+				taxRate > 0
+					? [
+							{
+								code: `vat-${taxRate}`,
+								rate: taxRate,
+								label: `${pool.taxLabel} ${taxRate}%`,
+								amount: taxAmount,
+							},
+						]
+					: [],
 		});
+	}
+	// Sprinkle per-line refund info on a couple of items when in refund mode so
+	// snapshots/templates exercise the new qty_refunded / total_refunded fields.
+	if (scenarios.refund && lines.length > 0) {
+		const targets = Math.max(1, Math.floor(lines.length / 2));
+		for (let i = 0; i < targets; i += 1) {
+			const line = lines[i] as ReceiptLineItem;
+			const fullQty = Math.abs(line.qty);
+			const refundedQty = fullQty <= 1 ? fullQty : 1 + Math.floor(rand() * (fullQty - 1));
+			const ratio = fullQty === 0 ? 0 : refundedQty / fullQty;
+			line.qty_refunded = refundedQty;
+			line.total_refunded = round(Math.abs(line.line_total_incl ?? 0) * ratio);
+		}
 	}
 	return lines;
 }
@@ -759,7 +789,12 @@ function taxableExcl(totalIncl: number, taxRate: number): number {
 	return round(totalIncl / (1 + taxRate / 100));
 }
 
-function buildFees(rand: () => number, refundSign: number, taxRate: number): ReceiptFee[] {
+function buildFees(
+	rand: () => number,
+	refundSign: number,
+	taxRate: number,
+	taxLabel: string
+): ReceiptFee[] {
 	const labels = ['Service charge', 'Eco fee', 'Delivery fee'];
 	const count = 1 + Math.floor(rand() * 2);
 	return Array.from({ length: count }, (_, index) => {
@@ -776,29 +811,59 @@ function buildFees(rand: () => number, refundSign: number, taxRate: number): Rec
 			fee.meta = buildKeyValueMetaFromPool(rand, FEE_META_POOL, 1 + Math.floor(rand() * 2));
 		}
 		if (taxRate > 0 && rand() < 0.7) {
-			fee.taxes = [{ code: `vat-${taxRate}`, amount: taxAmount }];
+			fee.taxes = [
+				{
+					code: `vat-${taxRate}`,
+					rate: taxRate,
+					label: `${taxLabel} ${taxRate}%`,
+					amount: taxAmount,
+				},
+			];
 		}
 		return fee;
 	});
 }
 
-function buildShipping(rand: () => number, refundSign: number, taxRate: number): ReceiptFee[] {
-	const total = round(rand() * 12 + 3) * refundSign;
-	const totalExcl = taxableExcl(total, taxRate);
-	const taxAmount = round(total - totalExcl);
-	const shipping: ReceiptFee = {
-		label: pickFrom(rand, ['Standard shipping', 'Local pickup', 'Same-day courier']),
-		total,
-		total_incl: total,
-		total_excl: totalExcl,
-	};
-	if (rand() < 0.7) {
-		shipping.meta = buildKeyValueMetaFromPool(rand, SHIPPING_META_POOL, 1 + Math.floor(rand() * 3));
+function buildShipping(
+	rand: () => number,
+	refundSign: number,
+	taxRate: number,
+	taxLabel: string
+): ReceiptShipping[] {
+	const methodIds = ['flat_rate', 'free_shipping', 'local_pickup'] as const;
+	const count = rand() < 0.25 ? 2 : 1;
+	const result: ReceiptShipping[] = [];
+	for (let i = 0; i < count; i += 1) {
+		const total = round(rand() * 12 + 3) * refundSign;
+		const totalExcl = taxableExcl(total, taxRate);
+		const taxAmount = round(total - totalExcl);
+		const shipping: ReceiptShipping = {
+			label: pickFrom(rand, ['Standard shipping', 'Local pickup', 'Same-day courier', 'Express']),
+			method_id: pickFrom(rand, methodIds),
+			total,
+			total_incl: total,
+			total_excl: totalExcl,
+		};
+		if (rand() < 0.7) {
+			shipping.meta = buildKeyValueMetaFromPool(
+				rand,
+				SHIPPING_META_POOL,
+				1 + Math.floor(rand() * 3)
+			);
+		}
+		if (taxRate > 0 && rand() < 0.7) {
+			shipping.taxes = [
+				{
+					code: `vat-${taxRate}`,
+					rate: taxRate,
+					label: `${taxLabel} ${taxRate}%`,
+					amount: taxAmount,
+				},
+			];
+		}
+		result.push(shipping);
 	}
-	if (taxRate > 0 && rand() < 0.7) {
-		shipping.taxes = [{ code: `vat-${taxRate}`, amount: taxAmount }];
-	}
-	return [shipping];
+	return result;
 }
 
 function buildDiscounts(
@@ -820,6 +885,7 @@ function buildDiscounts(
 				: null;
 		return {
 			label: code,
+			code,
 			codes: extra ? `${code}, ${extra}` : code,
 			total: -total,
 			total_incl: -total,
@@ -828,11 +894,51 @@ function buildDiscounts(
 	});
 }
 
+function buildRefunds(
+	rand: () => number,
+	lines: ReceiptLineItem[],
+	pool: LocalePool,
+	taxRate: number
+): ReceiptRefund[] {
+	void taxRate;
+	const refundReasons = [
+		'Customer return',
+		'Damaged item',
+		'Wrong size',
+		'Duplicate charge',
+		'Goodwill gesture',
+	];
+	const refundedByName = pickFrom(rand, pool.cashierNames);
+	const refundedById = Math.floor(rand() * 99) + 1;
+	// Build refund lines from the lines that were marked refunded.
+	const refundLines = lines
+		.filter((line) => (line.qty_refunded ?? 0) > 0)
+		.map((line) => ({
+			name: line.name,
+			sku: line.sku,
+			qty: line.qty_refunded ?? 0,
+			total: line.total_refunded ?? 0,
+		}));
+	const refundAmount = refundLines.reduce((sum, line) => sum + (line.total ?? 0), 0);
+	return [
+		{
+			id: 1000 + Math.floor(rand() * 9000),
+			amount: round(refundAmount),
+			reason: pickFrom(rand, refundReasons),
+			refunded_by_id: refundedById,
+			refunded_by_name: refundedByName,
+			refunded_payment: rand() < 0.5,
+			lines: refundLines,
+		},
+	];
+}
+
 function computeTotals(
 	lines: ReceiptLineItem[],
 	fees: ReceiptFee[],
-	shipping: ReceiptFee[],
-	discounts: ReceiptDiscount[]
+	shipping: ReceiptShipping[],
+	discounts: ReceiptDiscount[],
+	refunds: ReceiptRefund[]
 ): ReceiptTotals {
 	const lineSubInc = lines.reduce((sum, line) => sum + (line.line_subtotal_incl ?? 0), 0);
 	const lineSubExc = lines.reduce((sum, line) => sum + (line.line_subtotal_excl ?? 0), 0);
@@ -844,7 +950,8 @@ function computeTotals(
 	const discountTotalExcl = discounts.reduce((sum, item) => sum + item.total_excl, 0);
 	const grandIncl = round(lineSubInc + feeTotalIncl + shipTotalIncl + discountTotalIncl);
 	const grandExcl = round(lineSubExc + feeTotalExcl + shipTotalExcl + discountTotalExcl);
-	return {
+	const refundTotal = refunds.reduce((sum, refund) => sum + (refund.amount ?? 0), 0);
+	const totals: ReceiptTotals = {
 		subtotal: round(lineSubInc),
 		subtotal_incl: round(lineSubInc),
 		subtotal_excl: round(lineSubExc),
@@ -858,12 +965,16 @@ function computeTotals(
 		paid_total: grandIncl,
 		change_total: 0,
 	};
+	if (refunds.length > 0) {
+		totals.refund_total = round(refundTotal);
+	}
+	return totals;
 }
 
 function buildTaxSummary(
 	lines: ReceiptLineItem[],
 	fees: ReceiptFee[],
-	shipping: ReceiptFee[],
+	shipping: ReceiptShipping[],
 	discounts: ReceiptDiscount[],
 	taxRate: number,
 	taxLabel: string
@@ -887,6 +998,7 @@ function buildTaxSummary(
 			taxable_amount_excl: round(taxableExcl),
 			tax_amount: round(taxableIncl - taxableExcl),
 			taxable_amount_incl: round(taxableIncl),
+			compound: false,
 		},
 	];
 }
@@ -922,9 +1034,9 @@ function buildPayments(
 			amount,
 		};
 		if (method.id === 'card') {
-			payment.reference = `**** **** **** ${1000 + Math.floor(rand() * 8999)}`;
+			payment.transaction_id = `**** **** **** ${1000 + Math.floor(rand() * 8999)}`;
 		} else if (method.id === 'cash') {
-			payment.reference = `${currency} cash drawer`;
+			payment.transaction_id = `${currency} cash drawer`;
 			if (amount > 0) {
 				// Round tendered up to the nearest "round number" so change is non-zero,
 				// matching how cash gets handed over in real life.
@@ -933,9 +1045,9 @@ function buildPayments(
 				payment.change = round(tendered - amount);
 			}
 		} else if (method.id === 'bank_transfer') {
-			payment.reference = `IBAN ES${Math.floor(rand() * 9000_0000_0000_0000) + 1000_0000_0000_0000}`;
+			payment.transaction_id = `IBAN ES${Math.floor(rand() * 9000_0000_0000_0000) + 1000_0000_0000_0000}`;
 		} else if (method.id === 'wallet') {
-			payment.reference = `WAL-${formatSeed(seedFromRand(rand)).toUpperCase()}-${1000 + Math.floor(rand() * 8999)}`;
+			payment.transaction_id = `WAL-${formatSeed(seedFromRand(rand)).toUpperCase()}-${1000 + Math.floor(rand() * 8999)}`;
 		}
 		return payment;
 	};
@@ -1002,7 +1114,7 @@ function buildOrderMeta(
 		}
 	})();
 	return {
-		schema_version: '1.2.0',
+		schema_version: '1.3.0',
 		mode,
 		created_at_gmt: createdAtGmt,
 		created_at_local: localeFormatted,

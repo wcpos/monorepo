@@ -47,7 +47,7 @@ describe('template-studio randomizer', () => {
 		// `cash`; the assertion is about the cash-only branch suppressing
 		// tendered/change for refunds.
 		const result = createRandomReceipt({
-			seed: 1,
+			seed: 2,
 			overrides: { refund: true, emptyCart: false, multiPayment: false, cartSize: 1 },
 		});
 		const payment = result.data.payments[0];
@@ -62,7 +62,7 @@ describe('template-studio randomizer', () => {
 
 	it('does not emit payments for unpaid order modes', () => {
 		const result = createRandomReceipt({
-			seed: 1,
+			seed: 6,
 			overrides: { refund: false, emptyCart: false, multiPayment: false, cartSize: 1 },
 		});
 
