@@ -30,6 +30,7 @@ import type {
 	ReceiptStoreMeta,
 	ReceiptTaxSummaryItem,
 	ReceiptTotals,
+	TaxId,
 } from '@wcpos/printer/encoder';
 
 /* ─────────────────────────── Seed + PRNG ─────────────────────────── */
@@ -570,6 +571,112 @@ function pickOrderDate(rand: () => number, seed: number): Date {
 	return new Date(base + hour * 3_600_000 + minute * 60_000);
 }
 
+function buildTaxIds(rand: () => number, pool: LocalePool): TaxId[] {
+	if (rand() >= 0.7) return [];
+	// Pool's currency / locale steers the typed entries. Multiple entries
+	// per store are realistic — DE stores commonly render USt-IdNr. +
+	// Steuernummer + HRB on every receipt for Impressumspflicht compliance.
+	switch (pool.currency) {
+		case 'EUR': {
+			// Rotate between a few EU jurisdictions for snapshot variety.
+			const pick = Math.floor(rand() * 3);
+			if (pick === 0) {
+				// Germany — three lines (USt-IdNr. + Steuernummer + HRB).
+				return [
+					{
+						type: 'eu_vat',
+						value: `DE${Math.floor(rand() * 900_000_000 + 100_000_000)}`,
+						country: 'DE',
+					},
+					{
+						type: 'de_steuernummer',
+						value: `05/${Math.floor(rand() * 900 + 100)}/${Math.floor(rand() * 90_000 + 10_000)}`,
+						country: 'DE',
+					},
+					{
+						type: 'de_hrb',
+						value: `HRB München ${Math.floor(rand() * 900_000 + 100_000)}`,
+						country: 'DE',
+					},
+				];
+			}
+			if (pick === 1) {
+				// France — SIRET + EU VAT.
+				const siren = Math.floor(rand() * 900_000_000 + 100_000_000);
+				return [
+					{ type: 'eu_vat', value: `FR${Math.floor(rand() * 90 + 10)}${siren}`, country: 'FR' },
+					{
+						type: 'fr_siret',
+						value: `${siren}${Math.floor(rand() * 90_000 + 10_000)}`,
+						country: 'FR',
+					},
+				];
+			}
+			// Spain — ES NIF + EU VAT (original LATIN-pool default).
+			return [
+				{
+					type: 'eu_vat',
+					value: `ES${Math.floor(rand() * 90_000_000 + 10_000_000)}A`,
+					country: 'ES',
+				},
+				{
+					type: 'es_nif',
+					value: `${Math.floor(rand() * 90_000_000 + 10_000_000)}B`,
+					country: 'ES',
+				},
+			];
+		}
+		case 'GBP':
+			// UK — VAT + Companies House number.
+			return [
+				{
+					type: 'gb_vat',
+					value: `GB${Math.floor(rand() * 900_000_000 + 100_000_000)}`,
+					country: 'GB',
+				},
+				{
+					type: 'gb_company',
+					value: `${Math.floor(rand() * 90_000_000 + 10_000_000)}`,
+					country: 'GB',
+				},
+			];
+		case 'CHF':
+			return [
+				{
+					type: 'ch_uid',
+					value: `CHE-${Math.floor(rand() * 900 + 100)}.${Math.floor(rand() * 900 + 100)}.${Math.floor(rand() * 900 + 100)}`,
+					country: 'CH',
+				},
+			];
+		case 'SAR':
+			return [
+				{
+					type: 'sa_vat',
+					value: `3${Math.floor(rand() * 1e14)
+						.toString()
+						.padStart(14, '0')}`,
+					country: 'SA',
+				},
+			];
+		case 'JPY':
+			// JP isn't in the shipped Tax_Id_Types registry yet — emit as 'other'
+			// with a JP-shaped 13-digit qualified-issuer value. Add a typed
+			// constant in a follow-up if needed.
+			return [
+				{
+					type: 'other',
+					value: `T${Math.floor(rand() * 1e13)
+						.toString()
+						.padStart(13, '0')}`,
+					country: 'JP',
+					label: 'Qualified Invoice Issuer No.',
+				},
+			];
+		default:
+			return [{ type: 'other', value: `TAX-${Math.floor(rand() * 1_000_000)}` }];
+	}
+}
+
 function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
 	const hasHours = rand() < 0.85;
 	const openingDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -579,10 +686,8 @@ function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
 	return {
 		name: pickFrom(rand, pool.storeNames),
 		address_lines: [pickFrom(rand, pool.streets), cityRegion, pickFrom(rand, pool.postcodes)],
-		tax_id:
-			rand() < 0.9
-				? `${pool.countryCode}-${Math.floor(rand() * 9_000_000) + 1_000_000}`
-				: undefined,
+		tax_ids: buildTaxIds(rand, pool),
+		tax_id: undefined, // will be derived by the encoder/template if needed
 		phone:
 			rand() < 0.9 ? `${pool.dialingPrefix} 555 ${Math.floor(rand() * 9000 + 1000)}` : undefined,
 		email: rand() < 0.9 ? 'hello@example.com' : undefined,
