@@ -27,6 +27,7 @@ export const customerFormSchema = z.object({
 	role: z.string().optional(),
 	username: z.string().optional(),
 	password: z.string().default(''), // WC REST API will error if password is not provided on create
+	tax_id: z.string().optional(),
 	...billingAddressSchema.shape,
 	...shippingAddressSchema.shape,
 	meta_data: metaDataSchema,

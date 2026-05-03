@@ -751,7 +751,7 @@ function buildTaxIdForCountry(rand: () => number, countryCode: string): ReceiptT
 		case 'AU':
 			return { type: 'au_abn', value: digits(11), country: 'AU', label: null };
 		case 'SA':
-			return { type: 'sa_vat', value: digits(15), country: 'SA', label: null };
+			return { type: 'sa_vat', value: `3${digits(14)}`, country: 'SA', label: null };
 		case 'JP':
 			return { type: 'other', value: `T${digits(13)}`, country: 'JP', label: null };
 		case 'US':
