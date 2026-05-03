@@ -444,6 +444,11 @@ function buildReceiptData(
 		pool.timeZone
 	);
 	const payments = buildPayments(rand, scenarios, totals.grand_total_incl, orderCurrency, totals);
+	if (refunds.length > 0) {
+		for (const payment of payments) {
+			payment.method_title = `Refund - ${payment.method_title}`;
+		}
+	}
 	const presentationHints: ReceiptPresentationHints = {
 		display_tax: displayTax,
 		prices_entered_with_tax: pricesEnteredWithTax,
@@ -453,7 +458,7 @@ function buildReceiptData(
 	const fiscal: ReceiptFiscal = scenarios.fiscal ? buildFiscal(rand, orderMeta) : {};
 	const receiptInfo = buildReceiptInfo(rand, pool.locale, pool.timeZone, orderCreated);
 	const order = buildOrder(orderMeta, orderCreated, scenarios, pool.locale, pool.timeZone);
-	const i18n = buildI18nLabels();
+	const i18n = buildI18nLabels(refunds.length > 0);
 
 	return {
 		id: `random-${formatSeed(seed)}`,
@@ -872,7 +877,6 @@ function buildRefunds(
 	pool: LocalePool,
 	taxRate: number
 ): ReceiptRefund[] {
-	void taxRate;
 	const refundReasons = [
 		'Customer return',
 		'Damaged item',
@@ -880,8 +884,14 @@ function buildRefunds(
 		'Duplicate charge',
 		'Goodwill gesture',
 	];
+	const gateways = [
+		{ id: 'stripe', title: 'Stripe' },
+		{ id: 'paypal', title: 'PayPal' },
+		{ id: 'cash', title: 'Cash' },
+	] as const;
 	const refundedByName = pickFrom(rand, pool.cashierNames);
 	const refundedById = Math.floor(rand() * 99) + 1;
+	const gateway = gateways[refundedById % gateways.length];
 	// Build refund lines from the lines that were marked refunded.
 	const refundLines = lines
 		.filter((line) => (line.qty_refunded ?? 0) > 0)
@@ -891,15 +901,27 @@ function buildRefunds(
 			qty: line.qty_refunded ?? 0,
 			total: line.total_refunded ?? 0,
 		}));
-	const refundAmount = refundLines.reduce((sum, line) => sum + (line.total ?? 0), 0);
+	const refundAmount = round(refundLines.reduce((sum, line) => sum + (line.total ?? 0), 0));
+	const refundSubtotal = refundAmount;
+	const refundTaxTotal =
+		taxRate > 0 ? round(refundSubtotal - taxableExcl(refundSubtotal, taxRate)) : 0;
+	const refundId = 1000 + Math.floor(rand() * 9000);
+	const refundReason = pickFrom(rand, refundReasons);
+	const refundedPayment = rand() < 0.5;
 	return [
 		{
-			id: 1000 + Math.floor(rand() * 9000),
-			amount: round(refundAmount),
-			reason: pickFrom(rand, refundReasons),
+			id: refundId,
+			amount: refundAmount,
+			subtotal: refundSubtotal,
+			tax_total: refundTaxTotal,
+			reason: refundReason,
 			refunded_by_id: refundedById,
 			refunded_by_name: refundedByName,
-			refunded_payment: rand() < 0.5,
+			refunded_payment: refundedPayment,
+			destination: refundedPayment ? 'original_method' : 'manual',
+			gateway_id: gateway.id,
+			gateway_title: gateway.title,
+			processing_mode: refundedPayment ? 'provider' : 'manual',
 			lines: refundLines,
 		},
 	];
@@ -1067,18 +1089,15 @@ function buildOrderMeta(
 	const orderId = 1000 + (seed % 9000);
 	void scenarios;
 	const wcStatus = pickFrom(rand, [
-		'completed',
-		'completed',
+		'pending',
 		'completed',
 		'processing',
 		'on-hold',
+		'cancelled',
+		'refunded',
+		'failed',
 	] as const);
-	const createdVia = pickFrom(rand, [
-		'woocommerce-pos',
-		'woocommerce-pos',
-		'checkout',
-		'admin',
-	] as const);
+	const createdVia = pickFrom(rand, ['woocommerce-pos', 'checkout', 'admin', 'rest-api'] as const);
 	const createdAtGmt = createdAt.toISOString().replace('T', ' ').slice(0, 19);
 	const baseDateOptions: Intl.DateTimeFormatOptions = {
 		timeZone,
@@ -1162,11 +1181,11 @@ function buildOrder(
 	locale: string,
 	timeZone: string
 ): ReceiptOrder {
-	// Paid/completed timestamps trail creation for completed sales; non-completed
-	// statuses (e.g. on-hold, pending) leave the dates empty (matching how PHP
-	// returns Receipt_Date_Formatter::empty()).
+	// Paid/completed timestamps trail creation; paid statuses keep date_paid even
+	// when fulfillment has not completed yet.
+	const isPaid = meta.wc_status === 'processing' || meta.wc_status === 'completed';
 	const isCompleted = meta.wc_status === 'completed';
-	const paidAt = isCompleted ? new Date(createdAt.getTime() + 60_000) : null;
+	const paidAt = isPaid ? new Date(createdAt.getTime() + 60_000) : null;
 	const completedAt = isCompleted ? new Date(createdAt.getTime() + 5 * 60_000) : null;
 	void scenarios;
 	return {
@@ -1209,7 +1228,7 @@ function emptyDateObject(): ReceiptDate {
  * the same key set the PHP builder emits; the catchall in the schema lets
  * extensions add more without breaking validation.
  */
-function buildI18nLabels(): ReceiptI18n {
+function buildI18nLabels(hasRefunds = false): ReceiptI18n {
 	return {
 		order: 'Order',
 		date: 'Date',
@@ -1233,7 +1252,7 @@ function buildI18nLabels(): ReceiptI18n {
 		packed: 'Packed',
 		subtotal: 'Subtotal',
 		subtotal_excl_tax: 'Subtotal (excl. tax)',
-		total: 'Total',
+		total: hasRefunds ? 'Total Refunded' : 'Total',
 		total_tax: 'Total Tax',
 		grand_total_incl_tax: 'Grand Total (incl. tax)',
 		tax: 'Tax',
@@ -1257,7 +1276,7 @@ function buildI18nLabels(): ReceiptI18n {
 		customer_note: 'Customer Note',
 		terms_and_conditions: 'Terms & Conditions',
 		a_message_for_you: 'A message for you',
-		thank_you: 'Thank you!',
+		thank_you: 'Thank you',
 		thank_you_purchase: 'Thank you for your purchase!',
 		thank_you_shopping: 'Thank you for shopping with us!',
 		thank_you_business: 'Thank you for your business.',

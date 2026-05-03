@@ -137,6 +137,15 @@ describe('formatReceiptData', () => {
 		});
 	});
 
+	it('preserves custom i18n labels over gallery-template defaults', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.i18n = { total: 'Total Refunded' };
+		const result = formatReceiptData(data);
+
+		expect(result.i18n.total).toBe('Total Refunded');
+		expect(result.i18n.subtotal).toBe('Subtotal');
+	});
+
 	it('preserves zero numeric values for Mustache section truthiness', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.totals.discount_total_incl = 0;

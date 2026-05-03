@@ -51,7 +51,7 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 
 	return {
 		...data,
-		i18n: DEFAULT_I18N,
+		i18n: { ...DEFAULT_I18N, ...data.i18n },
 		order: {
 			id: data.meta.order_id,
 			number: data.meta.order_number,
