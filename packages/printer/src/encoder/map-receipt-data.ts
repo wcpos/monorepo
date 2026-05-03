@@ -67,11 +67,11 @@ function isCanonicalShape(data: Record<string, any>): boolean {
 function mapMeta(src: Record<string, any>): ReceiptOrderMeta {
 	return {
 		schema_version: 1,
-		mode: toStr(src.status) || 'live',
 		created_at_gmt: toStr(src.order_date),
 		order_id: 0, // Not available in the offline shape
 		order_number: toStr(src.order_number),
 		currency: toStr(src.currency),
+		wc_status: toStr(src.status) || undefined,
 	};
 }
 
@@ -317,18 +317,62 @@ function mapPayment(src: Record<string, any>): ReceiptPayment {
 	};
 }
 
+function mapRefundLine(entry: Record<string, any>) {
+	const line: ReceiptRefund['lines'][number] = {
+		name: toStr(entry.name),
+		sku: 'sku' in entry ? toStr(entry.sku) : undefined,
+		qty: toNum(entry.qty ?? entry.quantity),
+		total: toNum(entry.total ?? entry.amount),
+	};
+	if ('total_incl' in entry && entry.total_incl != null) line.total_incl = toNum(entry.total_incl);
+	if ('total_excl' in entry && entry.total_excl != null) line.total_excl = toNum(entry.total_excl);
+	if (Array.isArray(entry.taxes) && entry.taxes.length > 0) {
+		const taxes = mapItemTaxes(entry.taxes);
+		if (taxes.length > 0) line.taxes = taxes;
+	}
+	return line;
+}
+
+function mapRefundFee(entry: Record<string, any>) {
+	const fee: NonNullable<ReceiptRefund['fees']>[number] = {
+		label: toStr(entry.label ?? entry.name),
+		total: toNum(entry.total),
+	};
+	if ('total_incl' in entry && entry.total_incl != null) fee.total_incl = toNum(entry.total_incl);
+	if ('total_excl' in entry && entry.total_excl != null) fee.total_excl = toNum(entry.total_excl);
+	if (Array.isArray(entry.taxes) && entry.taxes.length > 0) {
+		const taxes = mapItemTaxes(entry.taxes);
+		if (taxes.length > 0) fee.taxes = taxes;
+	}
+	return fee;
+}
+
+function mapRefundShipping(entry: Record<string, any>) {
+	const shipping: NonNullable<ReceiptRefund['shipping']>[number] = {
+		label: toStr(entry.label ?? entry.name),
+		total: toNum(entry.total),
+	};
+	if ('method_id' in entry && entry.method_id != null) shipping.method_id = toStr(entry.method_id);
+	if ('total_incl' in entry && entry.total_incl != null) {
+		shipping.total_incl = toNum(entry.total_incl);
+	}
+	if ('total_excl' in entry && entry.total_excl != null) {
+		shipping.total_excl = toNum(entry.total_excl);
+	}
+	if (Array.isArray(entry.taxes) && entry.taxes.length > 0) {
+		const taxes = mapItemTaxes(entry.taxes);
+		if (taxes.length > 0) shipping.taxes = taxes;
+	}
+	return shipping;
+}
+
 function mapRefund(src: Record<string, any>): ReceiptRefund {
 	const refund: ReceiptRefund = {
 		id: Math.trunc(toNum(src.id)),
 		amount: toNum(src.amount),
 		lines: toArr(src.lines)
 			.filter((entry): entry is Record<string, any> => !!entry && typeof entry === 'object')
-			.map((entry) => ({
-				name: toStr(entry.name),
-				sku: 'sku' in entry ? toStr(entry.sku) : undefined,
-				qty: toNum(entry.qty ?? entry.quantity),
-				total: toNum(entry.total ?? entry.amount),
-			})),
+			.map(mapRefundLine),
 	};
 	if ('reason' in src && src.reason != null) refund.reason = toStr(src.reason);
 	if ('refunded_by_id' in src) {
@@ -340,6 +384,37 @@ function mapRefund(src: Record<string, any>): ReceiptRefund {
 	}
 	if ('refunded_payment' in src) refund.refunded_payment = !!src.refunded_payment;
 	if (src.date && typeof src.date === 'object') refund.date = src.date as ReceiptRefund['date'];
+
+	if ('subtotal' in src && src.subtotal != null) refund.subtotal = toNum(src.subtotal);
+	if ('tax_total' in src && src.tax_total != null) refund.tax_total = toNum(src.tax_total);
+	if ('shipping_total' in src && src.shipping_total != null) {
+		refund.shipping_total = toNum(src.shipping_total);
+	}
+	if ('shipping_tax' in src && src.shipping_tax != null) {
+		refund.shipping_tax = toNum(src.shipping_tax);
+	}
+	if ('destination' in src && src.destination != null) refund.destination = toStr(src.destination);
+	if ('gateway_id' in src && src.gateway_id != null) refund.gateway_id = toStr(src.gateway_id);
+	if ('gateway_title' in src && src.gateway_title != null) {
+		refund.gateway_title = toStr(src.gateway_title);
+	}
+	if ('processing_mode' in src && src.processing_mode != null) {
+		refund.processing_mode = toStr(src.processing_mode);
+	}
+	if (Array.isArray(src.fees) && src.fees.length > 0) {
+		refund.fees = src.fees
+			.filter(
+				(entry: unknown): entry is Record<string, any> => !!entry && typeof entry === 'object'
+			)
+			.map(mapRefundFee);
+	}
+	if (Array.isArray(src.shipping) && src.shipping.length > 0) {
+		refund.shipping = src.shipping
+			.filter(
+				(entry: unknown): entry is Record<string, any> => !!entry && typeof entry === 'object'
+			)
+			.map(mapRefundShipping);
+	}
 	return refund;
 }
 
@@ -534,7 +609,9 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 
 	if (Array.isArray(data.refunds)) {
 		result.refunds = data.refunds
-			.filter((entry: unknown): entry is Record<string, any> => !!entry && typeof entry === 'object')
+			.filter(
+				(entry: unknown): entry is Record<string, any> => !!entry && typeof entry === 'object'
+			)
 			.map((entry) => mapRefund(entry));
 	}
 
@@ -546,7 +623,6 @@ function emptyReceiptData(): ReceiptData {
 	return {
 		meta: {
 			schema_version: 1,
-			mode: 'live',
 			created_at_gmt: '',
 			order_id: 0,
 			order_number: '',

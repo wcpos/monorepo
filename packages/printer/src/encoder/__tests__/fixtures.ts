@@ -3,7 +3,6 @@ import type { ReceiptData } from '../types';
 export const sampleReceiptData: ReceiptData = {
 	meta: {
 		schema_version: 1,
-		mode: 'live',
 		created_at_gmt: '2026-03-06 14:30:00',
 		order_id: 123,
 		order_number: '1042',

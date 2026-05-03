@@ -50,6 +50,14 @@ export const ReceiptOrderSchema = z.object({
 	number: z.string().describe('Human-facing order number'),
 	currency: z.string().describe('Order currency code'),
 	customer_note: z.string().describe('Free-text note attached to the order'),
+	wc_status: z
+		.string()
+		.optional()
+		.describe('Raw WooCommerce order status (e.g. processing, completed)'),
+	created_via: z
+		.string()
+		.optional()
+		.describe('Order source / channel (e.g. woocommerce-pos, checkout, admin)'),
 	created: ReceiptDateSchema,
 	paid: ReceiptDateSchema,
 	completed: ReceiptDateSchema,
@@ -93,13 +101,20 @@ export const ReceiptOrderMetaSchema = z.object({
 	schema_version: z
 		.union([z.string(), z.number().int()])
 		.describe('Receipt-data contract version (PHP emits a SemVer string)'),
-	mode: z.string().describe('Receipt mode: sale, refund, quote, kitchen, etc.'),
 	created_at_gmt: z.string().describe('Order creation timestamp (ISO/GMT)'),
 	created_at_local: z.string().optional().describe('Order creation timestamp (local timezone)'),
 	order_id: z.number().int().describe('Numeric order identifier'),
 	order_number: z.string().describe('Human-facing order number'),
 	currency: z.string().describe('ISO 4217 currency code (e.g. USD, EUR, AED)'),
 	customer_note: z.string().optional().describe('Free-text note attached to the order'),
+	wc_status: z
+		.string()
+		.optional()
+		.describe('Raw WooCommerce order status (e.g. processing, completed)'),
+	created_via: z
+		.string()
+		.optional()
+		.describe('Order source / channel (e.g. woocommerce-pos, checkout, admin)'),
 });
 
 export const ReceiptCashierSchema = z.object({
@@ -246,12 +261,45 @@ export const ReceiptRefundLineSchema = z.object({
 	sku: z.string().optional().describe('Refunded line item SKU'),
 	qty: z.number().describe('Quantity refunded (positive)'),
 	total: z.number().describe('Refunded amount for this line (positive)'),
+	total_incl: z.number().optional().describe('Refunded line total tax-inclusive (positive)'),
+	total_excl: z.number().optional().describe('Refunded line total tax-exclusive (positive)'),
+	taxes: z
+		.array(ReceiptLineItemTaxSchema)
+		.optional()
+		.describe('Per-rate tax breakdown for this refunded line'),
+});
+
+export const ReceiptRefundFeeSchema = z.object({
+	label: z.string().describe('Refunded fee label'),
+	total: z.number().describe('Refunded fee amount (positive)'),
+	total_incl: z.number().optional().describe('Refunded fee total tax-inclusive (positive)'),
+	total_excl: z.number().optional().describe('Refunded fee total tax-exclusive (positive)'),
+	taxes: z
+		.array(ReceiptLineItemTaxSchema)
+		.optional()
+		.describe('Per-rate tax breakdown for this refunded fee'),
+});
+
+export const ReceiptRefundShippingSchema = z.object({
+	label: z.string().describe('Refunded shipping label'),
+	method_id: z.string().optional().describe('Shipping method id'),
+	total: z.number().describe('Refunded shipping amount (positive)'),
+	total_incl: z.number().optional().describe('Refunded shipping total tax-inclusive (positive)'),
+	total_excl: z.number().optional().describe('Refunded shipping total tax-exclusive (positive)'),
+	taxes: z
+		.array(ReceiptLineItemTaxSchema)
+		.optional()
+		.describe('Per-rate tax breakdown for this refunded shipping line'),
 });
 
 export const ReceiptRefundSchema = z.object({
 	id: z.number().int().describe('Refund record ID'),
 	date: ReceiptDateSchema.optional().describe('When the refund was created'),
 	amount: z.number().describe('Refund total (positive)'),
+	subtotal: z.number().optional().describe('Refund subtotal across line items (positive)'),
+	tax_total: z.number().optional().describe('Total tax refunded across all items (positive)'),
+	shipping_total: z.number().optional().describe('Shipping amount refunded (positive)'),
+	shipping_tax: z.number().optional().describe('Shipping tax refunded (positive)'),
 	reason: z.string().optional().describe('Refund reason'),
 	refunded_by_id: z.number().int().nullable().optional().describe('User who issued the refund'),
 	refunded_by_name: z.string().optional().describe('Display name of user who issued the refund'),
@@ -259,7 +307,22 @@ export const ReceiptRefundSchema = z.object({
 		.boolean()
 		.optional()
 		.describe('Whether the gateway payment was also refunded'),
+	destination: z
+		.string()
+		.optional()
+		.describe('Where the refund was sent (original_method | cash | manual)'),
+	gateway_id: z.string().optional().describe('Payment gateway id used for the refund'),
+	gateway_title: z.string().optional().describe('Payment gateway display title'),
+	processing_mode: z
+		.string()
+		.optional()
+		.describe('How the refund was processed (provider | manual)'),
 	lines: z.array(ReceiptRefundLineSchema).describe('Line items included in this refund'),
+	fees: z.array(ReceiptRefundFeeSchema).optional().describe('Fees included in this refund'),
+	shipping: z
+		.array(ReceiptRefundShippingSchema)
+		.optional()
+		.describe('Shipping rows included in this refund'),
 });
 
 export const ReceiptFiscalSchema = z.object({
@@ -407,6 +470,8 @@ export type ReceiptTotals = z.infer<typeof ReceiptTotalsSchema>;
 export type ReceiptTaxSummaryItem = z.infer<typeof ReceiptTaxSummaryItemSchema>;
 export type ReceiptPayment = z.infer<typeof ReceiptPaymentSchema>;
 export type ReceiptRefundLine = z.infer<typeof ReceiptRefundLineSchema>;
+export type ReceiptRefundFee = z.infer<typeof ReceiptRefundFeeSchema>;
+export type ReceiptRefundShipping = z.infer<typeof ReceiptRefundShippingSchema>;
 export type ReceiptRefund = z.infer<typeof ReceiptRefundSchema>;
 export type ReceiptFiscal = z.infer<typeof ReceiptFiscalSchema>;
 export type ReceiptPresentationHints = z.infer<typeof ReceiptPresentationHintsSchema>;
