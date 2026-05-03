@@ -21,6 +21,8 @@ import type {
 	ReceiptOrderMeta,
 	ReceiptPayment,
 	ReceiptPresentationHints,
+	ReceiptRefund,
+	ReceiptShipping,
 	ReceiptStoreMeta,
 	ReceiptTaxSummaryItem,
 	ReceiptTotals,
@@ -126,8 +128,12 @@ function resolveDisplayValueSide(
 function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax): ReceiptLineItem {
 	const qty = toNum(src.qty ?? src.quantity);
 	const price = toNum(src.price ?? src.unit_price ?? src.unit_price_incl ?? src.unit_price_excl);
-	const total = toNum(src.line_total ?? src.total ?? src.line_total_incl ?? src.line_total_excl);
-	const unitPriceFallback = qty > 0 ? total / qty : price;
+	const rawTotal = src.line_total ?? src.total ?? src.line_total_incl ?? src.line_total_excl;
+	const total = toNum(rawTotal);
+	const rawTotalNumber =
+		rawTotal == null ? NaN : typeof rawTotal === 'string' ? parseFloat(rawTotal) : Number(rawTotal);
+	const derivedUnitPrice = Number.isFinite(rawTotalNumber) && qty !== 0 ? total / qty : price;
+	const unitPriceFallback = Number.isFinite(derivedUnitPrice) ? derivedUnitPrice : price;
 	const unitPriceIncl = toNum(src.unit_price_incl ?? src.unit_price ?? unitPriceFallback);
 	const unitPriceExcl = toNum(src.unit_price_excl ?? src.unit_price ?? unitPriceFallback);
 	const lineSubtotalIncl = toNum(src.line_subtotal_incl ?? src.line_subtotal ?? total);
@@ -169,9 +175,19 @@ function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax
 			.filter((entry): entry is Record<string, any> => !!entry && typeof entry === 'object')
 			.map((entry) => ({
 				code: toStr(entry.code),
+				rate: entry.rate == null ? null : toNum(entry.rate),
+				label: 'label' in entry ? toStr(entry.label) : undefined,
+				compound: 'compound' in entry ? !!entry.compound : undefined,
 				amount: toNum(entry.amount),
 			})),
 	};
+
+	if ('qty_refunded' in src && src.qty_refunded != null) {
+		line.qty_refunded = toNum(src.qty_refunded);
+	}
+	if ('total_refunded' in src && src.total_refunded != null) {
+		line.total_refunded = toNum(src.total_refunded);
+	}
 
 	// Pass through pre-discount per-unit subtotals when the canonical shape
 	// supplies them — used by templates that want to display "was/now" pricing.
@@ -184,6 +200,21 @@ function mapLine(src: Record<string, any>, index: number, displayTax: DisplayTax
 	}
 
 	return line;
+}
+
+function mapItemTaxes(
+	taxes: any[]
+): { code: string; rate?: number | null; label?: string; compound?: boolean; amount: number }[] {
+	return taxes
+		.filter((tax: unknown): tax is Record<string, unknown> => !!tax && typeof tax === 'object')
+		.map((tax) => ({
+			code: toStr(tax.code ?? tax.rate_code ?? tax.id),
+			rate: tax.rate == null ? null : toNum(tax.rate),
+			label: 'label' in tax ? toStr(tax.label) : undefined,
+			compound: 'compound' in tax ? !!tax.compound : undefined,
+			amount: toNum(tax.amount ?? tax.tax_amount),
+		}))
+		.filter((tax) => tax.code.length > 0 || tax.amount !== 0);
 }
 
 function mapFeeLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptFee {
@@ -210,16 +241,19 @@ function mapFeeLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptFe
 		if (meta.length > 0) fee.meta = meta;
 	}
 	if (Array.isArray(src.taxes) && src.taxes.length > 0) {
-		const taxes = src.taxes
-			.filter((tax: unknown): tax is Record<string, unknown> => !!tax && typeof tax === 'object')
-			.map((tax) => ({
-				code: toStr(tax.code ?? tax.rate_code ?? tax.id),
-				amount: toNum(tax.amount ?? tax.tax_amount),
-			}))
-			.filter((tax) => tax.code.length > 0 || tax.amount !== 0);
+		const taxes = mapItemTaxes(src.taxes);
 		if (taxes.length > 0) fee.taxes = taxes;
 	}
 	return fee;
+}
+
+function mapShippingLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptShipping {
+	const fee = mapFeeLike(src, displayTax);
+	const shipping: ReceiptShipping = { ...fee };
+	if ('method_id' in src && src.method_id != null) {
+		shipping.method_id = toStr(src.method_id);
+	}
+	return shipping;
 }
 
 function mapDiscountLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptDiscount {
@@ -233,6 +267,7 @@ function mapDiscountLike(src: Record<string, any>, displayTax: DisplayTax): Rece
 		total_incl: totalIncl,
 		total_excl: totalExcl,
 	};
+	if ('code' in src && src.code != null) discount.code = toStr(src.code);
 	if ('codes' in src && src.codes != null) discount.codes = toStr(src.codes);
 	return discount;
 }
@@ -264,18 +299,48 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 		grand_total_excl: grandTotalExcl,
 		paid_total: 'paid_total' in src ? toNum(src.paid_total) : grandTotalIncl,
 		change_total: 'change_total' in src ? toNum(src.change_total) : 0,
+		...('refund_total' in src && src.refund_total != null
+			? { refund_total: toNum(src.refund_total) }
+			: {}),
 	};
 }
 
 function mapPayment(src: Record<string, any>): ReceiptPayment {
+	const transactionId = toStr(src.transaction_id);
 	return {
 		method_id: toStr(src.method_id ?? src.method),
 		method_title: toStr(src.method_title ?? src.method),
 		amount: toNum(src.amount),
-		reference: toStr(src.reference ?? src.transaction_id),
+		transaction_id: transactionId || toStr(src.reference),
 		tendered: 'tendered' in src ? toNum(src.tendered) : undefined,
 		change: 'change' in src ? toNum(src.change) : undefined,
 	};
+}
+
+function mapRefund(src: Record<string, any>): ReceiptRefund {
+	const refund: ReceiptRefund = {
+		id: Math.trunc(toNum(src.id)),
+		amount: toNum(src.amount),
+		lines: toArr(src.lines)
+			.filter((entry): entry is Record<string, any> => !!entry && typeof entry === 'object')
+			.map((entry) => ({
+				name: toStr(entry.name),
+				sku: 'sku' in entry ? toStr(entry.sku) : undefined,
+				qty: toNum(entry.qty ?? entry.quantity),
+				total: toNum(entry.total ?? entry.amount),
+			})),
+	};
+	if ('reason' in src && src.reason != null) refund.reason = toStr(src.reason);
+	if ('refunded_by_id' in src) {
+		refund.refunded_by_id =
+			src.refunded_by_id == null ? null : Math.trunc(toNum(src.refunded_by_id));
+	}
+	if ('refunded_by_name' in src && src.refunded_by_name != null) {
+		refund.refunded_by_name = toStr(src.refunded_by_name);
+	}
+	if ('refunded_payment' in src) refund.refunded_payment = !!src.refunded_payment;
+	if (src.date && typeof src.date === 'object') refund.date = src.date as ReceiptRefund['date'];
+	return refund;
 }
 
 function mapFiscal(src: Record<string, any>): ReceiptFiscal {
@@ -348,7 +413,10 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
 		),
 		shipping: toArr(data.shipping).map((item) =>
-			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
+			mapShippingLike(
+				item && typeof item === 'object' ? (item as Record<string, any>) : {},
+				displayTax
+			)
 		),
 		discounts: toArr(data.discounts).map((item) =>
 			mapDiscountLike(
@@ -362,14 +430,20 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 		),
 		tax_summary: toArr(data.tax_summary)
 			.filter((entry): entry is Record<string, any> => !!entry && typeof entry === 'object')
-			.map((entry) => ({
-				code: toStr(entry.code),
-				rate: toNum(entry.rate),
-				label: toStr(entry.label),
-				taxable_amount_excl: toNum(entry.taxable_amount_excl),
-				tax_amount: toNum(entry.tax_amount),
-				taxable_amount_incl: toNum(entry.taxable_amount_incl),
-			})),
+			.map((entry) => {
+				const item: ReceiptTaxSummaryItem = {
+					code: toStr(entry.code),
+					rate: entry.rate == null ? null : toNum(entry.rate),
+					label: toStr(entry.label),
+					taxable_amount_excl:
+						entry.taxable_amount_excl == null ? null : toNum(entry.taxable_amount_excl),
+					tax_amount: toNum(entry.tax_amount),
+					taxable_amount_incl:
+						entry.taxable_amount_incl == null ? null : toNum(entry.taxable_amount_incl),
+				};
+				if ('compound' in entry) item.compound = !!entry.compound;
+				return item;
+			}),
 		payments: toArr(data.payments).map((p) =>
 			mapPayment(p && typeof p === 'object' ? (p as Record<string, any>) : {})
 		),
@@ -378,6 +452,12 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 		),
 		presentation_hints: presentationHints,
 	};
+
+	if (Array.isArray(data.refunds)) {
+		result.refunds = data.refunds
+			.filter((entry: unknown) => !!entry && typeof entry === 'object')
+			.map((entry: unknown) => mapRefund(entry as Record<string, any>));
+	}
 
 	// Pass-through optional top-level keys (`receipt`, `order`, `i18n`) emitted
 	// by the PHP Receipt_Data_Builder. These are advisory — templates may use
@@ -420,7 +500,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	const normalizedHints = mapPresentationHints(presentationHints);
 	const displayTax = resolveDisplayValueSide(normalizedHints);
 
-	return {
+	const result: ReceiptData = {
 		meta: mapMeta(meta),
 		store: mapStore(store),
 		cashier: { id: 0, name: '' } as ReceiptCashier,
@@ -432,7 +512,10 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
 		),
 		shipping: toArr(data.shipping).map((item) =>
-			mapFeeLike(item && typeof item === 'object' ? (item as Record<string, any>) : {}, displayTax)
+			mapShippingLike(
+				item && typeof item === 'object' ? (item as Record<string, any>) : {},
+				displayTax
+			)
 		),
 		discounts: toArr(data.discounts).map((item) =>
 			mapDiscountLike(
@@ -448,6 +531,14 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 		fiscal: mapFiscal(fiscal),
 		presentation_hints: normalizedHints,
 	};
+
+	if (Array.isArray(data.refunds)) {
+		result.refunds = data.refunds
+			.filter((entry: unknown): entry is Record<string, any> => !!entry && typeof entry === 'object')
+			.map((entry) => mapRefund(entry));
+	}
+
+	return result;
 }
 
 /** Minimal valid ReceiptData with all required fields set to defaults. */

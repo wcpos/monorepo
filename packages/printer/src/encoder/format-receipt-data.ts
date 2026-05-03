@@ -128,8 +128,10 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		tax_summary: data.tax_summary.map((tax) => ({
 			...tax,
 			tax_amount_display: fmt(tax.tax_amount),
-			taxable_amount_incl_display: fmt(tax.taxable_amount_incl),
-			taxable_amount_excl_display: fmt(tax.taxable_amount_excl),
+			taxable_amount_incl_display:
+				tax.taxable_amount_incl != null ? fmt(tax.taxable_amount_incl) : '',
+			taxable_amount_excl_display:
+				tax.taxable_amount_excl != null ? fmt(tax.taxable_amount_excl) : '',
 		})),
 		payments: data.payments.map((payment) => ({
 			...payment,
