@@ -336,7 +336,7 @@ function mapRefundLine(entry: Record<string, any>) {
 
 function mapRefundFee(entry: Record<string, any>) {
 	const fee: NonNullable<ReceiptRefund['fees']>[number] = {
-		label: toStr(entry.label ?? entry.name),
+		label: toStr(entry.label ?? entry.name ?? entry.title),
 		total: toNum(entry.total),
 	};
 	if ('total_incl' in entry && entry.total_incl != null) fee.total_incl = toNum(entry.total_incl);
@@ -350,7 +350,7 @@ function mapRefundFee(entry: Record<string, any>) {
 
 function mapRefundShipping(entry: Record<string, any>) {
 	const shipping: NonNullable<ReceiptRefund['shipping']>[number] = {
-		label: toStr(entry.label ?? entry.name),
+		label: toStr(entry.label ?? entry.name ?? entry.title),
 		total: toNum(entry.total),
 	};
 	if ('method_id' in entry && entry.method_id != null) shipping.method_id = toStr(entry.method_id);

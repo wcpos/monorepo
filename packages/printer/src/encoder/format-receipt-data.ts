@@ -63,7 +63,9 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		i18n: {
 			...DEFAULT_I18N,
 			...data.i18n,
-			total: isRefund ? DEFAULT_I18N.refund_total : (data.i18n?.total ?? DEFAULT_I18N.total),
+			total: isRefund
+				? (data.i18n?.refund_total ?? DEFAULT_I18N.refund_total)
+				: (data.i18n?.total ?? DEFAULT_I18N.total),
 		},
 		order: {
 			id: data.meta.order_id,
