@@ -57,4 +57,30 @@ describe('ReceiptDataSchema', () => {
 		const result = ReceiptDataSchema.safeParse(stripped);
 		expect(result.success).toBe(true);
 	});
+
+	it('parses store.tax_ids as an array of TaxId entries', () => {
+		const withTaxIds = JSON.parse(JSON.stringify(sampleReceiptData));
+		withTaxIds.store.tax_ids = [
+			{ type: 'eu_vat', value: 'DE123456789', country: 'DE' },
+			{ type: 'de_steuernummer', value: '05/123/45678', country: 'DE' },
+		];
+		const result = ReceiptDataSchema.safeParse(withTaxIds);
+		expect(result.success).toBe(true);
+	});
+
+	it('accepts an unknown tax_ids[].type as a forgiving string', () => {
+		const withCustomType = JSON.parse(JSON.stringify(sampleReceiptData));
+		withCustomType.store.tax_ids = [
+			{ type: 'pl_nip', value: '1234567890', country: 'PL' }, // not in our enum yet
+		];
+		const result = ReceiptDataSchema.safeParse(withCustomType);
+		expect(result.success).toBe(true);
+	});
+
+	it('omits tax_ids cleanly when not provided', () => {
+		const stripped = JSON.parse(JSON.stringify(sampleReceiptData));
+		delete stripped.store.tax_ids;
+		const result = ReceiptDataSchema.safeParse(stripped);
+		expect(result.success).toBe(true);
+	});
 });
