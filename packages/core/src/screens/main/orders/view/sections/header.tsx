@@ -3,11 +3,13 @@ import { View } from 'react-native';
 
 import toNumber from 'lodash/toNumber';
 
-import { Button, ButtonText } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
+import { ModalHeader } from '@wcpos/components/modal';
 
 import { StatusPill } from './_status-pill';
 import { useT } from '../../../../../contexts/translations';
+import { useCashierLabel } from '../../../hooks/use-cashier-label';
+import { useStoreLabel } from '../../../hooks/use-store-label';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useDateFormat } from '../../../hooks/use-date-format';
 
@@ -28,11 +30,9 @@ function totalRefunded(order: OrderDocument) {
 
 interface Props {
 	order: OrderDocument;
-	onPrintReceipt?: () => void;
-	onRefund?: () => void;
 }
 
-export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
+export function HeaderSection({ order }: Props) {
 	const t = useT();
 	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
 	const dateCreated = useDateFormat(order.date_created_gmt);
@@ -43,12 +43,14 @@ export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
 	const isPartialRefund = refundedAmount > 0 && refundedAmount < total;
 	const status = isPartialRefund ? 'partially-refunded' : order.status;
 
-	const cashier = getMetaValue(order.meta_data, '_pos_user');
-	const store = getMetaValue(order.meta_data, '_pos_store');
+	const cashierID = getMetaValue(order.meta_data, '_pos_user');
+	const cashier = useCashierLabel(cashierID).label;
+	const storeID = getMetaValue(order.meta_data, '_pos_store');
+	const store = useStoreLabel(storeID).label;
 	const paymentMethod = order.payment_method_title || order.payment_method;
 
 	return (
-		<View className="border-border bg-card border-b px-5 pt-5 pb-5 md:px-6 md:pt-6 md:pb-5">
+		<ModalHeader className="border-border border-b px-5 pt-5 pb-5">
 			{/* Eyebrow row: order number + via */}
 			<View className="mb-3 flex-row items-center gap-2 pr-8">
 				<Text className="text-muted-foreground text-xs">{t('common.order')}</Text>
@@ -64,11 +66,11 @@ export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
 				) : null}
 			</View>
 
-			{/* Hero row: amount + status pill | actions */}
+			{/* Hero row: amount + status pill */}
 			<View className="flex-row flex-wrap items-end justify-between gap-3">
 				<View className="min-w-0 flex-1 gap-1.5">
 					<View className="flex-row flex-wrap items-baseline gap-3">
-						<Text className="text-foreground text-3xl font-semibold tracking-tight tabular-nums md:text-4xl">
+						<Text className="text-foreground text-4xl font-semibold tracking-tight tabular-nums">
 							{format(total)}
 						</Text>
 						<StatusPill status={status} />
@@ -83,26 +85,8 @@ export function HeaderSection({ order, onPrintReceipt, onRefund }: Props) {
 						formatMoney={format}
 					/>
 				</View>
-
-				<View className="flex-row gap-2">
-					{onPrintReceipt ? (
-						<Button variant="outline" size="sm" onPress={onPrintReceipt} leftIcon="receipt">
-							<ButtonText>{t('receipt.print_receipt')}</ButtonText>
-						</Button>
-					) : null}
-					{onRefund ? (
-						<Button
-							variant="outline-destructive"
-							size="sm"
-							onPress={onRefund}
-							leftIcon="arrowRotateLeft"
-						>
-							<ButtonText>{t('orders.refund')}</ButtonText>
-						</Button>
-					) : null}
-				</View>
 			</View>
-		</View>
+		</ModalHeader>
 	);
 }
 

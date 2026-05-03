@@ -23,9 +23,7 @@ export function Section({
 	last?: boolean;
 }) {
 	return (
-		<View
-			className={`px-5 py-4 md:px-6 md:py-5 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}
-		>
+		<View className={`px-5 py-4 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}>
 			{title ? (
 				<View className="mb-3 flex-row items-baseline justify-between">
 					{typeof title === 'string' ? (
@@ -57,9 +55,7 @@ export function RailSection({
 	last?: boolean;
 }) {
 	return (
-		<View
-			className={`px-4 py-3 md:px-5 md:py-4 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}
-		>
+		<View className={`px-4 py-3 ${last ? '' : 'border-border border-b'} ${className ?? ''}`}>
 			{title ? (
 				<Text className="text-muted-foreground mb-2 text-[10px] font-semibold tracking-wider uppercase">
 					{title}

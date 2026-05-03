@@ -22,10 +22,12 @@ function LineItemRow({
 	item,
 	format,
 	t,
+	last,
 }: {
 	item: LineItem;
 	format: (n: number) => string;
 	t: ReturnType<typeof useT>;
+	last?: boolean;
 }) {
 	const subtotal = toNumber(item.subtotal);
 	const total = toNumber(item.total);
@@ -36,7 +38,7 @@ function LineItemRow({
 	const variations = visibleMeta(item.meta_data);
 
 	return (
-		<View className="border-border/60 flex-row gap-3 border-b py-3">
+		<View className={`flex-row gap-3 py-3 ${last ? '' : 'border-border/60 border-b'}`}>
 			<View className="bg-muted h-11 w-11 overflow-hidden rounded">
 				{item.image?.src ? <Image source={{ uri: item.image.src }} className="h-11 w-11" /> : null}
 			</View>
@@ -76,13 +78,6 @@ function LineItemRow({
 					</Text>
 				</View>
 				<Text className="text-foreground text-sm font-medium tabular-nums">{format(total)}</Text>
-				{discounted ? (
-					<View className="bg-success/10 mt-0.5 rounded px-1.5 py-0.5">
-						<Text className="text-success text-[10px] font-medium tabular-nums">
-							{t('common.saved', { defaultValue: 'saved' })} {format(subtotal - total)}
-						</Text>
-					</View>
-				) : null}
 			</View>
 		</View>
 	);
@@ -92,13 +87,15 @@ function FeeRow({
 	fee,
 	format,
 	t,
+	last,
 }: {
 	fee: FeeLine;
 	format: (n: number) => string;
 	t: ReturnType<typeof useT>;
+	last?: boolean;
 }) {
 	return (
-		<View className="border-border/60 flex-row gap-3 border-b py-3">
+		<View className={`flex-row gap-3 py-3 ${last ? '' : 'border-border/60 border-b'}`}>
 			<View className="bg-primary/10 h-11 w-11 items-center justify-center rounded">
 				<Text className="text-primary text-base font-semibold">+</Text>
 			</View>
@@ -146,10 +143,17 @@ export function LineItemsSection({ order }: { order: OrderDocument }) {
 						item={item}
 						format={format}
 						t={t}
+						last={fees.length === 0 && index === lineItems.length - 1}
 					/>
 				))}
 				{fees.map((fee, index) => (
-					<FeeRow key={`${fee.id ?? fee.name ?? 'fee'}-${index}`} fee={fee} format={format} t={t} />
+					<FeeRow
+						key={`${fee.id ?? fee.name ?? 'fee'}-${index}`}
+						fee={fee}
+						format={format}
+						t={t}
+						last={index === fees.length - 1}
+					/>
 				))}
 			</View>
 		</Section>

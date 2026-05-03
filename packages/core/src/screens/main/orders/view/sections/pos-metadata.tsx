@@ -5,6 +5,8 @@ import { Text } from '@wcpos/components/text';
 
 import { RailSection } from './_section';
 import { useT } from '../../../../../contexts/translations';
+import { useCashierLabel } from '../../../hooks/use-cashier-label';
+import { useStoreLabel } from '../../../hooks/use-store-label';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -27,11 +29,13 @@ function KV({ k, v }: { k: string; v?: string }) {
 
 export function POSMetadataSection({ order, last }: { order: OrderDocument; last?: boolean }) {
 	const t = useT();
-	const cashier = getMetaValue(order.meta_data, '_pos_user');
-	const store = getMetaValue(order.meta_data, '_pos_store');
-	const channel = order.created_via;
+	const cashierID = getMetaValue(order.meta_data, '_pos_user');
+	const cashier = useCashierLabel(cashierID).label;
+	const storeID = getMetaValue(order.meta_data, '_pos_store');
+	const store = useStoreLabel(storeID).label;
+	const createdVia = order.created_via;
 
-	if (!cashier && !store && !channel && !order.id) return null;
+	if (!cashier && !store && !createdVia && !order.id) return null;
 
 	return (
 		<RailSection title={t('orders.metadata', { defaultValue: 'Metadata' })} last={last}>
@@ -40,7 +44,7 @@ export function POSMetadataSection({ order, last }: { order: OrderDocument; last
 			) : null}
 			<KV k={t('common.cashier')} v={cashier} />
 			<KV k={t('common.store')} v={store} />
-			<KV k={t('orders.channel', { defaultValue: 'Channel' })} v={channel} />
+			<KV k={t('common.created_via_2')} v={createdVia} />
 		</RailSection>
 	);
 }

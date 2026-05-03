@@ -48,7 +48,7 @@ jest.mock('@wcpos/components/form', () => ({
 }));
 
 jest.mock('@wcpos/components/hstack', () => ({
-	HStack: ({ children }: any) => <div>{children}</div>,
+	HStack: ({ children, className }: any) => <div className={className}>{children}</div>,
 }));
 jest.mock('@wcpos/components/modal', () => ({
 	ModalAction: ({ children, onPress, loading, ...props }: any) => (
@@ -361,5 +361,17 @@ describe('RefundOrderForm', () => {
 				expect.objectContaining({ params: { page: 2, per_page: 100 } })
 			)
 		);
+	});
+
+	it('renders refund actions in a right-aligned HStack row', async () => {
+		mockGet.mockResolvedValue({
+			data: order.refunds,
+			headers: { 'x-wp-totalpages': '1' },
+		});
+
+		render(<RefundOrderForm order={order} />);
+
+		const processButton = await screen.findByTestId('process-refund-button');
+		expect(processButton.parentElement).toHaveClass('justify-end');
 	});
 });

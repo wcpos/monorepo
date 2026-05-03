@@ -1,12 +1,13 @@
 import * as React from 'react';
-import { ScrollView, useWindowDimensions, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
+import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
-import { Modal, ModalContent } from '@wcpos/components/modal';
+import { Modal, ModalBody, ModalClose, ModalContent, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 
 import { AddressesRail, CustomerNoteSection, CustomerRail } from './sections/customer';
@@ -29,8 +30,6 @@ export function ViewOrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const router = useRouter();
-	const { width } = useWindowDimensions();
-	const isWide = width >= 768;
 	const [refundsRetryKey, setRefundsRetryKey] = React.useState(0);
 
 	if (!isRxDocument(order)) {
@@ -58,17 +57,12 @@ export function ViewOrderModal({ resource }: Props) {
 
 	return (
 		<Modal>
-			<ModalContent size="2xl" className="h-full gap-0 overflow-hidden py-0">
-				<ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-					<HeaderSection
-						order={order}
-						onPrintReceipt={handlePrintReceipt}
-						onRefund={handleRefund}
-					/>
-
-					<View className={isWide ? 'flex-row' : 'flex-col'}>
+			<ModalContent size="2xl" className="gap-0">
+				<HeaderSection order={order} />
+				<ModalBody className="p-0">
+					<View className="w-full flex-col sm:flex-row">
 						{/* Main column */}
-						<View className={isWide ? 'min-w-0 flex-1' : ''}>
+						<View className="min-w-0 flex-1">
 							<LineItemsSection order={order} />
 							<TotalsSection order={order} />
 							<RefundsBoundary
@@ -80,20 +74,27 @@ export function ViewOrderModal({ resource }: Props) {
 						</View>
 
 						{/* Rail */}
-						<View
-							className={
-								isWide
-									? 'border-border bg-muted/30 w-[300px] border-l'
-									: 'border-border bg-muted/30 border-t'
-							}
-						>
+						<View className="border-border bg-muted/30 border-t sm:w-80 sm:shrink-0 sm:border-t-0 sm:border-l">
 							<CustomerRail order={order} />
 							<AddressesRail order={order} />
 							<PaymentSection order={order} />
 							<POSMetadataSection order={order} last />
 						</View>
 					</View>
-				</ScrollView>
+				</ModalBody>
+				<ModalFooter className="border-border border-t pt-4">
+					{order.id && handlePrintReceipt ? (
+						<Button variant="outline" onPress={handlePrintReceipt} leftIcon="receipt">
+							<ButtonText>{t('receipt.print_receipt')}</ButtonText>
+						</Button>
+					) : null}
+					{handleRefund ? (
+						<Button variant="outline-destructive" onPress={handleRefund} leftIcon="arrowRotateLeft">
+							<ButtonText>{t('orders.refund')}</ButtonText>
+						</Button>
+					) : null}
+					<ModalClose>{t('common.cancel')}</ModalClose>
+				</ModalFooter>
 			</ModalContent>
 		</Modal>
 	);
