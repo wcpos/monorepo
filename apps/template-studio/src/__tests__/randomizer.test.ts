@@ -43,8 +43,11 @@ describe('template-studio randomizer', () => {
 	});
 
 	it('does not generate cash tendered/change for refund payments', () => {
+		// Seed picked because it deterministically lands the single payment on
+		// `cash`; the assertion is about the cash-only branch suppressing
+		// tendered/change for refunds.
 		const result = createRandomReceipt({
-			seed: 7,
+			seed: 1,
 			overrides: { refund: true, emptyCart: false, multiPayment: false, cartSize: 1 },
 		});
 		const payment = result.data.payments[0];
