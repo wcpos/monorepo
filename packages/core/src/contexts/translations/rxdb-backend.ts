@@ -1,4 +1,4 @@
-export const TRANSLATION_VERSION = '2026.5.1';
+export const TRANSLATION_VERSION = '2026.5.2';
 
 /**
  * Custom i18next backend that loads translations from jsDelivr CDN
@@ -44,7 +44,7 @@ export class RxDBBackend {
 
 		// Return cached translations immediately if available
 		const cached = this.translationsState?.[cacheKey];
-		if (cached) {
+		if (cached != null) {
 			callback(null, cached);
 			return;
 		}
