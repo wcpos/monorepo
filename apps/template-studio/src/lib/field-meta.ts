@@ -92,6 +92,8 @@ const DEFAULT_PAYMENT = {
 	amount: 0,
 };
 
+const DEFAULT_TAX_ID = { type: 'other', value: '', country: '', label: '' };
+
 const DEFAULT_LINE_META = { key: 'Attribute', value: '' };
 const DEFAULT_LINE_TAX = { code: 'TAX', rate: null, label: 'Tax', amount: 0 };
 const DEFAULT_REFUND_LINE = { name: 'Refunded item', qty: 1, total: 0 };
@@ -122,6 +124,7 @@ export const ARRAY_DEFAULTS: Record<string, unknown> = {
 	refunds: DEFAULT_REFUND,
 	meta: DEFAULT_LINE_META,
 	taxes: DEFAULT_LINE_TAX,
+	tax_ids: DEFAULT_TAX_ID,
 };
 
 /** Title for an array item (e.g., line item shows product name). */
@@ -133,6 +136,11 @@ export function arrayItemTitle(arrayKey: string, item: unknown, index: number): 
 		if (typeof name === 'string' && name.length > 0) return name;
 		const code = record.code as string | undefined;
 		if (code) return code;
+		// tax_ids: show value (e.g. VAT number) when available
+		if (arrayKey === 'tax_ids') {
+			const value = record.value as string | undefined;
+			if (typeof value === 'string' && value.length > 0) return value;
+		}
 	}
 	return `${arrayKey} #${index + 1}`;
 }
