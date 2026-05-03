@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { LayoutChangeEvent, useWindowDimensions, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
@@ -9,7 +9,6 @@ import { Button, ButtonText } from '@wcpos/components/button';
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Modal, ModalBody, ModalClose, ModalContent, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
-import { getLogger } from '@wcpos/utils/logger';
 
 import { AddressesRail, CustomerNoteSection, CustomerRail } from './sections/customer';
 import { HeaderSection } from './sections/header';
@@ -26,48 +25,12 @@ interface Props {
 }
 
 const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold'];
-const logger = getLogger(['wcpos', 'orders', 'view-modal']);
-const shouldLogLayout = typeof __DEV__ !== 'undefined' && __DEV__;
 
 export function ViewOrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const router = useRouter();
-	const { width } = useWindowDimensions();
 	const [refundsRetryKey, setRefundsRetryKey] = React.useState(0);
-
-	// Diagnostic logging: this is intentionally an effect so render stays side-effect free.
-	React.useEffect(() => {
-		if (!shouldLogLayout) {
-			return;
-		}
-
-		logger.debug('Order view modal breakpoint check', {
-			context: {
-				windowWidth: width,
-				activeLayout: width >= 640 ? 'two-column sm:flex-row' : 'single-column flex-col',
-			},
-		});
-	}, [width]);
-
-	const logLayout = React.useCallback(
-		(name: string) => (event: LayoutChangeEvent) => {
-			if (!shouldLogLayout) {
-				return;
-			}
-
-			const { width: layoutWidth, height: layoutHeight } = event.nativeEvent.layout;
-			logger.debug('Order view modal layout measurement', {
-				context: {
-					name,
-					windowWidth: width,
-					layoutWidth,
-					layoutHeight,
-				},
-			});
-		},
-		[width]
-	);
 
 	if (!isRxDocument(order)) {
 		return (
@@ -96,22 +59,10 @@ export function ViewOrderModal({ resource }: Props) {
 		<Modal>
 			<ModalContent size="2xl" className="gap-0">
 				<HeaderSection order={order} />
-				<ModalBody
-					className="p-0"
-					onLayout={logLayout('body-scroll-view')}
-					onContentSizeChange={(contentWidth, contentHeight) => {
-						if (!shouldLogLayout) {
-							return;
-						}
-
-						logger.debug('Order view modal content size', {
-							context: { contentWidth, contentHeight, windowWidth: width },
-						});
-					}}
-				>
-					<View className="w-full flex-col sm:flex-row" onLayout={logLayout('content-layout')}>
+				<ModalBody className="p-0">
+					<View className="w-full flex-col sm:flex-row">
 						{/* Main column */}
-						<View className="min-w-0 flex-1" onLayout={logLayout('main-column')}>
+						<View className="min-w-0 flex-1">
 							<LineItemsSection order={order} />
 							<TotalsSection order={order} />
 							<RefundsBoundary
@@ -123,10 +74,7 @@ export function ViewOrderModal({ resource }: Props) {
 						</View>
 
 						{/* Rail */}
-						<View
-							className="border-border bg-muted/30 border-t sm:w-80 sm:shrink-0 sm:border-t-0 sm:border-l"
-							onLayout={logLayout('rail-column')}
-						>
+						<View className="border-border bg-muted/30 border-t sm:w-80 sm:shrink-0 sm:border-t-0 sm:border-l">
 							<CustomerRail order={order} />
 							<AddressesRail order={order} />
 							<PaymentSection order={order} />
