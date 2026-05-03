@@ -1,6 +1,8 @@
+import { taxIdLiteral } from './tax-id';
+
 export const ordersLiteral = {
 	title: 'WooCommerce Order schema',
-	version: 5,
+	version: 6,
 	description: 'WooCommerce Order schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -251,6 +253,11 @@ export const ordersLiteral = {
 					},
 				},
 			},
+		},
+		tax_ids: {
+			description: 'Customer tax IDs snapshotted to the order at sale time.',
+			type: 'array',
+			items: taxIdLiteral,
 		},
 		line_items: {
 			description: 'Line items data.',

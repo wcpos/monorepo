@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import type { ProductDocument } from '@wcpos/database';
+import type { ProductDocument, TaxId } from '@wcpos/database';
 
 import {
 	calculateDefaultAmount,
@@ -236,7 +236,37 @@ describe('Utilities', () => {
 					postcode: '',
 					country: '',
 				},
+				tax_ids: [],
 			});
+		});
+
+		it('should snapshot customer tax_ids by value', () => {
+			const taxIds: TaxId[] = [
+				{
+					type: 'us_ein',
+					value: '12-3456789',
+					country: 'US',
+					label: null,
+					verified: { status: 'verified', source: 'test' },
+				},
+			];
+			const customer = {
+				id: 1,
+				email: 'test@example.com',
+				first_name: 'John',
+				last_name: 'Doe',
+				billing: { country: 'US' },
+				shipping: {},
+				tax_ids: taxIds,
+			} as Parameters<typeof transformCustomerJSONToOrderJSON>[0];
+
+			const transformed = transformCustomerJSONToOrderJSON(customer, 'CA');
+			expect(transformed.tax_ids).toEqual(taxIds);
+			expect(transformed.tax_ids).not.toBe(taxIds);
+			expect(transformed.tax_ids?.[0]).not.toBe(taxIds[0]);
+
+			taxIds[0].verified = { status: 'pending', source: 'mutated' };
+			expect(transformed.tax_ids?.[0]?.verified).toEqual({ status: 'verified', source: 'test' });
 		});
 	});
 

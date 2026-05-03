@@ -7,6 +7,7 @@ import { Text } from '@wcpos/components/text';
 
 import { RailSection, Section } from './_section';
 import { useT } from '../../../../../contexts/translations';
+import { TAX_ID_LABEL_KEYS, type TaxId, type TaxIdType } from '../../../../../lib/tax-id';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -106,6 +107,35 @@ export function AddressesRail({ order, last }: { order: OrderDocument; last?: bo
 						<FormatAddress address={shipping as Record<string, string>} showName />
 					</View>
 				) : null}
+			</View>
+		</RailSection>
+	);
+}
+
+/**
+ * Tax IDs block for the right rail. Displays the snapshotted `order.tax_ids`
+ * (not the live customer record), since the order owns its own copy from
+ * sale-time. Hidden when the order has none.
+ */
+export function TaxIdsRail({ order, last }: { order: OrderDocument; last?: boolean }) {
+	const t = useT();
+	const rawTaxIds = (order as { tax_ids?: unknown }).tax_ids;
+	const taxIds = Array.isArray(rawTaxIds) ? (rawTaxIds as TaxId[]) : [];
+	if (taxIds.length === 0) return null;
+	return (
+		<RailSection title={t('tax_id.section_label', { _: 'Tax IDs' })} last={last}>
+			<View className="gap-1">
+				{taxIds.map((entry, index) => {
+					const labelKey = TAX_ID_LABEL_KEYS[entry.type as TaxIdType];
+					return (
+						<View key={`${entry.type}-${entry.value}-${index}`} className="flex-row gap-2">
+							<Text className="text-muted-foreground text-xs">
+								{t(labelKey ?? 'tax_id.label.other', { _: entry.type })}
+							</Text>
+							<Text className="text-foreground text-xs font-medium">{entry.value}</Text>
+						</View>
+					);
+				})}
 			</View>
 		</RailSection>
 	);

@@ -15,6 +15,7 @@ import { BillingAddressForm, billingAddressSchema } from '../billing-address-for
 import { FormErrors } from '../form-errors';
 import { MetaDataForm, metaDataSchema } from '../meta-data-form';
 import { ShippingAddressForm, shippingAddressSchema } from '../shipping-address-form';
+import { TaxIdsForm, taxIdsFormSchema } from './tax-ids-form';
 
 /**
  *
@@ -29,6 +30,7 @@ export const customerFormSchema = z.object({
 	...billingAddressSchema.shape,
 	...shippingAddressSchema.shape,
 	meta_data: metaDataSchema,
+	tax_ids: taxIdsFormSchema,
 });
 
 /**
@@ -180,6 +182,7 @@ export function CustomerForm({ form, onClose, onSubmit, loading }: CustomerFormP
 						</VStack>
 					</CollapsibleContent>
 				</Collapsible>
+				<TaxIdsForm />
 				<MetaDataForm />
 				{/** TODO: move the buttons to the parent component */}
 				<HStack className="justify-end">

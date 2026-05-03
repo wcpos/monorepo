@@ -6,6 +6,8 @@
  * See field-picker.tsx for the full field reference.
  */
 
+import type { TaxId } from '@wcpos/database';
+
 interface ReceiptMeta {
 	order_number: string;
 	order_date: string;
@@ -28,6 +30,12 @@ interface ReceiptCustomer {
 	phone: string;
 	billing_address: string;
 	shipping_address: string;
+	/**
+	 * Legacy single-string tax ID (kept for templates pre-dating the structured
+	 * tax_ids field). Populated from the first entry of `tax_ids` when present.
+	 */
+	tax_id: string;
+	tax_ids: TaxId[];
 }
 
 interface ReceiptLine {
@@ -282,13 +290,32 @@ export function buildReceiptData(
 			tax_id: derivePrimaryTaxId(store.tax_ids),
 			tax_ids: store.tax_ids ?? [],
 		},
-		customer: {
-			name: [billing.first_name, billing.last_name].filter(Boolean).join(' '),
-			email: billing.email || '',
-			phone: billing.phone || '',
-			billing_address: formatAddress(billing),
-			shipping_address: formatAddress(shipping),
-		},
+		customer: (() => {
+			const rawLegacyTaxId = (order as { tax_id?: unknown }).tax_id;
+			const legacyTaxId = typeof rawLegacyTaxId === 'string' ? rawLegacyTaxId : '';
+			const taxIds: TaxId[] = Array.isArray(order.tax_ids)
+				? (order.tax_ids as TaxId[])
+				: legacyTaxId
+					? [
+							{
+								type: 'other',
+								value: legacyTaxId,
+								country: null,
+								label: null,
+								verified: null,
+							},
+						]
+					: [];
+			return {
+				name: [billing.first_name, billing.last_name].filter(Boolean).join(' '),
+				email: billing.email || '',
+				phone: billing.phone || '',
+				billing_address: formatAddress(billing),
+				shipping_address: formatAddress(shipping),
+				tax_id: legacyTaxId || (taxIds[0]?.value ?? ''),
+				tax_ids: taxIds,
+			};
+		})(),
 		lines: mappedLines,
 		fees: mappedFees,
 		shipping: mappedShipping,

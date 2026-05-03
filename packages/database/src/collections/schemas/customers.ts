@@ -1,6 +1,8 @@
+import { taxIdLiteral } from './tax-id';
+
 export const customersLiteral = {
 	title: 'WooCommerce Customer schema',
-	version: 2,
+	version: 3,
 	description: 'WooCommerce Customer schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -171,6 +173,11 @@ export const customersLiteral = {
 					},
 				},
 			},
+		},
+		tax_ids: {
+			description: 'Customer tax IDs (TaxId[]).',
+			type: 'array',
+			items: taxIdLiteral,
 		},
 		links: {
 			type: 'object',

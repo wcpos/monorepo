@@ -28,6 +28,7 @@ import type {
 	ReceiptRefund,
 	ReceiptShipping,
 	ReceiptStoreMeta,
+	ReceiptTaxId,
 	ReceiptTaxSummaryItem,
 	ReceiptTotals,
 	TaxId,
@@ -461,6 +462,10 @@ function buildReceiptData(
 	const order = buildOrder(orderMeta, orderCreated, scenarios, pool.locale, pool.timeZone);
 	const i18n = buildI18nLabels(refunds.length > 0);
 
+	// Attach customer tax IDs at the very end so the rand draws don't shift
+	// the seeded sequence used by payments, fiscal, etc.
+	applyCustomerTaxIds(rand, customer, pool);
+
 	return {
 		id: `random-${formatSeed(seed)}`,
 		receipt: receiptInfo,
@@ -731,6 +736,38 @@ function buildAddress(
 	};
 }
 
+/**
+ * Maps a country code to a plausible TaxId entry. Mirrors the canonical TaxId
+ * shape used by PHP `Tax_Id_Reader::parse_meta_map`. Used by the randomizer to
+ * synthesise `customer.tax_ids[]` for snapshots so designers can see how
+ * structured tax IDs render across locales (EU VAT, GB VAT, AU ABN, SA VAT,
+ * etc.).
+ */
+function buildTaxIdForCountry(rand: () => number, countryCode: string): ReceiptTaxId {
+	const digits = (n: number) => String(Math.floor(rand() * 10 ** n)).padStart(n, '0');
+	switch (countryCode) {
+		case 'GB':
+			return { type: 'gb_vat', value: `GB${digits(9)}`, country: 'GB', label: null };
+		case 'AU':
+			return { type: 'au_abn', value: digits(11), country: 'AU', label: null };
+		case 'SA':
+			return { type: 'sa_vat', value: digits(15), country: 'SA', label: null };
+		case 'JP':
+			return { type: 'other', value: `T${digits(13)}`, country: 'JP', label: null };
+		case 'US':
+			return { type: 'us_ein', value: `${digits(2)}-${digits(7)}`, country: 'US', label: null };
+		case 'CA':
+			return { type: 'ca_gst_hst', value: `${digits(9)}RT0001`, country: 'CA', label: null };
+		default:
+			return {
+				type: 'eu_vat',
+				value: `${countryCode}${digits(9)}`,
+				country: countryCode,
+				label: null,
+			};
+	}
+}
+
 function buildCustomer(rand: () => number, pool: LocalePool): ReceiptCustomer {
 	const isGuest = rand() < 0.3;
 	const fullName = pickFrom(rand, pool.customerNames);
@@ -745,6 +782,9 @@ function buildCustomer(rand: () => number, pool: LocalePool): ReceiptCustomer {
 		if (rand() < 0.7) {
 			customer.shipping_address = buildAddress(rand, pool, fullName);
 		}
+		// Preserve the original rand draws for the legacy scalar `tax_id` so
+		// downstream PRNG sequence (payments, fiscal, etc.) stays stable.
+		// Structured `tax_ids[]` is attached later in `applyCustomerTaxIds`.
 		if (rand() < 0.6) {
 			customer.tax_id = `${pool.countryCode}${Math.floor(rand() * 900_000_000) + 100_000_000}`;
 		}
@@ -753,6 +793,39 @@ function buildCustomer(rand: () => number, pool: LocalePool): ReceiptCustomer {
 		customer.billing_address = buildAddress(rand, pool, 'Walk-in Customer');
 	}
 	return customer;
+}
+
+/**
+ * Attaches structured `tax_ids[]` to the customer when a legacy `tax_id` was
+ * generated. Runs AFTER all other rand-consuming builders so the extra draws
+ * don't shift the PRNG sequence used by payments/fiscal — preserves existing
+ * test seeds and snapshot determinism for non–tax-id fields.
+ *
+ * Overwrites the legacy scalar with a properly-typed value so designers see
+ * realistic country-specific formats (GB VAT, AU ABN, SA VAT, etc.) rather
+ * than the generic `<CC>9-digit` legacy fallback.
+ */
+function applyCustomerTaxIds(
+	rand: () => number,
+	customer: ReceiptCustomer,
+	pool: LocalePool
+): void {
+	// Only attach when the legacy code path produced a tax_id; guests and
+	// the 40% of real customers without a legacy tax_id remain untouched.
+	if (!customer.tax_id) return;
+	const primary = buildTaxIdForCountry(rand, pool.countryCode);
+	customer.tax_id = primary.value;
+	customer.tax_ids = [primary];
+	// ~25% chance of a secondary ID (e.g. cross-border B2B trader with
+	// both an EU VAT and a national fiscal code).
+	if (rand() < 0.25) {
+		customer.tax_ids.push({
+			type: 'other',
+			value: `REG-${Math.floor(rand() * 900_000) + 100_000}`,
+			country: pool.countryCode,
+			label: 'Company registration',
+		});
+	}
 }
 
 function buildCashier(rand: () => number, pool: LocalePool): ReceiptCashier {
