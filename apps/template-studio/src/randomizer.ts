@@ -47,6 +47,17 @@ export function createPrng(seed: number): () => number {
 	};
 }
 
+export function createRandomSeed(): number {
+	const crypto = globalThis.crypto;
+	if (crypto?.getRandomValues) {
+		const values = new Uint32Array(1);
+		crypto.getRandomValues(values);
+		return values[0] >>> 0;
+	}
+
+	return Date.now() >>> 0;
+}
+
 /** Coerce a user-supplied seed (number or hex/decimal string) to a 32-bit unsigned int. */
 export function parseSeed(input: number | string | undefined): number {
 	if (typeof input === 'number' && Number.isFinite(input)) return input >>> 0;
@@ -66,8 +77,7 @@ export function parseSeed(input: number | string | undefined): number {
 		}
 		return hash >>> 0;
 	}
-	// No seed supplied → time-derived but still 32 bits.
-	return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+	return createRandomSeed();
 }
 
 /** Format a 32-bit seed as a stable 4-hex display token (`4f2a`). */
@@ -219,6 +229,7 @@ interface LocalePool {
 	postcodes: readonly string[];
 	regions: readonly string[];
 	countryCode: string;
+	dialingPrefix: string;
 	currency: string;
 	locale: string;
 	timeZone: string;
@@ -322,6 +333,7 @@ const LATIN_POOL: LocalePool = {
 	postcodes: ['08001', '28013', '1100-024', '75001', '00184', '10115'],
 	regions: ['Catalunya', 'Madrid', 'Lisboa', 'Île-de-France', 'Lazio', 'Berlin'],
 	countryCode: 'ES',
+	dialingPrefix: '+34',
 	currency: 'EUR',
 	locale: 'en_US',
 	timeZone: 'Europe/Madrid',
@@ -344,6 +356,7 @@ const RTL_POOL: LocalePool = {
 	postcodes: ['11564', '21412', '12211', '34325'],
 	regions: ['الرياض', 'المنطقة الشرقية', 'مكة المكرمة'],
 	countryCode: 'SA',
+	dialingPrefix: '+966',
 	currency: 'SAR',
 	locale: 'ar_SA',
 	timeZone: 'Asia/Riyadh',
@@ -363,6 +376,7 @@ const CJK_POOL: LocalePool = {
 	postcodes: ['100-0005', '530-0001', '604-8005'],
 	regions: ['東京都', '大阪府', '京都府'],
 	countryCode: 'JP',
+	dialingPrefix: '+81',
 	currency: 'JPY',
 	locale: 'ja_JP',
 	timeZone: 'Asia/Tokyo',
@@ -570,7 +584,8 @@ function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
 			rand() < 0.9
 				? `${pool.countryCode}-${Math.floor(rand() * 9_000_000) + 1_000_000}`
 				: undefined,
-		phone: rand() < 0.9 ? `+34 555 ${Math.floor(rand() * 9000 + 1000)}` : undefined,
+		phone:
+			rand() < 0.9 ? `${pool.dialingPrefix} 555 ${Math.floor(rand() * 9000 + 1000)}` : undefined,
 		email: rand() < 0.9 ? 'hello@example.com' : undefined,
 		logo:
 			rand() < 0.5 ? 'https://wcpos.com/wp-content/themes/wcpos-2024/assets/images/logo.png' : null,
@@ -596,7 +611,7 @@ function buildAddress(
 	// `email`, `phone`) so logicless templates can iterate `customer.billing_address`.
 	const [firstName, ...rest] = fullName.split(' ');
 	const lastName = rest.join(' ');
-	const cityPart = pickFrom(rand, pool.cities).split(',')[0]?.trim() ?? '';
+	const cityPart = pickFrom(rand, pool.cities).split(/[,،]/)[0]?.trim() ?? '';
 	return {
 		first_name: firstName ?? '',
 		last_name: lastName,
@@ -608,7 +623,7 @@ function buildAddress(
 		postcode: pickFrom(rand, pool.postcodes),
 		country: pool.countryCode,
 		email: 'customer@example.com',
-		phone: `+34 555 ${Math.floor(rand() * 9000 + 1000)}`,
+		phone: `${pool.dialingPrefix} 555 ${Math.floor(rand() * 9000 + 1000)}`,
 	};
 }
 
