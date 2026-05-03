@@ -155,6 +155,15 @@ describe('formatReceiptData', () => {
 		expect(result.i18n.total).toBe('Reembolso');
 	});
 
+	it('uses a custom i18n.total fallback on refund receipts without refund_total', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.refunds = [{ id: 1, amount: 25, lines: [] }];
+		data.i18n = { total: 'Total Refunded' };
+		const result = formatReceiptData(data);
+
+		expect(result.i18n.total).toBe('Total Refunded');
+	});
+
 	it('renders refund receipts with negative display amounts and refund labels', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.refunds = [{ id: 1, amount: 25, lines: [] }];
