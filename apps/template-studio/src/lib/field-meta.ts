@@ -55,6 +55,22 @@ export const ENUM_OPTIONS: Record<string, readonly string[]> = {
 	'receipt.mode': ['live', 'preview', 'gallery'],
 	'presentation_hints.display_tax': ['incl', 'excl', 'hidden', 'itemized', 'single'],
 	'presentation_hints.rounding_mode': ['per-line', 'per-total'],
+	'customer.tax_ids.type': [
+		'eu_vat',
+		'gb_vat',
+		'au_abn',
+		'br_cpf',
+		'br_cnpj',
+		'in_gst',
+		'it_cf',
+		'it_piva',
+		'es_nif',
+		'ar_cuit',
+		'sa_vat',
+		'ca_gst_hst',
+		'us_ein',
+		'other',
+	],
 };
 
 /** Hidden paths — not rendered in tree (system fields). */
@@ -131,10 +147,16 @@ export const ARRAY_DEFAULTS: Record<string, unknown> = {
 export function arrayItemTitle(arrayKey: string, item: unknown, index: number): string {
 	if (item && typeof item === 'object') {
 		const record = item as Record<string, unknown>;
-		// tax_ids: prefer value (e.g. VAT number) over the type label.
+		// Tax ID rows: prefer the structured `type: value` pair when present,
+		// falling back to value-only when `type` is omitted (e.g. some store
+		// tax_ids entries). Targeted by `arrayKey` so other shapes that happen
+		// to carry `value`/`type` aren't accidentally re-titled.
 		if (arrayKey === 'tax_ids') {
 			const value = record.value as string | undefined;
-			if (typeof value === 'string' && value.length > 0) return value;
+			if (typeof value === 'string' && value.length > 0) {
+				const type = record.type;
+				return type ? `${String(type)}: ${value}` : value;
+			}
 		}
 		const name =
 			(record.name as string) ?? (record.label as string) ?? (record.method_title as string);

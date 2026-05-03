@@ -182,6 +182,17 @@ export const transformCustomerJSONToOrderJSON = (
 			postcode: customer?.shipping?.postcode || '',
 			country: customer?.shipping?.country || '',
 		},
+		// Snapshot the customer's tax IDs onto the order at attach time. The
+		// order owns its own copy so post-sale edits don't leak back to the
+		// customer record (and customer-record edits don't retroactively
+		// change historical orders). Empty array when the customer has none —
+		// this overrides any prior snapshot if the cashier swaps customers.
+		tax_ids: Array.isArray(customer?.tax_ids)
+			? customer.tax_ids.map((taxId) => ({
+					...taxId,
+					verified: taxId.verified ? { ...taxId.verified } : null,
+				}))
+			: [],
 	};
 };
 

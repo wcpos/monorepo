@@ -7,7 +7,8 @@
  *   address_lines[].line,
  *   has_address_lines, has_phone, has_tax_id,
  *   order_number, created_at_gmt,
- *   cashier_name, customer_name,
+ *   cashier_name, customer_name, customer_tax_id, has_customer_tax_id,
+ *   customer_tax_ids[].{type, value, country, label}, has_customer_tax_ids,
  *   infoColLeft, infoColRight, nameColWidth, priceColWidth,
  *   formatted_lines[].{name, detail, line_total_fmt},
  *   subtotal_fmt, has_discount, discount_fmt,
@@ -56,6 +57,12 @@ export const DEFAULT_THERMAL_TEMPLATE = `<receipt paper-width="{{columns}}">
     <col width="{{infoColRight}}" align="right">{{customer_name}}</col>
   </row>
   {{/customer_name}}
+  {{#has_customer_tax_id}}
+  <row>
+    <col width="{{infoColLeft}}">Tax ID</col>
+    <col width="{{infoColRight}}" align="right">{{customer_tax_id}}</col>
+  </row>
+  {{/has_customer_tax_id}}
   <line />
   {{#formatted_lines}}
   <text>{{name}}</text>

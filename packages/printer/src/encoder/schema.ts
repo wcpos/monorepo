@@ -133,12 +133,48 @@ export const ReceiptCashierSchema = z.object({
 	name: z.string().describe('Cashier display name'),
 });
 
+/**
+ * Structured customer tax ID. Mirrors the canonical PHP `TaxId` shape (see
+ * `Tax_Id_Reader::parse_meta_map`). The legacy single-string `customer.tax_id`
+ * field on `ReceiptCustomerSchema` is kept for templates that pre-date this.
+ */
+export const ReceiptTaxIdSchema = z.object({
+	type: z
+		.enum([
+			'eu_vat',
+			'gb_vat',
+			'au_abn',
+			'br_cpf',
+			'br_cnpj',
+			'in_gst',
+			'it_cf',
+			'it_piva',
+			'es_nif',
+			'ar_cuit',
+			'sa_vat',
+			'ca_gst_hst',
+			'us_ein',
+			'other',
+		])
+		.describe('Tax ID type identifier'),
+	value: z.string().describe('Normalised tax ID value'),
+	country: z.string().nullable().optional().describe('ISO 3166-1 alpha-2 country code, when known'),
+	label: z.string().nullable().optional().describe('Optional human-readable label'),
+});
+
 export const ReceiptCustomerSchema = z.object({
 	id: z.number().int().nullable().describe('Customer ID (null/0 = guest)'),
 	name: z.string().describe('Customer display name'),
 	billing_address: z.record(z.string(), z.string()).optional().describe('Billing address fields'),
 	shipping_address: z.record(z.string(), z.string()).optional().describe('Shipping address fields'),
-	tax_id: z.string().optional().describe('Customer VAT/tax identifier'),
+	tax_id: z
+		.string()
+		.optional()
+		.describe('Legacy single-string customer VAT/tax ID (first entry of tax_ids when present)'),
+	tax_ids: z
+		.array(ReceiptTaxIdSchema)
+		.optional()
+		.describe('Structured customer tax IDs (TaxId[]). Snapshotted from the order at sale time.'),
 });
 
 export const ReceiptLineItemMetaSchema = z.object({
@@ -472,6 +508,7 @@ export type ReceiptOrder = z.infer<typeof ReceiptOrderSchema>;
 export type ReceiptStoreMeta = z.infer<typeof ReceiptStoreMetaSchema>;
 export type ReceiptOrderMeta = z.infer<typeof ReceiptOrderMetaSchema>;
 export type ReceiptCashier = z.infer<typeof ReceiptCashierSchema>;
+export type ReceiptTaxId = z.infer<typeof ReceiptTaxIdSchema>;
 export type ReceiptCustomer = z.infer<typeof ReceiptCustomerSchema>;
 export type ReceiptLineItem = z.infer<typeof ReceiptLineItemSchema>;
 export type ReceiptFee = z.infer<typeof ReceiptFeeSchema>;

@@ -10,7 +10,7 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { Modal, ModalBody, ModalClose, ModalContent, ModalFooter } from '@wcpos/components/modal';
 import { Text } from '@wcpos/components/text';
 
-import { AddressesRail, CustomerNoteSection, CustomerRail } from './sections/customer';
+import { AddressesRail, CustomerNoteSection, CustomerRail, TaxIdsRail } from './sections/customer';
 import { HeaderSection } from './sections/header';
 import { LineItemsSection } from './sections/line-items';
 import { PaymentSection } from './sections/payment';
@@ -77,6 +77,7 @@ export function ViewOrderModal({ resource }: Props) {
 						<View className="border-border bg-muted/30 border-t sm:w-80 sm:shrink-0 sm:border-t-0 sm:border-l">
 							<CustomerRail order={order} />
 							<AddressesRail order={order} />
+							<TaxIdsRail order={order} />
 							<PaymentSection order={order} />
 							<POSMetadataSection order={order} last />
 						</View>

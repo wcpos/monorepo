@@ -71,6 +71,7 @@ jest.mock('./sections/customer', () => ({
 	AddressesRail: () => <div />,
 	CustomerNoteSection: () => <div />,
 	CustomerRail: () => <div data-testid="customer-rail" />,
+	TaxIdsRail: () => <div />,
 }));
 jest.mock('./sections/line-items', () => ({
 	LineItemsSection: () => <div />,

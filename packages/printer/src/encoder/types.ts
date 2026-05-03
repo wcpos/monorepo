@@ -10,6 +10,7 @@ export type {
 	ReceiptStoreMeta,
 	ReceiptOrderMeta,
 	ReceiptCashier,
+	ReceiptTaxId,
 	ReceiptCustomer,
 	ReceiptLineItem,
 	ReceiptFee,

@@ -24,6 +24,7 @@ import type {
 	ReceiptRefund,
 	ReceiptShipping,
 	ReceiptStoreMeta,
+	ReceiptTaxId,
 	ReceiptTaxSummaryItem,
 	ReceiptTotals,
 } from './types';
@@ -95,14 +96,56 @@ function mapStore(src: Record<string, any>): ReceiptStoreMeta {
 	};
 }
 
+const RECEIPT_TAX_ID_TYPES: readonly ReceiptTaxId['type'][] = [
+	'eu_vat',
+	'gb_vat',
+	'au_abn',
+	'br_cpf',
+	'br_cnpj',
+	'in_gst',
+	'it_cf',
+	'it_piva',
+	'es_nif',
+	'ar_cuit',
+	'sa_vat',
+	'ca_gst_hst',
+	'us_ein',
+	'other',
+];
+
+function isReceiptTaxIdType(value: string): value is ReceiptTaxId['type'] {
+	return (RECEIPT_TAX_ID_TYPES as readonly string[]).includes(value);
+}
+
 function mapCustomer(src: Record<string, any>): ReceiptCustomer {
 	// The offline shape stores addresses as formatted strings, not objects.
 	// We can't reverse-parse them reliably, so leave the record-based fields empty.
+	const taxIds: ReceiptTaxId[] = Array.isArray(src.tax_ids)
+		? src.tax_ids
+				.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object')
+				.flatMap((entry): ReceiptTaxId[] => {
+					const type = toStr(entry.type);
+					const value = toStr(entry.value);
+					if (!isReceiptTaxIdType(type) || value.length === 0) return [];
+					return [
+						{
+							type,
+							value,
+							country: entry.country == null ? null : toStr(entry.country),
+							label: entry.label == null ? null : toStr(entry.label),
+						},
+					];
+				})
+		: [];
+	const taxIdString = toStr(src.tax_id);
 	return {
 		id: 0,
 		name: toStr(src.name),
 		billing_address: {},
 		shipping_address: {},
+		// Preserve both: legacy templates read `tax_id`, new templates iterate `tax_ids`.
+		tax_id: taxIdString || (taxIds[0]?.value ?? ''),
+		tax_ids: taxIds,
 	};
 }
 

@@ -406,6 +406,11 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
 		5(oldDoc) {
 			return oldDoc;
 		},
+		// v6: Added top-level tax_ids: TaxId[] (customer tax-ID snapshot on the order)
+		6(oldDoc) {
+			oldDoc.tax_ids = Array.isArray(oldDoc.tax_ids) ? oldDoc.tax_ids : [];
+			return oldDoc;
+		},
 	},
 };
 
@@ -436,6 +441,11 @@ const customers: RxCollectionCreator<CustomerDocumentType> = {
 			return oldDoc;
 		},
 		2(oldDoc) {
+			return oldDoc;
+		},
+		// v3: Added top-level tax_ids: TaxId[] (canonical customer tax IDs)
+		3(oldDoc) {
+			oldDoc.tax_ids = Array.isArray(oldDoc.tax_ids) ? oldDoc.tax_ids : [];
 			return oldDoc;
 		},
 	},

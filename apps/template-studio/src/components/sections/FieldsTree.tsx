@@ -222,7 +222,8 @@ interface FieldRendererProps {
 function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRendererProps) {
 	const [expanded, setExpanded] = useState(false);
 	const fieldPathString = pathLabel(path);
-	const enumOptions = ENUM_OPTIONS[fieldPathString];
+	const enumOptions =
+		ENUM_OPTIONS[fieldPathString] ?? ENUM_OPTIONS[fieldPathString.replace(/\[\d+\]/g, '')];
 
 	if (enumOptions) {
 		return (

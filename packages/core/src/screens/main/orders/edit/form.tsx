@@ -27,6 +27,7 @@ import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
 import { CurrencySelect } from '../../components/currency-select';
 import { CustomerSelect } from '../../components/customer-select';
+import { TaxIdsForm, taxIdsFormSchema } from '../../components/customer/tax-ids-form';
 import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
@@ -55,6 +56,7 @@ const formSchema = z.object({
 	currency: z.string().optional(),
 	transaction_id: z.string().optional(),
 	meta_data: metaDataSchema,
+	tax_ids: taxIdsFormSchema,
 });
 
 /**
@@ -93,6 +95,7 @@ export function EditOrderForm({ order }: Props) {
 				payment_method_title: latest.payment_method_title,
 				transaction_id: latest.transaction_id,
 				meta_data: latest.meta_data,
+				tax_ids: (latest as { tax_ids?: unknown[] }).tax_ids ?? [],
 			};
 		},
 		'status',
@@ -105,7 +108,8 @@ export function EditOrderForm({ order }: Props) {
 		'payment_method',
 		'payment_method_title',
 		'transaction_id',
-		'meta_data'
+		'meta_data',
+		'tax_ids' as never
 	);
 
 	/**
@@ -203,6 +207,12 @@ export function EditOrderForm({ order }: Props) {
 
 				form.setValue('billing', billing, { shouldValidate: true });
 				form.setValue('shipping', customerData.shipping, { shouldValidate: true });
+				// Snapshot the customer's tax IDs onto the order at attach time
+				// (mirrors `transformCustomerJSONToOrderJSON`). Empty array
+				// when the customer has none — overrides the prior snapshot.
+				form.setValue('tax_ids', Array.isArray(customerData.tax_ids) ? customerData.tax_ids : [], {
+					shouldValidate: true,
+				});
 
 				form.setValue('customer_id', customerId);
 			} catch (error) {
@@ -374,6 +384,7 @@ export function EditOrderForm({ order }: Props) {
 							)}
 						/>
 					</HStack>
+					<TaxIdsForm name="tax_ids" />
 					<MetaDataForm name="meta_data" />
 				</VStack>
 				<ModalFooter className="px-0">

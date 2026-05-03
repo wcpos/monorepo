@@ -17,6 +17,7 @@ import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
+import { TaxIdsForm, taxIdsFormSchema } from '../../components/customer/tax-ids-form';
 import { FormErrors } from '../../components/form-errors';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -33,6 +34,7 @@ const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
 const formSchema = z.object({
 	...billingAddressSchema.shape,
 	...shippingAddressSchema.shape,
+	tax_ids: taxIdsFormSchema,
 });
 
 /**
@@ -44,8 +46,15 @@ export function EditCartCustomerForm() {
 	const customerID = useObservableEagerState(currentOrder.customer_id$!);
 	const billingProxy = useObservableEagerState(currentOrder.billing$!);
 	const shippingProxy = useObservableEagerState(currentOrder.shipping$!);
+	const taxIdsProxy = useObservableEagerState(
+		(currentOrder as { tax_ids$?: import('rxjs').Observable<unknown> }).tax_ids$!
+	);
 	const billing = React.useMemo(() => JSON.parse(JSON.stringify(billingProxy)), [billingProxy]);
 	const shipping = React.useMemo(() => JSON.parse(JSON.stringify(shippingProxy)), [shippingProxy]);
+	const tax_ids = React.useMemo(
+		() => (Array.isArray(taxIdsProxy) ? JSON.parse(JSON.stringify(taxIdsProxy)) : []),
+		[taxIdsProxy]
+	);
 	const { localPatch } = useLocalMutation();
 	const { patch } = useMutation({ collectionName: 'customers' });
 	const { onOpenChange } = useRootContext();
@@ -61,7 +70,7 @@ export function EditCartCustomerForm() {
 
 	const form = useForm<FormValues, unknown, FormValues>({
 		resolver: zodResolver(formSchema as never) as never,
-		values: { billing, shipping },
+		values: { billing, shipping, tax_ids },
 	});
 
 	/**
@@ -73,6 +82,7 @@ export function EditCartCustomerForm() {
 			data: {
 				billing: data.billing,
 				shipping: data.shipping,
+				tax_ids: data.tax_ids ?? [],
 			},
 		});
 		onOpenChange(false);
@@ -102,6 +112,7 @@ export function EditCartCustomerForm() {
 				data: {
 					billing: data.billing,
 					shipping: data.shipping,
+					tax_ids: data.tax_ids ?? [],
 				},
 			});
 			if (savedDoc) {
@@ -175,6 +186,7 @@ export function EditCartCustomerForm() {
 						</VStack>
 					</CollapsibleContent>
 				</Collapsible>
+				<TaxIdsForm />
 				<DialogFooter className="px-0">
 					<DialogClose>{t('common.close')}</DialogClose>
 					{customerID !== 0 && (

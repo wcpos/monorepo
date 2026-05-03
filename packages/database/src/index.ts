@@ -15,6 +15,13 @@ export type { FlexSearchInstance } from './types.d';
 export { isRxDocument, isRxQuery, isRxCollection, isRxDatabase } from 'rxdb';
 
 /**
+ * Re-export the canonical TaxId type and supporting constants from the shared
+ * sub-schema (used inside customers.tax_ids and orders.tax_ids).
+ */
+export { TAX_ID_TYPES } from './collections/schemas/tax-id';
+export type { TaxId, TaxIdType, TaxIdVerified } from './collections/schemas/tax-id';
+
+/**
  * Re-export types
  */
 export type {
