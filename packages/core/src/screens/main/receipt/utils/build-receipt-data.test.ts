@@ -130,6 +130,8 @@ describe('buildReceiptData', () => {
 		expect(result.store.phone).toBe('555-9876');
 		expect(result.store.email).toBe('store@example.com');
 		expect(result.store.address).toContain('456 Commerce Ave');
+		expect(result.store.tax_id).toBe('');
+		expect(result.store.tax_ids).toEqual([]);
 	});
 
 	it('maps customer section from billing', () => {
@@ -245,6 +247,33 @@ describe('buildReceiptData', () => {
 		expect(exclResult.totals.discount_total).toBe('7.00');
 		expect(exclResult.totals.discount_total_incl).toBe('8.00');
 		expect(exclResult.totals.discount_total_excl).toBe('7.00');
+	});
+
+	describe('store.tax_ids mapping', () => {
+		it('defaults tax_id to empty string and tax_ids to [] when tax_ids is missing', () => {
+			const storeNoTaxIds = { ...mockStore };
+			const result = buildReceiptData(mockOrder, storeNoTaxIds);
+			expect(result.store.tax_id).toBe('');
+			expect(result.store.tax_ids).toEqual([]);
+		});
+
+		it('defaults tax_id to empty string and tax_ids to [] when tax_ids is an empty array', () => {
+			const storeEmptyTaxIds = { ...mockStore, tax_ids: [] };
+			const result = buildReceiptData(mockOrder, storeEmptyTaxIds);
+			expect(result.store.tax_id).toBe('');
+			expect(result.store.tax_ids).toEqual([]);
+		});
+
+		it('derives tax_id from the first entry and preserves the full tax_ids array', () => {
+			const taxIds = [
+				{ type: 'eu_vat', value: 'DE123', country: 'DE' },
+				{ type: 'de_steuernummer', value: '05/123/45678', country: 'DE' },
+			];
+			const storeWithTaxIds = { ...mockStore, tax_ids: taxIds };
+			const result = buildReceiptData(mockOrder, storeWithTaxIds);
+			expect(result.store.tax_id).toBe('DE123');
+			expect(result.store.tax_ids).toEqual(taxIds);
+		});
 	});
 
 	it('serializes fee, shipping, and coupon rows for offline templates', () => {
