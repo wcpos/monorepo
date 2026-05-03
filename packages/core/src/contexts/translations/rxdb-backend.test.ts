@@ -60,6 +60,19 @@ describe('RxDBBackend', () => {
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
+		it('returns cached falsy translations without fetching', () => {
+			const cached = '';
+			const backend = createBackend({
+				translationsState: { [`fr_CA@${TRANSLATION_VERSION}`]: cached },
+			});
+
+			const callback = jest.fn();
+			backend.read('fr_CA', 'core', callback);
+
+			expect(callback).toHaveBeenCalledWith(null, cached);
+			expect(mockFetch).not.toHaveBeenCalled();
+		});
+
 		it('ignores stale unversioned cache entries and refetches translations', async () => {
 			const staleCached = { 'common.cancel': 'Ancienne traduction' };
 			const freshData = { 'common.cancel': 'Nouvelle traduction' };

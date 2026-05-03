@@ -44,7 +44,7 @@ export class RxDBBackend {
 
 		// Return cached translations immediately if available
 		const cached = this.translationsState?.[cacheKey];
-		if (cached) {
+		if (cached != null) {
 			callback(null, cached);
 			return;
 		}
