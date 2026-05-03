@@ -27,6 +27,7 @@ interface Props {
 
 const REFUNDABLE_STATUSES: readonly string[] = ['completed', 'processing', 'on-hold'];
 const logger = getLogger(['wcpos', 'orders', 'view-modal']);
+const shouldLogLayout = typeof __DEV__ !== 'undefined' && __DEV__;
 
 export function ViewOrderModal({ resource }: Props) {
 	const order = useObservableSuspense(resource);
@@ -37,6 +38,10 @@ export function ViewOrderModal({ resource }: Props) {
 
 	// Diagnostic logging: this is intentionally an effect so render stays side-effect free.
 	React.useEffect(() => {
+		if (!shouldLogLayout) {
+			return;
+		}
+
 		logger.debug('Order view modal breakpoint check', {
 			context: {
 				windowWidth: width,
@@ -47,6 +52,10 @@ export function ViewOrderModal({ resource }: Props) {
 
 	const logLayout = React.useCallback(
 		(name: string) => (event: LayoutChangeEvent) => {
+			if (!shouldLogLayout) {
+				return;
+			}
+
 			const { width: layoutWidth, height: layoutHeight } = event.nativeEvent.layout;
 			logger.debug('Order view modal layout measurement', {
 				context: {
@@ -91,6 +100,10 @@ export function ViewOrderModal({ resource }: Props) {
 					className="p-0"
 					onLayout={logLayout('body-scroll-view')}
 					onContentSizeChange={(contentWidth, contentHeight) => {
+						if (!shouldLogLayout) {
+							return;
+						}
+
 						logger.debug('Order view modal content size', {
 							context: { contentWidth, contentHeight, windowWidth: width },
 						});

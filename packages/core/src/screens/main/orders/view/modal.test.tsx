@@ -4,7 +4,7 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import { ViewOrderModal } from './modal';
 
@@ -108,8 +108,17 @@ describe('ViewOrderModal', () => {
 		expect(screen.getByTestId('order-view-header')).toHaveAttribute('data-has-refund', 'false');
 
 		const footer = screen.getByTestId('order-view-modal-footer');
-		expect(within(footer).getByText('receipt.print_receipt')).toBeInTheDocument();
-		expect(within(footer).getByText('orders.refund')).toBeInTheDocument();
+		const printButton = within(footer).getByText('receipt.print_receipt');
+		const refundButton = within(footer).getByText('orders.refund');
+
+		expect(printButton).toBeInTheDocument();
+		expect(refundButton).toBeInTheDocument();
+
+		fireEvent.click(printButton);
+		expect(push).toHaveBeenCalledWith({ pathname: '/orders/receipt/order-uuid' });
+
+		fireEvent.click(refundButton);
+		expect(push).toHaveBeenCalledWith({ pathname: '/orders/refund/order-uuid' });
 	});
 
 	it('uses a top divider when stacked and left divider when the rail moves beside the main column', () => {

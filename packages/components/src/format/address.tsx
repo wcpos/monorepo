@@ -28,7 +28,7 @@ export function FormatAddress({ address, showName }: FormatAddressProps) {
 	const addressLines = [address.address_1, address.address_2].filter((line): line is string =>
 		Boolean(line?.trim())
 	);
-	const localizedLines = formatLocalizedAddress({
+	const localizedAddress = {
 		postalCountry: country,
 		administrativeArea: address.state,
 		locality: address.city,
@@ -36,8 +36,12 @@ export function FormatAddress({ address, showName }: FormatAddressProps) {
 		organization: address.company,
 		name,
 		addressLines,
-	});
-	const lines = preservesPostalFields(localizedLines, address)
+	};
+	const localizedLines = formatLocalizedAddress(localizedAddress);
+	const defaultLines = country
+		? formatLocalizedAddress({ ...localizedAddress, postalCountry: undefined })
+		: [];
+	const lines = hasUsableLocalizedFormat(country, localizedLines, defaultLines)
 		? localizedLines
 		: formatFallbackAddress(address, name);
 
@@ -77,9 +81,14 @@ function formatFallbackAddress(address: Address, name: string) {
 	].filter((line): line is string => Boolean(line?.trim()));
 }
 
-function preservesPostalFields(lines: string[], address: Address) {
-	return [address.state, address.postcode].every((field) => {
-		const value = field?.trim();
-		return !value || lines.some((line) => line.includes(value));
-	});
+function hasUsableLocalizedFormat(
+	country: string | undefined,
+	lines: string[],
+	defaultLines: string[]
+) {
+	return Boolean(country) && !linesEqual(lines, defaultLines);
+}
+
+function linesEqual(left: string[], right: string[]) {
+	return left.length === right.length && left.every((line, idx) => line === right[idx]);
 }

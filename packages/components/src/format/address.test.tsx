@@ -87,6 +87,33 @@ describe('FormatAddress', () => {
 		expect(screen.getByText('1012 JS Amsterdam')).toBeInTheDocument();
 		expect(screen.getByText('NL')).toBeInTheDocument();
 	});
+
+	it('uses known localized formats when they intentionally omit administrative area', () => {
+		render(
+			<FormatAddress
+				showName
+				address={{
+					first_name: 'Jane',
+					last_name: 'Doe',
+					company: 'Example Org.',
+					address_1: '10 Downing St',
+					city: 'London',
+					state: 'England',
+					postcode: 'SW1A 1AA',
+					country: 'GB',
+				}}
+			/>
+		);
+
+		expect(screen.getByText('Jane Doe')).toBeInTheDocument();
+		expect(screen.getByText('Example Org.')).toBeInTheDocument();
+		expect(screen.getByText('10 Downing St')).toBeInTheDocument();
+		expect(screen.getByText('London')).toBeInTheDocument();
+		expect(screen.getByText('SW1A 1AA')).toBeInTheDocument();
+		expect(screen.queryByText('England')).not.toBeInTheDocument();
+		expect(screen.getByText('GB')).toBeInTheDocument();
+	});
+
 	it('preserves city, state, and postcode when no country format is available', () => {
 		render(
 			<FormatAddress
@@ -96,6 +123,7 @@ describe('FormatAddress', () => {
 					city: 'Springfield',
 					state: 'IL',
 					postcode: '62704',
+					country: 'XX',
 				}}
 			/>
 		);
@@ -104,5 +132,6 @@ describe('FormatAddress', () => {
 		expect(screen.getByText('Springfield')).toBeInTheDocument();
 		expect(screen.getByText('IL')).toBeInTheDocument();
 		expect(screen.getByText('62704')).toBeInTheDocument();
+		expect(screen.getByText('XX')).toBeInTheDocument();
 	});
 });
