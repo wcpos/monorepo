@@ -254,6 +254,29 @@ describe('mapReceiptData', () => {
 			expect(mapped.meta.order_id).toBe(0);
 		});
 
+		it('preserves phase-3 meta keys from non-canonical input', () => {
+			const result = mapReceiptData({
+				meta: {
+					wc_status: 'processing',
+					created_via: 'checkout',
+				},
+			});
+
+			expect(result.meta.wc_status).toBe('processing');
+			expect(result.meta.created_via).toBe('checkout');
+		});
+
+		it('prefers phase-3 wc_status over legacy status when both are present', () => {
+			const result = mapReceiptData({
+				meta: {
+					status: 'completed',
+					wc_status: 'processing',
+				},
+			});
+
+			expect(result.meta.wc_status).toBe('processing');
+		});
+
 		it('maps store fields and splits address into lines', () => {
 			expect(mapped.store.name).toBe('My Test Store');
 			expect(mapped.store.address_lines).toEqual([
@@ -382,9 +405,7 @@ describe('mapReceiptData', () => {
 					total_incl: 2,
 					total_excl: 1.82,
 					meta: [{ key: 'Type', value: 'Handling' }],
-					taxes: [
-						{ code: 'VAT', rate: null, label: undefined, compound: true, amount: 0.18 },
-					],
+					taxes: [{ code: 'VAT', rate: null, label: undefined, compound: true, amount: 0.18 }],
 				},
 			]);
 			expect(mappedWithAdjustments.shipping).toEqual([

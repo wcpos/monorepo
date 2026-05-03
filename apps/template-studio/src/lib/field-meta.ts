@@ -42,7 +42,16 @@ export const SECTIONS: SectionMeta[] = [
 
 /** Path strings → enum option list. Used by leaf renderer to show a select. */
 export const ENUM_OPTIONS: Record<string, readonly string[]> = {
-	'meta.mode': ['sale', 'refund', 'quote', 'kitchen', 'packing-slip', 'gift-receipt', 'invoice'],
+	'meta.wc_status': [
+		'pending',
+		'processing',
+		'on-hold',
+		'completed',
+		'cancelled',
+		'refunded',
+		'failed',
+	],
+	'meta.created_via': ['woocommerce-pos', 'checkout', 'admin', 'rest-api'],
 	'receipt.mode': ['live', 'preview', 'gallery'],
 	'presentation_hints.display_tax': ['incl', 'excl', 'hidden', 'itemized', 'single'],
 	'presentation_hints.rounding_mode': ['per-line', 'per-total'],

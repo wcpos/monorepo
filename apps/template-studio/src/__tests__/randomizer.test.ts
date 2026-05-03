@@ -32,14 +32,17 @@ describe('template-studio randomizer', () => {
 		expect(result.data.totals.grand_total_incl).toBe(0);
 	});
 
-	it('honors scenario overrides for refund (negative qty + refund mode)', () => {
+	it('honors scenario overrides for refund (positive qty + refunds[] populated)', () => {
 		const result = createRandomReceipt({
 			seed: 7,
 			overrides: { refund: true, emptyCart: false, cartSize: 2 },
 		});
 		expect(result.scenarios.refund).toBe(true);
-		expect(result.data.meta.mode).toBe('refund');
-		expect(result.data.lines.every((line) => line.qty < 0)).toBe(true);
+		// An order with refunds is still an order — line qtys stay positive,
+		// the refund is captured in the refunds[] block.
+		expect(result.data.lines.length).toBeGreaterThan(0);
+		expect(result.data.lines.every((line) => line.qty > 0)).toBe(true);
+		expect(result.data.refunds.length).toBeGreaterThan(0);
 	});
 
 	it('does not emit synthetic refunds for an empty cart', () => {
@@ -55,36 +58,77 @@ describe('template-studio randomizer', () => {
 		expect(result.data.totals.refund_total).toBeUndefined();
 	});
 
-	it('does not generate cash tendered/change for refund payments', () => {
-		// Seed picked because it deterministically lands the single payment on
-		// `cash`; the assertion is about the cash-only branch suppressing
-		// tendered/change for refunds.
+	it('emits a refunds[] block with positive amount when refund scenario is enabled', () => {
 		const result = createRandomReceipt({
 			seed: 2,
-			overrides: { refund: true, emptyCart: false, multiPayment: false, cartSize: 1 },
+			overrides: { refund: true, emptyCart: false, cartSize: 2 },
 		});
-		const payment = result.data.payments[0];
 
-		expect(payment.method_id).toBe('cash');
-		expect(payment.amount).toBeLessThan(0);
-		expect(payment.tendered).toBeUndefined();
-		expect(payment.change).toBeUndefined();
-		expect(result.data.totals.paid_total).toBe(result.data.totals.grand_total_incl);
-		expect(result.data.totals.change_total).toBe(0);
+		expect(result.data.refunds.length).toBeGreaterThan(0);
+		const refund = result.data.refunds[0]!;
+		expect(refund.amount).toBeGreaterThan(0);
+		expect(refund.lines.length).toBeGreaterThan(0);
+		// Refund qtys / totals are stored as positive numbers in the refund block.
+		expect(refund.lines.every((line) => (line.qty ?? 0) > 0)).toBe(true);
 	});
 
-	it('does not emit payments for unpaid order modes', () => {
+	it('marks refund scenarios in rendered labels without negating order lines', () => {
 		const result = createRandomReceipt({
-			seed: 6,
-			overrides: { refund: false, emptyCart: false, multiPayment: false, cartSize: 1 },
+			seed: 'refund',
+			overrides: { refund: true, emptyCart: false, cartSize: 2 },
 		});
 
-		expect(['quote', 'kitchen']).toContain(result.data.meta.mode);
-		expect(result.data.payments).toEqual([]);
-		expect(result.data.totals.paid_total).toBe(0);
-		expect(result.data.totals.change_total).toBe(0);
-		expect(result.data.order?.paid.datetime).toBe('');
-		expect(result.data.order?.completed.datetime).toBe('');
+		expect(result.data.i18n.total).toBe('Refund Total');
+		expect(
+			result.data.payments.every((payment) => payment.method_title.startsWith('Refund — '))
+		).toBe(true);
+		expect(result.data.lines.every((line) => line.qty > 0 && line.line_total_incl >= 0)).toBe(true);
+	});
+
+	it('produces real-order timestamps when wc_status is completed', () => {
+		// All scenarios produce real orders now — there's no quote/kitchen mode
+		// that suppresses payment / completed dates. Filter to a completed order
+		// to assert paid/completed timestamps trail creation.
+		let completed: ReturnType<typeof createRandomReceipt> | undefined;
+		for (let seed = 1; seed < 50 && !completed; seed += 1) {
+			const candidate = createRandomReceipt({
+				seed,
+				overrides: { emptyCart: false, multiPayment: false, cartSize: 1 },
+			});
+			if (candidate.data.meta.wc_status === 'completed') {
+				completed = candidate;
+			}
+		}
+		if (!completed) throw new Error('no completed status seed found in range');
+
+		expect(completed.data.payments.length).toBeGreaterThan(0);
+		const order = completed.data.order;
+		expect(order).toBeDefined();
+		if (!order) throw new Error('completed order data missing');
+		expect(order.paid).toBeDefined();
+		expect(order.completed).toBeDefined();
+		expect(order.paid.datetime).toBeTruthy();
+		expect(order.completed.datetime).toBeTruthy();
+	});
+
+	it('marks processing orders as paid but not completed', () => {
+		let processing: ReturnType<typeof createRandomReceipt> | undefined;
+		for (let seed = 1; seed < 50 && !processing; seed += 1) {
+			const candidate = createRandomReceipt({
+				seed,
+				overrides: { emptyCart: false, multiPayment: false, cartSize: 1 },
+			});
+			if (candidate.data.meta.wc_status === 'processing') {
+				processing = candidate;
+			}
+		}
+		if (!processing) throw new Error('no processing status seed found in range');
+
+		const order = processing.data.order;
+		expect(order).toBeDefined();
+		if (!order) throw new Error('processing order data missing');
+		expect(order.paid.datetime).toBeTruthy();
+		expect(order.completed.datetime).toBe('');
 	});
 
 	it('honors RTL override (Arabic locale + SAR currency without multicurrency override)', () => {

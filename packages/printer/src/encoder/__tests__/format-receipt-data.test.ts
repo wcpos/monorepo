@@ -137,6 +137,47 @@ describe('formatReceiptData', () => {
 		});
 	});
 
+	it('preserves custom i18n labels over gallery-template defaults', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.i18n = { total: 'Total Refunded' };
+		const result = formatReceiptData(data);
+
+		expect(result.i18n.total).toBe('Total Refunded');
+		expect(result.i18n.subtotal).toBe('Subtotal');
+	});
+
+	it('honors a custom i18n.refund_total override on refund receipts', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.refunds = [{ id: 1, amount: 25, lines: [] }];
+		data.i18n = { refund_total: 'Reembolso' };
+		const result = formatReceiptData(data);
+
+		expect(result.i18n.total).toBe('Reembolso');
+	});
+
+	it('uses a custom i18n.total fallback on refund receipts without refund_total', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.refunds = [{ id: 1, amount: 25, lines: [] }];
+		data.i18n = { total: 'Total Refunded' };
+		const result = formatReceiptData(data);
+
+		expect(result.i18n.total).toBe('Total Refunded');
+	});
+
+	it('renders refund receipts with negative display amounts and refund labels', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.refunds = [{ id: 1, amount: 25, lines: [] }];
+		const result = formatReceiptData(data);
+
+		expect(result.i18n.total).toBe('Refund Total');
+		expect(result.lines[0].line_total_incl).toBe(-10);
+		expect(result.totals.subtotal_incl).toBe(-25);
+		expect(result.totals.grand_total_incl).toBe(-25);
+		expect(result.tax_summary[0].tax_amount).toBe(-2.27);
+		expect(result.payments[0].method_title).toBe('Refund — Cash');
+		expect(result.payments[0].amount).toBe(-25);
+	});
+
 	it('preserves zero numeric values for Mustache section truthiness', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.totals.discount_total_incl = 0;

@@ -417,23 +417,17 @@ function buildReceiptData(
 	const pricesEnteredWithTax = rand() < 0.6;
 	const displayTax = pickFrom(rand, ['incl', 'excl', 'hidden', 'itemized', 'single'] as const);
 	const roundingMode = pickFrom(rand, ['per-line', 'per-total'] as const);
-	const refundSign = scenarios.refund ? -1 : 1;
-
 	const store = buildStore(rand, pool);
 	const customer = buildCustomer(rand, pool);
 	const cashier = buildCashier(rand, pool);
 
-	const lines = buildLineItems(rand, pool, scenarios, taxRate, pricesEnteredWithTax, refundSign);
+	const lines = buildLineItems(rand, pool, scenarios, taxRate, pricesEnteredWithTax);
 	// An empty cart suppresses every other line-driven scenario so totals collapse to zero.
 	const populated = !scenarios.emptyCart;
-	const fees =
-		populated && scenarios.hasFees ? buildFees(rand, refundSign, taxRate, pool.taxLabel) : [];
+	const fees = populated && scenarios.hasFees ? buildFees(rand, taxRate, pool.taxLabel) : [];
 	const shipping =
-		populated && scenarios.hasShipping
-			? buildShipping(rand, refundSign, taxRate, pool.taxLabel)
-			: [];
-	const discounts =
-		populated && scenarios.hasDiscounts ? buildDiscounts(rand, refundSign, taxRate) : [];
+		populated && scenarios.hasShipping ? buildShipping(rand, taxRate, pool.taxLabel) : [];
+	const discounts = populated && scenarios.hasDiscounts ? buildDiscounts(rand, taxRate) : [];
 
 	const refunds = populated && scenarios.refund ? buildRefunds(rand, lines, pool, taxRate) : [];
 	const totals = computeTotals(lines, fees, shipping, discounts, refunds);
@@ -449,14 +443,12 @@ function buildReceiptData(
 		pool.locale,
 		pool.timeZone
 	);
-	const payments = buildPayments(
-		rand,
-		scenarios,
-		orderMeta.mode,
-		totals.grand_total_incl,
-		orderCurrency,
-		totals
-	);
+	const payments = buildPayments(rand, scenarios, totals.grand_total_incl, orderCurrency, totals);
+	if (refunds.length > 0) {
+		for (const payment of payments) {
+			payment.method_title = `Refund — ${payment.method_title}`;
+		}
+	}
 	const presentationHints: ReceiptPresentationHints = {
 		display_tax: displayTax,
 		prices_entered_with_tax: pricesEnteredWithTax,
@@ -466,7 +458,7 @@ function buildReceiptData(
 	const fiscal: ReceiptFiscal = scenarios.fiscal ? buildFiscal(rand, orderMeta) : {};
 	const receiptInfo = buildReceiptInfo(rand, pool.locale, pool.timeZone, orderCreated);
 	const order = buildOrder(orderMeta, orderCreated, scenarios, pool.locale, pool.timeZone);
-	const i18n = buildI18nLabels();
+	const i18n = buildI18nLabels(refunds.length > 0);
 
 	return {
 		id: `random-${formatSeed(seed)}`,
@@ -670,8 +662,7 @@ function buildLineItems(
 	pool: LocalePool,
 	scenarios: ResolvedScenarios,
 	taxRate: number,
-	pricesEnteredWithTax: boolean,
-	refundSign: number
+	pricesEnteredWithTax: boolean
 ): ReceiptLineItem[] {
 	const lines: ReceiptLineItem[] = [];
 	const totalLines = scenarios.cartSize;
@@ -680,7 +671,7 @@ function buildLineItems(
 		const name = useLong
 			? pickFrom(rand, pool.longProductNames)
 			: pickFrom(rand, pool.productNames);
-		const qty = refundSign * (Math.floor(rand() * 3) + 1);
+		const qty = Math.floor(rand() * 3) + 1;
 		const unitBase = round(rand() * 25 + 1.5);
 		const unitInclTax = pricesEnteredWithTax
 			? round(unitBase)
@@ -688,8 +679,8 @@ function buildLineItems(
 		const unitExclTax = pricesEnteredWithTax
 			? round(unitBase / (1 + taxRate / 100))
 			: round(unitBase);
-		const lineSubInc = round(unitInclTax * Math.abs(qty)) * Math.sign(qty || 1);
-		const lineSubExc = round(unitExclTax * Math.abs(qty)) * Math.sign(qty || 1);
+		const lineSubInc = round(unitInclTax * qty);
+		const lineSubExc = round(unitExclTax * qty);
 		const taxAmount = round(lineSubInc - lineSubExc);
 		lines.push({
 			key: `line-${index}-${formatSeed(seedFromRand(rand))}`,
@@ -789,16 +780,11 @@ function taxableExcl(totalIncl: number, taxRate: number): number {
 	return round(totalIncl / (1 + taxRate / 100));
 }
 
-function buildFees(
-	rand: () => number,
-	refundSign: number,
-	taxRate: number,
-	taxLabel: string
-): ReceiptFee[] {
+function buildFees(rand: () => number, taxRate: number, taxLabel: string): ReceiptFee[] {
 	const labels = ['Service charge', 'Eco fee', 'Delivery fee'];
 	const count = 1 + Math.floor(rand() * 2);
 	return Array.from({ length: count }, (_, index) => {
-		const total = round(rand() * 4 + 0.5) * refundSign;
+		const total = round(rand() * 4 + 0.5);
 		const totalExcl = taxableExcl(total, taxRate);
 		const taxAmount = round(total - totalExcl);
 		const fee: ReceiptFee = {
@@ -824,17 +810,12 @@ function buildFees(
 	});
 }
 
-function buildShipping(
-	rand: () => number,
-	refundSign: number,
-	taxRate: number,
-	taxLabel: string
-): ReceiptShipping[] {
+function buildShipping(rand: () => number, taxRate: number, taxLabel: string): ReceiptShipping[] {
 	const methodIds = ['flat_rate', 'free_shipping', 'local_pickup'] as const;
 	const count = rand() < 0.25 ? 2 : 1;
 	const result: ReceiptShipping[] = [];
 	for (let i = 0; i < count; i += 1) {
-		const total = round(rand() * 12 + 3) * refundSign;
+		const total = round(rand() * 12 + 3);
 		const totalExcl = taxableExcl(total, taxRate);
 		const taxAmount = round(total - totalExcl);
 		const shipping: ReceiptShipping = {
@@ -866,15 +847,11 @@ function buildShipping(
 	return result;
 }
 
-function buildDiscounts(
-	rand: () => number,
-	refundSign: number,
-	taxRate: number
-): ReceiptDiscount[] {
+function buildDiscounts(rand: () => number, taxRate: number): ReceiptDiscount[] {
 	const codes = ['WELCOME10', 'LOYALTY5', 'SUMMER25', 'STAFF'];
 	const count = 1 + Math.floor(rand() * 2);
 	return Array.from({ length: count }, () => {
-		const total = round(rand() * 6 + 1) * refundSign;
+		const total = round(rand() * 6 + 1);
 		const code = pickFrom(rand, codes);
 		const extra =
 			rand() < 0.4
@@ -900,7 +877,6 @@ function buildRefunds(
 	pool: LocalePool,
 	taxRate: number
 ): ReceiptRefund[] {
-	void taxRate;
 	const refundReasons = [
 		'Customer return',
 		'Damaged item',
@@ -908,8 +884,14 @@ function buildRefunds(
 		'Duplicate charge',
 		'Goodwill gesture',
 	];
+	const gateways = [
+		{ id: 'stripe', title: 'Stripe' },
+		{ id: 'paypal', title: 'PayPal' },
+		{ id: 'cash', title: 'Cash' },
+	] as const;
 	const refundedByName = pickFrom(rand, pool.cashierNames);
 	const refundedById = Math.floor(rand() * 99) + 1;
+	const gateway = gateways[refundedById % gateways.length];
 	// Build refund lines from the lines that were marked refunded.
 	const refundLines = lines
 		.filter((line) => (line.qty_refunded ?? 0) > 0)
@@ -919,15 +901,27 @@ function buildRefunds(
 			qty: line.qty_refunded ?? 0,
 			total: line.total_refunded ?? 0,
 		}));
-	const refundAmount = refundLines.reduce((sum, line) => sum + (line.total ?? 0), 0);
+	const refundAmount = round(refundLines.reduce((sum, line) => sum + (line.total ?? 0), 0));
+	const refundSubtotal = refundAmount;
+	const refundTaxTotal =
+		taxRate > 0 ? round(refundSubtotal - taxableExcl(refundSubtotal, taxRate)) : 0;
+	const refundId = 1000 + Math.floor(rand() * 9000);
+	const refundReason = pickFrom(rand, refundReasons);
+	const refundedPayment = rand() < 0.5;
 	return [
 		{
-			id: 1000 + Math.floor(rand() * 9000),
-			amount: round(refundAmount),
-			reason: pickFrom(rand, refundReasons),
+			id: refundId,
+			amount: refundAmount,
+			subtotal: refundSubtotal,
+			tax_total: refundTaxTotal,
+			reason: refundReason,
 			refunded_by_id: refundedById,
 			refunded_by_name: refundedByName,
-			refunded_payment: rand() < 0.5,
+			refunded_payment: refundedPayment,
+			destination: refundedPayment ? 'original_method' : 'manual',
+			gateway_id: gateway.id,
+			gateway_title: gateway.title,
+			processing_mode: refundedPayment ? 'provider' : 'manual',
 			lines: refundLines,
 		},
 	];
@@ -1010,16 +1004,10 @@ function buildTaxSummary(
 function buildPayments(
 	rand: () => number,
 	scenarios: ResolvedScenarios,
-	mode: ReceiptOrderMeta['mode'],
 	grandTotal: number,
 	currency: string,
 	totals: ReceiptTotals
 ): ReceiptPayment[] {
-	if (mode === 'quote' || mode === 'kitchen') {
-		totals.paid_total = 0;
-		totals.change_total = 0;
-		return [];
-	}
 	if (grandTotal === 0) return [];
 	const methods = [
 		{ id: 'card', title: 'Card' },
@@ -1099,9 +1087,17 @@ function buildOrderMeta(
 	timeZone: string
 ): ReceiptOrderMeta {
 	const orderId = 1000 + (seed % 9000);
-	const mode = scenarios.refund
-		? 'refund'
-		: pickFrom(rand, ['sale', 'sale', 'sale', 'quote', 'kitchen', 'invoice'] as const);
+	void scenarios;
+	const wcStatus = pickFrom(rand, [
+		'pending',
+		'completed',
+		'processing',
+		'on-hold',
+		'cancelled',
+		'refunded',
+		'failed',
+	] as const);
+	const createdVia = pickFrom(rand, ['woocommerce-pos', 'checkout', 'admin', 'rest-api'] as const);
 	const createdAtGmt = createdAt.toISOString().replace('T', ' ').slice(0, 19);
 	const baseDateOptions: Intl.DateTimeFormatOptions = {
 		timeZone,
@@ -1120,8 +1116,7 @@ function buildOrderMeta(
 		}
 	})();
 	return {
-		schema_version: '1.3.0',
-		mode,
+		schema_version: '1.4.0',
 		created_at_gmt: createdAtGmt,
 		created_at_local: localeFormatted,
 		order_id: orderId,
@@ -1131,6 +1126,8 @@ function buildOrderMeta(
 			rand() < 0.25
 				? pickFrom(rand, ['Please gift wrap', 'Leave at front desk', 'Call on arrival'])
 				: '',
+		wc_status: wcStatus,
+		created_via: createdVia,
 	};
 }
 
@@ -1184,11 +1181,11 @@ function buildOrder(
 	locale: string,
 	timeZone: string
 ): ReceiptOrder {
-	// Paid/completed timestamps trail creation for typical sales; refunds fire
-	// the same day; quotes/kitchen never reach those states so we leave the
-	// dates empty (matching how PHP returns Receipt_Date_Formatter::empty()).
-	const isCompleted = meta.mode === 'sale' || meta.mode === 'invoice' || meta.mode === 'refund';
-	const paidAt = isCompleted ? new Date(createdAt.getTime() + 60_000) : null;
+	// Paid/completed timestamps trail creation; paid statuses keep date_paid even
+	// when fulfillment has not completed yet.
+	const isPaid = meta.wc_status === 'processing' || meta.wc_status === 'completed';
+	const isCompleted = meta.wc_status === 'completed';
+	const paidAt = isPaid ? new Date(createdAt.getTime() + 60_000) : null;
 	const completedAt = isCompleted ? new Date(createdAt.getTime() + 5 * 60_000) : null;
 	void scenarios;
 	return {
@@ -1231,7 +1228,7 @@ function emptyDateObject(): ReceiptDate {
  * the same key set the PHP builder emits; the catchall in the schema lets
  * extensions add more without breaking validation.
  */
-function buildI18nLabels(): ReceiptI18n {
+function buildI18nLabels(hasRefunds = false): ReceiptI18n {
 	return {
 		order: 'Order',
 		date: 'Date',
@@ -1255,7 +1252,7 @@ function buildI18nLabels(): ReceiptI18n {
 		packed: 'Packed',
 		subtotal: 'Subtotal',
 		subtotal_excl_tax: 'Subtotal (excl. tax)',
-		total: 'Total',
+		total: hasRefunds ? 'Refund Total' : 'Total',
 		total_tax: 'Total Tax',
 		grand_total_incl_tax: 'Grand Total (incl. tax)',
 		tax: 'Tax',
@@ -1279,7 +1276,7 @@ function buildI18nLabels(): ReceiptI18n {
 		customer_note: 'Customer Note',
 		terms_and_conditions: 'Terms & Conditions',
 		a_message_for_you: 'A message for you',
-		thank_you: 'Thank you!',
+		thank_you: 'Thank you',
 		thank_you_purchase: 'Thank you for your purchase!',
 		thank_you_shopping: 'Thank you for shopping with us!',
 		thank_you_business: 'Thank you for your business.',
