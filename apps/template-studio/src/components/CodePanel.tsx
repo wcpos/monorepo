@@ -187,7 +187,7 @@ export function CodePanel({ content, engine, templateName }: CodePanelProps) {
 	return (
 		<div
 			ref={rootRef}
-			className={`code-panel${collapsed ? 'collapsed' : ''}`}
+			className={['code-panel', collapsed ? 'collapsed' : ''].filter(Boolean).join(' ')}
 			style={{ height: effectiveHeight }}
 			aria-label="Template source"
 		>

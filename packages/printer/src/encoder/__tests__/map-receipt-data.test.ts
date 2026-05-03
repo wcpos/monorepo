@@ -103,8 +103,25 @@ const offlineReceiptData = {
 
 const offlineReceiptDataWithAdjustments = {
 	...offlineReceiptData,
-	fees: [{ label: 'Service Fee', total_incl: '2.00', total_excl: '1.82' }],
-	shipping: [{ label: 'Shipping', total: '3.00', total_excl: '2.73', total_incl: '3.00' }],
+	fees: [
+		{
+			label: 'Service Fee',
+			total_incl: '2.00',
+			total_excl: '1.82',
+			meta: [null, {}, { display_key: 'Type', display_value: 'Handling' }],
+			taxes: [null, {}, { rate_code: 'VAT', tax_amount: '0.18' }],
+		},
+	],
+	shipping: [
+		{
+			label: 'Shipping',
+			total: '3.00',
+			total_excl: '2.73',
+			total_incl: '3.00',
+			meta: [null, {}],
+			taxes: [null, {}],
+		},
+	],
 	discounts: [{ label: 'Promo', total_incl: '1.50', total_excl: '1.36' }],
 };
 
@@ -315,7 +332,14 @@ describe('mapReceiptData', () => {
 			const mappedWithAdjustments = mapReceiptData(offlineReceiptDataWithAdjustments);
 
 			expect(mappedWithAdjustments.fees).toEqual([
-				{ label: 'Service Fee', total: 2, total_incl: 2, total_excl: 1.82 },
+				{
+					label: 'Service Fee',
+					total: 2,
+					total_incl: 2,
+					total_excl: 1.82,
+					meta: [{ key: 'Type', value: 'Handling' }],
+					taxes: [{ code: 'VAT', amount: 0.18 }],
+				},
 			]);
 			expect(mappedWithAdjustments.shipping).toEqual([
 				{ label: 'Shipping', total: 3, total_incl: 3, total_excl: 2.73 },

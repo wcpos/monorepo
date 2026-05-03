@@ -47,6 +47,17 @@ export function createPrng(seed: number): () => number {
 	};
 }
 
+export function createRandomSeed(): number {
+	const crypto = globalThis.crypto;
+	if (crypto?.getRandomValues) {
+		const values = new Uint32Array(1);
+		crypto.getRandomValues(values);
+		return values[0] >>> 0;
+	}
+
+	return Date.now() >>> 0;
+}
+
 /** Coerce a user-supplied seed (number or hex/decimal string) to a 32-bit unsigned int. */
 export function parseSeed(input: number | string | undefined): number {
 	if (typeof input === 'number' && Number.isFinite(input)) return input >>> 0;
@@ -66,8 +77,7 @@ export function parseSeed(input: number | string | undefined): number {
 		}
 		return hash >>> 0;
 	}
-	// No seed supplied → time-derived but still 32 bits.
-	return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+	return createRandomSeed();
 }
 
 /** Format a 32-bit seed as a stable 4-hex display token (`4f2a`). */
@@ -596,7 +606,7 @@ function buildAddress(
 	// `email`, `phone`) so logicless templates can iterate `customer.billing_address`.
 	const [firstName, ...rest] = fullName.split(' ');
 	const lastName = rest.join(' ');
-	const cityPart = pickFrom(rand, pool.cities).split(',')[0]?.trim() ?? '';
+	const cityPart = pickFrom(rand, pool.cities).split(/[,،]/)[0]?.trim() ?? '';
 	return {
 		first_name: firstName ?? '',
 		last_name: lastName,

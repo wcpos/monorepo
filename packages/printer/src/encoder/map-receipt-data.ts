@@ -198,16 +198,26 @@ function mapFeeLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptFe
 		total_excl: totalExcl,
 	};
 	if (Array.isArray(src.meta) && src.meta.length > 0) {
-		fee.meta = src.meta.map((entry: any) => ({
-			key: toStr(entry?.key ?? entry?.display_key),
-			value: toStr(entry?.value ?? entry?.display_value),
-		}));
+		const meta = src.meta
+			.filter(
+				(entry: unknown): entry is Record<string, unknown> => !!entry && typeof entry === 'object'
+			)
+			.map((entry) => ({
+				key: toStr(entry.key ?? entry.display_key),
+				value: toStr(entry.value ?? entry.display_value),
+			}))
+			.filter((entry) => entry.key.length > 0 || entry.value.length > 0);
+		if (meta.length > 0) fee.meta = meta;
 	}
 	if (Array.isArray(src.taxes) && src.taxes.length > 0) {
-		fee.taxes = src.taxes.map((tax: any) => ({
-			code: toStr(tax?.code ?? tax?.rate_code ?? tax?.id),
-			amount: toNum(tax?.amount ?? tax?.tax_amount),
-		}));
+		const taxes = src.taxes
+			.filter((tax: unknown): tax is Record<string, unknown> => !!tax && typeof tax === 'object')
+			.map((tax) => ({
+				code: toStr(tax.code ?? tax.rate_code ?? tax.id),
+				amount: toNum(tax.amount ?? tax.tax_amount),
+			}))
+			.filter((tax) => tax.code.length > 0 || tax.amount !== 0);
+		if (taxes.length > 0) fee.taxes = taxes;
 	}
 	return fee;
 }
