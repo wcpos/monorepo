@@ -76,8 +76,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 .studio-app {
 	display: grid;
 	grid-template-rows: var(--ts-toolbar-height) auto 1fr;
-	min-height: 100vh;
-	min-height: 100dvh;
+	height: 100vh;
+	height: 100dvh;
+	overflow: hidden;
 }
 
 .studio-toolbar {
@@ -146,6 +147,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	display: grid;
 	grid-template-columns: 220px minmax(420px, 1fr) 320px;
 	min-height: 0;
+	height: 100%;
+	overflow: hidden;
 }
 
 /* ─────────────────────────── Left panel ────────────────────────── */
@@ -155,11 +158,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	border-right: 1px solid var(--ts-border);
 	overflow-y: auto;
 	padding: 12px 0;
-	position: sticky;
-	top: var(--ts-toolbar-height);
-	align-self: start;
-	height: calc(100vh - var(--ts-toolbar-height));
-	height: calc(100dvh - var(--ts-toolbar-height));
+	min-height: 0;
+	height: 100%;
 }
 .template-group { padding: 8px 0; }
 .template-group h3 {
@@ -206,14 +206,120 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 
 .stage {
 	background: var(--ts-stage);
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	position: relative;
+}
+.stage-preview {
+	flex: 1 1 auto;
+	min-height: 0;
 	display: grid;
 	place-items: start center;
-	position: relative;
 	padding: 32px;
+	overflow: auto;
+	position: relative;
 }
 .stage .stage-empty {
 	color: var(--ts-text-muted);
 	font-style: italic;
+}
+
+/* ─────────────────────── Code preview panel ─────────────────────── */
+
+.code-panel {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	background: #fdfcf8;
+	color: #1c1814;
+	border-top: 1px solid var(--ts-border-strong);
+	position: relative;
+	overflow: hidden;
+}
+.code-panel.collapsed {
+	border-top-color: var(--ts-border);
+}
+.code-panel-resizer {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 6px;
+	cursor: ns-resize;
+	background: transparent;
+	z-index: 2;
+	touch-action: none;
+}
+.code-panel-resizer:hover,
+.code-panel-resizer:active {
+	background: var(--ts-accent);
+}
+.code-panel-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 0 14px;
+	height: 32px;
+	flex: 0 0 32px;
+	background: var(--ts-panel-alt);
+	border: none;
+	border-bottom: 1px solid var(--ts-border);
+	border-radius: 0;
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	font-weight: 600;
+	color: var(--ts-text);
+	user-select: none;
+	cursor: pointer;
+	text-align: left;
+	width: 100%;
+}
+.code-panel-header:hover {
+	background: #ebe4d6;
+}
+.code-panel-title {
+	text-transform: uppercase;
+	color: var(--ts-text-label);
+}
+.code-panel-name {
+	font-weight: 500;
+	color: var(--ts-text);
+	letter-spacing: 0;
+	text-transform: none;
+}
+.code-panel-tag {
+	font-family: var(--ts-mono);
+	font-size: 10px;
+	background: var(--ts-panel);
+	color: var(--ts-text-secondary);
+	border: 1px solid var(--ts-border-strong);
+	border-radius: 999px;
+	padding: 1px 8px;
+	letter-spacing: 0;
+	text-transform: lowercase;
+}
+.code-panel-spacer {
+	flex: 1;
+}
+.code-panel-chevron {
+	font-size: 11px;
+	color: var(--ts-text-secondary);
+}
+.code-panel-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	background: #fdfcf8;
+	overflow: hidden;
+}
+.code-panel-body .cm-editor {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+}
+.code-panel-body .cm-editor.cm-focused {
+	outline: none;
 }
 
 .paper-frame {
@@ -241,25 +347,20 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 }
 .paper-frame :is(table, tr, td, th) { color: inherit; }
 
-.spec-pill {
-	position: absolute;
-	bottom: 16px;
-	left: 50%;
-	transform: translateX(-50%);
-	display: inline-flex;
+.stage-status {
+	flex: 0 0 auto;
+	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 6px 14px;
-	background: rgba(40, 32, 22, 0.78);
-	color: #fff;
-	border-radius: 999px;
+	padding: 4px 14px;
+	background: var(--ts-panel);
+	border-top: 1px solid var(--ts-border);
+	color: var(--ts-text-secondary);
 	font-size: 11px;
 	font-variant-numeric: tabular-nums;
 	letter-spacing: 0.02em;
-	box-shadow: 0 4px 12px rgba(40, 32, 22, 0.18);
-	pointer-events: none;
 }
-.spec-pill .dot { opacity: 0.4; }
+.stage-status .dot { opacity: 0.4; }
 
 /* ─────────────────────────── Right panel ───────────────────────── */
 
@@ -269,11 +370,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	overflow-y: auto;
 	display: flex;
 	flex-direction: column;
-	position: sticky;
-	top: var(--ts-toolbar-height);
-	align-self: start;
-	height: calc(100vh - var(--ts-toolbar-height));
-	height: calc(100dvh - var(--ts-toolbar-height));
+	min-height: 0;
+	height: 100%;
 }
 .section {
 	border-bottom: 1px solid var(--ts-border);

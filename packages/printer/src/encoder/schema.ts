@@ -149,11 +149,25 @@ export const ReceiptLineItemSchema = z.object({
 	taxes: z.array(ReceiptLineItemTaxSchema).describe('Per-rate tax breakdown'),
 });
 
+/**
+ * Fees and shipping share the same shape (PHP emits both via the same builder).
+ * `meta` and `taxes` mirror the line-item shapes so templates can show
+ * shipping tracking codes, fee notes, or per-fee/shipping itemized tax. Both
+ * are optional — the live PHP builder doesn't emit them yet.
+ */
 export const ReceiptFeeSchema = z.object({
 	label: z.string().describe('Fee label'),
 	total: z.number().optional().describe('Display-side fee total'),
 	total_incl: z.number().describe('Fee total tax-inclusive'),
 	total_excl: z.number().describe('Fee total tax-exclusive'),
+	meta: z
+		.array(ReceiptLineItemMetaSchema)
+		.optional()
+		.describe('Fee/shipping meta key-value pairs (tracking codes, notes, etc.)'),
+	taxes: z
+		.array(ReceiptLineItemTaxSchema)
+		.optional()
+		.describe('Per-rate tax breakdown for this fee/shipping line'),
 });
 
 export const ReceiptDiscountSchema = z.object({

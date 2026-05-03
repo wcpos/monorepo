@@ -273,6 +273,8 @@ export function App() {
 					paperWidth={effectivePaperWidth}
 					zoom={zoom}
 					templateName={selectedTemplate?.name}
+					templateContent={selectedTemplate?.content}
+					templateEngine={selectedTemplate?.engine}
 				/>
 				<aside className="right-panel" aria-label="Studio controls">
 					<CollapsibleSection

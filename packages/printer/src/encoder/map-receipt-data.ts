@@ -191,12 +191,25 @@ function mapFeeLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptFe
 	const totalExcl = 'total_excl' in src ? toNum(src.total_excl) : totalIncl - toNum(src.total_tax);
 	const total = displayTax === 'excl' ? totalExcl : totalIncl;
 
-	return {
+	const fee: ReceiptFee = {
 		label: toStr(src.label ?? src.name ?? src.title),
 		total,
 		total_incl: totalIncl,
 		total_excl: totalExcl,
 	};
+	if (Array.isArray(src.meta) && src.meta.length > 0) {
+		fee.meta = src.meta.map((entry: any) => ({
+			key: toStr(entry?.key ?? entry?.display_key),
+			value: toStr(entry?.value ?? entry?.display_value),
+		}));
+	}
+	if (Array.isArray(src.taxes) && src.taxes.length > 0) {
+		fee.taxes = src.taxes.map((tax: any) => ({
+			code: toStr(tax?.code ?? tax?.rate_code ?? tax?.id),
+			amount: toNum(tax?.amount ?? tax?.tax_amount),
+		}));
+	}
+	return fee;
 }
 
 function mapDiscountLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptDiscount {

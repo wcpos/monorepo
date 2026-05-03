@@ -82,7 +82,16 @@ const DEFAULT_PAYMENT = {
 	amount: 0,
 };
 
-/** Default item to insert when "+ Add" is clicked on an array section. */
+const DEFAULT_LINE_META = { key: 'Attribute', value: '' };
+const DEFAULT_LINE_TAX = { code: 'TAX', amount: 0 };
+
+/**
+ * Default item to insert when "+ Add" is clicked on an array section.
+ *
+ * Keys here are the *last* path segment of the array, so nested arrays like
+ * `lines[0].meta` or `fees[0].taxes` resolve via their own segment name (no
+ * collision with the top-level `meta` object section, which is not an array).
+ */
 export const ARRAY_DEFAULTS: Record<string, unknown> = {
 	lines: DEFAULT_LINE,
 	fees: DEFAULT_FEE,
@@ -90,6 +99,8 @@ export const ARRAY_DEFAULTS: Record<string, unknown> = {
 	discounts: DEFAULT_DISCOUNT,
 	tax_summary: DEFAULT_TAX,
 	payments: DEFAULT_PAYMENT,
+	meta: DEFAULT_LINE_META,
+	taxes: DEFAULT_LINE_TAX,
 };
 
 /** Title for an array item (e.g., line item shows product name). */
