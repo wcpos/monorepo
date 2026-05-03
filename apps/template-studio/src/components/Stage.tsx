@@ -1,6 +1,8 @@
 import type { RefObject } from 'react';
 
-import type { PaperWidth, StudioRenderResult } from '../studio-core';
+import { CodePanel } from './CodePanel';
+
+import type { PaperWidth, StudioRenderResult, TemplateEngine } from '../studio-core';
 
 interface StageProps {
 	previewFrameRef: RefObject<HTMLDivElement | null>;
@@ -9,6 +11,8 @@ interface StageProps {
 	paperWidth: PaperWidth;
 	zoom: number;
 	templateName?: string;
+	templateContent?: string;
+	templateEngine?: TemplateEngine;
 }
 
 const PAPER_CLASS: Record<PaperWidth, string> = {
@@ -67,6 +71,8 @@ export function Stage({
 	paperWidth,
 	zoom,
 	templateName,
+	templateContent,
+	templateEngine,
 }: StageProps) {
 	const lineCount = countPreviewLines(previewHtml);
 	const sizeLabel =
@@ -75,33 +81,29 @@ export function Stage({
 			: previewHtml
 				? `${formatBytes(new Blob([previewHtml]).size)} HTML`
 				: '';
-	const showByteCount = rendered?.kind === 'thermal';
 	const paperLabel = paperWidth === 'a4' ? 'A4' : paperWidth;
 	const transform = zoom === 100 ? undefined : `scale(${zoom / 100})`;
 
 	return (
 		<main className="stage" aria-label={templateName ?? 'Preview'}>
+			<div className="stage-preview">
+				{rendered ? (
+					<div
+						ref={previewFrameRef}
+						className={`paper-frame ${PAPER_CLASS[paperWidth]}`}
+						style={transform ? { transform } : undefined}
+						dangerouslySetInnerHTML={{ __html: previewHtml }}
+					/>
+				) : (
+					<div className="stage-empty">Select a template to render a preview.</div>
+				)}
+			</div>
 			{rendered ? (
-				<div
-					ref={previewFrameRef}
-					className={`paper-frame ${PAPER_CLASS[paperWidth]}`}
-					style={transform ? { transform } : undefined}
-					dangerouslySetInnerHTML={{ __html: previewHtml }}
-				/>
-			) : (
-				<div className="stage-empty">Select a template to render a preview.</div>
-			)}
-			{rendered ? (
-				<div className="spec-pill" aria-live="polite">
+				<div className="stage-status" aria-live="polite">
 					<span>{paperLabel}</span>
 					<span className="dot">·</span>
 					<span>{lineCount} lines</span>
-					{showByteCount ? (
-						<>
-							<span className="dot">·</span>
-							<span>{sizeLabel}</span>
-						</>
-					) : sizeLabel ? (
+					{sizeLabel ? (
 						<>
 							<span className="dot">·</span>
 							<span>{sizeLabel}</span>
@@ -109,6 +111,7 @@ export function Stage({
 					) : null}
 				</div>
 			) : null}
+			<CodePanel content={templateContent} engine={templateEngine} templateName={templateName} />
 		</main>
 	);
 }

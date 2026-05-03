@@ -47,6 +47,17 @@ export function createPrng(seed: number): () => number {
 	};
 }
 
+export function createRandomSeed(): number {
+	const crypto = globalThis.crypto;
+	if (crypto?.getRandomValues) {
+		const values = new Uint32Array(1);
+		crypto.getRandomValues(values);
+		return values[0] >>> 0;
+	}
+
+	return Date.now() >>> 0;
+}
+
 /** Coerce a user-supplied seed (number or hex/decimal string) to a 32-bit unsigned int. */
 export function parseSeed(input: number | string | undefined): number {
 	if (typeof input === 'number' && Number.isFinite(input)) return input >>> 0;
@@ -66,8 +77,7 @@ export function parseSeed(input: number | string | undefined): number {
 		}
 		return hash >>> 0;
 	}
-	// No seed supplied → time-derived but still 32 bits.
-	return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+	return createRandomSeed();
 }
 
 /** Format a 32-bit seed as a stable 4-hex display token (`4f2a`). */
@@ -215,12 +225,51 @@ interface LocalePool {
 	cashierNames: readonly string[];
 	productNames: readonly string[];
 	longProductNames: readonly string[];
+	companies: readonly string[];
+	postcodes: readonly string[];
+	regions: readonly string[];
+	countryCode: string;
 	currency: string;
 	locale: string;
 	timeZone: string;
 	taxLabel: string;
 	thankYouNote: string;
 }
+
+/**
+ * Attribute pools used to populate line-item `meta` with realistic
+ * key/value pairs the way WooCommerce surfaces variation attributes and
+ * custom item meta via `WC_Order_Item::get_formatted_meta_data()`.
+ */
+const LINE_META_POOL: readonly { key: string; values: readonly string[] }[] = [
+	{ key: 'Size', values: ['XS', 'S', 'M', 'L', 'XL', '12 oz', '16 oz', '250 g', '500 g'] },
+	{
+		key: 'Color',
+		values: ['Black', 'White', 'Sand', 'Sage', 'Cream', 'Indigo', 'Burgundy'],
+	},
+	{ key: 'Material', values: ['Cotton', 'Linen', 'Wool', 'Bamboo', 'Recycled'] },
+	{ key: 'Flavor', values: ['Vanilla', 'Chocolate', 'Caramel', 'Hazelnut', 'Matcha'] },
+	{ key: 'Roast', values: ['Light', 'Medium', 'Dark', 'Espresso'] },
+	{ key: 'Grind', values: ['Whole bean', 'Espresso', 'Filter', 'Coarse'] },
+	{ key: 'Milk', values: ['Whole', 'Oat', 'Almond', 'Soy', 'Skim'] },
+	{ key: 'Notes', values: ['No nuts', 'Extra hot', 'Gift wrapped', 'Allergy: gluten'] },
+];
+
+const FEE_META_POOL: readonly { key: string; values: readonly string[] }[] = [
+	{ key: 'Reason', values: ['Late evening', 'Holiday', 'Express handling', 'Out-of-area'] },
+	{ key: 'Reference', values: ['POS-FEE-001', 'POS-FEE-014', 'POS-FEE-022'] },
+	{ key: 'Operator note', values: ['Approved by manager', 'Loyalty waiver'] },
+];
+
+const SHIPPING_META_POOL: readonly { key: string; values: readonly string[] }[] = [
+	{ key: 'Carrier', values: ['UPS', 'FedEx', 'DHL', 'USPS', 'Royal Mail', 'Correos'] },
+	{
+		key: 'Tracking',
+		values: ['1Z999AA10123456784', '7489-2233-9911', 'JD0002390321', 'UA123456789ES'],
+	},
+	{ key: 'Service', values: ['Ground', 'Express', 'Same-day', 'Pickup point'] },
+	{ key: 'ETA', values: ['2-3 business days', 'Tomorrow', 'Today before 18:00'] },
+];
 
 const LATIN_POOL: LocalePool = {
 	storeNames: [
@@ -279,6 +328,10 @@ const LATIN_POOL: LocalePool = {
 		'Hand-bound notebook with linen cover, ruled pages, and lay-flat binding (A5)',
 		'Reclaimed-oak butcher block cutting board with hand-rubbed mineral oil finish',
 	],
+	companies: ['Acme Provisions S.L.', 'Northwind Trading', 'Helios Holdings', 'Verde Atelier'],
+	postcodes: ['08001', '28013', '1100-024', '75001', '00184', '10115'],
+	regions: ['Catalunya', 'Madrid', 'Lisboa', 'Île-de-France', 'Lazio', 'Berlin'],
+	countryCode: 'ES',
 	currency: 'EUR',
 	locale: 'en_US',
 	timeZone: 'Europe/Madrid',
@@ -297,6 +350,10 @@ const RTL_POOL: LocalePool = {
 		'قهوة عربية فاخرة محمصة طازجاً مع هيل من المنشأ الأخضر ٢٥٠ غرام',
 		'تمر سكري ممتاز معبأ في علبة هدية مع شوكولاتة بالكراميل',
 	],
+	companies: ['شركة الواحة', 'مؤسسة الخير التجارية', 'مجموعة النخيل'],
+	postcodes: ['11564', '21412', '12211', '34325'],
+	regions: ['الرياض', 'المنطقة الشرقية', 'مكة المكرمة'],
+	countryCode: 'SA',
 	currency: 'SAR',
 	locale: 'ar_SA',
 	timeZone: 'Asia/Riyadh',
@@ -312,6 +369,10 @@ const CJK_POOL: LocalePool = {
 	cashierNames: ['伊藤 さくら', '渡辺 拓海'],
 	productNames: ['抹茶ラテ', '黒糖まんじゅう', '醤油ラーメン', '焼き鳥', '苺ショートケーキ'],
 	longProductNames: ['宇治抹茶を使った濃厚抹茶ロールケーキ（季節限定・要冷蔵・8切れ入り）'],
+	companies: ['株式会社さくら', '東京和菓子合同会社'],
+	postcodes: ['100-0005', '530-0001', '604-8005'],
+	regions: ['東京都', '大阪府', '京都府'],
+	countryCode: 'JP',
 	currency: 'JPY',
 	locale: 'ja_JP',
 	timeZone: 'Asia/Tokyo',
@@ -507,35 +568,82 @@ function pickOrderDate(rand: () => number, seed: number): Date {
 }
 
 function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
-	const hasHours = rand() < 0.7;
+	const hasHours = rand() < 0.85;
 	const openingDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 	const openingInline = openingDays.map((d) => `${d} 9:00–18:00`).join(', ');
 	const openingVertical = openingDays.map((d) => `${d}: 9:00–18:00`).join('\n');
+	const cityRegion = pickFrom(rand, pool.cities);
 	return {
 		name: pickFrom(rand, pool.storeNames),
-		address_lines: [pickFrom(rand, pool.streets), pickFrom(rand, pool.cities)],
-		tax_id: rand() < 0.7 ? `TAX-${Math.floor(rand() * 1_000_000)}` : undefined,
-		phone: rand() < 0.6 ? `+34 555 ${Math.floor(rand() * 9000 + 1000)}` : undefined,
-		email: rand() < 0.5 ? 'hello@example.com' : undefined,
-		logo: rand() < 0.3 ? 'https://example.com/logo.png' : null,
+		address_lines: [pickFrom(rand, pool.streets), cityRegion, pickFrom(rand, pool.postcodes)],
+		tax_id:
+			rand() < 0.9
+				? `${pool.countryCode}-${Math.floor(rand() * 9_000_000) + 1_000_000}`
+				: undefined,
+		phone: rand() < 0.9 ? `+34 555 ${Math.floor(rand() * 9000 + 1000)}` : undefined,
+		email: rand() < 0.9 ? 'hello@example.com' : undefined,
+		logo:
+			rand() < 0.5 ? 'https://wcpos.com/wp-content/themes/wcpos-2024/assets/images/logo.png' : null,
 		opening_hours: hasHours ? 'Mon–Sat 9:00–18:00' : null,
 		opening_hours_vertical: hasHours ? openingVertical : null,
 		opening_hours_inline: hasHours ? openingInline : null,
-		opening_hours_notes: rand() < 0.2 ? 'Closed on public holidays' : null,
-		personal_notes: rand() < 0.25 ? 'Follow us @example' : null,
+		opening_hours_notes: rand() < 0.5 ? 'Closed on public holidays' : null,
+		personal_notes: rand() < 0.5 ? 'Follow us @example' : null,
 		policies_and_conditions:
-			rand() < 0.4 ? 'Returns accepted within 30 days with this receipt.' : null,
-		footer_imprint: rand() < 0.2 ? 'VAT EU0000000000 · Reg. 12345' : null,
+			rand() < 0.7 ? 'Returns accepted within 30 days with this receipt.' : null,
+		footer_imprint: rand() < 0.5 ? `VAT ${pool.countryCode}0000000000 · Reg. 12345` : null,
+	};
+}
+
+function buildAddress(
+	rand: () => number,
+	pool: LocalePool,
+	fullName: string,
+	options: { includeCompany?: boolean } = {}
+): Record<string, string> {
+	// Mirrors the WC address shape (`first_name`, `last_name`, `company`,
+	// `address_1`, `address_2`, `city`, `state`, `postcode`, `country`,
+	// `email`, `phone`) so logicless templates can iterate `customer.billing_address`.
+	const [firstName, ...rest] = fullName.split(' ');
+	const lastName = rest.join(' ');
+	const cityPart = pickFrom(rand, pool.cities).split(/[,،]/)[0]?.trim() ?? '';
+	return {
+		first_name: firstName ?? '',
+		last_name: lastName,
+		company: options.includeCompany && rand() < 0.5 ? pickFrom(rand, pool.companies) : '',
+		address_1: pickFrom(rand, pool.streets),
+		address_2: rand() < 0.4 ? `Apt ${Math.floor(rand() * 99) + 1}` : '',
+		city: cityPart,
+		state: pickFrom(rand, pool.regions),
+		postcode: pickFrom(rand, pool.postcodes),
+		country: pool.countryCode,
+		email: 'customer@example.com',
+		phone: `+34 555 ${Math.floor(rand() * 9000 + 1000)}`,
 	};
 }
 
 function buildCustomer(rand: () => number, pool: LocalePool): ReceiptCustomer {
-	const isGuest = rand() < 0.4;
-	const name = pickFrom(rand, pool.customerNames);
-	return {
+	const isGuest = rand() < 0.3;
+	const fullName = pickFrom(rand, pool.customerNames);
+	const customer: ReceiptCustomer = {
 		id: isGuest ? 0 : Math.floor(rand() * 9999) + 1,
-		name: isGuest ? 'Guest customer' : name,
+		name: isGuest ? 'Guest customer' : fullName,
 	};
+	if (!isGuest) {
+		// Real customers in the live app almost always have a billing address.
+		customer.billing_address = buildAddress(rand, pool, fullName, { includeCompany: true });
+		// ~70% have a separate shipping address; otherwise it mirrors billing or is omitted.
+		if (rand() < 0.7) {
+			customer.shipping_address = buildAddress(rand, pool, fullName);
+		}
+		if (rand() < 0.6) {
+			customer.tax_id = `${pool.countryCode}${Math.floor(rand() * 900_000_000) + 100_000_000}`;
+		}
+	} else if (rand() < 0.3) {
+		// Guest checkouts occasionally still capture an address.
+		customer.billing_address = buildAddress(rand, pool, 'Walk-in Customer');
+	}
+	return customer;
 }
 
 function buildCashier(rand: () => number, pool: LocalePool): ReceiptCashier {
@@ -573,7 +681,7 @@ function buildLineItems(
 		const taxAmount = round(lineSubInc - lineSubExc);
 		lines.push({
 			key: `line-${index}-${formatSeed(seedFromRand(rand))}`,
-			sku: rand() < 0.7 ? `SKU-${Math.floor(rand() * 9999)}` : undefined,
+			sku: rand() < 0.85 ? `SKU-${Math.floor(rand() * 9999)}` : undefined,
 			name,
 			qty,
 			unit_subtotal: unitInclTax,
@@ -591,7 +699,7 @@ function buildLineItems(
 			line_total: lineSubInc,
 			line_total_incl: lineSubInc,
 			line_total_excl: lineSubExc,
-			meta: useLong && rand() < 0.4 ? [{ key: 'Variation', value: 'Limited Edition' }] : undefined,
+			meta: buildLineMeta(rand, useLong),
 			taxes: taxRate > 0 ? [{ code: `vat-${taxRate}`, amount: taxAmount }] : [],
 		});
 	}
@@ -603,6 +711,45 @@ function seedFromRand(rand: () => number): number {
 	return Math.floor(rand() * 0xffffffff);
 }
 
+/**
+ * Build a realistic `meta` array for a line item, drawn from the attribute
+ * pool above. Most products carry 1–3 attribute pairs in the live app
+ * (variations + custom item meta surfaced via WC's `get_formatted_meta_data()`).
+ */
+function buildLineMeta(
+	rand: () => number,
+	useLong: boolean
+): { key: string; value: string }[] | undefined {
+	const populationRoll = rand();
+	if (populationRoll < 0.15) return undefined; // ~15% of lines have no meta — plain SKUs
+	const desired = useLong ? 2 + Math.floor(rand() * 3) : 1 + Math.floor(rand() * 3);
+	const used = new Set<string>();
+	const result: { key: string; value: string }[] = [];
+	for (let attempts = 0; attempts < 12 && result.length < desired; attempts += 1) {
+		const entry = pickFrom(rand, LINE_META_POOL);
+		if (used.has(entry.key)) continue;
+		used.add(entry.key);
+		result.push({ key: entry.key, value: pickFrom(rand, entry.values) });
+	}
+	return result;
+}
+
+function buildKeyValueMetaFromPool(
+	rand: () => number,
+	pool: readonly { key: string; values: readonly string[] }[],
+	count: number
+): { key: string; value: string }[] {
+	const used = new Set<string>();
+	const result: { key: string; value: string }[] = [];
+	for (let attempts = 0; attempts < 12 && result.length < count; attempts += 1) {
+		const entry = pickFrom(rand, pool);
+		if (used.has(entry.key)) continue;
+		used.add(entry.key);
+		result.push({ key: entry.key, value: pickFrom(rand, entry.values) });
+	}
+	return result;
+}
+
 function taxableExcl(totalIncl: number, taxRate: number): number {
 	return round(totalIncl / (1 + taxRate / 100));
 }
@@ -612,25 +759,41 @@ function buildFees(rand: () => number, refundSign: number, taxRate: number): Rec
 	const count = 1 + Math.floor(rand() * 2);
 	return Array.from({ length: count }, (_, index) => {
 		const total = round(rand() * 4 + 0.5) * refundSign;
-		return {
+		const totalExcl = taxableExcl(total, taxRate);
+		const taxAmount = round(total - totalExcl);
+		const fee: ReceiptFee = {
 			label: labels[index % labels.length] as string,
 			total,
 			total_incl: total,
-			total_excl: taxableExcl(total, taxRate),
+			total_excl: totalExcl,
 		};
+		if (rand() < 0.5) {
+			fee.meta = buildKeyValueMetaFromPool(rand, FEE_META_POOL, 1 + Math.floor(rand() * 2));
+		}
+		if (taxRate > 0 && rand() < 0.7) {
+			fee.taxes = [{ code: `vat-${taxRate}`, amount: taxAmount }];
+		}
+		return fee;
 	});
 }
 
 function buildShipping(rand: () => number, refundSign: number, taxRate: number): ReceiptFee[] {
 	const total = round(rand() * 12 + 3) * refundSign;
-	return [
-		{
-			label: pickFrom(rand, ['Standard shipping', 'Local pickup', 'Same-day courier']),
-			total,
-			total_incl: total,
-			total_excl: taxableExcl(total, taxRate),
-		},
-	];
+	const totalExcl = taxableExcl(total, taxRate);
+	const taxAmount = round(total - totalExcl);
+	const shipping: ReceiptFee = {
+		label: pickFrom(rand, ['Standard shipping', 'Local pickup', 'Same-day courier']),
+		total,
+		total_incl: total,
+		total_excl: totalExcl,
+	};
+	if (rand() < 0.7) {
+		shipping.meta = buildKeyValueMetaFromPool(rand, SHIPPING_META_POOL, 1 + Math.floor(rand() * 3));
+	}
+	if (taxRate > 0 && rand() < 0.7) {
+		shipping.taxes = [{ code: `vat-${taxRate}`, amount: taxAmount }];
+	}
+	return [shipping];
 }
 
 function buildDiscounts(
@@ -764,6 +927,10 @@ function buildPayments(
 				payment.tendered = round(tendered);
 				payment.change = round(tendered - amount);
 			}
+		} else if (method.id === 'bank_transfer') {
+			payment.reference = `IBAN ES${Math.floor(rand() * 9000_0000_0000_0000) + 1000_0000_0000_0000}`;
+		} else if (method.id === 'wallet') {
+			payment.reference = `WAL-${formatSeed(seedFromRand(rand)).toUpperCase()}-${1000 + Math.floor(rand() * 8999)}`;
 		}
 		return payment;
 	};
@@ -847,6 +1014,18 @@ function buildOrderMeta(
 function buildFiscal(rand: () => number, meta: ReceiptOrderMeta): ReceiptFiscal {
 	const isReprint = rand() < 0.2;
 	const hash = formatSeed(seedFromRand(rand)) + formatSeed(seedFromRand(rand));
+	const agency = pickFrom(rand, ['AEAT', 'ZATCA', 'NTA', 'AFIP'] as const);
+	const extraFields: Record<string, string> = {
+		// Spanish AEAT TicketBAI / Saudi ZATCA-style identifiers — gives templates
+		// realistic jurisdiction-specific keys to render.
+		invoice_serial: `${meta.order_number}-${formatSeed(seedFromRand(rand)).toUpperCase()}`,
+		signature_algorithm: 'sha256',
+		issuer_id: `ISS-${formatSeed(seedFromRand(rand)).toUpperCase()}`,
+	};
+	if (agency === 'ZATCA') {
+		extraFields.zatca_uuid = `ZATCA-${formatSeed(seedFromRand(rand)).toUpperCase()}-${formatSeed(seedFromRand(rand))}`;
+		extraFields.zatca_invoice_type = pickFrom(rand, ['standard', 'simplified']);
+	}
 	return {
 		immutable_id: `IMM-${formatSeed(seedFromRand(rand))}-${meta.order_id}`,
 		receipt_number: `R-${meta.order_number}-${formatSeed(seedFromRand(rand))}`,
@@ -854,12 +1033,12 @@ function buildFiscal(rand: () => number, meta: ReceiptOrderMeta): ReceiptFiscal 
 		hash,
 		signature_excerpt: hash.slice(0, 8).toUpperCase(),
 		qr_payload: `wcpos://receipt/${meta.order_number}/${formatSeed(seedFromRand(rand))}`,
-		tax_agency_code: 'AEAT',
+		tax_agency_code: agency,
 		signed_at: meta.created_at_gmt,
 		document_label: pickFrom(rand, ['Tax Invoice', 'Receipt', 'Fiscal Receipt'] as const),
 		is_reprint: isReprint,
 		reprint_count: isReprint ? 1 + Math.floor(rand() * 3) : 0,
-		extra_fields: {},
+		extra_fields: extraFields,
 	};
 }
 

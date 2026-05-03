@@ -191,12 +191,35 @@ function mapFeeLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptFe
 	const totalExcl = 'total_excl' in src ? toNum(src.total_excl) : totalIncl - toNum(src.total_tax);
 	const total = displayTax === 'excl' ? totalExcl : totalIncl;
 
-	return {
+	const fee: ReceiptFee = {
 		label: toStr(src.label ?? src.name ?? src.title),
 		total,
 		total_incl: totalIncl,
 		total_excl: totalExcl,
 	};
+	if (Array.isArray(src.meta) && src.meta.length > 0) {
+		const meta = src.meta
+			.filter(
+				(entry: unknown): entry is Record<string, unknown> => !!entry && typeof entry === 'object'
+			)
+			.map((entry) => ({
+				key: toStr(entry.key ?? entry.display_key),
+				value: toStr(entry.value ?? entry.display_value),
+			}))
+			.filter((entry) => entry.key.length > 0 || entry.value.length > 0);
+		if (meta.length > 0) fee.meta = meta;
+	}
+	if (Array.isArray(src.taxes) && src.taxes.length > 0) {
+		const taxes = src.taxes
+			.filter((tax: unknown): tax is Record<string, unknown> => !!tax && typeof tax === 'object')
+			.map((tax) => ({
+				code: toStr(tax.code ?? tax.rate_code ?? tax.id),
+				amount: toNum(tax.amount ?? tax.tax_amount),
+			}))
+			.filter((tax) => tax.code.length > 0 || tax.amount !== 0);
+		if (taxes.length > 0) fee.taxes = taxes;
+	}
+	return fee;
 }
 
 function mapDiscountLike(src: Record<string, any>, displayTax: DisplayTax): ReceiptDiscount {

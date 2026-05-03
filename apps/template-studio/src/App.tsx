@@ -11,7 +11,7 @@ import { TemplateList } from './components/TemplateList';
 import { Toolbar } from './components/Toolbar';
 import { ARRAY_DEFAULTS } from './lib/field-meta';
 import { getAtPath, removeAtPath, setAtPath } from './lib/path-utils';
-import { createRandomReceipt, formatSeed } from './randomizer';
+import { createRandomReceipt, createRandomSeed, formatSeed } from './randomizer';
 import { fetchBundledTemplates, paperWidths } from './studio-api';
 import { renderStudioTemplate, selectVisibleTemplate } from './studio-core';
 
@@ -153,7 +153,7 @@ export function App() {
 		rendered?.kind === 'logicless' ? (rendered.diagnosticHtml ?? '') : ''
 	);
 
-	const shuffleSeed = useCallback(() => setSeed((Math.random() * 0xffffffff) >>> 0), []);
+	const shuffleSeed = useCallback(() => setSeed(createRandomSeed()), []);
 
 	const toggleSection = (key: SectionKey) =>
 		setSections((current) => ({ ...current, [key]: !current[key] }));
@@ -273,6 +273,8 @@ export function App() {
 					paperWidth={effectivePaperWidth}
 					zoom={zoom}
 					templateName={selectedTemplate?.name}
+					templateContent={selectedTemplate?.content}
+					templateEngine={selectedTemplate?.engine}
 				/>
 				<aside className="right-panel" aria-label="Studio controls">
 					<CollapsibleSection
