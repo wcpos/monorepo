@@ -487,27 +487,40 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 4px 6px;
+	padding: 3px 6px;
 	background: transparent;
-	border: none;
 	width: 100%;
-	cursor: pointer;
 	font-size: 12px;
 	font-weight: 500;
 	text-align: left;
 	color: var(--ts-text);
 }
 .fields-tree .tree-section-header:hover { background: var(--ts-panel-alt); border-radius: var(--ts-radius-sm); }
-.fields-tree .tree-section-header .twirl {
+.fields-tree .tree-section-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	padding: 1px 0;
+	background: transparent;
+	border: none;
+	color: inherit;
+	cursor: pointer;
+	font: inherit;
+	text-align: left;
+}
+.fields-tree .tree-section-toggle .twirl {
 	width: 8px;
 	height: 8px;
+	flex: 0 0 auto;
 	border-right: 1.4px solid var(--ts-text-secondary);
 	border-bottom: 1.4px solid var(--ts-text-secondary);
 	transform: rotate(-45deg);
 	transition: transform 120ms ease;
 }
-.fields-tree .tree-section.open .tree-section-header .twirl { transform: rotate(45deg); }
-.fields-tree .tree-section-header .badge {
+.fields-tree .tree-section.open .tree-section-toggle .twirl { transform: rotate(45deg); }
+.fields-tree .tree-section-toggle .badge {
 	margin-left: auto;
 	font-family: var(--ts-mono);
 	font-size: 10px;
@@ -516,7 +529,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	border-radius: 999px;
 	padding: 0 6px;
 }
-.fields-tree .tree-section-header .badge.populated {
+.fields-tree .tree-section-toggle .badge.populated {
 	color: var(--ts-accent-strong);
 	border-color: var(--ts-accent);
 	background: var(--ts-accent-soft);
@@ -524,10 +537,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 .fields-tree .tree-content { padding: 4px 8px 8px 18px; display: flex; flex-direction: column; gap: 4px; }
 .fields-tree .field-row {
 	display: grid;
-	grid-template-columns: 100px 1fr;
+	grid-template-columns: minmax(116px, 38%) minmax(0, 1fr);
 	gap: 8px;
 	align-items: center;
 	min-height: 24px;
+	min-width: 0;
 }
 .fields-tree .field-row .field-label {
 	color: var(--ts-text-label);
@@ -539,17 +553,34 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 }
 .fields-tree .field-row input,
 .fields-tree .field-row select {
+	width: 100%;
+	min-width: 0;
 	min-height: 24px;
 	padding: 2px 6px;
 	font-size: 12px;
 }
-.fields-tree .field-row.boolean { grid-template-columns: 1fr auto; }
+.fields-tree .field-row.full {
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+}
+.fields-tree .field-row.full > .field-label {
+	padding-top: 5px;
+}
+.fields-tree .field-row.full > .nested-array,
+.fields-tree .field-row.full > .nested-object {
+	grid-column: 1 / -1;
+	min-width: 0;
+	width: 100%;
+}
+.fields-tree .field-row.boolean { grid-template-columns: minmax(0, 1fr) auto; }
+.fields-tree .field-row.boolean input { width: auto; }
 .fields-tree .array-item {
 	border: 1px solid var(--ts-border);
 	border-radius: var(--ts-radius-sm);
 	padding: 6px 8px;
 	margin-bottom: 4px;
 	background: var(--ts-panel-alt);
+	min-width: 0;
 }
 .fields-tree .array-item-header {
 	display: flex;
