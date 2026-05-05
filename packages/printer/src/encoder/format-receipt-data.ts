@@ -97,9 +97,9 @@ function resolveTaxIdLabel(
  * Returns a new object suitable for Mustache template rendering.
  */
 export function formatReceiptData(data: ReceiptData): Record<string, any> {
-	const currency = data.meta.currency;
+	const currency = data.order.currency;
 	if (!currency) {
-		console.warn('formatReceiptData: missing currency in meta, formatting may be incomplete');
+		console.warn('formatReceiptData: missing currency in order, formatting may be incomplete');
 	}
 	const normalizedLocale = (data.presentation_hints?.locale || 'en-US').trim().replace(/_/g, '-');
 	const displayTax = resolveDisplayValueSide(data);
@@ -147,15 +147,6 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			})),
 		},
 		i18n,
-		// Templates expect `order.{id, number, created.datetime, ...}` even when the source
-		// data only carries `meta.*`. When the source already provides a fully populated
-		// `data.order` (with locale-formatted ReceiptDateSchema), use it as-is — don't
-		// downgrade to the raw GMT stub.
-		order: data.order ?? {
-			id: data.meta.order_id,
-			number: data.meta.order_number,
-			created: { datetime: data.meta.created_at_gmt },
-		},
 		lines: data.lines.map((line) => ({
 			...line,
 			unit_price: line.unit_price != null ? refundValue(line.unit_price) : line.unit_price,

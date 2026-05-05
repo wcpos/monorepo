@@ -8,7 +8,7 @@ import { sampleReceiptData } from './fixtures';
 const LOGICLESS_TEMPLATE = `
 <div class="receipt">
   <h1>{{store.name}}</h1>
-  <p>Order #{{meta.order_number}}</p>
+  <p>Order #{{order.number}}</p>
   <ul>
     {{#lines}}
       <li>{{name}} — {{line_total_display}}</li>
@@ -59,7 +59,8 @@ describe('renderForStudio', () => {
 
 	it('normalizes pre-canonical input (mapReceiptData runs first)', () => {
 		const minimal = {
-			meta: { order_id: 1, order_number: '1', currency: 'USD' },
+			order_number: '1',
+			currency: 'USD',
 			store: { name: 'X' },
 			lines: [],
 		};

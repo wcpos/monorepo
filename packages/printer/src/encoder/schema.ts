@@ -40,11 +40,6 @@ export const ReceiptDateSchema = z.object({
 	year: z.string(),
 });
 
-export const ReceiptInfoSchema = z.object({
-	mode: z.string().describe('Receipt mode: live, preview, gallery, etc.'),
-	printed: ReceiptDateSchema.describe('When the receipt was printed/rendered'),
-});
-
 export const ReceiptOrderSchema = z.object({
 	id: z.number().int().describe('Numeric order ID'),
 	number: z.string().describe('Human-facing order number'),
@@ -128,35 +123,6 @@ export const ReceiptStoreMetaSchema = z.object({
 		.optional()
 		.describe('Refund / exchange policy text'),
 	footer_imprint: z.string().nullable().optional().describe('Footer imprint / legal block'),
-});
-
-export const ReceiptOrderMetaSchema = z.object({
-	// ──────────────────────────────────────────────────────────────────
-	// NO LEGACY — schema_version is pinned at literal `1`. Do not widen
-	// to a string/number union "for backwards-compat" — there is no
-	// shipped legacy contract. If you need a breaking-change release,
-	// bump to `2`. Any other value fails validation by design.
-	// See refactor/rename-grand-total-to-total review thread for context.
-	// ──────────────────────────────────────────────────────────────────
-	schema_version: z
-		.literal(1)
-		.describe(
-			'Receipt-data contract version. Pinned at 1 — this is v1 of the contract. The version only changes on a breaking-change release, not on additive iterations.'
-		),
-	created_at_gmt: z.string().describe('Order creation timestamp (ISO/GMT)'),
-	created_at_local: z.string().optional().describe('Order creation timestamp (local timezone)'),
-	order_id: z.number().int().describe('Numeric order identifier'),
-	order_number: z.string().describe('Human-facing order number'),
-	currency: z.string().describe('ISO 4217 currency code (e.g. USD, EUR, AED)'),
-	customer_note: z.string().optional().describe('Free-text note attached to the order'),
-	wc_status: z
-		.string()
-		.optional()
-		.describe('Raw WooCommerce order status (e.g. processing, completed)'),
-	created_via: z
-		.string()
-		.optional()
-		.describe('Order source / channel (e.g. woocommerce-pos, checkout, admin)'),
 });
 
 export const ReceiptCashierSchema = z.object({
@@ -508,16 +474,13 @@ export const ReceiptI18nSchema = z
 		copy_number: z.string().optional(),
 		status: z.string().optional(),
 		completed: z.string().optional(),
-		printed: z.string().optional(),
 	})
 	.catchall(z.string());
 
 /* ──────────────── Top-level schema ──────────────── */
 
 export const ReceiptDataSchema = z.object({
-	receipt: ReceiptInfoSchema.optional(),
-	order: ReceiptOrderSchema.optional(),
-	meta: ReceiptOrderMetaSchema,
+	order: ReceiptOrderSchema,
 	store: ReceiptStoreMetaSchema,
 	cashier: ReceiptCashierSchema,
 	customer: ReceiptCustomerSchema,
@@ -537,11 +500,9 @@ export const ReceiptDataSchema = z.object({
 /* ──────────────── Derived TypeScript types ──────────────── */
 
 export type ReceiptDate = z.infer<typeof ReceiptDateSchema>;
-export type ReceiptInfo = z.infer<typeof ReceiptInfoSchema>;
 export type ReceiptOrder = z.infer<typeof ReceiptOrderSchema>;
 export type ReceiptStoreAddress = z.infer<typeof ReceiptStoreAddressSchema>;
 export type ReceiptStoreMeta = z.infer<typeof ReceiptStoreMetaSchema>;
-export type ReceiptOrderMeta = z.infer<typeof ReceiptOrderMetaSchema>;
 export type ReceiptCashier = z.infer<typeof ReceiptCashierSchema>;
 export type ReceiptTaxId = z.infer<typeof ReceiptTaxIdSchema>;
 export type ReceiptCustomer = z.infer<typeof ReceiptCustomerSchema>;

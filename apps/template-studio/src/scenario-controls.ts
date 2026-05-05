@@ -53,7 +53,7 @@ export function createScenarioState(
 	scenarios: Partial<Omit<ResolvedScenarios, 'cartSize'>>,
 	data?: ReceiptData
 ): ScenarioState {
-	const fixtureCurrency = data?.meta.currency || DEFAULT_CURRENCY;
+	const fixtureCurrency = data?.order.currency || DEFAULT_CURRENCY;
 	return {
 		emptyCart: scenarios.emptyCart ?? Boolean(data && data.lines.length === 0),
 		refund: scenarios.refund ?? Boolean(data?.refunds && data.refunds.length > 0),
@@ -380,20 +380,20 @@ function applyFiscal(data: ReceiptData, fiscal: boolean, barcodeQr: boolean): Re
 	if (!fiscal && !barcodeQr) return {};
 	const base: ReceiptFiscal = fiscal
 		? {
-				immutable_id: `IMM-${data.meta.order_number}`,
-				receipt_number: `R-${data.meta.order_number}`,
-				sequence: data.meta.order_id,
+				immutable_id: `IMM-${data.order.number}`,
+				receipt_number: `R-${data.order.number}`,
+				sequence: data.order.id,
 				hash: 'scenariohash',
 				signature_excerpt: 'SCENARIO',
 				tax_agency_code: 'AEAT',
-				signed_at: data.meta.created_at_gmt,
+				signed_at: data.order.created.datetime,
 				document_label: 'Fiscal Receipt',
 				is_reprint: false,
 				reprint_count: 0,
-				extra_fields: { invoice_serial: `${data.meta.order_number}-SCN` },
+				extra_fields: { invoice_serial: `${data.order.number}-SCN` },
 			}
 		: {};
-	if (barcodeQr) base.qr_payload = `wcpos://receipt/${data.meta.order_number}/scenario`;
+	if (barcodeQr) base.qr_payload = `wcpos://receipt/${data.order.number}/scenario`;
 	return base;
 }
 
@@ -435,12 +435,11 @@ function applyLocale(data: ReceiptData, rtl: boolean): ReceiptData {
 }
 
 function applyCurrency(data: ReceiptData, multicurrency: boolean): ReceiptData {
-	const fixtureCurrency = data.meta.currency || DEFAULT_CURRENCY;
+	const fixtureCurrency = data.order.currency || DEFAULT_CURRENCY;
 	const currency = multicurrency ? fixtureCurrency : DEFAULT_CURRENCY;
 	return {
 		...data,
-		meta: { ...data.meta, currency },
-		order: data.order ? { ...data.order, currency } : data.order,
+		order: { ...data.order, currency },
 	};
 }
 

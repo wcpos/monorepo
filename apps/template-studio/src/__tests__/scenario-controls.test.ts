@@ -157,18 +157,15 @@ describe('scenario controls', () => {
 
 	it('uses the fixture currency when toggling multicurrency', () => {
 		const data = fullReceipt();
-		data.meta.currency = 'GBP';
-		if (data.order) data.order.currency = 'GBP';
+		data.order.currency = 'GBP';
 
 		const state = createScenarioState({}, data);
 		const off = applyScenarioState(data, { ...state, multicurrency: false });
 		const on = applyScenarioState(data, { ...state, multicurrency: true });
 
 		expect(state.multicurrency).toBe(true);
-		expect(off.meta.currency).toBe('USD');
-		expect(off.order?.currency).toBe('USD');
-		expect(on.meta.currency).toBe('GBP');
-		expect(on.order?.currency).toBe('GBP');
+		expect(off.order.currency).toBe('USD');
+		expect(on.order.currency).toBe('GBP');
 	});
 
 	it('toggles empty cart and dependent sections', () => {
@@ -190,8 +187,7 @@ describe('scenario controls', () => {
 
 	it('toggles refund, multi-payment, fiscal, barcode, tax breakdown, customer, gift, locale, currency, and long-name data', () => {
 		const data = fullReceipt();
-		data.meta.currency = 'EUR';
-		if (data.order) data.order.currency = 'EUR';
+		data.order.currency = 'EUR';
 		const off = applyScenarioState(data, {
 			...createScenarioState({}, data),
 			refund: false,
@@ -226,7 +222,7 @@ describe('scenario controls', () => {
 		expect(off.customer.billing_address).toEqual({});
 		expect(off.presentation_hints.display_tax).not.toBe('hidden');
 		expect(off.presentation_hints.locale).toBe('en_US');
-		expect(off.meta.currency).toBe('USD');
+		expect(off.order.currency).toBe('USD');
 		expect(on.refunds?.length).toBeGreaterThan(0);
 		expect(on.payments.length).toBeGreaterThan(1);
 		expect(on.fiscal.immutable_id).toBeTruthy();
@@ -235,7 +231,7 @@ describe('scenario controls', () => {
 		expect(Object.keys(on.customer.billing_address ?? {}).length).toBeGreaterThan(0);
 		expect(on.presentation_hints.display_tax).toBe('hidden');
 		expect(on.presentation_hints.locale).toBe('ar_SA');
-		expect(on.meta.currency).toBe('EUR');
+		expect(on.order.currency).toBe('EUR');
 		expect(on.lines[0]?.name.length).toBeGreaterThan(40);
 		expect(ReceiptDataSchema.safeParse(on).success).toBe(true);
 	});

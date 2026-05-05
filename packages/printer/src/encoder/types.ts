@@ -8,7 +8,6 @@
 
 export type {
 	ReceiptStoreMeta,
-	ReceiptOrderMeta,
 	ReceiptCashier,
 	ReceiptTaxId,
 	ReceiptCustomer,
@@ -24,7 +23,6 @@ export type {
 	ReceiptFiscal,
 	ReceiptPresentationHints,
 	ReceiptDate,
-	ReceiptInfo,
 	ReceiptOrder,
 	TaxId,
 	ReceiptI18n,

@@ -200,7 +200,7 @@ describe('formatReceiptData', () => {
 
 	it('uses locale from presentation_hints', () => {
 		const data = structuredClone(sampleReceiptData);
-		data.meta.currency = 'EUR';
+		data.order.currency = 'EUR';
 		data.presentation_hints.locale = 'de-DE';
 		const result = formatReceiptData(data);
 		// German locale — verify EUR symbol and comma decimal separator
@@ -210,7 +210,7 @@ describe('formatReceiptData', () => {
 
 	it('normalizes underscore locale tags from presentation_hints', () => {
 		const data = structuredClone(sampleReceiptData);
-		data.meta.currency = 'EUR';
+		data.order.currency = 'EUR';
 		data.presentation_hints.locale = ' de_DE ';
 		const result = formatReceiptData(data);
 		expect(result.totals.total_incl_display).toContain(',');
@@ -248,17 +248,17 @@ describe('formatReceiptData', () => {
 	it('preserves non-numeric fields unchanged', () => {
 		const result = formatReceiptData(sampleReceiptData);
 		expect(result.store.name).toBe('My Test Store');
-		expect(result.meta.order_number).toBe('1042');
+		expect(result.order.number).toBe('1042');
 		expect(result.cashier.name).toBe('Jane');
 		expect(result.lines[0].name).toBe('Widget A');
 	});
 
-	it('adds gallery-template aliases for order metadata and labels', () => {
+	it('exposes order metadata and i18n labels for templates', () => {
 		const result = formatReceiptData(sampleReceiptData);
 		expect(result.order).toMatchObject({
-			id: sampleReceiptData.meta.order_id,
-			number: sampleReceiptData.meta.order_number,
-			created: { datetime: sampleReceiptData.meta.created_at_gmt },
+			id: sampleReceiptData.order.id,
+			number: sampleReceiptData.order.number,
+			created: { datetime: sampleReceiptData.order.created.datetime },
 		});
 		expect(result.i18n).toMatchObject({
 			order: 'Order',

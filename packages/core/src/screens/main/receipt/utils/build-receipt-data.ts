@@ -8,11 +8,13 @@
 
 import type { TaxId } from '@wcpos/database';
 
-interface ReceiptMeta {
-	order_number: string;
-	order_date: string;
+interface ReceiptOrder {
+	id: number;
+	number: string;
 	currency: string;
-	status: string;
+	customer_note: string;
+	wc_status: string;
+	created: { datetime: string };
 }
 
 interface ReceiptStore {
@@ -98,7 +100,7 @@ interface ReceiptPresentationHints {
 }
 
 export interface ReceiptData {
-	meta: ReceiptMeta;
+	order: ReceiptOrder;
 	store: ReceiptStore;
 	customer: ReceiptCustomer;
 	lines: ReceiptLine[];
@@ -269,11 +271,13 @@ export function buildReceiptData(
 	);
 
 	return {
-		meta: {
-			order_number: order.number || String(order.id || ''),
-			order_date: order.date_created || '',
+		order: {
+			id: typeof order.id === 'number' ? order.id : Number(order.id) || 0,
+			number: order.number || String(order.id || ''),
 			currency: order.currency || '',
-			status: order.status || '',
+			customer_note: order.customer_note || '',
+			wc_status: order.status || '',
+			created: { datetime: order.date_created || '' },
 		},
 		store: {
 			name: store.name || '',

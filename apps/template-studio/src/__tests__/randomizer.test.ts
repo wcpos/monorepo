@@ -121,7 +121,7 @@ describe('template-studio randomizer', () => {
 				seed,
 				overrides: { emptyCart: false, multiPayment: false, cartSize: 1 },
 			});
-			if (candidate.data.meta.wc_status === 'completed') {
+			if (candidate.data.order.wc_status === 'completed') {
 				completed = candidate;
 			}
 		}
@@ -144,7 +144,7 @@ describe('template-studio randomizer', () => {
 				seed,
 				overrides: { emptyCart: false, multiPayment: false, cartSize: 1 },
 			});
-			if (candidate.data.meta.wc_status === 'processing') {
+			if (candidate.data.order.wc_status === 'processing') {
 				processing = candidate;
 			}
 		}
@@ -163,7 +163,7 @@ describe('template-studio randomizer', () => {
 			overrides: { rtl: true, multicurrency: false, emptyCart: false },
 		});
 		expect(result.data.presentation_hints.locale).toBe('ar_SA');
-		expect(result.data.meta.currency).toBe('SAR');
+		expect(result.data.order.currency).toBe('SAR');
 	});
 
 	it('labels structured store tax IDs for receipt templates', () => {
@@ -226,19 +226,6 @@ describe('template-studio randomizer', () => {
 		expect(Math.round(summaryTax * 100) / 100).toBe(result.data.totals.tax_total);
 	});
 
-	it('generates GMT order dates in MySQL datetime format', () => {
-		// Mirrors PHP `current_time( 'mysql', true )` — `Y-m-d H:i:s`.
-		const result = createRandomReceipt({ seed: 'seed-utc' });
-		expect(result.data.meta.created_at_gmt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
-	});
-
-	it('derives printed receipt dates from seeded order data', () => {
-		const result = createRandomReceipt({ seed: 'seed-printed' });
-		expect(result.data.receipt).toBeDefined();
-		expect(result.data.order).toBeDefined();
-		expect(result.data.receipt!.printed.datetime).toBe(result.data.order!.created.datetime);
-	});
-
 	it('keeps seeded date formatting stable across runtime time zones', () => {
 		const originalTimeZone = process.env.TZ;
 		try {
@@ -247,8 +234,6 @@ describe('template-studio randomizer', () => {
 			process.env.TZ = 'Pacific/Honolulu';
 			const honolulu = createRandomReceipt({ seed: 'seed-timezone' });
 
-			expect(honolulu.data.meta.created_at_local).toBe(utc.data.meta.created_at_local);
-			expect(honolulu.data.receipt).toEqual(utc.data.receipt);
 			expect(honolulu.data.order).toEqual(utc.data.order);
 		} finally {
 			if (originalTimeZone === undefined) {

@@ -11,7 +11,6 @@ export type {
 export type {
 	ReceiptData,
 	ReceiptStoreMeta,
-	ReceiptOrderMeta,
 	ReceiptCashier,
 	ReceiptCustomer,
 	ReceiptLineItem,
@@ -22,11 +21,11 @@ export type {
 	ReceiptPayment,
 	ReceiptFiscal,
 	ReceiptPresentationHints,
+	ReceiptOrder,
 } from './encoder/types';
 export {
 	ReceiptDataSchema,
 	ReceiptStoreMetaSchema,
-	ReceiptOrderMetaSchema,
 	ReceiptCashierSchema,
 	ReceiptCustomerSchema,
 	ReceiptLineItemSchema,
@@ -40,6 +39,7 @@ export {
 	ReceiptFiscalSchema,
 	ReceiptPresentationHintsSchema,
 	ReceiptDisplayTaxSchema,
+	ReceiptOrderSchema,
 } from './encoder/schema';
 export {
 	renderThermalPreview,
