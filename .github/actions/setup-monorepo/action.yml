@@ -74,6 +74,13 @@ runs:
         fi
       shell: bash
 
+    - name: 🧰 Refresh RxDB web worker
+      run: |
+        if [ -f node_modules/rxdb-premium/dist/workers/opfs.worker.js ]; then
+          cp node_modules/rxdb-premium/dist/workers/opfs.worker.js apps/main/public/opfs.worker.js
+        fi
+      shell: bash
+
     - name: ♻️ Restore cache
       uses: actions/cache@v4
       with:
