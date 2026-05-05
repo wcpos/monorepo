@@ -288,18 +288,52 @@ export const ReceiptDiscountSchema = z.object({
 	label: z.string().describe('Discount label / coupon code'),
 	code: z.string().optional().describe('Coupon code for this row (single code per row)'),
 	codes: z.string().optional().describe('Joined coupon codes (legacy / display fallback)'),
-	total: z.number().optional().describe('Display-side discount amount'),
-	total_incl: z.number().describe('Discount total tax-inclusive'),
-	total_excl: z.number().describe('Discount total tax-exclusive'),
+	total: z
+		.number()
+		.nonnegative()
+		.optional()
+		.describe(
+			'Display-side discount amount as a positive magnitude; templates may prepend "-" for display'
+		),
+	total_incl: z
+		.number()
+		.nonnegative()
+		.describe(
+			'Discount total tax-inclusive as a positive magnitude; templates may prepend "-" for display'
+		),
+	total_excl: z
+		.number()
+		.nonnegative()
+		.describe(
+			'Discount total tax-exclusive as a positive magnitude; templates may prepend "-" for display'
+		),
 });
 
 export const ReceiptTotalsSchema = z.object({
 	subtotal: z.number().optional().describe('Display-side subtotal'),
 	subtotal_incl: z.number().describe('Subtotal tax-inclusive'),
 	subtotal_excl: z.number().describe('Subtotal tax-exclusive'),
-	discount_total: z.number().optional().describe('Display-side discount total'),
-	discount_total_incl: z.number().describe('Discount total tax-inclusive'),
-	discount_total_excl: z.number().describe('Discount total tax-exclusive'),
+	discount_total: z
+		.number()
+		.nonnegative()
+		.optional()
+		.describe(
+			'Display-side discount total as a positive magnitude; templates may prepend "-" for display'
+		),
+	discount_total_incl: z
+		.number()
+		.nonnegative()
+		.optional()
+		.describe(
+			'Discount total tax-inclusive as a positive magnitude; templates may prepend "-" for display'
+		),
+	discount_total_excl: z
+		.number()
+		.nonnegative()
+		.optional()
+		.describe(
+			'Discount total tax-exclusive as a positive magnitude; templates may prepend "-" for display'
+		),
 	tax_total: z.number().describe('Total tax amount'),
 	total: z.number().optional().describe('Display-side grand total'),
 	total_incl: z.number().describe('Grand total tax-inclusive'),

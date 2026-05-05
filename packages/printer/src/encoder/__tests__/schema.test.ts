@@ -49,6 +49,32 @@ describe('ReceiptDataSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
+	it('keeps v1 discount total incl/excl fields optional', () => {
+		const legacy = JSON.parse(JSON.stringify(sampleReceiptData));
+		delete legacy.totals.discount_total_incl;
+		delete legacy.totals.discount_total_excl;
+
+		const result = ReceiptDataSchema.safeParse(legacy);
+		expect(result.success).toBe(true);
+	});
+
+	it('rejects negative discount magnitudes', () => {
+		for (const field of ['total', 'total_incl', 'total_excl'] as const) {
+			const broken = JSON.parse(JSON.stringify(sampleReceiptData));
+			broken.discounts = [{ label: 'Promo', total: 1, total_incl: 1, total_excl: 1 }];
+			broken.discounts[0][field] = -1;
+
+			expect(ReceiptDataSchema.safeParse(broken).success).toBe(false);
+		}
+
+		for (const field of ['discount_total', 'discount_total_incl', 'discount_total_excl'] as const) {
+			const broken = JSON.parse(JSON.stringify(sampleReceiptData));
+			broken.totals[field] = -1;
+
+			expect(ReceiptDataSchema.safeParse(broken).success).toBe(false);
+		}
+	});
+
 	it('preserves optional store/customer fields when omitted', () => {
 		const stripped = JSON.parse(JSON.stringify(sampleReceiptData));
 		delete stripped.store.tax_id;
