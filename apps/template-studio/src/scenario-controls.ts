@@ -47,16 +47,18 @@ export const SCENARIO_CHIPS: readonly ScenarioChipDefinition[] = [
 
 const TAX_RATE = 10;
 const TAX_LABEL = 'VAT';
+const DEFAULT_CURRENCY = 'USD';
 
 export function createScenarioState(
 	scenarios: Partial<Omit<ResolvedScenarios, 'cartSize'>>,
 	data?: ReceiptData
 ): ScenarioState {
+	const fixtureCurrency = data?.meta.currency || DEFAULT_CURRENCY;
 	return {
 		emptyCart: scenarios.emptyCart ?? Boolean(data && data.lines.length === 0),
 		refund: scenarios.refund ?? Boolean(data?.refunds && data.refunds.length > 0),
 		rtl: scenarios.rtl ?? Boolean(data && data.presentation_hints.locale.startsWith('ar')),
-		multicurrency: scenarios.multicurrency ?? Boolean(data && data.meta.currency !== 'USD'),
+		multicurrency: scenarios.multicurrency ?? fixtureCurrency !== DEFAULT_CURRENCY,
 		multiPayment: scenarios.multiPayment ?? Boolean(data && data.payments.length > 1),
 		fiscal: scenarios.fiscal ?? Boolean(data && data.fiscal.immutable_id),
 		longNames:
@@ -268,14 +270,27 @@ function computeTotals(
 	discounts: ReceiptDiscount[],
 	refunds: ReceiptRefund[]
 ): ReceiptTotals {
-	const subtotalIncl = round(lines.reduce((sum, line) => sum + line.line_subtotal_incl, 0));
-	const subtotalExcl = round(lines.reduce((sum, line) => sum + line.line_subtotal_excl, 0));
+	const lineTotals = lines.reduce(
+		(totals, line) => ({
+			subtotalIncl: totals.subtotalIncl + line.line_subtotal_incl,
+			subtotalExcl: totals.subtotalExcl + line.line_subtotal_excl,
+			totalIncl: totals.totalIncl + line.line_total_incl,
+			totalExcl: totals.totalExcl + line.line_total_excl,
+		}),
+		{ subtotalIncl: 0, subtotalExcl: 0, totalIncl: 0, totalExcl: 0 }
+	);
+	const subtotalIncl = round(lineTotals.subtotalIncl);
+	const subtotalExcl = round(lineTotals.subtotalExcl);
+	const lineDiscountIncl = lineTotals.totalIncl - lineTotals.subtotalIncl;
+	const lineDiscountExcl = lineTotals.totalExcl - lineTotals.subtotalExcl;
 	const feeIncl = fees.reduce((sum, fee) => sum + fee.total_incl, 0);
 	const feeExcl = fees.reduce((sum, fee) => sum + fee.total_excl, 0);
 	const shippingIncl = shipping.reduce((sum, item) => sum + item.total_incl, 0);
 	const shippingExcl = shipping.reduce((sum, item) => sum + item.total_excl, 0);
-	const discountIncl = discounts.reduce((sum, discount) => sum + discount.total_incl, 0);
-	const discountExcl = discounts.reduce((sum, discount) => sum + discount.total_excl, 0);
+	const discountIncl =
+		lineDiscountIncl + discounts.reduce((sum, discount) => sum + discount.total_incl, 0);
+	const discountExcl =
+		lineDiscountExcl + discounts.reduce((sum, discount) => sum + discount.total_excl, 0);
 	const grandIncl = round(subtotalIncl + feeIncl + shippingIncl + discountIncl);
 	const grandExcl = round(subtotalExcl + feeExcl + shippingExcl + discountExcl);
 	const totals: ReceiptTotals = {
@@ -298,18 +313,18 @@ function computeTotals(
 }
 
 function buildTaxSummary(data: ReceiptData): ReceiptTaxSummaryItem[] {
-	const taxableExcl = data.totals.grand_total_excl;
-	const taxableIncl = data.totals.grand_total_incl;
-	if (taxableIncl === 0 && taxableExcl === 0) return [];
+	const grandExcl = data.totals.grand_total_excl;
+	const grandIncl = data.totals.grand_total_incl;
+	if (grandIncl === 0 && grandExcl === 0) return [];
 	return [
 		{
 			code: `vat-${TAX_RATE}`,
 			rate: TAX_RATE,
 			label: `${TAX_LABEL} ${TAX_RATE}%`,
 			compound: false,
-			taxable_amount_excl: taxableExcl,
-			tax_amount: round(taxableIncl - taxableExcl),
-			taxable_amount_incl: taxableIncl,
+			taxable_amount_excl: grandExcl,
+			tax_amount: round(grandIncl - grandExcl),
+			taxable_amount_incl: grandIncl,
 		},
 	];
 }
@@ -420,11 +435,8 @@ function applyLocale(data: ReceiptData, rtl: boolean): ReceiptData {
 }
 
 function applyCurrency(data: ReceiptData, multicurrency: boolean): ReceiptData {
-	const currency = multicurrency
-		? 'EUR'
-		: data.meta.currency === 'EUR'
-			? 'USD'
-			: data.meta.currency;
+	const fixtureCurrency = data.meta.currency || DEFAULT_CURRENCY;
+	const currency = multicurrency ? fixtureCurrency : DEFAULT_CURRENCY;
 	return {
 		...data,
 		meta: { ...data.meta, currency },

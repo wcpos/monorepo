@@ -111,12 +111,64 @@ describe('scenario controls', () => {
 		expect(withAdjustments.shipping.length).toBeGreaterThan(0);
 		expect(withAdjustments.discounts.length).toBeGreaterThan(0);
 		expect(withAdjustments.totals.grand_total_incl).toBeCloseTo(
-			withAdjustments.lines.reduce((sum, line) => sum + line.line_subtotal_incl, 0) +
+			withAdjustments.lines.reduce((sum, line) => sum + line.line_total_incl, 0) +
 				withAdjustments.fees.reduce((sum, fee) => sum + fee.total_incl, 0) +
 				withAdjustments.shipping.reduce((sum, item) => sum + item.total_incl, 0) +
 				withAdjustments.discounts.reduce((sum, item) => sum + item.total_incl, 0),
 			2
 		);
+	});
+
+	it('includes item-level discounts when recomputing totals', () => {
+		const data = fullReceipt();
+		const line = structuredClone(data.lines[0]!);
+		line.line_subtotal = 20;
+		line.line_subtotal_incl = 20;
+		line.line_subtotal_excl = 16;
+		line.discounts = 5;
+		line.discounts_incl = 5;
+		line.discounts_excl = 4;
+		line.line_total = 15;
+		line.line_total_incl = 15;
+		line.line_total_excl = 12;
+		data.lines = [line];
+		data.fees = [];
+		data.shipping = [];
+		data.discounts = [];
+		data.refunds = [];
+
+		const result = applyScenarioState(data, {
+			...createScenarioState({}, data),
+			hasFees: false,
+			hasShipping: false,
+			hasDiscounts: false,
+			refund: false,
+			taxBreakdown: false,
+		});
+
+		expect(result.totals.subtotal_incl).toBe(20);
+		expect(result.totals.discount_total_incl).toBe(-5);
+		expect(result.totals.discount_total_excl).toBe(-4);
+		expect(result.totals.grand_total_incl).toBe(15);
+		expect(result.totals.grand_total_excl).toBe(12);
+		expect(result.totals.tax_total).toBe(3);
+		expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+	});
+
+	it('uses the fixture currency when toggling multicurrency', () => {
+		const data = fullReceipt();
+		data.meta.currency = 'GBP';
+		if (data.order) data.order.currency = 'GBP';
+
+		const state = createScenarioState({}, data);
+		const off = applyScenarioState(data, { ...state, multicurrency: false });
+		const on = applyScenarioState(data, { ...state, multicurrency: true });
+
+		expect(state.multicurrency).toBe(true);
+		expect(off.meta.currency).toBe('USD');
+		expect(off.order?.currency).toBe('USD');
+		expect(on.meta.currency).toBe('GBP');
+		expect(on.order?.currency).toBe('GBP');
 	});
 
 	it('toggles empty cart and dependent sections', () => {
@@ -138,6 +190,8 @@ describe('scenario controls', () => {
 
 	it('toggles refund, multi-payment, fiscal, barcode, tax breakdown, customer, gift, locale, currency, and long-name data', () => {
 		const data = fullReceipt();
+		data.meta.currency = 'EUR';
+		if (data.order) data.order.currency = 'EUR';
 		const off = applyScenarioState(data, {
 			...createScenarioState({}, data),
 			refund: false,
@@ -151,8 +205,8 @@ describe('scenario controls', () => {
 			multicurrency: false,
 			longNames: false,
 		});
-		const on = applyScenarioState(off, {
-			...createScenarioState({}, off),
+		const on = applyScenarioState(data, {
+			...createScenarioState({}, data),
 			refund: true,
 			multiPayment: true,
 			fiscal: true,
