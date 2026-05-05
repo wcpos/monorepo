@@ -194,39 +194,19 @@ export function App() {
 
 	const openPrintDialog = React.useCallback(() => {
 		if (!rendered) return;
-		const printWindow = window.open(
-			'',
-			'wcpos-template-studio-print',
-			'popup,width=420,height=720'
-		);
-		if (!printWindow) {
-			setError('Print window was blocked. Allow popups for Template Studio.');
+		const receiptNode = previewFrameRef.current?.firstElementChild;
+		if (!receiptNode) {
+			setError('Print preview is not ready yet.');
 			return;
 		}
 
-		let printed = false;
-		let fallbackTimer: number | undefined;
-		const printReceipt = () => {
-			if (printed) return;
-			printed = true;
-			printWindow.removeEventListener('load', printReceipt);
-			if (fallbackTimer !== undefined) printWindow.clearTimeout(fallbackTimer);
-			waitForImages(printWindow.document)
-				.finally(() => {
-					printWindow.focus();
-					printWindow.print();
-				})
-				.catch(() => undefined);
-		};
-
-		printWindow.addEventListener('load', printReceipt, { once: true });
-		preparePrintDocument(printWindow.document, effectivePaperWidth);
-
-		const receiptNode = previewFrameRef.current?.firstElementChild?.cloneNode(true);
-		if (receiptNode) {
-			printWindow.document.body.append(receiptNode);
-		}
-		fallbackTimer = printWindow.setTimeout(printReceipt, 1500);
+		void printReceiptInHiddenFrame({
+			hostDocument: document,
+			receiptNode,
+			paperWidth: effectivePaperWidth,
+		}).catch((error: unknown) => {
+			setError(error instanceof Error ? error.message : String(error));
+		});
 	}, [effectivePaperWidth, rendered]);
 
 	React.useEffect(() => {
@@ -376,6 +356,52 @@ body { display: flex; justify-content: center; }
 
 	document.head.replaceChildren(meta, title, style);
 	document.body.replaceChildren();
+}
+
+interface PrintReceiptInHiddenFrameOptions {
+	hostDocument: Document;
+	receiptNode: Element;
+	paperWidth: PaperWidth;
+	cleanupDelayMs?: number;
+}
+
+export async function printReceiptInHiddenFrame({
+	hostDocument,
+	receiptNode,
+	paperWidth,
+	cleanupDelayMs = 3000,
+}: PrintReceiptInHiddenFrameOptions): Promise<void> {
+	const frame = hostDocument.createElement('iframe');
+	frame.className = 'system-print-frame';
+	frame.setAttribute('aria-hidden', 'true');
+	frame.tabIndex = -1;
+	frame.style.position = 'fixed';
+	frame.style.right = '100vw';
+	frame.style.bottom = '100vh';
+	frame.style.width = paperWidth === 'a4' ? '210mm' : paperWidth;
+	frame.style.height = '1px';
+	frame.style.border = '0';
+	frame.style.opacity = '0';
+	frame.style.pointerEvents = 'none';
+
+	hostDocument.body.append(frame);
+
+	const printWindow = frame.contentWindow;
+	const printDocument = frame.contentDocument ?? printWindow?.document;
+	if (!printWindow || !printDocument) {
+		frame.remove();
+		throw new Error('Print frame could not be created.');
+	}
+
+	preparePrintDocument(printDocument, paperWidth);
+	printDocument.body.append(receiptNode.cloneNode(true));
+	await waitForImages(printDocument);
+	printWindow.focus();
+	printWindow.print();
+
+	const cleanup = () => frame.remove();
+	printWindow.addEventListener('afterprint', cleanup, { once: true });
+	window.setTimeout(cleanup, cleanupDelayMs);
 }
 
 function waitForImages(document: Document): Promise<void> {

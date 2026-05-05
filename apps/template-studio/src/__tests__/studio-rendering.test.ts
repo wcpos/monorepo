@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { App, preparePrintDocument } from '../App';
+import { App, preparePrintDocument, printReceiptInHiddenFrame } from '../App';
 import { countPreviewLines } from '../components/Stage';
 import { createRandomReceipt } from '../randomizer';
 import { fetchWpPreview, printRawTcp } from '../studio-api';
@@ -39,6 +39,7 @@ function buildCanonicalFixture(seedId = 'studio-test-default') {
 
 afterEach(() => {
 	globalThis.fetch = originalFetch;
+	vi.useRealTimers();
 	vi.restoreAllMocks();
 });
 
@@ -173,6 +174,56 @@ describe('template studio rendering harness', () => {
 		expect(printDocument.title).toBe('WCPOS Template Studio Print');
 		expect(printDocument.head.textContent).toContain('@page { size: 80mm auto; margin: 0; }');
 		expect(printDocument.body.innerHTML).toBe('');
+	});
+
+	it('prints through an offscreen iframe without opening a popup window', async () => {
+		vi.useFakeTimers();
+		const openSpy = vi.spyOn(window, 'open');
+		const receiptNode = document.createElement('section');
+		receiptNode.className = 'paper-frame thermal-80';
+		receiptNode.innerHTML = '<p>Receipt</p>';
+
+		const createElement = document.createElement.bind(document);
+		const printSpy = vi.fn();
+		const focusSpy = vi.fn();
+		vi.spyOn(document, 'createElement').mockImplementation(
+			(tagName: string, options?: ElementCreationOptions) => {
+				const element = createElement(tagName, options);
+				if (tagName.toLowerCase() === 'iframe') {
+					Object.defineProperty(element, 'contentWindow', {
+						configurable: true,
+						value: {
+							document: document.implementation.createHTMLDocument(''),
+							addEventListener: vi.fn(),
+							focus: focusSpy,
+							print: printSpy,
+						},
+					});
+				}
+				return element;
+			}
+		);
+
+		await printReceiptInHiddenFrame({
+			hostDocument: document,
+			receiptNode,
+			paperWidth: '80mm',
+			cleanupDelayMs: 25,
+		});
+
+		const frame = document.querySelector<HTMLIFrameElement>('iframe.system-print-frame');
+		expect(openSpy).not.toHaveBeenCalled();
+		expect(frame).not.toBeNull();
+		expect(frame?.style.position).toBe('fixed');
+		expect(frame?.style.right).toBe('100vw');
+		expect(frame?.style.bottom).toBe('100vh');
+		expect(frame?.contentDocument?.body.textContent).toContain('Receipt');
+		expect(focusSpy).toHaveBeenCalledOnce();
+		expect(printSpy).toHaveBeenCalledOnce();
+
+		vi.advanceTimersByTime(25);
+		expect(document.querySelector('iframe.system-print-frame')).toBeNull();
+		vi.useRealTimers();
 	});
 
 	it('keeps generated barcode SVGs visible in the React preview frame', async () => {
