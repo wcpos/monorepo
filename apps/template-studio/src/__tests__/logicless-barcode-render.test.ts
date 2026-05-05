@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { sanitizeHtml } from '@wcpos/receipt-renderer';
+
 import { renderStudioTemplate } from '../studio-core';
 import { createRandomReceipt } from '../randomizer';
 
@@ -40,5 +42,15 @@ describe('logicless template + <barcode> renders SVG through the studio pipeline
 		expect(view.html).toContain('data-barcode-kind="barcode"');
 		expect(view.html).toContain('data-barcode-value="' + fixture.meta.order_number + '"');
 		expect(view.html).not.toContain('<barcode');
+	});
+
+	// Regression for #375 follow-up: App.tsx used to re-sanitize the rendered
+	// logicless HTML with the default profile, which strips `<svg>` and broke
+	// the barcode in both preview and print. This test pins down the
+	// upstream cause: the default `sanitizeHtml` profile is SVG-stripping, so
+	// we must NOT pipe `rendered.html` through it again.
+	it('default sanitizeHtml strips <svg> — proving why App must not re-sanitize', () => {
+		const html = '<div><svg viewBox="0 0 10 10"><path d="M0 0h10v10H0z"/></svg></div>';
+		expect(sanitizeHtml(html)).not.toContain('<svg');
 	});
 });
