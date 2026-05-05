@@ -508,6 +508,7 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 		meta: {
 			...base.meta,
 			...(data.meta ?? {}),
+			schema_version: 1,
 		},
 		store: {
 			...base.store,

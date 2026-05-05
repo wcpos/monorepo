@@ -230,6 +230,20 @@ describe('mapReceiptData', () => {
 			expect(result.presentation_hints.display_tax).toBe('incl');
 		});
 
+		it('normalizes canonical schema_version to v1 before validation', () => {
+			const legacyCanonical = {
+				...sampleReceiptData,
+				meta: {
+					...sampleReceiptData.meta,
+					schema_version: '1.4.0',
+				},
+			};
+			const result = mapReceiptData(legacyCanonical as Record<string, any>);
+
+			expect(result.meta.schema_version).toBe(1);
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+		});
+
 		it('does not treat partial canonical markers as canonical', () => {
 			// Only meta markers, no totals marker — should map, not passthrough
 			const data = { meta: { order_id: 5 }, totals: {} };
