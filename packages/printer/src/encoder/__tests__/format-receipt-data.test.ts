@@ -103,6 +103,64 @@ describe('formatReceiptData', () => {
 		expect(result.store.tax_ids?.[0].label).toBe('ضريبة القيمة المضافة');
 	});
 
+	it('falls back to a built-in default label per type when no i18n key is provided', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.store.tax_ids = [
+			{ type: 'au_abn', value: '12345678901', country: 'AU' },
+			{ type: 'eu_vat', value: 'DE123456789', country: 'DE' },
+			{ type: 'gb_company', value: '12345678', country: 'GB' },
+		];
+
+		const result = formatReceiptData(data);
+
+		expect(result.store.tax_ids?.[0].label).toBe('ABN');
+		expect(result.store.tax_ids?.[1].label).toBe('VAT ID');
+		expect(result.store.tax_ids?.[2].label).toBe('Company No.');
+	});
+
+	it('falls back to "Tax ID" for unknown types when neither i18n nor built-in default exists', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.store.tax_ids = [{ type: 'other', value: 'XYZ-99' }];
+
+		const result = formatReceiptData(data);
+
+		expect(result.store.tax_ids?.[0].label).toBe('Tax ID');
+	});
+
+	it('resolves customer tax IDs through the same label pipeline (per-type defaults)', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.customer.tax_ids = [
+			{ type: 'au_abn', value: '12345678901', country: 'AU' },
+			{ type: 'us_ein', value: '12-3456789', country: 'US' },
+		];
+
+		const result = formatReceiptData(data);
+
+		expect(result.customer.tax_ids?.[0].label).toBe('ABN');
+		expect(result.customer.tax_ids?.[1].label).toBe('EIN');
+	});
+
+	it('lets a customer-scoped i18n key override the built-in default', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.customer.tax_ids = [{ type: 'au_abn', value: '12345678901', country: 'AU' }];
+		data.i18n = { ...data.i18n, customer_tax_id_label_au_abn: 'Customer ABN' };
+
+		const result = formatReceiptData(data);
+
+		expect(result.customer.tax_ids?.[0].label).toBe('Customer ABN');
+	});
+
+	it('keeps explicit label values without overwriting them', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.customer.tax_ids = [
+			{ type: 'au_abn', value: '12345678901', country: 'AU', label: 'Australian Business No.' },
+		];
+
+		const result = formatReceiptData(data);
+
+		expect(result.customer.tax_ids?.[0].label).toBe('Australian Business No.');
+	});
+
 	it('signs per-line tax amount on refund renders', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.lines[0].taxes = [{ code: 'vat-10', rate: 10, label: 'VAT 10%', amount: 0.91 }];
@@ -208,6 +266,48 @@ describe('formatReceiptData', () => {
 			subtotal: 'Subtotal',
 			total: 'Total',
 		});
+	});
+
+	it('passes through a fully populated data.order without clobbering its date object', () => {
+		const data = structuredClone(sampleReceiptData);
+		const fullDate = {
+			datetime: 'Apr 30, 2026, 2:08 PM',
+			date: 'Apr 30, 2026',
+			time: '2:08 PM',
+			datetime_short: '4/30/26, 2:08 PM',
+			datetime_long: 'April 30, 2026, 2:08 PM',
+			datetime_full: 'Thursday, April 30, 2026, 2:08 PM',
+			date_short: '4/30/26',
+			date_long: 'April 30, 2026',
+			date_full: 'Thursday, April 30, 2026',
+			date_ymd: '2026-04-30',
+			date_dmy: '30/04/2026',
+			date_mdy: '04/30/2026',
+			weekday_short: 'Thu',
+			weekday_long: 'Thursday',
+			day: '30',
+			month: '04',
+			month_short: 'Apr',
+			month_long: 'April',
+			year: '2026',
+		};
+		data.order = {
+			id: 1287,
+			number: '1287',
+			currency: 'EUR',
+			customer_note: '',
+			created: fullDate,
+			paid: fullDate,
+			completed: fullDate,
+		};
+
+		const result = formatReceiptData(data);
+
+		// The full ReceiptDateSchema must survive — templates that read
+		// {{order.created.date_long}} etc. depend on every key being there.
+		expect(result.order).toEqual(data.order);
+		expect(result.order.created.date_long).toBe('April 30, 2026');
+		expect(result.order.created.datetime).toBe('Apr 30, 2026, 2:08 PM');
 	});
 
 	it('preserves custom i18n labels over gallery-template defaults', () => {

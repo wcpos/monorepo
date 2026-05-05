@@ -16,6 +16,7 @@ const DEFAULT_I18N = {
 	cashier: 'Cashier',
 	customer: 'Customer',
 	store_tax_id_label_other: 'Tax ID',
+	customer_tax_id_label_other: 'Tax ID',
 	subtotal: 'Subtotal',
 	total: 'Total',
 	refund_total: 'Refund Total',
@@ -25,17 +26,67 @@ const DEFAULT_I18N = {
 	thank_you_purchase: 'Thank you for your purchase!',
 };
 
-function resolveStoreTaxIdLabel(
+/**
+ * Built-in English labels for known tax-ID types. Used when the `label`
+ * field is empty and no scoped i18n key is provided. Mirrors the labels
+ * shipped in `Receipt_I18n_Labels::get_labels()` so studio renders look
+ * the same as production renders even without the WP i18n dictionary
+ * injected.
+ */
+const DEFAULT_TAX_ID_LABELS: Record<string, string> = {
+	eu_vat: 'VAT ID',
+	gb_vat: 'VAT No.',
+	sa_vat: 'VAT No.',
+	au_abn: 'ABN',
+	br_cpf: 'CPF',
+	br_cnpj: 'CNPJ',
+	in_gst: 'GSTIN',
+	it_cf: 'Codice Fiscale',
+	it_piva: 'P.IVA',
+	es_nif: 'NIF',
+	ar_cuit: 'CUIT',
+	ca_gst_hst: 'GST/HST No.',
+	us_ein: 'EIN',
+	de_ust_id: 'USt-IdNr.',
+	de_steuernummer: 'Steuernummer',
+	de_hrb: 'HRB',
+	nl_kvk: 'KVK',
+	fr_siret: 'SIRET',
+	fr_siren: 'SIREN',
+	gb_company: 'Company No.',
+	ch_uid: 'UID',
+};
+
+/**
+ * Resolve a display label for a `{ type, label?, value }` tax-ID entry.
+ *
+ * Order of precedence: explicit `label` → scope-specific i18n key
+ * (`<scope>_tax_id_label_<type>`) → built-in default for the type →
+ * scope-specific generic i18n key (`<scope>_tax_id_label_other`) →
+ * "Tax ID".
+ *
+ * `scope` is `"store"` or `"customer"`; the same type may want a different
+ * translation depending on which side of the receipt it sits on.
+ */
+function resolveTaxIdLabel(
 	taxId: { type: string; label?: string | null },
-	i18n: Record<string, string | undefined>
+	i18n: Record<string, string | undefined>,
+	scope: 'store' | 'customer'
 ): string {
 	const label = taxId.label?.trim();
 	if (label) return label;
 
-	const typeLabel = i18n[`store_tax_id_label_${taxId.type}`]?.trim();
+	const typeLabel = i18n[`${scope}_tax_id_label_${taxId.type}`]?.trim();
 	if (typeLabel) return typeLabel;
 
-	return i18n.store_tax_id_label_other || DEFAULT_I18N.store_tax_id_label_other;
+	const builtIn = DEFAULT_TAX_ID_LABELS[taxId.type];
+	if (builtIn) return builtIn;
+
+	return (
+		i18n[`${scope}_tax_id_label_other`]?.trim() ||
+		DEFAULT_I18N[`${scope}_tax_id_label_other` as keyof typeof DEFAULT_I18N] ||
+		'Tax ID'
+	);
 }
 
 /**
@@ -85,11 +136,22 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			...data.store,
 			tax_ids: data.store.tax_ids?.map((taxId) => ({
 				...taxId,
-				label: resolveStoreTaxIdLabel(taxId, i18n),
+				label: resolveTaxIdLabel(taxId, i18n, 'store'),
+			})),
+		},
+		customer: {
+			...data.customer,
+			tax_ids: data.customer.tax_ids?.map((taxId) => ({
+				...taxId,
+				label: resolveTaxIdLabel(taxId, i18n, 'customer'),
 			})),
 		},
 		i18n,
-		order: {
+		// Templates expect `order.{id, number, created.datetime, ...}` even when the source
+		// data only carries `meta.*`. When the source already provides a fully populated
+		// `data.order` (with locale-formatted ReceiptDateSchema), use it as-is — don't
+		// downgrade to the raw GMT stub.
+		order: data.order ?? {
 			id: data.meta.order_id,
 			number: data.meta.order_number,
 			created: { datetime: data.meta.created_at_gmt },
