@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { ReceiptDataSchema } from '@wcpos/printer/encoder';
@@ -17,6 +20,14 @@ describe('template-studio randomizer', () => {
 		const b = createRandomReceipt({ seed: 0xc0ffee });
 		expect(JSON.stringify(a.data)).toEqual(JSON.stringify(b.data));
 		expect(a.scenarios).toEqual(b.scenarios);
+	});
+
+	it('uses the bundled Coffee Monster logo for HTML template previews', () => {
+		const result = createRandomReceipt({ seed: 'coffee-logo' });
+
+		expect(result.data.store.logo).toContain('coffee-monster.png');
+		expect(result.data.store.logo).not.toMatch(/^https?:\/\//);
+		expect(fs.existsSync(path.resolve('public/coffee-monster.png'))).toBe(true);
 	});
 
 	it('produces different shapes for different seeds', () => {

@@ -34,6 +34,8 @@ import type {
 	TaxId,
 } from '@wcpos/printer/encoder';
 
+const COFFEE_MONSTER_LOGO_URL = '/coffee-monster.png';
+
 /* ─────────────────────────── Seed + PRNG ─────────────────────────── */
 
 /**
@@ -711,8 +713,7 @@ function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
 		phone:
 			rand() < 0.9 ? `${pool.dialingPrefix} 555 ${Math.floor(rand() * 9000 + 1000)}` : undefined,
 		email: rand() < 0.9 ? 'hello@example.com' : undefined,
-		logo:
-			rand() < 0.5 ? 'https://wcpos.com/wp-content/themes/wcpos-2024/assets/images/logo.png' : null,
+		logo: (rand(), COFFEE_MONSTER_LOGO_URL), // Preserve old logo/no-logo PRNG draw.
 		opening_hours: hasHours ? 'Mon–Sat 9:00–18:00' : null,
 		opening_hours_vertical: hasHours ? openingVertical : null,
 		opening_hours_inline: hasHours ? openingInline : null,
