@@ -329,22 +329,27 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 	color: #1c1814;
 	transform-origin: top center;
 }
-.paper-frame.thermal-58 { width: 220px; }
-.paper-frame.thermal-80 { width: 304px; }
-.paper-frame.a4 { width: 794px; min-height: 1123px; padding: 24px; }
+.paper-frame.thermal-58 { width: 58mm; }
+.paper-frame.thermal-80 { width: 80mm; }
+.paper-frame.a4 { width: 210mm; min-height: 297mm; padding: 15mm; }
 .paper-frame.thermal-58, .paper-frame.thermal-80 {
-	padding: 12px 8px 0;
+	padding: 4mm 2mm;
 	font-size: 11.5px;
 }
-/* Soft torn-paper bottom edge for thermal paper. */
-.paper-frame.thermal-58, .paper-frame.thermal-80 {
-	-webkit-mask: linear-gradient(#000 calc(100% - 12px), transparent 100%),
-		conic-gradient(from -45deg at bottom, transparent 25%, #000 25% 75%, transparent 75%) 0 100% / 8px 12px repeat-x;
-	-webkit-mask-composite: source-over;
-	mask: linear-gradient(#000 calc(100% - 12px), transparent 100%),
-		conic-gradient(from -45deg at bottom, transparent 25%, #000 25% 75%, transparent 75%) 0 100% / 8px 12px repeat-x;
-	padding-bottom: 16px;
+/* Receipt-renderer wraps thermal content in an inline-styled <div> intended for
+ * standalone display (own background, shadow, margin, fixed ch width). Inside
+ * the studio, the paper-frame already represents the physical paper, so flatten
+ * the inner wrapper and let it fill the frame. */
+.paper-frame.thermal-58 > div,
+.paper-frame.thermal-80 > div {
+	box-shadow: none !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	background: transparent !important;
+	width: 100% !important;
 }
+.paper-frame.thermal-58 > div { font-size: 10.5px !important; }
+.paper-frame.thermal-80 > div { font-size: 10px !important; }
 .paper-frame :is(table, tr, td, th) { color: inherit; }
 
 .stage-status {

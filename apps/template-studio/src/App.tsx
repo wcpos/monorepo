@@ -12,15 +12,14 @@ import { Toolbar } from './components/Toolbar';
 import { ARRAY_DEFAULTS } from './lib/field-meta';
 import { getAtPath, removeAtPath, setAtPath } from './lib/path-utils';
 import { createRandomReceipt, createRandomSeed, formatSeed } from './randomizer';
-import { fetchBundledTemplates, paperWidths } from './studio-api';
+import { fetchBundledTemplates } from './studio-api';
 import { renderStudioTemplate, selectVisibleTemplate } from './studio-core';
 
 import type { PathSegment } from './lib/path-utils';
-import type { PaperWidth, StudioTemplate } from './studio-core';
+import type { PaperWidth, StudioTemplate, TemplateEngine } from './studio-core';
 
 const SECTION_STORAGE_KEY = 'wcpos-template-studio:sections';
 const SELECTION_STORAGE_KEY = 'wcpos-template-studio:selection';
-const PAPER_STORAGE_KEY = 'wcpos-template-studio:paper-width';
 
 type SectionKey = 'data' | 'woocommerce' | 'print';
 
@@ -48,20 +47,13 @@ function loadSelection(): string {
 	}
 }
 
-function loadPaperWidth(): PaperWidth {
-	if (typeof window === 'undefined') return '80mm';
-	try {
-		const value = window.localStorage.getItem(PAPER_STORAGE_KEY) as PaperWidth | null;
-		return paperWidths.includes(value as PaperWidth) ? (value as PaperWidth) : '80mm';
-	} catch {
-		return '80mm';
-	}
+function defaultPaperWidth(engine: TemplateEngine | undefined): PaperWidth {
+	return engine === 'thermal' ? '80mm' : 'a4';
 }
 
 export function App() {
 	const [templates, setTemplates] = useState<StudioTemplate[]>([]);
 	const [selectedTemplateId, setSelectedTemplateId] = useState(() => loadSelection());
-	const [paperWidth, setPaperWidth] = useState<PaperWidth>(() => loadPaperWidth());
 	const [zoom, setZoom] = useState(100);
 	const [seed, setSeed] = useState<number | string>('default');
 	const [sections, setSections] = useState<SectionState>(() => loadSectionState());
@@ -100,15 +92,6 @@ export function App() {
 		}
 	}, [selectedTemplateId]);
 
-	useEffect(() => {
-		if (typeof window === 'undefined') return;
-		try {
-			window.localStorage.setItem(PAPER_STORAGE_KEY, paperWidth);
-		} catch {
-			/* storage may be disabled */
-		}
-	}, [paperWidth]);
-
 	const selectedTemplate = selectVisibleTemplate(templates, selectedTemplateId);
 	const randomReceipt = useMemo(() => createRandomReceipt({ seed }), [seed]);
 	const pristineData = useMemo(
@@ -126,7 +109,8 @@ export function App() {
 		() => ({ ...workingData, id: `random-${randomReceipt.seedHex}` }),
 		[workingData, randomReceipt]
 	);
-	const effectivePaperWidth = selectedTemplate?.paperWidth ?? paperWidth;
+	const effectivePaperWidth: PaperWidth =
+		selectedTemplate?.paperWidth ?? defaultPaperWidth(selectedTemplate?.engine);
 	const { rendered, renderError } = useMemo(() => {
 		if (!selectedTemplate) return { rendered: null, renderError: null };
 		try {
@@ -253,12 +237,7 @@ export function App() {
 
 	return (
 		<div className="studio-app">
-			<Toolbar
-				paperWidth={paperWidth}
-				onPaperWidthChange={setPaperWidth}
-				zoom={zoom}
-				onZoomChange={setZoom}
-			/>
+			<Toolbar zoom={zoom} onZoomChange={setZoom} />
 			{error || renderError ? <div className="error-banner">{error ?? renderError}</div> : null}
 			<div className="studio-body">
 				<TemplateList
