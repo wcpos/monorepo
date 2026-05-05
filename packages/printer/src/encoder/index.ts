@@ -36,7 +36,6 @@ export type {
 	ReceiptDate,
 	ReceiptInfo,
 	ReceiptOrder,
-	TaxId,
 	ReceiptI18n,
 	TaxId,
 } from './types';

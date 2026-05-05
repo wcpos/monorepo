@@ -77,6 +77,26 @@ describe('template studio rendering harness', () => {
 		expect(view.diagnosticHtml).toBe('<h1>PHP diagnostic</h1>');
 	});
 
+	it('renders the bundled Coffee Monster logo in logicless HTML templates', () => {
+		const fixture = buildCanonicalFixture('studio-test-logo');
+		const view = renderStudioTemplate({
+			template: {
+				id: 'logicless-logo-sample',
+				name: 'Logicless logo sample',
+				engine: 'logicless',
+				source: 'bundled-gallery',
+				content: '<img src="{{store.logo}}" alt="{{store.name}}">',
+			},
+			fixture,
+			paperWidth: '80mm',
+		});
+
+		expect(view.kind).toBe('logicless');
+		if (view.kind !== 'logicless') throw new Error('Expected logicless view');
+		expect(view.html).toContain('coffee-monster.png');
+		expect(view.html).toContain('<img');
+	});
+
 	it('renders thermal templates with preview HTML and ESC/POS hex/debug output', () => {
 		const fixture = buildCanonicalFixture('studio-test-thermal');
 		const view = renderStudioTemplate({
