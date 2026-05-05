@@ -507,9 +507,16 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			: {}
 	);
 	const displayTax = resolveDisplayValueSide(presentationHints);
+	const order = data.order ?? base.order;
 
 	const result: ReceiptData = {
-		order: data.order ?? base.order,
+		order: {
+			...base.order,
+			...order,
+			created: { ...base.order.created, ...(order.created ?? {}) },
+			paid: { ...base.order.paid, ...(order.paid ?? {}) },
+			completed: { ...base.order.completed, ...(order.completed ?? {}) },
+		},
 		store: {
 			...base.store,
 			...(data.store ?? {}),

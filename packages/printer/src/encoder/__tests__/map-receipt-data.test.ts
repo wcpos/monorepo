@@ -229,6 +229,25 @@ describe('mapReceiptData', () => {
 			expect(result.presentation_hints.display_tax).toBe('incl');
 		});
 
+		it('fills missing date blocks on partial canonical order data', () => {
+			const result = mapReceiptData({
+				order: {
+					id: 5,
+					number: '5',
+					currency: 'USD',
+					customer_note: '',
+					created: { datetime: '2026-03-06T14:30:00' },
+				},
+				totals: { subtotal_incl: 10 },
+			});
+
+			expect(result.order.created.datetime).toBe('2026-03-06T14:30:00');
+			expect(result.order.created.date).toBe('');
+			expect(result.order.paid.datetime).toBe('');
+			expect(result.order.completed.datetime).toBe('');
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+		});
+
 		// ──────────────────────────────────────────────────────────────────
 		// NO LEGACY COMPAT — these tests exist to lock the v1 contract and
 		// catch any future PR that re-introduces a `grand_total*` bridge or
