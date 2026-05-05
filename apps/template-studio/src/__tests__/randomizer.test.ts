@@ -140,6 +140,18 @@ describe('template-studio randomizer', () => {
 		expect(result.data.meta.currency).toBe('SAR');
 	});
 
+	it('labels structured store tax IDs for receipt templates', () => {
+		const result = createRandomReceipt({
+			seed: 'rtl',
+			overrides: { rtl: true, multicurrency: false, emptyCart: false },
+		});
+
+		expect(result.data.store.tax_ids?.length).toBeGreaterThan(0);
+		for (const taxId of result.data.store.tax_ids ?? []) {
+			expect(taxId.label).toMatch(/\S/);
+		}
+	});
+
 	it('produces fiscal data when fiscal override is on', () => {
 		const result = createRandomReceipt({ seed: 11, overrides: { fiscal: true } });
 		expect(result.data.fiscal.immutable_id).toBeTruthy();

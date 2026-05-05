@@ -61,7 +61,7 @@ function renderNode(node: ThermalNode): string {
 	}
 }
 
-function renderBarcode(
+export function renderBarcode(
 	barcodeType: string,
 	value: string,
 	height: number,
@@ -86,7 +86,7 @@ function renderBarcode(
 	}
 }
 
-function renderQrCode(value: string, size: number): string {
+export function renderQrCode(value: string, size: number): string {
 	const text = value.trim();
 	if (!text) return '';
 
