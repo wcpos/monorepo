@@ -316,6 +316,24 @@ function mapDiscountLike(src: Record<string, any>, displayTax: DisplayTax): Rece
 	return discount;
 }
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────
+ * NO LEGACY COMPAT — DO NOT ADD `grand_total*` FALLBACKS HERE
+ * ─────────────────────────────────────────────────────────────────────────
+ *
+ * The receipt-data contract is v1 (see `meta.schema_version` pinned at 1
+ * in schema.ts). The earlier `grand_total*` field family was renamed to
+ * `total*` before any release ever shipped — there is no legacy producer
+ * to bridge to. If a payload comes in without `total_incl` / `total_excl`,
+ * the resulting zeros are the correct signal that the producer is
+ * out-of-spec.
+ *
+ * Review history: a compat shim was added in c5626465a / 4f8e6076a in
+ * response to bot review feedback, then deliberately stripped in
+ * c2820539e once the maintainer confirmed there is no shipping legacy.
+ * Do not add it back.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
 function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTotals {
 	const subtotalIncl = toNum(src.subtotal_incl ?? src.subtotal);
 	const subtotalExcl =

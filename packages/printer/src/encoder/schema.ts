@@ -109,6 +109,13 @@ export const ReceiptStoreMetaSchema = z.object({
 });
 
 export const ReceiptOrderMetaSchema = z.object({
+	// ──────────────────────────────────────────────────────────────────
+	// NO LEGACY — schema_version is pinned at literal `1`. Do not widen
+	// to a string/number union "for backwards-compat" — there is no
+	// shipped legacy contract. If you need a breaking-change release,
+	// bump to `2`. Any other value fails validation by design.
+	// See refactor/rename-grand-total-to-total review thread for context.
+	// ──────────────────────────────────────────────────────────────────
 	schema_version: z
 		.literal(1)
 		.describe(
