@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { sanitizeHtml, sanitizeThermalPreviewHtml } from '@wcpos/receipt-renderer';
+import { sanitizeHtml } from '@wcpos/receipt-renderer';
 
 import { CollapsibleSection } from './components/CollapsibleSection';
 import { DataSection } from './components/sections/DataSection';
@@ -151,10 +151,11 @@ export function App() {
 			return { rendered: null, renderError: err instanceof Error ? err.message : String(err) };
 		}
 	}, [selectedTemplate, fixture, effectivePaperWidth, printerModel, language]);
-	const previewHtml =
-		rendered?.kind === 'thermal'
-			? sanitizeThermalPreviewHtml(rendered.html)
-			: sanitizeHtml(rendered?.html ?? '');
+	// `rendered.html` is already sanitized by `renderForStudio` with the SVG-
+	// allowing profile both engines need (so `<barcode>` SVGs survive). Re-
+	// sanitizing here with the default profile strips `<svg>` and breaks
+	// barcodes for logicless templates, so just pass it through.
+	const previewHtml = rendered?.html ?? '';
 	const diagnosticHtml = sanitizeHtml(
 		rendered?.kind === 'logicless' ? (rendered.diagnosticHtml ?? '') : ''
 	);
