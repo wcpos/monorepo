@@ -184,8 +184,14 @@ describe('template studio rendering harness', () => {
 		receiptNode.innerHTML = '<p>Receipt</p>';
 
 		const createElement = document.createElement.bind(document);
-		const printSpy = vi.fn();
+		const addEventListenerSpy = vi.fn();
+		const printSpy = vi.fn(() => {
+			expect(addEventListenerSpy).toHaveBeenCalledWith('afterprint', expect.any(Function), {
+				once: true,
+			});
+		});
 		const focusSpy = vi.fn();
+		const printDocument = document.implementation.createHTMLDocument('');
 		vi.spyOn(document, 'createElement').mockImplementation(
 			(tagName: string, options?: ElementCreationOptions) => {
 				const element = createElement(tagName, options);
@@ -193,18 +199,22 @@ describe('template studio rendering harness', () => {
 					Object.defineProperty(element, 'contentWindow', {
 						configurable: true,
 						value: {
-							document: document.implementation.createHTMLDocument(''),
-							addEventListener: vi.fn(),
+							document: printDocument,
+							addEventListener: addEventListenerSpy,
 							focus: focusSpy,
 							print: printSpy,
 						},
+					});
+					Object.defineProperty(element, 'contentDocument', {
+						configurable: true,
+						value: printDocument,
 					});
 				}
 				return element;
 			}
 		);
 
-		await printReceiptInHiddenFrame({
+		const printPromise = printReceiptInHiddenFrame({
 			hostDocument: document,
 			receiptNode,
 			paperWidth: '80mm',
@@ -212,8 +222,14 @@ describe('template studio rendering harness', () => {
 		});
 
 		const frame = document.querySelector<HTMLIFrameElement>('iframe.system-print-frame');
-		expect(openSpy).not.toHaveBeenCalled();
 		expect(frame).not.toBeNull();
+		expect(printDocument.body.textContent).not.toContain('Receipt');
+		expect(printSpy).not.toHaveBeenCalled();
+
+		frame?.dispatchEvent(new Event('load'));
+		await printPromise;
+
+		expect(openSpy).not.toHaveBeenCalled();
 		expect(frame?.style.position).toBe('fixed');
 		expect(frame?.style.right).toBe('100vw');
 		expect(frame?.style.bottom).toBe('100vh');
@@ -222,6 +238,53 @@ describe('template studio rendering harness', () => {
 		expect(printSpy).toHaveBeenCalledOnce();
 
 		vi.advanceTimersByTime(25);
+		expect(document.querySelector('iframe.system-print-frame')).toBeNull();
+		vi.useRealTimers();
+	});
+
+	it('removes the offscreen iframe immediately when system print throws', async () => {
+		vi.useFakeTimers();
+		const receiptNode = document.createElement('section');
+		receiptNode.innerHTML = '<p>Receipt</p>';
+
+		const createElement = document.createElement.bind(document);
+		const printDocument = document.implementation.createHTMLDocument('');
+		vi.spyOn(document, 'createElement').mockImplementation(
+			(tagName: string, options?: ElementCreationOptions) => {
+				const element = createElement(tagName, options);
+				if (tagName.toLowerCase() === 'iframe') {
+					Object.defineProperty(element, 'contentWindow', {
+						configurable: true,
+						value: {
+							document: printDocument,
+							addEventListener: vi.fn(),
+							focus: vi.fn(),
+							print: vi.fn(() => {
+								throw new Error('Print failed');
+							}),
+						},
+					});
+					Object.defineProperty(element, 'contentDocument', {
+						configurable: true,
+						value: printDocument,
+					});
+				}
+				return element;
+			}
+		);
+
+		const printPromise = printReceiptInHiddenFrame({
+			hostDocument: document,
+			receiptNode,
+			paperWidth: '80mm',
+			cleanupDelayMs: 3000,
+		});
+
+		const frame = document.querySelector<HTMLIFrameElement>('iframe.system-print-frame');
+		expect(frame).not.toBeNull();
+		frame?.dispatchEvent(new Event('load'));
+
+		await expect(printPromise).rejects.toThrow('Print failed');
 		expect(document.querySelector('iframe.system-print-frame')).toBeNull();
 		vi.useRealTimers();
 	});

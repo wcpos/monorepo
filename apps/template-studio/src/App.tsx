@@ -200,6 +200,7 @@ export function App() {
 			return;
 		}
 
+		setError(null);
 		void printReceiptInHiddenFrame({
 			hostDocument: document,
 			receiptNode,
@@ -384,7 +385,12 @@ export async function printReceiptInHiddenFrame({
 	frame.style.opacity = '0';
 	frame.style.pointerEvents = 'none';
 
+	const frameLoaded = new Promise<void>((resolve) => {
+		frame.addEventListener('load', () => resolve(), { once: true });
+	});
+
 	hostDocument.body.append(frame);
+	await frameLoaded;
 
 	const printWindow = frame.contentWindow;
 	const printDocument = frame.contentDocument ?? printWindow?.document;
@@ -396,12 +402,18 @@ export async function printReceiptInHiddenFrame({
 	preparePrintDocument(printDocument, paperWidth);
 	printDocument.body.append(receiptNode.cloneNode(true));
 	await waitForImages(printDocument);
-	printWindow.focus();
-	printWindow.print();
 
 	const cleanup = () => frame.remove();
 	printWindow.addEventListener('afterprint', cleanup, { once: true });
-	window.setTimeout(cleanup, cleanupDelayMs);
+	hostDocument.defaultView?.setTimeout(cleanup, cleanupDelayMs);
+
+	try {
+		printWindow.focus();
+		printWindow.print();
+	} catch (error) {
+		cleanup();
+		throw error;
+	}
 }
 
 function waitForImages(document: Document): Promise<void> {
