@@ -1310,7 +1310,7 @@ function buildOrderMeta(
 		}
 	})();
 	return {
-		schema_version: '1.4.0',
+		schema_version: 1,
 		created_at_gmt: createdAtGmt,
 		created_at_local: localeFormatted,
 		order_id: orderId,

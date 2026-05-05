@@ -230,55 +230,6 @@ describe('mapReceiptData', () => {
 			expect(result.presentation_hints.display_tax).toBe('incl');
 		});
 
-		it('preserves legacy grand_total totals in canonical data', () => {
-			const legacyTotals = { ...sampleReceiptData.totals } as Record<string, any>;
-			const { total, total_incl, total_excl } = legacyTotals;
-			delete legacyTotals.total;
-			delete legacyTotals.total_incl;
-			delete legacyTotals.total_excl;
-			delete legacyTotals.paid_total;
-			const legacyCanonical = {
-				...sampleReceiptData,
-				totals: {
-					...legacyTotals,
-					grand_total: total,
-					grand_total_incl: total_incl,
-					grand_total_excl: total_excl,
-				},
-			};
-			const result = mapReceiptData(legacyCanonical as Record<string, any>);
-
-			expect(result.totals.total).toBe(total);
-			expect(result.totals.total_incl).toBe(total_incl);
-			expect(result.totals.total_excl).toBe(total_excl);
-			expect(result.totals.paid_total).toBe(total_incl);
-		});
-
-		it('preserves legacy total-inclusive i18n labels in canonical data', () => {
-			const legacyCanonical = {
-				...sampleReceiptData,
-				i18n: {
-					grand_total_incl_tax: 'Grand Total Including Tax',
-				},
-			};
-			const result = mapReceiptData(legacyCanonical as Record<string, any>);
-
-			expect(result.i18n?.total_incl_tax).toBe('Grand Total Including Tax');
-		});
-
-		it('prefers new total-inclusive i18n labels over legacy labels', () => {
-			const legacyCanonical = {
-				...sampleReceiptData,
-				i18n: {
-					total_incl_tax: 'Total Including Tax',
-					grand_total_incl_tax: 'Grand Total Including Tax',
-				},
-			};
-			const result = mapReceiptData(legacyCanonical as Record<string, any>);
-
-			expect(result.i18n?.total_incl_tax).toBe('Total Including Tax');
-		});
-
 		it('does not treat partial canonical markers as canonical', () => {
 			// Only meta markers, no totals marker — should map, not passthrough
 			const data = { meta: { order_id: 5 }, totals: {} };

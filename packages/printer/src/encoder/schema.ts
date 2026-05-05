@@ -110,8 +110,10 @@ export const ReceiptStoreMetaSchema = z.object({
 
 export const ReceiptOrderMetaSchema = z.object({
 	schema_version: z
-		.union([z.string(), z.number().int()])
-		.describe('Receipt-data contract version (PHP emits a SemVer string)'),
+		.literal(1)
+		.describe(
+			'Receipt-data contract version. Pinned at 1 — this is v1 of the contract. The version only changes on a breaking-change release, not on additive iterations.'
+		),
 	created_at_gmt: z.string().describe('Order creation timestamp (ISO/GMT)'),
 	created_at_local: z.string().optional().describe('Order creation timestamp (local timezone)'),
 	order_id: z.number().int().describe('Numeric order identifier'),

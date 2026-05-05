@@ -323,13 +323,8 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 	const taxTotal = toNum(src.tax_total);
 	const discountTotalIncl = toNum(src.discount_total_incl ?? src.discount_total);
 	const discountTotalExcl = toNum(src.discount_total_excl ?? src.discount_total);
-	const grandTotalIncl = toNum(
-		src.total_incl ?? src.total ?? src.grand_total_incl ?? src.grand_total
-	);
-	const grandTotalExcl =
-		'total_excl' in src || 'grand_total_excl' in src
-			? toNum(src.total_excl ?? src.grand_total_excl)
-			: grandTotalIncl - taxTotal;
+	const grandTotalIncl = toNum(src.total_incl ?? src.total);
+	const grandTotalExcl = 'total_excl' in src ? toNum(src.total_excl) : grandTotalIncl - taxTotal;
 	const subtotal = displayTax === 'excl' ? subtotalExcl : subtotalIncl;
 	const discountTotal = displayTax === 'excl' ? discountTotalExcl : discountTotalIncl;
 	const grandTotal = displayTax === 'excl' ? grandTotalExcl : grandTotalIncl;
@@ -500,16 +495,6 @@ function mapPresentationHints(src: Record<string, any>): ReceiptPresentationHint
 	};
 }
 
-function mapI18n(src: unknown): ReceiptData['i18n'] | undefined {
-	if (!src || typeof src !== 'object') return undefined;
-
-	const labels = { ...(src as Record<string, string>) };
-	if (labels.total_incl_tax == null && labels.grand_total_incl_tax != null) {
-		labels.total_incl_tax = labels.grand_total_incl_tax;
-	}
-	return labels;
-}
-
 function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData {
 	const base = emptyReceiptData();
 	const presentationHints = mapPresentationHints(
@@ -597,7 +582,7 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 	// them but the encoder doesn't depend on them, so we copy as-is.
 	if (data.receipt !== undefined) result.receipt = data.receipt;
 	if (data.order !== undefined) result.order = data.order;
-	if (data.i18n !== undefined) result.i18n = mapI18n(data.i18n);
+	if (data.i18n !== undefined) result.i18n = data.i18n;
 
 	return result;
 }
@@ -672,8 +657,6 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 			)
 			.map((entry) => mapRefund(entry));
 	}
-
-	if (data.i18n !== undefined) result.i18n = mapI18n(data.i18n);
 
 	return result;
 }
