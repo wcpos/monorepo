@@ -1,4 +1,4 @@
-import type { PaperWidth, ReceiptFixture, StudioTemplate, TemplateEngine } from './studio-core';
+import type { ReceiptFixture, StudioTemplate, TemplateEngine } from './studio-core';
 
 export async function fetchBundledTemplates(): Promise<StudioTemplate[]> {
 	const response = await fetch('/__studio/templates', { credentials: 'include' });
@@ -78,5 +78,3 @@ export async function printRawTcp(input: RawTcpPrintInput): Promise<RawTcpPrintR
 	if (!response.ok) throw new Error(`Raw TCP print failed: ${response.status}`);
 	return response.json();
 }
-
-export const paperWidths: PaperWidth[] = ['58mm', '80mm', 'a4'];
