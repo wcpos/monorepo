@@ -244,6 +244,61 @@ describe('mapReceiptData', () => {
 			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
 		});
 
+		it('normalizes legacy canonical total and i18n keys during rollout', () => {
+			const legacyCanonical = {
+				...sampleReceiptData,
+				totals: {
+					subtotal: 25,
+					subtotal_incl: 25,
+					subtotal_excl: 22.73,
+					discount_total: 0,
+					discount_total_incl: 0,
+					discount_total_excl: 0,
+					tax_total: 2.27,
+					grand_total: 25,
+					grand_total_incl: 25,
+					grand_total_excl: 22.73,
+					change_total: 0,
+				},
+				i18n: {
+					grand_total_incl_tax: 'Grand Total (incl. tax)',
+				},
+			};
+			const result = mapReceiptData(legacyCanonical as Record<string, any>);
+
+			expect(result.totals.total).toBe(25);
+			expect(result.totals.total_incl).toBe(25);
+			expect(result.totals.total_excl).toBe(22.73);
+			expect(result.totals.paid_total).toBe(25);
+			expect(result.i18n?.total_incl_tax).toBe('Grand Total (incl. tax)');
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+		});
+
+		it('prefers renamed canonical total and i18n keys over legacy keys', () => {
+			const mixedCanonical = {
+				...sampleReceiptData,
+				totals: {
+					...sampleReceiptData.totals,
+					total: 30,
+					total_incl: 30,
+					total_excl: 27.27,
+					grand_total: 25,
+					grand_total_incl: 25,
+					grand_total_excl: 22.73,
+				},
+				i18n: {
+					total_incl_tax: 'Total (incl. tax)',
+					grand_total_incl_tax: 'Grand Total (incl. tax)',
+				},
+			};
+			const result = mapReceiptData(mixedCanonical as Record<string, any>);
+
+			expect(result.totals.total).toBe(30);
+			expect(result.totals.total_incl).toBe(30);
+			expect(result.totals.total_excl).toBe(27.27);
+			expect(result.i18n?.total_incl_tax).toBe('Total (incl. tax)');
+		});
+
 		it('does not treat partial canonical markers as canonical', () => {
 			// Only meta markers, no totals marker — should map, not passthrough
 			const data = { meta: { order_id: 5 }, totals: {} };
