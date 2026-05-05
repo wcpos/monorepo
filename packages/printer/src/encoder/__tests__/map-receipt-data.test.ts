@@ -230,22 +230,15 @@ describe('mapReceiptData', () => {
 			expect(result.presentation_hints.display_tax).toBe('incl');
 		});
 
-		it('normalizes canonical schema_version to v1 before validation', () => {
-			const legacyCanonical = {
-				...sampleReceiptData,
-				meta: {
-					...sampleReceiptData.meta,
-					schema_version: '1.4.0',
-				},
-			};
-			const result = mapReceiptData(legacyCanonical as Record<string, any>);
-
-			expect(result.meta.schema_version).toBe(1);
-			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
-		});
-
-		it('normalizes legacy canonical total and i18n keys during rollout', () => {
-			const legacyCanonical = {
+		// ──────────────────────────────────────────────────────────────────
+		// NO LEGACY COMPAT — these tests exist to lock the v1 contract and
+		// catch any future PR that re-introduces a `grand_total*` bridge or
+		// re-widens schema_version. If you find yourself "fixing" these
+		// tests by adding fallbacks, stop and read the comment block at the
+		// top of `mapTotals` in map-receipt-data.ts.
+		// ──────────────────────────────────────────────────────────────────
+		it('does NOT bridge legacy grand_total* keys (out-of-spec → zero totals)', () => {
+			const outOfSpec = {
 				...sampleReceiptData,
 				totals: {
 					subtotal: 25,
@@ -255,48 +248,49 @@ describe('mapReceiptData', () => {
 					discount_total_incl: 0,
 					discount_total_excl: 0,
 					tax_total: 2.27,
+					// Renamed v1 keys absent on purpose; only legacy keys present.
 					grand_total: 25,
 					grand_total_incl: 25,
 					grand_total_excl: 22.73,
 					change_total: 0,
 				},
-				i18n: {
-					grand_total_incl_tax: 'Grand Total (incl. tax)',
-				},
 			};
-			const result = mapReceiptData(legacyCanonical as Record<string, any>);
+			const result = mapReceiptData(outOfSpec as Record<string, any>);
 
-			expect(result.totals.total).toBe(25);
-			expect(result.totals.total_incl).toBe(25);
-			expect(result.totals.total_excl).toBe(22.73);
-			expect(result.totals.paid_total).toBe(25);
-			expect(result.i18n?.total_incl_tax).toBe('Grand Total (incl. tax)');
-			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+			// v1 contract: total_incl/excl are required; legacy keys are NOT a fallback.
+			expect(result.totals.total_incl).toBe(0);
+			expect(result.totals.total_excl).toBe(-2.27); // 0 - tax_total
+			expect(result.totals.total).toBe(0);
 		});
 
-		it('prefers renamed canonical total and i18n keys over legacy keys', () => {
-			const mixedCanonical = {
+		it('does NOT translate legacy i18n.grand_total_incl_tax → total_incl_tax', () => {
+			const outOfSpec = {
 				...sampleReceiptData,
-				totals: {
-					...sampleReceiptData.totals,
-					total: 30,
-					total_incl: 30,
-					total_excl: 27.27,
-					grand_total: 25,
-					grand_total_incl: 25,
-					grand_total_excl: 22.73,
-				},
 				i18n: {
-					total_incl_tax: 'Total (incl. tax)',
 					grand_total_incl_tax: 'Grand Total (incl. tax)',
 				},
 			};
-			const result = mapReceiptData(mixedCanonical as Record<string, any>);
+			const result = mapReceiptData(outOfSpec as Record<string, any>);
 
-			expect(result.totals.total).toBe(30);
-			expect(result.totals.total_incl).toBe(30);
-			expect(result.totals.total_excl).toBe(27.27);
-			expect(result.i18n?.total_incl_tax).toBe('Total (incl. tax)');
+			// The legacy key passes through (we don't drop unrecognized i18n keys),
+			// but the canonical `total_incl_tax` is NOT auto-populated from it.
+			expect(result.i18n?.total_incl_tax).toBeUndefined();
+		});
+
+		it('does NOT auto-coerce schema_version "1.4.0" string to integer 1', () => {
+			const outOfSpec = {
+				...sampleReceiptData,
+				meta: {
+					...sampleReceiptData.meta,
+					schema_version: '1.4.0',
+				},
+			};
+			const result = mapReceiptData(outOfSpec as Record<string, any>);
+
+			// v1 contract: schema_version must arrive as integer 1. Anything else
+			// passes through, then fails Zod validation downstream — by design.
+			expect(result.meta.schema_version).toBe('1.4.0');
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(false);
 		});
 
 		it('does not treat partial canonical markers as canonical', () => {
