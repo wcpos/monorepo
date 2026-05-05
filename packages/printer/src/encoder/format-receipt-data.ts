@@ -15,6 +15,7 @@ const DEFAULT_I18N = {
 	date: 'Date',
 	cashier: 'Cashier',
 	customer: 'Customer',
+	store_tax_id_label_other: 'Tax ID',
 	subtotal: 'Subtotal',
 	total: 'Total',
 	refund_total: 'Refund Total',
@@ -23,6 +24,19 @@ const DEFAULT_I18N = {
 	thank_you: 'Thank you',
 	thank_you_purchase: 'Thank you for your purchase!',
 };
+
+function resolveStoreTaxIdLabel(
+	taxId: { type: string; label?: string | null },
+	i18n: Record<string, string | undefined>
+): string {
+	const label = taxId.label?.trim();
+	if (label) return label;
+
+	const typeLabel = i18n[`store_tax_id_label_${taxId.type}`]?.trim();
+	if (typeLabel) return typeLabel;
+
+	return i18n.store_tax_id_label_other || DEFAULT_I18N.store_tax_id_label_other;
+}
 
 /**
  * Format all numeric currency fields in ReceiptData, adding locale-aware
@@ -46,6 +60,13 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		if (/^Refund\s[-—]\s/.test(title)) return title.replace(/^Refund\s[-—]\s/, 'Refund — ');
 		return `Refund — ${title}`;
 	};
+	const i18n = {
+		...DEFAULT_I18N,
+		...data.i18n,
+		total: isRefund
+			? (data.i18n?.refund_total ?? data.i18n?.total ?? DEFAULT_I18N.refund_total)
+			: (data.i18n?.total ?? DEFAULT_I18N.total),
+	};
 
 	const fmt = (value: number): string => {
 		try {
@@ -60,13 +81,14 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 
 	return {
 		...data,
-		i18n: {
-			...DEFAULT_I18N,
-			...data.i18n,
-			total: isRefund
-				? (data.i18n?.refund_total ?? data.i18n?.total ?? DEFAULT_I18N.refund_total)
-				: (data.i18n?.total ?? DEFAULT_I18N.total),
+		store: {
+			...data.store,
+			tax_ids: data.store.tax_ids?.map((taxId) => ({
+				...taxId,
+				label: resolveStoreTaxIdLabel(taxId, i18n),
+			})),
 		},
+		i18n,
 		order: {
 			id: data.meta.order_id,
 			number: data.meta.order_number,
@@ -124,7 +146,7 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			total_excl_display: fmt(fee.total_excl),
 			taxes: fee.taxes?.map((tax) => ({
 				...tax,
-				amount_display: fmt(tax.amount),
+				amount_display: fmt(refundValue(tax.amount)),
 			})),
 		})),
 		shipping: data.shipping.map((s) => ({
@@ -134,7 +156,7 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			total_excl_display: fmt(s.total_excl),
 			taxes: s.taxes?.map((tax) => ({
 				...tax,
-				amount_display: fmt(tax.amount),
+				amount_display: fmt(refundValue(tax.amount)),
 			})),
 		})),
 		discounts: data.discounts.map((d) => ({

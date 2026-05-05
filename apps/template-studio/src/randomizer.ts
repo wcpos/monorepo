@@ -592,16 +592,19 @@ function buildTaxIds(rand: () => number, pool: LocalePool): TaxId[] {
 						type: 'eu_vat',
 						value: `DE${Math.floor(rand() * 900_000_000 + 100_000_000)}`,
 						country: 'DE',
+						label: 'USt-IdNr.',
 					},
 					{
 						type: 'de_steuernummer',
 						value: `05/${Math.floor(rand() * 900 + 100)}/${Math.floor(rand() * 90_000 + 10_000)}`,
 						country: 'DE',
+						label: 'Steuernummer',
 					},
 					{
 						type: 'de_hrb',
 						value: `HRB München ${Math.floor(rand() * 900_000 + 100_000)}`,
 						country: 'DE',
+						label: 'Handelsregister',
 					},
 				];
 			}
@@ -609,11 +612,17 @@ function buildTaxIds(rand: () => number, pool: LocalePool): TaxId[] {
 				// France — SIRET + EU VAT.
 				const siren = Math.floor(rand() * 900_000_000 + 100_000_000);
 				return [
-					{ type: 'eu_vat', value: `FR${Math.floor(rand() * 90 + 10)}${siren}`, country: 'FR' },
+					{
+						type: 'eu_vat',
+						value: `FR${Math.floor(rand() * 90 + 10)}${siren}`,
+						country: 'FR',
+						label: 'TVA intracommunautaire',
+					},
 					{
 						type: 'fr_siret',
 						value: `${siren}${Math.floor(rand() * 90_000 + 10_000)}`,
 						country: 'FR',
+						label: 'SIRET',
 					},
 				];
 			}
@@ -623,11 +632,13 @@ function buildTaxIds(rand: () => number, pool: LocalePool): TaxId[] {
 					type: 'eu_vat',
 					value: `ES${Math.floor(rand() * 90_000_000 + 10_000_000)}A`,
 					country: 'ES',
+					label: 'IVA',
 				},
 				{
 					type: 'es_nif',
 					value: `${Math.floor(rand() * 90_000_000 + 10_000_000)}B`,
 					country: 'ES',
+					label: 'NIF',
 				},
 			];
 		}
@@ -638,11 +649,13 @@ function buildTaxIds(rand: () => number, pool: LocalePool): TaxId[] {
 					type: 'gb_vat',
 					value: `GB${Math.floor(rand() * 900_000_000 + 100_000_000)}`,
 					country: 'GB',
+					label: 'UK VAT',
 				},
 				{
 					type: 'gb_company',
 					value: `${Math.floor(rand() * 90_000_000 + 10_000_000)}`,
 					country: 'GB',
+					label: 'Company registration',
 				},
 			];
 		case 'CHF':
@@ -651,6 +664,7 @@ function buildTaxIds(rand: () => number, pool: LocalePool): TaxId[] {
 					type: 'ch_uid',
 					value: `CHE-${Math.floor(rand() * 900 + 100)}.${Math.floor(rand() * 900 + 100)}.${Math.floor(rand() * 900 + 100)}`,
 					country: 'CH',
+					label: 'UID',
 				},
 			];
 		case 'SAR':
@@ -661,6 +675,7 @@ function buildTaxIds(rand: () => number, pool: LocalePool): TaxId[] {
 						.toString()
 						.padStart(14, '0')}`,
 					country: 'SA',
+					label: pool.taxLabel,
 				},
 			];
 		case 'JPY':
@@ -678,7 +693,7 @@ function buildTaxIds(rand: () => number, pool: LocalePool): TaxId[] {
 				},
 			];
 		default:
-			return [{ type: 'other', value: `TAX-${Math.floor(rand() * 1_000_000)}` }];
+			return [{ type: 'other', value: `TAX-${Math.floor(rand() * 1_000_000)}`, label: 'Tax ID' }];
 	}
 }
 

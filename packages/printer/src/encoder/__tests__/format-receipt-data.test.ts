@@ -90,13 +90,45 @@ describe('formatReceiptData', () => {
 		expect(result.shipping[0].taxes?.[0].amount_display).toBe('$1.04');
 	});
 
+	it('adds localized labels to store tax IDs without labels', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.store.tax_ids = [{ type: 'sa_vat', value: '398563834163360', country: 'SA' }];
+		data.i18n = {
+			...data.i18n,
+			store_tax_id_label_sa_vat: 'ضريبة القيمة المضافة',
+		};
+
+		const result = formatReceiptData(data);
+
+		expect(result.store.tax_ids?.[0].label).toBe('ضريبة القيمة المضافة');
+	});
+
 	it('signs per-line tax amount on refund renders', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.lines[0].taxes = [{ code: 'vat-10', rate: 10, label: 'VAT 10%', amount: 0.91 }];
+		data.fees = [
+			{
+				label: 'Service Fee',
+				total_incl: 2.5,
+				total_excl: 2.27,
+				taxes: [{ code: 'vat-10', rate: 10, label: 'VAT 10%', amount: 0.23 }],
+			},
+		];
+		data.shipping = [
+			{
+				label: 'Standard shipping',
+				method_id: 'flat_rate',
+				total_incl: 6.0,
+				total_excl: 4.96,
+				taxes: [{ code: 'vat-21', rate: 21, label: 'VAT 21%', amount: 1.04 }],
+			},
+		];
 		data.refunds = [{ id: 1, amount: 5, lines: [] }];
 		const result = formatReceiptData(data);
 		expect(result.lines[0].taxes[0].amount).toBe(-0.91);
 		expect(result.lines[0].taxes[0].amount_display).toBe('-$0.91');
+		expect(result.fees[0].taxes?.[0].amount_display).toBe('-$0.23');
+		expect(result.shipping[0].taxes?.[0].amount_display).toBe('-$1.04');
 	});
 
 	it('adds _display variants for fees and discounts', () => {
