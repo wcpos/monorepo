@@ -144,8 +144,8 @@ export function applyScenarioState(data: ReceiptData, state: ScenarioState): Rec
 	}
 
 	next.payments = state.multiPayment
-		? buildSplitPayments(next.totals.grand_total_incl)
-		: [buildSinglePayment(next.totals.grand_total_incl)];
+		? buildSplitPayments(next.totals.total_incl)
+		: [buildSinglePayment(next.totals.total_incl)];
 	next.fiscal = applyFiscal(next, state.fiscal, state.barcodeQr);
 
 	return next;
@@ -255,9 +255,9 @@ function emptyTotals(): ReceiptTotals {
 		discount_total_incl: 0,
 		discount_total_excl: 0,
 		tax_total: 0,
-		grand_total: 0,
-		grand_total_incl: 0,
-		grand_total_excl: 0,
+		total: 0,
+		total_incl: 0,
+		total_excl: 0,
 		paid_total: 0,
 		change_total: 0,
 	};
@@ -301,9 +301,9 @@ function computeTotals(
 		discount_total_incl: round(discountIncl),
 		discount_total_excl: round(discountExcl),
 		tax_total: round(grandIncl - grandExcl),
-		grand_total: grandIncl,
-		grand_total_incl: grandIncl,
-		grand_total_excl: grandExcl,
+		total: grandIncl,
+		total_incl: grandIncl,
+		total_excl: grandExcl,
 		paid_total: grandIncl,
 		change_total: 0,
 	};
@@ -313,8 +313,8 @@ function computeTotals(
 }
 
 function buildTaxSummary(data: ReceiptData): ReceiptTaxSummaryItem[] {
-	const grandExcl = data.totals.grand_total_excl;
-	const grandIncl = data.totals.grand_total_incl;
+	const grandExcl = data.totals.total_excl;
+	const grandIncl = data.totals.total_incl;
 	if (grandIncl === 0 && grandExcl === 0) return [];
 	return [
 		{

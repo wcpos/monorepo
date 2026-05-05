@@ -316,6 +316,24 @@ function mapDiscountLike(src: Record<string, any>, displayTax: DisplayTax): Rece
 	return discount;
 }
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────
+ * NO LEGACY COMPAT — DO NOT ADD `grand_total*` FALLBACKS HERE
+ * ─────────────────────────────────────────────────────────────────────────
+ *
+ * The receipt-data contract is v1 (see `meta.schema_version` pinned at 1
+ * in schema.ts). The earlier `grand_total*` field family was renamed to
+ * `total*` before any release ever shipped — there is no legacy producer
+ * to bridge to. If a payload comes in without `total_incl` / `total_excl`,
+ * the resulting zeros are the correct signal that the producer is
+ * out-of-spec.
+ *
+ * Review history: a compat shim was added in c5626465a / 4f8e6076a in
+ * response to bot review feedback, then deliberately stripped in
+ * c2820539e once the maintainer confirmed there is no shipping legacy.
+ * Do not add it back.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
 function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTotals {
 	const subtotalIncl = toNum(src.subtotal_incl ?? src.subtotal);
 	const subtotalExcl =
@@ -323,9 +341,8 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 	const taxTotal = toNum(src.tax_total);
 	const discountTotalIncl = toNum(src.discount_total_incl ?? src.discount_total);
 	const discountTotalExcl = toNum(src.discount_total_excl ?? src.discount_total);
-	const grandTotalIncl = toNum(src.grand_total_incl ?? src.grand_total);
-	const grandTotalExcl =
-		'grand_total_excl' in src ? toNum(src.grand_total_excl) : grandTotalIncl - taxTotal;
+	const grandTotalIncl = toNum(src.total_incl ?? src.total);
+	const grandTotalExcl = 'total_excl' in src ? toNum(src.total_excl) : grandTotalIncl - taxTotal;
 	const subtotal = displayTax === 'excl' ? subtotalExcl : subtotalIncl;
 	const discountTotal = displayTax === 'excl' ? discountTotalExcl : discountTotalIncl;
 	const grandTotal = displayTax === 'excl' ? grandTotalExcl : grandTotalIncl;
@@ -338,9 +355,9 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 		discount_total_incl: discountTotalIncl,
 		discount_total_excl: discountTotalExcl,
 		tax_total: taxTotal,
-		grand_total: grandTotal,
-		grand_total_incl: grandTotalIncl,
-		grand_total_excl: grandTotalExcl,
+		total: grandTotal,
+		total_incl: grandTotalIncl,
+		total_excl: grandTotalExcl,
 		paid_total: 'paid_total' in src ? toNum(src.paid_total) : grandTotalIncl,
 		change_total: 'change_total' in src ? toNum(src.change_total) : 0,
 		...('refund_total' in src && src.refund_total != null
@@ -687,9 +704,9 @@ function emptyReceiptData(): ReceiptData {
 			discount_total_incl: 0,
 			discount_total_excl: 0,
 			tax_total: 0,
-			grand_total: 0,
-			grand_total_incl: 0,
-			grand_total_excl: 0,
+			total: 0,
+			total_incl: 0,
+			total_excl: 0,
 			paid_total: 0,
 			change_total: 0,
 		},

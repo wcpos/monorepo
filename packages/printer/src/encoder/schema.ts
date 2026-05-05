@@ -109,9 +109,18 @@ export const ReceiptStoreMetaSchema = z.object({
 });
 
 export const ReceiptOrderMetaSchema = z.object({
+	// ──────────────────────────────────────────────────────────────────
+	// NO LEGACY — schema_version is pinned at literal `1`. Do not widen
+	// to a string/number union "for backwards-compat" — there is no
+	// shipped legacy contract. If you need a breaking-change release,
+	// bump to `2`. Any other value fails validation by design.
+	// See refactor/rename-grand-total-to-total review thread for context.
+	// ──────────────────────────────────────────────────────────────────
 	schema_version: z
-		.union([z.string(), z.number().int()])
-		.describe('Receipt-data contract version (PHP emits a SemVer string)'),
+		.literal(1)
+		.describe(
+			'Receipt-data contract version. Pinned at 1 — this is v1 of the contract. The version only changes on a breaking-change release, not on additive iterations.'
+		),
 	created_at_gmt: z.string().describe('Order creation timestamp (ISO/GMT)'),
 	created_at_local: z.string().optional().describe('Order creation timestamp (local timezone)'),
 	order_id: z.number().int().describe('Numeric order identifier'),
@@ -270,9 +279,9 @@ export const ReceiptTotalsSchema = z.object({
 	discount_total_incl: z.number().describe('Discount total tax-inclusive'),
 	discount_total_excl: z.number().describe('Discount total tax-exclusive'),
 	tax_total: z.number().describe('Total tax amount'),
-	grand_total: z.number().optional().describe('Display-side grand total'),
-	grand_total_incl: z.number().describe('Grand total tax-inclusive'),
-	grand_total_excl: z.number().describe('Grand total tax-exclusive'),
+	total: z.number().optional().describe('Display-side grand total'),
+	total_incl: z.number().describe('Grand total tax-inclusive'),
+	total_excl: z.number().describe('Grand total tax-exclusive'),
 	paid_total: z.number().describe('Sum of payments tendered'),
 	change_total: z.number().describe('Change returned to customer'),
 	refund_total: z
@@ -439,7 +448,7 @@ export const ReceiptI18nSchema = z
 		subtotal_excl_tax: z.string().optional(),
 		total: z.string().optional(),
 		total_tax: z.string().optional(),
-		grand_total_incl_tax: z.string().optional(),
+		total_incl_tax: z.string().optional(),
 		tax: z.string().optional(),
 		paid: z.string().optional(),
 		tendered: z.string().optional(),

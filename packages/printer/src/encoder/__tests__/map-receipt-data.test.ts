@@ -79,9 +79,9 @@ const offlineReceiptData = {
 		discount_total: '0.00',
 		discount_total_incl: '0.00',
 		discount_total_excl: '0.00',
-		grand_total: '25.00',
-		grand_total_incl: '25.00',
-		grand_total_excl: '22.73',
+		total: '25.00',
+		total_incl: '25.00',
+		total_excl: '22.73',
 	},
 	payments: [
 		{
@@ -153,7 +153,7 @@ describe('mapReceiptData', () => {
 					...sampleReceiptData.totals,
 					subtotal: undefined,
 					discount_total: undefined,
-					grand_total: undefined,
+					total: undefined,
 				},
 				presentation_hints: undefined,
 			};
@@ -166,7 +166,7 @@ describe('mapReceiptData', () => {
 			expect(result.lines[0].line_total).toBe(10);
 			expect(result.totals.subtotal).toBe(25);
 			expect(result.totals.discount_total).toBe(0);
-			expect(result.totals.grand_total).toBe(25);
+			expect(result.totals.total).toBe(25);
 			expect(result.presentation_hints).toEqual({
 				display_tax: 'incl',
 				prices_entered_with_tax: true,
@@ -194,7 +194,7 @@ describe('mapReceiptData', () => {
 					...sampleReceiptData.totals,
 					subtotal: undefined,
 					discount_total: undefined,
-					grand_total: undefined,
+					total: undefined,
 				},
 				presentation_hints: {
 					display_tax: 'hidden',
@@ -215,7 +215,7 @@ describe('mapReceiptData', () => {
 			expect(result.discounts[0].total).toBe(1.36);
 			expect(result.totals.subtotal).toBe(sampleReceiptData.totals.subtotal_excl);
 			expect(result.totals.discount_total).toBe(sampleReceiptData.totals.discount_total_excl);
-			expect(result.totals.grand_total).toBe(sampleReceiptData.totals.grand_total_excl);
+			expect(result.totals.total).toBe(sampleReceiptData.totals.total_excl);
 		});
 
 		it('detects canonical shape when both meta and totals markers are present', () => {
@@ -228,6 +228,69 @@ describe('mapReceiptData', () => {
 			expect(result.meta.order_id).toBe(5);
 			expect(result.totals.subtotal_incl).toBe(10);
 			expect(result.presentation_hints.display_tax).toBe('incl');
+		});
+
+		// ──────────────────────────────────────────────────────────────────
+		// NO LEGACY COMPAT — these tests exist to lock the v1 contract and
+		// catch any future PR that re-introduces a `grand_total*` bridge or
+		// re-widens schema_version. If you find yourself "fixing" these
+		// tests by adding fallbacks, stop and read the comment block at the
+		// top of `mapTotals` in map-receipt-data.ts.
+		// ──────────────────────────────────────────────────────────────────
+		it('does NOT bridge legacy grand_total* keys (out-of-spec → zero totals)', () => {
+			const outOfSpec = {
+				...sampleReceiptData,
+				totals: {
+					subtotal: 25,
+					subtotal_incl: 25,
+					subtotal_excl: 22.73,
+					discount_total: 0,
+					discount_total_incl: 0,
+					discount_total_excl: 0,
+					tax_total: 2.27,
+					// Renamed v1 keys absent on purpose; only legacy keys present.
+					grand_total: 25,
+					grand_total_incl: 25,
+					grand_total_excl: 22.73,
+					change_total: 0,
+				},
+			};
+			const result = mapReceiptData(outOfSpec as Record<string, any>);
+
+			// v1 contract: total_incl/excl are required; legacy keys are NOT a fallback.
+			expect(result.totals.total_incl).toBe(0);
+			expect(result.totals.total_excl).toBe(-2.27); // 0 - tax_total
+			expect(result.totals.total).toBe(0);
+		});
+
+		it('does NOT translate legacy i18n.grand_total_incl_tax → total_incl_tax', () => {
+			const outOfSpec = {
+				...sampleReceiptData,
+				i18n: {
+					grand_total_incl_tax: 'Grand Total (incl. tax)',
+				},
+			};
+			const result = mapReceiptData(outOfSpec as Record<string, any>);
+
+			// The legacy key passes through (we don't drop unrecognized i18n keys),
+			// but the canonical `total_incl_tax` is NOT auto-populated from it.
+			expect(result.i18n?.total_incl_tax).toBeUndefined();
+		});
+
+		it('does NOT auto-coerce schema_version "1.4.0" string to integer 1', () => {
+			const outOfSpec = {
+				...sampleReceiptData,
+				meta: {
+					...sampleReceiptData.meta,
+					schema_version: '1.4.0',
+				},
+			};
+			const result = mapReceiptData(outOfSpec as Record<string, any>);
+
+			// v1 contract: schema_version must arrive as integer 1. Anything else
+			// passes through, then fails Zod validation downstream — by design.
+			expect(result.meta.schema_version).toBe('1.4.0');
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(false);
 		});
 
 		it('does not treat partial canonical markers as canonical', () => {
@@ -330,14 +393,14 @@ describe('mapReceiptData', () => {
 			expect(mapped.totals.subtotal_incl).toBe(25);
 			expect(mapped.totals.tax_total).toBe(2.27);
 			expect(mapped.totals.discount_total_incl).toBe(0);
-			expect(mapped.totals.grand_total_incl).toBe(25);
+			expect(mapped.totals.total_incl).toBe(25);
 			expect(mapped.totals.subtotal_excl).toBeCloseTo(22.73, 2);
-			expect(mapped.totals.grand_total_excl).toBeCloseTo(22.73, 2);
+			expect(mapped.totals.total_excl).toBeCloseTo(22.73, 2);
 			expect(mapped.totals.paid_total).toBe(25);
 			expect(mapped.totals.change_total).toBe(0);
 			expect(mapped.totals.subtotal).toBe(25);
 			expect(mapped.totals.discount_total).toBe(0);
-			expect(mapped.totals.grand_total).toBe(25);
+			expect(mapped.totals.total).toBe(25);
 		});
 
 		it('maps payments with method used as both id and title', () => {
@@ -443,7 +506,7 @@ describe('mapReceiptData', () => {
 
 		it('returns empty structure for non-object input', () => {
 			const result = mapReceiptData('string' as any);
-			expect(result.totals.grand_total_incl).toBe(0);
+			expect(result.totals.total_incl).toBe(0);
 		});
 
 		it('handles completely empty object', () => {
@@ -469,7 +532,7 @@ describe('mapReceiptData', () => {
 			expect(result.customer.name).toBe('');
 			expect(result.lines).toEqual([]);
 			expect(result.payments).toEqual([]);
-			expect(result.totals.grand_total_incl).toBe(0);
+			expect(result.totals.total_incl).toBe(0);
 		});
 
 		it('handles line items with missing fields', () => {
@@ -489,13 +552,13 @@ describe('mapReceiptData', () => {
 					subtotal: 'not a number',
 					tax_total: undefined,
 					discount_total: null,
-					grand_total_incl: NaN,
+					total_incl: NaN,
 				},
 			});
 			expect(result.totals.subtotal_incl).toBe(0);
 			expect(result.totals.tax_total).toBe(0);
 			expect(result.totals.discount_total_incl).toBe(0);
-			expect(result.totals.grand_total_incl).toBe(0);
+			expect(result.totals.total_incl).toBe(0);
 		});
 
 		it('handles line with zero quantity without division-by-zero', () => {

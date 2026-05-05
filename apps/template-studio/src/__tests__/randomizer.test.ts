@@ -40,7 +40,7 @@ describe('template-studio randomizer', () => {
 		const result = createRandomReceipt({ seed: 1, overrides: { emptyCart: true } });
 		expect(result.scenarios.emptyCart).toBe(true);
 		expect(result.data.lines).toEqual([]);
-		expect(result.data.totals.grand_total_incl).toBe(0);
+		expect(result.data.totals.total_incl).toBe(0);
 	});
 
 	it('honors scenario overrides for refund (positive qty + refunds[] populated)', () => {
@@ -176,7 +176,7 @@ describe('template-studio randomizer', () => {
 		});
 		expect(result.data.payments.length).toBeGreaterThanOrEqual(2);
 		const sum = result.data.payments.reduce((acc, p) => acc + p.amount, 0);
-		expect(Math.round(sum * 100) / 100).toBe(result.data.totals.grand_total_incl);
+		expect(Math.round(sum * 100) / 100).toBe(result.data.totals.total_incl);
 	});
 
 	it('keeps grand totals internally consistent when fees and shipping are present', () => {
@@ -202,9 +202,9 @@ describe('template-studio randomizer', () => {
 			Math.round((lineTotalExcl + feeTotalExcl + shippingTotalExcl + discountTotalExcl) * 100) /
 			100;
 
-		expect(result.data.totals.grand_total_excl).toBe(expectedGrandExcl);
+		expect(result.data.totals.total_excl).toBe(expectedGrandExcl);
 		expect(result.data.totals.tax_total).toBe(
-			Math.round((result.data.totals.grand_total_incl - expectedGrandExcl) * 100) / 100
+			Math.round((result.data.totals.total_incl - expectedGrandExcl) * 100) / 100
 		);
 		const summaryTax = result.data.tax_summary.reduce((sum, tax) => sum + tax.tax_amount, 0);
 		expect(Math.round(summaryTax * 100) / 100).toBe(result.data.totals.tax_total);

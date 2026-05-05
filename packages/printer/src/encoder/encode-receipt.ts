@@ -88,7 +88,7 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 			nameColWidth,
 			priceColWidth,
 		})),
-		grand_total_fmt: formatMoney(data.totals.grand_total_incl, currency, dp),
+		total_fmt: formatMoney(data.totals.total_incl, currency, dp),
 		payments: data.payments.map((payment) => ({
 			method_title: payment.method_title,
 			amount_fmt: formatMoney(payment.amount, currency, dp),

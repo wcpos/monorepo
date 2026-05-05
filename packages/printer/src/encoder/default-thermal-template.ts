@@ -13,7 +13,7 @@
  *   formatted_lines[].{name, detail, line_total_fmt},
  *   subtotal_fmt, has_discount, discount_fmt,
  *   show_tax, tax_lines[].{label, amount_fmt},
- *   grand_total_fmt,
+ *   total_fmt,
  *   payments[].{method_title, amount_fmt, has_tendered, tendered_fmt, change_fmt},
  *   cut, openDrawer, columns
  */
@@ -93,7 +93,7 @@ export const DEFAULT_THERMAL_TEMPLATE = `<receipt paper-width="{{columns}}">
   <bold>
   <row>
     <col width="{{nameColWidth}}">TOTAL</col>
-    <col width="{{priceColWidth}}" align="right">{{grand_total_fmt}}</col>
+    <col width="{{priceColWidth}}" align="right">{{total_fmt}}</col>
   </row>
   </bold>
   <line />

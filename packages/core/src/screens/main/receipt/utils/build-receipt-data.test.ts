@@ -154,7 +154,7 @@ describe('buildReceiptData', () => {
 	it('maps totals', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.totals.subtotal).toBe('25.00');
-		expect(result.totals.grand_total_incl).toBe('25.00');
+		expect(result.totals.total_incl).toBe('25.00');
 		expect(result.totals.tax_total).toBe('2.50');
 		expect(result.totals.discount_total).toBe('5.00');
 	});
@@ -210,7 +210,7 @@ describe('buildReceiptData', () => {
 
 		expect(result.totals.subtotal).toBe('30.00');
 		expect(result.totals.discount_total).toBe('6.00');
-		expect(result.totals.grand_total).toBe('24.00');
+		expect(result.totals.total).toBe('24.00');
 		expect(result.presentation_hints.display_tax).toBe('incl');
 		expect(result.presentation_hints.prices_entered_with_tax).toBe(true);
 		expect(result.presentation_hints.locale).toBe('en_US');
@@ -228,7 +228,7 @@ describe('buildReceiptData', () => {
 
 		expect(result.totals.subtotal).toBe('25.00');
 		expect(result.totals.discount_total).toBe('5.00');
-		expect(result.totals.grand_total).toBe('20.00');
+		expect(result.totals.total).toBe('20.00');
 		expect(result.presentation_hints.display_tax).toBe('excl');
 		expect(result.presentation_hints.prices_entered_with_tax).toBe(false);
 	});

@@ -67,9 +67,9 @@ interface ReceiptTotals {
 	discount_total: string;
 	discount_total_incl: string;
 	discount_total_excl: string;
-	grand_total: string;
-	grand_total_incl: string;
-	grand_total_excl: string;
+	total: string;
+	total_incl: string;
+	total_excl: string;
 }
 
 interface ReceiptAdjustment {
@@ -332,13 +332,13 @@ export function buildReceiptData(
 			}).toFixed(dp),
 			discount_total_incl: discountTotalIncl.toFixed(dp),
 			discount_total_excl: discountTotalExcl.toFixed(dp),
-			grand_total: getDisplayValue({
+			total: getDisplayValue({
 				incl: grandTotalIncl,
 				excl: grandTotalExcl,
 				displayTax,
 			}).toFixed(dp),
-			grand_total_incl: grandTotalIncl.toFixed(dp),
-			grand_total_excl: grandTotalExcl.toFixed(dp),
+			total_incl: grandTotalIncl.toFixed(dp),
+			total_excl: grandTotalExcl.toFixed(dp),
 		},
 		payments: [
 			{

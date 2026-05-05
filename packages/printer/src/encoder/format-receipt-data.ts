@@ -234,12 +234,9 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			subtotal_incl: refundValue(data.totals.subtotal_incl),
 			subtotal_excl: refundValue(data.totals.subtotal_excl),
 			tax_total: refundValue(data.totals.tax_total),
-			grand_total:
-				data.totals.grand_total != null
-					? refundValue(data.totals.grand_total)
-					: data.totals.grand_total,
-			grand_total_incl: refundValue(data.totals.grand_total_incl),
-			grand_total_excl: refundValue(data.totals.grand_total_excl),
+			total: data.totals.total != null ? refundValue(data.totals.total) : data.totals.total,
+			total_incl: refundValue(data.totals.total_incl),
+			total_excl: refundValue(data.totals.total_excl),
 			paid_total: refundValue(data.totals.paid_total),
 			subtotal_display: fmt(
 				refundValue(
@@ -258,14 +255,14 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			discount_total_incl_display: fmt(data.totals.discount_total_incl),
 			discount_total_excl_display: fmt(data.totals.discount_total_excl),
 			tax_total_display: fmt(refundValue(data.totals.tax_total)),
-			grand_total_display: fmt(
+			total_display: fmt(
 				refundValue(
-					data.totals.grand_total ??
-						(displayTax === 'excl' ? data.totals.grand_total_excl : data.totals.grand_total_incl)
+					data.totals.total ??
+						(displayTax === 'excl' ? data.totals.total_excl : data.totals.total_incl)
 				)
 			),
-			grand_total_incl_display: fmt(refundValue(data.totals.grand_total_incl)),
-			grand_total_excl_display: fmt(refundValue(data.totals.grand_total_excl)),
+			total_incl_display: fmt(refundValue(data.totals.total_incl)),
+			total_excl_display: fmt(refundValue(data.totals.total_excl)),
 			paid_total_display: fmt(refundValue(data.totals.paid_total)),
 			change_total_display: fmt(data.totals.change_total),
 		},

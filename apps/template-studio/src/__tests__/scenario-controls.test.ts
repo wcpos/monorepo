@@ -110,7 +110,7 @@ describe('scenario controls', () => {
 		expect(withoutAdjustments.discounts).toEqual([]);
 		expect(withAdjustments.shipping.length).toBeGreaterThan(0);
 		expect(withAdjustments.discounts.length).toBeGreaterThan(0);
-		expect(withAdjustments.totals.grand_total_incl).toBeCloseTo(
+		expect(withAdjustments.totals.total_incl).toBeCloseTo(
 			withAdjustments.lines.reduce((sum, line) => sum + line.line_total_incl, 0) +
 				withAdjustments.fees.reduce((sum, fee) => sum + fee.total_incl, 0) +
 				withAdjustments.shipping.reduce((sum, item) => sum + item.total_incl, 0) +
@@ -149,8 +149,8 @@ describe('scenario controls', () => {
 		expect(result.totals.subtotal_incl).toBe(20);
 		expect(result.totals.discount_total_incl).toBe(-5);
 		expect(result.totals.discount_total_excl).toBe(-4);
-		expect(result.totals.grand_total_incl).toBe(15);
-		expect(result.totals.grand_total_excl).toBe(12);
+		expect(result.totals.total_incl).toBe(15);
+		expect(result.totals.total_excl).toBe(12);
 		expect(result.totals.tax_total).toBe(3);
 		expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
 	});
@@ -184,7 +184,7 @@ describe('scenario controls', () => {
 		expect(empty.shipping).toEqual([]);
 		expect(empty.discounts).toEqual([]);
 		expect(empty.refunds).toEqual([]);
-		expect(empty.totals.grand_total_incl).toBe(0);
+		expect(empty.totals.total_incl).toBe(0);
 		expect(populated.lines.length).toBeGreaterThan(0);
 	});
 

@@ -25,7 +25,7 @@ describe('ReceiptDataSchema', () => {
 
 	it('rejects wrong-typed numeric field', () => {
 		const broken = JSON.parse(JSON.stringify(sampleReceiptData));
-		broken.totals.grand_total_incl = 'not-a-number';
+		broken.totals.total_incl = 'not-a-number';
 		const result = ReceiptDataSchema.safeParse(broken);
 		expect(result.success).toBe(false);
 	});

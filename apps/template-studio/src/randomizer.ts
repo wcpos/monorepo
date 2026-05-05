@@ -447,7 +447,7 @@ function buildReceiptData(
 		pool.locale,
 		pool.timeZone
 	);
-	const payments = buildPayments(rand, scenarios, totals.grand_total_incl, orderCurrency, totals);
+	const payments = buildPayments(rand, scenarios, totals.total_incl, orderCurrency, totals);
 	if (refunds.length > 0) {
 		for (const payment of payments) {
 			payment.method_title = `Refund — ${payment.method_title}`;
@@ -1147,9 +1147,9 @@ function computeTotals(
 		discount_total_incl: round(discountTotalIncl),
 		discount_total_excl: round(discountTotalExcl),
 		tax_total: round(grandIncl - grandExcl),
-		grand_total: grandIncl,
-		grand_total_incl: grandIncl,
-		grand_total_excl: grandExcl,
+		total: grandIncl,
+		total_incl: grandIncl,
+		total_excl: grandExcl,
 		paid_total: grandIncl,
 		change_total: 0,
 	};
@@ -1310,7 +1310,7 @@ function buildOrderMeta(
 		}
 	})();
 	return {
-		schema_version: '1.4.0',
+		schema_version: 1,
 		created_at_gmt: createdAtGmt,
 		created_at_local: localeFormatted,
 		order_id: orderId,
@@ -1448,7 +1448,7 @@ function buildI18nLabels(hasRefunds = false): ReceiptI18n {
 		subtotal_excl_tax: 'Subtotal (excl. tax)',
 		total: hasRefunds ? 'Refund Total' : 'Total',
 		total_tax: 'Total Tax',
-		grand_total_incl_tax: 'Grand Total (incl. tax)',
+		total_incl_tax: 'Total (incl. tax)',
 		tax: 'Tax',
 		paid: 'Paid',
 		tendered: 'Tendered',
