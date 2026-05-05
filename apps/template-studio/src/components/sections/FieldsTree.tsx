@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React from 'react';
 
 import {
 	ARRAY_DEFAULTS,
@@ -23,7 +23,7 @@ interface FieldsTreeProps {
 
 export function FieldsTree(props: FieldsTreeProps) {
 	const { data, pristine, search, onChangePath, onAddItem, onRemoveItem, onRevertSection } = props;
-	const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => ({}));
+	const [openSections, setOpenSections] = React.useState<Record<string, boolean>>(() => ({}));
 	const normalizedSearch = search.trim().toLowerCase();
 
 	const toggleSection = (key: string) =>
@@ -42,45 +42,36 @@ export function FieldsTree(props: FieldsTreeProps) {
 				const open = openSections[section.key] ?? Boolean(normalizedSearch);
 				return (
 					<div key={section.key} className={open ? 'tree-section open' : 'tree-section'}>
-						<button
-							type="button"
-							className="tree-section-header"
-							aria-expanded={open}
-							onClick={() => toggleSection(section.key)}
-						>
-							<span className="twirl" aria-hidden="true" />
-							<span>{section.label}</span>
-							{section.kind === 'array' && arrayCount !== null ? (
-								<span
-									className={arrayCount > 0 ? 'badge populated' : 'badge'}
-									aria-label={`${arrayCount} items`}
-								>
-									[ {arrayCount} ]
-								</span>
-							) : null}
+						<div className="tree-section-header">
+							<button
+								type="button"
+								className="tree-section-toggle"
+								aria-expanded={open}
+								onClick={() => toggleSection(section.key)}
+							>
+								<span className="twirl" aria-hidden="true" />
+								<span>{section.label}</span>
+								{section.kind === 'array' && arrayCount !== null ? (
+									<span
+										className={arrayCount > 0 ? 'badge populated' : 'badge'}
+										aria-label={`${arrayCount} items`}
+									>
+										[ {arrayCount} ]
+									</span>
+								) : null}
+							</button>
 							{isModified ? (
-								<span
+								<button
+									type="button"
 									className="revert-button"
-									role="button"
-									tabIndex={0}
 									aria-label={`Revert ${section.label}`}
 									title="Revert to last shuffle"
-									onClick={(event) => {
-										event.stopPropagation();
-										onRevertSection(section.path);
-									}}
-									onKeyDown={(event) => {
-										if (event.key === 'Enter' || event.key === ' ') {
-											event.preventDefault();
-											event.stopPropagation();
-											onRevertSection(section.path);
-										}
-									}}
+									onClick={() => onRevertSection(section.path)}
 								>
 									↺
-								</span>
+								</button>
 							) : null}
-						</button>
+						</div>
 						{open ? (
 							<div className="tree-content">
 								{section.kind === 'array' ? (
@@ -118,12 +109,13 @@ interface ObjectEditorProps {
 }
 
 function ObjectEditor({ value, basePath, search, onChangePath }: ObjectEditorProps) {
-	const entries = Object.entries(value).filter(([key]) => !HIDDEN_PATHS.has(key));
+	const entries = Object.entries(value);
 	return (
 		<>
 			{entries.map(([key, fieldValue]) => {
 				const fieldPath = [...basePath, key];
 				const fieldPathString = pathLabel(fieldPath);
+				if (HIDDEN_PATHS.has(fieldPathString)) return null;
 				if (
 					search &&
 					!fieldPathString.toLowerCase().includes(search) &&
@@ -220,7 +212,7 @@ interface FieldRendererProps {
 }
 
 function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRendererProps) {
-	const [expanded, setExpanded] = useState(false);
+	const [expanded, setExpanded] = React.useState(false);
 	const fieldPathString = pathLabel(path);
 	const enumOptions =
 		ENUM_OPTIONS[fieldPathString] ?? ENUM_OPTIONS[fieldPathString.replace(/\[\d+\]/g, '')];
@@ -232,6 +224,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 					{fieldKey}
 				</label>
 				<select
+					aria-label={fieldKey}
 					value={String(value ?? '')}
 					onChange={(event) => onChangePath(path, event.target.value)}
 				>
@@ -259,7 +252,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 						{value.map((item, index) => (
 							<div key={index} className="array-item">
 								<div className="array-item-header">
-									<span className="item-title">{`${fieldKey} #${index + 1}`}</span>
+									<span className="item-title">{arrayItemTitle(fieldKey, item, index)}</span>
 								</div>
 								{item && typeof item === 'object' ? (
 									<ObjectEditor
@@ -270,6 +263,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 									/>
 								) : (
 									<input
+										aria-label={fieldKey}
 										value={String(item ?? '')}
 										onChange={(event) => onChangePath([...path, index], event.target.value)}
 									/>
@@ -312,6 +306,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 					{fieldKey}
 				</label>
 				<input
+					aria-label={fieldKey}
 					type="checkbox"
 					checked={value}
 					onChange={(event) => onChangePath(path, event.target.checked)}
@@ -327,6 +322,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 					{fieldKey}
 				</label>
 				<input
+					aria-label={fieldKey}
 					type="number"
 					value={Number.isFinite(value) ? value : 0}
 					onChange={(event) => {
@@ -345,6 +341,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 				{fieldKey}
 			</label>
 			<input
+				aria-label={fieldKey}
 				type="text"
 				value={String(value ?? '')}
 				onChange={(event) => onChangePath(path, event.target.value)}
