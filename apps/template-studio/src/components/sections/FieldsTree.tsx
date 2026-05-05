@@ -224,7 +224,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 					{fieldKey}
 				</label>
 				<select
-					aria-label={fieldKey}
+					aria-label={fieldPathString}
 					value={String(value ?? '')}
 					onChange={(event) => onChangePath(path, event.target.value)}
 				>
@@ -244,7 +244,11 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 				<label className="field-label" title={fieldPathString}>
 					{fieldKey} <span className="badge">[ {value.length} ]</span>
 				</label>
-				<button type="button" onClick={() => setExpanded((current) => !current)}>
+				<button
+					type="button"
+					aria-label={`${expanded ? 'Hide' : 'Edit'} field ${fieldPathString}`}
+					onClick={() => setExpanded((current) => !current)}
+				>
 					{expanded ? 'Hide' : 'Edit'}
 				</button>
 				{expanded ? (
@@ -263,7 +267,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 									/>
 								) : (
 									<input
-										aria-label={fieldKey}
+										aria-label={pathLabel([...path, index])}
 										value={String(item ?? '')}
 										onChange={(event) => onChangePath([...path, index], event.target.value)}
 									/>
@@ -282,7 +286,11 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 				<label className="field-label" title={fieldPathString}>
 					{fieldKey}
 				</label>
-				<button type="button" onClick={() => setExpanded((current) => !current)}>
+				<button
+					type="button"
+					aria-label={`${expanded ? 'Hide' : 'Edit'} field ${fieldPathString}`}
+					onClick={() => setExpanded((current) => !current)}
+				>
 					{expanded ? 'Hide' : 'Edit'}
 				</button>
 				{expanded ? (
@@ -306,7 +314,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 					{fieldKey}
 				</label>
 				<input
-					aria-label={fieldKey}
+					aria-label={fieldPathString}
 					type="checkbox"
 					checked={value}
 					onChange={(event) => onChangePath(path, event.target.checked)}
@@ -322,7 +330,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 					{fieldKey}
 				</label>
 				<input
-					aria-label={fieldKey}
+					aria-label={fieldPathString}
 					type="number"
 					value={Number.isFinite(value) ? value : 0}
 					onChange={(event) => {
@@ -341,7 +349,7 @@ function FieldRenderer({ fieldKey, value, path, search, onChangePath }: FieldRen
 				{fieldKey}
 			</label>
 			<input
-				aria-label={fieldKey}
+				aria-label={fieldPathString}
 				type="text"
 				value={String(value ?? '')}
 				onChange={(event) => onChangePath(path, event.target.value)}
