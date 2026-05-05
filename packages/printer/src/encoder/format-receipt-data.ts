@@ -84,6 +84,11 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			line_total: line.line_total != null ? refundValue(line.line_total) : line.line_total,
 			line_total_incl: refundValue(line.line_total_incl),
 			line_total_excl: refundValue(line.line_total_excl),
+			taxes: line.taxes.map((tax) => ({
+				...tax,
+				amount: refundValue(tax.amount),
+				amount_display: fmt(refundValue(tax.amount)),
+			})),
 			unit_price_display: fmt(
 				refundValue(
 					line.unit_price ?? (displayTax === 'excl' ? line.unit_price_excl : line.unit_price_incl)
@@ -117,12 +122,20 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			total_display: fmt(fee.total ?? (displayTax === 'excl' ? fee.total_excl : fee.total_incl)),
 			total_incl_display: fmt(fee.total_incl),
 			total_excl_display: fmt(fee.total_excl),
+			taxes: fee.taxes?.map((tax) => ({
+				...tax,
+				amount_display: fmt(tax.amount),
+			})),
 		})),
 		shipping: data.shipping.map((s) => ({
 			...s,
 			total_display: fmt(s.total ?? (displayTax === 'excl' ? s.total_excl : s.total_incl)),
 			total_incl_display: fmt(s.total_incl),
 			total_excl_display: fmt(s.total_excl),
+			taxes: s.taxes?.map((tax) => ({
+				...tax,
+				amount_display: fmt(tax.amount),
+			})),
 		})),
 		discounts: data.discounts.map((d) => ({
 			...d,

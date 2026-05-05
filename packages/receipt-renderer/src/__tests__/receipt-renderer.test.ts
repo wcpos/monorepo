@@ -123,6 +123,40 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).not.toContain('>QR<');
 	});
 
+	it('resolves <barcode> elements inside logicless HTML templates to inline SVG', () => {
+		const html = renderLogiclessTemplate(
+			'<div><barcode type="code128" height="40">{{order.number}}</barcode></div>',
+			{ order: { number: 'ABC-123' } }
+		);
+
+		expect(html).toContain('data-barcode-kind="barcode"');
+		expect(html).toContain('data-barcode-value="ABC-123"');
+		expect(html).toContain('<svg');
+		// The original <barcode> tag must be removed by the resolver.
+		expect(html).not.toContain('<barcode');
+	});
+
+	it('resolves <qrcode> elements inside logicless HTML templates', () => {
+		const html = renderLogiclessTemplate('<div><qrcode size="4">{{payload}}</qrcode></div>', {
+			payload: 'wcpos://receipt/1001',
+		});
+
+		expect(html).toContain('data-barcode-kind="qrcode"');
+		expect(html).toContain('data-barcode-value="wcpos://receipt/1001"');
+		expect(html).toContain('<svg');
+		expect(html).not.toContain('<qrcode');
+	});
+
+	it('keeps existing logicless XSS protection when barcodes are absent', () => {
+		const html = renderLogiclessTemplate(
+			'<main><h1>{{store.name}}</h1><script>alert(1)</script></main>',
+			data
+		);
+
+		expect(html).toContain('<h1>My Test Store</h1>');
+		expect(html).not.toContain('<script');
+	});
+
 	it('rejects unsafe image data URIs in HTML rendering', () => {
 		const ast = parseXml(
 			'<receipt><image src="data:image/svg+xml,&lt;svg onload=alert(1)&gt;" width="200" /></receipt>'

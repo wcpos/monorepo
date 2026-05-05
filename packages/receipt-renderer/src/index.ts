@@ -2,7 +2,7 @@ import Mustache from 'mustache';
 
 import { parseXml } from './parse-xml';
 import { renderEscpos } from './render-escpos';
-import { renderHtml } from './render-html';
+import { renderBarcode, renderHtml, renderQrCode } from './render-html';
 import { sanitizeHtml } from './sanitize-html';
 
 import type { EscposRenderOptions } from './render-escpos';
@@ -17,6 +17,12 @@ export type { EscposRenderOptions } from './render-escpos';
 export type { SanitizeHtmlOptions } from './sanitize-html';
 export type * from './types';
 
+/**
+ * Sanitize options shared by every pipeline that emits barcode SVG: thermal
+ * preview and logicless HTML. Both call `renderBarcode` / `renderQrCode`,
+ * which produce `<svg><path/></svg>` wrapped in a `data-barcode-*` div, so
+ * the allow-list permits those tags and attributes.
+ */
 export const thermalPreviewSanitizeOptions = {
 	addTags: ['svg', 'path'],
 	addAttributes: [
@@ -57,15 +63,69 @@ export interface ThermalPreviewOptions extends SanitizeHtmlOptions {
 }
 
 /**
- * Render a logicless HTML template with Mustache data, then sanitize the output.
+ * Render a logicless HTML template with Mustache data, then resolve any
+ * `<barcode>` / `<qrcode>` elements to inline barcode SVG (mirroring the
+ * thermal pipeline's `renderHtml` behavior), then sanitize.
+ *
+ * Logicless templates can use the same syntax thermal templates use:
+ *
+ *     <barcode type="code128" height="40">{{order.number}}</barcode>
+ *     <qrcode size="4">{{fiscal.qr_payload}}</qrcode>
  */
 export function renderLogiclessTemplate(
 	template: string,
 	data: Record<string, any>,
 	options: LogiclessRenderOptions = {}
 ): string {
-	const html = Mustache.render(template, data);
-	return options.sanitize === false ? html : sanitizeHtml(html, options);
+	const rendered = Mustache.render(template, data);
+	const withBarcodes = resolveBarcodeElements(rendered);
+	if (options.sanitize === false) return withBarcodes;
+	return sanitizeHtml(withBarcodes, {
+		...options,
+		addTags: [...thermalPreviewSanitizeOptions.addTags, ...(options.addTags ?? [])],
+		addAttributes: [
+			...thermalPreviewSanitizeOptions.addAttributes,
+			...(options.addAttributes ?? []),
+		],
+	});
+}
+
+/**
+ * Walk rendered HTML and replace any `<barcode>` / `<qrcode>` elements with
+ * the SVG output produced by `renderBarcode` / `renderQrCode`. No-op when
+ * the markup contains no barcode elements, or when no DOMParser is
+ * available (e.g. server-side build tooling without a DOM polyfill).
+ */
+function resolveBarcodeElements(html: string): string {
+	if (!/<barcode\b|<qrcode\b/i.test(html)) return html;
+	if (typeof DOMParser === 'undefined') return html;
+
+	const doc = new DOMParser().parseFromString(`<!doctype html><body>${html}</body>`, 'text/html');
+
+	for (const el of Array.from(doc.querySelectorAll('barcode'))) {
+		const type = el.getAttribute('type') ?? 'code128';
+		const heightAttr = el.getAttribute('height');
+		const height = heightAttr ? Number(heightAttr) : 40;
+		const value = (el.textContent ?? '').trim();
+		replaceElementWithHtml(el, renderBarcode(type, value, height, 'barcode'), doc);
+	}
+
+	for (const el of Array.from(doc.querySelectorAll('qrcode'))) {
+		const sizeAttr = el.getAttribute('size');
+		const size = sizeAttr ? Number(sizeAttr) : 4;
+		const value = (el.textContent ?? '').trim();
+		replaceElementWithHtml(el, renderQrCode(value, size), doc);
+	}
+
+	return doc.body.innerHTML;
+}
+
+function replaceElementWithHtml(el: Element, html: string, doc: Document): void {
+	const tmp = doc.createElement('div');
+	tmp.innerHTML = html;
+	const fragment = doc.createDocumentFragment();
+	while (tmp.firstChild) fragment.appendChild(tmp.firstChild);
+	el.replaceWith(fragment);
 }
 
 /**
