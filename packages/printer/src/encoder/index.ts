@@ -37,6 +37,7 @@ export type {
 	ReceiptInfo,
 	ReceiptOrder,
 	ReceiptI18n,
+	TaxId,
 } from './types';
 export {
 	ReceiptDataSchema,

@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import React from 'react';
 
 import { FieldsTree } from './FieldsTree';
+import { SCENARIO_CHIPS } from '../../scenario-controls';
 
 import type { PathSegment } from '../../lib/path-utils';
-import type { ResolvedScenarios, ScenarioWeights } from '../../randomizer';
+import type { ScenarioKey, ScenarioState } from '../../scenario-controls';
 
 interface DataSectionProps {
 	seedLabel: string;
 	onShuffle: () => void;
-	scenarios: ResolvedScenarios;
+	scenarioState: ScenarioState;
+	onToggleScenario: (key: ScenarioKey, nextValue: boolean) => void;
 	data: Record<string, unknown>;
 	pristine: Record<string, unknown>;
 	onChangePath: (path: PathSegment[], value: unknown) => void;
@@ -17,23 +19,11 @@ interface DataSectionProps {
 	onRevertSection: (path: PathSegment[]) => void;
 }
 
-const SCENARIO_LABELS: Record<keyof ScenarioWeights, string> = {
-	emptyCart: 'empty cart',
-	refund: 'refund',
-	rtl: 'RTL',
-	multicurrency: 'multi-currency',
-	multiPayment: 'multi-payment',
-	fiscal: 'fiscal',
-	longNames: 'long names',
-	hasDiscounts: 'discounts',
-	hasFees: 'fees',
-	hasShipping: 'shipping',
-};
-
 export function DataSection({
 	seedLabel,
 	onShuffle,
-	scenarios,
+	scenarioState,
+	onToggleScenario,
 	data,
 	pristine,
 	onChangePath,
@@ -41,10 +31,7 @@ export function DataSection({
 	onRemoveItem,
 	onRevertSection,
 }: DataSectionProps) {
-	const [search, setSearch] = useState('');
-	const activeScenarios = (Object.keys(SCENARIO_LABELS) as (keyof ScenarioWeights)[]).filter(
-		(key) => scenarios[key]
-	);
+	const [search, setSearch] = React.useState('');
 
 	return (
 		<>
@@ -56,15 +43,23 @@ export function DataSection({
 					seed: {seedLabel}
 				</span>
 			</div>
-			{activeScenarios.length > 0 ? (
-				<div className="scenario-tags" aria-label="Active scenarios">
-					{activeScenarios.map((key) => (
-						<span key={key} className="scenario-tag">
-							{SCENARIO_LABELS[key]}
-						</span>
-					))}
-				</div>
-			) : null}
+			<div className="scenario-tags" aria-label="Receipt data scenarios">
+				{SCENARIO_CHIPS.map((chip) => {
+					const active = scenarioState[chip.key];
+					return (
+						<button
+							key={chip.key}
+							type="button"
+							className={active ? 'scenario-tag active' : 'scenario-tag inactive'}
+							aria-pressed={active}
+							data-testid={`scenario-chip-${chip.key}`}
+							onClick={() => onToggleScenario(chip.key, !active)}
+						>
+							{chip.label}
+						</button>
+					);
+				})}
+			</div>
 			<input
 				type="search"
 				className="data-search"
