@@ -14,11 +14,11 @@ const LOGICLESS_TEMPLATE = `
       <li>{{name}} — {{line_total_display}}</li>
     {{/lines}}
   </ul>
-  <p>Total: {{totals.grand_total_display}}</p>
+  <p>Total: {{totals.total_display}}</p>
 </div>
 `;
 
-const THERMAL_TEMPLATE = `<receipt><text>{{store.name}}</text><text>{{totals.grand_total_display}}</text></receipt>`;
+const THERMAL_TEMPLATE = `<receipt><text>{{store.name}}</text><text>{{totals.total_display}}</text></receipt>`;
 
 describe('renderForStudio', () => {
 	it('renders a logicless template through the canonical pipeline', () => {
@@ -32,7 +32,7 @@ describe('renderForStudio', () => {
 		expect(result.html).toContain('My Test Store');
 		expect(result.html).toContain('Order #1042');
 		// Display values are produced by formatReceiptData
-		expect(result.data.totals.grand_total_display).toBeDefined();
+		expect(result.data.totals.total_display).toBeDefined();
 	});
 
 	it('renders a thermal template and returns ESC/POS bytes', () => {

@@ -32,17 +32,17 @@ describe('formatReceiptData', () => {
 	it('adds _display variants for totals', () => {
 		const result = formatReceiptData(sampleReceiptData);
 		expect(result.totals.subtotal_incl_display).toBe('$25.00');
-		expect(result.totals.grand_total_incl_display).toBe('$25.00');
+		expect(result.totals.total_incl_display).toBe('$25.00');
 		expect(result.totals.tax_total_display).toBe('$2.27');
 		expect(result.totals.subtotal_display).toBe('$25.00');
 		expect(result.totals.discount_total_display).toBe('$0.00');
-		expect(result.totals.grand_total_display).toBe('$25.00');
+		expect(result.totals.total_display).toBe('$25.00');
 	});
 
 	it('preserves original numeric totals', () => {
 		const result = formatReceiptData(sampleReceiptData);
 		expect(result.totals.subtotal_incl).toBe(25.0);
-		expect(result.totals.grand_total_incl).toBe(25.0);
+		expect(result.totals.total_incl).toBe(25.0);
 		expect(result.totals.tax_total).toBe(2.27);
 	});
 
@@ -204,8 +204,8 @@ describe('formatReceiptData', () => {
 		data.presentation_hints.locale = 'de-DE';
 		const result = formatReceiptData(data);
 		// German locale — verify EUR symbol and comma decimal separator
-		expect(result.totals.grand_total_incl_display).toMatch(/[€]|EUR/);
-		expect(result.totals.grand_total_incl_display).toContain(',');
+		expect(result.totals.total_incl_display).toMatch(/[€]|EUR/);
+		expect(result.totals.total_incl_display).toContain(',');
 	});
 
 	it('normalizes underscore locale tags from presentation_hints', () => {
@@ -213,7 +213,7 @@ describe('formatReceiptData', () => {
 		data.meta.currency = 'EUR';
 		data.presentation_hints.locale = ' de_DE ';
 		const result = formatReceiptData(data);
-		expect(result.totals.grand_total_incl_display).toContain(',');
+		expect(result.totals.total_incl_display).toContain(',');
 	});
 
 	it('uses prices_entered_with_tax fallback for display aliases when tax display is hidden', () => {
@@ -226,7 +226,7 @@ describe('formatReceiptData', () => {
 		delete data.lines[0].line_total;
 		delete data.totals.subtotal;
 		delete data.totals.discount_total;
-		delete data.totals.grand_total;
+		delete data.totals.total;
 		data.fees = [{ label: 'Service Fee', total_incl: 2.5, total_excl: 2.27 }];
 		data.shipping = [{ label: 'Flat Rate', total_incl: 3.5, total_excl: 3.18 }];
 		data.discounts = [{ label: 'Promo', total_incl: 1.5, total_excl: 1.36 }];
@@ -242,7 +242,7 @@ describe('formatReceiptData', () => {
 		expect(result.discounts[0].total_display).toBe('$1.36');
 		expect(result.totals.subtotal_display).toBe('$22.73');
 		expect(result.totals.discount_total_display).toBe('$0.00');
-		expect(result.totals.grand_total_display).toBe('$22.73');
+		expect(result.totals.total_display).toBe('$22.73');
 	});
 
 	it('preserves non-numeric fields unchanged', () => {
@@ -345,7 +345,7 @@ describe('formatReceiptData', () => {
 		expect(result.i18n.total).toBe('Refund Total');
 		expect(result.lines[0].line_total_incl).toBe(-10);
 		expect(result.totals.subtotal_incl).toBe(-25);
-		expect(result.totals.grand_total_incl).toBe(-25);
+		expect(result.totals.total_incl).toBe(-25);
 		expect(result.tax_summary[0].tax_amount).toBe(-2.27);
 		expect(result.payments[0].method_title).toBe('Refund — Cash');
 		expect(result.payments[0].amount).toBe(-25);

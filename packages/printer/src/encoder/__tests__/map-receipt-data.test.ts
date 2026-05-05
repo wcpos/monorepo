@@ -79,9 +79,9 @@ const offlineReceiptData = {
 		discount_total: '0.00',
 		discount_total_incl: '0.00',
 		discount_total_excl: '0.00',
-		grand_total: '25.00',
-		grand_total_incl: '25.00',
-		grand_total_excl: '22.73',
+		total: '25.00',
+		total_incl: '25.00',
+		total_excl: '22.73',
 	},
 	payments: [
 		{
@@ -153,7 +153,7 @@ describe('mapReceiptData', () => {
 					...sampleReceiptData.totals,
 					subtotal: undefined,
 					discount_total: undefined,
-					grand_total: undefined,
+					total: undefined,
 				},
 				presentation_hints: undefined,
 			};
@@ -166,7 +166,7 @@ describe('mapReceiptData', () => {
 			expect(result.lines[0].line_total).toBe(10);
 			expect(result.totals.subtotal).toBe(25);
 			expect(result.totals.discount_total).toBe(0);
-			expect(result.totals.grand_total).toBe(25);
+			expect(result.totals.total).toBe(25);
 			expect(result.presentation_hints).toEqual({
 				display_tax: 'incl',
 				prices_entered_with_tax: true,
@@ -194,7 +194,7 @@ describe('mapReceiptData', () => {
 					...sampleReceiptData.totals,
 					subtotal: undefined,
 					discount_total: undefined,
-					grand_total: undefined,
+					total: undefined,
 				},
 				presentation_hints: {
 					display_tax: 'hidden',
@@ -215,7 +215,7 @@ describe('mapReceiptData', () => {
 			expect(result.discounts[0].total).toBe(1.36);
 			expect(result.totals.subtotal).toBe(sampleReceiptData.totals.subtotal_excl);
 			expect(result.totals.discount_total).toBe(sampleReceiptData.totals.discount_total_excl);
-			expect(result.totals.grand_total).toBe(sampleReceiptData.totals.grand_total_excl);
+			expect(result.totals.total).toBe(sampleReceiptData.totals.total_excl);
 		});
 
 		it('detects canonical shape when both meta and totals markers are present', () => {
@@ -228,6 +228,30 @@ describe('mapReceiptData', () => {
 			expect(result.meta.order_id).toBe(5);
 			expect(result.totals.subtotal_incl).toBe(10);
 			expect(result.presentation_hints.display_tax).toBe('incl');
+		});
+
+		it('preserves legacy grand_total totals in canonical data', () => {
+			const legacyTotals = { ...sampleReceiptData.totals } as Record<string, any>;
+			const { total, total_incl, total_excl } = legacyTotals;
+			delete legacyTotals.total;
+			delete legacyTotals.total_incl;
+			delete legacyTotals.total_excl;
+			delete legacyTotals.paid_total;
+			const legacyCanonical = {
+				...sampleReceiptData,
+				totals: {
+					...legacyTotals,
+					grand_total: total,
+					grand_total_incl: total_incl,
+					grand_total_excl: total_excl,
+				},
+			};
+			const result = mapReceiptData(legacyCanonical as Record<string, any>);
+
+			expect(result.totals.total).toBe(total);
+			expect(result.totals.total_incl).toBe(total_incl);
+			expect(result.totals.total_excl).toBe(total_excl);
+			expect(result.totals.paid_total).toBe(total_incl);
 		});
 
 		it('does not treat partial canonical markers as canonical', () => {
@@ -330,14 +354,14 @@ describe('mapReceiptData', () => {
 			expect(mapped.totals.subtotal_incl).toBe(25);
 			expect(mapped.totals.tax_total).toBe(2.27);
 			expect(mapped.totals.discount_total_incl).toBe(0);
-			expect(mapped.totals.grand_total_incl).toBe(25);
+			expect(mapped.totals.total_incl).toBe(25);
 			expect(mapped.totals.subtotal_excl).toBeCloseTo(22.73, 2);
-			expect(mapped.totals.grand_total_excl).toBeCloseTo(22.73, 2);
+			expect(mapped.totals.total_excl).toBeCloseTo(22.73, 2);
 			expect(mapped.totals.paid_total).toBe(25);
 			expect(mapped.totals.change_total).toBe(0);
 			expect(mapped.totals.subtotal).toBe(25);
 			expect(mapped.totals.discount_total).toBe(0);
-			expect(mapped.totals.grand_total).toBe(25);
+			expect(mapped.totals.total).toBe(25);
 		});
 
 		it('maps payments with method used as both id and title', () => {
@@ -443,7 +467,7 @@ describe('mapReceiptData', () => {
 
 		it('returns empty structure for non-object input', () => {
 			const result = mapReceiptData('string' as any);
-			expect(result.totals.grand_total_incl).toBe(0);
+			expect(result.totals.total_incl).toBe(0);
 		});
 
 		it('handles completely empty object', () => {
@@ -469,7 +493,7 @@ describe('mapReceiptData', () => {
 			expect(result.customer.name).toBe('');
 			expect(result.lines).toEqual([]);
 			expect(result.payments).toEqual([]);
-			expect(result.totals.grand_total_incl).toBe(0);
+			expect(result.totals.total_incl).toBe(0);
 		});
 
 		it('handles line items with missing fields', () => {
@@ -489,13 +513,13 @@ describe('mapReceiptData', () => {
 					subtotal: 'not a number',
 					tax_total: undefined,
 					discount_total: null,
-					grand_total_incl: NaN,
+					total_incl: NaN,
 				},
 			});
 			expect(result.totals.subtotal_incl).toBe(0);
 			expect(result.totals.tax_total).toBe(0);
 			expect(result.totals.discount_total_incl).toBe(0);
-			expect(result.totals.grand_total_incl).toBe(0);
+			expect(result.totals.total_incl).toBe(0);
 		});
 
 		it('handles line with zero quantity without division-by-zero', () => {

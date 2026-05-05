@@ -323,9 +323,13 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 	const taxTotal = toNum(src.tax_total);
 	const discountTotalIncl = toNum(src.discount_total_incl ?? src.discount_total);
 	const discountTotalExcl = toNum(src.discount_total_excl ?? src.discount_total);
-	const grandTotalIncl = toNum(src.grand_total_incl ?? src.grand_total);
+	const grandTotalIncl = toNum(
+		src.total_incl ?? src.total ?? src.grand_total_incl ?? src.grand_total
+	);
 	const grandTotalExcl =
-		'grand_total_excl' in src ? toNum(src.grand_total_excl) : grandTotalIncl - taxTotal;
+		'total_excl' in src || 'grand_total_excl' in src
+			? toNum(src.total_excl ?? src.grand_total_excl)
+			: grandTotalIncl - taxTotal;
 	const subtotal = displayTax === 'excl' ? subtotalExcl : subtotalIncl;
 	const discountTotal = displayTax === 'excl' ? discountTotalExcl : discountTotalIncl;
 	const grandTotal = displayTax === 'excl' ? grandTotalExcl : grandTotalIncl;
@@ -338,9 +342,9 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 		discount_total_incl: discountTotalIncl,
 		discount_total_excl: discountTotalExcl,
 		tax_total: taxTotal,
-		grand_total: grandTotal,
-		grand_total_incl: grandTotalIncl,
-		grand_total_excl: grandTotalExcl,
+		total: grandTotal,
+		total_incl: grandTotalIncl,
+		total_excl: grandTotalExcl,
 		paid_total: 'paid_total' in src ? toNum(src.paid_total) : grandTotalIncl,
 		change_total: 'change_total' in src ? toNum(src.change_total) : 0,
 		...('refund_total' in src && src.refund_total != null
@@ -687,9 +691,9 @@ function emptyReceiptData(): ReceiptData {
 			discount_total_incl: 0,
 			discount_total_excl: 0,
 			tax_total: 0,
-			grand_total: 0,
-			grand_total_incl: 0,
-			grand_total_excl: 0,
+			total: 0,
+			total_incl: 0,
+			total_excl: 0,
 			paid_total: 0,
 			change_total: 0,
 		},

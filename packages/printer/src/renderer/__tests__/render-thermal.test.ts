@@ -17,7 +17,7 @@ const SIMPLE_TEMPLATE = `<receipt paper-width="48">
   <line />
   <row>
     <col width="36"><bold>TOTAL</bold></col>
-    <col width="12" align="right"><bold>{{totals.grand_total_incl_display}}</bold></col>
+    <col width="12" align="right"><bold>{{totals.total_incl_display}}</bold></col>
   </row>
   <cut />
 </receipt>`;
@@ -96,7 +96,7 @@ describe('star-width columns integration', () => {
   <line />
   <row>
     <col width="*">TOTAL</col>
-    <col width="10" align="right">{{totals.grand_total_incl_display}}</col>
+    <col width="10" align="right">{{totals.total_incl_display}}</col>
   </row>
 </receipt>`;
 
