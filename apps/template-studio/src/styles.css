@@ -331,7 +331,9 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 }
 .paper-frame.thermal-58 { width: 58mm; }
 .paper-frame.thermal-80 { width: 80mm; }
-.paper-frame.a4 { width: 210mm; min-height: 297mm; padding: 15mm; }
+/* A4 frame is edge-to-edge — print uses @page margin: 0, and templates
+ * carry their own internal padding. */
+.paper-frame.a4 { width: 210mm; min-height: 297mm; }
 .paper-frame.thermal-58, .paper-frame.thermal-80 {
 	padding: 4mm 2mm;
 	font-size: 11.5px;
