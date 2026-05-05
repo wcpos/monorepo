@@ -704,10 +704,24 @@ function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
 	const openingDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 	const openingInline = openingDays.map((d) => `${d} 9:00–18:00`).join(', ');
 	const openingVertical = openingDays.map((d) => `${d}: 9:00–18:00`).join('\n');
+	// PRNG draw order is preserved (cityRegion → name → street → postcode).
+	// We split cityRegion ("City, CC") to derive structured `city` without
+	// adding extra rand draws — adding a state pick would shift downstream
+	// snapshots and isn't necessary for EU/JP/SA stores.
 	const cityRegion = pickFrom(rand, pool.cities);
+	const name = pickFrom(rand, pool.storeNames);
+	const street = pickFrom(rand, pool.streets);
+	const postcode = pickFrom(rand, pool.postcodes);
+	const [cityName] = cityRegion.split(/[,،]/).map((part) => part.trim());
 	return {
-		name: pickFrom(rand, pool.storeNames),
-		address_lines: [pickFrom(rand, pool.streets), cityRegion, pickFrom(rand, pool.postcodes)],
+		name,
+		address: {
+			address_1: street,
+			city: cityName,
+			postcode,
+			country: pool.countryCode,
+		},
+		address_lines: [street, cityRegion, postcode],
 		tax_ids: buildTaxIds(rand, pool),
 		tax_id: undefined, // will be derived by the encoder/template if needed
 		phone:

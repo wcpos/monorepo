@@ -73,8 +73,30 @@ export const TaxIdSchema = z.object({
 });
 export type TaxId = z.infer<typeof TaxIdSchema>;
 
+/**
+ * Structured store address. Mirrors the part-by-part shape WooCommerce
+ * stores natively (`get_store_address`, `get_store_city`, etc.) so
+ * templates can compose country-specific layouts directly. Sits
+ * alongside the pre-formatted `address_lines[]`, which remains the
+ * easy default for templates that just iterate.
+ *
+ * All fields optional — stores in the wild often omit `address_2`,
+ * `state`, or both.
+ */
+export const ReceiptStoreAddressSchema = z.object({
+	address_1: z.string().optional().describe('Street address line 1'),
+	address_2: z.string().optional().describe('Street address line 2 / suite / unit'),
+	city: z.string().optional().describe('City / locality'),
+	state: z.string().optional().describe('State / region / province'),
+	postcode: z.string().optional().describe('Postal / ZIP code'),
+	country: z.string().optional().describe('ISO 3166-1 alpha-2 country code'),
+});
+
 export const ReceiptStoreMetaSchema = z.object({
 	name: z.string().describe('Store display name'),
+	address: ReceiptStoreAddressSchema.optional().describe(
+		'Structured address parts. Use these to compose custom / country-specific layouts; address_lines[] is the pre-formatted default.'
+	),
 	address_lines: z
 		.array(z.string())
 		.describe('Address as ordered lines (street, city, postcode...)'),
@@ -505,6 +527,7 @@ export const ReceiptDataSchema = z.object({
 export type ReceiptDate = z.infer<typeof ReceiptDateSchema>;
 export type ReceiptInfo = z.infer<typeof ReceiptInfoSchema>;
 export type ReceiptOrder = z.infer<typeof ReceiptOrderSchema>;
+export type ReceiptStoreAddress = z.infer<typeof ReceiptStoreAddressSchema>;
 export type ReceiptStoreMeta = z.infer<typeof ReceiptStoreMetaSchema>;
 export type ReceiptOrderMeta = z.infer<typeof ReceiptOrderMetaSchema>;
 export type ReceiptCashier = z.infer<typeof ReceiptCashierSchema>;

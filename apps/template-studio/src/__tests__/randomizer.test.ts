@@ -30,6 +30,21 @@ describe('template-studio randomizer', () => {
 		expect(fs.existsSync(path.resolve('public/coffee-monster.png'))).toBe(true);
 	});
 
+	it('populates structured store.address alongside address_lines[]', () => {
+		const result = createRandomReceipt({ seed: 'store-address' });
+
+		expect(result.data.store.address).toBeDefined();
+		// All locale pools either pick a Latin/CJK/RTL country code, but the type
+		// is always a 2-letter ISO code.
+		expect(result.data.store.address?.country).toMatch(/^[A-Z]{2}$/);
+		expect(result.data.store.address?.address_1).toBeTruthy();
+		expect(result.data.store.address?.city).toBeTruthy();
+		expect(result.data.store.address?.postcode).toBeTruthy();
+		// The pre-formatted address_lines[] is still populated for templates that
+		// just iterate.
+		expect(result.data.store.address_lines).toContain(result.data.store.address?.address_1);
+	});
+
 	it('produces different shapes for different seeds', () => {
 		const a = createRandomReceipt({ seed: 1 });
 		const b = createRandomReceipt({ seed: 2 });
