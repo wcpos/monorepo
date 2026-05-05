@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React from 'react';
 
 import { sanitizeHtml, sanitizeThermalPreviewHtml } from '@wcpos/receipt-renderer';
 
@@ -12,10 +12,17 @@ import { Toolbar } from './components/Toolbar';
 import { ARRAY_DEFAULTS } from './lib/field-meta';
 import { getAtPath, removeAtPath, setAtPath } from './lib/path-utils';
 import { createRandomReceipt, createRandomSeed, formatSeed } from './randomizer';
+import {
+	applyScenarioState,
+	createScenarioState,
+	mergeScenarioOverrides,
+	toggleScenarioOverride,
+} from './scenario-controls';
 import { fetchBundledTemplates } from './studio-api';
 import { renderStudioTemplate, selectVisibleTemplate } from './studio-core';
 
 import type { PathSegment } from './lib/path-utils';
+import type { ScenarioKey } from './scenario-controls';
 import type { PaperWidth, StudioTemplate, TemplateEngine } from './studio-core';
 
 const SECTION_STORAGE_KEY = 'wcpos-template-studio:sections';
@@ -52,17 +59,20 @@ function defaultPaperWidth(engine: TemplateEngine | undefined): PaperWidth {
 }
 
 export function App() {
-	const [templates, setTemplates] = useState<StudioTemplate[]>([]);
-	const [selectedTemplateId, setSelectedTemplateId] = useState(() => loadSelection());
-	const [zoom, setZoom] = useState(100);
-	const [seed, setSeed] = useState<number | string>('default');
-	const [sections, setSections] = useState<SectionState>(() => loadSectionState());
-	const [printerModel, setPrinterModel] = useState('');
-	const [language, setLanguage] = useState<'esc-pos' | 'star-prnt' | 'star-line'>('esc-pos');
-	const [error, setError] = useState<string | null>(null);
-	const previewFrameRef = useRef<HTMLDivElement>(null);
+	const [templates, setTemplates] = React.useState<StudioTemplate[]>([]);
+	const [selectedTemplateId, setSelectedTemplateId] = React.useState(() => loadSelection());
+	const [zoom, setZoom] = React.useState(100);
+	const [seed, setSeed] = React.useState<number | string>('default');
+	const [scenarioOverrides, setScenarioOverrides] = React.useState<
+		Partial<Record<ScenarioKey, boolean>>
+	>({});
+	const [sections, setSections] = React.useState<SectionState>(() => loadSectionState());
+	const [printerModel, setPrinterModel] = React.useState('');
+	const [language, setLanguage] = React.useState<'esc-pos' | 'star-prnt' | 'star-line'>('esc-pos');
+	const [error, setError] = React.useState<string | null>(null);
+	const previewFrameRef = React.useRef<HTMLDivElement>(null);
 
-	useEffect(() => {
+	React.useEffect(() => {
 		fetchBundledTemplates()
 			.then((loaded) => {
 				setTemplates(loaded);
@@ -74,7 +84,7 @@ export function App() {
 			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
 	}, []);
 
-	useEffect(() => {
+	React.useEffect(() => {
 		if (typeof window === 'undefined') return;
 		try {
 			window.localStorage.setItem(SECTION_STORAGE_KEY, JSON.stringify(sections));
@@ -83,7 +93,7 @@ export function App() {
 		}
 	}, [sections]);
 
-	useEffect(() => {
+	React.useEffect(() => {
 		if (typeof window === 'undefined' || !selectedTemplateId) return;
 		try {
 			window.localStorage.setItem(SELECTION_STORAGE_KEY, selectedTemplateId);
@@ -93,25 +103,37 @@ export function App() {
 	}, [selectedTemplateId]);
 
 	const selectedTemplate = selectVisibleTemplate(templates, selectedTemplateId);
-	const randomReceipt = useMemo(() => createRandomReceipt({ seed }), [seed]);
-	const pristineData = useMemo(
-		() => randomReceipt.data as unknown as Record<string, unknown>,
+	const randomReceipt = React.useMemo(() => createRandomReceipt({ seed }), [seed]);
+	const baseScenarioState = React.useMemo(
+		() => createScenarioState(randomReceipt.scenarios, randomReceipt.data),
 		[randomReceipt]
 	);
-	const [workingData, setWorkingData] = useState<Record<string, unknown>>(pristineData);
+	const scenarioState = React.useMemo(
+		() => mergeScenarioOverrides(baseScenarioState, scenarioOverrides),
+		[baseScenarioState, scenarioOverrides]
+	);
+	const pristineReceiptData = React.useMemo(
+		() => applyScenarioState(randomReceipt.data, scenarioState),
+		[randomReceipt.data, scenarioState]
+	);
+	const pristineData = React.useMemo(
+		() => pristineReceiptData as unknown as Record<string, unknown>,
+		[pristineReceiptData]
+	);
+	const [workingData, setWorkingData] = React.useState<Record<string, unknown>>(pristineData);
 
-	useEffect(() => {
-		// Reset working data whenever the seed changes (Shuffle).
+	React.useEffect(() => {
+		// Reset working data whenever Shuffle or a scenario chip changes the fixture baseline.
 		setWorkingData(pristineData);
 	}, [pristineData]);
 
-	const fixture = useMemo(
+	const fixture = React.useMemo(
 		() => ({ ...workingData, id: `random-${randomReceipt.seedHex}` }),
 		[workingData, randomReceipt]
 	);
 	const effectivePaperWidth: PaperWidth =
 		selectedTemplate?.paperWidth ?? defaultPaperWidth(selectedTemplate?.engine);
-	const { rendered, renderError } = useMemo(() => {
+	const { rendered, renderError } = React.useMemo(() => {
 		if (!selectedTemplate) return { rendered: null, renderError: null };
 		try {
 			return {
@@ -137,7 +159,11 @@ export function App() {
 		rendered?.kind === 'logicless' ? (rendered.diagnosticHtml ?? '') : ''
 	);
 
-	const shuffleSeed = useCallback(() => setSeed(createRandomSeed()), []);
+	const shuffleSeed = React.useCallback(() => setSeed(createRandomSeed()), []);
+
+	const handleToggleScenario = React.useCallback((key: ScenarioKey, nextValue: boolean) => {
+		setScenarioOverrides((current) => toggleScenarioOverride(current, key, nextValue));
+	}, []);
 
 	const toggleSection = (key: SectionKey) =>
 		setSections((current) => ({ ...current, [key]: !current[key] }));
@@ -166,7 +192,7 @@ export function App() {
 		setWorkingData((current) => setAtPath(current, path, structuredClone(pristineSection)));
 	};
 
-	const openPrintDialog = useCallback(() => {
+	const openPrintDialog = React.useCallback(() => {
 		if (!rendered) return;
 		const printWindow = window.open(
 			'',
@@ -203,7 +229,7 @@ export function App() {
 		fallbackTimer = printWindow.setTimeout(printReceipt, 1500);
 	}, [effectivePaperWidth, rendered]);
 
-	useEffect(() => {
+	React.useEffect(() => {
 		if (typeof window === 'undefined') return;
 		const handler = (event: KeyboardEvent) => {
 			const target = event.target as HTMLElement | null;
@@ -264,7 +290,8 @@ export function App() {
 						<DataSection
 							seedLabel={formatSeed(randomReceipt.seed)}
 							onShuffle={shuffleSeed}
-							scenarios={randomReceipt.scenarios}
+							scenarioState={scenarioState}
+							onToggleScenario={handleToggleScenario}
 							data={workingData}
 							pristine={pristineData}
 							onChangePath={handleChangePath}

@@ -445,12 +445,19 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ts-accent);
 
 .scenario-tag {
 	padding: 2px 8px;
+	border: 1px solid transparent;
 	border-radius: 999px;
 	background: var(--ts-accent-soft);
 	color: var(--ts-accent-strong);
 	cursor: pointer;
 	font-size: 11px;
 	font-weight: 500;
+}
+
+.scenario-tag.inactive {
+	background: var(--ts-panel-alt);
+	border-color: var(--ts-border);
+	color: var(--ts-text-secondary);
 }
 
 .scenario-tag:hover,
