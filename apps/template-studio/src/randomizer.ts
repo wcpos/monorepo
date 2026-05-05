@@ -1191,12 +1191,12 @@ function buildTaxSummary(
 		lines.reduce((sum, line) => sum + (line.line_subtotal_excl ?? 0), 0) +
 		fees.reduce((sum, fee) => sum + fee.total_excl, 0) +
 		shipping.reduce((sum, item) => sum + item.total_excl, 0) +
-		discounts.reduce((sum, item) => sum + item.total_excl, 0);
+		discounts.reduce((sum, item) => sum - item.total_excl, 0);
 	const taxableIncl =
 		lines.reduce((sum, line) => sum + (line.line_subtotal_incl ?? 0), 0) +
 		fees.reduce((sum, fee) => sum + fee.total_incl, 0) +
 		shipping.reduce((sum, item) => sum + item.total_incl, 0) +
-		discounts.reduce((sum, item) => sum + item.total_incl, 0);
+		discounts.reduce((sum, item) => sum - item.total_incl, 0);
 	if (taxRate === 0 || (taxableIncl === 0 && taxableExcl === 0)) return [];
 	return [
 		{
