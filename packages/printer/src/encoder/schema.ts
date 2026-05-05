@@ -506,6 +506,9 @@ export const ReceiptI18nSchema = z
 		document_type: z.string().optional(),
 		copy: z.string().optional(),
 		copy_number: z.string().optional(),
+		status: z.string().optional(),
+		completed: z.string().optional(),
+		printed: z.string().optional(),
 	})
 	.catchall(z.string());
 
