@@ -82,7 +82,7 @@ async function blockScriptRequests(route: import('@playwright/test').Route) {
  * storage migration. That approach always timed out (30s wasted per run).
  */
 async function waitForOPFSPersistence(page: Page): Promise<void> {
-	await page.waitForTimeout(5_000);
+	await page.waitForTimeout(15_000);
 }
 
 /**
@@ -365,6 +365,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
 		timeout: 120_000,
 	});
+	await waitForOPFSPersistence(page);
 }
 
 /**
