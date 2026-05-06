@@ -29,9 +29,9 @@ function ThemedSystemBars() {
 }
 
 export default function AuthLayout() {
-	const { storeDB } = useAppState();
+	const { storeDB, fastStoreDB } = useAppState();
 
-	if (storeDB) {
+	if (storeDB && fastStoreDB) {
 		return <Redirect href="/(app)" />;
 	}
 

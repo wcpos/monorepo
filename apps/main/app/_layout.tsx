@@ -69,7 +69,7 @@ function useToastTheme(): 'light' | 'dark' {
 }
 
 function RootStack() {
-	const { storeDB, store } = useAppState();
+	const { storeDB, fastStoreDB, store } = useAppState();
 	const { isThemeReady } = useThemeRestorer();
 	setToast(Toast.show);
 
@@ -81,7 +81,7 @@ function RootStack() {
 
 	return (
 		<Stack screenOptions={{ headerShown: false }}>
-			<Stack.Protected guard={!!storeDB}>
+			<Stack.Protected guard={!!storeDB && !!fastStoreDB}>
 				<Stack.Screen name="(app)" />
 			</Stack.Protected>
 			<Stack.Screen name="(auth)" />
