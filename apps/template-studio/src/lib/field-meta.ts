@@ -52,6 +52,7 @@ export const ENUM_OPTIONS: Record<string, readonly string[]> = {
 	'order.created_via': ['woocommerce-pos', 'checkout', 'admin', 'rest-api'],
 	'presentation_hints.display_tax': ['incl', 'excl', 'hidden', 'itemized', 'single'],
 	'presentation_hints.rounding_mode': ['per-line', 'per-total'],
+	'presentation_hints.order_barcode_type': ['code128', 'qrcode', 'ean13', 'ean8', 'upca'],
 	'customer.tax_ids.type': [
 		'eu_vat',
 		'gb_vat',

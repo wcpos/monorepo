@@ -496,7 +496,23 @@ function mapPresentationHints(src: Record<string, any>): ReceiptPresentationHint
 			'prices_entered_with_tax' in src ? !!src.prices_entered_with_tax : true,
 		rounding_mode: toStr(src.rounding_mode) || 'round',
 		locale: locale || 'en-US',
+		order_barcode_type: resolveOrderBarcodeType(src.order_barcode_type),
 	};
+}
+
+function resolveOrderBarcodeType(value: unknown): ReceiptPresentationHints['order_barcode_type'] {
+	const normalized = toStr(value).trim().toLowerCase();
+	if (
+		normalized === 'qr' ||
+		normalized === 'qrcode' ||
+		normalized === 'code128' ||
+		normalized === 'ean13' ||
+		normalized === 'ean8' ||
+		normalized === 'upca'
+	) {
+		return normalized === 'qr' ? 'qrcode' : normalized;
+	}
+	return 'code128';
 }
 
 function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData {
@@ -749,6 +765,7 @@ function emptyReceiptData(): ReceiptData {
 			prices_entered_with_tax: true,
 			rounding_mode: 'round',
 			locale: 'en-US',
+			order_barcode_type: 'code128',
 		},
 	};
 }
