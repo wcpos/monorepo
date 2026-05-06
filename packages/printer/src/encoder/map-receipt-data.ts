@@ -349,6 +349,7 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 		...('refund_total' in src && src.refund_total != null
 			? { refund_total: toNum(src.refund_total) }
 			: {}),
+		...('net_total' in src && src.net_total != null ? { net_total: toNum(src.net_total) } : {}),
 	};
 }
 

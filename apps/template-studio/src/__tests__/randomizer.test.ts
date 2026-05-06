@@ -125,17 +125,26 @@ describe('template-studio randomizer', () => {
 		expect(refund?.date?.datetime_full).toBeTruthy();
 	});
 
-	it('marks refund scenarios in rendered labels without negating order lines', () => {
+	it('keeps order totals positive on refund scenarios and exposes refund_total + net_total', () => {
 		const result = createRandomReceipt({
 			seed: 'refund',
 			overrides: { refund: true, emptyCart: false, cartSize: 2 },
 		});
 
-		expect(result.data.i18n.total).toBe(result.data.i18n.refund_total);
-		expect(
-			result.data.payments.every((payment) => payment.method_title.startsWith('Refund — '))
-		).toBe(true);
+		// Refund scenarios still produce a normal positive receipt — the refund
+		// info is in `refunds[]` and `totals.refund_total`, never via flipped
+		// signs or hijacked labels.
+		expect(result.data.i18n.total).toBe('Total');
 		expect(result.data.lines.every((line) => line.qty > 0 && line.line_total_incl >= 0)).toBe(true);
+		expect(result.data.totals.total_incl).toBeGreaterThanOrEqual(0);
+		expect(result.data.totals.refund_total).toBeGreaterThan(0);
+		expect(result.data.totals.net_total).toBe(
+			Math.max(
+				Math.round((result.data.totals.total_incl - (result.data.totals.refund_total ?? 0)) * 100) /
+					100,
+				0
+			)
+		);
 	});
 
 	it('localizes labels when shuffle resolves an RTL locale', () => {

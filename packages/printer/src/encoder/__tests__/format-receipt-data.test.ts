@@ -161,7 +161,7 @@ describe('formatReceiptData', () => {
 		expect(result.customer.tax_ids?.[0].label).toBe('Australian Business No.');
 	});
 
-	it('signs per-line tax amount on refund renders', () => {
+	it('preserves per-line / fee / shipping tax amounts as positive even when refunds exist', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.lines[0].taxes = [{ code: 'vat-10', rate: 10, label: 'VAT 10%', amount: 0.91 }];
 		data.fees = [
@@ -183,10 +183,12 @@ describe('formatReceiptData', () => {
 		];
 		data.refunds = [{ id: 1, amount: 5, lines: [] }];
 		const result = formatReceiptData(data);
-		expect(result.lines[0].taxes[0].amount).toBe(-0.91);
-		expect(result.lines[0].taxes[0].amount_display).toBe('-$0.91');
-		expect(result.fees[0].taxes?.[0].amount_display).toBe('-$0.23');
-		expect(result.shipping[0].taxes?.[0].amount_display).toBe('-$1.04');
+		// formatReceiptData no longer auto-flips signs when refunds are present —
+		// templates that want a credit-note look render the `refunds[]` block.
+		expect(result.lines[0].taxes[0].amount).toBe(0.91);
+		expect(result.lines[0].taxes[0].amount_display).toBe('$0.91');
+		expect(result.fees[0].taxes?.[0].amount_display).toBe('$0.23');
+		expect(result.shipping[0].taxes?.[0].amount_display).toBe('$1.04');
 	});
 
 	it('adds _display variants for fees and discounts', () => {
@@ -319,36 +321,42 @@ describe('formatReceiptData', () => {
 		expect(result.i18n.subtotal).toBe('Subtotal');
 	});
 
-	it('honors a custom i18n.refund_total override on refund receipts', () => {
+	it('passes through i18n.refund_total without remapping it onto i18n.total', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.refunds = [{ id: 1, amount: 25, lines: [] }];
 		data.i18n = { refund_total: 'Reembolso' };
 		const result = formatReceiptData(data);
 
-		expect(result.i18n.total).toBe('Reembolso');
+		// i18n.total stays the default "Total"; refund_total is available as its own key.
+		expect(result.i18n.total).toBe('Total');
+		expect(result.i18n.refund_total).toBe('Reembolso');
 	});
 
-	it('uses a custom i18n.total fallback on refund receipts without refund_total', () => {
-		const data = structuredClone(sampleReceiptData);
-		data.refunds = [{ id: 1, amount: 25, lines: [] }];
-		data.i18n = { total: 'Total Refunded' };
-		const result = formatReceiptData(data);
-
-		expect(result.i18n.total).toBe('Total Refunded');
-	});
-
-	it('renders refund receipts with negative display amounts and refund labels', () => {
+	it('keeps order totals positive when refunds are present', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.refunds = [{ id: 1, amount: 25, lines: [] }];
 		const result = formatReceiptData(data);
 
-		expect(result.i18n.total).toBe('Refund Total');
-		expect(result.lines[0].line_total_incl).toBe(-10);
-		expect(result.totals.subtotal_incl).toBe(-25);
-		expect(result.totals.total_incl).toBe(-25);
-		expect(result.tax_summary[0].tax_amount).toBe(-2.27);
-		expect(result.payments[0].method_title).toBe('Refund — Cash');
-		expect(result.payments[0].amount).toBe(-25);
+		// Source values pass through verbatim — no automatic credit-note flip.
+		expect(result.i18n.total).toBe('Total');
+		expect(result.lines[0].line_total_incl).toBe(10);
+		expect(result.totals.subtotal_incl).toBe(25);
+		expect(result.totals.total_incl).toBe(25);
+		expect(result.tax_summary[0].tax_amount).toBe(2.27);
+		expect(result.payments[0].method_title).toBe('Cash');
+		expect(result.payments[0].amount).toBe(25);
+	});
+
+	it('emits refund_total_display + net_total_display when those fields are set', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.totals.refund_total = 10;
+		data.totals.net_total = 15;
+		const result = formatReceiptData(data);
+
+		expect(result.totals.refund_total).toBe(10);
+		expect(result.totals.refund_total_display).toBe('$10.00');
+		expect(result.totals.net_total).toBe(15);
+		expect(result.totals.net_total_display).toBe('$15.00');
 	});
 
 	it('adds display fields and line-style aliases to refund rows', () => {

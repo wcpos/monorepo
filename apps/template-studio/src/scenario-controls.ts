@@ -351,7 +351,11 @@ function computeTotals(
 		change_total: 0,
 	};
 	const refundTotal = refunds.reduce((sum, refund) => sum + (refund.amount ?? 0), 0);
-	if (refundTotal > 0) totals.refund_total = round(refundTotal);
+	if (refundTotal > 0) {
+		const roundedRefundTotal = round(refundTotal);
+		totals.refund_total = roundedRefundTotal;
+		totals.net_total = round(Math.max(grandIncl - roundedRefundTotal, 0));
+	}
 	return totals;
 }
 
