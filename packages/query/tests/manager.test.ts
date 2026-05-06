@@ -381,6 +381,37 @@ describe('Manager', () => {
 			});
 			expect(result).toBeUndefined();
 		});
+
+		it('should skip replication when the sync database is not ready', () => {
+			manager = Manager.getInstance(storeDatabase, undefined, httpClientMock);
+
+			const result = manager.registerQuery({
+				queryKeys: ['missingSyncDatabaseQuery'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+
+			expect(result).toBeDefined();
+			expect(manager.replicationStates.has('products')).toBe(false);
+			expect(manager.activeCollectionReplications.has('["missingSyncDatabaseQuery"]')).toBe(false);
+		});
+
+		it('should retry replication setup when the sync database becomes ready', async () => {
+			manager = Manager.getInstance(storeDatabase, undefined, httpClientMock);
+
+			manager.registerQuery({
+				queryKeys: ['delayedSyncDatabaseQuery'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+
+			manager.fastLocalDB = syncDatabase;
+
+			await new Promise((resolve) => setTimeout(resolve, 1100));
+
+			expect(manager.replicationStates.has('products')).toBe(true);
+			expect(manager.activeCollectionReplications.has('["delayedSyncDatabaseQuery"]')).toBe(true);
+		});
 	});
 
 	describe('rxQuery$ replication dedup', () => {
@@ -657,6 +688,38 @@ describe('Manager', () => {
 			const newCollection = storeDatabase.collections.products;
 			expect(secondReplication.collection).toBe(newCollection);
 			expect(secondReplication.collection).not.toBe(firstCollection);
+		});
+
+		it('should create fresh replication when sync collection instance changes', async () => {
+			manager.registerQuery({
+				queryKeys: ['freshSyncTest'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+
+			const firstReplication = manager.replicationStates.get('products');
+			const firstSyncCollection = firstReplication.syncStateManager.syncCollection;
+			const syncSchema = (firstSyncCollection as any).schema.jsonSchema;
+
+			await syncDatabase.collections.products.remove();
+			await syncDatabase.addCollections({
+				products: { schema: syncSchema },
+			});
+
+			const queryKey = manager.stringify(['freshSyncTest']);
+			await manager.deregisterQuery(queryKey);
+			manager.registerQuery({
+				queryKeys: ['freshSyncTest'],
+				collectionName: 'products',
+				initialParams: {},
+			});
+
+			const secondReplication = manager.replicationStates.get('products');
+			const newSyncCollection = syncDatabase.collections.products;
+
+			expect(secondReplication).not.toBe(firstReplication);
+			expect(secondReplication.syncStateManager.syncCollection).toBe(newSyncCollection);
+			expect(secondReplication.syncStateManager.syncCollection).not.toBe(firstSyncCollection);
 		});
 
 		it('should detect stale replication by collection reference inequality', async () => {

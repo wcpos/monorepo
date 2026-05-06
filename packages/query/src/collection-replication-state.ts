@@ -75,6 +75,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	private pollingInterval = 1000 * 60 * 5; // 5 minutes
 	private fullFetchInterval = 1000 * 60 * 60; // 1 hour
 	private firstSyncResolver: (() => void) | null = null;
+	private retryTimer: ReturnType<typeof setTimeout> | null = null;
 	public readonly firstSync: Promise<void>;
 
 	/**
@@ -121,6 +122,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	}
 
 	async cancel(): Promise<void> {
+		if (this.retryTimer) {
+			clearTimeout(this.retryTimer);
+			this.retryTimer = null;
+		}
 		this.subjects.total.next(0);
 		await super.cancel();
 	}
@@ -263,6 +268,22 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.lastFetchRemoteUpdates = null;
 	}
 
+	private scheduleRetry() {
+		if (this.retryTimer || this.isCanceled || this.subjects.paused.getValue()) {
+			return;
+		}
+
+		this.retryTimer = setTimeout(() => {
+			this.retryTimer = null;
+			if (this.isCanceled || this.subjects.paused.getValue()) {
+				return;
+			}
+			this.run().catch(() => {
+				// Errors are already logged in run() and its sub-methods
+			});
+		}, 1000);
+	}
+
 	private shouldFetchRemoteState() {
 		const now = Date.now();
 		return !this.lastFetchRemoteState || this.lastFetchRemoteState < now - this.fullFetchInterval;
@@ -277,6 +298,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.lastFetchRemoteState = Date.now();
 		this.lastFetchRemoteUpdates = this.lastFetchRemoteState;
 		this.subjects.active.next(true);
+		let resolveFirstSync = true;
 
 		try {
 			const response = await this.dataFetcher.fetchAllRemoteIds(this.signal);
@@ -327,8 +349,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 						endpoint: this.endpoint,
 					},
 				});
-				// Don't show error - auth is being handled
-				// Polling will retry automatically when auth succeeds
+				this.resetFetchTimes();
+				this.scheduleRetry();
+				resolveFirstSync = false;
 				return;
 			}
 
@@ -356,7 +379,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} finally {
 			this.subjects.active.next(false);
 			// Fallback: resolve firstSync on error too, so query replications aren't stuck
-			if (this.firstSyncResolver) {
+			if (resolveFirstSync && this.firstSyncResolver) {
 				this.firstSyncResolver();
 				this.firstSyncResolver = null;
 			}
@@ -414,6 +437,8 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 							endpoint: this.endpoint,
 						},
 					});
+					this.resetFetchTimes();
+					this.scheduleRetry();
 					return;
 				}
 
@@ -510,6 +535,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 						endpoint: this.endpoint,
 					},
 				});
+				this.scheduleRetry();
 				return;
 			}
 

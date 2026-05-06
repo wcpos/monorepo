@@ -17,6 +17,7 @@ import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
 const E2E_USERNAME = process.env.E2E_USERNAME || 'demo';
 const E2E_PASSWORD = process.env.E2E_PASSWORD || 'demo';
+const E2E_PRO_STORE_ID = process.env.E2E_PRO_STORE_ID || '578';
 
 /**
  * Get the store URL from the project config, with env var override.
@@ -33,6 +34,57 @@ export function getStoreUrl(testInfo: TestInfo): string {
 export function getStoreVariant(testInfo: TestInfo): StoreVariant {
 	const opts = testInfo.project.use as WcposTestOptions;
 	return opts.storeVariant || 'free';
+}
+
+async function selectStoreOption(page: Page, testInfo: TestInfo): Promise<void> {
+	const preferredStoreOption =
+		getStoreVariant(testInfo) === 'pro'
+			? page.getByTestId(`store-option-${E2E_PRO_STORE_ID}`).first()
+			: null;
+
+	if (preferredStoreOption) {
+		const hasPreferred = await preferredStoreOption
+			.isVisible({ timeout: 2_000 })
+			.catch(() => false);
+		if (hasPreferred) {
+			console.log(`[auth] Selecting store ${E2E_PRO_STORE_ID} radio option...`);
+			await preferredStoreOption.click().catch(() => null);
+			return;
+		}
+	}
+
+	const firstStoreOption = page
+		.locator('[role="radiogroup"] [role="radio"], [role="radiogroup"] input[type="radio"]')
+		.first();
+	const hasOption = await firstStoreOption.isVisible({ timeout: 2_000 }).catch(() => false);
+	if (hasOption) {
+		console.log('[auth] Selecting first store radio option...');
+		await firstStoreOption.click().catch(() => null);
+	}
+}
+
+function logProductSyncResponses(page: Page): () => void {
+	const seen = new Set<string>();
+	const listener = async (response: import('@playwright/test').Response) => {
+		const url = response.url();
+		if (!/\/(?:wcpos\/v1|wc\/v3)\/products/.test(url)) return;
+
+		const parsed = new URL(url);
+		parsed.searchParams.delete('authorization');
+		const key = `${response.status()} ${parsed.pathname}?${parsed.searchParams.toString()}`;
+		if (seen.has(key)) return;
+		seen.add(key);
+
+		let count: string | number = 'n/a';
+		const body = await response.json().catch(() => null);
+		if (Array.isArray(body)) count = body.length;
+		console.log(
+			`[auth] Product sync response: ${response.status()} ${parsed.pathname}?${parsed.searchParams.toString()} — x-wp-total=${response.headers()['x-wp-total'] ?? 'n/a'}, body=${count}`
+		);
+	};
+
+	page.on('response', listener);
+	return () => page.off('response', listener);
 }
 
 /**
@@ -103,6 +155,7 @@ async function waitForOPFSPersistence(page: Page): Promise<void> {
 export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	const storeUrl = getStoreUrl(testInfo);
 	const context = page.context();
+	const stopProductSyncLogging = logProductSyncResponses(page);
 
 	// Intercept window.open: capture the URL, return fake window to prevent
 	// expo-auth-session from falling back to a page redirect.
@@ -316,15 +369,10 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 
 		const openPosEnabled = await openPosButton.isEnabled({ timeout: 2_000 }).catch(() => false);
 		if (!openPosEnabled) {
-			// Multi-store: no auto-selection — select the first store option.
-			const firstStoreOption = page
-				.locator('[role="radiogroup"] [role="radio"], [role="radiogroup"] input[type="radio"]')
-				.first();
-			const hasOption = await firstStoreOption.isVisible({ timeout: 2_000 }).catch(() => false);
-			if (hasOption) {
-				console.log('[auth] Selecting first store radio option...');
-				await firstStoreOption.click().catch(() => null);
-			} else {
+			// Multi-store: no auto-selection — select the configured store option.
+			await selectStoreOption(page, testInfo);
+			const selectedStore = await openPosButton.isEnabled({ timeout: 2_000 }).catch(() => false);
+			if (!selectedStore) {
 				console.log('[auth] open-pos-button still disabled and no store radio found, waiting...');
 				await page.waitForTimeout(2_000);
 				continue;
@@ -361,10 +409,14 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 		throw new Error('Failed to reach POS during auth bootstrap (wp-user-button/open-pos-button)');
 	}
 
-	// Wait for products to sync (use testID to avoid locale-dependent text)
-	await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
-		timeout: 120_000,
-	});
+	try {
+		// Wait for products to sync (use testID to avoid locale-dependent text)
+		await expect(page.getByTestId('data-table-count')).toContainText(/[1-9]/, {
+			timeout: 120_000,
+		});
+	} finally {
+		stopProductSyncLogging();
+	}
 }
 
 /**

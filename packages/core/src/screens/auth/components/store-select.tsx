@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Pressable } from 'react-native';
 
 import { of } from 'rxjs';
-import { distinctUntilChanged, switchMap, tap } from 'rxjs/operators';
+import { distinctUntilChanged, map, switchMap, tap } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
@@ -87,8 +87,15 @@ export function StoreSelect({
 					// Use a reactive find() query — findByIds(...).$ on filesystem-node
 					// storage does not re-emit when matching docs are inserted *after*
 					// the query was created. find({selector: { $in }}).$ does.
-					return storesCollection.find({ selector: { localID: { $in: validIds } } })
-						.$ as import('rxjs').Observable<StoreDocument[]>;
+					return storesCollection
+						.find({ selector: { localID: { $in: validIds } } })
+						.$.pipe(
+							map((resolved: StoreDocument[]) =>
+								validIds
+									.map((id) => resolved.find((store) => store.localID === id))
+									.filter((store): store is StoreDocument => !!store)
+							)
+						) as import('rxjs').Observable<StoreDocument[]>;
 				}),
 				distinctUntilChanged(storesEqual)
 			)
@@ -149,6 +156,7 @@ export function StoreSelect({
 							{stores.map((store) => (
 								<Pressable
 									key={store.localID}
+									testID={store.id != null ? `store-option-${store.id}` : undefined}
 									onPress={() => onStoreSelect(store.localID ?? null)}
 									className={`web:cursor-pointer web:transition-colors rounded-lg border p-3 ${
 										selectedStoreId === store.localID

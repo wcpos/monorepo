@@ -614,6 +614,39 @@ describe('CollectionReplicationState', () => {
 			await replicationState.cancel();
 		});
 
+		it('retries auth-cancelled first audit before resolving firstSync', async () => {
+			httpClientMock.get
+				.mockRejectedValueOnce(new CanceledError('Request canceled'))
+				.mockResolvedValueOnce({ data: [{ id: 1, date_modified_gmt: '2024-01-01T00:00:00' }] });
+
+			const replicationState = new CollectionReplicationState({
+				collection: storeDatabase.collections.products,
+				syncCollection: syncDatabase.collections.products,
+				httpClient: httpClientMock,
+				endpoint: 'products',
+			});
+
+			try {
+				let firstSyncResolved = false;
+				replicationState.firstSync.then(() => {
+					firstSyncResolved = true;
+				});
+
+				await replicationState.run({ force: true });
+				await new Promise((resolve) => setTimeout(resolve, 50));
+
+				expect(firstSyncResolved).toBe(false);
+				expect(httpClientMock.get).toHaveBeenCalledTimes(1);
+
+				await replicationState.firstSync;
+
+				expect(firstSyncResolved).toBe(true);
+				expect(httpClientMock.get).toHaveBeenCalledTimes(2);
+			} finally {
+				await replicationState.cancel();
+			}
+		}, 10_000);
+
 		it('silently returns on auth cancel via error.name === CanceledError', async () => {
 			const error = new Error('canceled');
 			error.name = 'CanceledError';

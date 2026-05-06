@@ -56,6 +56,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	// private static instanceCount = 0;
 	// private instanceId: number;
 	private static instance: Manager<any>;
+	private readonly replicationRetryAttempts = new Map<string, number>();
 
 	private constructor(
 		public localDB: TDatabase,
@@ -334,7 +335,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	getSyncCollection(collectionName: string) {
 		// Note: sync collection might not exist during collection swap
 		// The caller should handle undefined gracefully
-		return this.fastLocalDB.collections[collectionName];
+		return this.fastLocalDB?.collections?.[collectionName];
 	}
 
 	getQuery(queryKeys: (string | number | object)[]) {
@@ -438,6 +439,25 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 * - subscribe to the query params and register a new query replication state
 	 */
 	onNewQueryState(queryState: Query<RxCollection>) {
+		const activeCollectionReplication = this.activeCollectionReplications.get(queryState.id);
+		if (activeCollectionReplication) {
+			const currentSyncCollection = this.getSyncCollection((queryState.collection as any).name);
+			const activeSyncCollection = (activeCollectionReplication as any).syncStateManager
+				?.syncCollection;
+			const isActiveReplicationCurrent =
+				(activeCollectionReplication as any).collection === queryState.collection &&
+				!(activeCollectionReplication as any).collection?.destroyed &&
+				!!currentSyncCollection &&
+				activeSyncCollection === currentSyncCollection &&
+				!activeSyncCollection?.destroyed;
+
+			if (isActiveReplicationCurrent) {
+				return;
+			}
+
+			this.activeCollectionReplications.delete(queryState.id);
+		}
+
 		const { collection, endpoint } = queryState;
 		const collectionReplication = this.registerCollectionReplication({
 			collection,
@@ -450,9 +470,12 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			queryLogger.debug('Skipping replication setup - collection replication not ready', {
 				context: { queryId: queryState.id, collection: (collection as any).name },
 			});
+			this.scheduleReplicationRetry(queryState);
 			return;
 		}
 
+		this.replicationRetryAttempts.delete(queryState.id);
+		queryState.cancelSub('replication-retry');
 		this.activeCollectionReplications.set(queryState.id, collectionReplication);
 		collectionReplication.start();
 
@@ -522,6 +545,28 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		);
 	}
 
+	private scheduleReplicationRetry(queryState: Query<RxCollection>) {
+		const nextAttempt = (this.replicationRetryAttempts.get(queryState.id) ?? 0) + 1;
+		if (nextAttempt > 120 || this.isCanceled || queryState.isCanceled) {
+			queryLogger.warn('Replication setup retry exhausted', {
+				context: { queryId: queryState.id, collection: (queryState.collection as any).name },
+			});
+			return;
+		}
+
+		this.replicationRetryAttempts.set(queryState.id, nextAttempt);
+		const timeout = setTimeout(() => {
+			if (this.isCanceled || queryState.isCanceled) {
+				return;
+			}
+			this.onNewQueryState(queryState);
+		}, 1000);
+
+		queryState.addSub('replication-retry', {
+			unsubscribe: () => clearTimeout(timeout),
+		});
+	}
+
 	/**
 	 * There is one replication state per collection
 	 */
@@ -546,10 +591,13 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		// Check if existing replication is stale (collection destroyed or different instance)
+		const existingSyncCollection = (existingReplication as any)?.syncStateManager?.syncCollection;
 		const isExistingStale =
 			existingReplication instanceof CollectionReplicationState &&
 			((existingReplication as any).collection?.destroyed ||
-				(existingReplication as any).collection !== collection);
+				(existingReplication as any).collection !== collection ||
+				existingSyncCollection?.destroyed ||
+				existingSyncCollection !== syncCollection);
 
 		if (isExistingStale) {
 			queryLogger.debug('Existing replication is stale, creating new one', {
@@ -558,6 +606,8 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					collection: colName,
 					existingCollectionDestroyed: (existingReplication as any).collection?.destroyed,
 					isSameCollection: (existingReplication as any).collection === collection,
+					existingSyncCollectionDestroyed: existingSyncCollection?.destroyed,
+					isSameSyncCollection: existingSyncCollection === syncCollection,
 				},
 			});
 			// Don't await cancel - let it clean up in background
