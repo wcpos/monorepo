@@ -570,6 +570,69 @@ describe('parseAttributes', () => {
 		]);
 	});
 
+	it('BUG: should keep later custom attribute options active when all attributes have id 0', () => {
+		const attributes: ProductDocument['attributes'] = [
+			{
+				id: 0,
+				name: 'Colour',
+				options: ['Blue', 'Red', 'Yellow'],
+				position: 0,
+				variation: true,
+				visible: true,
+			},
+			{
+				id: 0,
+				name: 'Size',
+				options: ['1L', '5L', '25L'],
+				position: 1,
+				variation: true,
+				visible: true,
+			},
+		];
+
+		const hits = ['Blue', 'Red', 'Yellow'].flatMap((colour) =>
+			['1L', '5L', '25L'].map((size) => ({
+				document: {
+					attributes: [
+						{ id: 0, name: 'Colour', option: colour },
+						{ id: 0, name: 'Size', option: size },
+					],
+				} as ProductVariationDocument,
+			}))
+		);
+
+		const result = parseAttributes(attributes, undefined, hits);
+
+		expect(result).toEqual([
+			{
+				attribute: {
+					id: 0,
+					name: 'Colour',
+					position: 0,
+					visible: true,
+					variation: true,
+					options: ['Blue', 'Red', 'Yellow'],
+					characterCount: 13,
+				},
+				optionCounts: { Blue: 3, Red: 3, Yellow: 3 },
+				selected: undefined,
+			},
+			{
+				attribute: {
+					id: 0,
+					name: 'Size',
+					position: 1,
+					visible: true,
+					variation: true,
+					options: ['1L', '5L', '25L'],
+					characterCount: 7,
+				},
+				optionCounts: { '1L': 3, '5L': 3, '25L': 3 },
+				selected: undefined,
+			},
+		]);
+	});
+
 	describe('tests for "any" variations', () => {
 		it('should calculate option counts and character counts correctly', () => {
 			const selectedAttributes = undefined;
