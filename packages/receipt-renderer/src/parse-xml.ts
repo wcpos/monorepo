@@ -98,12 +98,20 @@ function parseChildren(parent: Element): ThermalNode[] {
 				break;
 			}
 			case 'barcode':
-				nodes.push({
-					type: 'barcode',
-					barcodeType: el.getAttribute('type') ?? 'code128',
-					height: intAttr(el, 'height', 40),
-					value: (el.textContent ?? '').trim(),
-				});
+				if (isQrBarcodeType(el.getAttribute('type') ?? 'code128')) {
+					nodes.push({
+						type: 'qrcode',
+						size: heightToQrSize(intAttr(el, 'height', 40)),
+						value: (el.textContent ?? '').trim(),
+					});
+				} else {
+					nodes.push({
+						type: 'barcode',
+						barcodeType: el.getAttribute('type') ?? 'code128',
+						height: intAttr(el, 'height', 40),
+						value: (el.textContent ?? '').trim(),
+					});
+				}
 				break;
 			case 'qrcode':
 				nodes.push({
@@ -142,6 +150,16 @@ function parseChildren(parent: Element): ThermalNode[] {
 	}
 
 	return nodes;
+}
+
+function isQrBarcodeType(type: string): boolean {
+	return type.trim().toLowerCase() === 'qrcode' || type.trim().toLowerCase() === 'qr';
+}
+
+function heightToQrSize(height: number): number {
+	return Number.isFinite(height) && height > 0
+		? Math.max(2, Math.min(10, Math.round(height / 10)))
+		: 4;
 }
 
 function parseRowChildren(row: Element): ColNode[] {

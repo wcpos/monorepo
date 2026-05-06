@@ -44,6 +44,34 @@ describe('logicless template + <barcode> renders SVG through the studio pipeline
 		expect(view.html).not.toContain('<barcode');
 	});
 
+	it('treats <barcode type="qrcode"> as a QR code so templates can switch barcode type from data', () => {
+		const random = createRandomReceipt({ seed: 'logicless-qr-barcode' });
+		const fixture = {
+			...random.data,
+			id: 'logicless-qr-barcode',
+			presentation_hints: { ...random.data.presentation_hints, order_barcode_type: 'qrcode' },
+		};
+
+		const view = renderStudioTemplate({
+			template: {
+				id: 'logicless-qr-barcode',
+				name: 'Logicless QR barcode',
+				engine: 'logicless',
+				source: 'bundled-gallery',
+				content:
+					'<div><barcode type="{{presentation_hints.order_barcode_type}}">{{order.number}}</barcode></div>',
+			},
+			fixture,
+			paperWidth: 'a4',
+		});
+
+		expect(view.kind).toBe('logicless');
+		expect(view.html).toContain('<svg');
+		expect(view.html).toContain('data-barcode-kind="qrcode"');
+		expect(view.html).toContain('data-barcode-value="' + fixture.order.number + '"');
+		expect(view.html).not.toContain('<barcode');
+	});
+
 	// Regression for #375 follow-up: App.tsx used to re-sanitize the rendered
 	// logicless HTML with the default profile, which strips `<svg>` and broke
 	// the barcode in both preview and print. This test pins down the

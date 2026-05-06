@@ -443,6 +443,10 @@ export const ReceiptPresentationHintsSchema = z.object({
 	prices_entered_with_tax: z.boolean().describe('Whether store prices were entered tax-inclusive'),
 	rounding_mode: z.string().describe('Rounding strategy: per-line | per-total | yes | no'),
 	locale: z.string().describe('Locale tag for formatting (e.g. en_US, ar_SA)'),
+	order_barcode_type: z
+		.enum(['code128', 'qrcode', 'ean13', 'ean8', 'upca'])
+		.optional()
+		.describe('Barcode symbology used by gallery templates for the order number'),
 });
 
 /**
@@ -502,7 +506,6 @@ export const ReceiptI18nSchema = z
 		thank_you_purchase: z.string().optional(),
 		thank_you_shopping: z.string().optional(),
 		thank_you_business: z.string().optional(),
-		tax_invoice_retain: z.string().optional(),
 		gift_return_policy: z.string().optional(),
 		quote_validity: z.string().optional(),
 		quote_not_receipt: z.string().optional(),

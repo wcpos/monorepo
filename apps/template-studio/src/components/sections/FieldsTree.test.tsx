@@ -73,4 +73,34 @@ describe('FieldsTree', () => {
 		});
 		expect(onChangePath).toHaveBeenCalledWith(['store', 'tax_ids', 0, 'value'], 'NL987654321B01');
 	});
+
+	it('renders order barcode type as a select in presentation hints', () => {
+		const onChangePath = vi.fn();
+		render(
+			<FieldsTree
+				{...baseProps}
+				onChangePath={onChangePath}
+				data={{
+					presentation_hints: {
+						display_tax: 'incl',
+						prices_entered_with_tax: true,
+						rounding_mode: 'per-line',
+						locale: 'es_ES',
+						order_barcode_type: 'code128',
+					},
+				}}
+			/>
+		);
+
+		fireEvent.click(screen.getByRole('button', { name: 'Presentation' }));
+		const select = screen.getByLabelText('presentation_hints.order_barcode_type');
+		expect(select).toHaveValue('code128');
+		expect(within(select).getByRole('option', { name: 'qrcode' })).toBeInTheDocument();
+
+		fireEvent.change(select, { target: { value: 'qrcode' } });
+		expect(onChangePath).toHaveBeenCalledWith(
+			['presentation_hints', 'order_barcode_type'],
+			'qrcode'
+		);
+	});
 });

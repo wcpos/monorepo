@@ -107,7 +107,13 @@ function resolveBarcodeElements(html: string): string {
 		const heightAttr = el.getAttribute('height');
 		const height = heightAttr ? Number(heightAttr) : 40;
 		const value = (el.textContent ?? '').trim();
-		replaceElementWithHtml(el, renderBarcode(type, value, height, 'barcode'), doc);
+		replaceElementWithHtml(
+			el,
+			isQrBarcodeType(type)
+				? renderQrCode(value, heightToQrSize(height))
+				: renderBarcode(type, value, height, 'barcode'),
+			doc
+		);
 	}
 
 	for (const el of Array.from(doc.querySelectorAll('qrcode'))) {
@@ -118,6 +124,16 @@ function resolveBarcodeElements(html: string): string {
 	}
 
 	return doc.body.innerHTML;
+}
+
+function isQrBarcodeType(type: string): boolean {
+	return type.trim().toLowerCase() === 'qrcode' || type.trim().toLowerCase() === 'qr';
+}
+
+function heightToQrSize(height: number): number {
+	return Number.isFinite(height) && height > 0
+		? Math.max(2, Math.min(10, Math.round(height / 10)))
+		: 4;
 }
 
 function replaceElementWithHtml(el: Element, html: string, doc: Document): void {

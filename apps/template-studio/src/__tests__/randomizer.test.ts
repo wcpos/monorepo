@@ -124,6 +124,108 @@ describe('template-studio randomizer', () => {
 		expect(result.data.i18n?.thank_you).toBe('شكراً');
 	});
 
+	it('localizes every detailed receipt i18n label used by the gallery fixture', () => {
+		const english: Record<string, string> = {
+			bill_to: 'Bill To',
+			cashier: 'Cashier',
+			change: 'Change',
+			customer_note: 'Customer Note',
+			customer_tax_id: 'Customer Tax ID',
+			date: 'Date',
+			discount: 'Discount',
+			item: 'Item',
+			order: 'Order',
+			paid: 'Paid',
+			qty: 'Qty',
+			reference: 'Reference',
+			returned_items: 'Returned Items',
+			ship_to: 'Ship To',
+			sku: 'SKU',
+			status: 'Status',
+			subtotal: 'Subtotal',
+			subtotal_excl_tax: 'Subtotal (excl. tax)',
+			tax: 'Tax',
+			tax_amount: 'Tax Amount',
+			tax_invoice: 'Tax Invoice',
+			tax_summary: 'Tax Summary',
+			taxable_excl: 'Taxable (excl.)',
+			taxable_incl: 'Taxable (incl.)',
+			tendered: 'Tendered',
+			terms_and_conditions: 'Terms & Conditions',
+			thank_you_purchase: 'Thank you for your purchase!',
+			total: 'Total',
+			total_excl: 'Total (excl.)',
+			total_incl_tax: 'Total (incl. tax)',
+			total_refunded: 'Total Refunded',
+			total_tax: 'Total Tax',
+			unit_excl: 'Unit (excl.)',
+		};
+		const detailedReceiptKeys = [
+			'bill_to',
+			'cashier',
+			'change',
+			'customer_note',
+			'customer_tax_id',
+			'date',
+			'discount',
+			'item',
+			'order',
+			'paid',
+			'qty',
+			'reference',
+			'returned_items',
+			'ship_to',
+			'sku',
+			'status',
+			'subtotal',
+			'subtotal_excl_tax',
+			'tax',
+			'tax_amount',
+			'tax_invoice',
+			'tax_summary',
+			'taxable_excl',
+			'taxable_incl',
+			'tendered',
+			'terms_and_conditions',
+			'thank_you_purchase',
+			'total',
+			'total_excl',
+			'total_incl_tax',
+			'total_refunded',
+			'total_tax',
+			'unit_excl',
+		] as const;
+
+		const localizedReceipts = [
+			createRandomReceipt({
+				seed: 'spanish-labels',
+				overrides: { rtl: false },
+				weights: { rtl: 0 },
+			}),
+			createRandomReceipt({ seed: 'arabic-labels', overrides: { rtl: true } }),
+		];
+
+		for (const receipt of localizedReceipts) {
+			for (const key of detailedReceiptKeys) {
+				expect(
+					receipt.data.i18n?.[key],
+					`${receipt.data.presentation_hints.locale}.${key}`
+				).toBeTruthy();
+				if (key !== 'total' && key !== 'subtotal') {
+					expect(
+						receipt.data.i18n?.[key],
+						`${receipt.data.presentation_hints.locale}.${key}`
+					).not.toBe(english[key]);
+				}
+			}
+		}
+	});
+
+	it('exposes an editable order barcode type presentation hint', () => {
+		const result = createRandomReceipt({ seed: 'barcode-type' });
+		expect(result.data.presentation_hints.order_barcode_type).toBe('code128');
+	});
+
 	it('localizes labels and currency when shuffle resolves a Japanese locale', () => {
 		let result: ReturnType<typeof createRandomReceipt> | undefined;
 		for (let seed = 1; seed < 100 && !result; seed += 1) {
@@ -147,22 +249,13 @@ describe('template-studio randomizer', () => {
 		expect(result.data.i18n?.thank_you).toBe('ありがとうございます');
 	});
 
-	it('emits a status_label for every wc_status', () => {
+	it('emits a localized status_label for every wc_status', () => {
 		// Studio receipts feed templates that prefer order.status_label over
 		// the raw wc_status; make sure both are always populated.
-		const expected: Record<string, string> = {
-			pending: 'Pending payment',
-			processing: 'Processing',
-			'on-hold': 'On hold',
-			completed: 'Completed',
-			cancelled: 'Cancelled',
-			refunded: 'Refunded',
-			failed: 'Failed',
-		};
 		for (let seed = 1; seed < 30; seed += 1) {
 			const candidate = createRandomReceipt({ seed });
-			const status = candidate.data.order.wc_status as string;
-			expect(candidate.data.order.status_label).toBe(expected[status]);
+			expect(candidate.data.order.wc_status).toBeTruthy();
+			expect(candidate.data.order.status_label).toMatch(/\S/);
 		}
 	});
 
