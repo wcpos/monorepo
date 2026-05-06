@@ -41,7 +41,7 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 					throw new Error(`Failed to fetch image: ${response?.status} ${response?.statusText}`);
 				}
 
-				const contentType = response.headers['content-type'] || '';
+				const contentType = String(response.headers['content-type'] ?? '');
 				if (!contentType.startsWith('image/')) {
 					throw new Error(`Invalid content type: ${contentType}`);
 				}
