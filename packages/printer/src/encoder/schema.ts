@@ -316,6 +316,12 @@ export const ReceiptTotalsSchema = z.object({
 		.number()
 		.optional()
 		.describe('Total amount refunded across all refunds (positive)'),
+	net_total: z
+		.number()
+		.optional()
+		.describe(
+			'Order grand total minus refund_total, clamped to >= 0 (positive). Present when refund_total is set.'
+		),
 });
 
 export const ReceiptTaxSummaryItemSchema = z.object({
@@ -512,6 +518,9 @@ export const ReceiptI18nSchema = z
 		subtotal: z.string().optional(),
 		subtotal_excl_tax: z.string().optional(),
 		total: z.string().optional(),
+		refund_total: z.string().optional(),
+		refunded: z.string().optional(),
+		net_total: z.string().optional(),
 		total_tax: z.string().optional(),
 		total_incl_tax: z.string().optional(),
 		tax: z.string().optional(),

@@ -20,6 +20,8 @@ const DEFAULT_I18N = {
 	subtotal: 'Subtotal',
 	total: 'Total',
 	refund_total: 'Refund Total',
+	refunded: 'Refunded',
+	net_total: 'Net Total',
 	tendered: 'Tendered',
 	change: 'Change',
 	thank_you: 'Thank you',
@@ -91,8 +93,9 @@ function resolveTaxIdLabel(
 
 /**
  * Format all numeric currency fields in ReceiptData, adding locale-aware
- * `_display` variants while preserving source values for normal receipts.
- * Refund render data is signed for templates that print the raw fields.
+ * `_display` variants. Source values are preserved verbatim — totals on
+ * orders with partial refunds stay positive, and templates that want a
+ * credit-note look render the `refunds[]` block explicitly.
  *
  * Returns a new object suitable for Mustache template rendering.
  */
@@ -103,20 +106,9 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 	}
 	const normalizedLocale = (data.presentation_hints?.locale || 'en-US').trim().replace(/_/g, '-');
 	const displayTax = resolveDisplayValueSide(data);
-	const isRefund = (data.refunds?.length ?? 0) > 0;
-	const refundValue = (value: number): number =>
-		isRefund && value !== 0 ? -Math.abs(value) : value;
-	const refundPaymentTitle = (title: string): string => {
-		if (!isRefund) return title;
-		if (/^Refund\s[-—]\s/.test(title)) return title.replace(/^Refund\s[-—]\s/, 'Refund — ');
-		return `Refund — ${title}`;
-	};
 	const i18n = {
 		...DEFAULT_I18N,
 		...data.i18n,
-		total: isRefund
-			? (data.i18n?.refund_total ?? data.i18n?.total ?? DEFAULT_I18N.refund_total)
-			: (data.i18n?.total ?? DEFAULT_I18N.total),
 	};
 
 	const fmt = (value: number): string => {
@@ -133,6 +125,12 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		if (total == null || qty === 0) return undefined;
 		return total / qty;
 	};
+	const pickDisplayValue = (
+		total: number | undefined,
+		totalIncl: number | undefined,
+		totalExcl: number | undefined
+	): number | undefined =>
+		displayTax === 'excl' ? (totalExcl ?? total ?? totalIncl) : (totalIncl ?? total ?? totalExcl);
 	const formatRefundTotal = <
 		T extends {
 			total: number;
@@ -144,7 +142,9 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		item: T
 	) => ({
 		...item,
-		total_display: fmt(item.total),
+		total_display: fmt(
+			pickDisplayValue(item.total, item.total_incl, item.total_excl) ?? item.total
+		),
 		total_incl_display: item.total_incl != null ? fmt(item.total_incl) : undefined,
 		total_excl_display: item.total_excl != null ? fmt(item.total_excl) : undefined,
 		taxes: item.taxes?.map((tax) => ({
@@ -159,19 +159,21 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		const unitTotal = line.unit_total ?? perUnit(lineTotal, line.qty);
 		const unitTotalIncl = line.unit_total_incl ?? perUnit(lineTotalIncl, line.qty);
 		const unitTotalExcl = line.unit_total_excl ?? perUnit(lineTotalExcl, line.qty);
+		const lineTotalDisplay = pickDisplayValue(lineTotal, lineTotalIncl, lineTotalExcl);
+		const unitTotalDisplay = pickDisplayValue(unitTotal, unitTotalIncl, unitTotalExcl);
 
 		return {
 			...formatRefundTotal(line),
 			line_total: lineTotal,
 			line_total_incl: lineTotalIncl,
 			line_total_excl: lineTotalExcl,
-			line_total_display: fmt(lineTotal),
+			line_total_display: fmt(lineTotalDisplay ?? lineTotal),
 			line_total_incl_display: fmt(lineTotalIncl),
 			line_total_excl_display: lineTotalExcl != null ? fmt(lineTotalExcl) : undefined,
 			unit_total: unitTotal,
 			unit_total_incl: unitTotalIncl,
 			unit_total_excl: unitTotalExcl,
-			unit_total_display: unitTotal != null ? fmt(unitTotal) : undefined,
+			unit_total_display: unitTotalDisplay != null ? fmt(unitTotalDisplay) : undefined,
 			unit_total_incl_display: unitTotalIncl != null ? fmt(unitTotalIncl) : undefined,
 			unit_total_excl_display: unitTotalExcl != null ? fmt(unitTotalExcl) : undefined,
 		};
@@ -198,43 +200,26 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		i18n,
 		lines: data.lines.map((line) => ({
 			...line,
-			unit_price: line.unit_price != null ? refundValue(line.unit_price) : line.unit_price,
-			unit_price_incl: refundValue(line.unit_price_incl),
-			unit_price_excl: refundValue(line.unit_price_excl),
-			line_subtotal:
-				line.line_subtotal != null ? refundValue(line.line_subtotal) : line.line_subtotal,
-			line_subtotal_incl: refundValue(line.line_subtotal_incl),
-			line_subtotal_excl: refundValue(line.line_subtotal_excl),
-			line_total: line.line_total != null ? refundValue(line.line_total) : line.line_total,
-			line_total_incl: refundValue(line.line_total_incl),
-			line_total_excl: refundValue(line.line_total_excl),
 			taxes: line.taxes.map((tax) => ({
 				...tax,
-				amount: refundValue(tax.amount),
-				amount_display: fmt(refundValue(tax.amount)),
+				amount_display: fmt(tax.amount),
 			})),
 			unit_price_display: fmt(
-				refundValue(
-					line.unit_price ?? (displayTax === 'excl' ? line.unit_price_excl : line.unit_price_incl)
-				)
+				line.unit_price ?? (displayTax === 'excl' ? line.unit_price_excl : line.unit_price_incl)
 			),
-			unit_price_incl_display: fmt(refundValue(line.unit_price_incl)),
-			unit_price_excl_display: fmt(refundValue(line.unit_price_excl)),
+			unit_price_incl_display: fmt(line.unit_price_incl),
+			unit_price_excl_display: fmt(line.unit_price_excl),
 			line_subtotal_display: fmt(
-				refundValue(
-					line.line_subtotal ??
-						(displayTax === 'excl' ? line.line_subtotal_excl : line.line_subtotal_incl)
-				)
+				line.line_subtotal ??
+					(displayTax === 'excl' ? line.line_subtotal_excl : line.line_subtotal_incl)
 			),
-			line_subtotal_incl_display: fmt(refundValue(line.line_subtotal_incl)),
-			line_subtotal_excl_display: fmt(refundValue(line.line_subtotal_excl)),
+			line_subtotal_incl_display: fmt(line.line_subtotal_incl),
+			line_subtotal_excl_display: fmt(line.line_subtotal_excl),
 			line_total_display: fmt(
-				refundValue(
-					line.line_total ?? (displayTax === 'excl' ? line.line_total_excl : line.line_total_incl)
-				)
+				line.line_total ?? (displayTax === 'excl' ? line.line_total_excl : line.line_total_incl)
 			),
-			line_total_incl_display: fmt(refundValue(line.line_total_incl)),
-			line_total_excl_display: fmt(refundValue(line.line_total_excl)),
+			line_total_incl_display: fmt(line.line_total_incl),
+			line_total_excl_display: fmt(line.line_total_excl),
 			discounts_display: fmt(
 				line.discounts ?? (displayTax === 'excl' ? line.discounts_excl : line.discounts_incl)
 			),
@@ -248,7 +233,7 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			total_excl_display: fmt(fee.total_excl),
 			taxes: fee.taxes?.map((tax) => ({
 				...tax,
-				amount_display: fmt(refundValue(tax.amount)),
+				amount_display: fmt(tax.amount),
 			})),
 		})),
 		shipping: data.shipping.map((s) => ({
@@ -258,7 +243,7 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			total_excl_display: fmt(s.total_excl),
 			taxes: s.taxes?.map((tax) => ({
 				...tax,
-				amount_display: fmt(refundValue(tax.amount)),
+				amount_display: fmt(tax.amount),
 			})),
 		})),
 		discounts: data.discounts.map((d) => ({
@@ -269,59 +254,43 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		})),
 		totals: {
 			...data.totals,
-			subtotal:
-				data.totals.subtotal != null ? refundValue(data.totals.subtotal) : data.totals.subtotal,
-			subtotal_incl: refundValue(data.totals.subtotal_incl),
-			subtotal_excl: refundValue(data.totals.subtotal_excl),
-			tax_total: refundValue(data.totals.tax_total),
-			total: data.totals.total != null ? refundValue(data.totals.total) : data.totals.total,
-			total_incl: refundValue(data.totals.total_incl),
-			total_excl: refundValue(data.totals.total_excl),
-			paid_total: refundValue(data.totals.paid_total),
 			subtotal_display: fmt(
-				refundValue(
-					data.totals.subtotal ??
-						(displayTax === 'excl' ? data.totals.subtotal_excl : data.totals.subtotal_incl)
-				)
+				data.totals.subtotal ??
+					(displayTax === 'excl' ? data.totals.subtotal_excl : data.totals.subtotal_incl)
 			),
-			subtotal_incl_display: fmt(refundValue(data.totals.subtotal_incl)),
-			subtotal_excl_display: fmt(refundValue(data.totals.subtotal_excl)),
+			subtotal_incl_display: fmt(data.totals.subtotal_incl),
+			subtotal_excl_display: fmt(data.totals.subtotal_excl),
 			discount_total_display: fmt(
 				data.totals.discount_total ??
 					(displayTax === 'excl' ? discountTotalExcl : discountTotalIncl)
 			),
 			discount_total_incl_display: fmt(discountTotalIncl),
 			discount_total_excl_display: fmt(discountTotalExcl),
-			tax_total_display: fmt(refundValue(data.totals.tax_total)),
+			tax_total_display: fmt(data.totals.tax_total),
 			total_display: fmt(
-				refundValue(
-					data.totals.total ??
-						(displayTax === 'excl' ? data.totals.total_excl : data.totals.total_incl)
-				)
+				data.totals.total ??
+					(displayTax === 'excl' ? data.totals.total_excl : data.totals.total_incl)
 			),
-			total_incl_display: fmt(refundValue(data.totals.total_incl)),
-			total_excl_display: fmt(refundValue(data.totals.total_excl)),
-			paid_total_display: fmt(refundValue(data.totals.paid_total)),
+			total_incl_display: fmt(data.totals.total_incl),
+			total_excl_display: fmt(data.totals.total_excl),
+			paid_total_display: fmt(data.totals.paid_total),
 			change_total_display: fmt(data.totals.change_total),
+			...(data.totals.refund_total != null
+				? { refund_total_display: fmt(data.totals.refund_total) }
+				: {}),
+			...(data.totals.net_total != null ? { net_total_display: fmt(data.totals.net_total) } : {}),
 		},
 		tax_summary: data.tax_summary.map((tax) => ({
 			...tax,
-			tax_amount: refundValue(tax.tax_amount),
-			taxable_amount_incl:
-				tax.taxable_amount_incl != null ? refundValue(tax.taxable_amount_incl) : null,
-			taxable_amount_excl:
-				tax.taxable_amount_excl != null ? refundValue(tax.taxable_amount_excl) : null,
-			tax_amount_display: fmt(refundValue(tax.tax_amount)),
+			tax_amount_display: fmt(tax.tax_amount),
 			taxable_amount_incl_display:
-				tax.taxable_amount_incl != null ? fmt(refundValue(tax.taxable_amount_incl)) : '',
+				tax.taxable_amount_incl != null ? fmt(tax.taxable_amount_incl) : '',
 			taxable_amount_excl_display:
-				tax.taxable_amount_excl != null ? fmt(refundValue(tax.taxable_amount_excl)) : '',
+				tax.taxable_amount_excl != null ? fmt(tax.taxable_amount_excl) : '',
 		})),
 		payments: data.payments.map((payment) => ({
 			...payment,
-			method_title: refundPaymentTitle(payment.method_title),
-			amount: refundValue(payment.amount),
-			amount_display: fmt(refundValue(payment.amount)),
+			amount_display: fmt(payment.amount),
 			tendered_display: payment.tendered != null ? fmt(payment.tendered) : undefined,
 			change_display: payment.change != null ? fmt(payment.change) : undefined,
 		})),

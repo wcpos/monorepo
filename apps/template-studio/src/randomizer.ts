@@ -699,12 +699,11 @@ function buildReceiptData(
 		pool.statusLabels
 	);
 	applyRefundDates(refunds, orderCreated, pool.locale, pool.timeZone);
+	// Order payments are the customer's original tender — they stay positive and
+	// keep their plain method title even when the order has refunds. Refund
+	// movements live in the refunds[] block (with refund.gateway_title etc.) so
+	// templates can show them separately when they want a credit-note look.
 	const payments = buildPayments(rand, scenarios, totals.total_incl, orderCurrency, totals);
-	if (refunds.length > 0) {
-		for (const payment of payments) {
-			payment.method_title = `Refund — ${payment.method_title}`;
-		}
-	}
 	const presentationHints: ReceiptPresentationHints = {
 		display_tax: displayTax,
 		prices_entered_with_tax: pricesEnteredWithTax,
@@ -713,7 +712,7 @@ function buildReceiptData(
 		order_barcode_type: 'code128',
 	};
 	const fiscal: ReceiptFiscal = scenarios.fiscal ? buildFiscal(rand, order) : {};
-	const i18n = buildI18nLabels(refunds.length > 0, pool);
+	const i18n = buildI18nLabels(pool);
 
 	// Attach customer tax IDs at the very end so the rand draws don't shift
 	// the seeded sequence used by payments, fiscal, etc.
@@ -1470,7 +1469,9 @@ function computeTotals(
 		change_total: 0,
 	};
 	if (refunds.length > 0) {
-		totals.refund_total = round(refundTotal);
+		const roundedRefundTotal = round(refundTotal);
+		totals.refund_total = roundedRefundTotal;
+		totals.net_total = round(Math.max(grandIncl - roundedRefundTotal, 0));
 	}
 	return totals;
 }
@@ -1706,7 +1707,7 @@ function emptyDateObject(): ReceiptDate {
  * the same key set the PHP builder emits; the catchall in the schema lets
  * extensions add more without breaking validation.
  */
-function buildI18nLabels(hasRefunds = false, pool?: LocalePool): ReceiptI18n {
+function buildI18nLabels(pool?: LocalePool): ReceiptI18n {
 	const labels: ReceiptI18n = {
 		order: 'Order',
 		date: 'Date',
@@ -1739,8 +1740,10 @@ function buildI18nLabels(hasRefunds = false, pool?: LocalePool): ReceiptI18n {
 		taxable_incl_short: 'Taxable incl.',
 		subtotal: 'Subtotal',
 		subtotal_excl_tax: 'Subtotal (excl. tax)',
-		total: hasRefunds ? 'Refund Total' : 'Total',
+		total: 'Total',
 		refund_total: 'Refund Total',
+		refunded: 'Refunded',
+		net_total: 'Net Total',
 		total_tax: 'Total Tax',
 		total_incl_tax: 'Total (incl. tax)',
 		tax: 'Tax',
@@ -1781,11 +1784,5 @@ function buildI18nLabels(hasRefunds = false, pool?: LocalePool): ReceiptI18n {
 		status: 'Status',
 		completed: 'Completed',
 	};
-	const localized = { ...labels, ...pool?.i18nLabels };
-	return {
-		...localized,
-		total: hasRefunds
-			? (localized.refund_total ?? localized.total ?? labels.refund_total)
-			: (localized.total ?? labels.total),
-	};
+	return { ...labels, ...pool?.i18nLabels };
 }

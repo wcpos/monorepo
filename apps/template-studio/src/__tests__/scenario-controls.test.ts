@@ -211,6 +211,27 @@ describe('scenario controls', () => {
 			Object.keys(result.order.created).sort()
 		);
 		expect(result.refunds?.[0]?.date?.datetime).toBeTruthy();
+		expect(result.totals.refund_total).toBeGreaterThan(0);
+		expect(result.totals.net_total).toBe(
+			Math.max(
+				Math.round((result.totals.total_incl - (result.totals.refund_total ?? 0)) * 100) / 100,
+				0
+			)
+		);
+	});
+
+	it('does not expose refund-derived totals for zero-value refunds', () => {
+		const data = fullReceipt();
+		data.refunds = [{ id: 9002, amount: 0, lines: [] }];
+
+		const result = applyScenarioState(data, {
+			...createScenarioState({}, data),
+			refund: true,
+			emptyCart: false,
+		});
+
+		expect(result.totals.refund_total).toBeUndefined();
+		expect(result.totals.net_total).toBeUndefined();
 	});
 
 	it('toggles refund, multi-payment, fiscal, barcode, tax breakdown, customer, gift, locale, currency, and long-name data', () => {
@@ -244,6 +265,8 @@ describe('scenario controls', () => {
 		});
 
 		expect(off.refunds).toEqual([]);
+		expect(off.totals.refund_total).toBeUndefined();
+		expect(off.totals.net_total).toBeUndefined();
 		expect(off.payments).toHaveLength(1);
 		expect(off.fiscal).toEqual({});
 		expect(off.tax_summary).toEqual([]);
@@ -256,6 +279,10 @@ describe('scenario controls', () => {
 			Object.keys(on.order.created).sort()
 		);
 		expect(on.refunds?.[0]?.date?.datetime).toBeTruthy();
+		expect(on.totals.refund_total).toBeGreaterThan(0);
+		expect(on.totals.net_total).toBe(
+			Math.max(Math.round((on.totals.total_incl - (on.totals.refund_total ?? 0)) * 100) / 100, 0)
+		);
 		expect(on.payments.length).toBeGreaterThan(1);
 		expect(on.fiscal.immutable_id).toBeTruthy();
 		expect(on.fiscal.qr_payload).toContain('wcpos://receipt/');

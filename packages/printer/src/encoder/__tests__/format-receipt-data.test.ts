@@ -161,7 +161,7 @@ describe('formatReceiptData', () => {
 		expect(result.customer.tax_ids?.[0].label).toBe('Australian Business No.');
 	});
 
-	it('signs per-line tax amount on refund renders', () => {
+	it('preserves per-line / fee / shipping tax amounts as positive even when refunds exist', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.lines[0].taxes = [{ code: 'vat-10', rate: 10, label: 'VAT 10%', amount: 0.91 }];
 		data.fees = [
@@ -183,10 +183,12 @@ describe('formatReceiptData', () => {
 		];
 		data.refunds = [{ id: 1, amount: 5, lines: [] }];
 		const result = formatReceiptData(data);
-		expect(result.lines[0].taxes[0].amount).toBe(-0.91);
-		expect(result.lines[0].taxes[0].amount_display).toBe('-$0.91');
-		expect(result.fees[0].taxes?.[0].amount_display).toBe('-$0.23');
-		expect(result.shipping[0].taxes?.[0].amount_display).toBe('-$1.04');
+		// formatReceiptData no longer auto-flips signs when refunds are present —
+		// templates that want a credit-note look render the `refunds[]` block.
+		expect(result.lines[0].taxes[0].amount).toBe(0.91);
+		expect(result.lines[0].taxes[0].amount_display).toBe('$0.91');
+		expect(result.fees[0].taxes?.[0].amount_display).toBe('$0.23');
+		expect(result.shipping[0].taxes?.[0].amount_display).toBe('$1.04');
 	});
 
 	it('adds _display variants for fees and discounts', () => {
@@ -265,6 +267,8 @@ describe('formatReceiptData', () => {
 			date: 'Date',
 			subtotal: 'Subtotal',
 			total: 'Total',
+			refunded: 'Refunded',
+			net_total: 'Net Total',
 		});
 	});
 
@@ -319,36 +323,42 @@ describe('formatReceiptData', () => {
 		expect(result.i18n.subtotal).toBe('Subtotal');
 	});
 
-	it('honors a custom i18n.refund_total override on refund receipts', () => {
+	it('passes through i18n.refund_total without remapping it onto i18n.total', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.refunds = [{ id: 1, amount: 25, lines: [] }];
 		data.i18n = { refund_total: 'Reembolso' };
 		const result = formatReceiptData(data);
 
-		expect(result.i18n.total).toBe('Reembolso');
+		// i18n.total stays the default "Total"; refund_total is available as its own key.
+		expect(result.i18n.total).toBe('Total');
+		expect(result.i18n.refund_total).toBe('Reembolso');
 	});
 
-	it('uses a custom i18n.total fallback on refund receipts without refund_total', () => {
-		const data = structuredClone(sampleReceiptData);
-		data.refunds = [{ id: 1, amount: 25, lines: [] }];
-		data.i18n = { total: 'Total Refunded' };
-		const result = formatReceiptData(data);
-
-		expect(result.i18n.total).toBe('Total Refunded');
-	});
-
-	it('renders refund receipts with negative display amounts and refund labels', () => {
+	it('keeps order totals positive when refunds are present', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.refunds = [{ id: 1, amount: 25, lines: [] }];
 		const result = formatReceiptData(data);
 
-		expect(result.i18n.total).toBe('Refund Total');
-		expect(result.lines[0].line_total_incl).toBe(-10);
-		expect(result.totals.subtotal_incl).toBe(-25);
-		expect(result.totals.total_incl).toBe(-25);
-		expect(result.tax_summary[0].tax_amount).toBe(-2.27);
-		expect(result.payments[0].method_title).toBe('Refund — Cash');
-		expect(result.payments[0].amount).toBe(-25);
+		// Source values pass through verbatim — no automatic credit-note flip.
+		expect(result.i18n.total).toBe('Total');
+		expect(result.lines[0].line_total_incl).toBe(10);
+		expect(result.totals.subtotal_incl).toBe(25);
+		expect(result.totals.total_incl).toBe(25);
+		expect(result.tax_summary[0].tax_amount).toBe(2.27);
+		expect(result.payments[0].method_title).toBe('Cash');
+		expect(result.payments[0].amount).toBe(25);
+	});
+
+	it('emits refund_total_display + net_total_display when those fields are set', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.totals.refund_total = 10;
+		data.totals.net_total = 15;
+		const result = formatReceiptData(data);
+
+		expect(result.totals.refund_total).toBe(10);
+		expect(result.totals.refund_total_display).toBe('$10.00');
+		expect(result.totals.net_total).toBe(15);
+		expect(result.totals.net_total_display).toBe('$15.00');
 	});
 
 	it('adds display fields and line-style aliases to refund rows', () => {
@@ -412,6 +422,60 @@ describe('formatReceiptData', () => {
 		expect(line.taxes[0].amount_display).toBe('$2.00');
 		expect(refund.fees[0].total_display).toBe('$1.20');
 		expect(refund.shipping[0].total_display).toBe('$3.00');
+	});
+
+	it('uses tax-exclusive values for refund row display aliases when requested', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.presentation_hints.display_tax = 'excl';
+		data.refunds = [
+			{
+				id: 1,
+				amount: 12,
+				lines: [
+					{
+						name: 'Widget A',
+						sku: 'SKU-001',
+						qty: 2,
+						total: 12,
+						total_incl: 12,
+						total_excl: 10,
+						line_total: 12,
+						line_total_incl: 12,
+						line_total_excl: 10,
+						unit_total: 6,
+						unit_total_incl: 6,
+						unit_total_excl: 5,
+						taxes: [],
+					},
+				],
+				fees: [{ label: 'Restocking fee', total: 1.2, total_incl: 1.2, total_excl: 1 }],
+				shipping: [
+					{
+						label: 'Returned shipping',
+						method_id: 'flat_rate',
+						total: 3,
+						total_incl: 3,
+						total_excl: 2.5,
+					},
+				],
+			},
+		];
+
+		const result = formatReceiptData(data);
+		const refund = result.refunds[0];
+		const line = refund.lines[0];
+
+		expect(line.total_display).toBe('$10.00');
+		expect(line.total_incl_display).toBe('$12.00');
+		expect(line.total_excl_display).toBe('$10.00');
+		expect(line.line_total_display).toBe('$10.00');
+		expect(line.line_total_incl_display).toBe('$12.00');
+		expect(line.line_total_excl_display).toBe('$10.00');
+		expect(line.unit_total_display).toBe('$5.00');
+		expect(line.unit_total_incl_display).toBe('$6.00');
+		expect(line.unit_total_excl_display).toBe('$5.00');
+		expect(refund.fees[0].total_display).toBe('$1.00');
+		expect(refund.shipping[0].total_display).toBe('$2.50');
 	});
 
 	it('preserves zero numeric values for Mustache section truthiness', () => {
