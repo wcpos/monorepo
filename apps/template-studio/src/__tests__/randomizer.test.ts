@@ -220,28 +220,42 @@ describe('template-studio randomizer', () => {
 		expect(result.data.i18n?.thank_you).toBe('ありがとうございます');
 	});
 
-	it('emits localized status labels for the expected Woo status set', () => {
-		const expectedStatuses = [
-			'pending',
-			'processing',
-			'on-hold',
-			'completed',
-			'cancelled',
-			'refunded',
-			'failed',
-		] as const;
+	it('emits Spanish status label translations for the expected Woo status set', () => {
+		const expectedStatusLabels = {
+			pending: 'Pendiente de pago',
+			processing: 'Procesando',
+			'on-hold': 'En espera',
+			completed: 'Completado',
+			cancelled: 'Cancelado',
+			refunded: 'Reembolsado',
+			failed: 'Fallido',
+		} as const;
+		const receiptsByStatus = new Map<
+			keyof typeof expectedStatusLabels,
+			ReturnType<typeof createRandomReceipt>
+		>();
+
 		// Studio receipts feed templates that prefer order.status_label over
-		// the raw wc_status; make sure both are always populated.
-		for (const expectedStatus of expectedStatuses) {
-			let candidate: ReturnType<typeof createRandomReceipt> | undefined;
-			for (let seed = 1; seed < 500 && !candidate; seed += 1) {
-				const receipt = createRandomReceipt({ seed });
-				if (receipt.data.order.wc_status === expectedStatus) candidate = receipt;
+		// the raw wc_status; make sure localized pools populate both.
+		for (let seed = 1; seed < 1000 && receiptsByStatus.size < 7; seed += 1) {
+			const receipt = createRandomReceipt({
+				seed,
+				overrides: { rtl: false, multicurrency: false, emptyCart: false },
+			});
+			const status = receipt.data.order.wc_status;
+			if (receipt.data.presentation_hints.locale === 'es_ES' && status in expectedStatusLabels) {
+				receiptsByStatus.set(status as keyof typeof expectedStatusLabels, receipt);
 			}
+		}
+
+		for (const expectedStatus of Object.keys(
+			expectedStatusLabels
+		) as (keyof typeof expectedStatusLabels)[]) {
+			const candidate = receiptsByStatus.get(expectedStatus);
 			if (!candidate) throw new Error(`no ${expectedStatus} status seed found in range`);
 
 			expect(candidate.data.order.wc_status).toBe(expectedStatus);
-			expect(candidate.data.order.status_label).toMatch(/\S/);
+			expect(candidate.data.order.status_label).toBe(expectedStatusLabels[expectedStatus]);
 		}
 	});
 
