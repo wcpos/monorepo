@@ -347,6 +347,30 @@ export const ReceiptRefundLineSchema = z.object({
 	total: z.number().describe('Refunded amount for this line (positive)'),
 	total_incl: z.number().optional().describe('Refunded line total tax-inclusive (positive)'),
 	total_excl: z.number().optional().describe('Refunded line total tax-exclusive (positive)'),
+	line_total: z
+		.number()
+		.optional()
+		.describe('Alias of total for line-item template parity (positive)'),
+	line_total_incl: z
+		.number()
+		.optional()
+		.describe('Alias of total_incl for line-item template parity (positive)'),
+	line_total_excl: z
+		.number()
+		.optional()
+		.describe('Alias of total_excl for line-item template parity (positive)'),
+	unit_total: z
+		.number()
+		.optional()
+		.describe('Refunded amount per unit for this line (positive, derived when qty > 0)'),
+	unit_total_incl: z
+		.number()
+		.optional()
+		.describe('Refunded tax-inclusive amount per unit (positive, derived when qty > 0)'),
+	unit_total_excl: z
+		.number()
+		.optional()
+		.describe('Refunded tax-exclusive amount per unit (positive, derived when qty > 0)'),
 	taxes: z
 		.array(ReceiptLineItemTaxSchema)
 		.optional()

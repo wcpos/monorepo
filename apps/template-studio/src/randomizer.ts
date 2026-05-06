@@ -1329,12 +1329,7 @@ function buildRefunds(
 	// Build refund lines from the lines that were marked refunded.
 	const refundLines = lines
 		.filter((line) => (line.qty_refunded ?? 0) > 0)
-		.map((line) => ({
-			name: line.name,
-			sku: line.sku,
-			qty: line.qty_refunded ?? 0,
-			total: line.total_refunded ?? 0,
-		}));
+		.map((line) => buildRefundLine(line, taxRate, pool.taxLabel));
 	const refundAmount = round(refundLines.reduce((sum, line) => sum + (line.total ?? 0), 0));
 	const refundSubtotal = refundAmount;
 	const refundTaxTotal =
@@ -1359,6 +1354,45 @@ function buildRefunds(
 			lines: refundLines,
 		},
 	];
+}
+
+function buildRefundLine(
+	line: ReceiptLineItem,
+	taxRate: number,
+	taxLabel: string
+): ReceiptRefund['lines'][number] {
+	const qty = line.qty_refunded ?? 0;
+	const totalIncl = round(line.total_refunded ?? 0);
+	const totalExcl = taxRate > 0 ? taxableExcl(totalIncl, taxRate) : totalIncl;
+	const taxAmount = round(totalIncl - totalExcl);
+	const unitTotal = qty === 0 ? 0 : round(totalIncl / qty);
+	const unitTotalExcl = qty === 0 ? 0 : round(totalExcl / qty);
+
+	return {
+		name: line.name,
+		sku: line.sku,
+		qty,
+		total: totalIncl,
+		total_incl: totalIncl,
+		total_excl: totalExcl,
+		line_total: totalIncl,
+		line_total_incl: totalIncl,
+		line_total_excl: totalExcl,
+		unit_total: unitTotal,
+		unit_total_incl: unitTotal,
+		unit_total_excl: unitTotalExcl,
+		taxes:
+			taxRate > 0
+				? [
+						{
+							code: `vat-${taxRate}`,
+							rate: taxRate,
+							label: `${taxLabel} ${taxRate}%`,
+							amount: taxAmount,
+						},
+					]
+				: [],
+	};
 }
 
 function computeTotals(

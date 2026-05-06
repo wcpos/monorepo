@@ -129,6 +129,53 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			return currency ? `${currency} ${value.toFixed(2)}` : value.toFixed(2);
 		}
 	};
+	const perUnit = (total: number | undefined, qty: number): number | undefined => {
+		if (total == null || qty === 0) return undefined;
+		return total / qty;
+	};
+	const formatRefundTotal = <
+		T extends {
+			total: number;
+			total_incl?: number;
+			total_excl?: number;
+			taxes?: { amount: number }[];
+		},
+	>(
+		item: T
+	) => ({
+		...item,
+		total_display: fmt(item.total),
+		total_incl_display: item.total_incl != null ? fmt(item.total_incl) : undefined,
+		total_excl_display: item.total_excl != null ? fmt(item.total_excl) : undefined,
+		taxes: item.taxes?.map((tax) => ({
+			...tax,
+			amount_display: fmt(tax.amount),
+		})),
+	});
+	const formatRefundLine = (line: NonNullable<ReceiptData['refunds']>[number]['lines'][number]) => {
+		const lineTotal = line.line_total ?? line.total;
+		const lineTotalIncl = line.line_total_incl ?? line.total_incl ?? line.total;
+		const lineTotalExcl = line.line_total_excl ?? line.total_excl;
+		const unitTotal = line.unit_total ?? perUnit(lineTotal, line.qty);
+		const unitTotalIncl = line.unit_total_incl ?? perUnit(lineTotalIncl, line.qty);
+		const unitTotalExcl = line.unit_total_excl ?? perUnit(lineTotalExcl, line.qty);
+
+		return {
+			...formatRefundTotal(line),
+			line_total: lineTotal,
+			line_total_incl: lineTotalIncl,
+			line_total_excl: lineTotalExcl,
+			line_total_display: fmt(lineTotal),
+			line_total_incl_display: fmt(lineTotalIncl),
+			line_total_excl_display: lineTotalExcl != null ? fmt(lineTotalExcl) : undefined,
+			unit_total: unitTotal,
+			unit_total_incl: unitTotalIncl,
+			unit_total_excl: unitTotalExcl,
+			unit_total_display: unitTotal != null ? fmt(unitTotal) : undefined,
+			unit_total_incl_display: unitTotalIncl != null ? fmt(unitTotalIncl) : undefined,
+			unit_total_excl_display: unitTotalExcl != null ? fmt(unitTotalExcl) : undefined,
+		};
+	};
 	const discountTotalIncl = data.totals.discount_total_incl ?? data.totals.discount_total ?? 0;
 	const discountTotalExcl = data.totals.discount_total_excl ?? data.totals.discount_total ?? 0;
 
@@ -277,6 +324,18 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			amount_display: fmt(refundValue(payment.amount)),
 			tendered_display: payment.tendered != null ? fmt(payment.tendered) : undefined,
 			change_display: payment.change != null ? fmt(payment.change) : undefined,
+		})),
+		refunds: data.refunds?.map((refund) => ({
+			...refund,
+			amount_display: fmt(refund.amount),
+			subtotal_display: refund.subtotal != null ? fmt(refund.subtotal) : undefined,
+			tax_total_display: refund.tax_total != null ? fmt(refund.tax_total) : undefined,
+			shipping_total_display:
+				refund.shipping_total != null ? fmt(refund.shipping_total) : undefined,
+			shipping_tax_display: refund.shipping_tax != null ? fmt(refund.shipping_tax) : undefined,
+			lines: refund.lines.map(formatRefundLine),
+			fees: refund.fees?.map(formatRefundTotal),
+			shipping: refund.shipping?.map(formatRefundTotal),
 		})),
 	};
 }

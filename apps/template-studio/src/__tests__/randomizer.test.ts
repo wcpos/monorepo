@@ -96,6 +96,17 @@ describe('template-studio randomizer', () => {
 		expect(refund.lines.length).toBeGreaterThan(0);
 		// Refund qtys / totals are stored as positive numbers in the refund block.
 		expect(refund.lines.every((line) => (line.qty ?? 0) > 0)).toBe(true);
+		expect(
+			refund.lines.every(
+				(line) =>
+					line.line_total === line.total &&
+					line.line_total_incl === line.total_incl &&
+					line.line_total_excl === line.total_excl &&
+					(line.unit_total ?? 0) > 0 &&
+					(line.unit_total_incl ?? 0) > 0 &&
+					(line.unit_total_excl ?? 0) > 0
+			)
+		).toBe(true);
 	});
 
 	it('marks refund scenarios in rendered labels without negating order lines', () => {

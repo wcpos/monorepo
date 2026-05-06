@@ -494,7 +494,7 @@ describe('mapReceiptData', () => {
 					refunded_by_id: 7,
 					refunded_by_name: 'Sam',
 					refunded_payment: true,
-					lines: [{ name: 'Widget A', sku: undefined, qty: 1, total: 4.5 }],
+					lines: [{ name: 'Widget A', sku: undefined, qty: 1, total: 4.5, line_total: 4.5 }],
 				},
 			]);
 		});

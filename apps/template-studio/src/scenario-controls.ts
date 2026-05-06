@@ -377,12 +377,14 @@ function ensureRefund(data: ReceiptData): ReceiptRefund[] {
 	const line = data.lines[0] ?? buildDefaultLine();
 	const qty = Math.min(Math.max(line.qty, 1), 1);
 	const amount = round(line.line_total_incl / Math.max(line.qty, 1));
+	const amountExcl = taxableExcl(amount);
+	const taxAmount = round(amount - amountExcl);
 	return [
 		{
 			id: 9001,
 			amount,
 			subtotal: amount,
-			tax_total: round(amount - taxableExcl(amount)),
+			tax_total: taxAmount,
 			reason: 'Customer return',
 			refunded_by_id: 1,
 			refunded_by_name: 'Store Manager',
@@ -391,7 +393,30 @@ function ensureRefund(data: ReceiptData): ReceiptRefund[] {
 			gateway_id: 'cash',
 			gateway_title: 'Cash',
 			processing_mode: 'manual',
-			lines: [{ name: line.name, sku: line.sku, qty, total: amount }],
+			lines: [
+				{
+					name: line.name,
+					sku: line.sku,
+					qty,
+					total: amount,
+					total_incl: amount,
+					total_excl: amountExcl,
+					line_total: amount,
+					line_total_incl: amount,
+					line_total_excl: amountExcl,
+					unit_total: amount,
+					unit_total_incl: amount,
+					unit_total_excl: amountExcl,
+					taxes: [
+						{
+							code: `vat-${TAX_RATE}`,
+							rate: TAX_RATE,
+							label: `${TAX_LABEL} ${TAX_RATE}%`,
+							amount: taxAmount,
+						},
+					],
+				},
+			],
 		},
 	];
 }

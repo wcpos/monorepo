@@ -110,7 +110,20 @@ const DEFAULT_TAX_ID = { type: 'other', value: '', country: '', label: '' };
 
 const DEFAULT_LINE_META = { key: 'Attribute', value: '' };
 const DEFAULT_LINE_TAX = { code: 'TAX', rate: null, label: 'Tax', amount: 0 };
-const DEFAULT_REFUND_LINE = { name: 'Refunded item', qty: 1, total: 0 };
+const DEFAULT_REFUND_LINE = {
+	name: 'Refunded item',
+	qty: 1,
+	total: 0,
+	total_incl: 0,
+	total_excl: 0,
+	line_total: 0,
+	line_total_incl: 0,
+	line_total_excl: 0,
+	unit_total: 0,
+	unit_total_incl: 0,
+	unit_total_excl: 0,
+	taxes: [],
+};
 const DEFAULT_REFUND = {
 	id: 0,
 	amount: 0,
