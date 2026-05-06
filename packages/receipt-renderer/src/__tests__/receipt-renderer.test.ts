@@ -123,6 +123,19 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).not.toContain('>QR<');
 	});
 
+	it('renders a helpful error when barcode data is invalid for the selected type', () => {
+		const html = renderThermalPreview(
+			'<receipt><barcode type="ean13">ABC-123</barcode></receipt>',
+			{}
+		);
+
+		expect(html).toContain('data-barcode-error="true"');
+		expect(html).toContain('Barcode error');
+		expect(html).toContain('Invalid ean13 barcode value');
+		expect(html).toContain('ABC-123');
+		expect(html).not.toContain('<svg');
+	});
+
 	it('resolves <barcode> elements inside logicless HTML templates to inline SVG', () => {
 		const html = renderLogiclessTemplate(
 			'<div><barcode type="code128" height="40">{{order.number}}</barcode></div>',
