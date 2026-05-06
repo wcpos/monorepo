@@ -49,16 +49,55 @@ const TAX_RATE = 10;
 const TAX_LABEL = 'VAT';
 const DEFAULT_CURRENCY = 'USD';
 
+const LOCALE_CURRENCIES: Record<string, string> = {
+	en_US: 'USD',
+	en_GB: 'GBP',
+	en_AU: 'AUD',
+	en_CA: 'CAD',
+	es_ES: 'EUR',
+	es_MX: 'MXN',
+	fr_FR: 'EUR',
+	fr_CA: 'CAD',
+	de_DE: 'EUR',
+	it_IT: 'EUR',
+	pt_BR: 'BRL',
+	pt_PT: 'EUR',
+	nl_NL: 'EUR',
+	sv_SE: 'SEK',
+	da_DK: 'DKK',
+	nb_NO: 'NOK',
+	ja_JP: 'JPY',
+	zh_CN: 'CNY',
+	zh_TW: 'TWD',
+	ko_KR: 'KRW',
+	ar_SA: 'SAR',
+	ar_AE: 'AED',
+	he_IL: 'ILS',
+	ru_RU: 'RUB',
+};
+
+const LOCALIZED_SCENARIO_I18N: Record<string, Partial<ReceiptData['i18n']>> = {
+	ar_SA: {
+		gift_receipt: 'إيصال هدية',
+		gift_return_policy: 'يمكن إرجاع أو استبدال الأصناف خلال 30 يوماً مع هذا الإيصال.',
+	},
+	ja_JP: {
+		gift_receipt: 'ギフトレシート',
+		gift_return_policy: '返品・交換には30日以内にこのレシートをご提示ください。',
+	},
+};
+
 export function createScenarioState(
 	scenarios: Partial<Omit<ResolvedScenarios, 'cartSize'>>,
 	data?: ReceiptData
 ): ScenarioState {
 	const fixtureCurrency = data?.order.currency || DEFAULT_CURRENCY;
+	const localCurrency = localeCurrency(data?.presentation_hints.locale);
 	return {
 		emptyCart: scenarios.emptyCart ?? Boolean(data && data.lines.length === 0),
 		refund: scenarios.refund ?? Boolean(data?.refunds && data.refunds.length > 0),
 		rtl: scenarios.rtl ?? Boolean(data && data.presentation_hints.locale.startsWith('ar')),
-		multicurrency: scenarios.multicurrency ?? fixtureCurrency !== DEFAULT_CURRENCY,
+		multicurrency: scenarios.multicurrency ?? fixtureCurrency !== localCurrency,
 		multiPayment: scenarios.multiPayment ?? Boolean(data && data.payments.length > 1),
 		fiscal: scenarios.fiscal ?? Boolean(data && data.fiscal.immutable_id),
 		longNames:
@@ -125,10 +164,14 @@ export function applyScenarioState(data: ReceiptData, state: ScenarioState): Rec
 			? 'hidden'
 			: normalizeVisibleTax(next.presentation_hints.display_tax),
 	};
+	const localizedScenarioI18n = LOCALIZED_SCENARIO_I18N[next.presentation_hints.locale] ?? {};
 	next.i18n = {
 		...next.i18n,
-		gift_receipt: 'Gift Receipt',
-		gift_return_policy: 'Items may be returned or exchanged within 30 days with this receipt.',
+		gift_receipt: localizedScenarioI18n.gift_receipt ?? next.i18n?.gift_receipt ?? 'Gift Receipt',
+		gift_return_policy:
+			localizedScenarioI18n.gift_return_policy ??
+			next.i18n?.gift_return_policy ??
+			'Items may be returned or exchanged within 30 days with this receipt.',
 	};
 
 	next.totals = computeTotals(next.lines, next.fees, next.shipping, next.discounts, []);
@@ -434,9 +477,25 @@ function applyLocale(data: ReceiptData, rtl: boolean): ReceiptData {
 	};
 }
 
+function localeCurrency(locale: string | undefined): string {
+	if (!locale) return DEFAULT_CURRENCY;
+	return (
+		LOCALE_CURRENCIES[locale] ?? LOCALE_CURRENCIES[locale.replace(/-/g, '_')] ?? DEFAULT_CURRENCY
+	);
+}
+
+function alternateCurrencyFor(localeCurrencyCode: string): string {
+	return localeCurrencyCode === DEFAULT_CURRENCY ? 'EUR' : DEFAULT_CURRENCY;
+}
+
 function applyCurrency(data: ReceiptData, multicurrency: boolean): ReceiptData {
-	const fixtureCurrency = data.order.currency || DEFAULT_CURRENCY;
-	const currency = multicurrency ? fixtureCurrency : DEFAULT_CURRENCY;
+	const localCurrency = localeCurrency(data.presentation_hints.locale);
+	const fixtureCurrency = data.order.currency || localCurrency;
+	const currency = multicurrency
+		? fixtureCurrency === localCurrency
+			? alternateCurrencyFor(localCurrency)
+			: fixtureCurrency
+		: localCurrency;
 	return {
 		...data,
 		order: { ...data.order, currency },

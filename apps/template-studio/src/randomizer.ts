@@ -239,6 +239,7 @@ interface LocalePool {
 	timeZone: string;
 	taxLabel: string;
 	thankYouNote: string;
+	i18nLabels?: Partial<ReceiptI18n>;
 }
 
 /**
@@ -339,10 +340,38 @@ const LATIN_POOL: LocalePool = {
 	countryCode: 'ES',
 	dialingPrefix: '+34',
 	currency: 'EUR',
-	locale: 'en_US',
+	locale: 'es_ES',
 	timeZone: 'Europe/Madrid',
-	taxLabel: 'VAT',
-	thankYouNote: 'Thank you for your order!',
+	taxLabel: 'IVA',
+	thankYouNote: '¡Gracias por su compra!',
+	i18nLabels: {
+		order: 'Pedido',
+		date: 'Fecha',
+		cashier: 'Cajero',
+		customer: 'Cliente',
+		item: 'Artículo',
+		sku: 'SKU',
+		qty: 'Cant.',
+		unit_price: 'Precio unitario',
+		discount: 'Descuento',
+		subtotal: 'Subtotal',
+		total: 'Total',
+		refund_total: 'Total reembolsado',
+		total_tax: 'Total impuestos',
+		tax: 'Impuesto',
+		paid: 'Pagado',
+		tendered: 'Entregado',
+		change: 'Cambio',
+		tax_summary: 'Resumen de impuestos',
+		receipt: 'Recibo',
+		tax_invoice: 'Factura fiscal',
+		gift_receipt: 'Recibo regalo',
+		amount: 'Importe',
+		thank_you: 'Gracias',
+		thank_you_purchase: '¡Gracias por su compra!',
+		gift_return_policy:
+			'Los artículos se pueden devolver o cambiar en un plazo de 30 días con este recibo.',
+	},
 };
 
 const RTL_POOL: LocalePool = {
@@ -366,6 +395,33 @@ const RTL_POOL: LocalePool = {
 	timeZone: 'Asia/Riyadh',
 	taxLabel: 'ضريبة القيمة المضافة',
 	thankYouNote: 'شكراً لزيارتكم!',
+	i18nLabels: {
+		order: 'الطلب',
+		date: 'التاريخ',
+		cashier: 'البائع',
+		customer: 'العميل',
+		item: 'الصنف',
+		sku: 'رمز المنتج',
+		qty: 'الكمية',
+		unit_price: 'سعر الوحدة',
+		discount: 'الخصم',
+		subtotal: 'المجموع الفرعي',
+		total: 'الإجمالي',
+		refund_total: 'إجمالي الاسترداد',
+		total_tax: 'إجمالي الضريبة',
+		tax: 'الضريبة',
+		paid: 'المدفوع',
+		tendered: 'المبلغ المدفوع',
+		change: 'الباقي',
+		tax_summary: 'ملخص الضريبة',
+		receipt: 'إيصال',
+		tax_invoice: 'فاتورة ضريبية',
+		gift_receipt: 'إيصال هدية',
+		amount: 'المبلغ',
+		thank_you: 'شكراً',
+		thank_you_purchase: 'شكراً لعملية الشراء!',
+		gift_return_policy: 'يمكن إرجاع أو استبدال الأصناف خلال 30 يوماً مع هذا الإيصال.',
+	},
 };
 
 const CJK_POOL: LocalePool = {
@@ -386,6 +442,33 @@ const CJK_POOL: LocalePool = {
 	timeZone: 'Asia/Tokyo',
 	taxLabel: '消費税',
 	thankYouNote: 'またのご来店をお待ちしております。',
+	i18nLabels: {
+		order: '注文',
+		date: '日付',
+		cashier: 'レジ担当',
+		customer: '顧客',
+		item: '商品',
+		sku: 'SKU',
+		qty: '数量',
+		unit_price: '単価',
+		discount: '割引',
+		subtotal: '小計',
+		total: '合計',
+		refund_total: '返金合計',
+		total_tax: '税額合計',
+		tax: '税',
+		paid: '支払い済み',
+		tendered: '預り金',
+		change: 'お釣り',
+		tax_summary: '税の内訳',
+		receipt: '領収書',
+		tax_invoice: '適格請求書',
+		gift_receipt: 'ギフトレシート',
+		amount: '金額',
+		thank_you: 'ありがとうございます',
+		thank_you_purchase: 'お買い上げありがとうございます。',
+		gift_return_policy: '返品・交換には30日以内にこのレシートをご提示ください。',
+	},
 };
 
 /* ─────────────────────────── Builders ─────────────────────────── */
@@ -458,7 +541,7 @@ function buildReceiptData(
 		locale: pool.locale,
 	};
 	const fiscal: ReceiptFiscal = scenarios.fiscal ? buildFiscal(rand, order) : {};
-	const i18n = buildI18nLabels(refunds.length > 0);
+	const i18n = buildI18nLabels(refunds.length > 0, pool);
 
 	// Attach customer tax IDs at the very end so the rand draws don't shift
 	// the seeded sequence used by payments, fiscal, etc.
@@ -1389,8 +1472,8 @@ function emptyDateObject(): ReceiptDate {
  * the same key set the PHP builder emits; the catchall in the schema lets
  * extensions add more without breaking validation.
  */
-function buildI18nLabels(hasRefunds = false): ReceiptI18n {
-	return {
+function buildI18nLabels(hasRefunds = false, pool?: LocalePool): ReceiptI18n {
+	const labels: ReceiptI18n = {
 		order: 'Order',
 		date: 'Date',
 		invoice_no: 'Invoice No.',
@@ -1414,6 +1497,7 @@ function buildI18nLabels(hasRefunds = false): ReceiptI18n {
 		subtotal: 'Subtotal',
 		subtotal_excl_tax: 'Subtotal (excl. tax)',
 		total: hasRefunds ? 'Refund Total' : 'Total',
+		refund_total: 'Refund Total',
 		total_tax: 'Total Tax',
 		total_incl_tax: 'Total (incl. tax)',
 		tax: 'Tax',
@@ -1454,5 +1538,12 @@ function buildI18nLabels(hasRefunds = false): ReceiptI18n {
 		copy_number: 'Copy No.',
 		status: 'Status',
 		completed: 'Completed',
+	};
+	const localized = { ...labels, ...pool?.i18nLabels };
+	return {
+		...localized,
+		total: hasRefunds
+			? (localized.refund_total ?? localized.total ?? labels.refund_total)
+			: (localized.total ?? labels.total),
 	};
 }

@@ -104,11 +104,47 @@ describe('template-studio randomizer', () => {
 			overrides: { refund: true, emptyCart: false, cartSize: 2 },
 		});
 
-		expect(result.data.i18n.total).toBe('Refund Total');
+		expect(result.data.i18n.total).toBe(result.data.i18n.refund_total);
 		expect(
 			result.data.payments.every((payment) => payment.method_title.startsWith('Refund — '))
 		).toBe(true);
 		expect(result.data.lines.every((line) => line.qty > 0 && line.line_total_incl >= 0)).toBe(true);
+	});
+
+	it('localizes labels when shuffle resolves an RTL locale', () => {
+		const result = createRandomReceipt({
+			seed: 9,
+			overrides: { rtl: true, multicurrency: false, emptyCart: false },
+		});
+
+		expect(result.data.presentation_hints.locale).toBe('ar_SA');
+		expect(result.data.order.currency).toBe('SAR');
+		expect(result.data.i18n?.subtotal).toBe('المجموع الفرعي');
+		expect(result.data.i18n?.total).toBe('الإجمالي');
+		expect(result.data.i18n?.thank_you).toBe('شكراً');
+	});
+
+	it('localizes labels and currency when shuffle resolves a Japanese locale', () => {
+		let result: ReturnType<typeof createRandomReceipt> | undefined;
+		for (let seed = 1; seed < 100 && !result; seed += 1) {
+			const candidate = createRandomReceipt({
+				seed,
+				overrides: {
+					rtl: false,
+					multicurrency: false,
+					emptyCart: false,
+					refund: false,
+					cartSize: 1,
+				},
+			});
+			if (candidate.data.presentation_hints.locale === 'ja_JP') result = candidate;
+		}
+		if (!result) throw new Error('no Japanese locale seed found in range');
+
+		expect(result.data.order.currency).toBe('JPY');
+		expect(result.data.i18n?.subtotal).toBe('小計');
+		expect(result.data.i18n?.total).toBe('合計');
+		expect(result.data.i18n?.thank_you).toBe('ありがとうございます');
 	});
 
 	it('produces real-order timestamps when wc_status is completed', () => {

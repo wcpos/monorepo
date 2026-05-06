@@ -112,7 +112,7 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 					<select
 						id="woo-currency"
 						value={currency}
-						onChange={(event) => onChangePath(['meta', 'currency'], event.target.value)}
+						onChange={(event) => onChangePath(['order', 'currency'], event.target.value)}
 					>
 						{currencyOptions.map((code) => (
 							<option key={code} value={code}>

@@ -290,7 +290,7 @@ export function App() {
 						<WooCommerceSection
 							engine={selectedTemplate?.engine ?? null}
 							currency={
-								((workingData.meta as Record<string, unknown> | undefined)?.currency as string) ??
+								((workingData.order as Record<string, unknown> | undefined)?.currency as string) ??
 								'USD'
 							}
 							locale={
