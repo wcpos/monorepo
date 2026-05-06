@@ -43,6 +43,7 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 	const priceColWidth = Math.max(10, Math.floor(columns * 0.25));
 	const nameColWidth = columns - priceColWidth;
 	const customerTaxId = data.customer?.tax_id || data.customer?.tax_ids?.[0]?.value || '';
+	const discountTotalIncl = data.totals.discount_total_incl ?? data.totals.discount_total ?? 0;
 
 	// Build template data with pre-formatted money values
 	const templateData: Record<string, any> = {
@@ -79,8 +80,8 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 			priceColWidth,
 		})),
 		subtotal_fmt: formatMoney(data.totals.subtotal_incl, currency, dp),
-		has_discount: data.totals.discount_total_incl > 0,
-		discount_fmt: `-${formatMoney(data.totals.discount_total_incl, currency, dp)}`,
+		has_discount: discountTotalIncl > 0,
+		discount_fmt: `-${formatMoney(discountTotalIncl, currency, dp)}`,
 		show_tax: data.presentation_hints.display_tax !== 'hidden' && data.totals.tax_total > 0,
 		tax_lines: data.tax_summary.map((tax) => ({
 			label: tax.rate ? `${tax.label} (${tax.rate}%)` : tax.label,

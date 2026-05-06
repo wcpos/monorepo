@@ -1072,9 +1072,14 @@ function buildDiscounts(rand: () => number, taxRate: number): ReceiptDiscount[] 
 			label: code,
 			code,
 			codes: extra ? `${code}, ${extra}` : code,
-			total: -total,
-			total_incl: -total,
-			total_excl: taxableExcl(-total, taxRate),
+			// Discount magnitudes are POSITIVE in the receipt-data contract,
+			// matching WC's `WC_Order_Item_Coupon::get_discount()` and
+			// `WC_Order::get_discount_total()`. Templates that visually present
+			// deductions render with a leading `-` (see every gallery template
+			// in woocommerce-pos/templates/gallery — `-{{total_incl_display}}`).
+			total,
+			total_incl: total,
+			total_excl: taxableExcl(total, taxRate),
 		};
 	});
 }
@@ -1150,8 +1155,9 @@ function computeTotals(
 	const shipTotalExcl = shipping.reduce((sum, item) => sum + item.total_excl, 0);
 	const discountTotalIncl = discounts.reduce((sum, item) => sum + item.total_incl, 0);
 	const discountTotalExcl = discounts.reduce((sum, item) => sum + item.total_excl, 0);
-	const grandIncl = round(lineSubInc + feeTotalIncl + shipTotalIncl + discountTotalIncl);
-	const grandExcl = round(lineSubExc + feeTotalExcl + shipTotalExcl + discountTotalExcl);
+	// Discounts are positive magnitudes (matches WC) — subtract from grand.
+	const grandIncl = round(lineSubInc + feeTotalIncl + shipTotalIncl - discountTotalIncl);
+	const grandExcl = round(lineSubExc + feeTotalExcl + shipTotalExcl - discountTotalExcl);
 	const refundTotal = refunds.reduce((sum, refund) => sum + (refund.amount ?? 0), 0);
 	const totals: ReceiptTotals = {
 		subtotal: round(lineSubInc),
@@ -1185,12 +1191,12 @@ function buildTaxSummary(
 		lines.reduce((sum, line) => sum + (line.line_subtotal_excl ?? 0), 0) +
 		fees.reduce((sum, fee) => sum + fee.total_excl, 0) +
 		shipping.reduce((sum, item) => sum + item.total_excl, 0) +
-		discounts.reduce((sum, item) => sum + item.total_excl, 0);
+		discounts.reduce((sum, item) => sum - item.total_excl, 0);
 	const taxableIncl =
 		lines.reduce((sum, line) => sum + (line.line_subtotal_incl ?? 0), 0) +
 		fees.reduce((sum, fee) => sum + fee.total_incl, 0) +
 		shipping.reduce((sum, item) => sum + item.total_incl, 0) +
-		discounts.reduce((sum, item) => sum + item.total_incl, 0);
+		discounts.reduce((sum, item) => sum - item.total_incl, 0);
 	if (taxRate === 0 || (taxableIncl === 0 && taxableExcl === 0)) return [];
 	return [
 		{
@@ -1499,5 +1505,8 @@ function buildI18nLabels(hasRefunds = false): ReceiptI18n {
 		document_type: 'Document Type',
 		copy: 'Copy',
 		copy_number: 'Copy No.',
+		status: 'Status',
+		completed: 'Completed',
+		printed: 'Printed',
 	};
 }

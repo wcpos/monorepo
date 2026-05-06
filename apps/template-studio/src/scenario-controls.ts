@@ -235,7 +235,7 @@ function buildShipping(): ReceiptShipping {
 }
 
 function buildDiscount(): ReceiptDiscount {
-	const totalIncl = -3;
+	const totalIncl = 3;
 	return {
 		label: 'WELCOME10',
 		code: 'WELCOME10',
@@ -281,8 +281,8 @@ function computeTotals(
 	);
 	const subtotalIncl = round(lineTotals.subtotalIncl);
 	const subtotalExcl = round(lineTotals.subtotalExcl);
-	const lineDiscountIncl = lineTotals.totalIncl - lineTotals.subtotalIncl;
-	const lineDiscountExcl = lineTotals.totalExcl - lineTotals.subtotalExcl;
+	const lineDiscountIncl = lineTotals.subtotalIncl - lineTotals.totalIncl;
+	const lineDiscountExcl = lineTotals.subtotalExcl - lineTotals.totalExcl;
 	const feeIncl = fees.reduce((sum, fee) => sum + fee.total_incl, 0);
 	const feeExcl = fees.reduce((sum, fee) => sum + fee.total_excl, 0);
 	const shippingIncl = shipping.reduce((sum, item) => sum + item.total_incl, 0);
@@ -291,8 +291,8 @@ function computeTotals(
 		lineDiscountIncl + discounts.reduce((sum, discount) => sum + discount.total_incl, 0);
 	const discountExcl =
 		lineDiscountExcl + discounts.reduce((sum, discount) => sum + discount.total_excl, 0);
-	const grandIncl = round(subtotalIncl + feeIncl + shippingIncl + discountIncl);
-	const grandExcl = round(subtotalExcl + feeExcl + shippingExcl + discountExcl);
+	const grandIncl = round(subtotalIncl + feeIncl + shippingIncl - discountIncl);
+	const grandExcl = round(subtotalExcl + feeExcl + shippingExcl - discountExcl);
 	const totals: ReceiptTotals = {
 		subtotal: subtotalIncl,
 		subtotal_incl: subtotalIncl,

@@ -129,6 +129,8 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			return currency ? `${currency} ${value.toFixed(2)}` : value.toFixed(2);
 		}
 	};
+	const discountTotalIncl = data.totals.discount_total_incl ?? data.totals.discount_total ?? 0;
+	const discountTotalExcl = data.totals.discount_total_excl ?? data.totals.discount_total ?? 0;
 
 	return {
 		...data,
@@ -248,12 +250,10 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 			subtotal_excl_display: fmt(refundValue(data.totals.subtotal_excl)),
 			discount_total_display: fmt(
 				data.totals.discount_total ??
-					(displayTax === 'excl'
-						? data.totals.discount_total_excl
-						: data.totals.discount_total_incl)
+					(displayTax === 'excl' ? discountTotalExcl : discountTotalIncl)
 			),
-			discount_total_incl_display: fmt(data.totals.discount_total_incl),
-			discount_total_excl_display: fmt(data.totals.discount_total_excl),
+			discount_total_incl_display: fmt(discountTotalIncl),
+			discount_total_excl_display: fmt(discountTotalExcl),
 			tax_total_display: fmt(refundValue(data.totals.tax_total)),
 			total_display: fmt(
 				refundValue(

@@ -194,13 +194,13 @@ describe('template-studio randomizer', () => {
 		expect(Math.round(sum * 100) / 100).toBe(result.data.totals.total_incl);
 	});
 
-	it('keeps grand totals internally consistent when fees and shipping are present', () => {
+	it('keeps grand totals internally consistent when fees, shipping, and discounts are present', () => {
 		const result = createRandomReceipt({
 			seed: 21,
 			overrides: {
 				emptyCart: false,
 				refund: false,
-				hasDiscounts: false,
+				hasDiscounts: true,
 				hasFees: true,
 				hasShipping: true,
 				cartSize: 2,
@@ -213,8 +213,9 @@ describe('template-studio randomizer', () => {
 		const feeTotalExcl = result.data.fees.reduce((sum, fee) => sum + fee.total_excl, 0);
 		const shippingTotalExcl = result.data.shipping.reduce((sum, item) => sum + item.total_excl, 0);
 		const discountTotalExcl = result.data.discounts.reduce((sum, item) => sum + item.total_excl, 0);
+		expect(discountTotalExcl).toBeGreaterThan(0);
 		const expectedGrandExcl =
-			Math.round((lineTotalExcl + feeTotalExcl + shippingTotalExcl + discountTotalExcl) * 100) /
+			Math.round((lineTotalExcl + feeTotalExcl + shippingTotalExcl - discountTotalExcl) * 100) /
 			100;
 
 		expect(result.data.totals.total_excl).toBe(expectedGrandExcl);

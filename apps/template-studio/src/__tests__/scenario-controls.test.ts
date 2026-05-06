@@ -113,7 +113,7 @@ describe('scenario controls', () => {
 		expect(withAdjustments.totals.total_incl).toBeCloseTo(
 			withAdjustments.lines.reduce((sum, line) => sum + line.line_total_incl, 0) +
 				withAdjustments.fees.reduce((sum, fee) => sum + fee.total_incl, 0) +
-				withAdjustments.shipping.reduce((sum, item) => sum + item.total_incl, 0) +
+				withAdjustments.shipping.reduce((sum, item) => sum + item.total_incl, 0) -
 				withAdjustments.discounts.reduce((sum, item) => sum + item.total_incl, 0),
 			2
 		);
@@ -147,8 +147,8 @@ describe('scenario controls', () => {
 		});
 
 		expect(result.totals.subtotal_incl).toBe(20);
-		expect(result.totals.discount_total_incl).toBe(-5);
-		expect(result.totals.discount_total_excl).toBe(-4);
+		expect(result.totals.discount_total_incl).toBe(5);
+		expect(result.totals.discount_total_excl).toBe(4);
 		expect(result.totals.total_incl).toBe(15);
 		expect(result.totals.total_excl).toBe(12);
 		expect(result.totals.tax_total).toBe(3);
