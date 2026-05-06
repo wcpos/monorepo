@@ -18,7 +18,6 @@ import type {
 	ReceiptFee,
 	ReceiptFiscal,
 	ReceiptLineItem,
-	ReceiptOrderMeta,
 	ReceiptPayment,
 	ReceiptPresentationHints,
 	ReceiptRefund,
@@ -50,31 +49,19 @@ function toArr(value: unknown): unknown[] {
 /**
  * Checks whether the data already matches the canonical ReceiptData shape.
  * We look for fields that exist only in the canonical shape and never in the
- * offline rendering shape (e.g., `meta.schema_version`, `meta.order_id`,
- * `totals.subtotal_incl`).
+ * offline rendering shape (a structured `order.id` and `totals.subtotal_incl`).
  */
 function isCanonicalShape(data: Record<string, any>): boolean {
-	const meta = data.meta;
+	const order = data.order;
 	const totals = data.totals;
 
-	// Require markers from at least two sections to avoid false positives
-	const hasMeta =
-		meta && typeof meta === 'object' && 'schema_version' in meta && 'order_id' in meta;
+	// Require markers from at least two sections to avoid false positives.
+	// Offline shape carries `order_number` at the top level (no nested `order` block);
+	// canonical shape always has the nested object with `id`.
+	const hasOrder = order && typeof order === 'object' && 'id' in order && 'number' in order;
 	const hasTotals = totals && typeof totals === 'object' && 'subtotal_incl' in totals;
 
-	return !!(hasMeta && hasTotals);
-}
-
-function mapMeta(src: Record<string, any>): ReceiptOrderMeta {
-	return {
-		schema_version: 1,
-		created_at_gmt: toStr(src.order_date),
-		order_id: 0, // Not available in the offline shape
-		order_number: toStr(src.order_number),
-		currency: toStr(src.currency),
-		wc_status: toStr(src.wc_status ?? src.status) || undefined,
-		created_via: toStr(src.created_via) || undefined,
-	};
+	return !!(hasOrder && hasTotals);
 }
 
 function mapStore(src: Record<string, any>): ReceiptStoreMeta {
@@ -321,8 +308,7 @@ function mapDiscountLike(src: Record<string, any>, displayTax: DisplayTax): Rece
  * NO LEGACY COMPAT — DO NOT ADD `grand_total*` FALLBACKS HERE
  * ─────────────────────────────────────────────────────────────────────────
  *
- * The receipt-data contract is v1 (see `meta.schema_version` pinned at 1
- * in schema.ts). The earlier `grand_total*` field family was renamed to
+ * The receipt-data contract is v1. The earlier `grand_total*` field family was renamed to
  * `total*` before any release ever shipped — there is no legacy producer
  * to bridge to. If a payload comes in without `total_incl` / `total_excl`,
  * the resulting zeros are the correct signal that the producer is
@@ -521,11 +507,15 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			: {}
 	);
 	const displayTax = resolveDisplayValueSide(presentationHints);
+	const order = data.order ?? base.order;
 
 	const result: ReceiptData = {
-		meta: {
-			...base.meta,
-			...(data.meta ?? {}),
+		order: {
+			...base.order,
+			...order,
+			created: { ...base.order.created, ...(order.created ?? {}) },
+			paid: { ...base.order.paid, ...(order.paid ?? {}) },
+			completed: { ...base.order.completed, ...(order.completed ?? {}) },
 		},
 		store: {
 			...base.store,
@@ -595,11 +585,8 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			.map((entry: unknown) => mapRefund(entry as Record<string, any>));
 	}
 
-	// Pass-through optional top-level keys (`receipt`, `order`, `i18n`) emitted
-	// by the PHP Receipt_Data_Builder. These are advisory — templates may use
-	// them but the encoder doesn't depend on them, so we copy as-is.
-	if (data.receipt !== undefined) result.receipt = data.receipt;
-	if (data.order !== undefined) result.order = data.order;
+	// Pass-through `i18n` (advisory labels — templates may use it but the
+	// encoder doesn't depend on them).
 	if (data.i18n !== undefined) result.i18n = data.i18n;
 
 	return result;
@@ -624,7 +611,6 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 		return normalizeCanonicalReceiptData(data as Partial<ReceiptData>);
 	}
 
-	const meta = data.meta && typeof data.meta === 'object' ? data.meta : {};
 	const store = data.store && typeof data.store === 'object' ? data.store : {};
 	const customer = data.customer && typeof data.customer === 'object' ? data.customer : {};
 	const totals = data.totals && typeof data.totals === 'object' ? data.totals : {};
@@ -636,8 +622,25 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	const normalizedHints = mapPresentationHints(presentationHints);
 	const displayTax = resolveDisplayValueSide(normalizedHints);
 
+	// Offline rendering shape carries `order_number`, `order_date`, `currency` at the top
+	// level — synthesise the canonical `order` block from those. Date variants are empty
+	// strings for everything except `datetime` (the only field the offline shape provides),
+	// matching the contract that ReceiptDate has all 19 keys present.
+	const offlineCreated = { ...emptyReceiptDate(), datetime: toStr(data.order_date) };
+	const offlineDate = emptyReceiptDate();
+
 	const result: ReceiptData = {
-		meta: mapMeta(meta),
+		order: {
+			id: 0,
+			number: toStr(data.order_number),
+			currency: toStr(data.currency),
+			customer_note: toStr(data.customer_note),
+			wc_status: toStr(data.wc_status ?? data.status) || undefined,
+			created_via: toStr(data.created_via) || undefined,
+			created: offlineCreated,
+			paid: offlineDate,
+			completed: offlineDate,
+		},
 		store: mapStore(store),
 		cashier: { id: 0, name: '' } as ReceiptCashier,
 		customer: mapCustomer(customer),
@@ -679,15 +682,42 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	return result;
 }
 
+/** A ReceiptDate object with every field set to an empty string. */
+function emptyReceiptDate() {
+	return {
+		datetime: '',
+		date: '',
+		time: '',
+		datetime_short: '',
+		datetime_long: '',
+		datetime_full: '',
+		date_short: '',
+		date_long: '',
+		date_full: '',
+		date_ymd: '',
+		date_dmy: '',
+		date_mdy: '',
+		weekday_short: '',
+		weekday_long: '',
+		day: '',
+		month: '',
+		month_short: '',
+		month_long: '',
+		year: '',
+	};
+}
+
 /** Minimal valid ReceiptData with all required fields set to defaults. */
 function emptyReceiptData(): ReceiptData {
 	return {
-		meta: {
-			schema_version: 1,
-			created_at_gmt: '',
-			order_id: 0,
-			order_number: '',
+		order: {
+			id: 0,
+			number: '',
 			currency: '',
+			customer_note: '',
+			created: emptyReceiptDate(),
+			paid: emptyReceiptDate(),
+			completed: emptyReceiptDate(),
 		},
 		store: { name: '', address_lines: [] },
 		cashier: { id: 0, name: '' },

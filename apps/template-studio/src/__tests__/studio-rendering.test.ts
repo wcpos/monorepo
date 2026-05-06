@@ -64,7 +64,7 @@ describe('template studio rendering harness', () => {
 				name: 'Logicless sample',
 				engine: 'logicless',
 				source: 'bundled-gallery',
-				content: '<h1>{{store.name}}</h1><p>{{meta.order_number}}</p>',
+				content: '<h1>{{store.name}}</h1><p>{{order.number}}</p>',
 				previewHtml: '<h1>PHP diagnostic</h1>',
 			},
 			fixture,
@@ -320,7 +320,7 @@ describe('template studio rendering harness', () => {
 						engine: 'thermal',
 						source: 'bundled-gallery',
 						content:
-							'<receipt><barcode type="code128">{{meta.order_number}}</barcode><qrcode>{{meta.order_number}}</qrcode></receipt>',
+							'<receipt><barcode type="code128">{{order.number}}</barcode><qrcode>{{order.number}}</qrcode></receipt>',
 					},
 				]);
 			}

@@ -18,7 +18,6 @@ export type {
 export type {
 	ReceiptData,
 	ReceiptStoreMeta,
-	ReceiptOrderMeta,
 	ReceiptCashier,
 	ReceiptTaxId,
 	ReceiptCustomer,
@@ -34,7 +33,6 @@ export type {
 	ReceiptFiscal,
 	ReceiptPresentationHints,
 	ReceiptDate,
-	ReceiptInfo,
 	ReceiptOrder,
 	ReceiptI18n,
 	TaxId,
@@ -42,7 +40,6 @@ export type {
 export {
 	ReceiptDataSchema,
 	ReceiptStoreMetaSchema,
-	ReceiptOrderMetaSchema,
 	ReceiptCashierSchema,
 	ReceiptTaxIdSchema,
 	ReceiptCustomerSchema,
@@ -61,7 +58,6 @@ export {
 	ReceiptPresentationHintsSchema,
 	ReceiptDisplayTaxSchema,
 	ReceiptDateSchema,
-	ReceiptInfoSchema,
 	ReceiptOrderSchema,
 	ReceiptI18nSchema,
 } from './schema';

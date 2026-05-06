@@ -19,10 +19,8 @@ import type {
 	ReceiptFee,
 	ReceiptFiscal,
 	ReceiptI18n,
-	ReceiptInfo,
 	ReceiptLineItem,
 	ReceiptOrder,
-	ReceiptOrderMeta,
 	ReceiptPayment,
 	ReceiptPresentationHints,
 	ReceiptRefund,
@@ -438,11 +436,11 @@ function buildReceiptData(
 	const taxSummary = buildTaxSummary(lines, fees, shipping, discounts, taxRate, pool.taxLabel);
 
 	const orderCreated = pickOrderDate(rand, seed);
-	const orderMeta = buildOrderMeta(
+	const order = buildOrder(
 		rand,
 		scenarios,
-		orderCurrency,
 		seed,
+		orderCurrency,
 		orderCreated,
 		pool.locale,
 		pool.timeZone
@@ -459,9 +457,7 @@ function buildReceiptData(
 		rounding_mode: roundingMode,
 		locale: pool.locale,
 	};
-	const fiscal: ReceiptFiscal = scenarios.fiscal ? buildFiscal(rand, orderMeta) : {};
-	const receiptInfo = buildReceiptInfo(rand, pool.locale, pool.timeZone, orderCreated);
-	const order = buildOrder(orderMeta, orderCreated, scenarios, pool.locale, pool.timeZone);
+	const fiscal: ReceiptFiscal = scenarios.fiscal ? buildFiscal(rand, order) : {};
 	const i18n = buildI18nLabels(refunds.length > 0);
 
 	// Attach customer tax IDs at the very end so the rand draws don't shift
@@ -470,9 +466,7 @@ function buildReceiptData(
 
 	return {
 		id: `random-${formatSeed(seed)}`,
-		receipt: receiptInfo,
 		order,
-		meta: orderMeta,
 		store,
 		cashier,
 		customer,
@@ -1291,17 +1285,17 @@ function buildPayments(
 	return result;
 }
 
-function buildOrderMeta(
+function buildOrder(
 	rand: () => number,
 	scenarios: ResolvedScenarios,
-	currency: string,
 	seed: number,
+	currency: string,
 	createdAt: Date,
 	locale: string,
 	timeZone: string
-): ReceiptOrderMeta {
-	const orderId = 1000 + (seed % 9000);
+): ReceiptOrder {
 	void scenarios;
+	const orderId = 1000 + (seed % 9000);
 	const wcStatus = pickFrom(rand, [
 		'pending',
 		'completed',
@@ -1312,47 +1306,37 @@ function buildOrderMeta(
 		'failed',
 	] as const);
 	const createdVia = pickFrom(rand, ['woocommerce-pos', 'checkout', 'admin', 'rest-api'] as const);
-	const createdAtGmt = createdAt.toISOString().replace('T', ' ').slice(0, 19);
-	const baseDateOptions: Intl.DateTimeFormatOptions = {
-		timeZone,
-		calendar: 'gregory',
-		numberingSystem: 'latn',
-	};
-	const localeFormatted = (() => {
-		try {
-			return new Intl.DateTimeFormat(locale.replace(/_/g, '-'), {
-				...baseDateOptions,
-				dateStyle: 'medium',
-				timeStyle: 'short',
-			}).format(createdAt);
-		} catch {
-			return createdAtGmt;
-		}
-	})();
+	const customerNote =
+		rand() < 0.25
+			? pickFrom(rand, ['Please gift wrap', 'Leave at front desk', 'Call on arrival'])
+			: '';
+	// Paid/completed timestamps trail creation; paid statuses keep date_paid even
+	// when fulfillment has not completed yet.
+	const isPaid = wcStatus === 'processing' || wcStatus === 'completed';
+	const isCompleted = wcStatus === 'completed';
+	const paidAt = isPaid ? new Date(createdAt.getTime() + 60_000) : null;
+	const completedAt = isCompleted ? new Date(createdAt.getTime() + 5 * 60_000) : null;
 	return {
-		schema_version: 1,
-		created_at_gmt: createdAtGmt,
-		created_at_local: localeFormatted,
-		order_id: orderId,
-		order_number: `${orderId}`,
+		id: orderId,
+		number: `${orderId}`,
 		currency,
-		customer_note:
-			rand() < 0.25
-				? pickFrom(rand, ['Please gift wrap', 'Leave at front desk', 'Call on arrival'])
-				: '',
+		customer_note: customerNote,
 		wc_status: wcStatus,
 		created_via: createdVia,
+		created: buildDateObject(createdAt, locale, timeZone),
+		paid: paidAt ? buildDateObject(paidAt, locale, timeZone) : emptyDateObject(),
+		completed: completedAt ? buildDateObject(completedAt, locale, timeZone) : emptyDateObject(),
 	};
 }
 
-function buildFiscal(rand: () => number, meta: ReceiptOrderMeta): ReceiptFiscal {
+function buildFiscal(rand: () => number, order: ReceiptOrder): ReceiptFiscal {
 	const isReprint = rand() < 0.2;
 	const hash = formatSeed(seedFromRand(rand)) + formatSeed(seedFromRand(rand));
 	const agency = pickFrom(rand, ['AEAT', 'ZATCA', 'NTA', 'AFIP'] as const);
 	const extraFields: Record<string, string> = {
 		// Spanish AEAT TicketBAI / Saudi ZATCA-style identifiers — gives templates
 		// realistic jurisdiction-specific keys to render.
-		invoice_serial: `${meta.order_number}-${formatSeed(seedFromRand(rand)).toUpperCase()}`,
+		invoice_serial: `${order.number}-${formatSeed(seedFromRand(rand)).toUpperCase()}`,
 		signature_algorithm: 'sha256',
 		issuer_id: `ISS-${formatSeed(seedFromRand(rand)).toUpperCase()}`,
 	};
@@ -1361,55 +1345,18 @@ function buildFiscal(rand: () => number, meta: ReceiptOrderMeta): ReceiptFiscal 
 		extraFields.zatca_invoice_type = pickFrom(rand, ['standard', 'simplified']);
 	}
 	return {
-		immutable_id: `IMM-${formatSeed(seedFromRand(rand))}-${meta.order_id}`,
-		receipt_number: `R-${meta.order_number}-${formatSeed(seedFromRand(rand))}`,
-		sequence: meta.order_id,
+		immutable_id: `IMM-${formatSeed(seedFromRand(rand))}-${order.id}`,
+		receipt_number: `R-${order.number}-${formatSeed(seedFromRand(rand))}`,
+		sequence: order.id,
 		hash,
 		signature_excerpt: hash.slice(0, 8).toUpperCase(),
-		qr_payload: `wcpos://receipt/${meta.order_number}/${formatSeed(seedFromRand(rand))}`,
+		qr_payload: `wcpos://receipt/${order.number}/${formatSeed(seedFromRand(rand))}`,
 		tax_agency_code: agency,
-		signed_at: meta.created_at_gmt,
+		signed_at: order.created.datetime,
 		document_label: pickFrom(rand, ['Tax Invoice', 'Receipt', 'Fiscal Receipt'] as const),
 		is_reprint: isReprint,
 		reprint_count: isReprint ? 1 + Math.floor(rand() * 3) : 0,
 		extra_fields: extraFields,
-	};
-}
-
-function buildReceiptInfo(
-	rand: () => number,
-	locale: string,
-	timeZone: string,
-	printedAt: Date
-): ReceiptInfo {
-	return {
-		mode: pickFrom(rand, ['live', 'preview', 'gallery'] as const),
-		printed: buildDateObject(printedAt, locale, timeZone),
-	};
-}
-
-function buildOrder(
-	meta: ReceiptOrderMeta,
-	createdAt: Date,
-	scenarios: ResolvedScenarios,
-	locale: string,
-	timeZone: string
-): ReceiptOrder {
-	// Paid/completed timestamps trail creation; paid statuses keep date_paid even
-	// when fulfillment has not completed yet.
-	const isPaid = meta.wc_status === 'processing' || meta.wc_status === 'completed';
-	const isCompleted = meta.wc_status === 'completed';
-	const paidAt = isPaid ? new Date(createdAt.getTime() + 60_000) : null;
-	const completedAt = isCompleted ? new Date(createdAt.getTime() + 5 * 60_000) : null;
-	void scenarios;
-	return {
-		id: meta.order_id,
-		number: meta.order_number,
-		currency: meta.currency,
-		customer_note: meta.customer_note ?? '',
-		created: buildDateObject(createdAt, locale, timeZone),
-		paid: paidAt ? buildDateObject(paidAt, locale, timeZone) : emptyDateObject(),
-		completed: completedAt ? buildDateObject(completedAt, locale, timeZone) : emptyDateObject(),
 	};
 }
 
@@ -1507,6 +1454,5 @@ function buildI18nLabels(hasRefunds = false): ReceiptI18n {
 		copy_number: 'Copy No.',
 		status: 'Status',
 		completed: 'Completed',
-		printed: 'Printed',
 	};
 }

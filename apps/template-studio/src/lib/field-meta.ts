@@ -16,9 +16,7 @@ export interface SectionMeta {
 }
 
 export const SECTIONS: SectionMeta[] = [
-	{ key: 'receipt', label: 'Receipt', path: ['receipt'], kind: 'object' },
 	{ key: 'order', label: 'Order', path: ['order'], kind: 'object' },
-	{ key: 'meta', label: 'Meta', path: ['meta'], kind: 'object' },
 	{ key: 'store', label: 'Store', path: ['store'], kind: 'object' },
 	{ key: 'cashier', label: 'Cashier', path: ['cashier'], kind: 'object' },
 	{ key: 'customer', label: 'Customer', path: ['customer'], kind: 'object' },
@@ -42,7 +40,7 @@ export const SECTIONS: SectionMeta[] = [
 
 /** Path strings → enum option list. Used by leaf renderer to show a select. */
 export const ENUM_OPTIONS: Record<string, readonly string[]> = {
-	'meta.wc_status': [
+	'order.wc_status': [
 		'pending',
 		'processing',
 		'on-hold',
@@ -51,8 +49,7 @@ export const ENUM_OPTIONS: Record<string, readonly string[]> = {
 		'refunded',
 		'failed',
 	],
-	'meta.created_via': ['woocommerce-pos', 'checkout', 'admin', 'rest-api'],
-	'receipt.mode': ['live', 'preview', 'gallery'],
+	'order.created_via': ['woocommerce-pos', 'checkout', 'admin', 'rest-api'],
 	'presentation_hints.display_tax': ['incl', 'excl', 'hidden', 'itemized', 'single'],
 	'presentation_hints.rounding_mode': ['per-line', 'per-total'],
 	'customer.tax_ids.type': [
@@ -74,7 +71,7 @@ export const ENUM_OPTIONS: Record<string, readonly string[]> = {
 };
 
 /** Hidden paths — not rendered in tree (system fields). */
-export const HIDDEN_PATHS = new Set<string>(['id', 'meta.schema_version']);
+export const HIDDEN_PATHS = new Set<string>(['id']);
 
 const DEFAULT_LINE = {
 	key: 'new-line',

@@ -116,12 +116,13 @@ const orderWithAdjustments = {
 };
 
 describe('buildReceiptData', () => {
-	it('maps meta section from order', () => {
+	it('maps order section from order', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
-		expect(result.meta.order_number).toBe('1234');
-		expect(result.meta.currency).toBe('USD');
-		expect(result.meta.status).toBe('completed');
-		expect(result.meta.order_date).toBe('2026-03-06T10:00:00');
+		expect(result.order.id).toBe(123);
+		expect(result.order.number).toBe('1234');
+		expect(result.order.currency).toBe('USD');
+		expect(result.order.wc_status).toBe('completed');
+		expect(result.order.created.datetime).toBe('2026-03-06T10:00:00');
 	});
 
 	it('maps store section from store document', () => {

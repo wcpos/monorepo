@@ -40,7 +40,7 @@ describe('logicless template + <barcode> renders SVG through the studio pipeline
 		expect(view.kind).toBe('logicless');
 		expect(view.html).toContain('<svg');
 		expect(view.html).toContain('data-barcode-kind="barcode"');
-		expect(view.html).toContain('data-barcode-value="' + fixture.meta.order_number + '"');
+		expect(view.html).toContain('data-barcode-value="' + fixture.order.number + '"');
 		expect(view.html).not.toContain('<barcode');
 	});
 

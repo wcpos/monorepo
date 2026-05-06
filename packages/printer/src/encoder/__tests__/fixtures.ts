@@ -1,12 +1,36 @@
 import type { ReceiptData } from '../types';
 
+const emptyDate = {
+	datetime: '',
+	date: '',
+	time: '',
+	datetime_short: '',
+	datetime_long: '',
+	datetime_full: '',
+	date_short: '',
+	date_long: '',
+	date_full: '',
+	date_ymd: '',
+	date_dmy: '',
+	date_mdy: '',
+	weekday_short: '',
+	weekday_long: '',
+	day: '',
+	month: '',
+	month_short: '',
+	month_long: '',
+	year: '',
+};
+
 export const sampleReceiptData: ReceiptData = {
-	meta: {
-		schema_version: 1,
-		created_at_gmt: '2026-03-06 14:30:00',
-		order_id: 123,
-		order_number: '1042',
+	order: {
+		id: 123,
+		number: '1042',
 		currency: 'USD',
+		customer_note: '',
+		created: { ...emptyDate, datetime: '2026-03-06 14:30:00' },
+		paid: emptyDate,
+		completed: emptyDate,
 	},
 	store: {
 		name: 'My Test Store',

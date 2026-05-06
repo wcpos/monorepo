@@ -35,7 +35,7 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		decimals: dp = 2,
 	} = options;
 
-	const currency = data.meta.currency;
+	const currency = data.order.currency;
 
 	// Compute column widths
 	const infoColRight = Math.max(12, Math.floor(columns / 2));
@@ -55,8 +55,8 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		infoColRight,
 		nameColWidth,
 		priceColWidth,
-		order_number: data.meta.order_number,
-		created_at_gmt: data.meta.created_at_gmt,
+		order_number: data.order.number,
+		created_at_gmt: data.order.created.datetime,
 		has_address_lines: data.store.address_lines && data.store.address_lines.length > 0,
 		address_lines: (data.store.address_lines ?? []).map((line) => ({ line })),
 		has_phone: !!data.store.phone,

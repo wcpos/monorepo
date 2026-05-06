@@ -5,16 +5,15 @@ import { sampleReceiptData } from './fixtures';
 import type { ReceiptData } from '../types';
 
 /**
- * Offline rendering shape — mirrors what buildReceiptData() produces
- * in core/src/screens/main/receipt/utils/build-receipt-data.ts
+ * Offline rendering shape — non-canonical input (no nested `order` block).
+ * Mirrors a producer that scatters order metadata at the top level so the
+ * mapper can synthesise a canonical `order` block from those keys.
  */
 const offlineReceiptData = {
-	meta: {
-		order_number: '1042',
-		order_date: '2026-03-06T14:30:00',
-		currency: 'USD',
-		status: 'completed',
-	},
+	order_number: '1042',
+	order_date: '2026-03-06T14:30:00',
+	currency: 'USD',
+	status: 'completed',
 	store: {
 		name: 'My Test Store',
 		address: '123 Main Street, Suite 100, Springfield, IL 62704',
@@ -218,16 +217,35 @@ describe('mapReceiptData', () => {
 			expect(result.totals.total).toBe(sampleReceiptData.totals.total_excl);
 		});
 
-		it('detects canonical shape when both meta and totals markers are present', () => {
+		it('detects canonical shape when both order and totals markers are present', () => {
 			const data = {
-				meta: { schema_version: 1, order_id: 5 },
+				order: { id: 5, number: '5' },
 				totals: { subtotal_incl: 10 },
 			};
 			const result = mapReceiptData(data);
-			expect(result.meta.schema_version).toBe(1);
-			expect(result.meta.order_id).toBe(5);
+			expect(result.order.id).toBe(5);
+			expect(result.order.number).toBe('5');
 			expect(result.totals.subtotal_incl).toBe(10);
 			expect(result.presentation_hints.display_tax).toBe('incl');
+		});
+
+		it('fills missing date blocks on partial canonical order data', () => {
+			const result = mapReceiptData({
+				order: {
+					id: 5,
+					number: '5',
+					currency: 'USD',
+					customer_note: '',
+					created: { datetime: '2026-03-06T14:30:00' },
+				},
+				totals: { subtotal_incl: 10 },
+			});
+
+			expect(result.order.created.datetime).toBe('2026-03-06T14:30:00');
+			expect(result.order.created.date).toBe('');
+			expect(result.order.paid.datetime).toBe('');
+			expect(result.order.completed.datetime).toBe('');
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
 		});
 
 		// ──────────────────────────────────────────────────────────────────
@@ -277,28 +295,12 @@ describe('mapReceiptData', () => {
 			expect(result.i18n?.total_incl_tax).toBeUndefined();
 		});
 
-		it('does NOT auto-coerce schema_version "1.4.0" string to integer 1', () => {
-			const outOfSpec = {
-				...sampleReceiptData,
-				meta: {
-					...sampleReceiptData.meta,
-					schema_version: '1.4.0',
-				},
-			};
-			const result = mapReceiptData(outOfSpec as Record<string, any>);
-
-			// v1 contract: schema_version must arrive as integer 1. Anything else
-			// passes through, then fails Zod validation downstream — by design.
-			expect(result.meta.schema_version).toBe('1.4.0');
-			expect(ReceiptDataSchema.safeParse(result).success).toBe(false);
-		});
-
 		it('does not treat partial canonical markers as canonical', () => {
-			// Only meta markers, no totals marker — should map, not passthrough
-			const data = { meta: { order_id: 5 }, totals: {} };
+			// Only order marker, no totals marker — should map, not passthrough
+			const data = { order: { id: 5, number: '5' }, totals: {} };
 			const result = mapReceiptData(data);
 			expect(result).not.toBe(data);
-			expect(result.meta.schema_version).toBe(1);
+			expect(result.totals.total_incl).toBe(0);
 		});
 	});
 
@@ -309,35 +311,30 @@ describe('mapReceiptData', () => {
 			mapped = mapReceiptData(offlineReceiptData);
 		});
 
-		it('maps meta fields correctly', () => {
-			expect(mapped.meta.order_number).toBe('1042');
-			expect(mapped.meta.created_at_gmt).toBe('2026-03-06T14:30:00');
-			expect(mapped.meta.currency).toBe('USD');
-			expect(mapped.meta.schema_version).toBe(1);
-			expect(mapped.meta.order_id).toBe(0);
+		it('synthesises order block from top-level offline keys', () => {
+			expect(mapped.order.number).toBe('1042');
+			expect(mapped.order.created.datetime).toBe('2026-03-06T14:30:00');
+			expect(mapped.order.currency).toBe('USD');
+			expect(mapped.order.id).toBe(0);
 		});
 
-		it('preserves phase-3 meta keys from non-canonical input', () => {
+		it('reads top-level wc_status / created_via from offline shape', () => {
 			const result = mapReceiptData({
-				meta: {
-					wc_status: 'processing',
-					created_via: 'checkout',
-				},
+				wc_status: 'processing',
+				created_via: 'checkout',
 			});
 
-			expect(result.meta.wc_status).toBe('processing');
-			expect(result.meta.created_via).toBe('checkout');
+			expect(result.order.wc_status).toBe('processing');
+			expect(result.order.created_via).toBe('checkout');
 		});
 
-		it('prefers phase-3 wc_status over legacy status when both are present', () => {
+		it('prefers wc_status over legacy status when both are present', () => {
 			const result = mapReceiptData({
-				meta: {
-					status: 'completed',
-					wc_status: 'processing',
-				},
+				status: 'completed',
+				wc_status: 'processing',
 			});
 
-			expect(result.meta.wc_status).toBe('processing');
+			expect(result.order.wc_status).toBe('processing');
 		});
 
 		it('maps store fields and splits address into lines', () => {
@@ -494,14 +491,14 @@ describe('mapReceiptData', () => {
 	describe('defensive handling of bad input', () => {
 		it('returns empty structure for null input', () => {
 			const result = mapReceiptData(null as any);
-			expect(result.meta.order_number).toBe('');
+			expect(result.order.number).toBe('');
 			expect(result.lines).toEqual([]);
 			expect(result.payments).toEqual([]);
 		});
 
 		it('returns empty structure for undefined input', () => {
 			const result = mapReceiptData(undefined as any);
-			expect(result.meta.schema_version).toBe(1);
+			expect(result.order.number).toBe('');
 		});
 
 		it('returns empty structure for non-object input', () => {
@@ -511,7 +508,7 @@ describe('mapReceiptData', () => {
 
 		it('handles completely empty object', () => {
 			const result = mapReceiptData({});
-			expect(result.meta.order_number).toBe('');
+			expect(result.order.number).toBe('');
 			expect(result.store.name).toBe('');
 			expect(result.lines).toEqual([]);
 			expect(result.totals.subtotal_incl).toBe(0);
@@ -519,7 +516,6 @@ describe('mapReceiptData', () => {
 
 		it('handles missing nested objects gracefully', () => {
 			const result = mapReceiptData({
-				meta: null,
 				store: undefined,
 				customer: 'not an object',
 				lines: 'not an array',
@@ -527,7 +523,7 @@ describe('mapReceiptData', () => {
 				totals: false,
 			});
 
-			expect(result.meta.order_number).toBe('');
+			expect(result.order.number).toBe('');
 			expect(result.store.name).toBe('');
 			expect(result.customer.name).toBe('');
 			expect(result.lines).toEqual([]);
