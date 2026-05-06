@@ -20,6 +20,8 @@ const DEFAULT_I18N = {
 	subtotal: 'Subtotal',
 	total: 'Total',
 	refund_total: 'Refund Total',
+	refunded: 'Refunded',
+	net_total: 'Net Total',
 	tendered: 'Tendered',
 	change: 'Change',
 	thank_you: 'Thank you',
@@ -123,6 +125,12 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		if (total == null || qty === 0) return undefined;
 		return total / qty;
 	};
+	const pickDisplayValue = (
+		total: number | undefined,
+		totalIncl: number | undefined,
+		totalExcl: number | undefined
+	): number | undefined =>
+		displayTax === 'excl' ? (totalExcl ?? total ?? totalIncl) : (totalIncl ?? total ?? totalExcl);
 	const formatRefundTotal = <
 		T extends {
 			total: number;
@@ -134,7 +142,9 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		item: T
 	) => ({
 		...item,
-		total_display: fmt(item.total),
+		total_display: fmt(
+			pickDisplayValue(item.total, item.total_incl, item.total_excl) ?? item.total
+		),
 		total_incl_display: item.total_incl != null ? fmt(item.total_incl) : undefined,
 		total_excl_display: item.total_excl != null ? fmt(item.total_excl) : undefined,
 		taxes: item.taxes?.map((tax) => ({
@@ -149,19 +159,21 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		const unitTotal = line.unit_total ?? perUnit(lineTotal, line.qty);
 		const unitTotalIncl = line.unit_total_incl ?? perUnit(lineTotalIncl, line.qty);
 		const unitTotalExcl = line.unit_total_excl ?? perUnit(lineTotalExcl, line.qty);
+		const lineTotalDisplay = pickDisplayValue(lineTotal, lineTotalIncl, lineTotalExcl);
+		const unitTotalDisplay = pickDisplayValue(unitTotal, unitTotalIncl, unitTotalExcl);
 
 		return {
 			...formatRefundTotal(line),
 			line_total: lineTotal,
 			line_total_incl: lineTotalIncl,
 			line_total_excl: lineTotalExcl,
-			line_total_display: fmt(lineTotal),
+			line_total_display: fmt(lineTotalDisplay ?? lineTotal),
 			line_total_incl_display: fmt(lineTotalIncl),
 			line_total_excl_display: lineTotalExcl != null ? fmt(lineTotalExcl) : undefined,
 			unit_total: unitTotal,
 			unit_total_incl: unitTotalIncl,
 			unit_total_excl: unitTotalExcl,
-			unit_total_display: unitTotal != null ? fmt(unitTotal) : undefined,
+			unit_total_display: unitTotalDisplay != null ? fmt(unitTotalDisplay) : undefined,
 			unit_total_incl_display: unitTotalIncl != null ? fmt(unitTotalIncl) : undefined,
 			unit_total_excl_display: unitTotalExcl != null ? fmt(unitTotalExcl) : undefined,
 		};

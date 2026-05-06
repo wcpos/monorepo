@@ -177,12 +177,13 @@ export function applyScenarioState(data: ReceiptData, state: ScenarioState): Rec
 	next.totals = computeTotals(next.lines, next.fees, next.shipping, next.discounts, []);
 	next.tax_summary = state.taxBreakdown && !state.emptyCart ? buildTaxSummary(next) : [];
 	next.refunds = state.refund && !state.emptyCart ? ensureRefund(next) : [];
-	if (next.refunds.length > 0) {
-		next.totals.refund_total = round(
-			next.refunds.reduce((sum, refund) => sum + (refund.amount ?? 0), 0)
-		);
+	const refundTotal = round(next.refunds.reduce((sum, refund) => sum + (refund.amount ?? 0), 0));
+	if (refundTotal > 0) {
+		next.totals.refund_total = refundTotal;
+		next.totals.net_total = round(Math.max(next.totals.total_incl - refundTotal, 0));
 	} else {
 		delete next.totals.refund_total;
+		delete next.totals.net_total;
 		next.lines = next.lines.map(({ qty_refunded, total_refunded, ...line }) => line);
 	}
 

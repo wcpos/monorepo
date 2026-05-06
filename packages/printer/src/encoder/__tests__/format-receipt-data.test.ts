@@ -267,6 +267,8 @@ describe('formatReceiptData', () => {
 			date: 'Date',
 			subtotal: 'Subtotal',
 			total: 'Total',
+			refunded: 'Refunded',
+			net_total: 'Net Total',
 		});
 	});
 
@@ -420,6 +422,60 @@ describe('formatReceiptData', () => {
 		expect(line.taxes[0].amount_display).toBe('$2.00');
 		expect(refund.fees[0].total_display).toBe('$1.20');
 		expect(refund.shipping[0].total_display).toBe('$3.00');
+	});
+
+	it('uses tax-exclusive values for refund row display aliases when requested', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.presentation_hints.display_tax = 'excl';
+		data.refunds = [
+			{
+				id: 1,
+				amount: 12,
+				lines: [
+					{
+						name: 'Widget A',
+						sku: 'SKU-001',
+						qty: 2,
+						total: 12,
+						total_incl: 12,
+						total_excl: 10,
+						line_total: 12,
+						line_total_incl: 12,
+						line_total_excl: 10,
+						unit_total: 6,
+						unit_total_incl: 6,
+						unit_total_excl: 5,
+						taxes: [],
+					},
+				],
+				fees: [{ label: 'Restocking fee', total: 1.2, total_incl: 1.2, total_excl: 1 }],
+				shipping: [
+					{
+						label: 'Returned shipping',
+						method_id: 'flat_rate',
+						total: 3,
+						total_incl: 3,
+						total_excl: 2.5,
+					},
+				],
+			},
+		];
+
+		const result = formatReceiptData(data);
+		const refund = result.refunds[0];
+		const line = refund.lines[0];
+
+		expect(line.total_display).toBe('$10.00');
+		expect(line.total_incl_display).toBe('$12.00');
+		expect(line.total_excl_display).toBe('$10.00');
+		expect(line.line_total_display).toBe('$10.00');
+		expect(line.line_total_incl_display).toBe('$12.00');
+		expect(line.line_total_excl_display).toBe('$10.00');
+		expect(line.unit_total_display).toBe('$5.00');
+		expect(line.unit_total_incl_display).toBe('$6.00');
+		expect(line.unit_total_excl_display).toBe('$5.00');
+		expect(refund.fees[0].total_display).toBe('$1.00');
+		expect(refund.shipping[0].total_display).toBe('$2.50');
 	});
 
 	it('preserves zero numeric values for Mustache section truthiness', () => {

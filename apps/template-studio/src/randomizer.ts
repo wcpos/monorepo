@@ -712,7 +712,7 @@ function buildReceiptData(
 		order_barcode_type: 'code128',
 	};
 	const fiscal: ReceiptFiscal = scenarios.fiscal ? buildFiscal(rand, order) : {};
-	const i18n = buildI18nLabels(false, pool);
+	const i18n = buildI18nLabels(pool);
 
 	// Attach customer tax IDs at the very end so the rand draws don't shift
 	// the seeded sequence used by payments, fiscal, etc.
@@ -1707,7 +1707,7 @@ function emptyDateObject(): ReceiptDate {
  * the same key set the PHP builder emits; the catchall in the schema lets
  * extensions add more without breaking validation.
  */
-function buildI18nLabels(_hasRefunds = false, pool?: LocalePool): ReceiptI18n {
+function buildI18nLabels(pool?: LocalePool): ReceiptI18n {
 	const labels: ReceiptI18n = {
 		order: 'Order',
 		date: 'Date',
