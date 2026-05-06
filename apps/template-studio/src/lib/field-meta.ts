@@ -29,12 +29,6 @@ export const SECTIONS: SectionMeta[] = [
 	{ key: 'payments', label: 'Payments', path: ['payments'], kind: 'array' },
 	{ key: 'refunds', label: 'Refunds', path: ['refunds'], kind: 'array' },
 	{ key: 'fiscal', label: 'Fiscal', path: ['fiscal'], kind: 'object' },
-	{
-		key: 'presentation_hints',
-		label: 'Presentation',
-		path: ['presentation_hints'],
-		kind: 'object',
-	},
 	{ key: 'i18n', label: 'i18n', path: ['i18n'], kind: 'object' },
 ];
 
@@ -50,9 +44,6 @@ export const ENUM_OPTIONS: Record<string, readonly string[]> = {
 		'failed',
 	],
 	'order.created_via': ['woocommerce-pos', 'checkout', 'admin', 'rest-api'],
-	'presentation_hints.display_tax': ['incl', 'excl', 'hidden', 'itemized', 'single'],
-	'presentation_hints.rounding_mode': ['per-line', 'per-total'],
-	'presentation_hints.order_barcode_type': ['code128', 'qrcode', 'ean13', 'ean8', 'upca'],
 	'customer.tax_ids.type': [
 		'eu_vat',
 		'gb_vat',

@@ -74,12 +74,10 @@ describe('FieldsTree', () => {
 		expect(onChangePath).toHaveBeenCalledWith(['store', 'tax_ids', 0, 'value'], 'NL987654321B01');
 	});
 
-	it('renders order barcode type as a select in presentation hints', () => {
-		const onChangePath = vi.fn();
+	it('does not expose presentation hints in the editable field tree', () => {
 		render(
 			<FieldsTree
 				{...baseProps}
-				onChangePath={onChangePath}
 				data={{
 					presentation_hints: {
 						display_tax: 'incl',
@@ -92,15 +90,10 @@ describe('FieldsTree', () => {
 			/>
 		);
 
-		fireEvent.click(screen.getByRole('button', { name: 'Presentation' }));
-		const select = screen.getByLabelText('presentation_hints.order_barcode_type');
-		expect(select).toHaveValue('code128');
-		expect(within(select).getByRole('option', { name: 'qrcode' })).toBeInTheDocument();
-
-		fireEvent.change(select, { target: { value: 'qrcode' } });
-		expect(onChangePath).toHaveBeenCalledWith(
-			['presentation_hints', 'order_barcode_type'],
-			'qrcode'
-		);
+		expect(screen.queryByRole('button', { name: 'Presentation' })).not.toBeInTheDocument();
+		expect(screen.queryByLabelText('presentation_hints.display_tax')).not.toBeInTheDocument();
+		expect(
+			screen.queryByLabelText('presentation_hints.order_barcode_type')
+		).not.toBeInTheDocument();
 	});
 });
