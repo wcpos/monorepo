@@ -125,6 +125,29 @@ describe('buildReceiptData', () => {
 		expect(result.order.created.datetime).toBe('2026-03-06T10:00:00');
 	});
 
+	it('falls back to capitalized status_label when no resolver is provided', () => {
+		const result = buildReceiptData({ ...mockOrder, status: 'on-hold' }, mockStore);
+		expect(result.order.wc_status).toBe('on-hold');
+		expect(result.order.status_label).toBe('On Hold');
+	});
+
+	it('uses the getStatusLabel callback when provided', () => {
+		const result = buildReceiptData(mockOrder, mockStore, 2, {
+			getStatusLabel: (status) => (status === 'completed' ? 'Terminé' : status),
+		});
+		expect(result.order.status_label).toBe('Terminé');
+	});
+
+	it('uses the capitalized fallback when getStatusLabel returns the raw status', () => {
+		// useOrderStatusLabel.getLabel returns the raw status when it has no
+		// match — verify we capitalize that fall-through rather than emitting
+		// the raw lowercase value.
+		const result = buildReceiptData({ ...mockOrder, status: 'pending' }, mockStore, 2, {
+			getStatusLabel: (status) => status,
+		});
+		expect(result.order.status_label).toBe('Pending');
+	});
+
 	it('maps store section from store document', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.store.name).toBe('My POS Store');

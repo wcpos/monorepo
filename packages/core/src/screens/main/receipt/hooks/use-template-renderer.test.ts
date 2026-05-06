@@ -63,6 +63,13 @@ jest.mock('@wcpos/printer', () => ({
 	formatReceiptData: jest.fn((data: Record<string, unknown>) => data),
 }));
 
+jest.mock('../../hooks/use-order-status-label', () => ({
+	useOrderStatusLabel: () => ({
+		items: [],
+		getLabel: (status: string) => status,
+	}),
+}));
+
 const defaultOptions = {
 	orderId: 42,
 	baseReceiptURL: undefined,

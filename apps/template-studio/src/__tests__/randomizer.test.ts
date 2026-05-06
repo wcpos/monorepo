@@ -147,6 +147,25 @@ describe('template-studio randomizer', () => {
 		expect(result.data.i18n?.thank_you).toBe('ありがとうございます');
 	});
 
+	it('emits a status_label for every wc_status', () => {
+		// Studio receipts feed templates that prefer order.status_label over
+		// the raw wc_status; make sure both are always populated.
+		const expected: Record<string, string> = {
+			pending: 'Pending payment',
+			processing: 'Processing',
+			'on-hold': 'On hold',
+			completed: 'Completed',
+			cancelled: 'Cancelled',
+			refunded: 'Refunded',
+			failed: 'Failed',
+		};
+		for (let seed = 1; seed < 30; seed += 1) {
+			const candidate = createRandomReceipt({ seed });
+			const status = candidate.data.order.wc_status as string;
+			expect(candidate.data.order.status_label).toBe(expected[status]);
+		}
+	});
+
 	it('produces real-order timestamps when wc_status is completed', () => {
 		// All scenarios produce real orders now — there's no quote/kitchen mode
 		// that suppresses payment / completed dates. Filter to a completed order

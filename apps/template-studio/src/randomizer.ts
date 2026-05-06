@@ -1405,12 +1405,26 @@ function buildOrder(
 		currency,
 		customer_note: customerNote,
 		wc_status: wcStatus,
+		status_label: WC_STATUS_LABELS[wcStatus],
 		created_via: createdVia,
 		created: buildDateObject(createdAt, locale, timeZone),
 		paid: paidAt ? buildDateObject(paidAt, locale, timeZone) : emptyDateObject(),
 		completed: completedAt ? buildDateObject(completedAt, locale, timeZone) : emptyDateObject(),
 	};
 }
+
+// Mirrors `wc_get_order_status_name()` for the seven default WC statuses,
+// in English. The studio runs without a Woo install, so we hard-code the
+// labels — production receipts get the real translations from the API.
+const WC_STATUS_LABELS = {
+	pending: 'Pending payment',
+	processing: 'Processing',
+	'on-hold': 'On hold',
+	completed: 'Completed',
+	cancelled: 'Cancelled',
+	refunded: 'Refunded',
+	failed: 'Failed',
+} as const;
 
 function buildFiscal(rand: () => number, order: ReceiptOrder): ReceiptFiscal {
 	const isReprint = rand() < 0.2;
