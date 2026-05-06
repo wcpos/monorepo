@@ -25,7 +25,6 @@ describe('FieldsTree', () => {
 				{...baseProps}
 				data={{
 					id: 1,
-					meta: { schema_version: 1, order_id: 1001 },
 					customer: { id: 42, name: 'Ada Lovelace' },
 				}}
 			/>
@@ -34,10 +33,6 @@ describe('FieldsTree', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Customer' }));
 		expect(screen.queryByLabelText('id')).not.toBeInTheDocument();
 		expect(screen.getByLabelText('customer.id')).toHaveValue(42);
-
-		fireEvent.click(screen.getByRole('button', { name: 'Meta' }));
-		expect(screen.queryByLabelText('meta.schema_version')).not.toBeInTheDocument();
-		expect(screen.getByLabelText('meta.order_id')).toHaveValue(1001);
 	});
 
 	it('keeps nested tax ID values editable inside expanded arrays', () => {

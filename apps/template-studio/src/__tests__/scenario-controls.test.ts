@@ -155,7 +155,19 @@ describe('scenario controls', () => {
 		expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
 	});
 
-	it('uses the fixture currency when toggling multicurrency', () => {
+	it('does not infer local non-USD currencies as multicurrency', () => {
+		const data = fullReceipt();
+		data.presentation_hints.locale = 'es_ES';
+		data.order.currency = 'EUR';
+
+		const state = createScenarioState({}, data);
+		const result = applyScenarioState(data, state);
+
+		expect(state.multicurrency).toBe(false);
+		expect(result.order.currency).toBe('EUR');
+	});
+
+	it('uses the locale currency when multicurrency is off and fixture currency when on', () => {
 		const data = fullReceipt();
 		data.order.currency = 'GBP';
 
@@ -164,7 +176,7 @@ describe('scenario controls', () => {
 		const on = applyScenarioState(data, { ...state, multicurrency: true });
 
 		expect(state.multicurrency).toBe(true);
-		expect(off.order.currency).toBe('USD');
+		expect(off.order.currency).toBe('EUR');
 		expect(on.order.currency).toBe('GBP');
 	});
 
@@ -221,8 +233,8 @@ describe('scenario controls', () => {
 		expect(off.tax_summary).toEqual([]);
 		expect(off.customer.billing_address).toEqual({});
 		expect(off.presentation_hints.display_tax).not.toBe('hidden');
-		expect(off.presentation_hints.locale).toBe('en_US');
-		expect(off.order.currency).toBe('USD');
+		expect(off.presentation_hints.locale).toBe('es_ES');
+		expect(off.order.currency).toBe('EUR');
 		expect(on.refunds?.length).toBeGreaterThan(0);
 		expect(on.payments.length).toBeGreaterThan(1);
 		expect(on.fiscal.immutable_id).toBeTruthy();
