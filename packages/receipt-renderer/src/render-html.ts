@@ -81,8 +81,8 @@ export function renderBarcode(
 		});
 
 		return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${svg}</div>`;
-	} catch {
-		return `<div data-barcode-kind="${kind}" style="text-align: center; padding: 8px 0; color: #b91c1c">${escapeHtml(text)}</div>`;
+	} catch (error) {
+		return renderBarcodeError(kind, barcodeType, text, error);
 	}
 }
 
@@ -98,9 +98,25 @@ export function renderQrCode(value: string, size: number): string {
 		});
 
 		return `<div data-barcode-kind="qrcode" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${svg}</div>`;
-	} catch {
-		return `<div data-barcode-kind="qrcode" style="text-align: center; padding: 8px 0; color: #b91c1c">${escapeHtml(text)}</div>`;
+	} catch (error) {
+		return renderBarcodeError('qrcode', 'qrcode', text, error);
 	}
+}
+
+function renderBarcodeError(
+	kind: 'barcode' | 'qrcode',
+	barcodeType: string,
+	text: string,
+	error: unknown
+): string {
+	const title = kind === 'qrcode' ? 'QR code error' : 'Barcode error';
+	const normalizedType = barcodeType.trim().toLowerCase() || kind;
+	const summary =
+		kind === 'qrcode' ? 'Invalid QR code value' : `Invalid ${normalizedType} barcode value`;
+	const detail = error instanceof Error && error.message.trim() ? error.message.trim() : '';
+	const detailHtml = detail ? `<div style="font-size: 0.9em">${escapeHtml(detail)}</div>` : '';
+
+	return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" data-barcode-error="true" style="text-align: center; padding: 8px 0; color: #b91c1c"><strong>${title}</strong><div>${escapeHtml(summary)}</div>${detailHtml}<code>${escapeHtml(text)}</code></div>`;
 }
 
 function renderRow(node: RowNode): string {
