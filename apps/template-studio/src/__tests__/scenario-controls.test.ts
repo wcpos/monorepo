@@ -197,6 +197,22 @@ describe('scenario controls', () => {
 		expect(populated.lines.length).toBeGreaterThan(0);
 	});
 
+	it('creates refund dates with every date variant when the refund chip adds refunds', () => {
+		const data = fullReceipt();
+		data.refunds = [];
+
+		const result = applyScenarioState(data, {
+			...createScenarioState({}, data),
+			refund: true,
+			emptyCart: false,
+		});
+
+		expect(Object.keys(result.refunds?.[0]?.date ?? {}).sort()).toEqual(
+			Object.keys(result.order.created).sort()
+		);
+		expect(result.refunds?.[0]?.date?.datetime).toBeTruthy();
+	});
+
 	it('toggles refund, multi-payment, fiscal, barcode, tax breakdown, customer, gift, locale, currency, and long-name data', () => {
 		const data = fullReceipt();
 		data.order.currency = 'EUR';
@@ -236,6 +252,10 @@ describe('scenario controls', () => {
 		expect(off.presentation_hints.locale).toBe('es_ES');
 		expect(off.order.currency).toBe('EUR');
 		expect(on.refunds?.length).toBeGreaterThan(0);
+		expect(Object.keys(on.refunds?.[0]?.date ?? {}).sort()).toEqual(
+			Object.keys(on.order.created).sort()
+		);
+		expect(on.refunds?.[0]?.date?.datetime).toBeTruthy();
 		expect(on.payments.length).toBeGreaterThan(1);
 		expect(on.fiscal.immutable_id).toBeTruthy();
 		expect(on.fiscal.qr_payload).toContain('wcpos://receipt/');

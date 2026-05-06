@@ -109,6 +109,22 @@ describe('template-studio randomizer', () => {
 		).toBe(true);
 	});
 
+	it('populates refund dates with the same date variants exposed on order dates', () => {
+		const result = createRandomReceipt({
+			seed: 'refund-date-variants',
+			overrides: { refund: true, emptyCart: false, cartSize: 2 },
+		});
+
+		const refund = result.data.refunds[0];
+		expect(refund?.date).toBeDefined();
+		expect(Object.keys(refund?.date ?? {}).sort()).toEqual(
+			Object.keys(result.data.order.created).sort()
+		);
+		expect(refund?.date?.datetime).toBeTruthy();
+		expect(refund?.date?.date_short).toBeTruthy();
+		expect(refund?.date?.datetime_full).toBeTruthy();
+	});
+
 	it('marks refund scenarios in rendered labels without negating order lines', () => {
 		const result = createRandomReceipt({
 			seed: 'refund',

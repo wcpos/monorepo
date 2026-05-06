@@ -671,6 +671,7 @@ function buildReceiptData(
 		pool.timeZone,
 		pool.statusLabels
 	);
+	applyRefundDates(refunds, orderCreated, pool.locale, pool.timeZone);
 	const payments = buildPayments(rand, scenarios, totals.total_incl, orderCurrency, totals);
 	if (refunds.length > 0) {
 		for (const payment of payments) {
@@ -788,6 +789,19 @@ function buildDateObject(date: Date, locale: string, timeZone: string): ReceiptD
 		month_long: tryFormat({ month: 'long' }, () => String(month)),
 		year,
 	};
+}
+
+function applyRefundDates(
+	refunds: ReceiptRefund[],
+	orderCreated: Date,
+	locale: string,
+	timeZone: string
+): void {
+	for (const refund of refunds) {
+		const hoursAfterOrder = (refund.id % 72) + 2;
+		const refundCreated = new Date(orderCreated.getTime() + hoursAfterOrder * 60 * 60 * 1000);
+		refund.date = buildDateObject(refundCreated, locale, timeZone);
+	}
 }
 
 function pickOrderDate(rand: () => number, seed: number): Date {
