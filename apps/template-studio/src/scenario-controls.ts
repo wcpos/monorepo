@@ -382,6 +382,7 @@ function ensureRefund(data: ReceiptData): ReceiptRefund[] {
 	return [
 		{
 			id: 9001,
+			date: { ...data.order.created },
 			amount,
 			subtotal: amount,
 			tax_total: taxAmount,
