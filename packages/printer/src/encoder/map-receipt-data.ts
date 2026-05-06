@@ -501,15 +501,16 @@ function mapPresentationHints(src: Record<string, any>): ReceiptPresentationHint
 }
 
 function resolveOrderBarcodeType(value: unknown): ReceiptPresentationHints['order_barcode_type'] {
-	const normalized = toStr(value).toLowerCase();
+	const normalized = toStr(value).trim().toLowerCase();
 	if (
+		normalized === 'qr' ||
 		normalized === 'qrcode' ||
 		normalized === 'code128' ||
 		normalized === 'ean13' ||
 		normalized === 'ean8' ||
 		normalized === 'upca'
 	) {
-		return normalized;
+		return normalized === 'qr' ? 'qrcode' : normalized;
 	}
 	return 'code128';
 }

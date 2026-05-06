@@ -125,7 +125,7 @@ describe('template-studio randomizer', () => {
 	});
 
 	it('localizes every detailed receipt i18n label used by the gallery fixture', () => {
-		const english: Record<string, string> = {
+		const english = {
 			bill_to: 'Bill To',
 			cashier: 'Cashier',
 			change: 'Change',
@@ -133,9 +133,12 @@ describe('template-studio randomizer', () => {
 			customer_tax_id: 'Customer Tax ID',
 			date: 'Date',
 			discount: 'Discount',
+			invoice_no: 'Invoice No.',
 			item: 'Item',
 			order: 'Order',
 			paid: 'Paid',
+			prepared_for: 'Prepared For',
+			processed_by: 'Processed by',
 			qty: 'Qty',
 			reference: 'Reference',
 			returned_items: 'Returned Items',
@@ -152,49 +155,17 @@ describe('template-studio randomizer', () => {
 			taxable_incl: 'Taxable (incl.)',
 			tendered: 'Tendered',
 			terms_and_conditions: 'Terms & Conditions',
+			thank_you_business: 'Thank you for your business.',
 			thank_you_purchase: 'Thank you for your purchase!',
+			thank_you_shopping: 'Thank you for shopping with us!',
 			total: 'Total',
 			total_excl: 'Total (excl.)',
 			total_incl_tax: 'Total (incl. tax)',
 			total_refunded: 'Total Refunded',
 			total_tax: 'Total Tax',
 			unit_excl: 'Unit (excl.)',
-		};
-		const detailedReceiptKeys = [
-			'bill_to',
-			'cashier',
-			'change',
-			'customer_note',
-			'customer_tax_id',
-			'date',
-			'discount',
-			'item',
-			'order',
-			'paid',
-			'qty',
-			'reference',
-			'returned_items',
-			'ship_to',
-			'sku',
-			'status',
-			'subtotal',
-			'subtotal_excl_tax',
-			'tax',
-			'tax_amount',
-			'tax_invoice',
-			'tax_summary',
-			'taxable_excl',
-			'taxable_incl',
-			'tendered',
-			'terms_and_conditions',
-			'thank_you_purchase',
-			'total',
-			'total_excl',
-			'total_incl_tax',
-			'total_refunded',
-			'total_tax',
-			'unit_excl',
-		] as const;
+		} as const;
+		const detailedReceiptKeys = Object.keys(english) as (keyof typeof english)[];
 
 		const localizedReceipts = [
 			createRandomReceipt({
@@ -249,12 +220,27 @@ describe('template-studio randomizer', () => {
 		expect(result.data.i18n?.thank_you).toBe('ありがとうございます');
 	});
 
-	it('emits a localized status_label for every wc_status', () => {
+	it('emits localized status labels for the expected Woo status set', () => {
+		const expectedStatuses = [
+			'pending',
+			'processing',
+			'on-hold',
+			'completed',
+			'cancelled',
+			'refunded',
+			'failed',
+		] as const;
 		// Studio receipts feed templates that prefer order.status_label over
 		// the raw wc_status; make sure both are always populated.
-		for (let seed = 1; seed < 30; seed += 1) {
-			const candidate = createRandomReceipt({ seed });
-			expect(candidate.data.order.wc_status).toBeTruthy();
+		for (const expectedStatus of expectedStatuses) {
+			let candidate: ReturnType<typeof createRandomReceipt> | undefined;
+			for (let seed = 1; seed < 500 && !candidate; seed += 1) {
+				const receipt = createRandomReceipt({ seed });
+				if (receipt.data.order.wc_status === expectedStatus) candidate = receipt;
+			}
+			if (!candidate) throw new Error(`no ${expectedStatus} status seed found in range`);
+
+			expect(candidate.data.order.wc_status).toBe(expectedStatus);
 			expect(candidate.data.order.status_label).toMatch(/\S/);
 		}
 	});

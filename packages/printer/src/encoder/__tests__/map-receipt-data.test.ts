@@ -171,6 +171,7 @@ describe('mapReceiptData', () => {
 				prices_entered_with_tax: true,
 				rounding_mode: 'round',
 				locale: 'en-US',
+				order_barcode_type: 'code128',
 			});
 			expect(result.fees[0]).toEqual({
 				label: 'Service Fee',
@@ -446,6 +447,17 @@ describe('mapReceiptData', () => {
 			expect(mapped.presentation_hints.prices_entered_with_tax).toBe(true);
 			expect(mapped.presentation_hints.rounding_mode).toBe('round');
 			expect(mapped.presentation_hints.locale).toBe('en-US');
+			expect(mapped.presentation_hints.order_barcode_type).toBe('code128');
+		});
+
+		it('normalizes QR barcode presentation hints from offline shape', () => {
+			const result = mapReceiptData({
+				presentation_hints: {
+					order_barcode_type: ' QR ',
+				},
+			});
+
+			expect(result.presentation_hints.order_barcode_type).toBe('qrcode');
 		});
 
 		it('defaults fees, shipping, discounts, and tax_summary to empty arrays', () => {
