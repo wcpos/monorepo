@@ -49,6 +49,12 @@ export const ReceiptOrderSchema = z.object({
 		.string()
 		.optional()
 		.describe('Raw WooCommerce order status (e.g. processing, completed)'),
+	status_label: z
+		.string()
+		.optional()
+		.describe(
+			'Localized order status name (e.g. "Completed", "Terminé"). Sourced from wc_get_order_status_name() and includes labels for custom statuses registered by extensions. Use this in templates for display; use wc_status for conditional / styling logic.'
+		),
 	created_via: z
 		.string()
 		.optional()

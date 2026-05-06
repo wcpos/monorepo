@@ -14,6 +14,7 @@ interface ReceiptOrder {
 	currency: string;
 	customer_note: string;
 	wc_status: string;
+	status_label: string;
 	created: { datetime: string };
 }
 
@@ -164,10 +165,29 @@ function derivePrimaryTaxId(taxIds: unknown): string {
 	return typeof first?.value === 'string' ? first.value : '';
 }
 
+function capitalizeStatus(status: string): string {
+	return status
+		.split('-')
+		.map((part) => (part.length === 0 ? part : part[0].toUpperCase() + part.slice(1)))
+		.join(' ');
+}
+
+export interface BuildReceiptDataOptions {
+	/**
+	 * Resolves a raw WooCommerce order status (e.g. "completed") to its
+	 * localized display label ("Completed", "Terminé", …). Pass the
+	 * `getLabel` returned by `useOrderStatusLabel()` so receipts pick up
+	 * translations and any custom statuses registered by extensions.
+	 * Falls back to a capitalized raw status when omitted.
+	 */
+	getStatusLabel?: (status: string) => string;
+}
+
 export function buildReceiptData(
 	order: Record<string, any>,
 	store: Record<string, any>,
-	dp: number = 2
+	dp: number = 2,
+	options: BuildReceiptDataOptions = {}
 ): ReceiptData {
 	const billing = order.billing || {};
 	const shipping = order.shipping || {};
@@ -270,13 +290,25 @@ export function buildReceiptData(
 			)
 	);
 
+	const rawStatus = String(order.status ?? '');
+	// `useOrderStatusLabel.getLabel` returns the raw status when the
+	// orderStatuses cache hasn't loaded yet — capitalize that fall-through
+	// instead of printing the lowercase identifier.
+	const resolvedLabel = rawStatus ? options.getStatusLabel?.(rawStatus) : '';
+	const statusLabel = rawStatus
+		? resolvedLabel && resolvedLabel !== rawStatus
+			? resolvedLabel
+			: capitalizeStatus(rawStatus)
+		: '';
+
 	return {
 		order: {
 			id: typeof order.id === 'number' ? order.id : Number(order.id) || 0,
 			number: order.number || String(order.id || ''),
 			currency: order.currency || '',
 			customer_note: order.customer_note || '',
-			wc_status: order.status || '',
+			wc_status: rawStatus,
+			status_label: statusLabel,
 			created: { datetime: order.date_created || '' },
 		},
 		store: {

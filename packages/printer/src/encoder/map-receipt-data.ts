@@ -636,6 +636,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 			currency: toStr(data.currency),
 			customer_note: toStr(data.customer_note),
 			wc_status: toStr(data.wc_status ?? data.status) || undefined,
+			status_label: toStr(data.status_label) || undefined,
 			created_via: toStr(data.created_via) || undefined,
 			created: offlineCreated,
 			paid: offlineDate,

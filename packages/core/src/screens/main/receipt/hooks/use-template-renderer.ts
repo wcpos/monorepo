@@ -13,6 +13,7 @@ import { buildReceiptData } from '../utils/build-receipt-data';
 import { useAppState } from '../../../../contexts/app-state';
 import { TaxRatesContext } from '../../contexts/tax-rates/provider';
 import { resolvePriceNumDecimals } from '../../contexts/tax-rates/resolve-price-num-decimals';
+import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
 import type { ReceiptData } from '../utils/build-receipt-data';
 import type { ReceiptMode } from './use-receipt-data';
@@ -54,6 +55,7 @@ export function useTemplateRenderer({
 	});
 	const { status } = useOnlineStatus();
 	const isOffline = status !== 'online-website-available';
+	const { getLabel: getStatusLabel } = useOrderStatusLabel();
 
 	// Fetch receipt data from API (when online)
 	const { data: apiReceiptData, isLoading } = useReceiptData({ orderId, mode });
@@ -62,10 +64,10 @@ export function useTemplateRenderer({
 	const receiptData = React.useMemo(() => {
 		if (apiReceiptData) return apiReceiptData;
 		if (order && store) {
-			return buildReceiptData(order, store, dp);
+			return buildReceiptData(order, store, dp, { getStatusLabel });
 		}
 		return null;
-	}, [apiReceiptData, order, store, dp]);
+	}, [apiReceiptData, order, store, dp, getStatusLabel]);
 
 	// Syncing: API fetch is in flight and we're still showing local data
 	const isSyncing = isLoading && !apiReceiptData;
