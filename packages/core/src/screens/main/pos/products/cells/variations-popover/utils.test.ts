@@ -594,8 +594,8 @@ describe('parseAttributes', () => {
 			['1L', '5L', '25L'].map((size) => ({
 				document: {
 					attributes: [
-						{ id: 0, name: 'Colour', option: colour },
-						{ id: 0, name: 'Size', option: size },
+						{ name: 'Colour', option: colour },
+						{ name: 'Size', option: size },
 					],
 				} as ProductVariationDocument,
 			}))
@@ -631,6 +631,26 @@ describe('parseAttributes', () => {
 				selected: undefined,
 			},
 		]);
+	});
+
+	it('should preserve global attribute id matching when variation attribute names are absent', () => {
+		const namelessHits = ['Red', 'Blue'].flatMap((color) =>
+			['Small', 'Large'].map((size) => ({
+				document: {
+					attributes: [
+						{ id: 1, option: color },
+						{ id: 2, option: size },
+					],
+				} as ProductVariationDocument,
+			}))
+		);
+
+		const result = parseAttributes(attributes, undefined, namelessHits);
+
+		expect(result[0].optionCounts).toEqual({ Red: 2, Blue: 2 });
+		expect(result[1].optionCounts).toEqual({ Small: 2, Large: 2 });
+		expect(result[0].selected).toBeUndefined();
+		expect(result[1].selected).toBeUndefined();
 	});
 
 	describe('tests for "any" variations', () => {

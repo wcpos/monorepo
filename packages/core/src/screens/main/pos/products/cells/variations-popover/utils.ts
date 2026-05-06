@@ -45,7 +45,15 @@ function isSameAttribute(
 	targetAttrId: number,
 	targetAttrName: string
 ): boolean {
-	return attribute.id === targetAttrId && attribute.name === targetAttrName;
+	if (targetAttrId === 0) {
+		return attribute.name === targetAttrName;
+	}
+
+	if (attribute.id !== targetAttrId) {
+		return false;
+	}
+
+	return attribute.name && targetAttrName ? attribute.name === targetAttrName : true;
 }
 
 /**
