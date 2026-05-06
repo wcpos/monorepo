@@ -37,6 +37,26 @@ import type { ProductDocument, ProductVariationDocument } from '@wcpos/database'
 type SelectedAttribute = { id: number; name: string; option: string };
 
 /**
+ * WooCommerce global attributes have stable IDs, but custom/local attributes use id=0.
+ * Match on both id and name so multiple custom attributes do not collapse together.
+ */
+function isSameAttribute(
+	attribute: { id?: number; name?: string },
+	targetAttrId: number,
+	targetAttrName: string
+): boolean {
+	if (targetAttrId === 0) {
+		return attribute.name === targetAttrName;
+	}
+
+	if (attribute.id !== targetAttrId) {
+		return false;
+	}
+
+	return attribute.name && targetAttrName ? attribute.name === targetAttrName : true;
+}
+
+/**
  * Check if a variation hit is compatible with a specific attribute option
  * and all currently selected attributes.
  *
@@ -47,13 +67,14 @@ type SelectedAttribute = { id: number; name: string; option: string };
 function hitMatchesOption(
 	hit: { document: ProductVariationDocument },
 	targetAttrId: number,
+	targetAttrName: string,
 	targetOption: string,
 	selectedAttributes: SelectedAttribute[] | undefined
 ): boolean {
 	const hitAttrs = hit.document.attributes || [];
 
 	// Check if hit is compatible with the target option
-	const targetHitAttr = hitAttrs.find((a) => a.id === targetAttrId);
+	const targetHitAttr = hitAttrs.find((a) => isSameAttribute(a, targetAttrId, targetAttrName));
 	if (targetHitAttr && targetHitAttr.option !== targetOption) {
 		return false; // Hit specifies a different option - no match
 	}
@@ -62,7 +83,7 @@ function hitMatchesOption(
 	// Check if hit is compatible with all selected attributes
 	if (selectedAttributes && selectedAttributes.length > 0) {
 		for (const selected of selectedAttributes) {
-			const hitAttr = hitAttrs.find((a) => a.id === selected.id);
+			const hitAttr = hitAttrs.find((a) => isSameAttribute(a, selected.id, selected.name));
 			if (hitAttr && hitAttr.option !== selected.option) {
 				return false; // Hit specifies different value than what user selected
 			}
@@ -101,7 +122,15 @@ export const parseAttributes = (
 					// Count hits that match this option (considering "any option" and selections)
 					let count = 0;
 					for (const hit of hits) {
-						if (hitMatchesOption(hit, attribute.id ?? 0, option, selectedAttributes)) {
+						if (
+							hitMatchesOption(
+								hit,
+								attribute.id ?? 0,
+								attribute.name ?? '',
+								option,
+								selectedAttributes
+							)
+						) {
 							count++;
 						}
 					}

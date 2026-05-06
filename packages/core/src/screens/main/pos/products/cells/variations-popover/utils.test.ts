@@ -570,6 +570,142 @@ describe('parseAttributes', () => {
 		]);
 	});
 
+	it('BUG: should keep later custom attribute options active when all attributes have id 0', () => {
+		const attributes: ProductDocument['attributes'] = [
+			{
+				id: 0,
+				name: 'Colour',
+				options: ['Blue', 'Red', 'Yellow'],
+				position: 0,
+				variation: true,
+				visible: true,
+			},
+			{
+				id: 0,
+				name: 'Size',
+				options: ['1L', '5L', '25L'],
+				position: 1,
+				variation: true,
+				visible: true,
+			},
+		];
+
+		const hits = ['Blue', 'Red', 'Yellow'].flatMap((colour) =>
+			['1L', '5L', '25L'].map((size) => ({
+				document: {
+					attributes: [
+						{ name: 'Colour', option: colour },
+						{ name: 'Size', option: size },
+					],
+				} as ProductVariationDocument,
+			}))
+		);
+
+		const result = parseAttributes(attributes, undefined, hits);
+
+		expect(result).toEqual([
+			{
+				attribute: {
+					id: 0,
+					name: 'Colour',
+					position: 0,
+					visible: true,
+					variation: true,
+					options: ['Blue', 'Red', 'Yellow'],
+					characterCount: 13,
+				},
+				optionCounts: { Blue: 3, Red: 3, Yellow: 3 },
+				selected: undefined,
+			},
+			{
+				attribute: {
+					id: 0,
+					name: 'Size',
+					position: 1,
+					visible: true,
+					variation: true,
+					options: ['1L', '5L', '25L'],
+					characterCount: 7,
+				},
+				optionCounts: { '1L': 3, '5L': 3, '25L': 3 },
+				selected: undefined,
+			},
+		]);
+	});
+
+	it('should preserve global attribute id matching when variation attribute names are absent', () => {
+		const namelessHits = ['Red', 'Blue'].flatMap((color) =>
+			['Small', 'Large'].map((size) => ({
+				document: {
+					attributes: [
+						{ id: 1, option: color },
+						{ id: 2, option: size },
+					],
+				} as ProductVariationDocument,
+			}))
+		);
+
+		const result = parseAttributes(attributes, undefined, namelessHits);
+
+		expect(result[0].optionCounts).toEqual({ Red: 2, Blue: 2 });
+		expect(result[1].optionCounts).toEqual({ Small: 2, Large: 2 });
+		expect(result[0].selected).toBeUndefined();
+		expect(result[1].selected).toBeUndefined();
+	});
+
+	it('should treat an omitted id=0 custom attribute as any option', () => {
+		const attributes: ProductDocument['attributes'] = [
+			{
+				id: 0,
+				name: 'Colour',
+				options: ['Blue', 'Red'],
+				position: 0,
+				variation: true,
+				visible: true,
+			},
+			{
+				id: 0,
+				name: 'Size',
+				options: ['1L', '5L', '25L'],
+				position: 1,
+				variation: true,
+				visible: true,
+			},
+		];
+		const selectedAttributes = [{ id: 0, name: 'Colour', option: 'Blue' }];
+		const hits: { document: ProductVariationDocument }[] = [
+			{
+				document: {
+					attributes: [{ id: 0, name: 'Colour', option: 'Blue' }],
+				} as ProductVariationDocument,
+			},
+			{
+				document: {
+					attributes: [
+						{ id: 0, name: 'Colour', option: 'Blue' },
+						{ id: 0, name: 'Size', option: '5L' },
+					],
+				} as ProductVariationDocument,
+			},
+		];
+
+		const result = parseAttributes(attributes, selectedAttributes, hits);
+
+		expect(result[1]).toEqual({
+			attribute: {
+				id: 0,
+				name: 'Size',
+				position: 1,
+				visible: true,
+				variation: true,
+				options: ['1L', '5L', '25L'],
+				characterCount: 7,
+			},
+			optionCounts: { '1L': 1, '5L': 2, '25L': 1 },
+			selected: undefined,
+		});
+	});
+
 	describe('tests for "any" variations', () => {
 		it('should calculate option counts and character counts correctly', () => {
 			const selectedAttributes = undefined;
