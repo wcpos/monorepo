@@ -290,7 +290,7 @@ export function buildReceiptData(
 			)
 	);
 
-	const rawStatus = (order.status as string) || '';
+	const rawStatus = String(order.status ?? '');
 	// `useOrderStatusLabel.getLabel` returns the raw status when the
 	// orderStatuses cache hasn't loaded yet — capitalize that fall-through
 	// instead of printing the lowercase identifier.

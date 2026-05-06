@@ -131,6 +131,12 @@ describe('buildReceiptData', () => {
 		expect(result.order.status_label).toBe('On Hold');
 	});
 
+	it('coerces malformed order status before capitalizing status_label', () => {
+		const result = buildReceiptData({ ...mockOrder, status: 123 }, mockStore);
+		expect(result.order.wc_status).toBe('123');
+		expect(result.order.status_label).toBe('123');
+	});
+
 	it('uses the getStatusLabel callback when provided', () => {
 		const result = buildReceiptData(mockOrder, mockStore, 2, {
 			getStatusLabel: (status) => (status === 'completed' ? 'Terminé' : status),
