@@ -653,6 +653,59 @@ describe('parseAttributes', () => {
 		expect(result[1].selected).toBeUndefined();
 	});
 
+	it('should treat an omitted id=0 custom attribute as any option', () => {
+		const attributes: ProductDocument['attributes'] = [
+			{
+				id: 0,
+				name: 'Colour',
+				options: ['Blue', 'Red'],
+				position: 0,
+				variation: true,
+				visible: true,
+			},
+			{
+				id: 0,
+				name: 'Size',
+				options: ['1L', '5L', '25L'],
+				position: 1,
+				variation: true,
+				visible: true,
+			},
+		];
+		const selectedAttributes = [{ id: 0, name: 'Colour', option: 'Blue' }];
+		const hits: { document: ProductVariationDocument }[] = [
+			{
+				document: {
+					attributes: [{ id: 0, name: 'Colour', option: 'Blue' }],
+				} as ProductVariationDocument,
+			},
+			{
+				document: {
+					attributes: [
+						{ id: 0, name: 'Colour', option: 'Blue' },
+						{ id: 0, name: 'Size', option: '5L' },
+					],
+				} as ProductVariationDocument,
+			},
+		];
+
+		const result = parseAttributes(attributes, selectedAttributes, hits);
+
+		expect(result[1]).toEqual({
+			attribute: {
+				id: 0,
+				name: 'Size',
+				position: 1,
+				visible: true,
+				variation: true,
+				options: ['1L', '5L', '25L'],
+				characterCount: 7,
+			},
+			optionCounts: { '1L': 1, '5L': 2, '25L': 1 },
+			selected: undefined,
+		});
+	});
+
 	describe('tests for "any" variations', () => {
 		it('should calculate option counts and character counts correctly', () => {
 			const selectedAttributes = undefined;
