@@ -365,14 +365,47 @@ function mapPayment(src: Record<string, any>): ReceiptPayment {
 }
 
 function mapRefundLine(entry: Record<string, any>) {
+	const total = toNum(entry.total ?? entry.amount ?? entry.line_total);
+	const totalIncl =
+		'total_incl' in entry
+			? toNum(entry.total_incl)
+			: 'line_total_incl' in entry
+				? toNum(entry.line_total_incl)
+				: undefined;
+	const totalExcl =
+		'total_excl' in entry
+			? toNum(entry.total_excl)
+			: 'line_total_excl' in entry
+				? toNum(entry.line_total_excl)
+				: undefined;
 	const line: ReceiptRefund['lines'][number] = {
 		name: toStr(entry.name),
 		sku: 'sku' in entry ? toStr(entry.sku) : undefined,
 		qty: toNum(entry.qty ?? entry.quantity),
-		total: toNum(entry.total ?? entry.amount),
+		total,
+		line_total: 'line_total' in entry && entry.line_total != null ? toNum(entry.line_total) : total,
 	};
-	if ('total_incl' in entry && entry.total_incl != null) line.total_incl = toNum(entry.total_incl);
-	if ('total_excl' in entry && entry.total_excl != null) line.total_excl = toNum(entry.total_excl);
+	if (totalIncl != null) {
+		line.total_incl = totalIncl;
+		line.line_total_incl =
+			'line_total_incl' in entry && entry.line_total_incl != null
+				? toNum(entry.line_total_incl)
+				: totalIncl;
+	}
+	if (totalExcl != null) {
+		line.total_excl = totalExcl;
+		line.line_total_excl =
+			'line_total_excl' in entry && entry.line_total_excl != null
+				? toNum(entry.line_total_excl)
+				: totalExcl;
+	}
+	if ('unit_total' in entry && entry.unit_total != null) line.unit_total = toNum(entry.unit_total);
+	if ('unit_total_incl' in entry && entry.unit_total_incl != null) {
+		line.unit_total_incl = toNum(entry.unit_total_incl);
+	}
+	if ('unit_total_excl' in entry && entry.unit_total_excl != null) {
+		line.unit_total_excl = toNum(entry.unit_total_excl);
+	}
 	if (Array.isArray(entry.taxes) && entry.taxes.length > 0) {
 		const taxes = mapItemTaxes(entry.taxes);
 		if (taxes.length > 0) line.taxes = taxes;

@@ -351,6 +351,69 @@ describe('formatReceiptData', () => {
 		expect(result.payments[0].amount).toBe(-25);
 	});
 
+	it('adds display fields and line-style aliases to refund rows', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.refunds = [
+			{
+				id: 1,
+				amount: 12,
+				subtotal: 10,
+				tax_total: 2,
+				shipping_total: 3,
+				shipping_tax: 0.5,
+				lines: [
+					{
+						name: 'Widget A',
+						sku: 'SKU-001',
+						qty: 2,
+						total: 12,
+						total_incl: 12,
+						total_excl: 10,
+						taxes: [{ code: 'vat-20', rate: 20, label: 'VAT 20%', amount: 2 }],
+					},
+				],
+				fees: [{ label: 'Restocking fee', total: 1.2, total_incl: 1.2, total_excl: 1 }],
+				shipping: [
+					{
+						label: 'Returned shipping',
+						method_id: 'flat_rate',
+						total: 3,
+						total_incl: 3,
+						total_excl: 2.5,
+					},
+				],
+			},
+		];
+
+		const result = formatReceiptData(data);
+		const refund = result.refunds[0];
+		const line = refund.lines[0];
+
+		expect(refund.amount_display).toBe('$12.00');
+		expect(refund.subtotal_display).toBe('$10.00');
+		expect(refund.tax_total_display).toBe('$2.00');
+		expect(refund.shipping_total_display).toBe('$3.00');
+		expect(refund.shipping_tax_display).toBe('$0.50');
+		expect(line.total_display).toBe('$12.00');
+		expect(line.total_incl_display).toBe('$12.00');
+		expect(line.total_excl_display).toBe('$10.00');
+		expect(line.line_total).toBe(12);
+		expect(line.line_total_incl).toBe(12);
+		expect(line.line_total_excl).toBe(10);
+		expect(line.line_total_display).toBe('$12.00');
+		expect(line.line_total_incl_display).toBe('$12.00');
+		expect(line.line_total_excl_display).toBe('$10.00');
+		expect(line.unit_total).toBe(6);
+		expect(line.unit_total_incl).toBe(6);
+		expect(line.unit_total_excl).toBe(5);
+		expect(line.unit_total_display).toBe('$6.00');
+		expect(line.unit_total_incl_display).toBe('$6.00');
+		expect(line.unit_total_excl_display).toBe('$5.00');
+		expect(line.taxes[0].amount_display).toBe('$2.00');
+		expect(refund.fees[0].total_display).toBe('$1.20');
+		expect(refund.shipping[0].total_display).toBe('$3.00');
+	});
+
 	it('preserves zero numeric values for Mustache section truthiness', () => {
 		const data = structuredClone(sampleReceiptData);
 		data.totals.discount_total_incl = 0;
