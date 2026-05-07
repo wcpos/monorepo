@@ -42,7 +42,7 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 	const infoColLeft = columns - infoColRight;
 	const priceColWidth = Math.max(10, Math.floor(columns * 0.25));
 	const nameColWidth = columns - priceColWidth;
-	const customerTaxId = data.customer?.tax_id || data.customer?.tax_ids?.[0]?.value || '';
+	const customerTaxId = data.customer?.tax_ids?.[0]?.value || '';
 	const discountTotalIncl = data.totals.discount_total_incl ?? data.totals.discount_total ?? 0;
 
 	// Build template data with pre-formatted money values
@@ -60,7 +60,13 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		has_address_lines: data.store.address_lines && data.store.address_lines.length > 0,
 		address_lines: (data.store.address_lines ?? []).map((line) => ({ line })),
 		has_phone: !!data.store.phone,
-		has_tax_id: !!data.store.tax_id,
+		store_tax_ids: (data.store?.tax_ids ?? []).map((t) => ({
+			type: t.type,
+			value: t.value,
+			country: t.country ?? '',
+			label: t.label ?? 'Tax ID',
+		})),
+		has_store_tax_ids: !!(data.store?.tax_ids && data.store.tax_ids.length > 0),
 		cashier_name: data.cashier?.name || '',
 		customer_name: data.customer?.name || '',
 		customer_tax_id: customerTaxId,

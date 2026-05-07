@@ -3,9 +3,9 @@
  * original hardcoded encodeReceipt encoder.
  *
  * Mustache data context expected:
- *   store.name, store.phone, store.tax_id,
+ *   store.name, store.phone, store_tax_ids[],
  *   address_lines[].line,
- *   has_address_lines, has_phone, has_tax_id,
+ *   has_address_lines, has_phone, has_store_tax_ids,
  *   order_number, created_at_gmt,
  *   cashier_name, customer_name, customer_tax_id, has_customer_tax_id,
  *   customer_tax_ids[].{type, value, country, label}, has_customer_tax_ids,
@@ -28,9 +28,11 @@ export const DEFAULT_THERMAL_TEMPLATE = `<receipt paper-width="{{columns}}">
     {{#has_phone}}
     <text>{{store.phone}}</text>
     {{/has_phone}}
-    {{#has_tax_id}}
-    <text>Tax ID: {{store.tax_id}}</text>
-    {{/has_tax_id}}
+    {{#has_store_tax_ids}}
+    {{#store_tax_ids}}
+    <text>{{label}}: {{value}}</text>
+    {{/store_tax_ids}}
+    {{/has_store_tax_ids}}
   </align>
   <feed lines="1" />
   <line />

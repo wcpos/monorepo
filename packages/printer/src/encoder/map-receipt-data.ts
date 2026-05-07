@@ -76,6 +76,7 @@ function mapStore(src: Record<string, any>): ReceiptStoreMeta {
 		: [];
 
 	return {
+		id: Number.isFinite(Number(src.id)) ? Number(src.id) : 0,
 		name: toStr(src.name),
 		address_lines: addressLines,
 		phone: toStr(src.phone),
@@ -124,14 +125,11 @@ function mapCustomer(src: Record<string, any>): ReceiptCustomer {
 					];
 				})
 		: [];
-	const taxIdString = toStr(src.tax_id);
 	return {
 		id: 0,
 		name: toStr(src.name),
 		billing_address: {},
 		shipping_address: {},
-		// Preserve both: legacy templates read `tax_id`, new templates iterate `tax_ids`.
-		tax_id: taxIdString || (taxIds[0]?.value ?? ''),
 		tax_ids: taxIds,
 	};
 }
@@ -770,7 +768,7 @@ function emptyReceiptData(): ReceiptData {
 			paid: emptyReceiptDate(),
 			completed: emptyReceiptDate(),
 		},
-		store: { name: '', address_lines: [] },
+		store: { id: 0, name: '', address_lines: [] },
 		cashier: { id: 0, name: '' },
 		customer: { id: 0, name: '' },
 		lines: [],

@@ -15,6 +15,18 @@ describe('template-studio randomizer', () => {
 		if (!parsed.success) throw new Error(parsed.error.message);
 	});
 
+	it('matches the v1 tax ID contract: store.id plus structured tax_ids only', () => {
+		const result = createRandomReceipt({
+			seed: 'rtl',
+			overrides: { rtl: true, multicurrency: false, emptyCart: false },
+		});
+
+		expect(result.data.store.id).toEqual(expect.any(Number));
+		expect(result.data.store.tax_ids?.length).toBeGreaterThan(0);
+		expect(result.data.store).not.toHaveProperty('tax_id');
+		expect(result.data.customer).not.toHaveProperty('tax_id');
+	});
+
 	it('is deterministic for a given seed', () => {
 		const a = createRandomReceipt({ seed: 0xc0ffee });
 		const b = createRandomReceipt({ seed: 0xc0ffee });

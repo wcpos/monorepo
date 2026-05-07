@@ -77,11 +77,27 @@ describe('ReceiptDataSchema', () => {
 
 	it('preserves optional store/customer fields when omitted', () => {
 		const stripped = JSON.parse(JSON.stringify(sampleReceiptData));
-		delete stripped.store.tax_id;
 		delete stripped.store.phone;
 		delete stripped.customer.billing_address;
 		const result = ReceiptDataSchema.safeParse(stripped);
 		expect(result.success).toBe(true);
+	});
+
+	it('exposes store.id and rejects scalar tax ID shortcuts in the v1 receipt contract', () => {
+		expect(ReceiptDataSchema.safeParse(sampleReceiptData).success).toBe(true);
+		expect(sampleReceiptData.store.id).toEqual(expect.any(Number));
+		expect(sampleReceiptData.store).not.toHaveProperty('tax_id');
+		expect(sampleReceiptData.customer).not.toHaveProperty('tax_id');
+
+		const withStoreScalar = JSON.parse(JSON.stringify(sampleReceiptData));
+		withStoreScalar.store.tax_id = 'TAX-12345';
+		const parsedStoreScalar = ReceiptDataSchema.parse(withStoreScalar);
+		expect(parsedStoreScalar.store).not.toHaveProperty('tax_id');
+
+		const withCustomerScalar = JSON.parse(JSON.stringify(sampleReceiptData));
+		withCustomerScalar.customer.tax_id = 'TAX-12345';
+		const parsedCustomerScalar = ReceiptDataSchema.parse(withCustomerScalar);
+		expect(parsedCustomerScalar.customer).not.toHaveProperty('tax_id');
 	});
 
 	it('parses store.tax_ids as an array of TaxId entries', () => {
