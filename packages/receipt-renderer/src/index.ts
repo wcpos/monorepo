@@ -1,11 +1,11 @@
 import Mustache from 'mustache';
 
 import { parseXml } from './parse-xml';
-import { renderEscpos } from './render-escpos';
+import { analyzeThermalAst, renderEscpos } from './render-escpos';
 import { renderBarcode, renderHtml, renderQrCode } from './render-html';
 import { sanitizeHtml } from './sanitize-html';
 
-import type { EscposRenderOptions } from './render-escpos';
+import type { EscposRenderOptions, ThermalLayoutDiagnostics } from './render-escpos';
 import type { SanitizeHtmlOptions } from './sanitize-html';
 
 export { parseXml } from './parse-xml';
@@ -13,7 +13,11 @@ export { renderHtml } from './render-html';
 export { renderEscpos } from './render-escpos';
 export { sanitizeHtml } from './sanitize-html';
 export type { HtmlRenderOptions } from './render-html';
-export type { EscposRenderOptions } from './render-escpos';
+export type {
+	EscposRenderOptions,
+	ThermalLayoutDiagnostics,
+	ThermalRowDiagnostic,
+} from './render-escpos';
 export type { SanitizeHtmlOptions } from './sanitize-html';
 export type * from './types';
 
@@ -171,4 +175,14 @@ export function encodeThermalTemplate(
 	const resolved = Mustache.render(template, data);
 	const ast = parseXml(resolved);
 	return renderEscpos(ast, options);
+}
+
+export function analyzeThermalTemplate(
+	template: string,
+	data: Record<string, any>,
+	options: EscposRenderOptions = {}
+): ThermalLayoutDiagnostics {
+	const resolved = Mustache.render(template, data);
+	const ast = parseXml(resolved);
+	return analyzeThermalAst(ast, options.columns ?? ast.paperWidth);
 }

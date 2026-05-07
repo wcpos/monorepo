@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+	analyzeThermalTemplate,
 	encodeThermalTemplate,
 	parseXml,
 	renderEscpos,
@@ -258,6 +259,59 @@ describe('@wcpos/receipt-renderer exports', () => {
 		);
 
 		expect(kanjiModeIndex).toBe(-1);
+	});
+
+	it('analyzes fixed thermal rows that exceed configured printer columns', () => {
+		const diagnostics = analyzeThermalTemplate(
+			'<receipt paper-width="48"><row><col width="24">Subtotal</col><col width="24" align="right">13,26 €</col></row></receipt>',
+			{},
+			{ columns: 42 }
+		);
+
+		expect(diagnostics.rows).toEqual([
+			expect.objectContaining({
+				columns: 42,
+				fixedTotal: 48,
+				resolvedTotal: 48,
+				overflows: true,
+				hasStar: false,
+			}),
+		]);
+	});
+
+	it('analyzes star-width thermal rows without overflow at 42 columns', () => {
+		const diagnostics = analyzeThermalTemplate(
+			'<receipt paper-width="48"><row><col width="*">Subtotal</col><col width="14" align="right">13,26 €</col></row></receipt>',
+			{},
+			{ columns: 42 }
+		);
+
+		expect(diagnostics.rows).toEqual([
+			expect.objectContaining({
+				columns: 42,
+				fixedTotal: 14,
+				resolvedTotal: 42,
+				overflows: false,
+				hasStar: true,
+			}),
+		]);
+	});
+
+	it('warns when encoding a fixed thermal row wider than the configured printer columns', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			encodeThermalTemplate(
+				'<receipt paper-width="48"><row><col width="24">Subtotal</col><col width="24" align="right">13,26 €</col></row></receipt>',
+				{},
+				{ columns: 42 }
+			);
+
+			expect(warn).toHaveBeenCalledWith(
+				expect.stringContaining('thermal row columns (48) exceed total width (42)')
+			);
+		} finally {
+			warn.mockRestore();
+		}
 	});
 
 	it('renders existing ASTs to ESC/POS bytes', () => {
