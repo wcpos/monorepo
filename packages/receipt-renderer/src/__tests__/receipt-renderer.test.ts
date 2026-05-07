@@ -27,6 +27,23 @@ const data = {
 	],
 };
 
+function includesSequence(bytes: Uint8Array, sequence: number[]): boolean {
+	return Array.from(bytes).some((_, index, all) =>
+		sequence.every((value, offset) => all[index + offset] === value)
+	);
+}
+
+function opaqueBlackImageData(width: number, height: number): ImageData {
+	const data = new Uint8ClampedArray(width * height * 4);
+	for (let offset = 0; offset < data.length; offset += 4) {
+		data[offset] = 0;
+		data[offset + 1] = 0;
+		data[offset + 2] = 0;
+		data[offset + 3] = 255;
+	}
+	return { width, height, data } as ImageData;
+}
+
 describe('@wcpos/receipt-renderer exports', () => {
 	it('renders sanitized logicless HTML with Mustache data', () => {
 		const html = renderLogiclessTemplate(
@@ -177,6 +194,35 @@ describe('@wcpos/receipt-renderer exports', () => {
 		const html = renderHtml(ast);
 
 		expect(html).not.toContain('<img');
+	});
+
+	it('prints resolved image assets as ESC/POS raster images when imageMode is raster', () => {
+		const ast = parseXml('<receipt><image src="logo://store" width="64" /></receipt>');
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			imageAssets: {
+				'logo://store': {
+					image: opaqueBlackImageData(64, 32),
+					width: 64,
+					height: 32,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			},
+		});
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+	});
+
+	it('skips unresolved image assets without throwing', () => {
+		const ast = parseXml(
+			'<receipt><text>Before</text><image src="missing" width="64" /><text>After</text></receipt>'
+		);
+		const bytes = renderEscpos(ast);
+		const ascii = new TextDecoder().decode(bytes);
+
+		expect(ascii).toContain('Before');
+		expect(ascii).toContain('After');
 	});
 
 	it('sanitizes style-affecting numeric fields when rendering HTML', () => {
