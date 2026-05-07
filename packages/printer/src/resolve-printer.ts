@@ -13,6 +13,12 @@ export interface ResolvePrinterOptions {
 	manualPrinterId?: string;
 }
 
+function targetColumnsForTemplate(template: TemplateInfo): number[] {
+	if (template.paper_width === '58mm') return [32];
+	if (template.paper_width === '80mm') return [42, 48];
+	return [42, 48];
+}
+
 export function resolvePrinter(options: ResolvePrinterOptions): PrinterProfile | null {
 	const { template, overrides, profiles, manualPrinterId } = options;
 
@@ -31,9 +37,9 @@ export function resolvePrinter(options: ResolvePrinterOptions): PrinterProfile |
 
 	// Layer 3: auto-match
 	if (template.output_type === 'escpos') {
-		const targetColumns = template.paper_width === '58mm' ? 32 : 48;
+		const targetColumns = targetColumnsForTemplate(template);
 		const candidates = profiles.filter(
-			(p) => p.connectionType !== 'system' && p.columns === targetColumns
+			(p) => p.connectionType !== 'system' && targetColumns.includes(p.columns)
 		);
 		if (candidates.length === 0) return null;
 		return candidates.find((p) => p.isDefault) ?? candidates[0];

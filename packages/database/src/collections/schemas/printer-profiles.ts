@@ -1,6 +1,6 @@
 export const printerProfilesLiteral = {
 	title: 'Printer Profiles schema',
-	version: 2,
+	version: 3,
 	description: 'Local printer profiles for direct thermal printing',
 	type: 'object',
 	primaryKey: 'id',
@@ -46,8 +46,9 @@ export const printerProfilesLiteral = {
 		},
 		columns: {
 			type: 'integer',
-			default: 48,
-			description: '48 for 80mm paper, 32 for 58mm',
+			default: 42,
+			description:
+				'Printer character capacity: 32 for 58mm, 42 for standard 80mm, 48 for wide/known 48-CPL 80mm',
 		},
 		autoPrint: {
 			type: 'boolean',

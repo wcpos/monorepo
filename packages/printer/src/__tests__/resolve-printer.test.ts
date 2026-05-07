@@ -6,9 +6,21 @@ interface TemplateInfo {
 	paper_width: string | null;
 }
 
-const thermal80mm: TemplateInfo = { id: 'tmpl-1', output_type: 'escpos', paper_width: '80mm' };
-const thermal58mm: TemplateInfo = { id: 'tmpl-2', output_type: 'escpos', paper_width: '58mm' };
-const htmlTemplate: TemplateInfo = { id: 'tmpl-3', output_type: 'html', paper_width: null };
+const thermal80mm: TemplateInfo = {
+	id: 'tmpl-1',
+	output_type: 'escpos',
+	paper_width: '80mm',
+};
+const thermal58mm: TemplateInfo = {
+	id: 'tmpl-2',
+	output_type: 'escpos',
+	paper_width: '58mm',
+};
+const htmlTemplate: TemplateInfo = {
+	id: 'tmpl-3',
+	output_type: 'html',
+	paper_width: null,
+};
 
 const epsonPrinter: PrinterProfile = {
 	id: 'printer-1',
@@ -119,6 +131,41 @@ describe('resolvePrinter', () => {
 				profiles: allPrinters,
 			});
 			expect(result?.id).toBe('printer-1');
+		});
+
+		it('auto-matches 80mm ESC/POS templates to a standard 42-column thermal printer', () => {
+			const result = resolvePrinter({
+				template: {
+					id: 'thermal-80',
+					output_type: 'escpos',
+					paper_width: '80mm',
+				},
+				overrides: new Map(),
+				profiles: [
+					{
+						...epsonPrinter,
+						id: 'standard-80mm',
+						columns: 42,
+						isDefault: true,
+					},
+				],
+			});
+
+			expect(result?.id).toBe('standard-80mm');
+		});
+
+		it('auto-matches 80mm ESC/POS templates to a 48-column thermal printer when available', () => {
+			const result = resolvePrinter({
+				template: {
+					id: 'thermal-80',
+					output_type: 'escpos',
+					paper_width: '80mm',
+				},
+				overrides: new Map(),
+				profiles: [{ ...epsonPrinter, id: 'wide-80mm', columns: 48, isDefault: true }],
+			});
+
+			expect(result?.id).toBe('wide-80mm');
 		});
 
 		it('matches escpos/58mm to a 32-column non-system printer', () => {

@@ -24,7 +24,9 @@ describe('WooCommerceSection', () => {
 			/>
 		);
 
-		fireEvent.change(screen.getByLabelText('Currency'), { target: { value: 'EUR' } });
+		fireEvent.change(screen.getByLabelText('Currency'), {
+			target: { value: 'EUR' },
+		});
 
 		expect(onChangePath).toHaveBeenCalledWith(['order', 'currency'], 'EUR');
 	});
@@ -50,6 +52,10 @@ describe('WooCommerceSection', () => {
 
 		const select = screen.getByLabelText('Characters per line');
 		expect(select).toHaveValue('42');
+		expect(screen.getByRole('option', { name: '80mm standard (42 chars)' })).toBeInTheDocument();
+		expect(screen.getByRole('option', { name: '80mm wide (48 chars)' })).toBeInTheDocument();
+		expect(screen.getByRole('option', { name: '58mm (32 chars)' })).toBeInTheDocument();
+		expect(screen.getByText(/Matches the POS printer profile text width/)).toBeInTheDocument();
 		fireEvent.change(select, { target: { value: '48' } });
 		expect(onThermalColumnsChange).toHaveBeenCalledWith(48);
 	});

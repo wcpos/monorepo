@@ -41,7 +41,7 @@ const printerSchema = z.object({
 	port: z.coerce.number().int().min(1).max(65535).default(9100),
 	vendor: z.enum(['epson', 'star', 'generic']).default(isWeb ? 'epson' : 'generic'),
 	language: z.enum(['esc-pos', 'star-prnt', 'star-line']).default('esc-pos'),
-	columns: z.coerce.number().default(48),
+	columns: z.coerce.number().default(42),
 	autoPrint: z.boolean().default(false),
 	autoCut: z.boolean().default(true),
 	autoOpenDrawer: z.boolean().default(false),
@@ -56,7 +56,7 @@ const DEFAULT_VALUES: PrinterFormData = {
 	port: 9100,
 	vendor: isWeb ? 'epson' : 'generic',
 	language: 'esc-pos',
-	columns: 48,
+	columns: 42,
 	autoPrint: false,
 	autoCut: true,
 	autoOpenDrawer: false,
@@ -71,7 +71,10 @@ function vendorDefaults(vendor: string) {
 		case 'epson': {
 			const secureOrigin =
 				isWeb && typeof window !== 'undefined' && window.location.protocol === 'https:';
-			return { language: 'esc-pos' as const, port: isWeb ? (secureOrigin ? 8043 : 8008) : 9100 };
+			return {
+				language: 'esc-pos' as const,
+				port: isWeb ? (secureOrigin ? 8043 : 8008) : 9100,
+			};
 		}
 		case 'star':
 			return { language: 'star-line' as const, port: 9100 };
@@ -127,7 +130,7 @@ export function PrinterDialog({
 				port: printer.port ?? 9100,
 				vendor: printer.vendor ?? 'generic',
 				language: printer.language ?? 'esc-pos',
-				columns: printer.columns ?? 48,
+				columns: printer.columns ?? 42,
 				autoPrint: printer.autoPrint ?? false,
 				autoCut: printer.autoCut ?? true,
 				autoOpenDrawer: printer.autoOpenDrawer ?? false,
@@ -364,7 +367,7 @@ export function PrinterDialog({
 			(printer.vendor ?? 'generic') !== DEFAULT_VALUES.vendor ||
 			(printer.port ?? 9100) !== DEFAULT_VALUES.port ||
 			(printer.language ?? 'esc-pos') !== DEFAULT_VALUES.language ||
-			(printer.columns ?? 48) !== DEFAULT_VALUES.columns
+			(printer.columns ?? 42) !== DEFAULT_VALUES.columns
 		);
 	}, [printer]);
 
@@ -502,7 +505,7 @@ export function PrinterDialog({
 													<View className="flex-1">
 														<FormSelect
 															customComponent={PaperWidthSelect}
-															label={t('settings.paper_width', 'Paper Width')}
+															label={t('settings.printer_text_width', 'Printer text width')}
 															value={value != null ? String(value) : undefined}
 															onChange={(val: string) => onChange(Number(val))}
 															{...rest}
