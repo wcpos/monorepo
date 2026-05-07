@@ -4,6 +4,8 @@ import type { EscposRenderOptions } from '@wcpos/receipt-renderer';
 export type TemplateEngine = 'logicless' | 'thermal';
 export type TemplateSource = 'bundled-gallery' | 'wp-env';
 export type PaperWidth = '58mm' | '80mm' | 'a4';
+export type ThermalColumns = 32 | 42 | 48;
+export type ThermalPaperWidth = Extract<PaperWidth, '58mm' | '80mm'>;
 
 export interface StudioTemplate {
 	id: string;
@@ -25,6 +27,7 @@ export interface RenderStudioTemplateInput {
 	template: StudioTemplate;
 	fixture: ReceiptFixture;
 	paperWidth: PaperWidth;
+	thermalColumns?: ThermalColumns;
 	/** Optional thermal encoder overrides surfaced through the WooCommerce panel. */
 	printerModel?: string;
 	language?: 'esc-pos' | 'star-prnt' | 'star-line';
@@ -89,13 +92,23 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 		};
 	}
 
-	const columns = paperWidthToColumns(template.paperWidth ?? paperWidth);
+	const resolvedPaperWidth = template.paperWidth ?? paperWidth;
+	if (resolvedPaperWidth !== '58mm' && resolvedPaperWidth !== '80mm') {
+		throw new Error(
+			`Thermal templates require a thermal paper width, received "${resolvedPaperWidth}"`
+		);
+	}
+	const thermalPaperWidth: ThermalPaperWidth = resolvedPaperWidth;
+	const columns = normalizeThermalColumns(
+		input.thermalColumns,
+		defaultThermalColumnsForPaper(thermalPaperWidth)
+	);
 	const mergedEncodeOptions: EscposRenderOptions = {
 		...encodeOptions,
-		printerModel: printerModel || encodeOptions?.printerModel,
-		language: language ?? encodeOptions?.language,
 		columns,
 	};
+	if (printerModel) mergedEncodeOptions.printerModel = printerModel;
+	if (language) mergedEncodeOptions.language = language;
 	if ((mergedEncodeOptions.language ?? 'esc-pos') === 'esc-pos') {
 		// Template Studio intentionally forces CP932 for ESC/POS previews/prints, even if
 		// callers pass `enableCp932: false` through `mergedEncodeOptions`.
@@ -156,6 +169,15 @@ export function bytesToDebugOutput(bytes: Uint8Array): { hex: string; ascii: str
 	};
 }
 
+export function defaultThermalColumnsForPaper(paperWidth: ThermalPaperWidth): ThermalColumns {
+	return paperWidth === '58mm' ? 32 : 42;
+}
+
+export function normalizeThermalColumns(value: unknown, fallback: ThermalColumns): ThermalColumns {
+	return value === 32 || value === 42 || value === 48 ? value : fallback;
+}
+
+/** @deprecated Paper width is physical, not printer CPL. Use explicit thermal columns. */
 export function paperWidthToColumns(paperWidth: PaperWidth | string | null | undefined): number {
 	if (paperWidth === '58mm') return 32;
 	if (paperWidth === '80mm') return 48;

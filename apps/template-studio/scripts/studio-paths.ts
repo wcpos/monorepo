@@ -1,7 +1,12 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const studioRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+const scriptDir =
+	typeof import.meta.url === 'string' && import.meta.url.startsWith('file:')
+		? path.dirname(fileURLToPath(import.meta.url))
+		: path.resolve(process.cwd(), 'scripts');
+
+export const studioRoot = path.resolve(scriptDir, '..');
 export const monorepoRoot = path.resolve(studioRoot, '../..');
 
 /**
