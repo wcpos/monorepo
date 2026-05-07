@@ -97,6 +97,8 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 		columns,
 	};
 	if ((mergedEncodeOptions.language ?? 'esc-pos') === 'esc-pos') {
+		// Template Studio intentionally forces CP932 for ESC/POS previews/prints, even if
+		// callers pass `enableCp932: false` through `mergedEncodeOptions`.
 		mergedEncodeOptions.enableCp932 = true;
 	}
 	const result = renderForStudio({

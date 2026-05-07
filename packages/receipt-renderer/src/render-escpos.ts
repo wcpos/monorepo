@@ -217,10 +217,10 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 				if (asset) {
 					encoder.image(
 						asset.image,
-						normalizeImageDimension(asset.width),
-						normalizeImageDimension(asset.height),
-						'threshold',
-						128
+						normalizeImageWidth(asset.width),
+						normalizeImageHeight(asset.height),
+						asset.algorithm ?? context.imageAlgorithm,
+						asset.threshold ?? context.imageThreshold
 					);
 					break;
 				}
@@ -240,10 +240,10 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 				if (asset) {
 					encoder.image(
 						asset.image,
-						normalizeImageDimension(asset.width),
-						normalizeImageDimension(asset.height),
-						'threshold',
-						128
+						normalizeImageWidth(asset.width),
+						normalizeImageHeight(asset.height),
+						asset.algorithm ?? context.imageAlgorithm,
+						asset.threshold ?? context.imageThreshold
 					);
 					break;
 				}
@@ -255,8 +255,8 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 				context.imageAssets[thermalImageAssetKey({ src: node.src, width: node.width })] ??
 				context.imageAssets[node.src];
 			if (!asset) break;
-			const width = normalizeImageDimension(asset.width);
-			const height = normalizeImageDimension(asset.height);
+			const width = normalizeImageWidth(asset.width);
+			const height = normalizeImageHeight(asset.height);
 			encoder.image(
 				asset.image,
 				width,
@@ -281,9 +281,14 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 	}
 }
 
-function normalizeImageDimension(value: number): number {
+function normalizeImageWidth(value: number): number {
 	const finite = Number.isFinite(value) ? Math.max(8, Math.floor(value)) : 8;
 	return Math.max(8, finite - (finite % 8));
+}
+
+function normalizeImageHeight(value: number): number {
+	const finite = Number.isFinite(value) ? Math.max(8, Math.floor(value)) : 8;
+	return finite + ((8 - (finite % 8)) % 8);
 }
 
 function writeText(encoder: ReceiptPrinterEncoder, value: string, supportsCp932: boolean): void {

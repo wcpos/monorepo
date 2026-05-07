@@ -21,9 +21,9 @@ describe('thermal image assets', () => {
 	});
 
 	it('normalizes raster dimensions to multiples of 8 within printer width', () => {
-		expect(normalizeThermalImageSize({ width: 577, height: 73, maxWidth: 576 })).toEqual({
+		expect(normalizeThermalImageSize({ width: 577, height: 80, maxWidth: 576 })).toEqual({
 			width: 576,
-			height: 72,
+			height: 80,
 		});
 	});
 

@@ -31,13 +31,16 @@ export function PrintSection({
 	const [lastResult, setLastResult] = useState<LastResult | null>(null);
 	const [sending, setSending] = useState(false);
 	const [showInspector, setShowInspector] = useState(false);
+	const [preparedEscposBytes, setPreparedEscposBytes] = useState<Uint8Array | null>(null);
 
 	const isThermal = rendered?.kind === 'thermal';
 
 	const decodedSegments = useMemo(() => {
-		if (rendered?.kind !== 'thermal') return [];
-		return decodeEscposBytes(rendered.escposBytes);
-	}, [rendered]);
+		const bytesToShow =
+			preparedEscposBytes ?? (rendered?.kind === 'thermal' ? rendered.escposBytes : null);
+		if (!bytesToShow) return [];
+		return decodeEscposBytes(bytesToShow);
+	}, [preparedEscposBytes, rendered]);
 
 	function getConnectionTarget() {
 		const normalizedHost = host.trim();
@@ -61,8 +64,10 @@ export function PrintSection({
 		onError(null);
 		const start = performance.now();
 		try {
+			setPreparedEscposBytes(null);
 			const target = getConnectionTarget();
 			const prepared = onPrepareRawPrint ? await onPrepareRawPrint() : rendered;
+			setPreparedEscposBytes(prepared.escposBytes);
 			const result = await printRawTcp({
 				...target,
 				data: prepared.escposBase64,
@@ -84,6 +89,7 @@ export function PrintSection({
 		setSending(true);
 		onError(null);
 		try {
+			setPreparedEscposBytes(null);
 			const target = getConnectionTarget();
 			const result = await printRawTcp({
 				...target,

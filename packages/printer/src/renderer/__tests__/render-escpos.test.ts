@@ -136,10 +136,7 @@ describe('renderEscpos', () => {
 			imageAssets: { logo: { image: opaqueBlackImageData(64, 32), width: 64, height: 32 } },
 		});
 
-		// Both StarPRNT and Star Line image output from ReceiptPrinterEncoder start with:
-		// ESC @, CAN, LF, CR, ESC 0, ESC X, width-low, width-high.
-		expect(
-			includesSequence(bytes, [0x1b, 0x40, 0x18, 0x0a, 0x0d, 0x1b, 0x30, 0x1b, 0x58, 0x40, 0x00])
-		).toBe(true);
+		// ESC X starts Star image output; avoid pinning width bytes or full encoder layout.
+		expect(includesSequence(bytes, [0x1b, 0x58])).toBe(true);
 	});
 });

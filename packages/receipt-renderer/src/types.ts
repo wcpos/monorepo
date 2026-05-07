@@ -6,8 +6,14 @@ export type ThermalImageAlgorithm = 'threshold' | 'bayer' | 'floydsteinberg' | '
 export type ThermalImageMode = 'column' | 'raster';
 export type ThermalBarcodeMode = 'image' | 'native';
 
+export interface ThermalPixelBuffer {
+	width: number;
+	height: number;
+	data: Uint8ClampedArray;
+}
+
 export interface ThermalRasterImage {
-	image: ImageData | { width: number; height: number; data: Uint8ClampedArray };
+	image: ThermalPixelBuffer;
 	width: number;
 	height: number;
 	algorithm?: ThermalImageAlgorithm;

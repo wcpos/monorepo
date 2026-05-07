@@ -17,6 +17,10 @@ export type { EscposRenderOptions } from './render-escpos';
 export type { SanitizeHtmlOptions } from './sanitize-html';
 export type * from './types';
 
+export function renderReceiptTemplate(template: string, data: Record<string, any>): string {
+	return Mustache.render(template, data);
+}
+
 /**
  * Sanitize options shared by every pipeline that emits barcode SVG: thermal
  * preview and logicless HTML. Both call `renderBarcode` / `renderQrCode`,
@@ -52,15 +56,13 @@ export function sanitizeThermalPreviewHtml(
 	});
 }
 
-export interface LogiclessRenderOptions extends SanitizeHtmlOptions {
+export interface RenderSanitizeOptions extends SanitizeHtmlOptions {
 	/** Disable sanitization only for trusted test/debug output. Defaults to true. */
 	sanitize?: boolean;
 }
 
-export interface ThermalPreviewOptions extends SanitizeHtmlOptions {
-	/** Disable sanitization only for trusted test/debug output. Defaults to true. */
-	sanitize?: boolean;
-}
+export type LogiclessRenderOptions = RenderSanitizeOptions;
+export type ThermalPreviewOptions = RenderSanitizeOptions;
 
 /**
  * Render a logicless HTML template with Mustache data, then resolve any

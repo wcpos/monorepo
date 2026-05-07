@@ -215,6 +215,24 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
 	});
 
+	it('pads raster image height up without dropping rows', () => {
+		const ast = parseXml('<receipt><image src="logo://store" width="64" /></receipt>');
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			imageAssets: {
+				'logo://store': {
+					image: opaqueBlackImageData(64, 33),
+					width: 64,
+					height: 33,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			},
+		});
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30, 0x00, 0x08, 0x00, 0x28, 0x00])).toBe(true);
+	});
+
 	it('uses width-qualified image assets for repeated sources with different widths', () => {
 		const ast = parseXml(
 			'<receipt><image src="logo://store" width="64" /><image src="logo://store" width="128" /></receipt>'

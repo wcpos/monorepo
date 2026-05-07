@@ -29,7 +29,7 @@ export function normalizeThermalImageSize(input: {
 	const height = Math.max(8, Math.floor(input.height * scale));
 	return {
 		width: Math.max(8, width - (width % 8)),
-		height: Math.max(8, height - (height % 8)),
+		height: height + ((8 - (height % 8)) % 8),
 	};
 }
 

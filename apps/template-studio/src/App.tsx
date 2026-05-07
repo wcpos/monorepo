@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { sanitizeHtml, thermalImageAssetKey } from '@wcpos/receipt-renderer';
+import { renderReceiptTemplate, sanitizeHtml, thermalImageAssetKey } from '@wcpos/receipt-renderer';
 import type { ThermalBarcodeImages, ThermalImageAssets } from '@wcpos/receipt-renderer';
 
 import { CollapsibleSection } from './components/CollapsibleSection';
@@ -500,15 +500,11 @@ interface ThermalAssetRequests {
 	}[];
 }
 
-function renderTemplatePlaceholders(template: string, data: Record<string, unknown>): string {
-	return template.replace(/{{\s*([^#/^!>{][^}]*)\s*}}/g, (match, path: string) => {
-		const value = getAtPath(data, path.trim().split('.'));
-		if (value === undefined || value === null) return '';
-		if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-			return String(value);
-		}
-		return match;
-	});
+export function renderTemplatePlaceholders(
+	template: string,
+	data: Record<string, unknown>
+): string {
+	return renderReceiptTemplate(template, data);
 }
 
 export function discoverThermalAssetRequests(template: string): ThermalAssetRequests {

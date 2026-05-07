@@ -8,6 +8,7 @@ import {
 	discoverThermalAssetRequests,
 	preparePrintDocument,
 	printReceiptInHiddenFrame,
+	renderTemplatePlaceholders,
 } from '../App';
 import { countPreviewLines } from '../components/Stage';
 import { createRandomReceipt } from '../randomizer';
@@ -124,11 +125,9 @@ describe('template studio rendering harness', () => {
 	});
 
 	it('passes thermal image assets into raw ESC/POS encoding', () => {
-		const image = {
-			width: 64,
-			height: 32,
-			data: new Uint8ClampedArray(64 * 32 * 4).fill(255),
-		} as ImageData;
+		const data = new Uint8ClampedArray(64 * 32 * 4);
+		for (let offset = 3; offset < data.length; offset += 4) data[offset] = 255;
+		const image = { width: 64, height: 32, data };
 
 		const view = renderStudioTemplate({
 			template: {
@@ -154,6 +153,15 @@ describe('template studio rendering harness', () => {
 		expect(view.escposHex).toMatch(/1d 76 30/i);
 	});
 
+	it('renders sections before discovering raw thermal assets', () => {
+		expect(
+			renderTemplatePlaceholders(
+				'<receipt>{{#items}}<barcode>{{sku}}</barcode>{{/items}}</receipt>',
+				{ items: [{ sku: 'ABC' }, { sku: 'XYZ' }] }
+			)
+		).toBe('<receipt><barcode>ABC</barcode><barcode>XYZ</barcode></receipt>');
+	});
+
 	it('discovers QR barcode aliases and per-width image requests for raw thermal assets', () => {
 		const requests = discoverThermalAssetRequests(
 			'<receipt><image src="logo://store" width="64" /><image src="logo://store" width="128" /><barcode type="qrcode" height="40">https://example.test</barcode></receipt>'
@@ -172,7 +180,6 @@ describe('template studio rendering harness', () => {
 		);
 
 		expect(requests.barcodes[0]?.value).not.toContain('<');
-		expect(requests.barcodes[0]?.value).not.toContain('<script');
 	});
 
 	it('fetches real store preview data for a selected store URL and order', async () => {
