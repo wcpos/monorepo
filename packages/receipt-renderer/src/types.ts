@@ -2,6 +2,27 @@
  * AST node types for parsed thermal XML templates.
  */
 
+export type ThermalImageAlgorithm = 'threshold' | 'bayer' | 'floydsteinberg' | 'atkinson';
+export type ThermalImageMode = 'column' | 'raster';
+export type ThermalBarcodeMode = 'image' | 'native';
+
+export interface ThermalPixelBuffer {
+	width: number;
+	height: number;
+	data: Uint8ClampedArray;
+}
+
+export interface ThermalRasterImage {
+	image: ThermalPixelBuffer;
+	width: number;
+	height: number;
+	algorithm?: ThermalImageAlgorithm;
+	threshold?: number;
+}
+
+export type ThermalImageAssets = Record<string, ThermalRasterImage | undefined>;
+export type ThermalBarcodeImages = Record<string, ThermalRasterImage | undefined>;
+
 export type ThermalNode =
 	| ReceiptNode
 	| TextNode

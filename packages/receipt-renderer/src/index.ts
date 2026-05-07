@@ -10,7 +10,7 @@ import type { SanitizeHtmlOptions } from './sanitize-html';
 
 export { parseXml } from './parse-xml';
 export { renderHtml } from './render-html';
-export { renderEscpos } from './render-escpos';
+export { renderEscpos, thermalBarcodeImageKey, thermalImageAssetKey } from './render-escpos';
 export { sanitizeHtml } from './sanitize-html';
 export type { HtmlRenderOptions } from './render-html';
 export type {
@@ -20,6 +20,10 @@ export type {
 } from './render-escpos';
 export type { SanitizeHtmlOptions } from './sanitize-html';
 export type * from './types';
+
+export function renderReceiptTemplate(template: string, data: Record<string, any>): string {
+	return Mustache.render(template, data);
+}
 
 /**
  * Sanitize options shared by every pipeline that emits barcode SVG: thermal
@@ -56,15 +60,13 @@ export function sanitizeThermalPreviewHtml(
 	});
 }
 
-export interface LogiclessRenderOptions extends SanitizeHtmlOptions {
+export interface RenderSanitizeOptions extends SanitizeHtmlOptions {
 	/** Disable sanitization only for trusted test/debug output. Defaults to true. */
 	sanitize?: boolean;
 }
 
-export interface ThermalPreviewOptions extends SanitizeHtmlOptions {
-	/** Disable sanitization only for trusted test/debug output. Defaults to true. */
-	sanitize?: boolean;
-}
+export type LogiclessRenderOptions = RenderSanitizeOptions;
+export type ThermalPreviewOptions = RenderSanitizeOptions;
 
 /**
  * Render a logicless HTML template with Mustache data, then resolve any

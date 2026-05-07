@@ -3,7 +3,13 @@ import { createElement } from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { App, preparePrintDocument, printReceiptInHiddenFrame } from '../App';
+import {
+	App,
+	discoverThermalAssetRequests,
+	preparePrintDocument,
+	printReceiptInHiddenFrame,
+	renderTemplatePlaceholders,
+} from '../App';
 import { countPreviewLines } from '../components/Stage';
 import { createRandomReceipt } from '../randomizer';
 import { fetchWpPreview, printRawTcp } from '../studio-api';
@@ -118,6 +124,64 @@ describe('template studio rendering harness', () => {
 		expect(view.html).toContain(fixture.store.name);
 		expect(view.escposHex).toMatch(/1b 40/i);
 		expect(view.escposBase64).toBe(bytesToBase64(new Uint8Array(Array.from(view.escposBytes))));
+	});
+
+	it('passes thermal image assets into raw ESC/POS encoding', () => {
+		const data = new Uint8ClampedArray(64 * 32 * 4);
+		for (let offset = 3; offset < data.length; offset += 4) data[offset] = 255;
+		const image = { width: 64, height: 32, data };
+
+		const view = renderStudioTemplate({
+			template: {
+				id: 'thermal-logo-template',
+				name: 'Thermal logo template',
+				engine: 'thermal',
+				source: 'bundled-gallery',
+				paperWidth: '80mm',
+				content: '<receipt><image src="logo://store" width="64" /></receipt>',
+			},
+			fixture: buildCanonicalFixture('thermal-logo-test'),
+			paperWidth: '80mm',
+			encodeOptions: {
+				imageMode: 'raster',
+				imageAssets: {
+					'logo://store': { image, width: 64, height: 32, algorithm: 'threshold' },
+				},
+			},
+		});
+
+		expect(view.kind).toBe('thermal');
+		if (view.kind !== 'thermal') throw new Error('Expected thermal view');
+		expect(view.escposHex).toMatch(/1d 76 30/i);
+	});
+
+	it('renders sections before discovering raw thermal assets', () => {
+		expect(
+			renderTemplatePlaceholders(
+				'<receipt>{{#items}}<barcode>{{sku}}</barcode>{{/items}}</receipt>',
+				{ items: [{ sku: 'ABC' }, { sku: 'XYZ' }] }
+			)
+		).toBe('<receipt><barcode>ABC</barcode><barcode>XYZ</barcode></receipt>');
+	});
+
+	it('discovers QR barcode aliases and per-width image requests for raw thermal assets', () => {
+		const requests = discoverThermalAssetRequests(
+			'<receipt><image src="logo://store" width="64" /><image src="logo://store" width="128" /><barcode type="qrcode" height="40">https://example.test</barcode></receipt>'
+		);
+
+		expect(requests.images).toEqual([
+			{ src: 'logo://store', width: 64 },
+			{ src: 'logo://store', width: 128 },
+		]);
+		expect(requests.barcodes).toEqual([{ kind: 'qrcode', value: 'https://example.test', size: 4 }]);
+	});
+
+	it('does not leave script element openings in fallback barcode text extraction', () => {
+		const requests = discoverThermalAssetRequests(
+			'<receipt><barcode>safe <scr<scriptipt>alert(1)</script></barcode>'
+		);
+
+		expect(requests.barcodes[0]?.value).not.toContain('<');
 	});
 
 	it('fetches real store preview data for a selected store URL and order', async () => {

@@ -1,4 +1,5 @@
 import { renderForStudio } from '@wcpos/printer/encoder';
+import type { EscposRenderOptions } from '@wcpos/receipt-renderer';
 
 export type TemplateEngine = 'logicless' | 'thermal';
 export type TemplateSource = 'bundled-gallery' | 'wp-env';
@@ -30,6 +31,7 @@ export interface RenderStudioTemplateInput {
 	/** Optional thermal encoder overrides surfaced through the WooCommerce panel. */
 	printerModel?: string;
 	language?: 'esc-pos' | 'star-prnt' | 'star-line';
+	encodeOptions?: EscposRenderOptions;
 }
 
 export type StudioRenderResult =
@@ -74,7 +76,7 @@ export function selectVisibleTemplate(
  * Sanitization is on (default) for both engines, matching production.
  */
 export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRenderResult {
-	const { template, fixture, paperWidth, printerModel, language } = input;
+	const { template, fixture, paperWidth, printerModel, language, encodeOptions } = input;
 
 	if (template.engine === 'logicless') {
 		const result = renderForStudio({
@@ -101,20 +103,22 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 		input.thermalColumns,
 		defaultThermalColumnsForPaper(thermalPaperWidth)
 	);
-	const encodeOptions: {
-		columns: number;
-		printerModel?: string;
-		language?: 'esc-pos' | 'star-prnt' | 'star-line';
-		enableCp932?: boolean;
-	} = { columns };
-	if (printerModel) encodeOptions.printerModel = printerModel;
-	if (language) encodeOptions.language = language;
-	if ((language ?? 'esc-pos') === 'esc-pos') encodeOptions.enableCp932 = true;
+	const mergedEncodeOptions: EscposRenderOptions = {
+		...encodeOptions,
+		columns,
+	};
+	if (printerModel) mergedEncodeOptions.printerModel = printerModel;
+	if (language) mergedEncodeOptions.language = language;
+	if ((mergedEncodeOptions.language ?? 'esc-pos') === 'esc-pos') {
+		// Template Studio intentionally forces CP932 for ESC/POS previews/prints, even if
+		// callers pass `enableCp932: false` through `mergedEncodeOptions`.
+		mergedEncodeOptions.enableCp932 = true;
+	}
 	const result = renderForStudio({
 		template: template.content,
 		engine: 'thermal',
 		data: fixture,
-		encodeOptions,
+		encodeOptions: mergedEncodeOptions,
 	});
 
 	if (result.engine !== 'thermal') {

@@ -10,6 +10,7 @@ interface PrintSectionProps {
 	rendered: StudioRenderResult | null;
 	onOpenPrintDialog: () => void;
 	onError: (message: string | null) => void;
+	onPrepareRawPrint?: () => Promise<{ escposBase64: string; escposBytes: Uint8Array }>;
 }
 
 interface LastResult {
@@ -19,19 +20,27 @@ interface LastResult {
 
 const TEST_CONNECTION_BYTES = new Uint8Array([0x1b, 0x40]); // ESC @ — init printer
 
-export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSectionProps) {
+export function PrintSection({
+	rendered,
+	onOpenPrintDialog,
+	onError,
+	onPrepareRawPrint,
+}: PrintSectionProps) {
 	const [host, setHost] = useState('127.0.0.1');
 	const [port, setPort] = useState('9100');
 	const [lastResult, setLastResult] = useState<LastResult | null>(null);
 	const [sending, setSending] = useState(false);
 	const [showInspector, setShowInspector] = useState(false);
+	const [preparedEscposBytes, setPreparedEscposBytes] = useState<Uint8Array | null>(null);
 
 	const isThermal = rendered?.kind === 'thermal';
 
 	const decodedSegments = useMemo(() => {
-		if (rendered?.kind !== 'thermal') return [];
-		return decodeEscposBytes(rendered.escposBytes);
-	}, [rendered]);
+		const bytesToShow =
+			preparedEscposBytes ?? (rendered?.kind === 'thermal' ? rendered.escposBytes : null);
+		if (!bytesToShow) return [];
+		return decodeEscposBytes(bytesToShow);
+	}, [preparedEscposBytes, rendered]);
 
 	function getConnectionTarget() {
 		const normalizedHost = host.trim();
@@ -55,10 +64,13 @@ export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSect
 		onError(null);
 		const start = performance.now();
 		try {
+			setPreparedEscposBytes(null);
 			const target = getConnectionTarget();
+			const prepared = onPrepareRawPrint ? await onPrepareRawPrint() : rendered;
+			setPreparedEscposBytes(prepared.escposBytes);
 			const result = await printRawTcp({
 				...target,
-				data: rendered.escposBase64,
+				data: prepared.escposBase64,
 			});
 			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
 			setLastResult({
@@ -77,6 +89,7 @@ export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSect
 		setSending(true);
 		onError(null);
 		try {
+			setPreparedEscposBytes(null);
 			const target = getConnectionTarget();
 			const result = await printRawTcp({
 				...target,

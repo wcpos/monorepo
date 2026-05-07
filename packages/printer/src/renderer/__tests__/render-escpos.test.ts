@@ -7,6 +7,18 @@ function decode(bytes: Uint8Array): string {
 	return new TextDecoder().decode(bytes);
 }
 
+function includesSequence(bytes: Uint8Array, sequence: number[]): boolean {
+	return Array.from(bytes).some((_, index, all) =>
+		sequence.every((value, offset) => all[index + offset] === value)
+	);
+}
+
+function opaqueBlackImageData(width: number, height: number): ImageData {
+	const data = new Uint8ClampedArray(width * height * 4);
+	for (let offset = 0; offset < data.length; offset += 4) data[offset + 3] = 255;
+	return { width, height, data } as ImageData;
+}
+
 describe('renderEscpos', () => {
 	it('returns a Uint8Array with length > 0', () => {
 		const ast = parseXml('<receipt><text>Hello</text></receipt>');
@@ -105,5 +117,26 @@ describe('renderEscpos', () => {
 		expect(text).toContain('A');
 		expect(text).toContain('B');
 		expect(text).toContain('C');
+	});
+
+	it('emits ESC/POS GS v 0 raster image bytes', () => {
+		const ast = parseXml('<receipt><image src="logo" width="64" /></receipt>');
+		const bytes = renderEscpos(ast, {
+			language: 'esc-pos',
+			imageMode: 'raster',
+			imageAssets: { logo: { image: opaqueBlackImageData(64, 32), width: 64, height: 32 } },
+		});
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+	});
+
+	it.each(['star-prnt', 'star-line'] as const)('emits image bytes for %s', (language) => {
+		const ast = parseXml('<receipt><image src="logo" width="64" /></receipt>');
+		const bytes = renderEscpos(ast, {
+			language,
+			imageAssets: { logo: { image: opaqueBlackImageData(64, 32), width: 64, height: 32 } },
+		});
+
+		// ESC X starts Star image output; avoid pinning width bytes or full encoder layout.
+		expect(includesSequence(bytes, [0x1b, 0x58])).toBe(true);
 	});
 });

@@ -1,13 +1,38 @@
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import iconv from 'iconv-lite';
 
-import type { ColNode, ReceiptNode, ThermalNode } from './types.js';
+import type {
+	ColNode,
+	ReceiptNode,
+	ThermalBarcodeImages,
+	ThermalBarcodeMode,
+	ThermalImageAlgorithm,
+	ThermalImageAssets,
+	ThermalImageMode,
+	ThermalNode,
+} from './types.js';
 
 export interface EscposRenderOptions {
 	printerModel?: string;
 	language?: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns?: number;
 	enableCp932?: boolean;
+	imageMode?: ThermalImageMode;
+	imageAssets?: ThermalImageAssets;
+	imageAlgorithm?: ThermalImageAlgorithm;
+	imageThreshold?: number;
+	barcodeMode?: ThermalBarcodeMode;
+	barcodeImages?: ThermalBarcodeImages;
+}
+
+interface RenderContext {
+	columns: number;
+	supportsCp932: boolean;
+	imageAssets: ThermalImageAssets;
+	imageAlgorithm: ThermalImageAlgorithm;
+	imageThreshold: number;
+	barcodeMode: ThermalBarcodeMode;
+	barcodeImages: ThermalBarcodeImages;
 }
 
 export interface ThermalRowDiagnostic {
@@ -33,6 +58,22 @@ const FULL_WIDTH_TEXT_RE =
 const KANJI_MODE_ON = [0x1c, 0x26];
 const KANJI_MODE_OFF = [0x1c, 0x2e];
 
+export function thermalBarcodeImageKey(input: {
+	kind: 'barcode' | 'qrcode';
+	value: string;
+	barcodeType?: string;
+	height?: number;
+	size?: number;
+}): string {
+	return input.kind === 'barcode'
+		? `barcode:${input.barcodeType ?? 'code128'}:${input.value}:${input.height ?? 40}`
+		: `qrcode:${input.value}:${input.size ?? 4}`;
+}
+
+export function thermalImageAssetKey(input: { src: string; width?: number }): string {
+	return input.width === undefined ? input.src : `image:${input.width}:${input.src}`;
+}
+
 export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}): Uint8Array {
 	const {
 		printerModel,
@@ -41,7 +82,11 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		enableCp932 = false,
 	} = options;
 
-	const encoderOpts: Record<string, unknown> = { language, columns };
+	const encoderOpts: Record<string, unknown> = {
+		language,
+		columns,
+		imageMode: options.imageMode ?? 'raster',
+	};
 	if (printerModel) {
 		encoderOpts.printerModel = printerModel;
 	}
@@ -49,7 +94,17 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 	const encoder = new ReceiptPrinterEncoder(encoderOpts);
 	encoder.initialize().codepage('auto');
 
-	walkNodes(encoder, ast.children, columns, language === 'esc-pos' && enableCp932);
+	const context: RenderContext = {
+		columns,
+		supportsCp932: language === 'esc-pos' && enableCp932,
+		imageAssets: options.imageAssets ?? {},
+		imageAlgorithm: options.imageAlgorithm ?? 'atkinson',
+		imageThreshold: options.imageThreshold ?? 128,
+		barcodeMode: options.barcodeMode ?? 'image',
+		barcodeImages: options.barcodeImages ?? {},
+	};
+
+	walkNodes(encoder, ast.children, context);
 
 	const bytes = encoder.encode();
 	if (language !== 'esc-pos') return bytes;
@@ -97,62 +152,62 @@ export function analyzeThermalAst(ast: ReceiptNode, columns: number): ThermalLay
 function walkNodes(
 	encoder: ReceiptPrinterEncoder,
 	nodes: ThermalNode[],
-	columns: number,
-	supportsCp932: boolean
+	context: RenderContext
 ): void {
 	for (const node of nodes) {
-		walkNode(encoder, node, columns, supportsCp932);
+		walkNode(encoder, node, context);
 	}
 }
 
-function walkNode(
-	encoder: ReceiptPrinterEncoder,
-	node: ThermalNode,
-	columns: number,
-	supportsCp932: boolean
-): void {
+function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: RenderContext): void {
 	switch (node.type) {
 		case 'raw-text':
-			writeText(encoder, node.value, supportsCp932);
+			writeText(encoder, node.value, context.supportsCp932);
 			break;
 		case 'text':
-			walkNodes(encoder, node.children, columns, supportsCp932);
+			walkNodes(encoder, node.children, context);
 			encoder.newline();
 			break;
 		case 'bold':
 			encoder.bold(true);
-			walkNodes(encoder, node.children, columns, supportsCp932);
+			walkNodes(encoder, node.children, context);
 			encoder.bold(false);
 			break;
 		case 'underline':
 			encoder.underline(true);
-			walkNodes(encoder, node.children, columns, supportsCp932);
+			walkNodes(encoder, node.children, context);
 			encoder.underline(false);
 			break;
 		case 'invert':
 			encoder.invert(true);
-			walkNodes(encoder, node.children, columns, supportsCp932);
+			walkNodes(encoder, node.children, context);
 			encoder.invert(false);
 			break;
 		case 'size':
 			encoder.size(node.width, node.height);
-			walkNodes(encoder, node.children, columns, supportsCp932);
+			walkNodes(encoder, node.children, context);
 			encoder.size(1, 1);
 			break;
 		case 'align':
 			encoder.align(node.mode);
-			walkNodes(encoder, node.children, columns, supportsCp932);
+			walkNodes(encoder, node.children, context);
 			encoder.align('left');
 			break;
 		case 'row': {
-			const resolvedWidths = resolveThermalRowWidths(node.children, columns);
+			const resolvedWidths = resolveThermalRowWidths(node.children, context.columns);
 			const resolvedTotal = resolvedWidths.reduce((total, width) => total + width, 0);
-			if (resolvedTotal > columns) {
-				console.warn(`thermal row columns (${resolvedTotal}) exceed total width (${columns})`);
+			if (resolvedTotal > context.columns) {
+				console.warn(
+					`thermal row columns (${resolvedTotal}) exceed total width (${context.columns})`
+				);
 			}
 			const rowData = node.children.map((col) => extractText(col.children));
-			if (supportsCp932 && rowData.some(containsJapaneseText)) {
-				writeText(encoder, formatRow(rowData, resolvedWidths, node.children), supportsCp932);
+			if (context.supportsCp932 && rowData.some(containsJapaneseText)) {
+				writeText(
+					encoder,
+					formatRow(rowData, resolvedWidths, node.children),
+					context.supportsCp932
+				);
 				encoder.newline();
 			} else {
 				const colDefs = node.children.map((col, i) => ({
@@ -173,14 +228,68 @@ function walkNode(
 			}
 			break;
 		case 'barcode':
+			if (context.barcodeMode === 'image') {
+				const asset =
+					context.barcodeImages[
+						thermalBarcodeImageKey({
+							kind: 'barcode',
+							value: node.value,
+							barcodeType: node.barcodeType,
+							height: node.height,
+						})
+					];
+				if (asset) {
+					encoder.image(
+						asset.image,
+						normalizeImageWidth(asset.width),
+						normalizeImageHeight(asset.height),
+						asset.algorithm ?? context.imageAlgorithm,
+						asset.threshold ?? context.imageThreshold
+					);
+					break;
+				}
+			}
 			encoder.barcode(node.value, node.barcodeType, node.height);
 			break;
 		case 'qrcode':
+			if (context.barcodeMode === 'image') {
+				const asset =
+					context.barcodeImages[
+						thermalBarcodeImageKey({
+							kind: 'qrcode',
+							value: node.value,
+							size: node.size,
+						})
+					];
+				if (asset) {
+					encoder.image(
+						asset.image,
+						normalizeImageWidth(asset.width),
+						normalizeImageHeight(asset.height),
+						asset.algorithm ?? context.imageAlgorithm,
+						asset.threshold ?? context.imageThreshold
+					);
+					break;
+				}
+			}
 			encoder.qrcode(node.value, 2, node.size);
 			break;
-		case 'image':
-			// Image encoding requires actual image data — skip in base implementation
+		case 'image': {
+			const asset =
+				context.imageAssets[thermalImageAssetKey({ src: node.src, width: node.width })] ??
+				context.imageAssets[node.src];
+			if (!asset) break;
+			const width = normalizeImageWidth(asset.width);
+			const height = normalizeImageHeight(asset.height);
+			encoder.image(
+				asset.image,
+				width,
+				height,
+				asset.algorithm ?? context.imageAlgorithm,
+				asset.threshold ?? context.imageThreshold
+			);
 			break;
+		}
 		case 'cut':
 			encoder.cut(node.cutType === 'full' ? 'full' : 'partial');
 			break;
@@ -191,9 +300,19 @@ function walkNode(
 			encoder.pulse();
 			break;
 		case 'receipt':
-			walkNodes(encoder, node.children, columns, supportsCp932);
+			walkNodes(encoder, node.children, context);
 			break;
 	}
+}
+
+function normalizeImageWidth(value: number): number {
+	const finite = Number.isFinite(value) ? Math.max(8, Math.floor(value)) : 8;
+	return Math.max(8, finite - (finite % 8));
+}
+
+function normalizeImageHeight(value: number): number {
+	const finite = Number.isFinite(value) ? Math.max(8, Math.floor(value)) : 8;
+	return finite + ((8 - (finite % 8)) % 8);
 }
 
 function writeText(encoder: ReceiptPrinterEncoder, value: string, supportsCp932: boolean): void {

@@ -9,6 +9,7 @@ import {
 	renderLogiclessTemplate,
 	renderThermalPreview,
 	sanitizeHtml,
+	thermalImageAssetKey,
 } from '../index';
 
 const THERMAL_TEMPLATE = `<receipt paper-width="32">
@@ -27,6 +28,23 @@ const data = {
 		{ name: 'Gadget B', total: '$15.00' },
 	],
 };
+
+function includesSequence(bytes: Uint8Array, sequence: number[]): boolean {
+	return Array.from(bytes).some((_, index, all) =>
+		sequence.every((value, offset) => all[index + offset] === value)
+	);
+}
+
+function opaqueBlackImageData(width: number, height: number): ImageData {
+	const data = new Uint8ClampedArray(width * height * 4);
+	for (let offset = 0; offset < data.length; offset += 4) {
+		data[offset] = 0;
+		data[offset + 1] = 0;
+		data[offset + 2] = 0;
+		data[offset + 3] = 255;
+	}
+	return { width, height, data } as ImageData;
+}
 
 describe('@wcpos/receipt-renderer exports', () => {
 	it('renders sanitized logicless HTML with Mustache data', () => {
@@ -178,6 +196,126 @@ describe('@wcpos/receipt-renderer exports', () => {
 		const html = renderHtml(ast);
 
 		expect(html).not.toContain('<img');
+	});
+
+	it('prints resolved image assets as ESC/POS raster images when imageMode is raster', () => {
+		const ast = parseXml('<receipt><image src="logo://store" width="64" /></receipt>');
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			imageAssets: {
+				'logo://store': {
+					image: opaqueBlackImageData(64, 32),
+					width: 64,
+					height: 32,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			},
+		});
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+	});
+
+	it('pads raster image height up without dropping rows', () => {
+		const ast = parseXml('<receipt><image src="logo://store" width="64" /></receipt>');
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			imageAssets: {
+				'logo://store': {
+					image: opaqueBlackImageData(64, 33),
+					width: 64,
+					height: 33,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			},
+		});
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30, 0x00, 0x08, 0x00, 0x28, 0x00])).toBe(true);
+	});
+
+	it('uses width-qualified image assets for repeated sources with different widths', () => {
+		const ast = parseXml(
+			'<receipt><image src="logo://store" width="64" /><image src="logo://store" width="128" /></receipt>'
+		);
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			imageAssets: {
+				[thermalImageAssetKey({ src: 'logo://store', width: 64 })]: {
+					image: opaqueBlackImageData(64, 32),
+					width: 64,
+					height: 32,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+				[thermalImageAssetKey({ src: 'logo://store', width: 128 })]: {
+					image: opaqueBlackImageData(128, 32),
+					width: 128,
+					height: 32,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			},
+		});
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30, 0x00, 0x08, 0x00, 0x20, 0x00])).toBe(true);
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30, 0x00, 0x10, 0x00, 0x20, 0x00])).toBe(true);
+	});
+
+	it('skips unresolved image assets without throwing', () => {
+		const ast = parseXml(
+			'<receipt><text>Before</text><image src="missing" width="64" /><text>After</text></receipt>'
+		);
+		const bytes = renderEscpos(ast);
+		const ascii = new TextDecoder().decode(bytes);
+
+		expect(ascii).toContain('Before');
+		expect(ascii).toContain('After');
+	});
+
+	it('prints barcodes as raster images when barcodeMode is image and an asset is supplied', () => {
+		const ast = parseXml('<receipt><barcode type="code128">ABC-123</barcode></receipt>');
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			barcodeMode: 'image',
+			barcodeImages: {
+				'barcode:code128:ABC-123:40': {
+					image: opaqueBlackImageData(128, 64),
+					width: 128,
+					height: 64,
+					algorithm: 'threshold',
+				},
+			},
+		});
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+	});
+
+	it('keeps native barcode commands when barcodeMode is native', () => {
+		const ast = parseXml('<receipt><barcode type="code128">ABC-123</barcode></receipt>');
+		const bytes = renderEscpos(ast, { barcodeMode: 'native' });
+
+		expect(includesSequence(bytes, [0x1d, 0x6b])).toBe(true);
+	});
+
+	it('prints QR codes as raster images when barcodeMode is image and an asset is supplied', () => {
+		const ast = parseXml(
+			'<receipt><qrcode size="4">https://example.test/order/1001</qrcode></receipt>'
+		);
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			barcodeMode: 'image',
+			barcodeImages: {
+				'qrcode:https://example.test/order/1001:4': {
+					image: opaqueBlackImageData(128, 128),
+					width: 128,
+					height: 128,
+					algorithm: 'threshold',
+				},
+			},
+		});
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
 	});
 
 	it('sanitizes style-affecting numeric fields when rendering HTML', () => {

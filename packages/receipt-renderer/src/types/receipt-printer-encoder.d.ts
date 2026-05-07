@@ -7,6 +7,7 @@ declare module '@point-of-sale/receipt-printer-encoder' {
 			language?: string;
 			feedBeforeCut?: number;
 			newline?: string;
+			imageMode?: 'column' | 'raster';
 		});
 		initialize(): this;
 		align(value: 'left' | 'center' | 'right'): this;
