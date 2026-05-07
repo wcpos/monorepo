@@ -304,6 +304,7 @@ describe('template-studio randomizer', () => {
 			expect.arrayContaining([...canonicalLabelKeys].sort())
 		);
 		expect(receipt.data.i18n?.printed).toBe('Printed');
+		expect(receipt.data.i18n?.refund_total).toBeDefined();
 	});
 
 	it('localizes every detailed receipt i18n label used by the gallery fixture', () => {

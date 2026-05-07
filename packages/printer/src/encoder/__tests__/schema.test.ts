@@ -94,6 +94,22 @@ describe('ReceiptDataSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
+	it('parses supported customer.tax_ids entries with regional business ID types', () => {
+		const withTaxIds = JSON.parse(JSON.stringify(sampleReceiptData));
+		withTaxIds.customer.tax_ids = [
+			{ type: 'de_ust_id', value: 'DE123456789', country: 'DE' },
+			{ type: 'de_steuernummer', value: '05/123/45678', country: 'DE' },
+			{ type: 'de_hrb', value: 'HRB 123456', country: 'DE' },
+			{ type: 'nl_kvk', value: '12345678', country: 'NL' },
+			{ type: 'fr_siret', value: '12345678900012', country: 'FR' },
+			{ type: 'fr_siren', value: '123456789', country: 'FR' },
+			{ type: 'gb_company', value: '12345678', country: 'GB' },
+			{ type: 'ch_uid', value: 'CHE-123.456.789', country: 'CH' },
+		];
+		const result = ReceiptDataSchema.safeParse(withTaxIds);
+		expect(result.success).toBe(true);
+	});
+
 	it('accepts an unknown tax_ids[].type as a forgiving string', () => {
 		const withCustomType = JSON.parse(JSON.stringify(sampleReceiptData));
 		withCustomType.store.tax_ids = [
