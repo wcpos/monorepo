@@ -44,6 +44,42 @@ function stripDeletionMarkers(json: Record<string, any>): Record<string, any> {
 	return cleaned;
 }
 
+const ORDER_GMT_FIELDS = [
+	'date_created_gmt',
+	'date_modified_gmt',
+	'date_completed_gmt',
+	'date_paid_gmt',
+] as const;
+
+const TIMEZONE_OFFSET_SUFFIX = /[+-]\d{2}:\d{2}$/;
+
+function normalizeOrderGmtDateValue(value: string): string {
+	if (value.endsWith('Z')) return value;
+
+	if (TIMEZONE_OFFSET_SUFFIX.test(value)) {
+		const timestamp = Date.parse(value);
+		if (!Number.isNaN(timestamp)) {
+			return new Date(timestamp).toISOString();
+		}
+	}
+
+	return `${value}Z`;
+}
+
+function normalizeOrderGmtDates(json: Record<string, any>): Record<string, any> {
+	let result = json;
+	for (const field of ORDER_GMT_FIELDS) {
+		const value = result[field];
+		if (typeof value === 'string' && value !== '') {
+			const normalizedValue = normalizeOrderGmtDateValue(value);
+			if (normalizedValue !== value) {
+				result = { ...result, [field]: normalizedValue };
+			}
+		}
+	}
+	return result;
+}
+
 type AnyRxDocument = import('rxdb').RxDocument<any>;
 
 /**
@@ -187,7 +223,10 @@ export const usePushDocument = () => {
 			}
 
 			// Prepare data from local DB
-			const { json, latestDoc } = await prepareDocumentData(doc);
+			let { json, latestDoc } = await prepareDocumentData(doc);
+			if (collection.name === 'orders') {
+				json = normalizeOrderGmtDates(json);
+			}
 
 			// Add document ID to endpoint if it exists
 			if (latestDoc.id) {

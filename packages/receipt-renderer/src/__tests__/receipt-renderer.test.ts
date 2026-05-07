@@ -293,8 +293,50 @@ describe('@wcpos/receipt-renderer exports', () => {
 				resolvedTotal: 42,
 				overflows: false,
 				hasStar: true,
+				warnings: [],
 			}),
 		]);
+	});
+
+	it('warns when clamped star-width thermal rows overflow configured printer columns', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const cases = [
+				{
+					template:
+						'<receipt paper-width="48"><row><col width="42">Subtotal</col><col width="*">Tax</col></row></receipt>',
+					widths: [42, 1],
+				},
+				{
+					template:
+						'<receipt paper-width="48"><row><col width="41">Subtotal</col><col width="*">Tax</col><col width="*">Total</col></row></receipt>',
+					widths: [41, 1, 1],
+				},
+			];
+
+			for (const { template, widths } of cases) {
+				const diagnostics = analyzeThermalTemplate(template, {}, { columns: 42 });
+				const warning = 'thermal row columns (43) exceed total width (42)';
+
+				expect(diagnostics.rows).toEqual([
+					expect.objectContaining({
+						columns: 42,
+						resolvedTotal: 43,
+						overflows: true,
+						hasStar: true,
+						widths,
+						warnings: [warning],
+					}),
+				]);
+
+				warn.mockClear();
+				encodeThermalTemplate(template, {}, { columns: 42 });
+				expect(warn).toHaveBeenCalledTimes(1);
+				expect(warn).toHaveBeenCalledWith(warning);
+			}
+		} finally {
+			warn.mockRestore();
+		}
 	});
 
 	it('reports height-only scaled text in thermal row diagnostics', () => {

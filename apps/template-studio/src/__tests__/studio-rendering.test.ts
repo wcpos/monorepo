@@ -485,11 +485,38 @@ describe('template studio rendering harness', () => {
 		}
 	});
 
+	it('falls back to the paper default when thermal columns are invalid at runtime', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const fixture = buildCanonicalFixture('studio-test-thermal-columns-invalid');
+			renderStudioTemplate({
+				template: {
+					id: 'thermal-columns-sample',
+					name: 'Thermal columns sample',
+					engine: 'thermal',
+					source: 'bundled-gallery',
+					content:
+						'<receipt paper-width="48"><row><col width="24">Subtotal</col><col width="24" align="right">13,26 €</col></row></receipt>',
+					paperWidth: '80mm',
+				},
+				fixture,
+				paperWidth: '80mm',
+				thermalColumns: 999 as never,
+			});
+
+			expect(warn).toHaveBeenCalledWith(
+				expect.stringContaining('thermal row columns (48) exceed total width (42)')
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
 	it('defaults generic thermal capacity by physical paper width', () => {
 		expect(defaultThermalColumnsForPaper('80mm')).toBe(42);
 		expect(defaultThermalColumnsForPaper('58mm')).toBe(32);
-		expect(paperWidthToColumns('80mm')).toBe(defaultThermalColumnsForPaper('80mm'));
-		expect(paperWidthToColumns('58mm')).toBe(defaultThermalColumnsForPaper('58mm'));
+		expect(paperWidthToColumns('80mm')).toBe(48);
+		expect(paperWidthToColumns('58mm')).toBe(32);
 	});
 
 	it('rejects non-thermal paper widths for thermal templates', () => {

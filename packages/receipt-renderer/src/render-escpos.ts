@@ -16,6 +16,7 @@ export interface ThermalRowDiagnostic {
 	resolvedTotal: number;
 	hasStar: boolean;
 	overflows: boolean;
+	warnings: string[];
 	widths: number[];
 	texts: string[];
 	hasScaledText: boolean;
@@ -262,12 +263,17 @@ function collectRowDiagnostics(
 			);
 			const widths = resolveThermalRowWidths(node.children, columns);
 			const resolvedTotal = widths.reduce((total, width) => total + width, 0);
+			const warnings =
+				resolvedTotal > columns
+					? [`thermal row columns (${resolvedTotal}) exceed total width (${columns})`]
+					: [];
 			rows.push({
 				columns,
 				fixedTotal,
 				resolvedTotal,
 				hasStar: node.children.some((col) => col.width === '*'),
 				overflows: resolvedTotal > columns,
+				warnings,
 				widths,
 				texts: node.children.map((col) => extractText(col.children)),
 				hasScaledText: node.children.some((col) => containsScaledText(col.children)),
