@@ -1,5 +1,5 @@
 import type { PathSegment } from '../../lib/path-utils';
-import type { TemplateEngine } from '../../studio-core';
+import type { TemplateEngine, ThermalColumns } from '../../studio-core';
 
 interface WooCommerceSectionProps {
 	engine: TemplateEngine | null;
@@ -10,9 +10,11 @@ interface WooCommerceSectionProps {
 	roundingMode: string;
 	printerModel: string;
 	language: string;
+	thermalColumns: ThermalColumns;
 	onChangePath: (path: PathSegment[], value: unknown) => void;
 	onPrinterModelChange: (value: string) => void;
 	onLanguageChange: (value: string) => void;
+	onThermalColumnsChange: (value: ThermalColumns) => void;
 }
 
 const COMMON_CURRENCIES = [
@@ -82,6 +84,12 @@ const LANGUAGES: { value: string; label: string }[] = [
 	{ value: 'star-line', label: 'Star Line' },
 ];
 
+const THERMAL_COLUMNS: { value: ThermalColumns; label: string }[] = [
+	{ value: 32, label: '32 (58mm)' },
+	{ value: 42, label: '42 (generic 80mm)' },
+	{ value: 48, label: '48 (48-CPL 80mm)' },
+];
+
 export function WooCommerceSection(props: WooCommerceSectionProps) {
 	const {
 		engine,
@@ -92,9 +100,11 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 		roundingMode,
 		printerModel,
 		language,
+		thermalColumns,
 		onChangePath,
 		onPrinterModelChange,
 		onLanguageChange,
+		onThermalColumnsChange,
 	} = props;
 	const isThermal = engine === 'thermal';
 	const currencyOptions = COMMON_CURRENCIES.includes(currency)
@@ -213,7 +223,29 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 						))}
 					</select>
 				</div>
+				<div className="row">
+					<label htmlFor="woo-thermal-columns">Characters per line</label>
+					<select
+						id="woo-thermal-columns"
+						value={String(thermalColumns)}
+						onChange={(event) =>
+							onThermalColumnsChange(Number(event.target.value) as ThermalColumns)
+						}
+						disabled={!isThermal}
+					>
+						{THERMAL_COLUMNS.map((entry) => (
+							<option key={entry.value} value={entry.value}>
+								{entry.label}
+							</option>
+						))}
+					</select>
+				</div>
 			</div>
+			{isThermal ? (
+				<p className="field-help">
+					Match this to the printer or simulator Characters per line setting.
+				</p>
+			) : null}
 		</div>
 	);
 }
