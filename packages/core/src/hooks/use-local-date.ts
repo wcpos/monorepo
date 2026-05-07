@@ -15,10 +15,10 @@ export const convertUTCStringToLocalDate = (dateString: string) => {
 
 /**
  * Opposite of convertUTCStringToLocalDate, this function takes a local date
- * and converts it to a UTC date string (without the 'Z' for use by WC REST API)
+ * and converts it to a UTC date string for use by WC REST API
  */
 export const convertLocalDateToUTCString = (date: Date) => {
-	return format(date, "yyyy-MM-dd'T'HH:mm:ss", { in: utc });
+	return format(date, "yyyy-MM-dd'T'HH:mm:ss'Z'", { in: utc });
 };
 
 /**
