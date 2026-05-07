@@ -3,6 +3,8 @@ import { renderForStudio } from '@wcpos/printer/encoder';
 export type TemplateEngine = 'logicless' | 'thermal';
 export type TemplateSource = 'bundled-gallery' | 'wp-env';
 export type PaperWidth = '58mm' | '80mm' | 'a4';
+export type ThermalColumns = 32 | 42 | 48;
+export type ThermalPaperWidth = Extract<PaperWidth, '58mm' | '80mm'>;
 
 export interface StudioTemplate {
 	id: string;
@@ -24,6 +26,7 @@ export interface RenderStudioTemplateInput {
 	template: StudioTemplate;
 	fixture: ReceiptFixture;
 	paperWidth: PaperWidth;
+	thermalColumns?: ThermalColumns;
 	/** Optional thermal encoder overrides surfaced through the WooCommerce panel. */
 	printerModel?: string;
 	language?: 'esc-pos' | 'star-prnt' | 'star-line';
@@ -87,7 +90,9 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 		};
 	}
 
-	const columns = paperWidthToColumns(template.paperWidth ?? paperWidth);
+	const resolvedPaperWidth = template.paperWidth ?? paperWidth;
+	const thermalPaperWidth: ThermalPaperWidth = resolvedPaperWidth === '58mm' ? '58mm' : '80mm';
+	const columns = input.thermalColumns ?? defaultThermalColumnsForPaper(thermalPaperWidth);
 	const encodeOptions: {
 		columns: number;
 		printerModel?: string;
@@ -152,6 +157,15 @@ export function bytesToDebugOutput(bytes: Uint8Array): { hex: string; ascii: str
 	};
 }
 
+export function defaultThermalColumnsForPaper(paperWidth: ThermalPaperWidth): ThermalColumns {
+	return paperWidth === '58mm' ? 32 : 42;
+}
+
+export function normalizeThermalColumns(value: unknown, fallback: ThermalColumns): ThermalColumns {
+	return value === 32 || value === 42 || value === 48 ? value : fallback;
+}
+
+/** @deprecated Paper width is physical, not printer CPL. Use explicit thermal columns. */
 export function paperWidthToColumns(paperWidth: PaperWidth | string | null | undefined): number {
 	if (paperWidth === '58mm') return 32;
 	if (paperWidth === '80mm') return 48;
