@@ -11,8 +11,15 @@ import {
 describe('thermal image assets', () => {
 	it('accepts same-origin root-relative images for thermal raw print assets', () => {
 		expect(isSupportedThermalLogoSrc('/coffee-monster.png')).toBe(true);
+		expect(isSupportedThermalLogoSrc('/coffee-monster.png?v=2#rev')).toBe(true);
 		expect(isSupportedThermalLogoSrc('javascript:alert(1)')).toBe(false);
 		expect(isSupportedThermalLogoSrc('data:image/svg+xml;base64,PHN2Zy8+')).toBe(false);
+	});
+
+	it('rejects root-relative image paths with encoded traversal', () => {
+		expect(isSupportedThermalLogoSrc('/img/%2e%2e/secret.png')).toBe(false);
+		expect(isSupportedThermalLogoSrc('/img/%5c..%5csecret.png')).toBe(false);
+		expect(isSupportedThermalLogoSrc('/img/%ZZ/secret.png')).toBe(false);
 	});
 
 	it('accepts png and jpeg data image sources', () => {

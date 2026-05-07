@@ -160,8 +160,21 @@ function safeImageSrc(src: unknown): string {
 function isSafeRootRelativeImageSrc(value: string): boolean {
 	if (value.startsWith('//')) return false;
 	if (value.includes('\\')) return false;
-	if (value.split(/[?#]/, 1)[0].split('/').includes('..')) return false;
-	return /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/.test(value);
+	const path = value.split(/[?#]/, 1)[0];
+	const suffix = value.slice(path.length);
+	let decodedPath: string;
+	try {
+		decodedPath = decodeURIComponent(path);
+	} catch {
+		return false;
+	}
+	if (decodedPath.includes('\\')) return false;
+	const segments = decodedPath.split('/');
+	if (segments.includes('..') || segments.includes('.')) return false;
+	return (
+		/^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/.test(path) &&
+		(suffix === '' || /^[?#][A-Za-z0-9._~!$&'()*+,;=:@%/?#-]+$/.test(suffix))
+	);
 }
 
 function escapeHtml(str: string): string {

@@ -126,11 +126,20 @@ describe('@wcpos/receipt-renderer exports', () => {
 
 	it('allows same-origin root-relative image URLs in thermal preview', () => {
 		const html = renderThermalPreview(
-			'<receipt><image src="/coffee-monster.png" width="200" /></receipt>',
+			'<receipt><image src="/coffee-monster.png?v=2#rev" width="200" /></receipt>',
 			{}
 		);
 
-		expect(html).toContain('src="/coffee-monster.png"');
+		expect(html).toContain('src="/coffee-monster.png?v=2#rev"');
+	});
+
+	it('rejects root-relative image URLs with encoded traversal', () => {
+		const html = renderThermalPreview(
+			'<receipt><image src="/img/%2e%2e/secret.png" width="200" /><image src="/img/%5c..%5csecret.png" width="200" /></receipt>',
+			{}
+		);
+
+		expect(html).not.toContain('<img');
 	});
 
 	it('renders barcode and QR preview images with the barcode library', () => {
@@ -544,6 +553,22 @@ describe('@wcpos/receipt-renderer exports', () => {
 
 		expect(decoded).toContain('Mon-Sat 9:00-18:00');
 		expect(decoded).not.toContain('Mon–Sat');
+	});
+
+	it('does not ASCII-normalize typographic punctuation for non-ESC/POS languages', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>Mon–Sat “open”</text><row><col width="*">Total—Today</col><col width="10" align="right">1.00</col></row></receipt>',
+			{},
+			{ columns: 42, language: 'star-line' }
+		);
+		const decoded = new TextDecoder().decode(bytes);
+
+		expect(decoded).toContain('Mon');
+		expect(decoded).toContain('Sat');
+		expect(decoded).toContain('Total');
+		expect(decoded).toContain('Today');
+		expect(decoded).not.toContain('Mon-Sat "open"');
+		expect(decoded).not.toContain('Total-Today');
 	});
 
 	it('reports height-only scaled text in thermal row diagnostics', () => {
