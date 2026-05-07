@@ -252,6 +252,16 @@ describe('template studio rendering harness', () => {
 		});
 	});
 
+	it('includes raw TCP print response text in failures', async () => {
+		globalThis.fetch = vi.fn(
+			async () => new Response('Raw TCP host is blocked', { status: 403 })
+		) as typeof fetch;
+
+		await expect(printRawTcp({ host: '192.168.1.167', port: 9100, data: 'G0A=' })).rejects.toThrow(
+			'Raw TCP print failed: 403 - Raw TCP host is blocked'
+		);
+	});
+
 	it('prepares a print dialog shell without interpolating receipt HTML', () => {
 		const printDocument = document.implementation.createHTMLDocument('');
 

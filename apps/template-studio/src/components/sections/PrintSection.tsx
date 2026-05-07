@@ -26,7 +26,7 @@ export function PrintSection({
 	onError,
 	onPrepareRawPrint,
 }: PrintSectionProps) {
-	const [host, setHost] = useState('127.0.0.1');
+	const [host, setHost] = useState('192.168.1.167');
 	const [port, setPort] = useState('9100');
 	const [lastResult, setLastResult] = useState<LastResult | null>(null);
 	const [sending, setSending] = useState(false);

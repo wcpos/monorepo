@@ -44,6 +44,7 @@ describe('PrintSection', () => {
 			/>
 		);
 
+		fireEvent.change(screen.getByLabelText('Host'), { target: { value: '127.0.0.1' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Send to printer' }));
 
 		await waitFor(() =>
@@ -53,5 +54,18 @@ describe('PrintSection', () => {
 		);
 		expect(container.textContent).toContain('42Btext');
 		expect(container.textContent).not.toContain('41Atext');
+	});
+
+	it('defaults to an explicit thermal printer host', () => {
+		render(
+			<PrintSection
+				rendered={thermalResult(new Uint8Array([0x1b, 0x40]))}
+				onOpenPrintDialog={vi.fn()}
+				onError={vi.fn()}
+			/>
+		);
+
+		expect(screen.getByLabelText('Host')).toHaveValue('');
+		expect(screen.getByLabelText('Port')).toHaveValue('9100');
 	});
 });

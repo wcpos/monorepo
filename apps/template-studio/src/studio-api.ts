@@ -75,6 +75,9 @@ export async function printRawTcp(input: RawTcpPrintInput): Promise<RawTcpPrintR
 		},
 		body: JSON.stringify(input),
 	});
-	if (!response.ok) throw new Error(`Raw TCP print failed: ${response.status}`);
+	if (!response.ok) {
+		const message = (await response.text()).trim();
+		throw new Error(`Raw TCP print failed: ${response.status}${message ? ` - ${message}` : ''}`);
+	}
 	return response.json();
 }
