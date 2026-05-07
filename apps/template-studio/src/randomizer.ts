@@ -419,6 +419,7 @@ const LATIN_POOL: LocalePool = {
 		copy_number: 'N.º de copia',
 		status: 'Estado',
 		completed: 'Completado',
+		opening_hours: 'Horario de apertura',
 	},
 	statusLabels: {
 		pending: 'Pendiente de pago',
@@ -525,6 +526,7 @@ const RTL_POOL: LocalePool = {
 		copy_number: 'رقم النسخة',
 		status: 'الحالة',
 		completed: 'مكتمل',
+		opening_hours: 'ساعات العمل',
 	},
 	statusLabels: {
 		pending: 'بانتظار الدفع',
@@ -628,6 +630,7 @@ const CJK_POOL: LocalePool = {
 		copy_number: 'コピー番号',
 		status: 'ステータス',
 		completed: '完了',
+		opening_hours: '営業時間',
 	},
 	statusLabels: {
 		pending: '支払い待ち',
@@ -1783,6 +1786,7 @@ function buildI18nLabels(pool?: LocalePool): ReceiptI18n {
 		copy_number: 'Copy No.',
 		status: 'Status',
 		completed: 'Completed',
+		opening_hours: 'Opening Hours',
 	};
 	return { ...labels, ...pool?.i18nLabels };
 }
