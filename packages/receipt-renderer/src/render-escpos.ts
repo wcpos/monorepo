@@ -41,6 +41,18 @@ const FULL_WIDTH_TEXT_RE =
 const KANJI_MODE_ON = [0x1c, 0x26];
 const KANJI_MODE_OFF = [0x1c, 0x2e];
 
+export function thermalBarcodeImageKey(input: {
+	kind: 'barcode' | 'qrcode';
+	value: string;
+	barcodeType?: string;
+	height?: number;
+	size?: number;
+}): string {
+	return input.kind === 'barcode'
+		? `barcode:${input.barcodeType ?? 'code128'}:${input.value}:${input.height ?? 40}`
+		: `qrcode:${input.value}:${input.size ?? 4}`;
+}
+
 export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}): Uint8Array {
 	const {
 		printerModel,
@@ -188,9 +200,50 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			}
 			break;
 		case 'barcode':
+			if (context.barcodeMode === 'image') {
+				const asset =
+					context.barcodeImages[
+						thermalBarcodeImageKey({
+							kind: 'barcode',
+							value: node.value,
+							barcodeType: node.barcodeType,
+							height: node.height,
+						})
+					];
+				if (asset) {
+					encoder.image(
+						asset.image,
+						normalizeImageDimension(asset.width),
+						normalizeImageDimension(asset.height),
+						'threshold',
+						128
+					);
+					break;
+				}
+			}
 			encoder.barcode(node.value, node.barcodeType, node.height);
 			break;
 		case 'qrcode':
+			if (context.barcodeMode === 'image') {
+				const asset =
+					context.barcodeImages[
+						thermalBarcodeImageKey({
+							kind: 'qrcode',
+							value: node.value,
+							size: node.size,
+						})
+					];
+				if (asset) {
+					encoder.image(
+						asset.image,
+						normalizeImageDimension(asset.width),
+						normalizeImageDimension(asset.height),
+						'threshold',
+						128
+					);
+					break;
+				}
+			}
 			encoder.qrcode(node.value, 2, node.size);
 			break;
 		case 'image': {

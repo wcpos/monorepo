@@ -10,7 +10,7 @@ import type { SanitizeHtmlOptions } from './sanitize-html';
 
 export { parseXml } from './parse-xml';
 export { renderHtml } from './render-html';
-export { renderEscpos } from './render-escpos';
+export { renderEscpos, thermalBarcodeImageKey } from './render-escpos';
 export { sanitizeHtml } from './sanitize-html';
 export type { HtmlRenderOptions } from './render-html';
 export type { EscposRenderOptions } from './render-escpos';

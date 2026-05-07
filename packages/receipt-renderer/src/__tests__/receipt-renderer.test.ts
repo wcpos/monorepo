@@ -225,6 +225,51 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(ascii).toContain('After');
 	});
 
+	it('prints barcodes as raster images when barcodeMode is image and an asset is supplied', () => {
+		const ast = parseXml('<receipt><barcode type="code128">ABC-123</barcode></receipt>');
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			barcodeMode: 'image',
+			barcodeImages: {
+				'barcode:code128:ABC-123:40': {
+					image: opaqueBlackImageData(128, 64),
+					width: 128,
+					height: 64,
+					algorithm: 'threshold',
+				},
+			},
+		});
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+	});
+
+	it('keeps native barcode commands when barcodeMode is native', () => {
+		const ast = parseXml('<receipt><barcode type="code128">ABC-123</barcode></receipt>');
+		const bytes = renderEscpos(ast, { barcodeMode: 'native' });
+
+		expect(includesSequence(bytes, [0x1d, 0x6b])).toBe(true);
+	});
+
+	it('prints QR codes as raster images when barcodeMode is image and an asset is supplied', () => {
+		const ast = parseXml(
+			'<receipt><qrcode size="4">https://example.test/order/1001</qrcode></receipt>'
+		);
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			barcodeMode: 'image',
+			barcodeImages: {
+				'qrcode:https://example.test/order/1001:4': {
+					image: opaqueBlackImageData(128, 128),
+					width: 128,
+					height: 128,
+					algorithm: 'threshold',
+				},
+			},
+		});
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+	});
+
 	it('sanitizes style-affecting numeric fields when rendering HTML', () => {
 		const ast = {
 			type: 'receipt',
