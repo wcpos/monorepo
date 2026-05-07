@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { thermalBarcodeImageKey } from '@wcpos/receipt-renderer';
+
 import {
 	isSupportedThermalLogoSrc,
 	maxDotsForPaperWidth,
@@ -28,5 +30,22 @@ describe('thermal image assets', () => {
 	it('maps paper widths to conservative dot budgets', () => {
 		expect(maxDotsForPaperWidth('58mm')).toBe(384);
 		expect(maxDotsForPaperWidth('80mm')).toBe(576);
+	});
+
+	it('uses receipt-renderer barcode keys for code128 assets', () => {
+		expect(
+			thermalBarcodeImageKey({
+				kind: 'barcode',
+				value: 'ABC-123',
+				barcodeType: 'code128',
+				height: 40,
+			})
+		).toBe('barcode:code128:ABC-123:40');
+	});
+
+	it('uses receipt-renderer barcode keys for QR assets', () => {
+		expect(thermalBarcodeImageKey({ kind: 'qrcode', value: 'https://example.test', size: 4 })).toBe(
+			'qrcode:https://example.test:4'
+		);
 	});
 });

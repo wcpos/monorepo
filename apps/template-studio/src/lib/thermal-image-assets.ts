@@ -1,3 +1,6 @@
+import { toSVG } from 'bwip-js/browser';
+
+import { thermalBarcodeImageKey } from '@wcpos/receipt-renderer';
 import type { ThermalRasterImage } from '@wcpos/receipt-renderer';
 
 import type { PaperWidth } from '../studio-core';
@@ -64,6 +67,70 @@ export async function loadThermalLogoAsset(input: {
 			height: size.height,
 			algorithm: 'atkinson',
 			threshold: 128,
+		};
+	} catch {
+		return undefined;
+	}
+}
+
+export async function renderThermalBarcodeAsset(input: {
+	kind: 'barcode' | 'qrcode';
+	value: string;
+	barcodeType?: string;
+	height?: number;
+	size?: number;
+	maxWidth: number;
+}): Promise<{ key: string; asset: ThermalRasterImage } | undefined> {
+	const text = input.value.trim();
+	if (!text) return undefined;
+
+	try {
+		const svg = toSVG(
+			input.kind === 'qrcode'
+				? { bcid: 'qrcode', text, scale: Math.max(1, input.size ?? 4) }
+				: {
+						bcid: (input.barcodeType ?? 'code128').toLowerCase(),
+						text,
+						height: Math.max(1, input.height ?? 40) / 10,
+						scale: 2,
+						includetext: true,
+						textsize: 10,
+					}
+		);
+		const image = await loadHtmlImage(`data:image/svg+xml;base64,${btoa(svg)}`);
+		const naturalWidth = image.naturalWidth || image.width;
+		const naturalHeight = image.naturalHeight || image.height;
+		if (!naturalWidth || !naturalHeight) return undefined;
+
+		const size = normalizeThermalImageSize({
+			width: naturalWidth,
+			height: naturalHeight,
+			maxWidth: input.maxWidth,
+		});
+		const canvas = document.createElement('canvas');
+		canvas.width = size.width;
+		canvas.height = size.height;
+		const context = canvas.getContext('2d');
+		if (!context) return undefined;
+		context.fillStyle = '#fff';
+		context.fillRect(0, 0, size.width, size.height);
+		context.drawImage(image, 0, 0, size.width, size.height);
+
+		return {
+			key: thermalBarcodeImageKey({
+				kind: input.kind,
+				value: text,
+				barcodeType: input.barcodeType,
+				height: input.height,
+				size: input.size,
+			}),
+			asset: {
+				image: context.getImageData(0, 0, size.width, size.height),
+				width: size.width,
+				height: size.height,
+				algorithm: 'threshold',
+				threshold: 128,
+			},
 		};
 	} catch {
 		return undefined;
