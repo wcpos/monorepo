@@ -37,3 +37,17 @@ Print testing options:
 Thermal previews render barcode and QR nodes through `bwip-js`, matching the barcode library path used for browser preview output instead of placeholder bars.
 
 Preview image output defaults to `apps/template-studio/gallery-previews` for this PR. Set `WCPOS_GALLERY_PREVIEW_DIR=/path/to/woocommerce-pos/packages/template-gallery/src/assets/previews` when copying generated assets into the plugin gallery UI.
+
+## Thermal template column rules
+
+Thermal paper width and printer character capacity are separate settings. An 80mm printer may be configured for 42 or 48 characters per line, and generic printers often use 42 CPL. Template Studio exposes **Characters per line** so raw ESC/POS output can match the target printer or simulator.
+
+Authoring rules for gallery thermal templates:
+
+- Treat 42 CPL as the safe default for generic 80mm templates.
+- Use `width="*"` for flexible text columns.
+- Reserve fixed widths for quantities and amounts, e.g. qty `5`, amount `12`-`14`.
+- Do not create rows whose fixed widths sum to 48 unless the template is explicitly 48-CPL-only.
+- Keep long product names as full-width text lines, not table cells beside prices.
+- Avoid `<size width="2">` inside multi-column rows; wide text halves effective line capacity.
+- Test 80mm templates at 42 and 48 CPL; test 58mm templates at 32 CPL.

@@ -19,20 +19,31 @@ import {
 	toggleScenarioOverride,
 } from './scenario-controls';
 import { fetchBundledTemplates } from './studio-api';
-import { renderStudioTemplate, selectVisibleTemplate } from './studio-core';
+import {
+	defaultThermalColumnsForPaper,
+	normalizeThermalColumns,
+	renderStudioTemplate,
+	selectVisibleTemplate,
+} from './studio-core';
 
 import type { PathSegment } from './lib/path-utils';
 import type { ScenarioKey } from './scenario-controls';
-import type { PaperWidth, StudioTemplate, TemplateEngine } from './studio-core';
+import type { PaperWidth, StudioTemplate, TemplateEngine, ThermalColumns } from './studio-core';
 
 const SECTION_STORAGE_KEY = 'wcpos-template-studio:sections';
 const SELECTION_STORAGE_KEY = 'wcpos-template-studio:selection';
+const THERMAL_COLUMNS_STORAGE_KEY = 'wcpos-template-studio:thermal-columns-by-paper';
 
 type SectionKey = 'data' | 'woocommerce' | 'print';
 
 type SectionState = Record<SectionKey, boolean>;
+type ThermalColumnsByPaper = Record<'58mm' | '80mm', ThermalColumns>;
 
 const DEFAULT_SECTION_STATE: SectionState = { data: true, woocommerce: true, print: true };
+const DEFAULT_THERMAL_COLUMNS_BY_PAPER: ThermalColumnsByPaper = {
+	'58mm': defaultThermalColumnsForPaper('58mm'),
+	'80mm': defaultThermalColumnsForPaper('80mm'),
+};
 
 function loadSectionState(): SectionState {
 	if (typeof window === 'undefined') return DEFAULT_SECTION_STATE;
@@ -54,6 +65,20 @@ function loadSelection(): string {
 	}
 }
 
+function loadThermalColumnsByPaper(): ThermalColumnsByPaper {
+	if (typeof window === 'undefined') return DEFAULT_THERMAL_COLUMNS_BY_PAPER;
+	try {
+		const raw = window.localStorage.getItem(THERMAL_COLUMNS_STORAGE_KEY);
+		const parsed = raw ? (JSON.parse(raw) as Partial<Record<'58mm' | '80mm', unknown>>) : {};
+		return {
+			'58mm': normalizeThermalColumns(parsed['58mm'], DEFAULT_THERMAL_COLUMNS_BY_PAPER['58mm']),
+			'80mm': normalizeThermalColumns(parsed['80mm'], DEFAULT_THERMAL_COLUMNS_BY_PAPER['80mm']),
+		};
+	} catch {
+		return DEFAULT_THERMAL_COLUMNS_BY_PAPER;
+	}
+}
+
 function defaultPaperWidth(engine: TemplateEngine | undefined): PaperWidth {
 	return engine === 'thermal' ? '80mm' : 'a4';
 }
@@ -69,6 +94,9 @@ export function App() {
 	const [sections, setSections] = React.useState<SectionState>(() => loadSectionState());
 	const [printerModel, setPrinterModel] = React.useState('');
 	const [language, setLanguage] = React.useState<'esc-pos' | 'star-prnt' | 'star-line'>('esc-pos');
+	const [thermalColumnsByPaper, setThermalColumnsByPaper] = React.useState<ThermalColumnsByPaper>(
+		() => loadThermalColumnsByPaper()
+	);
 	const [error, setError] = React.useState<string | null>(null);
 	const previewFrameRef = React.useRef<HTMLDivElement>(null);
 
@@ -102,6 +130,19 @@ export function App() {
 		}
 	}, [selectedTemplateId]);
 
+	React.useEffect(() => {
+		// Persist CPL independently per paper width so 80mm choices do not leak into 58mm templates.
+		if (typeof window === 'undefined') return;
+		try {
+			window.localStorage.setItem(
+				THERMAL_COLUMNS_STORAGE_KEY,
+				JSON.stringify(thermalColumnsByPaper)
+			);
+		} catch {
+			/* storage may be disabled */
+		}
+	}, [thermalColumnsByPaper]);
+
 	const selectedTemplate = selectVisibleTemplate(templates, selectedTemplateId);
 	const randomReceipt = React.useMemo(() => createRandomReceipt({ seed }), [seed]);
 	const baseScenarioState = React.useMemo(
@@ -133,6 +174,14 @@ export function App() {
 	);
 	const effectivePaperWidth: PaperWidth =
 		selectedTemplate?.paperWidth ?? defaultPaperWidth(selectedTemplate?.engine);
+	const thermalPaperWidth = effectivePaperWidth === '58mm' ? '58mm' : '80mm';
+	const effectiveThermalColumns = thermalColumnsByPaper[thermalPaperWidth];
+	const handleThermalColumnsChange = React.useCallback(
+		(value: ThermalColumns) => {
+			setThermalColumnsByPaper((current) => ({ ...current, [thermalPaperWidth]: value }));
+		},
+		[thermalPaperWidth]
+	);
 	const { rendered, renderError } = React.useMemo(() => {
 		if (!selectedTemplate) return { rendered: null, renderError: null };
 		try {
@@ -141,6 +190,7 @@ export function App() {
 					template: selectedTemplate,
 					fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
 					paperWidth: effectivePaperWidth,
+					thermalColumns: effectiveThermalColumns,
 					printerModel: printerModel || undefined,
 					language,
 				}),
@@ -150,7 +200,14 @@ export function App() {
 			console.error('Template render failed', err);
 			return { rendered: null, renderError: err instanceof Error ? err.message : String(err) };
 		}
-	}, [selectedTemplate, fixture, effectivePaperWidth, printerModel, language]);
+	}, [
+		selectedTemplate,
+		fixture,
+		effectivePaperWidth,
+		effectiveThermalColumns,
+		printerModel,
+		language,
+	]);
 	// `rendered.html` is already sanitized by `renderForStudio` with the SVG-
 	// allowing profile both engines need (so `<barcode>` SVGs survive). Re-
 	// sanitizing here with the default profile strips `<svg>` and breaks
@@ -311,11 +368,13 @@ export function App() {
 							}
 							printerModel={printerModel}
 							language={language}
+							thermalColumns={effectiveThermalColumns}
 							onChangePath={handleChangePath}
 							onPrinterModelChange={setPrinterModel}
 							onLanguageChange={(value) =>
 								setLanguage(value as 'esc-pos' | 'star-prnt' | 'star-line')
 							}
+							onThermalColumnsChange={handleThermalColumnsChange}
 						/>
 					</CollapsibleSection>
 					<CollapsibleSection
