@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { ReceiptDataSchema } from '@wcpos/printer/encoder';
+import { ReceiptDataSchema, ReceiptI18nSchema } from '@wcpos/printer/encoder';
 
 import { createPrng, createRandomReceipt, formatSeed, parseSeed } from '../randomizer';
 
@@ -301,6 +301,9 @@ describe('template-studio randomizer', () => {
 		const receipt = createRandomReceipt({ seed: 'canonical-i18n-labels' });
 
 		expect(Object.keys(receipt.data.i18n ?? {}).sort()).toEqual(
+			expect.arrayContaining([...canonicalLabelKeys].sort())
+		);
+		expect(Object.keys(ReceiptI18nSchema.shape).sort()).toEqual(
 			expect.arrayContaining([...canonicalLabelKeys].sort())
 		);
 		expect(receipt.data.i18n?.printed).toBe('Printed');
