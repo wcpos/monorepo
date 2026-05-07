@@ -297,6 +297,16 @@ describe('@wcpos/receipt-renderer exports', () => {
 		]);
 	});
 
+	it('reports height-only scaled text in thermal row diagnostics', () => {
+		const diagnostics = analyzeThermalTemplate(
+			'<receipt paper-width="48"><row><col width="*"><size height="2">Subtotal</size></col><col width="14" align="right">13,26 €</col></row></receipt>',
+			{},
+			{ columns: 42 }
+		);
+
+		expect(diagnostics.rows[0]).toEqual(expect.objectContaining({ hasScaledText: true }));
+	});
+
 	it('warns when encoding a fixed thermal row wider than the configured printer columns', () => {
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		try {

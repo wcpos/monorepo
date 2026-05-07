@@ -91,7 +91,12 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 	}
 
 	const resolvedPaperWidth = template.paperWidth ?? paperWidth;
-	const thermalPaperWidth: ThermalPaperWidth = resolvedPaperWidth === '58mm' ? '58mm' : '80mm';
+	if (resolvedPaperWidth !== '58mm' && resolvedPaperWidth !== '80mm') {
+		throw new Error(
+			`Thermal templates require a thermal paper width, received "${resolvedPaperWidth}"`
+		);
+	}
+	const thermalPaperWidth: ThermalPaperWidth = resolvedPaperWidth;
 	const columns = input.thermalColumns ?? defaultThermalColumnsForPaper(thermalPaperWidth);
 	const encodeOptions: {
 		columns: number;
@@ -167,7 +172,8 @@ export function normalizeThermalColumns(value: unknown, fallback: ThermalColumns
 
 /** @deprecated Paper width is physical, not printer CPL. Use explicit thermal columns. */
 export function paperWidthToColumns(paperWidth: PaperWidth | string | null | undefined): number {
-	if (paperWidth === '58mm') return 32;
-	if (paperWidth === '80mm') return 48;
+	if (paperWidth === '58mm' || paperWidth === '80mm') {
+		return defaultThermalColumnsForPaper(paperWidth);
+	}
 	return 80;
 }

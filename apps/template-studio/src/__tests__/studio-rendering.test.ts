@@ -12,6 +12,7 @@ import {
 	bytesToBase64,
 	bytesToDebugOutput,
 	defaultThermalColumnsForPaper,
+	paperWidthToColumns,
 	renderStudioTemplate,
 	selectVisibleTemplate,
 } from '../studio-core';
@@ -487,5 +488,26 @@ describe('template studio rendering harness', () => {
 	it('defaults generic thermal capacity by physical paper width', () => {
 		expect(defaultThermalColumnsForPaper('80mm')).toBe(42);
 		expect(defaultThermalColumnsForPaper('58mm')).toBe(32);
+		expect(paperWidthToColumns('80mm')).toBe(defaultThermalColumnsForPaper('80mm'));
+		expect(paperWidthToColumns('58mm')).toBe(defaultThermalColumnsForPaper('58mm'));
+	});
+
+	it('rejects non-thermal paper widths for thermal templates', () => {
+		const fixture = buildCanonicalFixture('studio-test-thermal-invalid-width');
+
+		expect(() =>
+			renderStudioTemplate({
+				template: {
+					id: 'thermal-invalid-width',
+					name: 'Thermal invalid width',
+					engine: 'thermal',
+					source: 'bundled-gallery',
+					content: '<receipt><text>Receipt</text></receipt>',
+					paperWidth: 'a4',
+				},
+				fixture,
+				paperWidth: '80mm',
+			})
+		).toThrow('Thermal templates require a thermal paper width, received "a4"');
 	});
 });

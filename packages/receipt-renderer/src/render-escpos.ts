@@ -281,7 +281,7 @@ function collectRowDiagnostics(
 
 function containsScaledText(nodes: readonly ThermalNode[]): boolean {
 	for (const node of nodes) {
-		if (node.type === 'size' && node.width > 1) return true;
+		if (node.type === 'size' && (node.width > 1 || node.height > 1)) return true;
 		if ('children' in node && containsScaledText(node.children)) return true;
 	}
 	return false;

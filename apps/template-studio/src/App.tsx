@@ -71,8 +71,8 @@ function loadThermalColumnsByPaper(): ThermalColumnsByPaper {
 		const raw = window.localStorage.getItem(THERMAL_COLUMNS_STORAGE_KEY);
 		const parsed = raw ? (JSON.parse(raw) as Partial<Record<'58mm' | '80mm', unknown>>) : {};
 		return {
-			'58mm': normalizeThermalColumns(parsed['58mm'], defaultThermalColumnsForPaper('58mm')),
-			'80mm': normalizeThermalColumns(parsed['80mm'], defaultThermalColumnsForPaper('80mm')),
+			'58mm': normalizeThermalColumns(parsed['58mm'], DEFAULT_THERMAL_COLUMNS_BY_PAPER['58mm']),
+			'80mm': normalizeThermalColumns(parsed['80mm'], DEFAULT_THERMAL_COLUMNS_BY_PAPER['80mm']),
 		};
 	} catch {
 		return DEFAULT_THERMAL_COLUMNS_BY_PAPER;
