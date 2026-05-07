@@ -118,6 +118,37 @@ describe('template studio rendering harness', () => {
 		expect(view.escposBase64).toBe(bytesToBase64(new Uint8Array(Array.from(view.escposBytes))));
 	});
 
+	it('passes thermal image assets into raw ESC/POS encoding', () => {
+		const image = {
+			width: 64,
+			height: 32,
+			data: new Uint8ClampedArray(64 * 32 * 4).fill(255),
+		} as ImageData;
+
+		const view = renderStudioTemplate({
+			template: {
+				id: 'thermal-logo-template',
+				name: 'Thermal logo template',
+				engine: 'thermal',
+				source: 'bundled-gallery',
+				paperWidth: '80mm',
+				content: '<receipt><image src="logo://store" width="64" /></receipt>',
+			},
+			fixture: buildCanonicalFixture('thermal-logo-test'),
+			paperWidth: '80mm',
+			encodeOptions: {
+				imageMode: 'raster',
+				imageAssets: {
+					'logo://store': { image, width: 64, height: 32, algorithm: 'threshold' },
+				},
+			},
+		});
+
+		expect(view.kind).toBe('thermal');
+		if (view.kind !== 'thermal') throw new Error('Expected thermal view');
+		expect(view.escposHex).toMatch(/1d 76 30/i);
+	});
+
 	it('fetches real store preview data for a selected store URL and order', async () => {
 		globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
 			expect(String(input)).toBe(

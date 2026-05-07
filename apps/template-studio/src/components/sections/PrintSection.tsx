@@ -10,6 +10,7 @@ interface PrintSectionProps {
 	rendered: StudioRenderResult | null;
 	onOpenPrintDialog: () => void;
 	onError: (message: string | null) => void;
+	onPrepareRawPrint?: () => Promise<{ escposBase64: string; escposBytes: Uint8Array }>;
 }
 
 interface LastResult {
@@ -19,7 +20,12 @@ interface LastResult {
 
 const TEST_CONNECTION_BYTES = new Uint8Array([0x1b, 0x40]); // ESC @ — init printer
 
-export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSectionProps) {
+export function PrintSection({
+	rendered,
+	onOpenPrintDialog,
+	onError,
+	onPrepareRawPrint,
+}: PrintSectionProps) {
 	const [host, setHost] = useState('127.0.0.1');
 	const [port, setPort] = useState('9100');
 	const [lastResult, setLastResult] = useState<LastResult | null>(null);
@@ -56,9 +62,10 @@ export function PrintSection({ rendered, onOpenPrintDialog, onError }: PrintSect
 		const start = performance.now();
 		try {
 			const target = getConnectionTarget();
+			const prepared = onPrepareRawPrint ? await onPrepareRawPrint() : rendered;
 			const result = await printRawTcp({
 				...target,
-				data: rendered.escposBase64,
+				data: prepared.escposBase64,
 			});
 			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
 			setLastResult({
