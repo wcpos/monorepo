@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -383,6 +383,49 @@ describe('template studio rendering harness', () => {
 		await expect(printPromise).rejects.toThrow('Print failed');
 		expect(document.querySelector('iframe.system-print-frame')).toBeNull();
 		vi.useRealTimers();
+	});
+
+	it('uses selected thermal columns when preparing raw print bytes', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			if (url === '/__studio/templates') {
+				return Response.json([
+					{
+						id: 'thermal-columns-template',
+						name: 'Thermal columns template',
+						engine: 'thermal',
+						source: 'bundled-gallery',
+						paperWidth: '80mm',
+						content:
+							'<receipt paper-width="48"><row><col width="24">Subtotal</col><col width="24" align="right">13,26 €</col></row></receipt>',
+					},
+				]);
+			}
+			if (url === '/__studio/print/raw-tcp') {
+				expect(init?.method).toBe('POST');
+				return Response.json({ ok: true, bytesWritten: 3 });
+			}
+			return new Response(null, { status: 404 });
+		}) as typeof fetch;
+
+		render(createElement(App));
+
+		await waitFor(() =>
+			expect(warn).toHaveBeenCalledWith(
+				expect.stringContaining('thermal row columns (48) exceed total width (42)')
+			)
+		);
+		warn.mockClear();
+
+		fireEvent.change(screen.getByLabelText('Host'), { target: { value: '127.0.0.1' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Send to printer' }));
+
+		await waitFor(() =>
+			expect(warn).toHaveBeenCalledWith(
+				expect.stringContaining('thermal row columns (48) exceed total width (42)')
+			)
+		);
 	});
 
 	it('keeps generated barcode SVGs visible in the React preview frame', async () => {

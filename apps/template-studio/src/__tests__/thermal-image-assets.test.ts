@@ -9,6 +9,12 @@ import {
 } from '../lib/thermal-image-assets';
 
 describe('thermal image assets', () => {
+	it('accepts same-origin root-relative images for thermal raw print assets', () => {
+		expect(isSupportedThermalLogoSrc('/coffee-monster.png')).toBe(true);
+		expect(isSupportedThermalLogoSrc('javascript:alert(1)')).toBe(false);
+		expect(isSupportedThermalLogoSrc('data:image/svg+xml;base64,PHN2Zy8+')).toBe(false);
+	});
+
 	it('accepts png and jpeg data image sources', () => {
 		expect(isSupportedThermalLogoSrc('data:image/png;base64,AAAA')).toBe(true);
 		expect(isSupportedThermalLogoSrc('data:image/jpeg;base64,AAAA')).toBe(true);

@@ -10,7 +10,18 @@ const SUPPORTED_DATA_IMAGE_RE = /^data:image\/(?:png|jpe?g);base64,[A-Za-z0-9+/=
 export function isSupportedThermalLogoSrc(src: unknown): boolean {
 	if (typeof src !== 'string') return false;
 	const value = src.trim();
-	return SUPPORTED_DATA_IMAGE_RE.test(value) || /^https?:\/\//i.test(value);
+	return (
+		SUPPORTED_DATA_IMAGE_RE.test(value) ||
+		/^https?:\/\//i.test(value) ||
+		isSafeRootRelativeImageSrc(value)
+	);
+}
+
+function isSafeRootRelativeImageSrc(value: string): boolean {
+	if (value.startsWith('//')) return false;
+	if (value.includes('\\')) return false;
+	if (value.split(/[?#]/, 1)[0].split('/').includes('..')) return false;
+	return /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/.test(value);
 }
 
 export function maxDotsForPaperWidth(paperWidth: PaperWidth): number {

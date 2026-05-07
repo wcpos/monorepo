@@ -80,7 +80,7 @@ export function renderBarcode(
 			textsize: 10,
 		});
 
-		return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${svg}</div>`;
+		return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg)}</div>`;
 	} catch (error) {
 		return renderBarcodeError(kind, barcodeType, text, error);
 	}
@@ -97,7 +97,7 @@ export function renderQrCode(value: string, size: number): string {
 			scale: safeInteger(size, 4, 1, 20),
 		});
 
-		return `<div data-barcode-kind="qrcode" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${svg}</div>`;
+		return `<div data-barcode-kind="qrcode" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg)}</div>`;
 	} catch (error) {
 		return renderBarcodeError('qrcode', 'qrcode', text, error);
 	}
@@ -144,12 +144,24 @@ function safeAlign(value: unknown): 'left' | 'center' | 'right' {
 	return value === 'left' || value === 'center' || value === 'right' ? value : 'left';
 }
 
+function constrainSvg(svg: string): string {
+	return svg.replace('<svg ', '<svg style="max-width: 100%; height: auto" ');
+}
+
 function safeImageSrc(src: unknown): string {
 	if (typeof src !== 'string') return '';
 	const value = src.trim();
 	const isHttpUrl = /^https?:\/\//i.test(value);
 	const isSafeDataUri = /^data:image\/(?:png|jpe?g|gif);base64,[A-Za-z0-9+/=]+$/i.test(value);
-	return isHttpUrl || isSafeDataUri ? escapeHtml(value) : '';
+	const isSafeRootRelative = isSafeRootRelativeImageSrc(value);
+	return isHttpUrl || isSafeDataUri || isSafeRootRelative ? escapeHtml(value) : '';
+}
+
+function isSafeRootRelativeImageSrc(value: string): boolean {
+	if (value.startsWith('//')) return false;
+	if (value.includes('\\')) return false;
+	if (value.split(/[?#]/, 1)[0].split('/').includes('..')) return false;
+	return /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/.test(value);
 }
 
 function escapeHtml(str: string): string {

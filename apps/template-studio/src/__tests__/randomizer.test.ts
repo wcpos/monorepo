@@ -388,6 +388,22 @@ describe('template-studio randomizer', () => {
 		}
 	});
 
+	it('uses ASCII hyphens in generated store opening hours for thermal printers', () => {
+		let result: ReturnType<typeof createRandomReceipt> | undefined;
+		for (let seed = 1; seed < 100 && !result; seed += 1) {
+			const candidate = createRandomReceipt({ seed, overrides: { emptyCart: false } });
+			if (candidate.data.store.opening_hours) result = candidate;
+		}
+		if (!result) throw new Error('no opening-hours seed found in range');
+
+		expect(result.data.store.opening_hours).toContain('Mon-Sat 9:00-18:00');
+		expect(result.data.store.opening_hours_inline).toContain('9:00-18:00');
+		expect(result.data.store.opening_hours_vertical).toContain('9:00-18:00');
+		expect(result.data.store.opening_hours).not.toContain('–');
+		expect(result.data.store.opening_hours_inline).not.toContain('–');
+		expect(result.data.store.opening_hours_vertical).not.toContain('–');
+	});
+
 	it('exposes an editable order barcode type presentation hint', () => {
 		const result = createRandomReceipt({ seed: 'barcode-type' });
 		expect(result.data.presentation_hints.order_barcode_type).toBe('code128');
