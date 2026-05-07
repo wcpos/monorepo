@@ -6,10 +6,10 @@ import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 
 import {
-	allowedHostsFromEnv,
 	allowedOriginsFromEnv,
+	allowedPrintDestinationsFromEnv,
 	isLoopbackAddress,
-	isPrintHostAllowed,
+	isPrintDestinationAllowed,
 	isStoreOriginAllowed,
 	shouldForwardCookies,
 } from './scripts/studio-security';
@@ -26,7 +26,9 @@ const allowedStoreOrigins = allowedOriginsFromEnv(
 	process.env.WCPOS_STUDIO_STORE_ORIGINS,
 	wpProxyOrigin
 );
-const allowedPrintHosts = allowedHostsFromEnv(process.env.WCPOS_STUDIO_PRINT_HOSTS);
+const allowedPrintDestinations = allowedPrintDestinationsFromEnv(
+	process.env.WCPOS_STUDIO_PRINT_HOSTS
+);
 const upstreamFetchTimeoutMs = 10_000;
 
 function templateStudioPlugin(): Plugin {
@@ -112,18 +114,33 @@ function templateStudioPlugin(): Plugin {
 
 			server.middlewares.use('/__studio/print/raw-tcp', async (request, response) => {
 				if (request.method !== 'POST') {
+					logRawTcpPrint('warn', 'rejected: method not allowed', {
+						method: request.method,
+						remoteAddress: request.socket.remoteAddress,
+					});
 					response.statusCode = 405;
 					response.end('Method Not Allowed');
 					return;
 				}
 
 				if (!isLoopbackAddress(request.socket.remoteAddress)) {
+					logRawTcpPrint('warn', 'rejected: non-loopback client', {
+						remoteAddress: request.socket.remoteAddress,
+						hostHeader: request.headers.host,
+						origin: request.headers.origin,
+					});
 					response.statusCode = 403;
 					response.end('Raw TCP printing is only available from loopback clients');
 					return;
 				}
 
 				if (request.headers['x-wcpos-template-studio'] !== '1') {
+					logRawTcpPrint('warn', 'rejected: missing studio header', {
+						remoteAddress: request.socket.remoteAddress,
+						hostHeader: request.headers.host,
+						origin: request.headers.origin,
+						studioHeader: request.headers['x-wcpos-template-studio'],
+					});
 					response.statusCode = 403;
 					response.end('Raw TCP printing requires the Template Studio request header');
 					return;
@@ -136,23 +153,45 @@ function templateStudioPlugin(): Plugin {
 					const data = typeof body.data === 'string' ? body.data : '';
 
 					if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !data) {
+						logRawTcpPrint('warn', 'rejected: invalid payload', {
+							remoteAddress: request.socket.remoteAddress,
+							host,
+							port: body.port,
+							hasData: Boolean(data),
+						});
 						response.statusCode = 400;
 						response.end('Expected host, port, and base64 data');
 						return;
 					}
 
-					if (!isPrintHostAllowed(host, allowedPrintHosts)) {
+					if (!isPrintDestinationAllowed(host, port, allowedPrintDestinations)) {
+						logRawTcpPrint('warn', 'rejected: destination not allowed', {
+							remoteAddress: request.socket.remoteAddress,
+							host,
+							port,
+							allowedDestinations: allowedPrintDestinations,
+						});
 						response.statusCode = 403;
 						response.end(
-							`Raw TCP host is not allowed. Set WCPOS_STUDIO_PRINT_HOSTS to include ${host}.`
+							`Raw TCP destination is not allowed. Set WCPOS_STUDIO_PRINT_HOSTS to include ${host}:${port}.`
 						);
 						return;
 					}
 
+					logRawTcpPrint('info', 'connecting', {
+						remoteAddress: request.socket.remoteAddress,
+						host,
+						port,
+						base64Length: data.length,
+					});
 					const bytesWritten = await sendRawTcp(host, port, Buffer.from(data, 'base64'));
+					logRawTcpPrint('info', 'sent', { host, port, bytesWritten });
 					response.setHeader('Content-Type', 'application/json');
 					response.end(JSON.stringify({ ok: true, bytesWritten }));
 				} catch (error) {
+					logRawTcpPrint('error', 'failed', {
+						error: error instanceof Error ? error.message : String(error),
+					});
 					response.statusCode = error instanceof SyntaxError ? 400 : 500;
 					response.end(error instanceof Error ? error.message : String(error));
 				}
@@ -163,6 +202,15 @@ function templateStudioPlugin(): Plugin {
 
 function isAbortError(error: unknown): boolean {
 	return error instanceof Error && error.name === 'AbortError';
+}
+
+function logRawTcpPrint(
+	level: 'info' | 'warn' | 'error',
+	message: string,
+	details: Record<string, unknown>
+): void {
+	const prefix = '[template-studio raw-tcp]';
+	console[level](prefix, message, details);
 }
 
 function readJsonBody(
