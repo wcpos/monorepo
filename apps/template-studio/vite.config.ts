@@ -7,9 +7,7 @@ import { defineConfig, type Plugin } from 'vite';
 
 import {
 	allowedOriginsFromEnv,
-	allowedPrintDestinationsFromEnv,
 	isLoopbackAddress,
-	isPrintDestinationAllowed,
 	isStoreOriginAllowed,
 	shouldForwardCookies,
 } from './scripts/studio-security';
@@ -25,9 +23,6 @@ const wpProxyOrigin = new URL(wpProxyTarget).origin;
 const allowedStoreOrigins = allowedOriginsFromEnv(
 	process.env.WCPOS_STUDIO_STORE_ORIGINS,
 	wpProxyOrigin
-);
-const allowedPrintDestinations = allowedPrintDestinationsFromEnv(
-	process.env.WCPOS_STUDIO_PRINT_HOSTS
 );
 const upstreamFetchTimeoutMs = 10_000;
 
@@ -161,20 +156,6 @@ function templateStudioPlugin(): Plugin {
 						});
 						response.statusCode = 400;
 						response.end('Expected host, port, and base64 data');
-						return;
-					}
-
-					if (!isPrintDestinationAllowed(host, port, allowedPrintDestinations)) {
-						logRawTcpPrint('warn', 'rejected: destination not allowed', {
-							remoteAddress: request.socket.remoteAddress,
-							host,
-							port,
-							allowedDestinations: allowedPrintDestinations,
-						});
-						response.statusCode = 403;
-						response.end(
-							`Raw TCP destination is not allowed. Set WCPOS_STUDIO_PRINT_HOSTS to include ${host}:${port}.`
-						);
 						return;
 					}
 

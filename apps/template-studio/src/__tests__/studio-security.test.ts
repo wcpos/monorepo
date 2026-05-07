@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	allowedOriginsFromEnv,
-	allowedPrintDestinationsFromEnv,
 	isLoopbackAddress,
-	isPrintDestinationAllowed,
 	isStoreOriginAllowed,
 	shouldForwardCookies,
 } from '../../scripts/studio-security';
@@ -30,26 +28,9 @@ describe('Template Studio dev-server security helpers', () => {
 		);
 	});
 
-	it('limits raw TCP printing to loopback clients and allowlisted printer destinations', () => {
+	it('limits raw TCP printing to loopback browser clients', () => {
 		expect(isLoopbackAddress('::1')).toBe(true);
 		expect(isLoopbackAddress('::ffff:127.0.0.1')).toBe(true);
 		expect(isLoopbackAddress('192.168.1.20')).toBe(false);
-
-		expect(
-			isPrintDestinationAllowed('127.0.0.1', 9100, allowedPrintDestinationsFromEnv(undefined))
-		).toBe(true);
-		expect(
-			isPrintDestinationAllowed('127.0.0.1', 6379, allowedPrintDestinationsFromEnv(undefined))
-		).toBe(false);
-		expect(
-			isPrintDestinationAllowed('printer.local', 9100, allowedPrintDestinationsFromEnv(undefined))
-		).toBe(false);
-		expect(
-			isPrintDestinationAllowed(
-				'printer.local',
-				9100,
-				allowedPrintDestinationsFromEnv('printer.local:9100')
-			)
-		).toBe(true);
 	});
 });
