@@ -209,6 +209,7 @@ describe('template-studio randomizer', () => {
 			item_short: 'Item',
 			qty_short: 'Qty',
 			sku_short: 'SKU',
+			opening_hours: 'Opening Hours',
 		} as const;
 		const detailedReceiptKeys = Object.keys(english) as (keyof typeof english)[];
 
