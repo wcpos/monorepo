@@ -18,8 +18,12 @@ describe('resolveStoreTimezone', () => {
 		expect(resolveStoreTimezone({}, { timezone_string: '', gmt_offset: '2' })).toBe('Etc/GMT-2');
 	});
 
+	it('preserves fractional gmt_offset values as fixed offsets', () => {
+		expect(resolveStoreTimezone({}, { timezone_string: '', gmt_offset: '5.5' })).toBe('+05:30');
+		expect(resolveStoreTimezone({}, { timezone_string: '', gmt_offset: '-3.75' })).toBe('-03:45');
+	});
+
 	it('falls back to UTC when no safe timezone is available', () => {
-		expect(resolveStoreTimezone({}, { timezone_string: '', gmt_offset: '5.5' })).toBe('UTC');
 		expect(resolveStoreTimezone()).toBe('UTC');
 	});
 });

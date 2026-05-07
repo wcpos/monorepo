@@ -7,14 +7,18 @@ interface SiteLike {
 	gmt_offset?: unknown;
 }
 
-function offsetToEtcGmt(offset: number): string {
+function offsetToTimezone(offset: number): string {
 	if (!Number.isFinite(offset) || offset === 0) {
 		return 'UTC';
 	}
 
 	const rounded = Math.trunc(offset);
 	if (rounded !== offset) {
-		return 'UTC';
+		const totalMinutes = Math.round(Math.abs(offset) * 60);
+		const hours = Math.floor(totalMinutes / 60);
+		const minutes = totalMinutes % 60;
+		const sign = offset > 0 ? '+' : '-';
+		return `${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 	}
 
 	// POSIX Etc/GMT signs are inverted: UTC-5 is Etc/GMT+5.
@@ -33,7 +37,7 @@ export function resolveStoreTimezone(store?: StoreLike | null, site?: SiteLike |
 	if (site?.gmt_offset != null) {
 		const offset =
 			typeof site.gmt_offset === 'string' ? Number(site.gmt_offset) : Number(site.gmt_offset);
-		return offsetToEtcGmt(offset);
+		return offsetToTimezone(offset);
 	}
 
 	return 'UTC';
