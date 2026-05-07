@@ -264,6 +264,7 @@ describe('template-studio randomizer', () => {
 		expect(result.data.i18n?.subtotal).toBe('小計');
 		expect(result.data.i18n?.total).toBe('合計');
 		expect(result.data.i18n?.thank_you).toBe('ありがとうございます');
+		expect(result.data.i18n?.opening_hours).toBe('営業時間');
 	});
 
 	it('emits Spanish status label translations for the expected Woo status set', () => {
