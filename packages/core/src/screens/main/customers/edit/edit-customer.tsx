@@ -25,7 +25,7 @@ export function EditCustomer({ resource }: Props) {
 	if (!isRxDocument(customer)) {
 		return (
 			<Modal>
-				<ModalContent size="lg">
+				<ModalContent size="xl">
 					<ModalHeader>
 						<ModalTitle>
 							<Text>{t('common.no_customer_found')}</Text>
@@ -38,7 +38,7 @@ export function EditCustomer({ resource }: Props) {
 
 	return (
 		<Modal>
-			<ModalContent size="lg">
+			<ModalContent size="xl">
 				<ModalHeader>
 					<ModalTitle>
 						<Text>{t('common.edit_2', { name: format(customer) })}</Text>

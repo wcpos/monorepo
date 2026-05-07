@@ -50,7 +50,7 @@ export function Customer({
 					<ButtonText>{name}</ButtonText>
 				</ButtonPill>
 			</DialogTrigger>
-			<DialogContent size="lg" portalHost="pos">
+			<DialogContent size="xl" portalHost="pos">
 				<DialogHeader>
 					<DialogTitle>{t('pos_cart.edit_customer_address')}</DialogTitle>
 				</DialogHeader>
