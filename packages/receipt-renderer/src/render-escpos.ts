@@ -53,6 +53,10 @@ export function thermalBarcodeImageKey(input: {
 		: `qrcode:${input.value}:${input.size ?? 4}`;
 }
 
+export function thermalImageAssetKey(input: { src: string; width?: number }): string {
+	return input.width === undefined ? input.src : `image:${input.width}:${input.src}`;
+}
+
 export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}): Uint8Array {
 	const {
 		printerModel,
@@ -247,7 +251,9 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			encoder.qrcode(node.value, 2, node.size);
 			break;
 		case 'image': {
-			const asset = context.imageAssets[node.src];
+			const asset =
+				context.imageAssets[thermalImageAssetKey({ src: node.src, width: node.width })] ??
+				context.imageAssets[node.src];
 			if (!asset) break;
 			const width = normalizeImageDimension(asset.width);
 			const height = normalizeImageDimension(asset.height);

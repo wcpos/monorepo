@@ -8,6 +8,7 @@ import {
 	renderLogiclessTemplate,
 	renderThermalPreview,
 	sanitizeHtml,
+	thermalImageAssetKey,
 } from '../index';
 
 const THERMAL_TEMPLATE = `<receipt paper-width="32">
@@ -212,6 +213,34 @@ describe('@wcpos/receipt-renderer exports', () => {
 		});
 
 		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+	});
+
+	it('uses width-qualified image assets for repeated sources with different widths', () => {
+		const ast = parseXml(
+			'<receipt><image src="logo://store" width="64" /><image src="logo://store" width="128" /></receipt>'
+		);
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			imageAssets: {
+				[thermalImageAssetKey({ src: 'logo://store', width: 64 })]: {
+					image: opaqueBlackImageData(64, 32),
+					width: 64,
+					height: 32,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+				[thermalImageAssetKey({ src: 'logo://store', width: 128 })]: {
+					image: opaqueBlackImageData(128, 32),
+					width: 128,
+					height: 32,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			},
+		});
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30, 0x00, 0x08, 0x00, 0x20, 0x00])).toBe(true);
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30, 0x00, 0x10, 0x00, 0x20, 0x00])).toBe(true);
 	});
 
 	it('skips unresolved image assets without throwing', () => {

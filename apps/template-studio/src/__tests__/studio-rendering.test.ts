@@ -3,7 +3,12 @@ import { createElement } from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { App, preparePrintDocument, printReceiptInHiddenFrame } from '../App';
+import {
+	App,
+	discoverThermalAssetRequests,
+	preparePrintDocument,
+	printReceiptInHiddenFrame,
+} from '../App';
 import { countPreviewLines } from '../components/Stage';
 import { createRandomReceipt } from '../randomizer';
 import { fetchWpPreview, printRawTcp } from '../studio-api';
@@ -147,6 +152,27 @@ describe('template studio rendering harness', () => {
 		expect(view.kind).toBe('thermal');
 		if (view.kind !== 'thermal') throw new Error('Expected thermal view');
 		expect(view.escposHex).toMatch(/1d 76 30/i);
+	});
+
+	it('discovers QR barcode aliases and per-width image requests for raw thermal assets', () => {
+		const requests = discoverThermalAssetRequests(
+			'<receipt><image src="logo://store" width="64" /><image src="logo://store" width="128" /><barcode type="qrcode" height="40">https://example.test</barcode></receipt>'
+		);
+
+		expect(requests.images).toEqual([
+			{ src: 'logo://store', width: 64 },
+			{ src: 'logo://store', width: 128 },
+		]);
+		expect(requests.barcodes).toEqual([{ kind: 'qrcode', value: 'https://example.test', size: 4 }]);
+	});
+
+	it('does not leave script element openings in fallback barcode text extraction', () => {
+		const requests = discoverThermalAssetRequests(
+			'<receipt><barcode>safe <scr<scriptipt>alert(1)</script></barcode>'
+		);
+
+		expect(requests.barcodes[0]?.value).not.toContain('<');
+		expect(requests.barcodes[0]?.value).not.toContain('<script');
 	});
 
 	it('fetches real store preview data for a selected store URL and order', async () => {
