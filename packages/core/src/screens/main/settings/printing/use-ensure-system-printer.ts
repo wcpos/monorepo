@@ -29,7 +29,9 @@ export function useEnsureSystemPrinter(storeDB: StoreDatabase) {
 						connectionType: 'system',
 						vendor: 'generic',
 						language: 'esc-pos',
-						columns: 48,
+						// System/browser print does not use ESC/POS columns; keep a safe value only because
+						// printer_profiles requires the shared columns field.
+						columns: 42,
 						port: 9100,
 						autoPrint: false,
 						autoCut: false,

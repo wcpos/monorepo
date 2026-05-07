@@ -85,9 +85,9 @@ const LANGUAGES: { value: string; label: string }[] = [
 ];
 
 const THERMAL_COLUMNS: { value: ThermalColumns; label: string }[] = [
-	{ value: 32, label: '32 (58mm)' },
-	{ value: 42, label: '42 (generic 80mm)' },
-	{ value: 48, label: '48 (48-CPL 80mm)' },
+	{ value: 32, label: '58mm (32 chars)' },
+	{ value: 42, label: '80mm standard (42 chars)' },
+	{ value: 48, label: '80mm wide (48 chars)' },
 ];
 
 export function WooCommerceSection(props: WooCommerceSectionProps) {
@@ -243,7 +243,8 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 			</div>
 			{isThermal ? (
 				<p className="field-help">
-					Match this to the printer or simulator Characters per line setting.
+					Matches the POS printer profile text width. Use 42 for standard/generic 80mm printers, 48
+					only for known 48-CPL printers, and 32 for 58mm printers.
 				</p>
 			) : null}
 		</div>

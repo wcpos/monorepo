@@ -21,7 +21,7 @@ export function toPrinterProfile(doc: PrinterProfileDocument): PrinterProfile {
 		port: doc.port ?? 9100,
 		nativeInterfaceType: doc.nativeInterfaceType,
 		language: (doc.language ?? 'esc-pos') as PrinterProfile['language'],
-		columns: doc.columns ?? 48,
+		columns: doc.columns ?? 42,
 		autoPrint: doc.autoPrint ?? false,
 		autoCut: doc.autoCut ?? true,
 		autoOpenDrawer: doc.autoOpenDrawer ?? false,

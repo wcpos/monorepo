@@ -572,6 +572,11 @@ const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 			// v2: Added nativeInterfaceType for vendor-native transports
 			return oldDoc;
 		},
+		3(oldDoc) {
+			// v3: Changed the default columns metadata from 48 to 42.
+			// Preserve explicit existing profile values.
+			return oldDoc;
+		},
 	},
 };
 

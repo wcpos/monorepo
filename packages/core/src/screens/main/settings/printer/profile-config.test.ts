@@ -58,4 +58,46 @@ describe('buildPrinterProfileFields', () => {
 			})
 		);
 	});
+
+	it('preserves explicit standard 42-column printer capacity', () => {
+		expect(
+			buildPrinterProfileFields({
+				name: 'Generic 80mm',
+				vendor: 'generic',
+				address: '192.168.1.102',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				autoPrint: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: true,
+			})
+		).toEqual(
+			expect.objectContaining({
+				columns: 42,
+			})
+		);
+	});
+
+	it('preserves explicit wide 48-column printer capacity', () => {
+		expect(
+			buildPrinterProfileFields({
+				name: 'Wide 80mm',
+				vendor: 'epson',
+				address: '192.168.1.103',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 48,
+				autoPrint: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: false,
+			})
+		).toEqual(
+			expect.objectContaining({
+				columns: 48,
+			})
+		);
+	});
 });
