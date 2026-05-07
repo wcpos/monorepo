@@ -35,8 +35,7 @@ export function resolveStoreTimezone(store?: StoreLike | null, site?: SiteLike |
 	}
 
 	if (site?.gmt_offset != null) {
-		const offset =
-			typeof site.gmt_offset === 'string' ? Number(site.gmt_offset) : Number(site.gmt_offset);
+		const offset = Number(site.gmt_offset);
 		return offsetToTimezone(offset);
 	}
 
