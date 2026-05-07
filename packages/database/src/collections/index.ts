@@ -126,6 +126,11 @@ const stores: RxCollectionCreator<StoreDocumentType> = {
 			oldDoc.tax_ids = Array.isArray(oldDoc.tax_ids) ? oldDoc.tax_ids : [];
 			return oldDoc;
 		},
+		9(oldDoc: any) {
+			// Empty string means inherit the WordPress site's timezone.
+			oldDoc.timezone = typeof oldDoc.timezone === 'string' ? oldDoc.timezone : '';
+			return oldDoc;
+		},
 	},
 };
 

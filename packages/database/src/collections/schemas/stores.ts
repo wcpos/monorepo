@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 8,
+	version: 9,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -282,6 +282,13 @@ export const storesLiteral = {
 			default: 'itemized',
 			enum: ['single', 'itemized'],
 			enumNames: ['As a single total', 'Itemized'],
+		},
+		timezone: {
+			title: 'Timezone',
+			description: 'IANA timezone name for this store. Empty string inherits the site timezone.',
+			type: 'string',
+			maxLength: 100,
+			default: '',
 		},
 		locale: {
 			title: 'Language',

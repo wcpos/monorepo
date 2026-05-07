@@ -42,6 +42,10 @@ const VALID_TAX_BASED_ON_VALUES = new Set(['shipping', 'billing', 'base']);
 function normalizeStorePayload<T extends { id: number; [key: string]: any }>(store: T): T {
 	const out: any = { ...store };
 
+	if (typeof out.timezone !== 'string') {
+		out.timezone = '';
+	}
+
 	if (!VALID_TAX_BASED_ON_VALUES.has(out.tax_based_on)) {
 		out.tax_based_on = 'base';
 	}
