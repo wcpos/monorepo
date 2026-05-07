@@ -56,7 +56,7 @@ describe('PrintSection', () => {
 		expect(container.textContent).not.toContain('41Atext');
 	});
 
-	it('defaults to an explicit thermal printer host', () => {
+	it('defaults the LAN printer host and 9100 port', () => {
 		render(
 			<PrintSection
 				rendered={thermalResult(new Uint8Array([0x1b, 0x40]))}
@@ -65,7 +65,7 @@ describe('PrintSection', () => {
 			/>
 		);
 
-		expect(screen.getByLabelText('Host')).toHaveValue('');
+		expect(screen.getByLabelText('Host')).toHaveValue('192.168.1.167');
 		expect(screen.getByLabelText('Port')).toHaveValue('9100');
 	});
 });
