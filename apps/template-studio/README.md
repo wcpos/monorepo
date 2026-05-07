@@ -36,4 +36,16 @@ Print testing options:
 
 Thermal previews render barcode and QR nodes through `bwip-js`, matching the barcode library path used for browser preview output instead of placeholder bars.
 
+### Raw thermal logos and barcodes
+
+Raw network thermal printing supports rasterized PNG and JPEG logos. WCPOS does not send PNG/JPEG directly to printers; it decodes the uploaded image, flattens transparency onto white, resizes to the printer dot budget, converts to monochrome, and encodes printer image commands.
+
+SVG logo uploads are not supported for raw thermal printing yet. SVG must be sanitized and rasterized safely before `getImageData()`; otherwise scripts/external references can be unsafe or taint the canvas.
+
+Recommended logo format: high-contrast PNG with transparent or white background. JPEG works, but compression artifacts may print as noise. For 80mm printers WCPOS uses a conservative 576-dot width budget; for 58mm printers it uses 384 dots. Centered logos require the template to wrap the image in `<align mode="center">...</align>`.
+
+Manual validation notes:
+
+- Verify `<align mode="center"><image ... /></align>` prints centered. `ReceiptPrinterEncoder.image()` temporarily applies current alignment and resets to left afterward; the outer align node should reapply alignment for the image call.
+
 Preview image output defaults to `apps/template-studio/gallery-previews` for this PR. Set `WCPOS_GALLERY_PREVIEW_DIR=/path/to/woocommerce-pos/packages/template-gallery/src/assets/previews` when copying generated assets into the plugin gallery UI.
