@@ -610,6 +610,7 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			created: { ...base.order.created, ...(order.created ?? {}) },
 			paid: { ...base.order.paid, ...(order.paid ?? {}) },
 			completed: { ...base.order.completed, ...(order.completed ?? {}) },
+			printed: { ...base.order.printed, ...(order.printed ?? {}) },
 		},
 		store: {
 			...base.store,
@@ -724,6 +725,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	// matching the contract that ReceiptDate has all 19 keys present.
 	const offlineCreated = { ...emptyReceiptDate(), datetime: toStr(data.order_date) };
 	const offlineDate = emptyReceiptDate();
+	const offlinePrinted = { ...emptyReceiptDate(), datetime: new Date().toLocaleString() };
 
 	const result: ReceiptData = {
 		order: {
@@ -737,6 +739,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 			created: offlineCreated,
 			paid: offlineDate,
 			completed: offlineDate,
+			printed: offlinePrinted,
 		},
 		store: mapStore(store),
 		cashier: { id: 0, name: '' } as ReceiptCashier,
@@ -815,6 +818,7 @@ function emptyReceiptData(): ReceiptData {
 			created: emptyReceiptDate(),
 			paid: emptyReceiptDate(),
 			completed: emptyReceiptDate(),
+			printed: emptyReceiptDate(),
 		},
 		store: { id: 0, name: '', address_lines: [] },
 		cashier: { id: 0, name: '' },
