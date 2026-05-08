@@ -725,7 +725,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	// matching the contract that ReceiptDate has all 19 keys present.
 	const offlineCreated = { ...emptyReceiptDate(), datetime: toStr(data.order_date) };
 	const offlineDate = emptyReceiptDate();
-	const offlinePrinted = { ...emptyReceiptDate(), datetime: new Date().toLocaleString() };
+	const offlinePrinted = { ...emptyReceiptDate(), datetime: new Date().toISOString() };
 
 	const result: ReceiptData = {
 		order: {
