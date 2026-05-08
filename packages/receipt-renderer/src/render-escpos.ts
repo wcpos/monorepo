@@ -415,7 +415,15 @@ function writeIndentedStandaloneTextLine(
 	nodes: ThermalNode[],
 	context: RenderContext
 ): boolean {
-	if (context.align !== 'left' || nodes.length !== 1 || nodes[0]?.type !== 'raw-text') {
+	const activeWidth = context.escposPrintMode?.width ?? 1;
+	const activeHeight = context.escposPrintMode?.height ?? 1;
+	if (
+		context.align !== 'left' ||
+		activeWidth > 1 ||
+		activeHeight > 1 ||
+		nodes.length !== 1 ||
+		nodes[0]?.type !== 'raw-text'
+	) {
 		return false;
 	}
 

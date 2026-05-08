@@ -518,6 +518,23 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(includesSequence(bytes, [0x1b, 0x74, 0x00, 0x20, 0x20, 0x53])).toBe(true);
 	});
 
+	it('skips counted indented layout while ESC/POS text size is scaled', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><size width="2" height="2"><text>  SKU: SKU-6564</text></size></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos' }
+		);
+		const sizeIndex = sequenceIndex(bytes, [0x1d, 0x21, 0x11]);
+		const countedLayoutIndex = sequenceIndex(
+			bytes,
+			[0x1b, 0x74, 0x00, 0x20, 0x20, 0x53],
+			sizeIndex
+		);
+
+		expect(sizeIndex).toBeGreaterThanOrEqual(0);
+		expect(countedLayoutIndex).toBe(-1);
+	});
+
 	it('encodes Japanese thermal text without question-mark substitutions', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt><text>東京コーヒー商會</text><row><col width="24">抹茶ラテ</col><col width="24" align="right">100</col></row></receipt>',
