@@ -74,11 +74,29 @@ function mapStore(src: Record<string, any>): ReceiptStoreMeta {
 				.map((s: string) => s.trim())
 				.filter(Boolean)
 		: [];
+	const taxIds: NonNullable<ReceiptStoreMeta['tax_ids']> = Array.isArray(src.tax_ids)
+		? src.tax_ids
+				.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object')
+				.flatMap((entry): NonNullable<ReceiptStoreMeta['tax_ids']> => {
+					const type = toStr(entry.type);
+					const value = toStr(entry.value);
+					if (!type || !value) return [];
+					return [
+						{
+							type,
+							value,
+							country: entry.country == null ? undefined : toStr(entry.country),
+							label: entry.label == null ? undefined : toStr(entry.label),
+						},
+					];
+				})
+		: [];
 
 	return {
-		id: Number.isFinite(Number(src.id)) ? Number(src.id) : 0,
+		id: Number.isFinite(Number(src.id)) ? Math.trunc(Number(src.id)) : 0,
 		name: toStr(src.name),
 		address_lines: addressLines,
+		...(taxIds.length > 0 ? { tax_ids: taxIds } : {}),
 		phone: toStr(src.phone),
 		email: toStr(src.email),
 	};

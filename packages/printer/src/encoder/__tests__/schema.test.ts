@@ -16,6 +16,32 @@ describe('ReceiptDataSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
+	it('maps store.id to an integer', () => {
+		const mapped = mapReceiptData({ store: { id: '42.9' } });
+		expect(mapped.store.id).toBe(42);
+		expect(ReceiptDataSchema.safeParse(mapped).success).toBe(true);
+	});
+
+	it('maps structured store tax IDs', () => {
+		const mapped = mapReceiptData({
+			store: {
+				tax_ids: [
+					{ type: 'other', value: 'TAX-123', country: 'US', label: 'Tax ID' },
+					{ type: 'custom_tax_id', value: 'CUSTOM-456' },
+					{ type: '', value: 'missing-type' },
+					{ type: 'other', value: '' },
+					null,
+				],
+			},
+		});
+
+		expect(mapped.store.tax_ids).toEqual([
+			{ type: 'other', value: 'TAX-123', country: 'US', label: 'Tax ID' },
+			{ type: 'custom_tax_id', value: 'CUSTOM-456' },
+		]);
+		expect(ReceiptDataSchema.safeParse(mapped).success).toBe(true);
+	});
+
 	it('rejects missing required top-level keys', () => {
 		const broken = { ...sampleReceiptData } as Record<string, unknown>;
 		delete broken.totals;
