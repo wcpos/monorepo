@@ -42,6 +42,7 @@ interface EscposPrintModeState {
 
 interface RenderContext {
 	columns: number;
+	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	align: 'left' | 'center' | 'right';
 	supportsCp932: boolean;
 	normalizeText: boolean;
@@ -95,34 +96,35 @@ export function thermalImageAssetKey(input: { src: string; width?: number }): st
 }
 
 export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}): Uint8Array {
-	const {
-		printerModel,
-		language = 'esc-pos',
-		columns = ast.paperWidth,
-		enableCp932 = false,
-		emitEscPrintMode = true,
-	} = options;
+	const { printerModel, enableCp932 = false, emitEscPrintMode = true } = options;
+	const columns = options.columns ?? ast.paperWidth;
 
 	const encoderOpts: Record<string, unknown> = {
-		language,
 		columns,
 		imageMode: options.imageMode ?? 'raster',
 	};
+	if (options.language !== undefined || !printerModel) {
+		encoderOpts.language = options.language ?? 'esc-pos';
+	}
 	if (printerModel) {
 		encoderOpts.printerModel = printerModel;
 	}
 
 	const encoder = new ReceiptPrinterEncoder(encoderOpts);
 	encoder.initialize().codepage('auto');
+	const resolvedLanguage = encoder.language as 'esc-pos' | 'star-prnt' | 'star-line';
 
 	const context: RenderContext = {
 		columns,
+		language: resolvedLanguage,
 		align: 'left',
-		supportsCp932: language === 'esc-pos' && enableCp932,
-		normalizeText: language === 'esc-pos',
-		emitEscPrintMode: language === 'esc-pos' && emitEscPrintMode,
+		supportsCp932: resolvedLanguage === 'esc-pos' && enableCp932,
+		normalizeText: resolvedLanguage === 'esc-pos',
+		emitEscPrintMode: resolvedLanguage === 'esc-pos' && emitEscPrintMode,
 		escposPrintMode:
-			language === 'esc-pos' ? { bold: false, underline: false, width: 1, height: 1 } : undefined,
+			resolvedLanguage === 'esc-pos'
+				? { bold: false, underline: false, width: 1, height: 1 }
+				: undefined,
 		imageAssets: options.imageAssets ?? {},
 		imageAlgorithm: options.imageAlgorithm ?? 'atkinson',
 		imageThreshold: options.imageThreshold ?? 128,
@@ -133,7 +135,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 	walkNodes(encoder, ast.children, context);
 
 	const bytes = encoder.encode();
-	if (language !== 'esc-pos') return bytes;
+	if (resolvedLanguage !== 'esc-pos') return bytes;
 	const resetIndex = bytes.findIndex((byte, index) => byte === 0x1b && bytes[index + 1] === 0x40);
 	if (resetIndex > 0) return bytes.slice(resetIndex);
 	if (resetIndex === -1) return Uint8Array.from([0x1b, 0x40, ...bytes]);
@@ -246,6 +248,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			walkNodes(encoder, node.children, context);
 			context.align = previous;
 			encoder.align(previous);
+			writeHardwareAlign(encoder, context.language, previous);
 			break;
 		}
 		case 'row': {
@@ -299,13 +302,12 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 						})
 					];
 				if (asset) {
-					encoder.image(
-						asset.image,
-						normalizeImageWidth(asset.width),
-						normalizeImageHeight(asset.height),
-						asset.algorithm ?? context.imageAlgorithm,
-						asset.threshold ?? context.imageThreshold
-					);
+					writeImage(encoder, context, asset.image, {
+						width: normalizeImageWidth(asset.width),
+						height: normalizeImageHeight(asset.height),
+						algorithm: asset.algorithm ?? context.imageAlgorithm,
+						threshold: asset.threshold ?? context.imageThreshold,
+					});
 					break;
 				}
 			}
@@ -322,13 +324,12 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 						})
 					];
 				if (asset) {
-					encoder.image(
-						asset.image,
-						normalizeImageWidth(asset.width),
-						normalizeImageHeight(asset.height),
-						asset.algorithm ?? context.imageAlgorithm,
-						asset.threshold ?? context.imageThreshold
-					);
+					writeImage(encoder, context, asset.image, {
+						width: normalizeImageWidth(asset.width),
+						height: normalizeImageHeight(asset.height),
+						algorithm: asset.algorithm ?? context.imageAlgorithm,
+						threshold: asset.threshold ?? context.imageThreshold,
+					});
 					break;
 				}
 			}
@@ -341,13 +342,12 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			if (!asset) break;
 			const width = normalizeImageWidth(asset.width);
 			const height = normalizeImageHeight(asset.height);
-			encoder.image(
-				asset.image,
+			writeImage(encoder, context, asset.image, {
 				width,
 				height,
-				asset.algorithm ?? context.imageAlgorithm,
-				asset.threshold ?? context.imageThreshold
-			);
+				algorithm: asset.algorithm ?? context.imageAlgorithm,
+				threshold: asset.threshold ?? context.imageThreshold,
+			});
 			break;
 		}
 		case 'cut':
@@ -391,6 +391,35 @@ function normalizeImageWidth(value: number): number {
 function normalizeImageHeight(value: number): number {
 	const finite = Number.isFinite(value) ? Math.max(8, Math.floor(value)) : 8;
 	return finite + ((8 - (finite % 8)) % 8);
+}
+
+function writeImage(
+	encoder: ReceiptPrinterEncoder,
+	context: RenderContext,
+	image: unknown,
+	options: {
+		width: number;
+		height: number;
+		algorithm: ThermalImageAlgorithm;
+		threshold: number;
+	}
+): void {
+	encoder.image(image, options.width, options.height, options.algorithm, options.threshold);
+	if (context.align !== 'left') {
+		writeHardwareAlign(encoder, context.language, context.align);
+	}
+}
+
+function writeHardwareAlign(
+	encoder: ReceiptPrinterEncoder,
+	language: 'esc-pos' | 'star-prnt' | 'star-line',
+	align: 'left' | 'center' | 'right'
+): void {
+	if (language === 'esc-pos') {
+		encoder.raw([0x1b, 0x61, align === 'left' ? 0x00 : align === 'center' ? 0x01 : 0x02]);
+		return;
+	}
+	encoder.align(align);
 }
 
 function updateEscposPrintMode(

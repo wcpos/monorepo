@@ -9,6 +9,7 @@ declare module '@point-of-sale/receipt-printer-encoder' {
 			newline?: string;
 			imageMode?: 'column' | 'raster';
 		});
+		get language(): 'esc-pos' | 'star-prnt' | 'star-line';
 		initialize(): this;
 		align(value: 'left' | 'center' | 'right'): this;
 		bold(value?: boolean): this;
