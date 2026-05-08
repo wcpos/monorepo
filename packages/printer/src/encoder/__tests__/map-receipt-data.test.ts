@@ -1,3 +1,5 @@
+import { afterEach, vi } from 'vitest';
+
 import { mapReceiptData } from '../map-receipt-data';
 import { ReceiptDataSchema } from '../schema';
 import { sampleReceiptData } from './fixtures';
@@ -138,6 +140,10 @@ const offlineReceiptDataWithAdjustments = {
 };
 
 describe('mapReceiptData', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	describe('passthrough for canonical shape', () => {
 		it('normalizes canonical data so aliases and defaults are available', () => {
 			const legacyCanonical = {
@@ -246,6 +252,27 @@ describe('mapReceiptData', () => {
 			expect(result.order.created.date).toBe('');
 			expect(result.order.paid.datetime).toBe('');
 			expect(result.order.completed.datetime).toBe('');
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+		});
+
+		it('synthesizes printed datetime when canonical input omits it', () => {
+			const printedAt = new Date('2026-05-08T12:34:00Z');
+			vi.useFakeTimers();
+			vi.setSystemTime(printedAt);
+
+			const result = mapReceiptData({
+				order: {
+					id: 5,
+					number: '5',
+					currency: 'USD',
+					customer_note: '',
+					created: { datetime: '2026-03-06T14:30:00' },
+				},
+				store: { timezone: 'UTC' },
+				totals: { subtotal_incl: 10 },
+			});
+
+			expect(result.order.printed.datetime).toBe('May 8, 2026, 12:34 PM');
 			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
 		});
 
