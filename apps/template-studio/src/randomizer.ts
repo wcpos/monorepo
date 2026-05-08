@@ -1633,6 +1633,7 @@ function buildOrder(
 		created: buildDateObject(createdAt, locale, timeZone),
 		paid: paidAt ? buildDateObject(paidAt, locale, timeZone) : emptyDateObject(),
 		completed: completedAt ? buildDateObject(completedAt, locale, timeZone) : emptyDateObject(),
+		printed: buildDateObject(createdAt, locale, timeZone),
 	};
 }
 

@@ -10,6 +10,7 @@ export type HtmlRenderOptions = object;
 const DOT_BUDGET_WIDE = 576;
 const DOT_BUDGET_NARROW = 384;
 const NARROW_PAPER_THRESHOLD_CHARS = 40;
+const BARCODE_PREVIEW_SCALE = 1.5;
 
 export function renderHtml(ast: ReceiptNode, _options: HtmlRenderOptions = {}): string {
 	const widthChars = safeInteger(ast.paperWidth, 48, 16, 120);
@@ -90,7 +91,7 @@ export function renderBarcode(
 			textsize: 10,
 		});
 
-		return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg, paperWidthChars)}</div>`;
+		return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg, paperWidthChars, kind)}</div>`;
 	} catch (error) {
 		return renderBarcodeError(kind, barcodeType, text, error);
 	}
@@ -107,7 +108,7 @@ export function renderQrCode(value: string, size: number, paperWidthChars?: numb
 			scale: safeInteger(size, 4, 1, 20),
 		});
 
-		return `<div data-barcode-kind="qrcode" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg, paperWidthChars)}</div>`;
+		return `<div data-barcode-kind="qrcode" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg, paperWidthChars, 'qrcode')}</div>`;
 	} catch (error) {
 		return renderBarcodeError('qrcode', 'qrcode', text, error);
 	}
@@ -179,7 +180,11 @@ function svgIntrinsicWidth(svg: string): number | null {
 	return null;
 }
 
-function constrainSvg(svg: string, paperWidthChars?: number): string {
+function constrainSvg(
+	svg: string,
+	paperWidthChars?: number,
+	kind: 'barcode' | 'qrcode' = 'barcode'
+): string {
 	if (paperWidthChars === undefined) {
 		return svg.replace('<svg ', '<svg style="max-width: 100%; height: auto" ');
 	}
@@ -187,7 +192,8 @@ function constrainSvg(svg: string, paperWidthChars?: number): string {
 	if (naturalWidth === null || naturalWidth <= 0) {
 		return svg.replace('<svg ', '<svg style="max-width: 100%; height: auto" ');
 	}
-	const widthCh = dotsToCh(naturalWidth, paperWidthChars);
+	const widthCh =
+		dotsToCh(naturalWidth, paperWidthChars) * (kind === 'barcode' ? BARCODE_PREVIEW_SCALE : 1);
 	return svg.replace(
 		'<svg ',
 		`<svg style="width: min(100%, ${widthCh.toFixed(2)}ch); height: auto" `
