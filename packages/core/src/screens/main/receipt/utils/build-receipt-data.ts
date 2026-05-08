@@ -312,15 +312,27 @@ export function buildReceiptData(
 	// Format with explicit Intl options (en-US) so the audit string is
 	// locale-agnostic, while still rendering in the store's wall-clock when
 	// `store.timezone` is set.
-	const printedDatetime = new Intl.DateTimeFormat('en-US', {
-		timeZone: storeTimezone,
+	const printedAt = new Date();
+	const printedFormatOptions: Intl.DateTimeFormatOptions = {
 		year: 'numeric',
 		month: 'short',
 		day: 'numeric',
 		hour: 'numeric',
 		minute: '2-digit',
 		hour12: true,
-	}).format(new Date());
+	};
+	let printedDatetime: string;
+	try {
+		printedDatetime = new Intl.DateTimeFormat('en-US', {
+			...printedFormatOptions,
+			timeZone: storeTimezone,
+		}).format(printedAt);
+	} catch (error) {
+		if (!(error instanceof RangeError)) {
+			throw error;
+		}
+		printedDatetime = new Intl.DateTimeFormat('en-US', printedFormatOptions).format(printedAt);
+	}
 
 	return {
 		order: {

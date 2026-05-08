@@ -132,11 +132,41 @@ describe('buildReceiptData', () => {
 	});
 
 	it('formats order.printed in the configured store timezone', () => {
-		// Choose two timezones with a >12h offset so the rendered hour differs
-		// regardless of the runtime's local zone.
-		const earlyZone = buildReceiptData(mockOrder, { ...mockStore, timezone: 'Pacific/Auckland' });
-		const lateZone = buildReceiptData(mockOrder, { ...mockStore, timezone: 'Pacific/Honolulu' });
-		expect(earlyZone.order.printed.datetime).not.toBe(lateZone.order.printed.datetime);
+		const printedAt = new Date('2026-03-06T12:34:00Z');
+		jest.useFakeTimers();
+		jest.setSystemTime(printedAt);
+
+		try {
+			// Choose two timezones with a >12h offset so the rendered hour differs
+			// regardless of the runtime's local zone.
+			const earlyZone = buildReceiptData(mockOrder, { ...mockStore, timezone: 'Pacific/Auckland' });
+			const lateZone = buildReceiptData(mockOrder, { ...mockStore, timezone: 'Pacific/Honolulu' });
+			expect(earlyZone.order.printed.datetime).not.toBe(lateZone.order.printed.datetime);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it('falls back when the configured store timezone is invalid', () => {
+		const printedAt = new Date('2026-03-06T12:34:00Z');
+		jest.useFakeTimers();
+		jest.setSystemTime(printedAt);
+
+		try {
+			const result = buildReceiptData(mockOrder, { ...mockStore, timezone: 'Invalid/Zone' });
+			expect(result.order.printed.datetime).toBe(
+				new Intl.DateTimeFormat('en-US', {
+					year: 'numeric',
+					month: 'short',
+					day: 'numeric',
+					hour: 'numeric',
+					minute: '2-digit',
+					hour12: true,
+				}).format(printedAt)
+			);
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 
 	it('falls back to capitalized status_label when no resolver is provided', () => {
