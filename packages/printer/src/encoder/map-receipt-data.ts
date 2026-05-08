@@ -610,6 +610,7 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			created: { ...base.order.created, ...(order.created ?? {}) },
 			paid: { ...base.order.paid, ...(order.paid ?? {}) },
 			completed: { ...base.order.completed, ...(order.completed ?? {}) },
+			printed: { ...base.order.printed, ...(order.printed ?? {}) },
 		},
 		store: {
 			...base.store,
@@ -724,6 +725,25 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	// matching the contract that ReceiptDate has all 19 keys present.
 	const offlineCreated = { ...emptyReceiptDate(), datetime: toStr(data.order_date) };
 	const offlineDate = emptyReceiptDate();
+	// Format the printed timestamp deterministically (en-US format, explicit
+	// options) so audit strings are locale-agnostic, but honor the store's
+	// IANA timezone when configured so reprints reflect the store's wall-clock
+	// rather than the device's. Falls back to the device timezone when the
+	// store carries no timezone override.
+	const storeTimezone =
+		typeof store.timezone === 'string' && store.timezone ? store.timezone : undefined;
+	const offlinePrinted = {
+		...emptyReceiptDate(),
+		datetime: new Intl.DateTimeFormat('en-US', {
+			timeZone: storeTimezone,
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit',
+			hour12: true,
+		}).format(new Date()),
+	};
 
 	const result: ReceiptData = {
 		order: {
@@ -737,6 +757,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 			created: offlineCreated,
 			paid: offlineDate,
 			completed: offlineDate,
+			printed: offlinePrinted,
 		},
 		store: mapStore(store),
 		cashier: { id: 0, name: '' } as ReceiptCashier,
@@ -815,6 +836,7 @@ function emptyReceiptData(): ReceiptData {
 			created: emptyReceiptDate(),
 			paid: emptyReceiptDate(),
 			completed: emptyReceiptDate(),
+			printed: emptyReceiptDate(),
 		},
 		store: { id: 0, name: '', address_lines: [] },
 		cashier: { id: 0, name: '' },

@@ -16,6 +16,12 @@ interface ReceiptOrder {
 	wc_status: string;
 	status_label: string;
 	created: { datetime: string };
+	/**
+	 * Render-time print timestamp. Refreshed on every buildReceiptData call so
+	 * reprints reflect the actual print time rather than persisted order
+	 * metadata. Formatted in the store's IANA timezone when configured.
+	 */
+	printed: { datetime: string };
 }
 
 interface ReceiptStore {
@@ -301,6 +307,33 @@ export function buildReceiptData(
 			: capitalizeStatus(rawStatus)
 		: '';
 
+	const storeTimezone =
+		typeof store.timezone === 'string' && store.timezone ? store.timezone : undefined;
+	// Format with explicit Intl options (en-US) so the audit string is
+	// locale-agnostic, while still rendering in the store's wall-clock when
+	// `store.timezone` is set.
+	const printedAt = new Date();
+	const printedFormatOptions: Intl.DateTimeFormatOptions = {
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric',
+		hour: 'numeric',
+		minute: '2-digit',
+		hour12: true,
+	};
+	let printedDatetime: string;
+	try {
+		printedDatetime = new Intl.DateTimeFormat('en-US', {
+			...printedFormatOptions,
+			timeZone: storeTimezone,
+		}).format(printedAt);
+	} catch (error) {
+		if (!(error instanceof RangeError)) {
+			throw error;
+		}
+		printedDatetime = new Intl.DateTimeFormat('en-US', printedFormatOptions).format(printedAt);
+	}
+
 	return {
 		order: {
 			id: typeof order.id === 'number' ? order.id : Number(order.id) || 0,
@@ -310,6 +343,7 @@ export function buildReceiptData(
 			wc_status: rawStatus,
 			status_label: statusLabel,
 			created: { datetime: order.date_created || '' },
+			printed: { datetime: printedDatetime },
 		},
 		store: {
 			name: store.name || '',

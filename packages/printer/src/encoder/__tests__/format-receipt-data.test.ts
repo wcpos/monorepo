@@ -303,6 +303,7 @@ describe('formatReceiptData', () => {
 			created: fullDate,
 			paid: fullDate,
 			completed: fullDate,
+			printed: fullDate,
 		};
 
 		const result = formatReceiptData(data);

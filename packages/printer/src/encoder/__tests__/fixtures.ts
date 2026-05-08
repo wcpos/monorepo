@@ -31,6 +31,7 @@ export const sampleReceiptData: ReceiptData = {
 		created: { ...emptyDate, datetime: '2026-03-06 14:30:00' },
 		paid: emptyDate,
 		completed: emptyDate,
+		printed: { ...emptyDate, datetime: '2026-03-06 14:35:00' },
 	},
 	store: {
 		id: 1,

@@ -62,6 +62,9 @@ export const ReceiptOrderSchema = z.object({
 	created: ReceiptDateSchema,
 	paid: ReceiptDateSchema,
 	completed: ReceiptDateSchema,
+	printed: ReceiptDateSchema.describe(
+		'Render-time print timestamp. Refreshed on every Receipt_Data_Builder::build() call so reprints reflect the actual print time rather than persisted order metadata.'
+	),
 });
 
 export const TaxIdSchema = z.object({
