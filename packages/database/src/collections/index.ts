@@ -578,9 +578,9 @@ const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 			return oldDoc;
 		},
 		4(oldDoc) {
-			// v4: Added enableLegacyPrintMode for ESC ! / GS ! compatibility.
-			// Default to true so existing profiles keep the safer dual-emission behavior.
-			oldDoc.enableLegacyPrintMode = true;
+			// v4: Added emitEscPrintMode to control ESC ! / GS ! dual size emission.
+			// Default to true so existing profiles get the broader compatibility behavior.
+			oldDoc.emitEscPrintMode = true;
 			return oldDoc;
 		},
 	},

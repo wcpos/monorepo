@@ -17,12 +17,12 @@ describe('WooCommerceSection', () => {
 				printerModel=""
 				language="esc-pos"
 				thermalColumns={42}
-				enableLegacyPrintMode={true}
+				emitEscPrintMode={true}
 				onChangePath={onChangePath}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={vi.fn()}
-				onEnableLegacyPrintModeChange={vi.fn()}
+				onEmitEscPrintModeChange={vi.fn()}
 			/>
 		);
 
@@ -45,12 +45,12 @@ describe('WooCommerceSection', () => {
 				printerModel="generic"
 				language="esc-pos"
 				thermalColumns={42}
-				enableLegacyPrintMode={true}
+				emitEscPrintMode={true}
 				onChangePath={vi.fn()}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={onThermalColumnsChange}
-				onEnableLegacyPrintModeChange={vi.fn()}
+				onEmitEscPrintModeChange={vi.fn()}
 			/>
 		);
 
@@ -64,8 +64,8 @@ describe('WooCommerceSection', () => {
 		expect(onThermalColumnsChange).toHaveBeenCalledWith(48);
 	});
 
-	it('wires legacy size toggle by template engine', () => {
-		const onEnableLegacyPrintModeChange = vi.fn();
+	it('wires the wide-compatibility toggle by template engine', () => {
+		const onEmitEscPrintModeChange = vi.fn();
 		const props = {
 			currency: 'EUR',
 			locale: 'es_ES',
@@ -75,22 +75,22 @@ describe('WooCommerceSection', () => {
 			printerModel: 'generic',
 			language: 'esc-pos',
 			thermalColumns: 42 as const,
-			enableLegacyPrintMode: true,
+			emitEscPrintMode: true,
 			onChangePath: vi.fn(),
 			onPrinterModelChange: vi.fn(),
 			onLanguageChange: vi.fn(),
 			onThermalColumnsChange: vi.fn(),
-			onEnableLegacyPrintModeChange,
+			onEmitEscPrintModeChange,
 		};
 		const { rerender } = render(<WooCommerceSection {...props} engine="thermal" />);
 
-		const toggle = screen.getByLabelText('Use legacy size commands');
+		const toggle = screen.getByLabelText('Wide compatibility');
 		expect(toggle).toBeEnabled();
 		fireEvent.click(toggle);
-		expect(onEnableLegacyPrintModeChange).toHaveBeenCalledWith(false);
+		expect(onEmitEscPrintModeChange).toHaveBeenCalledWith(false);
 
 		rerender(<WooCommerceSection {...props} engine="logicless" />);
-		expect(screen.getByLabelText('Use legacy size commands')).toBeDisabled();
+		expect(screen.getByLabelText('Wide compatibility')).toBeDisabled();
 	});
 
 	it('disables characters-per-line selection for logicless templates', () => {
@@ -105,12 +105,12 @@ describe('WooCommerceSection', () => {
 				printerModel="generic"
 				language="esc-pos"
 				thermalColumns={42}
-				enableLegacyPrintMode={true}
+				emitEscPrintMode={true}
 				onChangePath={vi.fn()}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={vi.fn()}
-				onEnableLegacyPrintModeChange={vi.fn()}
+				onEmitEscPrintModeChange={vi.fn()}
 			/>
 		);
 

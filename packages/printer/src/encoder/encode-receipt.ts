@@ -13,10 +13,10 @@ export interface EncodeReceiptOptions {
 	/** Enable CP932/Kanji-mode encoding for Japanese ESC/POS receipts. Default: false */
 	enableCp932?: boolean;
 	/**
-	 * Send legacy `ESC !` print-mode bytes alongside `GS !` size bytes.
+	 * Emit `ESC !` print-mode bytes alongside `GS !` size bytes.
 	 * Default: true. Disable as an escape hatch for printers that misbehave.
 	 */
-	enableLegacyPrintMode?: boolean;
+	emitEscPrintMode?: boolean;
 	/** Include cut command. Default: true */
 	cut?: boolean;
 	/** Send cash drawer kick pulse. Default: false */
@@ -35,7 +35,7 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		language = 'esc-pos',
 		columns = 48,
 		enableCp932 = false,
-		enableLegacyPrintMode = true,
+		emitEscPrintMode = true,
 		cut = true,
 		openDrawer = false,
 		decimals: dp = 2,
@@ -118,6 +118,6 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		language,
 		columns,
 		enableCp932,
-		enableLegacyPrintMode,
+		emitEscPrintMode,
 	});
 }

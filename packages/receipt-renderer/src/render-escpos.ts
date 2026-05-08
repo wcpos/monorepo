@@ -18,14 +18,13 @@ export interface EscposRenderOptions {
 	columns?: number;
 	enableCp932?: boolean;
 	/**
-	 * Emit legacy `ESC !` print-mode bytes alongside `GS !` size bytes.
+	 * Emit `ESC !` print-mode bytes alongside `GS !` size bytes.
 	 *
-	 * Default `true`. Older printers and simulators (e.g. Virtual Thermal Printer)
-	 * honour `ESC !` but ignore `GS !`; modern Epson/Star printers honour both.
-	 * Disable only as an escape hatch for printers that misbehave when both are
-	 * sent — the dual emission is otherwise strictly safer.
+	 * Default `true`. Some printers and simulators only honour one of the two
+	 * size commands; emitting both maximizes compatibility. Disable as an
+	 * escape hatch for printers that misbehave when both are sent.
 	 */
-	enableLegacyPrintMode?: boolean;
+	emitEscPrintMode?: boolean;
 	imageMode?: ThermalImageMode;
 	imageAssets?: ThermalImageAssets;
 	imageAlgorithm?: ThermalImageAlgorithm;
@@ -46,7 +45,7 @@ interface RenderContext {
 	align: 'left' | 'center' | 'right';
 	supportsCp932: boolean;
 	normalizeText: boolean;
-	emitLegacyPrintMode: boolean;
+	emitEscPrintMode: boolean;
 	escposPrintMode?: EscposPrintModeState;
 	imageAssets: ThermalImageAssets;
 	imageAlgorithm: ThermalImageAlgorithm;
@@ -100,7 +99,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		language = 'esc-pos',
 		columns = ast.paperWidth,
 		enableCp932 = false,
-		enableLegacyPrintMode = true,
+		emitEscPrintMode = true,
 	} = options;
 
 	const encoderOpts: Record<string, unknown> = {
@@ -120,7 +119,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		align: 'left',
 		supportsCp932: language === 'esc-pos' && enableCp932,
 		normalizeText: language === 'esc-pos',
-		emitLegacyPrintMode: language === 'esc-pos' && enableLegacyPrintMode,
+		emitEscPrintMode: language === 'esc-pos' && emitEscPrintMode,
 		escposPrintMode:
 			language === 'esc-pos' ? { bold: false, underline: false, width: 1, height: 1 } : undefined,
 		imageAssets: options.imageAssets ?? {},
@@ -370,7 +369,7 @@ function updateEscposPrintMode(
 ): void {
 	if (!context.escposPrintMode) return;
 	Object.assign(context.escposPrintMode, patch);
-	if (!context.emitLegacyPrintMode) return;
+	if (!context.emitEscPrintMode) return;
 	if (context.escposPrintMode.width > 2 || context.escposPrintMode.height > 2) return;
 	encoder.raw([0x1b, 0x21, escposPrintModeByte(context.escposPrintMode)]);
 }
@@ -386,7 +385,7 @@ function updateEscposSize(
 		return;
 	}
 	Object.assign(context.escposPrintMode, { width, height });
-	if (!context.emitLegacyPrintMode) {
+	if (!context.emitEscPrintMode) {
 		encoder.size(width, height);
 		return;
 	}

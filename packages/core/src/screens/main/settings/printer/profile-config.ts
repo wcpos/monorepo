@@ -7,7 +7,7 @@ export interface PrinterProfileFormData {
 	port: number;
 	language: PrinterProfile['language'];
 	columns: number;
-	enableLegacyPrintMode: boolean;
+	emitEscPrintMode: boolean;
 	autoPrint: boolean;
 	autoCut: boolean;
 	autoOpenDrawer: boolean;
@@ -59,7 +59,7 @@ export function buildPrinterProfileFields(
 			: {}),
 		language: data.language,
 		columns: data.columns,
-		enableLegacyPrintMode: data.enableLegacyPrintMode,
+		emitEscPrintMode: data.emitEscPrintMode,
 		autoPrint: data.autoPrint,
 		autoCut: data.autoCut,
 		autoOpenDrawer: data.autoOpenDrawer,

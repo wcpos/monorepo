@@ -11,12 +11,12 @@ interface WooCommerceSectionProps {
 	printerModel: string;
 	language: string;
 	thermalColumns: ThermalColumns;
-	enableLegacyPrintMode: boolean;
+	emitEscPrintMode: boolean;
 	onChangePath: (path: PathSegment[], value: unknown) => void;
 	onPrinterModelChange: (value: string) => void;
 	onLanguageChange: (value: string) => void;
 	onThermalColumnsChange: (value: ThermalColumns) => void;
-	onEnableLegacyPrintModeChange: (value: boolean) => void;
+	onEmitEscPrintModeChange: (value: boolean) => void;
 }
 
 const COMMON_CURRENCIES = [
@@ -103,12 +103,12 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 		printerModel,
 		language,
 		thermalColumns,
-		enableLegacyPrintMode,
+		emitEscPrintMode,
 		onChangePath,
 		onPrinterModelChange,
 		onLanguageChange,
 		onThermalColumnsChange,
-		onEnableLegacyPrintModeChange,
+		onEmitEscPrintModeChange,
 	} = props;
 	const isThermal = engine === 'thermal';
 	const currencyOptions = COMMON_CURRENCIES.includes(currency)
@@ -253,20 +253,19 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 			) : null}
 
 			<div className={isThermal ? 'toggle-row' : 'toggle-row muted'}>
-				<label htmlFor="woo-legacy-print-mode">Use legacy size commands</label>
+				<label htmlFor="woo-esc-print-mode">Wide compatibility</label>
 				<input
-					id="woo-legacy-print-mode"
+					id="woo-esc-print-mode"
 					type="checkbox"
-					checked={enableLegacyPrintMode}
-					onChange={(event) => onEnableLegacyPrintModeChange(event.target.checked)}
+					checked={emitEscPrintMode}
+					onChange={(event) => onEmitEscPrintModeChange(event.target.checked)}
 					disabled={!isThermal}
 				/>
 			</div>
 			{isThermal ? (
 				<p className="field-help">
-					Sends both modern (GS !) and legacy (ESC !) size commands. Improves compatibility with
-					older printers and simulators. Disable only as an escape hatch for printers that
-					misbehave.
+					Emits both ESC ! and GS ! size commands so receipts print correctly on a wider range of
+					printers. Disable as an escape hatch for printers that misbehave when both are sent.
 				</p>
 			) : null}
 		</div>

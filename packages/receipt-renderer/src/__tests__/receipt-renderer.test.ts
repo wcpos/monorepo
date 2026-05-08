@@ -535,11 +535,11 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(countedLayoutIndex).toBe(-1);
 	});
 
-	it('omits ESC ! print-mode bytes when enableLegacyPrintMode is false', () => {
+	it('omits ESC ! print-mode bytes when emitEscPrintMode is false', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt><text><size width="2" height="2">Store</size>Small</text></receipt>',
 			{},
-			{ columns: 48, language: 'esc-pos', enableLegacyPrintMode: false }
+			{ columns: 48, language: 'esc-pos', emitEscPrintMode: false }
 		);
 		const gsSizeIndex = sequenceIndex(bytes, [0x1d, 0x21, 0x11]);
 		const escPrintModeIndex = sequenceIndex(bytes, [0x1b, 0x21]);
@@ -548,11 +548,11 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(escPrintModeIndex).toBe(-1);
 	});
 
-	it('still preserves leading spaces when enableLegacyPrintMode is false', () => {
+	it('still preserves leading spaces when emitEscPrintMode is false', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt><text>  SKU: SKU-6564</text></receipt>',
 			{},
-			{ columns: 42, language: 'esc-pos', enableLegacyPrintMode: false }
+			{ columns: 42, language: 'esc-pos', emitEscPrintMode: false }
 		);
 		const printable = decodePrintableAscii(bytes);
 
