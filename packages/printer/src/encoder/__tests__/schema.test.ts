@@ -22,6 +22,14 @@ describe('ReceiptDataSchema', () => {
 		expect(ReceiptDataSchema.safeParse(mapped).success).toBe(true);
 	});
 
+	it('falls back to 0 for non-numeric store.id primitives', () => {
+		for (const id of [true, false, 'true', '42abc', '1e2', '']) {
+			const mapped = mapReceiptData({ store: { id } });
+			expect(mapped.store.id).toBe(0);
+			expect(ReceiptDataSchema.safeParse(mapped).success).toBe(true);
+		}
+	});
+
 	it('maps structured store tax IDs', () => {
 		const mapped = mapReceiptData({
 			store: {
@@ -39,6 +47,24 @@ describe('ReceiptDataSchema', () => {
 			{ type: 'other', value: 'TAX-123', country: 'US', label: 'Tax ID' },
 			{ type: 'custom_tax_id', value: 'CUSTOM-456' },
 		]);
+		expect(ReceiptDataSchema.safeParse(mapped).success).toBe(true);
+	});
+
+	it('normalizes canonical store and customer tax ID fields', () => {
+		const canonical = JSON.parse(JSON.stringify(sampleReceiptData));
+		canonical.store.id = '42.9';
+		canonical.store.tax_id = 'STORE-TAX-123';
+		delete canonical.store.tax_ids;
+		canonical.customer.tax_id = 'CUSTOMER-TAX-456';
+
+		const mapped = mapReceiptData(canonical);
+
+		expect(mapped.store.id).toBe(42);
+		expect(mapped.store.address_lines).toEqual(sampleReceiptData.store.address_lines);
+		expect(mapped.store).not.toHaveProperty('tax_id');
+		expect(mapped.store.tax_ids).toEqual([{ type: 'other', value: 'STORE-TAX-123' }]);
+		expect(mapped.customer).not.toHaveProperty('tax_id');
+		expect(mapped.customer.tax_ids).toEqual([{ type: 'other', value: 'CUSTOMER-TAX-456' }]);
 		expect(ReceiptDataSchema.safeParse(mapped).success).toBe(true);
 	});
 

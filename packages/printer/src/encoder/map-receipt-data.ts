@@ -91,9 +91,19 @@ function mapStore(src: Record<string, any>): ReceiptStoreMeta {
 					];
 				})
 		: [];
+	const scalarTaxId = toStr(src.tax_id);
+	if (taxIds.length === 0 && scalarTaxId) {
+		taxIds.push({ type: 'other', value: scalarTaxId });
+	}
+	const numericId =
+		typeof src.id === 'number' && Number.isFinite(src.id)
+			? src.id
+			: typeof src.id === 'string' && /^[+-]?\d+(\.\d+)?$/.test(src.id.trim())
+				? Number(src.id)
+				: 0;
 
 	return {
-		id: Number.isFinite(Number(src.id)) ? Math.trunc(Number(src.id)) : 0,
+		id: Math.trunc(numericId),
 		name: toStr(src.name),
 		address_lines: addressLines,
 		...(taxIds.length > 0 ? { tax_ids: taxIds } : {}),
@@ -143,6 +153,10 @@ function mapCustomer(src: Record<string, any>): ReceiptCustomer {
 					];
 				})
 		: [];
+	const scalarTaxId = toStr(src.tax_id);
+	if (taxIds.length === 0 && scalarTaxId) {
+		taxIds.push({ type: 'other', value: scalarTaxId });
+	}
 	return {
 		id: 0,
 		name: toStr(src.name),
@@ -574,6 +588,20 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 	);
 	const displayTax = resolveDisplayValueSide(presentationHints);
 	const order = data.order ?? base.order;
+	const storeSource =
+		data.store && typeof data.store === 'object' ? (data.store as Record<string, any>) : {};
+	const customerSource =
+		data.customer && typeof data.customer === 'object'
+			? (data.customer as Record<string, any>)
+			: {};
+	const storeData = { ...storeSource };
+	delete storeData.tax_id;
+	delete storeData.tax_ids;
+	const customerData = { ...customerSource };
+	delete customerData.tax_id;
+	delete customerData.tax_ids;
+	const normalizedStore = mapStore(storeSource);
+	const normalizedCustomer = mapCustomer(customerSource);
 
 	const result: ReceiptData = {
 		order: {
@@ -585,10 +613,11 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 		},
 		store: {
 			...base.store,
-			...(data.store ?? {}),
-			address_lines: Array.isArray(data.store?.address_lines)
-				? data.store.address_lines.map((line) => toStr(line))
-				: base.store.address_lines,
+			...storeData,
+			...normalizedStore,
+			address_lines: Array.isArray(storeSource.address_lines)
+				? storeSource.address_lines.map((line) => toStr(line))
+				: normalizedStore.address_lines,
 		},
 		cashier: {
 			...base.cashier,
@@ -596,7 +625,8 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 		},
 		customer: {
 			...base.customer,
-			...(data.customer ?? {}),
+			...customerData,
+			...(normalizedCustomer.tax_ids?.length ? { tax_ids: normalizedCustomer.tax_ids } : {}),
 		},
 		lines: toArr(data.lines).map((item, i) =>
 			mapLine(item && typeof item === 'object' ? (item as Record<string, any>) : {}, i, displayTax)
