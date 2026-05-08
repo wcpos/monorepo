@@ -30,9 +30,58 @@ const data = {
 };
 
 function includesSequence(bytes: Uint8Array, sequence: number[]): boolean {
-	return Array.from(bytes).some((_, index, all) =>
-		sequence.every((value, offset) => all[index + offset] === value)
+	return sequenceIndex(bytes, sequence) !== -1;
+}
+
+function sequenceIndex(bytes: Uint8Array, sequence: number[], fromIndex = 0): number {
+	const all = Array.from(bytes);
+	return all.findIndex(
+		(_, index) =>
+			index >= fromIndex && sequence.every((value, offset) => all[index + offset] === value)
 	);
+}
+
+function gsCommandSkipLength(bytes: Uint8Array, index: number): number {
+	const command = bytes[index + 1];
+	if (command === 0x21) return 2;
+	if (command === 0x56) {
+		const mode = bytes[index + 2];
+		return mode === 0x41 || mode === 0x42 ? 3 : 2;
+	}
+	if (command === 0x76 && bytes[index + 2] === 0x30) {
+		const width = (bytes[index + 4] ?? 0) + ((bytes[index + 5] ?? 0) << 8);
+		const height = (bytes[index + 6] ?? 0) + ((bytes[index + 7] ?? 0) << 8);
+		return 7 + width * height;
+	}
+	return 1;
+}
+
+function decodePrintableAscii(bytes: Uint8Array): string {
+	let output = '';
+	for (let index = 0; index < bytes.length; index++) {
+		const byte = bytes[index];
+		if (byte === 0x1b) {
+			const command = bytes[index + 1];
+			index += command === 0x21 || command === 0x4d || command === 0x74 ? 2 : 1;
+			continue;
+		}
+		if (byte === 0x1c) {
+			index += 1;
+			continue;
+		}
+		if (byte === 0x1d) {
+			index += gsCommandSkipLength(bytes, index);
+			continue;
+		}
+		if (byte === 0x0d || byte === 0x0a) {
+			output += '\n';
+			continue;
+		}
+		if (byte >= 0x20 && byte <= 0x7e) {
+			output += String.fromCharCode(byte);
+		}
+	}
+	return output;
 }
 
 function opaqueBlackImageData(width: number, height: number): ImageData {
@@ -405,6 +454,109 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(setSizeIndex).toBeGreaterThanOrEqual(0);
 		expect(textIndex).toBeGreaterThan(setSizeIndex);
 		expect(resetSizeIndex).toBeGreaterThan(textIndex);
+	});
+
+	it('emits ESC ! print-mode size bytes for the virtual thermal printer simulator', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text><size width="2" height="2">Store</size>Small</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const hex = Array.from(bytes)
+			.map((byte) => byte.toString(16).padStart(2, '0'))
+			.join(' ');
+		const storeIndex = hex.indexOf('53 74 6f 72 65');
+		const smallIndex = hex.indexOf('53 6d 61 6c 6c');
+		const setEscPrintModeIndex = hex.indexOf('1b 21 30');
+		const resetEscPrintModeIndex = hex.indexOf('1b 21 00', storeIndex);
+
+		expect(setEscPrintModeIndex).toBeGreaterThanOrEqual(0);
+		expect(storeIndex).toBeGreaterThan(setEscPrintModeIndex);
+		expect(resetEscPrintModeIndex).toBeGreaterThan(storeIndex);
+		expect(smallIndex).toBeGreaterThan(resetEscPrintModeIndex);
+	});
+
+	it('does not collapse GS ! magnification above double size with ESC ! print mode', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text><size width="2" height="2"><size width="3" height="3">Store</size></size>Small</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const doubleSizeIndex = sequenceIndex(bytes, [0x1b, 0x21, 0x30]);
+		const clearEscSizeIndex = sequenceIndex(bytes, [0x1b, 0x21, 0x00], doubleSizeIndex);
+		const gsSizeIndex = sequenceIndex(bytes, [0x1d, 0x21, 0x22]);
+		const storeIndex = sequenceIndex(bytes, [0x53, 0x74, 0x6f, 0x72, 0x65]);
+		const escPrintModeBeforeText = sequenceIndex(bytes, [0x1b, 0x21], gsSizeIndex);
+
+		expect(doubleSizeIndex).toBeGreaterThanOrEqual(0);
+		expect(clearEscSizeIndex).toBeGreaterThan(doubleSizeIndex);
+		expect(gsSizeIndex).toBeGreaterThan(clearEscSizeIndex);
+		expect(gsSizeIndex).toBeGreaterThanOrEqual(0);
+		expect(storeIndex).toBeGreaterThan(gsSizeIndex);
+		expect(escPrintModeBeforeText).toBeGreaterThan(storeIndex);
+	});
+
+	it('preserves leading spaces in ESC/POS text nodes for indented continuation lines', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>  SKU: SKU-6564</text><text>  Flavor: Chocolate</text></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos' }
+		);
+		const printable = decodePrintableAscii(bytes);
+
+		expect(printable).toContain('  SKU: SKU-6564');
+		expect(printable).toContain('  Flavor: Chocolate');
+	});
+
+	it('emits indented standalone text through counted ESC/POS text layout', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>  SKU: SKU-6564</text></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos' }
+		);
+
+		expect(includesSequence(bytes, [0x1b, 0x74, 0x00, 0x20, 0x20, 0x53])).toBe(true);
+	});
+
+	it('skips counted indented layout while ESC/POS text size is scaled', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><size width="2" height="2"><text>  SKU: SKU-6564</text></size></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos' }
+		);
+		const sizeIndex = sequenceIndex(bytes, [0x1d, 0x21, 0x11]);
+		const countedLayoutIndex = sequenceIndex(
+			bytes,
+			[0x1b, 0x74, 0x00, 0x20, 0x20, 0x53],
+			sizeIndex
+		);
+
+		expect(sizeIndex).toBeGreaterThanOrEqual(0);
+		expect(countedLayoutIndex).toBe(-1);
+	});
+
+	it('omits ESC ! print-mode bytes when emitEscPrintMode is false', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text><size width="2" height="2">Store</size>Small</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos', emitEscPrintMode: false }
+		);
+		const gsSizeIndex = sequenceIndex(bytes, [0x1d, 0x21, 0x11]);
+		const escPrintModeIndex = sequenceIndex(bytes, [0x1b, 0x21]);
+
+		expect(gsSizeIndex).toBeGreaterThanOrEqual(0);
+		expect(escPrintModeIndex).toBe(-1);
+	});
+
+	it('still preserves leading spaces when emitEscPrintMode is false', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>  SKU: SKU-6564</text></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos', emitEscPrintMode: false }
+		);
+		const printable = decodePrintableAscii(bytes);
+
+		expect(printable).toContain('  SKU: SKU-6564');
 	});
 
 	it('encodes Japanese thermal text without question-mark substitutions', () => {

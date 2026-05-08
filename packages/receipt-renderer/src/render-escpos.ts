@@ -17,6 +17,14 @@ export interface EscposRenderOptions {
 	language?: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns?: number;
 	enableCp932?: boolean;
+	/**
+	 * Emit `ESC !` print-mode bytes alongside `GS !` size bytes.
+	 *
+	 * Default `true`. Some printers and simulators only honour one of the two
+	 * size commands; emitting both maximizes compatibility. Disable as an
+	 * escape hatch for printers that misbehave when both are sent.
+	 */
+	emitEscPrintMode?: boolean;
 	imageMode?: ThermalImageMode;
 	imageAssets?: ThermalImageAssets;
 	imageAlgorithm?: ThermalImageAlgorithm;
@@ -25,10 +33,20 @@ export interface EscposRenderOptions {
 	barcodeImages?: ThermalBarcodeImages;
 }
 
+interface EscposPrintModeState {
+	bold: boolean;
+	underline: boolean;
+	width: number;
+	height: number;
+}
+
 interface RenderContext {
 	columns: number;
+	align: 'left' | 'center' | 'right';
 	supportsCp932: boolean;
 	normalizeText: boolean;
+	emitEscPrintMode: boolean;
+	escposPrintMode?: EscposPrintModeState;
 	imageAssets: ThermalImageAssets;
 	imageAlgorithm: ThermalImageAlgorithm;
 	imageThreshold: number;
@@ -81,6 +99,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		language = 'esc-pos',
 		columns = ast.paperWidth,
 		enableCp932 = false,
+		emitEscPrintMode = true,
 	} = options;
 
 	const encoderOpts: Record<string, unknown> = {
@@ -97,8 +116,12 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 
 	const context: RenderContext = {
 		columns,
+		align: 'left',
 		supportsCp932: language === 'esc-pos' && enableCp932,
 		normalizeText: language === 'esc-pos',
+		emitEscPrintMode: language === 'esc-pos' && emitEscPrintMode,
+		escposPrintMode:
+			language === 'esc-pos' ? { bold: false, underline: false, width: 1, height: 1 } : undefined,
 		imageAssets: options.imageAssets ?? {},
 		imageAlgorithm: options.imageAlgorithm ?? 'atkinson',
 		imageThreshold: options.imageThreshold ?? 128,
@@ -167,34 +190,52 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			writeText(encoder, node.value, context.supportsCp932, context.normalizeText);
 			break;
 		case 'text':
+			if (writeIndentedStandaloneTextLine(encoder, node.children, context)) {
+				break;
+			}
 			walkNodes(encoder, node.children, context);
 			encoder.newline();
 			break;
-		case 'bold':
+		case 'bold': {
+			const previous = context.escposPrintMode?.bold ?? false;
 			encoder.bold(true);
+			updateEscposPrintMode(encoder, context, { bold: true });
 			walkNodes(encoder, node.children, context);
-			encoder.bold(false);
+			encoder.bold(previous);
+			updateEscposPrintMode(encoder, context, { bold: previous });
 			break;
-		case 'underline':
+		}
+		case 'underline': {
+			const previous = context.escposPrintMode?.underline ?? false;
 			encoder.underline(true);
+			updateEscposPrintMode(encoder, context, { underline: true });
 			walkNodes(encoder, node.children, context);
-			encoder.underline(false);
+			encoder.underline(previous);
+			updateEscposPrintMode(encoder, context, { underline: previous });
 			break;
+		}
 		case 'invert':
 			encoder.invert(true);
 			walkNodes(encoder, node.children, context);
 			encoder.invert(false);
 			break;
-		case 'size':
-			encoder.size(node.width, node.height);
+		case 'size': {
+			const previousWidth = context.escposPrintMode?.width ?? 1;
+			const previousHeight = context.escposPrintMode?.height ?? 1;
+			updateEscposSize(encoder, context, node.width, node.height);
 			walkNodes(encoder, node.children, context);
-			encoder.size(1, 1);
+			updateEscposSize(encoder, context, previousWidth, previousHeight);
 			break;
-		case 'align':
+		}
+		case 'align': {
+			const previous = context.align;
+			context.align = node.mode;
 			encoder.align(node.mode);
 			walkNodes(encoder, node.children, context);
-			encoder.align('left');
+			context.align = previous;
+			encoder.align(previous);
 			break;
+		}
 		case 'row': {
 			const resolvedWidths = resolveThermalRowWidths(node.children, context.columns);
 			const resolvedTotal = resolvedWidths.reduce((total, width) => total + width, 0);
@@ -321,6 +362,55 @@ function normalizeImageHeight(value: number): number {
 	return finite + ((8 - (finite % 8)) % 8);
 }
 
+function updateEscposPrintMode(
+	encoder: ReceiptPrinterEncoder,
+	context: RenderContext,
+	patch: Partial<EscposPrintModeState>
+): void {
+	if (!context.escposPrintMode) return;
+	Object.assign(context.escposPrintMode, patch);
+	if (!context.emitEscPrintMode) return;
+	if (context.escposPrintMode.width > 2 || context.escposPrintMode.height > 2) return;
+	encoder.raw([0x1b, 0x21, escposPrintModeByte(context.escposPrintMode)]);
+}
+
+function updateEscposSize(
+	encoder: ReceiptPrinterEncoder,
+	context: RenderContext,
+	width: number,
+	height: number
+): void {
+	if (!context.escposPrintMode) {
+		encoder.size(width, height);
+		return;
+	}
+	Object.assign(context.escposPrintMode, { width, height });
+	if (!context.emitEscPrintMode) {
+		encoder.size(width, height);
+		return;
+	}
+	if (width > 2 || height > 2) {
+		encoder.raw([
+			0x1b,
+			0x21,
+			escposPrintModeByte({ ...context.escposPrintMode, width: 1, height: 1 }),
+		]);
+		encoder.size(width, height);
+		return;
+	}
+	encoder.size(width, height);
+	encoder.raw([0x1b, 0x21, escposPrintModeByte(context.escposPrintMode)]);
+}
+
+function escposPrintModeByte(mode: EscposPrintModeState): number {
+	return (
+		(mode.bold ? 0x08 : 0) |
+		(mode.height > 1 ? 0x10 : 0) |
+		(mode.width > 1 ? 0x20 : 0) |
+		(mode.underline ? 0x80 : 0)
+	);
+}
+
 function writeText(
 	encoder: ReceiptPrinterEncoder,
 	value: string,
@@ -334,6 +424,61 @@ function writeText(
 	}
 
 	encoder.raw([...KANJI_MODE_ON, ...iconv.encode(normalized, 'cp932'), ...KANJI_MODE_OFF]);
+}
+
+/**
+ * Preserve leading spaces on a standalone left-aligned `<text>` line by routing
+ * it through the encoder's table layout (which honours `marginLeft`) instead of
+ * `encoder.text()` (which trims leading whitespace).
+ *
+ * Limitation: only triggers when the `<text>` node has a single raw-text child.
+ * Mixed-content nodes like `<text>  Discount: <bold>{{label}}</bold></text>`
+ * fall through to plain `encoder.text()` and lose their leading spaces. Also
+ * skipped while text size is scaled (the table layout doesn't account for
+ * scaled glyph width), inside non-left alignment, and on the Japanese (CP932)
+ * path. Templates that need indentation in those cases should use a
+ * `<row>`/`<col>` layout instead of leading-space text.
+ */
+function writeIndentedStandaloneTextLine(
+	encoder: ReceiptPrinterEncoder,
+	nodes: ThermalNode[],
+	context: RenderContext
+): boolean {
+	const activeWidth = context.escposPrintMode?.width ?? 1;
+	const activeHeight = context.escposPrintMode?.height ?? 1;
+	if (
+		context.align !== 'left' ||
+		activeWidth > 1 ||
+		activeHeight > 1 ||
+		nodes.length !== 1 ||
+		nodes[0]?.type !== 'raw-text'
+	) {
+		return false;
+	}
+
+	const normalized = context.normalizeText ? normalizeThermalText(nodes[0].value) : nodes[0].value;
+	const leadingSpaces = normalized.match(/^ +/)?.[0] ?? '';
+	const rest = normalized.slice(leadingSpaces.length);
+	if (
+		!leadingSpaces ||
+		!rest ||
+		(context.supportsCp932 && containsJapaneseText(normalized)) ||
+		displayWidth(normalized) > context.columns
+	) {
+		return false;
+	}
+
+	encoder.table(
+		[
+			{
+				width: Math.max(1, context.columns - leadingSpaces.length),
+				marginLeft: leadingSpaces.length,
+				align: 'left',
+			},
+		],
+		[[rest]]
+	);
+	return true;
 }
 
 function normalizeThermalText(value: string): string {

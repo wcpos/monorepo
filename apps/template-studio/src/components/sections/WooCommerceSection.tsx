@@ -11,10 +11,12 @@ interface WooCommerceSectionProps {
 	printerModel: string;
 	language: string;
 	thermalColumns: ThermalColumns;
+	emitEscPrintMode: boolean;
 	onChangePath: (path: PathSegment[], value: unknown) => void;
 	onPrinterModelChange: (value: string) => void;
 	onLanguageChange: (value: string) => void;
 	onThermalColumnsChange: (value: ThermalColumns) => void;
+	onEmitEscPrintModeChange: (value: boolean) => void;
 }
 
 const COMMON_CURRENCIES = [
@@ -101,10 +103,12 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 		printerModel,
 		language,
 		thermalColumns,
+		emitEscPrintMode,
 		onChangePath,
 		onPrinterModelChange,
 		onLanguageChange,
 		onThermalColumnsChange,
+		onEmitEscPrintModeChange,
 	} = props;
 	const isThermal = engine === 'thermal';
 	const currencyOptions = COMMON_CURRENCIES.includes(currency)
@@ -245,6 +249,23 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 				<p className="field-help">
 					Matches the POS printer profile text width. Use 42 for standard/generic 80mm printers, 48
 					only for known 48-CPL printers, and 32 for 58mm printers.
+				</p>
+			) : null}
+
+			<div className={isThermal ? 'toggle-row' : 'toggle-row muted'}>
+				<label htmlFor="woo-esc-print-mode">Wide compatibility</label>
+				<input
+					id="woo-esc-print-mode"
+					type="checkbox"
+					checked={emitEscPrintMode}
+					onChange={(event) => onEmitEscPrintModeChange(event.target.checked)}
+					disabled={!isThermal}
+				/>
+			</div>
+			{isThermal ? (
+				<p className="field-help">
+					Emits both ESC ! and GS ! size commands so receipts print correctly on a wider range of
+					printers. Disable as an escape hatch for printers that misbehave when both are sent.
 				</p>
 			) : null}
 		</div>

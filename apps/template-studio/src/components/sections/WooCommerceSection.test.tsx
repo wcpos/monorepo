@@ -17,10 +17,12 @@ describe('WooCommerceSection', () => {
 				printerModel=""
 				language="esc-pos"
 				thermalColumns={42}
+				emitEscPrintMode={true}
 				onChangePath={onChangePath}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={vi.fn()}
+				onEmitEscPrintModeChange={vi.fn()}
 			/>
 		);
 
@@ -43,10 +45,12 @@ describe('WooCommerceSection', () => {
 				printerModel="generic"
 				language="esc-pos"
 				thermalColumns={42}
+				emitEscPrintMode={true}
 				onChangePath={vi.fn()}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={onThermalColumnsChange}
+				onEmitEscPrintModeChange={vi.fn()}
 			/>
 		);
 
@@ -58,6 +62,35 @@ describe('WooCommerceSection', () => {
 		expect(screen.getByText(/Matches the POS printer profile text width/)).toBeInTheDocument();
 		fireEvent.change(select, { target: { value: '48' } });
 		expect(onThermalColumnsChange).toHaveBeenCalledWith(48);
+	});
+
+	it('wires the wide-compatibility toggle by template engine', () => {
+		const onEmitEscPrintModeChange = vi.fn();
+		const props = {
+			currency: 'EUR',
+			locale: 'es_ES',
+			displayTax: 'incl',
+			pricesEnteredWithTax: true,
+			roundingMode: 'per-line',
+			printerModel: 'generic',
+			language: 'esc-pos',
+			thermalColumns: 42 as const,
+			emitEscPrintMode: true,
+			onChangePath: vi.fn(),
+			onPrinterModelChange: vi.fn(),
+			onLanguageChange: vi.fn(),
+			onThermalColumnsChange: vi.fn(),
+			onEmitEscPrintModeChange,
+		};
+		const { rerender } = render(<WooCommerceSection {...props} engine="thermal" />);
+
+		const toggle = screen.getByLabelText('Wide compatibility');
+		expect(toggle).toBeEnabled();
+		fireEvent.click(toggle);
+		expect(onEmitEscPrintModeChange).toHaveBeenCalledWith(false);
+
+		rerender(<WooCommerceSection {...props} engine="logicless" />);
+		expect(screen.getByLabelText('Wide compatibility')).toBeDisabled();
 	});
 
 	it('disables characters-per-line selection for logicless templates', () => {
@@ -72,10 +105,12 @@ describe('WooCommerceSection', () => {
 				printerModel="generic"
 				language="esc-pos"
 				thermalColumns={42}
+				emitEscPrintMode={true}
 				onChangePath={vi.fn()}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={vi.fn()}
+				onEmitEscPrintModeChange={vi.fn()}
 			/>
 		);
 

@@ -56,6 +56,13 @@ export interface PrinterProfile {
 	printerModel?: string;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns: number;
+	/**
+	 * Emit `ESC !` print-mode bytes alongside `GS !` size bytes.
+	 * Default `true`. Some printers and simulators only honour one of the two
+	 * size commands; emitting both maximizes compatibility. Disable as an
+	 * escape hatch for printers that misbehave when both are sent.
+	 */
+	emitEscPrintMode?: boolean;
 	autoPrint: boolean;
 	autoCut: boolean;
 	autoOpenDrawer: boolean;

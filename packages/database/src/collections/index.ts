@@ -577,6 +577,12 @@ const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 			// Preserve explicit existing profile values.
 			return oldDoc;
 		},
+		4(oldDoc) {
+			// v4: Added emitEscPrintMode to control ESC ! / GS ! dual size emission.
+			// Default to true so existing profiles get the broader compatibility behavior.
+			oldDoc.emitEscPrintMode = true;
+			return oldDoc;
+		},
 	},
 };
 

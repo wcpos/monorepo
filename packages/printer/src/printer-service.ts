@@ -131,6 +131,7 @@ export class PrinterService {
 				language: profile.language,
 				columns: profile.columns,
 				printerModel: profile.printerModel,
+				emitEscPrintMode: profile.emitEscPrintMode ?? true,
 			};
 
 			let bytes: Uint8Array;
