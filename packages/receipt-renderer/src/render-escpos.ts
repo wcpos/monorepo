@@ -17,6 +17,15 @@ export interface EscposRenderOptions {
 	language?: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns?: number;
 	enableCp932?: boolean;
+	/**
+	 * Emit legacy `ESC !` print-mode bytes alongside `GS !` size bytes.
+	 *
+	 * Default `true`. Older printers and simulators (e.g. Virtual Thermal Printer)
+	 * honour `ESC !` but ignore `GS !`; modern Epson/Star printers honour both.
+	 * Disable only as an escape hatch for printers that misbehave when both are
+	 * sent — the dual emission is otherwise strictly safer.
+	 */
+	enableLegacyPrintMode?: boolean;
 	imageMode?: ThermalImageMode;
 	imageAssets?: ThermalImageAssets;
 	imageAlgorithm?: ThermalImageAlgorithm;
@@ -37,6 +46,7 @@ interface RenderContext {
 	align: 'left' | 'center' | 'right';
 	supportsCp932: boolean;
 	normalizeText: boolean;
+	emitLegacyPrintMode: boolean;
 	escposPrintMode?: EscposPrintModeState;
 	imageAssets: ThermalImageAssets;
 	imageAlgorithm: ThermalImageAlgorithm;
@@ -90,6 +100,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		language = 'esc-pos',
 		columns = ast.paperWidth,
 		enableCp932 = false,
+		enableLegacyPrintMode = true,
 	} = options;
 
 	const encoderOpts: Record<string, unknown> = {
@@ -109,6 +120,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		align: 'left',
 		supportsCp932: language === 'esc-pos' && enableCp932,
 		normalizeText: language === 'esc-pos',
+		emitLegacyPrintMode: language === 'esc-pos' && enableLegacyPrintMode,
 		escposPrintMode:
 			language === 'esc-pos' ? { bold: false, underline: false, width: 1, height: 1 } : undefined,
 		imageAssets: options.imageAssets ?? {},
@@ -358,6 +370,7 @@ function updateEscposPrintMode(
 ): void {
 	if (!context.escposPrintMode) return;
 	Object.assign(context.escposPrintMode, patch);
+	if (!context.emitLegacyPrintMode) return;
 	if (context.escposPrintMode.width > 2 || context.escposPrintMode.height > 2) return;
 	encoder.raw([0x1b, 0x21, escposPrintModeByte(context.escposPrintMode)]);
 }
@@ -373,6 +386,10 @@ function updateEscposSize(
 		return;
 	}
 	Object.assign(context.escposPrintMode, { width, height });
+	if (!context.emitLegacyPrintMode) {
+		encoder.size(width, height);
+		return;
+	}
 	if (width > 2 || height > 2) {
 		encoder.raw([
 			0x1b,
@@ -410,6 +427,19 @@ function writeText(
 	encoder.raw([...KANJI_MODE_ON, ...iconv.encode(normalized, 'cp932'), ...KANJI_MODE_OFF]);
 }
 
+/**
+ * Preserve leading spaces on a standalone left-aligned `<text>` line by routing
+ * it through the encoder's table layout (which honours `marginLeft`) instead of
+ * `encoder.text()` (which trims leading whitespace).
+ *
+ * Limitation: only triggers when the `<text>` node has a single raw-text child.
+ * Mixed-content nodes like `<text>  Discount: <bold>{{label}}</bold></text>`
+ * fall through to plain `encoder.text()` and lose their leading spaces. Also
+ * skipped while text size is scaled (the table layout doesn't account for
+ * scaled glyph width), inside non-left alignment, and on the Japanese (CP932)
+ * path. Templates that need indentation in those cases should use a
+ * `<row>`/`<col>` layout instead of leading-space text.
+ */
 function writeIndentedStandaloneTextLine(
 	encoder: ReceiptPrinterEncoder,
 	nodes: ThermalNode[],

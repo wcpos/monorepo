@@ -17,10 +17,12 @@ describe('WooCommerceSection', () => {
 				printerModel=""
 				language="esc-pos"
 				thermalColumns={42}
+				enableLegacyPrintMode={true}
 				onChangePath={onChangePath}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={vi.fn()}
+				onEnableLegacyPrintModeChange={vi.fn()}
 			/>
 		);
 
@@ -43,10 +45,12 @@ describe('WooCommerceSection', () => {
 				printerModel="generic"
 				language="esc-pos"
 				thermalColumns={42}
+				enableLegacyPrintMode={true}
 				onChangePath={vi.fn()}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={onThermalColumnsChange}
+				onEnableLegacyPrintModeChange={vi.fn()}
 			/>
 		);
 
@@ -72,10 +76,12 @@ describe('WooCommerceSection', () => {
 				printerModel="generic"
 				language="esc-pos"
 				thermalColumns={42}
+				enableLegacyPrintMode={true}
 				onChangePath={vi.fn()}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={vi.fn()}
+				onEnableLegacyPrintModeChange={vi.fn()}
 			/>
 		);
 

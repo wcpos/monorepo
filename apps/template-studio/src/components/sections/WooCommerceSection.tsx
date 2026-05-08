@@ -11,10 +11,12 @@ interface WooCommerceSectionProps {
 	printerModel: string;
 	language: string;
 	thermalColumns: ThermalColumns;
+	enableLegacyPrintMode: boolean;
 	onChangePath: (path: PathSegment[], value: unknown) => void;
 	onPrinterModelChange: (value: string) => void;
 	onLanguageChange: (value: string) => void;
 	onThermalColumnsChange: (value: ThermalColumns) => void;
+	onEnableLegacyPrintModeChange: (value: boolean) => void;
 }
 
 const COMMON_CURRENCIES = [
@@ -101,10 +103,12 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 		printerModel,
 		language,
 		thermalColumns,
+		enableLegacyPrintMode,
 		onChangePath,
 		onPrinterModelChange,
 		onLanguageChange,
 		onThermalColumnsChange,
+		onEnableLegacyPrintModeChange,
 	} = props;
 	const isThermal = engine === 'thermal';
 	const currencyOptions = COMMON_CURRENCIES.includes(currency)
@@ -245,6 +249,24 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 				<p className="field-help">
 					Matches the POS printer profile text width. Use 42 for standard/generic 80mm printers, 48
 					only for known 48-CPL printers, and 32 for 58mm printers.
+				</p>
+			) : null}
+
+			<div className={isThermal ? 'toggle-row' : 'toggle-row muted'}>
+				<label htmlFor="woo-legacy-print-mode">Use legacy size commands</label>
+				<input
+					id="woo-legacy-print-mode"
+					type="checkbox"
+					checked={enableLegacyPrintMode}
+					onChange={(event) => onEnableLegacyPrintModeChange(event.target.checked)}
+					disabled={!isThermal}
+				/>
+			</div>
+			{isThermal ? (
+				<p className="field-help">
+					Sends both modern (GS !) and legacy (ESC !) size commands. Improves compatibility with
+					older printers and simulators. Disable only as an escape hatch for printers that
+					misbehave.
 				</p>
 			) : null}
 		</div>

@@ -1,6 +1,6 @@
 export const printerProfilesLiteral = {
 	title: 'Printer Profiles schema',
-	version: 3,
+	version: 4,
 	description: 'Local printer profiles for direct thermal printing',
 	type: 'object',
 	primaryKey: 'id',
@@ -49,6 +49,12 @@ export const printerProfilesLiteral = {
 			default: 42,
 			description:
 				'Printer character capacity: 32 for 58mm, 42 for standard 80mm, 48 for wide/known 48-CPL 80mm',
+		},
+		enableLegacyPrintMode: {
+			type: 'boolean',
+			default: true,
+			description:
+				'Send legacy ESC ! print-mode bytes alongside GS ! size bytes for older printers and simulators. Disable only as an escape hatch when a printer misbehaves.',
 		},
 		autoPrint: {
 			type: 'boolean',

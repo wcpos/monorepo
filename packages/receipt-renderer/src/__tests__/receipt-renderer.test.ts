@@ -535,6 +535,30 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(countedLayoutIndex).toBe(-1);
 	});
 
+	it('omits ESC ! print-mode bytes when enableLegacyPrintMode is false', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text><size width="2" height="2">Store</size>Small</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos', enableLegacyPrintMode: false }
+		);
+		const gsSizeIndex = sequenceIndex(bytes, [0x1d, 0x21, 0x11]);
+		const escPrintModeIndex = sequenceIndex(bytes, [0x1b, 0x21]);
+
+		expect(gsSizeIndex).toBeGreaterThanOrEqual(0);
+		expect(escPrintModeIndex).toBe(-1);
+	});
+
+	it('still preserves leading spaces when enableLegacyPrintMode is false', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>  SKU: SKU-6564</text></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos', enableLegacyPrintMode: false }
+		);
+		const printable = decodePrintableAscii(bytes);
+
+		expect(printable).toContain('  SKU: SKU-6564');
+	});
+
 	it('encodes Japanese thermal text without question-mark substitutions', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt><text>東京コーヒー商會</text><row><col width="24">抹茶ラテ</col><col width="24" align="right">100</col></row></receipt>',

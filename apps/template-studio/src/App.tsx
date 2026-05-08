@@ -100,6 +100,7 @@ export function App() {
 	const [sections, setSections] = React.useState<SectionState>(() => loadSectionState());
 	const [printerModel, setPrinterModel] = React.useState('');
 	const [language, setLanguage] = React.useState<'esc-pos' | 'star-prnt' | 'star-line'>('esc-pos');
+	const [enableLegacyPrintMode, setEnableLegacyPrintMode] = React.useState(true);
 	const [thermalColumnsByPaper, setThermalColumnsByPaper] = React.useState<ThermalColumnsByPaper>(
 		() => loadThermalColumnsByPaper()
 	);
@@ -199,6 +200,7 @@ export function App() {
 					thermalColumns: effectiveThermalColumns,
 					printerModel: printerModel || undefined,
 					language,
+					encodeOptions: { enableLegacyPrintMode },
 				}),
 				renderError: null,
 			};
@@ -213,6 +215,7 @@ export function App() {
 		effectiveThermalColumns,
 		printerModel,
 		language,
+		enableLegacyPrintMode,
 	]);
 	// `rendered.html` is already sanitized by `renderForStudio` with the SVG-
 	// allowing profile both engines need (so `<barcode>` SVGs survive). Re-
@@ -318,6 +321,7 @@ export function App() {
 				imageAssets,
 				barcodeMode: 'image',
 				barcodeImages,
+				enableLegacyPrintMode,
 			},
 		});
 
@@ -331,6 +335,7 @@ export function App() {
 		printerModel,
 		rendered,
 		selectedTemplate,
+		enableLegacyPrintMode,
 	]);
 
 	React.useEffect(() => {
@@ -434,12 +439,14 @@ export function App() {
 							printerModel={printerModel}
 							language={language}
 							thermalColumns={effectiveThermalColumns}
+							enableLegacyPrintMode={enableLegacyPrintMode}
 							onChangePath={handleChangePath}
 							onPrinterModelChange={setPrinterModel}
 							onLanguageChange={(value) =>
 								setLanguage(value as 'esc-pos' | 'star-prnt' | 'star-line')
 							}
 							onThermalColumnsChange={handleThermalColumnsChange}
+							onEnableLegacyPrintModeChange={setEnableLegacyPrintMode}
 						/>
 					</CollapsibleSection>
 					<CollapsibleSection

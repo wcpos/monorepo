@@ -42,6 +42,7 @@ const printerSchema = z.object({
 	vendor: z.enum(['epson', 'star', 'generic']).default(isWeb ? 'epson' : 'generic'),
 	language: z.enum(['esc-pos', 'star-prnt', 'star-line']).default('esc-pos'),
 	columns: z.coerce.number().default(42),
+	enableLegacyPrintMode: z.boolean().default(true),
 	autoPrint: z.boolean().default(false),
 	autoCut: z.boolean().default(true),
 	autoOpenDrawer: z.boolean().default(false),
@@ -57,6 +58,7 @@ const DEFAULT_VALUES: PrinterFormData = {
 	vendor: isWeb ? 'epson' : 'generic',
 	language: 'esc-pos',
 	columns: 42,
+	enableLegacyPrintMode: true,
 	autoPrint: false,
 	autoCut: true,
 	autoOpenDrawer: false,
@@ -131,6 +133,7 @@ export function PrinterDialog({
 				vendor: printer.vendor ?? 'generic',
 				language: printer.language ?? 'esc-pos',
 				columns: printer.columns ?? 42,
+				enableLegacyPrintMode: printer.enableLegacyPrintMode ?? true,
 				autoPrint: printer.autoPrint ?? false,
 				autoCut: printer.autoCut ?? true,
 				autoOpenDrawer: printer.autoOpenDrawer ?? false,
@@ -367,7 +370,8 @@ export function PrinterDialog({
 			(printer.vendor ?? 'generic') !== DEFAULT_VALUES.vendor ||
 			(printer.port ?? 9100) !== DEFAULT_VALUES.port ||
 			(printer.language ?? 'esc-pos') !== DEFAULT_VALUES.language ||
-			(printer.columns ?? 42) !== DEFAULT_VALUES.columns
+			(printer.columns ?? 42) !== DEFAULT_VALUES.columns ||
+			(printer.enableLegacyPrintMode ?? true) !== DEFAULT_VALUES.enableLegacyPrintMode
 		);
 	}, [printer]);
 
@@ -514,6 +518,23 @@ export function PrinterDialog({
 												)}
 											/>
 										</HStack>
+										<FormField
+											control={form.control}
+											name="enableLegacyPrintMode"
+											render={({ field }) => (
+												<FormSwitch
+													label={t(
+														'settings.printer_legacy_print_mode',
+														'Use legacy size commands'
+													)}
+													description={t(
+														'settings.printer_legacy_print_mode_help',
+														'Improves compatibility with older printers and simulators. Disable only if your printer prints garbage characters with size commands.'
+													)}
+													{...field}
+												/>
+											)}
+										/>
 									</VStack>
 								</CollapsibleContent>
 							</Collapsible>

@@ -56,6 +56,12 @@ export interface PrinterProfile {
 	printerModel?: string;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns: number;
+	/**
+	 * Send legacy `ESC !` print-mode bytes alongside `GS !` size bytes.
+	 * Default `true`. Older printers and simulators rely on `ESC !` for size
+	 * scaling; disable only as an escape hatch when a printer misbehaves.
+	 */
+	enableLegacyPrintMode?: boolean;
 	autoPrint: boolean;
 	autoCut: boolean;
 	autoOpenDrawer: boolean;
