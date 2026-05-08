@@ -202,7 +202,7 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).toContain('data-barcode-kind="qrcode"');
 		expect(html).toMatch(/data-barcode-kind="qrcode"[\s\S]*<svg[^>]* viewBox="0 0 (\d+) \1"/);
 		expect(html).toContain('data-barcode-value="ABC-123"');
-		expect(html).toContain('max-width: 100%');
+		expect(html).toMatch(/<svg[^>]*style="width: min\(100%, [0-9.]+ch\); height: auto"/);
 		expect(html).toContain('height: auto');
 		expect(html).toContain('stroke=');
 		expect(html).toContain('stroke-width=');
@@ -420,7 +420,8 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).toContain('width: 48ch');
 		expect(html).toContain('text-align: left');
 		expect(html).toContain('font-size: 1em');
-		expect(html).toContain('max-width: 200px');
+		// 200 dots default → 200 * 48 / 576 = 16.67ch on a 48-char 80mm receipt.
+		expect(html).toContain('width: min(100%, 16.67ch)');
 		expect(html).toContain('height: 1.4em');
 		expect(html).not.toContain('evil.test');
 	});
@@ -533,6 +534,85 @@ describe('@wcpos/receipt-renderer exports', () => {
 
 		expect(sizeIndex).toBeGreaterThanOrEqual(0);
 		expect(countedLayoutIndex).toBe(-1);
+	});
+
+	it('restores ESC line spacing after the newline that closes inline scaled text', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text><size width="2" height="2">Big</size>Small</text><text>Next</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const setSpacingIndex = sequenceIndex(bytes, [0x1b, 0x33, 60]);
+		const bigIndex = sequenceIndex(bytes, [0x42, 0x69, 0x67]);
+		const smallIndex = sequenceIndex(bytes, [0x53, 0x6d, 0x61, 0x6c, 0x6c]);
+		const newlineIndex = sequenceIndex(bytes, [0x0a], smallIndex);
+		const restoreSpacingIndex = sequenceIndex(bytes, [0x1b, 0x32], smallIndex);
+		const nextIndex = sequenceIndex(bytes, [0x4e, 0x65, 0x78, 0x74]);
+
+		expect(setSpacingIndex).toBeGreaterThanOrEqual(0);
+		expect(bigIndex).toBeGreaterThan(setSpacingIndex);
+		expect(smallIndex).toBeGreaterThan(bigIndex);
+		expect(newlineIndex).toBeGreaterThan(smallIndex);
+		expect(restoreSpacingIndex).toBeGreaterThan(newlineIndex);
+		expect(nextIndex).toBeGreaterThan(restoreSpacingIndex);
+	});
+
+	it('tracks the tallest ESC line spacing across nested scaled text', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text><size height="2"><size height="3">Big</size></size>Small</text><text>Next</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const doubleSpacingIndex = sequenceIndex(bytes, [0x1b, 0x33, 60]);
+		const tripleSpacingIndex = sequenceIndex(bytes, [0x1b, 0x33, 90]);
+		const bigIndex = sequenceIndex(bytes, [0x42, 0x69, 0x67]);
+		const smallIndex = sequenceIndex(bytes, [0x53, 0x6d, 0x61, 0x6c, 0x6c]);
+		const newlineIndex = sequenceIndex(bytes, [0x0a], smallIndex);
+		const restoreSpacingIndex = sequenceIndex(bytes, [0x1b, 0x32], smallIndex);
+		const nextIndex = sequenceIndex(bytes, [0x4e, 0x65, 0x78, 0x74]);
+
+		expect(doubleSpacingIndex).toBeGreaterThanOrEqual(0);
+		expect(tripleSpacingIndex).toBeGreaterThan(doubleSpacingIndex);
+		expect(bigIndex).toBeGreaterThan(tripleSpacingIndex);
+		expect(smallIndex).toBeGreaterThan(bigIndex);
+		expect(newlineIndex).toBeGreaterThan(smallIndex);
+		expect(restoreSpacingIndex).toBeGreaterThan(newlineIndex);
+		expect(nextIndex).toBeGreaterThan(restoreSpacingIndex);
+	});
+
+	it('restores ESC line spacing after a scaled row before following text', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><size height="2"><row><col width="*">Big</col><col width="10" align="right">1.00</col></row></size><text>Next</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const setSpacingIndex = sequenceIndex(bytes, [0x1b, 0x33, 60]);
+		const bigIndex = sequenceIndex(bytes, [0x42, 0x69, 0x67]);
+		const amountIndex = sequenceIndex(bytes, [0x31, 0x2e, 0x30, 0x30], bigIndex);
+		const newlineIndex = sequenceIndex(bytes, [0x0a], amountIndex);
+		const restoreSpacingIndex = sequenceIndex(bytes, [0x1b, 0x32], newlineIndex);
+		const nextIndex = sequenceIndex(bytes, [0x4e, 0x65, 0x78, 0x74]);
+
+		expect(setSpacingIndex).toBeGreaterThanOrEqual(0);
+		expect(bigIndex).toBeGreaterThan(setSpacingIndex);
+		expect(amountIndex).toBeGreaterThan(bigIndex);
+		expect(newlineIndex).toBeGreaterThan(amountIndex);
+		expect(restoreSpacingIndex).toBeGreaterThan(newlineIndex);
+		expect(nextIndex).toBeGreaterThan(restoreSpacingIndex);
+	});
+
+	it('keeps ESC line-spacing bytes out of Star printer output', () => {
+		const template = '<receipt><text><size width="2" height="2">Big</size>Small</text></receipt>';
+
+		for (const language of ['star-prnt', 'star-line'] as const) {
+			const bytes = encodeThermalTemplate(template, {}, { columns: 48, language });
+			const anyEsc3Index = Array.from(bytes).findIndex(
+				(byte, index, all) => byte === 0x1b && all[index + 1] === 0x33 && index + 2 < all.length
+			);
+
+			expect(anyEsc3Index).toBe(-1);
+			expect(sequenceIndex(bytes, [0x1b, 0x32])).toBe(-1);
+		}
 	});
 
 	it('omits ESC ! print-mode bytes when emitEscPrintMode is false', () => {

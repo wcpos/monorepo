@@ -4,49 +4,58 @@ import type { ColNode, ReceiptNode, RowNode, ThermalNode } from './types.js';
 
 export type HtmlRenderOptions = object;
 
+// 80mm thermal paper at 203 DPI prints ~576 dots wide; 58mm prints ~384 dots.
+// We pick a budget from the receipt's character width because that is what the
+// AST gives us — anything ≥ 40 chars is treated as 80mm.
+const DOT_BUDGET_WIDE = 576;
+const DOT_BUDGET_NARROW = 384;
+const NARROW_PAPER_THRESHOLD_CHARS = 40;
+
 export function renderHtml(ast: ReceiptNode, _options: HtmlRenderOptions = {}): string {
-	const width = safeInteger(ast.paperWidth, 48, 16, 120);
-	const inner = renderNodes(ast.children);
-	return `<div style="width: ${width}ch; font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; background: #fff; color: #000; padding: 16px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); margin: 0 auto; overflow: hidden; white-space: pre-wrap; word-break: break-all;">${inner}</div>`;
+	const widthChars = safeInteger(ast.paperWidth, 48, 16, 120);
+	const inner = renderNodes(ast.children, widthChars);
+	return `<div style="width: ${widthChars}ch; font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; background: #fff; color: #000; padding: 16px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); margin: 0 auto; overflow: hidden; white-space: pre-wrap; word-break: break-all;">${inner}</div>`;
 }
 
-function renderNodes(nodes: ThermalNode[]): string {
-	return nodes.map(renderNode).join('');
+function renderNodes(nodes: ThermalNode[], widthChars: number): string {
+	return nodes.map((node) => renderNode(node, widthChars)).join('');
 }
 
-function renderNode(node: ThermalNode): string {
+function renderNode(node: ThermalNode, widthChars: number): string {
 	switch (node.type) {
 		case 'raw-text':
 			return escapeHtml(node.value);
 		case 'text':
-			return `<div>${renderNodes(node.children)}</div>`;
+			return `<div>${renderNodes(node.children, widthChars)}</div>`;
 		case 'bold':
-			return `<strong>${renderNodes(node.children)}</strong>`;
+			return `<strong>${renderNodes(node.children, widthChars)}</strong>`;
 		case 'underline':
-			return `<span style="text-decoration: underline">${renderNodes(node.children)}</span>`;
+			return `<span style="text-decoration: underline">${renderNodes(node.children, widthChars)}</span>`;
 		case 'invert':
-			return `<span style="background: #000; color: #fff; padding: 0 4px">${renderNodes(node.children)}</span>`;
+			return `<span style="background: #000; color: #fff; padding: 0 4px">${renderNodes(node.children, widthChars)}</span>`;
 		case 'size':
-			return `<span style="font-size: ${safeFloat(node.width, 1, 0.5, 8)}em; line-height: 1.2">${renderNodes(node.children)}</span>`;
+			return `<span style="font-size: ${safeFloat(node.width, 1, 0.5, 8)}em; line-height: 1.2">${renderNodes(node.children, widthChars)}</span>`;
 		case 'align':
-			return `<div style="text-align: ${safeAlign(node.mode)}">${renderNodes(node.children)}</div>`;
+			return `<div style="text-align: ${safeAlign(node.mode)}">${renderNodes(node.children, widthChars)}</div>`;
 		case 'row':
-			return renderRow(node);
+			return renderRow(node, widthChars);
 		case 'col':
-			return renderCol(node);
+			return renderCol(node, widthChars);
 		case 'line':
 			if (node.style === 'double') {
 				return '<hr style="border: none; border-top: 3px double #000; margin: 4px 0" />';
 			}
 			return '<hr style="border: none; border-top: 1px dashed #000; margin: 4px 0" />';
 		case 'barcode':
-			return renderBarcode(node.barcodeType, node.value, node.height, 'barcode');
+			return renderBarcode(node.barcodeType, node.value, node.height, 'barcode', widthChars);
 		case 'qrcode':
-			return renderQrCode(node.value, node.size);
+			return renderQrCode(node.value, node.size, widthChars);
 		case 'image': {
 			const safeSrc = safeImageSrc(node.src);
 			if (!safeSrc) return '';
-			return `<div style="text-align: center; padding: 8px 0"><img src="${safeSrc}" style="max-width: ${safeInteger(node.width, 200, 1, 2000)}px; height: auto" /></div>`;
+			const widthDots = safeInteger(node.width, 200, 1, 2000);
+			const widthCh = dotsToCh(widthDots, widthChars);
+			return `<div style="text-align: center; padding: 8px 0"><img src="${safeSrc}" style="width: min(100%, ${widthCh.toFixed(2)}ch); height: auto" /></div>`;
 		}
 		case 'cut':
 			return '<div style="border-top: 1px dashed #ccc; margin: 12px 0; position: relative"><span style="position: absolute; top: -8px; left: -4px; font-size: 14px">&#9986;</span></div>';
@@ -55,7 +64,7 @@ function renderNode(node: ThermalNode): string {
 		case 'drawer':
 			return '';
 		case 'receipt':
-			return renderNodes(node.children);
+			return renderNodes(node.children, widthChars);
 		default:
 			return '';
 	}
@@ -65,7 +74,8 @@ export function renderBarcode(
 	barcodeType: string,
 	value: string,
 	height: number,
-	kind: 'barcode' | 'qrcode'
+	kind: 'barcode' | 'qrcode',
+	paperWidthChars?: number
 ): string {
 	const text = value.trim();
 	if (!text) return '';
@@ -80,13 +90,13 @@ export function renderBarcode(
 			textsize: 10,
 		});
 
-		return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg)}</div>`;
+		return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg, paperWidthChars)}</div>`;
 	} catch (error) {
 		return renderBarcodeError(kind, barcodeType, text, error);
 	}
 }
 
-export function renderQrCode(value: string, size: number): string {
+export function renderQrCode(value: string, size: number, paperWidthChars?: number): string {
 	const text = value.trim();
 	if (!text) return '';
 
@@ -97,7 +107,7 @@ export function renderQrCode(value: string, size: number): string {
 			scale: safeInteger(size, 4, 1, 20),
 		});
 
-		return `<div data-barcode-kind="qrcode" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg)}</div>`;
+		return `<div data-barcode-kind="qrcode" data-barcode-value="${escapeHtml(text)}" style="text-align: center; padding: 8px 0">${constrainSvg(svg, paperWidthChars)}</div>`;
 	} catch (error) {
 		return renderBarcodeError('qrcode', 'qrcode', text, error);
 	}
@@ -119,15 +129,15 @@ function renderBarcodeError(
 	return `<div data-barcode-kind="${kind}" data-barcode-value="${escapeHtml(text)}" data-barcode-error="true" style="text-align: center; padding: 8px 0; color: #b91c1c"><strong>${title}</strong><div>${escapeHtml(summary)}</div>${detailHtml}<code>${escapeHtml(text)}</code></div>`;
 }
 
-function renderRow(node: RowNode): string {
-	const cols = node.children.map(renderCol).join('');
+function renderRow(node: RowNode, widthChars: number): string {
+	const cols = node.children.map((col) => renderCol(col, widthChars)).join('');
 	return `<div style="display: flex">${cols}</div>`;
 }
 
-function renderCol(node: ColNode): string {
+function renderCol(node: ColNode, widthChars: number): string {
 	const flex =
 		node.width === '*' ? 'flex: 1' : `flex: 0 0 ${safeInteger(node.width, 12, 1, 120)}ch`;
-	return `<span style="${flex}; text-align: ${safeAlign(node.align)}; overflow: hidden">${renderNodes(node.children)}</span>`;
+	return `<span style="${flex}; text-align: ${safeAlign(node.align)}; overflow: hidden">${renderNodes(node.children, widthChars)}</span>`;
 }
 
 function safeInteger(value: unknown, fallback: number, min: number, max: number): number {
@@ -144,8 +154,44 @@ function safeAlign(value: unknown): 'left' | 'center' | 'right' {
 	return value === 'left' || value === 'center' || value === 'right' ? value : 'left';
 }
 
-function constrainSvg(svg: string): string {
-	return svg.replace('<svg ', '<svg style="max-width: 100%; height: auto" ');
+/**
+ * Convert printer dots to ch units relative to the receipt's character width.
+ *
+ * The bwip-js SVG uses 1 SVG unit per printer dot (at scale=2 each barcode
+ * module is 2 dots wide), and the thermal encoder rasterises images at their
+ * dot-equivalent width. Sizing previews against the dot budget keeps the
+ * relative width of images and barcodes consistent between the studio
+ * preview and the printed receipt.
+ */
+function dotsToCh(dots: number, paperWidthChars: number): number {
+	const dotBudget =
+		paperWidthChars >= NARROW_PAPER_THRESHOLD_CHARS ? DOT_BUDGET_WIDE : DOT_BUDGET_NARROW;
+	return (dots * paperWidthChars) / dotBudget;
+}
+
+function svgIntrinsicWidth(svg: string): number | null {
+	const widthMatch = svg.match(/<svg\b[^>]*?\bwidth\s*=\s*["']?([0-9.]+)/);
+	if (widthMatch) return Number(widthMatch[1]);
+	const viewBoxMatch = svg.match(
+		/<svg\b[^>]*?\bviewBox\s*=\s*["']\s*[0-9.]+\s+[0-9.]+\s+([0-9.]+)/
+	);
+	if (viewBoxMatch) return Number(viewBoxMatch[1]);
+	return null;
+}
+
+function constrainSvg(svg: string, paperWidthChars?: number): string {
+	if (paperWidthChars === undefined) {
+		return svg.replace('<svg ', '<svg style="max-width: 100%; height: auto" ');
+	}
+	const naturalWidth = svgIntrinsicWidth(svg);
+	if (naturalWidth === null || naturalWidth <= 0) {
+		return svg.replace('<svg ', '<svg style="max-width: 100%; height: auto" ');
+	}
+	const widthCh = dotsToCh(naturalWidth, paperWidthChars);
+	return svg.replace(
+		'<svg ',
+		`<svg style="width: min(100%, ${widthCh.toFixed(2)}ch); height: auto" `
+	);
 }
 
 function safeImageSrc(src: unknown): string {
