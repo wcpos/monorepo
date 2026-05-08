@@ -74,10 +74,39 @@ function mapStore(src: Record<string, any>): ReceiptStoreMeta {
 				.map((s: string) => s.trim())
 				.filter(Boolean)
 		: [];
+	const taxIds: NonNullable<ReceiptStoreMeta['tax_ids']> = Array.isArray(src.tax_ids)
+		? src.tax_ids
+				.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === 'object')
+				.flatMap((entry): NonNullable<ReceiptStoreMeta['tax_ids']> => {
+					const type = toStr(entry.type);
+					const value = toStr(entry.value);
+					if (!type || !value) return [];
+					return [
+						{
+							type,
+							value,
+							country: entry.country == null ? undefined : toStr(entry.country),
+							label: entry.label == null ? undefined : toStr(entry.label),
+						},
+					];
+				})
+		: [];
+	const scalarTaxId = toStr(src.tax_id);
+	if (taxIds.length === 0 && scalarTaxId) {
+		taxIds.push({ type: 'other', value: scalarTaxId });
+	}
+	const numericId =
+		typeof src.id === 'number' && Number.isFinite(src.id)
+			? src.id
+			: typeof src.id === 'string' && /^[+-]?\d+(\.\d+)?$/.test(src.id.trim())
+				? Number(src.id)
+				: 0;
 
 	return {
+		id: Math.trunc(numericId),
 		name: toStr(src.name),
 		address_lines: addressLines,
+		...(taxIds.length > 0 ? { tax_ids: taxIds } : {}),
 		phone: toStr(src.phone),
 		email: toStr(src.email),
 	};
@@ -124,14 +153,15 @@ function mapCustomer(src: Record<string, any>): ReceiptCustomer {
 					];
 				})
 		: [];
-	const taxIdString = toStr(src.tax_id);
+	const scalarTaxId = toStr(src.tax_id);
+	if (taxIds.length === 0 && scalarTaxId) {
+		taxIds.push({ type: 'other', value: scalarTaxId });
+	}
 	return {
 		id: 0,
 		name: toStr(src.name),
 		billing_address: {},
 		shipping_address: {},
-		// Preserve both: legacy templates read `tax_id`, new templates iterate `tax_ids`.
-		tax_id: taxIdString || (taxIds[0]?.value ?? ''),
 		tax_ids: taxIds,
 	};
 }
@@ -558,6 +588,20 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 	);
 	const displayTax = resolveDisplayValueSide(presentationHints);
 	const order = data.order ?? base.order;
+	const storeSource =
+		data.store && typeof data.store === 'object' ? (data.store as Record<string, any>) : {};
+	const customerSource =
+		data.customer && typeof data.customer === 'object'
+			? (data.customer as Record<string, any>)
+			: {};
+	const storeData = { ...storeSource };
+	delete storeData.tax_id;
+	delete storeData.tax_ids;
+	const customerData = { ...customerSource };
+	delete customerData.tax_id;
+	delete customerData.tax_ids;
+	const normalizedStore = mapStore(storeSource);
+	const normalizedCustomer = mapCustomer(customerSource);
 
 	const result: ReceiptData = {
 		order: {
@@ -569,10 +613,11 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 		},
 		store: {
 			...base.store,
-			...(data.store ?? {}),
-			address_lines: Array.isArray(data.store?.address_lines)
-				? data.store.address_lines.map((line) => toStr(line))
-				: base.store.address_lines,
+			...storeData,
+			...normalizedStore,
+			address_lines: Array.isArray(storeSource.address_lines)
+				? storeSource.address_lines.map((line) => toStr(line))
+				: normalizedStore.address_lines,
 		},
 		cashier: {
 			...base.cashier,
@@ -580,7 +625,8 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 		},
 		customer: {
 			...base.customer,
-			...(data.customer ?? {}),
+			...customerData,
+			...(normalizedCustomer.tax_ids?.length ? { tax_ids: normalizedCustomer.tax_ids } : {}),
 		},
 		lines: toArr(data.lines).map((item, i) =>
 			mapLine(item && typeof item === 'object' ? (item as Record<string, any>) : {}, i, displayTax)
@@ -770,7 +816,7 @@ function emptyReceiptData(): ReceiptData {
 			paid: emptyReceiptDate(),
 			completed: emptyReceiptDate(),
 		},
-		store: { name: '', address_lines: [] },
+		store: { id: 0, name: '', address_lines: [] },
 		cashier: { id: 0, name: '' },
 		customer: { id: 0, name: '' },
 		lines: [],

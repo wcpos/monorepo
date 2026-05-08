@@ -94,6 +94,7 @@ export const ReceiptStoreAddressSchema = z.object({
 });
 
 export const ReceiptStoreMetaSchema = z.object({
+	id: z.number().int().describe('Store ID'),
 	name: z.string().describe('Store display name'),
 	address: ReceiptStoreAddressSchema.optional().describe(
 		'Structured address parts. Use these to compose custom / country-specific layouts; address_lines[] is the pre-formatted default.'
@@ -101,7 +102,6 @@ export const ReceiptStoreMetaSchema = z.object({
 	address_lines: z
 		.array(z.string())
 		.describe('Address as ordered lines (street, city, postcode...)'),
-	tax_id: z.string().optional().describe('Store VAT/tax identifier'),
 	tax_ids: z.array(TaxIdSchema).optional().describe('Structured business identifiers'),
 	phone: z.string().optional().describe('Store contact phone'),
 	email: z.string().optional().describe('Store contact email'),
@@ -138,8 +138,7 @@ export const ReceiptCashierSchema = z.object({
 
 /**
  * Structured customer tax ID. Mirrors the canonical PHP `TaxId` shape (see
- * `Tax_Id_Reader::parse_meta_map`). The legacy single-string `customer.tax_id`
- * field on `ReceiptCustomerSchema` is kept for templates that pre-date this.
+ * `Tax_Id_Reader::parse_meta_map`).
  */
 export const ReceiptTaxIdSchema = z.object({
 	type: z
@@ -178,10 +177,6 @@ export const ReceiptCustomerSchema = z.object({
 	name: z.string().describe('Customer display name'),
 	billing_address: z.record(z.string(), z.string()).optional().describe('Billing address fields'),
 	shipping_address: z.record(z.string(), z.string()).optional().describe('Shipping address fields'),
-	tax_id: z
-		.string()
-		.optional()
-		.describe('Legacy single-string customer VAT/tax ID (first entry of tax_ids when present)'),
 	tax_ids: z
 		.array(ReceiptTaxIdSchema)
 		.optional()

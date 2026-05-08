@@ -978,6 +978,7 @@ function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
 	const postcode = pickFrom(rand, pool.postcodes);
 	const [cityName] = cityRegion.split(/[,،]/).map((part) => part.trim());
 	return {
+		id: 1,
 		name,
 		address: {
 			address_1: street,
@@ -987,7 +988,6 @@ function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
 		},
 		address_lines: [street, cityRegion, postcode],
 		tax_ids: buildTaxIds(rand, pool),
-		tax_id: undefined, // will be derived by the encoder/template if needed
 		phone:
 			rand() < 0.9 ? `${pool.dialingPrefix} 555 ${Math.floor(rand() * 9000 + 1000)}` : undefined,
 		email: rand() < 0.9 ? 'hello@example.com' : undefined,
@@ -1076,11 +1076,12 @@ function buildCustomer(rand: () => number, pool: LocalePool): ReceiptCustomer {
 		if (rand() < 0.7) {
 			customer.shipping_address = buildAddress(rand, pool, fullName);
 		}
-		// Preserve the original rand draws for the legacy scalar `tax_id` so
+		// Preserve the original rand draws from the old scalar tax-ID branch so
 		// downstream PRNG sequence (payments, fiscal, etc.) stays stable.
 		// Structured `tax_ids[]` is attached later in `applyCustomerTaxIds`.
 		if (rand() < 0.6) {
-			customer.tax_id = `${pool.countryCode}${Math.floor(rand() * 900_000_000) + 100_000_000}`;
+			void (Math.floor(rand() * 900_000_000) + 100_000_000);
+			customer.tax_ids = [];
 		}
 	} else if (rand() < 0.3) {
 		// Guest checkouts occasionally still capture an address.
@@ -1090,25 +1091,23 @@ function buildCustomer(rand: () => number, pool: LocalePool): ReceiptCustomer {
 }
 
 /**
- * Attaches structured `tax_ids[]` to the customer when a legacy `tax_id` was
- * generated. Runs AFTER all other rand-consuming builders so the extra draws
+ * Attaches structured `tax_ids[]` to the customer when the old scalar tax-ID
+ * branch was selected. Runs AFTER all other rand-consuming builders so the extra draws
  * don't shift the PRNG sequence used by payments/fiscal — preserves existing
  * test seeds and snapshot determinism for non–tax-id fields.
  *
- * Overwrites the legacy scalar with a properly-typed value so designers see
- * realistic country-specific formats (GB VAT, AU ABN, SA VAT, etc.) rather
- * than the generic `<CC>9-digit` legacy fallback.
+ * Produces realistic country-specific formats (GB VAT, AU ABN, SA VAT, etc.)
+ * without exposing scalar tax-ID shortcuts in the v1 receipt contract.
  */
 function applyCustomerTaxIds(
 	rand: () => number,
 	customer: ReceiptCustomer,
 	pool: LocalePool
 ): void {
-	// Only attach when the legacy code path produced a tax_id; guests and
-	// the 40% of real customers without a legacy tax_id remain untouched.
-	if (!customer.tax_id) return;
+	// Only attach when the old scalar code path selected tax IDs; guests and
+	// the 40% of real customers without tax IDs remain untouched.
+	if (!customer.tax_ids) return;
 	const primary = buildTaxIdForCountry(rand, pool.countryCode);
-	customer.tax_id = primary.value;
 	customer.tax_ids = [primary];
 	// ~25% chance of a secondary ID (e.g. cross-border B2B trader with
 	// both an EU VAT and a national fiscal code).

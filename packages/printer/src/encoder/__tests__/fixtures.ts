@@ -33,10 +33,10 @@ export const sampleReceiptData: ReceiptData = {
 		completed: emptyDate,
 	},
 	store: {
+		id: 1,
 		name: 'My Test Store',
 		address_lines: ['123 Main Street', 'Suite 100'],
 		phone: '(555) 123-4567',
-		tax_id: 'TAX-12345',
 		tax_ids: [{ type: 'other', value: 'TAX-12345' }],
 	},
 	cashier: { id: 1, name: 'Jane' },

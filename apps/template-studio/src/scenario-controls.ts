@@ -198,7 +198,6 @@ export function applyScenarioState(data: ReceiptData, state: ScenarioState): Rec
 function hasCustomerDetails(customer: ReceiptCustomer): boolean {
 	return Boolean(
 		customer.name !== 'Guest customer' ||
-		customer.tax_id ||
 		(customer.tax_ids && customer.tax_ids.length > 0) ||
 		Object.keys(customer.billing_address ?? {}).length > 0 ||
 		Object.keys(customer.shipping_address ?? {}).length > 0
@@ -562,7 +561,6 @@ function ensureCustomerDetails(customer: ReceiptCustomer): ReceiptCustomer {
 						postcode: '94607',
 						country: 'US',
 					},
-		tax_id: customer.tax_id || 'US123456789',
 		tax_ids:
 			customer.tax_ids && customer.tax_ids.length > 0
 				? customer.tax_ids
@@ -577,7 +575,6 @@ function stripCustomerDetails(customer: ReceiptCustomer): ReceiptCustomer {
 		name: 'Guest customer',
 		billing_address: {},
 		shipping_address: {},
-		tax_id: '',
 		tax_ids: [],
 	};
 }
