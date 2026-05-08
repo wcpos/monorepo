@@ -2,18 +2,32 @@ import './install-dom-parser';
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { chromium } from 'playwright';
+
+import type { ReceiptData } from '@wcpos/printer/encoder';
 
 import { createRandomReceipt } from '../src/randomizer';
 import { renderStudioTemplate } from '../src/studio-core';
 import { listBundledTemplates } from '../src/template-loader';
-import { galleryPreviewOutputDir, galleryTemplatesDir } from './studio-paths';
+import { galleryPreviewOutputDir, galleryTemplatesDir, studioRoot } from './studio-paths';
+
+import type { PaperWidth, ReceiptFixture, TemplateEngine } from '../src/studio-core';
 
 const checkMode = process.argv.includes('--check');
-// Stable seed + zeroed edge cases keeps the gallery previews deterministic across runs.
-const galleryFixture = (() => {
+const paperClass: Record<PaperWidth, string> = {
+	'58mm': 'thermal-58',
+	'80mm': 'thermal-80',
+	a4: 'a4',
+};
+const coffeeMonsterLogoUrl = '/coffee-monster.png';
+const coffeeMonsterLogoPath = path.join(studioRoot, 'public/coffee-monster.png');
+export type GalleryFixture = ReceiptData & { id: string };
+
+// Stable seed + curated edge cases keeps the gallery previews deterministic across runs while
+// still showing enough fields for the template gallery to look like the interactive Studio preview.
+export function buildGalleryFixture(): GalleryFixture {
 	const random = createRandomReceipt({
 		seed: 'gallery-default-receipt',
 		overrides: {
@@ -21,24 +35,60 @@ const galleryFixture = (() => {
 			refund: false,
 			rtl: false,
 			multicurrency: false,
-			multiPayment: false,
-			fiscal: false,
+			multiPayment: true,
+			fiscal: true,
 			longNames: false,
-			hasDiscounts: false,
-			hasFees: false,
-			hasShipping: false,
+			hasDiscounts: true,
+			hasFees: true,
+			hasShipping: true,
 			cartSize: 3,
 		},
 	});
-	return { ...random.data, id: 'gallery-default-receipt' };
-})();
+	const fixture: GalleryFixture = {
+		...random.data,
+		id: 'gallery-default-receipt',
+		store: {
+			...random.data.store,
+			name: 'Coffee Monster',
+			logo: coffeeMonsterLogoUrl,
+		},
+	};
+	return fixture;
+}
 
-function pageHtml(renderedHtml: string): string {
-	return `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#eef2f6;padding:24px;width:360px;box-sizing:border-box}.preview{background:white;box-shadow:0 12px 32px rgba(15,23,42,.18);border-radius:12px;overflow:hidden;min-height:420px;display:flex;align-items:flex-start;justify-content:center;padding:16px;box-sizing:border-box}table{max-width:100%}</style></head><body><main class="preview">${renderedHtml}</main></body></html>`;
+function viewportForPaperWidth(paperWidth: PaperWidth): { width: number; height: number } {
+	if (paperWidth === 'a4') return { width: 900, height: 1300 };
+	return { width: 480, height: 720 };
+}
+
+export function resolveGalleryPaperWidth(template: {
+	engine: TemplateEngine;
+	paperWidth?: PaperWidth | null;
+}): PaperWidth {
+	return template.paperWidth ?? (template.engine === 'thermal' ? '80mm' : 'a4');
+}
+
+export function pageHtml(renderedHtml: string, paperWidth: PaperWidth): string {
+	return `<!doctype html><html><head><meta charset="utf-8"><base href="https://studio.local/"><style>
+:root{--ts-stage:#efe9dd;--ts-paper:#ffffff;--ts-mono:'SF Mono','Cascadia Code','Roboto Mono',Consolas,'Courier New',monospace;--ts-shadow-paper:0 2px 4px rgba(40,32,22,.08),0 18px 40px rgba(40,32,22,.12)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ts-stage);padding:32px;display:grid;place-items:start center;min-width:100vw;min-height:100vh}
+.paper-frame{background:var(--ts-paper);box-shadow:var(--ts-shadow-paper);font-family:var(--ts-mono);color:#1c1814;transform-origin:top center}
+.paper-frame.thermal-58{width:58mm}
+.paper-frame.thermal-80{width:80mm}
+.paper-frame.a4{width:210mm;min-height:297mm}
+.paper-frame.thermal-58,.paper-frame.thermal-80{padding:4mm 2mm;font-size:11.5px}
+.paper-frame.thermal-58>div,.paper-frame.thermal-80>div{box-shadow:none!important;margin:0!important;padding:0!important;background:transparent!important;width:100%!important}
+.paper-frame.thermal-58>div{font-size:10.5px!important}
+.paper-frame.thermal-80>div{font-size:10px!important}
+.paper-frame :is(table,tr,td,th){color:inherit}
+table{max-width:100%}
+img{max-width:100%}
+</style></head><body><main class="paper-frame ${paperClass[paperWidth]}">${renderedHtml}</main></body></html>`;
 }
 
 async function main() {
-	const fixture = galleryFixture;
+	const fixture: ReceiptFixture = buildGalleryFixture();
 	const templates = await listBundledTemplates({
 		templatesDir: pathToFileURL(galleryTemplatesDir),
 	});
@@ -53,14 +103,22 @@ async function main() {
 			viewport: { width: 360, height: 520 },
 			deviceScaleFactor: 1,
 		});
+		await page.route('https://studio.local/coffee-monster.png', async (route) => {
+			await route.fulfill({
+				contentType: 'image/png',
+				body: await fs.readFile(coffeeMonsterLogoPath),
+			});
+		});
 		for (const template of templates) {
+			const paperWidth = resolveGalleryPaperWidth(template);
+			await page.setViewportSize(viewportForPaperWidth(paperWidth));
 			const rendered = renderStudioTemplate({
 				template,
 				fixture,
-				paperWidth: template.paperWidth ?? '80mm',
+				paperWidth,
 			});
-			await page.setContent(pageHtml(rendered.html), { waitUntil: 'load' });
-			const locator = page.locator('.preview');
+			await page.setContent(pageHtml(rendered.html, paperWidth), { waitUntil: 'load' });
+			const locator = page.locator('.paper-frame');
 			const image = await locator.screenshot({ type: 'png' });
 			const outputPath = path.join(galleryPreviewOutputDir, `${template.id}.png`);
 			let current: Buffer | undefined;
@@ -103,7 +161,9 @@ async function main() {
 	);
 }
 
-main().catch((error) => {
-	console.error(error instanceof Error ? error.message : error);
-	process.exitCode = 1;
-});
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+	main().catch((error) => {
+		console.error(error instanceof Error ? error.message : error);
+		process.exitCode = 1;
+	});
+}
