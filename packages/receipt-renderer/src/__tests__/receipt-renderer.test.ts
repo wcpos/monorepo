@@ -41,6 +41,18 @@ function sequenceIndex(bytes: Uint8Array, sequence: number[], fromIndex = 0): nu
 	);
 }
 
+function countSequence(bytes: Uint8Array, sequence: number[]): number {
+	let count = 0;
+	let fromIndex = 0;
+	while (fromIndex < bytes.length) {
+		const index = sequenceIndex(bytes, sequence, fromIndex);
+		if (index === -1) break;
+		count++;
+		fromIndex = index + 1;
+	}
+	return count;
+}
+
 function gsCommandSkipLength(bytes: Uint8Array, index: number): number {
 	const command = bytes[index + 1];
 	if (command === 0x21) return 2;
@@ -283,6 +295,60 @@ describe('@wcpos/receipt-renderer exports', () => {
 		});
 
 		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+	});
+
+	it('preserves center alignment for text after a raster image in the same align block', () => {
+		const ast = parseXml(
+			'<receipt><align mode="center"><image src="logo://store" width="64" /><text>Store Name</text></align><text>After</text></receipt>'
+		);
+		const bytes = renderEscpos(ast, {
+			imageMode: 'raster',
+			imageAssets: {
+				'logo://store': {
+					image: opaqueBlackImageData(64, 32),
+					width: 64,
+					height: 32,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			},
+		});
+
+		expect(countSequence(bytes, [0x1b, 0x61, 0x01])).toBeGreaterThanOrEqual(2);
+		expect(
+			sequenceIndex(bytes, [0x1b, 0x61, 0x01], sequenceIndex(bytes, [0x1d, 0x76, 0x30]))
+		).toBeLessThan(sequenceIndex(bytes, Array.from(new TextEncoder().encode('Store Name'))));
+		const resetAfterStoreName = sequenceIndex(
+			bytes,
+			[0x1b, 0x61, 0x00],
+			sequenceIndex(bytes, Array.from(new TextEncoder().encode('Store Name')))
+		);
+		expect(resetAfterStoreName).toBeGreaterThanOrEqual(0);
+		expect(resetAfterStoreName).toBeLessThan(
+			sequenceIndex(bytes, Array.from(new TextEncoder().encode('After')))
+		);
+	});
+
+	it('uses the printer model language when restoring image alignment', () => {
+		const ast = parseXml(
+			'<receipt><align mode="center"><image src="logo://store" width="64" /><text>Store Name</text></align></receipt>'
+		);
+		const bytes = renderEscpos(ast, {
+			printerModel: 'star-tsp100iv',
+			imageMode: 'raster',
+			imageAssets: {
+				'logo://store': {
+					image: opaqueBlackImageData(64, 32),
+					width: 64,
+					height: 32,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			},
+		});
+
+		expect(countSequence(bytes, [0x1b, 0x1d, 0x61, 0x01])).toBeGreaterThanOrEqual(2);
+		expect(sequenceIndex(bytes, [0x1b, 0x61, 0x01])).toBe(-1);
 	});
 
 	it('pads raster image height up without dropping rows', () => {

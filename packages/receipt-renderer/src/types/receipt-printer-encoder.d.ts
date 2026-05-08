@@ -4,11 +4,12 @@ declare module '@point-of-sale/receipt-printer-encoder' {
 		constructor(options?: {
 			printerModel?: string;
 			columns?: number;
-			language?: string;
+			language?: 'esc-pos' | 'star-prnt' | 'star-line';
 			feedBeforeCut?: number;
 			newline?: string;
 			imageMode?: 'column' | 'raster';
 		});
+		get language(): 'esc-pos' | 'star-prnt' | 'star-line';
 		initialize(): this;
 		align(value: 'left' | 'center' | 'right'): this;
 		bold(value?: boolean): this;
