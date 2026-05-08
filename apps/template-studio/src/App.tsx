@@ -310,6 +310,7 @@ export function App() {
 			template: selectedTemplate,
 			fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
 			paperWidth: effectivePaperWidth,
+			thermalColumns: effectiveThermalColumns,
 			printerModel: printerModel || undefined,
 			language,
 			encodeOptions: {
@@ -322,7 +323,15 @@ export function App() {
 
 		if (prepared.kind !== 'thermal') return rendered;
 		return prepared;
-	}, [effectivePaperWidth, fixture, language, printerModel, rendered, selectedTemplate]);
+	}, [
+		effectivePaperWidth,
+		effectiveThermalColumns,
+		fixture,
+		language,
+		printerModel,
+		rendered,
+		selectedTemplate,
+	]);
 
 	React.useEffect(() => {
 		if (typeof window === 'undefined') return;

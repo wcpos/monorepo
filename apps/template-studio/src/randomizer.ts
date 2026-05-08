@@ -966,8 +966,8 @@ function buildTaxIds(rand: () => number, pool: LocalePool): TaxId[] {
 function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
 	const hasHours = rand() < 0.85;
 	const openingDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-	const openingInline = openingDays.map((d) => `${d} 9:00–18:00`).join(', ');
-	const openingVertical = openingDays.map((d) => `${d}: 9:00–18:00`).join('\n');
+	const openingInline = openingDays.map((d) => `${d} 9:00-18:00`).join(', ');
+	const openingVertical = openingDays.map((d) => `${d}: 9:00-18:00`).join('\n');
 	// PRNG draw order is preserved (cityRegion → name → street → postcode).
 	// We split cityRegion ("City, CC") to derive structured `city` without
 	// adding extra rand draws — adding a state pick would shift downstream
@@ -992,7 +992,7 @@ function buildStore(rand: () => number, pool: LocalePool): ReceiptStoreMeta {
 			rand() < 0.9 ? `${pool.dialingPrefix} 555 ${Math.floor(rand() * 9000 + 1000)}` : undefined,
 		email: rand() < 0.9 ? 'hello@example.com' : undefined,
 		logo: (rand(), COFFEE_MONSTER_LOGO_URL), // Preserve old logo/no-logo PRNG draw.
-		opening_hours: hasHours ? 'Mon–Sat 9:00–18:00' : null,
+		opening_hours: hasHours ? 'Mon-Sat 9:00-18:00' : null,
 		opening_hours_vertical: hasHours ? openingVertical : null,
 		opening_hours_inline: hasHours ? openingInline : null,
 		opening_hours_notes: rand() < 0.5 ? 'Closed on public holidays' : null,

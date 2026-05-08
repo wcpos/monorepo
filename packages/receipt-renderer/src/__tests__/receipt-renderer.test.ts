@@ -124,6 +124,24 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).toContain('✂');
 	});
 
+	it('allows same-origin root-relative image URLs in thermal preview', () => {
+		const html = renderThermalPreview(
+			'<receipt><image src="/coffee-monster.png?v=2#rev" width="200" /></receipt>',
+			{}
+		);
+
+		expect(html).toContain('src="/coffee-monster.png?v=2#rev"');
+	});
+
+	it('rejects root-relative image URLs with encoded traversal', () => {
+		const html = renderThermalPreview(
+			'<receipt><image src="/img/%2e%2e/secret.png" width="200" /><image src="/img/%5c..%5csecret.png" width="200" /></receipt>',
+			{}
+		);
+
+		expect(html).not.toContain('<img');
+	});
+
 	it('renders barcode and QR preview images with the barcode library', () => {
 		const html = renderThermalPreview(
 			'<receipt><barcode type="code128">ABC-123</barcode><qrcode>https://example.test/receipt/1001</qrcode></receipt>',
@@ -133,8 +151,10 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).toContain('<svg');
 		expect(html).toContain('data-barcode-kind="barcode"');
 		expect(html).toContain('data-barcode-kind="qrcode"');
-		expect(html).toMatch(/data-barcode-kind="qrcode"[\s\S]*<svg viewBox="0 0 (\d+) \1"/);
+		expect(html).toMatch(/data-barcode-kind="qrcode"[\s\S]*<svg[^>]* viewBox="0 0 (\d+) \1"/);
 		expect(html).toContain('data-barcode-value="ABC-123"');
+		expect(html).toContain('max-width: 100%');
+		expect(html).toContain('height: auto');
 		expect(html).toContain('stroke=');
 		expect(html).toContain('stroke-width=');
 		expect(html).toContain('ABC-123');
@@ -365,14 +385,26 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(decoded).toContain('Widget A');
 	});
 
-	it('normalizes ESC/POS output to start with printer reset', () => {
+	it('normalizes ESC/POS output to start with printer reset and emits double-size bytes', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt><align mode="center"><bold><size width="2" height="2">Store</size></bold></align></receipt>',
 			{},
-			{ columns: 48 }
+			{ columns: 48, language: 'esc-pos' }
 		);
+		const hex = Array.from(bytes)
+			.map((byte) => byte.toString(16).padStart(2, '0'))
+			.join(' ');
+		const textHex = '53 74 6f 72 65';
+		const setSizeIndex = hex.indexOf('1d 21 11');
+		const textIndex = hex.indexOf(textHex);
+		const resetSizeIndex = hex.indexOf('1d 21 00', textIndex);
 
 		expect(Array.from(bytes.slice(0, 2))).toEqual([0x1b, 0x40]);
+		// Epson ESC/POS GS ! uses low bits for height and high bits for width.
+		// width=2 + height=2 is 0x10 + 0x01 = 0x11.
+		expect(setSizeIndex).toBeGreaterThanOrEqual(0);
+		expect(textIndex).toBeGreaterThan(setSizeIndex);
+		expect(resetSizeIndex).toBeGreaterThan(textIndex);
 	});
 
 	it('encodes Japanese thermal text without question-mark substitutions', () => {
@@ -475,6 +507,68 @@ describe('@wcpos/receipt-renderer exports', () => {
 		} finally {
 			warn.mockRestore();
 		}
+	});
+
+	it('documents that styled thermal row cells flatten to text-only table bytes', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><row><col width="*"><size width="2" height="2">BIG</size></col><col width="10" align="right">1.00</col></row></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos' }
+		);
+		const hex = Array.from(bytes)
+			.map((byte) => byte.toString(16).padStart(2, '0'))
+			.join(' ');
+
+		expect(new TextDecoder().decode(bytes)).toContain('BIG');
+		expect(hex).not.toContain('1d 21 11');
+	});
+
+	it('prints inline styled heading before following text without losing size bytes', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><align mode="center"><bold><size width="2" height="2">Store</size></bold><text>Address</text></align></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos' }
+		);
+		const decoded = new TextDecoder().decode(bytes);
+		const hex = Array.from(bytes)
+			.map((byte) => byte.toString(16).padStart(2, '0'))
+			.join(' ');
+
+		const storeIndex = decoded.indexOf('Store');
+		const addressIndex = decoded.indexOf('Address');
+
+		expect(hex).toContain('1d 21 11');
+		expect(storeIndex).toBeGreaterThanOrEqual(0);
+		expect(addressIndex).toBeGreaterThan(storeIndex);
+		expect(decoded.slice(storeIndex, addressIndex)).not.toMatch(/\r?\n/);
+	});
+
+	it('normalizes typographic dashes before ESC/POS text encoding', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>Mon–Sat 9:00–18:00</text></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos' }
+		);
+		const decoded = new TextDecoder().decode(bytes);
+
+		expect(decoded).toContain('Mon-Sat 9:00-18:00');
+		expect(decoded).not.toContain('Mon–Sat');
+	});
+
+	it('does not ASCII-normalize typographic punctuation for non-ESC/POS languages', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>Mon–Sat “open”</text><row><col width="*">Total—Today</col><col width="10" align="right">1.00</col></row></receipt>',
+			{},
+			{ columns: 42, language: 'star-line' }
+		);
+		const decoded = new TextDecoder().decode(bytes);
+
+		expect(decoded).toContain('Mon');
+		expect(decoded).toContain('Sat');
+		expect(decoded).toContain('Total');
+		expect(decoded).toContain('Today');
+		expect(decoded).not.toContain('Mon-Sat "open"');
+		expect(decoded).not.toContain('Total-Today');
 	});
 
 	it('reports height-only scaled text in thermal row diagnostics', () => {

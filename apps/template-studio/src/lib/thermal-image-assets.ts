@@ -10,7 +10,31 @@ const SUPPORTED_DATA_IMAGE_RE = /^data:image\/(?:png|jpe?g);base64,[A-Za-z0-9+/=
 export function isSupportedThermalLogoSrc(src: unknown): boolean {
 	if (typeof src !== 'string') return false;
 	const value = src.trim();
-	return SUPPORTED_DATA_IMAGE_RE.test(value) || /^https?:\/\//i.test(value);
+	return (
+		SUPPORTED_DATA_IMAGE_RE.test(value) ||
+		/^https?:\/\//i.test(value) ||
+		isSafeRootRelativeImageSrc(value)
+	);
+}
+
+function isSafeRootRelativeImageSrc(value: string): boolean {
+	if (value.startsWith('//')) return false;
+	if (value.includes('\\')) return false;
+	const path = value.split(/[?#]/, 1)[0];
+	const suffix = value.slice(path.length);
+	let decodedPath: string;
+	try {
+		decodedPath = decodeURIComponent(path);
+	} catch {
+		return false;
+	}
+	if (decodedPath.includes('\\')) return false;
+	const segments = decodedPath.split('/');
+	if (segments.includes('..') || segments.includes('.')) return false;
+	return (
+		/^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/.test(path) &&
+		(suffix === '' || /^[?#][A-Za-z0-9._~!$&'()*+,;=:@%/?#-]+$/.test(suffix))
+	);
 }
 
 export function maxDotsForPaperWidth(paperWidth: PaperWidth): number {

@@ -28,6 +28,7 @@ export interface EscposRenderOptions {
 interface RenderContext {
 	columns: number;
 	supportsCp932: boolean;
+	normalizeText: boolean;
 	imageAssets: ThermalImageAssets;
 	imageAlgorithm: ThermalImageAlgorithm;
 	imageThreshold: number;
@@ -97,6 +98,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 	const context: RenderContext = {
 		columns,
 		supportsCp932: language === 'esc-pos' && enableCp932,
+		normalizeText: language === 'esc-pos',
 		imageAssets: options.imageAssets ?? {},
 		imageAlgorithm: options.imageAlgorithm ?? 'atkinson',
 		imageThreshold: options.imageThreshold ?? 128,
@@ -162,7 +164,7 @@ function walkNodes(
 function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: RenderContext): void {
 	switch (node.type) {
 		case 'raw-text':
-			writeText(encoder, node.value, context.supportsCp932);
+			writeText(encoder, node.value, context.supportsCp932, context.normalizeText);
 			break;
 		case 'text':
 			walkNodes(encoder, node.children, context);
@@ -201,12 +203,16 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 					`thermal row columns (${resolvedTotal}) exceed total width (${context.columns})`
 				);
 			}
-			const rowData = node.children.map((col) => extractText(col.children));
+			const rowData = node.children.map((col) => {
+				const text = extractText(col.children);
+				return context.normalizeText ? normalizeThermalText(text) : text;
+			});
 			if (context.supportsCp932 && rowData.some(containsJapaneseText)) {
 				writeText(
 					encoder,
 					formatRow(rowData, resolvedWidths, node.children),
-					context.supportsCp932
+					context.supportsCp932,
+					context.normalizeText
 				);
 				encoder.newline();
 			} else {
@@ -315,13 +321,27 @@ function normalizeImageHeight(value: number): number {
 	return finite + ((8 - (finite % 8)) % 8);
 }
 
-function writeText(encoder: ReceiptPrinterEncoder, value: string, supportsCp932: boolean): void {
-	if (!supportsCp932 || !containsJapaneseText(value)) {
-		encoder.text(value);
+function writeText(
+	encoder: ReceiptPrinterEncoder,
+	value: string,
+	supportsCp932: boolean,
+	normalizeText: boolean
+): void {
+	const normalized = normalizeText ? normalizeThermalText(value) : value;
+	if (!supportsCp932 || !containsJapaneseText(normalized)) {
+		encoder.text(normalized);
 		return;
 	}
 
-	encoder.raw([...KANJI_MODE_ON, ...iconv.encode(value, 'cp932'), ...KANJI_MODE_OFF]);
+	encoder.raw([...KANJI_MODE_ON, ...iconv.encode(normalized, 'cp932'), ...KANJI_MODE_OFF]);
+}
+
+function normalizeThermalText(value: string): string {
+	return value
+		.replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, '-')
+		.replace(/[\u2018\u2019]/g, "'")
+		.replace(/[\u201C\u201D]/g, '"')
+		.replace(/\u00A0/g, ' ');
 }
 
 function containsJapaneseText(value: string): boolean {
