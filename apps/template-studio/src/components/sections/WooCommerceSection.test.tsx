@@ -64,6 +64,35 @@ describe('WooCommerceSection', () => {
 		expect(onThermalColumnsChange).toHaveBeenCalledWith(48);
 	});
 
+	it('wires legacy size toggle by template engine', () => {
+		const onEnableLegacyPrintModeChange = vi.fn();
+		const props = {
+			currency: 'EUR',
+			locale: 'es_ES',
+			displayTax: 'incl',
+			pricesEnteredWithTax: true,
+			roundingMode: 'per-line',
+			printerModel: 'generic',
+			language: 'esc-pos',
+			thermalColumns: 42 as const,
+			enableLegacyPrintMode: true,
+			onChangePath: vi.fn(),
+			onPrinterModelChange: vi.fn(),
+			onLanguageChange: vi.fn(),
+			onThermalColumnsChange: vi.fn(),
+			onEnableLegacyPrintModeChange,
+		};
+		const { rerender } = render(<WooCommerceSection {...props} engine="thermal" />);
+
+		const toggle = screen.getByLabelText('Use legacy size commands');
+		expect(toggle).toBeEnabled();
+		fireEvent.click(toggle);
+		expect(onEnableLegacyPrintModeChange).toHaveBeenCalledWith(false);
+
+		rerender(<WooCommerceSection {...props} engine="logicless" />);
+		expect(screen.getByLabelText('Use legacy size commands')).toBeDisabled();
+	});
+
 	it('disables characters-per-line selection for logicless templates', () => {
 		render(
 			<WooCommerceSection
