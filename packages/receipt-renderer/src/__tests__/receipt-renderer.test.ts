@@ -35,6 +35,30 @@ function includesSequence(bytes: Uint8Array, sequence: number[]): boolean {
 	);
 }
 
+function decodePrintableAscii(bytes: Uint8Array): string {
+	let output = '';
+	for (let index = 0; index < bytes.length; index++) {
+		const byte = bytes[index];
+		if (byte === 0x1b) {
+			const command = bytes[index + 1];
+			index += command === 0x21 || command === 0x4d || command === 0x74 ? 2 : 1;
+			continue;
+		}
+		if (byte === 0x1c) {
+			index += 1;
+			continue;
+		}
+		if (byte === 0x0d || byte === 0x0a) {
+			output += '\n';
+			continue;
+		}
+		if (byte >= 0x20 && byte <= 0x7e) {
+			output += String.fromCharCode(byte);
+		}
+	}
+	return output;
+}
+
 function opaqueBlackImageData(width: number, height: number): ImageData {
 	const data = new Uint8ClampedArray(width * height * 4);
 	for (let offset = 0; offset < data.length; offset += 4) {
@@ -405,6 +429,48 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(setSizeIndex).toBeGreaterThanOrEqual(0);
 		expect(textIndex).toBeGreaterThan(setSizeIndex);
 		expect(resetSizeIndex).toBeGreaterThan(textIndex);
+	});
+
+	it('emits ESC ! print-mode size bytes for the virtual thermal printer simulator', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text><size width="2" height="2">Store</size>Small</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const hex = Array.from(bytes)
+			.map((byte) => byte.toString(16).padStart(2, '0'))
+			.join(' ');
+		const storeIndex = hex.indexOf('53 74 6f 72 65');
+		const smallIndex = hex.indexOf('53 6d 61 6c 6c');
+		const setEscPrintModeIndex = hex.indexOf('1b 21 30');
+		const resetEscPrintModeIndex = hex.indexOf('1b 21 00', storeIndex);
+
+		expect(setEscPrintModeIndex).toBeGreaterThanOrEqual(0);
+		expect(storeIndex).toBeGreaterThan(setEscPrintModeIndex);
+		expect(resetEscPrintModeIndex).toBeGreaterThan(storeIndex);
+		expect(smallIndex).toBeGreaterThan(resetEscPrintModeIndex);
+	});
+
+	it('preserves leading spaces in ESC/POS text nodes for indented continuation lines', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>  SKU: SKU-6564</text><text>  Flavor: Chocolate</text></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos' }
+		);
+		const printable = decodePrintableAscii(bytes);
+
+		expect(printable).toContain('  SKU: SKU-6564');
+		expect(printable).toContain('  Flavor: Chocolate');
+	});
+
+	it('emits indented standalone text through counted ESC/POS text layout', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>  SKU: SKU-6564</text></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos' }
+		);
+
+		expect(includesSequence(bytes, [0x1b, 0x74, 0x00, 0x20, 0x20, 0x53])).toBe(true);
 	});
 
 	it('encodes Japanese thermal text without question-mark substitutions', () => {
