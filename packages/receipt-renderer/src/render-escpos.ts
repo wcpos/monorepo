@@ -246,6 +246,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			const previous = context.align;
 			context.align = node.mode;
 			encoder.align(node.mode);
+			writeHardwareAlign(encoder, context.language, node.mode);
 			walkNodes(encoder, node.children, context);
 			context.align = previous;
 			encoder.align(previous);
@@ -373,14 +374,14 @@ function writeNewline(encoder: ReceiptPrinterEncoder, context: RenderContext, li
 	}
 
 	const count = Number.isFinite(lines) ? Math.max(1, Math.floor(lines)) : 1;
-	encoder.raw([0x0a]);
+	encoder.newline();
 	if (context.activeScaledLineSpacing !== undefined) {
 		// ESC 2 — restore default line spacing after the enlarged line breaks.
 		encoder.raw([0x1b, 0x32]);
 		context.activeScaledLineSpacing = undefined;
 	}
 	if (count > 1) {
-		encoder.raw(new Array(count - 1).fill(0x0a));
+		encoder.newline(count - 1);
 	}
 }
 

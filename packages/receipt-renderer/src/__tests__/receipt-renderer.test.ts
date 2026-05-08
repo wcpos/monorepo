@@ -96,6 +96,74 @@ function decodePrintableAscii(bytes: Uint8Array): string {
 	return output;
 }
 
+type DecodedAlignedLine = { text: string; align: 'left' | 'center' | 'right' };
+
+function decodeAlignByte(value: number | undefined): DecodedAlignedLine['align'] {
+	if (value === 0x01) return 'center';
+	if (value === 0x02) return 'right';
+	return 'left';
+}
+
+function decodeAlignedAsciiLines(bytes: Uint8Array): DecodedAlignedLine[] {
+	const lines: DecodedAlignedLine[] = [];
+	let currentAlign: DecodedAlignedLine['align'] = 'left';
+	let lineAlign: DecodedAlignedLine['align'] = currentAlign;
+	let text = '';
+
+	for (let index = 0; index < bytes.length; index++) {
+		const byte = bytes[index];
+		if (byte === 0x1b) {
+			const command = bytes[index + 1];
+			if (command === 0x61) {
+				currentAlign = decodeAlignByte(bytes[index + 2]);
+				if (!text) lineAlign = currentAlign;
+				index += 2;
+				continue;
+			}
+			if (command === 0x1d && bytes[index + 2] === 0x61) {
+				currentAlign = decodeAlignByte(bytes[index + 3]);
+				if (!text) lineAlign = currentAlign;
+				index += 3;
+				continue;
+			}
+			index += command === 0x21 || command === 0x4d || command === 0x74 || command === 0x33 ? 2 : 1;
+			continue;
+		}
+		if (byte === 0x1c) {
+			index += 1;
+			continue;
+		}
+		if (byte === 0x1d) {
+			index += gsCommandSkipLength(bytes, index);
+			continue;
+		}
+		if (byte === 0x0d) continue;
+		if (byte === 0x0a) {
+			if (text) lines.push({ text, align: lineAlign });
+			text = '';
+			lineAlign = currentAlign;
+			continue;
+		}
+		if (byte >= 0x20 && byte <= 0x7e) {
+			text += String.fromCharCode(byte);
+		}
+	}
+
+	if (text) lines.push({ text, align: lineAlign });
+	return lines;
+}
+
+function expectAlignedLine(
+	lines: DecodedAlignedLine[],
+	text: string,
+	align: DecodedAlignedLine['align']
+): void {
+	const line = lines.find((candidate) => candidate.text.includes(text));
+	expect(line).toBeDefined();
+	expect(line?.text.trim()).toBe(text);
+	expect(line?.align).toBe(align);
+}
+
 function opaqueBlackImageData(width: number, height: number): ImageData {
 	const data = new Uint8ClampedArray(width * height * 4);
 	for (let offset = 0; offset < data.length; offset += 4) {
@@ -346,6 +414,18 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(resetAfterStoreName).toBeLessThan(
 			sequenceIndex(bytes, Array.from(new TextEncoder().encode('After')))
 		);
+	});
+
+	it('centers each text line inside ESC/POS align blocks', () => {
+		const ast = parseXml(
+			'<receipt paper-width="48"><align mode="center"><text>48 Avinguda Diagonal</text><text>VAT ES0000000000</text><text>Horario de apertura</text></align><text>After</text></receipt>'
+		);
+		const lines = decodeAlignedAsciiLines(renderEscpos(ast, { columns: 48, language: 'esc-pos' }));
+
+		expectAlignedLine(lines, '48 Avinguda Diagonal', 'center');
+		expectAlignedLine(lines, 'VAT ES0000000000', 'center');
+		expectAlignedLine(lines, 'Horario de apertura', 'center');
+		expectAlignedLine(lines, 'After', 'left');
 	});
 
 	it('uses the printer model language when restoring image alignment', () => {
