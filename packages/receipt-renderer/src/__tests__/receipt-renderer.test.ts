@@ -536,21 +536,36 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(countedLayoutIndex).toBe(-1);
 	});
 
-	it('expands ESC line spacing while scaled-height text is active', () => {
+	it('restores ESC line spacing after the newline that closes inline scaled text', () => {
 		const bytes = encodeThermalTemplate(
-			'<receipt><size width="2" height="2"><text>Big</text></size><text>Small</text></receipt>',
+			'<receipt><text><size width="2" height="2">Big</size>Small</text><text>Next</text></receipt>',
 			{},
 			{ columns: 48, language: 'esc-pos' }
 		);
 		const setSpacingIndex = sequenceIndex(bytes, [0x1b, 0x33, 60]);
 		const bigIndex = sequenceIndex(bytes, [0x42, 0x69, 0x67]);
-		const restoreSpacingIndex = sequenceIndex(bytes, [0x1b, 0x32], bigIndex);
 		const smallIndex = sequenceIndex(bytes, [0x53, 0x6d, 0x61, 0x6c, 0x6c]);
+		const newlineIndex = sequenceIndex(bytes, [0x0a], smallIndex);
+		const restoreSpacingIndex = sequenceIndex(bytes, [0x1b, 0x32], smallIndex);
+		const nextIndex = sequenceIndex(bytes, [0x4e, 0x65, 0x78, 0x74]);
 
 		expect(setSpacingIndex).toBeGreaterThanOrEqual(0);
 		expect(bigIndex).toBeGreaterThan(setSpacingIndex);
-		expect(restoreSpacingIndex).toBeGreaterThan(bigIndex);
-		expect(smallIndex).toBeGreaterThan(restoreSpacingIndex);
+		expect(smallIndex).toBeGreaterThan(bigIndex);
+		expect(newlineIndex).toBeGreaterThan(smallIndex);
+		expect(restoreSpacingIndex).toBeGreaterThan(newlineIndex);
+		expect(nextIndex).toBeGreaterThan(restoreSpacingIndex);
+	});
+
+	it('keeps ESC line-spacing bytes out of Star printer output', () => {
+		const template = '<receipt><text><size width="2" height="2">Big</size>Small</text></receipt>';
+
+		for (const language of ['star-prnt', 'star-line'] as const) {
+			const bytes = encodeThermalTemplate(template, {}, { columns: 48, language });
+
+			expect(sequenceIndex(bytes, [0x1b, 0x33, 60])).toBe(-1);
+			expect(sequenceIndex(bytes, [0x1b, 0x32])).toBe(-1);
+		}
 	});
 
 	it('omits ESC ! print-mode bytes when emitEscPrintMode is false', () => {

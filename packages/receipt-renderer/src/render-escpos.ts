@@ -47,6 +47,7 @@ interface RenderContext {
 	normalizeText: boolean;
 	emitEscPrintMode: boolean;
 	escposPrintMode?: EscposPrintModeState;
+	activeScaledLineSpacing?: number;
 	imageAssets: ThermalImageAssets;
 	imageAlgorithm: ThermalImageAlgorithm;
 	imageThreshold: number;
@@ -194,7 +195,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 				break;
 			}
 			walkNodes(encoder, node.children, context);
-			encoder.newline();
+			writeNewline(encoder, context);
 			break;
 		case 'bold': {
 			const previous = context.escposPrintMode?.bold ?? false;
@@ -222,21 +223,19 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 		case 'size': {
 			const previousWidth = context.escposPrintMode?.width ?? 1;
 			const previousHeight = context.escposPrintMode?.height ?? 1;
-			const enteringScaledHeight = node.height > 1 && previousHeight <= 1;
+			const enteringScaledHeight =
+				context.escposPrintMode !== undefined && node.height > 1 && previousHeight <= 1;
 			if (enteringScaledHeight) {
 				// ESC 3 n — set line spacing to n/180". The default LF after
 				// double-height text advances by ~30/180", which is too small for
 				// the taller character cell, so the next line overlaps. Scale
 				// spacing with the active height multiplier.
+				context.activeScaledLineSpacing = node.height;
 				encoder.raw([0x1b, 0x33, Math.min(255, node.height * 30)]);
 			}
 			updateEscposSize(encoder, context, node.width, node.height);
 			walkNodes(encoder, node.children, context);
 			updateEscposSize(encoder, context, previousWidth, previousHeight);
-			if (enteringScaledHeight) {
-				// ESC 2 — restore default line spacing.
-				encoder.raw([0x1b, 0x32]);
-			}
 			break;
 		}
 		case 'align': {
@@ -267,7 +266,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 					context.supportsCp932,
 					context.normalizeText
 				);
-				encoder.newline();
+				writeNewline(encoder, context);
 			} else {
 				const colDefs = node.children.map((col, i) => ({
 					width: resolvedWidths[i],
@@ -353,7 +352,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			encoder.cut(node.cutType === 'full' ? 'full' : 'partial');
 			break;
 		case 'feed':
-			encoder.newline(node.lines);
+			writeNewline(encoder, context, node.lines);
 			break;
 		case 'drawer':
 			encoder.pulse();
@@ -361,6 +360,24 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 		case 'receipt':
 			walkNodes(encoder, node.children, context);
 			break;
+	}
+}
+
+function writeNewline(encoder: ReceiptPrinterEncoder, context: RenderContext, lines = 1): void {
+	if (!context.escposPrintMode) {
+		encoder.newline(lines);
+		return;
+	}
+
+	const count = Number.isFinite(lines) ? Math.max(1, Math.floor(lines)) : 1;
+	encoder.raw([0x0a]);
+	if (context.activeScaledLineSpacing !== undefined) {
+		// ESC 2 — restore default line spacing after the enlarged line breaks.
+		encoder.raw([0x1b, 0x32]);
+		context.activeScaledLineSpacing = undefined;
+	}
+	if (count > 1) {
+		encoder.raw(new Array(count - 1).fill(0x0a));
 	}
 }
 
