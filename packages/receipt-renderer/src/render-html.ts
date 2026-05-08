@@ -48,6 +48,9 @@ function renderNode(node: ThermalNode, widthChars: number): string {
 			}
 			return '<hr style="border: none; border-top: 1px dashed #000; margin: 4px 0" />';
 		case 'barcode':
+			if (isQrBarcodeType(node.barcodeType)) {
+				return renderQrCode(node.value, heightToQrSize(node.height), widthChars);
+			}
 			return renderBarcode(node.barcodeType, node.value, node.height, 'barcode', widthChars);
 		case 'qrcode':
 			return renderQrCode(node.value, node.size, widthChars);
@@ -153,6 +156,17 @@ function safeFloat(value: unknown, fallback: number, min: number, max: number): 
 
 function safeAlign(value: unknown): 'left' | 'center' | 'right' {
 	return value === 'left' || value === 'center' || value === 'right' ? value : 'left';
+}
+
+function isQrBarcodeType(type: string): boolean {
+	const normalized = type.trim().toLowerCase();
+	return normalized === 'qrcode' || normalized === 'qr';
+}
+
+function heightToQrSize(height: number): number {
+	return Number.isFinite(height) && height > 0
+		? Math.max(2, Math.min(10, Math.round(height / 10)))
+		: 4;
 }
 
 /**

@@ -219,6 +219,15 @@ describe('@wcpos/receipt-renderer exports', () => {
 		});
 
 		expect(html).toContain('style="width: min(100%, 28.00ch); height: auto"');
+
+		const qrHtml = renderHtml({
+			type: 'receipt',
+			paperWidth: 48,
+			children: [{ type: 'barcode', barcodeType: 'qr', height: 40, value: 'XYZ' }],
+		});
+
+		expect(qrHtml).not.toContain('style="width: min(100%, 28.00ch); height: auto"');
+		expect(qrHtml).toContain('style="width: min(100%, 14.00ch); height: auto"');
 	});
 
 	it('renders a helpful error when barcode data is invalid for the selected type', () => {
