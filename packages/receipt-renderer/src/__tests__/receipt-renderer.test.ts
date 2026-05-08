@@ -202,7 +202,7 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).toContain('data-barcode-kind="qrcode"');
 		expect(html).toMatch(/data-barcode-kind="qrcode"[\s\S]*<svg[^>]* viewBox="0 0 (\d+) \1"/);
 		expect(html).toContain('data-barcode-value="ABC-123"');
-		expect(html).toContain('max-width: 100%');
+		expect(html).toMatch(/<svg[^>]*style="width: min\(100%, [0-9.]+ch\); height: auto"/);
 		expect(html).toContain('height: auto');
 		expect(html).toContain('stroke=');
 		expect(html).toContain('stroke-width=');
@@ -420,7 +420,8 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).toContain('width: 48ch');
 		expect(html).toContain('text-align: left');
 		expect(html).toContain('font-size: 1em');
-		expect(html).toContain('max-width: 200px');
+		// 200 dots default → 200 * 48 / 576 = 16.67ch on a 48-char 80mm receipt.
+		expect(html).toContain('width: min(100%, 16.67ch)');
 		expect(html).toContain('height: 1.4em');
 		expect(html).not.toContain('evil.test');
 	});
@@ -533,6 +534,23 @@ describe('@wcpos/receipt-renderer exports', () => {
 
 		expect(sizeIndex).toBeGreaterThanOrEqual(0);
 		expect(countedLayoutIndex).toBe(-1);
+	});
+
+	it('expands ESC line spacing while scaled-height text is active', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><size width="2" height="2"><text>Big</text></size><text>Small</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const setSpacingIndex = sequenceIndex(bytes, [0x1b, 0x33, 60]);
+		const bigIndex = sequenceIndex(bytes, [0x42, 0x69, 0x67]);
+		const restoreSpacingIndex = sequenceIndex(bytes, [0x1b, 0x32], bigIndex);
+		const smallIndex = sequenceIndex(bytes, [0x53, 0x6d, 0x61, 0x6c, 0x6c]);
+
+		expect(setSpacingIndex).toBeGreaterThanOrEqual(0);
+		expect(bigIndex).toBeGreaterThan(setSpacingIndex);
+		expect(restoreSpacingIndex).toBeGreaterThan(bigIndex);
+		expect(smallIndex).toBeGreaterThan(restoreSpacingIndex);
 	});
 
 	it('omits ESC ! print-mode bytes when emitEscPrintMode is false', () => {

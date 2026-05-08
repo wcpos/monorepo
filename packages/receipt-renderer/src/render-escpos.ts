@@ -222,9 +222,21 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 		case 'size': {
 			const previousWidth = context.escposPrintMode?.width ?? 1;
 			const previousHeight = context.escposPrintMode?.height ?? 1;
+			const enteringScaledHeight = node.height > 1 && previousHeight <= 1;
+			if (enteringScaledHeight) {
+				// ESC 3 n — set line spacing to n/180". The default LF after
+				// double-height text advances by ~30/180", which is too small for
+				// the taller character cell, so the next line overlaps. Scale
+				// spacing with the active height multiplier.
+				encoder.raw([0x1b, 0x33, Math.min(255, node.height * 30)]);
+			}
 			updateEscposSize(encoder, context, node.width, node.height);
 			walkNodes(encoder, node.children, context);
 			updateEscposSize(encoder, context, previousWidth, previousHeight);
+			if (enteringScaledHeight) {
+				// ESC 2 — restore default line spacing.
+				encoder.raw([0x1b, 0x32]);
+			}
 			break;
 		}
 		case 'align': {
