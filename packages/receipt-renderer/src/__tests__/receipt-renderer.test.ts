@@ -30,9 +30,30 @@ const data = {
 };
 
 function includesSequence(bytes: Uint8Array, sequence: number[]): boolean {
-	return Array.from(bytes).some((_, index, all) =>
-		sequence.every((value, offset) => all[index + offset] === value)
+	return sequenceIndex(bytes, sequence) !== -1;
+}
+
+function sequenceIndex(bytes: Uint8Array, sequence: number[], fromIndex = 0): number {
+	const all = Array.from(bytes);
+	return all.findIndex(
+		(_, index) =>
+			index >= fromIndex && sequence.every((value, offset) => all[index + offset] === value)
 	);
+}
+
+function gsCommandSkipLength(bytes: Uint8Array, index: number): number {
+	const command = bytes[index + 1];
+	if (command === 0x21) return 2;
+	if (command === 0x56) {
+		const mode = bytes[index + 2];
+		return mode === 0x41 || mode === 0x42 ? 3 : 2;
+	}
+	if (command === 0x76 && bytes[index + 2] === 0x30) {
+		const width = (bytes[index + 4] ?? 0) + ((bytes[index + 5] ?? 0) << 8);
+		const height = (bytes[index + 6] ?? 0) + ((bytes[index + 7] ?? 0) << 8);
+		return 7 + width * height;
+	}
+	return 1;
 }
 
 function decodePrintableAscii(bytes: Uint8Array): string {
@@ -46,6 +67,10 @@ function decodePrintableAscii(bytes: Uint8Array): string {
 		}
 		if (byte === 0x1c) {
 			index += 1;
+			continue;
+		}
+		if (byte === 0x1d) {
+			index += gsCommandSkipLength(bytes, index);
 			continue;
 		}
 		if (byte === 0x0d || byte === 0x0a) {
@@ -449,6 +474,26 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(storeIndex).toBeGreaterThan(setEscPrintModeIndex);
 		expect(resetEscPrintModeIndex).toBeGreaterThan(storeIndex);
 		expect(smallIndex).toBeGreaterThan(resetEscPrintModeIndex);
+	});
+
+	it('does not collapse GS ! magnification above double size with ESC ! print mode', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text><size width="2" height="2"><size width="3" height="3">Store</size></size>Small</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const doubleSizeIndex = sequenceIndex(bytes, [0x1b, 0x21, 0x30]);
+		const clearEscSizeIndex = sequenceIndex(bytes, [0x1b, 0x21, 0x00], doubleSizeIndex);
+		const gsSizeIndex = sequenceIndex(bytes, [0x1d, 0x21, 0x22]);
+		const storeIndex = sequenceIndex(bytes, [0x53, 0x74, 0x6f, 0x72, 0x65]);
+		const escPrintModeBeforeText = sequenceIndex(bytes, [0x1b, 0x21], gsSizeIndex);
+
+		expect(doubleSizeIndex).toBeGreaterThanOrEqual(0);
+		expect(clearEscSizeIndex).toBeGreaterThan(doubleSizeIndex);
+		expect(gsSizeIndex).toBeGreaterThan(clearEscSizeIndex);
+		expect(gsSizeIndex).toBeGreaterThanOrEqual(0);
+		expect(storeIndex).toBeGreaterThan(gsSizeIndex);
+		expect(escPrintModeBeforeText).toBeGreaterThan(storeIndex);
 	});
 
 	it('preserves leading spaces in ESC/POS text nodes for indented continuation lines', () => {

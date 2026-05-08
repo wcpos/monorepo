@@ -211,14 +211,9 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 		case 'size': {
 			const previousWidth = context.escposPrintMode?.width ?? 1;
 			const previousHeight = context.escposPrintMode?.height ?? 1;
-			encoder.size(node.width, node.height);
-			updateEscposPrintMode(encoder, context, { width: node.width, height: node.height });
+			updateEscposSize(encoder, context, node.width, node.height);
 			walkNodes(encoder, node.children, context);
-			encoder.size(previousWidth, previousHeight);
-			updateEscposPrintMode(encoder, context, {
-				width: previousWidth,
-				height: previousHeight,
-			});
+			updateEscposSize(encoder, context, previousWidth, previousHeight);
 			break;
 		}
 		case 'align': {
@@ -363,6 +358,31 @@ function updateEscposPrintMode(
 ): void {
 	if (!context.escposPrintMode) return;
 	Object.assign(context.escposPrintMode, patch);
+	if (context.escposPrintMode.width > 2 || context.escposPrintMode.height > 2) return;
+	encoder.raw([0x1b, 0x21, escposPrintModeByte(context.escposPrintMode)]);
+}
+
+function updateEscposSize(
+	encoder: ReceiptPrinterEncoder,
+	context: RenderContext,
+	width: number,
+	height: number
+): void {
+	if (!context.escposPrintMode) {
+		encoder.size(width, height);
+		return;
+	}
+	Object.assign(context.escposPrintMode, { width, height });
+	if (width > 2 || height > 2) {
+		encoder.raw([
+			0x1b,
+			0x21,
+			escposPrintModeByte({ ...context.escposPrintMode, width: 1, height: 1 }),
+		]);
+		encoder.size(width, height);
+		return;
+	}
+	encoder.size(width, height);
 	encoder.raw([0x1b, 0x21, escposPrintModeByte(context.escposPrintMode)]);
 }
 
