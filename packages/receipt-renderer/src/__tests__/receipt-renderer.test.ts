@@ -223,6 +223,25 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(html).not.toContain('>QR<');
 	});
 
+	it('scales thermal barcode previews 50% larger than their print dot ratio', () => {
+		const html = renderHtml({
+			type: 'receipt',
+			paperWidth: 48,
+			children: [{ type: 'barcode', barcodeType: 'code128', height: 40, value: 'ABC-123' }],
+		});
+
+		expect(html).toContain('style="width: min(100%, 28.00ch); height: auto"');
+
+		const qrHtml = renderHtml({
+			type: 'receipt',
+			paperWidth: 48,
+			children: [{ type: 'barcode', barcodeType: 'qr', height: 40, value: 'XYZ' }],
+		});
+
+		expect(qrHtml).not.toContain('style="width: min(100%, 28.00ch); height: auto"');
+		expect(qrHtml).toContain('style="width: min(100%, 14.00ch); height: auto"');
+	});
+
 	it('renders a helpful error when barcode data is invalid for the selected type', () => {
 		const html = renderThermalPreview(
 			'<receipt><barcode type="ean13">ABC-123</barcode></receipt>',
