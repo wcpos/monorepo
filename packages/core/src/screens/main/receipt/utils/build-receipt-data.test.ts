@@ -125,6 +125,20 @@ describe('buildReceiptData', () => {
 		expect(result.order.created.datetime).toBe('2026-03-06T10:00:00');
 	});
 
+	it('emits a render-time order.printed datetime', () => {
+		const result = buildReceiptData(mockOrder, mockStore);
+		expect(result.order.printed.datetime).not.toBe('');
+		expect(result.order.printed.datetime).toContain(String(new Date().getFullYear()));
+	});
+
+	it('formats order.printed in the configured store timezone', () => {
+		// Choose two timezones with a >12h offset so the rendered hour differs
+		// regardless of the runtime's local zone.
+		const earlyZone = buildReceiptData(mockOrder, { ...mockStore, timezone: 'Pacific/Auckland' });
+		const lateZone = buildReceiptData(mockOrder, { ...mockStore, timezone: 'Pacific/Honolulu' });
+		expect(earlyZone.order.printed.datetime).not.toBe(lateZone.order.printed.datetime);
+	});
+
 	it('falls back to capitalized status_label when no resolver is provided', () => {
 		const result = buildReceiptData({ ...mockOrder, status: 'on-hold' }, mockStore);
 		expect(result.order.wc_status).toBe('on-hold');
