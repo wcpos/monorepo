@@ -347,7 +347,7 @@ describe('@wcpos/receipt-renderer exports', () => {
 			},
 		});
 
-		expect(includesSequence(bytes, [0x1b, 0x1d, 0x61, 0x01])).toBe(true);
+		expect(countSequence(bytes, [0x1b, 0x1d, 0x61, 0x01])).toBeGreaterThanOrEqual(2);
 		expect(sequenceIndex(bytes, [0x1b, 0x61, 0x01])).toBe(-1);
 	});
 

@@ -1,3 +1,4 @@
+/// <reference path="./types/receipt-printer-encoder.d.ts" />
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import iconv from 'iconv-lite';
 
@@ -419,6 +420,8 @@ function writeHardwareAlign(
 		encoder.raw([0x1b, 0x61, align === 'left' ? 0x00 : align === 'center' ? 0x01 : 0x02]);
 		return;
 	}
+	const value = align === 'left' ? 0x00 : align === 'center' ? 0x01 : 0x02;
+	encoder.raw([0x1b, 0x1d, 0x61, value]);
 	encoder.align(align);
 }
 
