@@ -579,6 +579,29 @@ function resolveOrderBarcodeType(value: unknown): ReceiptPresentationHints['orde
 	return 'code128';
 }
 
+function formatPrintedDatetime(timezone?: string): string {
+	const options: Intl.DateTimeFormatOptions = {
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric',
+		hour: 'numeric',
+		minute: '2-digit',
+		hour12: true,
+	};
+
+	try {
+		return new Intl.DateTimeFormat('en-US', {
+			...options,
+			timeZone: timezone,
+		}).format(new Date());
+	} catch (error) {
+		if (!(error instanceof RangeError)) {
+			throw error;
+		}
+		return new Intl.DateTimeFormat('en-US', options).format(new Date());
+	}
+}
+
 function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData {
 	const base = emptyReceiptData();
 	const presentationHints = mapPresentationHints(
@@ -602,6 +625,14 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 	delete customerData.tax_ids;
 	const normalizedStore = mapStore(storeSource);
 	const normalizedCustomer = mapCustomer(customerSource);
+	const storeTimezone =
+		typeof storeSource.timezone === 'string' && storeSource.timezone
+			? storeSource.timezone
+			: undefined;
+	const printed = { ...base.order.printed, ...(order.printed ?? {}) };
+	if (!printed.datetime) {
+		printed.datetime = formatPrintedDatetime(storeTimezone);
+	}
 
 	const result: ReceiptData = {
 		order: {
@@ -610,7 +641,7 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			created: { ...base.order.created, ...(order.created ?? {}) },
 			paid: { ...base.order.paid, ...(order.paid ?? {}) },
 			completed: { ...base.order.completed, ...(order.completed ?? {}) },
-			printed: { ...base.order.printed, ...(order.printed ?? {}) },
+			printed,
 		},
 		store: {
 			...base.store,
@@ -732,18 +763,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	// store carries no timezone override.
 	const storeTimezone =
 		typeof store.timezone === 'string' && store.timezone ? store.timezone : undefined;
-	const offlinePrinted = {
-		...emptyReceiptDate(),
-		datetime: new Intl.DateTimeFormat('en-US', {
-			timeZone: storeTimezone,
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-			hour: 'numeric',
-			minute: '2-digit',
-			hour12: true,
-		}).format(new Date()),
-	};
+	const offlinePrinted = { ...emptyReceiptDate(), datetime: formatPrintedDatetime(storeTimezone) };
 
 	const result: ReceiptData = {
 		order: {
