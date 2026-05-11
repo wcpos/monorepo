@@ -486,6 +486,23 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
 	});
 
+	it.each([
+		['center', 17],
+		['right', 35],
+	] as const)('keeps inline formatted %s text on one physical line', (mode, xStart) => {
+		const ast = parseXml(
+			`<receipt paper-width="48"><align mode="${mode}"><text>Total: <bold>$10.00</bold></text></align><text>After</text></receipt>`
+		);
+		const lines = simulateEscposTextLines(
+			renderEscpos(ast, { columns: 48, language: 'esc-pos' }),
+			48
+		);
+
+		expect(lines.find((line) => line.text === 'Total: $10.00')?.xStart).toBe(xStart);
+		expect(lines.some((line) => line.text === 'Total:' || line.text === '$10.00')).toBe(false);
+		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
+	});
+
 	it.each([42, 48])(
 		'visually centers receipt header/fiscal/footer text at %i columns',
 		(columns) => {

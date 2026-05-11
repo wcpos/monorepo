@@ -46,6 +46,7 @@ interface RenderContext {
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	align: 'left' | 'center' | 'right';
 	lineHasText: boolean;
+	allowAlignedRawTextLine: boolean;
 	supportsCp932: boolean;
 	normalizeText: boolean;
 	emitEscPrintMode: boolean;
@@ -121,6 +122,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		language: resolvedLanguage,
 		align: 'left',
 		lineHasText: false,
+		allowAlignedRawTextLine: true,
 		supportsCp932: resolvedLanguage === 'esc-pos' && enableCp932,
 		normalizeText: resolvedLanguage === 'esc-pos',
 		emitEscPrintMode: resolvedLanguage === 'esc-pos' && emitEscPrintMode,
@@ -193,7 +195,10 @@ function walkNodes(
 function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: RenderContext): void {
 	switch (node.type) {
 		case 'raw-text':
-			if (writeAlignedRawTextLine(encoder, node.value, context)) {
+			if (
+				context.allowAlignedRawTextLine &&
+				writeAlignedRawTextLine(encoder, node.value, context)
+			) {
 				break;
 			}
 			writeText(encoder, node.value, context.supportsCp932, context.normalizeText);
@@ -206,7 +211,10 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			if (writeIndentedStandaloneTextLine(encoder, node.children, context)) {
 				break;
 			}
+			const previousAllowAlignedRawTextLine = context.allowAlignedRawTextLine;
+			context.allowAlignedRawTextLine = false;
 			walkNodes(encoder, node.children, context);
+			context.allowAlignedRawTextLine = previousAllowAlignedRawTextLine;
 			if (context.lineHasText) {
 				writeNewline(encoder, context);
 			}
@@ -550,13 +558,13 @@ function writeAlignedStandaloneTextLine(
 		context.lineHasText ||
 		activeWidth > 1 ||
 		activeHeight > 1 ||
-		nodes.length !== 1 ||
-		nodes[0]?.type !== 'raw-text'
+		containsScaledText(nodes)
 	) {
 		return false;
 	}
 
-	const normalized = context.normalizeText ? normalizeThermalText(nodes[0].value) : nodes[0].value;
+	const text = extractText(nodes);
+	const normalized = context.normalizeText ? normalizeThermalText(text) : text;
 	if (
 		!normalized ||
 		(context.supportsCp932 && containsJapaneseText(normalized)) ||
@@ -566,7 +574,23 @@ function writeAlignedStandaloneTextLine(
 	}
 
 	encoder.align('left');
-	encoder.table([{ width: context.columns, align: context.align }], [[normalized]]);
+	encoder.table(
+		[{ width: context.columns, align: context.align }],
+		[
+			[
+				(cellEncoder: ReceiptPrinterEncoder) => {
+					walkNodes(cellEncoder, nodes, {
+						...context,
+						align: 'left',
+						lineHasText: false,
+						allowAlignedRawTextLine: false,
+						escposPrintMode: context.escposPrintMode ? { ...context.escposPrintMode } : undefined,
+						activeScaledLineSpacing: undefined,
+					});
+				},
+			],
+		]
+	);
 	context.lineHasText = false;
 	encoder.align(context.align);
 	return true;
