@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildPrintableReceiptHtml, normalizeReceiptPaperWidth } from '../print-html';
+import {
+	buildPrintableReceiptHtml,
+	normalizeReceiptPaperWidth,
+	prepareSystemPrintHtml,
+} from '../print-html';
 
 describe('normalizeReceiptPaperWidth', () => {
 	it.each([
@@ -47,5 +51,28 @@ describe('buildPrintableReceiptHtml', () => {
 
 		expect(html).toContain('<style>.receipt{padding:24px}</style>');
 		expect(html).toContain('print-color-adjust: exact');
+	});
+});
+
+describe('prepareSystemPrintHtml', () => {
+	it('wraps provided rendered HTML with the selected template paper width', () => {
+		const html = prepareSystemPrintHtml({
+			html: '<div>Invoice</div>',
+			paperWidth: 'a4',
+		});
+
+		expect(html).toContain('@page { size: A4; margin: 0; }');
+		expect(html).toContain('<div>Invoice</div>');
+	});
+
+	it('wraps iframe-extracted full documents instead of bypassing the print shell', () => {
+		const html = prepareSystemPrintHtml({
+			html: '<html><head><style>.x{color:red}</style></head><body><div>From iframe</div></body></html>',
+			paperWidth: '80mm',
+		});
+
+		expect(html).toContain('@page { size: 80mm auto; margin: 0; }');
+		expect(html).toContain('<style>.x{color:red}</style>');
+		expect(html).toContain('<div>From iframe</div>');
 	});
 });

@@ -37,3 +37,29 @@ body, body * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }${
 <body>${bodyHtml}</body>
 </html>`;
 }
+
+export function prepareSystemPrintHtml({
+	html,
+	paperWidth,
+}: {
+	html: string;
+	paperWidth?: string | null;
+}): string {
+	return buildPrintableReceiptHtml({
+		bodyHtml: extractPrintableBodyHtml(html),
+		paperWidth,
+	});
+}
+
+function extractPrintableBodyHtml(html: string): string {
+	if (typeof DOMParser === 'undefined') return html;
+	const trimmed = html.trimStart().toLowerCase();
+	const looksLikeFullDocument = trimmed.startsWith('<!doctype') || trimmed.startsWith('<html');
+	if (!looksLikeFullDocument) return html;
+
+	const doc = new DOMParser().parseFromString(html, 'text/html');
+	const headStyles = Array.from(doc.head.querySelectorAll('style'))
+		.map((style) => style.outerHTML)
+		.join('');
+	return `${headStyles}${doc.body.innerHTML}`;
+}

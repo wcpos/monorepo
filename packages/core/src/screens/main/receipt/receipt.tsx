@@ -125,6 +125,7 @@ export function Receipt({ resource }: Props) {
 		html: renderedHtml ?? undefined,
 		receiptUrl: templateReceiptUrl || baseReceiptURL,
 		printerProfile: useSystemDialog ? undefined : (resolvedPrinter ?? undefined),
+		paperWidth: selectedTemplate?.paper_width ?? undefined,
 		decimals: dp,
 		templateEngine: selectedTemplateEngine ?? undefined,
 		templateXml:

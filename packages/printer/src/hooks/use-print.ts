@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { mapReceiptData } from '../encoder/map-receipt-data';
+import { prepareSystemPrintHtml } from '../print-html';
 import { PrinterService } from '../printer-service';
 import { printFromUrl } from './print-from-url';
 
@@ -15,6 +16,8 @@ interface UsePrintOptions {
 	html?: string;
 	/** Receipt URL — fetched and used as HTML for system print fallback */
 	receiptUrl?: string;
+	/** Template paper width used by system print shell. */
+	paperWidth?: string | null;
 	/** Active printer profile. If undefined, uses system print dialog. */
 	printerProfile?: PrinterProfile;
 	/** XML template content for thermal engine templates */
@@ -72,6 +75,7 @@ export function usePrint(options: UsePrintOptions) {
 			receiptData,
 			html,
 			receiptUrl,
+			paperWidth,
 			printerProfile,
 			templateXml,
 			decimals,
@@ -111,9 +115,21 @@ export function usePrint(options: UsePrintOptions) {
 
 				// If we have HTML, print it directly
 				if (htmlContent) {
-					await service.printHtml(htmlContent);
+					await service.printHtml(
+						prepareSystemPrintHtml({
+							html: htmlContent,
+							paperWidth,
+						})
+					);
 				} else if (receiptUrl) {
-					await printFromUrl(receiptUrl, (h) => service.printHtml(h));
+					await printFromUrl(receiptUrl, (h) =>
+						service.printHtml(
+							prepareSystemPrintHtml({
+								html: h,
+								paperWidth,
+							})
+						)
+					);
 				} else {
 					throw new Error(
 						'No printable content available (no HTML, no URL, no receipt data with printer profile)'
@@ -136,3 +152,5 @@ export function usePrint(options: UsePrintOptions) {
 
 	return { print, isPrinting };
 }
+
+export { prepareSystemPrintHtml };
