@@ -1,7 +1,4 @@
-import {
-	renderLogiclessTemplate,
-	renderThermalPreview,
-} from '@wcpos/receipt-renderer/render-template';
+import { renderLogiclessTemplate, renderThermalPreview } from '@wcpos/receipt-renderer';
 
 import { formatReceiptData } from './format-receipt-data';
 import { mapReceiptData } from './map-receipt-data';
