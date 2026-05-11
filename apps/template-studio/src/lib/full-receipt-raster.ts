@@ -18,6 +18,27 @@ export function normalizeRasterCaptureSize(input: {
 	};
 }
 
+export function stripThermalControlNodesForRaster(template: string): string {
+	const parser = typeof DOMParser === 'undefined' ? null : new DOMParser();
+	if (!parser) return stripTrailingThermalControlNodesFallback(template);
+
+	const document = parser.parseFromString(template, 'application/xml');
+	if (document.querySelector('parsererror')) {
+		return stripTrailingThermalControlNodesFallback(template);
+	}
+
+	const receipt = document.documentElement;
+	if (receipt.nodeName.toLowerCase() !== 'receipt') {
+		return stripTrailingThermalControlNodesFallback(template);
+	}
+
+	while (receipt.lastElementChild && isThermalControlElement(receipt.lastElementChild)) {
+		receipt.lastElementChild.remove();
+	}
+
+	return new XMLSerializer().serializeToString(receipt);
+}
+
 export async function rasterizeReceiptElement(input: {
 	receiptNode: Element | null;
 	maxWidth: number;
@@ -29,10 +50,11 @@ export async function rasterizeReceiptElement(input: {
 
 	const hostDocument = input.hostDocument ?? input.receiptNode.ownerDocument ?? document;
 	await waitForFonts(hostDocument);
+	await waitForImages(input.receiptNode);
 
 	const sourceRect = input.receiptNode.getBoundingClientRect();
-	const sourceWidth = sourceRect.width || input.receiptNode.clientWidth || input.maxWidth;
-	const sourceHeight = sourceRect.height || input.receiptNode.clientHeight || 1;
+	const sourceWidth = input.receiptNode.clientWidth || sourceRect.width || input.maxWidth;
+	const sourceHeight = input.receiptNode.clientHeight || sourceRect.height || 1;
 	const size = normalizeRasterCaptureSize({
 		width: sourceWidth,
 		height: sourceHeight,
@@ -75,10 +97,40 @@ export async function rasterizeReceiptElement(input: {
 	};
 }
 
+function stripTrailingThermalControlNodesFallback(template: string): string {
+	let next = template;
+	let previous: string;
+	do {
+		previous = next;
+		next = next.replace(/\s*<(cut|feed|drawer)\b[^>]*(?:\/>|>\s*<\/\1>)\s*(?=<\/receipt>)/i, '');
+	} while (next !== previous);
+	return next;
+}
+
+function isThermalControlElement(element: Element): boolean {
+	const name = element.nodeName.toLowerCase();
+	return name === 'cut' || name === 'feed' || name === 'drawer';
+}
+
 async function waitForFonts(hostDocument: Document): Promise<void> {
 	const fonts = hostDocument.fonts as FontFaceSet | undefined;
 	if (!fonts?.ready) return;
 	await fonts.ready;
+}
+
+function waitForImages(receiptNode: Element): Promise<void> {
+	const images = Array.from(receiptNode.querySelectorAll('img')).filter((image) => !image.complete);
+	if (images.length === 0) return Promise.resolve();
+
+	return Promise.all(
+		images.map(
+			(image) =>
+				new Promise<void>((resolve) => {
+					image.addEventListener('load', () => resolve(), { once: true });
+					image.addEventListener('error', () => resolve(), { once: true });
+				})
+		)
+	).then(() => undefined);
 }
 
 function inlineComputedStyles(

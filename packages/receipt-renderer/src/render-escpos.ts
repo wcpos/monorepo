@@ -172,11 +172,20 @@ function writePostRasterCommands(
 	nodes: readonly ThermalNode[],
 	context: RenderContext
 ): void {
-	for (const node of nodes) {
-		if (node.type === 'cut' || node.type === 'feed' || node.type === 'drawer') {
-			walkNode(encoder, node, context);
-		}
+	const trailingControls: ThermalNode[] = [];
+	for (let index = nodes.length - 1; index >= 0; index--) {
+		const node = nodes[index];
+		if (!node || !isThermalControlNode(node)) break;
+		trailingControls.unshift(node);
 	}
+
+	for (const node of trailingControls) {
+		walkNode(encoder, node, context);
+	}
+}
+
+function isThermalControlNode(node: ThermalNode): boolean {
+	return node.type === 'cut' || node.type === 'feed' || node.type === 'drawer';
 }
 
 /**

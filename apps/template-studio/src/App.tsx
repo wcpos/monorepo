@@ -1,7 +1,11 @@
 import React from 'react';
 
 import { renderReceiptTemplate, sanitizeHtml, thermalImageAssetKey } from '@wcpos/receipt-renderer';
-import type { ThermalBarcodeImages, ThermalImageAssets } from '@wcpos/receipt-renderer';
+import type {
+	ThermalBarcodeImages,
+	ThermalImageAssets,
+	ThermalRasterImage,
+} from '@wcpos/receipt-renderer';
 
 import { CollapsibleSection } from './components/CollapsibleSection';
 import { DataSection } from './components/sections/DataSection';
@@ -11,7 +15,10 @@ import { Stage } from './components/Stage';
 import { TemplateList } from './components/TemplateList';
 import { Toolbar } from './components/Toolbar';
 import { ARRAY_DEFAULTS } from './lib/field-meta';
-import { rasterizeReceiptElement } from './lib/full-receipt-raster';
+import {
+	rasterizeReceiptElement,
+	stripThermalControlNodesForRaster,
+} from './lib/full-receipt-raster';
 import { getAtPath, removeAtPath, setAtPath } from './lib/path-utils';
 import {
 	loadThermalLogoAsset,
@@ -289,11 +296,40 @@ export function App() {
 
 		const maxWidth = maxDotsForPaperWidth(effectivePaperWidth);
 		if (fullReceiptRaster) {
-			const fullReceiptRasterImage = await rasterizeReceiptElement({
-				receiptNode: previewFrameRef.current?.firstElementChild ?? null,
-				maxWidth,
-				hostDocument: document,
+			const rasterPreview = renderStudioTemplate({
+				template: {
+					...selectedTemplate,
+					content: stripThermalControlNodesForRaster(selectedTemplate.content),
+				},
+				fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
+				paperWidth: effectivePaperWidth,
+				thermalColumns: effectiveThermalColumns,
+				printerModel: printerModel || undefined,
+				language,
 			});
+			if (rasterPreview.kind !== 'thermal') return rendered;
+			const rasterHost = document.createElement('div');
+			rasterHost.style.position = 'absolute';
+			rasterHost.style.left = '-10000px';
+			rasterHost.style.top = '0';
+			rasterHost.style.width = `${maxWidth}px`;
+			const rasterFrame = document.createElement('div');
+			rasterFrame.className = `paper-frame ${thermalPaperWidth === '58mm' ? 'thermal-58' : 'thermal-80'}`;
+			rasterFrame.style.width = `${maxWidth}px`;
+			rasterFrame.style.boxSizing = 'border-box';
+			rasterFrame.innerHTML = rasterPreview.html;
+			rasterHost.append(rasterFrame);
+			document.body.append(rasterHost);
+			let fullReceiptRasterImage: ThermalRasterImage;
+			try {
+				fullReceiptRasterImage = await rasterizeReceiptElement({
+					receiptNode: rasterFrame,
+					maxWidth,
+					hostDocument: document,
+				});
+			} finally {
+				rasterHost.remove();
+			}
 			const prepared = renderStudioTemplate({
 				template: selectedTemplate,
 				fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
@@ -362,6 +398,7 @@ export function App() {
 		printerModel,
 		rendered,
 		selectedTemplate,
+		thermalPaperWidth,
 		emitEscPrintMode,
 	]);
 
