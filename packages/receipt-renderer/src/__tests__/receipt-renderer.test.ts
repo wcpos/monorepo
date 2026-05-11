@@ -698,7 +698,7 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expectSingleNewlineBetween(bytes, 'Base c/IVA', 'Card');
 	});
 
-	it('prints single line rules as dashed text rows for thermal preview parity', () => {
+	it('prints default single line rules as printer-native straight rules', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt paper-width="48"><text>Before</text><line /><text>After</text></receipt>',
 			{},
@@ -706,9 +706,42 @@ describe('@wcpos/receipt-renderer exports', () => {
 		);
 		const printable = decodePrintableAscii(bytes);
 
-		expect(printable).toContain('-'.repeat(48));
-		expectSingleNewlineBetween(bytes, 'Before', '-'.repeat(48));
-		expectSingleNewlineBetween(bytes, '-'.repeat(48), 'After');
+		expect(printable).not.toContain('-'.repeat(48));
+		expect(printable.indexOf('After')).toBeGreaterThan(printable.indexOf('Before'));
+	});
+
+	it.each([
+		['dashed', '-'.repeat(48)],
+		['dotted', '. '.repeat(24)],
+	] as const)('prints %s line rules as text rows for thermal preview parity', (style, rule) => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48"><text>Before</text><line style="${style}" /><text>After</text></receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const printable = decodePrintableAscii(bytes);
+
+		expect(printable).toContain(rule);
+		expectSingleNewlineBetween(bytes, 'Before', rule);
+		expectSingleNewlineBetween(bytes, rule, 'After');
+	});
+
+	it('centers formatted status text after a scaled fiscal heading', () => {
+		const ast = parseXml(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<text><bold><size width="2" height="2">Factura fiscal</size></bold></text>
+					<text>[ <bold>Cancelado</bold> ]</text>
+				</align>
+			</receipt>`
+		);
+		const lines = simulateEscposTextLines(
+			renderEscpos(ast, { columns: 48, language: 'esc-pos' }),
+			48
+		);
+
+		expectVisuallyCentered(lines, '[ Cancelado ]', 48);
+		expect(lines.find((line) => line.text === '[ Cancelado ]')?.lineWidth).toBe(48);
 	});
 
 	it.each([42, 48])(
@@ -1277,24 +1310,26 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(hex).not.toContain('1d 21 11');
 	});
 
-	it('prints inline styled heading before following text without losing size bytes', () => {
+	it('centers text after a direct styled heading on the next physical line', () => {
 		const bytes = encodeThermalTemplate(
-			'<receipt><align mode="center"><bold><size width="2" height="2">Store</size></bold><text>Address</text></align></receipt>',
+			'<receipt paper-width="48"><align mode="center"><bold><size width="2" height="2">Cassette Coffee Co.</size></bold><text>88 Rue de Rivoli</text></align></receipt>',
 			{},
-			{ columns: 42, language: 'esc-pos' }
+			{ columns: 48, language: 'esc-pos' }
 		);
 		const decoded = new TextDecoder().decode(bytes);
 		const hex = Array.from(bytes)
 			.map((byte) => byte.toString(16).padStart(2, '0'))
 			.join(' ');
+		const lines = simulateEscposTextLines(bytes, 48);
 
-		const storeIndex = decoded.indexOf('Store');
-		const addressIndex = decoded.indexOf('Address');
+		const storeIndex = decoded.indexOf('Cassette Coffee Co.');
+		const addressIndex = decoded.indexOf('88 Rue de Rivoli');
 
 		expect(hex).toContain('1d 21 11');
 		expect(storeIndex).toBeGreaterThanOrEqual(0);
 		expect(addressIndex).toBeGreaterThan(storeIndex);
-		expect(decoded.slice(storeIndex, addressIndex)).not.toMatch(/\r?\n/);
+		expect(decoded.slice(storeIndex, addressIndex)).toMatch(/\r?\n/);
+		expectVisuallyCentered(lines, '88 Rue de Rivoli', 48);
 	});
 
 	it('normalizes typographic dashes before ESC/POS text encoding', () => {

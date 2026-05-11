@@ -88,11 +88,11 @@ function parseChildren(parent: Element): ThermalNode[] {
 				break;
 			case 'line': {
 				const styleAttr = el.getAttribute('style');
-				const validStyles = ['single', 'double'] as const;
+				const validStyles = ['single', 'double', 'dashed', 'dotted'] as const;
 				nodes.push({
 					type: 'line',
 					style: validStyles.includes(styleAttr as (typeof validStyles)[number])
-						? (styleAttr as 'single' | 'double')
+						? (styleAttr as (typeof validStyles)[number])
 						: 'single',
 				});
 				break;

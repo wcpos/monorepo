@@ -118,6 +118,11 @@ describe('parseXml', () => {
 		expect(ast.children[0]).toEqual({ type: 'line', style: 'double' });
 	});
 
+	it.each(['dashed', 'dotted'] as const)('parses line with style="%s"', (style) => {
+		const ast = parseXml(`<receipt><line style="${style}"/></receipt>`);
+		expect(ast.children[0]).toEqual({ type: 'line', style });
+	});
+
 	it('parses self-closing cut element', () => {
 		const ast = parseXml('<receipt><cut/></receipt>');
 		expect(ast.children[0]).toEqual({ type: 'cut', cutType: 'partial' });
