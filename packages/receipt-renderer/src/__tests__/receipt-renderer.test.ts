@@ -577,6 +577,25 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
 	});
 
+	it.each([
+		['standalone text node', '<text>One&#10;Two</text>'],
+		['direct raw text node', 'One&#10;Two'],
+	] as const)('does not use fixed-column aligned layout for multiline %s', (_name, template) => {
+		const ast = parseXml(
+			`<receipt paper-width="48"><align mode="center">${template}</align></receipt>`
+		);
+		const lines = simulateEscposTextLines(
+			renderEscpos(ast, { columns: 48, language: 'esc-pos' }),
+			48
+		);
+
+		for (const text of ['One', 'Two']) {
+			const line = lines.find((candidate) => candidate.text === text);
+			expect(line).toBeDefined();
+			expect(line?.lineWidth).toBeLessThan(48);
+		}
+	});
+
 	it.each(['esc-pos', 'star-prnt', 'star-line'] as const)(
 		'keeps inline formatted centered text on one printable row for %s',
 		(language) => {

@@ -569,6 +569,7 @@ function writeAlignedStandaloneTextLine(
 	const normalized = context.normalizeText ? normalizeThermalText(text) : text;
 	if (
 		!normalized ||
+		hasLineBreak(normalized) ||
 		(context.supportsCp932 && containsJapaneseText(normalized)) ||
 		displayWidth(normalized) > context.columns
 	) {
@@ -612,6 +613,7 @@ function writeAlignedRawTextLine(
 	const normalized = context.normalizeText ? normalizeThermalText(value) : value;
 	if (
 		!normalized ||
+		hasLineBreak(normalized) ||
 		(context.supportsCp932 && containsJapaneseText(normalized)) ||
 		displayWidth(normalized) > context.columns
 	) {
@@ -635,6 +637,10 @@ function normalizeThermalText(value: string): string {
 
 function containsJapaneseText(value: string): boolean {
 	return CP932_TEXT_RE.test(value);
+}
+
+function hasLineBreak(value: string): boolean {
+	return value.includes('\n') || value.includes('\r');
 }
 
 function formatRow(values: string[], widths: number[], cols: readonly ColNode[]): string {
