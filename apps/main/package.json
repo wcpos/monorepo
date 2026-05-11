@@ -61,13 +61,13 @@
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",
     "react-native-star-io10": "^1.12.0",
-    "react-native-svg": "15.15.3",
+    "react-native-svg": "15.15.5",
     "react-native-tcp-socket": "^6.4.1",
     "react-native-web": "^0.21.0",
     "react-native-webview": "~13.16.1",
     "react-native-worklets": "~0.7.2",
     "tailwindcss": "^4.1.13",
-    "uniwind": "npm:uniwind-pro@1.1.1",
+    "uniwind": "npm:uniwind-pro@1.1.2",
     "victory-native": "^41.20.2"
   },
   "devDependencies": {
