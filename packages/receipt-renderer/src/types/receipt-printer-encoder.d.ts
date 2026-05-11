@@ -29,7 +29,7 @@ declare module '@point-of-sale/receipt-printer-encoder' {
 				marginLeft?: number;
 				marginRight?: number;
 			}[],
-			rows: string[][]
+			rows: (string | ((encoder: ReceiptPrinterEncoder) => void))[][]
 		): this;
 		barcode(data: string, symbology: string, height: number): this;
 		qrcode(data: string, model?: 1 | 2, size?: number, errorlevel?: 'l' | 'm' | 'q' | 'h'): this;
