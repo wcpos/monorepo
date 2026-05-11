@@ -71,10 +71,10 @@ describe('renderHtml', () => {
 		expect(html).toContain('$10');
 	});
 
-	it('<line /> produces dashed hr', () => {
+	it('<line /> produces solid hr', () => {
 		const ast = parseXml('<receipt><line/></receipt>');
 		const html = renderHtml(ast);
-		expect(html).toContain('border-top: 1px dashed #000');
+		expect(html).toContain('border-top: 1px solid #000');
 	});
 
 	it('<line style="double" /> produces double border', () => {
@@ -82,6 +82,15 @@ describe('renderHtml', () => {
 		const html = renderHtml(ast);
 		expect(html).toContain('border-top: 3px double #000');
 	});
+
+	it.each(['dashed', 'dotted'] as const)(
+		'<line style="%s" /> produces matching border',
+		(style) => {
+			const ast = parseXml(`<receipt><line style="${style}"/></receipt>`);
+			const html = renderHtml(ast);
+			expect(html).toContain(`border-top: 1px ${style} #000`);
+		}
+	);
 
 	it('<cut /> produces cut visual with scissors character', () => {
 		const ast = parseXml('<receipt><cut/></receipt>');

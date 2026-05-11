@@ -100,7 +100,7 @@ export interface ColNode {
 
 export interface LineNode {
 	type: 'line';
-	style: 'single' | 'double';
+	style: 'single' | 'double' | 'dashed' | 'dotted';
 }
 
 export interface BarcodeNode {

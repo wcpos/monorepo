@@ -46,7 +46,13 @@ function renderNode(node: ThermalNode, widthChars: number): string {
 			if (node.style === 'double') {
 				return '<hr style="border: none; border-top: 3px double #000; margin: 4px 0" />';
 			}
-			return '<hr style="border: none; border-top: 1px dashed #000; margin: 4px 0" />';
+			if (node.style === 'dashed') {
+				return '<hr style="border: none; border-top: 1px dashed #000; margin: 4px 0" />';
+			}
+			if (node.style === 'dotted') {
+				return '<hr style="border: none; border-top: 1px dotted #000; margin: 4px 0" />';
+			}
+			return '<hr style="border: none; border-top: 1px solid #000; margin: 4px 0" />';
 		case 'barcode':
 			if (isQrBarcodeType(node.barcodeType)) {
 				return renderQrCode(node.value, heightToQrSize(node.height), widthChars);

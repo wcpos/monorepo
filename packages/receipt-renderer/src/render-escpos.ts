@@ -265,7 +265,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			context.align = node.mode;
 			encoder.align(node.mode);
 			if (!writeAlignedStandaloneTextLine(encoder, node.children, context)) {
-				walkNodes(encoder, node.children, context);
+				walkAlignedNodes(encoder, node.children, context);
 			}
 			context.align = previous;
 			encoder.align(previous);
@@ -309,14 +309,15 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 		case 'line':
 			if (node.style === 'double') {
 				encoder.rule({ style: 'double' });
-			} else {
-				writeText(
-					encoder,
-					'-'.repeat(context.columns),
-					context.supportsCp932,
-					context.normalizeText
-				);
+			} else if (node.style === 'dashed' || node.style === 'dotted') {
+				const pattern = node.style === 'dashed' ? '-' : '. ';
+				const text = pattern
+					.repeat(Math.ceil(context.columns / pattern.length))
+					.slice(0, context.columns);
+				writeText(encoder, text, context.supportsCp932, context.normalizeText);
 				writeNewline(encoder, context);
+			} else {
+				encoder.rule();
 			}
 			break;
 		case 'barcode':
@@ -392,6 +393,29 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			walkNodes(encoder, node.children, context);
 			break;
 	}
+}
+
+function walkAlignedNodes(
+	encoder: ReceiptPrinterEncoder,
+	nodes: ThermalNode[],
+	context: RenderContext
+): void {
+	for (let index = 0; index < nodes.length; index++) {
+		const node = nodes[index];
+		walkNode(encoder, node, context);
+		if (context.lineHasText && isDirectStyledHeading(node) && nodes[index + 1]?.type === 'text') {
+			writeNewline(encoder, context);
+		}
+	}
+}
+
+function isDirectStyledHeading(node: ThermalNode): boolean {
+	return (
+		node.type === 'bold' ||
+		node.type === 'underline' ||
+		node.type === 'invert' ||
+		node.type === 'size'
+	);
 }
 
 function writeNewline(encoder: ReceiptPrinterEncoder, context: RenderContext, lines = 1): void {
