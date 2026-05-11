@@ -123,7 +123,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	});
 
 	console.log('[auth] Navigating to /');
-	await page.goto('/');
+	await page.goto('/', { waitUntil: 'commit' });
 	await expect(page.getByTestId('enter-demo-store-button')).toBeVisible({
 		timeout: 60_000,
 	});
@@ -462,7 +462,7 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 				// Block JavaScript so the OPFS worker never starts — createSyncAccessHandle
 				// grants exclusive access, so we must restore files before any worker runs.
 				await page.route('**/*', blockScriptRequests);
-				await page.goto('/');
+				await page.goto('/', { waitUntil: 'commit' });
 
 				// Restore OPFS and localStorage while JS is blocked (no worker running)
 				await restoreOPFS(page, state.opfs);
@@ -470,7 +470,7 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 
 				// Unblock JS and reload so the app picks up the restored OPFS state
 				await page.unroute('**/*', blockScriptRequests);
-				await page.reload();
+				await page.reload({ waitUntil: 'commit' });
 
 				// App should skip auth and go straight to POS. The product catalog can be
 				// empty or still syncing, so the search UI is the readiness marker. If a
@@ -498,7 +498,7 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 				// The OPFS worker is running and holds exclusive createSyncAccessHandle()
 				// locks. Block JS and reload to terminate it before clearing state.
 				await page.route('**/*', blockScriptRequests);
-				await page.reload();
+				await page.reload({ waitUntil: 'commit' });
 
 				// Clear all persisted state so authenticateWithStore sees first-launch
 				await page

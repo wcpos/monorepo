@@ -12,11 +12,13 @@ interface WooCommerceSectionProps {
 	language: string;
 	thermalColumns: ThermalColumns;
 	emitEscPrintMode: boolean;
+	fullReceiptRaster: boolean;
 	onChangePath: (path: PathSegment[], value: unknown) => void;
 	onPrinterModelChange: (value: string) => void;
 	onLanguageChange: (value: string) => void;
 	onThermalColumnsChange: (value: ThermalColumns) => void;
 	onEmitEscPrintModeChange: (value: boolean) => void;
+	onFullReceiptRasterChange: (value: boolean) => void;
 }
 
 const COMMON_CURRENCIES = [
@@ -104,11 +106,13 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 		language,
 		thermalColumns,
 		emitEscPrintMode,
+		fullReceiptRaster,
 		onChangePath,
 		onPrinterModelChange,
 		onLanguageChange,
 		onThermalColumnsChange,
 		onEmitEscPrintModeChange,
+		onFullReceiptRasterChange,
 	} = props;
 	const isThermal = engine === 'thermal';
 	const currencyOptions = COMMON_CURRENCIES.includes(currency)
@@ -266,6 +270,22 @@ export function WooCommerceSection(props: WooCommerceSectionProps) {
 				<p className="field-help">
 					Emits both ESC ! and GS ! size commands so receipts print correctly on a wider range of
 					printers. Disable as an escape hatch for printers that misbehave when both are sent.
+				</p>
+			) : null}
+			<div className={isThermal ? 'toggle-row' : 'toggle-row muted'}>
+				<label htmlFor="woo-full-receipt-raster">Full receipt raster</label>
+				<input
+					id="woo-full-receipt-raster"
+					type="checkbox"
+					checked={fullReceiptRaster}
+					onChange={(event) => onFullReceiptRasterChange(event.target.checked)}
+					disabled={!isThermal}
+				/>
+			</div>
+			{isThermal ? (
+				<p className="field-help">
+					Prints the whole receipt as an image for Unicode/RTL compatibility. Slower and larger than
+					text mode.
 				</p>
 			) : null}
 		</div>
