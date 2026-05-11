@@ -10,6 +10,22 @@ describe('ReceiptDataSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
+	it('parses and preserves order payment-state fields', () => {
+		const result = ReceiptDataSchema.safeParse({
+			...sampleReceiptData,
+			order: {
+				...sampleReceiptData.order,
+				needs_payment: true,
+				payment_url: 'https://example.test/checkout/order-pay/1042',
+			},
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) throw new Error(result.error.message);
+		expect(result.data.order.needs_payment).toBe(true);
+		expect(result.data.order.payment_url).toBe('https://example.test/checkout/order-pay/1042');
+	});
+
 	it('parses output of mapReceiptData', () => {
 		const mapped = mapReceiptData(sampleReceiptData as unknown as Record<string, unknown>);
 		const result = ReceiptDataSchema.safeParse(mapped);

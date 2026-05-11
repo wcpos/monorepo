@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { ARRAY_DEFAULTS } from './field-meta';
+import { ReceiptDataSchema } from '@wcpos/printer/encoder';
+
+import { ARRAY_DEFAULTS, SECTIONS } from './field-meta';
 
 describe('field metadata defaults', () => {
+	it('has an editable section for every receipt data top-level field except system-only hints', () => {
+		const sectionKeys = SECTIONS.map((section) => section.key).sort();
+		const receiptDataKeys = Object.keys(ReceiptDataSchema.shape)
+			.filter((key) => key !== 'presentation_hints')
+			.sort();
+
+		expect(sectionKeys).toEqual(receiptDataKeys);
+	});
+
 	it('adds refunds with every editable date variant present', () => {
 		const refund = ARRAY_DEFAULTS.refunds as { date?: Record<string, string> };
 		expect(Object.keys(refund.date ?? {}).sort()).toEqual([

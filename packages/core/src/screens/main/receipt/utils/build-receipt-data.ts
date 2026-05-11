@@ -15,6 +15,8 @@ interface ReceiptOrder {
 	customer_note: string;
 	wc_status: string;
 	status_label: string;
+	needs_payment: boolean;
+	payment_url: string;
 	created: { datetime: string };
 	/**
 	 * Render-time print timestamp. Refreshed on every buildReceiptData call so
@@ -344,6 +346,8 @@ export function buildReceiptData(
 			customer_note: order.customer_note || '',
 			wc_status: rawStatus,
 			status_label: statusLabel,
+			needs_payment: Boolean(order.needs_payment),
+			payment_url: typeof order.payment_url === 'string' ? order.payment_url : '',
 			created: { datetime: order.date_created || '' },
 			printed: { datetime: printedDatetime },
 		},

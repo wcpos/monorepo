@@ -125,6 +125,20 @@ describe('buildReceiptData', () => {
 		expect(result.order.created.datetime).toBe('2026-03-06T10:00:00');
 	});
 
+	it('maps order payment-state fields from order', () => {
+		const result = buildReceiptData(
+			{
+				...mockOrder,
+				needs_payment: true,
+				payment_url: 'https://example.test/checkout/order-pay/1234',
+			},
+			mockStore
+		);
+
+		expect(result.order.needs_payment).toBe(true);
+		expect(result.order.payment_url).toBe('https://example.test/checkout/order-pay/1234');
+	});
+
 	it('emits a render-time order.printed datetime', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.order.printed.datetime).not.toBe('');

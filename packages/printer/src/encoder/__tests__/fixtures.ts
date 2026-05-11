@@ -28,6 +28,8 @@ export const sampleReceiptData: ReceiptData = {
 		number: '1042',
 		currency: 'USD',
 		customer_note: '',
+		needs_payment: false,
+		payment_url: 'https://example.test/checkout/order-pay/1042',
 		created: { ...emptyDate, datetime: '2026-03-06 14:30:00' },
 		paid: emptyDate,
 		completed: emptyDate,
