@@ -662,12 +662,62 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(rowLine?.rawText.endsWith('#1894')).toBe(true);
 	});
 
+	it('does not insert blank rows between adjacent thermal table rows', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<row><col width="10">Pedido:</col><col width="38" align="right">#7270</col></row>
+				<row><col width="10">Fecha:</col><col width="38" align="right">28 may 2026, 12:16</col></row>
+				<row><col width="10">Cajero:</col><col width="38" align="right">Lin Beaumont</col></row>
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+
+		expectSingleNewlineBetween(bytes, '#7270', 'Fecha:');
+		expectSingleNewlineBetween(bytes, '12:16', 'Cajero:');
+	});
+
+	it('preserves leading indentation in left-aligned thermal row cells', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<row><col width="*" align="left">  3 x 7,15 €</col><col width="12" align="right">21,45 €</col></row>
+				<row><col width="*" align="left">  Base imp. 19,50 €</col><col width="20" align="right">Base c/IVA 21,45 €</col></row>
+				<row><col width="*" align="left">Card</col><col width="12" align="right">21,45 €</col></row>
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const lines = simulateEscposTextLines(bytes, 48);
+		const itemQuantityLine = lines.find((line) => line.text.startsWith('3 x 7,15'));
+		const taxBaseLine = lines.find((line) => line.text.startsWith('Base imp.'));
+
+		expect(itemQuantityLine?.rawText.startsWith('  3 x 7,15')).toBe(true);
+		expect(itemQuantityLine?.rawText).toContain('21,45');
+		expect(taxBaseLine?.rawText.startsWith('  Base imp.')).toBe(true);
+		expectSingleNewlineBetween(bytes, '21,45', 'Base imp.');
+		expectSingleNewlineBetween(bytes, 'Base c/IVA', 'Card');
+	});
+
+	it('prints single line rules as dashed text rows for thermal preview parity', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><text>Before</text><line /><text>After</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const printable = decodePrintableAscii(bytes);
+
+		expect(printable).toContain('-'.repeat(48));
+		expectSingleNewlineBetween(bytes, 'Before', '-'.repeat(48));
+		expectSingleNewlineBetween(bytes, '-'.repeat(48), 'After');
+	});
+
 	it.each([42, 48])(
 		'visually centers receipt header/fiscal/footer text at %i columns',
 		(columns) => {
 			const bytes = encodeThermalTemplate(
 				`<receipt paper-width="${columns}">
 					<align mode="center">
+						<text>17 Rua dos Douradores</text>
 						<text>Avinguda Diagonal</text>
 						<text>Amsterdam, NL</text>
 						<text>08001</text>
@@ -698,6 +748,7 @@ describe('@wcpos/receipt-renderer exports', () => {
 			const lines = simulateEscposTextLines(bytes, columns);
 
 			for (const text of [
+				'17 Rua dos Douradores',
 				'Avinguda Diagonal',
 				'Amsterdam, NL',
 				'08001',

@@ -292,12 +292,15 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 				);
 				writeNewline(encoder, context);
 			} else {
-				const colDefs = node.children.map((col, i) => ({
-					width: resolvedWidths[i],
-					align: col.align as 'left' | 'right',
-				}));
-				encoder.table(colDefs, [rowData]);
-				writeNewline(encoder, context);
+				const formattedCells = rowData.map((text, i) =>
+					formatThermalTableCell(text, resolvedWidths[i] ?? 1, node.children[i])
+				);
+				encoder.table(
+					formattedCells.map((cell) => cell.column),
+					[formattedCells.map((cell) => cell.text)]
+				);
+				restoreActiveLineSpacing(encoder, context);
+				context.lineHasText = false;
 			}
 			break;
 		}
@@ -307,7 +310,13 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			if (node.style === 'double') {
 				encoder.rule({ style: 'double' });
 			} else {
-				encoder.rule();
+				writeText(
+					encoder,
+					'-'.repeat(context.columns),
+					context.supportsCp932,
+					context.normalizeText
+				);
+				writeNewline(encoder, context);
 			}
 			break;
 		case 'barcode':
@@ -394,15 +403,18 @@ function writeNewline(encoder: ReceiptPrinterEncoder, context: RenderContext, li
 
 	const count = Number.isFinite(lines) ? Math.max(1, Math.floor(lines)) : 1;
 	encoder.newline();
-	if (context.activeScaledLineSpacing !== undefined) {
-		// ESC 2 — restore default line spacing after the enlarged line breaks.
-		encoder.raw([0x1b, 0x32]);
-		context.activeScaledLineSpacing = undefined;
-	}
+	restoreActiveLineSpacing(encoder, context);
 	if (count > 1) {
 		encoder.newline(count - 1);
 	}
 	context.lineHasText = false;
+}
+
+function restoreActiveLineSpacing(encoder: ReceiptPrinterEncoder, context: RenderContext): void {
+	if (context.activeScaledLineSpacing === undefined) return;
+	// ESC 2 — restore default line spacing after the enlarged line breaks.
+	encoder.raw([0x1b, 0x32]);
+	context.activeScaledLineSpacing = undefined;
 }
 
 function normalizeImageWidth(value: number): number {
@@ -641,6 +653,35 @@ function containsJapaneseText(value: string): boolean {
 
 function hasLineBreak(value: string): boolean {
 	return value.includes('\n') || value.includes('\r');
+}
+
+function formatThermalTableCell(
+	text: string,
+	width: number,
+	col: ColNode | undefined
+): {
+	text: string;
+	column: { width: number; align?: 'left' | 'right'; marginLeft?: number };
+} {
+	const align = col?.align as 'left' | 'right' | undefined;
+	if (align !== 'left') {
+		return { text, column: { width, align } };
+	}
+
+	const leadingSpaces = text.match(/^ +/)?.[0].length ?? 0;
+	const marginLeft = Math.min(leadingSpaces, Math.max(0, width - 1));
+	if (!marginLeft || marginLeft >= text.length) {
+		return { text, column: { width, align } };
+	}
+
+	return {
+		text: text.slice(marginLeft),
+		column: {
+			width: Math.max(1, width - marginLeft),
+			align,
+			marginLeft,
+		},
+	};
 }
 
 function formatRow(values: string[], widths: number[], cols: readonly ColNode[]): string {
