@@ -1,0 +1,136 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+	buildPrintableReceiptHtml,
+	normalizeReceiptPaperWidth,
+	prepareSystemPrintHtml,
+} from '../print-html';
+
+describe('normalizeReceiptPaperWidth', () => {
+	it.each([
+		['58mm', '58mm'],
+		['80mm', '80mm'],
+		['a4', 'a4'],
+		['A4', 'a4'],
+		[null, 'a4'],
+		[undefined, 'a4'],
+		['letter', 'a4'],
+	])('normalizes %s to %s', (input, expected) => {
+		expect(normalizeReceiptPaperWidth(input)).toBe(expected);
+	});
+});
+
+describe('buildPrintableReceiptHtml', () => {
+	it('wraps A4 output with zero browser margins and a 210mm content width', () => {
+		const html = buildPrintableReceiptHtml({
+			bodyHtml: '<main class="invoice">Hello</main>',
+			paperWidth: 'a4',
+		});
+
+		expect(html).toContain('@page { size: A4; margin: 0; }');
+		expect(html).toContain('body > * { width: 210mm; }');
+		expect(html).toContain('<main class="invoice">Hello</main>');
+	});
+
+	it('wraps 80mm thermal output with physical page size and no A4 width rule', () => {
+		const html = buildPrintableReceiptHtml({
+			bodyHtml: '<div class="receipt">Thermal</div>',
+			paperWidth: '80mm',
+		});
+
+		expect(html).toContain('@page { size: 80mm; margin: 0; }');
+		expect(html).not.toContain('body > * { width: 210mm; }');
+		expect(html).toContain('<div class="receipt">Thermal</div>');
+	});
+
+	it('keeps print mechanics outside user template content', () => {
+		const html = buildPrintableReceiptHtml({
+			bodyHtml: '<style>.receipt{padding:24px}</style><div class="receipt">User CSS</div>',
+			paperWidth: 'a4',
+		});
+
+		expect(html).toContain('<style>.receipt{padding:24px}</style>');
+		expect(html).toContain('print-color-adjust: exact');
+	});
+});
+
+describe('prepareSystemPrintHtml', () => {
+	it('wraps provided rendered HTML with the selected template paper width', () => {
+		const html = prepareSystemPrintHtml({
+			html: '<div>Invoice</div>',
+			paperWidth: 'a4',
+		});
+
+		expect(html).toContain('@page { size: A4; margin: 0; }');
+		expect(html).toContain('<div>Invoice</div>');
+	});
+
+	it('wraps iframe-extracted full documents instead of bypassing the print shell', () => {
+		const html = prepareSystemPrintHtml({
+			html: '<html><head><style>.x{color:red}</style></head><body><div>From iframe</div></body></html>',
+			paperWidth: '80mm',
+		});
+
+		expect(html).toContain('@page { size: 80mm; margin: 0; }');
+		expect(html).toContain('<style>.x{color:red}</style>');
+		expect(html).toContain('<div>From iframe</div>');
+	});
+
+	it('preserves base and linked stylesheets from iframe-extracted full documents', () => {
+		const html = prepareSystemPrintHtml({
+			html: '<html><head><base href="https://example.test/"><link rel="stylesheet" href="/receipt.css"><style>.x{color:red}</style></head><body><div>Styled</div></body></html>',
+			paperWidth: 'a4',
+		});
+
+		expect(html).toContain('<base href="https://example.test/">');
+		expect(html).toContain('<link rel="stylesheet" href="/receipt.css">');
+		expect(html).toContain('<style>.x{color:red}</style>');
+		expect(html).toContain('<div>Styled</div>');
+	});
+
+	it('extracts full document content without DOMParser instead of nesting html tags', () => {
+		const originalDomParser = globalThis.DOMParser;
+		try {
+			(globalThis as { DOMParser?: typeof DOMParser }).DOMParser = undefined;
+			const html = prepareSystemPrintHtml({
+				html: '<!doctype html><html><head><base href="https://example.test/"><style>.x{color:red}</style></head><body><div>Native</div></body></html>',
+				paperWidth: '80mm',
+			});
+
+			expect(html).toContain('<base href="https://example.test/">');
+			expect(html).toContain('<style>.x{color:red}</style>');
+			expect(html).toContain('<div>Native</div>');
+			expect(html).not.toContain('<body><!doctype html>');
+			expect(html).not.toContain('<body><html>');
+		} finally {
+			globalThis.DOMParser = originalDomParser;
+		}
+	});
+
+	it('extracts full document content without DOMParser when tag attributes contain repeated prefixes', () => {
+		const originalDomParser = globalThis.DOMParser;
+		try {
+			(globalThis as { DOMParser?: typeof DOMParser }).DOMParser = undefined;
+			const headAttributes = Array.from(
+				{ length: 32 },
+				(_, index) => `data-head-${index}="<head"`
+			).join(' ');
+			const bodyAttributes = Array.from(
+				{ length: 32 },
+				(_, index) => `data-body-${index}="<body"`
+			).join(' ');
+			const html = prepareSystemPrintHtml({
+				html: `<!doctype html><html><head ${headAttributes}><base href="https://example.test/"><style>.x{color:red}</style></head><body ${bodyAttributes}><div>Native</div></body></html>`,
+				paperWidth: '80mm',
+			});
+
+			expect(html).toContain('<base href="https://example.test/">');
+			expect(html).toContain('<style>.x{color:red}</style>');
+			expect(html).toContain('<div>Native</div>');
+			expect(html).not.toContain('<body><!doctype html>');
+			expect(html).not.toContain('<body><html>');
+		} finally {
+			globalThis.DOMParser = originalDomParser;
+		}
+	});
+});

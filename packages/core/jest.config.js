@@ -28,6 +28,8 @@ module.exports = {
 		// Other mocks
 		'^expo-localization$': '<rootDir>/jest/__mocks__/expo-localization.js',
 		'^@wcpos/printer$': '<rootDir>/../printer/src/index.ts',
+		'^@wcpos/receipt-renderer$': '<rootDir>/../receipt-renderer/src/index.ts',
+		'^@wcpos/receipt-renderer/(.*)$': '<rootDir>/../receipt-renderer/src/$1',
 		'^@wcpos/printer/(.*)$': '<rootDir>/../printer/src/$1',
 		'^@wcpos/components/(.*)$': '<rootDir>/../components/src/$1',
 		// Fallback for other @wcpos/utils imports

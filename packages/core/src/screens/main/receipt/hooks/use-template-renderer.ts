@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import Mustache from 'mustache';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { formatReceiptData, mapReceiptData, renderThermalPreview } from '@wcpos/printer';
+import { type PreviewTemplateEngine, renderPreview } from '@wcpos/printer/encoder/render-preview';
 import type { TemplateDocument } from '@wcpos/database';
 
 import { useActiveTemplates } from './use-active-templates';
@@ -17,6 +16,33 @@ import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
 import type { ReceiptData } from '../utils/build-receipt-data';
 import type { ReceiptMode } from './use-receipt-data';
+
+function resolvePreviewEngine(engine: string | null | undefined): PreviewTemplateEngine {
+	if (engine == null || engine === 'logicless') {
+		return 'logicless';
+	}
+	if (engine === 'thermal') {
+		return 'thermal';
+	}
+	throw new Error(`Unsupported template engine: ${engine}`);
+}
+
+export function renderOfflineTemplatePreview({
+	engine,
+	content,
+	receiptData,
+}: {
+	engine: string | null | undefined;
+	content: string;
+	receiptData: Record<string, unknown>;
+}): string {
+	const result = renderPreview({
+		template: content,
+		engine: resolvePreviewEngine(engine),
+		data: receiptData,
+	});
+	return result.html;
+}
 
 interface UseTemplateRendererOptions {
 	orderId: number | undefined;
@@ -88,24 +114,6 @@ export function useTemplateRenderer({
 	const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
 
 	// Pre-render all offline-capable templates into a cache
-	// Normalise receipt data so thermal preview uses the same shape as thermal printing
-	const normalisedReceiptData = React.useMemo(
-		() => (receiptData ? mapReceiptData(receiptData as Record<string, any>) : null),
-		[receiptData]
-	);
-
-	// Format currency fields so the preview matches the printed ESC/POS output
-	const formattedReceiptData = React.useMemo(
-		() => (normalisedReceiptData ? formatReceiptData(normalisedReceiptData) : null),
-		[normalisedReceiptData]
-	);
-
-	// Single source of truth for the data shape passed to thermal templates
-	const thermalData = React.useMemo(
-		() => formattedReceiptData ?? normalisedReceiptData ?? receiptData,
-		[formattedReceiptData, normalisedReceiptData, receiptData]
-	);
-
 	const preRenderedCache = React.useMemo(() => {
 		const cache = new Map<string | number, string>();
 		if (!receiptData) return cache;
@@ -113,21 +121,21 @@ export function useTemplateRenderer({
 		for (const tmpl of templates) {
 			if (tmpl.offline_capable && tmpl.content) {
 				try {
-					if (tmpl.engine === 'thermal') {
-						cache.set(
-							tmpl.id,
-							renderThermalPreview(tmpl.content, thermalData as Record<string, any>)
-						);
-					} else {
-						cache.set(tmpl.id, Mustache.render(tmpl.content, receiptData));
-					}
+					cache.set(
+						tmpl.id,
+						renderOfflineTemplatePreview({
+							engine: tmpl.engine,
+							content: tmpl.content,
+							receiptData: receiptData as Record<string, unknown>,
+						})
+					);
 				} catch {
 					// Skip templates with render errors
 				}
 			}
 		}
 		return cache;
-	}, [templates, receiptData, thermalData]);
+	}, [templates, receiptData]);
 
 	// Determine output
 	let renderedHtml: string | null = null;
@@ -141,14 +149,11 @@ export function useTemplateRenderer({
 			const data = receiptData;
 			if (data && selectedTemplate.content) {
 				try {
-					if (selectedTemplate.engine === 'thermal') {
-						renderedHtml = renderThermalPreview(
-							selectedTemplate.content,
-							thermalData as Record<string, any>
-						);
-					} else {
-						renderedHtml = Mustache.render(selectedTemplate.content, data);
-					}
+					renderedHtml = renderOfflineTemplatePreview({
+						engine: selectedTemplate.engine,
+						content: selectedTemplate.content,
+						receiptData: data as Record<string, unknown>,
+					});
 				} catch {
 					renderedHtml = '<p>Template render error</p>';
 				}
