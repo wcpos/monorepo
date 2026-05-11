@@ -744,6 +744,31 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(lines.find((line) => line.text === '[ Cancelado ]')?.lineWidth).toBe(48);
 	});
 
+	it('closes a centered scaled kitchen heading before the following rule', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<bold><size width="2" height="2"><text>{{i18n.kitchen}}</text></size></bold>
+				</align>
+				<line style="double" />
+				<bold><text>{{order.number}}</text></bold>
+			</receipt>`,
+			{ i18n: { kitchen: 'COCINA' }, order: { number: '3595' } },
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const kitchenIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('COCINA')));
+		const headingNewlineIndex = sequenceIndex(bytes, [0x0a], kitchenIndex);
+		const doubleRuleIndex = sequenceIndex(bytes, [0xcd], kitchenIndex);
+		const orderIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('3595')));
+		const printable = decodePrintableAscii(bytes);
+
+		expect(kitchenIndex).toBeGreaterThanOrEqual(0);
+		expect(headingNewlineIndex).toBeGreaterThan(kitchenIndex);
+		expect(doubleRuleIndex).toBeGreaterThan(headingNewlineIndex);
+		expect(orderIndex).toBeGreaterThan(headingNewlineIndex);
+		expect(printable).not.toContain('COCINA' + '=');
+	});
+
 	it.each([42, 48])(
 		'visually centers receipt header/fiscal/footer text at %i columns',
 		(columns) => {
