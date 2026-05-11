@@ -215,9 +215,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			context.allowAlignedRawTextLine = false;
 			walkNodes(encoder, node.children, context);
 			context.allowAlignedRawTextLine = previousAllowAlignedRawTextLine;
-			if (context.lineHasText) {
-				writeNewline(encoder, context);
-			}
+			writeNewline(encoder, context);
 			break;
 		case 'bold': {
 			const previous = context.escposPrintMode?.bold ?? false;
@@ -265,7 +263,9 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			const previous = context.align;
 			context.align = node.mode;
 			encoder.align(node.mode);
-			walkNodes(encoder, node.children, context);
+			if (!writeAlignedStandaloneTextLine(encoder, node.children, context)) {
+				walkNodes(encoder, node.children, context);
+			}
 			context.align = previous;
 			encoder.align(previous);
 			break;
@@ -558,6 +558,7 @@ function writeAlignedStandaloneTextLine(
 		context.lineHasText ||
 		activeWidth > 1 ||
 		activeHeight > 1 ||
+		!isInlineTextContent(nodes) ||
 		containsScaledText(nodes)
 	) {
 		return false;
@@ -674,6 +675,25 @@ function extractText(nodes: ThermalNode[]): string {
 			return '';
 		})
 		.join('');
+}
+
+function isInlineTextContent(nodes: readonly ThermalNode[]): boolean {
+	return (
+		nodes.length > 0 &&
+		nodes.every((node) => {
+			switch (node.type) {
+				case 'raw-text':
+					return true;
+				case 'bold':
+				case 'underline':
+				case 'invert':
+				case 'size':
+					return isInlineTextContent(node.children);
+				default:
+					return false;
+			}
+		})
+	);
 }
 
 function collectRowDiagnostics(

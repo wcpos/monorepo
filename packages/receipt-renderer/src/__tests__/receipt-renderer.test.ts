@@ -74,7 +74,18 @@ function decodePrintableAscii(bytes: Uint8Array): string {
 		const byte = bytes[index];
 		if (byte === 0x1b) {
 			const command = bytes[index + 1];
-			index += command === 0x21 || command === 0x4d || command === 0x74 ? 2 : 1;
+			if (command === 0x1d) {
+				index += 3;
+			} else {
+				index +=
+					command === 0x21 ||
+					command === 0x2d ||
+					command === 0x45 ||
+					command === 0x4d ||
+					command === 0x74
+						? 2
+						: 1;
+			}
 			continue;
 		}
 		if (byte === 0x1c) {
@@ -150,7 +161,15 @@ function simulateEscposTextLines(bytes: Uint8Array, columns: number): VirtualThe
 				index += 2;
 				continue;
 			}
-			index += command === 0x21 || command === 0x33 || command === 0x4d || command === 0x74 ? 2 : 1;
+			index +=
+				command === 0x21 ||
+				command === 0x2d ||
+				command === 0x33 ||
+				command === 0x45 ||
+				command === 0x4d ||
+				command === 0x74
+					? 2
+					: 1;
 			continue;
 		}
 		if (byte === 0x1c) {
@@ -180,6 +199,19 @@ function expectVisuallyCentered(lines: VirtualThermalLine[], text: string, colum
 	expect(line).toBeDefined();
 	const actualCenter = (line?.xStart ?? 0) + (line?.textWidth ?? 0) / 2;
 	expect(Math.abs(actualCenter - columns / 2)).toBeLessThanOrEqual(0.5);
+}
+
+function expectSingleNewlineBetween(bytes: Uint8Array, first: string, second: string): void {
+	const encoder = new TextEncoder();
+	const firstIndex = sequenceIndex(bytes, Array.from(encoder.encode(first)));
+	const secondIndex = sequenceIndex(bytes, Array.from(encoder.encode(second)), firstIndex);
+
+	expect(firstIndex).toBeGreaterThanOrEqual(0);
+	expect(secondIndex).toBeGreaterThan(firstIndex);
+	const newlinesBetween = Array.from(bytes.slice(firstIndex, secondIndex)).filter(
+		(byte) => byte === 0x0a
+	).length;
+	expect(newlinesBetween).toBe(1);
 }
 
 function opaqueBlackImageData(width: number, height: number): ImageData {
@@ -445,15 +477,8 @@ describe('@wcpos/receipt-renderer exports', () => {
 			{},
 			{ columns: 48, language: 'esc-pos' }
 		);
-		const storeIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Store')));
-		const nameIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Name')));
 
-		expect(storeIndex).toBeGreaterThanOrEqual(0);
-		expect(nameIndex).toBeGreaterThan(storeIndex);
-		const newlinesBetween = Array.from(bytes.slice(storeIndex, nameIndex)).filter(
-			(byte) => byte === 0x0a
-		).length;
-		expect(newlinesBetween).toBe(1);
+		expectSingleNewlineBetween(bytes, 'Store', 'Name');
 	});
 
 	it('does not insert blank rows after centered formatted text lines', () => {
@@ -462,15 +487,29 @@ describe('@wcpos/receipt-renderer exports', () => {
 			{},
 			{ columns: 48, language: 'esc-pos' }
 		);
-		const storeIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Store')));
-		const nameIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Name')));
 
-		expect(storeIndex).toBeGreaterThanOrEqual(0);
-		expect(nameIndex).toBeGreaterThan(storeIndex);
-		const newlinesBetween = Array.from(bytes.slice(storeIndex, nameIndex)).filter(
+		expectSingleNewlineBetween(bytes, 'Store', 'Name');
+	});
+
+	it('preserves explicit empty text rows as receipt spacing', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><text>Before</text><text></text><text>After</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const beforeIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Before')));
+		const afterIndex = sequenceIndex(
+			bytes,
+			Array.from(new TextEncoder().encode('After')),
+			beforeIndex
+		);
+
+		expect(beforeIndex).toBeGreaterThanOrEqual(0);
+		expect(afterIndex).toBeGreaterThan(beforeIndex);
+		const newlinesBetween = Array.from(bytes.slice(beforeIndex, afterIndex)).filter(
 			(byte) => byte === 0x0a
 		).length;
-		expect(newlinesBetween).toBe(1);
+		expect(newlinesBetween).toBe(2);
 	});
 
 	it('visually centers formatted raw children inside ESC/POS align blocks', () => {
@@ -501,6 +540,107 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(lines.find((line) => line.text === 'Total: $10.00')?.xStart).toBe(xStart);
 		expect(lines.some((line) => line.text === 'Total:' || line.text === '$10.00')).toBe(false);
 		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
+	});
+
+	it.each([
+		['plain prefix plus bold suffix', '<text>Hello <bold>world</bold>!</text>', 'Hello world!'],
+		[
+			'multiple styled siblings',
+			'<text><bold>Factura</bold><underline> fiscal</underline></text>',
+			'Factura fiscal',
+		],
+	] as const)('centers inline mixed-content text as one row: %s', (_name, template, text) => {
+		const ast = parseXml(
+			`<receipt paper-width="48"><align mode="center">${template}</align><text>After</text></receipt>`
+		);
+		const lines = simulateEscposTextLines(
+			renderEscpos(ast, { columns: 48, language: 'esc-pos' }),
+			48
+		);
+
+		expectVisuallyCentered(lines, text, 48);
+		expect(lines.filter((line) => line.text === text)).toHaveLength(1);
+		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
+	});
+
+	it('keeps direct inline mixed content in an align block on one physical line', () => {
+		const ast = parseXml(
+			'<receipt paper-width="48"><align mode="center">Total: <bold>$10.00</bold></align><text>After</text></receipt>'
+		);
+		const lines = simulateEscposTextLines(
+			renderEscpos(ast, { columns: 48, language: 'esc-pos' }),
+			48
+		);
+
+		expectVisuallyCentered(lines, 'Total: $10.00', 48);
+		expect(lines.some((line) => line.text === 'Total:' || line.text === '$10.00')).toBe(false);
+		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
+	});
+
+	it.each(['esc-pos', 'star-prnt', 'star-line'] as const)(
+		'keeps inline formatted centered text on one printable row for %s',
+		(language) => {
+			const bytes = encodeThermalTemplate(
+				'<receipt paper-width="48"><align mode="center"><text>Total: <bold>$10.00</bold></text></align><text>After</text></receipt>',
+				{},
+				{ columns: 48, language }
+			);
+			const printable = decodePrintableAscii(bytes);
+
+			expect(printable).toContain('Total: $10.00');
+			expect(printable).not.toContain('Total:\n');
+			expect(printable).not.toContain('$10.00\nAfter');
+			expectSingleNewlineBetween(bytes, 'Total: ', 'After');
+		}
+	);
+
+	it('does not insert blank rows between common centered receipt blocks', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<text><bold>Solstice Records</bold></text>
+					<text>Avinguda Diagonal</text>
+					<text>Amsterdam, NL</text>
+				</align>
+				<line />
+				<align mode="center">
+					<text><bold>Factura fiscal</bold></text>
+					<text>[ Reembolsado ]</text>
+				</align>
+				<line />
+				<align mode="center">
+					<text><bold>Horario de apertura</bold></text>
+					<text>Mon-Sat 9:00-18:00</text>
+					<text>Closed on public holidays</text>
+				</align>
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+
+		expectSingleNewlineBetween(bytes, 'Solstice Records', 'Avinguda Diagonal');
+		expectSingleNewlineBetween(bytes, 'Avinguda Diagonal', 'Amsterdam, NL');
+		expectSingleNewlineBetween(bytes, 'Factura fiscal', '[ Reembolsado ]');
+		expectSingleNewlineBetween(bytes, 'Horario de apertura', 'Mon-Sat 9:00-18:00');
+		expectSingleNewlineBetween(bytes, 'Mon-Sat 9:00-18:00', 'Closed on public holidays');
+	});
+
+	it('restores left row layout after centered inline text', () => {
+		const ast = parseXml(
+			`<receipt paper-width="48">
+				<align mode="center"><text>Total: <bold>$10.00</bold></text></align>
+				<row><col width="10">Pedido:</col><col width="38" align="right">#1894</col></row>
+			</receipt>`
+		);
+		const lines = simulateEscposTextLines(
+			renderEscpos(ast, { columns: 48, language: 'esc-pos' }),
+			48
+		);
+		const rowLine = lines.find((line) => line.text.startsWith('Pedido:'));
+
+		expect(rowLine?.xStart).toBe(0);
+		expect(rowLine?.rawText.startsWith('Pedido:')).toBe(true);
+		expect(rowLine?.rawText.endsWith('#1894')).toBe(true);
 	});
 
 	it.each([42, 48])(
