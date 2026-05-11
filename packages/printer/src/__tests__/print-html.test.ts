@@ -76,3 +76,32 @@ describe('prepareSystemPrintHtml', () => {
 		expect(html).toContain('<div>From iframe</div>');
 	});
 });
+
+it('preserves linked stylesheets from iframe-extracted full documents', () => {
+	const html = prepareSystemPrintHtml({
+		html: '<html><head><link rel="stylesheet" href="/receipt.css"><style>.x{color:red}</style></head><body><div>Styled</div></body></html>',
+		paperWidth: 'a4',
+	});
+
+	expect(html).toContain('<link rel="stylesheet" href="/receipt.css">');
+	expect(html).toContain('<style>.x{color:red}</style>');
+	expect(html).toContain('<div>Styled</div>');
+});
+
+it('extracts full document content without DOMParser instead of nesting html tags', () => {
+	const originalDomParser = globalThis.DOMParser;
+	try {
+		(globalThis as { DOMParser?: typeof DOMParser }).DOMParser = undefined;
+		const html = prepareSystemPrintHtml({
+			html: '<!doctype html><html><head><style>.x{color:red}</style></head><body><div>Native</div></body></html>',
+			paperWidth: '80mm',
+		});
+
+		expect(html).toContain('<style>.x{color:red}</style>');
+		expect(html).toContain('<div>Native</div>');
+		expect(html).not.toContain('<body><!doctype html>');
+		expect(html).not.toContain('<body><html>');
+	} finally {
+		globalThis.DOMParser = originalDomParser;
+	}
+});

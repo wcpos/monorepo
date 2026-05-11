@@ -1,10 +1,15 @@
 import type { PrinterTransport } from '../types';
 
-export function waitForPrintDocumentImages(doc: Document): Promise<void> {
+const IMAGE_WAIT_TIMEOUT_MS = 5_000;
+
+export function waitForPrintDocumentImages(
+	doc: Document,
+	timeoutMs = IMAGE_WAIT_TIMEOUT_MS
+): Promise<void> {
 	const pendingImages = Array.from(doc.images).filter((image) => !image.complete);
 	if (pendingImages.length === 0) return Promise.resolve();
 
-	return Promise.all(
+	const imagesReady = Promise.all(
 		pendingImages.map(
 			(image) =>
 				new Promise<void>((resolve) => {
@@ -13,6 +18,14 @@ export function waitForPrintDocumentImages(doc: Document): Promise<void> {
 				})
 		)
 	).then(() => undefined);
+	let timeoutId: ReturnType<typeof setTimeout>;
+	const timeout = new Promise<void>((resolve) => {
+		timeoutId = setTimeout(resolve, timeoutMs);
+	});
+
+	return Promise.race([imagesReady, timeout]).finally(() => {
+		clearTimeout(timeoutId);
+	});
 }
 
 /**

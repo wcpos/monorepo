@@ -52,14 +52,29 @@ export function prepareSystemPrintHtml({
 }
 
 function extractPrintableBodyHtml(html: string): string {
-	if (typeof DOMParser === 'undefined') return html;
 	const trimmed = html.trimStart().toLowerCase();
 	const looksLikeFullDocument = trimmed.startsWith('<!doctype') || trimmed.startsWith('<html');
 	if (!looksLikeFullDocument) return html;
+	if (typeof DOMParser === 'undefined') return extractFullDocumentHtmlWithoutDomParser(html);
 
 	const doc = new DOMParser().parseFromString(html, 'text/html');
-	const headStyles = Array.from(doc.head.querySelectorAll('style'))
-		.map((style) => style.outerHTML)
+	const headPrintAssets = Array.from(doc.head.querySelectorAll('style, link[rel~="stylesheet" i]'))
+		.map((element) => element.outerHTML)
 		.join('');
-	return `${headStyles}${doc.body.innerHTML}`;
+	return `${headPrintAssets}${doc.body.innerHTML}`;
+}
+
+function extractFullDocumentHtmlWithoutDomParser(html: string): string {
+	const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+	const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+	const headHtml = headMatch?.[1] ?? '';
+	const bodyHtml = bodyMatch?.[1] ?? html.replace(/^\s*<!doctype[^>]*>/i, '');
+	const headPrintAssets = Array.from(
+		headHtml.matchAll(
+			/<(?:style\b[\s\S]*?<\/style>|link\b(?=[^>]*\brel=["'][^"']*stylesheet)[^>]*>)/gi
+		),
+		(match) => match[0]
+	).join('');
+
+	return `${headPrintAssets}${bodyHtml}`;
 }
