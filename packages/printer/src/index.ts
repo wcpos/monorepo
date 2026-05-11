@@ -63,3 +63,5 @@ export type {
 	PrintJob,
 	UsePrintResult,
 } from './types';
+export { buildPrintableReceiptHtml, normalizeReceiptPaperWidth } from './print-html';
+export type { ReceiptPaperWidth } from './print-html';
