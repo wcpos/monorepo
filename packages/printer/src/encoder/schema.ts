@@ -328,6 +328,8 @@ export const ReceiptTotalsSchema = z.object({
 		.describe(
 			'Order grand total minus refund_total, clamped to >= 0 (positive). Present when refund_total is set.'
 		),
+	total_qty: z.number().optional().describe('Sum of line item quantities across the order'),
+	line_count: z.number().int().optional().describe('Count of distinct line items in the order'),
 });
 
 export const ReceiptTaxSummaryItemSchema = z.object({

@@ -233,6 +233,13 @@ describe('buildReceiptData', () => {
 		expect(result.totals.discount_total).toBe('5.00');
 	});
 
+	it('exposes item-count summaries in totals', () => {
+		const result = buildReceiptData(mockOrder, mockStore);
+		// Mock order has a single line item with quantity 2.
+		expect(result.totals.total_qty).toBe(2);
+		expect(result.totals.line_count).toBe(1);
+	});
+
 	it('maps payments', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.payments).toHaveLength(1);

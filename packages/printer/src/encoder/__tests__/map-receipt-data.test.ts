@@ -428,6 +428,18 @@ describe('mapReceiptData', () => {
 			expect(mapped.totals.total).toBe(25);
 		});
 
+		it('normalizes line_count to a non-negative integer', () => {
+			const fractional = mapReceiptData({
+				totals: { line_count: '2.75' },
+			});
+			const negative = mapReceiptData({
+				totals: { line_count: '-1' },
+			});
+
+			expect(fractional.totals.line_count).toBe(2);
+			expect(negative.totals.line_count).toBe(0);
+		});
+
 		it('maps payments with method used as both id and title', () => {
 			expect(mapped.payments).toHaveLength(1);
 			const payment = mapped.payments[0];
