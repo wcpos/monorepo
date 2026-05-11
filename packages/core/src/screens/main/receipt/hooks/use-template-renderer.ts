@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { useOnlineStatus } from '@wcpos/hooks/use-online-status';
-import { renderPreview } from '@wcpos/printer/encoder/render-preview';
+import { type PreviewTemplateEngine, renderPreview } from '@wcpos/printer/encoder/render-preview';
 import type { TemplateDocument } from '@wcpos/database';
 
 import { useActiveTemplates } from './use-active-templates';
@@ -17,6 +17,16 @@ import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 import type { ReceiptData } from '../utils/build-receipt-data';
 import type { ReceiptMode } from './use-receipt-data';
 
+function resolvePreviewEngine(engine: string | null | undefined): PreviewTemplateEngine {
+	if (engine == null || engine === 'logicless') {
+		return 'logicless';
+	}
+	if (engine === 'thermal') {
+		return 'thermal';
+	}
+	throw new Error(`Unsupported template engine: ${engine}`);
+}
+
 export function renderOfflineTemplatePreview({
 	engine,
 	content,
@@ -28,7 +38,7 @@ export function renderOfflineTemplatePreview({
 }): string {
 	const result = renderPreview({
 		template: content,
-		engine: engine === 'thermal' ? 'thermal' : 'logicless',
+		engine: resolvePreviewEngine(engine),
 		data: receiptData,
 	});
 	return result.html;

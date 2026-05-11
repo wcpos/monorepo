@@ -38,7 +38,7 @@ describe('buildPrintableReceiptHtml', () => {
 			paperWidth: '80mm',
 		});
 
-		expect(html).toContain('@page { size: 80mm auto; margin: 0; }');
+		expect(html).toContain('@page { size: 80mm; margin: 0; }');
 		expect(html).not.toContain('body > * { width: 210mm; }');
 		expect(html).toContain('<div class="receipt">Thermal</div>');
 	});
@@ -71,37 +71,66 @@ describe('prepareSystemPrintHtml', () => {
 			paperWidth: '80mm',
 		});
 
-		expect(html).toContain('@page { size: 80mm auto; margin: 0; }');
+		expect(html).toContain('@page { size: 80mm; margin: 0; }');
 		expect(html).toContain('<style>.x{color:red}</style>');
 		expect(html).toContain('<div>From iframe</div>');
 	});
-});
 
-it('preserves linked stylesheets from iframe-extracted full documents', () => {
-	const html = prepareSystemPrintHtml({
-		html: '<html><head><link rel="stylesheet" href="/receipt.css"><style>.x{color:red}</style></head><body><div>Styled</div></body></html>',
-		paperWidth: 'a4',
-	});
-
-	expect(html).toContain('<link rel="stylesheet" href="/receipt.css">');
-	expect(html).toContain('<style>.x{color:red}</style>');
-	expect(html).toContain('<div>Styled</div>');
-});
-
-it('extracts full document content without DOMParser instead of nesting html tags', () => {
-	const originalDomParser = globalThis.DOMParser;
-	try {
-		(globalThis as { DOMParser?: typeof DOMParser }).DOMParser = undefined;
+	it('preserves base and linked stylesheets from iframe-extracted full documents', () => {
 		const html = prepareSystemPrintHtml({
-			html: '<!doctype html><html><head><style>.x{color:red}</style></head><body><div>Native</div></body></html>',
-			paperWidth: '80mm',
+			html: '<html><head><base href="https://example.test/"><link rel="stylesheet" href="/receipt.css"><style>.x{color:red}</style></head><body><div>Styled</div></body></html>',
+			paperWidth: 'a4',
 		});
 
+		expect(html).toContain('<base href="https://example.test/">');
+		expect(html).toContain('<link rel="stylesheet" href="/receipt.css">');
 		expect(html).toContain('<style>.x{color:red}</style>');
-		expect(html).toContain('<div>Native</div>');
-		expect(html).not.toContain('<body><!doctype html>');
-		expect(html).not.toContain('<body><html>');
-	} finally {
-		globalThis.DOMParser = originalDomParser;
-	}
+		expect(html).toContain('<div>Styled</div>');
+	});
+
+	it('extracts full document content without DOMParser instead of nesting html tags', () => {
+		const originalDomParser = globalThis.DOMParser;
+		try {
+			(globalThis as { DOMParser?: typeof DOMParser }).DOMParser = undefined;
+			const html = prepareSystemPrintHtml({
+				html: '<!doctype html><html><head><base href="https://example.test/"><style>.x{color:red}</style></head><body><div>Native</div></body></html>',
+				paperWidth: '80mm',
+			});
+
+			expect(html).toContain('<base href="https://example.test/">');
+			expect(html).toContain('<style>.x{color:red}</style>');
+			expect(html).toContain('<div>Native</div>');
+			expect(html).not.toContain('<body><!doctype html>');
+			expect(html).not.toContain('<body><html>');
+		} finally {
+			globalThis.DOMParser = originalDomParser;
+		}
+	});
+
+	it('extracts full document content without DOMParser when tag attributes contain repeated prefixes', () => {
+		const originalDomParser = globalThis.DOMParser;
+		try {
+			(globalThis as { DOMParser?: typeof DOMParser }).DOMParser = undefined;
+			const headAttributes = Array.from(
+				{ length: 32 },
+				(_, index) => `data-head-${index}="<head"`
+			).join(' ');
+			const bodyAttributes = Array.from(
+				{ length: 32 },
+				(_, index) => `data-body-${index}="<body"`
+			).join(' ');
+			const html = prepareSystemPrintHtml({
+				html: `<!doctype html><html><head ${headAttributes}><base href="https://example.test/"><style>.x{color:red}</style></head><body ${bodyAttributes}><div>Native</div></body></html>`,
+				paperWidth: '80mm',
+			});
+
+			expect(html).toContain('<base href="https://example.test/">');
+			expect(html).toContain('<style>.x{color:red}</style>');
+			expect(html).toContain('<div>Native</div>');
+			expect(html).not.toContain('<body><!doctype html>');
+			expect(html).not.toContain('<body><html>');
+		} finally {
+			globalThis.DOMParser = originalDomParser;
+		}
+	});
 });

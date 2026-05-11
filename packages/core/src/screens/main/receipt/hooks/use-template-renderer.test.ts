@@ -244,6 +244,58 @@ describe('renderOfflineTemplatePreview', () => {
 		expect(html).not.toContain('<barcode');
 	});
 
+	it('renders thermal barcode elements through the canonical renderer', () => {
+		const html = renderOfflineTemplatePreview({
+			engine: 'thermal',
+			content: '<receipt><barcode type="code128">{{order.number}}</barcode></receipt>',
+			receiptData: {
+				order: { id: 1001, number: '1001', currency: 'USD' },
+				store: { name: 'Demo Store' },
+				lines: [],
+				totals: {
+					subtotal_incl: 0,
+					subtotal_excl: 0,
+					total_incl: 0,
+					total_excl: 0,
+					tax_total: 0,
+					paid_total: 0,
+					change_total: 0,
+				},
+				payments: [],
+			},
+		});
+
+		expect(html).toContain("font-family: 'Courier New'");
+		expect(html).toContain('data-barcode-value="1001"');
+	});
+
+	it.each([null, undefined])('defaults %s engines to the logicless preview path', (engine) => {
+		const html = renderOfflineTemplatePreview({
+			engine,
+			content:
+				'<div>Order {{order.number}}</div><barcode type="code128">{{order.number}}</barcode>',
+			receiptData: {
+				order: { id: 1001, number: '1001', currency: 'USD' },
+				store: { name: 'Demo Store' },
+				lines: [],
+				totals: {
+					subtotal_incl: 0,
+					subtotal_excl: 0,
+					total_incl: 0,
+					total_excl: 0,
+					tax_total: 0,
+					paid_total: 0,
+					change_total: 0,
+				},
+				payments: [],
+			},
+		});
+
+		expect(html).toContain('Order 1001');
+		expect(html).toContain('data-barcode-value="1001"');
+		expect(html).not.toContain('<barcode');
+	});
+
 	it('passes formatted template data to logicless templates', () => {
 		const html = renderOfflineTemplatePreview({
 			engine: 'logicless',
@@ -266,5 +318,15 @@ describe('renderOfflineTemplatePreview', () => {
 		});
 
 		expect(html).toContain('12.50');
+	});
+
+	it('throws for unsupported template engines', () => {
+		expect(() =>
+			renderOfflineTemplatePreview({
+				engine: 'unsupported',
+				content: '<div>{{order.number}}</div>',
+				receiptData: {},
+			})
+		).toThrow('Unsupported template engine: unsupported');
 	});
 });
