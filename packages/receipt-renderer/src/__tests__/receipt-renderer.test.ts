@@ -97,6 +97,14 @@ function decodePrintableAscii(bytes: Uint8Array): string {
 }
 
 type DecodedAlignedLine = { text: string; align: 'left' | 'center' | 'right' };
+type VirtualThermalLine = {
+	rawText: string;
+	text: string;
+	xStart: number;
+	textWidth: number;
+	lineWidth: number;
+	align: 'left' | 'center' | 'right';
+};
 
 function decodeAlignByte(value: number | undefined): DecodedAlignedLine['align'] {
 	if (value === 0x01) return 'center';
@@ -104,29 +112,45 @@ function decodeAlignByte(value: number | undefined): DecodedAlignedLine['align']
 	return 'left';
 }
 
-function decodeAlignedAsciiLines(bytes: Uint8Array): DecodedAlignedLine[] {
-	const lines: DecodedAlignedLine[] = [];
-	let currentAlign: DecodedAlignedLine['align'] = 'left';
-	let lineAlign: DecodedAlignedLine['align'] = currentAlign;
-	let text = '';
+function simulateEscposTextLines(bytes: Uint8Array, columns: number): VirtualThermalLine[] {
+	const lines: VirtualThermalLine[] = [];
+	let align: VirtualThermalLine['align'] = 'left';
+	let rawText = '';
+
+	function commitLine(): void {
+		if (!rawText) return;
+		const leadingSpaces = rawText.match(/^ */)?.[0].length ?? 0;
+		const lineWidth = rawText.length;
+		const text = rawText.trim();
+		const textWidth = text.length;
+		const alignedOffset =
+			align === 'center'
+				? Math.floor(Math.max(0, columns - lineWidth) / 2)
+				: align === 'right'
+					? Math.max(0, columns - lineWidth)
+					: 0;
+
+		lines.push({
+			rawText,
+			text,
+			xStart: alignedOffset + leadingSpaces,
+			textWidth,
+			lineWidth,
+			align,
+		});
+		rawText = '';
+	}
 
 	for (let index = 0; index < bytes.length; index++) {
 		const byte = bytes[index];
 		if (byte === 0x1b) {
 			const command = bytes[index + 1];
 			if (command === 0x61) {
-				currentAlign = decodeAlignByte(bytes[index + 2]);
-				if (!text) lineAlign = currentAlign;
+				align = decodeAlignByte(bytes[index + 2]);
 				index += 2;
 				continue;
 			}
-			if (command === 0x1d && bytes[index + 2] === 0x61) {
-				currentAlign = decodeAlignByte(bytes[index + 3]);
-				if (!text) lineAlign = currentAlign;
-				index += 3;
-				continue;
-			}
-			index += command === 0x21 || command === 0x4d || command === 0x74 || command === 0x33 ? 2 : 1;
+			index += command === 0x21 || command === 0x33 || command === 0x4d || command === 0x74 ? 2 : 1;
 			continue;
 		}
 		if (byte === 0x1c) {
@@ -139,29 +163,23 @@ function decodeAlignedAsciiLines(bytes: Uint8Array): DecodedAlignedLine[] {
 		}
 		if (byte === 0x0d) continue;
 		if (byte === 0x0a) {
-			if (text) lines.push({ text, align: lineAlign });
-			text = '';
-			lineAlign = currentAlign;
+			commitLine();
 			continue;
 		}
 		if (byte >= 0x20 && byte <= 0x7e) {
-			text += String.fromCharCode(byte);
+			rawText += String.fromCharCode(byte);
 		}
 	}
 
-	if (text) lines.push({ text, align: lineAlign });
+	commitLine();
 	return lines;
 }
 
-function expectAlignedLine(
-	lines: DecodedAlignedLine[],
-	text: string,
-	align: DecodedAlignedLine['align']
-): void {
-	const line = lines.find((candidate) => candidate.text.includes(text));
+function expectVisuallyCentered(lines: VirtualThermalLine[], text: string, columns: number): void {
+	const line = lines.find((candidate) => candidate.text === text);
 	expect(line).toBeDefined();
-	expect(line?.text.trim()).toBe(text);
-	expect(line?.align).toBe(align);
+	const actualCenter = (line?.xStart ?? 0) + (line?.textWidth ?? 0) / 2;
+	expect(Math.abs(actualCenter - columns / 2)).toBeLessThanOrEqual(0.5);
 }
 
 function opaqueBlackImageData(width: number, height: number): ImageData {
@@ -401,34 +419,129 @@ describe('@wcpos/receipt-renderer exports', () => {
 			},
 		});
 
-		expect(countSequence(bytes, [0x1b, 0x61, 0x01])).toBeGreaterThanOrEqual(2);
-		expect(
-			sequenceIndex(bytes, [0x1b, 0x61, 0x01], sequenceIndex(bytes, [0x1d, 0x76, 0x30]))
-		).toBeLessThan(sequenceIndex(bytes, Array.from(new TextEncoder().encode('Store Name'))));
-		const resetAfterStoreName = sequenceIndex(
-			bytes,
-			[0x1b, 0x61, 0x00],
-			sequenceIndex(bytes, Array.from(new TextEncoder().encode('Store Name')))
-		);
-		expect(resetAfterStoreName).toBeGreaterThanOrEqual(0);
-		expect(resetAfterStoreName).toBeLessThan(
-			sequenceIndex(bytes, Array.from(new TextEncoder().encode('After')))
-		);
+		const lines = simulateEscposTextLines(bytes, 48);
+		expectVisuallyCentered(lines, 'Store Name', 48);
+		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
 	});
 
-	it('centers each text line inside ESC/POS align blocks', () => {
+	it('visually centers each text line inside ESC/POS align blocks', () => {
 		const ast = parseXml(
 			'<receipt paper-width="48"><align mode="center"><text>48 Avinguda Diagonal</text><text>VAT ES0000000000</text><text>Horario de apertura</text></align><text>After</text></receipt>'
 		);
-		const lines = decodeAlignedAsciiLines(renderEscpos(ast, { columns: 48, language: 'esc-pos' }));
+		const lines = simulateEscposTextLines(
+			renderEscpos(ast, { columns: 48, language: 'esc-pos' }),
+			48
+		);
 
-		expectAlignedLine(lines, '48 Avinguda Diagonal', 'center');
-		expectAlignedLine(lines, 'VAT ES0000000000', 'center');
-		expectAlignedLine(lines, 'Horario de apertura', 'center');
-		expectAlignedLine(lines, 'After', 'left');
+		expectVisuallyCentered(lines, '48 Avinguda Diagonal', 48);
+		expectVisuallyCentered(lines, 'VAT ES0000000000', 48);
+		expectVisuallyCentered(lines, 'Horario de apertura', 48);
+		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
 	});
 
-	it('uses the printer model language when restoring image alignment', () => {
+	it('does not insert blank rows between centered standalone text lines', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><align mode="center"><text>Store</text><text>Name</text></align></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const storeIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Store')));
+		const nameIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Name')));
+
+		expect(storeIndex).toBeGreaterThanOrEqual(0);
+		expect(nameIndex).toBeGreaterThan(storeIndex);
+		const newlinesBetween = Array.from(bytes.slice(storeIndex, nameIndex)).filter(
+			(byte) => byte === 0x0a
+		).length;
+		expect(newlinesBetween).toBe(1);
+	});
+
+	it('does not insert blank rows after centered formatted text lines', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><align mode="center"><text><bold>Store</bold></text><text>Name</text></align></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const storeIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Store')));
+		const nameIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Name')));
+
+		expect(storeIndex).toBeGreaterThanOrEqual(0);
+		expect(nameIndex).toBeGreaterThan(storeIndex);
+		const newlinesBetween = Array.from(bytes.slice(storeIndex, nameIndex)).filter(
+			(byte) => byte === 0x0a
+		).length;
+		expect(newlinesBetween).toBe(1);
+	});
+
+	it('visually centers formatted raw children inside ESC/POS align blocks', () => {
+		const ast = parseXml(
+			'<receipt paper-width="48"><align mode="center"><bold>Store Name</bold></align><text>After</text></receipt>'
+		);
+		const lines = simulateEscposTextLines(
+			renderEscpos(ast, { columns: 48, language: 'esc-pos' }),
+			48
+		);
+
+		expectVisuallyCentered(lines, 'Store Name', 48);
+		expect(lines.find((line) => line.text === 'After')?.xStart).toBe(0);
+	});
+
+	it.each([42, 48])(
+		'visually centers receipt header/fiscal/footer text at %i columns',
+		(columns) => {
+			const bytes = encodeThermalTemplate(
+				`<receipt paper-width="${columns}">
+					<align mode="center">
+						<text>Avinguda Diagonal</text>
+						<text>Amsterdam, NL</text>
+						<text>08001</text>
+						<text>Phone: +34 555 9329</text>
+						<text>Email: hello@example.com</text>
+						<text>TVA intracommunautaire: FR54925237147</text>
+						<text>SIRET: 92523714748264</text>
+					</align>
+					<line />
+					<align mode="center">
+						<text>Factura fiscal</text>
+						<text>[ Reembolsado ]</text>
+					</align>
+					<line />
+					<align mode="center">
+						<text>VAT ES0000000000 - Reg. 12345</text>
+					</align>
+					<line />
+					<align mode="center">
+						<text>Horario de apertura</text>
+						<text>Mon-Sat 9:00-18:00</text>
+						<text>Closed on public holidays</text>
+					</align>
+				</receipt>`,
+				{},
+				{ columns, language: 'esc-pos' }
+			);
+			const lines = simulateEscposTextLines(bytes, columns);
+
+			for (const text of [
+				'Avinguda Diagonal',
+				'Amsterdam, NL',
+				'08001',
+				'Phone: +34 555 9329',
+				'Email: hello@example.com',
+				'TVA intracommunautaire: FR54925237147',
+				'SIRET: 92523714748264',
+				'Factura fiscal',
+				'[ Reembolsado ]',
+				'VAT ES0000000000 - Reg. 12345',
+				'Horario de apertura',
+				'Mon-Sat 9:00-18:00',
+				'Closed on public holidays',
+			]) {
+				expectVisuallyCentered(lines, text, columns);
+			}
+		}
+	);
+
+	it('uses the printer model language for image alignment', () => {
 		const ast = parseXml(
 			'<receipt><align mode="center"><image src="logo://store" width="64" /><text>Store Name</text></align></receipt>'
 		);
@@ -446,7 +559,7 @@ describe('@wcpos/receipt-renderer exports', () => {
 			},
 		});
 
-		expect(countSequence(bytes, [0x1b, 0x1d, 0x61, 0x01])).toBeGreaterThanOrEqual(2);
+		expect(countSequence(bytes, [0x1b, 0x1d, 0x61, 0x01])).toBeGreaterThanOrEqual(1);
 		expect(sequenceIndex(bytes, [0x1b, 0x61, 0x01])).toBe(-1);
 	});
 
@@ -699,6 +812,23 @@ describe('@wcpos/receipt-renderer exports', () => {
 
 		expect(sizeIndex).toBeGreaterThanOrEqual(0);
 		expect(countedLayoutIndex).toBe(-1);
+	});
+
+	it('skips fixed-column aligned text layout while ESC/POS text size is scaled', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="42"><align mode="center"><size width="2" height="2"><text>BIG</text></size></align></receipt>',
+			{},
+			{ columns: 42, language: 'esc-pos' }
+		);
+		const sizeIndex = sequenceIndex(bytes, [0x1d, 0x21, 0x11]);
+		const centeredTableIndex = sequenceIndex(
+			bytes,
+			Array.from(new TextEncoder().encode('                   BIG')),
+			sizeIndex
+		);
+
+		expect(sizeIndex).toBeGreaterThanOrEqual(0);
+		expect(centeredTableIndex).toBe(-1);
 	});
 
 	it('restores ESC line spacing after the newline that closes inline scaled text', () => {

@@ -45,6 +45,7 @@ interface RenderContext {
 	columns: number;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	align: 'left' | 'center' | 'right';
+	lineHasText: boolean;
 	supportsCp932: boolean;
 	normalizeText: boolean;
 	emitEscPrintMode: boolean;
@@ -119,6 +120,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		columns,
 		language: resolvedLanguage,
 		align: 'left',
+		lineHasText: false,
 		supportsCp932: resolvedLanguage === 'esc-pos' && enableCp932,
 		normalizeText: resolvedLanguage === 'esc-pos',
 		emitEscPrintMode: resolvedLanguage === 'esc-pos' && emitEscPrintMode,
@@ -191,14 +193,23 @@ function walkNodes(
 function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: RenderContext): void {
 	switch (node.type) {
 		case 'raw-text':
+			if (writeAlignedRawTextLine(encoder, node.value, context)) {
+				break;
+			}
 			writeText(encoder, node.value, context.supportsCp932, context.normalizeText);
+			if (node.value) context.lineHasText = true;
 			break;
 		case 'text':
+			if (writeAlignedStandaloneTextLine(encoder, node.children, context)) {
+				break;
+			}
 			if (writeIndentedStandaloneTextLine(encoder, node.children, context)) {
 				break;
 			}
 			walkNodes(encoder, node.children, context);
-			writeNewline(encoder, context);
+			if (context.lineHasText) {
+				writeNewline(encoder, context);
+			}
 			break;
 		case 'bold': {
 			const previous = context.escposPrintMode?.bold ?? false;
@@ -246,11 +257,9 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			const previous = context.align;
 			context.align = node.mode;
 			encoder.align(node.mode);
-			writeHardwareAlign(encoder, context.language, node.mode);
 			walkNodes(encoder, node.children, context);
 			context.align = previous;
 			encoder.align(previous);
-			writeHardwareAlign(encoder, context.language, previous);
 			break;
 		}
 		case 'row': {
@@ -304,7 +313,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 						})
 					];
 				if (asset) {
-					writeImage(encoder, context, asset.image, {
+					writeImage(encoder, asset.image, {
 						width: normalizeImageWidth(asset.width),
 						height: normalizeImageHeight(asset.height),
 						algorithm: asset.algorithm ?? context.imageAlgorithm,
@@ -326,7 +335,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 						})
 					];
 				if (asset) {
-					writeImage(encoder, context, asset.image, {
+					writeImage(encoder, asset.image, {
 						width: normalizeImageWidth(asset.width),
 						height: normalizeImageHeight(asset.height),
 						algorithm: asset.algorithm ?? context.imageAlgorithm,
@@ -344,7 +353,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			if (!asset) break;
 			const width = normalizeImageWidth(asset.width);
 			const height = normalizeImageHeight(asset.height);
-			writeImage(encoder, context, asset.image, {
+			writeImage(encoder, asset.image, {
 				width,
 				height,
 				algorithm: asset.algorithm ?? context.imageAlgorithm,
@@ -370,6 +379,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 function writeNewline(encoder: ReceiptPrinterEncoder, context: RenderContext, lines = 1): void {
 	if (!context.escposPrintMode) {
 		encoder.newline(lines);
+		context.lineHasText = false;
 		return;
 	}
 
@@ -383,6 +393,7 @@ function writeNewline(encoder: ReceiptPrinterEncoder, context: RenderContext, li
 	if (count > 1) {
 		encoder.newline(count - 1);
 	}
+	context.lineHasText = false;
 }
 
 function normalizeImageWidth(value: number): number {
@@ -397,7 +408,6 @@ function normalizeImageHeight(value: number): number {
 
 function writeImage(
 	encoder: ReceiptPrinterEncoder,
-	context: RenderContext,
 	image: unknown,
 	options: {
 		width: number;
@@ -407,23 +417,6 @@ function writeImage(
 	}
 ): void {
 	encoder.image(image, options.width, options.height, options.algorithm, options.threshold);
-	if (context.align !== 'left') {
-		writeHardwareAlign(encoder, context.language, context.align);
-	}
-}
-
-function writeHardwareAlign(
-	encoder: ReceiptPrinterEncoder,
-	language: 'esc-pos' | 'star-prnt' | 'star-line',
-	align: 'left' | 'center' | 'right'
-): void {
-	if (language === 'esc-pos') {
-		encoder.raw([0x1b, 0x61, align === 'left' ? 0x00 : align === 'center' ? 0x01 : 0x02]);
-		return;
-	}
-	const value = align === 'left' ? 0x00 : align === 'center' ? 0x01 : 0x02;
-	encoder.raw([0x1b, 0x1d, 0x61, value]);
-	encoder.align(align);
 }
 
 function updateEscposPrintMode(
@@ -542,6 +535,67 @@ function writeIndentedStandaloneTextLine(
 		],
 		[[rest]]
 	);
+	return true;
+}
+
+function writeAlignedStandaloneTextLine(
+	encoder: ReceiptPrinterEncoder,
+	nodes: ThermalNode[],
+	context: RenderContext
+): boolean {
+	const activeWidth = context.escposPrintMode?.width ?? 1;
+	const activeHeight = context.escposPrintMode?.height ?? 1;
+	if (
+		context.align === 'left' ||
+		context.lineHasText ||
+		activeWidth > 1 ||
+		activeHeight > 1 ||
+		nodes.length !== 1 ||
+		nodes[0]?.type !== 'raw-text'
+	) {
+		return false;
+	}
+
+	const normalized = context.normalizeText ? normalizeThermalText(nodes[0].value) : nodes[0].value;
+	if (
+		!normalized ||
+		(context.supportsCp932 && containsJapaneseText(normalized)) ||
+		displayWidth(normalized) > context.columns
+	) {
+		return false;
+	}
+
+	encoder.align('left');
+	encoder.table([{ width: context.columns, align: context.align }], [[normalized]]);
+	context.lineHasText = false;
+	encoder.align(context.align);
+	return true;
+}
+
+function writeAlignedRawTextLine(
+	encoder: ReceiptPrinterEncoder,
+	value: string,
+	context: RenderContext
+): boolean {
+	const activeWidth = context.escposPrintMode?.width ?? 1;
+	const activeHeight = context.escposPrintMode?.height ?? 1;
+	if (context.align === 'left' || context.lineHasText || activeWidth > 1 || activeHeight > 1) {
+		return false;
+	}
+
+	const normalized = context.normalizeText ? normalizeThermalText(value) : value;
+	if (
+		!normalized ||
+		(context.supportsCp932 && containsJapaneseText(normalized)) ||
+		displayWidth(normalized) > context.columns
+	) {
+		return false;
+	}
+
+	encoder.align('left');
+	encoder.table([{ width: context.columns, align: context.align }], [[normalized]]);
+	context.lineHasText = false;
+	encoder.align(context.align);
 	return true;
 }
 
