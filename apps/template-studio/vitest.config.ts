@@ -5,6 +5,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
 	resolve: {
 		alias: {
+			'@wcpos/receipt-renderer/render-template': fileURLToPath(
+				new URL('../../packages/receipt-renderer/src/render-template.ts', import.meta.url)
+			),
 			'@wcpos/receipt-renderer': fileURLToPath(
 				new URL('../../packages/receipt-renderer/src/index.ts', import.meta.url)
 			),

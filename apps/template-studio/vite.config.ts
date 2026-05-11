@@ -236,6 +236,9 @@ function sendRawTcp(host: string, port: number, data: Buffer): Promise<number> {
 export default defineConfig({
 	resolve: {
 		alias: {
+			'@wcpos/receipt-renderer/render-template': fileURLToPath(
+				new URL('../../packages/receipt-renderer/src/render-template.ts', import.meta.url)
+			),
 			'@wcpos/receipt-renderer': fileURLToPath(
 				new URL('../../packages/receipt-renderer/src/index.ts', import.meta.url)
 			),

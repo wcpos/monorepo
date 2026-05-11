@@ -12,6 +12,9 @@
 		"noEmit": true,
 		"baseUrl": ".",
 		"paths": {
+			"@wcpos/receipt-renderer/render-template": [
+				"../../packages/receipt-renderer/src/render-template.ts"
+			],
 			"@wcpos/receipt-renderer": [
 				"../../packages/receipt-renderer/src/index.ts"
 			]

@@ -19,6 +19,7 @@
         "dependsOn": ["^build"],
         "outputs": [
           "build/**",
+          "dist/**",
           "node_modules/.cache/metro/**"
         ]
       },
