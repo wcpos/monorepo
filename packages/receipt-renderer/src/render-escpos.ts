@@ -204,7 +204,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			writeText(encoder, node.value, context.supportsCp932, context.normalizeText);
 			if (node.value) context.lineHasText = true;
 			break;
-		case 'text':
+		case 'text': {
 			if (writeAlignedStandaloneTextLine(encoder, node.children, context)) {
 				break;
 			}
@@ -217,6 +217,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			context.allowAlignedRawTextLine = previousAllowAlignedRawTextLine;
 			writeNewline(encoder, context);
 			break;
+		}
 		case 'bold': {
 			const previous = context.escposPrintMode?.bold ?? false;
 			encoder.bold(true);
