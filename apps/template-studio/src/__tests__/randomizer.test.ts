@@ -15,6 +15,13 @@ describe('template-studio randomizer', () => {
 		if (!parsed.success) throw new Error(parsed.error.message);
 	});
 
+	it('populates payment-state fields on generated order data', () => {
+		const result = createRandomReceipt({ seed: 'seed-default' });
+
+		expect(result.data.order.needs_payment).toEqual(expect.any(Boolean));
+		expect(result.data.order.payment_url).toMatch(/^https?:\/\//);
+	});
+
 	it('matches the v1 tax ID contract: store.id plus structured tax_ids only', () => {
 		const result = createRandomReceipt({
 			seed: 'rtl',

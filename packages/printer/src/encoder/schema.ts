@@ -59,6 +59,8 @@ export const ReceiptOrderSchema = z.object({
 		.string()
 		.optional()
 		.describe('Order source / channel (e.g. woocommerce-pos, checkout, admin)'),
+	needs_payment: z.boolean().optional().describe('Whether the order still requires payment'),
+	payment_url: z.string().optional().describe('URL where the customer can pay for this order'),
 	created: ReceiptDateSchema,
 	paid: ReceiptDateSchema,
 	completed: ReceiptDateSchema,

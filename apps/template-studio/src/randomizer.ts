@@ -1631,6 +1631,7 @@ function buildOrder(
 	// when fulfillment has not completed yet.
 	const isPaid = wcStatus === 'processing' || wcStatus === 'completed';
 	const isCompleted = wcStatus === 'completed';
+	const needsPayment = wcStatus === 'pending' || wcStatus === 'failed';
 	const paidAt = isPaid ? new Date(createdAt.getTime() + 60_000) : null;
 	const completedAt = isCompleted ? new Date(createdAt.getTime() + 5 * 60_000) : null;
 	return {
@@ -1641,6 +1642,8 @@ function buildOrder(
 		wc_status: wcStatus,
 		status_label: statusLabels[wcStatus] ?? WC_STATUS_LABELS[wcStatus],
 		created_via: createdVia,
+		needs_payment: needsPayment,
+		payment_url: `https://checkout.example.test/order-pay/${orderId}?pay_for_order=true`,
 		created: buildDateObject(createdAt, locale, timeZone),
 		paid: paidAt ? buildDateObject(paidAt, locale, timeZone) : emptyDateObject(),
 		completed: completedAt ? buildDateObject(completedAt, locale, timeZone) : emptyDateObject(),

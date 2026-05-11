@@ -96,4 +96,23 @@ describe('FieldsTree', () => {
 			screen.queryByLabelText('presentation_hints.order_barcode_type')
 		).not.toBeInTheDocument();
 	});
+
+	it('exposes order payment-state fields for editing', () => {
+		render(
+			<FieldsTree
+				{...baseProps}
+				data={{
+					order: {
+						needs_payment: true,
+						payment_url: 'https://example.test/pay/123',
+					},
+				}}
+			/>
+		);
+
+		fireEvent.click(screen.getByRole('button', { name: 'Order' }));
+
+		expect(screen.getByLabelText('order.needs_payment')).toBeChecked();
+		expect(screen.getByLabelText('order.payment_url')).toHaveValue('https://example.test/pay/123');
+	});
 });
