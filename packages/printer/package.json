@@ -1,44 +1,47 @@
 {
-  "name": "@wcpos/printer",
-  "version": "0.1.0",
-  "description": "Printer encoding and transport for WooCommerce POS",
-  "author": "kilbot <paul@kilbot.com>",
-  "license": "MIT",
-  "type": "module",
-  "main": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts",
-    "./encoder": "./src/encoder/index.ts"
-  },
-  "files": ["src/**"],
-  "dependencies": {
-    "@point-of-sale/receipt-printer-encoder": "^3.0.3",
-    "@wcpos/receipt-renderer": "workspace:*",
-    "p-queue": "^9.1.1",
-    "zod": "^4.1.3"
-  },
-  "devDependencies": {
-    "jsdom": "^26.1.0",
-    "vitest": "^4.0.18"
-  },
-  "peerDependencies": {
-    "expo-print": ">=55.0.0",
-    "react-native-tcp-socket": ">=6.0.0",
-    "react-native-esc-pos-printer": ">=4.0.0",
-    "react-native-star-io10": ">=1.0.0"
-  },
-  "peerDependenciesMeta": {
-    "expo-print": {
-      "optional": true
-    },
-    "react-native-tcp-socket": {
-      "optional": true
-    },
-    "react-native-esc-pos-printer": {
-      "optional": true
-    },
-    "react-native-star-io10": {
-      "optional": true
-    }
-  }
+	"name": "@wcpos/printer",
+	"version": "0.1.0",
+	"description": "Printer encoding and transport for WooCommerce POS",
+	"author": "kilbot <paul@kilbot.com>",
+	"license": "MIT",
+	"type": "module",
+	"main": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./encoder": "./src/encoder/index.ts",
+		"./encoder/render-preview": "./src/encoder/render-preview.ts"
+	},
+	"files": [
+		"src/**"
+	],
+	"dependencies": {
+		"@point-of-sale/receipt-printer-encoder": "^3.0.3",
+		"@wcpos/receipt-renderer": "workspace:*",
+		"p-queue": "^9.1.1",
+		"zod": "^4.1.3"
+	},
+	"devDependencies": {
+		"jsdom": "^26.1.0",
+		"vitest": "^4.0.18"
+	},
+	"peerDependencies": {
+		"expo-print": ">=55.0.0",
+		"react-native-tcp-socket": ">=6.0.0",
+		"react-native-esc-pos-printer": ">=4.0.0",
+		"react-native-star-io10": ">=1.0.0"
+	},
+	"peerDependenciesMeta": {
+		"expo-print": {
+			"optional": true
+		},
+		"react-native-tcp-socket": {
+			"optional": true
+		},
+		"react-native-esc-pos-printer": {
+			"optional": true
+		},
+		"react-native-star-io10": {
+			"optional": true
+		}
+	}
 }

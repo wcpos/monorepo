@@ -61,3 +61,9 @@ export {
 	ReceiptOrderSchema,
 	ReceiptI18nSchema,
 } from './schema';
+export { buildPreviewTemplateData, renderPreview } from './render-preview';
+export type {
+	PreviewTemplateEngine,
+	RenderPreviewOptions,
+	RenderPreviewResult,
+} from './render-preview';

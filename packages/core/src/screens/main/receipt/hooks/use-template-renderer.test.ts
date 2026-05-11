@@ -4,7 +4,7 @@
 import { renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-import { useTemplateRenderer } from './use-template-renderer';
+import { renderOfflineTemplatePreview, useTemplateRenderer } from './use-template-renderer';
 
 const mockUseReceiptData = jest.fn();
 const mockUseActiveTemplates = jest.fn(() => []);
@@ -13,7 +13,9 @@ const createStore = (dp = 2) => ({
 	wc_price_decimals$: new BehaviorSubject(dp),
 });
 const mockUseAppState = jest.fn(() => ({ store: createStore() }));
-const mockUseOnlineStatus = jest.fn(() => ({ status: 'online-website-available' }));
+const mockUseOnlineStatus = jest.fn(() => ({
+	status: 'online-website-available',
+}));
 const mockBuildReceiptData = jest.fn(
 	(order: Record<string, unknown>, store: Record<string, unknown>, dp?: number) => ({
 		source: 'local',
@@ -186,7 +188,9 @@ describe('useTemplateRenderer', () => {
 
 	describe('isOffline', () => {
 		it('is false when online', () => {
-			mockUseOnlineStatus.mockReturnValue({ status: 'online-website-available' });
+			mockUseOnlineStatus.mockReturnValue({
+				status: 'online-website-available',
+			});
 
 			const { result } = renderHook(() => useTemplateRenderer(defaultOptions));
 
@@ -202,11 +206,65 @@ describe('useTemplateRenderer', () => {
 		});
 
 		it('is true when website is unavailable', () => {
-			mockUseOnlineStatus.mockReturnValue({ status: 'online-website-unavailable' });
+			mockUseOnlineStatus.mockReturnValue({
+				status: 'online-website-unavailable',
+			});
 
 			const { result } = renderHook(() => useTemplateRenderer(defaultOptions));
 
 			expect(result.current.isOffline).toBe(true);
 		});
+	});
+});
+
+describe('renderOfflineTemplatePreview', () => {
+	it('renders logicless barcode elements through the canonical renderer', () => {
+		const html = renderOfflineTemplatePreview({
+			engine: 'logicless',
+			content: '<div>Order <barcode type="code128" height="40">{{order.number}}</barcode></div>',
+			receiptData: {
+				order: { id: 1001, number: '1001', currency: 'USD' },
+				store: { name: 'Demo Store' },
+				lines: [],
+				totals: {
+					subtotal_incl: 0,
+					subtotal_excl: 0,
+					total_incl: 0,
+					total_excl: 0,
+					tax_total: 0,
+					paid_total: 0,
+					change_total: 0,
+				},
+				payments: [],
+			},
+		});
+
+		expect(html).toContain('data-barcode-kind="barcode"');
+		expect(html).toContain('data-barcode-value="1001"');
+		expect(html).not.toContain('<barcode');
+	});
+
+	it('passes formatted template data to logicless templates', () => {
+		const html = renderOfflineTemplatePreview({
+			engine: 'logicless',
+			content: '<div>{{totals.total_incl_display}}</div>',
+			receiptData: {
+				order: { id: 1001, number: '1001', currency: 'USD' },
+				store: { name: 'Demo Store' },
+				lines: [],
+				totals: {
+					subtotal_incl: 12.5,
+					subtotal_excl: 12.5,
+					total_incl: 12.5,
+					total_excl: 12.5,
+					tax_total: 0,
+					paid_total: 0,
+					change_total: 0,
+				},
+				payments: [],
+			},
+		});
+
+		expect(html).toContain('12.50');
 	});
 });

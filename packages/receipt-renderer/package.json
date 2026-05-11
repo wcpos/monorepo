@@ -10,6 +10,12 @@
 			"browser": "./dist/index.js",
 			"import": "./dist/index.js",
 			"default": "./dist/index.js"
+		},
+		"./render-template": {
+			"types": "./dist/render-template.d.ts",
+			"browser": "./dist/render-template.js",
+			"import": "./dist/render-template.js",
+			"default": "./dist/render-template.js"
 		}
 	},
 	"files": [
