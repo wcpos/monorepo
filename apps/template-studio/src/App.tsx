@@ -482,10 +482,14 @@ export function preparePrintDocument(document: Document, paperWidth: PaperWidth)
 	title.textContent = 'WCPOS Template Studio Print';
 
 	const style = document.createElement('style');
+	// Force the cloned receipt root to the full page width. Without this, the
+	// flex-centered body lets the child shrink to its max-content size, which
+	// makes A4 templates print narrower than the page.
+	const widthRule = paperWidth === 'a4' ? '\nbody > * { width: 210mm; }' : '';
 	style.textContent = `
 @page { size: ${pageSize}; margin: 0; }
 html, body { margin: 0; padding: 0; background: #fff; }
-body { display: flex; justify-content: center; }
+body { display: flex; justify-content: center; }${widthRule}
 `;
 
 	document.head.replaceChildren(meta, title, style);

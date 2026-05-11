@@ -269,7 +269,17 @@ describe('template studio rendering harness', () => {
 
 		expect(printDocument.title).toBe('WCPOS Template Studio Print');
 		expect(printDocument.head.textContent).toContain('@page { size: 80mm auto; margin: 0; }');
+		expect(printDocument.head.textContent).not.toContain('body > *');
 		expect(printDocument.body.innerHTML).toBe('');
+	});
+
+	it('forces A4 receipts to fill the printed page width', () => {
+		const printDocument = document.implementation.createHTMLDocument('');
+
+		preparePrintDocument(printDocument, 'a4');
+
+		expect(printDocument.head.textContent).toContain('@page { size: A4; margin: 0; }');
+		expect(printDocument.head.textContent).toContain('body > * { width: 210mm; }');
 	});
 
 	it('prints through an offscreen iframe without opening a popup window', async () => {
