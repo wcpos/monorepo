@@ -705,9 +705,15 @@ describe('@wcpos/receipt-renderer exports', () => {
 			{ columns: 48, language: 'esc-pos' }
 		);
 		const printable = decodePrintableAscii(bytes);
+		const nativeSingleRule = new Array(48).fill(0xc4);
+		const beforeIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Before')));
+		const singleRuleIndex = sequenceIndex(bytes, nativeSingleRule, beforeIndex);
+		const afterIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('After')));
 
 		expect(printable).not.toContain('-'.repeat(48));
-		expect(printable.indexOf('After')).toBeGreaterThan(printable.indexOf('Before'));
+		expect(beforeIndex).toBeGreaterThanOrEqual(0);
+		expect(singleRuleIndex).toBeGreaterThan(beforeIndex);
+		expect(afterIndex).toBeGreaterThan(singleRuleIndex);
 	});
 
 	it.each([
