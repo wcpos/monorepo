@@ -434,6 +434,29 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
 	});
 
+	it('prints a full receipt raster image instead of text when supplied', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>متجر القهوة الذهبية</text><text>After raster</text><cut /></receipt>',
+			{},
+			{
+				columns: 42,
+				language: 'esc-pos',
+				fullReceiptRasterImage: {
+					image: opaqueBlackImageData(64, 32),
+					width: 64,
+					height: 32,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			}
+		);
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+		expect(sequenceIndex(bytes, Array.from(new TextEncoder().encode('After raster')))).toBe(-1);
+		expect(includesSequence(bytes, [0x1b, 0x74, 0x20])).toBe(false);
+		expect(includesSequence(bytes, [0x1d, 0x56])).toBe(true);
+	});
+
 	it('preserves center alignment for text after a raster image in the same align block', () => {
 		const ast = parseXml(
 			'<receipt><align mode="center"><image src="logo://store" width="64" /><text>Store Name</text></align><text>After</text></receipt>'

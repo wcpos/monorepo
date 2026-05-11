@@ -11,6 +11,7 @@ import type {
 	ThermalImageAssets,
 	ThermalImageMode,
 	ThermalNode,
+	ThermalRasterImage,
 } from './types.js';
 
 export interface EscposRenderOptions {
@@ -32,6 +33,7 @@ export interface EscposRenderOptions {
 	imageThreshold?: number;
 	barcodeMode?: ThermalBarcodeMode;
 	barcodeImages?: ThermalBarcodeImages;
+	fullReceiptRasterImage?: ThermalRasterImage;
 }
 
 interface EscposPrintModeState {
@@ -137,14 +139,44 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		barcodeImages: options.barcodeImages ?? {},
 	};
 
+	if (options.fullReceiptRasterImage) {
+		const image = options.fullReceiptRasterImage;
+		writeImage(encoder, image.image, {
+			width: normalizeImageWidth(image.width),
+			height: normalizeImageHeight(image.height),
+			algorithm: image.algorithm ?? context.imageAlgorithm,
+			threshold: image.threshold ?? context.imageThreshold,
+		});
+		writePostRasterCommands(encoder, ast.children, context);
+		return normalizeEscposBytes(encoder.encode(), resolvedLanguage);
+	}
+
 	walkNodes(encoder, ast.children, context);
 
-	const bytes = encoder.encode();
+	return normalizeEscposBytes(encoder.encode(), resolvedLanguage);
+}
+
+function normalizeEscposBytes(
+	bytes: Uint8Array,
+	resolvedLanguage: 'esc-pos' | 'star-prnt' | 'star-line'
+): Uint8Array {
 	if (resolvedLanguage !== 'esc-pos') return bytes;
 	const resetIndex = bytes.findIndex((byte, index) => byte === 0x1b && bytes[index + 1] === 0x40);
 	if (resetIndex > 0) return bytes.slice(resetIndex);
 	if (resetIndex === -1) return Uint8Array.from([0x1b, 0x40, ...bytes]);
 	return bytes;
+}
+
+function writePostRasterCommands(
+	encoder: ReceiptPrinterEncoder,
+	nodes: readonly ThermalNode[],
+	context: RenderContext
+): void {
+	for (const node of nodes) {
+		if (node.type === 'cut' || node.type === 'feed' || node.type === 'drawer') {
+			walkNode(encoder, node, context);
+		}
+	}
 }
 
 /**

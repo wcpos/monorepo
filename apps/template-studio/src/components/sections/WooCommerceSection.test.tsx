@@ -18,11 +18,13 @@ describe('WooCommerceSection', () => {
 				language="esc-pos"
 				thermalColumns={42}
 				emitEscPrintMode={true}
+				fullReceiptRaster={false}
 				onChangePath={onChangePath}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={vi.fn()}
 				onEmitEscPrintModeChange={vi.fn()}
+				onFullReceiptRasterChange={vi.fn()}
 			/>
 		);
 
@@ -46,11 +48,13 @@ describe('WooCommerceSection', () => {
 				language="esc-pos"
 				thermalColumns={42}
 				emitEscPrintMode={true}
+				fullReceiptRaster={false}
 				onChangePath={vi.fn()}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={onThermalColumnsChange}
 				onEmitEscPrintModeChange={vi.fn()}
+				onFullReceiptRasterChange={vi.fn()}
 			/>
 		);
 
@@ -76,11 +80,13 @@ describe('WooCommerceSection', () => {
 			language: 'esc-pos',
 			thermalColumns: 42 as const,
 			emitEscPrintMode: true,
+			fullReceiptRaster: false,
 			onChangePath: vi.fn(),
 			onPrinterModelChange: vi.fn(),
 			onLanguageChange: vi.fn(),
 			onThermalColumnsChange: vi.fn(),
 			onEmitEscPrintModeChange,
+			onFullReceiptRasterChange: vi.fn(),
 		};
 		const { rerender } = render(<WooCommerceSection {...props} engine="thermal" />);
 
@@ -106,14 +112,45 @@ describe('WooCommerceSection', () => {
 				language="esc-pos"
 				thermalColumns={42}
 				emitEscPrintMode={true}
+				fullReceiptRaster={false}
 				onChangePath={vi.fn()}
 				onPrinterModelChange={vi.fn()}
 				onLanguageChange={vi.fn()}
 				onThermalColumnsChange={vi.fn()}
 				onEmitEscPrintModeChange={vi.fn()}
+				onFullReceiptRasterChange={vi.fn()}
 			/>
 		);
 
 		expect(screen.getByLabelText('Characters per line')).toBeDisabled();
+	});
+
+	it('enables full receipt raster mode for thermal templates', () => {
+		const onFullReceiptRasterChange = vi.fn();
+		render(
+			<WooCommerceSection
+				engine="thermal"
+				currency="SAR"
+				locale="ar_SA"
+				displayTax="incl"
+				pricesEnteredWithTax={true}
+				roundingMode="per-line"
+				printerModel="generic"
+				language="esc-pos"
+				thermalColumns={42}
+				emitEscPrintMode={true}
+				fullReceiptRaster={false}
+				onChangePath={vi.fn()}
+				onPrinterModelChange={vi.fn()}
+				onLanguageChange={vi.fn()}
+				onThermalColumnsChange={vi.fn()}
+				onEmitEscPrintModeChange={vi.fn()}
+				onFullReceiptRasterChange={onFullReceiptRasterChange}
+			/>
+		);
+
+		fireEvent.click(screen.getByLabelText('Full receipt raster'));
+
+		expect(onFullReceiptRasterChange).toHaveBeenCalledWith(true);
 	});
 });

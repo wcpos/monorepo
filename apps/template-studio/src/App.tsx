@@ -11,6 +11,7 @@ import { Stage } from './components/Stage';
 import { TemplateList } from './components/TemplateList';
 import { Toolbar } from './components/Toolbar';
 import { ARRAY_DEFAULTS } from './lib/field-meta';
+import { rasterizeReceiptElement } from './lib/full-receipt-raster';
 import { getAtPath, removeAtPath, setAtPath } from './lib/path-utils';
 import {
 	loadThermalLogoAsset,
@@ -101,6 +102,7 @@ export function App() {
 	const [printerModel, setPrinterModel] = React.useState('');
 	const [language, setLanguage] = React.useState<'esc-pos' | 'star-prnt' | 'star-line'>('esc-pos');
 	const [emitEscPrintMode, setEmitEscPrintMode] = React.useState(true);
+	const [fullReceiptRaster, setFullReceiptRaster] = React.useState(false);
 	const [thermalColumnsByPaper, setThermalColumnsByPaper] = React.useState<ThermalColumnsByPaper>(
 		() => loadThermalColumnsByPaper()
 	);
@@ -286,6 +288,30 @@ export function App() {
 		}
 
 		const maxWidth = maxDotsForPaperWidth(effectivePaperWidth);
+		if (fullReceiptRaster) {
+			const fullReceiptRasterImage = await rasterizeReceiptElement({
+				receiptNode: previewFrameRef.current?.firstElementChild ?? null,
+				maxWidth,
+				hostDocument: document,
+			});
+			const prepared = renderStudioTemplate({
+				template: selectedTemplate,
+				fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
+				paperWidth: effectivePaperWidth,
+				thermalColumns: effectiveThermalColumns,
+				printerModel: printerModel || undefined,
+				language,
+				encodeOptions: {
+					imageMode: 'raster',
+					fullReceiptRasterImage,
+					emitEscPrintMode,
+				},
+			});
+
+			if (prepared.kind !== 'thermal') return rendered;
+			return prepared;
+		}
+
 		const renderedTemplate = renderTemplatePlaceholders(selectedTemplate.content, rendered.data);
 		const assets = discoverThermalAssetRequests(renderedTemplate);
 		const imageAssets: ThermalImageAssets = {};
@@ -331,6 +357,7 @@ export function App() {
 		effectivePaperWidth,
 		effectiveThermalColumns,
 		fixture,
+		fullReceiptRaster,
 		language,
 		printerModel,
 		rendered,
@@ -440,6 +467,7 @@ export function App() {
 							language={language}
 							thermalColumns={effectiveThermalColumns}
 							emitEscPrintMode={emitEscPrintMode}
+							fullReceiptRaster={fullReceiptRaster}
 							onChangePath={handleChangePath}
 							onPrinterModelChange={setPrinterModel}
 							onLanguageChange={(value) =>
@@ -447,6 +475,7 @@ export function App() {
 							}
 							onThermalColumnsChange={handleThermalColumnsChange}
 							onEmitEscPrintModeChange={setEmitEscPrintMode}
+							onFullReceiptRasterChange={setFullReceiptRaster}
 						/>
 					</CollapsibleSection>
 					<CollapsibleSection

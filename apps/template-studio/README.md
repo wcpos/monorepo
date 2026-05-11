@@ -36,6 +36,12 @@ Print testing options:
 
 Thermal previews render barcode and QR nodes through `bwip-js`, matching the barcode library path used for browser preview output instead of placeholder bars.
 
+### Full-receipt raster fallback
+
+Thermal printer settings include **Full receipt raster** for Unicode/RTL testing. When enabled, raw ESC/POS printing captures the rendered receipt preview with browser font shaping, converts the whole receipt to a monochrome raster image, and sends that image to the printer instead of native text bytes. Use this for simulators or printers that garble Arabic, Hebrew, or other scripts that need Unicode shaping or unsupported code pages.
+
+Tradeoffs: raster jobs are larger and slower than text-mode ESC/POS, and capture depends on browser rendering. Cross-origin images can fail or taint the canvas; use same-origin or data-URI assets when testing this mode.
+
 ### Raw thermal logos and barcodes
 
 Raw network thermal printing supports rasterized PNG and JPEG logos. WCPOS does not send PNG/JPEG directly to printers; it decodes the uploaded image, flattens transparency onto white, resizes to the printer dot budget, converts to monochrome, and encodes printer image commands.
