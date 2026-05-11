@@ -303,6 +303,8 @@ function emptyTotals(): ReceiptTotals {
 		total_excl: 0,
 		paid_total: 0,
 		change_total: 0,
+		total_qty: 0,
+		line_count: 0,
 	};
 }
 
@@ -349,6 +351,8 @@ function computeTotals(
 		total_excl: grandExcl,
 		paid_total: grandIncl,
 		change_total: 0,
+		total_qty: lines.reduce((sum, line) => sum + line.qty, 0),
+		line_count: lines.length,
 	};
 	const refundTotal = refunds.reduce((sum, refund) => sum + (refund.amount ?? 0), 0);
 	if (refundTotal > 0) {

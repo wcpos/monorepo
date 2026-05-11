@@ -100,6 +100,8 @@ export const sampleReceiptData: ReceiptData = {
 		total_excl: 22.73,
 		paid_total: 25.0,
 		change_total: 0,
+		total_qty: 3,
+		line_count: 2,
 	},
 	tax_summary: [
 		{

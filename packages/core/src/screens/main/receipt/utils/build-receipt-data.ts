@@ -79,6 +79,8 @@ interface ReceiptTotals {
 	total: string;
 	total_incl: string;
 	total_excl: string;
+	total_qty: number;
+	line_count: number;
 }
 
 interface ReceiptAdjustment {
@@ -409,6 +411,8 @@ export function buildReceiptData(
 			}).toFixed(dp),
 			total_incl: grandTotalIncl.toFixed(dp),
 			total_excl: grandTotalExcl.toFixed(dp),
+			total_qty: mappedLines.reduce((sum, line) => sum + toNum(line.quantity), 0),
+			line_count: mappedLines.length,
 		},
 		payments: [
 			{

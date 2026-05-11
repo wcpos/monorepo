@@ -380,6 +380,8 @@ function mapTotals(src: Record<string, any>, displayTax: DisplayTax): ReceiptTot
 			? { refund_total: toNum(src.refund_total) }
 			: {}),
 		...('net_total' in src && src.net_total != null ? { net_total: toNum(src.net_total) } : {}),
+		...('total_qty' in src && src.total_qty != null ? { total_qty: toNum(src.total_qty) } : {}),
+		...('line_count' in src && src.line_count != null ? { line_count: toNum(src.line_count) } : {}),
 	};
 }
 
