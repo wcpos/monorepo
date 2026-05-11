@@ -139,6 +139,13 @@ describe('buildReceiptData', () => {
 		expect(result.order.payment_url).toBe('https://example.test/checkout/order-pay/1234');
 	});
 
+	it('defaults order payment-state fields when omitted', () => {
+		const result = buildReceiptData(mockOrder, mockStore);
+
+		expect(result.order.needs_payment).toBe(false);
+		expect(result.order.payment_url).toBe('');
+	});
+
 	it('emits a render-time order.printed datetime', () => {
 		const result = buildReceiptData(mockOrder, mockStore);
 		expect(result.order.printed.datetime).not.toBe('');

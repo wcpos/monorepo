@@ -41,6 +41,13 @@ function toStr(value: unknown): string {
 	return String(value);
 }
 
+function toOptionalBool(value: unknown): boolean | undefined {
+	if (typeof value === 'boolean') return value;
+	if (typeof value === 'number') return value !== 0;
+	if (typeof value === 'string') return ['true', '1', 'yes'].includes(value.trim().toLowerCase());
+	return undefined;
+}
+
 /** Safe array coercion. */
 function toArr(value: unknown): unknown[] {
 	return Array.isArray(value) ? value : [];
@@ -778,7 +785,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 			wc_status: toStr(data.wc_status ?? data.status) || undefined,
 			status_label: toStr(data.status_label) || undefined,
 			created_via: toStr(data.created_via) || undefined,
-			needs_payment: 'needs_payment' in data ? !!data.needs_payment : undefined,
+			needs_payment: 'needs_payment' in data ? toOptionalBool(data.needs_payment) : undefined,
 			payment_url: toStr(data.payment_url) || undefined,
 			created: offlineCreated,
 			paid: offlineDate,
