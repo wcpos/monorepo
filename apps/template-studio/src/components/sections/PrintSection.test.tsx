@@ -81,7 +81,7 @@ describe('PrintSection', () => {
 		await waitFor(() => expect(screen.getByText(/3 bytes/)).toBeInTheDocument());
 	});
 
-	it('does not orphan a pending TCP completion when a later action fails before dispatch', async () => {
+	it('ignores a pending TCP completion when a later action fails before dispatch', async () => {
 		let resolvePrint: ((value: { ok: true; bytesWritten: number }) => void) | undefined;
 		mockedPrintRawTcp.mockReturnValueOnce(
 			new Promise((resolve) => {
@@ -116,7 +116,8 @@ describe('PrintSection', () => {
 			resolvePrint?.({ ok: true, bytesWritten: 3 });
 		});
 
-		await waitFor(() => expect(screen.getByText(/3 bytes/)).toBeInTheDocument());
+		expect(screen.queryByText(/3 bytes/)).not.toBeInTheDocument();
+		expect(screen.getByText('Printer port must be between 1 and 65535')).toBeInTheDocument();
 	});
 
 	it('shows prepared raw print bytes in the inspector after sending', async () => {
