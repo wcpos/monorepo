@@ -49,6 +49,8 @@ interface RenderContext {
 	align: 'left' | 'center' | 'right';
 	lineHasText: boolean;
 	allowAlignedRawTextLine: boolean;
+	styleDepth: number;
+	deferAlignedTeardownDepth?: number;
 	supportsCp932: boolean;
 	normalizeText: boolean;
 	emitEscPrintMode: boolean;
@@ -136,6 +138,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		align: 'left',
 		lineHasText: false,
 		allowAlignedRawTextLine: true,
+		styleDepth: 0,
 		supportsCp932: resolvedLanguage === 'esc-pos' && enableCp932,
 		normalizeText: resolvedLanguage === 'esc-pos',
 		emitEscPrintMode: resolvedLanguage === 'esc-pos' && emitEscPrintMode,
@@ -274,7 +277,9 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			const previous = context.escposPrintMode?.bold ?? false;
 			encoder.bold(true);
 			updateEscposPrintMode(encoder, context, { bold: true });
+			context.styleDepth++;
 			walkNodes(encoder, node.children, context);
+			context.styleDepth--;
 			encoder.bold(previous);
 			updateEscposPrintMode(encoder, context, { bold: previous });
 			break;
@@ -283,14 +288,18 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			const previous = context.escposPrintMode?.underline ?? false;
 			encoder.underline(true);
 			updateEscposPrintMode(encoder, context, { underline: true });
+			context.styleDepth++;
 			walkNodes(encoder, node.children, context);
+			context.styleDepth--;
 			encoder.underline(previous);
 			updateEscposPrintMode(encoder, context, { underline: previous });
 			break;
 		}
 		case 'invert':
 			encoder.invert(true);
+			context.styleDepth++;
 			walkNodes(encoder, node.children, context);
+			context.styleDepth--;
 			encoder.invert(false);
 			break;
 		case 'size': {
@@ -308,7 +317,9 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 				encoder.raw([0x1b, 0x33, Math.min(255, context.activeScaledLineSpacing * 30)]);
 			}
 			updateEscposSize(encoder, context, node.width, node.height);
+			context.styleDepth++;
 			walkNodes(encoder, node.children, context);
+			context.styleDepth--;
 			updateEscposSize(encoder, context, previousWidth, previousHeight);
 			break;
 		}
@@ -318,6 +329,9 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			writePrinterAlign(encoder, context, node.mode);
 			if (!writeAlignedStandaloneTextLine(encoder, node.children, context)) {
 				walkAlignedNodes(encoder, node.children, context);
+			}
+			if (context.lineHasText) {
+				writeNewline(encoder, context);
 			}
 			context.align = previous;
 			writePrinterAlign(encoder, context, previous);
@@ -454,9 +468,26 @@ function walkAlignedNodes(
 ): void {
 	for (let index = 0; index < nodes.length; index++) {
 		const node = nodes[index];
+		if (
+			isDirectStyledHeading(node) &&
+			nodes[index + 1] &&
+			isInlineTextContent([node]) &&
+			!containsScaledText([node]) &&
+			writeAlignedStandaloneTextLine(encoder, [node], context)
+		) {
+			continue;
+		}
+		const previousDeferAlignedTeardownDepth = context.deferAlignedTeardownDepth;
+		const deferAlignedTeardownDepth =
+			isDirectStyledHeading(node) && nodes[index + 1]
+				? singleStyledLineDepth(node, context.styleDepth)
+				: undefined;
+		context.deferAlignedTeardownDepth = deferAlignedTeardownDepth;
 		walkNode(encoder, node, context);
-		if (context.lineHasText && isDirectStyledHeading(node) && nodes[index + 1]?.type === 'text') {
+		context.deferAlignedTeardownDepth = previousDeferAlignedTeardownDepth;
+		if (context.lineHasText && isDirectStyledHeading(node) && nodes[index + 1]) {
 			writeNewline(encoder, context);
+			writePrinterAlign(encoder, context, context.align);
 		}
 	}
 }
@@ -468,6 +499,27 @@ function isDirectStyledHeading(node: ThermalNode): boolean {
 		node.type === 'invert' ||
 		node.type === 'size'
 	);
+}
+
+function singleStyledLineDepth(node: ThermalNode, styleDepth: number): number | undefined {
+	switch (node.type) {
+		case 'raw-text':
+			return node.value && !hasLineBreak(node.value) ? styleDepth : undefined;
+		case 'text':
+			return isInlineTextContent(node.children) ? styleDepth : undefined;
+		case 'bold':
+		case 'underline':
+		case 'invert':
+		case 'size':
+			return styledLineDepth(node.children, styleDepth + 1);
+		default:
+			return undefined;
+	}
+}
+
+function styledLineDepth(nodes: readonly ThermalNode[], styleDepth: number): number | undefined {
+	if (nodes.length === 1) return singleStyledLineDepth(nodes[0] as ThermalNode, styleDepth);
+	return isInlineTextContent(nodes) ? styleDepth : undefined;
 }
 
 function writeNewline(encoder: ReceiptPrinterEncoder, context: RenderContext, lines = 1): void {
@@ -717,8 +769,10 @@ function writeAlignedStandaloneTextLine(
 		activeScaledLineSpacing: undefined,
 	});
 	context.lineHasText = true;
-	writeNewline(encoder, context);
-	writePrinterAlign(encoder, context, context.align);
+	if (!shouldDeferAlignedTeardown(context)) {
+		writeNewline(encoder, context);
+		writePrinterAlign(encoder, context, context.align);
+	}
 	return true;
 }
 
@@ -751,9 +805,18 @@ function writeAlignedRawTextLine(
 	}
 	writeText(encoder, normalized, context.supportsCp932, context.normalizeText);
 	context.lineHasText = true;
-	writeNewline(encoder, context);
-	writePrinterAlign(encoder, context, context.align);
+	if (!shouldDeferAlignedTeardown(context)) {
+		writeNewline(encoder, context);
+		writePrinterAlign(encoder, context, context.align);
+	}
 	return true;
+}
+
+function shouldDeferAlignedTeardown(context: RenderContext): boolean {
+	return (
+		context.deferAlignedTeardownDepth !== undefined &&
+		context.styleDepth >= context.deferAlignedTeardownDepth
+	);
 }
 
 function writePrinterAlign(

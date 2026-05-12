@@ -1613,6 +1613,40 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expectVisuallyCentered(simulateEscposTextLines(bytes, 48), '[ Refunded ]', 48);
 	});
 
+	it('keeps multiple styled aligned text nodes on separate physical lines', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<bold><text>Line 1</text><text>Line 2</text></bold>
+				</align>
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const lines = simulateEscposTextLines(bytes, 48)
+			.filter((line) => line.text === 'Line 1' || line.text === 'Line 2')
+			.map((line) => line.text);
+
+		expect(lines).toEqual(['Line 1', 'Line 2']);
+	});
+
+	it('finishes mixed inline styled headings before the following centered line', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<bold>Hello <underline>world</underline></bold>
+					<text>After</text>
+				</align>
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const lines = simulateEscposTextLines(bytes, 48);
+
+		expectVisuallyCentered(lines, 'Hello world', 48);
+		expectVisuallyCentered(lines, 'After', 48);
+	});
+
 	it('forces left printer alignment before physical center padding after a scaled centered heading', () => {
 		const bytes = encodeThermalTemplate(
 			`<receipt paper-width="48">
@@ -1636,6 +1670,32 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(statusIndex).toBeGreaterThan(0);
 		expect(lastEscposAlignBefore(bytes, statusIndex)).toBe(0);
 		expect(statusLine).toBe(`${' '.repeat(14)}[STATUS LINE 21 CH]`);
+	});
+
+	it('finishes styled scaled heading state before moving to the next centered line', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<bold><size width="2"><text>BIG CENTER 14</text></size></bold>
+					<text>[STATUS LINE 21 CH]</text>
+				</align>
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const bigIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('BIG CENTER 14')));
+		const newlineAfterBig = sequenceIndex(bytes, [0x0a], bigIndex);
+		const statusIndex = sequenceIndex(
+			bytes,
+			Array.from(new TextEncoder().encode('[STATUS LINE 21 CH]'))
+		);
+		const betweenLines = Array.from(bytes.slice(newlineAfterBig, statusIndex));
+
+		expect(newlineAfterBig).toBeGreaterThan(bigIndex);
+		expect(statusIndex).toBeGreaterThan(newlineAfterBig);
+		expect(betweenLines).not.toContain(0x11);
+		expect(betweenLines).not.toContain(0x38);
+		expect(sequenceIndex(bytes, [0x1b, 0x61, 0x00], newlineAfterBig)).toBeLessThan(statusIndex);
 	});
 
 	it('does not carry hidden center padding from one aligned block into the next scaled heading', () => {
