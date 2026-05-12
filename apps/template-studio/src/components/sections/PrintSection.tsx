@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 
+import { flushSync } from 'react-dom';
+
 import { decodeEscposBytes } from '../../lib/escpos-decoder';
 import { debugError, debugInfo, debugLog } from '../../lib/debug-log';
 import { bytesToBase64 } from '../../studio-core';
@@ -35,6 +37,7 @@ export function PrintSection({
 	const [preparedEscposBytes, setPreparedEscposBytes] = useState<Uint8Array | null>(null);
 	const latestUiActionIdRef = useRef(0);
 	const latestTcpRequestIdRef = useRef(0);
+	const sendButtonRef = useRef<HTMLButtonElement | null>(null);
 
 	const isThermal = rendered?.kind === 'thermal';
 
@@ -98,11 +101,27 @@ export function PrintSection({
 				elapsedMs: Math.round(performance.now() - start),
 				target,
 			});
-			setLastResult({
-				kind: 'success',
-				message: `print queued · ${prepared.escposBytes.length} bytes · ${target.host}:${target.port}`,
+			debugInfo('print-section', 'releasing send button after raw TCP dispatch', {
+				actionId,
+				tcpRequestId,
+				elapsedMs: Math.round(performance.now() - start),
 			});
-			setSending(false);
+			flushSync(() => {
+				setLastResult({
+					kind: 'success',
+					message: `print queued · ${prepared.escposBytes.length} bytes · ${target.host}:${target.port}`,
+				});
+				setSending(false);
+			});
+			queueMicrotask(() => {
+				debugLog('print-section', 'send button DOM after dispatch release', {
+					actionId,
+					tcpRequestId,
+					elapsedMs: Math.round(performance.now() - start),
+					buttonDisabled: sendButtonRef.current?.disabled ?? null,
+					buttonText: sendButtonRef.current?.textContent ?? null,
+				});
+			});
 			const result = await printPromise;
 			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
 			if (latestTcpRequestIdRef.current !== tcpRequestId) return;
@@ -210,6 +229,7 @@ export function PrintSection({
 					Test connection
 				</button>
 				<button
+					ref={sendButtonRef}
 					type="button"
 					className="primary"
 					onClick={sendToPrinter}
