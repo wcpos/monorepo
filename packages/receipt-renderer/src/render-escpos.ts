@@ -89,6 +89,12 @@ interface EncodedReceiptPrinterCommand {
 	payload?: ArrayLike<number>;
 }
 
+interface ReceiptPrinterEncoderWithCapabilities extends ReceiptPrinterEncoder {
+	readonly printerCapabilities?: {
+		readonly newline?: string;
+	};
+}
+
 export function thermalBarcodeImageKey(input: {
 	kind: 'barcode' | 'qrcode';
 	value: string;
@@ -515,6 +521,7 @@ function encodeReceiptPrinterBytesSafely(encoder: ReceiptPrinterEncoder): Uint8A
 		mode: 'lines'
 	) => EncodedReceiptPrinterCommand[][];
 	const lines = encodeLines.call(encoder, 'lines');
+	const newlineBytes = receiptPrinterNewlineBytes(encoder);
 	const bytes: number[] = [];
 	let lastCommand: EncodedReceiptPrinterCommand | undefined;
 
@@ -523,14 +530,24 @@ function encodeReceiptPrinterBytesSafely(encoder: ReceiptPrinterEncoder): Uint8A
 			appendPayload(bytes, command.payload);
 			lastCommand = command;
 		}
-		bytes.push(0x0a, 0x0d);
+		bytes.push(...newlineBytes);
 	}
 
 	if (lastCommand?.type === 'pulse') {
-		bytes.splice(Math.max(0, bytes.length - 2), 2);
+		bytes.splice(Math.max(0, bytes.length - newlineBytes.length), newlineBytes.length);
 	}
 
 	return Uint8Array.from(bytes);
+}
+
+function receiptPrinterNewlineBytes(encoder: ReceiptPrinterEncoder): number[] {
+	const newline =
+		(encoder as ReceiptPrinterEncoderWithCapabilities).printerCapabilities?.newline ?? '\n\r';
+	const bytes: number[] = [];
+	for (let index = 0; index < newline.length; index++) {
+		bytes.push(newline.charCodeAt(index));
+	}
+	return bytes;
 }
 
 function appendPayload(bytes: number[], payload: ArrayLike<number> | undefined): void {
