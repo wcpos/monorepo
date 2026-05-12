@@ -3,7 +3,6 @@ import { useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { decodeEscposBytes } from '../../lib/escpos-decoder';
-import { debugError, debugInfo, debugLog } from '../../lib/debug-log';
 import { bytesToBase64 } from '../../studio-core';
 import { printRawTcp } from '../../studio-api';
 
@@ -37,7 +36,6 @@ export function PrintSection({
 	const [preparedEscposBytes, setPreparedEscposBytes] = useState<Uint8Array | null>(null);
 	const latestUiActionIdRef = useRef(0);
 	const latestTcpRequestIdRef = useRef(0);
-	const sendButtonRef = useRef<HTMLButtonElement | null>(null);
 
 	const isThermal = rendered?.kind === 'thermal';
 
@@ -69,24 +67,13 @@ export function PrintSection({
 		const actionId = latestUiActionIdRef.current + 1;
 		latestUiActionIdRef.current = actionId;
 		let tcpRequestId: number | null = null;
-		debugInfo('print-section', 'send to printer clicked', {
-			renderedBytes: rendered.escposBytes.length,
-			renderedBase64Length: rendered.escposBase64.length,
-			hasPrepareRawPrint: Boolean(onPrepareRawPrint),
-		});
 		setSending(true);
 		onError(null);
 		const start = performance.now();
 		try {
 			setPreparedEscposBytes(null);
 			const target = getConnectionTarget();
-			debugLog('print-section', 'connection target resolved', target);
 			const prepared = onPrepareRawPrint ? await onPrepareRawPrint() : rendered;
-			debugInfo('print-section', 'raw print payload prepared', {
-				bytes: prepared.escposBytes.length,
-				base64Length: prepared.escposBase64.length,
-				elapsedMs: Math.round(performance.now() - start),
-			});
 			if (latestUiActionIdRef.current !== actionId) return;
 			setPreparedEscposBytes(prepared.escposBytes);
 			const printPromise = printRawTcp({
@@ -95,32 +82,12 @@ export function PrintSection({
 			});
 			tcpRequestId = latestTcpRequestIdRef.current + 1;
 			latestTcpRequestIdRef.current = tcpRequestId;
-			debugInfo('print-section', 'raw TCP print request dispatched', {
-				bytes: prepared.escposBytes.length,
-				base64Length: prepared.escposBase64.length,
-				elapsedMs: Math.round(performance.now() - start),
-				target,
-			});
-			debugInfo('print-section', 'releasing send button after raw TCP dispatch', {
-				actionId,
-				tcpRequestId,
-				elapsedMs: Math.round(performance.now() - start),
-			});
 			flushSync(() => {
 				setLastResult({
 					kind: 'success',
 					message: `print queued · ${prepared.escposBytes.length} bytes · ${target.host}:${target.port}`,
 				});
 				setSending(false);
-			});
-			queueMicrotask(() => {
-				debugLog('print-section', 'send button DOM after dispatch release', {
-					actionId,
-					tcpRequestId,
-					elapsedMs: Math.round(performance.now() - start),
-					buttonDisabled: sendButtonRef.current?.disabled ?? null,
-					buttonText: sendButtonRef.current?.textContent ?? null,
-				});
 			});
 			const result = await printPromise;
 			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
@@ -130,11 +97,6 @@ export function PrintSection({
 			) {
 				return;
 			}
-			debugInfo('print-section', 'raw TCP print succeeded', {
-				bytesWritten: result.bytesWritten,
-				elapsedSeconds: elapsed,
-				target,
-			});
 			setLastResult({
 				kind: 'success',
 				message: `${result.bytesWritten} bytes · ${elapsed}s · ${target.host}:${target.port}`,
@@ -147,10 +109,6 @@ export function PrintSection({
 			) {
 				return;
 			}
-			debugError('print-section', 'raw TCP print failed', {
-				error: error instanceof Error ? error.stack || error.message : String(error),
-				elapsedMs: Math.round(performance.now() - start),
-			});
 			setLastResult({ kind: 'error', message });
 		} finally {
 			if (latestUiActionIdRef.current === actionId) setSending(false);
@@ -166,7 +124,6 @@ export function PrintSection({
 		try {
 			setPreparedEscposBytes(null);
 			const target = getConnectionTarget();
-			debugInfo('print-section', 'test connection requested', target);
 			const testPromise = printRawTcp({
 				...target,
 				data: bytesToBase64(TEST_CONNECTION_BYTES),
@@ -175,10 +132,6 @@ export function PrintSection({
 			latestTcpRequestIdRef.current = tcpRequestId;
 			const result = await testPromise;
 			if (latestTcpRequestIdRef.current !== tcpRequestId) return;
-			debugInfo('print-section', 'test connection succeeded', {
-				target,
-				bytesWritten: result.bytesWritten,
-			});
 			setLastResult({
 				kind: 'success',
 				message: `connection OK (${result.bytesWritten} bytes)`,
@@ -192,9 +145,6 @@ export function PrintSection({
 			) {
 				return;
 			}
-			debugError('print-section', 'test connection failed', {
-				error: error instanceof Error ? error.stack || error.message : String(error),
-			});
 			setLastResult({ kind: 'error', message });
 		} finally {
 			if (latestUiActionIdRef.current === actionId) setSending(false);
@@ -233,7 +183,6 @@ export function PrintSection({
 					Test connection
 				</button>
 				<button
-					ref={sendButtonRef}
 					type="button"
 					className="primary"
 					onClick={sendToPrinter}

@@ -5,12 +5,10 @@ import { type RawTcpWritableSocket, writeRawTcpPayload } from '../../scripts/raw
 describe('Template Studio raw TCP printing', () => {
 	it('acknowledges after queueing the payload instead of waiting for socket drain', () => {
 		const events: string[] = [];
-		let writeCallback: ((error?: Error) => void) | undefined;
 		const data = Buffer.from('print bytes');
 		const socket: RawTcpWritableSocket = {
-			write(_data, callback) {
+			write(_data) {
 				events.push('write');
-				writeCallback = callback;
 				return false;
 			},
 			end() {
@@ -24,10 +22,6 @@ describe('Template Studio raw TCP printing', () => {
 		});
 
 		expect(bytesQueued).toBe(data.byteLength);
-		expect(events).toEqual(['write', 'end']);
-		expect(writeCallback).toBeTypeOf('function');
-
-		writeCallback?.();
 		expect(events).toEqual(['write', 'end']);
 	});
 });

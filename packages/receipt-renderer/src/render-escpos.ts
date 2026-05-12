@@ -83,7 +83,6 @@ const FULL_WIDTH_TEXT_RE =
 	/[\u1100-\u115f\u2329\u232a\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe10-\ufe19\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/u;
 const KANJI_MODE_ON = [0x1c, 0x26];
 const KANJI_MODE_OFF = [0x1c, 0x2e];
-const RECEIPT_RENDERER_DEBUG_FLAG = '__WCPOS_DEBUG_RECEIPT_RENDERER__';
 
 interface EncodedReceiptPrinterCommand {
 	type?: string;
@@ -115,20 +114,6 @@ export function thermalImageAssetKey(input: { src: string; width?: number }): st
 export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}): Uint8Array {
 	const { printerModel, enableCp932 = false, emitEscPrintMode = true } = options;
 	const columns = options.columns ?? ast.paperWidth;
-	debugReceiptRenderer('renderEscpos started', {
-		columns,
-		astPaperWidth: ast.paperWidth,
-		printerModel,
-		language: options.language,
-		enableCp932,
-		emitEscPrintMode,
-		imageMode: options.imageMode,
-		imageAssetCount: options.imageAssets ? Object.keys(options.imageAssets).length : 0,
-		barcodeMode: options.barcodeMode,
-		barcodeImageCount: options.barcodeImages ? Object.keys(options.barcodeImages).length : 0,
-		hasFullReceiptRasterImage: Boolean(options.fullReceiptRasterImage),
-		childCount: ast.children.length,
-	});
 
 	const encoderOpts: Record<string, unknown> = {
 		columns,
@@ -167,15 +152,6 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 
 	if (options.fullReceiptRasterImage) {
 		const image = options.fullReceiptRasterImage;
-		debugReceiptRenderer('writing full receipt raster image', {
-			width: image.width,
-			height: image.height,
-			normalizedWidth: normalizeImageWidth(image.width),
-			normalizedHeight: normalizeImageHeight(image.height),
-			algorithm: image.algorithm ?? context.imageAlgorithm,
-			threshold: image.threshold ?? context.imageThreshold,
-			pixelDataLength: image.image.data?.length,
-		});
 		writeImage(encoder, image.image, {
 			width: normalizeImageWidth(image.width),
 			height: normalizeImageHeight(image.height),
@@ -183,26 +159,12 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 			threshold: image.threshold ?? context.imageThreshold,
 		});
 		writePostRasterCommands(encoder, ast.children, context);
-		const encoded = encodeReceiptPrinterBytesSafely(encoder);
-		const normalized = normalizeEscposBytes(encoded, resolvedLanguage);
-		debugReceiptRenderer('full receipt raster encoded', {
-			encodedByteLength: encoded.byteLength,
-			normalizedByteLength: normalized.byteLength,
-			resolvedLanguage,
-		});
-		return normalized;
+		return normalizeEscposBytes(encodeReceiptPrinterBytesSafely(encoder), resolvedLanguage);
 	}
 
 	walkNodes(encoder, ast.children, context);
 
-	const encoded = encoder.encode();
-	const normalized = normalizeEscposBytes(encoded, resolvedLanguage);
-	debugReceiptRenderer('normal receipt encoded', {
-		encodedByteLength: encoded.byteLength,
-		normalizedByteLength: normalized.byteLength,
-		resolvedLanguage,
-	});
-	return normalized;
+	return normalizeEscposBytes(encoder.encode(), resolvedLanguage);
 }
 
 function normalizeEscposBytes(
@@ -422,12 +384,6 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 						})
 					];
 				if (asset) {
-					debugReceiptRenderer('writing barcode raster asset', {
-						kind: 'barcode',
-						hasAsset: true,
-						width: asset.width,
-						height: asset.height,
-					});
 					writeImage(encoder, asset.image, {
 						width: normalizeImageWidth(asset.width),
 						height: normalizeImageHeight(asset.height),
@@ -437,11 +393,6 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 					break;
 				}
 			}
-			debugReceiptRenderer('using encoder barcode command', {
-				barcodeType: node.barcodeType,
-				valueLength: node.value.length,
-				height: node.height,
-			});
 			encoder.barcode(node.value, node.barcodeType, node.height);
 			break;
 		case 'qrcode':
@@ -455,12 +406,6 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 						})
 					];
 				if (asset) {
-					debugReceiptRenderer('writing qrcode raster asset', {
-						kind: 'qrcode',
-						hasAsset: true,
-						width: asset.width,
-						height: asset.height,
-					});
 					writeImage(encoder, asset.image, {
 						width: normalizeImageWidth(asset.width),
 						height: normalizeImageHeight(asset.height),
@@ -470,36 +415,15 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 					break;
 				}
 			}
-			debugReceiptRenderer('using encoder qrcode command', {
-				valueLength: node.value.length,
-				size: node.size,
-			});
 			encoder.qrcode(node.value, 2, node.size);
 			break;
 		case 'image': {
 			const asset =
 				context.imageAssets[thermalImageAssetKey({ src: node.src, width: node.width })] ??
 				context.imageAssets[node.src];
-			if (!asset) {
-				debugReceiptRenderer('thermal image node skipped: missing raster asset', {
-					src: node.src,
-					requestedWidth: node.width,
-					imageAssetCount: Object.keys(context.imageAssets).length,
-				});
-				break;
-			}
+			if (!asset) break;
 			const width = normalizeImageWidth(asset.width);
 			const height = normalizeImageHeight(asset.height);
-			debugReceiptRenderer('writing thermal image raster asset', {
-				src: node.src,
-				requestedWidth: node.width,
-				assetWidth: asset.width,
-				assetHeight: asset.height,
-				normalizedWidth: width,
-				normalizedHeight: height,
-				algorithm: asset.algorithm ?? context.imageAlgorithm,
-				threshold: asset.threshold ?? context.imageThreshold,
-			});
 			writeImage(encoder, asset.image, {
 				width,
 				height,
@@ -589,12 +513,6 @@ function writeImage(
 		threshold: number;
 	}
 ): void {
-	debugReceiptRenderer('encoder.image call', {
-		width: options.width,
-		height: options.height,
-		algorithm: options.algorithm,
-		threshold: options.threshold,
-	});
 	encoder.image(image, options.width, options.height, options.algorithm, options.threshold);
 }
 
@@ -606,13 +524,9 @@ function encodeReceiptPrinterBytesSafely(encoder: ReceiptPrinterEncoder): Uint8A
 	const newlineBytes = receiptPrinterNewlineBytes(encoder);
 	const bytes: number[] = [];
 	let lastCommand: EncodedReceiptPrinterCommand | undefined;
-	let commandCount = 0;
-	let payloadCount = 0;
 
 	for (const line of lines) {
 		for (const command of line) {
-			commandCount++;
-			if (command.payload) payloadCount++;
 			appendPayload(bytes, command.payload);
 			lastCommand = command;
 		}
@@ -623,47 +537,7 @@ function encodeReceiptPrinterBytesSafely(encoder: ReceiptPrinterEncoder): Uint8A
 		bytes.splice(Math.max(0, bytes.length - newlineBytes.length), newlineBytes.length);
 	}
 
-	const result = Uint8Array.from(bytes);
-	debugReceiptRenderer('safe encoder byte extraction completed', {
-		lineCount: lines.length,
-		commandCount,
-		payloadCount,
-		newlineByteLength: newlineBytes.length,
-		trailingPulse: lastCommand?.type === 'pulse',
-		byteLength: result.byteLength,
-	});
-	return result;
-}
-
-function debugReceiptRenderer(message: string, details: Record<string, unknown>): void {
-	if (!isReceiptRendererDebugEnabled()) return;
-	console.debug('[receipt-renderer render-escpos]', message, sanitizeDebugDetails(details));
-}
-
-function isReceiptRendererDebugEnabled(): boolean {
-	return Boolean(
-		(globalThis as typeof globalThis & Record<typeof RECEIPT_RENDERER_DEBUG_FLAG, unknown>)[
-			RECEIPT_RENDERER_DEBUG_FLAG
-		]
-	);
-}
-
-function sanitizeDebugDetails(details: Record<string, unknown>): Record<string, unknown> {
-	return Object.fromEntries(
-		Object.entries(details).map(([key, value]) => [
-			key,
-			key.toLowerCase().includes('src') && typeof value === 'string'
-				? sanitizeImageSrc(value)
-				: value,
-		])
-	);
-}
-
-function sanitizeImageSrc(src: string): string {
-	if (src.startsWith('data:')) return `[data-url:${src.length}]`;
-	if (src.startsWith('/')) return `[root-relative-url:${src.length}]`;
-	if (/^https?:/i.test(src)) return `[http-url:${src.length}]`;
-	return `[image-src:${src.length}]`;
+	return Uint8Array.from(bytes);
 }
 
 function receiptPrinterNewlineBytes(encoder: ReceiptPrinterEncoder): number[] {
@@ -830,13 +704,6 @@ function writeAlignedStandaloneTextLine(
 
 	const padding = alignedPadding(normalized, context.columns, context.align, activeWidth);
 	if (padding === undefined) return false;
-	debugReceiptRenderer('writing physically padded aligned standalone text line', {
-		align: context.align,
-		columns: context.columns,
-		activeWidth,
-		textDisplayWidth: displayWidth(normalized),
-		paddingCharacters: padding.length,
-	});
 	writePrinterAlign(encoder, context, 'left');
 	if (padding) {
 		writeRawSpaces(encoder, padding.length);
@@ -878,13 +745,6 @@ function writeAlignedRawTextLine(
 
 	const padding = alignedPadding(normalized, context.columns, context.align, activeWidth);
 	if (padding === undefined) return false;
-	debugReceiptRenderer('writing physically padded aligned raw text line', {
-		align: context.align,
-		columns: context.columns,
-		activeWidth,
-		textDisplayWidth: displayWidth(normalized),
-		paddingCharacters: padding.length,
-	});
 	writePrinterAlign(encoder, context, 'left');
 	if (padding) {
 		writeRawSpaces(encoder, padding.length);

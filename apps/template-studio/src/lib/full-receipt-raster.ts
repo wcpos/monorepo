@@ -1,7 +1,5 @@
 import type { ThermalRasterImage } from '@wcpos/receipt-renderer';
 
-import { debugError, debugInfo, debugLog, debugWarn } from './debug-log';
-
 export function normalizeRasterCaptureSize(input: {
 	width: number;
 	height: number;
@@ -51,15 +49,10 @@ export async function rasterizeReceiptElement(input: {
 	hostDocument?: Document;
 }): Promise<ThermalRasterImage> {
 	if (!input.receiptNode) {
-		debugError('full-receipt-raster', 'receipt node missing before rasterization');
 		throw new Error('Receipt preview is not ready for raster printing.');
 	}
 
 	const hostDocument = input.hostDocument ?? input.receiptNode.ownerDocument ?? document;
-	debugInfo('full-receipt-raster', 'rasterization started', {
-		maxWidth: input.maxWidth,
-		baseURI: hostDocument.baseURI,
-	});
 	await waitForFonts(hostDocument);
 	await waitForImages(input.receiptNode);
 
@@ -70,16 +63,6 @@ export async function rasterizeReceiptElement(input: {
 		width: sourceWidth,
 		height: sourceHeight,
 		maxWidth: input.maxWidth,
-	});
-	debugLog('full-receipt-raster', 'measured receipt preview', {
-		clientWidth: input.receiptNode.clientWidth,
-		clientHeight: input.receiptNode.clientHeight,
-		rectWidth: sourceRect.width,
-		rectHeight: sourceRect.height,
-		sourceWidth,
-		sourceHeight,
-		targetWidth: size.width,
-		targetHeight: size.height,
 	});
 	const clone = input.receiptNode.cloneNode(true) as HTMLElement;
 	inlineComputedStyles(
@@ -93,45 +76,25 @@ export async function rasterizeReceiptElement(input: {
 	clone.style.minWidth = `${size.sourceWidth}px`;
 	clone.style.maxWidth = `${size.sourceWidth}px`;
 	clone.style.transform = '';
-	debugLog('full-receipt-raster', 'cloned and styled receipt DOM', {
-		elementCount: clone.querySelectorAll('*').length,
-		imageCount: clone.querySelectorAll('img').length,
-	});
 	await inlineImageSourcesForRaster(clone, hostDocument);
 
 	const serialized = new XMLSerializer().serializeToString(clone);
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.sourceWidth} ${size.sourceHeight}" preserveAspectRatio="xMinYMin meet"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
-	debugLog('full-receipt-raster', 'serialized raster SVG', {
-		serializedLength: serialized.length,
-		svgLength: svg.length,
-	});
 	const image = await loadSvgAsImage(svg);
 	const canvas = hostDocument.createElement('canvas');
 	canvas.width = size.width;
 	canvas.height = size.height;
 	const context = canvas.getContext('2d');
 	if (!context) {
-		debugError('full-receipt-raster', 'canvas context unavailable', {
-			width: size.width,
-			height: size.height,
-		});
 		throw new Error('Unable to create canvas context for raster printing.');
 	}
 
 	context.fillStyle = '#fff';
 	context.fillRect(0, 0, size.width, size.height);
 	context.drawImage(image, 0, 0, size.width, size.height);
-	const imageData = context.getImageData(0, 0, size.width, size.height);
-	debugInfo('full-receipt-raster', 'raster image data captured', {
-		width: size.width,
-		height: size.height,
-		pixelDataLength: imageData.data?.length,
-		algorithm: 'atkinson',
-		threshold: 128,
-	});
 
 	return {
-		image: imageData,
+		image: context.getImageData(0, 0, size.width, size.height),
 		width: size.width,
 		height: size.height,
 		algorithm: 'atkinson',
@@ -144,36 +107,13 @@ export async function inlineImageSourcesForRaster(
 	hostDocument: Document
 ): Promise<void> {
 	const images = Array.from(container.querySelectorAll('img[src]'));
-	debugLog('full-receipt-raster', 'inlining image sources for SVG serialization', {
-		imageCount: images.length,
-	});
 	await Promise.all(
-		images.map(async (image, index) => {
+		images.map(async (image) => {
 			const src = image.getAttribute('src')?.trim();
-			if (!src) {
-				debugWarn('full-receipt-raster', 'image has empty src', { index });
-				return;
-			}
-			if (isInlineImageSource(src)) {
-				debugLog('full-receipt-raster', 'image source already inline', {
-					index,
-					scheme: src.slice(0, src.indexOf(':')),
-					length: src.length,
-				});
-				return;
-			}
+			if (!src || isInlineImageSource(src)) return;
 
 			const dataUrl = await fetchImageAsDataUrl(src, hostDocument);
-			if (dataUrl) {
-				image.setAttribute('src', dataUrl);
-				debugInfo('full-receipt-raster', 'image source inlined', {
-					index,
-					src,
-					dataUrlLength: dataUrl.length,
-				});
-			} else {
-				debugWarn('full-receipt-raster', 'image source could not be inlined', { index, src });
-			}
+			if (dataUrl) image.setAttribute('src', dataUrl);
 		})
 	);
 }
@@ -190,42 +130,14 @@ async function fetchImageAsDataUrl(
 		const url = new URL(src, hostDocument.baseURI);
 		const hostUrl = new URL(hostDocument.baseURI);
 		if (!/^https?:$/i.test(url.protocol) || url.origin !== hostUrl.origin) return undefined;
-		const urlString = url.toString();
 
-		debugLog('full-receipt-raster', 'fetching image for inline raster source', {
-			src,
-			url: urlString,
-		});
-		const response = await fetch(urlString, { credentials: 'same-origin' });
-		debugLog('full-receipt-raster', 'image fetch completed', {
-			src,
-			url: urlString,
-			status: response.status,
-			ok: response.ok,
-			contentType: response.headers.get('content-type'),
-		});
+		const response = await fetch(url.toString(), { credentials: 'same-origin' });
 		if (!response.ok) return undefined;
 		const contentType = response.headers.get('content-type') ?? '';
-		if (!contentType.toLowerCase().startsWith('image/')) {
-			debugWarn('full-receipt-raster', 'image fetch returned non-image content', {
-				src,
-				url: urlString,
-				contentType,
-			});
-			return undefined;
-		}
+		if (!contentType.toLowerCase().startsWith('image/')) return undefined;
 		const bytes = new Uint8Array(await response.arrayBuffer());
-		debugLog('full-receipt-raster', 'image fetch body read', {
-			src,
-			url: urlString,
-			byteLength: bytes.byteLength,
-		});
 		return `data:${contentType};base64,${bytesToBase64(bytes)}`;
-	} catch (error) {
-		debugError('full-receipt-raster', 'image fetch failed', {
-			src,
-			error: error instanceof Error ? error.message : String(error),
-		});
+	} catch {
 		return undefined;
 	}
 }
@@ -255,66 +167,20 @@ function isThermalControlElement(element: Element): boolean {
 
 async function waitForFonts(hostDocument: Document): Promise<void> {
 	const fonts = hostDocument.fonts as FontFaceSet | undefined;
-	if (!fonts?.ready) {
-		debugLog('full-receipt-raster', 'font readiness API unavailable');
-		return;
-	}
-	debugLog('full-receipt-raster', 'waiting for fonts');
+	if (!fonts?.ready) return;
 	await fonts.ready;
-	debugLog('full-receipt-raster', 'fonts ready');
 }
 
 function waitForImages(receiptNode: Element): Promise<void> {
-	const images = Array.from(receiptNode.querySelectorAll('img'));
-	const pendingImages = images.filter((image) => !image.complete);
-	debugLog('full-receipt-raster', 'checking preview images before rasterization', {
-		pendingImageCount: pendingImages.length,
-		totalImageCount: images.length,
-	});
-	if (pendingImages.length === 0) return Promise.resolve();
+	const images = Array.from(receiptNode.querySelectorAll('img')).filter((image) => !image.complete);
+	if (images.length === 0) return Promise.resolve();
 
 	return Promise.all(
-		pendingImages.map(
-			(image, index) =>
+		images.map(
+			(image) =>
 				new Promise<void>((resolve) => {
-					let settled = false;
-					const finish = (loaded: boolean) => {
-						if (settled) return;
-						settled = true;
-						if (loaded) {
-							debugLog('full-receipt-raster', 'preview image loaded', {
-								index,
-								src: image.currentSrc || image.src,
-								naturalWidth: image.naturalWidth,
-								naturalHeight: image.naturalHeight,
-							});
-						} else {
-							debugWarn('full-receipt-raster', 'preview image failed before rasterization', {
-								index,
-								src: image.currentSrc || image.src,
-							});
-						}
-						resolve();
-					};
-					if (image.complete) {
-						finish(image.naturalWidth > 0 || image.naturalHeight > 0);
-						return;
-					}
-					image.addEventListener(
-						'load',
-						() => {
-							finish(true);
-						},
-						{ once: true }
-					);
-					image.addEventListener(
-						'error',
-						() => {
-							finish(false);
-						},
-						{ once: true }
-					);
-					if (image.complete) finish(image.naturalWidth > 0 || image.naturalHeight > 0);
+					image.addEventListener('load', () => resolve(), { once: true });
+					image.addEventListener('error', () => resolve(), { once: true });
 				})
 		)
 	).then(() => undefined);
@@ -347,17 +213,8 @@ function inlineComputedStyles(
 function loadSvgAsImage(svg: string): Promise<HTMLImageElement> {
 	return new Promise((resolve, reject) => {
 		const image = new Image();
-		image.onload = () => {
-			debugInfo('full-receipt-raster', 'SVG loaded as image', {
-				naturalWidth: image.naturalWidth,
-				naturalHeight: image.naturalHeight,
-			});
-			resolve(image);
-		};
-		image.onerror = () => {
-			debugError('full-receipt-raster', 'SVG image load failed', { svgLength: svg.length });
-			reject(new Error('Unable to render receipt preview as raster image.'));
-		};
+		image.onload = () => resolve(image);
+		image.onerror = () => reject(new Error('Unable to render receipt preview as raster image.'));
 		image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 	});
 }

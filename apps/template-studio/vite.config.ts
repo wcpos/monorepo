@@ -114,47 +114,20 @@ function templateStudioPlugin(): Plugin {
 			});
 
 			server.middlewares.use('/__studio/print/raw-tcp', async (request, response) => {
-				logRawTcpPrint('info', 'request received', {
-					method: request.method,
-					remoteAddress: request.socket.remoteAddress,
-					hostHeader: request.headers.host,
-					origin: request.headers.origin,
-					contentLength: request.headers['content-length'],
-					userAgent: request.headers['user-agent'],
-				});
 				if (request.method !== 'POST') {
-					logRawTcpPrint('warn', 'rejected: method not allowed', {
-						method: request.method,
-						remoteAddress: request.socket.remoteAddress,
-					});
 					response.statusCode = 405;
 					response.end('Method Not Allowed');
 					return;
 				}
 
 				const rawTcpClientAllowed = isRawTcpClientAddressAllowed(request.socket.remoteAddress);
-				logRawTcpPrint('info', 'client address evaluated', {
-					remoteAddress: request.socket.remoteAddress,
-					allowed: rawTcpClientAllowed,
-				});
 				if (!rawTcpClientAllowed) {
-					logRawTcpPrint('warn', 'rejected: non-local client', {
-						remoteAddress: request.socket.remoteAddress,
-						hostHeader: request.headers.host,
-						origin: request.headers.origin,
-					});
 					response.statusCode = 403;
 					response.end('Raw TCP printing is only available from loopback or private LAN clients');
 					return;
 				}
 
 				if (request.headers['x-wcpos-template-studio'] !== '1') {
-					logRawTcpPrint('warn', 'rejected: missing studio header', {
-						remoteAddress: request.socket.remoteAddress,
-						hostHeader: request.headers.host,
-						origin: request.headers.origin,
-						studioHeader: request.headers['x-wcpos-template-studio'],
-					});
 					response.statusCode = 403;
 					response.end('Raw TCP printing requires the Template Studio request header');
 					return;
@@ -166,40 +139,17 @@ function templateStudioPlugin(): Plugin {
 					const port = Number(body.port);
 					const data = typeof body.data === 'string' ? body.data : '';
 					const decoded = data ? Buffer.from(data, 'base64') : Buffer.alloc(0);
-					logRawTcpPrint('info', 'payload parsed', {
-						remoteAddress: request.socket.remoteAddress,
-						host,
-						port,
-						base64Length: data.length,
-						decodedByteLength: decoded.byteLength,
-					});
 
 					if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !data) {
-						logRawTcpPrint('warn', 'rejected: invalid payload', {
-							remoteAddress: request.socket.remoteAddress,
-							host,
-							port: body.port,
-							hasData: Boolean(data),
-						});
 						response.statusCode = 400;
 						response.end('Expected host, port, and base64 data');
 						return;
 					}
 
-					logRawTcpPrint('info', 'connecting', {
-						remoteAddress: request.socket.remoteAddress,
-						host,
-						port,
-						base64Length: data.length,
-					});
 					const bytesWritten = await sendRawTcp(host, port, decoded);
-					logRawTcpPrint('info', 'sent', { host, port, bytesWritten });
 					response.setHeader('Content-Type', 'application/json');
 					response.end(JSON.stringify({ ok: true, bytesWritten }));
 				} catch (error) {
-					logRawTcpPrint('error', 'failed', {
-						error: error instanceof Error ? error.message : String(error),
-					});
 					response.statusCode =
 						typeof (error as HttpStatusError).statusCode === 'number'
 							? (error as HttpStatusError).statusCode!
@@ -217,15 +167,6 @@ function isAbortError(error: unknown): boolean {
 	return error instanceof Error && error.name === 'AbortError';
 }
 
-function logRawTcpPrint(
-	level: 'info' | 'warn' | 'error',
-	message: string,
-	details: Record<string, unknown>
-): void {
-	const prefix = '[template-studio raw-tcp]';
-	console[level](prefix, message, details);
-}
-
 function readJsonBody(
 	request: import('node:http').IncomingMessage
 ): Promise<Record<string, unknown>> {
@@ -241,40 +182,21 @@ function readJsonBody(
 				rejected = true;
 				const error = new Error('Request body too large') as HttpStatusError;
 				error.statusCode = 413;
-				logRawTcpPrint('warn', 'body rejected: too large', {
-					maxBodyBytes: rawTcpMaxBodyBytes,
-					receivedBytes,
-				});
 				reject(error);
 				request.destroy(error);
 				return;
 			}
 			raw += chunk;
-			logRawTcpPrint('info', 'body chunk received', {
-				chunkLength: chunk.length,
-				totalLength: raw.length,
-				receivedBytes,
-			});
 		});
 		request.on('end', () => {
 			if (rejected) return;
 			try {
-				logRawTcpPrint('info', 'body read completed', { rawLength: raw.length, receivedBytes });
 				resolve(JSON.parse(raw || '{}') as Record<string, unknown>);
 			} catch (error) {
-				logRawTcpPrint('error', 'body JSON parse failed', {
-					rawLength: raw.length,
-					error: error instanceof Error ? error.message : String(error),
-				});
 				reject(error);
 			}
 		});
-		request.on('error', (error) => {
-			logRawTcpPrint('error', 'body stream failed', {
-				error: error instanceof Error ? error.message : String(error),
-			});
-			reject(error);
-		});
+		request.on('error', reject);
 	});
 }
 
