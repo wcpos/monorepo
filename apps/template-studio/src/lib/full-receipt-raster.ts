@@ -78,7 +78,7 @@ export async function rasterizeReceiptElement(input: {
 	clone.style.transform = '';
 
 	const serialized = new XMLSerializer().serializeToString(clone);
-	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.sourceWidth} ${size.sourceHeight}"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.sourceWidth} ${size.sourceHeight}" preserveAspectRatio="xMinYMin meet"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
 	const image = await loadSvgAsImage(svg);
 	const canvas = hostDocument.createElement('canvas');
 	canvas.width = size.width;
