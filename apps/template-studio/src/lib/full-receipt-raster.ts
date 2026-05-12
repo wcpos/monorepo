@@ -127,8 +127,11 @@ async function fetchImageAsDataUrl(
 	hostDocument: Document
 ): Promise<string | undefined> {
 	try {
-		const url = new URL(src, hostDocument.baseURI).toString();
-		const response = await fetch(url, { credentials: 'include' });
+		const url = new URL(src, hostDocument.baseURI);
+		const hostUrl = new URL(hostDocument.baseURI);
+		if (!/^https?:$/i.test(url.protocol) || url.origin !== hostUrl.origin) return undefined;
+
+		const response = await fetch(url.toString(), { credentials: 'same-origin' });
 		if (!response.ok) return undefined;
 		const contentType = response.headers.get('content-type') ?? '';
 		if (!contentType.toLowerCase().startsWith('image/')) return undefined;

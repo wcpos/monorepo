@@ -108,8 +108,27 @@ describe('full receipt raster helpers', () => {
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			new URL('/coffee-monster.png', document.baseURI).toString(),
-			{ credentials: 'include' }
+			{ credentials: 'same-origin' }
 		);
 		expect(host.querySelector('img')?.getAttribute('src')).toMatch(/^data:image\/png;base64,/);
+	});
+
+	it('skips cross-origin image sources when inlining full-receipt raster SVG', async () => {
+		const originalFetch = globalThis.fetch;
+		const fetchMock = vi.fn() as unknown as typeof fetch;
+		globalThis.fetch = fetchMock;
+		const host = document.createElement('div');
+		host.innerHTML = '<img src="https://example.com/coffee-monster.png" />';
+
+		try {
+			await inlineImageSourcesForRaster(host, document);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(host.querySelector('img')?.getAttribute('src')).toBe(
+			'https://example.com/coffee-monster.png'
+		);
 	});
 });
