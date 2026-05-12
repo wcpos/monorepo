@@ -808,12 +808,9 @@ function writeAlignedStandaloneTextLine(
 	context: RenderContext
 ): boolean {
 	const activeWidth = context.escposPrintMode?.width ?? 1;
-	const activeHeight = context.escposPrintMode?.height ?? 1;
 	if (
 		context.align === 'left' ||
 		context.lineHasText ||
-		activeWidth > 1 ||
-		activeHeight > 1 ||
 		!isInlineTextContent(nodes) ||
 		containsScaledText(nodes)
 	) {
@@ -829,6 +826,32 @@ function writeAlignedStandaloneTextLine(
 		displayWidth(normalized) > context.columns
 	) {
 		return false;
+	}
+
+	if (activeWidth > 1) {
+		const padding = scaledAlignedPadding(normalized, context.columns, context.align, activeWidth);
+		if (padding === undefined) return false;
+		debugReceiptRenderer('writing scaled aligned standalone text line', {
+			align: context.align,
+			columns: context.columns,
+			activeWidth,
+			textDisplayWidth: displayWidth(normalized),
+			paddingCharacters: padding.length,
+		});
+		encoder.align('left');
+		if (padding) {
+			writeRawSpaces(encoder, padding.length);
+		}
+		walkNodes(encoder, nodes, {
+			...context,
+			align: 'left',
+			lineHasText: false,
+			allowAlignedRawTextLine: false,
+		});
+		context.lineHasText = true;
+		writeNewline(encoder, context);
+		encoder.align(context.align);
+		return true;
 	}
 
 	encoder.align('left');
@@ -849,6 +872,7 @@ function writeAlignedStandaloneTextLine(
 			],
 		]
 	);
+	restoreActiveLineSpacing(encoder, context);
 	context.lineHasText = false;
 	encoder.align(context.align);
 	return true;
@@ -861,7 +885,7 @@ function writeAlignedRawTextLine(
 ): boolean {
 	const activeWidth = context.escposPrintMode?.width ?? 1;
 	const activeHeight = context.escposPrintMode?.height ?? 1;
-	if (context.align === 'left' || context.lineHasText || activeWidth > 1 || activeHeight > 1) {
+	if (context.align === 'left' || context.lineHasText || (activeHeight > 1 && activeWidth === 1)) {
 		return false;
 	}
 
@@ -875,11 +899,52 @@ function writeAlignedRawTextLine(
 		return false;
 	}
 
+	if (activeWidth > 1) {
+		const padding = scaledAlignedPadding(normalized, context.columns, context.align, activeWidth);
+		if (padding === undefined) return false;
+		debugReceiptRenderer('writing scaled aligned raw text line', {
+			align: context.align,
+			columns: context.columns,
+			activeWidth,
+			textDisplayWidth: displayWidth(normalized),
+			paddingCharacters: padding.length,
+		});
+		encoder.align('left');
+		if (padding) {
+			writeRawSpaces(encoder, padding.length);
+		}
+		writeText(encoder, normalized, context.supportsCp932, context.normalizeText);
+		context.lineHasText = true;
+		writeNewline(encoder, context);
+		encoder.align(context.align);
+		return true;
+	}
+
 	encoder.align('left');
 	encoder.table([{ width: context.columns, align: context.align }], [[normalized]]);
+	restoreActiveLineSpacing(encoder, context);
 	context.lineHasText = false;
 	encoder.align(context.align);
 	return true;
+}
+
+function writeRawSpaces(encoder: ReceiptPrinterEncoder, count: number): void {
+	if (count <= 0) return;
+	encoder.raw(new Array(count).fill(0x20));
+}
+
+function scaledAlignedPadding(
+	value: string,
+	columns: number,
+	align: 'center' | 'right',
+	activeWidth: number
+): string | undefined {
+	const visualWidth = displayWidth(value) * activeWidth;
+	if (visualWidth > columns) return undefined;
+	const remaining = Math.max(0, columns - visualWidth);
+	const visualPadding = align === 'center' ? Math.floor(remaining / 2) : remaining;
+	const paddingCharacters = Math.floor(visualPadding / activeWidth);
+	return ' '.repeat(paddingCharacters);
 }
 
 function normalizeThermalText(value: string): string {
