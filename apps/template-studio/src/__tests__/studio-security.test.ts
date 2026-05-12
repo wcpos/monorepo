@@ -29,6 +29,8 @@ describe('Template Studio dev-server security helpers', () => {
 	});
 
 	it('allows raw TCP printing from loopback and private LAN browser clients', () => {
+		expect(isRawTcpClientAddressAllowed(undefined)).toBe(false);
+		expect(isRawTcpClientAddressAllowed('127.0.0.1')).toBe(true);
 		expect(isRawTcpClientAddressAllowed('::1')).toBe(true);
 		expect(isRawTcpClientAddressAllowed('::ffff:127.0.0.1')).toBe(true);
 		expect(isRawTcpClientAddressAllowed('192.168.1.20')).toBe(true);
@@ -38,5 +40,7 @@ describe('Template Studio dev-server security helpers', () => {
 		expect(isRawTcpClientAddressAllowed('172.31.255.255')).toBe(true);
 		expect(isRawTcpClientAddressAllowed('172.32.0.1')).toBe(false);
 		expect(isRawTcpClientAddressAllowed('8.8.8.8')).toBe(false);
+		expect(isRawTcpClientAddressAllowed('')).toBe(false);
+		expect(isRawTcpClientAddressAllowed('not-an-ip')).toBe(false);
 	});
 });
