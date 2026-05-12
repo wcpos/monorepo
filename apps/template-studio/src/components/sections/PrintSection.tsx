@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { decodeEscposBytes } from '../../lib/escpos-decoder';
 import { debugError, debugInfo, debugLog } from '../../lib/debug-log';
@@ -33,6 +33,8 @@ export function PrintSection({
 	const [sending, setSending] = useState(false);
 	const [showInspector, setShowInspector] = useState(false);
 	const [preparedEscposBytes, setPreparedEscposBytes] = useState<Uint8Array | null>(null);
+	const latestUiActionIdRef = useRef(0);
+	const latestTcpRequestIdRef = useRef(0);
 
 	const isThermal = rendered?.kind === 'thermal';
 
@@ -61,6 +63,9 @@ export function PrintSection({
 
 	async function sendToPrinter() {
 		if (!rendered || rendered.kind !== 'thermal') return;
+		const actionId = latestUiActionIdRef.current + 1;
+		latestUiActionIdRef.current = actionId;
+		let tcpRequestId: number | null = null;
 		debugInfo('print-section', 'send to printer clicked', {
 			renderedBytes: rendered.escposBytes.length,
 			renderedBase64Length: rendered.escposBase64.length,
@@ -79,11 +84,14 @@ export function PrintSection({
 				base64Length: prepared.escposBase64.length,
 				elapsedMs: Math.round(performance.now() - start),
 			});
+			if (latestUiActionIdRef.current !== actionId) return;
 			setPreparedEscposBytes(prepared.escposBytes);
 			const printPromise = printRawTcp({
 				...target,
 				data: prepared.escposBase64,
 			});
+			tcpRequestId = latestTcpRequestIdRef.current + 1;
+			latestTcpRequestIdRef.current = tcpRequestId;
 			debugInfo('print-section', 'raw TCP print request dispatched', {
 				bytes: prepared.escposBytes.length,
 				base64Length: prepared.escposBase64.length,
@@ -97,6 +105,7 @@ export function PrintSection({
 			setSending(false);
 			const result = await printPromise;
 			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
+			if (latestTcpRequestIdRef.current !== tcpRequestId) return;
 			debugInfo('print-section', 'raw TCP print succeeded', {
 				bytesWritten: result.bytesWritten,
 				elapsedSeconds: elapsed,
@@ -108,27 +117,41 @@ export function PrintSection({
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
+			if (
+				tcpRequestId === null
+					? latestUiActionIdRef.current !== actionId
+					: latestTcpRequestIdRef.current !== tcpRequestId
+			) {
+				return;
+			}
 			debugError('print-section', 'raw TCP print failed', {
 				error: error instanceof Error ? error.stack || error.message : String(error),
 				elapsedMs: Math.round(performance.now() - start),
 			});
 			setLastResult({ kind: 'error', message });
 		} finally {
-			setSending(false);
+			if (latestUiActionIdRef.current === actionId) setSending(false);
 		}
 	}
 
 	async function testConnection() {
+		const actionId = latestUiActionIdRef.current + 1;
+		latestUiActionIdRef.current = actionId;
+		let tcpRequestId: number | null = null;
 		setSending(true);
 		onError(null);
 		try {
 			setPreparedEscposBytes(null);
 			const target = getConnectionTarget();
 			debugInfo('print-section', 'test connection requested', target);
-			const result = await printRawTcp({
+			const testPromise = printRawTcp({
 				...target,
 				data: bytesToBase64(TEST_CONNECTION_BYTES),
 			});
+			tcpRequestId = latestTcpRequestIdRef.current + 1;
+			latestTcpRequestIdRef.current = tcpRequestId;
+			const result = await testPromise;
+			if (latestTcpRequestIdRef.current !== tcpRequestId) return;
 			debugInfo('print-section', 'test connection succeeded', {
 				target,
 				bytesWritten: result.bytesWritten,
@@ -139,12 +162,19 @@ export function PrintSection({
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
+			if (
+				tcpRequestId === null
+					? latestUiActionIdRef.current !== actionId
+					: latestTcpRequestIdRef.current !== tcpRequestId
+			) {
+				return;
+			}
 			debugError('print-section', 'test connection failed', {
 				error: error instanceof Error ? error.stack || error.message : String(error),
 			});
 			setLastResult({ kind: 'error', message });
 		} finally {
-			setSending(false);
+			if (latestUiActionIdRef.current === actionId) setSending(false);
 		}
 	}
 
