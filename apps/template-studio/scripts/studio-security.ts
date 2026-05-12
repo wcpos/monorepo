@@ -28,6 +28,37 @@ export function isLoopbackAddress(address: string | undefined): boolean {
 	);
 }
 
+export function isRawTcpClientAddressAllowed(address: string | undefined): boolean {
+	if (!address) return false;
+	return isLoopbackAddress(address) || isPrivateLanAddress(address);
+}
+
+function isPrivateLanAddress(address: string): boolean {
+	const normalized = stripIpv6MappedPrefix(address.toLowerCase());
+	const octets = normalized.split('.').map((part) => Number(part));
+	if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet))) return false;
+	const [first, second, third, fourth] = octets;
+	if (
+		first === undefined ||
+		second === undefined ||
+		third === undefined ||
+		fourth === undefined ||
+		octets.some((octet) => octet < 0 || octet > 255)
+	) {
+		return false;
+	}
+
+	return (
+		first === 10 ||
+		(first === 172 && second >= 16 && second <= 31) ||
+		(first === 192 && second === 168)
+	);
+}
+
+function stripIpv6MappedPrefix(address: string): string {
+	return address.startsWith('::ffff:') ? address.slice('::ffff:'.length) : address;
+}
+
 function normalizeOrigin(rawUrl: string): string {
 	try {
 		return new URL(rawUrl).origin;

@@ -7,7 +7,7 @@ import { defineConfig, type Plugin } from 'vite';
 
 import {
 	allowedOriginsFromEnv,
-	isLoopbackAddress,
+	isRawTcpClientAddressAllowed,
 	isStoreOriginAllowed,
 	shouldForwardCookies,
 } from './scripts/studio-security';
@@ -118,14 +118,14 @@ function templateStudioPlugin(): Plugin {
 					return;
 				}
 
-				if (!isLoopbackAddress(request.socket.remoteAddress)) {
-					logRawTcpPrint('warn', 'rejected: non-loopback client', {
+				if (!isRawTcpClientAddressAllowed(request.socket.remoteAddress)) {
+					logRawTcpPrint('warn', 'rejected: non-local client', {
 						remoteAddress: request.socket.remoteAddress,
 						hostHeader: request.headers.host,
 						origin: request.headers.origin,
 					});
 					response.statusCode = 403;
-					response.end('Raw TCP printing is only available from loopback clients');
+					response.end('Raw TCP printing is only available from loopback or private LAN clients');
 					return;
 				}
 
