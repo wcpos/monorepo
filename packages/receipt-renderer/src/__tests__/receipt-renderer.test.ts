@@ -460,6 +460,27 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(includesSequence(bytes, [0x1d, 0x56])).toBe(true);
 	});
 
+	it('encodes a large full receipt raster without overflowing the call stack', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>After raster</text><feed lines="2" /><cut /></receipt>',
+			{},
+			{
+				columns: 42,
+				language: 'esc-pos',
+				fullReceiptRasterImage: {
+					image: opaqueBlackImageData(576, 1720),
+					width: 576,
+					height: 1720,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			}
+		);
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+		expect(includesSequence(bytes, [0x1d, 0x56])).toBe(true);
+	});
+
 	it('preserves center alignment for text after a raster image in the same align block', () => {
 		const ast = parseXml(
 			'<receipt><align mode="center"><image src="logo://store" width="64" /><text>Store Name</text></align><text>After</text></receipt>'

@@ -84,6 +84,11 @@ const FULL_WIDTH_TEXT_RE =
 const KANJI_MODE_ON = [0x1c, 0x26];
 const KANJI_MODE_OFF = [0x1c, 0x2e];
 
+interface EncodedReceiptPrinterCommand {
+	type?: string;
+	payload?: ArrayLike<number>;
+}
+
 export function thermalBarcodeImageKey(input: {
 	kind: 'barcode' | 'qrcode';
 	value: string;
@@ -148,7 +153,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 			threshold: image.threshold ?? context.imageThreshold,
 		});
 		writePostRasterCommands(encoder, ast.children, context);
-		return normalizeEscposBytes(encoder.encode(), resolvedLanguage);
+		return normalizeEscposBytes(encodeReceiptPrinterBytesSafely(encoder), resolvedLanguage);
 	}
 
 	walkNodes(encoder, ast.children, context);
@@ -503,6 +508,36 @@ function writeImage(
 	}
 ): void {
 	encoder.image(image, options.width, options.height, options.algorithm, options.threshold);
+}
+
+function encodeReceiptPrinterBytesSafely(encoder: ReceiptPrinterEncoder): Uint8Array {
+	const encodeLines = encoder.encode as unknown as (
+		mode: 'lines'
+	) => EncodedReceiptPrinterCommand[][];
+	const lines = encodeLines.call(encoder, 'lines');
+	const bytes: number[] = [];
+	let lastCommand: EncodedReceiptPrinterCommand | undefined;
+
+	for (const line of lines) {
+		for (const command of line) {
+			appendPayload(bytes, command.payload);
+			lastCommand = command;
+		}
+		bytes.push(0x0a, 0x0d);
+	}
+
+	if (lastCommand?.type === 'pulse') {
+		bytes.splice(Math.max(0, bytes.length - 2), 2);
+	}
+
+	return Uint8Array.from(bytes);
+}
+
+function appendPayload(bytes: number[], payload: ArrayLike<number> | undefined): void {
+	if (!payload) return;
+	for (let index = 0; index < payload.length; index++) {
+		bytes.push(payload[index] ?? 0);
+	}
 }
 
 function updateEscposPrintMode(
