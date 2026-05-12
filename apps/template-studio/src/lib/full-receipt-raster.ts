@@ -181,6 +181,7 @@ function waitForImages(receiptNode: Element): Promise<void> {
 				new Promise<void>((resolve) => {
 					image.addEventListener('load', () => resolve(), { once: true });
 					image.addEventListener('error', () => resolve(), { once: true });
+					if (image.complete) resolve();
 				})
 		)
 	).then(() => undefined);
