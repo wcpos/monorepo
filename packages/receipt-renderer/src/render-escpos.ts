@@ -353,12 +353,12 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 		case 'align': {
 			const previous = context.align;
 			context.align = node.mode;
-			encoder.align(node.mode);
+			writePrinterAlign(encoder, context, node.mode);
 			if (!writeAlignedStandaloneTextLine(encoder, node.children, context)) {
 				walkAlignedNodes(encoder, node.children, context);
 			}
 			context.align = previous;
-			encoder.align(previous);
+			writePrinterAlign(encoder, context, previous);
 			break;
 		}
 		case 'row': {
@@ -828,53 +828,30 @@ function writeAlignedStandaloneTextLine(
 		return false;
 	}
 
-	if (activeWidth > 1) {
-		const padding = scaledAlignedPadding(normalized, context.columns, context.align, activeWidth);
-		if (padding === undefined) return false;
-		debugReceiptRenderer('writing scaled aligned standalone text line', {
-			align: context.align,
-			columns: context.columns,
-			activeWidth,
-			textDisplayWidth: displayWidth(normalized),
-			paddingCharacters: padding.length,
-		});
-		encoder.align('left');
-		if (padding) {
-			writeRawSpaces(encoder, padding.length);
-		}
-		walkNodes(encoder, nodes, {
-			...context,
-			align: 'left',
-			lineHasText: false,
-			allowAlignedRawTextLine: false,
-		});
-		context.lineHasText = true;
-		writeNewline(encoder, context);
-		encoder.align(context.align);
-		return true;
+	const padding = alignedPadding(normalized, context.columns, context.align, activeWidth);
+	if (padding === undefined) return false;
+	debugReceiptRenderer('writing physically padded aligned standalone text line', {
+		align: context.align,
+		columns: context.columns,
+		activeWidth,
+		textDisplayWidth: displayWidth(normalized),
+		paddingCharacters: padding.length,
+	});
+	writePrinterAlign(encoder, context, 'left');
+	if (padding) {
+		writeRawSpaces(encoder, padding.length);
 	}
-
-	encoder.align('left');
-	encoder.table(
-		[{ width: context.columns, align: context.align }],
-		[
-			[
-				(cellEncoder: ReceiptPrinterEncoder) => {
-					walkNodes(cellEncoder, nodes, {
-						...context,
-						align: 'left',
-						lineHasText: false,
-						allowAlignedRawTextLine: false,
-						escposPrintMode: context.escposPrintMode ? { ...context.escposPrintMode } : undefined,
-						activeScaledLineSpacing: undefined,
-					});
-				},
-			],
-		]
-	);
-	restoreActiveLineSpacing(encoder, context);
-	context.lineHasText = false;
-	encoder.align(context.align);
+	walkNodes(encoder, nodes, {
+		...context,
+		align: 'left',
+		lineHasText: false,
+		allowAlignedRawTextLine: false,
+		escposPrintMode: context.escposPrintMode ? { ...context.escposPrintMode } : undefined,
+		activeScaledLineSpacing: undefined,
+	});
+	context.lineHasText = true;
+	writeNewline(encoder, context);
+	writePrinterAlign(encoder, context, context.align);
 	return true;
 }
 
@@ -899,33 +876,39 @@ function writeAlignedRawTextLine(
 		return false;
 	}
 
-	if (activeWidth > 1) {
-		const padding = scaledAlignedPadding(normalized, context.columns, context.align, activeWidth);
-		if (padding === undefined) return false;
-		debugReceiptRenderer('writing scaled aligned raw text line', {
-			align: context.align,
-			columns: context.columns,
-			activeWidth,
-			textDisplayWidth: displayWidth(normalized),
-			paddingCharacters: padding.length,
-		});
-		encoder.align('left');
-		if (padding) {
-			writeRawSpaces(encoder, padding.length);
-		}
-		writeText(encoder, normalized, context.supportsCp932, context.normalizeText);
-		context.lineHasText = true;
-		writeNewline(encoder, context);
-		encoder.align(context.align);
-		return true;
+	const padding = alignedPadding(normalized, context.columns, context.align, activeWidth);
+	if (padding === undefined) return false;
+	debugReceiptRenderer('writing physically padded aligned raw text line', {
+		align: context.align,
+		columns: context.columns,
+		activeWidth,
+		textDisplayWidth: displayWidth(normalized),
+		paddingCharacters: padding.length,
+	});
+	writePrinterAlign(encoder, context, 'left');
+	if (padding) {
+		writeRawSpaces(encoder, padding.length);
 	}
-
-	encoder.align('left');
-	encoder.table([{ width: context.columns, align: context.align }], [[normalized]]);
-	restoreActiveLineSpacing(encoder, context);
-	context.lineHasText = false;
-	encoder.align(context.align);
+	writeText(encoder, normalized, context.supportsCp932, context.normalizeText);
+	context.lineHasText = true;
+	writeNewline(encoder, context);
+	writePrinterAlign(encoder, context, context.align);
 	return true;
+}
+
+function writePrinterAlign(
+	encoder: ReceiptPrinterEncoder,
+	context: RenderContext,
+	align: 'left' | 'center' | 'right'
+): void {
+	// The encoder de-duplicates alignment state, but our physically padded
+	// text lines need an explicit ESC/POS alignment byte before the spaces.
+	// Otherwise a printer can keep the previous centered mode while receiving
+	// left-margin padding, which is the failure this path avoids.
+	encoder.align(align);
+	if (context.language !== 'esc-pos') return;
+	const value = align === 'center' ? 0x01 : align === 'right' ? 0x02 : 0x00;
+	encoder.raw([0x1b, 0x61, value]);
 }
 
 function writeRawSpaces(encoder: ReceiptPrinterEncoder, count: number): void {
@@ -933,7 +916,7 @@ function writeRawSpaces(encoder: ReceiptPrinterEncoder, count: number): void {
 	encoder.raw(new Array(count).fill(0x20));
 }
 
-function scaledAlignedPadding(
+function alignedPadding(
 	value: string,
 	columns: number,
 	align: 'center' | 'right',
