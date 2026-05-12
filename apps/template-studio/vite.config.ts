@@ -1,4 +1,3 @@
-import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -11,6 +10,7 @@ import {
 	isStoreOriginAllowed,
 	shouldForwardCookies,
 } from './scripts/studio-security';
+import { sendRawTcp } from './scripts/raw-tcp-print';
 import { resolveDefaultWooCommercePosRoot } from './scripts/studio-paths';
 import { listBundledTemplates } from './src/template-loader';
 
@@ -273,61 +273,6 @@ function readJsonBody(
 				error: error instanceof Error ? error.message : String(error),
 			});
 			reject(error);
-		});
-	});
-}
-
-function sendRawTcp(host: string, port: number, data: Buffer): Promise<number> {
-	return new Promise((resolve, reject) => {
-		logRawTcpPrint('info', 'socket opening', {
-			host,
-			port,
-			byteLength: data.byteLength,
-			timeoutMs: 5000,
-		});
-		const socket = net.createConnection({ host, port, timeout: 5000 }, () => {
-			logRawTcpPrint('info', 'socket connected', {
-				host,
-				port,
-				localAddress: socket.localAddress,
-				localPort: socket.localPort,
-				remoteAddress: socket.remoteAddress,
-				remotePort: socket.remotePort,
-			});
-			logRawTcpPrint('info', 'socket writing', { host, port, byteLength: data.byteLength });
-			socket.write(data, (error) => {
-				if (error) {
-					logRawTcpPrint('error', 'socket write failed', {
-						host,
-						port,
-						error: error.message,
-					});
-					reject(error);
-					return;
-				}
-				logRawTcpPrint('info', 'socket write completed', {
-					host,
-					port,
-					byteLength: data.byteLength,
-				});
-				socket.end();
-				resolve(data.byteLength);
-			});
-		});
-		socket.on('error', (error) => {
-			logRawTcpPrint('error', 'socket error', {
-				host,
-				port,
-				error: error instanceof Error ? error.message : String(error),
-			});
-			reject(error);
-		});
-		socket.on('close', (hadError) => {
-			logRawTcpPrint('info', 'socket closed', { host, port, hadError });
-		});
-		socket.on('timeout', () => {
-			logRawTcpPrint('error', 'socket timed out', { host, port, byteLength: data.byteLength });
-			socket.destroy(new Error('Raw TCP print timed out'));
 		});
 	});
 }
