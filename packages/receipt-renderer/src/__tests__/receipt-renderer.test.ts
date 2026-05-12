@@ -41,6 +41,15 @@ function sequenceIndex(bytes: Uint8Array, sequence: number[], fromIndex = 0): nu
 	);
 }
 
+function lastEscposAlignBefore(bytes: Uint8Array, beforeIndex: number): number | undefined {
+	for (let index = beforeIndex - 3; index >= 0; index--) {
+		if (bytes[index] === 0x1b && bytes[index + 1] === 0x61) {
+			return bytes[index + 2];
+		}
+	}
+	return undefined;
+}
+
 function countSequence(bytes: Uint8Array, sequence: number[]): number {
 	let count = 0;
 	let fromIndex = 0;
@@ -909,7 +918,7 @@ describe('@wcpos/receipt-renderer exports', () => {
 		);
 
 		expectVisuallyCentered(lines, '[ Cancelado ]', 48);
-		expect(lines.find((line) => line.text === '[ Cancelado ]')?.lineWidth).toBe(48);
+		expect(lines.find((line) => line.text === '[ Cancelado ]')?.xStart).toBe(17);
 	});
 
 	it('closes a centered scaled kitchen heading before the following rule', () => {
@@ -1602,6 +1611,31 @@ describe('@wcpos/receipt-renderer exports', () => {
 
 		expectScaledVisualCentered(bytes, 'Fiscal Receipt', 48);
 		expectVisuallyCentered(simulateEscposTextLines(bytes, 48), '[ Refunded ]', 48);
+	});
+
+	it('forces left printer alignment before physical center padding after a scaled centered heading', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<text>[CENTER NORMAL 21]</text>
+					<bold><size width="2"><text>BIG CENTER 14</text></size></bold>
+					<text>[STATUS LINE 21 CH]</text>
+				</align>
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const statusIndex = sequenceIndex(
+			bytes,
+			Array.from(new TextEncoder().encode('[STATUS LINE 21 CH]'))
+		);
+		const statusLine = decodePrintableAscii(bytes)
+			.split('\n')
+			.find((line) => line.includes('[STATUS LINE 21 CH]'));
+
+		expect(statusIndex).toBeGreaterThan(0);
+		expect(lastEscposAlignBefore(bytes, statusIndex)).toBe(0);
+		expect(statusLine).toBe(`${' '.repeat(14)}[STATUS LINE 21 CH]`);
 	});
 
 	it('does not carry hidden center padding from one aligned block into the next scaled heading', () => {
