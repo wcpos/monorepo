@@ -9,8 +9,19 @@ import {
 describe('full receipt raster helpers', () => {
 	it('scales receipt capture width to the printer dot budget and pads height', () => {
 		expect(normalizeRasterCaptureSize({ width: 720, height: 125, maxWidth: 576 })).toEqual({
+			sourceWidth: 720,
+			sourceHeight: 125,
 			width: 576,
 			height: 104,
+		});
+	});
+
+	it('upscales browser CSS paper width to the printer dot budget', () => {
+		expect(normalizeRasterCaptureSize({ width: 302, height: 900, maxWidth: 576 })).toEqual({
+			sourceWidth: 302,
+			sourceHeight: 900,
+			width: 576,
+			height: 1720,
 		});
 	});
 
