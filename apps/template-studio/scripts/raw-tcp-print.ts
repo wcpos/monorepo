@@ -26,6 +26,7 @@ export function sendRawTcp(host: string, port: number, data: Buffer): Promise<nu
 			try {
 				const bytesQueued = writeRawTcpPayload(socket, data, { host, port });
 				settled = true;
+				socket.setTimeout(0);
 				resolve(bytesQueued);
 			} catch (error) {
 				settled = true;
@@ -52,8 +53,8 @@ export function sendRawTcp(host: string, port: number, data: Buffer): Promise<nu
 			if (!settled) {
 				settled = true;
 				reject(error);
+				socket.destroy(error);
 			}
-			socket.destroy(error);
 		});
 	});
 }

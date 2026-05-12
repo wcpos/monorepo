@@ -164,13 +164,13 @@ function templateStudioPlugin(): Plugin {
 					const host = typeof body.host === 'string' ? body.host.trim() : '';
 					const port = Number(body.port);
 					const data = typeof body.data === 'string' ? body.data : '';
-					const decodedByteLength = data ? Buffer.from(data, 'base64').byteLength : 0;
+					const decoded = data ? Buffer.from(data, 'base64') : Buffer.alloc(0);
 					logRawTcpPrint('info', 'payload parsed', {
 						remoteAddress: request.socket.remoteAddress,
 						host,
 						port,
 						base64Length: data.length,
-						decodedByteLength,
+						decodedByteLength: decoded.byteLength,
 					});
 
 					if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !data) {
@@ -191,7 +191,7 @@ function templateStudioPlugin(): Plugin {
 						port,
 						base64Length: data.length,
 					});
-					const bytesWritten = await sendRawTcp(host, port, Buffer.from(data, 'base64'));
+					const bytesWritten = await sendRawTcp(host, port, decoded);
 					logRawTcpPrint('info', 'sent', { host, port, bytesWritten });
 					response.setHeader('Content-Type', 'application/json');
 					response.end(JSON.stringify({ ok: true, bytesWritten }));
