@@ -460,6 +460,52 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(includesSequence(bytes, [0x1d, 0x56])).toBe(true);
 	});
 
+	it('encodes a large full receipt raster without overflowing the call stack', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><text>After raster</text><feed lines="2" /><cut /></receipt>',
+			{},
+			{
+				columns: 42,
+				language: 'esc-pos',
+				fullReceiptRasterImage: {
+					image: opaqueBlackImageData(576, 1720),
+					width: 576,
+					height: 1720,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			}
+		);
+
+		expect(includesSequence(bytes, [0x1d, 0x76, 0x30])).toBe(true);
+		expect(includesSequence(bytes, [0x1d, 0x56])).toBe(true);
+	});
+
+	it('respects printer-model newline bytes for full receipt raster encoding', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt><feed lines="2" /><drawer /></receipt>',
+			{},
+			{
+				printerModel: 'hp-a779',
+				fullReceiptRasterImage: {
+					image: opaqueBlackImageData(64, 32),
+					width: 64,
+					height: 32,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			}
+		);
+		const imageIndex = sequenceIndex(bytes, [0x1d, 0x76, 0x30]);
+		const pulseIndex = sequenceIndex(bytes, [0x1b, 0x70], imageIndex);
+		const bytesBeforePulse = bytes.slice(imageIndex, pulseIndex);
+
+		expect(imageIndex).toBeGreaterThanOrEqual(0);
+		expect(pulseIndex).toBeGreaterThan(imageIndex);
+		expect(includesSequence(bytesBeforePulse, [0x0a, 0x0d])).toBe(false);
+		expect(countSequence(bytesBeforePulse, [0x0a])).toBe(3);
+	});
+
 	it('preserves center alignment for text after a raster image in the same align block', () => {
 		const ast = parseXml(
 			'<receipt><align mode="center"><image src="logo://store" width="64" /><text>Store Name</text></align><text>After</text></receipt>'
