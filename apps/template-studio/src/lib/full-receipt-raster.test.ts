@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+	inlineImageSourcesForRaster,
 	normalizeRasterCaptureSize,
 	rasterizeReceiptElement,
 	stripThermalControlNodesForRaster,
@@ -85,5 +86,30 @@ describe('full receipt raster helpers', () => {
 				'<receipt><text>Before</text><feed lines="2" /><text>After</text><feed lines="1" /><cut type="full"></cut><drawer /></receipt>'
 			)
 		).toBe('<receipt><text>Before</text><feed lines="2"/><text>After</text></receipt>');
+	});
+
+	it('inlines image sources before serializing full-receipt raster SVG', async () => {
+		const originalFetch = globalThis.fetch;
+		const fetchMock = vi.fn(
+			async () =>
+				new Response(new Blob(['image-bytes'], { type: 'image/png' }), {
+					headers: { 'content-type': 'image/png' },
+				})
+		) as typeof fetch;
+		globalThis.fetch = fetchMock;
+		const host = document.createElement('div');
+		host.innerHTML = '<img src="/coffee-monster.png" />';
+
+		try {
+			await inlineImageSourcesForRaster(host, document);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			new URL('/coffee-monster.png', document.baseURI).toString(),
+			{ credentials: 'include' }
+		);
+		expect(host.querySelector('img')?.getAttribute('src')).toMatch(/^data:image\/png;base64,/);
 	});
 });

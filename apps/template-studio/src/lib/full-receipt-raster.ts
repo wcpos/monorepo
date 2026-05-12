@@ -76,6 +76,7 @@ export async function rasterizeReceiptElement(input: {
 	clone.style.minWidth = `${size.sourceWidth}px`;
 	clone.style.maxWidth = `${size.sourceWidth}px`;
 	clone.style.transform = '';
+	await inlineImageSourcesForRaster(clone, hostDocument);
 
 	const serialized = new XMLSerializer().serializeToString(clone);
 	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.sourceWidth} ${size.sourceHeight}" preserveAspectRatio="xMinYMin meet"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
@@ -99,6 +100,51 @@ export async function rasterizeReceiptElement(input: {
 		algorithm: 'atkinson',
 		threshold: 128,
 	};
+}
+
+export async function inlineImageSourcesForRaster(
+	container: Element,
+	hostDocument: Document
+): Promise<void> {
+	const images = Array.from(container.querySelectorAll('img[src]'));
+	await Promise.all(
+		images.map(async (image) => {
+			const src = image.getAttribute('src')?.trim();
+			if (!src || isInlineImageSource(src)) return;
+
+			const dataUrl = await fetchImageAsDataUrl(src, hostDocument);
+			if (dataUrl) image.setAttribute('src', dataUrl);
+		})
+	);
+}
+
+function isInlineImageSource(src: string): boolean {
+	return /^(?:data|blob):/i.test(src);
+}
+
+async function fetchImageAsDataUrl(
+	src: string,
+	hostDocument: Document
+): Promise<string | undefined> {
+	try {
+		const url = new URL(src, hostDocument.baseURI).toString();
+		const response = await fetch(url, { credentials: 'include' });
+		if (!response.ok) return undefined;
+		const contentType = response.headers.get('content-type') ?? '';
+		if (!contentType.toLowerCase().startsWith('image/')) return undefined;
+		const bytes = new Uint8Array(await response.arrayBuffer());
+		return `data:${contentType};base64,${bytesToBase64(bytes)}`;
+	} catch {
+		return undefined;
+	}
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+	let binary = '';
+	for (const byte of bytes) {
+		binary += String.fromCharCode(byte);
+	}
+	return btoa(binary);
 }
 
 function stripTrailingThermalControlNodesFallback(template: string): string {
