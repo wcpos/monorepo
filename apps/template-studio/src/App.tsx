@@ -25,7 +25,6 @@ import {
 	maxDotsForPaperWidth,
 	renderThermalBarcodeAsset,
 } from './lib/thermal-image-assets';
-import { debugError, debugInfo, debugLog, debugWarn } from './lib/debug-log';
 import { createRandomReceipt, createRandomSeed, formatSeed } from './randomizer';
 import {
 	applyScenarioState,
@@ -288,44 +287,19 @@ export function App() {
 	}, [effectivePaperWidth, rendered]);
 
 	const renderRawThermalForPrint = React.useCallback(async () => {
-		debugInfo('raw-print', 'prepare requested', {
-			renderedKind: rendered?.kind ?? null,
-			templateId: selectedTemplate?.id ?? null,
-			templateEngine: selectedTemplate?.engine ?? null,
-			effectivePaperWidth,
-			effectiveThermalColumns,
-			printerModel: printerModel || null,
-			language,
-			fullReceiptRaster,
-			emitEscPrintMode,
-		});
 		if (rendered?.kind !== 'thermal') {
-			debugWarn('raw-print', 'aborted because rendered output is not thermal', {
-				renderedKind: rendered?.kind ?? null,
-			});
 			throw new Error('Thermal print output is not ready.');
 		}
 		if (!selectedTemplate || selectedTemplate.engine !== 'thermal') {
-			debugWarn('raw-print', 'returning existing output because selected template is not thermal', {
-				hasSelectedTemplate: Boolean(selectedTemplate),
-				templateEngine: selectedTemplate?.engine ?? null,
-			});
 			return rendered;
 		}
 
 		const maxWidth = maxDotsForPaperWidth(effectivePaperWidth);
-		debugLog('raw-print', 'resolved printer dot budget', { maxWidth });
 		if (fullReceiptRaster) {
-			const strippedContent = stripThermalControlNodesForRaster(selectedTemplate.content);
-			debugInfo('full-raster', 'rendering stripped raster preview', {
-				templateId: selectedTemplate.id,
-				originalTemplateLength: selectedTemplate.content.length,
-				strippedTemplateLength: strippedContent.length,
-			});
 			const rasterPreview = renderStudioTemplate({
 				template: {
 					...selectedTemplate,
-					content: strippedContent,
+					content: stripThermalControlNodesForRaster(selectedTemplate.content),
 				},
 				fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
 				paperWidth: effectivePaperWidth,
@@ -333,17 +307,7 @@ export function App() {
 				printerModel: printerModel || undefined,
 				language,
 			});
-			debugLog('full-raster', 'raster preview rendered', {
-				kind: rasterPreview.kind,
-				htmlLength: rasterPreview.html.length,
-				escposBytes: rasterPreview.kind === 'thermal' ? rasterPreview.escposBytes.length : null,
-			});
-			if (rasterPreview.kind !== 'thermal') {
-				debugWarn('full-raster', 'raster preview was not thermal; falling back', {
-					kind: rasterPreview.kind,
-				});
-				return rendered;
-			}
+			if (rasterPreview.kind !== 'thermal') return rendered;
 			const rasterHost = document.createElement('div');
 			rasterHost.style.position = 'absolute';
 			rasterHost.style.left = '-10000px';
@@ -353,14 +317,6 @@ export function App() {
 			rasterFrame.innerHTML = rasterPreview.html;
 			rasterHost.append(rasterFrame);
 			document.body.append(rasterHost);
-			debugLog('full-raster', 'hidden raster DOM attached', {
-				frameClassName: rasterFrame.className,
-				imageCount: rasterFrame.querySelectorAll('img').length,
-				htmlLength: rasterFrame.innerHTML.length,
-				clientWidth: rasterFrame.clientWidth,
-				clientHeight: rasterFrame.clientHeight,
-				rect: rectDetails(rasterFrame),
-			});
 			let fullReceiptRasterImage: ThermalRasterImage;
 			try {
 				fullReceiptRasterImage = await rasterizeReceiptElement({
@@ -368,27 +324,9 @@ export function App() {
 					maxWidth,
 					hostDocument: document,
 				});
-				debugInfo('full-raster', 'DOM rasterized', {
-					width: fullReceiptRasterImage.width,
-					height: fullReceiptRasterImage.height,
-					pixels: fullReceiptRasterImage.image.data?.length,
-					algorithm: fullReceiptRasterImage.algorithm,
-					threshold: fullReceiptRasterImage.threshold,
-				});
-			} catch (error) {
-				debugError('full-raster', 'rasterizeReceiptElement failed', {
-					error: error instanceof Error ? error.stack || error.message : String(error),
-				});
-				throw error;
 			} finally {
 				rasterHost.remove();
-				debugLog('full-raster', 'hidden raster DOM removed');
 			}
-			debugInfo('full-raster', 'encoding full receipt raster image', {
-				templateId: selectedTemplate.id,
-				rasterWidth: fullReceiptRasterImage.width,
-				rasterHeight: fullReceiptRasterImage.height,
-			});
 			const prepared = renderStudioTemplate({
 				template: selectedTemplate,
 				fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
@@ -403,76 +341,33 @@ export function App() {
 				},
 			});
 
-			debugInfo('full-raster', 'encoded full receipt raster output', {
-				kind: prepared.kind,
-				bytes: prepared.kind === 'thermal' ? prepared.escposBytes.length : null,
-				base64Length: prepared.kind === 'thermal' ? prepared.escposBase64.length : null,
-			});
 			if (prepared.kind !== 'thermal') return rendered;
 			return prepared;
 		}
 
-		debugInfo('raw-print', 'preparing normal raster asset print path', {
-			templateId: selectedTemplate.id,
-			templateLength: selectedTemplate.content.length,
-		});
 		const renderedTemplate = renderTemplatePlaceholders(selectedTemplate.content, rendered.data);
 		const assets = discoverThermalAssetRequests(renderedTemplate);
 		const imageAssets: ThermalImageAssets = {};
 		const barcodeImages: ThermalBarcodeImages = {};
-		debugLog('raw-print', 'discovered thermal assets', {
-			imageCount: assets.images.length,
-			barcodeCount: assets.barcodes.length,
-			images: assets.images.map(describeThermalImageRequest),
-			barcodes: assets.barcodes.map(describeThermalBarcodeRequest),
-		});
 
 		await Promise.all(
 			assets.images.map(async (image) => {
-				debugLog('raw-print', 'loading image asset', describeThermalImageRequest(image));
 				const asset = await loadThermalLogoAsset({
 					src: image.src,
 					requestedWidth: image.width ?? maxWidth,
 					maxWidth,
 				});
-				if (asset) {
-					debugInfo('raw-print', 'loaded image asset', {
-						key: thermalImageAssetKey(image),
-						width: asset.width,
-						height: asset.height,
-					});
-					imageAssets[thermalImageAssetKey(image)] = asset;
-				} else {
-					debugWarn('raw-print', 'image asset did not load', describeThermalImageRequest(image));
-				}
+				if (asset) imageAssets[thermalImageAssetKey(image)] = asset;
 			})
 		);
 
 		await Promise.all(
 			assets.barcodes.map(async (barcode) => {
-				debugLog('raw-print', 'rendering barcode asset', describeThermalBarcodeRequest(barcode));
 				const result = await renderThermalBarcodeAsset({ ...barcode, maxWidth });
-				if (result) {
-					debugInfo('raw-print', 'rendered barcode asset', {
-						key: result.key,
-						width: result.asset.width,
-						height: result.asset.height,
-					});
-					barcodeImages[result.key] = result.asset;
-				} else {
-					debugWarn(
-						'raw-print',
-						'barcode asset did not render',
-						describeThermalBarcodeRequest(barcode)
-					);
-				}
+				if (result) barcodeImages[result.key] = result.asset;
 			})
 		);
 
-		debugInfo('raw-print', 'encoding normal thermal output', {
-			imageAssetKeys: Object.keys(imageAssets),
-			barcodeImageKeys: Object.keys(barcodeImages),
-		});
 		const prepared = renderStudioTemplate({
 			template: selectedTemplate,
 			fixture: fixture as unknown as Parameters<typeof renderStudioTemplate>[0]['fixture'],
@@ -489,17 +384,11 @@ export function App() {
 			},
 		});
 
-		debugInfo('raw-print', 'encoded normal thermal output', {
-			kind: prepared.kind,
-			bytes: prepared.kind === 'thermal' ? prepared.escposBytes.length : null,
-			base64Length: prepared.kind === 'thermal' ? prepared.escposBase64.length : null,
-		});
 		if (prepared.kind !== 'thermal') return rendered;
 		return prepared;
 	}, [
 		effectivePaperWidth,
 		effectiveThermalColumns,
-		emitEscPrintMode,
 		fixture,
 		fullReceiptRaster,
 		language,
@@ -507,6 +396,7 @@ export function App() {
 		rendered,
 		selectedTemplate,
 		thermalPaperWidth,
+		emitEscPrintMode,
 	]);
 
 	React.useEffect(() => {
@@ -752,40 +642,6 @@ interface ThermalAssetRequests {
 	}[];
 }
 
-function describeThermalImageRequest(image: ThermalAssetRequests['images'][number]): {
-	sourceKind: string;
-	sourceLength: number;
-	width?: number;
-} {
-	return {
-		sourceKind: image.src.startsWith('data:')
-			? 'data-url'
-			: image.src.startsWith('/')
-				? 'root-relative-url'
-				: /^https?:/i.test(image.src)
-					? 'url'
-					: 'other',
-		sourceLength: image.src.length,
-		width: image.width,
-	};
-}
-
-function describeThermalBarcodeRequest(barcode: ThermalAssetRequests['barcodes'][number]): {
-	kind: 'barcode' | 'qrcode';
-	valueLength: number;
-	barcodeType?: string;
-	height?: number;
-	size?: number;
-} {
-	return {
-		kind: barcode.kind,
-		valueLength: barcode.value.length,
-		barcodeType: barcode.barcodeType,
-		height: barcode.height,
-		size: barcode.size,
-	};
-}
-
 export function renderTemplatePlaceholders(
 	template: string,
 	data: Record<string, unknown>
@@ -928,18 +784,4 @@ function parsePositiveInt(value: string | null | undefined): number | undefined 
 	if (!trimmed || !/^[1-9]\d*$/.test(trimmed)) return undefined;
 	const parsed = Number(trimmed);
 	return Number.isSafeInteger(parsed) ? parsed : undefined;
-}
-
-function rectDetails(element: Element): Record<string, number> {
-	const rect = element.getBoundingClientRect();
-	return {
-		x: rect.x,
-		y: rect.y,
-		width: rect.width,
-		height: rect.height,
-		top: rect.top,
-		right: rect.right,
-		bottom: rect.bottom,
-		left: rect.left,
-	};
 }
