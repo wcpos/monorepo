@@ -50,6 +50,7 @@ interface RenderContext {
 	lineHasText: boolean;
 	allowAlignedRawTextLine: boolean;
 	styleDepth: number;
+	deferAlignedTeardownDepth?: number;
 	supportsCp932: boolean;
 	normalizeText: boolean;
 	emitEscPrintMode: boolean;
@@ -543,7 +544,14 @@ function walkAlignedNodes(
 ): void {
 	for (let index = 0; index < nodes.length; index++) {
 		const node = nodes[index];
+		const previousDeferAlignedTeardownDepth = context.deferAlignedTeardownDepth;
+		const deferAlignedTeardownDepth =
+			isDirectStyledHeading(node) && nodes[index + 1]
+				? singleStyledLineDepth(node, context.styleDepth)
+				: undefined;
+		context.deferAlignedTeardownDepth = deferAlignedTeardownDepth;
 		walkNode(encoder, node, context);
+		context.deferAlignedTeardownDepth = previousDeferAlignedTeardownDepth;
 		if (context.lineHasText && isDirectStyledHeading(node) && nodes[index + 1]) {
 			writeNewline(encoder, context);
 			writePrinterAlign(encoder, context, context.align);
@@ -558,6 +566,31 @@ function isDirectStyledHeading(node: ThermalNode): boolean {
 		node.type === 'invert' ||
 		node.type === 'size'
 	);
+}
+
+function singleStyledLineDepth(node: ThermalNode, styleDepth: number): number | undefined {
+	switch (node.type) {
+		case 'raw-text':
+			return node.value && !hasLineBreak(node.value) ? styleDepth : undefined;
+		case 'text':
+			return isInlineTextContent(node.children) ? styleDepth : undefined;
+		case 'bold':
+		case 'underline':
+		case 'invert':
+			return singleChildStyledLineDepth(node.children, styleDepth + 1);
+		case 'size':
+			return singleChildStyledLineDepth(node.children, styleDepth + 1);
+		default:
+			return undefined;
+	}
+}
+
+function singleChildStyledLineDepth(
+	nodes: readonly ThermalNode[],
+	styleDepth: number
+): number | undefined {
+	if (nodes.length !== 1) return undefined;
+	return singleStyledLineDepth(nodes[0] as ThermalNode, styleDepth);
 }
 
 function writeNewline(encoder: ReceiptPrinterEncoder, context: RenderContext, lines = 1): void {
@@ -864,7 +897,7 @@ function writeAlignedStandaloneTextLine(
 		activeScaledLineSpacing: undefined,
 	});
 	context.lineHasText = true;
-	if (context.styleDepth === 0) {
+	if (!shouldDeferAlignedTeardown(context)) {
 		writeNewline(encoder, context);
 		writePrinterAlign(encoder, context, context.align);
 	}
@@ -907,11 +940,15 @@ function writeAlignedRawTextLine(
 	}
 	writeText(encoder, normalized, context.supportsCp932, context.normalizeText);
 	context.lineHasText = true;
-	if (context.styleDepth === 0) {
+	if (!shouldDeferAlignedTeardown(context)) {
 		writeNewline(encoder, context);
 		writePrinterAlign(encoder, context, context.align);
 	}
 	return true;
+}
+
+function shouldDeferAlignedTeardown(context: RenderContext): boolean {
+	return context.deferAlignedTeardownDepth === context.styleDepth;
 }
 
 function writePrinterAlign(

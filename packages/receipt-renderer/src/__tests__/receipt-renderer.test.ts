@@ -1613,6 +1613,23 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expectVisuallyCentered(simulateEscposTextLines(bytes, 48), '[ Refunded ]', 48);
 	});
 
+	it('keeps multiple styled aligned text nodes on separate physical lines', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<bold><text>Line 1</text><text>Line 2</text></bold>
+				</align>
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const lines = simulateEscposTextLines(bytes, 48)
+			.filter((line) => line.text === 'Line 1' || line.text === 'Line 2')
+			.map((line) => line.text);
+
+		expect(lines).toEqual(['Line 1', 'Line 2']);
+	});
+
 	it('forces left printer alignment before physical center padding after a scaled centered heading', () => {
 		const bytes = encodeThermalTemplate(
 			`<receipt paper-width="48">
