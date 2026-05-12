@@ -12,6 +12,7 @@ import {
 } from './scripts/studio-security';
 import { sendRawTcp } from './scripts/raw-tcp-print';
 import { resolveDefaultWooCommercePosRoot } from './scripts/studio-paths';
+import { appendDiagnosticTemplates } from './src/diagnostic-templates';
 import { listBundledTemplates } from './src/template-loader';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -48,7 +49,7 @@ function templateStudioPlugin(): Plugin {
 						templatesDir: pathToFileURL(galleryTemplatesDir),
 					});
 					response.setHeader('Content-Type', 'application/json');
-					response.end(JSON.stringify(templates));
+					response.end(JSON.stringify(appendDiagnosticTemplates(templates)));
 				} catch (error) {
 					response.statusCode = 500;
 					response.end(error instanceof Error ? error.message : String(error));

@@ -11,6 +11,7 @@ import {
 	renderTemplatePlaceholders,
 } from '../App';
 import { countPreviewLines } from '../components/Stage';
+import { appendDiagnosticTemplates } from '../diagnostic-templates';
 import { createRandomReceipt } from '../randomizer';
 import { fetchWpPreview, printRawTcp } from '../studio-api';
 import {
@@ -62,6 +63,27 @@ describe('template studio rendering harness', () => {
 			'thermal-sample',
 		]);
 		expect(templates.every((template) => template.source === 'bundled-gallery')).toBe(true);
+	});
+
+	it('appends the thermal centering diagnostic template after gallery templates', async () => {
+		const templates = await listBundledTemplates({
+			templatesDir: new URL(`file://${process.cwd()}/src/test/fixtures/templates/`),
+		});
+		const withDiagnostics = appendDiagnosticTemplates(templates);
+
+		expect(withDiagnostics.map((template) => template.id)).toEqual([
+			'logicless-sample',
+			'thermal-sample',
+			'diagnostic-thermal-centering',
+		]);
+		expect(withDiagnostics.at(-1)).toMatchObject({
+			name: 'Diagnostic: Thermal centering',
+			engine: 'thermal',
+			paperWidth: '80mm',
+			source: 'bundled-gallery',
+		});
+		expect(withDiagnostics.at(-1)?.content).toContain('COL RULER 48:');
+		expect(withDiagnostics.at(-1)?.content).toContain('<size width="2">');
 	});
 
 	it('renders logicless templates with JS output and optional PHP diagnostic output', () => {
