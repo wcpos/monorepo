@@ -1,6 +1,8 @@
 import { renderForStudio } from '@wcpos/printer/encoder';
 import type { EscposRenderOptions } from '@wcpos/receipt-renderer';
 
+import { debugInfo, debugLog } from './lib/debug-log';
+
 export type TemplateEngine = 'logicless' | 'thermal';
 export type TemplateSource = 'bundled-gallery' | 'wp-env';
 export type PaperWidth = '58mm' | '80mm' | 'a4';
@@ -77,12 +79,36 @@ export function selectVisibleTemplate(
  */
 export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRenderResult {
 	const { template, fixture, paperWidth, printerModel, language, encodeOptions } = input;
+	debugInfo('studio-core', 'renderStudioTemplate started', {
+		templateId: template.id,
+		templateName: template.name,
+		engine: template.engine,
+		fixtureId: fixture.id,
+		paperWidth,
+		templatePaperWidth: template.paperWidth,
+		thermalColumns: input.thermalColumns,
+		printerModel,
+		language,
+		hasEncodeOptions: Boolean(encodeOptions),
+		fullReceiptRaster: Boolean(encodeOptions?.fullReceiptRasterImage),
+		imageAssetCount: encodeOptions?.imageAssets
+			? Object.keys(encodeOptions.imageAssets).length
+			: undefined,
+		barcodeImageCount: encodeOptions?.barcodeImages
+			? Object.keys(encodeOptions.barcodeImages).length
+			: undefined,
+	});
 
 	if (template.engine === 'logicless') {
 		const result = renderForStudio({
 			template: template.content,
 			engine: 'logicless',
 			data: fixture,
+		});
+		debugInfo('studio-core', 'renderStudioTemplate completed logicless render', {
+			templateId: template.id,
+			htmlLength: result.html.length,
+			hasDiagnosticHtml: Boolean(template.previewHtml),
 		});
 		return {
 			kind: 'logicless',
@@ -114,6 +140,20 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 		// callers pass `enableCp932: false` through `mergedEncodeOptions`.
 		mergedEncodeOptions.enableCp932 = true;
 	}
+	debugLog('studio-core', 'thermal encode options resolved', {
+		templateId: template.id,
+		thermalPaperWidth,
+		columns,
+		printerModel: mergedEncodeOptions.printerModel,
+		language: mergedEncodeOptions.language,
+		enableCp932: mergedEncodeOptions.enableCp932,
+		emitEscPrintMode: mergedEncodeOptions.emitEscPrintMode,
+		imageMode: mergedEncodeOptions.imageMode,
+		imageAlgorithm: mergedEncodeOptions.imageAlgorithm,
+		imageThreshold: mergedEncodeOptions.imageThreshold,
+		barcodeMode: mergedEncodeOptions.barcodeMode,
+		hasFullReceiptRasterImage: Boolean(mergedEncodeOptions.fullReceiptRasterImage),
+	});
 	const result = renderForStudio({
 		template: template.content,
 		engine: 'thermal',
@@ -126,6 +166,14 @@ export function renderStudioTemplate(input: RenderStudioTemplateInput): StudioRe
 	}
 
 	const debug = bytesToDebugOutput(result.bytes);
+	debugInfo('studio-core', 'renderStudioTemplate completed thermal render', {
+		templateId: template.id,
+		htmlLength: result.html.length,
+		byteLength: result.bytes.byteLength,
+		base64Length: bytesToBase64(result.bytes).length,
+		hexLength: debug.hex.length,
+		asciiLength: debug.ascii.length,
+	});
 	return {
 		kind: 'thermal',
 		html: result.html,
