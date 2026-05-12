@@ -4,17 +4,21 @@ export function normalizeRasterCaptureSize(input: {
 	width: number;
 	height: number;
 	maxWidth: number;
-}): { width: number; height: number } {
+}): { sourceWidth: number; sourceHeight: number; width: number; height: number } {
 	const sourceWidth = Number.isFinite(input.width) ? Math.max(1, Math.floor(input.width)) : 1;
 	const sourceHeight = Number.isFinite(input.height) ? Math.max(1, Math.floor(input.height)) : 1;
 	const maxWidth = Number.isFinite(input.maxWidth) ? Math.max(8, Math.floor(input.maxWidth)) : 576;
-	const scale = sourceWidth > maxWidth ? maxWidth / sourceWidth : 1;
-	const width = Math.max(8, Math.floor(sourceWidth * scale));
-	const height = Math.max(8, Math.floor(sourceHeight * scale));
+	const targetWidth = Math.max(8, maxWidth - (maxWidth % 8));
+	// Always scale the CSS preview geometry, including upward, so the final
+	// raster fills the printer dot budget without changing preview layout.
+	const scale = targetWidth / sourceWidth;
+	const targetHeight = Math.max(8, Math.floor(sourceHeight * scale));
 
 	return {
-		width: Math.max(8, width - (width % 8)),
-		height: height + ((8 - (height % 8)) % 8),
+		sourceWidth,
+		sourceHeight,
+		width: targetWidth,
+		height: targetHeight + ((8 - (targetHeight % 8)) % 8),
 	};
 }
 
@@ -68,13 +72,13 @@ export async function rasterizeReceiptElement(input: {
 	);
 	clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
 	clone.style.margin = '0';
-	clone.style.width = `${size.width}px`;
-	clone.style.minWidth = `${size.width}px`;
-	clone.style.maxWidth = `${size.width}px`;
+	clone.style.width = `${size.sourceWidth}px`;
+	clone.style.minWidth = `${size.sourceWidth}px`;
+	clone.style.maxWidth = `${size.sourceWidth}px`;
 	clone.style.transform = '';
 
 	const serialized = new XMLSerializer().serializeToString(clone);
-	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.sourceWidth} ${size.sourceHeight}" preserveAspectRatio="xMinYMin meet"><foreignObject width="100%" height="100%">${serialized}</foreignObject></svg>`;
 	const image = await loadSvgAsImage(svg);
 	const canvas = hostDocument.createElement('canvas');
 	canvas.width = size.width;

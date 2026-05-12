@@ -312,11 +312,8 @@ export function App() {
 			rasterHost.style.position = 'absolute';
 			rasterHost.style.left = '-10000px';
 			rasterHost.style.top = '0';
-			rasterHost.style.width = `${maxWidth}px`;
 			const rasterFrame = document.createElement('div');
 			rasterFrame.className = `paper-frame ${thermalPaperWidth === '58mm' ? 'thermal-58' : 'thermal-80'}`;
-			rasterFrame.style.width = `${maxWidth}px`;
-			rasterFrame.style.boxSizing = 'border-box';
 			rasterFrame.innerHTML = rasterPreview.html;
 			rasterHost.append(rasterFrame);
 			document.body.append(rasterHost);
