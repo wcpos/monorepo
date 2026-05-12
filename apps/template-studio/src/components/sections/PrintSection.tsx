@@ -124,7 +124,12 @@ export function PrintSection({
 			});
 			const result = await printPromise;
 			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
-			if (latestTcpRequestIdRef.current !== tcpRequestId) return;
+			if (
+				latestUiActionIdRef.current !== actionId ||
+				latestTcpRequestIdRef.current !== tcpRequestId
+			) {
+				return;
+			}
 			debugInfo('print-section', 'raw TCP print succeeded', {
 				bytesWritten: result.bytesWritten,
 				elapsedSeconds: elapsed,
@@ -137,9 +142,8 @@ export function PrintSection({
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			if (
-				tcpRequestId === null
-					? latestUiActionIdRef.current !== actionId
-					: latestTcpRequestIdRef.current !== tcpRequestId
+				latestUiActionIdRef.current !== actionId ||
+				(tcpRequestId !== null && latestTcpRequestIdRef.current !== tcpRequestId)
 			) {
 				return;
 			}
