@@ -25,6 +25,11 @@ const allowedStoreOrigins = allowedOriginsFromEnv(
 	wpProxyOrigin
 );
 const upstreamFetchTimeoutMs = 10_000;
+const rawTcpMaxBodyBytes = 1_000_000;
+
+interface HttpStatusError extends Error {
+	statusCode?: number;
+}
 
 function templateStudioPlugin(): Plugin {
 	return {
@@ -194,7 +199,12 @@ function templateStudioPlugin(): Plugin {
 					logRawTcpPrint('error', 'failed', {
 						error: error instanceof Error ? error.message : String(error),
 					});
-					response.statusCode = error instanceof SyntaxError ? 400 : 500;
+					response.statusCode =
+						typeof (error as HttpStatusError).statusCode === 'number'
+							? (error as HttpStatusError).statusCode!
+							: error instanceof SyntaxError
+								? 400
+								: 500;
 					response.end(error instanceof Error ? error.message : String(error));
 				}
 			});
@@ -220,17 +230,35 @@ function readJsonBody(
 ): Promise<Record<string, unknown>> {
 	return new Promise((resolve, reject) => {
 		let raw = '';
+		let receivedBytes = 0;
+		let rejected = false;
 		request.setEncoding('utf8');
 		request.on('data', (chunk) => {
+			if (rejected) return;
+			receivedBytes += Buffer.byteLength(chunk, 'utf8');
+			if (receivedBytes > rawTcpMaxBodyBytes) {
+				rejected = true;
+				const error = new Error('Request body too large') as HttpStatusError;
+				error.statusCode = 413;
+				logRawTcpPrint('warn', 'body rejected: too large', {
+					maxBodyBytes: rawTcpMaxBodyBytes,
+					receivedBytes,
+				});
+				reject(error);
+				request.destroy(error);
+				return;
+			}
 			raw += chunk;
 			logRawTcpPrint('info', 'body chunk received', {
 				chunkLength: chunk.length,
 				totalLength: raw.length,
+				receivedBytes,
 			});
 		});
 		request.on('end', () => {
+			if (rejected) return;
 			try {
-				logRawTcpPrint('info', 'body read completed', { rawLength: raw.length });
+				logRawTcpPrint('info', 'body read completed', { rawLength: raw.length, receivedBytes });
 				resolve(JSON.parse(raw || '{}') as Record<string, unknown>);
 			} catch (error) {
 				logRawTcpPrint('error', 'body JSON parse failed', {

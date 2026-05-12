@@ -64,13 +64,14 @@ export async function loadThermalLogoAsset(input: {
 	requestedWidth: number;
 	maxWidth: number;
 }): Promise<ThermalRasterImage | undefined> {
+	const src = summarizeImageSrc(input.src);
 	debugLog('thermal-image-assets', 'loading thermal logo asset', {
-		src: input.src,
+		src,
 		requestedWidth: input.requestedWidth,
 		maxWidth: input.maxWidth,
 	});
 	if (!isSupportedThermalLogoSrc(input.src)) {
-		debugWarn('thermal-image-assets', 'rejected unsupported logo src', { src: input.src });
+		debugWarn('thermal-image-assets', 'rejected unsupported logo src', { src });
 		return undefined;
 	}
 	try {
@@ -78,12 +79,12 @@ export async function loadThermalLogoAsset(input: {
 		const naturalWidth = image.naturalWidth || image.width;
 		const naturalHeight = image.naturalHeight || image.height;
 		debugLog('thermal-image-assets', 'logo image loaded', {
-			src: input.src,
+			src,
 			naturalWidth,
 			naturalHeight,
 		});
 		if (!naturalWidth || !naturalHeight) {
-			debugWarn('thermal-image-assets', 'logo image has no dimensions', { src: input.src });
+			debugWarn('thermal-image-assets', 'logo image has no dimensions', { src });
 			return undefined;
 		}
 
@@ -100,7 +101,7 @@ export async function loadThermalLogoAsset(input: {
 		const context = canvas.getContext('2d');
 		if (!context) {
 			debugError('thermal-image-assets', 'logo canvas context unavailable', {
-				src: input.src,
+				src,
 				width: size.width,
 				height: size.height,
 			});
@@ -111,7 +112,7 @@ export async function loadThermalLogoAsset(input: {
 		context.drawImage(image, 0, 0, size.width, size.height);
 		const imageData = context.getImageData(0, 0, size.width, size.height);
 		debugInfo('thermal-image-assets', 'logo raster asset ready', {
-			src: input.src,
+			src,
 			desiredWidth,
 			width: size.width,
 			height: size.height,
@@ -127,11 +128,44 @@ export async function loadThermalLogoAsset(input: {
 		};
 	} catch (error) {
 		debugError('thermal-image-assets', 'logo raster asset failed', {
-			src: input.src,
+			src,
 			error: error instanceof Error ? error.message : String(error),
 		});
 		return undefined;
 	}
+}
+
+function summarizeImageSrc(src: string): {
+	sourceKind: 'data-url' | 'http-url' | 'root-relative-url' | 'other';
+	sourceLength: number;
+	hasQuery: boolean;
+	mime?: string;
+} {
+	if (src.startsWith('data:')) {
+		const mimeEnd = src.indexOf(';');
+		return {
+			sourceKind: 'data-url',
+			sourceLength: src.length,
+			hasQuery: false,
+			mime: mimeEnd > 5 ? src.slice(5, mimeEnd) : undefined,
+		};
+	}
+	if (/^https?:/i.test(src)) {
+		try {
+			return {
+				sourceKind: 'http-url',
+				sourceLength: src.length,
+				hasQuery: Boolean(new URL(src).search),
+			};
+		} catch {
+			return { sourceKind: 'http-url', sourceLength: src.length, hasQuery: src.includes('?') };
+		}
+	}
+	return {
+		sourceKind: src.startsWith('/') ? 'root-relative-url' : 'other',
+		sourceLength: src.length,
+		hasQuery: src.includes('?'),
+	};
 }
 
 export async function renderThermalBarcodeAsset(input: {
