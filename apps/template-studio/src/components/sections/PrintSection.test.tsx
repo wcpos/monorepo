@@ -31,6 +31,33 @@ function thermalResult(bytes: Uint8Array): ThermalStudioRenderResult {
 }
 
 describe('PrintSection', () => {
+	it('re-enables send button after dispatching raw TCP request', async () => {
+		let resolvePrint: ((value: { ok: true; bytesWritten: number }) => void) | undefined;
+		mockedPrintRawTcp.mockReturnValueOnce(
+			new Promise((resolve) => {
+				resolvePrint = resolve;
+			})
+		);
+
+		render(
+			<PrintSection
+				rendered={thermalResult(new Uint8Array([0x1b, 0x40, 0x41]))}
+				onOpenPrintDialog={vi.fn()}
+				onError={vi.fn()}
+			/>
+		);
+
+		fireEvent.change(screen.getByLabelText('Host'), { target: { value: '127.0.0.1' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Send to printer' }));
+
+		await waitFor(() => expect(mockedPrintRawTcp).toHaveBeenCalled());
+		expect(screen.getByRole('button', { name: 'Send to printer' })).toBeEnabled();
+		expect(screen.getByText(/print queued/i)).toBeInTheDocument();
+
+		resolvePrint?.({ ok: true, bytesWritten: 3 });
+		await waitFor(() => expect(screen.getByText(/3 bytes/)).toBeInTheDocument());
+	});
+
 	it('shows prepared raw print bytes in the inspector after sending', async () => {
 		mockedPrintRawTcp.mockResolvedValueOnce({ ok: true, bytesWritten: 3 });
 		const prepared = thermalResult(new Uint8Array([0x1b, 0x40, 0x42]));

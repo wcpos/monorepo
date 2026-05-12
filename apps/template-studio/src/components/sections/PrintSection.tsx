@@ -80,10 +80,22 @@ export function PrintSection({
 				elapsedMs: Math.round(performance.now() - start),
 			});
 			setPreparedEscposBytes(prepared.escposBytes);
-			const result = await printRawTcp({
+			const printPromise = printRawTcp({
 				...target,
 				data: prepared.escposBase64,
 			});
+			debugInfo('print-section', 'raw TCP print request dispatched', {
+				bytes: prepared.escposBytes.length,
+				base64Length: prepared.escposBase64.length,
+				elapsedMs: Math.round(performance.now() - start),
+				target,
+			});
+			setLastResult({
+				kind: 'success',
+				message: `print queued · ${prepared.escposBytes.length} bytes · ${target.host}:${target.port}`,
+			});
+			setSending(false);
+			const result = await printPromise;
 			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
 			debugInfo('print-section', 'raw TCP print succeeded', {
 				bytesWritten: result.bytesWritten,
