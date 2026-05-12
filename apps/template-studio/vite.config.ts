@@ -7,7 +7,7 @@ import { defineConfig, type Plugin } from 'vite';
 
 import {
 	allowedOriginsFromEnv,
-	isLoopbackAddress,
+	isRawTcpClientAddressAllowed,
 	isStoreOriginAllowed,
 	shouldForwardCookies,
 } from './scripts/studio-security';
@@ -25,6 +25,11 @@ const allowedStoreOrigins = allowedOriginsFromEnv(
 	wpProxyOrigin
 );
 const upstreamFetchTimeoutMs = 10_000;
+const rawTcpMaxBodyBytes = 1_000_000;
+
+interface HttpStatusError extends Error {
+	statusCode?: number;
+}
 
 function templateStudioPlugin(): Plugin {
 	return {
@@ -108,6 +113,14 @@ function templateStudioPlugin(): Plugin {
 			});
 
 			server.middlewares.use('/__studio/print/raw-tcp', async (request, response) => {
+				logRawTcpPrint('info', 'request received', {
+					method: request.method,
+					remoteAddress: request.socket.remoteAddress,
+					hostHeader: request.headers.host,
+					origin: request.headers.origin,
+					contentLength: request.headers['content-length'],
+					userAgent: request.headers['user-agent'],
+				});
 				if (request.method !== 'POST') {
 					logRawTcpPrint('warn', 'rejected: method not allowed', {
 						method: request.method,
@@ -118,14 +131,19 @@ function templateStudioPlugin(): Plugin {
 					return;
 				}
 
-				if (!isLoopbackAddress(request.socket.remoteAddress)) {
-					logRawTcpPrint('warn', 'rejected: non-loopback client', {
+				const rawTcpClientAllowed = isRawTcpClientAddressAllowed(request.socket.remoteAddress);
+				logRawTcpPrint('info', 'client address evaluated', {
+					remoteAddress: request.socket.remoteAddress,
+					allowed: rawTcpClientAllowed,
+				});
+				if (!rawTcpClientAllowed) {
+					logRawTcpPrint('warn', 'rejected: non-local client', {
 						remoteAddress: request.socket.remoteAddress,
 						hostHeader: request.headers.host,
 						origin: request.headers.origin,
 					});
 					response.statusCode = 403;
-					response.end('Raw TCP printing is only available from loopback clients');
+					response.end('Raw TCP printing is only available from loopback or private LAN clients');
 					return;
 				}
 
@@ -146,6 +164,14 @@ function templateStudioPlugin(): Plugin {
 					const host = typeof body.host === 'string' ? body.host.trim() : '';
 					const port = Number(body.port);
 					const data = typeof body.data === 'string' ? body.data : '';
+					const decodedByteLength = data ? Buffer.from(data, 'base64').byteLength : 0;
+					logRawTcpPrint('info', 'payload parsed', {
+						remoteAddress: request.socket.remoteAddress,
+						host,
+						port,
+						base64Length: data.length,
+						decodedByteLength,
+					});
 
 					if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !data) {
 						logRawTcpPrint('warn', 'rejected: invalid payload', {
@@ -173,7 +199,12 @@ function templateStudioPlugin(): Plugin {
 					logRawTcpPrint('error', 'failed', {
 						error: error instanceof Error ? error.message : String(error),
 					});
-					response.statusCode = error instanceof SyntaxError ? 400 : 500;
+					response.statusCode =
+						typeof (error as HttpStatusError).statusCode === 'number'
+							? (error as HttpStatusError).statusCode!
+							: error instanceof SyntaxError
+								? 400
+								: 500;
 					response.end(error instanceof Error ? error.message : String(error));
 				}
 			});
@@ -199,35 +230,103 @@ function readJsonBody(
 ): Promise<Record<string, unknown>> {
 	return new Promise((resolve, reject) => {
 		let raw = '';
+		let receivedBytes = 0;
+		let rejected = false;
 		request.setEncoding('utf8');
 		request.on('data', (chunk) => {
+			if (rejected) return;
+			receivedBytes += Buffer.byteLength(chunk, 'utf8');
+			if (receivedBytes > rawTcpMaxBodyBytes) {
+				rejected = true;
+				const error = new Error('Request body too large') as HttpStatusError;
+				error.statusCode = 413;
+				logRawTcpPrint('warn', 'body rejected: too large', {
+					maxBodyBytes: rawTcpMaxBodyBytes,
+					receivedBytes,
+				});
+				reject(error);
+				request.destroy(error);
+				return;
+			}
 			raw += chunk;
+			logRawTcpPrint('info', 'body chunk received', {
+				chunkLength: chunk.length,
+				totalLength: raw.length,
+				receivedBytes,
+			});
 		});
 		request.on('end', () => {
+			if (rejected) return;
 			try {
+				logRawTcpPrint('info', 'body read completed', { rawLength: raw.length, receivedBytes });
 				resolve(JSON.parse(raw || '{}') as Record<string, unknown>);
 			} catch (error) {
+				logRawTcpPrint('error', 'body JSON parse failed', {
+					rawLength: raw.length,
+					error: error instanceof Error ? error.message : String(error),
+				});
 				reject(error);
 			}
 		});
-		request.on('error', reject);
+		request.on('error', (error) => {
+			logRawTcpPrint('error', 'body stream failed', {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			reject(error);
+		});
 	});
 }
 
 function sendRawTcp(host: string, port: number, data: Buffer): Promise<number> {
 	return new Promise((resolve, reject) => {
+		logRawTcpPrint('info', 'socket opening', {
+			host,
+			port,
+			byteLength: data.byteLength,
+			timeoutMs: 5000,
+		});
 		const socket = net.createConnection({ host, port, timeout: 5000 }, () => {
+			logRawTcpPrint('info', 'socket connected', {
+				host,
+				port,
+				localAddress: socket.localAddress,
+				localPort: socket.localPort,
+				remoteAddress: socket.remoteAddress,
+				remotePort: socket.remotePort,
+			});
+			logRawTcpPrint('info', 'socket writing', { host, port, byteLength: data.byteLength });
 			socket.write(data, (error) => {
 				if (error) {
+					logRawTcpPrint('error', 'socket write failed', {
+						host,
+						port,
+						error: error.message,
+					});
 					reject(error);
 					return;
 				}
+				logRawTcpPrint('info', 'socket write completed', {
+					host,
+					port,
+					byteLength: data.byteLength,
+				});
 				socket.end();
 				resolve(data.byteLength);
 			});
 		});
-		socket.on('error', reject);
+		socket.on('error', (error) => {
+			logRawTcpPrint('error', 'socket error', {
+				host,
+				port,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			reject(error);
+		});
+		socket.on('close', (hadError) => {
+			logRawTcpPrint('info', 'socket closed', { host, port, hadError });
+		});
 		socket.on('timeout', () => {
+			logRawTcpPrint('error', 'socket timed out', { host, port, byteLength: data.byteLength });
 			socket.destroy(new Error('Raw TCP print timed out'));
 		});
 	});

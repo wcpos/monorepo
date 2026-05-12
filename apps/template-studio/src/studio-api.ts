@@ -1,3 +1,5 @@
+import { debugError, debugInfo, debugLog } from './lib/debug-log';
+
 import type { ReceiptFixture, StudioTemplate, TemplateEngine } from './studio-core';
 
 export async function fetchBundledTemplates(): Promise<StudioTemplate[]> {
@@ -67,6 +69,11 @@ export async function fetchWpPreview({
 }
 
 export async function printRawTcp(input: RawTcpPrintInput): Promise<RawTcpPrintResult> {
+	debugInfo('studio-api', 'posting raw TCP payload', {
+		host: input.host,
+		port: input.port,
+		base64Length: input.data.length,
+	});
 	const response = await fetch('/__studio/print/raw-tcp', {
 		method: 'POST',
 		headers: {
@@ -75,9 +82,23 @@ export async function printRawTcp(input: RawTcpPrintInput): Promise<RawTcpPrintR
 		},
 		body: JSON.stringify(input),
 	});
+	debugLog('studio-api', 'raw TCP endpoint responded', {
+		status: response.status,
+		ok: response.ok,
+		statusText: response.statusText,
+	});
 	if (!response.ok) {
 		const message = (await response.text()).trim();
+		debugError('studio-api', 'raw TCP endpoint rejected payload', {
+			status: response.status,
+			message,
+			host: input.host,
+			port: input.port,
+			base64Length: input.data.length,
+		});
 		throw new Error(`Raw TCP print failed: ${response.status}${message ? ` - ${message}` : ''}`);
 	}
-	return response.json();
+	const result = (await response.json()) as RawTcpPrintResult;
+	debugInfo('studio-api', 'raw TCP endpoint accepted payload', { ...result });
+	return result;
 }

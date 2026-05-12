@@ -32,7 +32,7 @@ Use the Store URL, Template ID, and Order ID fields to load real preview payload
 Print testing options:
 
 - **Print dialog** opens a print-sized browser document and calls `window.print()` so macOS/browser can target a desktop thermal-printer simulator.
-- **Send raw ESC/POS** sends thermal template bytes to a TCP simulator using the host and port fields, defaulting to `192.168.1.167:9100`. The dev endpoint only accepts loopback browser clients (loopback + the `x-wcpos-template-studio` header). Raw TCP printing is only available for thermal templates because logicless templates are HTML-only.
+- **Send raw ESC/POS** sends thermal template bytes to a TCP simulator using the host and port fields, defaulting to `192.168.1.167:9100`. The dev endpoint accepts loopback and private LAN browser clients with the `x-wcpos-template-studio` header. Raw TCP printing is only available for thermal templates because logicless templates are HTML-only.
 
 Thermal previews render barcode and QR nodes through `bwip-js`, matching the barcode library path used for browser preview output instead of placeholder bars.
 

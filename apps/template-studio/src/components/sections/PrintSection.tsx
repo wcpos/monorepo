@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import { decodeEscposBytes } from '../../lib/escpos-decoder';
+import { debugError, debugInfo, debugLog } from '../../lib/debug-log';
 import { bytesToBase64 } from '../../studio-core';
 import { printRawTcp } from '../../studio-api';
 
@@ -60,25 +61,45 @@ export function PrintSection({
 
 	async function sendToPrinter() {
 		if (!rendered || rendered.kind !== 'thermal') return;
+		debugInfo('print-section', 'send to printer clicked', {
+			renderedBytes: rendered.escposBytes.length,
+			renderedBase64Length: rendered.escposBase64.length,
+			hasPrepareRawPrint: Boolean(onPrepareRawPrint),
+		});
 		setSending(true);
 		onError(null);
 		const start = performance.now();
 		try {
 			setPreparedEscposBytes(null);
 			const target = getConnectionTarget();
+			debugLog('print-section', 'connection target resolved', target);
 			const prepared = onPrepareRawPrint ? await onPrepareRawPrint() : rendered;
+			debugInfo('print-section', 'raw print payload prepared', {
+				bytes: prepared.escposBytes.length,
+				base64Length: prepared.escposBase64.length,
+				elapsedMs: Math.round(performance.now() - start),
+			});
 			setPreparedEscposBytes(prepared.escposBytes);
 			const result = await printRawTcp({
 				...target,
 				data: prepared.escposBase64,
 			});
 			const elapsed = ((performance.now() - start) / 1000).toFixed(2);
+			debugInfo('print-section', 'raw TCP print succeeded', {
+				bytesWritten: result.bytesWritten,
+				elapsedSeconds: elapsed,
+				target,
+			});
 			setLastResult({
 				kind: 'success',
 				message: `${result.bytesWritten} bytes · ${elapsed}s · ${target.host}:${target.port}`,
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
+			debugError('print-section', 'raw TCP print failed', {
+				error: error instanceof Error ? error.stack || error.message : String(error),
+				elapsedMs: Math.round(performance.now() - start),
+			});
 			setLastResult({ kind: 'error', message });
 		} finally {
 			setSending(false);
@@ -91,9 +112,14 @@ export function PrintSection({
 		try {
 			setPreparedEscposBytes(null);
 			const target = getConnectionTarget();
+			debugInfo('print-section', 'test connection requested', target);
 			const result = await printRawTcp({
 				...target,
 				data: bytesToBase64(TEST_CONNECTION_BYTES),
+			});
+			debugInfo('print-section', 'test connection succeeded', {
+				target,
+				bytesWritten: result.bytesWritten,
 			});
 			setLastResult({
 				kind: 'success',
@@ -101,6 +127,9 @@ export function PrintSection({
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
+			debugError('print-section', 'test connection failed', {
+				error: error instanceof Error ? error.stack || error.message : String(error),
+			});
 			setLastResult({ kind: 'error', message });
 		} finally {
 			setSending(false);
