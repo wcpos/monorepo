@@ -544,6 +544,15 @@ function walkAlignedNodes(
 ): void {
 	for (let index = 0; index < nodes.length; index++) {
 		const node = nodes[index];
+		if (
+			isDirectStyledHeading(node) &&
+			nodes[index + 1] &&
+			isInlineTextContent([node]) &&
+			!containsScaledText([node]) &&
+			writeAlignedStandaloneTextLine(encoder, [node], context)
+		) {
+			continue;
+		}
 		const previousDeferAlignedTeardownDepth = context.deferAlignedTeardownDepth;
 		const deferAlignedTeardownDepth =
 			isDirectStyledHeading(node) && nodes[index + 1]
@@ -577,20 +586,16 @@ function singleStyledLineDepth(node: ThermalNode, styleDepth: number): number | 
 		case 'bold':
 		case 'underline':
 		case 'invert':
-			return singleChildStyledLineDepth(node.children, styleDepth + 1);
 		case 'size':
-			return singleChildStyledLineDepth(node.children, styleDepth + 1);
+			return styledLineDepth(node.children, styleDepth + 1);
 		default:
 			return undefined;
 	}
 }
 
-function singleChildStyledLineDepth(
-	nodes: readonly ThermalNode[],
-	styleDepth: number
-): number | undefined {
-	if (nodes.length !== 1) return undefined;
-	return singleStyledLineDepth(nodes[0] as ThermalNode, styleDepth);
+function styledLineDepth(nodes: readonly ThermalNode[], styleDepth: number): number | undefined {
+	if (nodes.length === 1) return singleStyledLineDepth(nodes[0] as ThermalNode, styleDepth);
+	return isInlineTextContent(nodes) ? styleDepth : undefined;
 }
 
 function writeNewline(encoder: ReceiptPrinterEncoder, context: RenderContext, lines = 1): void {
@@ -948,7 +953,10 @@ function writeAlignedRawTextLine(
 }
 
 function shouldDeferAlignedTeardown(context: RenderContext): boolean {
-	return context.deferAlignedTeardownDepth === context.styleDepth;
+	return (
+		context.deferAlignedTeardownDepth !== undefined &&
+		context.styleDepth >= context.deferAlignedTeardownDepth
+	);
 }
 
 function writePrinterAlign(

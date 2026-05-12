@@ -1630,6 +1630,23 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(lines).toEqual(['Line 1', 'Line 2']);
 	});
 
+	it('finishes mixed inline styled headings before the following centered line', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<bold>Hello <underline>world</underline></bold>
+					<text>After</text>
+				</align>
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const lines = simulateEscposTextLines(bytes, 48);
+
+		expectVisuallyCentered(lines, 'Hello world', 48);
+		expectVisuallyCentered(lines, 'After', 48);
+	});
+
 	it('forces left printer alignment before physical center padding after a scaled centered heading', () => {
 		const bytes = encodeThermalTemplate(
 			`<receipt paper-width="48">
