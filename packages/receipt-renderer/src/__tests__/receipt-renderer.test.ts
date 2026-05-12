@@ -1383,6 +1383,19 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(nextIndex).toBeGreaterThan(restoreSpacingIndex);
 	});
 
+	it('keeps height-only scaled mixed inline text on one physical line', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><align mode="center"><size height="2">AB<bold>CD</bold></size></align></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const lines = simulateEscposTextLines(bytes, 48);
+
+		expect(lines.map((line) => line.text)).toContain('ABCD');
+		expect(lines.map((line) => line.text)).not.toContain('AB');
+		expect(lines.map((line) => line.text)).not.toContain('CD');
+	});
+
 	it('keeps ESC line-spacing bytes out of Star printer output', () => {
 		const template = '<receipt><text><size width="2" height="2">Big</size>Small</text></receipt>';
 
@@ -1651,6 +1664,19 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(barcodeIndex).toBeGreaterThan(bigIndex);
 		expect(centerAlignIndex).toBeGreaterThan(bigIndex);
 		expect(centerAlignIndex).toBeLessThan(barcodeIndex);
+	});
+
+	it('terminates a scaled raw text line before following text', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="48"><align mode="center"><size width="2">BIG</size></align><text>After</text></receipt>',
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const lines = simulateEscposTextLines(bytes, 48);
+
+		expectScaledVisualCentered(bytes, 'BIG', 48);
+		expect(lines.map((line) => line.text)).not.toContain('BIGAfter');
+		expectSingleNewlineBetween(bytes, 'BIG', 'After');
 	});
 
 	it('normalizes typographic dashes before ESC/POS text encoding', () => {

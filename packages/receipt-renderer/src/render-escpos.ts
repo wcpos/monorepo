@@ -884,7 +884,8 @@ function writeAlignedRawTextLine(
 	context: RenderContext
 ): boolean {
 	const activeWidth = context.escposPrintMode?.width ?? 1;
-	if (context.align === 'left' || context.lineHasText) {
+	const activeHeight = context.escposPrintMode?.height ?? 1;
+	if (context.align === 'left' || context.lineHasText || (activeHeight > 1 && activeWidth === 1)) {
 		return false;
 	}
 
@@ -914,6 +915,7 @@ function writeAlignedRawTextLine(
 		}
 		writeText(encoder, normalized, context.supportsCp932, context.normalizeText);
 		context.lineHasText = true;
+		writeNewline(encoder, context);
 		encoder.align(context.align);
 		return true;
 	}
