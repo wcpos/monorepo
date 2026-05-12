@@ -1638,6 +1638,32 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(statusLine).toBe(`${' '.repeat(14)}[STATUS LINE 21 CH]`);
 	});
 
+	it('finishes styled scaled heading state before moving to the next centered line', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<bold><size width="2"><text>BIG CENTER 14</text></size></bold>
+					<text>[STATUS LINE 21 CH]</text>
+				</align>
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const bigIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('BIG CENTER 14')));
+		const newlineAfterBig = sequenceIndex(bytes, [0x0a], bigIndex);
+		const statusIndex = sequenceIndex(
+			bytes,
+			Array.from(new TextEncoder().encode('[STATUS LINE 21 CH]'))
+		);
+		const betweenLines = Array.from(bytes.slice(newlineAfterBig, statusIndex));
+
+		expect(newlineAfterBig).toBeGreaterThan(bigIndex);
+		expect(statusIndex).toBeGreaterThan(newlineAfterBig);
+		expect(betweenLines).not.toContain(0x11);
+		expect(betweenLines).not.toContain(0x38);
+		expect(sequenceIndex(bytes, [0x1b, 0x61, 0x00], newlineAfterBig)).toBeLessThan(statusIndex);
+	});
+
 	it('does not carry hidden center padding from one aligned block into the next scaled heading', () => {
 		const bytes = encodeThermalTemplate(
 			`<receipt paper-width="48">

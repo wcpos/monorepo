@@ -49,6 +49,7 @@ interface RenderContext {
 	align: 'left' | 'center' | 'right';
 	lineHasText: boolean;
 	allowAlignedRawTextLine: boolean;
+	styleDepth: number;
 	supportsCp932: boolean;
 	normalizeText: boolean;
 	emitEscPrintMode: boolean;
@@ -151,6 +152,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		align: 'left',
 		lineHasText: false,
 		allowAlignedRawTextLine: true,
+		styleDepth: 0,
 		supportsCp932: resolvedLanguage === 'esc-pos' && enableCp932,
 		normalizeText: resolvedLanguage === 'esc-pos',
 		emitEscPrintMode: resolvedLanguage === 'esc-pos' && emitEscPrintMode,
@@ -312,7 +314,9 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			const previous = context.escposPrintMode?.bold ?? false;
 			encoder.bold(true);
 			updateEscposPrintMode(encoder, context, { bold: true });
+			context.styleDepth++;
 			walkNodes(encoder, node.children, context);
+			context.styleDepth--;
 			encoder.bold(previous);
 			updateEscposPrintMode(encoder, context, { bold: previous });
 			break;
@@ -321,14 +325,18 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			const previous = context.escposPrintMode?.underline ?? false;
 			encoder.underline(true);
 			updateEscposPrintMode(encoder, context, { underline: true });
+			context.styleDepth++;
 			walkNodes(encoder, node.children, context);
+			context.styleDepth--;
 			encoder.underline(previous);
 			updateEscposPrintMode(encoder, context, { underline: previous });
 			break;
 		}
 		case 'invert':
 			encoder.invert(true);
+			context.styleDepth++;
 			walkNodes(encoder, node.children, context);
+			context.styleDepth--;
 			encoder.invert(false);
 			break;
 		case 'size': {
@@ -346,7 +354,9 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 				encoder.raw([0x1b, 0x33, Math.min(255, context.activeScaledLineSpacing * 30)]);
 			}
 			updateEscposSize(encoder, context, node.width, node.height);
+			context.styleDepth++;
 			walkNodes(encoder, node.children, context);
+			context.styleDepth--;
 			updateEscposSize(encoder, context, previousWidth, previousHeight);
 			break;
 		}
@@ -356,6 +366,9 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			writePrinterAlign(encoder, context, node.mode);
 			if (!writeAlignedStandaloneTextLine(encoder, node.children, context)) {
 				walkAlignedNodes(encoder, node.children, context);
+			}
+			if (context.lineHasText) {
+				writeNewline(encoder, context);
 			}
 			context.align = previous;
 			writePrinterAlign(encoder, context, previous);
@@ -531,8 +544,9 @@ function walkAlignedNodes(
 	for (let index = 0; index < nodes.length; index++) {
 		const node = nodes[index];
 		walkNode(encoder, node, context);
-		if (context.lineHasText && isDirectStyledHeading(node) && nodes[index + 1]?.type === 'text') {
+		if (context.lineHasText && isDirectStyledHeading(node) && nodes[index + 1]) {
 			writeNewline(encoder, context);
+			writePrinterAlign(encoder, context, context.align);
 		}
 	}
 }
@@ -850,8 +864,10 @@ function writeAlignedStandaloneTextLine(
 		activeScaledLineSpacing: undefined,
 	});
 	context.lineHasText = true;
-	writeNewline(encoder, context);
-	writePrinterAlign(encoder, context, context.align);
+	if (context.styleDepth === 0) {
+		writeNewline(encoder, context);
+		writePrinterAlign(encoder, context, context.align);
+	}
 	return true;
 }
 
@@ -891,8 +907,10 @@ function writeAlignedRawTextLine(
 	}
 	writeText(encoder, normalized, context.supportsCp932, context.normalizeText);
 	context.lineHasText = true;
-	writeNewline(encoder, context);
-	writePrinterAlign(encoder, context, context.align);
+	if (context.styleDepth === 0) {
+		writeNewline(encoder, context);
+		writePrinterAlign(encoder, context, context.align);
+	}
 	return true;
 }
 
