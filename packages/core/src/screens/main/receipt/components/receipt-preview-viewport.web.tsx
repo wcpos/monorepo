@@ -31,13 +31,27 @@ export function ReceiptPreviewViewport({
 	const containerRef = React.useRef<HTMLDivElement>(null);
 	const { width: paperW, height: paperH } = PAPER_DIMENSIONS[paperWidth];
 	const [zoom, setZoom] = React.useState<PreviewZoom>(100);
+	const autoFitDoneRef = React.useRef(false);
 
 	React.useLayoutEffect(() => {
+		autoFitDoneRef.current = false;
 		const el = containerRef.current;
 		if (!el) return;
-		const availW = el.clientWidth - CANVAS_PAD_PX * 2;
-		const availH = el.clientHeight - CANVAS_PAD_PX * 2;
-		setZoom(pickAutoFitZoom(paperW, paperH, availW, availH));
+		const applyAutoFit = () => {
+			if (autoFitDoneRef.current) return;
+			const availW = el.clientWidth - CANVAS_PAD_PX * 2;
+			const availH = el.clientHeight - CANVAS_PAD_PX * 2;
+			if (availW <= 0 || availH <= 0) return;
+			autoFitDoneRef.current = true;
+			setZoom(pickAutoFitZoom(paperW, paperH, availW, availH));
+		};
+
+		applyAutoFit();
+		if (autoFitDoneRef.current || typeof ResizeObserver === 'undefined') return;
+
+		const resizeObserver = new ResizeObserver(applyAutoFit);
+		resizeObserver.observe(el);
+		return () => resizeObserver.disconnect();
 	}, [paperW, paperH]);
 
 	const scale = zoom / 100;
@@ -76,7 +90,6 @@ export function ReceiptPreviewViewport({
 					data-testid={testID ? `${testID}-zoom-value` : undefined}
 					className="text-foreground inline-flex min-w-[44px] items-center justify-center border-r border-l px-2 text-xs tabular-nums"
 					role="status"
-					aria-label={`Zoom ${zoom}%`}
 					aria-live="polite"
 				>
 					{zoom}%

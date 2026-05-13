@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import {
 	getReceiptPreviewPaperWidth,
@@ -52,6 +52,36 @@ describe('ReceiptPreviewViewport', () => {
 		expect(screen.getByTestId('receipt-preview-canvas')).toHaveStyle({
 			transform: `scale(${scale})`,
 		});
+	});
+
+	it('auto-fits after a zero-size initial measurement when the container resizes', () => {
+		const originalResizeObserver = window.ResizeObserver;
+		let resizeCallback: ResizeObserverCallback | undefined;
+
+		window.ResizeObserver = class ResizeObserver {
+			constructor(callback: ResizeObserverCallback) {
+				resizeCallback = callback;
+			}
+			observe = jest.fn();
+			unobserve = jest.fn();
+			disconnect = jest.fn();
+		};
+
+		try {
+			renderViewport('a4');
+
+			const container = screen.getByTestId('receipt-preview');
+			Object.defineProperty(container, 'clientWidth', { configurable: true, value: 421 });
+			Object.defineProperty(container, 'clientHeight', { configurable: true, value: 586 });
+
+			act(() => {
+				resizeCallback?.([], {} as ResizeObserver);
+			});
+
+			expect(screen.getByTestId('receipt-preview-zoom-value')).toHaveTextContent('50%');
+		} finally {
+			window.ResizeObserver = originalResizeObserver;
+		}
 	});
 
 	it('steps through the zoom levels with the + and − controls', () => {

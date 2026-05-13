@@ -90,7 +90,6 @@ export function ReceiptPreviewViewport({
 				<View
 					testID={testID ? `${testID}-zoom-value` : undefined}
 					accessibilityRole="text"
-					accessibilityLabel={`Zoom ${zoom}%`}
 					className="min-w-[44px] items-center justify-center border-r border-l px-2"
 				>
 					<Text className="text-foreground text-xs tabular-nums">{zoom}%</Text>
@@ -114,6 +113,7 @@ export function ReceiptPreviewViewport({
 			</View>
 			<ScrollView
 				testID={testID ? `${testID}-scroll-area` : undefined}
+				className="min-h-0 flex-1"
 				contentContainerStyle={{ padding: CANVAS_PAD_PX, alignItems: 'center' }}
 			>
 				<View
