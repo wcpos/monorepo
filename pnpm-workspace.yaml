@@ -60,7 +60,7 @@ allowBuilds:
   "protobufjs": true
   "react-native-esc-pos-printer": true
   "rxdb": true
-  "rxdb-premium": false
+  "rxdb-premium": true
   "secp256k1": true
   "uniwind-pro": true
   "unrs-resolver": true
