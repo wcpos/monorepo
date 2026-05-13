@@ -37,7 +37,7 @@ import { WebView } from '@wcpos/components/webview';
 import { usePrint } from '@wcpos/printer';
 
 import {
-	getDefaultReceiptPreviewZoom,
+	getReceiptPreviewPaperWidth,
 	ReceiptPreviewViewport,
 } from './components/receipt-preview-viewport';
 import { EmailForm } from './email';
@@ -114,9 +114,9 @@ export function Receipt({ resource }: Props) {
 		};
 	}, [selectedTemplate]);
 
-	const defaultPreviewZoom = React.useMemo(
+	const previewPaperWidth = React.useMemo(
 		() =>
-			getDefaultReceiptPreviewZoom({
+			getReceiptPreviewPaperWidth({
 				output_type: selectedTemplate?.output_type,
 				paper_width: selectedTemplate?.paper_width ?? null,
 			}),
@@ -221,8 +221,9 @@ export function Receipt({ resource }: Props) {
 							<MismatchBadge message={mismatchWarning} />
 							<ReceiptPreviewViewport
 								key={String(selectedTemplateId ?? 'legacy-receipt')}
-								defaultZoom={defaultPreviewZoom}
-								label={t('receipt.preview_zoom', 'Preview zoom')}
+								paperWidth={previewPaperWidth}
+								zoomInLabel={t('receipt.zoom_in', 'Zoom in')}
+								zoomOutLabel={t('receipt.zoom_out', 'Zoom out')}
 								testID="receipt-preview"
 							>
 								<WebView
@@ -232,7 +233,7 @@ export function Receipt({ resource }: Props) {
 										: { src: templateReceiptUrl || baseReceiptURL || '' })}
 									onLoad={handleLoad}
 									onMessage={() => {}}
-									className="min-h-[640px] flex-1"
+									className="h-full w-full"
 								/>
 							</ReceiptPreviewViewport>
 						</VStack>

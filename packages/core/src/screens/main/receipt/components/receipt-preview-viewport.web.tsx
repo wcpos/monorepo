@@ -1,76 +1,120 @@
 import * as React from 'react';
 
 import {
-	DEFAULT_RECEIPT_PREVIEW_ZOOMS,
-	getDefaultReceiptPreviewZoom,
-	isReceiptPreviewZoom,
+	getReceiptPreviewPaperWidth,
+	PAPER_DIMENSIONS,
+	pickAutoFitZoom,
+	PREVIEW_ZOOM_STEPS,
+	type PreviewPaperWidth,
+	type PreviewZoom,
 } from './receipt-preview-viewport-utils';
 
-export { DEFAULT_RECEIPT_PREVIEW_ZOOMS, getDefaultReceiptPreviewZoom };
+export { getReceiptPreviewPaperWidth, PAPER_DIMENSIONS, PREVIEW_ZOOM_STEPS };
+
+const CANVAS_PAD_PX = 12;
 
 interface ReceiptPreviewViewportProps {
 	children: React.ReactNode;
-	defaultZoom: number;
-	zoomOptions?: readonly number[];
-	label: string;
+	paperWidth: PreviewPaperWidth;
+	zoomInLabel: string;
+	zoomOutLabel: string;
 	testID?: string;
 }
 
 export function ReceiptPreviewViewport({
 	children,
-	defaultZoom,
-	zoomOptions = DEFAULT_RECEIPT_PREVIEW_ZOOMS,
-	label,
+	paperWidth,
+	zoomInLabel,
+	zoomOutLabel,
 	testID,
 }: ReceiptPreviewViewportProps) {
-	const fallbackZoom = zoomOptions[0] ?? DEFAULT_RECEIPT_PREVIEW_ZOOMS[0];
-	const normalizedDefaultZoom = isReceiptPreviewZoom(defaultZoom, zoomOptions)
-		? defaultZoom
-		: fallbackZoom;
-	const [zoom, setZoom] = React.useState(normalizedDefaultZoom);
+	const containerRef = React.useRef<HTMLDivElement>(null);
+	const { width: paperW, height: paperH } = PAPER_DIMENSIONS[paperWidth];
+	const [zoom, setZoom] = React.useState<PreviewZoom>(100);
 
-	// Reset zoom when the selected receipt template changes its type-appropriate default.
-	React.useEffect(() => {
-		setZoom(normalizedDefaultZoom);
-	}, [normalizedDefaultZoom]);
+	React.useLayoutEffect(() => {
+		const el = containerRef.current;
+		if (!el) return;
+		const availW = el.clientWidth - CANVAS_PAD_PX * 2;
+		const availH = el.clientHeight - CANVAS_PAD_PX * 2;
+		setZoom(pickAutoFitZoom(paperW, paperH, availW, availH));
+	}, [paperW, paperH]);
 
 	const scale = zoom / 100;
+	const currentIndex = PREVIEW_ZOOM_STEPS.indexOf(zoom);
+	const canZoomOut = currentIndex > 0;
+	const canZoomIn = currentIndex < PREVIEW_ZOOM_STEPS.length - 1;
+	const stepZoom = (delta: number) => {
+		const next = Math.max(0, Math.min(PREVIEW_ZOOM_STEPS.length - 1, currentIndex + delta));
+		setZoom(PREVIEW_ZOOM_STEPS[next]);
+	};
+
+	const buttonClass =
+		'flex h-7 w-7 cursor-pointer items-center justify-center border-0 bg-transparent text-base leading-none text-foreground hover:bg-muted disabled:cursor-default disabled:text-muted-foreground/50 disabled:hover:bg-transparent';
 
 	return (
-		<div data-testid={testID} className="flex min-h-0 flex-1 flex-col gap-2">
-			<div className="flex items-center gap-2" aria-label={label}>
-				<span className="text-muted-foreground text-sm">{label}</span>
-				<div className="flex gap-1">
-					{zoomOptions.map((option) => {
-						const active = option === zoom;
-						return (
-							<button
-								key={option}
-								type="button"
-								aria-pressed={active}
-								className={`rounded-md border px-2 py-1 text-sm ${
-									active ? 'bg-primary text-primary-foreground' : 'bg-background text-foreground'
-								}`}
-								onClick={() => setZoom(option)}
-							>
-								{option}%
-							</button>
-						);
-					})}
-				</div>
+		<div
+			ref={containerRef}
+			data-testid={testID}
+			className="bg-muted relative flex min-h-0 flex-1 flex-col rounded-md border"
+		>
+			<div
+				data-testid={testID ? `${testID}-zoom-controls` : undefined}
+				className="bg-background/95 absolute top-2 right-2 z-10 inline-flex items-stretch overflow-hidden rounded-md border shadow-sm"
+			>
+				<button
+					type="button"
+					aria-label={zoomOutLabel}
+					title={zoomOutLabel}
+					disabled={!canZoomOut}
+					onClick={() => stepZoom(-1)}
+					className={buttonClass}
+				>
+					&minus;
+				</button>
+				<span
+					data-testid={testID ? `${testID}-zoom-value` : undefined}
+					className="text-foreground inline-flex min-w-[44px] items-center justify-center border-r border-l px-2 text-xs tabular-nums"
+					role="status"
+					aria-label={`Zoom ${zoom}%`}
+					aria-live="polite"
+				>
+					{zoom}%
+				</span>
+				<button
+					type="button"
+					aria-label={zoomInLabel}
+					title={zoomInLabel}
+					disabled={!canZoomIn}
+					onClick={() => stepZoom(1)}
+					className={buttonClass}
+				>
+					+
+				</button>
 			</div>
-			<div className="bg-muted min-h-0 flex-1 overflow-auto rounded-md border p-3">
+			<div
+				data-testid={testID ? `${testID}-scroll-area` : undefined}
+				className="min-h-0 flex-1 overflow-auto p-3"
+			>
 				<div
-					data-testid={testID ? `${testID}-canvas` : undefined}
-					className="flex min-h-[640px] flex-col"
+					data-testid={testID ? `${testID}-canvas-frame` : undefined}
+					className="mx-auto overflow-hidden bg-white shadow-sm"
 					style={{
-						transform: `scale(${scale})`,
-						transformOrigin: 'top left',
-						width: `${100 / scale}%`,
-						height: `${100 / scale}%`,
+						width: paperW * scale,
+						height: paperH * scale,
 					}}
 				>
-					{children}
+					<div
+						data-testid={testID ? `${testID}-canvas` : undefined}
+						style={{
+							width: paperW,
+							height: paperH,
+							transform: `scale(${scale})`,
+							transformOrigin: 'top left',
+						}}
+					>
+						{children}
+					</div>
 				</div>
 			</div>
 		</div>

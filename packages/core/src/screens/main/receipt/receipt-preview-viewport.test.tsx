@@ -5,73 +5,90 @@ import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import {
-	DEFAULT_RECEIPT_PREVIEW_ZOOMS,
-	getDefaultReceiptPreviewZoom,
+	getReceiptPreviewPaperWidth,
+	PAPER_DIMENSIONS,
+	PREVIEW_ZOOM_STEPS,
 	ReceiptPreviewViewport,
 } from './components/receipt-preview-viewport.web';
 
+const renderViewport = (paperWidth: 'a4' | '58mm' | '80mm' = 'a4') =>
+	render(
+		<ReceiptPreviewViewport
+			paperWidth={paperWidth}
+			zoomInLabel="Zoom in"
+			zoomOutLabel="Zoom out"
+			testID="receipt-preview"
+		>
+			<div data-testid="receipt-webview">Receipt frame</div>
+		</ReceiptPreviewViewport>
+	);
+
 describe('ReceiptPreviewViewport', () => {
-	it('renders children inside a top-left anchored scaled preview canvas', () => {
-		render(
-			<ReceiptPreviewViewport defaultZoom={75} label="Preview zoom" testID="receipt-preview">
-				<div data-testid="receipt-webview">Receipt frame</div>
-			</ReceiptPreviewViewport>
-		);
+	it('renders the receipt canvas at true paper dimensions with a top-left scale transform', () => {
+		renderViewport('a4');
 
 		expect(screen.getByTestId('receipt-webview')).toBeInTheDocument();
-		expect(screen.getByTestId('receipt-preview-canvas')).toHaveStyle({
-			transform: 'scale(0.75)',
+
+		const canvas = screen.getByTestId('receipt-preview-canvas');
+		expect(canvas).toHaveStyle({
+			width: `${PAPER_DIMENSIONS.a4.width}px`,
+			height: `${PAPER_DIMENSIONS.a4.height}px`,
 			transformOrigin: 'top left',
 		});
-		expect(screen.getByTestId('receipt-preview-canvas')).toHaveClass('flex');
 	});
 
-	it('switches between the supported receipt preview zooms', () => {
-		render(
-			<ReceiptPreviewViewport defaultZoom={75} label="Preview zoom" testID="receipt-preview">
-				<div data-testid="receipt-webview">Receipt frame</div>
-			</ReceiptPreviewViewport>
-		);
+	it('shrinks the outer frame with the chosen zoom so the page is a true preview', () => {
+		renderViewport('a4');
 
-		expect(DEFAULT_RECEIPT_PREVIEW_ZOOMS).toEqual([50, 75, 100]);
-		expect(screen.getByRole('button', { name: '75%' })).toHaveAttribute('aria-pressed', 'true');
+		fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
 
-		fireEvent.click(screen.getByRole('button', { name: '50%' }));
-
-		expect(screen.getByRole('button', { name: '50%' })).toHaveAttribute('aria-pressed', 'true');
-		expect(screen.getByTestId('receipt-preview-canvas')).toHaveStyle({ transform: 'scale(0.5)' });
+		const value = screen.getByTestId('receipt-preview-zoom-value');
+		const zoom = Number(value.textContent?.replace('%', ''));
+		const scale = zoom / 100;
+		expect(screen.getByTestId('receipt-preview-canvas-frame')).toHaveStyle({
+			width: `${PAPER_DIMENSIONS.a4.width * scale}px`,
+			height: `${PAPER_DIMENSIONS.a4.height * scale}px`,
+		});
+		expect(screen.getByTestId('receipt-preview-canvas')).toHaveStyle({
+			transform: `scale(${scale})`,
+		});
 	});
 
-	it('defaults browser/html templates to 75%', () => {
-		expect(getDefaultReceiptPreviewZoom({ output_type: 'html', paper_width: null })).toBe(75);
+	it('steps through the zoom levels with the + and − controls', () => {
+		renderViewport('a4');
+
+		const value = screen.getByTestId('receipt-preview-zoom-value');
+		const initial = Number(value.textContent?.replace('%', ''));
+		const initialIndex = PREVIEW_ZOOM_STEPS.indexOf(initial as (typeof PREVIEW_ZOOM_STEPS)[number]);
+		expect(initialIndex).toBeGreaterThanOrEqual(0);
+
+		fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+		expect(value.textContent).toBe(`${PREVIEW_ZOOM_STEPS[initialIndex + 1]}%`);
+
+		fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+		expect(value.textContent).toBe(`${PREVIEW_ZOOM_STEPS[initialIndex]}%`);
 	});
 
-	it('defaults thermal templates and thermal paper widths to 100%', () => {
-		expect(getDefaultReceiptPreviewZoom({ output_type: 'escpos', paper_width: null })).toBe(100);
-		expect(getDefaultReceiptPreviewZoom({ output_type: 'html', paper_width: '58mm' })).toBe(100);
-		expect(getDefaultReceiptPreviewZoom({ output_type: undefined, paper_width: '80mm' })).toBe(100);
+	it('disables zoom controls at the boundary steps', () => {
+		renderViewport('a4');
+
+		const zoomOut = screen.getByRole('button', { name: 'Zoom out' });
+		const zoomIn = screen.getByRole('button', { name: 'Zoom in' });
+
+		for (let i = 0; i < PREVIEW_ZOOM_STEPS.length; i++) fireEvent.click(zoomOut);
+		expect(zoomOut).toBeDisabled();
+		expect(zoomIn).not.toBeDisabled();
+
+		for (let i = 0; i < PREVIEW_ZOOM_STEPS.length; i++) fireEvent.click(zoomIn);
+		expect(zoomIn).toBeDisabled();
+		expect(zoomOut).not.toBeDisabled();
 	});
 
-	it('defaults unknown template metadata to 100%', () => {
-		expect(getDefaultReceiptPreviewZoom({ output_type: undefined, paper_width: null })).toBe(100);
-	});
-
-	it('resets manual zoom when the selected template default changes', () => {
-		const { rerender } = render(
-			<ReceiptPreviewViewport defaultZoom={75} label="Preview zoom" testID="receipt-preview">
-				<div data-testid="receipt-webview">Receipt frame</div>
-			</ReceiptPreviewViewport>
-		);
-
-		fireEvent.click(screen.getByRole('button', { name: '50%' }));
-		expect(screen.getByRole('button', { name: '50%' })).toHaveAttribute('aria-pressed', 'true');
-
-		rerender(
-			<ReceiptPreviewViewport defaultZoom={100} label="Preview zoom" testID="receipt-preview">
-				<div data-testid="receipt-webview">Receipt frame</div>
-			</ReceiptPreviewViewport>
-		);
-
-		expect(screen.getByRole('button', { name: '100%' })).toHaveAttribute('aria-pressed', 'true');
+	it('maps template metadata to the matching paper width', () => {
+		expect(getReceiptPreviewPaperWidth({ output_type: 'html', paper_width: null })).toBe('a4');
+		expect(getReceiptPreviewPaperWidth({ output_type: 'html', paper_width: '58mm' })).toBe('58mm');
+		expect(getReceiptPreviewPaperWidth({ output_type: 'html', paper_width: '80mm' })).toBe('80mm');
+		expect(getReceiptPreviewPaperWidth({ output_type: 'escpos', paper_width: null })).toBe('80mm');
+		expect(getReceiptPreviewPaperWidth({ output_type: undefined, paper_width: null })).toBe('a4');
 	});
 });
