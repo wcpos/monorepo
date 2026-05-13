@@ -7,7 +7,7 @@ const THERMAL_CENTERING_DIAGNOSTIC = `<receipt paper-width="48">
 
   <align mode="center">
     <text>[CENTER NORMAL 21]</text>
-    <bold><size width="2"><text>BIG CENTER 14</text></size></bold>
+    <bold><size width="2" height="2"><text>BIG CENTER 14</text></size></bold>
     <text>[STATUS LINE 21 CH]</text>
   </align>
 
