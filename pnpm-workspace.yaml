@@ -1,6 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
+nodeLinker: hoisted
 minimumReleaseAge: 1440
 blockExoticSubdeps: true
 minimumReleaseAgeIgnoreMissingTime: true
@@ -33,6 +34,7 @@ overrides:
   "react-native-gesture-handler": "~2.30.0"
   "react-native-safe-area-context": "~5.6.2"
   "@react-navigation/drawer": "^7.5.0"
+  "@electron/node-gyp": "10.2.0-electron.2"
   "tar": "^7.5.11"
   "react-native-nitro-modules": "0.35.4"
 packageExtensions:
