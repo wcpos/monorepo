@@ -21,9 +21,7 @@ overrides:
 packageExtensionsChecksum: sha256-EMen4+1NnTMb6PkUt5YTKBLEs4BAWQPcwvdmpWcA5oA=
 
 patchedDependencies:
-  react-native-esc-pos-printer@4.5.0:
-    hash: 47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db
-    path: patches/react-native-esc-pos-printer@4.5.0.patch
+  react-native-esc-pos-printer@4.5.0: 47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db
 
 importers:
 
@@ -1838,7 +1836,7 @@ packages:
     engines: {node: '>=22.12.0'}
 
   '@electron/node-gyp@https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2':
-    resolution: {tarball: https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2}
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/electron/node-gyp/tar.gz/06b29aafb7708acef8b3669835c8a7857ebc92d2}
     version: 10.2.0-electron.1
     engines: {node: '>=12.13.0'}
     hasBin: true

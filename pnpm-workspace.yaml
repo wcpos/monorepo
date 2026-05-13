@@ -4,8 +4,62 @@ packages:
 minimumReleaseAge: 1440
 blockExoticSubdeps: true
 minimumReleaseAgeIgnoreMissingTime: true
-resolutionMode: highest
+minimumReleaseAgeStrict: false
 minimumReleaseAgeExclude:
   - react-native-svg
   - react-native
-  - '@react-native/*'
+  - "@react-native/assets-registry"
+  - "@react-native/babel-plugin-codegen"
+  - "@react-native/babel-preset"
+  - "@react-native/codegen"
+  - "@react-native/community-cli-plugin"
+  - "@react-native/debugger-frontend"
+  - "@react-native/debugger-shell"
+  - "@react-native/dev-middleware"
+  - "@react-native/gradle-plugin"
+  - "@react-native/js-polyfills"
+  - "@react-native/metro-config"
+  - "@react-native/normalize-colors"
+  - "@react-native/virtualized-lists"
+  - "@expo/config-types"
+overrides:
+  "expo": "~55.0.19"
+  "lightningcss": "1.30.1"
+  "uniwind": "npm:uniwind-pro@1.1.2"
+  "react": "19.2.5"
+  "react-dom": "19.2.5"
+  "react-native": "0.83.6"
+  "react-native-edge-to-edge": "^1.6.2"
+  "react-native-gesture-handler": "~2.30.0"
+  "react-native-safe-area-context": "~5.6.2"
+  "@react-navigation/drawer": "^7.5.0"
+  "tar": "^7.5.11"
+  "react-native-nitro-modules": "0.35.4"
+packageExtensions:
+  "rxdb-premium-old@16.21.1":
+    "dependencies": { "rxdb": "16.21.1" }
+  "rxdb-premium@16.21.1":
+    "dependencies": { "rxdb": "16.21.1" }
+allowBuilds:
+  "@firebase/util": false
+  "@shopify/react-native-skia": true
+  "@tailwindcss/oxide": true
+  "@zowe/secrets-for-zowe-sdk": true
+  "better-sqlite3": true
+  "core-js": true
+  "eccrypto": false
+  "electron": true
+  "electron-winstaller": false
+  "esbuild": true
+  "fs-xattr": true
+  "keccak": true
+  "macos-alias": true
+  "protobufjs": true
+  "react-native-esc-pos-printer": true
+  "rxdb": true
+  "rxdb-premium": true
+  "secp256k1": true
+  "uniwind-pro": true
+  "unrs-resolver": true
+patchedDependencies:
+  "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"

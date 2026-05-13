@@ -31,60 +31,6 @@
     "prepare": "git config core.hooksPath .githooks"
   },
   "packageManager": "pnpm@11.1.1",
-  "pnpm": {
-    "overrides": {
-      "expo": "~55.0.19",
-      "lightningcss": "1.30.1",
-      "uniwind": "npm:uniwind-pro@1.1.2",
-      "react": "19.2.5",
-      "react-dom": "19.2.5",
-      "react-native": "0.83.6",
-      "react-native-edge-to-edge": "^1.6.2",
-      "react-native-gesture-handler": "~2.30.0",
-      "react-native-safe-area-context": "~5.6.2",
-      "@react-navigation/drawer": "^7.5.0",
-      "tar": "^7.5.11",
-      "react-native-nitro-modules": "0.35.4"
-    },
-    "packageExtensions": {
-      "rxdb-premium-old@16.21.1": {
-        "dependencies": {
-          "rxdb": "16.21.1"
-        }
-      },
-      "rxdb-premium@16.21.1": {
-        "dependencies": {
-          "rxdb": "16.21.1"
-        }
-      }
-    },
-    "onlyBuiltDependencies": [
-      "@shopify/react-native-skia",
-      "@tailwindcss/oxide",
-      "@zowe/secrets-for-zowe-sdk",
-      "better-sqlite3",
-      "core-js",
-      "electron",
-      "esbuild",
-      "fs-xattr",
-      "keccak",
-      "macos-alias",
-      "protobufjs",
-      "react-native-esc-pos-printer",
-      "rxdb",
-      "rxdb-premium",
-      "secp256k1",
-      "uniwind-pro",
-      "unrs-resolver"
-    ],
-    "ignoredBuiltDependencies": [
-      "@firebase/util",
-      "electron-winstaller"
-    ],
-    "patchedDependencies": {
-      "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
-    }
-  },
   "lint-staged": {
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
   },
