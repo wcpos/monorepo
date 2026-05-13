@@ -36,6 +36,10 @@ import { VStack } from '@wcpos/components/vstack';
 import { WebView } from '@wcpos/components/webview';
 import { usePrint } from '@wcpos/printer';
 
+import {
+	getDefaultReceiptPreviewZoom,
+	ReceiptPreviewViewport,
+} from './components/receipt-preview-viewport';
 import { EmailForm } from './email';
 import { useTemplateRenderer } from './hooks/use-template-renderer';
 import { MismatchBadge } from './mismatch-badge';
@@ -109,6 +113,15 @@ export function Receipt({ resource }: Props) {
 			paper_width: selectedTemplate.paper_width ?? null,
 		};
 	}, [selectedTemplate]);
+
+	const defaultPreviewZoom = React.useMemo(
+		() =>
+			getDefaultReceiptPreviewZoom({
+				output_type: selectedTemplate?.output_type,
+				paper_width: selectedTemplate?.paper_width ?? null,
+			}),
+		[selectedTemplate]
+	);
 
 	// Resolve printer for this template
 	const {
@@ -206,15 +219,22 @@ export function Receipt({ resource }: Props) {
 								onSelect={setPrinterSelection}
 							/>
 							<MismatchBadge message={mismatchWarning} />
-							<WebView
-								ref={iframeRef as never}
-								{...(renderedHtml != null
-									? { srcDoc: renderedHtml }
-									: { src: templateReceiptUrl || baseReceiptURL || '' })}
-								onLoad={handleLoad}
-								onMessage={() => {}}
-								className="flex-1"
-							/>
+							<ReceiptPreviewViewport
+								key={String(selectedTemplateId ?? 'legacy-receipt')}
+								defaultZoom={defaultPreviewZoom}
+								label={t('receipt.preview_zoom', 'Preview zoom')}
+								testID="receipt-preview"
+							>
+								<WebView
+									ref={iframeRef as never}
+									{...(renderedHtml != null
+										? { srcDoc: renderedHtml }
+										: { src: templateReceiptUrl || baseReceiptURL || '' })}
+									onLoad={handleLoad}
+									onMessage={() => {}}
+									className="min-h-[640px] flex-1"
+								/>
+							</ReceiptPreviewViewport>
 						</VStack>
 					</ErrorBoundary>
 				</ModalBody>

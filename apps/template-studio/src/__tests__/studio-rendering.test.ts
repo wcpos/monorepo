@@ -10,7 +10,7 @@ import {
 	printReceiptInHiddenFrame,
 	renderTemplatePlaceholders,
 } from '../App';
-import { countPreviewLines } from '../components/Stage';
+import { countPreviewLines, Stage } from '../components/Stage';
 import { appendDiagnosticTemplates } from '../diagnostic-templates';
 import { createRandomReceipt } from '../randomizer';
 import { fetchWpPreview, printRawTcp } from '../studio-api';
@@ -84,6 +84,28 @@ describe('template studio rendering harness', () => {
 		});
 		expect(withDiagnostics.at(-1)?.content).toContain('COL RULER 48:');
 		expect(withDiagnostics.at(-1)?.content).toContain('<size width="2" height="2">');
+	});
+
+	it('anchors reduced zoom previews to the top-left of the paper frame', () => {
+		render(
+			createElement(Stage, {
+				previewFrameRef: { current: null },
+				rendered: {
+					kind: 'logicless',
+					html: '<p>Receipt</p>',
+					diagnosticHtml: undefined,
+					data: {},
+				},
+				previewHtml: '<p>Receipt</p>',
+				paperWidth: 'a4',
+				zoom: 75,
+			})
+		);
+
+		expect(document.querySelector('.paper-frame')).toHaveStyle({
+			transform: 'scale(0.75)',
+			transformOrigin: 'top left',
+		});
 	});
 
 	it('renders logicless templates with JS output and optional PHP diagnostic output', () => {

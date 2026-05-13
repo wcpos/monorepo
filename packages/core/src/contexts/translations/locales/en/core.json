@@ -490,6 +490,7 @@
 	"receipt.email_address": "Email Address",
 	"receipt.email_receipt": "Email Receipt",
 	"receipt.email_sent": "Email sent",
+	"receipt.preview_zoom": "Preview zoom",
 	"receipt.print_receipt": "Print Receipt",
 	"receipt.save_email_to_billing_address": "Save email to Billing Address",
 	"receipt.send": "Send",

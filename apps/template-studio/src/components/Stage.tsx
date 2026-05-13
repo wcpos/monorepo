@@ -91,7 +91,7 @@ export function Stage({
 					<div
 						ref={previewFrameRef}
 						className={`paper-frame ${PAPER_CLASS[paperWidth]}`}
-						style={transform ? { transform } : undefined}
+						style={transform ? { transform, transformOrigin: 'top left' } : undefined}
 						dangerouslySetInnerHTML={{ __html: previewHtml }}
 					/>
 				) : (
