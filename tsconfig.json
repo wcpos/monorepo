@@ -2,7 +2,11 @@
 	"extends": "expo/tsconfig.base",
 	"compilerOptions": {
 		"baseUrl": ".",
+		"ignoreDeprecations": "6.0",
 		"module": "esnext",
+		"rootDir": ".",
+		"typeRoots": ["./types", "./node_modules/@types"],
+		"types": ["jest", "node", "wcpos-dependabot-shims"],
 		"paths": {
 			"@wcpos/main/*": ["apps/main/*"],
 			"@wcpos/electron/*": ["apps/electron/*"],

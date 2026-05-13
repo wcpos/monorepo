@@ -31,7 +31,7 @@
 	"dependencies": {
 		"@point-of-sale/receipt-printer-encoder": "^3.0.3",
 		"bwip-js": "4.10.1",
-		"dompurify": "^3.4.1",
+		"dompurify": "^3.4.2",
 		"iconv-lite": "0.7.2",
 		"mustache": "^4.2.0"
 	},
