@@ -30,7 +30,7 @@
     "postinstall": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && test -f \"$(git rev-parse --git-path wcpos-submodule-updated)\" && git add apps/electron apps/web && rm -f \"$(git rev-parse --git-path wcpos-submodule-updated)\" || true",
     "prepare": "git config core.hooksPath .githooks"
   },
-  "packageManager": "pnpm@10.31.0",
+  "packageManager": "pnpm@11.1.1",
   "pnpm": {
     "overrides": {
       "expo": "~55.0.19",
