@@ -36,8 +36,8 @@
 		"@types/react": "^19.2.13",
 		"@types/react-dom": "^19.2.3",
 		"jsdom": "^26.1.0",
-		"playwright": "1.59.1",
+		"playwright": "1.60.0",
 		"tsx": "^4.21.0",
-		"vitest": "^4.0.18"
+		"vitest": "^4.1.6"
 	}
 }

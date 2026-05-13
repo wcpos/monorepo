@@ -43,7 +43,7 @@
     "@types/react": "^19.1.11",
     "jest": "^30.1.0",
     "react-native": "~0.83.2",
-    "react-test-renderer": "~19.2.5",
+    "react-test-renderer": "~19.2.6",
     "ts-jest": "^29.4.6"
   }
 }
