@@ -4,3 +4,8 @@ packages:
 minimumReleaseAge: 1440
 blockExoticSubdeps: true
 minimumReleaseAgeIgnoreMissingTime: true
+resolutionMode: highest
+minimumReleaseAgeExclude:
+  - react-native-svg
+  - react-native
+  - '@react-native/*'
