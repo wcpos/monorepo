@@ -22,7 +22,9 @@ overrides:
 packageExtensionsChecksum: sha256-EMen4+1NnTMb6PkUt5YTKBLEs4BAWQPcwvdmpWcA5oA=
 
 patchedDependencies:
-  react-native-esc-pos-printer@4.5.0: 47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db
+  react-native-esc-pos-printer@4.5.0:
+    hash: 47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db
+    path: patches/react-native-esc-pos-printer@4.5.0.patch
 
 importers:
 
@@ -249,6 +251,9 @@ importers:
       js-base64:
         specifier: ^3.7.7
         version: 3.7.8
+      observable-hooks:
+        specifier: 4.2.4
+        version: 4.2.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(rxjs@7.8.2)
       postcss:
         specifier: ^8.5.10
         version: 8.5.12
