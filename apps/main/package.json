@@ -48,6 +48,7 @@
     "expo-system-ui": "~55.0.16",
     "expo-web-browser": "~55.0.9",
     "js-base64": "^3.7.7",
+    "observable-hooks": "4.2.4",
     "postcss": "^8.5.10",
     "react": "~19.2.5",
     "react-dom": "~19.2.5",
