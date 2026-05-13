@@ -782,6 +782,9 @@ importers:
 
   packages/database:
     dependencies:
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
       expo-file-system:
         specifier: ~55.0.10
         version: 55.0.16(expo@55.0.19)(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.5))
