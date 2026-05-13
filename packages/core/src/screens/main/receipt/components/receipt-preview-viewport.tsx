@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
@@ -39,11 +39,8 @@ export function ReceiptPreviewViewport({
 					{zoomOptions.map((option) => {
 						const active = option === zoom;
 						return (
-							<Pressable
+							<View
 								key={option}
-								role="button"
-								accessibilityRole="button"
-								accessibilityState={{ selected: active }}
 								className={`rounded-md border px-2 py-1 ${active ? 'bg-primary' : 'bg-background'}`}
 							>
 								<Text
@@ -51,7 +48,7 @@ export function ReceiptPreviewViewport({
 								>
 									{option}%
 								</Text>
-							</Pressable>
+							</View>
 						);
 					})}
 				</HStack>
