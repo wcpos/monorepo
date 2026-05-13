@@ -38,7 +38,8 @@
     "glob": "^13.0.0",
     "lint-staged": "^16.3.2",
     "eslint": "^9.39.4",
-    "prettier-plugin-tailwindcss": "^0.8.0"
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "expo": "~55.0.19"
   },
   "dependencies": {
     "turbo": "^2.8.14",
