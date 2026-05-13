@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 nodeLinker: hoisted
+preferSymlinkedExecutables: false
 minimumReleaseAge: 1440
 blockExoticSubdeps: true
 minimumReleaseAgeIgnoreMissingTime: true
