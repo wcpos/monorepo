@@ -34,6 +34,9 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
     devDependencies:
+      eslint:
+        specifier: ^9.39.4
+        version: 9.39.4(jiti@2.6.1)
       glob:
         specifier: ^13.0.0
         version: 13.0.6
