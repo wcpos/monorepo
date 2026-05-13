@@ -83,7 +83,7 @@ describe('template studio rendering harness', () => {
 			source: 'bundled-gallery',
 		});
 		expect(withDiagnostics.at(-1)?.content).toContain('COL RULER 48:');
-		expect(withDiagnostics.at(-1)?.content).toContain('<size width="2">');
+		expect(withDiagnostics.at(-1)?.content).toContain('<size width="2" height="2">');
 	});
 
 	it('renders logicless templates with JS output and optional PHP diagnostic output', () => {
