@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
 
 import {
 	Select,
@@ -14,29 +13,16 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../contexts/translations';
 
-export function VendorSelect({ value, ...props }: SelectSingleRootProps) {
+import type { VendorOption } from '../schema';
+
+interface VendorSelectProps extends SelectSingleRootProps {
+	options: VendorOption[];
+}
+
+export function VendorSelect({ value, options, ...props }: VendorSelectProps) {
 	const t = useT();
-
-	const options = React.useMemo(() => {
-		const items = [
-			{ value: 'epson', label: 'Epson' },
-			{ value: 'star', label: 'Star Micronics' },
-		];
-		if (Platform.OS !== 'web') {
-			items.push({
-				value: 'generic',
-				label: t('settings.printer_vendor_generic', 'Generic'),
-			});
-		}
-		return items;
-	}, [t]);
-
 	const selectedLabel =
-		options.find((option) => option.value === value?.value)?.label ??
-		value?.label ??
-		value?.value ??
-		'';
-
+		options.find((o) => o.value === value?.value)?.label ?? value?.label ?? value?.value ?? '';
 	return (
 		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
 			<SelectTrigger>
