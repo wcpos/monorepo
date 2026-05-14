@@ -12,7 +12,7 @@ describe('buildPrinterProfileFields', () => {
 					language: 'star-prnt',
 					columns: 48,
 					emitEscPrintMode: true,
-					autoPrint: false,
+					fullReceiptRaster: false,
 					autoCut: true,
 					autoOpenDrawer: false,
 					isDefault: false,
@@ -43,7 +43,7 @@ describe('buildPrinterProfileFields', () => {
 					language: 'esc-pos',
 					columns: 48,
 					emitEscPrintMode: true,
-					autoPrint: false,
+					fullReceiptRaster: false,
 					autoCut: true,
 					autoOpenDrawer: false,
 					isDefault: false,
@@ -71,7 +71,7 @@ describe('buildPrinterProfileFields', () => {
 				language: 'esc-pos',
 				columns: 42,
 				emitEscPrintMode: true,
-				autoPrint: false,
+				fullReceiptRaster: false,
 				autoCut: true,
 				autoOpenDrawer: false,
 				isDefault: true,
@@ -93,7 +93,7 @@ describe('buildPrinterProfileFields', () => {
 				language: 'esc-pos',
 				columns: 48,
 				emitEscPrintMode: true,
-				autoPrint: false,
+				fullReceiptRaster: false,
 				autoCut: true,
 				autoOpenDrawer: false,
 				isDefault: false,
@@ -103,5 +103,45 @@ describe('buildPrinterProfileFields', () => {
 				columns: 48,
 			})
 		);
+	});
+
+	it('takes connectionType from form data over prefill', () => {
+		expect(
+			buildPrinterProfileFields(
+				{
+					name: 'Star BT manual',
+					connectionType: 'bluetooth',
+					vendor: 'star',
+					address: '01:23:45:67:89:AB',
+					port: 9100,
+					language: 'star-prnt',
+					columns: 48,
+					emitEscPrintMode: true,
+					fullReceiptRaster: false,
+					autoCut: true,
+					autoOpenDrawer: false,
+					isDefault: false,
+				},
+				{ prefill: { connectionType: 'network' } }
+			)
+		).toEqual(expect.objectContaining({ connectionType: 'bluetooth' }));
+	});
+
+	it('defaults connectionType to network when form data omits it', () => {
+		expect(
+			buildPrinterProfileFields({
+				name: 'Web Epson',
+				vendor: 'epson',
+				address: '192.168.1.100',
+				port: 8008,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: true,
+			})
+		).toEqual(expect.objectContaining({ connectionType: 'network' }));
 	});
 });

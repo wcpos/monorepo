@@ -2,13 +2,15 @@ import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
 
 export interface PrinterProfileFormData {
 	name: string;
+	connectionType?: PrinterProfile['connectionType'];
+	nativeInterfaceType?: string;
 	vendor: PrinterProfile['vendor'];
 	address: string;
 	port: number;
 	language: PrinterProfile['language'];
 	columns: number;
 	emitEscPrintMode: boolean;
-	autoPrint: boolean;
+	fullReceiptRaster: boolean;
 	autoCut: boolean;
 	autoOpenDrawer: boolean;
 	isDefault: boolean;
@@ -33,12 +35,19 @@ interface PrinterProfileSeed {
 }
 
 function resolvePrinterTransport({
+	data,
 	printer,
 	prefill,
-}: PrinterProfileSeed): Pick<PrinterProfile, 'connectionType' | 'nativeInterfaceType'> {
+}: {
+	data: { connectionType?: PrinterProfile['connectionType']; nativeInterfaceType?: string };
+	printer?: PrinterProfileSeed['printer'];
+	prefill?: PrinterProfileSeed['prefill'];
+}): Pick<PrinterProfile, 'connectionType' | 'nativeInterfaceType'> {
 	return {
-		connectionType: printer?.connectionType ?? prefill?.connectionType ?? 'network',
-		nativeInterfaceType: printer?.nativeInterfaceType ?? prefill?.nativeInterfaceType,
+		connectionType:
+			data.connectionType ?? printer?.connectionType ?? prefill?.connectionType ?? 'network',
+		nativeInterfaceType:
+			data.nativeInterfaceType ?? printer?.nativeInterfaceType ?? prefill?.nativeInterfaceType,
 	};
 }
 
@@ -46,7 +55,7 @@ export function buildPrinterProfileFields(
 	data: PrinterProfileFormData,
 	seed: PrinterProfileSeed = {}
 ): Omit<PrinterProfile, 'id' | 'isBuiltIn'> {
-	const transport = resolvePrinterTransport(seed);
+	const transport = resolvePrinterTransport({ data, printer: seed.printer, prefill: seed.prefill });
 
 	return {
 		name: data.name,
@@ -60,7 +69,7 @@ export function buildPrinterProfileFields(
 		language: data.language,
 		columns: data.columns,
 		emitEscPrintMode: data.emitEscPrintMode,
-		autoPrint: data.autoPrint,
+		fullReceiptRaster: data.fullReceiptRaster,
 		autoCut: data.autoCut,
 		autoOpenDrawer: data.autoOpenDrawer,
 		isDefault: data.isDefault,
