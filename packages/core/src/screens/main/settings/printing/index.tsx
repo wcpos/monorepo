@@ -1,47 +1,32 @@
 import * as React from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Button } from '@wcpos/components/button';
-import { HStack } from '@wcpos/components/hstack';
-import { Icon } from '@wcpos/components/icon';
-import { Toast } from '@wcpos/components/toast';
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@wcpos/components/table';
 import { Text } from '@wcpos/components/text';
+import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { PrinterService, resolvePrinter, usePrinterDiscovery } from '@wcpos/printer';
-import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
+import { PrinterService, resolvePrinter } from '@wcpos/printer';
+import type { PrinterProfile } from '@wcpos/printer';
 import type {
 	PrinterProfileDocument,
 	TemplateDocument,
 	TemplatePrinterOverrideDocument,
 } from '@wcpos/database';
 
+import { PrinterRow } from './printer-row';
+import { PrintersEmptyState } from './printers-empty-state';
+import { SectionHeader } from './section-header';
+import { TemplateRow } from './template-row';
 import { useEnsureSystemPrinter } from './use-ensure-system-printer';
+import { AUTO_VALUE } from './utils';
 import { PrinterDialog } from '../printer/add-printer';
 import { toPrinterProfile } from '../printer/use-default-printer-profile';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-
-const AUTO_VALUE = '__auto__';
 
 export function PrintingSettings() {
 	const t = useT();
@@ -51,10 +36,6 @@ export function PrintingSettings() {
 	const [testingPrinterIds, setTestingPrinterIds] = React.useState<Set<string>>(new Set());
 	const printerService = React.useMemo(() => new PrinterService(), []);
 	const templates = useActiveTemplates();
-	const discovery = usePrinterDiscovery();
-	const [prefilledPrinter, setPrefilledPrinter] = React.useState<
-		Partial<DiscoveredPrinter> | undefined
-	>();
 
 	useEnsureSystemPrinter(storeDB);
 
@@ -168,326 +149,97 @@ export function PrintingSettings() {
 		[printerService, t]
 	);
 
-	const connectionLabel = React.useCallback(
-		(profile: PrinterProfile) => {
-			if (profile.connectionType === 'system') {
-				return t('settings.connection_system', 'System Dialog');
-			}
-			const addr = profile.address || '?';
-			return `${addr}:${profile.port}`;
-		},
-		[t]
-	);
+	const openAddDialog = React.useCallback(() => {
+		setEditingPrinter(undefined);
+		setDialogOpen(true);
+	}, []);
+
+	const openEditDialog = React.useCallback((profile: PrinterProfile) => {
+		setEditingPrinter(profile);
+		setDialogOpen(true);
+	}, []);
+
+	const nonBuiltInCount = printers.filter((p) => !p.isBuiltIn).length;
 
 	return (
 		<VStack className="gap-6">
-			{/* Templates section */}
-			<VStack className="gap-2">
-				<Text className="text-sm font-semibold">
-					{t('receipt.receipt_templates', 'Receipt Templates')}
-				</Text>
+			{/* Printers section */}
+			<VStack className="gap-3">
+				<SectionHeader
+					icon="printer"
+					title={t('settings.printers', 'Printers')}
+					description={t('settings.printers_description', 'Devices receipts can be sent to.')}
+				/>
+				{nonBuiltInCount === 0 ? (
+					<PrintersEmptyState onAddPrinter={openAddDialog} />
+				) : (
+					<>
+						<View className="border-border overflow-hidden rounded-lg border">
+							{printers.map((profile, index) => (
+								<PrinterRow
+									key={profile.id}
+									profile={profile}
+									isFirst={index === 0}
+									isTesting={testingPrinterIds.has(profile.id)}
+									onTest={handleTestPrint}
+									onEdit={openEditDialog}
+									onSetDefault={handleSetDefault}
+									onDelete={handleDelete}
+								/>
+							))}
+						</View>
+						<Button
+							leftIcon="plus"
+							className="self-start"
+							onPress={openAddDialog}
+							testID="printing-add-printer-button"
+						>
+							<Text>{t('settings.add_printer', 'Add Printer')}</Text>
+						</Button>
+					</>
+				)}
+			</VStack>
+
+			{/* Receipt Templates section */}
+			<VStack className="gap-3">
+				<SectionHeader
+					icon="receipt"
+					title={t('receipt.receipt_templates', 'Receipt Templates')}
+					description={t(
+						'settings.templates_description',
+						'Choose which printer each template prints to.'
+					)}
+				/>
 				{templates.length === 0 ? (
 					<Text className="text-muted-foreground text-sm">
 						{t('settings.no_templates', 'No active templates found.')}
 					</Text>
 				) : (
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead>
-									<Text>{t('common.name', 'Name')}</Text>
-								</TableHead>
-								<TableHead>
-									<Text>{t('common.type', 'Type')}</Text>
-								</TableHead>
-								<TableHead>
-									<Text>{t('settings.printer', 'Printer')}</Text>
-								</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{templates.map((tmpl, index) => {
-								const tmplId = String(tmpl.id);
-								const currentOverride = overrides.get(tmplId);
-								const autoLabel = autoMatchLabel(tmpl);
-								const selectedPrinter = currentOverride
-									? printers.find((p) => p.id === currentOverride)
-									: null;
-								const currentValue = selectedPrinter ? currentOverride! : AUTO_VALUE;
-								const selectedLabel = selectedPrinter ? selectedPrinter.name : autoLabel;
+					<View className="border-border overflow-hidden rounded-lg border">
+						{templates.map((tmpl, index) => {
+							const tmplId = String(tmpl.id);
+							const currentOverride = overrides.get(tmplId);
+							const autoLabel = autoMatchLabel(tmpl);
+							const selectedPrinter = currentOverride
+								? printers.find((p) => p.id === currentOverride)
+								: null;
+							const currentValue = selectedPrinter ? currentOverride! : AUTO_VALUE;
+							const selectedLabel = selectedPrinter ? selectedPrinter.name : autoLabel;
 
-								return (
-									<TableRow key={tmplId} index={index}>
-										<TableCell>
-											<Text>{tmpl.title}</Text>
-										</TableCell>
-										<TableCell>
-											<View className="bg-muted self-start rounded px-1.5 py-0.5">
-												<Text className="text-muted-foreground text-xs font-medium">
-													{tmpl.output_type === 'escpos'
-														? `ESC/POS ${tmpl.paper_width ?? ''}`
-														: 'HTML'}
-												</Text>
-											</View>
-										</TableCell>
-										<TableCell>
-											<Select
-												value={{ value: currentValue, label: selectedLabel }}
-												onValueChange={(option) => {
-													if (option) {
-														handleRoutingChange(tmplId, option.value);
-													}
-												}}
-											>
-												<SelectTrigger>
-													<SelectValue
-														placeholder={t('settings.select_printer', 'Select printer...')}
-													/>
-												</SelectTrigger>
-												<SelectContent>
-													<SelectGroup>
-														<SelectItem value={AUTO_VALUE} label={autoLabel} />
-														{printers.map((printer) => (
-															<SelectItem
-																key={printer.id}
-																value={printer.id}
-																label={printer.name}
-															/>
-														))}
-													</SelectGroup>
-												</SelectContent>
-											</Select>
-										</TableCell>
-									</TableRow>
-								);
-							})}
-						</TableBody>
-					</Table>
-				)}
-			</VStack>
-
-			{/* Printers section */}
-			<VStack className="gap-2">
-				<Text className="text-sm font-semibold">{t('settings.printers', 'Printers')}</Text>
-				{printers.filter((p) => !p.isBuiltIn).length === 0 ? (
-					<View className="border-border items-center rounded-lg border border-dashed p-8">
-						<VStack className="max-w-sm items-center gap-3">
-							<Icon name="receipt" size="xl" className="text-muted-foreground" />
-							<Text className="text-center font-medium">
-								{t('settings.no_printers_configured', 'No printers configured')}
-							</Text>
-							<Text className="text-muted-foreground text-center text-sm">
-								{t(
-									'settings.no_printers_body',
-									"Add a network printer to print receipts directly. You only need the printer's IP address — we'll detect the rest automatically."
-								)}
-							</Text>
-							{Platform.OS === 'web' && (
-								<Text className="text-muted-foreground text-center text-xs">
-									{t(
-										'settings.web_printer_note',
-										'Web browsers support Epson and Star printers. For other brands, use the desktop app.'
-									)}
-								</Text>
-							)}
-							<HStack className="gap-2">
-								<Button
-									onPress={() => {
-										setPrefilledPrinter(undefined);
-										setEditingPrinter(undefined);
-										setDialogOpen(true);
-									}}
-								>
-									<Text>{t('settings.add_printer', 'Add Printer')}</Text>
-								</Button>
-								{Platform.OS !== 'web' && (
-									<Button
-										variant="outline"
-										onPress={() => discovery.startScan()}
-										loading={discovery.isScanning}
-									>
-										<Text>{t('settings.scan_network', 'Scan Network')}</Text>
-									</Button>
-								)}
-							</HStack>
-							{discovery.error && (
-								<Text className="text-muted-foreground text-xs">{discovery.error}</Text>
-							)}
-							{discovery.printers.length > 0 && (
-								<VStack className="gap-1">
-									{discovery.printers.map((dp) => (
-										<HStack key={dp.id} className="items-center gap-2">
-											<Text className="text-sm">
-												{dp.name} ({dp.address})
-											</Text>
-											{dp.vendor && dp.vendor !== 'generic' && (
-												<View className="bg-muted rounded px-1.5 py-0.5">
-													<Text className="text-muted-foreground text-xs">
-														{dp.vendor === 'epson' ? 'Epson' : 'Star'}
-													</Text>
-												</View>
-											)}
-											<Button
-												variant="outline"
-												size="sm"
-												onPress={() => {
-													setPrefilledPrinter(dp);
-													setEditingPrinter(undefined);
-													setDialogOpen(true);
-												}}
-											>
-												<Text>{t('common.add', 'Add')}</Text>
-											</Button>
-										</HStack>
-									))}
-								</VStack>
-							)}
-							<Text className="text-muted-foreground text-xs">
-								{t(
-									'settings.system_dialog_note',
-									'You can always use the System Print Dialog without adding a printer.'
-								)}
-							</Text>
-						</VStack>
+							return (
+								<TemplateRow
+									key={tmplId}
+									template={tmpl}
+									isFirst={index === 0}
+									currentValue={currentValue}
+									selectedLabel={selectedLabel}
+									autoLabel={autoLabel}
+									printers={printers}
+									onRoutingChange={handleRoutingChange}
+								/>
+							);
+						})}
 					</View>
-				) : (
-					<>
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>
-										<Text>{t('common.name', 'Name')}</Text>
-									</TableHead>
-									<TableHead>
-										<Text>{t('settings.connection_type', 'Connection')}</Text>
-									</TableHead>
-									<TableHead>
-										<Text>{t('common.actions', 'Actions')}</Text>
-									</TableHead>
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{printers.map((profile, index) => (
-									<TableRow key={profile.id} index={index}>
-										<TableCell>
-											<HStack className="items-center gap-2">
-												<Text>{profile.name}</Text>
-												{profile.isDefault && (
-													<View className="bg-primary rounded px-2 py-0.5">
-														<Text className="text-primary-foreground text-xs">
-															{t('common.default', 'Default')}
-														</Text>
-													</View>
-												)}
-											</HStack>
-										</TableCell>
-										<TableCell>
-											<Text className="text-muted-foreground text-sm">
-												{connectionLabel(profile)}
-											</Text>
-										</TableCell>
-										<TableCell>
-											<HStack className="gap-2">
-												{!profile.isBuiltIn && (
-													<Button
-														variant="outline"
-														size="sm"
-														onPress={() => {
-															setEditingPrinter(profile);
-															setDialogOpen(true);
-														}}
-													>
-														<Text>{t('common.edit', 'Edit')}</Text>
-													</Button>
-												)}
-												<Button
-													variant="outline"
-													size="sm"
-													loading={testingPrinterIds.has(profile.id)}
-													onPress={() => handleTestPrint(profile)}
-												>
-													<Text>{t('settings.test_print', 'Test')}</Text>
-												</Button>
-												{!profile.isDefault && (
-													<Button
-														variant="outline"
-														size="sm"
-														onPress={() => handleSetDefault(profile.id)}
-													>
-														<Text>{t('settings.set_default', 'Set Default')}</Text>
-													</Button>
-												)}
-												{!profile.isBuiltIn && (
-													<Button
-														variant="destructive"
-														size="sm"
-														onPress={() => handleDelete(profile.id)}
-													>
-														<Text>{t('common.delete', 'Delete')}</Text>
-													</Button>
-												)}
-											</HStack>
-										</TableCell>
-									</TableRow>
-								))}
-							</TableBody>
-						</Table>
-						<HStack className="gap-2">
-							<Button
-								onPress={() => {
-									setPrefilledPrinter(undefined);
-									setEditingPrinter(undefined);
-									setDialogOpen(true);
-								}}
-							>
-								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
-							</Button>
-							{Platform.OS !== 'web' && (
-								<Button
-									variant="outline"
-									onPress={() => discovery.startScan()}
-									loading={discovery.isScanning}
-								>
-									<Text>{t('settings.scan_network', 'Scan Network')}</Text>
-								</Button>
-							)}
-						</HStack>
-						{discovery.error && (
-							<Text className="text-muted-foreground text-xs">{discovery.error}</Text>
-						)}
-						{discovery.printers.length > 0 && (
-							<VStack className="gap-1">
-								<Text className="text-muted-foreground text-xs font-medium">
-									{t('settings.discovered_printers', 'Discovered printers:')}
-								</Text>
-								{discovery.printers.map((dp) => (
-									<HStack key={dp.id} className="items-center gap-2">
-										<Text className="text-sm">
-											{dp.name} ({dp.address})
-										</Text>
-										{dp.vendor && dp.vendor !== 'generic' && (
-											<View className="bg-muted rounded px-1.5 py-0.5">
-												<Text className="text-muted-foreground text-xs">
-													{dp.vendor === 'epson' ? 'Epson' : 'Star'}
-												</Text>
-											</View>
-										)}
-										<Button
-											variant="outline"
-											size="sm"
-											onPress={() => {
-												setPrefilledPrinter(dp);
-												setEditingPrinter(undefined);
-												setDialogOpen(true);
-											}}
-										>
-											<Text>{t('common.add', 'Add')}</Text>
-										</Button>
-									</HStack>
-								))}
-							</VStack>
-						)}
-					</>
 				)}
 			</VStack>
 
@@ -497,11 +249,9 @@ export function PrintingSettings() {
 				onSave={() => {
 					setDialogOpen(false);
 					setEditingPrinter(undefined);
-					setPrefilledPrinter(undefined);
 				}}
 				printer={editingPrinter}
-				printerCount={printers.filter((p) => !p.isBuiltIn).length}
-				prefill={prefilledPrinter}
+				printerCount={nonBuiltInCount}
 			/>
 		</VStack>
 	);
