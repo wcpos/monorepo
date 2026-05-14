@@ -195,6 +195,82 @@ describe('createTokenRefreshHandler', () => {
 			expect(result).toEqual(retryResponse);
 		});
 
+		it('should not mark auth failed when retry still returns a permission 403', async () => {
+			const wpUser = makeWpUser();
+			const handler = createTokenRefreshHandler({
+				site: makeSite(),
+				wpUser,
+				getHttpClient,
+			});
+
+			mockPost.mockResolvedValue({
+				data: { access_token: 'new-token', expires_at: 9999 },
+				status: 200,
+			});
+
+			(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (fn) => {
+				await fn();
+			});
+			(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
+
+			const retryError: any = new Error('Request failed with status code 403');
+			retryError.response = {
+				status: 403,
+				data: {
+					code: 'wcpos_rest_cannot_view',
+					message: 'Sorry, you cannot view receipts.',
+					data: { status: 403 },
+				},
+			};
+
+			const ctx = makeContext({ error: makeError(403) });
+			ctx.retryRequest.mockRejectedValue(retryError);
+
+			await expect(handler.handle(ctx)).rejects.toBe(retryError);
+
+			expect(requestStateManager.setAuthFailed).not.toHaveBeenCalled();
+			expect(ctx.error.isRefreshTokenInvalid).toBeUndefined();
+			expect(ctx.error.refreshTokenInvalid).toBeUndefined();
+		});
+
+		it('should mark auth failed when retry still returns an auth-coded 403', async () => {
+			const wpUser = makeWpUser();
+			const handler = createTokenRefreshHandler({
+				site: makeSite(),
+				wpUser,
+				getHttpClient,
+			});
+
+			mockPost.mockResolvedValue({
+				data: { access_token: 'new-token', expires_at: 9999 },
+				status: 200,
+			});
+
+			(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (fn) => {
+				await fn();
+			});
+			(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
+
+			const retryError: any = new Error('Request failed with status code 403');
+			retryError.response = {
+				status: 403,
+				data: {
+					code: 'jwt_auth_bad_request',
+					message: 'Bad token request',
+					data: { status: 403 },
+				},
+			};
+
+			const ctx = makeContext({ error: makeError(403) });
+			ctx.retryRequest.mockRejectedValue(retryError);
+
+			await expect(handler.handle(ctx)).rejects.toBe(ctx.error);
+
+			expect(requestStateManager.setAuthFailed).toHaveBeenCalledWith(true);
+			expect(ctx.error.isRefreshTokenInvalid).toBe(true);
+			expect(ctx.error.refreshTokenInvalid).toBe(true);
+		});
+
 		it('should set token as query param when use_jwt_as_param is true', async () => {
 			const handler = createTokenRefreshHandler({
 				site: makeSite({ use_jwt_as_param: true }),

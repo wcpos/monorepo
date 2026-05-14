@@ -81,6 +81,18 @@ import type { HttpErrorHandler, HttpErrorHandlerContext } from './types';
 
 const tokenLogger = getLogger(['wcpos', 'auth', 'token']);
 
+const AUTH_RETRY_403_CODES = new Set([
+	'jwt_auth_bad_config',
+	'jwt_auth_bad_iss',
+	'jwt_auth_bad_request',
+	'jwt_auth_expired_token',
+	'jwt_auth_failed',
+	'jwt_auth_invalid_token',
+	'jwt_auth_no_auth_header',
+	'rest_login_required',
+	'woocommerce_rest_authentication_error',
+]);
+
 /**
  * RxDB document interface for WordPress credentials.
  * This is a subset of the full RxDocument interface with the methods we need.
@@ -323,12 +335,14 @@ export const createTokenRefreshHandler = ({
 						retryRequest
 					);
 				} catch (retryError: any) {
-					// If the retry STILL fails with 401/403 after a successful token refresh,
-					// the issue isn't an expired token. Mark auth as failed to prevent
-					// infinite refresh loops (each refresh saves a new access_token which
-					// triggers re-validation via observable, which hits 403 again, etc.)
 					const retryStatus = retryError?.response?.status;
-					if (retryStatus === 401 || retryStatus === 403) {
+
+					// If the retry STILL fails with 401/403 after a successful token refresh,
+					// the issue isn't an expired token. A 401 still means authentication failed.
+					// A 403 can be either auth-related (JWT/WP login errors) or a legitimate
+					// permission denial from the endpoint (for example, receipts can return
+					// wcpos_rest_cannot_view). Only auth-coded 403s should restart auth.
+					if (isRetryAuthFailure(retryError)) {
 						tokenLogger.warn(
 							'Request still unauthorized after token refresh - please log in again',
 							{
@@ -358,6 +372,18 @@ export const createTokenRefreshHandler = ({
 		},
 	};
 };
+
+function isRetryAuthFailure(retryError: {
+	response?: { status?: number; data?: { code?: unknown } };
+}): boolean {
+	const retryStatus = retryError?.response?.status;
+	const serverCode = retryError?.response?.data?.code;
+
+	return (
+		retryStatus === 401 ||
+		(retryStatus === 403 && typeof serverCode === 'string' && AUTH_RETRY_403_CODES.has(serverCode))
+	);
+}
 
 /**
  * Retry request with a new access token
