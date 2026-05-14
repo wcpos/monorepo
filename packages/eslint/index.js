@@ -152,6 +152,7 @@ export const config = [
 			'**/e2e/global-setup.ts', // Playwright global setup
 			'**/tree-dom.tsx', // Expo "use dom" requires default export
 			'**/discord.tsx', // Expo "use dom" requires default export
+			'**/receipt-rasterizer.dom.tsx', // Expo "use dom" requires default export
 			'**/reports/chart/chart.tsx', // Dynamic import via WithSkiaWeb requires default export
 		],
 		rules: {
