@@ -52,7 +52,8 @@ export function PrinterRow({
 			'built-in'
 		)}`;
 	} else {
-		const base = `${profile.address || '?'}:${profile.port}`;
+		const host = profile.address || '?';
+		const base = profile.port ? `${host}:${profile.port}` : host;
 		if (profile.vendor === 'epson') {
 			connectionLabel = `${base} · Epson`;
 		} else if (profile.vendor === 'star') {
