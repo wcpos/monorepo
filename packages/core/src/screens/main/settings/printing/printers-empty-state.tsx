@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -10,12 +11,20 @@ import { useT } from '../../../../contexts/translations';
 
 interface PrintersEmptyStateProps {
 	onAddPrinter: () => void;
+	onScanNetwork: () => void;
+	canScanNetwork: boolean;
+	isScanning: boolean;
 }
 
 /**
  * Empty state for the Printers section — shown when no non-built-in printers exist.
  */
-export function PrintersEmptyState({ onAddPrinter }: PrintersEmptyStateProps) {
+export function PrintersEmptyState({
+	onAddPrinter,
+	onScanNetwork,
+	canScanNetwork,
+	isScanning,
+}: PrintersEmptyStateProps) {
 	const t = useT();
 
 	return (
@@ -33,9 +42,21 @@ export function PrintersEmptyState({ onAddPrinter }: PrintersEmptyStateProps) {
 						'Add a printer to send receipts straight to your hardware. You can always use the System Print Dialog without one.'
 					)}
 				</Text>
-				<Button leftIcon="plus" onPress={onAddPrinter} testID="printing-add-printer-button">
-					<Text>{t('settings.add_printer', 'Add Printer')}</Text>
-				</Button>
+				<HStack className="gap-2">
+					<Button leftIcon="plus" onPress={onAddPrinter} testID="printing-add-printer-button">
+						<Text>{t('settings.add_printer', 'Add Printer')}</Text>
+					</Button>
+					{canScanNetwork && (
+						<Button
+							variant="outline"
+							onPress={onScanNetwork}
+							loading={isScanning}
+							testID="printing-scan-network-button"
+						>
+							<Text>{t('settings.scan_network', 'Scan Network')}</Text>
+						</Button>
+					)}
+				</HStack>
 			</VStack>
 		</View>
 	);
