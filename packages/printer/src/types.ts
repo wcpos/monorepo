@@ -63,7 +63,7 @@ export interface PrinterProfile {
 	 * escape hatch for printers that misbehave when both are sent.
 	 */
 	emitEscPrintMode?: boolean;
-	autoPrint: boolean;
+	fullReceiptRaster: boolean;
 	autoCut: boolean;
 	autoOpenDrawer: boolean;
 	isDefault: boolean;

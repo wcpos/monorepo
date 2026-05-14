@@ -43,7 +43,7 @@ const printerSchema = z.object({
 	language: z.enum(['esc-pos', 'star-prnt', 'star-line']).default('esc-pos'),
 	columns: z.coerce.number().default(42),
 	emitEscPrintMode: z.boolean().default(true),
-	autoPrint: z.boolean().default(false),
+	fullReceiptRaster: z.boolean().default(false),
 	autoCut: z.boolean().default(true),
 	autoOpenDrawer: z.boolean().default(false),
 	isDefault: z.boolean().default(true),
@@ -59,7 +59,7 @@ const DEFAULT_VALUES: PrinterFormData = {
 	language: 'esc-pos',
 	columns: 42,
 	emitEscPrintMode: true,
-	autoPrint: false,
+	fullReceiptRaster: false,
 	autoCut: true,
 	autoOpenDrawer: false,
 	isDefault: true,
@@ -134,7 +134,7 @@ export function PrinterDialog({
 				language: printer.language ?? 'esc-pos',
 				columns: printer.columns ?? 42,
 				emitEscPrintMode: printer.emitEscPrintMode ?? true,
-				autoPrint: printer.autoPrint ?? false,
+				fullReceiptRaster: printer.fullReceiptRaster ?? false,
 				autoCut: printer.autoCut ?? true,
 				autoOpenDrawer: printer.autoOpenDrawer ?? false,
 				isDefault: printer.isDefault ?? false,
@@ -537,16 +537,6 @@ export function PrinterDialog({
 							</Collapsible>
 
 							<VStack className="gap-2">
-								<FormField
-									control={form.control}
-									name="autoPrint"
-									render={({ field }) => (
-										<FormSwitch
-											label={t('settings.auto_print_on_checkout', 'Auto-print on checkout')}
-											{...field}
-										/>
-									)}
-								/>
 								<FormField
 									control={form.control}
 									name="autoCut"

@@ -1,7 +1,7 @@
 /// <reference path="./types/receipt-printer-encoder.d.ts" />
-import ReceiptPrinterEncoderImport from '@point-of-sale/receipt-printer-encoder';
 import PQueue from 'p-queue';
 
+import { buildDiagnosticTemplate } from './encoder/diagnostic-template';
 import { encodeReceipt } from './encoder/encode-receipt';
 import { formatReceiptData } from './encoder/format-receipt-data';
 import { encodeThermalTemplate } from './renderer';
@@ -10,16 +10,6 @@ import { SystemPrintAdapter } from './transport/system-print-adapter';
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
 import type { ReceiptData } from './encoder/types';
 import type { PrinterProfile, PrinterTransport } from './types';
-
-// Handle both ESM default-exported and CJS direct-exported shapes. The encoder
-// package's CJS build uses `module.exports = Class` (no `.default`), and a
-// dynamic `await import(...).default` returned undefined on Hermes/Metro,
-// causing `new undefined()` → "Cannot read property 'prototype' of undefined".
-// A static import goes through Babel's `_interopRequireDefault`; the `??` fallback
-// covers any environment where the import returns the class directly.
-const ReceiptPrinterEncoder =
-	(ReceiptPrinterEncoderImport as unknown as { default?: typeof ReceiptPrinterEncoderImport })
-		?.default ?? ReceiptPrinterEncoderImport;
 
 /** Cache key that captures config-relevant fields so stale transports are evicted. */
 function transportKey(profile: PrinterProfile): string {
@@ -179,7 +169,7 @@ export class PrinterService {
 	async testPrint(profile: PrinterProfile): Promise<void> {
 		if (profile.connectionType === 'system') {
 			const html = `<html><body style="font-family:monospace;text-align:center;padding:2em">
-        <h2>WooCommerce POS</h2><p>Test Print</p>
+        <h2>WCPOS</h2><p>Test Print</p>
         <p>Printer: ${profile.name}</p>
         <p>Connection: System Dialog</p>
         <p>Date: ${new Date().toLocaleString()}</p>
@@ -190,33 +180,17 @@ export class PrinterService {
 
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
-
-			const encoder = new ReceiptPrinterEncoder({
-				language: profile.language,
-				columns: profile.columns,
-				...(profile.printerModel ? { printerModel: profile.printerModel } : {}),
-			});
-
-			const data = encoder
-				.initialize()
-				.codepage('auto')
-				.align('center')
-				.bold(true)
-				.line('WooCommerce POS')
-				.bold(false)
-				.line('Test Print')
-				.newline()
-				.line(`Printer: ${profile.name}`)
-				.line(`Connection: ${profile.connectionType}`)
-				.line(`Date: ${new Date().toLocaleString()}`)
-				.newline()
-				.line('If you can read this,')
-				.line('printing works!')
-				.newline(2)
-				.cut('partial')
-				.encode();
-
-			await transport.printRaw(data);
+			const bytes = encodeThermalTemplate(
+				buildDiagnosticTemplate(profile.columns),
+				{ printerName: profile.name, date: new Date().toLocaleString() },
+				{
+					language: profile.language,
+					columns: profile.columns,
+					printerModel: profile.printerModel,
+					emitEscPrintMode: profile.emitEscPrintMode ?? true,
+				}
+			);
+			await transport.printRaw(bytes);
 		});
 	}
 

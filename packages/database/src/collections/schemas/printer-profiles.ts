@@ -1,6 +1,6 @@
 export const printerProfilesLiteral = {
 	title: 'Printer Profiles schema',
-	version: 4,
+	version: 5,
 	description: 'Local printer profiles for direct thermal printing',
 	type: 'object',
 	primaryKey: 'id',
@@ -56,11 +56,6 @@ export const printerProfilesLiteral = {
 			description:
 				'Emit ESC ! print-mode bytes alongside GS ! size bytes for broader printer compatibility. Disable as an escape hatch when a printer misbehaves.',
 		},
-		autoPrint: {
-			type: 'boolean',
-			default: false,
-			description: 'Print automatically on checkout',
-		},
 		autoCut: {
 			type: 'boolean',
 			default: true,
@@ -68,6 +63,12 @@ export const printerProfilesLiteral = {
 		autoOpenDrawer: {
 			type: 'boolean',
 			default: false,
+		},
+		fullReceiptRaster: {
+			type: 'boolean',
+			default: false,
+			description:
+				'Print the whole receipt as a raster image for Unicode/RTL compatibility. Slower and larger than text mode.',
 		},
 		isDefault: {
 			type: 'boolean',
