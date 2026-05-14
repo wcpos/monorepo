@@ -114,14 +114,16 @@ function WebView({
 			// Web-specific: iframe load events don't match RN WebView navigation events
 			onLoad?.(e as unknown as Parameters<NonNullable<RNWebViewProps['onLoad']>>[0]);
 
+			resizeObserverRef.current?.disconnect();
+			resizeObserverRef.current = null;
+			if (!onContentSizeChangeRef.current) return;
+
 			let doc: Document | null = null;
 			try {
 				doc = localRef.current?.contentDocument ?? null;
 			} catch {
 				doc = null;
 			}
-			resizeObserverRef.current?.disconnect();
-			resizeObserverRef.current = null;
 			if (!doc?.body) return;
 			// Zero the UA's default body margin so the measurement reflects the
 			// document itself, and hide overflow so a transient scrollbar can't
