@@ -4,7 +4,7 @@ import { DEFAULT_THERMAL_TEMPLATE } from '../encoder/default-thermal-template';
 import { mapReceiptData } from '../encoder/map-receipt-data';
 import { prepareSystemPrintHtml } from '../print-html';
 import { PrinterService } from '../printer-service';
-import { useRasterize } from '../raster/rasterize-provider';
+import { useOptionalRasterize } from '../raster/rasterize-provider';
 import { printFromUrl } from './print-from-url';
 
 import type { ReceiptData } from '../encoder/types';
@@ -80,7 +80,7 @@ export function usePrint(options: UsePrintOptions) {
 	/** Track overlapping print calls so isPrinting stays true until all finish. */
 	const activePrintsRef = React.useRef(0);
 
-	const rasterize = useRasterize();
+	const rasterize = useOptionalRasterize();
 
 	const print = React.useCallback(async () => {
 		const {
@@ -112,6 +112,10 @@ export function usePrint(options: UsePrintOptions) {
 				const normalised = mapReceiptData(receiptData as Record<string, any>);
 
 				if (printerProfile.fullReceiptRaster) {
+					if (!rasterize) {
+						throw new Error('fullReceiptRaster requires RasterizeProvider in the component tree.');
+					}
+
 					// Raster path: render → capture → encode inside the 'use dom' component,
 					// then send the finished bytes via the existing printRaw.
 					const effectiveTemplateXml =

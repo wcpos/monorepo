@@ -29,19 +29,44 @@ function base64ToBytes(base64: string): Uint8Array {
 
 export function RasterizeProvider({ children }: { children: React.ReactNode }) {
 	const [job, setJob] = React.useState<(PendingJob & { id: string }) | null>(null);
+	const jobRef = React.useRef<(PendingJob & { id: string }) | null>(null);
 	const jobCounter = React.useRef(0);
+	const rasterizeQueue = React.useRef<Promise<void>>(Promise.resolve());
+	const unmountedRef = React.useRef(false);
 
 	const rasterize = React.useCallback<RasterizeFn>((input) => {
-		return new Promise<Uint8Array>((resolve, reject) => {
-			jobCounter.current += 1;
-			setJob({ id: `raster-${jobCounter.current}`, input, resolve, reject });
-		});
+		const runJob = () =>
+			new Promise<Uint8Array>((resolve, reject) => {
+				if (unmountedRef.current) {
+					reject(new Error('Rasterization cancelled: provider unmounted.'));
+					return;
+				}
+				jobCounter.current += 1;
+				const nextJob = { id: `raster-${jobCounter.current}`, input, resolve, reject };
+				jobRef.current = nextJob;
+				setJob(nextJob);
+			});
+		const queuedJob = rasterizeQueue.current.then(runJob, runJob);
+		rasterizeQueue.current = queuedJob.then(
+			() => undefined,
+			() => undefined
+		);
+		return queuedJob;
+	}, []);
+
+	React.useEffect(() => {
+		return () => {
+			unmountedRef.current = true;
+			jobRef.current?.reject(new Error('Rasterization cancelled: provider unmounted.'));
+			jobRef.current = null;
+		};
 	}, []);
 
 	const handleEncoded = React.useCallback(async (jobId: string, base64Bytes: string) => {
 		setJob((current) => {
 			if (current && current.id === jobId) {
 				current.resolve(base64ToBytes(base64Bytes));
+				jobRef.current = null;
 				return null;
 			}
 			return current;
@@ -52,6 +77,7 @@ export function RasterizeProvider({ children }: { children: React.ReactNode }) {
 		setJob((current) => {
 			if (current && current.id === jobId) {
 				current.reject(new Error(message));
+				jobRef.current = null;
 				return null;
 			}
 			return current;
@@ -84,4 +110,8 @@ export function useRasterize(): RasterizeFn {
 		throw new Error('useRasterize must be used within a RasterizeProvider');
 	}
 	return ctx;
+}
+
+export function useOptionalRasterize(): RasterizeFn | null {
+	return React.useContext(RasterizeContext);
 }
