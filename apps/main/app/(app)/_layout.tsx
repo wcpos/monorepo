@@ -15,6 +15,7 @@ import { UpgradeRequired } from '@wcpos/core/screens/main/upgrade-required';
 import { useCollection } from '@wcpos/core/screens/main/hooks/use-collection';
 import { useRestHttpClient } from '@wcpos/core/screens/main/hooks/use-rest-http-client';
 import { OnlineStatusProvider } from '@wcpos/hooks/use-online-status';
+import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider } from '@wcpos/query';
 import { setDatabase } from '@wcpos/utils/logger';
 
@@ -104,7 +105,9 @@ export default function AppLayout() {
 	return (
 		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 			<ExtraDataProvider>
-				<AppStack />
+				<RasterizeProvider>
+					<AppStack />
+				</RasterizeProvider>
 			</ExtraDataProvider>
 		</OnlineStatusProvider>
 	);

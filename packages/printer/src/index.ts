@@ -52,6 +52,8 @@ export type { EscposRenderOptions } from './renderer';
 export { PrinterService } from './printer-service';
 export { usePrint } from './hooks/use-print';
 export { usePrinterDiscovery } from './hooks/use-printer-discovery';
+export { RasterizeProvider, useRasterize } from './raster/rasterize-provider';
+export type { RasterizeInput } from './raster/rasterize-provider';
 export { resolvePrinter } from './resolve-printer';
 export type { TemplateInfo, ResolvePrinterOptions } from './resolve-printer';
 export { detectMismatch } from './detect-mismatch';
