@@ -4,16 +4,13 @@ import type { PrinterProfile } from '@wcpos/printer';
 import { usePrinterDiscovery } from '@wcpos/printer';
 
 import { AdvancedSettings } from './dialog/advanced-settings';
-import { BluetoothDevicePicker } from './dialog/connection/bluetooth-device-picker';
-import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
-import { UsbDevicePicker } from './dialog/connection/usb-device-picker';
 import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { usePrinterDialogForm, type VendorDefaults } from './dialog/use-printer-dialog-form';
 import {
 	DEFAULT_FORM_VALUES,
-	nativePrinterSchema,
+	electronPrinterSchema,
 	type PrinterFormValues,
 	type VendorOption,
 } from './schema';
@@ -59,7 +56,7 @@ export function PrinterDialog({
 		handleSaveAnyway,
 	} = usePrinterDialogForm({
 		open,
-		schema: nativePrinterSchema,
+		schema: electronPrinterSchema,
 		defaultValues: DEFAULT_FORM_VALUES,
 		deriveVendorDefaults,
 		printer,
@@ -68,43 +65,11 @@ export function PrinterDialog({
 		onSave,
 	});
 
-	const connectionType = form.watch('connectionType');
-
-	// Bluetooth/USB transport supports Epson + Star only (getTransport throws on generic).
-	const vendorOptions: VendorOption[] = React.useMemo(() => {
-		const base: VendorOption[] = [
-			{ value: 'epson', label: 'Epson' },
-			{ value: 'star', label: 'Star Micronics' },
-		];
-		if (connectionType === 'network') {
-			base.push({ value: 'generic', label: t('settings.printer_vendor_generic', 'Generic') });
-		}
-		return base;
-	}, [connectionType, t]);
-
-	// When switching to BT/USB while vendor is 'generic', move it to a supported vendor.
-	React.useEffect(() => {
-		if (connectionType !== 'network' && form.getValues('vendor') === 'generic') {
-			form.setValue('vendor', 'epson');
-		}
-	}, [connectionType, form]);
-
-	let connectionSection: React.ReactNode;
-	if (connectionType === 'bluetooth') {
-		connectionSection = <BluetoothDevicePicker form={form} />;
-	} else if (connectionType === 'usb') {
-		connectionSection = <UsbDevicePicker form={form} />;
-	} else {
-		connectionSection = (
-			<NetworkFields
-				form={form}
-				probing={probing}
-				detectedVendor={detectedVendor}
-				onScan={startScan}
-				scanning={scanning}
-			/>
-		);
-	}
+	const vendorOptions: VendorOption[] = [
+		{ value: 'epson', label: 'Epson' },
+		{ value: 'star', label: 'Star Micronics' },
+		{ value: 'generic', label: t('settings.printer_vendor_generic', 'Generic') },
+	];
 
 	return (
 		<PrinterDialogLayout
@@ -113,19 +78,19 @@ export function PrinterDialog({
 			onOpenChange={onOpenChange}
 			isEditing={isEditing}
 			connectionSection={
-				<>
-					<ConnectionTypeSegmented
-						value={connectionType}
-						onChange={(v) => form.setValue('connectionType', v)}
-					/>
-					{connectionSection}
-				</>
+				<NetworkFields
+					form={form}
+					probing={probing}
+					detectedVendor={detectedVendor}
+					onScan={startScan}
+					scanning={scanning}
+				/>
 			}
 			advancedSettings={
 				<AdvancedSettings
 					form={form}
 					showVendor
-					showPort={connectionType === 'network'}
+					showPort
 					vendorOptions={vendorOptions}
 					defaultOpen={isEditing}
 					onVendorManualChange={setManualVendor}
