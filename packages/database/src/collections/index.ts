@@ -583,6 +583,12 @@ const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 			oldDoc.emitEscPrintMode = true;
 			return oldDoc;
 		},
+		5(oldDoc) {
+			// v5: removed the dead `autoPrint` field; added `fullReceiptRaster` (default off).
+			delete oldDoc.autoPrint;
+			oldDoc.fullReceiptRaster = false;
+			return oldDoc;
+		},
 	},
 };
 
