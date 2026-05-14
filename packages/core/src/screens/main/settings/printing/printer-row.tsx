@@ -22,6 +22,7 @@ import { useT } from '../../../../contexts/translations';
 interface PrinterRowProps {
 	profile: PrinterProfile;
 	isFirst: boolean;
+	/** True only when a test print for *this* profile is in progress. */
 	isTesting: boolean;
 	onTest: (profile: PrinterProfile) => void;
 	onEdit: (profile: PrinterProfile) => void;
