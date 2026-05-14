@@ -123,6 +123,30 @@ export function Receipt({ resource }: Props) {
 		[selectedTemplate]
 	);
 
+	// TEMP DEBUG [receipt-zoom] — remove once template-switch page-size bug is diagnosed
+	console.log('[receipt-zoom] receipt.tsx', {
+		selectedTemplateId,
+		selectedTemplateIdType: typeof selectedTemplateId,
+		key: String(selectedTemplateId ?? 'legacy-receipt'),
+		found: selectedTemplate
+			? {
+					id: selectedTemplate.id,
+					idType: typeof selectedTemplate.id,
+					title: selectedTemplate.title,
+					paper_width: selectedTemplate.paper_width,
+					output_type: selectedTemplate.output_type,
+				}
+			: null,
+		previewPaperWidth,
+		templates: templates.map((t) => ({
+			id: t.id,
+			idType: typeof t.id,
+			title: t.title,
+			paper_width: t.paper_width,
+			output_type: t.output_type,
+		})),
+	});
+
 	// Resolve printer for this template
 	const {
 		allPrinters,

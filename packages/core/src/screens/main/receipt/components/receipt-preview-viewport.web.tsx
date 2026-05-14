@@ -37,8 +37,21 @@ export function ReceiptPreviewViewport({
 		if (!el) return;
 		const availW = el.clientWidth - CANVAS_PAD_PX * 2;
 		const availH = el.clientHeight - CANVAS_PAD_PX * 2;
-		setZoom(pickAutoFitZoom(paperW, paperH, availW, availH));
-	}, [paperW, paperH]);
+		const picked = pickAutoFitZoom(paperW, paperH, availW, availH);
+		// TEMP DEBUG [receipt-zoom] — remove once template-switch page-size bug is diagnosed
+		console.log('[receipt-zoom] viewport autofit', {
+			paperWidth,
+			paperW,
+			paperH,
+			availW,
+			availH,
+			picked,
+		});
+		setZoom(picked);
+	}, [paperW, paperH, paperWidth]);
+
+	// TEMP DEBUG [receipt-zoom] — remove once template-switch page-size bug is diagnosed
+	console.log('[receipt-zoom] viewport render', { paperWidth, paperW, paperH, zoom });
 
 	const scale = zoom / 100;
 	const currentIndex = PREVIEW_ZOOM_STEPS.indexOf(zoom);
