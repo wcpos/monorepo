@@ -56,7 +56,7 @@ export function PrinterDialog({
 		handleSaveAnyway,
 	} = usePrinterDialogForm({
 		open,
-		schema: electronPrinterSchema as never,
+		schema: electronPrinterSchema,
 		defaultValues: DEFAULT_FORM_VALUES,
 		deriveVendorDefaults,
 		printer,

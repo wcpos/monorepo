@@ -59,7 +59,7 @@ export function PrinterDialog({
 		handleSaveAnyway,
 	} = usePrinterDialogForm({
 		open,
-		schema: nativePrinterSchema as never,
+		schema: nativePrinterSchema,
 		defaultValues: DEFAULT_FORM_VALUES,
 		deriveVendorDefaults,
 		printer,

@@ -29,8 +29,10 @@ function deriveEndpointHint(vendor: string, address: string, port: number): stri
 	const ip = address.trim();
 	if (!ip) return undefined;
 	if (vendor === 'epson') {
-		const protocol = port === 8043 || port === 443 ? 'https' : 'http';
-		return `${protocol}://${ip}:${port}/cgi-bin/epos/service.cgi`;
+		const secure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+		const resolvedPort = port === 9100 ? (secure ? 8043 : 8008) : port;
+		const protocol = resolvedPort === 8043 || resolvedPort === 443 ? 'https' : 'http';
+		return `${protocol}://${ip}:${resolvedPort}/cgi-bin/epos/service.cgi`;
 	}
 	if (vendor === 'star') {
 		const suffix = port && port !== 9100 ? `:${port}` : '';
@@ -71,7 +73,7 @@ export function PrinterDialog({
 		handleSaveAnyway,
 	} = usePrinterDialogForm({
 		open,
-		schema: webPrinterSchema as never,
+		schema: webPrinterSchema,
 		defaultValues: WEB_DEFAULTS,
 		deriveVendorDefaults: deriveWebVendorDefaults,
 		printer,

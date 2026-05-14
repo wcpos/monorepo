@@ -42,7 +42,7 @@ const baseShape = {
 	name: z.string().min(1),
 	port: z.coerce.number().int().min(1).max(65535).default(9100),
 	language: z.enum(['esc-pos', 'star-prnt', 'star-line']).default('esc-pos'),
-	columns: z.coerce.number().default(42),
+	columns: z.coerce.number().int().min(1).default(42),
 	emitEscPrintMode: z.boolean().default(true),
 	fullReceiptRaster: z.boolean().default(false),
 	autoCut: z.boolean().default(true),

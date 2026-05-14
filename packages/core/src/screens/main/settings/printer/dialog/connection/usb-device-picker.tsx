@@ -36,6 +36,7 @@ export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValue
 							form.setValue('name', device.name);
 							if (device.vendor)
 								form.setValue('vendor', device.vendor as PrinterFormValues['vendor']);
+							form.setValue('nativeInterfaceType', device.nativeInterfaceType ?? undefined);
 						}}
 						className={`flex-row items-center gap-2 rounded-md border p-2 ${
 							selected ? 'border-primary bg-primary/5' : 'border-border'

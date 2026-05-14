@@ -32,6 +32,17 @@ export function NetworkFields({
 	scanning,
 }: NetworkFieldsProps) {
 	const t = useT();
+	const detectedVendorLabel =
+		detectedVendor == null
+			? ''
+			: detectedVendor === 'epson'
+				? 'Epson'
+				: detectedVendor === 'star'
+					? 'Star'
+					: detectedVendor === 'generic'
+						? t('settings.printer_vendor_generic', 'Generic')
+						: detectedVendor;
+
 	return (
 		<VStack className="gap-1">
 			<FormField
@@ -53,10 +64,7 @@ export function NetworkFields({
 			)}
 			{!probing && detectedVendor && (
 				<Text className="text-xs text-green-600">
-					{t('settings.detected_vendor', 'Detected: %s').replace(
-						'%s',
-						detectedVendor === 'epson' ? 'Epson' : 'Star'
-					)}
+					{t('settings.detected_vendor', 'Detected: %s').replace('%s', detectedVendorLabel)}
 				</Text>
 			)}
 			{endpointHint && (

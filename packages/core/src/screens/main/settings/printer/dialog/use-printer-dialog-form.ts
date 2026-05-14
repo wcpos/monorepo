@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { zodResolver } from '@hookform/resolvers/zod';
+import { standardSchemaResolver } from '@hookform/resolvers/standard-schema';
 import { useForm } from 'react-hook-form';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -20,9 +20,11 @@ export interface VendorDefaults {
 	port: number;
 }
 
+type PrinterFormSchema = z.ZodType<PrinterFormValues, any>;
+
 interface UsePrinterDialogFormArgs {
 	open: boolean;
-	schema: z.ZodType<PrinterFormValues>;
+	schema: PrinterFormSchema;
 	defaultValues: PrinterFormValues;
 	/** Per-platform: derive language/port (and anything else) from the chosen vendor. */
 	deriveVendorDefaults: (vendor: PrinterFormValues['vendor']) => VendorDefaults;
@@ -57,7 +59,7 @@ export function usePrinterDialogForm({
 	const probeRequestIdRef = React.useRef(0);
 
 	const form = useForm<PrinterFormValues>({
-		resolver: zodResolver(schema as never) as never,
+		resolver: standardSchemaResolver(schema),
 		defaultValues,
 	});
 
@@ -136,6 +138,7 @@ export function usePrinterDialogForm({
 	const connectionType = form.watch('connectionType');
 	React.useEffect(() => {
 		if (connectionType !== 'network') {
+			probeRequestIdRef.current += 1;
 			setProbing(false);
 			setDetectedVendor(null);
 			return;
