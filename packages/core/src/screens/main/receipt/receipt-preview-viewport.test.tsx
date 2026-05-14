@@ -11,10 +11,14 @@ import {
 	ReceiptPreviewViewport,
 } from './components/receipt-preview-viewport.web';
 
-const renderViewport = (paperWidth: 'a4' | '58mm' | '80mm' = 'a4') =>
+const renderViewport = (
+	paperWidth: 'a4' | '58mm' | '80mm' = 'a4',
+	contentSize?: { width: number; height: number }
+) =>
 	render(
 		<ReceiptPreviewViewport
 			paperWidth={paperWidth}
+			contentSize={contentSize}
 			zoomInLabel="Zoom in"
 			zoomOutLabel="Zoom out"
 			testID="receipt-preview"
@@ -24,7 +28,7 @@ const renderViewport = (paperWidth: 'a4' | '58mm' | '80mm' = 'a4') =>
 	);
 
 describe('ReceiptPreviewViewport', () => {
-	it('renders the receipt canvas at true paper dimensions with a top-left scale transform', () => {
+	it('falls back to true paper dimensions until the content size is measured', () => {
 		renderViewport('a4');
 
 		expect(screen.getByTestId('receipt-webview')).toBeInTheDocument();
@@ -34,6 +38,15 @@ describe('ReceiptPreviewViewport', () => {
 			width: `${PAPER_DIMENSIONS.a4.width}px`,
 			height: `${PAPER_DIMENSIONS.a4.height}px`,
 			transformOrigin: 'top left',
+		});
+	});
+
+	it('sizes the canvas to the measured content size instead of paper dimensions', () => {
+		renderViewport('80mm', { width: 360, height: 940 });
+
+		expect(screen.getByTestId('receipt-preview-canvas')).toHaveStyle({
+			width: '360px',
+			height: '940px',
 		});
 	});
 
@@ -52,6 +65,37 @@ describe('ReceiptPreviewViewport', () => {
 		expect(screen.getByTestId('receipt-preview-canvas')).toHaveStyle({
 			transform: `scale(${scale})`,
 		});
+	});
+
+	it('auto-fits to the measured content size when the container resizes', () => {
+		const originalResizeObserver = window.ResizeObserver;
+		let resizeCallback: ResizeObserverCallback | undefined;
+
+		window.ResizeObserver = class ResizeObserver {
+			constructor(callback: ResizeObserverCallback) {
+				resizeCallback = callback;
+			}
+			observe = jest.fn();
+			unobserve = jest.fn();
+			disconnect = jest.fn();
+		};
+
+		try {
+			renderViewport('a4', { width: 800, height: 2000 });
+
+			const container = screen.getByTestId('receipt-preview');
+			Object.defineProperty(container, 'clientWidth', { configurable: true, value: 424 });
+			Object.defineProperty(container, 'clientHeight', { configurable: true, value: 624 });
+
+			act(() => {
+				resizeCallback?.([], {} as ResizeObserver);
+			});
+
+			// 800×2000 content fits the 400×600 available area at 30% (2000 × 0.3 = 600).
+			expect(screen.getByTestId('receipt-preview-zoom-value')).toHaveTextContent('30%');
+		} finally {
+			window.ResizeObserver = originalResizeObserver;
+		}
 	});
 
 	it('auto-fits after a zero-size initial measurement when the container resizes', () => {

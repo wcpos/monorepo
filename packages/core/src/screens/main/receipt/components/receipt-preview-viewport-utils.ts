@@ -6,7 +6,16 @@ export type PreviewZoom = (typeof PREVIEW_ZOOM_STEPS)[number];
 
 export type PreviewPaperWidth = 'a4' | '58mm' | '80mm';
 
-export const PAPER_DIMENSIONS: Record<PreviewPaperWidth, { width: number; height: number }> = {
+export interface ContentSize {
+	width: number;
+	height: number;
+}
+
+/**
+ * True paper dimensions in CSS px. Used as the preview size until the rendered
+ * document has been measured — the measured content size takes over once known.
+ */
+export const PAPER_DIMENSIONS: Record<PreviewPaperWidth, ContentSize> = {
 	a4: { width: 794, height: 1123 },
 	'58mm': { width: 219, height: 520 },
 	'80mm': { width: 302, height: 520 },

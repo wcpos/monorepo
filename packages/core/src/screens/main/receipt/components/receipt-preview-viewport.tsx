@@ -4,6 +4,7 @@ import { LayoutChangeEvent, Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@wcpos/components/text';
 
 import {
+	type ContentSize,
 	getReceiptPreviewPaperWidth,
 	PAPER_DIMENSIONS,
 	pickAutoFitZoom,
@@ -19,6 +20,8 @@ const CANVAS_PAD_PX = 12;
 interface ReceiptPreviewViewportProps {
 	children: React.ReactNode;
 	paperWidth: PreviewPaperWidth;
+	/** Measured size of the rendered document; paper dimensions are used until it is known. */
+	contentSize?: ContentSize | null;
 	zoomInLabel: string;
 	zoomOutLabel: string;
 	testID?: string;
@@ -27,30 +30,41 @@ interface ReceiptPreviewViewportProps {
 export function ReceiptPreviewViewport({
 	children,
 	paperWidth,
+	contentSize,
 	zoomInLabel,
 	zoomOutLabel,
 	testID,
 }: ReceiptPreviewViewportProps) {
-	const { width: paperW, height: paperH } = PAPER_DIMENSIONS[paperWidth];
+	const fallback = PAPER_DIMENSIONS[paperWidth];
+	const canvasW = contentSize?.width ?? fallback.width;
+	const canvasH = contentSize?.height ?? fallback.height;
 	const [zoom, setZoom] = React.useState<PreviewZoom>(100);
-	const autoFitDoneRef = React.useRef(false);
+	const availSizeRef = React.useRef<{ width: number; height: number } | null>(null);
+	const userPickedRef = React.useRef(false);
 
-	React.useEffect(() => {
-		autoFitDoneRef.current = false;
-	}, [paperW, paperH]);
+	const applyAutoFit = React.useCallback(() => {
+		if (userPickedRef.current) return;
+		const avail = availSizeRef.current;
+		if (!avail) return;
+		const availW = avail.width - CANVAS_PAD_PX * 2;
+		const availH = avail.height - CANVAS_PAD_PX * 2;
+		if (availW <= 0 || availH <= 0) return;
+		setZoom(pickAutoFitZoom(canvasW, canvasH, availW, availH));
+	}, [canvasW, canvasH]);
 
 	const handleLayout = React.useCallback(
 		(event: LayoutChangeEvent) => {
-			if (autoFitDoneRef.current) return;
-			const { width, height } = event.nativeEvent.layout;
-			const availW = width - CANVAS_PAD_PX * 2;
-			const availH = height - CANVAS_PAD_PX * 2;
-			if (availW <= 0 || availH <= 0) return;
-			autoFitDoneRef.current = true;
-			setZoom(pickAutoFitZoom(paperW, paperH, availW, availH));
+			availSizeRef.current = event.nativeEvent.layout;
+			applyAutoFit();
 		},
-		[paperW, paperH]
+		[applyAutoFit]
 	);
+
+	// Re-fit when the measured content size changes — the container's onLayout
+	// only fires for its own layout, not for content-driven canvas changes.
+	React.useEffect(() => {
+		applyAutoFit();
+	}, [applyAutoFit]);
 
 	const scale = zoom / 100;
 	const currentIndex = PREVIEW_ZOOM_STEPS.indexOf(zoom);
@@ -58,6 +72,7 @@ export function ReceiptPreviewViewport({
 	const canZoomIn = currentIndex < PREVIEW_ZOOM_STEPS.length - 1;
 	const stepZoom = (delta: number) => {
 		const next = Math.max(0, Math.min(PREVIEW_ZOOM_STEPS.length - 1, currentIndex + delta));
+		userPickedRef.current = true;
 		setZoom(PREVIEW_ZOOM_STEPS[next]);
 	};
 
@@ -119,8 +134,8 @@ export function ReceiptPreviewViewport({
 				<View
 					testID={testID ? `${testID}-canvas-frame` : undefined}
 					style={{
-						width: paperW * scale,
-						height: paperH * scale,
+						width: canvasW * scale,
+						height: canvasH * scale,
 						overflow: 'hidden',
 						backgroundColor: 'white',
 					}}
@@ -128,8 +143,8 @@ export function ReceiptPreviewViewport({
 					<View
 						testID={testID ? `${testID}-canvas` : undefined}
 						style={{
-							width: paperW,
-							height: paperH,
+							width: canvasW,
+							height: canvasH,
 							transform: [{ scale }],
 							transformOrigin: 'top left',
 						}}
