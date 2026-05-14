@@ -1,8 +1,10 @@
 import * as React from 'react';
 
+import { DEFAULT_THERMAL_TEMPLATE } from '../encoder/default-thermal-template';
 import { mapReceiptData } from '../encoder/map-receipt-data';
 import { prepareSystemPrintHtml } from '../print-html';
 import { PrinterService } from '../printer-service';
+import { useOptionalRasterize } from '../raster/rasterize-provider';
 import { printFromUrl } from './print-from-url';
 
 import type { ReceiptData } from '../encoder/types';
@@ -62,6 +64,14 @@ function extractIframeHtml(
 	}
 }
 
+function resolvePaperGeometry(paperWidth: string | null | undefined): {
+	paperFrameClass: 'thermal-58' | 'thermal-80';
+	maxWidthDots: number;
+} {
+	if (paperWidth === '58mm') return { paperFrameClass: 'thermal-58', maxWidthDots: 384 };
+	return { paperFrameClass: 'thermal-80', maxWidthDots: 576 };
+}
+
 export function usePrint(options: UsePrintOptions) {
 	const [isPrinting, setIsPrinting] = React.useState(false);
 	const optionsRef = React.useRef(options);
@@ -69,6 +79,8 @@ export function usePrint(options: UsePrintOptions) {
 
 	/** Track overlapping print calls so isPrinting stays true until all finish. */
 	const activePrintsRef = React.useRef(0);
+
+	const rasterize = useOptionalRasterize();
 
 	const print = React.useCallback(async () => {
 		const {
@@ -97,9 +109,32 @@ export function usePrint(options: UsePrintOptions) {
 			const service = getService();
 
 			if (printerProfile && printerProfile.connectionType !== 'system' && receiptData) {
-				// Direct thermal printing — normalise shape then encode and send bytes
 				const normalised = mapReceiptData(receiptData as Record<string, any>);
-				if (templateEngine === 'thermal' && templateXml) {
+
+				if (printerProfile.fullReceiptRaster) {
+					if (!rasterize) {
+						throw new Error('fullReceiptRaster requires RasterizeProvider in the component tree.');
+					}
+
+					// Raster path: render → capture → encode inside the 'use dom' component,
+					// then send the finished bytes via the existing printRaw.
+					const effectiveTemplateXml =
+						templateEngine === 'thermal' && templateXml ? templateXml : DEFAULT_THERMAL_TEMPLATE;
+					const geometry = resolvePaperGeometry(paperWidth);
+					const bytes = await rasterize({
+						templateXml: effectiveTemplateXml,
+						receiptData: normalised as Record<string, unknown>,
+						maxWidthDots: geometry.maxWidthDots,
+						paperFrameClass: geometry.paperFrameClass,
+						encodeOptions: {
+							language: printerProfile.language,
+							columns: printerProfile.columns,
+							printerModel: printerProfile.printerModel,
+							emitEscPrintMode: printerProfile.emitEscPrintMode ?? true,
+						},
+					});
+					await service.printRaw(bytes, printerProfile);
+				} else if (templateEngine === 'thermal' && templateXml) {
 					await service.printReceipt(normalised, printerProfile, undefined, templateXml, decimals);
 				} else {
 					await service.printReceipt(normalised, printerProfile, undefined, undefined, decimals);
@@ -148,7 +183,7 @@ export function usePrint(options: UsePrintOptions) {
 				setIsPrinting(false);
 			}
 		}
-	}, []);
+	}, [rasterize]);
 
 	return { print, isPrinting };
 }

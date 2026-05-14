@@ -52,6 +52,8 @@ export type { EscposRenderOptions } from './renderer';
 export { PrinterService } from './printer-service';
 export { usePrint } from './hooks/use-print';
 export { usePrinterDiscovery } from './hooks/use-printer-discovery';
+export { RasterizeProvider, useOptionalRasterize, useRasterize } from './raster/rasterize-provider';
+export type { RasterizeInput } from './raster/rasterize-provider';
 export { resolvePrinter } from './resolve-printer';
 export type { TemplateInfo, ResolvePrinterOptions } from './resolve-printer';
 export { detectMismatch } from './detect-mismatch';
@@ -65,3 +67,4 @@ export type {
 } from './types';
 export { buildPrintableReceiptHtml, normalizeReceiptPaperWidth } from './print-html';
 export type { ReceiptPaperWidth } from './print-html';
+export { DEFAULT_THERMAL_TEMPLATE } from './encoder/default-thermal-template';
