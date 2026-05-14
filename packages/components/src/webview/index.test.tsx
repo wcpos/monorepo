@@ -35,6 +35,9 @@ describe('WebView native postMessage bridge', () => {
 		expect(injectJavaScriptMock).toHaveBeenCalledTimes(1);
 		const injectedScript = injectJavaScriptMock.mock.calls[0]?.[0] as string;
 		expect(injectedScript).toContain("new MessageEvent('message', eventInit)");
+		expect(injectedScript).toContain(
+			"event.initMessageEvent(\n\t\t\t\t\t\t\t\t\t\t'message',\n\t\t\t\t\t\t\t\t\t\tfalse,"
+		);
 		expect(injectedScript).toContain('dispatchMessage(window)');
 		expect(injectedScript).toContain('dispatchMessage(document)');
 		expect(injectedScript).toContain('wcpos-process-payment');

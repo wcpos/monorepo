@@ -47,7 +47,7 @@ function WebView({ ref, src, srcDoc, onMessage, onContentSizeChange, ...props }:
 									event = document.createEvent('MessageEvent');
 									event.initMessageEvent(
 										'message',
-										true,
+										false,
 										true,
 										eventInit.data,
 										eventInit.origin,
