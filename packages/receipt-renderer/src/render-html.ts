@@ -15,7 +15,7 @@ const BARCODE_PREVIEW_SCALE = 1.5;
 export function renderHtml(ast: ReceiptNode, _options: HtmlRenderOptions = {}): string {
 	const widthChars = safeInteger(ast.paperWidth, 48, 16, 120);
 	const inner = renderNodes(ast.children, widthChars);
-	return `<div style="width: ${widthChars}ch; font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; background: #fff; color: #000; padding: 16px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); margin: 0 auto; overflow: hidden; white-space: pre-wrap; word-break: break-all;">${inner}</div>`;
+	return `<div style="width: ${widthChars}ch; font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; background: #fff; color: #000; padding: 16px 12px; overflow: hidden; white-space: pre-wrap; word-break: break-all;">${inner}</div>`;
 }
 
 function renderNodes(nodes: ThermalNode[], widthChars: number): string {

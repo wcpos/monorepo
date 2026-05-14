@@ -123,6 +123,29 @@ export function Receipt({ resource }: Props) {
 		[selectedTemplate]
 	);
 
+	// Content size measured from the rendered receipt frame — lets the preview
+	// viewport track the real document instead of locking to fixed paper sizes.
+	const previewKey = String(selectedTemplateId ?? 'legacy-receipt');
+	const [contentSize, setContentSize] = React.useState<{ width: number; height: number } | null>(
+		null
+	);
+	const [measuredPreviewKey, setMeasuredPreviewKey] = React.useState(previewKey);
+	if (measuredPreviewKey !== previewKey) {
+		// Template switched — drop the stale measurement until the new frame loads.
+		setMeasuredPreviewKey(previewKey);
+		setContentSize(null);
+	}
+	const handleContentSizeChange = React.useCallback(
+		(event: { nativeEvent: { contentSize: { width: number; height: number } } }) => {
+			const { width, height } = event.nativeEvent.contentSize;
+			if (width <= 0 || height <= 0) return;
+			setContentSize((prev) =>
+				prev && prev.width === width && prev.height === height ? prev : { width, height }
+			);
+		},
+		[]
+	);
+
 	// Resolve printer for this template
 	const {
 		allPrinters,
@@ -220,8 +243,9 @@ export function Receipt({ resource }: Props) {
 							/>
 							<MismatchBadge message={mismatchWarning} />
 							<ReceiptPreviewViewport
-								key={String(selectedTemplateId ?? 'legacy-receipt')}
+								key={previewKey}
 								paperWidth={previewPaperWidth}
+								contentSize={contentSize}
 								zoomInLabel={t('receipt.zoom_in', 'Zoom in')}
 								zoomOutLabel={t('receipt.zoom_out', 'Zoom out')}
 								testID="receipt-preview"
@@ -233,6 +257,7 @@ export function Receipt({ resource }: Props) {
 										: { src: templateReceiptUrl || baseReceiptURL || '' })}
 									onLoad={handleLoad}
 									onMessage={() => {}}
+									onContentSizeChange={handleContentSizeChange}
 									className="h-full w-full"
 								/>
 							</ReceiptPreviewViewport>

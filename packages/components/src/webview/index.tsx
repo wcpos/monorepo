@@ -7,17 +7,27 @@ export type WebViewHandle = Omit<RNWebView, 'postMessage'> & {
 	postMessage(message: any): void;
 };
 
-export interface WebViewProps extends RNWebViewProps {
+/**
+ * react-native-webview types `onContentSizeChange` without the `contentSize`
+ * payload it actually delivers — declare the real shape so the host can size
+ * itself to the rendered document.
+ */
+export interface WebViewContentSizeChangeEvent {
+	nativeEvent: { contentSize: { width: number; height: number } };
+}
+
+export interface WebViewProps extends Omit<RNWebViewProps, 'onContentSizeChange'> {
 	ref?: React.Ref<WebViewHandle>;
 	src?: string;
 	srcDoc?: string;
 	onMessage: (event: { nativeEvent: { data: any } }) => void;
+	onContentSizeChange?: (event: WebViewContentSizeChangeEvent) => void;
 }
 
 /**
  * WebView component that automatically resizes to fill its parent container
  */
-function WebView({ ref, src, srcDoc, onMessage, ...props }: WebViewProps) {
+function WebView({ ref, src, srcDoc, onMessage, onContentSizeChange, ...props }: WebViewProps) {
 	const localRef = React.useRef<RNWebView>(null);
 
 	React.useImperativeHandle(
@@ -69,6 +79,9 @@ function WebView({ ref, src, srcDoc, onMessage, ...props }: WebViewProps) {
 				console.error('WebView error:', error);
 				props.onError?.(error);
 			}}
+			// react-native-webview types onContentSizeChange without `contentSize`,
+			// but it is populated at runtime — the cast bridges the upstream gap.
+			onContentSizeChange={onContentSizeChange as unknown as RNWebViewProps['onContentSizeChange']}
 			{...props}
 		/>
 	);

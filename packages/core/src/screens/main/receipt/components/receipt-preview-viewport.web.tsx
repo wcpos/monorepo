@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import {
+	type ContentSize,
 	getReceiptPreviewPaperWidth,
 	PAPER_DIMENSIONS,
 	pickAutoFitZoom,
@@ -16,6 +17,8 @@ const CANVAS_PAD_PX = 12;
 interface ReceiptPreviewViewportProps {
 	children: React.ReactNode;
 	paperWidth: PreviewPaperWidth;
+	/** Measured size of the rendered document; paper dimensions are used until it is known. */
+	contentSize?: ContentSize | null;
 	zoomInLabel: string;
 	zoomOutLabel: string;
 	testID?: string;
@@ -24,35 +27,41 @@ interface ReceiptPreviewViewportProps {
 export function ReceiptPreviewViewport({
 	children,
 	paperWidth,
+	contentSize,
 	zoomInLabel,
 	zoomOutLabel,
 	testID,
 }: ReceiptPreviewViewportProps) {
 	const containerRef = React.useRef<HTMLDivElement>(null);
-	const { width: paperW, height: paperH } = PAPER_DIMENSIONS[paperWidth];
+	const fallback = PAPER_DIMENSIONS[paperWidth];
+	const canvasW = contentSize?.width ?? fallback.width;
+	const canvasH = contentSize?.height ?? fallback.height;
 	const [zoom, setZoom] = React.useState<PreviewZoom>(100);
-	const autoFitDoneRef = React.useRef(false);
+	const userPickedRef = React.useRef(false);
 
+	// Auto-fit the preview to the viewport until the user picks a zoom. Re-runs
+	// when the measured content size changes (so a freshly measured frame gets
+	// fitted) and observes the container so a modal that first lays out at 0×0
+	// is still fitted once it has real dimensions.
 	React.useLayoutEffect(() => {
-		autoFitDoneRef.current = false;
+		if (userPickedRef.current) return;
 		const el = containerRef.current;
 		if (!el) return;
 		const applyAutoFit = () => {
-			if (autoFitDoneRef.current) return;
+			if (userPickedRef.current) return;
 			const availW = el.clientWidth - CANVAS_PAD_PX * 2;
 			const availH = el.clientHeight - CANVAS_PAD_PX * 2;
 			if (availW <= 0 || availH <= 0) return;
-			autoFitDoneRef.current = true;
-			setZoom(pickAutoFitZoom(paperW, paperH, availW, availH));
+			setZoom(pickAutoFitZoom(canvasW, canvasH, availW, availH));
 		};
 
 		applyAutoFit();
-		if (autoFitDoneRef.current || typeof ResizeObserver === 'undefined') return;
+		if (typeof ResizeObserver === 'undefined') return;
 
 		const resizeObserver = new ResizeObserver(applyAutoFit);
 		resizeObserver.observe(el);
 		return () => resizeObserver.disconnect();
-	}, [paperW, paperH]);
+	}, [canvasW, canvasH]);
 
 	const scale = zoom / 100;
 	const currentIndex = PREVIEW_ZOOM_STEPS.indexOf(zoom);
@@ -60,6 +69,7 @@ export function ReceiptPreviewViewport({
 	const canZoomIn = currentIndex < PREVIEW_ZOOM_STEPS.length - 1;
 	const stepZoom = (delta: number) => {
 		const next = Math.max(0, Math.min(PREVIEW_ZOOM_STEPS.length - 1, currentIndex + delta));
+		userPickedRef.current = true;
 		setZoom(PREVIEW_ZOOM_STEPS[next]);
 	};
 
@@ -113,15 +123,15 @@ export function ReceiptPreviewViewport({
 					data-testid={testID ? `${testID}-canvas-frame` : undefined}
 					className="mx-auto overflow-hidden bg-white shadow-sm"
 					style={{
-						width: paperW * scale,
-						height: paperH * scale,
+						width: canvasW * scale,
+						height: canvasH * scale,
 					}}
 				>
 					<div
 						data-testid={testID ? `${testID}-canvas` : undefined}
 						style={{
-							width: paperW,
-							height: paperH,
+							width: canvasW,
+							height: canvasH,
 							transform: `scale(${scale})`,
 							transformOrigin: 'top left',
 						}}
