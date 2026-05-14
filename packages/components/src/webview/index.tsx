@@ -35,9 +35,30 @@ function WebView({ ref, src, srcDoc, onMessage, onContentSizeChange, ...props }:
 		() =>
 			Object.assign(localRef.current ?? ({} as RNWebView), {
 				postMessage(message: any) {
+					const eventInit = JSON.stringify({ data: message });
 					localRef.current?.injectJavaScript(`
 						(function() {
-							window.postMessage(${JSON.stringify(message)}, '*');
+							var eventInit = ${eventInit};
+							function dispatchMessage(target) {
+								var event;
+								try {
+									event = new MessageEvent('message', eventInit);
+								} catch (error) {
+									event = document.createEvent('MessageEvent');
+									event.initMessageEvent(
+										'message',
+										true,
+										true,
+										eventInit.data,
+										eventInit.origin,
+										eventInit.lastEventId,
+										eventInit.source
+									);
+								}
+								target.dispatchEvent(event);
+							}
+							dispatchMessage(window);
+							dispatchMessage(document);
 							return true;
 						})();
 					`);
