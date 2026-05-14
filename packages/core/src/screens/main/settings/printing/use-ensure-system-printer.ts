@@ -33,7 +33,6 @@ export function useEnsureSystemPrinter(storeDB: StoreDatabase) {
 						// printer_profiles requires the shared columns field.
 						columns: 42,
 						port: 9100,
-						autoPrint: false,
 						autoCut: false,
 						autoOpenDrawer: false,
 						isDefault: !currentDefault,
