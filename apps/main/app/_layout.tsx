@@ -132,7 +132,6 @@ function useClearLocalDataOnStartup() {
 					window.location.reload();
 				}
 			} catch (error) {
-				window.localStorage.removeItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY);
 				appLogger.error('Failed to clear local data before hydration', {
 					context: {
 						error: error instanceof Error ? error.message : String(error),
