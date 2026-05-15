@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { printerIconName, templateTypeLabel } from './utils';
 
 describe('printerIconName', () => {
@@ -26,5 +29,18 @@ describe('templateTypeLabel', () => {
 
 	it('labels a non-escpos template as "HTML"', () => {
 		expect(templateTypeLabel({ output_type: 'html', paper_width: null })).toBe('HTML');
+	});
+});
+
+describe('printing settings copy', () => {
+	it('uses Print Dialog consistently for the built-in system printer', () => {
+		const files = ['index.tsx', 'printer-row.tsx', 'printers-empty-state.tsx'];
+
+		for (const file of files) {
+			const source = readFileSync(join(__dirname, file), 'utf8');
+
+			expect(source).not.toMatch(/System (?:Print )?Dialog/);
+			expect(source).toContain('Print Dialog');
+		}
 	});
 });

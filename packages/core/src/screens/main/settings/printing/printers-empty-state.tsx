@@ -39,7 +39,7 @@ export function PrintersEmptyState({
 				<Text className="text-muted-foreground text-center text-sm">
 					{t(
 						'settings.no_printers_body',
-						'Add a printer to send receipts straight to your hardware. You can always use the System Print Dialog without one.'
+						'Add a printer to send receipts straight to your hardware. You can always use the Print Dialog without one.'
 					)}
 				</Text>
 				<HStack className="gap-2">
