@@ -40,6 +40,10 @@ const sanitizeRoles = (data: Record<string, unknown>): string[] | undefined => {
 		return roles;
 	}
 
+	if (Array.isArray(data.roles) && data.roles.length === 0) {
+		return [];
+	}
+
 	return typeof data.role === 'string' && data.role.length > 0 ? [data.role] : undefined;
 };
 
