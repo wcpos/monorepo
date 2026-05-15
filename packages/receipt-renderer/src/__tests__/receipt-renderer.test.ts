@@ -950,6 +950,29 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expect(printable).not.toContain('COCINA' + '=');
 	});
 
+	it('tears down scaled text before the newline that precedes a following rule', () => {
+		const bytes = encodeThermalTemplate(
+			`<receipt paper-width="48">
+				<align mode="center">
+					<bold><size width="2" height="2"><text>COCINA</text></size></bold>
+				</align>
+				<line style="double" />
+			</receipt>`,
+			{},
+			{ columns: 48, language: 'esc-pos' }
+		);
+		const kitchenIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('COCINA')));
+		const headingNewlineIndex = sequenceIndex(bytes, [0x0a], kitchenIndex);
+		const doubleRuleIndex = sequenceIndex(bytes, [0xcd], headingNewlineIndex);
+		const betweenHeadingAndRule = bytes.slice(headingNewlineIndex, doubleRuleIndex);
+
+		expect(headingNewlineIndex).toBeGreaterThan(kitchenIndex);
+		expect(doubleRuleIndex).toBeGreaterThan(headingNewlineIndex);
+		expect(includesSequence(betweenHeadingAndRule, [0x1b, 0x33])).toBe(false);
+		expect(includesSequence(betweenHeadingAndRule, [0x1d, 0x21, 0x11])).toBe(false);
+		expect(includesSequence(betweenHeadingAndRule, [0x1b, 0x21, 0x38])).toBe(false);
+	});
+
 	it.each([42, 48])(
 		'visually centers receipt header/fiscal/footer text at %i columns',
 		(columns) => {

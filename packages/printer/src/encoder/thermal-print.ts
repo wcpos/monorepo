@@ -35,11 +35,14 @@ export interface ThermalPrintAssets {
 	barcodeImages: ThermalBarcodeImages;
 }
 
+export type ThermalImageSrcResolver = (src: string) => string | Promise<string>;
+
 export interface EncodeThermalTemplateForPrintInput {
 	templateXml: string;
 	receiptData: unknown;
 	maxWidthDots: number;
 	encodeOptions?: EscposRenderOptions;
+	imageSrcResolver?: ThermalImageSrcResolver;
 }
 
 export function renderTemplatePlaceholders(
@@ -95,6 +98,7 @@ export function discoverThermalAssetRequests(template: string): ThermalAssetRequ
 export async function prepareThermalPrintAssets(input: {
 	renderedTemplateXml: string;
 	maxWidthDots: number;
+	imageSrcResolver?: ThermalImageSrcResolver;
 }): Promise<ThermalPrintAssets> {
 	const requests = discoverThermalAssetRequests(input.renderedTemplateXml);
 	const imageAssets: ThermalImageAssets = {};
@@ -102,12 +106,17 @@ export async function prepareThermalPrintAssets(input: {
 
 	await Promise.all(
 		requests.images.map(async (image) => {
-			const asset = await loadThermalLogoAsset({
-				src: image.src,
-				requestedWidth: image.width ?? DEFAULT_THERMAL_IMAGE_WIDTH_DOTS,
-				maxWidth: input.maxWidthDots,
-			});
-			if (asset) imageAssets[thermalImageAssetKey(image)] = asset;
+			try {
+				const asset = await loadThermalLogoAsset({
+					src: image.src,
+					loadSrc: await resolveThermalImageLoadSrc(image.src, input.imageSrcResolver),
+					requestedWidth: image.width ?? DEFAULT_THERMAL_IMAGE_WIDTH_DOTS,
+					maxWidth: input.maxWidthDots,
+				});
+				if (asset) imageAssets[thermalImageAssetKey(image)] = asset;
+			} catch {
+				// Thermal image assets are optional: a missing/offline logo must not abort printing.
+			}
 		})
 	);
 
@@ -136,6 +145,7 @@ export async function encodeThermalTemplateForPrint(
 	const { imageAssets, barcodeImages } = await prepareThermalPrintAssets({
 		renderedTemplateXml,
 		maxWidthDots: input.maxWidthDots,
+		imageSrcResolver: input.imageSrcResolver,
 	});
 
 	return encodeThermalTemplate(input.templateXml, formatted, {
@@ -200,12 +210,14 @@ export function normalizeThermalImageSize(input: {
 
 export async function loadThermalLogoAsset(input: {
 	src: string;
+	loadSrc?: string;
 	requestedWidth: number;
 	maxWidth: number;
 }): Promise<ThermalRasterImage | undefined> {
-	if (!isSupportedThermalLogoSrc(input.src)) return undefined;
+	const loadSrc = input.loadSrc ?? input.src;
+	if (!isSupportedThermalLogoSrc(loadSrc)) return undefined;
 	try {
-		const image = await loadHtmlImage(input.src);
+		const image = await loadHtmlImage(loadSrc);
 		const naturalWidth = image.naturalWidth || image.width;
 		const naturalHeight = image.naturalHeight || image.height;
 		if (!naturalWidth || !naturalHeight) return undefined;
@@ -325,9 +337,56 @@ function loadHtmlImage(src: string, timeoutMs = 10000): Promise<HTMLImageElement
 			cleanup();
 			reject(new Error('Failed to load thermal image asset'));
 		};
-		image.crossOrigin = 'anonymous';
+		if (!/^wcpos-image:\/\//i.test(src)) {
+			image.crossOrigin = 'anonymous';
+		}
 		image.src = src;
 	});
+}
+
+async function resolveThermalImageLoadSrc(
+	src: string,
+	resolver: ThermalImageSrcResolver | undefined
+): Promise<string> {
+	const resolved = resolver
+		? await resolver(src)
+		: isElectronRenderer() && /^https?:\/\//i.test(src)
+			? toElectronImageCacheUrl(src)
+			: src;
+
+	if (!/^wcpos-image:\/\//i.test(resolved)) return resolved;
+	return fetchImageAsDataUrl(resolved).catch(() => resolved);
+}
+
+function isElectronRenderer(): boolean {
+	if (typeof window === 'undefined') return false;
+	const electronWindow = window as Window & { electron?: unknown };
+	return typeof electronWindow.electron === 'object' && !!electronWindow.electron;
+}
+
+function toElectronImageCacheUrl(url: string): string {
+	const base64 = btoa(url);
+	return `wcpos-image://cache/${base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+}
+
+async function fetchImageAsDataUrl(src: string): Promise<string> {
+	if (typeof fetch !== 'function') return src;
+	const response = await fetch(src);
+	if (!response.ok) throw new Error('Failed to fetch thermal image asset');
+	const contentTypeHeader = response.headers.get('Content-Type');
+	if (contentTypeHeader == null) return src;
+	const contentType = contentTypeHeader.split(';', 1)[0]?.trim().toLowerCase();
+	if (!contentType || !/^image\/(?:png|jpe?g)$/.test(contentType)) return src;
+	const buffer = new Uint8Array(await response.arrayBuffer());
+	return `data:${contentType};base64,${uint8ArrayToBase64(buffer)}`;
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+	let binary = '';
+	for (let index = 0; index < bytes.length; index++) {
+		binary += String.fromCharCode(bytes[index] ?? 0);
+	}
+	return btoa(binary);
 }
 
 function extractSvg(markup: string): string | undefined {

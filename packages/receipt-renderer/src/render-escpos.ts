@@ -484,10 +484,9 @@ function walkAlignedNodes(
 			continue;
 		}
 		const previousDeferAlignedTeardownDepth = context.deferAlignedTeardownDepth;
-		const deferAlignedTeardownDepth =
-			isDirectStyledHeading(node) && nodes[index + 1]
-				? singleStyledLineDepth(node, context.styleDepth)
-				: undefined;
+		const deferAlignedTeardownDepth = isDirectStyledHeading(node)
+			? singleStyledLineDepth(node, context.styleDepth)
+			: undefined;
 		context.deferAlignedTeardownDepth = deferAlignedTeardownDepth;
 		walkNode(encoder, node, context);
 		context.deferAlignedTeardownDepth = previousDeferAlignedTeardownDepth;

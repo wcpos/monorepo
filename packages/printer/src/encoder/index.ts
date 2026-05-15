@@ -24,6 +24,7 @@ export {
 export type {
 	EncodeThermalTemplateForPrintInput,
 	ThermalAssetRequests,
+	ThermalImageSrcResolver,
 	ThermalPrintAssets,
 } from './thermal-print';
 export type {
