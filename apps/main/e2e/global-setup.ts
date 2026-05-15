@@ -3,7 +3,7 @@ import * as path from 'path';
 
 import { chromium } from '@playwright/test';
 
-import { authenticateWithStore } from './fixtures';
+import { authenticateWithStore, stubStoreVersionForE2E } from './fixtures';
 import { exportOPFS } from './opfs-helpers';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
@@ -105,6 +105,7 @@ async function setupVariant(
 			});
 		});
 	}
+	await stubStoreVersionForE2E(context, storeUrl);
 	const authPage = await context.newPage();
 
 	// Capture console output for debugging
