@@ -36,7 +36,7 @@ const sanitizeStringArray = (value: unknown): string[] | undefined => {
 
 const sanitizeRoles = (data: Record<string, unknown>): string[] | undefined => {
 	const roles = sanitizeStringArray(data.roles);
-	if (roles && roles.length > 0) {
+	if (roles) {
 		return roles;
 	}
 
