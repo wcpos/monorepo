@@ -373,10 +373,9 @@ async function fetchImageAsDataUrl(src: string): Promise<string> {
 	if (typeof fetch !== 'function') return src;
 	const response = await fetch(src);
 	if (!response.ok) throw new Error('Failed to fetch thermal image asset');
-	const contentType = (response.headers.get('Content-Type') || 'image/png')
-		.split(';', 1)[0]
-		?.trim()
-		.toLowerCase();
+	const contentTypeHeader = response.headers.get('Content-Type');
+	if (contentTypeHeader == null) return src;
+	const contentType = contentTypeHeader.split(';', 1)[0]?.trim().toLowerCase();
 	if (!contentType || !/^image\/(?:png|jpe?g)$/.test(contentType)) return src;
 	const buffer = new Uint8Array(await response.arrayBuffer());
 	return `data:${contentType};base64,${uint8ArrayToBase64(buffer)}`;

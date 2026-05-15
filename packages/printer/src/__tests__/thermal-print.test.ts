@@ -175,6 +175,28 @@ describe('encodeThermalTemplateForPrint', () => {
 		expect(imageAssets[`image:64:${source}`]?.width).toBe(64);
 	});
 
+	it('applies imageSrcResolver while keeping the original asset key', async () => {
+		const { loadedSrcs, crossOriginsAtLoad } = mockImageAndCanvas(64, 32);
+		const source = 'https://example.test/logo.png';
+		const resolved = 'https://cdn.example.test/logo.png';
+		const imageSrcResolver = vi.fn(async (src: string) => {
+			expect(src).toBe(source);
+			return resolved;
+		});
+
+		const { imageAssets } = await prepareThermalPrintAssets({
+			renderedTemplateXml: `<receipt><image src="${source}" width="64" /></receipt>`,
+			maxWidthDots: 384,
+			imageSrcResolver,
+		});
+
+		expect(imageSrcResolver).toHaveBeenCalledWith(source);
+		expect(loadedSrcs).toEqual([resolved]);
+		expect(crossOriginsAtLoad).toEqual(['anonymous']);
+		expect(imageAssets[`image:64:${source}`]?.width).toBe(64);
+		expect(imageAssets[`image:64:${resolved}`]).toBeUndefined();
+	});
+
 	it('falls back to loading Electron image cache URLs when fetch is unavailable', async () => {
 		const { loadedSrcs, crossOriginsAtLoad } = mockImageAndCanvas(64, 32);
 		const source = 'https://example.test/logo.png';
