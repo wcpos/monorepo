@@ -227,6 +227,50 @@ const markerBelongsToCurrentRun = (marker: any) =>
 	getMigrationMarkerStatus(marker) === 'pending' &&
 	getMigrationMarkerOwnerId(marker) === MIGRATION_RUN_OWNER_ID;
 
+const formatStorageMigrationError = (error: unknown) => {
+	if (error instanceof Error) {
+		return error.message;
+	}
+
+	try {
+		return JSON.stringify(error);
+	} catch {
+		return String(error);
+	}
+};
+
+async function writeMigrationMarker({
+	database,
+	localDocId,
+	marker,
+	currentMarker,
+}: {
+	database: Pick<RunStorageMigrationInput['database'], 'getLocal' | 'insertLocal'>;
+	localDocId: string;
+	marker: StorageMigrationMeta;
+	currentMarker?: any;
+}): Promise<any> {
+	const existingMarker =
+		currentMarker && typeof currentMarker.incrementalModify === 'function'
+			? currentMarker
+			: await database.getLocal(localDocId);
+
+	if (existingMarker && typeof existingMarker.incrementalModify === 'function') {
+		return existingMarker.incrementalModify(() => marker);
+	}
+
+	try {
+		return await database.insertLocal(localDocId, marker);
+	} catch (error) {
+		const racedMarker = getMarkerFromWriteConflict(error) ?? (await database.getLocal(localDocId));
+		if (racedMarker && typeof racedMarker.incrementalModify === 'function') {
+			return racedMarker.incrementalModify(() => marker);
+		}
+
+		throw error;
+	}
+}
+
 async function claimRetryableMarker({
 	database,
 	marker,
@@ -329,6 +373,7 @@ export async function runStorageMigration({
 
 	const localDocId = getMigrationLocalDocId(database.name);
 	let existingMarker: any;
+	let migrationMarkerDoc: any;
 	let insertRaceResolved = false;
 	try {
 		existingMarker = await database.getLocal(localDocId);
@@ -339,7 +384,7 @@ export async function runStorageMigration({
 			localDocId,
 			sourceStorage,
 			targetStorage,
-			error: error instanceof Error ? error.message : String(error),
+			error: formatStorageMigrationError(error),
 		});
 		throw error;
 	}
@@ -385,6 +430,8 @@ export async function runStorageMigration({
 			if (claimResult === 'skip') {
 				return;
 			}
+
+			migrationMarkerDoc = existingMarker;
 		} catch (error) {
 			logStorageMigrationError('Storage migration failed to reserve retry marker state', {
 				databaseName: database.name,
@@ -392,7 +439,7 @@ export async function runStorageMigration({
 				localDocId,
 				sourceStorage,
 				targetStorage,
-				error: error instanceof Error ? error.message : String(error),
+				error: formatStorageMigrationError(error),
 			});
 			throw error;
 		}
@@ -406,7 +453,7 @@ export async function runStorageMigration({
 		});
 
 		try {
-			await database.insertLocal(localDocId, pendingMarker);
+			migrationMarkerDoc = await database.insertLocal(localDocId, pendingMarker);
 		} catch (error) {
 			let racedMarker: any = getMarkerFromWriteConflict(error);
 			if (!racedMarker) {
@@ -419,7 +466,7 @@ export async function runStorageMigration({
 						localDocId,
 						sourceStorage,
 						targetStorage,
-						error: lookupError instanceof Error ? lookupError.message : String(lookupError),
+						error: formatStorageMigrationError(lookupError),
 					});
 					throw error;
 				}
@@ -462,7 +509,7 @@ export async function runStorageMigration({
 								localDocId,
 								sourceStorage,
 								targetStorage,
-								error: lookupError instanceof Error ? lookupError.message : String(lookupError),
+								error: formatStorageMigrationError(lookupError),
 							});
 							throw error;
 						}
@@ -479,6 +526,9 @@ export async function runStorageMigration({
 						targetStorage,
 					});
 					insertRaceResolved = claimResult === 'claimed';
+					if (insertRaceResolved) {
+						migrationMarkerDoc = markerToClaim;
+					}
 					if (claimResult === 'skip') {
 						return;
 					}
@@ -489,7 +539,7 @@ export async function runStorageMigration({
 						localDocId,
 						sourceStorage,
 						targetStorage,
-						error: retryError instanceof Error ? retryError.message : String(retryError),
+						error: formatStorageMigrationError(retryError),
 					});
 					throw retryError;
 				}
@@ -511,20 +561,22 @@ export async function runStorageMigration({
 				localDocId,
 				sourceStorage,
 				targetStorage,
-				error: error instanceof Error ? error.message : String(error),
+				error: formatStorageMigrationError(error),
 			});
 
 			try {
-				await database.upsertLocal(
+				migrationMarkerDoc = await writeMigrationMarker({
+					database,
 					localDocId,
-					buildMigrationMarker({
+					currentMarker: migrationMarkerDoc,
+					marker: buildMigrationMarker({
 						newDatabaseName: database.name,
 						oldDatabaseName,
 						sourceStorage,
 						targetStorage,
 						status: 'failed',
-					})
-				);
+					}),
+				});
 			} catch {
 				// Best effort only; the original preparation error remains the source of truth.
 			}
@@ -554,20 +606,22 @@ export async function runStorageMigration({
 			oldDatabaseName,
 			sourceStorage,
 			targetStorage,
-			error: error instanceof Error ? error.message : String(error),
+			error: formatStorageMigrationError(error),
 		});
 
 		try {
-			await database.upsertLocal(
+			await writeMigrationMarker({
+				database,
 				localDocId,
-				buildMigrationMarker({
+				currentMarker: migrationMarkerDoc,
+				marker: buildMigrationMarker({
 					newDatabaseName: database.name,
 					oldDatabaseName,
 					sourceStorage,
 					targetStorage,
 					status: 'failed',
-				})
-			);
+				}),
+			});
 		} catch {
 			// Best effort only; the original migration error remains the source of truth.
 		}
@@ -584,7 +638,12 @@ export async function runStorageMigration({
 	});
 
 	try {
-		await database.upsertLocal(localDocId, cleanupPendingMarker);
+		migrationMarkerDoc = await writeMigrationMarker({
+			database,
+			localDocId,
+			currentMarker: migrationMarkerDoc,
+			marker: cleanupPendingMarker,
+		});
 	} catch (error) {
 		logStorageMigrationError('Storage migration completed but bookkeeping failed', {
 			databaseName: database.name,
@@ -592,20 +651,22 @@ export async function runStorageMigration({
 			localDocId,
 			sourceStorage,
 			targetStorage,
-			error: error instanceof Error ? error.message : String(error),
+			error: formatStorageMigrationError(error),
 		});
 
 		try {
-			await database.upsertLocal(
+			migrationMarkerDoc = await writeMigrationMarker({
+				database,
 				localDocId,
-				buildMigrationMarker({
+				currentMarker: migrationMarkerDoc,
+				marker: buildMigrationMarker({
 					newDatabaseName: database.name,
 					oldDatabaseName,
 					sourceStorage,
 					targetStorage,
 					status: 'failed',
-				})
-			);
+				}),
+			});
 		} catch {
 			// Best effort only; the original bookkeeping error remains the source of truth.
 		}

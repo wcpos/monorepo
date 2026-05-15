@@ -11,12 +11,12 @@ import {
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { clearAllDB } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 
 import type { FallbackProps } from 'react-error-boundary';
 
 const appLogger = getLogger(['wcpos', 'app', 'error']);
+const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
 
 /**
  * Reload the app - handles web and native platforms
@@ -74,11 +74,27 @@ const styles: any = StyleSheet.create({
  *
  */
 export function RootError({ error, resetErrorBoundary }: FallbackProps) {
+	const [isResetting, setIsResetting] = React.useState(false);
+
 	const handleReset = async () => {
-		// Clear databases to ensure clean start
+		if (isResetting) {
+			return;
+		}
+
+		setIsResetting(true);
+
+		if (Platform.OS === 'web') {
+			window.localStorage.setItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY, '1');
+			reloadApp();
+			return;
+		}
+
 		try {
+			const { clearAllDB } = await import('@wcpos/database/clear-all-db');
 			const result = await clearAllDB();
-			appLogger.info(result.message);
+			if (result && typeof result === 'object' && 'message' in result) {
+				appLogger.info(String(result.message));
+			}
 		} catch (err) {
 			appLogger.error(
 				`Failed to clear database: ${err instanceof Error ? err.message : String(err)}`
@@ -96,8 +112,12 @@ export function RootError({ error, resetErrorBoundary }: FallbackProps) {
 					<Text style={styles.title}>Oops!</Text>
 					<Text style={styles.subtitle}>{"There's an error"}</Text>
 					<Text style={styles.error}>{String(error)}</Text>
-					<TouchableOpacity style={styles.button} onPress={handleReset}>
-						<Text style={styles.buttonText}>Try again</Text>
+					<TouchableOpacity
+						style={[styles.button, isResetting ? { opacity: 0.5 } : null]}
+						onPress={handleReset}
+						disabled={isResetting}
+					>
+						<Text style={styles.buttonText}>{isResetting ? 'Resetting…' : 'Try again'}</Text>
 					</TouchableOpacity>
 				</View>
 			</ScrollView>
