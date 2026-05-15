@@ -155,11 +155,18 @@ export const hydrateUserSession = async (
 	}
 	if (store) {
 		const db = await createStoreDB(store.localID!);
-		if (db) {
-			storeDB = db;
-			fastStoreDB = await createFastStoreDB(store.localID!);
-			extraData = await db.addState('data_v2');
+		if (!db) {
+			throw new Error('Failed to create store database');
 		}
+
+		const fastDb = await createFastStoreDB(store.localID!);
+		if (!fastDb) {
+			throw new Error('Failed to create fast store database');
+		}
+
+		storeDB = db;
+		fastStoreDB = fastDb;
+		extraData = await db.addState('data_v2');
 	}
 
 	return { site, wpCredentials, store, storeDB, fastStoreDB, extraData };

@@ -22,6 +22,7 @@ import { wpCredentialsLiteral } from './schemas/wp-credientials';
 import { printerProfilesLiteral } from './schemas/printer-profiles';
 import { templatePrinterOverridesLiteral } from './schemas/template-printer-overrides';
 import { toSortableInteger } from './utils';
+import { sanitizeProductData } from './products';
 import { sanitizeWPCredentialsData } from './wp-credentials';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
@@ -223,6 +224,10 @@ const products: RxCollectionCreator<ProductDocumentType> = {
 		// v5: Removed format: 'uri' from image.src and permalink (RxDB v17 strict validation)
 		5(oldDoc) {
 			return oldDoc;
+		},
+		// v6: Sanitize stale REST payload shapes before storage migration writes to strict schema.
+		6(oldDoc) {
+			return sanitizeProductData(oldDoc) as ProductDocumentType;
 		},
 	},
 };
