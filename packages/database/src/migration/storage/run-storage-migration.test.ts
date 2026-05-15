@@ -33,6 +33,23 @@ const createLocalMarkerDoc = (data: Record<string, any>) => ({
 	}),
 });
 
+const createMutableLocalMarkerDoc = (initialData: Record<string, any>) => {
+	let data = initialData;
+	return {
+		get data() {
+			return data;
+		},
+		toJSON: () => ({
+			id: 'storage-migration::store_v3_abc123',
+			data,
+		}),
+		incrementalModify: jest.fn(async (mutate: (data: any) => any) => {
+			data = mutate(data);
+			return { data };
+		}),
+	};
+};
+
 describe('run-storage-migration helpers', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -155,10 +172,10 @@ describe('run-storage-migration helpers', () => {
 			targetStorage: 'new-storage',
 		});
 
-		expect(existingMarker.incrementalModify).toHaveBeenCalledTimes(1);
+		expect(existingMarker.incrementalModify).toHaveBeenCalledTimes(2);
 		expect(migrateStorage).toHaveBeenCalled();
-		expect(database.upsertLocal).toHaveBeenCalledTimes(1);
-		expect(database.upsertLocal).toHaveBeenNthCalledWith(1, 'storage-migration::store_v3_abc123', {
+		expect(database.upsertLocal).not.toHaveBeenCalled();
+		expect(existingMarker.incrementalModify.mock.calls[1][0]({ status: 'pending' })).toEqual({
 			status: 'cleanup-pending',
 			oldDatabaseName: 'store_v2_abc123',
 			newDatabaseName: 'store_v3_abc123',
@@ -206,7 +223,7 @@ describe('run-storage-migration helpers', () => {
 		});
 
 		expect(database.getLocal).toHaveBeenCalledTimes(2);
-		expect(existingMarker.incrementalModify).toHaveBeenCalledTimes(1);
+		expect(existingMarker.incrementalModify).toHaveBeenCalledTimes(2);
 		expect(migrateStorage).toHaveBeenCalledTimes(1);
 		expect(mockLogger.info).not.toHaveBeenCalledWith(
 			'Skipping storage migration because marker status is unrecognized',
@@ -249,7 +266,7 @@ describe('run-storage-migration helpers', () => {
 		});
 
 		expect(database.getLocal).toHaveBeenCalledTimes(2);
-		expect(existingMarker.incrementalModify).toHaveBeenCalledTimes(1);
+		expect(existingMarker.incrementalModify).toHaveBeenCalledTimes(2);
 		expect(migrateStorage).toHaveBeenCalledTimes(1);
 		expect(mockLogger.info).not.toHaveBeenCalledWith(
 			'Skipping storage migration because marker status is unrecognized',
@@ -284,7 +301,7 @@ describe('run-storage-migration helpers', () => {
 		});
 
 		expect(prepareOldDatabase).toHaveBeenCalledTimes(1);
-		expect(existingMarker.incrementalModify).toHaveBeenCalledTimes(1);
+		expect(existingMarker.incrementalModify).toHaveBeenCalledTimes(2);
 		expect(migrateStorage).toHaveBeenCalled();
 		expect(mockLogger.info).toHaveBeenCalledWith(
 			'Retrying storage migration because marker status is pending',
@@ -395,8 +412,9 @@ describe('run-storage-migration helpers', () => {
 			getLocal: jest.fn().mockResolvedValue(null),
 			insertLocal: jest.fn().mockImplementation(async () => {
 				sequence.push('reserve-pending');
+				return createMutableLocalMarkerDoc({ status: 'pending' });
 			}),
-			upsertLocal: jest.fn().mockResolvedValue(undefined),
+			upsertLocal: jest.fn(),
 		} as any;
 		const prepareOldDatabase = jest.fn(async () => {
 			sequence.push('prepare-start');
@@ -538,9 +556,9 @@ describe('run-storage-migration helpers', () => {
 			targetStorage: 'new-storage',
 		});
 
-		expect(failedMarker.incrementalModify).toHaveBeenCalledTimes(1);
-		expect(database.upsertLocal).toHaveBeenCalledTimes(1);
-		expect(database.upsertLocal).toHaveBeenNthCalledWith(1, 'storage-migration::store_v3_abc123', {
+		expect(failedMarker.incrementalModify).toHaveBeenCalledTimes(2);
+		expect(database.upsertLocal).not.toHaveBeenCalled();
+		expect(failedMarker.incrementalModify.mock.calls[1][0]({ status: 'pending' })).toEqual({
 			status: 'cleanup-pending',
 			oldDatabaseName: 'store_v2_abc123',
 			newDatabaseName: 'store_v3_abc123',
@@ -593,7 +611,7 @@ describe('run-storage-migration helpers', () => {
 		});
 
 		expect(database.getLocal).toHaveBeenCalledTimes(2);
-		expect(failedMarker.incrementalModify).toHaveBeenCalledTimes(1);
+		expect(failedMarker.incrementalModify).toHaveBeenCalledTimes(2);
 		expect(migrateStorage).toHaveBeenCalled();
 	});
 
@@ -631,11 +649,12 @@ describe('run-storage-migration helpers', () => {
 	});
 
 	it('migrates storage and writes a cleanup-pending local marker', async () => {
+		const pendingMarker = createMutableLocalMarkerDoc({ status: 'pending' });
 		const database = {
 			name: 'store_v3_abc123',
 			getLocal: jest.fn().mockResolvedValue(null),
-			insertLocal: jest.fn().mockResolvedValue(undefined),
-			upsertLocal: jest.fn().mockResolvedValue(undefined),
+			insertLocal: jest.fn().mockResolvedValue(pendingMarker),
+			upsertLocal: jest.fn(),
 		} as any;
 
 		(migrateStorage as jest.Mock).mockResolvedValue(undefined);
@@ -660,7 +679,9 @@ describe('run-storage-migration helpers', () => {
 			parallel: false,
 		});
 
-		expect(database.upsertLocal).toHaveBeenCalledWith('storage-migration::store_v3_abc123', {
+		expect(database.upsertLocal).not.toHaveBeenCalled();
+		expect(pendingMarker.incrementalModify).toHaveBeenCalledTimes(1);
+		expect(pendingMarker.incrementalModify.mock.calls[0][0]({ status: 'pending' })).toEqual({
 			status: 'cleanup-pending',
 			oldDatabaseName: 'store_v2_abc123',
 			newDatabaseName: 'store_v3_abc123',
@@ -680,11 +701,12 @@ describe('run-storage-migration helpers', () => {
 
 	it('logs and rethrows when the migration fails', async () => {
 		const migrationError = new Error('migration exploded');
+		const pendingMarker = createMutableLocalMarkerDoc({ status: 'pending' });
 		const database = {
 			name: 'store_v3_abc123',
 			getLocal: jest.fn().mockResolvedValue(null),
-			insertLocal: jest.fn().mockResolvedValue(undefined),
-			upsertLocal: jest.fn().mockResolvedValue(undefined),
+			insertLocal: jest.fn().mockResolvedValue(pendingMarker),
+			upsertLocal: jest.fn(),
 		} as any;
 
 		(migrateStorage as jest.Mock).mockRejectedValue(migrationError);
@@ -699,8 +721,9 @@ describe('run-storage-migration helpers', () => {
 			})
 		).rejects.toThrow('migration exploded');
 
-		expect(database.upsertLocal).toHaveBeenCalledWith(
-			'storage-migration::store_v3_abc123',
+		expect(database.upsertLocal).not.toHaveBeenCalled();
+		expect(pendingMarker.incrementalModify).toHaveBeenCalledTimes(1);
+		expect(pendingMarker.incrementalModify.mock.calls[0][0]({ status: 'pending' })).toEqual(
 			expect.objectContaining({ status: 'failed' })
 		);
 		expect(mockLogger.error).toHaveBeenCalledWith(
@@ -716,14 +739,18 @@ describe('run-storage-migration helpers', () => {
 
 	it('logs and rethrows when marker bookkeeping fails after a successful migration', async () => {
 		const bookkeepingError = new Error('marker write failed');
+		const pendingMarker = {
+			data: { status: 'pending' },
+			incrementalModify: jest
+				.fn()
+				.mockRejectedValueOnce(bookkeepingError)
+				.mockResolvedValueOnce({ data: { status: 'failed' } }),
+		};
 		const database = {
 			name: 'store_v3_abc123',
 			getLocal: jest.fn().mockResolvedValue(null),
-			insertLocal: jest.fn().mockResolvedValue(undefined),
-			upsertLocal: jest
-				.fn()
-				.mockRejectedValueOnce(bookkeepingError)
-				.mockResolvedValueOnce(undefined),
+			insertLocal: jest.fn().mockResolvedValue(pendingMarker),
+			upsertLocal: jest.fn(),
 		} as any;
 
 		(migrateStorage as jest.Mock).mockResolvedValue(undefined);
@@ -738,7 +765,9 @@ describe('run-storage-migration helpers', () => {
 			})
 		).rejects.toThrow('marker write failed');
 
-		expect(database.upsertLocal).toHaveBeenNthCalledWith(1, 'storage-migration::store_v3_abc123', {
+		expect(database.upsertLocal).not.toHaveBeenCalled();
+		expect(pendingMarker.incrementalModify).toHaveBeenCalledTimes(2);
+		expect(pendingMarker.incrementalModify.mock.calls[0][0]({ status: 'pending' })).toEqual({
 			status: 'cleanup-pending',
 			oldDatabaseName: 'store_v2_abc123',
 			newDatabaseName: 'store_v3_abc123',
@@ -746,7 +775,7 @@ describe('run-storage-migration helpers', () => {
 			targetStorage: 'new-storage',
 			migratedAt: '2026-01-02T03:04:05.000Z',
 		});
-		expect(database.upsertLocal).toHaveBeenNthCalledWith(2, 'storage-migration::store_v3_abc123', {
+		expect(pendingMarker.incrementalModify.mock.calls[1][0]({ status: 'pending' })).toEqual({
 			status: 'failed',
 			oldDatabaseName: 'store_v2_abc123',
 			newDatabaseName: 'store_v3_abc123',

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Platform } from 'react-native';
 
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -11,13 +12,16 @@ import { KeyboardProvider } from '@wcpos/components/keyboard-controller';
 import { Toast, Toaster } from '@wcpos/components/toast';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 import { HydrationProviders } from '@wcpos/core/contexts/hydration-providers';
-import { setToast } from '@wcpos/utils/logger';
+import { getLogger, setToast } from '@wcpos/utils/logger';
 
 import { RootError } from '../components/root-error';
 import '../global.css';
 import '../polyfills';
 
 WebBrowser.maybeCompleteAuthSession();
+
+const appLogger = getLogger(['wcpos', 'app', 'startup']);
+const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
 
 /**
  * Forwards safe area insets to Uniwind for p-safe, m-safe, etc. utilities
@@ -99,7 +103,62 @@ function ThemedToaster() {
 	return <Toaster position="top-center" theme={toastTheme} richColors />;
 }
 
+function useClearLocalDataOnStartup() {
+	const [isClearing, setIsClearing] = React.useState(
+		() =>
+			Platform.OS === 'web' &&
+			typeof window !== 'undefined' &&
+			window.localStorage.getItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY) === '1'
+	);
+
+	React.useEffect(() => {
+		if (!isClearing || Platform.OS !== 'web') {
+			return;
+		}
+
+		let cancelled = false;
+
+		(async () => {
+			try {
+				const { clearAllDB } = await import('@wcpos/database/clear-all-db');
+				const result = await clearAllDB();
+				window.localStorage.removeItem(CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY);
+
+				if (result && typeof result === 'object' && 'message' in result) {
+					appLogger.info(String(result.message));
+				}
+
+				if (!cancelled) {
+					window.location.reload();
+				}
+			} catch (error) {
+				appLogger.error('Failed to clear local data before hydration', {
+					context: {
+						error: error instanceof Error ? error.message : String(error),
+					},
+				});
+
+				if (!cancelled) {
+					setIsClearing(false);
+				}
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [isClearing]);
+
+	return isClearing;
+}
+
 export default function RootLayout() {
+	const isClearingLocalData = useClearLocalDataOnStartup();
+
+	if (isClearingLocalData) {
+		return null;
+	}
+
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<SafeAreaProvider style={{ overflow: 'hidden' }}>

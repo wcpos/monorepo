@@ -1,4 +1,10 @@
-import { APP_DATABASE_PREFIXES } from './migration/storage/database-names';
+import { APP_DATABASE_PREFIXES, isKnownAppDatabaseName } from './migration/storage/database-names';
+
+interface ClearDBResult {
+	success: boolean;
+	message: string;
+	databasesDeleted: number;
+}
 
 const RXDB_DIRECTORY_PREFIX = 'rxdb-';
 
@@ -14,7 +20,8 @@ const isKnownAppOpfsEntry = (name: string) =>
  */
 const deleteIndexedDbDatabases = async () => {
 	const databases = await indexedDB.databases();
-	const deletePromises = databases.map(
+	const appDatabases = databases.filter((db) => db.name && isKnownAppDatabaseName(db.name));
+	const deletePromises = appDatabases.map(
 		(db) =>
 			new Promise<void>((resolve, reject) => {
 				if (!db.name) {
@@ -25,11 +32,12 @@ const deleteIndexedDbDatabases = async () => {
 				const request = indexedDB.deleteDatabase(db.name);
 				request.onsuccess = () => resolve();
 				request.onerror = () => reject(new Error(`Failed to delete IndexedDB: ${db.name}`));
-				request.onblocked = () => resolve();
+				request.onblocked = () => reject(new Error(`Blocked deleting IndexedDB: ${db.name}`));
 			})
 	);
 
 	await Promise.all(deletePromises);
+	return appDatabases.length;
 };
 
 /**
@@ -37,7 +45,7 @@ const deleteIndexedDbDatabases = async () => {
  */
 const deleteOpfsDatabases = async () => {
 	if (!navigator.storage?.getDirectory) {
-		return;
+		return 0;
 	}
 
 	const root = await navigator.storage.getDirectory();
@@ -50,8 +58,23 @@ const deleteOpfsDatabases = async () => {
 	}
 
 	await Promise.all(entriesToDelete.map((name) => root.removeEntry(name, { recursive: true })));
+	return entriesToDelete.length;
 };
 
-export const clearAllDB = async (): Promise<void> => {
-	await Promise.all([deleteIndexedDbDatabases(), deleteOpfsDatabases()]);
+export const clearAllDB = async (): Promise<ClearDBResult> => {
+	const [deletedIndexedDbDatabases, deletedOpfsDatabases] = await Promise.all([
+		deleteIndexedDbDatabases(),
+		deleteOpfsDatabases(),
+	]);
+	const databasesDeleted = deletedIndexedDbDatabases + deletedOpfsDatabases;
+	const message =
+		databasesDeleted > 0
+			? `Successfully cleared ${databasesDeleted} database entries`
+			: 'No databases found to clear (this might mean the app is already in a clean state)';
+
+	return {
+		success: true,
+		message,
+		databasesDeleted,
+	};
 };
