@@ -11,12 +11,18 @@ const ONE_PIXEL_PNG =
 	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
 
 afterEach(() => {
+	delete (window as Window & { electron?: unknown }).electron;
 	vi.useRealTimers();
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
 });
 
-function mockImageAndCanvas(naturalWidth: number, naturalHeight: number): void {
+function mockImageAndCanvas(
+	naturalWidth: number,
+	naturalHeight: number
+): { loadedSrcs: string[]; crossOriginsAtLoad: string[] } {
+	const loadedSrcs: string[] = [];
+	const crossOriginsAtLoad: string[] = [];
 	class MockImage {
 		onload: (() => void) | null = null;
 		onerror: (() => void) | null = null;
@@ -26,7 +32,9 @@ function mockImageAndCanvas(naturalWidth: number, naturalHeight: number): void {
 		width = naturalWidth;
 		height = naturalHeight;
 
-		set src(_value: string) {
+		set src(value: string) {
+			loadedSrcs.push(value);
+			crossOriginsAtLoad.push(this.crossOrigin);
 			queueMicrotask(() => this.onload?.());
 		}
 	}
@@ -51,6 +59,8 @@ function mockImageAndCanvas(naturalWidth: number, naturalHeight: number): void {
 		}
 		return element;
 	}) as typeof document.createElement);
+
+	return { loadedSrcs, crossOriginsAtLoad };
 }
 
 function countSequence(bytes: Uint8Array, sequence: readonly number[]): number {
@@ -138,6 +148,71 @@ describe('encodeThermalTemplateForPrint', () => {
 
 		expect(requestedSrc).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
 		expect(decodeURIComponent(requestedSrc.split(',', 2)[1] ?? '')).toContain('<svg');
+	});
+
+	it('loads Electron remote thermal images through canvas-safe data URLs', async () => {
+		const { loadedSrcs, crossOriginsAtLoad } = mockImageAndCanvas(64, 32);
+		const source = 'https://example.test/logo.png';
+		const cached = 'wcpos-image://cache/aHR0cHM6Ly9leGFtcGxlLnRlc3QvbG9nby5wbmc';
+		const payload = new Uint8Array([1, 2, 3]);
+		(window as Window & { electron?: unknown }).electron = {};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => {
+				expect(url).toBe(cached);
+				return new Response(payload, { headers: { 'Content-Type': 'image/png' } });
+			})
+		);
+
+		const { imageAssets } = await prepareThermalPrintAssets({
+			renderedTemplateXml: `<receipt><image src="${source}" width="64" /></receipt>`,
+			maxWidthDots: 384,
+		});
+
+		expect(fetch).toHaveBeenCalledWith(cached);
+		expect(loadedSrcs).toEqual(['data:image/png;base64,AQID']);
+		expect(crossOriginsAtLoad).toEqual(['anonymous']);
+		expect(imageAssets[`image:64:${source}`]?.width).toBe(64);
+	});
+
+	it('falls back to loading Electron image cache URLs when fetch is unavailable', async () => {
+		const { loadedSrcs, crossOriginsAtLoad } = mockImageAndCanvas(64, 32);
+		const source = 'https://example.test/logo.png';
+		const cached = 'wcpos-image://cache/aHR0cHM6Ly9leGFtcGxlLnRlc3QvbG9nby5wbmc';
+		(window as Window & { electron?: unknown }).electron = {};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => Promise.reject(new Error('unsupported protocol')))
+		);
+
+		const { imageAssets } = await prepareThermalPrintAssets({
+			renderedTemplateXml: `<receipt><image src="${source}" width="64" /></receipt>`,
+			maxWidthDots: 384,
+		});
+
+		expect(loadedSrcs).toEqual([cached]);
+		expect(crossOriginsAtLoad).toEqual(['']);
+		expect(imageAssets[`image:64:${source}`]?.width).toBe(64);
+	});
+
+	it('falls back to Electron image cache URLs for unsupported fetched image types', async () => {
+		const { loadedSrcs } = mockImageAndCanvas(64, 32);
+		const source = 'https://example.test/logo.webp';
+		const cached = 'wcpos-image://cache/aHR0cHM6Ly9leGFtcGxlLnRlc3QvbG9nby53ZWJw';
+		(window as Window & { electron?: unknown }).electron = {};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () => new Response(new Uint8Array([1]), { headers: { 'Content-Type': 'image/webp' } })
+			)
+		);
+
+		await prepareThermalPrintAssets({
+			renderedTemplateXml: `<receipt><image src="${source}" width="64" /></receipt>`,
+			maxWidthDots: 384,
+		});
+
+		expect(loadedSrcs).toEqual([cached]);
 	});
 });
 
