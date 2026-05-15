@@ -2,9 +2,9 @@
  * Probe a network host to auto-detect the printer vendor.
  *
  * Sends lightweight HTTP requests to the known Epson ePOS and Star
- * WebPRNT endpoints. Any response (even an error status) confirms the
- * vendor — only a network-level failure (timeout / refused) is treated
- * as "not this vendor".
+ * WebPRNT endpoints. Endpoint-level HTTP responses confirm the vendor,
+ * including method rejections from printer endpoints that only accept POST.
+ * Missing paths such as generic web-server 404s are not treated as matches.
  */
 export async function probeVendor(host: string): Promise<'epson' | 'star' | null> {
 	const timeout = 3_000;
@@ -13,11 +13,11 @@ export async function probeVendor(host: string): Promise<'epson' | 'star' | null
 		const controller = new AbortController();
 		const id = setTimeout(() => controller.abort(), timeout);
 		try {
-			await fetch(`http://${host}:8008/cgi-bin/epos/service.cgi`, {
+			const response = await fetch(`http://${host}:8008/cgi-bin/epos/service.cgi`, {
 				method: 'GET',
 				signal: controller.signal,
 			});
-			return true;
+			return isEndpointPresent(response);
 		} catch {
 			return false;
 		} finally {
@@ -29,11 +29,11 @@ export async function probeVendor(host: string): Promise<'epson' | 'star' | null
 		const controller = new AbortController();
 		const id = setTimeout(() => controller.abort(), timeout);
 		try {
-			await fetch(`https://${host}/StarWebPRNT/SendMessage`, {
+			const response = await fetch(`https://${host}/StarWebPRNT/SendMessage`, {
 				method: 'GET',
 				signal: controller.signal,
 			});
-			return true;
+			return isEndpointPresent(response);
 		} catch {
 			// Star printers on HTTPS with self-signed certs will fail in
 			// browsers due to certificate rejection. Try HTTP as fallback.
@@ -42,11 +42,11 @@ export async function probeVendor(host: string): Promise<'epson' | 'star' | null
 			const controller2 = new AbortController();
 			const id2 = setTimeout(() => controller2.abort(), timeout);
 			try {
-				await fetch(`http://${host}/StarWebPRNT/SendMessage`, {
+				const response = await fetch(`http://${host}/StarWebPRNT/SendMessage`, {
 					method: 'GET',
 					signal: controller2.signal,
 				});
-				return true;
+				return isEndpointPresent(response);
 			} catch {
 				return false;
 			} finally {
@@ -62,4 +62,8 @@ export async function probeVendor(host: string): Promise<'epson' | 'star' | null
 	if (epson) return 'epson';
 	if (star) return 'star';
 	return null;
+}
+
+function isEndpointPresent(response: Response): boolean {
+	return response.status !== 404 && response.status < 500;
 }

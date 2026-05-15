@@ -1,13 +1,16 @@
+import { DOMParser as XmlDOMParser } from '@xmldom/xmldom';
+
 import type { ColNode, ReceiptNode, RowNode, ThermalNode } from './types.js';
 
 /**
  * Parse a thermal XML template string into an AST.
- * Uses DOMParser (available in browser, React Native, and jsdom for tests).
+ * Uses the native DOMParser when present, and falls back to @xmldom/xmldom
+ * for React Native runtimes that do not provide browser DOM globals.
  */
 export function parseXml(xml: string): ReceiptNode {
-	const doc = new DOMParser().parseFromString(xml, 'text/xml');
+	const doc = parseXmlDocument(xml);
 
-	const errorNode = doc.querySelector('parsererror');
+	const errorNode = doc.getElementsByTagName('parsererror')[0];
 	if (errorNode) {
 		throw new Error(`XML parse error: ${errorNode.textContent}`);
 	}
@@ -164,23 +167,48 @@ function heightToQrSize(height: number): number {
 
 function parseRowChildren(row: Element): ColNode[] {
 	const cols: ColNode[] = [];
-	for (const child of Array.from(row.children)) {
-		if (child.tagName.toLowerCase() === 'col') {
-			const rawWidth = child.getAttribute('width');
-			const width: number | '*' = rawWidth === '*' ? '*' : intAttr(child, 'width', 12);
+	for (const child of Array.from(row.childNodes)) {
+		if (child.nodeType !== 1 /* ELEMENT_NODE */) continue;
+		const el = child as Element;
+		if (el.tagName.toLowerCase() === 'col') {
+			const rawWidth = el.getAttribute('width');
+			const width: number | '*' = rawWidth === '*' ? '*' : intAttr(el, 'width', 12);
 			cols.push({
 				type: 'col',
 				width,
-				align: (['left', 'right'] as const).includes(
-					child.getAttribute('align') as 'left' | 'right'
-				)
-					? (child.getAttribute('align') as 'left' | 'right')
+				align: (['left', 'right'] as const).includes(el.getAttribute('align') as 'left' | 'right')
+					? (el.getAttribute('align') as 'left' | 'right')
 					: 'left',
-				children: parseChildren(child),
+				children: parseChildren(el),
 			});
 		}
 	}
 	return cols;
+}
+
+function parseXmlDocument(xml: string): Document {
+	if (typeof DOMParser !== 'undefined') {
+		return new DOMParser().parseFromString(xml, 'text/xml');
+	}
+
+	const errors: string[] = [];
+	let doc: Document | undefined;
+	try {
+		doc = new XmlDOMParser({
+			onError: (_level: string, message: unknown) => errors.push(String(message)),
+		} as unknown as ConstructorParameters<typeof XmlDOMParser>[0]).parseFromString(
+			xml,
+			'text/xml'
+		) as unknown as Document;
+	} catch (error) {
+		errors.push(error instanceof Error ? error.message : String(error));
+	}
+
+	if (errors.length > 0 || !doc) {
+		throw new Error(`XML parse error: ${errors.join('; ') || 'invalid document'}`);
+	}
+
+	return doc;
 }
 
 function intAttr(el: Element, name: string, fallback: number): number {
