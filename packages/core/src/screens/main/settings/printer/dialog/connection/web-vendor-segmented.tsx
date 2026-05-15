@@ -15,13 +15,13 @@ interface WebVendorSegmentedProps {
 	onSelect: (vendor: WebVendor) => void;
 }
 
-function normalizeVendor(vendor: PrinterFormValues['vendor']): WebVendor {
-	return vendor === 'star' ? 'star' : 'epson';
+function normalizeVendor(vendor: PrinterFormValues['vendor']): WebVendor | undefined {
+	return vendor === 'epson' || vendor === 'star' ? vendor : undefined;
 }
 
 export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps) {
 	const t = useT();
-	const [selectedVendor, setSelectedVendor] = React.useState<WebVendor>(() =>
+	const [selectedVendor, setSelectedVendor] = React.useState<WebVendor | undefined>(() =>
 		normalizeVendor(vendor)
 	);
 
