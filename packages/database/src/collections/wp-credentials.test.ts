@@ -46,6 +46,19 @@ describe('sanitizeWPCredentialsData', () => {
 			roles: ['shop_manager'],
 		});
 	});
+
+	it('falls back to legacy role when roles array sanitizes to empty', () => {
+		expect(
+			sanitizeWPCredentialsData({
+				uuid: 'cred-1',
+				roles: ['', 123],
+				role: 'shop_manager',
+			})
+		).toEqual({
+			uuid: 'cred-1',
+			roles: ['shop_manager'],
+		});
+	});
 });
 
 describe('wp_credentials migration strategy', () => {
