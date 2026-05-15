@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/printer",
-	"version": "0.1.0",
+	"version": "1.9.0",
 	"description": "Printer encoding and transport for WooCommerce POS",
 	"author": "kilbot <paul@kilbot.com>",
 	"license": "MIT",
