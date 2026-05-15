@@ -11,6 +11,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 	Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 const getDefaultForType = (schema: SchemaNode): unknown => {
+	if (Array.isArray(schema.type) && schema.type.includes('null')) {
+		return null;
+	}
+
 	const type = Array.isArray(schema.type)
 		? schema.type.find((entry) => entry !== 'null')
 		: schema.type;
@@ -33,6 +37,16 @@ const getDefaultForType = (schema: SchemaNode): unknown => {
 };
 
 const coercePrimitive = (schema: SchemaNode, value: unknown): unknown => {
+	if (Array.isArray(schema.type) && schema.type.includes('null')) {
+		if (value === null || value === undefined) {
+			return null;
+		}
+
+		if (value === '' && (schema.type.includes('number') || schema.type.includes('integer'))) {
+			return null;
+		}
+	}
+
 	const schemaType = Array.isArray(schema.type)
 		? schema.type.find((type) => type !== 'null')
 		: schema.type;

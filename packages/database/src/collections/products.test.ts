@@ -62,6 +62,25 @@ describe('sanitizeProductData', () => {
 			id: 123,
 		});
 	});
+
+	it('preserves nullable inventory fields during migration sanitization', () => {
+		expect(
+			sanitizeProductData({
+				uuid: 'product-uuid',
+				id: 1,
+				stock_quantity: null,
+				low_stock_amount: null,
+			})
+		).toMatchObject({
+			stock_quantity: null,
+			low_stock_amount: null,
+		});
+
+		expect(sanitizeProductData({ uuid: 'product-uuid', id: 1 })).toMatchObject({
+			stock_quantity: null,
+			low_stock_amount: null,
+		});
+	});
 });
 
 describe('products migration strategy', () => {
