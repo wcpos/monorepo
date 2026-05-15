@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useWatch } from 'react-hook-form';
+
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import type { PrinterProfile } from '@wcpos/printer';
@@ -82,7 +84,11 @@ export function PrinterDialog({
 		onSave,
 	});
 
-	const vendor = form.watch('vendor');
+	const vendor = useWatch({
+		control: form.control,
+		name: 'vendor',
+		defaultValue: WEB_DEFAULTS.vendor,
+	});
 	const address = form.watch('address');
 	const port = form.watch('port');
 	const endpointHint = deriveEndpointHint(vendor, address ?? '', port ?? 9100);
@@ -102,7 +108,11 @@ export function PrinterDialog({
 	const handleVendorSelect = React.useCallback(
 		(selectedVendor: 'epson' | 'star') => {
 			setManualVendor();
-			form.setValue('vendor', selectedVendor);
+			form.setValue('vendor', selectedVendor, {
+				shouldDirty: true,
+				shouldTouch: true,
+				shouldValidate: true,
+			});
 		},
 		[form, setManualVendor]
 	);
