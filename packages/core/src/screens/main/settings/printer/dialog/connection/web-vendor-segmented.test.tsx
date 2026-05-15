@@ -12,8 +12,8 @@ jest.mock('react-native', () => ({
 		className,
 		accessibilityRole,
 		accessibilityState,
-		testID,
 		onPress,
+		testID,
 	}: any) => (
 		<button
 			type="button"
@@ -47,9 +47,7 @@ jest.mock('../../../../../../contexts/translations', () => ({
 
 describe('WebVendorSegmented', () => {
 	it('marks the selected vendor with an accessible and visible active state', () => {
-		const onSelect = jest.fn();
-
-		render(<WebVendorSegmented vendor="star" onSelect={onSelect} />);
+		render(<WebVendorSegmented vendor="star" onSelect={jest.fn()} />);
 
 		const segmented = screen.getByTestId('add-printer-vendor-segmented');
 		const epson = screen.getByTestId('add-printer-vendor-epson');
@@ -64,11 +62,28 @@ describe('WebVendorSegmented', () => {
 		expect(epson).toHaveAttribute('aria-selected', 'false');
 		expect(epson).toHaveClass('border-transparent');
 		expect(epson.firstElementChild).toHaveClass('text-muted-foreground');
+	});
+	it('moves the active state immediately when a vendor is clicked', () => {
+		const onSelect = jest.fn();
+		render(<WebVendorSegmented vendor="epson" onSelect={onSelect} />);
 
-		fireEvent.click(epson);
-		fireEvent.click(star);
+		fireEvent.click(screen.getByTestId('add-printer-vendor-star'));
 
-		expect(onSelect).toHaveBeenCalledWith('epson');
 		expect(onSelect).toHaveBeenCalledWith('star');
+		expect(screen.getByTestId('add-printer-vendor-star')).toHaveAttribute('aria-selected', 'true');
+		expect(screen.getByTestId('add-printer-vendor-epson')).toHaveAttribute(
+			'aria-selected',
+			'false'
+		);
+	});
+
+	it('does not show a supported web vendor as selected for unsupported values', () => {
+		render(<WebVendorSegmented vendor="generic" onSelect={jest.fn()} />);
+
+		expect(screen.getByTestId('add-printer-vendor-epson')).toHaveAttribute(
+			'aria-selected',
+			'false'
+		);
+		expect(screen.getByTestId('add-printer-vendor-star')).toHaveAttribute('aria-selected', 'false');
 	});
 });

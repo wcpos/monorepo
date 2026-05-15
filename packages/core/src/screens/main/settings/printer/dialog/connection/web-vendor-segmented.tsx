@@ -8,13 +8,27 @@ import { useT } from '../../../../../../contexts/translations';
 
 import type { PrinterFormValues } from '../../schema';
 
+type WebVendor = 'epson' | 'star';
+
 interface WebVendorSegmentedProps {
 	vendor: PrinterFormValues['vendor'];
-	onSelect: (vendor: 'epson' | 'star') => void;
+	onSelect: (vendor: WebVendor) => void;
+}
+
+function normalizeVendor(vendor: PrinterFormValues['vendor']): WebVendor | undefined {
+	return vendor === 'epson' || vendor === 'star' ? vendor : undefined;
 }
 
 export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps) {
 	const t = useT();
+	const [selectedVendor, setSelectedVendor] = React.useState<WebVendor | undefined>(() =>
+		normalizeVendor(vendor)
+	);
+
+	// Keep the visual selection in sync when the form is reset for edit/prefill/open.
+	React.useEffect(() => {
+		setSelectedVendor(normalizeVendor(vendor));
+	}, [vendor]);
 
 	return (
 		<VStack className="gap-1">
@@ -28,12 +42,15 @@ export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps
 					{ value: 'epson' as const, label: 'Epson' },
 					{ value: 'star' as const, label: 'Star Micronics' },
 				].map((option) => {
-					const selected = option.value === vendor;
+					const selected = option.value === selectedVendor;
 					return (
 						<Pressable
 							key={option.value}
 							testID={`add-printer-vendor-${option.value}`}
-							onPress={() => onSelect(option.value)}
+							onPress={() => {
+								setSelectedVendor(option.value);
+								onSelect(option.value);
+							}}
 							accessibilityRole="tab"
 							accessibilityState={{ selected }}
 							className={`flex-1 items-center rounded border px-2 py-2 ${
