@@ -15,8 +15,12 @@ const FREE_STORE_URL =
 const PRO_STORE_URL =
 	process.env.E2E_STORE_URL_PRO || process.env.E2E_STORE_URL || 'https://dev-pro.wcpos.com';
 const STUB_UPLOADS_IN_CROSS_ORIGIN_E2E = process.env.E2E_STUB_UPLOADS !== 'false';
+const STUB_WCPOS_VERSION_IN_E2E = process.env.E2E_STUB_WCPOS_VERSION !== 'false';
 const TRANSPARENT_PNG_BASE64 =
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sM7nDUAAAAASUVORK5CYII=';
+const APP_PACKAGE_VERSION = JSON.parse(
+	fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
+).version;
 
 async function blockScriptRequests(route: import('@playwright/test').Route) {
 	if (route.request().resourceType() === 'script') {
@@ -34,6 +38,35 @@ function shouldStubCrossOriginUploads(storeUrl: string, baseURL: string): boolea
 	} catch {
 		return false;
 	}
+}
+
+async function stubStoreVersionForE2E(
+	context: import('@playwright/test').BrowserContext,
+	storeUrl: string
+): Promise<void> {
+	if (!STUB_WCPOS_VERSION_IN_E2E) {
+		return;
+	}
+
+	const storeOrigin = new URL(storeUrl).origin;
+	await context.route(`${storeOrigin}/wp-json/**`, async (route) => {
+		const url = new URL(route.request().url());
+		if (url.pathname.replace(/\/+$/, '') !== '/wp-json' || !url.searchParams.has('wcpos')) {
+			await route.fallback();
+			return;
+		}
+
+		const response = await route.fetch();
+		const data = await response.json();
+		await route.fulfill({
+			response,
+			json: {
+				...data,
+				wcpos_version: APP_PACKAGE_VERSION,
+				wcpos_pro_version: data.wcpos_pro_version ? APP_PACKAGE_VERSION : data.wcpos_pro_version,
+			},
+		});
+	});
 }
 
 /**
@@ -105,6 +138,7 @@ async function setupVariant(
 			});
 		});
 	}
+	await stubStoreVersionForE2E(context, storeUrl);
 	const authPage = await context.newPage();
 
 	// Capture console output for debugging
