@@ -791,7 +791,7 @@ describe('coerceData - special cases', () => {
 		expect(coercedData.uuid).toBe('extracted-uuid-123');
 	});
 
-	it('should not extract uuid if meta_data does not contain it', () => {
+	it('should fall back to the regular uuid field when meta_data does not contain one', () => {
 		const schema = {
 			version: 1,
 			type: 'object',
@@ -802,14 +802,13 @@ describe('coerceData - special cases', () => {
 			},
 		};
 		const data = {
+			uuid: 'existing-uuid',
 			meta_data: [{ key: 'other_meta', value: 'other value' }],
 		};
 
 		const coercedData = coerceData(schema, data);
 
-		// When uuid is not found in meta_data, the code continues without setting uuid
-		// This leaves it undefined (the uuid extraction is a special case that skips normal processing)
-		expect(coercedData.uuid).toBeUndefined();
+		expect(coercedData.uuid).toBe('existing-uuid');
 	});
 
 	it('should handle boolean string "true"', () => {

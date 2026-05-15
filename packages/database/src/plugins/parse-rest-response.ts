@@ -197,8 +197,10 @@ export function coerceData(
 				/** Special case for extracting uuid from meta_data */
 				if (prop === 'uuid' && Array.isArray(json.meta_data)) {
 					const uuidMeta = json.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-					if (uuidMeta) coercedData['uuid'] = uuidMeta.value;
-					continue;
+					if (uuidMeta) {
+						coercedData['uuid'] = uuidMeta.value;
+						continue;
+					}
 				}
 
 				if (Object.prototype.hasOwnProperty.call(safeData, prop)) {
