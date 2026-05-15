@@ -1,13 +1,13 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 import type { PrinterProfile } from '@wcpos/printer';
 
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { NetworkFields } from './dialog/connection/network-fields';
+import { WebVendorSegmented } from './dialog/connection/web-vendor-segmented';
 import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { usePrinterDialogForm, type VendorDefaults } from './dialog/use-printer-dialog-form';
@@ -99,36 +99,12 @@ export function PrinterDialog({
 		</View>
 	);
 
-	const vendorSegmented = (
-		<VStack className="gap-1">
-			<Text className="text-sm font-medium">{t('settings.printer_vendor', 'Vendor')}</Text>
-			<View
-				testID="add-printer-vendor-segmented"
-				className="bg-muted flex-row gap-1 rounded-md p-1"
-			>
-				{[
-					{ value: 'epson' as const, label: 'Epson' },
-					{ value: 'star' as const, label: 'Star Micronics' },
-				].map((option) => {
-					const selected = option.value === vendor;
-					return (
-						<Pressable
-							key={option.value}
-							testID={`add-printer-vendor-${option.value}`}
-							onPress={() => {
-								setManualVendor();
-								form.setValue('vendor', option.value);
-							}}
-							className={`flex-1 items-center rounded px-2 py-2 ${selected ? 'bg-background' : ''}`}
-						>
-							<Text className={`text-sm ${selected ? 'font-medium' : 'text-muted-foreground'}`}>
-								{option.label}
-							</Text>
-						</Pressable>
-					);
-				})}
-			</View>
-		</VStack>
+	const handleVendorSelect = React.useCallback(
+		(selectedVendor: 'epson' | 'star') => {
+			setManualVendor();
+			form.setValue('vendor', selectedVendor);
+		},
+		[form, setManualVendor]
 	);
 
 	return (
@@ -140,7 +116,7 @@ export function PrinterDialog({
 			banner={banner}
 			connectionSection={
 				<>
-					{vendorSegmented}
+					<WebVendorSegmented vendor={vendor} onSelect={handleVendorSelect} />
 					<NetworkFields
 						form={form}
 						probing={probing}
