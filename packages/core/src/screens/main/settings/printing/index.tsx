@@ -217,6 +217,7 @@ export function PrintingSettings() {
 							>
 								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
 							</Button>
+							{/* TODO: re-enable scan network in next release — currently broken
 							{canScanNetwork && (
 								<Button
 									variant="outline"
@@ -227,6 +228,7 @@ export function PrintingSettings() {
 									<Text>{t('settings.scan_network', 'Scan Network')}</Text>
 								</Button>
 							)}
+							*/}
 						</HStack>
 					</>
 				)}
