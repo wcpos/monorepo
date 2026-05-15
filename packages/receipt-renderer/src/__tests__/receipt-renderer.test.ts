@@ -1834,6 +1834,35 @@ describe('@wcpos/receipt-renderer exports', () => {
 
 		expect(new TextDecoder().decode(bytes)).toContain('Hello ESC/POS');
 	});
+
+	it('encodes thermal templates when DOMParser is unavailable', () => {
+		const originalDOMParser = globalThis.DOMParser;
+
+		try {
+			(globalThis as { DOMParser?: typeof DOMParser }).DOMParser = undefined;
+
+			const bytes = encodeThermalTemplate(
+				'<receipt><text>Hello native printer</text></receipt>',
+				{}
+			);
+
+			expect(new TextDecoder().decode(bytes)).toContain('Hello native printer');
+		} finally {
+			globalThis.DOMParser = originalDOMParser;
+		}
+	});
+
+	it('throws XML parse errors without DOMParser', () => {
+		const originalDOMParser = globalThis.DOMParser;
+
+		try {
+			(globalThis as { DOMParser?: typeof DOMParser }).DOMParser = undefined;
+
+			expect(() => parseXml('<receipt><unclosed></receipt>')).toThrow('XML parse error');
+		} finally {
+			globalThis.DOMParser = originalDOMParser;
+		}
+	});
 	it('preserves thermal preview markup when only DOMParser is available', () => {
 		const originalWindow = globalThis.window;
 		const originalDocument = globalThis.document;
