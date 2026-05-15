@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-import { getStoreUrl } from './fixtures';
+import { getStoreUrl, stubStoreVersionForE2E } from './fixtures';
 
 test.describe('Connect Screen', () => {
-	test.beforeEach(async ({ page }) => {
+	test.beforeEach(async ({ page }, testInfo) => {
+		await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo));
 		await page.goto('/');
 		await expect(page.getByTestId('connect-store-button')).toBeVisible({
 			timeout: 60_000,
