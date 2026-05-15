@@ -21,6 +21,7 @@ export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps
 			<Text className="text-sm font-medium">{t('settings.printer_vendor', 'Vendor')}</Text>
 			<View
 				testID="add-printer-vendor-segmented"
+				accessibilityRole="tablist"
 				className="bg-muted flex-row gap-1 rounded-md p-1"
 			>
 				{[
