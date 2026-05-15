@@ -362,19 +362,25 @@ describe('mapReceiptData', () => {
 					.payment_url
 			).toBe('https://pay.example/abc');
 			expect(mapReceiptData(offlineReceiptData).order.payment_url).toBeUndefined();
-			expect(mapReceiptData({ ...offlineReceiptData, payment_url: null }).order.payment_url).toBeUndefined();
+			expect(
+				mapReceiptData({ ...offlineReceiptData, payment_url: null }).order.payment_url
+			).toBeUndefined();
 
-			expect(mapReceiptData({ ...offlineReceiptData, needs_payment: 'false' }).order.needs_payment).toBe(
-				false
-			);
-			expect(mapReceiptData({ ...offlineReceiptData, needs_payment: '0' }).order.needs_payment).toBe(
-				false
-			);
-			expect(mapReceiptData({ ...offlineReceiptData, needs_payment: 'true' }).order.needs_payment).toBe(
+			expect(
+				mapReceiptData({ ...offlineReceiptData, needs_payment: 'false' }).order.needs_payment
+			).toBe(false);
+			expect(
+				mapReceiptData({ ...offlineReceiptData, needs_payment: '0' }).order.needs_payment
+			).toBe(false);
+			expect(
+				mapReceiptData({ ...offlineReceiptData, needs_payment: 'true' }).order.needs_payment
+			).toBe(true);
+			expect(mapReceiptData({ ...offlineReceiptData, needs_payment: 1 }).order.needs_payment).toBe(
 				true
 			);
-			expect(mapReceiptData({ ...offlineReceiptData, needs_payment: 1 }).order.needs_payment).toBe(true);
-			expect(mapReceiptData({ ...offlineReceiptData, needs_payment: 0 }).order.needs_payment).toBe(false);
+			expect(mapReceiptData({ ...offlineReceiptData, needs_payment: 0 }).order.needs_payment).toBe(
+				false
+			);
 		});
 
 		it('prefers wc_status over legacy status when both are present', () => {
@@ -396,6 +402,24 @@ describe('mapReceiptData', () => {
 			]);
 			expect(mapped.store.phone).toBe('(555) 123-4567');
 			expect(mapped.store.email).toBe('store@example.com');
+		});
+
+		it('preserves extra store presentation fields such as logo URLs', () => {
+			const result = mapReceiptData({
+				...offlineReceiptData,
+				store: { ...offlineReceiptData.store, logo: 'https://example.test/logo.png' },
+			});
+
+			expect(result.store.logo).toBe('https://example.test/logo.png');
+		});
+
+		it('does not preserve malformed raw store tax ID arrays', () => {
+			const result = mapReceiptData({
+				...offlineReceiptData,
+				store: { ...offlineReceiptData.store, tax_ids: [{ nope: 'bad' }] },
+			});
+
+			expect(result.store.tax_ids).toBeUndefined();
 		});
 
 		it('maps customer fields', () => {

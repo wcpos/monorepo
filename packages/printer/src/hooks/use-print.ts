@@ -135,7 +135,13 @@ export function usePrint(options: UsePrintOptions) {
 					});
 					await service.printRaw(bytes, printerProfile);
 				} else if (templateEngine === 'thermal' && templateXml) {
-					await service.printReceipt(normalised, printerProfile, undefined, templateXml, decimals);
+					const geometry = resolvePaperGeometry(paperWidth);
+					await service.printThermalTemplateForPrint(
+						normalised,
+						printerProfile,
+						templateXml,
+						geometry.maxWidthDots
+					);
 				} else {
 					await service.printReceipt(normalised, printerProfile, undefined, undefined, decimals);
 				}

@@ -869,19 +869,23 @@ describe('@wcpos/receipt-renderer exports', () => {
 		expectSingleNewlineBetween(bytes, 'Base c/IVA', 'Card');
 	});
 
-	it('prints default single line rules as printer-native straight rules', () => {
+	it('prints default single line rules as ASCII-safe text rows', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt paper-width="48"><text>Before</text><line /><text>After</text></receipt>',
 			{},
 			{ columns: 48, language: 'esc-pos' }
 		);
 		const printable = decodePrintableAscii(bytes);
-		const nativeSingleRule = new Array(48).fill(0xc4);
 		const beforeIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('Before')));
-		const singleRuleIndex = sequenceIndex(bytes, nativeSingleRule, beforeIndex);
+		const singleRuleIndex = sequenceIndex(
+			bytes,
+			Array.from(new TextEncoder().encode('-'.repeat(48))),
+			beforeIndex
+		);
 		const afterIndex = sequenceIndex(bytes, Array.from(new TextEncoder().encode('After')));
 
-		expect(printable).not.toContain('-'.repeat(48));
+		expect(printable).toContain('-'.repeat(48));
+		expect(Array.from(bytes)).not.toContain(0xc4);
 		expect(beforeIndex).toBeGreaterThanOrEqual(0);
 		expect(singleRuleIndex).toBeGreaterThan(beforeIndex);
 		expect(afterIndex).toBeGreaterThan(singleRuleIndex);
@@ -1105,6 +1109,15 @@ describe('@wcpos/receipt-renderer exports', () => {
 		const bytes = renderEscpos(ast, { barcodeMode: 'native' });
 
 		expect(includesSequence(bytes, [0x1d, 0x6b])).toBe(true);
+	});
+
+	it('emits ASCII-safe bytes for default line rules', () => {
+		const ast = parseXml('<receipt paper-width="42"><line /></receipt>');
+		const bytes = renderEscpos(ast, { columns: 42, language: 'esc-pos' });
+		const text = new TextDecoder().decode(bytes);
+
+		expect(text).toContain('-'.repeat(42));
+		expect(Array.from(bytes)).not.toContain(0xc4);
 	});
 
 	it('prints QR codes as raster images when barcodeMode is image and an asset is supplied', () => {
