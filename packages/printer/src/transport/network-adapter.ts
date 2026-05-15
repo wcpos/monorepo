@@ -44,9 +44,7 @@ export class NetworkAdapter implements PrinterTransport {
 						if (err) {
 							settle(err);
 						} else {
-							clearTimeout(timeout);
-							settled = true;
-							(client as any).end(() => resolve());
+							(client as any).end((endErr?: Error) => settle(endErr));
 						}
 					}) as any);
 				});
