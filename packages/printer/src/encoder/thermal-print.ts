@@ -251,7 +251,9 @@ export async function renderThermalBarcodeAsset(input: {
 		const svg = extractSvg(markup);
 		if (!svg) return undefined;
 
-		const image = await loadHtmlImage(`data:image/svg+xml;base64,${btoa(svg)}`);
+		const image = await loadHtmlImage(
+			`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+		);
 		const naturalWidth = image.naturalWidth || image.width;
 		const naturalHeight = image.naturalHeight || image.height;
 		if (!naturalWidth || !naturalHeight) return undefined;
@@ -302,11 +304,27 @@ function drawImageToImageData(
 	return context.getImageData(0, 0, size.width, size.height);
 }
 
-function loadHtmlImage(src: string): Promise<HTMLImageElement> {
+function loadHtmlImage(src: string, timeoutMs = 10000): Promise<HTMLImageElement> {
 	return new Promise((resolve, reject) => {
 		const image = new Image();
-		image.onload = () => resolve(image);
-		image.onerror = () => reject(new Error('Failed to load thermal image asset'));
+		const cleanup = () => {
+			clearTimeout(timer);
+			image.onload = null;
+			image.onerror = null;
+		};
+		const timer = setTimeout(() => {
+			cleanup();
+			image.src = '';
+			reject(new Error('Timed out loading thermal image asset'));
+		}, timeoutMs);
+		image.onload = () => {
+			cleanup();
+			resolve(image);
+		};
+		image.onerror = () => {
+			cleanup();
+			reject(new Error('Failed to load thermal image asset'));
+		};
 		image.crossOrigin = 'anonymous';
 		image.src = src;
 	});
@@ -340,7 +358,9 @@ function barcodeRequestFromElement(element: Element): ThermalAssetRequests['barc
 		return {
 			kind: 'qrcode',
 			value,
-			size: heightToQrSize(numberAttribute(element, 'height') ?? 40),
+			size:
+				numberAttribute(element, 'size') ??
+				heightToQrSize(numberAttribute(element, 'height') ?? 40),
 		};
 	}
 	return {
@@ -361,7 +381,9 @@ function barcodeRequestFromText(
 		return {
 			kind: 'qrcode',
 			value,
-			size: heightToQrSize(numberFromAttributeText(attributes, 'height') ?? 40),
+			size:
+				numberFromAttributeText(attributes, 'size') ??
+				heightToQrSize(numberFromAttributeText(attributes, 'height') ?? 40),
 		};
 	}
 	return {
@@ -387,14 +409,99 @@ function stringFromAttributeText(text: string, name: string): string | undefined
 }
 
 function textContentFromMarkup(value: string): string {
-	if (!/[<>]/.test(value)) return value;
-	if (typeof DOMParser !== 'undefined') {
-		const doc = new DOMParser().parseFromString(`<root>${value}</root>`, 'application/xml');
-		if (doc.querySelector('parsererror') === null) {
-			return doc.documentElement.textContent ?? '';
+	let text = '';
+	let index = 0;
+	while (index < value.length) {
+		if (value.startsWith('<!--', index)) {
+			const end = value.indexOf('-->', index + 4);
+			if (end === -1) break;
+			index = end + 3;
+			continue;
 		}
+		if (value.startsWith('<![CDATA[', index)) {
+			const end = value.indexOf(']]>', index + 9);
+			if (end === -1) {
+				text += htmlSafeText(value.slice(index + 9));
+				break;
+			}
+			text += htmlSafeText(value.slice(index + 9, end));
+			index = end + 3;
+			continue;
+		}
+		const char = value[index] ?? '';
+		if (char === '<') {
+			const end = value.indexOf('>', index + 1);
+			if (end === -1) break;
+			index = end + 1;
+			continue;
+		}
+		text += char;
+		index++;
 	}
-	return value.replaceAll('<', '').replaceAll('>', '');
+	return decodeXmlEntities(text);
+}
+
+function decodeXmlEntities(value: string): string {
+	let text = '';
+	let index = 0;
+	while (index < value.length) {
+		if (value[index] !== '&') {
+			text += value[index] ?? '';
+			index++;
+			continue;
+		}
+		const end = value.indexOf(';', index + 1);
+		if (end === -1) {
+			text += '&';
+			index++;
+			continue;
+		}
+		const entity = value.slice(index, end + 1);
+		const decoded = decodeXmlEntityBody(value.slice(index + 1, end), entity);
+		text += decoded;
+		index = end + 1;
+	}
+	return text;
+}
+
+function decodeXmlEntityBody(body: string, entity: string): string {
+	const key = body.toLowerCase();
+	if (key === 'amp') return '&';
+	if (key === 'lt' || key === 'gt') return entity;
+	if (key === 'quot') return '"';
+	if (key === 'apos') return "'";
+	if (key.startsWith('#x')) {
+		const codePoint = Number.parseInt(key.slice(2), 16);
+		return htmlSafeCodePoint(codePoint, entity);
+	}
+	if (key.startsWith('#')) {
+		const codePoint = Number(key.slice(1));
+		return htmlSafeCodePoint(codePoint, entity);
+	}
+	return entity;
+}
+
+function htmlSafeCodePoint(codePoint: number, entity: string): string {
+	if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return entity;
+	if (codePoint === 0x3c || codePoint === 0x3e) return entity;
+	return String.fromCodePoint(codePoint);
+}
+
+function htmlSafeText(value: string): string {
+	let text = '';
+	for (let index = 0; index < value.length; index++) {
+		const char = value[index] ?? '';
+		if (char === '<') {
+			text += '&lt;';
+			continue;
+		}
+		if (char === '>') {
+			text += '&gt;';
+			continue;
+		}
+		text += char;
+	}
+	return text;
 }
 
 function isQrBarcodeType(type: string | undefined): boolean {
