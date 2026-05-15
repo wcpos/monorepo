@@ -1,6 +1,11 @@
 import * as Crypto from 'expo-crypto';
 
-import { createFastStoreDB, createStoreDB, createUserDB } from '@wcpos/database';
+import {
+	createFastStoreDB,
+	createStoreDB,
+	createUserDB,
+	sanitizeWPCredentialsData,
+} from '@wcpos/database';
 import type { UserDatabase } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { Platform } from '@wcpos/utils/platform';
@@ -242,7 +247,9 @@ const processInitialPropsStep: HydrationStep = {
 
 		// Upsert site and credentials
 		const siteDoc = await userDB.sites.upsert(initialProps.site);
-		const wpCredentialsDoc = await userDB.wp_credentials.upsert(initialProps.wp_credentials);
+		const wpCredentialsDoc = await userDB.wp_credentials.upsert(
+			sanitizeWPCredentialsData(initialProps.wp_credentials)
+		);
 
 		// Handle URL store parameter
 		let urlStoreID: number | null = null;

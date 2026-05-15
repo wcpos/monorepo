@@ -5,6 +5,7 @@ import './types.d';
 
 export { createUserDB, createStoreDB, createTemporaryDB, createFastStoreDB } from './create-db';
 export { userCollections, storeCollections, syncCollections } from './collections';
+export { sanitizeWPCredentialsData } from './collections/wp-credentials';
 export { clearAllDB } from './clear-all-db';
 export type { ClearDBResult } from './clear-all-db';
 export type { FlexSearchInstance } from './types.d';

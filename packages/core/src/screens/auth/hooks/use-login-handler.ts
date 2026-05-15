@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { router } from 'expo-router';
 
+import { sanitizeWPCredentialsData } from '@wcpos/database';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES, type ErrorCode } from '@wcpos/utils/logger/error-codes';
 
@@ -113,7 +114,7 @@ export const useLoginHandler = (
 					});
 				} else {
 					// Create new credentials
-					await userDB.wp_credentials.insert(credentialsData);
+					await userDB.wp_credentials.insert(sanitizeWPCredentialsData(credentialsData));
 					authLogger.debug(`[stores] Created credentials for ${credentialsData.display_name}`, {
 						context: {
 							wpUserUuid: credentialsData.uuid,
