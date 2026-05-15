@@ -775,6 +775,18 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	const storeTimezone =
 		typeof store.timezone === 'string' && store.timezone ? store.timezone : undefined;
 	const offlinePrinted = { ...emptyReceiptDate(), datetime: formatPrintedDatetime(storeTimezone) };
+	const normalizedStore = mapStore(store);
+	const {
+		address: _storeAddress,
+		address_lines: storeAddressLines,
+		email: _storeEmail,
+		id: _storeId,
+		name: _storeName,
+		phone: _storePhone,
+		tax_id: _storeTaxId,
+		tax_ids: _storeTaxIds,
+		...storePresentationFields
+	} = store;
 
 	const result: ReceiptData = {
 		order: {
@@ -792,7 +804,13 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 			completed: offlineDate,
 			printed: offlinePrinted,
 		},
-		store: mapStore(store),
+		store: {
+			...storePresentationFields,
+			...normalizedStore,
+			address_lines: Array.isArray(storeAddressLines)
+				? storeAddressLines.map((line: unknown) => toStr(line))
+				: normalizedStore.address_lines,
+		},
 		cashier: { id: 0, name: '' } as ReceiptCashier,
 		customer: mapCustomer(customer),
 		lines: toArr(data.lines).map((item, i) =>

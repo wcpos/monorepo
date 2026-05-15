@@ -10,6 +10,22 @@ export type { EncodeReceiptOptions } from './encode-receipt';
 export { formatReceiptData } from './format-receipt-data';
 export { mapReceiptData } from './map-receipt-data';
 export { renderForStudio, buildTemplateData } from './render-for-studio';
+export {
+	discoverThermalAssetRequests,
+	encodeThermalTemplateForPrint,
+	isSupportedThermalLogoSrc,
+	loadThermalLogoAsset,
+	maxDotsForPaperWidth,
+	normalizeThermalImageSize,
+	prepareThermalPrintAssets,
+	renderTemplatePlaceholders,
+	renderThermalBarcodeAsset,
+} from './thermal-print';
+export type {
+	EncodeThermalTemplateForPrintInput,
+	ThermalAssetRequests,
+	ThermalPrintAssets,
+} from './thermal-print';
 export type {
 	RenderForStudioOptions,
 	RenderForStudioResult,

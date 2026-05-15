@@ -383,7 +383,13 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 				writeText(encoder, text, context.supportsCp932, context.normalizeText);
 				writeNewline(encoder, context);
 			} else {
-				encoder.rule();
+				writeText(
+					encoder,
+					'-'.repeat(context.columns),
+					context.supportsCp932,
+					context.normalizeText
+				);
+				writeNewline(encoder, context);
 			}
 			break;
 		case 'barcode':

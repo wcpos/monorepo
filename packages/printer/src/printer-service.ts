@@ -4,6 +4,7 @@ import PQueue from 'p-queue';
 import { buildDiagnosticTemplate } from './encoder/diagnostic-template';
 import { encodeReceipt } from './encoder/encode-receipt';
 import { formatReceiptData } from './encoder/format-receipt-data';
+import { encodeThermalTemplateForPrint } from './encoder/thermal-print';
 import { encodeThermalTemplate } from './renderer';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
 
@@ -149,6 +150,35 @@ export class PrinterService {
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
 			await transport.printRaw(data);
+		});
+	}
+
+	/**
+	 * Print a thermal XML template with Template Studio parity asset preparation.
+	 *
+	 * Encoding is intentionally inside the print queue so concurrent print calls
+	 * cannot reorder when an earlier job spends longer rasterizing images/barcodes.
+	 */
+	async printThermalTemplateForPrint(
+		receiptData: ReceiptData | Record<string, unknown>,
+		profile: PrinterProfile,
+		templateXml: string,
+		maxWidthDots: number
+	): Promise<void> {
+		return this.queue.add(async () => {
+			const transport = await this.getTransport(profile);
+			const bytes = await encodeThermalTemplateForPrint({
+				templateXml,
+				receiptData,
+				maxWidthDots,
+				encodeOptions: {
+					language: profile.language,
+					columns: profile.columns,
+					printerModel: profile.printerModel,
+					emitEscPrintMode: profile.emitEscPrintMode ?? true,
+				},
+			});
+			await transport.printRaw(bytes);
 		});
 	}
 

@@ -5,8 +5,9 @@ import { PrinterService } from '../printer-service';
 
 import type { PrinterProfile, PrinterTransport } from '../types';
 
-const { encodeReceiptMock } = vi.hoisted(() => ({
+const { encodeReceiptMock, encodeThermalTemplateForPrintMock } = vi.hoisted(() => ({
 	encodeReceiptMock: vi.fn(() => new Uint8Array([1, 2, 3])),
+	encodeThermalTemplateForPrintMock: vi.fn(() => Promise.resolve(new Uint8Array([4, 5, 6]))),
 }));
 
 const { epsonNativePrintRawMock, starNativePrintRawMock } = vi.hoisted(() => ({
@@ -21,6 +22,10 @@ const { epsonNativeCtorMock, starNativeCtorMock } = vi.hoisted(() => ({
 
 vi.mock('../encoder/encode-receipt', () => ({
 	encodeReceipt: encodeReceiptMock,
+}));
+
+vi.mock('../encoder/thermal-print', () => ({
+	encodeThermalTemplateForPrint: encodeThermalTemplateForPrintMock,
 }));
 
 vi.mock('../transport/system-print-adapter', () => ({
@@ -59,6 +64,7 @@ vi.mock('../transport/star-native-adapter', () => ({
 describe('PrinterService', () => {
 	beforeEach(() => {
 		encodeReceiptMock.mockClear();
+		encodeThermalTemplateForPrintMock.mockClear();
 		epsonNativePrintRawMock.mockClear();
 		starNativePrintRawMock.mockClear();
 		epsonNativeCtorMock.mockClear();
@@ -100,6 +106,63 @@ describe('PrinterService', () => {
 				decimals: 3,
 			})
 		);
+	});
+
+	it('queues thermal asset preparation with printing so concurrent receipts keep order', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+		const profile: PrinterProfile = {
+			id: 'printer-1',
+			name: 'Test Printer',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '127.0.0.1',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			isDefault: true,
+			isBuiltIn: false,
+		};
+		let resolveFirst: ((bytes: Uint8Array<ArrayBuffer>) => void) | undefined;
+		let resolveSecond: ((bytes: Uint8Array<ArrayBuffer>) => void) | undefined;
+		encodeThermalTemplateForPrintMock
+			.mockImplementationOnce(
+				() => new Promise<Uint8Array<ArrayBuffer>>((resolve) => void (resolveFirst = resolve))
+			)
+			.mockImplementationOnce(
+				() => new Promise<Uint8Array<ArrayBuffer>>((resolve) => void (resolveSecond = resolve))
+			);
+
+		const first = service.printThermalTemplateForPrint(
+			sampleReceiptData,
+			profile,
+			'<receipt />',
+			384
+		);
+		const second = service.printThermalTemplateForPrint(
+			sampleReceiptData,
+			profile,
+			'<receipt />',
+			384
+		);
+		await Promise.resolve();
+
+		expect(encodeThermalTemplateForPrintMock).toHaveBeenCalledTimes(1);
+		resolveFirst?.(new Uint8Array([1]));
+		await first;
+		expect(transport.printRaw).toHaveBeenNthCalledWith(1, new Uint8Array([1]));
+		expect(encodeThermalTemplateForPrintMock).toHaveBeenCalledTimes(2);
+		resolveSecond?.(new Uint8Array([2]));
+		await second;
+		expect(transport.printRaw).toHaveBeenNthCalledWith(2, new Uint8Array([2]));
 	});
 
 	it('routes Epson bluetooth profiles through the native adapter', async () => {

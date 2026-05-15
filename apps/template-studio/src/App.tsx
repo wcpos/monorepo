@@ -1,11 +1,18 @@
 import React from 'react';
 
-import { renderReceiptTemplate, sanitizeHtml, thermalImageAssetKey } from '@wcpos/receipt-renderer';
+import { sanitizeHtml, thermalImageAssetKey } from '@wcpos/receipt-renderer';
 import type {
 	ThermalBarcodeImages,
 	ThermalImageAssets,
 	ThermalRasterImage,
 } from '@wcpos/receipt-renderer';
+import {
+	discoverThermalAssetRequests,
+	loadThermalLogoAsset,
+	maxDotsForPaperWidth,
+	renderTemplatePlaceholders,
+	renderThermalBarcodeAsset,
+} from '@wcpos/printer/encoder';
 
 import { CollapsibleSection } from './components/CollapsibleSection';
 import { DataSection } from './components/sections/DataSection';
@@ -20,11 +27,6 @@ import {
 	stripThermalControlNodesForRaster,
 } from './lib/full-receipt-raster';
 import { getAtPath, removeAtPath, setAtPath } from './lib/path-utils';
-import {
-	loadThermalLogoAsset,
-	maxDotsForPaperWidth,
-	renderThermalBarcodeAsset,
-} from './lib/thermal-image-assets';
 import { createRandomReceipt, createRandomSeed, formatSeed } from './randomizer';
 import {
 	applyScenarioState,
@@ -631,157 +633,4 @@ function waitForImages(document: Document): Promise<void> {
 	).then(() => undefined);
 }
 
-interface ThermalAssetRequests {
-	images: { src: string; width?: number }[];
-	barcodes: {
-		kind: 'barcode' | 'qrcode';
-		value: string;
-		barcodeType?: string;
-		height?: number;
-		size?: number;
-	}[];
-}
-
-export function renderTemplatePlaceholders(
-	template: string,
-	data: Record<string, unknown>
-): string {
-	return renderReceiptTemplate(template, data);
-}
-
-export function discoverThermalAssetRequests(template: string): ThermalAssetRequests {
-	if (typeof DOMParser !== 'undefined') {
-		const doc = new DOMParser().parseFromString(template, 'application/xml');
-		if (doc.querySelector('parsererror') === null) {
-			return {
-				images: uniqueImages(
-					Array.from(doc.querySelectorAll('image')).map((element) => ({
-						src: element.getAttribute('src') ?? '',
-						width: numberAttribute(element, 'width'),
-					}))
-				),
-				barcodes: [
-					...Array.from(doc.querySelectorAll('barcode')).map(barcodeRequestFromElement),
-					...Array.from(doc.querySelectorAll('qrcode')).map((element) => ({
-						kind: 'qrcode' as const,
-						value: element.textContent?.trim() ?? '',
-						size: numberAttribute(element, 'size'),
-					})),
-				].filter((barcode) => barcode.value),
-			};
-		}
-	}
-
-	return {
-		images: uniqueImages(
-			Array.from(template.matchAll(/<image\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)).map((match) => ({
-				src: match[1] ?? '',
-				width: numberFromAttributeText(match[0] ?? '', 'width'),
-			}))
-		),
-		barcodes: [
-			...Array.from(template.matchAll(/<barcode\b([^>]*)>([\s\S]*?)<\/barcode>/gi)).map((match) =>
-				barcodeRequestFromText(match[1] ?? '', match[2] ?? '')
-			),
-			...Array.from(template.matchAll(/<qrcode\b([^>]*)>([\s\S]*?)<\/qrcode>/gi)).map((match) => ({
-				kind: 'qrcode' as const,
-				value: textContentFromMarkup(match[2] ?? '').trim(),
-				size: numberFromAttributeText(match[1] ?? '', 'size'),
-			})),
-		].filter((barcode) => barcode.value),
-	};
-}
-
-function uniqueImages(
-	images: { src: string; width?: number }[]
-): { src: string; width?: number }[] {
-	const seen = new Set<string>();
-	return images.filter((image) => {
-		const key = thermalImageAssetKey(image);
-		if (!image.src || seen.has(key)) return false;
-		seen.add(key);
-		return true;
-	});
-}
-
-function barcodeRequestFromElement(element: Element): ThermalAssetRequests['barcodes'][number] {
-	const barcodeType = element.getAttribute('type') ?? undefined;
-	const value = element.textContent?.trim() ?? '';
-	if (isQrBarcodeType(barcodeType)) {
-		return {
-			kind: 'qrcode',
-			value,
-			size: heightToQrSize(numberAttribute(element, 'height') ?? 40),
-		};
-	}
-	return {
-		kind: 'barcode',
-		value,
-		barcodeType,
-		height: numberAttribute(element, 'height'),
-	};
-}
-
-function barcodeRequestFromText(
-	attributes: string,
-	content: string
-): ThermalAssetRequests['barcodes'][number] {
-	const barcodeType = stringFromAttributeText(attributes, 'type');
-	const value = textContentFromMarkup(content).trim();
-	if (isQrBarcodeType(barcodeType)) {
-		return {
-			kind: 'qrcode',
-			value,
-			size: heightToQrSize(numberFromAttributeText(attributes, 'height') ?? 40),
-		};
-	}
-	return {
-		kind: 'barcode',
-		value,
-		barcodeType,
-		height: numberFromAttributeText(attributes, 'height'),
-	};
-}
-
-function numberAttribute(element: Element, name: string): number | undefined {
-	return parsePositiveInt(element.getAttribute(name));
-}
-
-function numberFromAttributeText(text: string, name: string): number | undefined {
-	const value = stringFromAttributeText(text, name);
-	return parsePositiveInt(value);
-}
-
-function stringFromAttributeText(text: string, name: string): string | undefined {
-	const match = new RegExp(`\\b${name}=["']([^"']+)["']`, 'i').exec(text);
-	return match?.[1];
-}
-
-function textContentFromMarkup(value: string): string {
-	if (!/[<>]/.test(value)) return value;
-	if (typeof DOMParser !== 'undefined') {
-		const doc = new DOMParser().parseFromString(`<root>${value}</root>`, 'application/xml');
-		if (doc.querySelector('parsererror') === null) {
-			return doc.documentElement.textContent ?? '';
-		}
-	}
-	return value.replaceAll('<', '').replaceAll('>', '');
-}
-
-function isQrBarcodeType(type: string | undefined): boolean {
-	const normalized = type?.trim().toLowerCase();
-	return normalized === 'qrcode' || normalized === 'qr';
-}
-
-function heightToQrSize(height: number): number {
-	return Number.isFinite(height) && height > 0
-		? Math.max(2, Math.min(10, Math.round(height / 10)))
-		: 4;
-}
-
-function parsePositiveInt(value: string | null | undefined): number | undefined {
-	const trimmed = value?.trim();
-	if (!trimmed || !/^[1-9]\d*$/.test(trimmed)) return undefined;
-	const parsed = Number(trimmed);
-	return Number.isSafeInteger(parsed) ? parsed : undefined;
-}
+export { discoverThermalAssetRequests, renderTemplatePlaceholders };

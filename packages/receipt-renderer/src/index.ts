@@ -6,7 +6,7 @@ import { analyzeThermalAst, renderEscpos } from './render-escpos';
 import type { EscposRenderOptions, ThermalLayoutDiagnostics } from './render-escpos';
 
 export { parseXml } from './parse-xml';
-export { renderHtml } from './render-html';
+export { renderBarcode, renderHtml, renderQrCode } from './render-html';
 export { renderEscpos, thermalBarcodeImageKey, thermalImageAssetKey } from './render-escpos';
 export { sanitizeHtml } from './sanitize-html';
 export type { HtmlRenderOptions } from './render-html';
