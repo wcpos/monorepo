@@ -72,6 +72,7 @@ export function NetworkFields({
 					{endpointHint}
 				</Text>
 			)}
+			{/* TODO: re-enable scan network in next release — currently broken
 			{onScan && (
 				<Button
 					testID="add-printer-scan-button"
@@ -87,6 +88,7 @@ export function NetworkFields({
 					</HStack>
 				</Button>
 			)}
+			*/}
 		</VStack>
 	);
 }
