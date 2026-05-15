@@ -22,6 +22,7 @@ import { wpCredentialsLiteral } from './schemas/wp-credientials';
 import { printerProfilesLiteral } from './schemas/printer-profiles';
 import { templatePrinterOverridesLiteral } from './schemas/template-printer-overrides';
 import { toSortableInteger } from './utils';
+import { sanitizeWPCredentialsData } from './wp-credentials';
 
 import type { RxCollection, RxCollectionCreator, RxDatabase, RxDocument } from 'rxdb';
 
@@ -151,23 +152,12 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 		},
 		2(oldDoc) {
 			// Added optional `role` field — no transformation needed.
-			return oldDoc;
+			return sanitizeWPCredentialsData(oldDoc) as WPCredentialsDocumentType;
 		},
-		3(oldDoc: any) {
-			// `role` (string) → `roles` (string[]). Cashiers can have multiple
-			// WordPress roles. Preserve the existing value as a single-element
-			// array when present. Idempotent: if `roles` is already a valid
-			// array, keep it and just drop any lingering `role`.
-			if (Array.isArray(oldDoc.roles)) {
-				oldDoc.roles = oldDoc.roles.filter(
-					(r: unknown): r is string => typeof r === 'string' && r.length > 0
-				);
-			} else {
-				const legacyRole = oldDoc.role;
-				oldDoc.roles = typeof legacyRole === 'string' && legacyRole.length > 0 ? [legacyRole] : [];
-			}
-			delete oldDoc.role;
-			return oldDoc;
+		3(oldDoc) {
+			// `role` (string) → `roles` (string[]) and strip fields outside
+			// the strict schema, including OAuth metadata like `token_type`.
+			return sanitizeWPCredentialsData(oldDoc) as WPCredentialsDocumentType;
 		},
 	},
 };
