@@ -76,4 +76,14 @@ describe('WebVendorSegmented', () => {
 			'false'
 		);
 	});
+
+	it('does not show a supported web vendor as selected for unsupported values', () => {
+		render(<WebVendorSegmented vendor="generic" onSelect={jest.fn()} />);
+
+		expect(screen.getByTestId('add-printer-vendor-epson')).toHaveAttribute(
+			'aria-selected',
+			'false'
+		);
+		expect(screen.getByTestId('add-printer-vendor-star')).toHaveAttribute('aria-selected', 'false');
+	});
 });

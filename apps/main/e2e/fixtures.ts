@@ -29,6 +29,15 @@ const APP_PACKAGE_VERSION = JSON.parse(
 ).version;
 const VERSION_STUBBED_CONTEXTS = new WeakSet<BrowserContext>();
 
+function isRouteClosedError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		/(Target page, context or browser has been closed|Response has been disposed)/.test(
+			error.message
+		)
+	);
+}
+
 /**
  * Get the store URL from the project config, with env var override.
  */
@@ -67,16 +76,21 @@ export async function stubStoreVersionForE2E(
 			return;
 		}
 
-		const response = await route.fetch();
-		const data = await response.json();
-		await route.fulfill({
-			response,
-			json: {
-				...data,
-				wcpos_version: APP_PACKAGE_VERSION,
-				wcpos_pro_version: data.wcpos_pro_version ? APP_PACKAGE_VERSION : data.wcpos_pro_version,
-			},
-		});
+		try {
+			const response = await route.fetch();
+			const data = await response.json();
+			await route.fulfill({
+				response,
+				json: {
+					...data,
+					wcpos_version: APP_PACKAGE_VERSION,
+					wcpos_pro_version: data.wcpos_pro_version ? APP_PACKAGE_VERSION : data.wcpos_pro_version,
+				},
+			});
+		} catch (error) {
+			if (isRouteClosedError(error)) return;
+			throw error;
+		}
 	});
 }
 
