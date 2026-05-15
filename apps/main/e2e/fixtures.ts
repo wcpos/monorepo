@@ -1,7 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
+import {
+	test as base,
+	type BrowserContext,
+	expect,
+	type Page,
+	type TestInfo,
+} from '@playwright/test';
 
 import { restoreOPFS } from './opfs-helpers';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
@@ -17,6 +23,11 @@ import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
 const E2E_USERNAME = process.env.E2E_USERNAME || 'demo';
 const E2E_PASSWORD = process.env.E2E_PASSWORD || 'demo';
+const STUB_WCPOS_VERSION_IN_E2E = process.env.E2E_STUB_WCPOS_VERSION !== 'false';
+const APP_PACKAGE_VERSION = JSON.parse(
+	fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
+).version;
+const VERSION_STUBBED_CONTEXTS = new WeakSet<BrowserContext>();
 
 /**
  * Get the store URL from the project config, with env var override.
@@ -33,6 +44,40 @@ export function getStoreUrl(testInfo: TestInfo): string {
 export function getStoreVariant(testInfo: TestInfo): StoreVariant {
 	const opts = testInfo.project.use as WcposTestOptions;
 	return opts.storeVariant || 'free';
+}
+
+export async function stubStoreVersionForE2E(
+	context: BrowserContext,
+	storeUrl: string
+): Promise<void> {
+	if (!STUB_WCPOS_VERSION_IN_E2E || VERSION_STUBBED_CONTEXTS.has(context)) {
+		return;
+	}
+
+	VERSION_STUBBED_CONTEXTS.add(context);
+	const storeOrigin = new URL(storeUrl).origin;
+	await context.route('**/wp-json**', async (route) => {
+		const url = new URL(route.request().url());
+		if (
+			url.origin !== storeOrigin ||
+			url.pathname.replace(/\/+$/, '') !== '/wp-json' ||
+			!url.searchParams.has('wcpos')
+		) {
+			await route.fallback();
+			return;
+		}
+
+		const response = await route.fetch();
+		const data = await response.json();
+		await route.fulfill({
+			response,
+			json: {
+				...data,
+				wcpos_version: APP_PACKAGE_VERSION,
+				wcpos_pro_version: data.wcpos_pro_version ? APP_PACKAGE_VERSION : data.wcpos_pro_version,
+			},
+		});
+	});
 }
 
 /**
@@ -103,6 +148,7 @@ async function waitForOPFSPersistence(page: Page): Promise<void> {
 export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	const storeUrl = getStoreUrl(testInfo);
 	const context = page.context();
+	await stubStoreVersionForE2E(context, storeUrl);
 
 	// Intercept window.open: capture the URL, return fake window to prevent
 	// expo-auth-session from falling back to a page redirect.
@@ -446,6 +492,7 @@ export async function navigateToPage(
 export const authenticatedTest = base.extend<{ posPage: Page }>({
 	posPage: async ({ page }, use, testInfo) => {
 		const variant = getStoreVariant(testInfo);
+		await stubStoreVersionForE2E(page.context(), getStoreUrl(testInfo));
 		const statePath = path.join(__dirname, '.auth-state', `${variant}.json`);
 
 		let state: SavedAuthState | null = null;
