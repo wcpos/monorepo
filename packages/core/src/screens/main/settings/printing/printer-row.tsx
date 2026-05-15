@@ -47,7 +47,7 @@ export function PrinterRow({
 
 	let connectionLabel: string;
 	if (profile.connectionType === 'system') {
-		connectionLabel = `${t('settings.connection_system', 'System Dialog')} · ${t(
+		connectionLabel = `${t('settings.connection_print_dialog', 'Print Dialog')} · ${t(
 			'settings.connection_built_in',
 			'built-in'
 		)}`;

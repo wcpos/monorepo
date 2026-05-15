@@ -81,7 +81,7 @@ export function PrintingSettings() {
 			if (matched) {
 				return `${t('common.auto', 'Auto')} — ${matched.name}`;
 			}
-			return `${t('common.auto', 'Auto')} — ${t('receipt.system_dialog', 'System Dialog')}`;
+			return `${t('common.auto', 'Auto')} — ${t('receipt.print_dialog', 'Print Dialog')}`;
 		},
 		[printers, t]
 	);
