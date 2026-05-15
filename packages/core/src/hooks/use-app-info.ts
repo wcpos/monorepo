@@ -23,7 +23,7 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
-import { type Observable, of } from 'rxjs';
+import { of } from 'rxjs';
 // @ts-expect-error: semver lacks type declarations in this project
 import semver from 'semver';
 
@@ -31,6 +31,19 @@ import type { SiteDocument } from '@wcpos/database';
 import { AppInfo } from '@wcpos/utils/app-info';
 
 import { AppStateContext } from '../contexts/app-state';
+
+export const MINIMUM_WCPOS_PLUGIN_VERSION = '1.8.0';
+
+export function isWcposPluginCompatible(pluginVersion: string | undefined): boolean {
+	if (!pluginVersion) return false;
+
+	try {
+		const coerced = semver.coerce(pluginVersion);
+		return !!coerced && semver.gte(coerced, MINIMUM_WCPOS_PLUGIN_VERSION);
+	} catch {
+		return false;
+	}
+}
 
 /**
  * Static app information (always available)
@@ -82,7 +95,7 @@ export interface LicenseInfo {
  * Version compatibility checks (available after connect)
  */
 export interface VersionCompatibility {
-	/** Whether plugin version >= app version (ensures API compatibility) */
+	/** Whether the plugin version supports the app's required API surface */
 	wcposVersionPass: boolean;
 }
 
@@ -171,14 +184,8 @@ export function useAppInfo(options?: UseAppInfoOptions): AppInfoResult {
 
 	// Compute version compatibility
 	const wcposVersionPass = React.useMemo(() => {
-		if (!siteData?.wcposVersion) return false;
-		try {
-			const coerced = semver.coerce(siteData.wcposVersion || '0');
-			return semver.gte(String(coerced), AppInfo.version);
-		} catch {
-			return false;
-		}
-	}, [siteData?.wcposVersion]);
+		return isWcposPluginCompatible(siteData?.wcposVersion || siteData?.wcposProVersion);
+	}, [siteData?.wcposVersion, siteData?.wcposProVersion]);
 
 	return {
 		// Static (always available)
