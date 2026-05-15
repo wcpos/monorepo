@@ -159,6 +159,11 @@ const wp_credentials: RxCollectionCreator<WPCredentialsDocumentType> = {
 			// the strict schema, including OAuth metadata like `token_type`.
 			return sanitizeWPCredentialsData(oldDoc) as WPCredentialsDocumentType;
 		},
+		4(oldDoc) {
+			// v3 rows may already contain token_type/unknown fields from earlier
+			// builds, so force one more migration pass to sanitize them.
+			return sanitizeWPCredentialsData(oldDoc) as WPCredentialsDocumentType;
+		},
 	},
 };
 

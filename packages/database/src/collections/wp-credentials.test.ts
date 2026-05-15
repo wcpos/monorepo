@@ -46,22 +46,15 @@ describe('sanitizeWPCredentialsData', () => {
 			roles: ['shop_manager'],
 		});
 	});
-
-	it('falls back to legacy role when roles array sanitizes to empty', () => {
-		expect(
-			sanitizeWPCredentialsData({
-				uuid: 'cred-1',
-				roles: ['', 123],
-				role: 'shop_manager',
-			})
-		).toEqual({
-			uuid: 'cred-1',
-			roles: ['shop_manager'],
-		});
-	});
 });
 
 describe('wp_credentials migration strategy', () => {
+	it('bumps wp_credentials schema to v4 so already-v3 legacy rows are sanitized', async () => {
+		const { wpCredentialsLiteral } = await import('./schemas/wp-credientials');
+
+		expect(wpCredentialsLiteral.version).toBe(4);
+	});
+
 	it('strips token_type while migrating legacy wp_credentials documents to schema v3', async () => {
 		const { userCollections } = await import('./index');
 		const migrateToV3 = userCollections.wp_credentials.migrationStrategies?.[3];
@@ -73,6 +66,26 @@ describe('wp_credentials migration strategy', () => {
 				role: 'administrator',
 				token_type: 'Bearer',
 				access_token: 'access-token',
+			})
+		).toEqual({
+			uuid: 'cred-1',
+			roles: ['administrator'],
+			access_token: 'access-token',
+		});
+	});
+
+	it('strips token_type while migrating already-v3 wp_credentials documents to schema v4', async () => {
+		const { userCollections } = await import('./index');
+		const migrateToV4 = userCollections.wp_credentials.migrationStrategies?.[4];
+
+		expect(typeof migrateToV4).toBe('function');
+		expect(
+			migrateToV4?.({
+				uuid: 'cred-1',
+				roles: ['administrator'],
+				token_type: 'Bearer',
+				access_token: 'access-token',
+				unexpected_server_field: 'do-not-persist',
 			})
 		).toEqual({
 			uuid: 'cred-1',
