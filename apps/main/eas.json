@@ -5,7 +5,7 @@
   },
   "build": {
     "monorepo": {
-      "pnpm": "10.31.0",
+      "pnpm": "11.1.1",
       "cache": {
         "key": "turbo",
         "paths": [
@@ -14,7 +14,8 @@
       },
       "env": {
         "EXPO_USE_FAST_RESOLVER": "true"
-      }
+      },
+      "node": "22.13.1"
     },
     "development": {
       "extends": "monorepo",
