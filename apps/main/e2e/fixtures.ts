@@ -87,10 +87,7 @@ export async function stubStoreVersionForE2E(
 				},
 			});
 		} catch (error) {
-			if (
-				error instanceof Error &&
-				error.message.includes('Target page, context or browser has been closed')
-			) {
+			if (isRouteTeardownError(error)) {
 				return;
 			}
 			throw error;
