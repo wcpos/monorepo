@@ -159,16 +159,15 @@ export const createTokenRefreshHandler = ({
 		intercepts: true, // Stops the error chain if successful
 
 		/**
-		 * Handle 401 Unauthorized and 403 Forbidden errors.
-		 *
-		 * 403 can occur when an expired JWT causes the server to reset
-		 * the authenticated user, failing the capability check.
+		 * Handle 401 Unauthorized errors.
 		 *
 		 * Other errors (network, 5xx, etc.) pass through to other handlers.
+		 * 403 responses are authenticated permission errors and should not
+		 * trigger token refresh.
 		 */
 		canHandle: (error) => {
 			const status = error.response?.status;
-			return status === 401 || status === 403;
+			return status === 401;
 		},
 
 		/**
@@ -323,12 +322,11 @@ export const createTokenRefreshHandler = ({
 						retryRequest
 					);
 				} catch (retryError: any) {
-					// If the retry STILL fails with 401/403 after a successful token refresh,
-					// the issue isn't an expired token. Mark auth as failed to prevent
-					// infinite refresh loops (each refresh saves a new access_token which
-					// triggers re-validation via observable, which hits 403 again, etc.)
+					// If the retry STILL fails with 401 after a successful token refresh,
+					// the session still cannot authenticate. Mark auth as failed to prevent
+					// infinite refresh loops.
 					const retryStatus = retryError?.response?.status;
-					if (retryStatus === 401 || retryStatus === 403) {
+					if (retryStatus === 401) {
 						tokenLogger.warn(
 							'Request still unauthorized after token refresh - please log in again',
 							{
