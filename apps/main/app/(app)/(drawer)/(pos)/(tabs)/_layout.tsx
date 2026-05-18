@@ -23,10 +23,10 @@ export const unstable_settings = {
 };
 
 /**
- * Tabs navigator wrapper consuming theme-aware colors via `useCSSVariable`.
- * Isolated so `TabsLayout` itself does not subscribe to theme changes
- * (which would re-render the entire navigator and cancel Uniwind's
- * theme transition).
+ * Tabs navigator wrapper subscribing to theme-aware colors via
+ * `useNavigationBackground` and `useCSSVariable`. Isolation here keeps the
+ * parent `TabsLayout` from subscribing to theme changes, re-rendering the
+ * entire navigator, and canceling Uniwind's theme transition.
  */
 function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => void } }) {
 	const screenBackgroundColor = useNavigationBackground();
