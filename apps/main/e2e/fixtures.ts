@@ -57,26 +57,36 @@ export async function stubStoreVersionForE2E(
 	VERSION_STUBBED_CONTEXTS.add(context);
 	const storeOrigin = new URL(storeUrl).origin;
 	await context.route('**/wp-json**', async (route) => {
-		const url = new URL(route.request().url());
-		if (
-			url.origin !== storeOrigin ||
-			url.pathname.replace(/\/+$/, '') !== '/wp-json' ||
-			!url.searchParams.has('wcpos')
-		) {
-			await route.fallback();
-			return;
-		}
+		try {
+			const url = new URL(route.request().url());
+			if (
+				url.origin !== storeOrigin ||
+				url.pathname.replace(/\/+$/, '') !== '/wp-json' ||
+				!url.searchParams.has('wcpos')
+			) {
+				await route.fallback();
+				return;
+			}
 
-		const response = await route.fetch();
-		const data = await response.json();
-		await route.fulfill({
-			response,
-			json: {
-				...data,
-				wcpos_version: APP_PACKAGE_VERSION,
-				wcpos_pro_version: data.wcpos_pro_version ? APP_PACKAGE_VERSION : data.wcpos_pro_version,
-			},
-		});
+			const response = await route.fetch();
+			const data = await response.json();
+			await route.fulfill({
+				response,
+				json: {
+					...data,
+					wcpos_version: APP_PACKAGE_VERSION,
+					wcpos_pro_version: data.wcpos_pro_version ? APP_PACKAGE_VERSION : data.wcpos_pro_version,
+				},
+			});
+		} catch (error) {
+			if (
+				error instanceof Error &&
+				error.message.includes('Target page, context or browser has been closed')
+			) {
+				return;
+			}
+			throw error;
+		}
 	});
 }
 
@@ -580,7 +590,11 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 			await authenticateWithStore(page, testInfo);
 		}
 
-		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
-		await use(page);
+		try {
+			// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
+			await use(page);
+		} finally {
+			await page.context().unrouteAll({ behavior: 'ignoreErrors' });
+		}
 	},
 });
