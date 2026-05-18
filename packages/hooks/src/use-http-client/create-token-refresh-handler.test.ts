@@ -90,6 +90,15 @@ describe('createTokenRefreshHandler', () => {
 			expect(handler.canHandle(makeError(500))).toBe(false);
 		});
 
+		it('should not handle 403 permission errors', () => {
+			const handler = createTokenRefreshHandler({
+				site: makeSite(),
+				wpUser: makeWpUser(),
+				getHttpClient,
+			});
+			expect(handler.canHandle(makeError(403))).toBe(false);
+		});
+
 		it('should not handle errors without response', () => {
 			const handler = createTokenRefreshHandler({
 				site: makeSite(),
@@ -263,6 +272,33 @@ describe('createTokenRefreshHandler', () => {
 
 			const ctx = makeContext();
 			await expect(handler.handle(ctx)).rejects.toThrow();
+		});
+
+		it('should re-throw 403 retry failures without marking auth failed', async () => {
+			const handler = createTokenRefreshHandler({
+				site: makeSite(),
+				wpUser: makeWpUser(),
+				getHttpClient,
+			});
+
+			mockPost.mockResolvedValue({
+				data: { access_token: 'new-token', expires_at: 9999 },
+				status: 200,
+			});
+
+			(requestStateManager.startTokenRefresh as jest.Mock).mockImplementation(async (fn) => {
+				await fn();
+			});
+			(requestStateManager.getRefreshedToken as jest.Mock).mockReturnValue('new-token');
+
+			const retryError = makeError(403);
+			const ctx = makeContext();
+			ctx.retryRequest.mockRejectedValue(retryError);
+
+			await expect(handler.handle(ctx)).rejects.toBe(retryError);
+			expect(requestStateManager.setAuthFailed).not.toHaveBeenCalled();
+			expect(ctx.error).not.toHaveProperty('isRefreshTokenInvalid');
+			expect(ctx.error).not.toHaveProperty('refreshTokenInvalid');
 		});
 
 		it('should mark auth failed and flag error when refresh token is invalid', async () => {

@@ -29,6 +29,14 @@ const APP_PACKAGE_VERSION = JSON.parse(
 ).version;
 const VERSION_STUBBED_CONTEXTS = new WeakSet<BrowserContext>();
 
+export function isRouteTeardownError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+
+	return error.message.includes('Target page, context or browser has been closed');
+}
+
 /**
  * Get the store URL from the project config, with env var override.
  */

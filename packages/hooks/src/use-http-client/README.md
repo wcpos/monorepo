@@ -143,14 +143,16 @@ Request fails with error
        ▼
 5. Retry original request with new token
        │
-   ┌───┴───┐
-   │       │
-SUCCESS  STILL 401
-   │       │
-   ▼       ▼
-6a. Return  6b. Mark error: isRefreshTokenInvalid = true
-    response    Set authFailed = true
-               Throw error → fallback-auth-handler
+   ┌───┴────────┬──────────────────────┐
+   │            │                      │
+SUCCESS     STILL 401            403 permission
+   │            │                      │
+   ▼            ▼                      ▼
+6a. Return  6b. Mark error:      6c. Re-throw as a
+    response    isRefreshTokenInvalid      permission error
+               Set authFailed = true       without re-login
+               Throw error →
+               fallback-auth-handler
 ```
 
 ### OAuth Fallback Flow
