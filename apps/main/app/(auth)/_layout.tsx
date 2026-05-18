@@ -8,6 +8,8 @@ import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { PortalHost } from '@wcpos/components/portal';
 import { useAppState } from '@wcpos/core/contexts/app-state';
 
+import { useNavigationBackground } from '../../components/use-navigation-background';
+
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
 	initialRouteName: 'connect',
@@ -29,6 +31,7 @@ function ThemedSystemBars() {
 }
 
 export default function AuthLayout() {
+	const screenBackgroundColor = useNavigationBackground();
 	const { storeDB, fastStoreDB } = useAppState();
 
 	if (storeDB && fastStoreDB) {
@@ -42,7 +45,7 @@ export default function AuthLayout() {
 				<Stack
 					screenOptions={{
 						headerShown: false,
-						contentStyle: { backgroundColor: 'transparent' },
+						contentStyle: { backgroundColor: screenBackgroundColor },
 					}}
 				>
 					<Stack.Screen name="connect" />

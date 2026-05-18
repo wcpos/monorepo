@@ -15,6 +15,8 @@ import { useUISettings } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 import { POSProducts } from '@wcpos/core/screens/main/pos/products';
 
+import { useNavigationBackground } from '../../../../../components/use-navigation-background';
+
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
 	initialRouteName: 'index',
@@ -27,6 +29,7 @@ export const unstable_settings = {
  * theme transition).
  */
 function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => void } }) {
+	const screenBackgroundColor = useNavigationBackground();
 	const [cardColor, primaryColor, mutedForeground, borderColor] = useCSSVariable([
 		'--color-card',
 		'--color-primary',
@@ -38,8 +41,11 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 		<Tabs
 			screenOptions={{
 				headerShown: false,
-				sceneStyle: { backgroundColor: 'transparent' },
-				tabBarStyle: { backgroundColor: cardColor, borderTopColor: borderColor },
+				sceneStyle: { backgroundColor: screenBackgroundColor },
+				tabBarStyle: {
+					backgroundColor: cardColor,
+					borderTopColor: borderColor,
+				},
 				tabBarActiveTintColor: primaryColor,
 				tabBarInactiveTintColor: mutedForeground,
 			}}
