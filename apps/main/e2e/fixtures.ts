@@ -29,6 +29,14 @@ const APP_PACKAGE_VERSION = JSON.parse(
 ).version;
 const VERSION_STUBBED_CONTEXTS = new WeakSet<BrowserContext>();
 
+export function isRouteTeardownError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+
+	return error.message.includes('Target page, context or browser has been closed');
+}
+
 /**
  * Get the store URL from the project config, with env var override.
  */
@@ -57,26 +65,33 @@ export async function stubStoreVersionForE2E(
 	VERSION_STUBBED_CONTEXTS.add(context);
 	const storeOrigin = new URL(storeUrl).origin;
 	await context.route('**/wp-json**', async (route) => {
-		const url = new URL(route.request().url());
-		if (
-			url.origin !== storeOrigin ||
-			url.pathname.replace(/\/+$/, '') !== '/wp-json' ||
-			!url.searchParams.has('wcpos')
-		) {
-			await route.fallback();
-			return;
-		}
+		try {
+			const url = new URL(route.request().url());
+			if (
+				url.origin !== storeOrigin ||
+				url.pathname.replace(/\/+$/, '') !== '/wp-json' ||
+				!url.searchParams.has('wcpos')
+			) {
+				await route.fallback();
+				return;
+			}
 
-		const response = await route.fetch();
-		const data = await response.json();
-		await route.fulfill({
-			response,
-			json: {
-				...data,
-				wcpos_version: APP_PACKAGE_VERSION,
-				wcpos_pro_version: data.wcpos_pro_version ? APP_PACKAGE_VERSION : data.wcpos_pro_version,
-			},
-		});
+			const response = await route.fetch();
+			const data = await response.json();
+			await route.fulfill({
+				response,
+				json: {
+					...data,
+					wcpos_version: APP_PACKAGE_VERSION,
+					wcpos_pro_version: data.wcpos_pro_version ? APP_PACKAGE_VERSION : data.wcpos_pro_version,
+				},
+			});
+		} catch (error) {
+			if (isRouteTeardownError(error)) {
+				return;
+			}
+			throw error;
+		}
 	});
 }
 
