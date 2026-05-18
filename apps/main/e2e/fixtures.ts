@@ -595,11 +595,7 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 			await authenticateWithStore(page, testInfo);
 		}
 
-		try {
-			// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
-			await use(page);
-		} finally {
-			await page.context().unrouteAll({ behavior: 'ignoreErrors' });
-		}
+		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
+		await use(page);
 	},
 });
