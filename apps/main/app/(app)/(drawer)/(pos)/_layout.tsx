@@ -18,6 +18,8 @@ import {
 import type { OrderDocument } from '@wcpos/database';
 import { useQuery } from '@wcpos/query';
 
+import { useNavigationBackground } from '../../../../components/use-navigation-background';
+
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
 	initialRouteName: 'index',
@@ -119,6 +121,7 @@ export default function POSLayout() {
 }
 
 function POSStack() {
+	const screenBackgroundColor = useNavigationBackground();
 	const { currentOrder } = useCurrentOrder();
 
 	/**
@@ -136,7 +139,7 @@ function POSStack() {
 					screenOptions={{
 						animation: 'none',
 						headerShown: false,
-						contentStyle: { backgroundColor: 'transparent' },
+						contentStyle: { backgroundColor: screenBackgroundColor },
 					}}
 				>
 					<Stack.Screen name="index" />

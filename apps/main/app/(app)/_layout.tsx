@@ -19,12 +19,15 @@ import { RasterizeProvider } from '@wcpos/printer';
 import { QueryProvider } from '@wcpos/query';
 import { setDatabase } from '@wcpos/utils/logger';
 
+import { useNavigationBackground } from '../../components/use-navigation-background';
+
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
 	initialRouteName: '(drawer)',
 };
 
 function AppStack() {
+	const screenBackgroundColor = useNavigationBackground();
 	const { storeDB, fastStoreDB } = useAppState();
 	const { locale } = useLocale();
 
@@ -40,7 +43,7 @@ function AppStack() {
 					<Stack
 						screenOptions={{
 							headerShown: false,
-							contentStyle: { backgroundColor: 'transparent' },
+							contentStyle: { backgroundColor: screenBackgroundColor },
 						}}
 					>
 						<Stack.Screen name="(drawer)" />

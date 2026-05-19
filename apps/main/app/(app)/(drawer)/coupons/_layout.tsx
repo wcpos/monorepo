@@ -2,17 +2,20 @@ import { View } from 'react-native';
 
 import { Stack } from 'expo-router';
 
+import { useNavigationBackground } from '../../../../components/use-navigation-background';
+
 export const unstable_settings = {
 	initialRouteName: 'index',
 };
 
 export default function CouponsLayout() {
+	const screenBackgroundColor = useNavigationBackground();
 	return (
 		<View className="bg-background flex-1">
 			<Stack
 				screenOptions={{
 					headerShown: false,
-					contentStyle: { backgroundColor: 'transparent' },
+					contentStyle: { backgroundColor: screenBackgroundColor },
 				}}
 			>
 				<Stack.Screen name="index" />

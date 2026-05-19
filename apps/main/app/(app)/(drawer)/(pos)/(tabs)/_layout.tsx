@@ -15,18 +15,21 @@ import { useUISettings } from '@wcpos/core/screens/main/contexts/ui-settings';
 import { OpenOrders } from '@wcpos/core/screens/main/pos/cart';
 import { POSProducts } from '@wcpos/core/screens/main/pos/products';
 
+import { useNavigationBackground } from '../../../../../components/use-navigation-background';
+
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
 	initialRouteName: 'index',
 };
 
 /**
- * Tabs navigator wrapper consuming theme-aware colors via `useCSSVariable`.
- * Isolated so `TabsLayout` itself does not subscribe to theme changes
- * (which would re-render the entire navigator and cancel Uniwind's
- * theme transition).
+ * Tabs navigator wrapper subscribing to theme-aware colors via
+ * `useNavigationBackground` and `useCSSVariable`. Isolation here keeps the
+ * parent `TabsLayout` from subscribing to theme changes, re-rendering the
+ * entire navigator, and canceling Uniwind's theme transition.
  */
 function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => void } }) {
+	const screenBackgroundColor = useNavigationBackground();
 	const [cardColor, primaryColor, mutedForeground, borderColor] = useCSSVariable([
 		'--color-card',
 		'--color-primary',
@@ -38,8 +41,11 @@ function ThemedTabs({ tabPressListener }: { tabPressListener: { tabPress: () => 
 		<Tabs
 			screenOptions={{
 				headerShown: false,
-				sceneStyle: { backgroundColor: 'transparent' },
-				tabBarStyle: { backgroundColor: cardColor, borderTopColor: borderColor },
+				sceneStyle: { backgroundColor: screenBackgroundColor },
+				tabBarStyle: {
+					backgroundColor: cardColor,
+					borderTopColor: borderColor,
+				},
 				tabBarActiveTintColor: primaryColor,
 				tabBarInactiveTintColor: mutedForeground,
 			}}

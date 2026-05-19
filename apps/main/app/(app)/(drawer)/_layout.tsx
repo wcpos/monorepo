@@ -15,6 +15,8 @@ import {
 } from '@wcpos/core/screens/main/components/drawer-content/logs-badge';
 import { Header } from '@wcpos/core/screens/main/components/header';
 
+import { useNavigationBackground } from '../../../components/use-navigation-background';
+
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
 	initialRouteName: '(pos)',
@@ -41,6 +43,8 @@ function ThemedDrawer({
 	unreadErrorCount: number;
 	markLogsAsRead: () => void;
 }) {
+	const screenBackgroundColor = useNavigationBackground();
+
 	// Get theme-aware colors for navigation
 	const [sidebarColor, sidebarBorderColor] = useCSSVariable([
 		'--color-sidebar',
@@ -67,7 +71,7 @@ function ThemedDrawer({
 					paddingRight: 0,
 					paddingLeft: 0,
 				},
-				sceneStyle: { backgroundColor: 'transparent' },
+				sceneStyle: { backgroundColor: screenBackgroundColor },
 			}}
 			drawerContent={DrawerContent}
 		>
