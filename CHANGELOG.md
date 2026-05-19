@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-05-19
+
+### Changed
+- Bumped the app, Template Studio, and versioned workspace packages to `1.9.1`.
+- Updated translation version metadata for the 2026.5.12 and 2026.5.13 translation drops (#481, #492, #493).
+
+### Fixed
+- Restored themed navigation backgrounds on web after theme changes (#494).
+- Kept 403 permission errors from incorrectly triggering token refresh handling (#491).
+- Stabilized E2E route teardown and ignored route cleanup races during test shutdown (#488).
+- Aligned the EAS build runtime with pnpm 11 requirements (#487).
+- Added missing core i18n source strings and spelled out the common quantity label (#486).
+- Preserved storage migration bookkeeping on clear-data retry failure and stabilized web storage migration reset behavior (#485).
+- Sanitized product rows during store migration while preserving nullable product fields (#484).
+- Preserved legacy role fallback during credential sanitization and forced the WordPress credentials v4 migration path (#483).
+- Corrected WordPress credentials token type handling (#482).
+- Fixed printer vendor tab interaction after the 1.9.0 printer flow changes (#480).
+
 ## [1.9.0] - 2026-05-15
 
 ### Added
