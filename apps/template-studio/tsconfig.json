@@ -10,6 +10,7 @@
 		],
 		"allowImportingTsExtensions": true,
 		"noEmit": true,
+		"ignoreDeprecations": "6.0",
 		"baseUrl": ".",
 		"paths": {
 			"@wcpos/receipt-renderer/render-template": [

@@ -8,31 +8,35 @@
  */
 
 // Mock the FlexSearch plugin
-// eslint-disable-next-line import/no-unresolved -- premium subpaths are resolved in licensed app builds.
+
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import type { RxCollection } from 'rxdb';
 
 let shouldFailOnCreate = false;
 
-jest.mock('rxdb-premium/plugins/flexsearch', () => ({
-	addFulltextSearch: jest.fn().mockImplementation(async (config) => {
-		if (shouldFailOnCreate) {
-			shouldFailOnCreate = false; // Only fail once for recovery tests
-			throw new Error('FlexSearch schema mismatch');
-		}
+jest.mock(
+	'rxdb-premium/plugins/flexsearch',
+	() => ({
+		addFulltextSearch: jest.fn().mockImplementation(async (config) => {
+			if (shouldFailOnCreate) {
+				shouldFailOnCreate = false; // Only fail once for recovery tests
+				throw new Error('FlexSearch schema mismatch');
+			}
 
-		// Return a mock search instance
-		return {
-			collection: {
-				destroy: jest.fn().mockResolvedValue(undefined),
-				remove: jest.fn().mockResolvedValue(undefined),
-				$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
-			},
-			search: jest.fn().mockResolvedValue(['uuid-1', 'uuid-2']),
-		};
+			// Return a mock search instance
+			return {
+				collection: {
+					destroy: jest.fn().mockResolvedValue(undefined),
+					remove: jest.fn().mockResolvedValue(undefined),
+					$: { pipe: jest.fn().mockReturnValue({ subscribe: jest.fn() }) },
+				},
+				search: jest.fn().mockResolvedValue(['uuid-1', 'uuid-2']),
+			};
+		}),
 	}),
-}));
+	{ virtual: true }
+);
 
 // Mock the logger
 jest.mock('@wcpos/utils/logger', () => ({

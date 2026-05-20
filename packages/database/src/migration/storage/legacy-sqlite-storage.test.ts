@@ -6,17 +6,21 @@ jest.mock('rxdb/plugins/core', () => ({
 	ensureRxStorageInstanceParamsAreCorrect: (params: unknown) => mockEnsureParams(params),
 }));
 
-jest.mock('rxdb-premium-old/plugins/storage-sqlite', () => ({
-	getRxStorageSQLite: jest.fn((settings: unknown) => ({
-		name: 'sqlite',
-		rxdbVersion: '16.21.1',
-		settings,
-		createStorageInstance: (...args: unknown[]) => mockOriginalCreateStorageInstance(...args),
-		base64AttachmentToStoredAttachmentsData: jest.fn(),
-		storedAttachmentsDataToBase64: jest.fn(),
-	})),
-	createSQLiteStorageInstance: (...args: unknown[]) => mockCreateSQLiteStorageInstance(...args),
-}));
+jest.mock(
+	'rxdb-premium-old/plugins/storage-sqlite',
+	() => ({
+		getRxStorageSQLite: jest.fn((settings: unknown) => ({
+			name: 'sqlite',
+			rxdbVersion: '16.21.1',
+			settings,
+			createStorageInstance: (...args: unknown[]) => mockOriginalCreateStorageInstance(...args),
+			base64AttachmentToStoredAttachmentsData: jest.fn(),
+			storedAttachmentsDataToBase64: jest.fn(),
+		})),
+		createSQLiteStorageInstance: (...args: unknown[]) => mockCreateSQLiteStorageInstance(...args),
+	}),
+	{ virtual: true }
+);
 
 describe('getLegacyMigrationRxStorageSQLite', () => {
 	beforeEach(() => {
