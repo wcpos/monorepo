@@ -15,7 +15,7 @@ import { UpgradeNotice } from './upgrade-notice';
 import { useAppState } from '../../../../contexts/app-state';
 import { useTheme } from '../../../../contexts/theme';
 
-import type { DrawerHeaderProps } from '@react-navigation/drawer';
+import type { DrawerHeaderProps } from 'expo-router/build/react-navigation/drawer';
 
 interface Props {
 	options: DrawerHeaderProps['options'];

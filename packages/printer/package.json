@@ -19,18 +19,18 @@
 		"@point-of-sale/webbluetooth-receipt-printer": "2.0.0",
 		"@point-of-sale/webusb-receipt-printer": "2.0.0",
 		"@wcpos/receipt-renderer": "workspace:*",
-		"p-queue": "^9.1.1",
-		"zod": "^4.1.3"
+		"p-queue": "^9.3.0",
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"jsdom": "^26.1.0",
-		"vitest": "^4.0.18"
+		"vitest": "^4.1.7"
 	},
 	"peerDependencies": {
 		"expo-print": ">=55.0.0",
-		"react-native-tcp-socket": ">=6.0.0",
 		"react-native-esc-pos-printer": ">=4.0.0",
-		"react-native-star-io10": ">=1.0.0"
+		"react-native-star-io10": ">=1.0.0",
+		"react-native-tcp-socket": ">=6.0.0"
 	},
 	"peerDependenciesMeta": {
 		"expo-print": {

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { type ColorValue, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/toolt
 import { VStack } from '@wcpos/components/vstack';
 import { Platform } from '@wcpos/utils/platform';
 
-import type { DrawerNavigationOptions } from '@react-navigation/drawer';
+import type { DrawerNavigationOptions } from 'expo-router/build/react-navigation/drawer';
 
 type Props = {
 	/**
@@ -35,19 +35,19 @@ type Props = {
 	/**
 	 * Color for the icon and label when the item is active.
 	 */
-	activeTintColor?: string;
+	activeTintColor?: ColorValue;
 	/**
 	 * Color for the icon and label when the item is inactive.
 	 */
-	inactiveTintColor?: string;
+	inactiveTintColor?: ColorValue;
 	/**
 	 * Background color for item when its active.
 	 */
-	activeBackgroundColor?: string;
+	activeBackgroundColor?: ColorValue;
 	/**
 	 * Background color for item when its inactive.
 	 */
-	inactiveBackgroundColor?: string;
+	inactiveBackgroundColor?: ColorValue;
 	/**
 	 * Color of the touchable effect on press.
 	 * Only supported on Android.

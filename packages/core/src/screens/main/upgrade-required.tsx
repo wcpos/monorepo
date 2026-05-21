@@ -15,9 +15,7 @@ export function UpgradeRequired() {
 	const { logout } = useAppState();
 
 	return (
-		<View
-			style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }]}
-		>
+		<View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
 			<VStack>
 				<HStack>
 					<Icon name="triangleExclamation" variant="destructive" />

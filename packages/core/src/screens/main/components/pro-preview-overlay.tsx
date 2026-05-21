@@ -105,7 +105,7 @@ export function ProPreviewOverlay({ page, blurTarget }: Props) {
 
 const styles = StyleSheet.create({
 	ctaContainer: {
-		...StyleSheet.absoluteFillObject,
+		...StyleSheet.absoluteFill,
 		justifyContent: 'center',
 		alignItems: 'center',
 	},

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigationState } from '@react-navigation/native';
+import { useNavigationState } from 'expo-router/react-navigation';
 import get from 'lodash/get';
 import {
 	ObservableResource,
