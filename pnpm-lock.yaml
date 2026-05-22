@@ -807,6 +807,12 @@ importers:
       '@point-of-sale/receipt-printer-encoder':
         specifier: ^3.0.3
         version: 3.0.3
+      '@point-of-sale/webbluetooth-receipt-printer':
+        specifier: 2.0.0
+        version: 2.0.0
+      '@point-of-sale/webusb-receipt-printer':
+        specifier: 2.0.0
+        version: 2.0.0
       '@wcpos/receipt-renderer':
         specifier: workspace:*
         version: link:../receipt-renderer
@@ -2969,6 +2975,12 @@ packages:
 
   '@point-of-sale/receipt-printer-encoder@3.0.3':
     resolution: {integrity: sha512-2+xgs6rwNfrkEw9g4LkgQS6k29qnmo3+hOV7Z2xHNBFn8h4FrwquZwL/dBOTwgmQ9sWEYBkj/bQkg9Rz6lL99w==}
+
+  '@point-of-sale/webbluetooth-receipt-printer@2.0.0':
+    resolution: {integrity: sha512-xtplxsZWuhKa7DFASYzV8PSiRzwzjbQLqAsWSdjpIVkEo9Xmo652Pcu3aKbRUu4Ih2k9Fz4weyUZljOgbyDYkg==}
+
+  '@point-of-sale/webusb-receipt-printer@2.0.0':
+    resolution: {integrity: sha512-jpPow4XBoHhLH5eqENQOtT7si8iwchfX/4eh5rvwOsLeTowtV2BFb6Jf9yxDY3mFmOGW35MR3yW02GR8bj0y1Q==}
 
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
@@ -13990,6 +14002,10 @@ snapshots:
       canvas-dither: 1.0.1
       canvas-flatten: 1.0.1
       resize-image-data: 0.3.1
+
+  '@point-of-sale/webbluetooth-receipt-printer@2.0.0': {}
+
+  '@point-of-sale/webusb-receipt-printer@2.0.0': {}
 
   '@protobufjs/aspromise@1.1.2': {}
 
