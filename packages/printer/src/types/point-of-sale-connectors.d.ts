@@ -1,6 +1,17 @@
 /* eslint-disable import/no-default-export */
 declare module '@point-of-sale/webusb-receipt-printer' {
-	import type { PosConnectedDevice } from './point-of-sale-connectors';
+	interface PosConnectedDeviceLike {
+		type: 'usb' | 'bluetooth';
+		language: 'esc-pos' | 'star-prnt';
+		codepageMapping?: string;
+		vendorId?: number;
+		productId?: number;
+		manufacturerName?: string;
+		productName?: string;
+		serialNumber?: string;
+		name?: string;
+		id?: string;
+	}
 
 	export default class WebUSBReceiptPrinter {
 		connect(): void;
@@ -8,13 +19,24 @@ declare module '@point-of-sale/webusb-receipt-printer' {
 		print(data: Uint8Array | number[]): void;
 		addEventListener(
 			type: 'connected' | 'disconnected' | 'data',
-			cb: (device: PosConnectedDevice) => void
+			cb: (device: PosConnectedDeviceLike) => void
 		): void;
 	}
 }
 
 declare module '@point-of-sale/webbluetooth-receipt-printer' {
-	import type { PosConnectedDevice } from './point-of-sale-connectors';
+	interface PosConnectedDeviceLike {
+		type: 'usb' | 'bluetooth';
+		language: 'esc-pos' | 'star-prnt';
+		codepageMapping?: string;
+		vendorId?: number;
+		productId?: number;
+		manufacturerName?: string;
+		productName?: string;
+		serialNumber?: string;
+		name?: string;
+		id?: string;
+	}
 
 	export default class WebBluetoothReceiptPrinter {
 		connect(): void;
@@ -22,7 +44,7 @@ declare module '@point-of-sale/webbluetooth-receipt-printer' {
 		print(data: Uint8Array | number[]): void;
 		addEventListener(
 			type: 'connected' | 'disconnected' | 'data',
-			cb: (device: PosConnectedDevice) => void
+			cb: (device: PosConnectedDeviceLike) => void
 		): void;
 	}
 }
