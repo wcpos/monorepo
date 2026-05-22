@@ -5,6 +5,7 @@ import type { DiscoveredPrinter } from '../types';
 interface UsePrinterDiscoveryResult {
 	printers: DiscoveredPrinter[];
 	isScanning: boolean;
+	scanCandidates: string[];
 	startScan: () => void;
 	stopScan: () => void;
 	addManualPrinter: (
@@ -109,6 +110,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	return {
 		printers,
 		isScanning,
+		scanCandidates: [],
 		startScan,
 		stopScan,
 		addManualPrinter,

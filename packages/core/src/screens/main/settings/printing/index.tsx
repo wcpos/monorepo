@@ -41,6 +41,10 @@ export function PrintingSettings() {
 	const printerService = React.useMemo(() => new PrinterService(), []);
 	const templates = useActiveTemplates();
 	const discovery = usePrinterDiscovery();
+	const scanCandidateList = React.useMemo(
+		() => discovery.scanCandidates.join(', '),
+		[discovery.scanCandidates]
+	);
 
 	useEnsureSystemPrinter(storeDB);
 
@@ -224,6 +228,20 @@ export function PrintingSettings() {
 							</Button>
 						</HStack>
 					</>
+				)}
+				{discovery.scanCandidates.length > 0 && (
+					<VStack className="bg-muted/50 gap-1 rounded-md p-3" testID="printing-scan-candidates">
+						<Text className="text-muted-foreground text-xs font-medium">
+							{t('settings.scan_candidates_title', 'Checking common printer addresses:')}
+						</Text>
+						<Text className="text-muted-foreground text-xs">{scanCandidateList}</Text>
+						<Text className="text-muted-foreground text-xs">
+							{t(
+								'settings.scan_candidates_hint',
+								'If your printer shows a different IP address, add it manually.'
+							)}
+						</Text>
+					</VStack>
 				)}
 				{discovery.error && (
 					<Text className="text-muted-foreground text-xs">{discovery.error}</Text>

@@ -12,13 +12,36 @@ export interface SweepCandidateOptions {
 	extraHosts?: string[];
 }
 
-// Loopback is always probed: in dev the virtual printer answers on localhost:8008,
-// in production a user's own machine simply 404s (no match). No sim flag needed.
+// These are deliberate, recognizable addresses rather than a random LAN sweep.
+// They cover the common home/office router ranges and printer-ish host numbers users
+// can visually compare with the IP shown on their printer's network status page.
 const ALWAYS_PROBE = ['localhost'];
+const COMMON_LOCAL_NAMES = ['printer.local', 'epson.local', 'star.local'];
+const COMMON_SUBNET_BASES = [
+	'192.168.0',
+	'192.168.1',
+	'192.168.4',
+	'192.168.10',
+	'10.0.0',
+	'10.0.1',
+	'172.16.0',
+];
+const COMMON_PRINTER_HOSTS = [1, 2, 10, 20, 50, 100, 101, 200, 254];
+
+function buildCommonLanCandidates(): string[] {
+	return COMMON_SUBNET_BASES.flatMap((base) =>
+		COMMON_PRINTER_HOSTS.map((hostNumber) => `${base}.${hostNumber}`)
+	);
+}
 
 export function buildSweepCandidates(options: SweepCandidateOptions = {}): string[] {
 	const { subnetBase, extraHosts = [] } = options;
-	const hosts = new Set<string>([...ALWAYS_PROBE, ...extraHosts]);
+	const hosts = new Set<string>([
+		...ALWAYS_PROBE,
+		...COMMON_LOCAL_NAMES,
+		...buildCommonLanCandidates(),
+		...extraHosts,
+	]);
 	if (subnetBase && /^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(subnetBase)) {
 		for (let i = 1; i <= 254; i++) hosts.add(`${subnetBase}.${i}`);
 	}

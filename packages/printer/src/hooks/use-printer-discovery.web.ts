@@ -5,6 +5,7 @@ import type { DiscoveredPrinter } from '../types';
 interface UsePrinterDiscoveryResult {
 	printers: DiscoveredPrinter[];
 	isScanning: boolean;
+	scanCandidates: string[];
 	startScan: () => void;
 	stopScan: () => void;
 	addManualPrinter: (
@@ -40,6 +41,7 @@ function mergePrinters(
 export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	const [printers, setPrinters] = React.useState<DiscoveredPrinter[]>([]);
 	const [isScanning, setIsScanning] = React.useState(false);
+	const [scanCandidates, setScanCandidates] = React.useState<string[]>([]);
 	const [error, setError] = React.useState<string | null>(null);
 	const abortRef = React.useRef<AbortController | null>(null);
 
@@ -81,6 +83,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 			const { probeVendor } = await import('../utils/probe-vendor');
 			const { buildSweepCandidates, sweepForPrinters } = await import('../discovery/network-sweep');
 			const hosts = buildSweepCandidates();
+			setScanCandidates(hosts);
 			const discovered = await sweepForPrinters({
 				hosts,
 				probe: probeVendor,
@@ -112,6 +115,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	return {
 		printers,
 		isScanning,
+		scanCandidates,
 		startScan,
 		stopScan,
 		addManualPrinter,

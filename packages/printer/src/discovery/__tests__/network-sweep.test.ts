@@ -3,8 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { buildSweepCandidates, sweepForPrinters } from '../network-sweep';
 
 describe('buildSweepCandidates', () => {
-	it('always includes localhost so the dev virtual printer is found without a flag', () => {
-		expect(buildSweepCandidates()).toContain('localhost');
+	it('includes localhost and recognizable common LAN printer addresses by default', () => {
+		const hosts = buildSweepCandidates();
+		expect(hosts).toEqual(
+			expect.arrayContaining([
+				'localhost',
+				'printer.local',
+				'epson.local',
+				'star.local',
+				'192.168.0.100',
+				'192.168.1.100',
+				'10.0.0.100',
+				'172.16.0.100',
+			])
+		);
+		expect(hosts.length).toBeLessThan(100);
 	});
 
 	it('merges and de-duplicates extra hosts', () => {
@@ -21,7 +34,9 @@ describe('buildSweepCandidates', () => {
 	});
 
 	it('ignores an invalid subnet base', () => {
-		expect(buildSweepCandidates({ subnetBase: 'not-a-subnet' })).toEqual(['localhost']);
+		const hosts = buildSweepCandidates({ subnetBase: 'not-a-subnet' });
+		expect(hosts).toContain('localhost');
+		expect(hosts).not.toContain('not-a-subnet.1');
 	});
 });
 
