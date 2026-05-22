@@ -20,6 +20,7 @@ export function toPrinterProfile(doc: PrinterProfileDocument): PrinterProfile {
 		address: doc.address,
 		port: doc.port ?? 9100,
 		nativeInterfaceType: doc.nativeInterfaceType,
+		cloudPrinterId: doc.cloudPrinterId,
 		language: (doc.language ?? 'esc-pos') as PrinterProfile['language'],
 		columns: doc.columns ?? 42,
 		fullReceiptRaster: doc.fullReceiptRaster ?? false,
