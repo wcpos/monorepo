@@ -71,12 +71,17 @@ export function NumberInput({
 	const [internalValue, setInternalValue] = React.useState(() => numberToString(value));
 	const [isFocused, setIsFocused] = React.useState(false);
 
-	// Sync from parent when value changes externally (and not focused)
-	React.useEffect(() => {
+	// Sync from parent when the value changes externally (and not focused).
+	// Implemented as the React "adjust state during render" pattern (tracking the
+	// previous value) rather than an effect, so it never sets state inside
+	// useEffect. While focused we skip syncing so typing isn't interrupted.
+	const [prevValue, setPrevValue] = React.useState(value);
+	if (value !== prevValue) {
+		setPrevValue(value);
 		if (!isFocused && value != null) {
 			setInternalValue(numberToString(value));
 		}
-	}, [value, isFocused, numberToString]);
+	}
 
 	// Emit number on blur
 	const handleBlur = React.useCallback(

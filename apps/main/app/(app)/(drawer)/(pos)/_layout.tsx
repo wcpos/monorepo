@@ -49,20 +49,21 @@ export default function POSLayout() {
 	// Check if we're at a /cart route (with or without orderId)
 	const isAtCartRoute = segments.includes('cart');
 
-	// Remember the last valid orderId when in POS routes
-	// This prevents losing the orderId when a modal (like settings) is opened
-	// Only remember if we're NOT at a cart route - this ensures /cart (new order) works
-	const lastOrderIdRef = React.useRef<string | undefined>(undefined);
-	if (isInPOSRoute && !isAtCartRoute) {
-		// Only preserve orderId when not explicitly at a cart route
-		// This allows /cart to show a new order instead of remembered order
-	} else if (isInPOSRoute && isAtCartRoute && orderIdFromParams) {
-		// At cart route with an orderId - remember it
-		lastOrderIdRef.current = orderIdFromParams;
+	// Remember the last valid orderId when at a cart route with an orderId.
+	// This prevents losing the orderId when a modal (like settings) is opened, which
+	// navigates away from the POS routes. We only remember when explicitly at a cart
+	// route with an orderId so that /cart (new order) still shows a new order.
+	//
+	// This uses React's "adjusting state during render" pattern: when a new candidate
+	// orderId is observed we store it immediately during render (no effect, no ref), so
+	// the value survives the transition out of the POS routes when a modal opens.
+	const [lastOrderId, setLastOrderId] = React.useState<string | undefined>(undefined);
+	if (isInPOSRoute && isAtCartRoute && orderIdFromParams && orderIdFromParams !== lastOrderId) {
+		setLastOrderId(orderIdFromParams);
 	}
 
 	// Use the route param if in POS, otherwise use the remembered value (for modals)
-	const orderId = isInPOSRoute ? orderIdFromParams : lastOrderIdRef.current;
+	const orderId = isInPOSRoute ? orderIdFromParams : lastOrderId;
 
 	/**
 	 * We then need to filter the open orders to limit by cashier and store

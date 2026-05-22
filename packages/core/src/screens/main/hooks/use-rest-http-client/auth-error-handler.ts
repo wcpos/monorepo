@@ -103,10 +103,14 @@ export const useAuthErrorHandler = (
 	// Setup OAuth flow via platform-specific useWcposAuth hook
 	const { response, promptAsync } = useWcposAuth({ site });
 
-	// Keep a ref so the error handler always calls the latest promptAsync
+	// Keep a ref so the error handler always calls the latest promptAsync.
+	// The ref write is done in an effect (not during render) to avoid mutating a
+	// ref during render.
 	const authFlowInFlightRef = React.useRef(false);
 	const promptAsyncRef = React.useRef(promptAsync);
-	promptAsyncRef.current = promptAsync;
+	React.useEffect(() => {
+		promptAsyncRef.current = promptAsync;
+	}, [promptAsync]);
 
 	/**
 	 * Trigger OAuth flow directly — no state-as-trigger intermediate

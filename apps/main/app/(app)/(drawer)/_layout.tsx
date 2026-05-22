@@ -203,10 +203,17 @@ export default function DrawerLayout() {
 	const t = useT();
 
 	const { license } = useAppInfo();
-	const [showUpgrade, setShowUpgrade] = React.useState(!license?.isPro);
-	React.useEffect(() => {
-		setShowUpgrade(!license?.isPro);
-	}, [license?.isPro]);
+	// `showUpgrade` is dismissable local state (the header can hide the banner), but it
+	// must re-sync whenever the license's Pro status changes. We track the previous
+	// `isPro` value and reset during render (React's "adjusting state during render"
+	// pattern) instead of in an effect, avoiding a cascading re-render.
+	const isPro = !!license?.isPro;
+	const [showUpgrade, setShowUpgrade] = React.useState(!isPro);
+	const [prevIsPro, setPrevIsPro] = React.useState(isPro);
+	if (isPro !== prevIsPro) {
+		setPrevIsPro(isPro);
+		setShowUpgrade(!isPro);
+	}
 	const { count: unreadErrorCount, markAsRead: markLogsAsRead } = useUnreadErrorCount();
 
 	return (

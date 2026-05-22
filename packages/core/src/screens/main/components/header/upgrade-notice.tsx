@@ -11,8 +11,11 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 	const t = useT();
 
 	/**
-	 *
+	 * Pick a random message index once on mount (impure Math.random must not run
+	 * during render). The text itself is derived from `t` so it stays translated.
 	 */
+	const [messageIndex] = React.useState(() => Math.floor(Math.random() * 6));
+
 	const upgradeToProText = React.useMemo(() => {
 		const texts = [
 			t('common.upgrade_to_pro_for_more_features'),
@@ -22,8 +25,8 @@ export function UpgradeNotice({ setShowUpgrade }: { setShowUpgrade: (show: boole
 			t('common.support_our_work_–_go_pro'),
 			t('common.support_future_updates_–_get_pro'),
 		];
-		return texts[Math.floor(Math.random() * texts.length)];
-	}, [t]);
+		return texts[messageIndex];
+	}, [t, messageIndex]);
 
 	return (
 		<HStack testID="upgrade-notice-banner" className="bg-attention">

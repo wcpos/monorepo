@@ -12,9 +12,12 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 	const [isLoading, setIsLoading] = React.useState(false);
 	const [error, setError] = React.useState<Error | null>(null);
 
+	const hasValidSource = isRxDocument(document) && !!imageUrl;
+
 	React.useEffect(() => {
-		if (!isRxDocument(document) || !imageUrl) {
-			setBlobUrl(undefined);
+		if (!hasValidSource) {
+			// No valid source: nothing to load. The returned uri is derived as
+			// undefined below, so no setState is needed here.
 			return;
 		}
 
@@ -70,7 +73,7 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 		};
 
 		loadImage();
-	}, [document, imageUrl, get]);
+	}, [document, imageUrl, get, hasValidSource]);
 
 	// Cleanup object URL when it changes or component unmounts
 	React.useEffect(() => {
@@ -82,7 +85,9 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 	}, [blobUrl]);
 
 	return {
-		uri: blobUrl,
+		// When there's no valid source the uri is undefined regardless of any
+		// previously-loaded blob (derived rather than reset via setState).
+		uri: hasValidSource ? blobUrl : undefined,
 		isLoading,
 		error,
 	};

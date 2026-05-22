@@ -53,9 +53,13 @@ export function DndContextProvider({
 	// Map to store element refs
 	const elementMapRef = React.useRef<Map<ItemId, HTMLElement>>(new Map());
 
-	// Store itemIds in a ref so getItemIndex callback stays stable
+	// Store itemIds in a ref so getItemIndex callback stays stable. The ref is
+	// written in an effect (not during render) and only read later from the
+	// getItemIndex callback (invoked by pragmatic-dnd after commit).
 	const itemIdsRef = React.useRef(itemIds);
-	itemIdsRef.current = itemIds;
+	React.useEffect(() => {
+		itemIdsRef.current = itemIds;
+	});
 
 	// These callbacks use refs internally so they never need to be recreated
 	const registerItem = React.useCallback((id: ItemId, element: HTMLElement | null) => {

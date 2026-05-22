@@ -26,9 +26,14 @@ export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps
 	);
 
 	// Keep the visual selection in sync when the form is reset for edit/prefill/open.
-	React.useEffect(() => {
+	// Implemented as the React "adjust state during render" pattern (tracking the
+	// previous vendor prop) rather than an effect, so it never sets state inside
+	// useEffect.
+	const [prevVendor, setPrevVendor] = React.useState(vendor);
+	if (vendor !== prevVendor) {
+		setPrevVendor(vendor);
 		setSelectedVendor(normalizeVendor(vendor));
-	}, [vendor]);
+	}
 
 	return (
 		<VStack className="gap-1">

@@ -63,14 +63,8 @@ export function useReceiptData({
 
 	React.useEffect(() => {
 		if (!orderId) {
-			setState({
-				data: null,
-				mode,
-				hasSnapshot: false,
-				submissionStatus: null,
-				isLoading: false,
-				error: null,
-			});
+			// No order: nothing to fetch. The empty result is derived below, so no
+			// setState is needed here.
 			return;
 		}
 
@@ -119,6 +113,20 @@ export function useReceiptData({
 			cancelled = true;
 		};
 	}, [http, orderId, mode, fetchKey]);
+
+	// When there's no order the result is the empty state regardless of any
+	// previously-fetched data (derived rather than reset via setState).
+	if (!orderId) {
+		return {
+			data: null,
+			mode,
+			hasSnapshot: false,
+			submissionStatus: null,
+			isLoading: false,
+			error: null,
+			refetch,
+		};
+	}
 
 	return { ...state, refetch };
 }

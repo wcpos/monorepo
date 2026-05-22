@@ -66,7 +66,7 @@ export function ZReport() {
 			from: formatDate(from, 'yyyy-M-dd HH:mm:ss'),
 			to: formatDate(to, 'yyyy-M-dd HH:mm:ss'),
 		};
-	}, [formatDate, selectedDateRange?.$gte, selectedDateRange?.$lte]);
+	}, [formatDate, selectedDateRange]);
 
 	/**
 	 * Create a report generated date string when:
@@ -81,12 +81,15 @@ export function ZReport() {
 			setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
 		}, [formatDate])
 	);
+	// Update the report-generated date when the selected orders change. The value
+	// comes from `new Date()` (impure), so it can't be derived during render; the
+	// update is deferred to a microtask so it doesn't run synchronously in the
+	// effect body (which would trigger a render cascade).
 	React.useEffect(() => {
-		setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
-	}, [
-		// update the report generated date when the selected orders change
-		selectedOrders,
-	]);
+		queueMicrotask(() => {
+			setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
+		});
+	}, [selectedOrders, formatDate]);
 
 	return (
 		<View>

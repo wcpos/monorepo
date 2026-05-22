@@ -23,15 +23,19 @@ export function EditableField({
 	const [editValue, setEditValue] = React.useState(valueProp ?? defaultValue ?? '');
 
 	/**
-	 * Sync internal value when prop changes externally (e.g., server update).
-	 * Only sync when NOT editing to avoid overwriting user's in-progress edits.
-	 * This is a legitimate useEffect for syncing with an external data source.
+	 * Sync internal value when the prop changes externally (e.g., server update).
+	 * Only sync when NOT editing to avoid overwriting the user's in-progress edits.
+	 * Implemented as the React "adjust state during render" pattern (tracking the
+	 * previous prop value) rather than an effect, so it never sets state inside
+	 * useEffect.
 	 */
-	React.useEffect(() => {
+	const [prevValueProp, setPrevValueProp] = React.useState(valueProp);
+	if (valueProp !== prevValueProp) {
+		setPrevValueProp(valueProp);
 		if (!editing && valueProp !== undefined) {
 			setEditValue(valueProp);
 		}
-	}, [valueProp, editing]);
+	}
 
 	/**
 	 * Submit the edited value and exit editing mode

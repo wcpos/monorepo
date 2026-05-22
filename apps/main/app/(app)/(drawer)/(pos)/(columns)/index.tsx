@@ -30,12 +30,18 @@ export default function ResizablePOSColumns() {
 		isAtCartRoute ? 'cart' : 'products'
 	);
 
-	// When navigating to/from cart route, switch tabs accordingly
-	React.useEffect(() => {
+	// When navigating onto a cart route, switch to the cart tab. We track the previous
+	// route flag and adjust state during render (React's "adjusting state during render"
+	// pattern) rather than in an effect, so the tab switch happens on the route
+	// transition without an extra render pass. Navigating away from cart does not force
+	// the products tab, matching the prior behaviour.
+	const [wasAtCartRoute, setWasAtCartRoute] = React.useState(isAtCartRoute);
+	if (isAtCartRoute !== wasAtCartRoute) {
+		setWasAtCartRoute(isAtCartRoute);
 		if (isAtCartRoute) {
 			setActiveTab('cart');
 		}
-	}, [isAtCartRoute]);
+	}
 
 	// On small screens, render a tab-like UI with Products and Cart tabs
 	// This handles the case when user resizes from large to small screen

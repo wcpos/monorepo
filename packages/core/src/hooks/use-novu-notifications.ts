@@ -68,7 +68,11 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 	const { storeDB } = useAppState();
 	const { subscriberId, subscriberMetadata, isConfigured } = useNovu();
 	const [isLoading, setIsLoading] = React.useState(false);
-	const [isConnected, setIsConnected] = React.useState(false);
+
+	// The client/WebSocket is set up by the effect below exactly when these
+	// preconditions hold, and torn down otherwise. Derive `isConnected` from them
+	// during render instead of mirroring the lifecycle into state via setState.
+	const isConnected = !!subscriberId && !!subscriberMetadata && isConfigured;
 
 	// Get notifications collection
 	const notificationsCollection = storeDB?.notifications as NotificationCollection | undefined;
@@ -280,9 +284,9 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			context: { subscriberId },
 		});
 
-		// Initialize the Novu client (this creates the WebSocket connection)
+		// Initialize the Novu client (this creates the WebSocket connection).
+		// `isConnected` is derived from the preconditions above, so no setState here.
 		getNovuClient(subscriberId, subscriberMetadata);
-		setIsConnected(true);
 
 		// Subscribe to real-time events (deduplication happens in client.ts)
 		const unsubscribe = subscribeToNovuEvents({
@@ -339,29 +343,31 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 			});
 		}
 
-		// Initial fetch of notifications
-		setIsLoading(true);
-		fetchNotifications()
-			.then((notifications) => {
+		// Initial fetch of notifications. Wrapped in an async function so the
+		// loading-state updates happen asynchronously (not synchronously in the
+		// effect body), avoiding a render cascade.
+		const loadInitialNotifications = async () => {
+			setIsLoading(true);
+			try {
+				const notifications = await fetchNotifications();
 				novuLogger.info('Novu: Initial notifications loaded', {
 					context: { count: notifications.length },
 				});
-				return syncToRxDB(notifications);
-			})
-			.catch((error) => {
+				await syncToRxDB(notifications);
+			} catch (error) {
 				novuLogger.error('Novu: Failed to load initial notifications', {
 					context: { error: error instanceof Error ? error.message : String(error) },
 				});
-			})
-			.finally(() => {
+			} finally {
 				setIsLoading(false);
-			});
+			}
+		};
+		loadInitialNotifications();
 
 		// Cleanup on unmount or subscriber change
 		return () => {
 			novuLogger.debug('Novu: Cleaning up WebSocket listeners');
 			unsubscribe();
-			setIsConnected(false);
 		};
 	}, [subscriberId, subscriberMetadata, isConfigured, syncNotificationToRxDB, syncToRxDB]);
 

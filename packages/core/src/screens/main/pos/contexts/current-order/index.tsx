@@ -48,16 +48,18 @@ export function CurrentOrderProvider({
 	);
 
 	// Sync from route param to internal state ONLY when route param has a value
-	// (e.g., user navigates directly to /cart/uuid or clicks browser back)
+	// (e.g., user navigates directly to /cart/uuid or clicks browser back).
 	// Do NOT sync when currentOrderUUID is undefined - this happens when switching
-	// to the Cart tab which doesn't have orderId in its URL
-	React.useEffect(() => {
-		// Only sync if route param has an actual value (explicit navigation to an order)
-		// Ignore undefined - internal state is the source of truth
-		if (currentOrderUUID !== undefined) {
-			setInternalOrderId(currentOrderUUID);
-		}
-	}, [currentOrderUUID]);
+	// to the Cart tab which doesn't have orderId in its URL.
+	//
+	// Implemented as the React "adjust state during render" pattern (tracking the
+	// previous route param) instead of an effect, so it never sets state inside
+	// useEffect.
+	const [prevOrderUUID, setPrevOrderUUID] = React.useState(currentOrderUUID);
+	if (currentOrderUUID !== undefined && currentOrderUUID !== prevOrderUUID) {
+		setPrevOrderUUID(currentOrderUUID);
+		setInternalOrderId(currentOrderUUID);
+	}
 
 	// Determine current order from internal state
 	const currentOrder = (openOrders.find((order) => order.id === internalOrderId)?.document ??

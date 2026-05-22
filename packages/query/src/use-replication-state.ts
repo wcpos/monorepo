@@ -35,24 +35,23 @@ export const useReplicationState = (
 	const collectionReplication = manager.activeCollectionReplications.get(queryID);
 	const queryReplication = manager.activeQueryReplications.get(queryID);
 
-	// Track the render-time values so the effect can detect stale reads
-	const lastSeenCollectionRef = React.useRef(collectionReplication);
-	lastSeenCollectionRef.current = collectionReplication;
-	const lastSeenQueryRef = React.useRef(queryReplication);
-	lastSeenQueryRef.current = queryReplication;
-
 	/**
 	 * Subscribe to replication add$ events and handle Suspense race condition.
 	 * Only depends on manager and queryID — forceUpdate is a stable dispatch.
+	 *
+	 * The render-time values are captured directly from this effect's closure
+	 * (the render that created the effect). Since effects run on commit before
+	 * the next render, this closure value equals the latest render-time lookup,
+	 * so the stale check below is equivalent to the previous ref-based approach.
 	 */
 	React.useEffect(() => {
 		// Stale check: replications may have been added between render and effect
 		const currentCollection = manager.activeCollectionReplications.get(queryID);
-		if (currentCollection !== lastSeenCollectionRef.current) {
+		if (currentCollection !== collectionReplication) {
 			forceUpdate();
 		}
 		const currentQuery = manager.activeQueryReplications.get(queryID);
-		if (currentQuery !== lastSeenQueryRef.current) {
+		if (currentQuery !== queryReplication) {
 			forceUpdate();
 		}
 

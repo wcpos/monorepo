@@ -37,6 +37,10 @@ overrides:
   "@electron/node-gyp": "10.2.0-electron.2"
   "tar": "^7.5.11"
   "react-native-nitro-modules": "0.35.7"
+  # jest-expo 56 pulls jest-environment-* 29 (nested jest-mock 29 lacks clearMocksOnScope);
+  # force them to 30 so the jest-30 workspace packages get a consistent test environment.
+  "jest-environment-jsdom": "^30.4.1"
+  "jest-environment-node": "^30.4.1"
 packageExtensions:
   "rxdb-premium-old@16.21.1":
     "dependencies": { "rxdb": "16.21.1" }

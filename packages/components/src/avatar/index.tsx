@@ -91,10 +91,14 @@ export function Avatar({
 	...imageProps
 }: AvatarProps) {
 	const [errored, setErrored] = React.useState(false);
-	// Reset error state if the source changes (e.g. site URL edited)
-	React.useEffect(() => {
+	// Reset error state if the source changes (e.g. site URL edited) by adjusting
+	// state during render instead of in an effect — React's recommended pattern for
+	// resetting state when a prop changes (https://react.dev/learn/you-might-not-need-an-effect).
+	const [prevSource, setPrevSource] = React.useState(source);
+	if (source !== prevSource) {
+		setPrevSource(source);
 		setErrored(false);
-	}, [source]);
+	}
 
 	const hasSource = Boolean(source);
 	const showImage = hasSource && !errored;

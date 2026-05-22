@@ -52,7 +52,7 @@ export function DateRangePill({ query }: Props) {
 		const toStr = formatDate(to, 'd MMM');
 
 		return `${fromStr} - ${toStr}`;
-	}, [isActive, selectedDateRange?.$gte, selectedDateRange?.$lte, formatDate, t]);
+	}, [isActive, selectedDateRange, formatDate, t]);
 
 	const handleDateSelect = React.useCallback(
 		(range: DateRange) => {

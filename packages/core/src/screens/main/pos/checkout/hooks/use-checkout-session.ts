@@ -57,7 +57,8 @@ export function useCheckoutSession(order: OrderDocument) {
 	const router = useRouter();
 	const t = useT();
 	const [loading, setLoading] = React.useState(false);
-	const [error, setError] = React.useState<string | null>(null);
+	// Error raised by the checkout flow itself (set imperatively in handlers).
+	const [checkoutError, setError] = React.useState<string | null>(null);
 	const checkoutAttemptIdRef = React.useRef<string | null>(null);
 
 	const gatewayId = React.useMemo(() => order.payment_method || 'pos_cash', [order.payment_method]);
@@ -69,15 +70,10 @@ export function useCheckoutSession(order: OrderDocument) {
 	} = usePaymentGateways(gatewayId);
 	const gatewayResolved = !gatewayLoading;
 
-	React.useEffect(() => {
-		setError((current) => {
-			if (gatewayError) {
-				return 'payment_gateways_fetch_failed';
-			}
-
-			return current === 'payment_gateways_fetch_failed' ? null : current;
-		});
-	}, [gatewayError]);
+	// The displayed error is the gateway fetch error (derived from the gateways
+	// hook) when present, otherwise the checkout flow's own error. Derived during
+	// render rather than synced into state via an effect.
+	const error = gatewayError ? 'payment_gateways_fetch_failed' : checkoutError;
 
 	React.useEffect(() => {
 		checkoutAttemptIdRef.current = null;

@@ -52,6 +52,7 @@ function Textarea({
 		(e: any) => {
 			const newHeight = e.nativeEvent.contentSize.height;
 			if (height.value !== newHeight) {
+				// eslint-disable-next-line react-hooks/immutability -- reanimated shared value: .value is a mutable ref, assigned from a JS event handler
 				height.value = newHeight;
 			}
 		},
@@ -90,6 +91,7 @@ function Textarea({
 	 */
 	React.useEffect(() => {
 		if (props.value?.length === 0) {
+			// eslint-disable-next-line react-hooks/immutability -- reanimated shared value: .value is a mutable ref, assigned from an effect
 			height.value = minHeight;
 		}
 	}, [height, minHeight, props.value?.length]);

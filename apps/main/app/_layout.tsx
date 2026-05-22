@@ -47,17 +47,20 @@ function useThemeRestorer() {
 	const { store } = useAppState();
 	const [isThemeReady, setIsThemeReady] = React.useState(false);
 
-	// Restore theme from store on mount
-	React.useEffect(() => {
-		if (store) {
-			const savedTheme = store.theme;
-			if (savedTheme && savedTheme !== 'system') {
-				Uniwind.setTheme(savedTheme);
-			}
-			// Mark theme as ready after applying (or if no custom theme)
-			setIsThemeReady(true);
+	// Restore the saved theme once the store becomes available, then mark the theme as
+	// ready. We use React's "adjusting state during render" pattern (rather than an
+	// effect) so the theme is applied synchronously before the gated content commits,
+	// which prevents the flash of default theme colors. `Uniwind.setTheme` is idempotent
+	// and the work is guarded so it only runs on the render where the store first appears.
+	const [restoredForStore, setRestoredForStore] = React.useState<unknown>(null);
+	if (store && restoredForStore !== store) {
+		setRestoredForStore(store);
+		const savedTheme = store.theme;
+		if (savedTheme && savedTheme !== 'system') {
+			Uniwind.setTheme(savedTheme);
 		}
-	}, [store]);
+		setIsThemeReady(true);
+	}
 
 	return { isThemeReady, hasStore: !!store };
 }
