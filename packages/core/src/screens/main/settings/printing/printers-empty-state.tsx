@@ -12,7 +12,6 @@ import { useT } from '../../../../contexts/translations';
 interface PrintersEmptyStateProps {
 	onAddPrinter: () => void;
 	onScanNetwork: () => void;
-	canScanNetwork: boolean;
 	isScanning: boolean;
 }
 
@@ -22,7 +21,6 @@ interface PrintersEmptyStateProps {
 export function PrintersEmptyState({
 	onAddPrinter,
 	onScanNetwork,
-	canScanNetwork,
 	isScanning,
 }: PrintersEmptyStateProps) {
 	const t = useT();
@@ -46,16 +44,14 @@ export function PrintersEmptyState({
 					<Button leftIcon="plus" onPress={onAddPrinter} testID="printing-add-printer-button">
 						<Text>{t('settings.add_printer', 'Add Printer')}</Text>
 					</Button>
-					{canScanNetwork && (
-						<Button
-							variant="outline"
-							onPress={onScanNetwork}
-							loading={isScanning}
-							testID="printing-scan-network-button"
-						>
-							<Text>{t('settings.scan_network', 'Scan Network')}</Text>
-						</Button>
-					)}
+					<Button
+						variant="outline"
+						onPress={onScanNetwork}
+						loading={isScanning}
+						testID="printing-scan-network-button"
+					>
+						<Text>{t('settings.scan_network', 'Scan Network')}</Text>
+					</Button>
 				</HStack>
 			</VStack>
 		</View>

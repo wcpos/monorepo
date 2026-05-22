@@ -22,7 +22,7 @@ import { PrintersEmptyState } from './printers-empty-state';
 import { SectionHeader } from './section-header';
 import { TemplateRow } from './template-row';
 import { useEnsureSystemPrinter } from './use-ensure-system-printer';
-import { AUTO_VALUE, isNetworkScanSupported } from './utils';
+import { AUTO_VALUE } from './utils';
 import { PrinterDialog } from '../printer/add-printer';
 import { toPrinterProfile } from '../printer/use-default-printer-profile';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
@@ -173,7 +173,6 @@ export function PrintingSettings() {
 	}, []);
 
 	const nonBuiltInCount = printers.filter((p) => !p.isBuiltIn).length;
-	const canScanNetwork = isNetworkScanSupported();
 
 	return (
 		<VStack className="gap-6">
@@ -188,7 +187,6 @@ export function PrintingSettings() {
 					<PrintersEmptyState
 						onAddPrinter={openAddDialog}
 						onScanNetwork={discovery.startScan}
-						canScanNetwork={canScanNetwork}
 						isScanning={discovery.isScanning}
 					/>
 				) : (
@@ -216,23 +214,21 @@ export function PrintingSettings() {
 							>
 								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
 							</Button>
-							{canScanNetwork && (
-								<Button
-									variant="outline"
-									onPress={discovery.startScan}
-									loading={discovery.isScanning}
-									testID="printing-scan-network-button"
-								>
-									<Text>{t('settings.scan_network', 'Scan Network')}</Text>
-								</Button>
-							)}
+							<Button
+								variant="outline"
+								onPress={discovery.startScan}
+								loading={discovery.isScanning}
+								testID="printing-scan-network-button"
+							>
+								<Text>{t('settings.scan_network', 'Scan Network')}</Text>
+							</Button>
 						</HStack>
 					</>
 				)}
-				{canScanNetwork && discovery.error && (
+				{discovery.error && (
 					<Text className="text-muted-foreground text-xs">{discovery.error}</Text>
 				)}
-				{canScanNetwork && discovery.printers.length > 0 && (
+				{discovery.printers.length > 0 && (
 					<VStack className="gap-1">
 						<Text className="text-muted-foreground text-xs font-medium">
 							{t('settings.discovered_printers', 'Discovered printers:')}

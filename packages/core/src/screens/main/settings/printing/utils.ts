@@ -24,8 +24,3 @@ export function templateTypeLabel(template: {
 	}
 	return 'HTML';
 }
-
-/** Network scan is a shipping feature on every platform. */
-export function isNetworkScanSupported(): boolean {
-	return true;
-}
