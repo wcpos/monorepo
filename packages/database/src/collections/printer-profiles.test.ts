@@ -3,7 +3,7 @@ interface PrinterProfileSchemaShape {
 	version: number;
 	properties: {
 		connectionType: { enum: readonly string[] };
-		cloudPrinterId?: { type: string };
+		cloudPrinterId?: { type: string; minLength?: number };
 	};
 }
 
@@ -15,6 +15,7 @@ describe('printer_profiles schema v6 (cloud connection type)', () => {
 		expect(schema.version).toBe(6);
 		expect(schema.properties.connectionType.enum).toContain('cloud');
 		expect(schema.properties.cloudPrinterId).toBeDefined();
+		expect(schema.properties.cloudPrinterId?.minLength).toBe(1);
 	});
 
 	it('provides a v6 migration that preserves existing profile data', async () => {

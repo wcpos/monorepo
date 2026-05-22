@@ -54,6 +54,15 @@ describe('PrinterService cloud routing', () => {
 		);
 	});
 
+	it('throws when cloudEnqueueFactory does not return an enqueue function', async () => {
+		const cloudEnqueueFactory = vi.fn().mockReturnValue(undefined);
+		const service = new PrinterService({ cloudEnqueueFactory });
+
+		await expect(service.printRaw(new Uint8Array([0x01]), cloudProfile())).rejects.toThrow(
+			/Cloud printing is not configured.*plugin-printer-7/
+		);
+	});
+
 	it('throws when a cloud profile has no cloudPrinterId', async () => {
 		const cloudEnqueueFactory = vi.fn();
 		const service = new PrinterService({ cloudEnqueueFactory });

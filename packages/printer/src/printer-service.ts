@@ -105,10 +105,13 @@ export class PrinterService {
 					);
 				}
 				const { CloudAdapter } = await import('./transport/cloud-adapter');
-				transport = new CloudAdapter(
-					profile.cloudPrinterId,
-					this.options.cloudEnqueueFactory(profile)
-				);
+				const enqueue = this.options.cloudEnqueueFactory(profile);
+				if (typeof enqueue !== 'function') {
+					throw new Error(
+						`Cloud printing is not configured (cloudEnqueueFactory must return an enqueue function for ${profile.cloudPrinterId})`
+					);
+				}
+				transport = new CloudAdapter(profile.cloudPrinterId, enqueue);
 				break;
 			}
 			case 'system':

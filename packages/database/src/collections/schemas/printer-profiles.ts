@@ -37,6 +37,7 @@ export const printerProfilesLiteral = {
 		},
 		cloudPrinterId: {
 			type: 'string',
+			minLength: 1,
 			maxLength: 64,
 			description:
 				'For connectionType "cloud": the WCPOS plugin-side registered cloud printer ID this profile prints to.',
