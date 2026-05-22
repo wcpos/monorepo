@@ -1,7 +1,7 @@
-import './plugins';
-
 // Import type augmentations for RxDB
 import './types.d';
+
+import './plugins';
 
 export { createUserDB, createStoreDB, createTemporaryDB, createFastStoreDB } from './create-db';
 export { userCollections, storeCollections, syncCollections } from './collections';

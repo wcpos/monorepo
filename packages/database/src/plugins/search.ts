@@ -1,5 +1,4 @@
 import get from 'lodash/get';
-// eslint-disable-next-line import/no-unresolved -- premium subpaths are resolved in licensed app builds.
 import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
 
 import { getLogger } from '@wcpos/utils/logger';
