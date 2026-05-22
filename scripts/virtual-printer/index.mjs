@@ -11,8 +11,12 @@ import { summarizeEscPos } from './escpos-summary.mjs';
 const NAME = process.env.VP_NAME ?? 'Virtual WCPOS Printer';
 const RAW_PORT = Number(process.env.VP_RAW_PORT ?? 9100);
 const HTTP_PORT = Number(process.env.VP_HTTP_PORT ?? 8008);
+const SHUTDOWN_TIMEOUT_MS = 3000;
 
 const log = (...args) => console.log(`[virtual-printer]`, ...args);
+const logCleanupError = (label, err) => {
+  if (err) log(`${label} cleanup error: ${err instanceof Error ? err.message : String(err)}`);
+};
 
 // 1. mDNS advertise (Electron discovery finds this)
 const bonjour = new Bonjour();
@@ -56,12 +60,47 @@ const httpServer = http.createServer((req, res) => {
 httpServer.listen(HTTP_PORT, () => log(`HTTP endpoints listening on http://0.0.0.0:${HTTP_PORT}`));
 
 // Graceful shutdown so mDNS de-registers
-const shutdown = () => {
+const waitForCallback = (label, start) =>
+  new Promise((resolve) => {
+    start((err) => {
+      logCleanupError(label, err);
+      resolve();
+    });
+  });
+
+const unpublishAll = () =>
+  new Promise((resolve) => {
+    bonjour.unpublishAll((err) => {
+      logCleanupError('mDNS unpublish', err);
+      bonjour.destroy((destroyErr) => {
+        logCleanupError('mDNS destroy', destroyErr);
+        resolve();
+      });
+    });
+  });
+
+const shutdownTimeout = () =>
+  new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      log(`shutdown timed out after ${SHUTDOWN_TIMEOUT_MS}ms`);
+      resolve();
+    }, SHUTDOWN_TIMEOUT_MS);
+    timeout.unref();
+  });
+
+const shutdown = async () => {
   log('shutting down…');
-  for (const service of published) service.stop?.();
-  bonjour.unpublishAll(() => bonjour.destroy());
-  rawServer.close();
-  httpServer.close();
+  const cleanup = Promise.allSettled([
+    ...published.map((service) =>
+      typeof service.stop === 'function'
+        ? waitForCallback('mDNS service', (done) => service.stop(done))
+        : Promise.resolve()
+    ),
+    unpublishAll(),
+    waitForCallback('raw server', (done) => rawServer.close(done)),
+    waitForCallback('HTTP server', (done) => httpServer.close(done)),
+  ]);
+  await Promise.race([cleanup, shutdownTimeout()]);
   process.exit(0);
 };
 process.on('SIGINT', shutdown);
