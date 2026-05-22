@@ -589,6 +589,11 @@ const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 			oldDoc.fullReceiptRaster = false;
 			return oldDoc;
 		},
+		6(oldDoc) {
+			// v6: added the optional `cloudPrinterId` field and the `cloud` connectionType.
+			// Existing profiles need no change — the new field is optional.
+			return oldDoc;
+		},
 	},
 };
 
