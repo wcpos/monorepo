@@ -24,3 +24,59 @@ export function buildSweepCandidates(options: SweepCandidateOptions = {}): strin
 	}
 	return [...hosts];
 }
+
+export interface SweepOptions {
+	hosts: string[];
+	probe: ProbeVendorFn;
+	concurrency?: number;
+	signal?: AbortSignal;
+}
+
+export async function sweepForPrinters(options: SweepOptions): Promise<DiscoveredPrinter[]> {
+	const { hosts, probe, concurrency = 16, signal } = options;
+	const queue = new PQueue({ concurrency });
+	const found = new Map<string, DiscoveredPrinter>();
+
+	// `queue.clear()` drops queued tasks but their add()-promises never settle, so awaiting
+	// Promise.all directly would hang on abort. Race the work against an abort promise instead
+	// and return whatever was found so far.
+	const aborted = new Promise<void>((resolve) => {
+		if (!signal) return; // no signal → never resolves; the race falls through to `work`
+		if (signal.aborted) {
+			resolve();
+			return;
+		}
+		signal.addEventListener(
+			'abort',
+			() => {
+				queue.clear();
+				resolve();
+			},
+			{ once: true }
+		);
+	});
+
+	const work = Promise.all(
+		hosts.map((host) =>
+			queue.add(async () => {
+				if (signal?.aborted) return;
+				const vendor = await probe(host).catch(() => null);
+				if (!vendor || signal?.aborted) return;
+				const id = `${host}:9100`;
+				if (!found.has(id)) {
+					found.set(id, {
+						id,
+						name: `${vendor === 'epson' ? 'Epson' : 'Star'} printer (${host})`,
+						connectionType: 'network',
+						address: host,
+						port: 9100,
+						vendor,
+					});
+				}
+			})
+		)
+	);
+
+	await Promise.race([work, aborted]);
+	return [...found.values()];
+}
