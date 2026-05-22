@@ -1,11 +1,19 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { useWatch } from 'react-hook-form';
 
+import { Button } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
-import type { PrinterProfile } from '@wcpos/printer';
+import { VStack } from '@wcpos/components/vstack';
+import {
+	isWebBluetoothSupported,
+	isWebUsbSupported,
+	type PrinterProfile,
+	usePrinterDiscovery,
+} from '@wcpos/printer';
 
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { NetworkFields } from './dialog/connection/network-fields';
@@ -61,6 +69,8 @@ export function PrinterDialog({
 	prefill,
 }: PrinterDialogProps) {
 	const t = useT();
+	const discovery = usePrinterDiscovery();
+	const { connectUsbDevice, connectBluetoothDevice } = discovery;
 	const {
 		form,
 		isEditing,
@@ -99,10 +109,58 @@ export function PrinterDialog({
 			<Text className="text-muted-foreground flex-1 text-sm">
 				{t(
 					'settings.web_printer_limitation',
-					'Web browsers can print directly to Epson and Star Micronics network printers only. For other printers, use the desktop app.'
+					'Web browsers can print directly to Epson and Star Micronics printers over network, USB, or Bluetooth when the browser supports it.'
 				)}
 			</Text>
 		</View>
+	);
+
+	const webDeviceSection = (isWebUsbSupported() || isWebBluetoothSupported()) && (
+		<VStack className="gap-2">
+			<HStack className="gap-2">
+				{isWebUsbSupported() && connectUsbDevice && (
+					<Button
+						testID="add-printer-connect-usb-button"
+						variant="outline"
+						size="sm"
+						onPress={connectUsbDevice}
+					>
+						<Text>{t('settings.connect_usb_printer', 'Connect USB printer')}</Text>
+					</Button>
+				)}
+				{isWebBluetoothSupported() && connectBluetoothDevice && (
+					<Button
+						testID="add-printer-connect-bt-button"
+						variant="outline"
+						size="sm"
+						onPress={connectBluetoothDevice}
+					>
+						<Text>{t('settings.connect_bt_printer', 'Connect Bluetooth printer')}</Text>
+					</Button>
+				)}
+			</HStack>
+			{discovery.printers
+				.filter((p) => p.connectionType === 'usb' || p.connectionType === 'bluetooth')
+				.map((device) => (
+					<Pressable
+						key={device.id}
+						testID={`add-printer-web-device-${device.id}`}
+						onPress={() => {
+							form.setValue('connectionType', device.connectionType, { shouldValidate: true });
+							form.setValue('address', device.address ?? '', { shouldValidate: true });
+							form.setValue('name', device.name);
+							if (device.vendor === 'epson' || device.vendor === 'star') {
+								form.setValue('vendor', device.vendor);
+							}
+						}}
+						className="border-border flex-row items-center gap-2 rounded-md border p-2"
+					>
+						<Text className="text-sm">
+							{device.name} ({device.connectionType})
+						</Text>
+					</Pressable>
+				))}
+		</VStack>
 	);
 
 	const handleVendorSelect = React.useCallback(
@@ -133,6 +191,7 @@ export function PrinterDialog({
 						detectedVendor={detectedVendor}
 						endpointHint={endpointHint}
 					/>
+					{webDeviceSection}
 				</>
 			}
 			advancedSettings={
