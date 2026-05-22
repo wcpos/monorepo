@@ -1,3 +1,5 @@
+/// <reference path="./rxdb-premium.d.ts" />
+
 import type { Observable } from 'rxjs';
 import type { RxCollection } from 'rxdb';
 
