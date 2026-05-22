@@ -29,11 +29,43 @@ export function unwrapEqSelector<T = unknown>(value: T): T | unknown {
 	return value;
 }
 
+type QueryPrimitive = string | number | boolean;
+type QueryParamValue = QueryPrimitive | QueryPrimitive[] | null | undefined;
+
+const isQueryPrimitive = (value: unknown): value is QueryPrimitive => {
+	return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+};
+
+export function sanitizeQueryParams(
+	params: Record<string, unknown>
+): Record<string, QueryParamValue> {
+	const clean: Record<string, QueryParamValue> = {};
+
+	for (const [key, value] of Object.entries(params)) {
+		if (value === null || value === undefined || isQueryPrimitive(value)) {
+			clean[key] = value;
+			continue;
+		}
+
+		if (Array.isArray(value)) {
+			const arrayValues = value.filter(isQueryPrimitive);
+			if (arrayValues.length > 0) {
+				clean[key] = arrayValues;
+			}
+		}
+	}
+
+	return clean;
+}
+
 /**
  * eg: customers?orderby=last_name&order=asc&per_page=10&role=all
  */
-export function buildEndpointWithParams(endpoint: string, params: Record<string, any>) {
-	const queryString = stringify(params, { arrayFormat: 'bracket', skipNull: true });
+export function buildEndpointWithParams(endpoint: string, params: Record<string, unknown>) {
+	const queryString = stringify(sanitizeQueryParams(params), {
+		arrayFormat: 'bracket',
+		skipNull: true,
+	});
 	return endpoint + (queryString ? `?${queryString}` : '');
 }
 

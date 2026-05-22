@@ -84,16 +84,27 @@ async function testParamAuth(wcposApiUrl: string, token: string): Promise<boolea
  * Test authorization methods for a site
  * This is important because some servers block Authorization headers for security reasons
  */
-async function testAuthorizationMethod(
+export async function testAuthorizationMethod(
 	wcposApiUrl: string,
 	accessToken: string
 ): Promise<{ useJwtAsParam: boolean } | null> {
 	try {
-		// Test both methods in parallel
-		const [headerSupported, paramSupported] = await Promise.all([
-			testHeaderAuth(wcposApiUrl, accessToken),
-			testParamAuth(wcposApiUrl, accessToken),
-		]);
+		// Test the Authorization header first. Only send the JWT in the query string if the
+		// safer header path fails.
+		const headerSupported = await testHeaderAuth(wcposApiUrl, accessToken);
+		if (headerSupported) {
+			appLogger.debug('Authorization method test results', {
+				context: {
+					headerSupported,
+					paramSupported: false,
+					wcposApiUrl,
+				},
+			});
+
+			return { useJwtAsParam: false };
+		}
+
+		const paramSupported = await testParamAuth(wcposApiUrl, accessToken);
 
 		appLogger.debug('Authorization method test results', {
 			context: {
@@ -103,23 +114,19 @@ async function testAuthorizationMethod(
 			},
 		});
 
-		// Determine the best method to use
-		if (headerSupported) {
-			// Headers work, prefer headers for security
-			return { useJwtAsParam: false };
-		} else if (paramSupported) {
-			// Only params work - this usually means server is blocking Authorization headers
+		if (paramSupported) {
+			// Only params work - this usually means server is blocking Authorization headers.
 			appLogger.warn('Server does not support Authorization headers, using query parameters', {
 				context: { wcposApiUrl },
 			});
 			return { useJwtAsParam: true };
-		} else {
-			// Neither work - log but don't fail hydration
-			appLogger.warn('Authorization test failed for both methods', {
-				context: { wcposApiUrl },
-			});
-			return null;
 		}
+
+		// Neither work - log but don't fail hydration.
+		appLogger.warn('Authorization test failed for both methods', {
+			context: { wcposApiUrl },
+		});
+		return null;
 	} catch (err) {
 		appLogger.warn('Authorization method test error', {
 			context: {

@@ -1,11 +1,11 @@
 import {
-	buildSchema,
-	isArrayOfIntegers,
 	buildEndpointWithParams,
+	buildSchema,
+	getParamValueFromEndpoint,
+	isArrayOfIntegers,
+	normalizeWhereClauses,
 	pluckProperties,
 	toUpperSnakeCase,
-	getParamValueFromEndpoint,
-	normalizeWhereClauses,
 } from '../src/utils';
 
 describe('buildSchema', () => {
@@ -217,6 +217,27 @@ describe('buildEndpointWithParams', () => {
 		const result = buildEndpointWithParams('products', { include: [1, 2, 3] });
 		expect(result).toContain('include');
 	});
+
+	it('should not serialize object-valued params as [object Object]', () => {
+		const result = buildEndpointWithParams('products', {
+			$and: [{ $or: [{ categories: { $elemMatch: { id: 9 } } }] }],
+			status: 'publish',
+		});
+
+		expect(result).toBe('products?status=publish');
+		expect(result).not.toContain('object');
+	});
+
+	it('should remove object elements from array params before serializing', () => {
+		const result = buildEndpointWithParams('products', {
+			include: [1, { unsupported: true }, 2],
+		});
+
+		expect(result).toContain('include[]=1');
+		expect(result).toContain('include[]=2');
+		expect(result).not.toContain('unsupported');
+		expect(result).not.toContain('object');
+	});
 });
 
 describe('pluckProperties', () => {
@@ -256,9 +277,7 @@ describe('toUpperSnakeCase', () => {
 describe('getParamValueFromEndpoint', () => {
 	it('should extract query param value', () => {
 		expect(getParamValueFromEndpoint('products?per_page=10&orderby=date', 'per_page')).toBe('10');
-		expect(getParamValueFromEndpoint('products?per_page=10&orderby=date', 'orderby')).toBe(
-			'date'
-		);
+		expect(getParamValueFromEndpoint('products?per_page=10&orderby=date', 'orderby')).toBe('date');
 	});
 
 	it('should return null for missing param', () => {
@@ -291,17 +310,13 @@ describe('normalizeWhereClauses', () => {
 	});
 
 	it('should handle $elemMatch clauses', () => {
-		const clauses = [
-			{ field: 'meta_data', value: { $elemMatch: { key: 'color', value: 'red' } } },
-		];
+		const clauses = [{ field: 'meta_data', value: { $elemMatch: { key: 'color', value: 'red' } } }];
 		const result = normalizeWhereClauses(clauses);
 		expect(result).toHaveLength(1);
 	});
 
 	it('should remove $elemMatch clauses with null value', () => {
-		const clauses = [
-			{ field: 'meta_data', value: { $elemMatch: { key: 'color', value: null } } },
-		];
+		const clauses = [{ field: 'meta_data', value: { $elemMatch: { key: 'color', value: null } } }];
 		const result = normalizeWhereClauses(clauses);
 		expect(result).toHaveLength(0);
 	});

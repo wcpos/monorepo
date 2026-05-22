@@ -1,13 +1,87 @@
 import { filterApiQueryParams as filterOrderParams } from '../src/hooks/orders';
 import { filterApiQueryParams as filterCustomerParams } from '../src/hooks/customers';
 import { filterApiQueryParams as filterCouponParams } from '../src/hooks/coupons';
+import { filterApiQueryParams as filterProductParams } from '../src/hooks/products';
 import {
 	filterApiQueryParams as filterVariationParams,
 	postQueryResult,
 	preQueryParams,
 } from '../src/hooks/variations';
+import {
+	extractDirectElemMatchId,
+	extractSameFieldAndElemMatchIds,
+	extractSameFieldOrElemMatchIds,
+	removeMangoOperatorKeys,
+} from '../src/hooks/selector-translator';
 
 describe('Hook Filters', () => {
+	describe('selector translator helpers', () => {
+		it('extracts a direct elemMatch ID', () => {
+			expect(
+				extractDirectElemMatchId({ categories: { $elemMatch: { id: 9 } } }, 'categories')
+			).toBe(9);
+		});
+
+		it('ignores elemMatch IDs that cannot be represented as REST IDs', () => {
+			expect(
+				extractDirectElemMatchId(
+					{ categories: { $elemMatch: { id: { nested: true } } } },
+					'categories'
+				)
+			).toBeUndefined();
+		});
+
+		it('extracts same-field OR elemMatch IDs from $and', () => {
+			const selector = {
+				$and: [
+					{
+						$or: [
+							{ categories: { $elemMatch: { id: 9 } } },
+							{ categories: { $elemMatch: { id: 14 } } },
+						],
+					},
+				],
+			};
+
+			expect(extractSameFieldOrElemMatchIds(selector, 'categories')).toEqual([9, 14]);
+		});
+
+		it('does not extract mixed-field OR conditions', () => {
+			const categoryClause = { categories: { $elemMatch: { id: 9 } } };
+			const tagClause = { tags: { $elemMatch: { id: 14 } } };
+			const selector = {
+				$and: [
+					{
+						$or: [categoryClause, tagClause],
+					},
+				],
+			};
+
+			expect(extractSameFieldOrElemMatchIds(selector, 'categories')).toEqual([]);
+		});
+
+		it('extracts same-field AND elemMatch IDs from $and', () => {
+			const selector = {
+				$and: [
+					{ categories: { $elemMatch: { id: 9 } } },
+					{ categories: { $elemMatch: { id: 14 } } },
+				],
+			};
+
+			expect(extractSameFieldAndElemMatchIds(selector, 'categories')).toEqual([9, 14]);
+		});
+
+		it('removes top-level Mango operator keys from REST params', () => {
+			expect(
+				removeMangoOperatorKeys({
+					$and: [{ categories: { $elemMatch: { id: 9 } } }],
+					$or: [{ featured: true }],
+					status: 'publish',
+				})
+			).toEqual({ status: 'publish' });
+		});
+	});
+
 	describe('Orders - filterApiQueryParams', () => {
 		it('should convert date_created orderby to date', () => {
 			const result = filterOrderParams({ orderby: 'date_created' });
@@ -138,6 +212,76 @@ describe('Hook Filters', () => {
 			});
 			expect(result.roles).toEqual(['administrator', 'shop_manager']);
 			expect(result.role).toBeUndefined();
+		});
+	});
+
+	describe('Products - filterApiQueryParams', () => {
+		it('converts direct category and tag elemMatch filters to WooCommerce REST params', () => {
+			const result = filterProductParams({
+				categories: { $elemMatch: { id: 9 } },
+				tags: { $elemMatch: { id: 14 } },
+			});
+
+			expect(result.category).toBe(9);
+			expect(result.tag).toBe(14);
+			expect(result.categories).toBeUndefined();
+			expect(result.tags).toBeUndefined();
+		});
+
+		it('converts same-field OR category filters inside $and to comma-delimited REST params', () => {
+			const result = filterProductParams({
+				$and: [
+					{
+						$or: [
+							{ categories: { $elemMatch: { id: 9 } } },
+							{ categories: { $elemMatch: { id: 14 } } },
+						],
+					},
+				],
+			});
+
+			expect(result.category).toBe('9,14');
+			expect(result.category_operator).toBe('in');
+			expect(result.$and).toBeUndefined();
+		});
+
+		it('converts same-field OR tag filters inside $and to comma-delimited REST params', () => {
+			const result = filterProductParams({
+				$and: [
+					{
+						$or: [{ tags: { $elemMatch: { id: 3 } } }, { tags: { $elemMatch: { id: 4 } } }],
+					},
+				],
+			});
+
+			expect(result.tag).toBe('3,4');
+			expect(result.tag_operator).toBe('in');
+			expect(result.$and).toBeUndefined();
+		});
+
+		it('converts product brand filters to Store API style brand params', () => {
+			const result = filterProductParams({
+				brands: { $elemMatch: { id: 6 } },
+			});
+
+			expect(result.brand).toBe(6);
+			expect(result.brands).toBeUndefined();
+		});
+
+		it('converts same-field AND brand filters inside $and to Store API style params', () => {
+			const result = filterProductParams({
+				$and: [{ brands: { $elemMatch: { id: 6 } } }, { brands: { $elemMatch: { id: 7 } } }],
+			});
+
+			expect(result.brand).toBe('6,7');
+			expect(result.brand_operator).toBe('and');
+			expect(result.$and).toBeUndefined();
+		});
+
+		it('preserves stock_status as a supported WooCommerce REST product filter', () => {
+			const result = filterProductParams({ stock_status: 'instock' });
+
+			expect(result.stock_status).toBe('instock');
 		});
 	});
 

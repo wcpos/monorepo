@@ -122,26 +122,19 @@ export const useAuthTesting = (): UseAuthTestingReturn => {
 				// Use provided token or generate a mock one for testing
 				const testToken = accessToken || generateMockToken();
 
-				// Test both methods
-				const [headerSupported, paramSupported] = await Promise.all([
-					testHeaderAuth(wcposApiUrl, testToken),
-					testParamAuth(wcposApiUrl, testToken),
-				]);
-
-				// Determine the best method to use
+				// Test the Authorization header first. Only send the JWT in the query string if
+				// the safer header path fails.
+				const headerSupported = await testHeaderAuth(wcposApiUrl, testToken);
+				let paramSupported = false;
 				let useJwtAsParam = false;
 
-				if (headerSupported && paramSupported) {
-					// Both work, prefer headers for security
-					useJwtAsParam = false;
-				} else if (headerSupported && !paramSupported) {
-					// Only headers work
-					useJwtAsParam = false;
-				} else if (!headerSupported && paramSupported) {
-					// Only params work
-					useJwtAsParam = true;
-				} else {
-					// Neither work - this is an error condition
+				if (!headerSupported) {
+					paramSupported = await testParamAuth(wcposApiUrl, testToken);
+					useJwtAsParam = paramSupported;
+				}
+
+				if (!headerSupported && !paramSupported) {
+					// Neither work - this is an error condition.
 					throw new Error(t('auth.server_does_not_support_any_authorization'));
 				}
 

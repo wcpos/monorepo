@@ -32,7 +32,7 @@ jest.mock('./initial-props', () => ({
 }));
 
 // eslint-disable-next-line import/first -- Jest mocks must be registered before importing the module under test.
-import { hydrateUserSession } from './hydration-steps';
+import { hydrateUserSession, testAuthorizationMethod } from './hydration-steps';
 
 const documentLookup = (document: unknown) => ({
 	findOne: jest.fn(() => ({ exec: jest.fn(async () => document) })),
@@ -73,5 +73,56 @@ describe('hydrateUserSession', () => {
 				{ siteID: 'site-1', wpCredentialsID: 'cred-1', storeID: 'store-1' }
 			)
 		).rejects.toThrow('Failed to create fast store database');
+	});
+});
+
+describe('testAuthorizationMethod', () => {
+	const fetchMock = jest.fn();
+
+	beforeEach(() => {
+		fetchMock.mockReset();
+		global.fetch = fetchMock as unknown as typeof fetch;
+	});
+
+	it('uses Authorization headers without testing query parameter auth when headers work', async () => {
+		fetchMock.mockResolvedValueOnce({
+			ok: true,
+			json: jest.fn(async () => ({ status: 'success' })),
+		});
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v1/', 'token')
+		).resolves.toEqual({
+			useJwtAsParam: false,
+		});
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock.mock.calls[0][0]).toBe('https://example.com/wp-json/wcpos/v1/auth/test');
+		expect(fetchMock.mock.calls[0][1]).toMatchObject({
+			headers: {
+				Authorization: 'Bearer token',
+			},
+		});
+	});
+
+	it('falls back to query parameter auth when headers fail', async () => {
+		fetchMock.mockResolvedValueOnce({ ok: false, json: jest.fn() }).mockResolvedValueOnce({
+			ok: true,
+			json: jest.fn(async () => ({ status: 'success' })),
+		});
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v1/', 'token')
+		).resolves.toEqual({
+			useJwtAsParam: true,
+		});
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(String(fetchMock.mock.calls[1][0])).toContain('authorization=Bearer+token');
+		expect(fetchMock.mock.calls[1][1]).toMatchObject({
+			headers: {
+				'X-WCPOS': '1',
+			},
+		});
 	});
 });
