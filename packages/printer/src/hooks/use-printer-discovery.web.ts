@@ -86,7 +86,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 				probe: probeVendor,
 				signal: controller.signal,
 			});
-			if (controller.signal.aborted) return;
+			if (abortRef.current !== controller || controller.signal.aborted) return;
 			setPrinters((prev) => mergePrinters(prev, discovered));
 			if (discovered.length === 0) {
 				setError(
@@ -94,10 +94,13 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 				);
 			}
 		} catch (err) {
+			if (abortRef.current !== controller || controller.signal.aborted) return;
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
-			if (abortRef.current === controller) abortRef.current = null;
-			setIsScanning(false);
+			if (abortRef.current === controller) {
+				abortRef.current = null;
+				setIsScanning(false);
+			}
 		}
 	}, []);
 
