@@ -26,6 +26,10 @@ interface UsePrinterDiscoveryResult {
 	) => void;
 	/** Remove a discovered printer by id */
 	removeDiscoveredPrinter: (id: string) => void;
+	/** Web only — open the browser USB chooser and add the chosen printer. */
+	connectUsbDevice?: () => void;
+	/** Web only — open the browser Bluetooth chooser and add the chosen printer. */
+	connectBluetoothDevice?: () => void;
 	/** Error message if scanning fails */
 	error: string | null;
 }
