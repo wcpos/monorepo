@@ -11,7 +11,6 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { PrinterService, resolvePrinter, usePrinterDiscovery } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
-import { Platform } from '@wcpos/utils/platform';
 import type {
 	PrinterProfileDocument,
 	TemplateDocument,
@@ -23,7 +22,7 @@ import { PrintersEmptyState } from './printers-empty-state';
 import { SectionHeader } from './section-header';
 import { TemplateRow } from './template-row';
 import { useEnsureSystemPrinter } from './use-ensure-system-printer';
-import { AUTO_VALUE } from './utils';
+import { AUTO_VALUE, isNetworkScanSupported } from './utils';
 import { PrinterDialog } from '../printer/add-printer';
 import { toPrinterProfile } from '../printer/use-default-printer-profile';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
@@ -174,7 +173,7 @@ export function PrintingSettings() {
 	}, []);
 
 	const nonBuiltInCount = printers.filter((p) => !p.isBuiltIn).length;
-	const canScanNetwork = !Platform.isWeb;
+	const canScanNetwork = isNetworkScanSupported();
 
 	return (
 		<VStack className="gap-6">
@@ -217,7 +216,6 @@ export function PrintingSettings() {
 							>
 								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
 							</Button>
-							{/* TODO: re-enable scan network in next release — currently broken
 							{canScanNetwork && (
 								<Button
 									variant="outline"
@@ -228,7 +226,6 @@ export function PrintingSettings() {
 									<Text>{t('settings.scan_network', 'Scan Network')}</Text>
 								</Button>
 							)}
-							*/}
 						</HStack>
 					</>
 				)}
