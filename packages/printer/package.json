@@ -16,6 +16,8 @@
 	],
 	"dependencies": {
 		"@point-of-sale/receipt-printer-encoder": "^3.0.3",
+		"@point-of-sale/webbluetooth-receipt-printer": "2.0.0",
+		"@point-of-sale/webusb-receipt-printer": "2.0.0",
 		"@wcpos/receipt-renderer": "workspace:*",
 		"p-queue": "^9.1.1",
 		"zod": "^4.1.3"
