@@ -12,6 +12,7 @@ interface UsePrinterDiscoveryResult {
 	printers: DiscoveredPrinter[];
 	/** Whether an auto-scan is running */
 	isScanning: boolean;
+	scanCandidates: string[];
 	/** Start auto-discovery scan */
 	startScan: () => void;
 	/** Stop auto-discovery scan */
@@ -149,6 +150,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	return {
 		printers,
 		isScanning,
+		scanCandidates: [],
 		startScan,
 		stopScan,
 		addManualPrinter,
