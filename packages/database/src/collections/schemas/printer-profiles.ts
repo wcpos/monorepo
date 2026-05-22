@@ -1,6 +1,6 @@
 export const printerProfilesLiteral = {
 	title: 'Printer Profiles schema',
-	version: 5,
+	version: 6,
 	description: 'Local printer profiles for direct thermal printing',
 	type: 'object',
 	primaryKey: 'id',
@@ -15,7 +15,7 @@ export const printerProfilesLiteral = {
 		},
 		connectionType: {
 			type: 'string',
-			enum: ['network', 'bluetooth', 'usb', 'system'],
+			enum: ['network', 'bluetooth', 'usb', 'system', 'cloud'],
 			default: 'network',
 		},
 		vendor: {
@@ -34,6 +34,13 @@ export const printerProfilesLiteral = {
 		nativeInterfaceType: {
 			type: 'string',
 			description: 'Vendor-native interface type hint, eg Star BluetoothLE vs Bluetooth',
+		},
+		cloudPrinterId: {
+			type: 'string',
+			minLength: 1,
+			maxLength: 64,
+			description:
+				'For connectionType "cloud": the WCPOS plugin-side registered cloud printer ID this profile prints to.',
 		},
 		printerModel: {
 			type: 'string',
