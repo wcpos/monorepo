@@ -72,6 +72,27 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.3.0
         version: 4.3.0
+      '@wcpos/components':
+        specifier: workspace:*
+        version: link:../../packages/components
+      '@wcpos/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@wcpos/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@wcpos/hooks':
+        specifier: workspace:*
+        version: link:../../packages/hooks
+      '@wcpos/printer':
+        specifier: workspace:*
+        version: link:../../packages/printer
+      '@wcpos/query':
+        specifier: workspace:*
+        version: link:../../packages/query
+      '@wcpos/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       expo:
         specifier: ~56.0.3
         version: 56.0.3(@babel/core@7.29.0)(@expo/dom-webview@55.0.5)(@expo/metro-runtime@56.0.11)(expo-router@56.2.5)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-webview@13.16.1(react-native@0.85.3(@babel/core@7.29.0)(@react-native/jest-preset@0.85.3(@babel/core@7.29.0)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(react-native-worklets@0.8.3(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(react-native@0.85.3(@babel/core@7.29.0)(@react-native/jest-preset@0.85.3(@babel/core@7.29.0)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.0)(@react-native/jest-preset@0.85.3(@babel/core@7.29.0)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
@@ -528,9 +549,24 @@ importers:
       '@tanstack/react-table':
         specifier: ^8.21.3
         version: 8.21.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@wcpos/components':
+        specifier: workspace:*
+        version: link:../components
+      '@wcpos/database':
+        specifier: workspace:*
+        version: link:../database
+      '@wcpos/hooks':
+        specifier: workspace:*
+        version: link:../hooks
       '@wcpos/printer':
         specifier: workspace:*
         version: link:../printer
+      '@wcpos/query':
+        specifier: workspace:*
+        version: link:../query
+      '@wcpos/utils':
+        specifier: workspace:*
+        version: link:../utils
       '@widgetbot/react-embed':
         specifier: ^1.10.0
         version: 1.10.0

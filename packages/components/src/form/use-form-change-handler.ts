@@ -76,20 +76,22 @@ export function useFormChangeHandler<T extends FieldValues>({
 		const subscription = form.watch((values, { name }) => {
 			// Only handle changes when a specific field is changed by the user.
 			// When `name` is undefined, it means the entire form was reset/set programmatically
-			if (name) {
-				const value = get(values, name);
-				const changes = { [name]: value } as unknown as Partial<T>;
-
-				// Debounce text inputs to avoid saving on every keystroke
-				if (isTextValue(value) && debounceMs > 0) {
-					debouncedOnChange(changes);
-				} else {
-					// Flush any pending debounced changes first
-					debouncedOnChange.flush();
-					onChange(changes);
-				}
+			if (!name) {
+				debouncedOnChange.cancel();
+				return;
 			}
-			// Skip when name is undefined (form.reset() or form.setValue() on entire form)
+
+			const value = get(values, name);
+			const changes = { [name]: value } as unknown as Partial<T>;
+
+			// Debounce text inputs to avoid saving on every keystroke
+			if (isTextValue(value) && debounceMs > 0) {
+				debouncedOnChange(changes);
+			} else {
+				// Flush any pending debounced changes first
+				debouncedOnChange.flush();
+				onChange(changes);
+			}
 		});
 
 		return () => subscription.unsubscribe();

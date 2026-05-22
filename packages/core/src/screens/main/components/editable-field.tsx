@@ -29,11 +29,33 @@ export function EditableField({
 	 * previous prop value) rather than an effect, so it never sets state inside
 	 * useEffect.
 	 */
-	const [prevValueProp, setPrevValueProp] = React.useState(valueProp);
-	if (valueProp !== prevValueProp) {
-		setPrevValueProp(valueProp);
-		if (!editing && valueProp !== undefined) {
-			setEditValue(valueProp);
+	const syncedValue = valueProp ?? defaultValue ?? '';
+	const [prevSyncedValue, setPrevSyncedValue] = React.useState(syncedValue);
+	const [pendingSyncedValue, setPendingSyncedValue] = React.useState<string | null>(null);
+	const [editDirty, setEditDirty] = React.useState(false);
+	const [prevEditing, setPrevEditing] = React.useState(editing);
+	const syncedValueChanged = syncedValue !== prevSyncedValue;
+	if (syncedValueChanged) {
+		setPrevSyncedValue(syncedValue);
+		if (editing) {
+			setPendingSyncedValue(syncedValue);
+		} else {
+			setPendingSyncedValue(null);
+			setEditValue(syncedValue);
+		}
+	}
+	if (editing !== prevEditing) {
+		setPrevEditing(editing);
+		if (editing) {
+			setEditDirty(false);
+		} else {
+			if (pendingSyncedValue !== null) {
+				setPendingSyncedValue(null);
+				if (!editDirty && !syncedValueChanged) {
+					setEditValue(pendingSyncedValue);
+				}
+			}
+			setEditDirty(false);
 		}
 	}
 
@@ -52,7 +74,10 @@ export function EditableField({
 		return (
 			<Textarea
 				value={editValue}
-				onChangeText={setEditValue}
+				onChangeText={(text) => {
+					setEditDirty(true);
+					setEditValue(text);
+				}}
 				autoFocus
 				onBlur={handleSubmit}
 				onSubmitEditing={handleSubmit}

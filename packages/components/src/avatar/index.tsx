@@ -73,6 +73,17 @@ const fallbackTextSizeVariants: Record<
 	lg: 'text-sm',
 };
 
+function getSourceKey(source: ImageProps['source']): string {
+	if (source == null) return '';
+	if (typeof source === 'string' || typeof source === 'number') return String(source);
+	if (Array.isArray(source)) return source.map(getSourceKey).join('|');
+	if (typeof source === 'object') {
+		const sourceRecord = source as { uri?: string; assetId?: string | number };
+		return String(sourceRecord.uri ?? sourceRecord.assetId ?? JSON.stringify(source));
+	}
+	return String(source);
+}
+
 export interface AvatarProps
 	extends Omit<ImageProps, 'source'>, VariantProps<typeof avatarVariants> {
 	/** Image source — URL string or { uri } object. When missing or errored, the fallback is shown. */
@@ -94,9 +105,10 @@ export function Avatar({
 	// Reset error state if the source changes (e.g. site URL edited) by adjusting
 	// state during render instead of in an effect — React's recommended pattern for
 	// resetting state when a prop changes (https://react.dev/learn/you-might-not-need-an-effect).
-	const [prevSource, setPrevSource] = React.useState(source);
-	if (source !== prevSource) {
-		setPrevSource(source);
+	const sourceKey = getSourceKey(source);
+	const [prevSourceKey, setPrevSourceKey] = React.useState(sourceKey);
+	if (sourceKey !== prevSourceKey) {
+		setPrevSourceKey(sourceKey);
 		setErrored(false);
 	}
 

@@ -60,7 +60,7 @@ export default function Chart() {
 	const { selectedOrders, dateRange } = useReports();
 	const { format } = useCurrencyFormat();
 	const { dateFnsLocale, formatDate } = useLocalDate();
-	const font = useFont(require('@wcpos/main/assets/fonts/Inter-Medium.ttf'), 12);
+	const font = useFont(require('../../../../assets/fonts/Inter-Medium.ttf'), 12);
 
 	// Theme colors
 	const [popoverColor, popoverForegroundColor, primaryColor, mutedForegroundColor, borderColor] =
@@ -96,6 +96,7 @@ export default function Chart() {
 	const gesture = React.useMemo(() => {
 		const showAt = (x: number) => setTouch({ active: true, x });
 		const hide = () => setTouch((prev) => ({ ...prev, active: false }));
+		const longPressDuration = 100;
 
 		if (isWeb) {
 			// Web: hover gesture
@@ -108,13 +109,14 @@ export default function Chart() {
 
 		// Native: long press activates tooltip on touch, pan tracks movement
 		const longPressGesture = Gesture.LongPress()
-			.minDuration(100)
+			.minDuration(longPressDuration)
 			.onStart((e) => showAt(e.x))
 			.onEnd(hide)
 			.runOnJS(true);
 
 		const panGesture = Gesture.Pan()
 			.minDistance(0)
+			.activateAfterLongPress(longPressDuration)
 			.onUpdate((e) => showAt(e.x))
 			.runOnJS(true);
 

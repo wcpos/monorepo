@@ -10,6 +10,19 @@
   },
   "license": "MIT",
   "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./use-heartbeat": "./src/use-heartbeat.ts",
+    "./use-hotkeys": "./src/use-hotkeys/index.ts",
+    "./use-http-client": "./src/use-http-client/index.ts",
+    "./use-http-client/create-token-refresh-handler": "./src/use-http-client/create-token-refresh-handler.ts",
+    "./use-http-client/parse-wp-error": "./src/use-http-client/parse-wp-error.ts",
+    "./use-online-status": {
+      "browser": "./src/use-online-status.web.tsx",
+      "default": "./src/use-online-status.tsx"
+    },
+    "./*": "./src/*"
+  },
   "files": [
     "src/**"
   ],

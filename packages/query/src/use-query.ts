@@ -27,7 +27,7 @@ export interface QueryOptions {
  * Create a stable identity key from query options.
  * This determines when a query should be re-registered.
  *
- * Includes: collectionName, queryKeys, locale, endpoint
+ * Includes: collectionName, queryKeys, locale, endpoint, registration options
  * Excludes: initialParams (changed via setParams), hooks (callbacks)
  */
 function getQueryIdentityKey(options: QueryOptions): string {
@@ -36,6 +36,9 @@ function getQueryIdentityKey(options: QueryOptions): string {
 		queryKeys: options.queryKeys,
 		locale: options.locale,
 		endpoint: options.endpoint,
+		greedy: options.greedy,
+		infiniteScroll: options.infiniteScroll,
+		pageSize: options.pageSize,
 	});
 }
 

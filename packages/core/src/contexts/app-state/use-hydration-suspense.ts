@@ -66,6 +66,7 @@ function getOrCreateHydrationPromise(
 		return currentContext;
 	})().catch((err) => {
 		console.log('Hydration failed:', err);
+		globalHydrationPromise = null;
 		throw err;
 	});
 

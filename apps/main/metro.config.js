@@ -30,6 +30,17 @@ const rxdbESMUtils = path.join(
 	'dist/esm/plugins/utils/index.js'
 );
 
+const workspaceSourceRoots = {
+	'@wcpos/main': path.resolve(__dirname),
+	'@wcpos/components': path.resolve(__dirname, '../../packages/components/src'),
+	'@wcpos/core': path.resolve(__dirname, '../../packages/core/src'),
+	'@wcpos/database': path.resolve(__dirname, '../../packages/database/src'),
+	'@wcpos/hooks': path.resolve(__dirname, '../../packages/hooks/src'),
+	'@wcpos/printer': path.resolve(__dirname, '../../packages/printer/src'),
+	'@wcpos/query': path.resolve(__dirname, '../../packages/query/src'),
+	'@wcpos/utils': path.resolve(__dirname, '../../packages/utils/src'),
+};
+
 const _baseResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
 	if (moduleName === 'rxdb-premium/plugins/shared') {
@@ -37,6 +48,12 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 	}
 	if (moduleName === 'rxdb/plugins/utils') {
 		return { type: 'sourceFile', filePath: rxdbESMUtils };
+	}
+	for (const [packageName, sourceRoot] of Object.entries(workspaceSourceRoots)) {
+		if (moduleName === packageName || moduleName.startsWith(`${packageName}/`)) {
+			const subpath = moduleName === packageName ? '' : moduleName.slice(packageName.length + 1);
+			return context.resolveRequest(context, path.join(sourceRoot, subpath), platform);
+		}
 	}
 	if (_baseResolveRequest) {
 		return _baseResolveRequest(context, moduleName, platform);

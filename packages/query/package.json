@@ -5,6 +5,10 @@
 	"author": "kilbot <paul@kilbot.com>",
 	"license": "MIT",
 	"main": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./*": "./src/*"
+	},
 	"type": "module",
 	"files": [
 		"src/*"

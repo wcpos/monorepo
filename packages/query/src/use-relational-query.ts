@@ -20,6 +20,9 @@ function getQueryIdentityKey(options: QueryOptions): string {
 		queryKeys: options.queryKeys,
 		locale: options.locale,
 		endpoint: options.endpoint,
+		greedy: options.greedy,
+		infiniteScroll: options.infiniteScroll,
+		pageSize: options.pageSize,
 	});
 }
 
@@ -89,16 +92,23 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 	const queries$ = React.useMemo(
 		() =>
 			(manager.localDB as any).reset$.pipe(
-				filter((collection: any) => collection.name === parentOptions.collectionName),
+				filter(
+					(collection: any) =>
+						collection.name === parentOptions.collectionName ||
+						collection.name === childOptions.collectionName
+				),
 				map(() => {
 					logger.debug('Re-registering relational queries after collection reset', {
-						context: { collectionName: parentOptions.collectionName },
+						context: {
+							parentCollectionName: parentOptions.collectionName,
+							childCollectionName: childOptions.collectionName,
+						},
 					});
 					return registerQueries();
 				}),
 				startWith(initialQueries)
 			),
-		[manager, parentIdentityKey, registerQueries, initialQueries]
+		[manager, parentIdentityKey, childIdentityKey, registerQueries, initialQueries]
 	);
 
 	/**

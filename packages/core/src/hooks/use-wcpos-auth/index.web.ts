@@ -43,6 +43,17 @@ interface SavedAuthState {
 	timestamp: number;
 }
 
+function getSavedAuthState(): SavedAuthState | null {
+	const raw = sessionStorage.getItem(AUTH_STATE_KEY);
+	if (!raw) return null;
+
+	try {
+		return JSON.parse(raw) as SavedAuthState;
+	} catch {
+		return null;
+	}
+}
+
 /**
  * Save current location before redirecting
  */
@@ -207,8 +218,8 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 	React.useEffect(() => {
 		const urlResult = parseAuthFromUrl();
 		if (urlResult && (urlResult.type === 'success' || urlResult.type === 'error')) {
+			const cleanUrl = getSavedAuthState()?.returnPath ?? window.location.pathname;
 			clearAuthState();
-			const cleanUrl = window.location.pathname;
 			window.history.replaceState({}, document.title, cleanUrl);
 		}
 	}, []);
@@ -227,6 +238,8 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			});
 			return;
 		}
+
+		setImperativeResult(null);
 
 		oauthLogger.debug('Triggering web auth flow', {
 			context: {

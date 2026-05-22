@@ -56,9 +56,11 @@ export function CurrentOrderProvider({
 	// previous route param) instead of an effect, so it never sets state inside
 	// useEffect.
 	const [prevOrderUUID, setPrevOrderUUID] = React.useState(currentOrderUUID);
-	if (currentOrderUUID !== undefined && currentOrderUUID !== prevOrderUUID) {
+	if (currentOrderUUID !== prevOrderUUID) {
 		setPrevOrderUUID(currentOrderUUID);
-		setInternalOrderId(currentOrderUUID);
+		if (currentOrderUUID !== undefined) {
+			setInternalOrderId(currentOrderUUID);
+		}
 	}
 
 	// Determine current order from internal state
