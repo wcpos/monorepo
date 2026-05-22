@@ -42,7 +42,14 @@ export function buildSweepCandidates(options: SweepCandidateOptions = {}): strin
 		...buildCommonLanCandidates(),
 		...extraHosts,
 	]);
-	if (subnetBase && /^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(subnetBase)) {
+	const subnetOctets = subnetBase?.split('.') ?? [];
+	if (
+		subnetOctets.length === 3 &&
+		subnetOctets.every((octet) => {
+			const value = Number(octet);
+			return /^\d+$/.test(octet) && Number.isInteger(value) && value >= 0 && value <= 255;
+		})
+	) {
 		for (let i = 1; i <= 254; i++) hosts.add(`${subnetBase}.${i}`);
 	}
 	return [...hosts];

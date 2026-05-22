@@ -38,6 +38,12 @@ describe('buildSweepCandidates', () => {
 		expect(hosts).toContain('localhost');
 		expect(hosts).not.toContain('not-a-subnet.1');
 	});
+
+	it('ignores subnet bases with out-of-range octets', () => {
+		const hosts = buildSweepCandidates({ subnetBase: '999.168.1' });
+		expect(hosts).toContain('localhost');
+		expect(hosts).not.toContain('999.168.1.1');
+	});
 });
 
 describe('sweepForPrinters', () => {
