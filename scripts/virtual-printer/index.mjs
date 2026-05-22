@@ -68,16 +68,16 @@ const waitForCallback = (label, start) =>
     });
   });
 
-const unpublishAll = () =>
-  new Promise((resolve) => {
-    bonjour.unpublishAll((err) => {
-      logCleanupError('mDNS unpublish', err);
-      bonjour.destroy((destroyErr) => {
-        logCleanupError('mDNS destroy', destroyErr);
-        resolve();
-      });
-    });
-  });
+const stopPublishedServices = async () => {
+  await Promise.allSettled(
+    published.map((service) =>
+      typeof service.stop === 'function'
+        ? waitForCallback('mDNS service', (done) => service.stop(done))
+        : Promise.resolve()
+    )
+  );
+  await waitForCallback('mDNS destroy', (done) => bonjour.destroy(done));
+};
 
 const shutdownTimeout = () =>
   new Promise((resolve) => {
@@ -91,12 +91,7 @@ const shutdownTimeout = () =>
 const shutdown = async () => {
   log('shutting down…');
   const cleanup = Promise.allSettled([
-    ...published.map((service) =>
-      typeof service.stop === 'function'
-        ? waitForCallback('mDNS service', (done) => service.stop(done))
-        : Promise.resolve()
-    ),
-    unpublishAll(),
+    stopPublishedServices(),
     waitForCallback('raw server', (done) => rawServer.close(done)),
     waitForCallback('HTTP server', (done) => httpServer.close(done)),
   ]);
