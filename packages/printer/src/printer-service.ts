@@ -10,11 +10,22 @@ import { SystemPrintAdapter } from './transport/system-print-adapter';
 
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
 import type { ReceiptData } from './encoder/types';
+import type { CloudEnqueueFn } from './transport/cloud-adapter';
 import type { PrinterProfile, PrinterTransport } from './types';
 
 /** Cache key that captures config-relevant fields so stale transports are evicted. */
 function transportKey(profile: PrinterProfile): string {
-	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}:${profile.nativeInterfaceType ?? ''}`;
+	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}:${profile.nativeInterfaceType ?? ''}:${profile.cloudPrinterId ?? ''}`;
+}
+
+export interface PrinterServiceOptions {
+	/**
+	 * Builds the enqueue function for a `connectionType: 'cloud'` profile.
+	 * Supplied by the host app, which owns the authenticated transport to the
+	 * WCPOS plugin queue. Omitted until that wiring exists, in which case
+	 * printing to a cloud profile throws.
+	 */
+	cloudEnqueueFactory?: (profile: PrinterProfile) => CloudEnqueueFn;
 }
 
 export class PrinterService {
@@ -22,6 +33,8 @@ export class PrinterService {
 	private transports = new Map<string, PrinterTransport>();
 	/** Tracks the config fingerprint used to create each cached transport. */
 	private transportKeys = new Map<string, string>();
+
+	constructor(private readonly options: PrinterServiceOptions = {}) {}
 
 	/**
 	 * Get or create a transport for the given profile.
@@ -81,6 +94,22 @@ export class PrinterService {
 				throw new Error(
 					`Unsupported native printer vendor for ${profile.connectionType}: ${profile.vendor}`
 				);
+			}
+			case 'cloud': {
+				if (!profile.cloudPrinterId) {
+					throw new Error(`Cloud printer profile is missing a cloudPrinterId for ${profile.name}`);
+				}
+				if (!this.options.cloudEnqueueFactory) {
+					throw new Error(
+						'Cloud printing is not configured (no cloudEnqueueFactory provided to PrinterService)'
+					);
+				}
+				const { CloudAdapter } = await import('./transport/cloud-adapter');
+				transport = new CloudAdapter(
+					profile.cloudPrinterId,
+					this.options.cloudEnqueueFactory(profile)
+				);
+				break;
 			}
 			case 'system':
 				transport = new SystemPrintAdapter();

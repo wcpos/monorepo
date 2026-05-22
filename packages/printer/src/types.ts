@@ -47,12 +47,14 @@ export interface DiscoveredPrinter {
 export interface PrinterProfile {
 	id: string;
 	name: string;
-	connectionType: 'network' | 'bluetooth' | 'usb' | 'system';
+	connectionType: 'network' | 'bluetooth' | 'usb' | 'system' | 'cloud';
 	vendor: 'epson' | 'star' | 'generic';
 	address?: string;
 	port: number;
 	/** Persisted vendor-native interface hint used by native adapters. */
 	nativeInterfaceType?: string;
+	/** For `connectionType: 'cloud'`: the WCPOS plugin-side registered cloud printer ID. */
+	cloudPrinterId?: string;
 	printerModel?: string;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns: number;
