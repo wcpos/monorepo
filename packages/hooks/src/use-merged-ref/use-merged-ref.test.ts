@@ -130,5 +130,53 @@ describe('use-merged-ref', () => {
 			expect(setValue).toHaveBeenCalledWith(element);
 			expect(objectRef.current).toBe(element);
 		});
+		it('should assign the mounted node to a new callback ref after rerender', () => {
+			const firstRef = jest.fn();
+			const secondRef = jest.fn();
+			const objectRef: React.MutableRefObject<HTMLDivElement | null> = { current: null };
+
+			const { result, rerender } = renderHook(
+				({ callbackRef }) => useMergedRef(callbackRef, objectRef),
+				{ initialProps: { callbackRef: firstRef as React.ForwardedRef<HTMLDivElement> } }
+			);
+
+			const element = document.createElement('div');
+
+			act(() => {
+				result.current(element);
+			});
+
+			expect(firstRef).toHaveBeenLastCalledWith(element);
+			expect(objectRef.current).toBe(element);
+
+			rerender({ callbackRef: secondRef as React.ForwardedRef<HTMLDivElement> });
+
+			expect(firstRef).toHaveBeenLastCalledWith(null);
+			expect(secondRef).toHaveBeenLastCalledWith(element);
+			expect(objectRef.current).toBe(element);
+		});
+
+		it('should clear removed object refs when refs change while mounted', () => {
+			const firstObjectRef: React.MutableRefObject<HTMLDivElement | null> = { current: null };
+			const secondObjectRef: React.MutableRefObject<HTMLDivElement | null> = { current: null };
+
+			const { result, rerender } = renderHook(({ objectRef }) => useMergedRef(objectRef), {
+				initialProps: { objectRef: firstObjectRef as React.ForwardedRef<HTMLDivElement> },
+			});
+
+			const element = document.createElement('div');
+
+			act(() => {
+				result.current(element);
+			});
+
+			expect(firstObjectRef.current).toBe(element);
+			expect(secondObjectRef.current).toBe(null);
+
+			rerender({ objectRef: secondObjectRef as React.ForwardedRef<HTMLDivElement> });
+
+			expect(firstObjectRef.current).toBe(null);
+			expect(secondObjectRef.current).toBe(element);
+		});
 	});
 });

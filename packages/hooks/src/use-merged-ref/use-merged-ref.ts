@@ -8,20 +8,35 @@ export function mergeRefs<T = any>(...refs: React.ForwardedRef<T>[]) {
 	};
 }
 
-export function useMergedRef<T = any>(...refs: React.ForwardedRef<T>[]) {
+export function useMergedRef<T = unknown>(...refs: React.ForwardedRef<T>[]) {
 	const latestRefs = React.useRef(refs);
+	const previousRefs = React.useRef<React.ForwardedRef<T>[]>(refs);
+	const currentNode = React.useRef<T | null>(null);
 
-	// Keep the stored refs current at commit time instead of during render, so
-	// the ref is never written while rendering (react-hooks/refs). Reading the
-	// updated value happens later in the callback ref, also at commit time.
-	React.useEffect(() => {
+	React.useLayoutEffect(() => {
+		const prevRefs = previousRefs.current;
 		latestRefs.current = refs;
+		previousRefs.current = refs;
+
+		if (currentNode.current === null) {
+			return;
+		}
+
+		for (const ref of prevRefs) {
+			if (!refs.includes(ref)) {
+				assignRef(ref, null);
+			}
+		}
+
+		for (const ref of refs) {
+			if (!prevRefs.includes(ref)) {
+				assignRef(ref, currentNode.current);
+			}
+		}
 	});
 
-	// A callback ref runs at commit time (not during render), so reading
-	// latestRefs.current here is safe. Keeping a single stable callback preserves
-	// the ref-merge behavior across renders.
 	return React.useCallback((node: T | null) => {
+		currentNode.current = node;
 		latestRefs.current.forEach((ref) => assignRef(ref, node));
 	}, []);
 }
