@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { createStableMeasureRef } from './utils/create-stable-measure-ref';
 import { ItemContext, RootContext, useItemContext, useRootContext } from './utils/contexts';
 import { useOnEndReached } from './utils/use-on-end-reached';
 
@@ -239,15 +238,31 @@ function List<T>({
 function Item({ children, ...props }: ItemProps<any>) {
 	const { index, rowVirtualizer, vItem } = useItemContext() as WebItemContext<any>;
 	const { horizontal } = useRootContext();
+
+	// Keep the latest virtualizer in a ref so the stable measure callback always
+	// calls the current measureElement without being recreated. The ref is written
+	// in an effect (not during render) and only read later from the ref callback,
+	// which fires when a DOM node is attached — both run after commit.
 	const virtualizerRef = React.useRef(rowVirtualizer);
-	virtualizerRef.current = rowVirtualizer;
-	const measureRef = React.useMemo(
-		() =>
-			createStableMeasureRef<Element>((node) => {
-				virtualizerRef.current.measureElement(node);
-			}),
-		[] // stable: always calls latest measureElement via ref
-	);
+	React.useEffect(() => {
+		virtualizerRef.current = rowVirtualizer;
+	});
+
+	// Stable ref callback that only measures when the DOM node changes (mirrors
+	// createStableMeasureRef), avoiding repeated measureElement calls during parent
+	// re-renders. Refs are read inside the callback body, never during render.
+	const previousNodeRef = React.useRef<Element | null>(null);
+	const measureRef = React.useCallback((node: Element | null) => {
+		if (!node) {
+			previousNodeRef.current = null;
+			return;
+		}
+		if (node === previousNodeRef.current) {
+			return;
+		}
+		previousNodeRef.current = node;
+		virtualizerRef.current.measureElement(node);
+	}, []);
 
 	// Web-specific props (dataSet, transform in style) require type assertion
 	// since this .web.tsx file runs exclusively in browsers via react-native-web

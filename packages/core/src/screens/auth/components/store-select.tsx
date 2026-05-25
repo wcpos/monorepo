@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { Pressable } from 'react-native';
 
+import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
-import { distinctUntilChanged, switchMap, tap } from 'rxjs/operators';
+import { distinctUntilChanged, startWith, switchMap, tap } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/components/button';
 import { Icon } from '@wcpos/components/icon';
@@ -37,7 +38,6 @@ export function StoreSelect({
 	onLogin,
 }: StoreSelectProps) {
 	const t = useT();
-	const [stores, setStores] = React.useState<StoreDocument[]>([]);
 	const { isValid, isLoading: isValidating } = useUserValidation({ site, wpUser });
 
 	// Resolve stores reactively by combining wpUser.stores$ (the localID array)
@@ -46,11 +46,11 @@ export function StoreSelect({
 	// where store docs are inserted *after* the ids are already written to the
 	// parent (e.g. stale pointer from prior session → cashier re-creates doc
 	// with same hash, parent ids never change, populate$ never re-emits).
-	React.useEffect(() => {
-		// Clear previously-resolved stores synchronously so we don't briefly
-		// render the prior user's list while the new subscription spins up.
-		setStores([]);
-
+	//
+	// `startWith([])` clears the prior user's list as soon as the source switches
+	// (when `wpUser` changes the memo rebuilds the observable), so we don't briefly
+	// render stale stores while the new subscription spins up.
+	const stores$ = React.useMemo(() => {
 		const wpUserAny = wpUser as unknown as {
 			collection: { database: { stores: any } };
 			get$: (key: string) => import('rxjs').Observable<any>;
@@ -73,26 +73,24 @@ export function StoreSelect({
 		const storesEqual = (a: StoreDocument[], b: StoreDocument[]) =>
 			a.length === b.length && a.every((v, i) => v.localID === b[i].localID);
 
-		const sub = ids$
-			.pipe(
-				tap((ids) => {
-					storeLogger.debug('[stores] wpUser.get$(stores) emitted', {
-						context: { wpUserUuid: wpUser.uuid, ids },
-					});
-				}),
-				distinctUntilChanged((a, b) => Array.isArray(a) && Array.isArray(b) && idsEqual(a, b)),
-				switchMap((ids: string[]) => {
-					const validIds = Array.isArray(ids) ? ids.filter((id) => id != null && id !== '') : [];
-					if (validIds.length === 0) return of([] as StoreDocument[]);
-					// Use a reactive find() query — findByIds(...).$ on filesystem-node
-					// storage does not re-emit when matching docs are inserted *after*
-					// the query was created. find({selector: { $in }}).$ does.
-					return storesCollection.find({ selector: { localID: { $in: validIds } } })
-						.$ as import('rxjs').Observable<StoreDocument[]>;
-				}),
-				distinctUntilChanged(storesEqual)
-			)
-			.subscribe((resolved: StoreDocument[]) => {
+		return ids$.pipe(
+			tap((ids) => {
+				storeLogger.debug('[stores] wpUser.get$(stores) emitted', {
+					context: { wpUserUuid: wpUser.uuid, ids },
+				});
+			}),
+			distinctUntilChanged((a, b) => Array.isArray(a) && Array.isArray(b) && idsEqual(a, b)),
+			switchMap((ids: string[]) => {
+				const validIds = Array.isArray(ids) ? ids.filter((id) => id != null && id !== '') : [];
+				if (validIds.length === 0) return of([] as StoreDocument[]);
+				// Use a reactive find() query — findByIds(...).$ on filesystem-node
+				// storage does not re-emit when matching docs are inserted *after*
+				// the query was created. find({selector: { $in }}).$ does.
+				return storesCollection.find({ selector: { localID: { $in: validIds } } })
+					.$ as import('rxjs').Observable<StoreDocument[]>;
+			}),
+			distinctUntilChanged(storesEqual),
+			tap((resolved: StoreDocument[]) => {
 				storeLogger.debug('[stores] StoreSelect stores resolved', {
 					context: {
 						wpUserUuid: wpUser.uuid,
@@ -101,10 +99,12 @@ export function StoreSelect({
 						storeLocalIDs: resolved.map((s) => s.localID),
 					},
 				});
-				setStores(resolved);
-			});
-		return () => sub.unsubscribe();
+			}),
+			startWith([] as StoreDocument[])
+		);
 	}, [wpUser]);
+
+	const stores = useObservableState(stores$, []);
 
 	// Auto-select single store
 	React.useEffect(() => {

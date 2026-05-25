@@ -89,7 +89,9 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 			return;
 		}
 
-		// Only validate if we have the required data
+		// Only validate if we have the required data. The "missing data" outcome is
+		// derived during render (see `missingRequiredData` below), so here we just
+		// skip the async work without touching state.
 		if (!apiUrl || !userId || !accessToken) {
 			appLogger.debug('[stores] SKIPPING user validation — missing required data', {
 				context: {
@@ -102,8 +104,6 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 					siteUuid: site.uuid,
 				},
 			});
-			setIsValid(false);
-			setError('Missing required user or site data');
 			return;
 		}
 
@@ -368,9 +368,13 @@ export const useUserValidation = ({ site, wpUser }: Props): UserValidationResult
 		site.uuid,
 	]);
 
+	// When required data is missing the user is invalid — derived during render
+	// rather than synced via setState in the effect above.
+	const missingRequiredData = !apiUrl || !userId || !accessToken;
+
 	return {
-		isValid,
+		isValid: missingRequiredData ? false : isValid,
 		isLoading,
-		error,
+		error: missingRequiredData ? 'Missing required user or site data' : error,
 	};
 };

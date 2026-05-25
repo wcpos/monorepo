@@ -39,11 +39,28 @@ type TooltipState = {
 	taxY: number;
 };
 
+// Find the index of the point whose x is closest to the given touch x
+function findClosestPointIndex(points: PointWithPosition[], touchX: number): number {
+	if (!points || points.length === 0) return -1;
+
+	let closestIdx = 0;
+	let closestDist = Math.abs(points[0].x - touchX);
+
+	for (let i = 1; i < points.length; i++) {
+		const dist = Math.abs(points[i].x - touchX);
+		if (dist < closestDist) {
+			closestDist = dist;
+			closestIdx = i;
+		}
+	}
+	return closestIdx;
+}
+
 export default function Chart() {
 	const { selectedOrders, dateRange } = useReports();
 	const { format } = useCurrencyFormat();
 	const { dateFnsLocale, formatDate } = useLocalDate();
-	const font = useFont(require('@wcpos/main/assets/fonts/Inter-Medium.ttf'), 12);
+	const font = useFont(require('../../../../assets/fonts/Inter-Medium.ttf'), 12);
 
 	// Theme colors
 	const [popoverColor, popoverForegroundColor, primaryColor, mutedForegroundColor, borderColor] =
@@ -62,92 +79,50 @@ export default function Chart() {
 	// Max is subtotal + tax = total (the actual order total)
 	const maxTotal = Math.max(...data.map((d) => d.total), 0);
 
-	// Tooltip state - managed in React state for simplicity
-	const [tooltip, setTooltip] = React.useState<TooltipState>({
-		visible: false,
-		pointIndex: -1,
+	/**
+	 * Track only the raw touch position in state. The closest-point lookup and
+	 * tooltip positioning happen inside the chart render prop below, where the
+	 * pixel-positioned `points` are available - this avoids stashing chart points
+	 * in a ref and reading that ref from gesture handlers during render.
+	 */
+	const [touch, setTouch] = React.useState<{ active: boolean; x: number }>({
+		active: false,
 		x: 0,
-		totalY: 0,
-		taxY: 0,
 	});
-
-	// Store points ref to access in gesture handlers
-	const pointsRef = React.useRef<{
-		subtotal: PointWithPosition[];
-		total_tax: PointWithPosition[];
-	} | null>(null);
-
-	// Find closest point index based on x position
-	const findClosestPointIndex = React.useCallback((touchX: number): number => {
-		const points = pointsRef.current?.subtotal;
-		if (!points || points.length === 0) return -1;
-
-		let closestIdx = 0;
-		let closestDist = Math.abs(points[0].x - touchX);
-
-		for (let i = 1; i < points.length; i++) {
-			const dist = Math.abs(points[i].x - touchX);
-			if (dist < closestDist) {
-				closestDist = dist;
-				closestIdx = i;
-			}
-		}
-		return closestIdx;
-	}, []);
-
-	// Show tooltip at position
-	const showTooltip = React.useCallback(
-		(touchX: number) => {
-			const idx = findClosestPointIndex(touchX);
-			if (idx < 0) return;
-
-			const subtotalPoints = pointsRef.current?.subtotal;
-			const taxPoints = pointsRef.current?.total_tax;
-			if (!subtotalPoints || !taxPoints) return;
-
-			setTooltip({
-				visible: true,
-				pointIndex: idx,
-				x: subtotalPoints[idx].x,
-				totalY: subtotalPoints[idx].y,
-				taxY: taxPoints[idx].y,
-			});
-		},
-		[findClosestPointIndex]
-	);
-
-	// Hide tooltip
-	const hideTooltip = React.useCallback(() => {
-		setTooltip((prev) => ({ ...prev, visible: false }));
-	}, []);
 
 	// Platform-specific gestures
 	const isWeb = Platform.OS === 'web';
 
-	// Web: hover gesture
-	const hoverGesture = Gesture.Hover()
-		.onBegin((e) => showTooltip(e.x))
-		.onUpdate((e) => showTooltip(e.x))
-		.onEnd(() => hideTooltip())
-		.runOnJS(true);
+	const gesture = React.useMemo(() => {
+		const showAt = (x: number) => setTouch({ active: true, x });
+		const hide = () => setTouch((prev) => ({ ...prev, active: false }));
+		const longPressDuration = 100;
 
-	// Native: long press + pan for precise tracking
-	// Long press activates tooltip on touch, pan tracks movement
-	const longPressGesture = Gesture.LongPress()
-		.minDuration(100)
-		.onStart((e) => showTooltip(e.x))
-		.onEnd(() => hideTooltip())
-		.runOnJS(true);
+		if (isWeb) {
+			// Web: hover gesture
+			return Gesture.Hover()
+				.onBegin((e) => showAt(e.x))
+				.onUpdate((e) => showAt(e.x))
+				.onEnd(hide)
+				.runOnJS(true);
+		}
 
-	const panGesture = Gesture.Pan()
-		.minDistance(0)
-		.onUpdate((e) => showTooltip(e.x))
-		.runOnJS(true);
+		// Native: long press activates tooltip on touch, pan tracks movement
+		const longPressGesture = Gesture.LongPress()
+			.minDuration(longPressDuration)
+			.onStart((e) => showAt(e.x))
+			.onEnd(hide)
+			.runOnJS(true);
 
-	// Combine: long press to activate, pan to track movement
-	const nativeGesture = Gesture.Simultaneous(longPressGesture, panGesture);
+		const panGesture = Gesture.Pan()
+			.minDistance(0)
+			.activateAfterLongPress(longPressDuration)
+			.onUpdate((e) => showAt(e.x))
+			.runOnJS(true);
 
-	const gesture = isWeb ? hoverGesture : nativeGesture;
+		// Combine: long press to activate, pan to track movement
+		return Gesture.Simultaneous(longPressGesture, panGesture);
+	}, [isWeb]);
 
 	// Calculate tick count based on data length
 	// Limit to actual data length to prevent victory-native from interpolating beyond our data
@@ -186,8 +161,21 @@ export default function Chart() {
 					]}
 				>
 					{({ points, chartBounds }) => {
-						// Store points for gesture handler access
-						pointsRef.current = points as any;
+						// Resolve the active tooltip from the current touch position and the
+						// pixel-positioned points provided by the chart.
+						const subtotalPoints = points.subtotal as unknown as PointWithPosition[];
+						const taxPoints = points.total_tax as unknown as PointWithPosition[];
+						const pointIndex = touch.active ? findClosestPointIndex(subtotalPoints, touch.x) : -1;
+						const tooltip: TooltipState | null =
+							pointIndex >= 0 && subtotalPoints[pointIndex] && taxPoints[pointIndex]
+								? {
+										visible: true,
+										pointIndex,
+										x: subtotalPoints[pointIndex].x,
+										totalY: subtotalPoints[pointIndex].y,
+										taxY: taxPoints[pointIndex].y,
+									}
+								: null;
 
 						return (
 							<>
@@ -201,7 +189,7 @@ export default function Chart() {
 										roundedCorners: isTop ? { topLeft: 5, topRight: 5 } : undefined,
 									})}
 								/>
-								{tooltip.visible && tooltip.pointIndex >= 0 && (
+								{tooltip && (
 									<ToolTip
 										tooltip={tooltip}
 										point={data[tooltip.pointIndex]}

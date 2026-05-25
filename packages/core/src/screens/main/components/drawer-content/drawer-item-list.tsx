@@ -1,10 +1,10 @@
 import * as React from 'react';
 
-import { CommonActions, DrawerActions } from '@react-navigation/native';
+import { CommonActions, DrawerActions } from 'expo-router/react-navigation';
 
 import { DrawerItem } from './drawer-item';
 
-import type { DrawerContentComponentProps } from '@react-navigation/drawer';
+import type { DrawerContentComponentProps } from 'expo-router/build/react-navigation/drawer';
 
 /**
  * Component that renders the navigation list in the drawer.

@@ -83,7 +83,7 @@ export function Report() {
 			from: formatDate(from, 'yyyy-M-dd HH:mm:ss'),
 			to: formatDate(to, 'yyyy-M-dd HH:mm:ss'),
 		};
-	}, [formatDate, selectedDateRange?.$gte, selectedDateRange?.$lte]);
+	}, [formatDate, selectedDateRange]);
 
 	/**
 	 * Generate report timestamp

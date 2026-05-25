@@ -32,9 +32,25 @@ export function useResolvedPrinter({
 	template,
 }: UseResolvedPrinterOptions): UseResolvedPrinterResult {
 	const { storeDB } = useAppState();
-	const [printerSelection, setPrinterSelection] = React.useState<PrinterSelection>({
-		type: 'auto',
-	});
+	// Track the user's explicit selection together with the template it was made
+	// for. When the template changes the selection resets to 'auto' - this is
+	// derived during render rather than reset via an effect.
+	const [pick, setPick] = React.useState<{
+		templateId: string | number | undefined;
+		selection: PrinterSelection;
+	}>({ templateId: template?.id, selection: { type: 'auto' } });
+
+	const setPrinterSelection = React.useCallback(
+		(selection: PrinterSelection) => {
+			setPick({ templateId: template?.id, selection });
+		},
+		[template?.id]
+	);
+
+	const printerSelection = React.useMemo<PrinterSelection>(
+		() => (pick.templateId === template?.id ? pick.selection : { type: 'auto' }),
+		[pick, template?.id]
+	);
 
 	// Subscribe to all printer profiles
 	const profiles$ = React.useMemo(
@@ -61,11 +77,6 @@ export function useResolvedPrinter({
 		[storeDB]
 	);
 	const overrides = useObservableState(overrides$, new Map<string, string>());
-
-	// Reset selection when template changes
-	React.useEffect(() => {
-		setPrinterSelection({ type: 'auto' });
-	}, [template?.id]);
 
 	// Resolve printer based on selection type
 	const resolvedPrinter = React.useMemo(() => {

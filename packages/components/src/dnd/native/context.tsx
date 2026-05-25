@@ -73,14 +73,19 @@ export function SortableContextProvider<T>({
 	// Store layouts (measurements) - using plain objects for worklet compatibility
 	const layouts = useSharedValue<LayoutsRecord>({});
 
-	// Keep items ref up to date
+	// Keep items ref up to date. Writes happen in an effect (not during render)
+	// so the latest values are flushed after commit without violating the rules
+	// of refs. These refs are only read later from JS-thread callbacks (e.g.
+	// handleOrderChange), well after the commit phase.
 	const itemsRef = React.useRef(items);
 	const getItemIdRef = React.useRef(getItemId);
 	const onOrderChangeRef = React.useRef(onOrderChange);
 
-	itemsRef.current = items;
-	getItemIdRef.current = getItemId;
-	onOrderChangeRef.current = onOrderChange;
+	React.useEffect(() => {
+		itemsRef.current = items;
+		getItemIdRef.current = getItemId;
+		onOrderChangeRef.current = onOrderChange;
+	});
 
 	// Initialize positions when items change - syncs item order to UI thread
 	React.useEffect(() => {

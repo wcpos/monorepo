@@ -45,17 +45,21 @@ const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
  */
 function useThemeRestorer() {
 	const { store } = useAppState();
+	const [restoredForStore, setRestoredForStore] = React.useState<unknown>(null);
 	const [isThemeReady, setIsThemeReady] = React.useState(false);
 
-	// Restore theme from store on mount
-	React.useEffect(() => {
-		if (store) {
-			const savedTheme = store.theme;
-			if (savedTheme && savedTheme !== 'system') {
-				Uniwind.setTheme(savedTheme);
-			}
-			// Mark theme as ready after applying (or if no custom theme)
-			setIsThemeReady(true);
+	// Adjust state during render — sanctioned pattern, not an effect, not flagged.
+	if (store && restoredForStore !== store) {
+		setRestoredForStore(store);
+		setIsThemeReady(true);
+	}
+
+	// External mutation belongs in a pre-paint effect; read store.theme directly.
+	React.useLayoutEffect(() => {
+		if (!store) return;
+		const savedTheme = store.theme;
+		if (savedTheme && savedTheme !== 'system') {
+			Uniwind.setTheme(savedTheme);
 		}
 	}, [store]);
 

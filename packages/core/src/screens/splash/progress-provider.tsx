@@ -23,30 +23,28 @@ export function SplashProgressProvider({
 }: SplashProgressProviderProps) {
 	const progress = useSharedValue(initialProgress);
 
-	const setProgress = React.useCallback(
-		(newProgress: number) => {
-			'worklet';
-			progress.value = newProgress;
-		},
-		[progress]
-	);
+	/**
+	 * `useSharedValue` returns a stable object, so these handlers can close over
+	 * `progress` without listing it as a hook dependency. Keeping it out of any
+	 * dependency array avoids the React Compiler treating the shared value as an
+	 * immutable hook argument (mutating `progress.value` is the intended behaviour).
+	 * The compiler memoizes these for us.
+	 */
+	const setProgress = (newProgress: number) => {
+		'worklet';
+		progress.value = newProgress;
+	};
 
-	const incrementProgress = React.useCallback(
-		(amount: number) => {
-			'worklet';
-			progress.value = Math.min(100, progress.value + amount);
-		},
-		[progress]
-	);
+	const incrementProgress = (amount: number) => {
+		'worklet';
+		progress.value = Math.min(100, progress.value + amount);
+	};
 
-	const value = React.useMemo(
-		() => ({
-			progress,
-			setProgress,
-			incrementProgress,
-		}),
-		[progress, setProgress, incrementProgress]
-	);
+	const value = {
+		progress,
+		setProgress,
+		incrementProgress,
+	};
 
 	return <SplashProgressContext.Provider value={value}>{children}</SplashProgressContext.Provider>;
 }

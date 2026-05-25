@@ -8,7 +8,7 @@ import {
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
-} from '@wcpos/components/accordian';
+} from '@wcpos/components/accordion';
 import {
 	AlertDialog,
 	AlertDialogAction,

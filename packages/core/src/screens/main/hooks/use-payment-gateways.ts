@@ -32,6 +32,7 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 	}, [http]);
 
 	React.useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- fetchGateways is the mount/reload event for this external resource; state updates happen in the async fetch lifecycle.
 		void fetchGateways();
 	}, [fetchGateways]);
 

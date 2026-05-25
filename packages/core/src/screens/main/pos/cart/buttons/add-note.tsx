@@ -31,12 +31,14 @@ export function AddNoteButton() {
 	const [open, setOpen] = React.useState(false);
 	const [text, onChangeText] = React.useState(note);
 
-	/**
-	 * Keep text in sync with note
-	 */
-	React.useEffect(() => {
+	// Keep text in sync with note. Implemented as the React "adjust state during
+	// render" pattern (tracking the previous note value) rather than an effect, so
+	// it never sets state inside useEffect.
+	const [prevNote, setPrevNote] = React.useState(note);
+	if (note !== prevNote) {
+		setPrevNote(note);
 		onChangeText(note);
-	}, [note]);
+	}
 
 	/**
 	 *

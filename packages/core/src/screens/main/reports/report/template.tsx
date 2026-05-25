@@ -66,7 +66,7 @@ export function ZReport() {
 			from: formatDate(from, 'yyyy-M-dd HH:mm:ss'),
 			to: formatDate(to, 'yyyy-M-dd HH:mm:ss'),
 		};
-	}, [formatDate, selectedDateRange?.$gte, selectedDateRange?.$lte]);
+	}, [formatDate, selectedDateRange]);
 
 	/**
 	 * Create a report generated date string when:
@@ -82,11 +82,12 @@ export function ZReport() {
 		}, [formatDate])
 	);
 	React.useEffect(() => {
+		// This timestamp represents an event: the report input set changed.
+		// It is intentionally stateful because `new Date()` is impure and should not
+		// be recomputed during render.
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- reportGenerated is an event timestamp, not derived render data; new Date() is impure and must not run during render.
 		setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
-	}, [
-		// update the report generated date when the selected orders change
-		selectedOrders,
-	]);
+	}, [selectedOrders, formatDate]);
 
 	return (
 		<View>

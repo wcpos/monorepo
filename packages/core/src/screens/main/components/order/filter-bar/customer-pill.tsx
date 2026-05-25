@@ -39,14 +39,18 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 		customer = { id: customerID } as CustomerDocument;
 	}
 
-	React.useEffect(() => {
+	// Reconcile the local selection with the active customerID. Implemented as the
+	// React "adjust state during render" pattern (tracking the previous customerID)
+	// rather than an effect, so it never sets state inside useEffect.
+	const [prevCustomerID, setPrevCustomerID] = React.useState(customerID);
+	if (customerID !== prevCustomerID) {
+		setPrevCustomerID(customerID);
 		if (!isActive) {
 			setSelectedCustomer(null);
-			return;
+		} else {
+			setSelectedCustomer((current) => (current?.id === customerID ? current : null));
 		}
-
-		setSelectedCustomer((current) => (current?.id === customerID ? current : null));
-	}, [customerID, isActive]);
+	}
 
 	const customerEntity = React.useMemo(
 		() => resolveCustomerPillEntity({ customer, selectedCustomer, customerID, isActive }),

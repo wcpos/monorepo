@@ -45,8 +45,12 @@ function WebView({
 
 	// Keep the latest callback in a ref so the ResizeObserver — wired up once on
 	// iframe load — always invokes the current handler without re-subscribing.
+	// The ref is written in an effect (not during render) and read later from the
+	// observer/load callbacks, both of which run after commit.
 	const onContentSizeChangeRef = React.useRef(onContentSizeChange);
-	onContentSizeChangeRef.current = onContentSizeChange;
+	React.useEffect(() => {
+		onContentSizeChangeRef.current = onContentSizeChange;
+	});
 	const resizeObserverRef = React.useRef<ResizeObserver | null>(null);
 
 	const measureContentSize = React.useCallback(() => {

@@ -31,7 +31,9 @@ export function Actions({ row, table }: CellContext<Props, 'actions'>) {
 				removeLineItem(uuid, type);
 			});
 		}
-	}, [removeLineItem, meta.rowRefs, type, uuid]);
+		// meta.rowRefs is a stable ref; its `.current` is read at call time, so it
+		// is intentionally not a dependency.
+	}, [removeLineItem, type, uuid]);
 
 	/**
 	 * Use pulse effect for new rows.

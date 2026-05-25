@@ -58,11 +58,10 @@ export const useOrderTotals = () => {
 	const [stableTotals, setStableTotals] = React.useState<Totals>(totals);
 
 	React.useEffect(() => {
-		if (!hasCoupons) {
-			setStableTotals(totals);
-			return;
-		}
-		const timer = setTimeout(() => setStableTotals(totals), 50);
+		// When coupons are active, debounce (50ms) so transient values don't flash.
+		// When they're not, sync immediately (delay 0). Either way the update goes
+		// through the timer callback so it never runs synchronously in the effect.
+		const timer = setTimeout(() => setStableTotals(totals), hasCoupons ? 50 : 0);
 		return () => clearTimeout(timer);
 	}, [totals, hasCoupons]);
 

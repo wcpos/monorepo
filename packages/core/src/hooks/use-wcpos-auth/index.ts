@@ -15,7 +15,10 @@ import type { UseWcposAuthReturn, WcposAuthConfig, WcposAuthResult } from './typ
 export type { WcposAuthConfig, WcposAuthResult, UseWcposAuthReturn } from './types';
 
 export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
-	const [authResult, setAuthResult] = React.useState<WcposAuthResult | null>(null);
+	// Imperative error captured when promptAsync() throws before producing a
+	// response (e.g. the request could not be launched). Set in the handler, not
+	// in an effect.
+	const [promptError, setPromptError] = React.useState<WcposAuthResult | null>(null);
 
 	const redirectUri = React.useMemo(() => getRedirectUri(), []);
 
@@ -49,41 +52,51 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 		discovery
 	);
 
-	// Convert expo-auth-session response to our unified format
-	React.useEffect(() => {
-		if (!response) return;
+	// Convert expo-auth-session response to our unified format. Derived during
+	// render from `response` instead of mirrored into state via an effect.
+	const responseResult = React.useMemo<WcposAuthResult | null>(() => {
+		if (!response) return null;
 
 		if (response.type === 'success') {
-			setAuthResult({
+			return {
 				type: 'success',
 				params: response.params as any,
-			});
-		} else if (response.type === 'error') {
-			setAuthResult({
+			};
+		}
+		if (response.type === 'error') {
+			return {
 				type: 'error',
 				error: response.error?.message || 'Authentication failed',
 				errorCode: response.error?.code,
-			});
-		} else if (response.type === 'dismiss' || response.type === 'cancel') {
-			setAuthResult({
-				type: response.type,
-			});
-		} else if (response.type === 'locked') {
-			setAuthResult({
-				type: 'locked',
-			});
+			};
 		}
+		if (response.type === 'dismiss' || response.type === 'cancel') {
+			return {
+				type: response.type,
+			};
+		}
+		if (response.type === 'locked') {
+			return {
+				type: 'locked',
+			};
+		}
+		return null;
 	}, [response]);
+
+	// A real response always supersedes a previous prompt-launch error.
+	const authResult = responseResult ?? promptError;
 
 	// Wrapper around promptAsync to match our interface
 	const handlePromptAsync = React.useCallback(async () => {
 		if (!request) {
 			return;
 		}
+		// Clear any stale prompt error before retrying.
+		setPromptError(null);
 		try {
 			await promptAsync();
 		} catch (err) {
-			setAuthResult({
+			setPromptError({
 				type: 'error',
 				error: err instanceof Error ? err.message : 'Authentication failed',
 			});

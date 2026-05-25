@@ -17,7 +17,6 @@ export function DemoButton() {
 	const [connectedSite, setConnectedSite] = React.useState<
 		import('@wcpos/database').SiteDocument | null
 	>(null);
-	const [authCompleted, setAuthCompleted] = React.useState(false);
 	const t = useT();
 
 	// Track which response we've already processed to prevent double-execution
@@ -40,7 +39,9 @@ export function DemoButton() {
 		extraParams: { user: 'demo' },
 	});
 
-	// Handle OAuth response
+	// Handle OAuth response. Side-effect only (login / logging); the
+	// processedResponseRef both dedupes and signals completion - no state is set
+	// here so this effect cannot trigger a cascading re-render.
 	React.useEffect(() => {
 		if (!response || !connectedSite) return;
 
@@ -53,21 +54,19 @@ export function DemoButton() {
 		if (response.type === 'success') {
 			authLogger.debug('Demo login successful');
 			processedResponseRef.current = responseKey;
-			setAuthCompleted(true);
 			handleLoginSuccess({ params: response.params } as any);
 		} else if (response.type === 'error') {
 			authLogger.error(`Demo login failed: ${response.error}`, {
 				showToast: true,
 				context: { response },
 			});
+			// Also mark processed on error to prevent retry.
 			processedResponseRef.current = responseKey;
-			setAuthCompleted(true); // Also set completed on error to prevent retry
 		}
 	}, [response, connectedSite, handleLoginSuccess]);
 
 	const handleDemoLogin = async () => {
 		// Reset auth state for new login attempt
-		setAuthCompleted(false);
 		setConnectedSite(null);
 		processedResponseRef.current = null;
 		authTriggeredRef.current = false;
@@ -94,17 +93,19 @@ export function DemoButton() {
 
 	// Trigger OAuth flow when site is connected and hook is ready
 	React.useEffect(() => {
-		// Use ref for synchronous check to prevent race conditions
-		if (authTriggeredRef.current) {
+		// Use refs for synchronous checks to prevent race conditions:
+		// authTriggeredRef stops a double-trigger; processedResponseRef being set
+		// means a response already arrived, so don't re-prompt.
+		if (authTriggeredRef.current || processedResponseRef.current !== null) {
 			return;
 		}
 
-		if (connectedSite && isReady && !isProcessing && !authCompleted) {
+		if (connectedSite && isReady && !isProcessing) {
 			authLogger.debug('Triggering OAuth flow for demo site');
 			authTriggeredRef.current = true; // Set immediately before async call
 			promptAsync();
 		}
-	}, [connectedSite, isReady, isProcessing, authCompleted, promptAsync]);
+	}, [connectedSite, isReady, isProcessing, promptAsync]);
 
 	const loading = siteConnectLoading || isProcessing;
 

@@ -66,6 +66,7 @@ function getOrCreateHydrationPromise(
 		return currentContext;
 	})().catch((err) => {
 		console.log('Hydration failed:', err);
+		globalHydrationPromise = null;
 		throw err;
 	});
 
@@ -75,41 +76,26 @@ function getOrCreateHydrationPromise(
 /**
  * Hook that manages hydration using suspense-throwing promises.
  * Each step throws suspense, executes async work, then resolves to move to next step.
+ *
+ * `use()` is called unconditionally at the top level: while the promise is pending
+ * it suspends (handled by the nearest <Suspense> boundary), and if it rejects the
+ * rejection is re-thrown during render (handled by the nearest error boundary).
  */
 export const useHydrationSuspense = (): UseHydrationSuspenseReturn => {
 	const { setProgress } = useSplashProgress();
 
 	const promise = getOrCreateHydrationPromise(setProgress);
 
-	// Use the promise - this will throw suspense until resolved
-	try {
-		const result = use(promise);
+	// Suspends until resolved; re-throws on rejection for the error boundary to catch.
+	const result = use(promise);
 
-		// Promise resolved, return the result directly
-		return {
-			isComplete: true,
-			context: result,
-			progress: 100,
-			currentMessage: 'Ready!',
-			currentStep: 'COMPLETE',
-			error: null,
-		};
-	} catch (promiseOrError: unknown) {
-		// If it's a promise (suspense), let it bubble up
-		if (promiseOrError && typeof (promiseOrError as Promise<unknown>).then === 'function') {
-			throw promiseOrError;
-		}
-		// If it's an error, handle it
-		if (promiseOrError instanceof Error) {
-			return {
-				isComplete: false,
-				context: {},
-				progress: 0,
-				currentMessage: 'Error occurred',
-				currentStep: 'ERROR',
-				error: promiseOrError,
-			};
-		}
-		throw promiseOrError;
-	}
+	// Promise resolved, return the result directly
+	return {
+		isComplete: true,
+		context: result,
+		progress: 100,
+		currentMessage: 'Ready!',
+		currentStep: 'COMPLETE',
+		error: null,
+	};
 };

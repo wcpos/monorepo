@@ -20,6 +20,9 @@ function getQueryIdentityKey(options: QueryOptions): string {
 		queryKeys: options.queryKeys,
 		locale: options.locale,
 		endpoint: options.endpoint,
+		greedy: options.greedy,
+		infiniteScroll: options.infiniteScroll,
+		pageSize: options.pageSize,
 	});
 }
 
@@ -30,18 +33,17 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 	const parentIdentityKey = getQueryIdentityKey(parentOptions);
 	const childIdentityKey = getQueryIdentityKey(childOptions);
 
-	// Store options in refs for access in callbacks without adding to deps
-	const parentOptionsRef = React.useRef(parentOptions);
-	const childOptionsRef = React.useRef(childOptions);
-	parentOptionsRef.current = parentOptions;
-	childOptionsRef.current = childOptions;
-
 	/**
 	 * Helper function to register all necessary queries.
+	 *
+	 * Reads `parentOptions`/`childOptions` directly from the render closure. The
+	 * callback is only recreated when the identity keys change, so the captured
+	 * options always carry the current identity. `registerQuery` is keyed by
+	 * queryKeys, so excluded fields (initialParams/hooks) do not affect the result.
 	 */
 	const registerQueries = React.useCallback(() => {
-		const parent = parentOptionsRef.current;
-		const child = childOptionsRef.current;
+		const parent = parentOptions;
+		const child = childOptions;
 
 		logger.debug('Registering relational queries', {
 			context: {
@@ -90,16 +92,23 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 	const queries$ = React.useMemo(
 		() =>
 			(manager.localDB as any).reset$.pipe(
-				filter((collection: any) => collection.name === parentOptionsRef.current.collectionName),
+				filter(
+					(collection: any) =>
+						collection.name === parentOptions.collectionName ||
+						collection.name === childOptions.collectionName
+				),
 				map(() => {
 					logger.debug('Re-registering relational queries after collection reset', {
-						context: { collectionName: parentOptionsRef.current.collectionName },
+						context: {
+							parentCollectionName: parentOptions.collectionName,
+							childCollectionName: childOptions.collectionName,
+						},
 					});
 					return registerQueries();
 				}),
 				startWith(initialQueries)
 			),
-		[manager, parentIdentityKey, registerQueries, initialQueries]
+		[manager, parentIdentityKey, childIdentityKey, registerQueries, initialQueries]
 	);
 
 	/**

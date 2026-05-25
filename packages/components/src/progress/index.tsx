@@ -65,12 +65,6 @@ type IndicatorProps = {
 function WebIndicator({ value, sharedValue, className }: IndicatorProps) {
 	const [svProgress, setSvProgress] = React.useState<number | undefined>(sharedValue?.value);
 
-	React.useEffect(() => {
-		if (!sharedValue) {
-			setSvProgress(undefined);
-		}
-	}, [sharedValue]);
-
 	useAnimatedReaction(
 		() => sharedValue?.value,
 		(currentValue) => {
@@ -78,7 +72,11 @@ function WebIndicator({ value, sharedValue, className }: IndicatorProps) {
 		}
 	);
 
-	const progress = Math.max(0, Math.min(svProgress ?? value ?? 0, 100));
+	// Derive directly during render: only honor the shared-value-driven state while a
+	// sharedValue is present, so a stale value is ignored once it's removed (no effect
+	// + setState needed to clear it).
+	const effectiveSvProgress = sharedValue ? svProgress : undefined;
+	const progress = Math.max(0, Math.min(effectiveSvProgress ?? value ?? 0, 100));
 
 	return (
 		<View

@@ -30,21 +30,18 @@ export function WPUsers({ site }: WpUsersProps) {
 	);
 	const t = useT();
 	const { login } = useAppState();
-	const [selectedUserUuid, setSelectedUserUuid] = React.useState<string | null>(null);
+	// Explicit user choice (null until the user picks one). The effective
+	// selection is derived during render so we never need an effect to sync it.
+	const [pickedUserUuid, setPickedUserUuid] = React.useState<string | null>(null);
 	const [selectedStoreId, setSelectedStoreId] = React.useState<string | null>(null);
 
-	// Auto-select first user if none selected
-	React.useEffect(() => {
-		if (wpCreds.length > 0 && !selectedUserUuid) {
-			setSelectedUserUuid(wpCreds[0].uuid ?? null);
-		}
-		// If selected user was removed, reset
-		if (selectedUserUuid && !wpCreds.find((c) => c.uuid === selectedUserUuid)) {
-			setSelectedUserUuid(wpCreds.length > 0 ? (wpCreds[0].uuid ?? null) : null);
-		}
-	}, [wpCreds, selectedUserUuid]);
+	// Derive the selected user: the explicit pick if it still exists, otherwise
+	// fall back to the first available credential.
+	const selectedUser =
+		(pickedUserUuid ? wpCreds.find((c) => c.uuid === pickedUserUuid) : undefined) ?? wpCreds[0];
+	const selectedUserUuid = selectedUser?.uuid ?? null;
 
-	const selectedUser = wpCreds.find((c) => c.uuid === selectedUserUuid);
+	const setSelectedUserUuid = setPickedUserUuid;
 
 	return (
 		<VStack space="md">

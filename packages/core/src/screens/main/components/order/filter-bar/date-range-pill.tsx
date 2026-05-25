@@ -62,7 +62,7 @@ export function DateRangePill({ query, onRemove }: Props) {
 		const toStr = formatDate(to, 'd MMM');
 
 		return `${fromStr} - ${toStr}`;
-	}, [isActive, selectedDateRange?.$gte, selectedDateRange?.$lte, formatDate, t]);
+	}, [isActive, selectedDateRange, formatDate, t]);
 
 	/**
 	 *

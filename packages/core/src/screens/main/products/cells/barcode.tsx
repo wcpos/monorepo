@@ -21,12 +21,14 @@ export function Barcode({ row, table }: CellContext<{ document: ProductDocument 
 		onChange: (arg: { document: ProductDocument; changes: Record<string, unknown> }) => void;
 	};
 
-	/**
-	 * Update value if prop changes
-	 */
-	React.useEffect(() => {
+	// Update value if the underlying barcode changes. Implemented as the React
+	// "adjust state during render" pattern (tracking the previous barcode) rather
+	// than an effect, so it never sets state inside useEffect.
+	const [prevBarcode, setPrevBarcode] = React.useState(barcode);
+	if (barcode !== prevBarcode) {
+		setPrevBarcode(barcode);
 		setValue(barcode);
-	}, [barcode]);
+	}
 
 	/**
 	 *

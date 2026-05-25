@@ -26,12 +26,14 @@ export function CustomerNote() {
 	const t = useT();
 	const { localPatch } = useLocalMutation();
 
-	// /**
-	//  * Keep textarea value insync with the order.customer_note
-	//  */
-	React.useEffect(() => {
+	// Keep the textarea value in sync with order.customer_note. Implemented as the
+	// React "adjust state during render" pattern (tracking the previous note value)
+	// rather than an effect, so it never sets state inside useEffect.
+	const [prevNote, setPrevNote] = React.useState(note);
+	if (note !== prevNote) {
+		setPrevNote(note);
 		setValue(note);
-	}, [note]);
+	}
 
 	/**
 	 *

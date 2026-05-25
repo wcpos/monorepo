@@ -65,9 +65,13 @@ export function SortableItem({
 	const [state, setState] = React.useState<DragState>(idle);
 	const { listId, gap, axis, registerItem, getItemIndex } = useDndContext();
 
-	// Store getItemIndex in a ref to always get current index
+	// Store getItemIndex in a ref to always get current index. The ref is written
+	// in an effect (not during render) and only read later from pragmatic-dnd
+	// callbacks (getInitialData/getData), which run after commit.
 	const getItemIndexRef = React.useRef(getItemIndex);
-	getItemIndexRef.current = getItemIndex;
+	React.useEffect(() => {
+		getItemIndexRef.current = getItemIndex;
+	});
 
 	// Callback for drag handle registration - uses state so effect re-runs when handle changes
 	const registerDragHandle = React.useCallback((element: HTMLElement | null) => {
@@ -202,7 +206,9 @@ export function SortableItem({
 		);
 	}, [children]);
 
-	const PreviewContent = renderPreview ?? defaultPreview;
+	// `renderPreview`/`defaultPreview` are render functions (`() => ReactNode`),
+	// not components, so invoke them directly rather than rendering as <Component />.
+	const renderPreviewContent = renderPreview ?? defaultPreview;
 
 	// Context value for drag handle registration
 	const dragHandleContextValue = { registerDragHandle };
@@ -221,7 +227,7 @@ export function SortableItem({
 					<DropIndicator edge={state.closestEdge} gap={`${gap}px`} />
 				) : null}
 			</div>
-			{state.type === 'preview' ? createPortal(<PreviewContent />, state.container) : null}
+			{state.type === 'preview' ? createPortal(renderPreviewContent(), state.container) : null}
 		</DragHandleContext.Provider>
 	);
 }

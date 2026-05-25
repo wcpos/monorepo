@@ -43,6 +43,19 @@ interface SavedAuthState {
 	timestamp: number;
 }
 
+function getSavedAuthState(): SavedAuthState | null {
+	if (typeof sessionStorage === 'undefined') return null;
+
+	const raw = sessionStorage.getItem(AUTH_STATE_KEY);
+	if (!raw) return null;
+
+	try {
+		return JSON.parse(raw) as SavedAuthState;
+	} catch {
+		return null;
+	}
+}
+
 /**
  * Save current location before redirecting
  */
@@ -73,11 +86,59 @@ function saveCsrfState(state: string): void {
  * Get saved CSRF state
  */
 function getSavedCsrfState(): string | null {
+	if (typeof sessionStorage === 'undefined') return null;
 	return sessionStorage.getItem(AUTH_CSRF_STATE_KEY);
 }
 
+/**
+ * Result of inspecting the URL for auth tokens (redirect-return fallback).
+ * Computed synchronously from window.location so it can seed initial state.
+ */
+function parseAuthFromUrl(): WcposAuthResult | null {
+	if (typeof window === 'undefined') return null;
+
+	const hash = window.location.hash;
+	const search = window.location.search;
+
+	if (!hash && !search) return null;
+
+	const urlToCheck = window.location.href;
+	if (!urlToCheck.includes('access_token') && !urlToCheck.includes('error')) {
+		return null;
+	}
+
+	oauthLogger.debug('Detected auth params in URL, parsing...');
+	const result = parseAuthResult(urlToCheck);
+
+	// Validate CSRF state for our fallback redirect
+	if (result.type === 'success' && result.params) {
+		const savedState = getSavedCsrfState();
+		const returnedState = (result.params as unknown as Record<string, unknown>)?.state as
+			| string
+			| undefined;
+
+		if (savedState && returnedState !== savedState) {
+			oauthLogger.error('State parameter mismatch - possible CSRF attack');
+			return {
+				type: 'error',
+				error: 'State parameter mismatch - authentication rejected for security',
+			};
+		}
+	}
+
+	if (result.type === 'success' || result.type === 'error') {
+		return result;
+	}
+
+	return null;
+}
+
 export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
-	const [authResult, setAuthResult] = React.useState<WcposAuthResult | null>(null);
+	// Seed state once from the URL (redirect-return fallback) and from any error
+	// raised while launching the prompt. Both are set outside of effects.
+	const [imperativeResult, setImperativeResult] = React.useState<WcposAuthResult | null>(() =>
+		parseAuthFromUrl()
+	);
 
 	const redirectUri = React.useMemo(() => getRedirectUri(), []);
 
@@ -119,78 +180,61 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 		discovery
 	);
 
-	// Handle expo-auth-session response
-	React.useEffect(() => {
-		if (!response) return;
+	// Convert expo-auth-session response to our unified format. Derived during
+	// render from `response` instead of mirrored into state via an effect.
+	const responseResult = React.useMemo<WcposAuthResult | null>(() => {
+		if (!response) return null;
 
 		if (response.type === 'success') {
-			clearAuthState();
-			setAuthResult({
+			return {
 				type: 'success',
 				params: response.params as any,
-			});
-		} else if (response.type === 'error') {
-			clearAuthState();
-			setAuthResult({
+			};
+		}
+		if (response.type === 'error') {
+			return {
 				type: 'error',
 				error: response.error?.message || 'Authentication failed',
 				errorCode: response.error?.code,
-			});
-		} else if (response.type === 'dismiss' || response.type === 'cancel') {
-			// Don't clear state on dismiss - user might want to retry
-			setAuthResult({
-				type: response.type,
-			});
-		} else if (response.type === 'locked') {
-			setAuthResult({
-				type: 'locked',
-			});
+			};
 		}
+		if (response.type === 'dismiss' || response.type === 'cancel') {
+			return {
+				type: response.type,
+			};
+		}
+		if (response.type === 'locked') {
+			return {
+				type: 'locked',
+			};
+		}
+		return null;
 	}, [response]);
 
-	// Check URL on mount for auth tokens (handles redirect return)
+	// A live response supersedes the seeded URL/prompt result.
+	const authResult = responseResult ?? imperativeResult;
+
+	/**
+	 * Mount-only side effects. State seeding for both the URL fallback and the
+	 * response mapping happens during render (above); this effect only performs
+	 * the imperative cleanup that must run once: clearing saved auth state and
+	 * stripping auth params from the URL. Runs once on mount.
+	 */
 	React.useEffect(() => {
-		// maybeCompleteAuthSession should handle this, but check manually as fallback
-		const hash = window.location.hash;
-		const search = window.location.search;
-
-		if (hash || search) {
-			const urlToCheck = window.location.href;
-			if (urlToCheck.includes('access_token') || urlToCheck.includes('error')) {
-				oauthLogger.debug('Detected auth params in URL, parsing...');
-				const result = parseAuthResult(urlToCheck);
-
-				// Validate CSRF state for our fallback redirect
-				if (result.type === 'success' && result.params) {
-					const savedState = getSavedCsrfState();
-					const returnedState = (result.params as unknown as Record<string, unknown>)?.state as
-						| string
-						| undefined;
-
-					if (savedState && returnedState !== savedState) {
-						oauthLogger.error('State parameter mismatch - possible CSRF attack');
-						setAuthResult({
-							type: 'error',
-							error: 'State parameter mismatch - authentication rejected for security',
-						});
-						clearAuthState();
-						const cleanUrl = window.location.pathname;
-						window.history.replaceState({}, document.title, cleanUrl);
-						return;
-					}
-				}
-
-				if (result.type === 'success' || result.type === 'error') {
-					setAuthResult(result);
-					clearAuthState();
-
-					// Clean up URL
-					const cleanUrl = window.location.pathname;
-					window.history.replaceState({}, document.title, cleanUrl);
-				}
-			}
+		const urlResult = parseAuthFromUrl();
+		if (urlResult && (urlResult.type === 'success' || urlResult.type === 'error')) {
+			const cleanUrl = getSavedAuthState()?.returnPath ?? window.location.pathname;
+			clearAuthState();
+			window.history.replaceState({}, document.title, cleanUrl);
 		}
 	}, []);
+
+	// Clear saved auth state once a live response resolves successfully or errors.
+	React.useEffect(() => {
+		if (response && (response.type === 'success' || response.type === 'error')) {
+			clearAuthState();
+		}
+	}, [response]);
 
 	const promptAsync = React.useCallback(async (): Promise<WcposAuthResult | void> => {
 		if (!request || !config.site) {
@@ -199,6 +243,8 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 			});
 			return;
 		}
+
+		setImperativeResult(null);
 
 		oauthLogger.debug('Triggering web auth flow', {
 			context: {
@@ -273,7 +319,7 @@ export function useWcposAuth(config: WcposAuthConfig): UseWcposAuthReturn {
 				type: 'error',
 				error: errorMessage,
 			};
-			setAuthResult(errorResult);
+			setImperativeResult(errorResult);
 			return errorResult;
 		}
 	}, [request, config.site, mergedExtraParams, redirectUri, expoPromptAsync]);

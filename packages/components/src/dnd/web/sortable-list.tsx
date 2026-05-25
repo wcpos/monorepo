@@ -23,20 +23,23 @@ function SortableListInner<T>({
 	className = '',
 	showFlash = true,
 }: SortableListProps<T>) {
-	// Use refs to avoid stale closures in the monitor callback
+	// Compute itemIds once per render for the context
+	const itemIds = items.map(getItemId);
+
+	// Use refs to avoid stale closures in the monitor callback. Writes happen in
+	// an effect (not during render) so the latest values are flushed after commit
+	// without violating the rules of refs.
 	const itemsRef = React.useRef(items);
 	const getItemIdRef = React.useRef(getItemId);
 	const onOrderChangeRef = React.useRef(onOrderChange);
-
-	// Keep refs up to date (no state changes, just ref updates)
-	itemsRef.current = items;
-	getItemIdRef.current = getItemId;
-	onOrderChangeRef.current = onOrderChange;
-
-	// Compute itemIds once per render for the context
-	const itemIds = items.map(getItemId);
 	const itemIdsRef = React.useRef(itemIds);
-	itemIdsRef.current = itemIds;
+
+	React.useEffect(() => {
+		itemsRef.current = items;
+		getItemIdRef.current = getItemId;
+		onOrderChangeRef.current = onOrderChange;
+		itemIdsRef.current = itemIds;
+	});
 
 	React.useEffect(() => {
 		const cleanup = monitorForElements({

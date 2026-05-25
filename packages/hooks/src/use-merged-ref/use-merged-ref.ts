@@ -8,14 +8,35 @@ export function mergeRefs<T = any>(...refs: React.ForwardedRef<T>[]) {
 	};
 }
 
-export function useMergedRef<T = any>(...refs: React.ForwardedRef<T>[]) {
-	const stableRefs = React.useRef(refs);
-	stableRefs.current = refs;
+export function useMergedRef<T = unknown>(...refs: React.ForwardedRef<T>[]) {
+	const latestRefs = React.useRef(refs);
+	const previousRefs = React.useRef<React.ForwardedRef<T>[]>(refs);
+	const currentNode = React.useRef<T | null>(null);
 
-	return React.useMemo(
-		() => (node: T | null) => {
-			stableRefs.current.forEach((ref) => assignRef(ref, node));
-		},
-		[stableRefs]
-	);
+	React.useLayoutEffect(() => {
+		const prevRefs = previousRefs.current;
+		latestRefs.current = refs;
+		previousRefs.current = refs;
+
+		if (currentNode.current === null) {
+			return;
+		}
+
+		for (const ref of prevRefs) {
+			if (!refs.includes(ref)) {
+				assignRef(ref, null);
+			}
+		}
+
+		for (const ref of refs) {
+			if (!prevRefs.includes(ref)) {
+				assignRef(ref, currentNode.current);
+			}
+		}
+	});
+
+	return React.useCallback((node: T | null) => {
+		currentNode.current = node;
+		latestRefs.current.forEach((ref) => assignRef(ref, node));
+	}, []);
 }

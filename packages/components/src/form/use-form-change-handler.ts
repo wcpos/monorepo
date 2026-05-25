@@ -43,9 +43,6 @@ export function useFormChangeHandler<T extends FieldValues>({
 	onChange,
 	debounceMs = 300,
 }: UseFormChangeHandlerOptions<T>) {
-	// Track if we're currently resetting from external data
-	const isResettingRef = React.useRef(false);
-
 	// Create a debounced version for text inputs
 	const debouncedOnChange = React.useMemo(
 		() =>
@@ -66,60 +63,35 @@ export function useFormChangeHandler<T extends FieldValues>({
 	}, [debouncedOnChange]);
 
 	/**
-	 * Intercept form.reset to track when we're resetting from external data.
-	 * This prevents firing onChange when:
-	 * - `values` prop changes (RHF internally calls reset)
-	 * - Manual reset() calls (e.g., clearing form on dialog close)
-	 *
-	 * This is a legitimate useEffect for synchronizing with an external system (RHF).
-	 */
-	React.useEffect(() => {
-		const originalReset = form.reset;
-		form.reset = (...args) => {
-			isResettingRef.current = true;
-			try {
-				return originalReset.apply(form, args);
-			} finally {
-				// Reset the flag after a microtask to ensure watch has fired
-				// Using finally ensures flag is cleared even if reset throws
-				queueMicrotask(() => {
-					isResettingRef.current = false;
-				});
-			}
-		};
-
-		return () => {
-			form.reset = originalReset;
-		};
-	}, [form]);
-
-	/**
 	 * Subscribe to form field changes and persist them.
 	 * This is a legitimate useEffect for subscribing to an external store (RHF watch).
+	 *
+	 * Programmatic resets are ignored automatically: when `form.reset()` runs (or the
+	 * `values` prop changes, which calls reset internally), RHF emits a single
+	 * form-level update whose `name` is `undefined`. User-initiated edits always carry
+	 * a defined `name`, so the `if (name)` guard below skips reset/programmatic updates
+	 * without needing to intercept `form.reset`.
 	 */
 	React.useEffect(() => {
-		const subscription = form.watch((values, { name, type }) => {
-			// Skip if we're resetting from external data
-			if (isResettingRef.current) {
+		const subscription = form.watch((values, { name }) => {
+			// Only handle changes when a specific field is changed by the user.
+			// When `name` is undefined, it means the entire form was reset/set programmatically
+			if (!name) {
+				debouncedOnChange.cancel();
 				return;
 			}
 
-			// Only handle changes when a specific field is changed by the user.
-			// When `name` is undefined, it means the entire form was reset/set programmatically
-			if (name) {
-				const value = get(values, name);
-				const changes = { [name]: value } as unknown as Partial<T>;
+			const value = get(values, name);
+			const changes = { [name]: value } as unknown as Partial<T>;
 
-				// Debounce text inputs to avoid saving on every keystroke
-				if (isTextValue(value) && debounceMs > 0) {
-					debouncedOnChange(changes);
-				} else {
-					// Flush any pending debounced changes first
-					debouncedOnChange.flush();
-					onChange(changes);
-				}
+			// Debounce text inputs to avoid saving on every keystroke
+			if (isTextValue(value) && debounceMs > 0) {
+				debouncedOnChange(changes);
+			} else {
+				// Flush any pending debounced changes first
+				debouncedOnChange.flush();
+				onChange(changes);
 			}
-			// Skip when name is undefined (form.reset() or form.setValue() on entire form)
 		});
 
 		return () => subscription.unsubscribe();

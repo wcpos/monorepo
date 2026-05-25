@@ -177,8 +177,11 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 
 			// Set drag state directly on shared values (don't call context function from worklet)
 			if (index >= 0) {
+				// eslint-disable-next-line react-hooks/immutability -- reanimated worklet mutates shared value on UI thread
 				activeId.value = id;
+				// eslint-disable-next-line react-hooks/immutability -- reanimated worklet mutates shared value on UI thread
 				activeIndex.value = index;
+				// eslint-disable-next-line react-hooks/immutability -- reanimated worklet mutates shared value on UI thread
 				targetIndex.value = index;
 			}
 
@@ -217,6 +220,7 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 				calcNewTarget = newTargetIndex;
 
 				if (newTargetIndex !== targetIndex.value) {
+					// eslint-disable-next-line react-hooks/immutability -- reanimated worklet mutates shared value on UI thread
 					targetIndex.value = newTargetIndex;
 				}
 			}
@@ -271,8 +275,11 @@ export function SortableItem({ id, children, disabled = false, style }: Sortable
 			zIndex.value = 0;
 
 			// Reset drag state
+			// eslint-disable-next-line react-hooks/immutability -- reanimated worklet mutates shared value on UI thread
 			activeId.value = null;
+			// eslint-disable-next-line react-hooks/immutability -- reanimated worklet mutates shared value on UI thread
 			activeIndex.value = -1;
+			// eslint-disable-next-line react-hooks/immutability -- reanimated worklet mutates shared value on UI thread
 			targetIndex.value = -1;
 
 			// Call order change handler if order changed

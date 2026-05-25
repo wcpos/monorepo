@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Platform, View } from 'react-native';
 
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { BlurTargetView } from 'expo-blur';
 
 import { ProAccessProvider } from '../contexts/pro-access';

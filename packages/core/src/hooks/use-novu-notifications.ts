@@ -68,7 +68,13 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 	const { storeDB } = useAppState();
 	const { subscriberId, subscriberMetadata, isConfigured } = useNovu();
 	const [isLoading, setIsLoading] = React.useState(false);
-	const [isConnected, setIsConnected] = React.useState(false);
+
+	const connectionKey = subscriberId && subscriberMetadata && isConfigured ? subscriberId : null;
+	const [connectedSubscriberId, setConnectedSubscriberId] = React.useState<string | null>(null);
+	if (!connectionKey && connectedSubscriberId !== null) {
+		setConnectedSubscriberId(null);
+	}
+	const isConnected = connectionKey !== null && connectedSubscriberId === connectionKey;
 
 	// Get notifications collection
 	const notificationsCollection = storeDB?.notifications as NotificationCollection | undefined;
@@ -275,14 +281,14 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		if (!subscriberId || !subscriberMetadata || !isConfigured) {
 			return;
 		}
+		let isActive = true;
 
 		novuLogger.info('Novu: Setting up client and WebSocket listeners', {
 			context: { subscriberId },
 		});
 
-		// Initialize the Novu client (this creates the WebSocket connection)
+		// Initialize the Novu client (this creates the WebSocket connection).
 		getNovuClient(subscriberId, subscriberMetadata);
-		setIsConnected(true);
 
 		// Subscribe to real-time events (deduplication happens in client.ts)
 		const unsubscribe = subscribeToNovuEvents({
@@ -308,15 +314,20 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 		// This ensures welcome notifications can be received in real-time
 		const shouldSync = syncedSubscriberRef.current !== subscriberId;
 
-		if (shouldSync) {
-			syncedSubscriberRef.current = subscriberId;
+		waitForNovuReady(5000)
+			.then((connected) => {
+				if (!isActive) return;
 
-			// Wait for Novu SDK to be ready BEFORE triggering server sync
-			// This ensures welcome notifications can be received in real-time
-			waitForNovuReady(5000).then((connected) => {
-				if (!connected) {
+				if (connected) {
+					setConnectedSubscriberId(subscriberId);
+				} else {
+					setConnectedSubscriberId(null);
 					novuLogger.warn('Novu: Socket connection timeout, syncing anyway');
 				}
+
+				if (!shouldSync) return;
+
+				syncedSubscriberRef.current = subscriberId;
 
 				syncSubscriberToServer(subscriberId, subscriberMetadata)
 					.then((result) => {
@@ -336,32 +347,44 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 						});
 						syncedSubscriberRef.current = null;
 					});
+			})
+			.catch((error) => {
+				if (!isActive) return;
+				setConnectedSubscriberId(null);
+				novuLogger.error('Novu: Socket readiness check failed', {
+					context: { error: error instanceof Error ? error.message : String(error) },
+				});
 			});
-		}
 
-		// Initial fetch of notifications
-		setIsLoading(true);
-		fetchNotifications()
-			.then((notifications) => {
+		const loadInitialNotifications = async () => {
+			setIsLoading(true);
+			try {
+				const notifications = await fetchNotifications();
+				if (!isActive) return;
+
 				novuLogger.info('Novu: Initial notifications loaded', {
 					context: { count: notifications.length },
 				});
-				return syncToRxDB(notifications);
-			})
-			.catch((error) => {
+				await syncToRxDB(notifications);
+			} catch (error) {
+				if (!isActive) return;
 				novuLogger.error('Novu: Failed to load initial notifications', {
 					context: { error: error instanceof Error ? error.message : String(error) },
 				});
-			})
-			.finally(() => {
-				setIsLoading(false);
-			});
+			} finally {
+				if (isActive) {
+					setIsLoading(false);
+				}
+			}
+		};
+		loadInitialNotifications();
 
 		// Cleanup on unmount or subscriber change
 		return () => {
+			isActive = false;
+			setConnectedSubscriberId(null);
 			novuLogger.debug('Novu: Cleaning up WebSocket listeners');
 			unsubscribe();
-			setIsConnected(false);
 		};
 	}, [subscriberId, subscriberMetadata, isConfigured, syncNotificationToRxDB, syncToRxDB]);
 
