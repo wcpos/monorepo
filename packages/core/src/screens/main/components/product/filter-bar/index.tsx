@@ -41,7 +41,7 @@ export function FilterBar({ query }: Props) {
 	const selectedTag$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
-				switchMap(([id]) => {
+				switchMap(([id, tagCollection, pullDocument]) => {
 					if (!id) {
 						return of(undefined);
 					}
@@ -54,7 +54,7 @@ export function FilterBar({ query }: Props) {
 					);
 				})
 			),
-		[selectedTagID]
+		[selectedTagID, tagCollection, pullDocument]
 	);
 
 	const selectedTagResource = React.useMemo(
@@ -65,7 +65,7 @@ export function FilterBar({ query }: Props) {
 	const selectedBrand$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
-				switchMap(([id]) => {
+				switchMap(([id, brandCollection, pullDocument]) => {
 					if (!id) {
 						return of(undefined);
 					}
@@ -78,7 +78,7 @@ export function FilterBar({ query }: Props) {
 					);
 				})
 			),
-		[selectedBrandID]
+		[selectedBrandID, brandCollection, pullDocument]
 	);
 
 	const selectedBrandResource = React.useMemo(

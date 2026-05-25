@@ -15,7 +15,7 @@ import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { normalizeSelectedCustomerID } from '../components/order/filter-bar/customer-filter-utils';
-import { createSelectedEntity$ } from '../components/filter-bar/selected-entity';
+import { createSelectedEntityFromInputs$ } from '../components/filter-bar/selected-entity';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
 /**
@@ -77,13 +77,8 @@ export function FilterBar({
 	 *
 	 */
 	const selectedCustomer$ = useObservable(
-		() =>
-			createSelectedEntity$({
-				id: customerID as string | number | null | undefined,
-				result$: customerQuery?.result$,
-				guestCustomer,
-			}),
-		[customerID, customerQuery, guestCustomer]
+		(inputs$) => createSelectedEntityFromInputs$(inputs$),
+		[customerID as string | number | null | undefined, customerQuery?.result$, guestCustomer]
 	);
 
 	/**
@@ -98,12 +93,8 @@ export function FilterBar({
 	 *
 	 */
 	const selectedCashier$ = useObservable(
-		() =>
-			createSelectedEntity$({
-				id: cashierID as string | number | null | undefined,
-				result$: cashierQuery?.result$,
-			}),
-		[cashierID, cashierQuery]
+		(inputs$) => createSelectedEntityFromInputs$(inputs$),
+		[cashierID as string | number | null | undefined, cashierQuery?.result$, undefined]
 	);
 
 	/**

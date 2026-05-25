@@ -1,7 +1,8 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservable } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { map, switchMap } from 'rxjs/operators';
 
 import { useQuery } from '@wcpos/query';
 
@@ -36,17 +37,25 @@ export const useDefaultCustomer = () => {
 	 *
 	 */
 	const defaultCustomer$ = useObservable(
-		() =>
-			query!.result$.pipe(
-				map((result) => {
-					if (result.count === 1) {
-						return result.hits[0].document;
-					} else {
-						return guestCustomer;
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(([result$, guestCustomer]) => {
+					if (!result$) {
+						return of(guestCustomer);
 					}
+
+					return result$.pipe(
+						map((result) => {
+							if (result.count === 1) {
+								return result.hits[0].document;
+							}
+
+							return guestCustomer;
+						})
+					);
 				})
 			),
-		[query, guestCustomer]
+		[query?.result$, guestCustomer]
 	);
 
 	/**

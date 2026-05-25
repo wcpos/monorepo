@@ -6,12 +6,70 @@ import * as React from 'react';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { firstValueFrom, NEVER, of, Subject } from 'rxjs';
+import { firstValueFrom, NEVER, Observable, of, Subject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 
-import { createSelectedEntity$ } from '../../filter-bar/selected-entity';
+import {
+	createSelectedEntity$,
+	createSelectedEntityFromInputs$,
+} from '../../filter-bar/selected-entity';
 
 describe('createSelectedEntity$', () => {
+	it('updates the selected entity when the input id changes', async () => {
+		const inputs$ = new Subject<
+			[
+				number | undefined,
+				Observable<{ count: number; hits: { document: { id: number; name: string } }[] }>,
+				undefined,
+			]
+		>();
+		const selected$ = createSelectedEntityFromInputs$(inputs$);
+		const emissions: unknown[] = [];
+		const subscription = selected$.subscribe((value) => emissions.push(value));
+
+		inputs$.next([7, of({ count: 1, hits: [{ document: { id: 7, name: 'Ada' } }] }), undefined]);
+		inputs$.next([8, of({ count: 1, hits: [{ document: { id: 8, name: 'Grace' } }] }), undefined]);
+
+		expect(emissions).toEqual([
+			{ id: 7, __isLoading: true, first_name: 'Loading...' },
+			{ id: 7, name: 'Ada' },
+			{ id: 8, __isLoading: true, first_name: 'Loading...' },
+			{ id: 8, name: 'Grace' },
+		]);
+
+		subscription.unsubscribe();
+	});
+
+	it('keeps the loading placeholder when a reused result stream replays a different id', () => {
+		const result$ = new Subject<{
+			count: number;
+			hits: { document: { id: number; name: string } }[];
+		}>();
+		const inputs$ = new Subject<
+			[
+				number | undefined,
+				Observable<{ count: number; hits: { document: { id: number; name: string } }[] }>,
+				undefined,
+			]
+		>();
+		const selected$ = createSelectedEntityFromInputs$(inputs$);
+		const emissions: unknown[] = [];
+		const subscription = selected$.subscribe((value) => emissions.push(value));
+
+		inputs$.next([7, result$, undefined]);
+		result$.next({ count: 1, hits: [{ document: { id: 7, name: 'Ada' } }] });
+		inputs$.next([8, result$, undefined]);
+		result$.next({ count: 1, hits: [{ document: { id: 7, name: 'Ada' } }] });
+
+		expect(emissions).toEqual([
+			{ id: 7, __isLoading: true, first_name: 'Loading...' },
+			{ id: 7, name: 'Ada' },
+			{ id: 8, __isLoading: true, first_name: 'Loading...' },
+		]);
+
+		subscription.unsubscribe();
+	});
+
 	it('emits a placeholder immediately when a cashier id exists but the lookup query has not resolved yet', async () => {
 		const selected$ = createSelectedEntity$({
 			id: '42',
