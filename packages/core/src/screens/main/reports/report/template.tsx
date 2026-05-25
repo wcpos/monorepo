@@ -81,14 +81,12 @@ export function ZReport() {
 			setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
 		}, [formatDate])
 	);
-	// Update the report-generated date when the selected orders change. The value
-	// comes from `new Date()` (impure), so it can't be derived during render; the
-	// update is deferred to a microtask so it doesn't run synchronously in the
-	// effect body (which would trigger a render cascade).
 	React.useEffect(() => {
-		queueMicrotask(() => {
-			setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
-		});
+		// This timestamp represents an event: the report input set changed.
+		// It is intentionally stateful because `new Date()` is impure and should not
+		// be recomputed during render.
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- reportGenerated is an event timestamp, not derived render data; new Date() is impure and must not run during render.
+		setReportGenerated(formatDate(new Date(), 'yyyy-M-dd HH:mm:ss'));
 	}, [selectedOrders, formatDate]);
 
 	return (
