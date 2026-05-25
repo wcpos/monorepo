@@ -3,7 +3,7 @@ import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'reac
 
 import { useFocusEffect } from 'expo-router';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
-import { filter } from 'rxjs/operators';
+import { filter, map, withLatestFrom } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -30,17 +30,6 @@ export const useBarcodeDetection = (
 	const avgTimeInputThreshold = useObservableEagerState(
 		store.barcode_scanning_avg_time_input_threshold$
 	) as number;
-	const validationRef = React.useRef({ minLength, t });
-
-	/**
-	 * `useObservableCallback` initializes its RxJS pipeline once, so the filter
-	 * below needs a ref to read the latest settings instead of closing over the
-	 * initial barcode minimum length.
-	 */
-	React.useEffect(() => {
-		validationRef.current = { minLength, t };
-	}, [minLength, t]);
-
 	// Refs to keep track of mutable state without causing re-renders
 	const inputStackRef = React.useRef<string[]>([]);
 	const lastInputTimeRef = React.useRef<number | null>(null);
@@ -51,28 +40,30 @@ export const useBarcodeDetection = (
 	// Subject to emit detected barcodes
 	const [onBarcodeScan, barcode$] = useObservableCallback((event$) =>
 		event$.pipe(
-			filter((barcode) => {
-				const { minLength: currentMinLength, t: currentT } = validationRef.current;
+			withLatestFrom(store.barcode_scanning_min_chars$),
+			filter(([barcode, currentMinLength]) => {
+				const currentMinLengthNumber = Number(currentMinLength);
 				if (typeof barcode === 'string') {
-					if (barcode.length >= currentMinLength) {
+					if (barcode.length >= currentMinLengthNumber) {
 						return true;
 					}
-					barcodeLogger.warn(currentT('common.barcode_scanned', { barcode }), {
+					barcodeLogger.warn(t('common.barcode_scanned', { barcode }), {
 						showToast: true,
 						toast: {
-							text2: currentT('common.barcode_must_be_at_least_characters', {
-								minLength: currentMinLength,
+							text2: t('common.barcode_must_be_at_least_characters', {
+								minLength: currentMinLengthNumber,
 							}),
 						},
 						context: {
 							barcode,
-							minLength: currentMinLength,
+							minLength: currentMinLengthNumber,
 							actualLength: barcode.length,
 						},
 					});
 				}
 				return false;
-			})
+			}),
+			map(([barcode]) => barcode)
 		)
 	);
 
