@@ -45,22 +45,23 @@ const CLEAR_LOCAL_DATA_ON_NEXT_LOAD_KEY = 'wcpos.clearLocalDataOnNextLoad';
  */
 function useThemeRestorer() {
 	const { store } = useAppState();
+	const [restoredForStore, setRestoredForStore] = React.useState<unknown>(null);
 	const [isThemeReady, setIsThemeReady] = React.useState(false);
 
-	// Restore the saved theme once the store becomes available, then mark the theme as
-	// ready. We use React's "adjusting state during render" pattern (rather than an
-	// effect) so the theme is applied synchronously before the gated content commits,
-	// which prevents the flash of default theme colors. `Uniwind.setTheme` is idempotent
-	// and the work is guarded so it only runs on the render where the store first appears.
-	const [restoredForStore, setRestoredForStore] = React.useState<unknown>(null);
+	// Adjust state during render — sanctioned pattern, not an effect, not flagged.
 	if (store && restoredForStore !== store) {
 		setRestoredForStore(store);
+		setIsThemeReady(true);
+	}
+
+	// External mutation belongs in a pre-paint effect; read store.theme directly.
+	React.useLayoutEffect(() => {
+		if (!store) return;
 		const savedTheme = store.theme;
 		if (savedTheme && savedTheme !== 'system') {
 			Uniwind.setTheme(savedTheme);
 		}
-		setIsThemeReady(true);
-	}
+	}, [store]);
 
 	return { isThemeReady, hasStore: !!store };
 }
