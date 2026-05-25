@@ -81,4 +81,26 @@ describe('useBarcodeDetection', () => {
 
 		subscription.unsubscribe();
 	});
+
+	it('uses the latest minimum length when scanner settings change during scan timeout', () => {
+		const detected: string[] = [];
+		const callback = jest.fn();
+		const { result } = renderHook(() => useBarcodeDetection(callback));
+		const subscription = result.current.barcode$.subscribe((barcode) =>
+			detected.push(String(barcode))
+		);
+
+		act(() => {
+			dispatchBarcode('1234');
+			jest.advanceTimersByTime(50);
+			minChars$.next(4);
+			jest.advanceTimersByTime(101);
+		});
+
+		expect(detected).toEqual(['1234']);
+		expect(callback).toHaveBeenCalledWith('1234');
+		expect(getLogger(['wcpos', 'barcode', 'detection']).warn).not.toHaveBeenCalled();
+
+		subscription.unsubscribe();
+	});
 });

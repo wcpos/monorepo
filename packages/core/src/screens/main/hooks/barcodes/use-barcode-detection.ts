@@ -3,7 +3,7 @@ import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'reac
 
 import { useFocusEffect } from 'expo-router';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
-import { filter, map, withLatestFrom } from 'rxjs/operators';
+import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -24,7 +24,6 @@ export const useBarcodeDetection = (
 ) => {
 	const t = useT();
 	const { store } = useAppState();
-	const minLength = useObservableEagerState(store.barcode_scanning_min_chars$) as number;
 	const prefix = useObservableEagerState(store.barcode_scanning_prefix$) as string;
 	const suffix = useObservableEagerState(store.barcode_scanning_suffix$) as string;
 	const avgTimeInputThreshold = useObservableEagerState(
@@ -36,6 +35,11 @@ export const useBarcodeDetection = (
 	const avgInputTimeRef = React.useRef<number>(0);
 	const detectingScanningRef = React.useRef<boolean>(false);
 	const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+	const callbackRef = React.useRef(callback);
+
+	React.useEffect(() => {
+		callbackRef.current = callback;
+	}, [callback]);
 
 	// Subject to emit detected barcodes
 	const [onBarcodeScan, barcode$] = useObservableCallback((event$) =>
@@ -62,6 +66,11 @@ export const useBarcodeDetection = (
 					});
 				}
 				return false;
+			}),
+			tap(([barcode]) => {
+				if (typeof barcode === 'string') {
+					callbackRef.current(barcode);
+				}
 			}),
 			map(([barcode]) => barcode)
 		)
@@ -119,13 +128,7 @@ export const useBarcodeDetection = (
 						}
 
 						const barcode = inputStack.join('');
-
-						if (barcode.length >= minLength) {
-							if (callback) {
-								callback(barcode);
-							}
-							onBarcodeScan(barcode);
-						}
+						onBarcodeScan(barcode);
 
 						// Reset variables
 						inputStackRef.current = [];
@@ -141,7 +144,7 @@ export const useBarcodeDetection = (
 			// Update lastInputTimeRef
 			lastInputTimeRef.current = currentInputTime;
 		},
-		[avgTimeInputThreshold, prefix, suffix, minLength, callback, onBarcodeScan]
+		[avgTimeInputThreshold, prefix, suffix, onBarcodeScan]
 	);
 
 	/**
