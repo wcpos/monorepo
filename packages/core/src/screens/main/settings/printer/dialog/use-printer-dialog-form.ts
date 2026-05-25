@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
 import { PrinterService, probeVendor } from '@wcpos/printer';
-import type { PrinterProfile } from '@wcpos/printer';
+import type { PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
 import { useAppState } from '../../../../../contexts/app-state';
@@ -30,6 +30,7 @@ interface UsePrinterDialogFormArgs {
 	deriveVendorDefaults: (vendor: PrinterFormValues['vendor']) => VendorDefaults;
 	printer?: PrinterProfile;
 	prefill?: PrinterDialogPrefill;
+	cloudEnqueueFactory?: PrinterServiceOptions['cloudEnqueueFactory'];
 	printerCount: number;
 	onSave: () => void;
 }
@@ -41,12 +42,16 @@ export function usePrinterDialogForm({
 	deriveVendorDefaults,
 	printer,
 	prefill,
+	cloudEnqueueFactory,
 	printerCount,
 	onSave,
 }: UsePrinterDialogFormArgs) {
 	const t = useT();
 	const { storeDB } = useAppState();
-	const printerService = React.useMemo(() => new PrinterService(), []);
+	const printerService = React.useMemo(
+		() => new PrinterService({ cloudEnqueueFactory }),
+		[cloudEnqueueFactory]
+	);
 	const isEditing = !!printer;
 
 	const [testLoading, setTestLoading] = React.useState(false);

@@ -14,8 +14,9 @@ import type { CloudEnqueueFn } from './transport/cloud-adapter';
 import type { PrinterProfile, PrinterTransport } from './types';
 
 /** Cache key that captures config-relevant fields so stale transports are evicted. */
-function transportKey(profile: PrinterProfile): string {
-	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}:${profile.nativeInterfaceType ?? ''}:${profile.cloudPrinterId ?? ''}`;
+function transportKey(profile: PrinterProfile, cloudFactoryVersion: number): string {
+	const factoryVersion = profile.connectionType === 'cloud' ? cloudFactoryVersion : 0;
+	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}:${profile.nativeInterfaceType ?? ''}:${profile.cloudPrinterId ?? ''}:${factoryVersion}`;
 }
 
 export interface PrinterServiceOptions {
@@ -31,6 +32,7 @@ export interface PrinterServiceOptions {
 export class PrinterService {
 	private queue = new PQueue({ concurrency: 1 });
 	private transports = new Map<string, PrinterTransport>();
+	private cloudFactoryVersion = 0;
 	/** Tracks the config fingerprint used to create each cached transport. */
 	private transportKeys = new Map<string, string>();
 
@@ -41,6 +43,7 @@ export class PrinterService {
 	 * host app to inject its authenticated transport into the singleton service.
 	 */
 	setCloudEnqueueFactory(factory: PrinterServiceOptions['cloudEnqueueFactory']): void {
+		this.cloudFactoryVersion += 1;
 		this.options = { ...this.options, cloudEnqueueFactory: factory };
 	}
 
@@ -50,7 +53,7 @@ export class PrinterService {
 	 * NetworkAdapter is loaded lazily to avoid triggering NativeEventEmitter at import time.
 	 */
 	private async getTransport(profile: PrinterProfile): Promise<PrinterTransport> {
-		const key = transportKey(profile);
+		const key = transportKey(profile, this.cloudFactoryVersion);
 		const cachedKey = this.transportKeys.get(profile.id);
 
 		if (cachedKey === key) {

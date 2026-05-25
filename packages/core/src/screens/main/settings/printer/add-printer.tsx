@@ -3,6 +3,8 @@ import * as React from 'react';
 import type { PrinterProfile } from '@wcpos/printer';
 import { usePrinterDiscovery } from '@wcpos/printer';
 
+import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { BluetoothDevicePicker } from './dialog/connection/bluetooth-device-picker';
 import { CloudFields } from './dialog/connection/cloud-fields';
@@ -46,6 +48,11 @@ export function PrinterDialog({
 }: PrinterDialogProps) {
 	const t = useT();
 	const { startScan, isScanning: scanning } = usePrinterDiscovery();
+	const cloudHttp = useRestHttpClient();
+	const cloudEnqueueFactory = React.useMemo(
+		() => createCloudEnqueueFactory(cloudHttp),
+		[cloudHttp]
+	);
 	const {
 		form,
 		isEditing,
@@ -65,6 +72,7 @@ export function PrinterDialog({
 		deriveVendorDefaults,
 		printer,
 		prefill,
+		cloudEnqueueFactory,
 		printerCount,
 		onSave,
 	});
