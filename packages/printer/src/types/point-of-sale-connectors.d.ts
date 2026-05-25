@@ -15,10 +15,10 @@ declare module '@point-of-sale/webusb-receipt-printer' {
 
 	export default class WebUSBReceiptPrinter {
 		connect(): void;
-		reconnect(device: unknown): void;
+		reconnect(device: unknown): void | Promise<void>;
 		print(data: Uint8Array | number[]): void;
 		addEventListener(
-			type: 'connected' | 'disconnected' | 'data',
+			type: 'connected' | 'disconnected' | 'data' | 'error',
 			cb: (device: PosConnectedDeviceLike) => void
 		): void;
 	}
@@ -40,10 +40,10 @@ declare module '@point-of-sale/webbluetooth-receipt-printer' {
 
 	export default class WebBluetoothReceiptPrinter {
 		connect(): void;
-		reconnect(device: unknown): void;
+		reconnect(device: unknown): void | Promise<void>;
 		print(data: Uint8Array | number[]): void;
 		addEventListener(
-			type: 'connected' | 'disconnected' | 'data',
+			type: 'connected' | 'disconnected' | 'data' | 'error',
 			cb: (device: PosConnectedDeviceLike) => void
 		): void;
 	}

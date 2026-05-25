@@ -20,6 +20,27 @@ describe('mapWebDeviceToDiscoveredPrinter', () => {
 		});
 	});
 
+	it('uses a collision-resistant fallback when serial/id are missing', () => {
+		const first = mapWebDeviceToDiscoveredPrinter({
+			type: 'usb',
+			language: 'esc-pos',
+			productName: 'TM-m30III',
+			vendorId: 1208,
+			productId: 1,
+		});
+		const second = mapWebDeviceToDiscoveredPrinter({
+			type: 'usb',
+			language: 'esc-pos',
+			productName: 'TM-m30III',
+			vendorId: 1208,
+			productId: 2,
+		});
+
+		expect(first.id).not.toBe(second.id);
+		expect(first.address).toBe(first.id);
+		expect(second.address).toBe(second.id);
+	});
+
 	it('maps a Bluetooth device using its id and name', () => {
 		expect(
 			mapWebDeviceToDiscoveredPrinter({

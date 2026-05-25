@@ -1,5 +1,6 @@
 /// <reference path="../types/point-of-sale-connectors.d.ts" />
 import { loadWebDevice } from './web-device-store';
+import { waitForWebPrinterReconnect } from './web-reconnect';
 
 import type { PrinterTransport } from '../types';
 
@@ -18,14 +19,7 @@ export class WebBluetoothAdapter implements PrinterTransport {
 		const { default: WebBluetoothReceiptPrinter } =
 			await import('@point-of-sale/webbluetooth-receipt-printer');
 		const printer = new WebBluetoothReceiptPrinter();
-		await new Promise<void>((resolve, reject) => {
-			printer.addEventListener('connected', () => resolve());
-			try {
-				printer.reconnect(device);
-			} catch (err) {
-				reject(err instanceof Error ? err : new Error(String(err)));
-			}
-		});
+		await waitForWebPrinterReconnect(printer, device, 'Bluetooth');
 		printer.print(data);
 	}
 

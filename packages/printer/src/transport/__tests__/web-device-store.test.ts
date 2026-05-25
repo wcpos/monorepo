@@ -22,4 +22,36 @@ describe('web-device-store', () => {
 	it('returns null when nothing is stored', () => {
 		expect(loadWebDevice('missing', fakeStorage())).toBeNull();
 	});
+
+	it('returns null for malformed JSON', () => {
+		expect(
+			loadWebDevice('profile-1', {
+				...fakeStorage(),
+				getItem: () => '{bad json',
+			})
+		).toBeNull();
+	});
+
+	it('returns null when storage throws while reading', () => {
+		expect(
+			loadWebDevice('profile-1', {
+				...fakeStorage(),
+				getItem: () => {
+					throw new Error('storage disabled');
+				},
+			})
+		).toBeNull();
+	});
+
+	it('does not throw when storage rejects writes', () => {
+		const device = { type: 'usb' as const, language: 'esc-pos' as const, serialNumber: 'abc' };
+		expect(() =>
+			saveWebDevice('profile-1', device, {
+				...fakeStorage(),
+				setItem: () => {
+					throw new Error('quota exceeded');
+				},
+			})
+		).not.toThrow();
+	});
 });

@@ -19,13 +19,21 @@ export function saveWebDevice(
 	device: PosConnectedDevice,
 	storage: KeyValueStorage | null = defaultStorage()
 ): void {
-	storage?.setItem(key(deviceKey), JSON.stringify(device));
+	try {
+		storage?.setItem(key(deviceKey), JSON.stringify(device));
+	} catch {
+		// Ignore storage failures (quota, privacy mode, unavailable backend).
+	}
 }
 
 export function loadWebDevice(
 	deviceKey: string,
 	storage: KeyValueStorage | null = defaultStorage()
 ): PosConnectedDevice | null {
-	const raw = storage?.getItem(key(deviceKey));
-	return raw ? (JSON.parse(raw) as PosConnectedDevice) : null;
+	try {
+		const raw = storage?.getItem(key(deviceKey));
+		return raw ? (JSON.parse(raw) as PosConnectedDevice) : null;
+	} catch {
+		return null;
+	}
 }
