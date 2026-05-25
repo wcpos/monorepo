@@ -3,7 +3,7 @@ import { NativeSyntheticEvent, Platform, TextInputKeyPressEventData } from 'reac
 
 import { useFocusEffect } from 'expo-router';
 import { useObservableCallback, useObservableEagerState } from 'observable-hooks';
-import { filter } from 'rxjs/operators';
+import { filter, map, tap, withLatestFrom } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
 
@@ -11,6 +11,11 @@ import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'detection']);
+
+type BarcodeScanEvent = {
+	barcode: string;
+	callback: (barcode: string) => void;
+};
 
 export const useBarcodeDetection = (
 	callback = (barcode: string) => {}
@@ -24,45 +29,52 @@ export const useBarcodeDetection = (
 ) => {
 	const t = useT();
 	const { store } = useAppState();
-	const minLength = useObservableEagerState(store.barcode_scanning_min_chars$) as number;
 	const prefix = useObservableEagerState(store.barcode_scanning_prefix$) as string;
 	const suffix = useObservableEagerState(store.barcode_scanning_suffix$) as string;
 	const avgTimeInputThreshold = useObservableEagerState(
 		store.barcode_scanning_avg_time_input_threshold$
 	) as number;
-
 	// Refs to keep track of mutable state without causing re-renders
 	const inputStackRef = React.useRef<string[]>([]);
 	const lastInputTimeRef = React.useRef<number | null>(null);
 	const avgInputTimeRef = React.useRef<number>(0);
 	const detectingScanningRef = React.useRef<boolean>(false);
 	const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
 	// Subject to emit detected barcodes
-	const [onBarcodeScan, barcode$] = useObservableCallback((event$) =>
-		event$.pipe(
-			filter((barcode) => {
-				if (typeof barcode === 'string') {
-					if (barcode.length >= minLength) {
+	const [onBarcodeScan, barcode$] = useObservableCallback<
+		string,
+		BarcodeScanEvent,
+		[string, (barcode: string) => void]
+	>(
+		(event$) =>
+			event$.pipe(
+				withLatestFrom(store.barcode_scanning_min_chars$),
+				filter(([event, currentMinLength]) => {
+					const currentMinLengthNumber = Number(currentMinLength);
+					if (event.barcode.length >= currentMinLengthNumber) {
 						return true;
 					}
-					barcodeLogger.warn(t('common.barcode_scanned', { barcode }), {
+					barcodeLogger.warn(t('common.barcode_scanned', { barcode: event.barcode }), {
 						showToast: true,
 						toast: {
 							text2: t('common.barcode_must_be_at_least_characters', {
-								minLength,
+								minLength: currentMinLengthNumber,
 							}),
 						},
 						context: {
-							barcode,
-							minLength,
-							actualLength: barcode.length,
+							barcode: event.barcode,
+							minLength: currentMinLengthNumber,
+							actualLength: event.barcode.length,
 						},
 					});
-				}
-				return false;
-			})
-		)
+					return false;
+				}),
+				tap(([event]) => {
+					event.callback(event.barcode);
+				}),
+				map(([event]) => event.barcode)
+			),
+		([barcode, eventCallback]) => ({ barcode, callback: eventCallback })
 	);
 
 	/**
@@ -117,13 +129,7 @@ export const useBarcodeDetection = (
 						}
 
 						const barcode = inputStack.join('');
-
-						if (barcode.length >= minLength) {
-							if (callback) {
-								callback(barcode);
-							}
-							onBarcodeScan(barcode);
-						}
+						onBarcodeScan(barcode, callback);
 
 						// Reset variables
 						inputStackRef.current = [];
@@ -139,7 +145,7 @@ export const useBarcodeDetection = (
 			// Update lastInputTimeRef
 			lastInputTimeRef.current = currentInputTime;
 		},
-		[avgTimeInputThreshold, prefix, suffix, minLength, callback, onBarcodeScan]
+		[avgTimeInputThreshold, prefix, suffix, callback, onBarcodeScan]
 	);
 
 	/**
