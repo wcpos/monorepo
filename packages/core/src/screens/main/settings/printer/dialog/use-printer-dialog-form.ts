@@ -85,6 +85,7 @@ export function usePrinterDialogForm({
 				autoOpenDrawer: printer.autoOpenDrawer ?? false,
 				isDefault: printer.isDefault ?? false,
 				nativeInterfaceType: printer.nativeInterfaceType,
+				cloudPrinterId: printer.cloudPrinterId ?? '',
 			};
 			prevVendorRef.current = next.vendor;
 			form.reset(next);
@@ -103,6 +104,7 @@ export function usePrinterDialogForm({
 				port: prefill.port ?? vendorDefaults.port,
 				language: vendorDefaults.language,
 				nativeInterfaceType: prefill.nativeInterfaceType,
+				cloudPrinterId: prefill.cloudPrinterId ?? '',
 			};
 			prevVendorRef.current = next.vendor;
 			form.reset(next);

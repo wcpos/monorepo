@@ -144,4 +144,25 @@ describe('buildPrinterProfileFields', () => {
 			})
 		).toEqual(expect.objectContaining({ connectionType: 'network' }));
 	});
+
+	it('builds a cloud profile carrying cloudPrinterId', () => {
+		expect(
+			buildPrinterProfileFields(
+				{
+					name: 'Kitchen (cloud)',
+					connectionType: 'cloud',
+					vendor: 'generic',
+					cloudPrinterId: 'reg-7',
+					language: 'esc-pos',
+					columns: 42,
+					emitEscPrintMode: true,
+					fullReceiptRaster: false,
+					autoCut: true,
+					autoOpenDrawer: false,
+					isDefault: false,
+				} as never,
+				{}
+			)
+		).toEqual(expect.objectContaining({ connectionType: 'cloud', cloudPrinterId: 'reg-7' }));
+	});
 });

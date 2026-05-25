@@ -2,9 +2,10 @@ import * as z from 'zod';
 
 export interface PrinterFormValues {
 	name: string;
-	connectionType: 'network' | 'bluetooth' | 'usb';
+	connectionType: 'network' | 'bluetooth' | 'usb' | 'cloud';
 	vendor: 'epson' | 'star' | 'generic';
 	address: string;
+	cloudPrinterId?: string;
 	port: number;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns: number;
@@ -28,6 +29,7 @@ export const DEFAULT_FORM_VALUES: PrinterFormValues = {
 	connectionType: 'network',
 	vendor: 'generic',
 	address: '',
+	cloudPrinterId: '',
 	port: 9100,
 	language: 'esc-pos',
 	columns: 42,
@@ -49,6 +51,7 @@ const baseShape = {
 	autoOpenDrawer: z.boolean().default(false),
 	isDefault: z.boolean().default(true),
 	nativeInterfaceType: z.string().optional(),
+	cloudPrinterId: z.string().optional(),
 };
 
 /** Web: Epson/Star; network or (capability-permitting) USB/Bluetooth via WebUSB/Web Bluetooth. */
@@ -79,3 +82,15 @@ export const nativePrinterSchema = z
 		path: ['vendor'],
 		message: 'Bluetooth and USB printers must be Epson or Star',
 	});
+
+/** Cloud: a registered plugin printer chosen by id, no address. */
+export const cloudPrinterSchema = z.object({
+	...baseShape,
+	connectionType: z.literal('cloud').default('cloud'),
+	vendor: z.enum(['epson', 'star', 'generic']).default('generic'),
+	address: z.string().optional().default(''),
+	cloudPrinterId: z.string().min(1, 'Select a cloud printer'),
+});
+
+/** Native app dialog: local native transports or plugin-registered cloud printers. */
+export const nativeOrCloudPrinterSchema = z.union([nativePrinterSchema, cloudPrinterSchema]);

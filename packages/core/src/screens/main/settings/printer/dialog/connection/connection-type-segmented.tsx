@@ -5,7 +5,7 @@ import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../../contexts/translations';
 
-type ConnType = 'network' | 'bluetooth' | 'usb';
+type ConnType = 'network' | 'bluetooth' | 'usb' | 'cloud';
 
 interface ConnectionTypeSegmentedProps {
 	value: ConnType;
@@ -17,6 +17,7 @@ export function ConnectionTypeSegmented({ value, onChange }: ConnectionTypeSegme
 	const options: { value: ConnType; label: string }[] = [
 		{ value: 'network', label: t('settings.connection_network', 'Network') },
 		{ value: 'bluetooth', label: t('settings.connection_bluetooth', 'Bluetooth') },
+		{ value: 'cloud', label: t('settings.printer_connection_cloud', 'Cloud') },
 	];
 	if (Platform.OS !== 'ios') {
 		options.push({ value: 'usb', label: t('settings.connection_usb', 'USB') });
@@ -31,7 +32,11 @@ export function ConnectionTypeSegmented({ value, onChange }: ConnectionTypeSegme
 				return (
 					<Pressable
 						key={option.value}
-						testID={`add-printer-connection-type-${option.value}`}
+						testID={
+							option.value === 'cloud'
+								? 'printer-connection-cloud'
+								: `add-printer-connection-type-${option.value}`
+						}
 						onPress={() => onChange(option.value)}
 						className={`flex-1 items-center rounded px-2 py-2 ${selected ? 'bg-background' : ''}`}
 					>
