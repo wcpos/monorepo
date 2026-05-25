@@ -30,6 +30,16 @@ export const useBarcodeDetection = (
 	const avgTimeInputThreshold = useObservableEagerState(
 		store.barcode_scanning_avg_time_input_threshold$
 	) as number;
+	const validationRef = React.useRef({ minLength, t });
+
+	/**
+	 * `useObservableCallback` initializes its RxJS pipeline once, so the filter
+	 * below needs a ref to read the latest settings instead of closing over the
+	 * initial barcode minimum length.
+	 */
+	React.useEffect(() => {
+		validationRef.current = { minLength, t };
+	}, [minLength, t]);
 
 	// Refs to keep track of mutable state without causing re-renders
 	const inputStackRef = React.useRef<string[]>([]);
@@ -42,20 +52,21 @@ export const useBarcodeDetection = (
 	const [onBarcodeScan, barcode$] = useObservableCallback((event$) =>
 		event$.pipe(
 			filter((barcode) => {
+				const { minLength: currentMinLength, t: currentT } = validationRef.current;
 				if (typeof barcode === 'string') {
-					if (barcode.length >= minLength) {
+					if (barcode.length >= currentMinLength) {
 						return true;
 					}
-					barcodeLogger.warn(t('common.barcode_scanned', { barcode }), {
+					barcodeLogger.warn(currentT('common.barcode_scanned', { barcode }), {
 						showToast: true,
 						toast: {
-							text2: t('common.barcode_must_be_at_least_characters', {
-								minLength,
+							text2: currentT('common.barcode_must_be_at_least_characters', {
+								minLength: currentMinLength,
 							}),
 						},
 						context: {
 							barcode,
-							minLength,
+							minLength: currentMinLength,
 							actualLength: barcode.length,
 						},
 					});
