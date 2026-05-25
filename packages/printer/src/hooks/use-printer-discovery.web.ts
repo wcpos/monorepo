@@ -1,4 +1,11 @@
+/// <reference path="../types/point-of-sale-connectors.d.ts" />
 import * as React from 'react';
+
+import WebBluetoothReceiptPrinter from '@point-of-sale/webbluetooth-receipt-printer';
+import WebUSBReceiptPrinter from '@point-of-sale/webusb-receipt-printer';
+
+import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
+import { saveWebDevice } from '../transport/web-device-store';
 
 import type { DiscoveredPrinter } from '../types';
 
@@ -15,6 +22,10 @@ interface UsePrinterDiscoveryResult {
 		vendor?: 'epson' | 'star' | 'generic'
 	) => void;
 	removeDiscoveredPrinter: (id: string) => void;
+	/** Web only — open the browser USB chooser and add the chosen printer. */
+	connectUsbDevice?: () => void;
+	/** Web only — open the browser Bluetooth chooser and add the chosen printer. */
+	connectBluetoothDevice?: () => void;
 	error: string | null;
 }
 
@@ -112,6 +123,36 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		setIsScanning(false);
 	}, []);
 
+	const connectUsbDevice = React.useCallback(() => {
+		setError(null);
+		try {
+			const printer = new WebUSBReceiptPrinter();
+			printer.addEventListener('connected', (device) => {
+				const discovered = mapWebDeviceToDiscoveredPrinter(device);
+				saveWebDevice(discovered.address, device);
+				setPrinters((prev) => mergePrinters(prev, [discovered]));
+			});
+			printer.connect(); // runs synchronously in the click gesture
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		}
+	}, []);
+
+	const connectBluetoothDevice = React.useCallback(() => {
+		setError(null);
+		try {
+			const printer = new WebBluetoothReceiptPrinter();
+			printer.addEventListener('connected', (device) => {
+				const discovered = mapWebDeviceToDiscoveredPrinter(device);
+				saveWebDevice(discovered.address, device);
+				setPrinters((prev) => mergePrinters(prev, [discovered]));
+			});
+			printer.connect(); // runs synchronously in the click gesture
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		}
+	}, []);
+
 	return {
 		printers,
 		isScanning,
@@ -120,6 +161,8 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		stopScan,
 		addManualPrinter,
 		removeDiscoveredPrinter,
+		connectUsbDevice,
+		connectBluetoothDevice,
 		error,
 	};
 }

@@ -15,6 +15,10 @@ interface UsePrinterDiscoveryResult {
 		vendor?: 'epson' | 'star' | 'generic'
 	) => void;
 	removeDiscoveredPrinter: (id: string) => void;
+	/** Web only — open the browser USB chooser and add the chosen printer. */
+	connectUsbDevice?: () => void;
+	/** Web only — open the browser Bluetooth chooser and add the chosen printer. */
+	connectBluetoothDevice?: () => void;
 	error: string | null;
 }
 

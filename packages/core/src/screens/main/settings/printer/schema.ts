@@ -51,12 +51,12 @@ const baseShape = {
 	nativeInterfaceType: z.string().optional(),
 };
 
-/** Web: Epson/Star only, network only. */
+/** Web: Epson/Star; network or (capability-permitting) USB/Bluetooth via WebUSB/Web Bluetooth. */
 export const webPrinterSchema = z.object({
 	...baseShape,
-	connectionType: z.literal('network').default('network'),
+	connectionType: z.enum(['network', 'usb', 'bluetooth']).default('network'),
 	vendor: z.enum(['epson', 'star']).default('epson'),
-	address: z.string().min(1, 'IP address is required'),
+	address: z.string().min(1, 'A printer address or device is required'),
 });
 
 /** Electron: all vendors, network only. */
