@@ -68,5 +68,6 @@ allowBuilds:
   "secp256k1": true
   "uniwind-pro": true
   "unrs-resolver": true
+  usb: true
 patchedDependencies:
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
