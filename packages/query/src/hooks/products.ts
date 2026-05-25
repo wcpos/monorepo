@@ -4,11 +4,9 @@ import {
 	extractSameFieldOrElemMatchIds,
 	removeMangoOperatorKeys,
 } from './selector-translator';
+import { unwrapEqSelector } from '../utils';
 
 const joinIds = (ids: (number | string)[]) => ids.join(',');
-
-const unwrapEqSelector = (value: unknown) =>
-	value && typeof value === 'object' && '$eq' in value ? value.$eq : value;
 
 /**
  * Convert RxDB/Mango product selectors into parameters supported by the WCPOS/WooCommerce REST API.

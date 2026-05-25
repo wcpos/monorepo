@@ -306,6 +306,18 @@ describe('Hook Filters', () => {
 			expect(result.brands).toBeUndefined();
 		});
 
+		it('does not unwrap taxonomy selectors with mixed Mango operators', () => {
+			const result = filterProductParams({
+				categories: {
+					$eq: { $elemMatch: { id: 9 } },
+					$ne: { $elemMatch: { id: 14 } },
+				},
+			});
+
+			expect(result.category).toBeUndefined();
+			expect(result.categories).toBeUndefined();
+		});
+
 		it('converts same-field OR brand filters inside $and to Store API brand params', () => {
 			const result = filterProductParams({
 				$and: [
