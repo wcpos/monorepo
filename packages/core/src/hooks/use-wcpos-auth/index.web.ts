@@ -44,6 +44,8 @@ interface SavedAuthState {
 }
 
 function getSavedAuthState(): SavedAuthState | null {
+	if (typeof sessionStorage === 'undefined') return null;
+
 	const raw = sessionStorage.getItem(AUTH_STATE_KEY);
 	if (!raw) return null;
 
@@ -84,6 +86,7 @@ function saveCsrfState(state: string): void {
  * Get saved CSRF state
  */
 function getSavedCsrfState(): string | null {
+	if (typeof sessionStorage === 'undefined') return null;
 	return sessionStorage.getItem(AUTH_CSRF_STATE_KEY);
 }
 
@@ -92,6 +95,8 @@ function getSavedCsrfState(): string | null {
  * Computed synchronously from window.location so it can seed initial state.
  */
 function parseAuthFromUrl(): WcposAuthResult | null {
+	if (typeof window === 'undefined') return null;
+
 	const hash = window.location.hash;
 	const search = window.location.search;
 
