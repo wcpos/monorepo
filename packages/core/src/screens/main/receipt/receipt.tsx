@@ -42,6 +42,8 @@ import {
 } from './components/receipt-preview-viewport';
 import { EmailForm } from './email';
 import { useTemplateRenderer } from './hooks/use-template-renderer';
+import { createCloudEnqueueFactory } from '../hooks/use-cloud-enqueue';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
 import { MismatchBadge } from './mismatch-badge';
 import { PrinterSwitcher } from './printer-switcher';
 import { SyncingBadge } from './syncing-badge';
@@ -67,6 +69,11 @@ export function Receipt({ resource }: Props) {
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>(null);
 	const { store } = useAppState();
+	const cloudHttp = useRestHttpClient();
+	const cloudEnqueueFactory = React.useMemo(
+		() => createCloudEnqueueFactory(cloudHttp),
+		[cloudHttp]
+	);
 	const taxRates = React.useContext(TaxRatesContext);
 	const storeDp = useObservableEagerState(store?.wc_price_decimals$) as number | undefined;
 	const dp = resolvePriceNumDecimals({
@@ -167,6 +174,7 @@ export function Receipt({ resource }: Props) {
 		templateXml:
 			selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
 		iframeRef,
+		cloudEnqueueFactory,
 	});
 
 	/**

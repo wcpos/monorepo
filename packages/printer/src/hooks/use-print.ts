@@ -8,6 +8,7 @@ import { useOptionalRasterize } from '../raster/rasterize-provider';
 import { printFromUrl } from './print-from-url';
 
 import type { ReceiptData } from '../encoder/types';
+import type { PrinterServiceOptions } from '../printer-service';
 import type { PrinterProfile } from '../types';
 
 interface UsePrintOptions {
@@ -30,6 +31,8 @@ interface UsePrintOptions {
 	templateEngine?: string;
 	/** Ref to the receipt iframe — used to extract HTML when fetch is blocked by CORS */
 	iframeRef?: React.RefObject<HTMLIFrameElement | null>;
+	/** Injected by the host app: builds the cloud queue enqueue fn for a profile. */
+	cloudEnqueueFactory?: PrinterServiceOptions['cloudEnqueueFactory'];
 	/** Callbacks */
 	onBeforePrint?: () => void | Promise<void>;
 	onAfterPrint?: () => void;
@@ -73,9 +76,23 @@ function resolvePaperGeometry(paperWidth: string | null | undefined): {
 }
 
 export function usePrint(options: UsePrintOptions) {
+	const {
+		receiptData,
+		html,
+		receiptUrl,
+		paperWidth,
+		printerProfile,
+		templateXml,
+		decimals,
+		templateEngine,
+		iframeRef,
+		cloudEnqueueFactory,
+		onBeforePrint,
+		onAfterPrint,
+		onPrintError,
+	} = options;
+
 	const [isPrinting, setIsPrinting] = React.useState(false);
-	const optionsRef = React.useRef(options);
-	optionsRef.current = options;
 
 	/** Track overlapping print calls so isPrinting stays true until all finish. */
 	const activePrintsRef = React.useRef(0);
@@ -83,21 +100,6 @@ export function usePrint(options: UsePrintOptions) {
 	const rasterize = useOptionalRasterize();
 
 	const print = React.useCallback(async () => {
-		const {
-			receiptData,
-			html,
-			receiptUrl,
-			paperWidth,
-			printerProfile,
-			templateXml,
-			decimals,
-			templateEngine,
-			iframeRef,
-			onBeforePrint,
-			onAfterPrint,
-			onPrintError,
-		} = optionsRef.current;
-
 		activePrintsRef.current += 1;
 		setIsPrinting(true);
 
@@ -107,6 +109,9 @@ export function usePrint(options: UsePrintOptions) {
 			}
 
 			const service = getService();
+			if (cloudEnqueueFactory) {
+				service.setCloudEnqueueFactory(cloudEnqueueFactory);
+			}
 
 			if (printerProfile && printerProfile.connectionType !== 'system' && receiptData) {
 				const normalised = mapReceiptData(receiptData as Record<string, any>);
@@ -189,7 +194,22 @@ export function usePrint(options: UsePrintOptions) {
 				setIsPrinting(false);
 			}
 		}
-	}, [rasterize]);
+	}, [
+		cloudEnqueueFactory,
+		decimals,
+		html,
+		iframeRef,
+		onAfterPrint,
+		onBeforePrint,
+		onPrintError,
+		paperWidth,
+		printerProfile,
+		rasterize,
+		receiptData,
+		receiptUrl,
+		templateEngine,
+		templateXml,
+	]);
 
 	return { print, isPrinting };
 }

@@ -34,7 +34,15 @@ export class PrinterService {
 	/** Tracks the config fingerprint used to create each cached transport. */
 	private transportKeys = new Map<string, string>();
 
-	constructor(private readonly options: PrinterServiceOptions = {}) {}
+	constructor(private options: PrinterServiceOptions = {}) {}
+
+	/**
+	 * Set or replace the cloud enqueue factory after construction. Used by the
+	 * host app to inject its authenticated transport into the singleton service.
+	 */
+	setCloudEnqueueFactory(factory: PrinterServiceOptions['cloudEnqueueFactory']): void {
+		this.options = { ...this.options, cloudEnqueueFactory: factory };
+	}
 
 	/**
 	 * Get or create a transport for the given profile.
