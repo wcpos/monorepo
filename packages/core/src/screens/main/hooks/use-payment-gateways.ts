@@ -32,13 +32,8 @@ export function usePaymentGateways(selectedGatewayId?: string | null) {
 	}, [http]);
 
 	React.useEffect(() => {
-		// Await inside a local async function so the loading-state updates inside
-		// fetchGateways happen asynchronously rather than synchronously in the
-		// effect body (which would trigger a render cascade).
-		const run = async () => {
-			await fetchGateways();
-		};
-		void run();
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- fetchGateways is the mount/reload event for this external resource; state updates happen in the async fetch lifecycle.
+		void fetchGateways();
 	}, [fetchGateways]);
 
 	const gateway = React.useMemo(
