@@ -3,6 +3,7 @@ import round from 'lodash/round';
 
 import { calculateTaxes } from '../../hooks/utils/calculate-taxes';
 import { roundTaxTotal } from '../../hooks/utils/precision';
+import { getLineItemTaxStatus } from './utils';
 
 import type { PerItemDiscount } from './coupon-discount';
 
@@ -366,8 +367,10 @@ export function calculateCouponDiscountTaxSplit(
 				? lineItems[entry.lineIndex]
 				: lineItems.find((item) => item.product_id === entry.product_id);
 
-		// WC: skip non-taxable items (tax_status !== 'taxable')
-		const taxStatus = (lineItem as any)?.tax_status ?? 'taxable';
+		// WC: skip non-taxable items (tax_status !== 'taxable'). For product line
+		// items tax_status lives in _woocommerce_pos_data, so read it from there
+		// rather than a (non-existent) top-level field.
+		const taxStatus = getLineItemTaxStatus(lineItem);
 		if (taxStatus !== 'taxable') {
 			totalDiscount += entry.discount;
 			continue;

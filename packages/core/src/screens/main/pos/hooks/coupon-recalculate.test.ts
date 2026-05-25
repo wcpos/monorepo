@@ -519,6 +519,62 @@ describe('recalculateCoupons — parity regression (Layer 5)', () => {
 		});
 	});
 
+	describe('non-taxable item + taxable item + percent coupon (tax_status none)', () => {
+		// Real user scenario — demo.wcpos.com order #27274:
+		// Poster $50 (taxable), biscuits $20 (tax_status: 'none'), both standard class.
+		// Tax: US 10% + US AL 2% (compound). popular20 = 20% off the whole cart.
+		// WooCommerce taxes ONLY the Poster; biscuits is exempt:
+		//   Poster   : $40 + US $4.00 + US AL $0.88
+		//   biscuits : $16 + $0 tax
+		//   Order total = $60.88  (the POS bug produced $62.83 by taxing biscuits)
+		const usRates = [
+			{ id: 6, rate: '10', compound: false, order: 1, class: 'standard' },
+			{ id: 7, rate: '2', compound: true, order: 2, class: 'standard' },
+		];
+
+		it('does not tax a tax_status=none item when a coupon is applied', () => {
+			const poster = makePosLineItem(1, 50, 80, 1, 'taxable');
+			const biscuits = makePosLineItem(16, 20, 25, 1, 'none');
+
+			const result = recalculateCoupons(
+				makeInput({
+					lineItems: [poster, biscuits],
+					couponLines: [makeCouponLine('popular20')],
+					couponConfigs: new Map([
+						['popular20', makeConfig({ discount_type: 'percent', amount: '20' })],
+					]),
+					pricesIncludeTax: false,
+					taxRates: usRates,
+				})
+			);
+
+			const posterOut = result.lineItems.find((li) => li.product_id === 1)!;
+			const biscuitsOut = result.lineItems.find((li) => li.product_id === 16)!;
+
+			// Poster: $50 − 20% = $40 ex-tax; US $4.00 + US AL compound $0.88 = $4.88
+			expect(parseFloat(posterOut.total!)).toBeCloseTo(40, 2);
+			expect(parseFloat(posterOut.total_tax!)).toBeCloseTo(4.88, 2);
+
+			// biscuits: $20 − 20% = $16 ex-tax; NO tax because tax_status === 'none'
+			expect(parseFloat(biscuitsOut.total!)).toBeCloseTo(16, 2);
+			expect(parseFloat(biscuitsOut.total_tax!)).toBeCloseTo(0, 2);
+			expect(biscuitsOut.taxes ?? []).toHaveLength(0);
+
+			// Order total = Σ(line total + line tax) = 56 + 4.88 = $60.88 (matches WC)
+			const orderTotal = result.lineItems.reduce(
+				(sum, li) => sum + parseFloat(li.total!) + parseFloat(li.total_tax!),
+				0
+			);
+			expect(orderTotal).toBeCloseTo(60.88, 2);
+
+			// coupon_line discount = $14 (20% of $70); discount_tax reflects only the
+			// taxable Poster portion: tax on its $10 discount = US $1.00 + US AL
+			// compound ($10+$1)×2% = $0.22 → $1.22. The exempt biscuits $4 adds $0.
+			expect(parseFloat(result.couponLines[0].discount!)).toBeCloseTo(14, 2);
+			expect(parseFloat(result.couponLines[0].discount_tax!)).toBeCloseTo(1.22, 2);
+		});
+	});
+
 	describe('dev-free: stacked coupons (fixed_product + percent)', () => {
 		// Tests that two stacked coupons both apply correctly.
 		// Non-sequential: both coupons see the original POS price.

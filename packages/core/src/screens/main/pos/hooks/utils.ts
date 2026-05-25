@@ -378,6 +378,36 @@ export const parsePosData = (item: CartLine) => {
 };
 
 /**
+ * Resolve a cart line's tax status.
+ *
+ * Product line items store their tax_status inside `_woocommerce_pos_data` meta
+ * — the order schema has no top-level tax_status for line_items. Fee/shipping
+ * lines may carry a top-level tax_status. We check top-level first, then
+ * pos_data, defaulting to 'taxable' to match WooCommerce's
+ * WC_Product::get_tax_status() (empty/invalid values are treated as taxable).
+ */
+export const getLineItemTaxStatus = (
+	item: { tax_status?: string | null; meta_data?: CartLine['meta_data'] } | null | undefined
+): 'taxable' | 'none' | 'shipping' => {
+	const isValid = (value: unknown): value is 'taxable' | 'none' | 'shipping' =>
+		value === 'taxable' || value === 'none' || value === 'shipping';
+
+	const topLevel = item?.tax_status;
+	if (isValid(topLevel)) {
+		return topLevel;
+	}
+
+	// parsePosData logs an error when meta_data isn't an array, so guard first.
+	const posData = Array.isArray(item?.meta_data) ? parsePosData(item as CartLine) : null;
+	const fromPosData = posData?.tax_status;
+	if (isValid(fromPosData)) {
+		return fromPosData;
+	}
+
+	return 'taxable';
+};
+
+/**
  * Calculate price and regular price based on tax inclusion and quantity.
  */
 /**
