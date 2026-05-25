@@ -13,6 +13,26 @@ import { Platform } from '@wcpos/utils/platform';
 import { initialProps } from './initial-props';
 
 const appLogger = getLogger(['wcpos', 'app', 'hydration']);
+const AUTH_TEST_TIMEOUT_MS = 10000;
+
+async function fetchWithTimeout(
+	input: Parameters<typeof fetch>[0],
+	init: Parameters<typeof fetch>[1] = {}
+): Promise<Response> {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => {
+		controller.abort();
+	}, AUTH_TEST_TIMEOUT_MS);
+
+	try {
+		return await fetch(input, {
+			...init,
+			signal: controller.signal,
+		});
+	} finally {
+		clearTimeout(timeout);
+	}
+}
 
 /**
  * Generate a unique id for stores
@@ -35,7 +55,7 @@ async function generateHashId(dataObject: any): Promise<string> {
  */
 async function testHeaderAuth(wcposApiUrl: string, token: string): Promise<boolean> {
 	try {
-		const response = await fetch(`${wcposApiUrl}auth/test`, {
+		const response = await fetchWithTimeout(`${wcposApiUrl}auth/test`, {
 			method: 'GET',
 			headers: {
 				'X-WCPOS': '1',
@@ -62,7 +82,7 @@ async function testParamAuth(wcposApiUrl: string, token: string): Promise<boolea
 		const url = new URL(`${wcposApiUrl}auth/test`);
 		url.searchParams.set('authorization', `Bearer ${token}`);
 
-		const response = await fetch(url.toString(), {
+		const response = await fetchWithTimeout(url.toString(), {
 			method: 'GET',
 			headers: {
 				'X-WCPOS': '1',

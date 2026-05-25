@@ -125,4 +125,39 @@ describe('testAuthorizationMethod', () => {
 			},
 		});
 	});
+
+	it('returns null when neither header nor query parameter auth works', async () => {
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: false, json: jest.fn() });
+
+		await expect(
+			testAuthorizationMethod('https://example.com/wp-json/wcpos/v1/', 'token')
+		).resolves.toBeNull();
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(fetchMock.mock.calls[0][1]).toMatchObject({
+			headers: {
+				Authorization: 'Bearer token',
+				'X-WCPOS': '1',
+			},
+		});
+		expect(String(fetchMock.mock.calls[1][0])).toContain('authorization=Bearer+token');
+		expect(fetchMock.mock.calls[1][1]).toMatchObject({
+			headers: {
+				'X-WCPOS': '1',
+			},
+		});
+	});
+
+	it('passes abort signals to auth probes so requests can time out', async () => {
+		fetchMock
+			.mockResolvedValueOnce({ ok: false, json: jest.fn() })
+			.mockResolvedValueOnce({ ok: false, json: jest.fn() });
+
+		await testAuthorizationMethod('https://example.com/wp-json/wcpos/v1/', 'token');
+
+		expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+		expect(fetchMock.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
+	});
 });
