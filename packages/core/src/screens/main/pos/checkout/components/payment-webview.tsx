@@ -42,6 +42,7 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 	const httpClient = useRestHttpClient('orders');
 	const paymentReceivedRef = React.useRef(false);
 	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+	const loadCountRef = React.useRef(0);
 
 	// Create a logger with order context
 	const orderLogger = React.useMemo(
@@ -164,11 +165,23 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 	);
 
 	/**
-	 * When the webview loads (including redirects after payment), schedule a fallback
-	 * fetch in case the payment gateway doesn't send a postMessage.
+	 * When the webview loads, schedule a fallback fetch in case the payment
+	 * gateway doesn't send a postMessage.
+	 *
+	 * The first load is the initial order-pay page, where a payment cannot have
+	 * completed yet — there is nothing to reconcile. We only poll on later
+	 * navigations (e.g. the post-payment redirect to the received page) where a
+	 * missed postMessage is actually possible. Polling on the initial load only
+	 * fires a request that races ahead of the payment and can never observe a
+	 * completed sale.
 	 */
 	const onWebViewLoaded = React.useCallback(
 		(_event: unknown) => {
+			loadCountRef.current += 1;
+			if (loadCountRef.current < 2) {
+				return;
+			}
+
 			if (fallbackTimerRef.current) {
 				clearTimeout(fallbackTimerRef.current);
 			}
@@ -182,7 +195,7 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 				if (!localStatus || localStatus !== 'pos-open') return;
 
 				try {
-					orderLogger.info('No postMessage received, fetching order status', {
+					orderLogger.debug('No postMessage received, fetching order status', {
 						context: { orderId: order.id },
 					});
 
@@ -256,11 +269,13 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 						}
 					}
 				} catch (err) {
-					const errorMessage = err instanceof Error ? err.message : 'Fallback order fetch failed';
-					orderLogger.error(errorMessage, {
-						saveToDb: true,
+					// Best-effort safety net only. Order completion is authoritatively
+					// delivered via the postMessage path, so a failed or premature poll
+					// (order not queryable yet, a 404, or a transient network error) is
+					// expected and must NOT be surfaced as a payment-gateway failure —
+					// doing so produced spurious PY02001 errors on successful checkouts.
+					orderLogger.debug('Fallback order status fetch did not complete', {
 						context: {
-							errorCode: ERROR_CODES.PAYMENT_GATEWAY_ERROR,
 							error: err instanceof Error ? err.message : String(err),
 							source: 'fallback-fetch',
 						},
