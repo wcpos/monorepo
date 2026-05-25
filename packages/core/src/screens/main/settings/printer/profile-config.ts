@@ -65,12 +65,13 @@ export function buildPrinterProfileFields(
 	seed: PrinterProfileSeed = {}
 ): Omit<PrinterProfile, 'id' | 'isBuiltIn'> {
 	const transport = resolvePrinterTransport({ data, printer: seed.printer, prefill: seed.prefill });
+	const cloudPrinterId =
+		data.cloudPrinterId || seed.printer?.cloudPrinterId || seed.prefill?.cloudPrinterId;
 
 	return {
 		name: data.name,
 		connectionType: transport.connectionType,
-		cloudPrinterId:
-			data.cloudPrinterId ?? seed.printer?.cloudPrinterId ?? seed.prefill?.cloudPrinterId,
+		...(cloudPrinterId ? { cloudPrinterId } : {}),
 		vendor: data.vendor,
 		address: data.address || '',
 		port: data.port,

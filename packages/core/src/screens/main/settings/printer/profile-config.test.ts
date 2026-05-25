@@ -145,6 +145,26 @@ describe('buildPrinterProfileFields', () => {
 		).toEqual(expect.objectContaining({ connectionType: 'network' }));
 	});
 
+	it('omits an empty cloudPrinterId from non-cloud profiles', () => {
+		expect(
+			buildPrinterProfileFields({
+				name: 'Counter',
+				connectionType: 'network',
+				vendor: 'generic',
+				address: '192.168.1.100',
+				cloudPrinterId: '',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: false,
+			})
+		).not.toHaveProperty('cloudPrinterId');
+	});
+
 	it('builds a cloud profile carrying cloudPrinterId', () => {
 		expect(
 			buildPrinterProfileFields(

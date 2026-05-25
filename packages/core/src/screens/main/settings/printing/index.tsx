@@ -25,6 +25,8 @@ import { useEnsureSystemPrinter } from './use-ensure-system-printer';
 import { AUTO_VALUE } from './utils';
 import { PrinterDialog } from '../printer/add-printer';
 import { toPrinterProfile } from '../printer/use-default-printer-profile';
+import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
@@ -38,7 +40,15 @@ export function PrintingSettings() {
 		Partial<DiscoveredPrinter> | undefined
 	>();
 	const [testingPrinterIds, setTestingPrinterIds] = React.useState<Set<string>>(new Set());
-	const printerService = React.useMemo(() => new PrinterService(), []);
+	const cloudHttp = useRestHttpClient();
+	const cloudEnqueueFactory = React.useMemo(
+		() => createCloudEnqueueFactory(cloudHttp),
+		[cloudHttp]
+	);
+	const printerService = React.useMemo(
+		() => new PrinterService({ cloudEnqueueFactory }),
+		[cloudEnqueueFactory]
+	);
 	const templates = useActiveTemplates();
 	const discovery = usePrinterDiscovery();
 	const scanCandidateList = React.useMemo(
