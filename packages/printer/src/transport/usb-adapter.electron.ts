@@ -5,7 +5,11 @@ interface ElectronIpc {
 }
 
 function getIpc(): ElectronIpc {
-	const ipc = (window as any).ipcRenderer as ElectronIpc | undefined;
+	const w = window as {
+		ipcRenderer?: ElectronIpc;
+		electronAPI?: { ipcRenderer?: ElectronIpc };
+	};
+	const ipc = w.ipcRenderer ?? w.electronAPI?.ipcRenderer;
 	if (!ipc) throw new Error('Electron ipcRenderer not available');
 	return ipc;
 }

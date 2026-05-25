@@ -193,7 +193,13 @@ export function PrinterDialog({
 				<>
 					<ConnectionTypeSegmented
 						value={connectionType}
-						onChange={(v) => form.setValue('connectionType', v)}
+						onChange={(v) => {
+							form.setValue('connectionType', v);
+							form.setValue('address', '', {
+								shouldDirty: true,
+								shouldValidate: true,
+							});
+						}}
 						includeCloud={false}
 					/>
 					{connectionSection}
