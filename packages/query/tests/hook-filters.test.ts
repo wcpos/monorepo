@@ -259,6 +259,29 @@ describe('Hook Filters', () => {
 			expect(result.$and).toBeUndefined();
 		});
 
+		it('converts same-field AND category filters to Store API category params', () => {
+			const result = filterProductParams({
+				$and: [
+					{ categories: { $elemMatch: { id: 9 } } },
+					{ categories: { $elemMatch: { id: 14 } } },
+				],
+			});
+
+			expect(result.category).toBe('9,14');
+			expect(result.category_operator).toBe('and');
+			expect(result.$and).toBeUndefined();
+		});
+
+		it('converts same-field AND tag filters to Store API tag params', () => {
+			const result = filterProductParams({
+				$and: [{ tags: { $elemMatch: { id: 3 } } }, { tags: { $elemMatch: { id: 4 } } }],
+			});
+
+			expect(result.tag).toBe('3,4');
+			expect(result.tag_operator).toBe('and');
+			expect(result.$and).toBeUndefined();
+		});
+
 		it('converts product brand filters to Store API style brand params', () => {
 			const result = filterProductParams({
 				brands: { $elemMatch: { id: 6 } },
@@ -266,6 +289,20 @@ describe('Hook Filters', () => {
 
 			expect(result.brand).toBe(6);
 			expect(result.brands).toBeUndefined();
+		});
+
+		it('converts same-field OR brand filters inside $and to Store API brand params', () => {
+			const result = filterProductParams({
+				$and: [
+					{
+						$or: [{ brands: { $elemMatch: { id: 6 } } }, { brands: { $elemMatch: { id: 7 } } }],
+					},
+				],
+			});
+
+			expect(result.brand).toBe('6,7');
+			expect(result.brand_operator).toBe('in');
+			expect(result.$and).toBeUndefined();
 		});
 
 		it('converts same-field AND brand filters inside $and to Store API style params', () => {
