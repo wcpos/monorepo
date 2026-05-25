@@ -62,12 +62,12 @@ export const webPrinterSchema = z.object({
 	address: z.string().min(1, 'A printer address or device is required'),
 });
 
-/** Electron: all vendors, network only. */
+/** Electron: all vendors; network, USB (raw libusb), or Bluetooth (Web Bluetooth). */
 export const electronPrinterSchema = z.object({
 	...baseShape,
-	connectionType: z.literal('network').default('network'),
+	connectionType: z.enum(['network', 'usb', 'bluetooth']).default('network'),
 	vendor: z.enum(['epson', 'star', 'generic']).default('generic'),
-	address: z.string().min(1, 'IP address is required'),
+	address: z.string().min(1, 'A printer address or device is required'),
 });
 
 /** Native: all vendors, all connection types. BT/USB require Epson/Star + an address. */

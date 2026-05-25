@@ -10,15 +10,22 @@ type ConnType = 'network' | 'bluetooth' | 'usb' | 'cloud';
 interface ConnectionTypeSegmentedProps {
 	value: ConnType;
 	onChange: (value: ConnType) => void;
+	includeCloud?: boolean;
 }
 
-export function ConnectionTypeSegmented({ value, onChange }: ConnectionTypeSegmentedProps) {
+export function ConnectionTypeSegmented({
+	value,
+	onChange,
+	includeCloud = true,
+}: ConnectionTypeSegmentedProps) {
 	const t = useT();
 	const options: { value: ConnType; label: string }[] = [
 		{ value: 'network', label: t('settings.connection_network', 'Network') },
 		{ value: 'bluetooth', label: t('settings.connection_bluetooth', 'Bluetooth') },
-		{ value: 'cloud', label: t('settings.printer_connection_cloud', 'Cloud') },
 	];
+	if (includeCloud) {
+		options.push({ value: 'cloud', label: t('settings.printer_connection_cloud', 'Cloud') });
+	}
 	if (Platform.OS !== 'ios') {
 		options.push({ value: 'usb', label: t('settings.connection_usb', 'USB') });
 	}
