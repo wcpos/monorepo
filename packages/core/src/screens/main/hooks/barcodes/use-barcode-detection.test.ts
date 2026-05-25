@@ -1,8 +1,6 @@
 /**
  * @jest-environment jsdom
  */
-import * as React from 'react';
-
 import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
@@ -13,9 +11,14 @@ const prefix$ = new BehaviorSubject('');
 const suffix$ = new BehaviorSubject('');
 const avgThreshold$ = new BehaviorSubject(24);
 
+const focusEffectCleanups: (() => void)[] = [];
+
 jest.mock('expo-router', () => ({
 	useFocusEffect: (callback: () => void | (() => void)) => {
-		React.useEffect(() => callback(), [callback]);
+		const cleanup = callback();
+		if (cleanup) {
+			focusEffectCleanups.push(cleanup);
+		}
 	},
 }));
 
@@ -68,6 +71,9 @@ describe('useBarcodeDetection', () => {
 
 	afterEach(() => {
 		jest.runOnlyPendingTimers();
+		for (const cleanup of focusEffectCleanups.splice(0)) {
+			cleanup();
+		}
 		jest.useRealTimers();
 	});
 

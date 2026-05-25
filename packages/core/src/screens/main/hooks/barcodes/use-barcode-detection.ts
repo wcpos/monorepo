@@ -12,6 +12,11 @@ import { useT } from '../../../../contexts/translations';
 
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'detection']);
 
+type BarcodeScanEvent = {
+	barcode: string;
+	callback: (barcode: string) => void;
+};
+
 export const useBarcodeDetection = (
 	callback = (barcode: string) => {}
 	// options = {
@@ -35,23 +40,21 @@ export const useBarcodeDetection = (
 	const avgInputTimeRef = React.useRef<number>(0);
 	const detectingScanningRef = React.useRef<boolean>(false);
 	const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-	const callbackRef = React.useRef(callback);
-
-	React.useEffect(() => {
-		callbackRef.current = callback;
-	}, [callback]);
-
 	// Subject to emit detected barcodes
-	const [onBarcodeScan, barcode$] = useObservableCallback((event$) =>
-		event$.pipe(
-			withLatestFrom(store.barcode_scanning_min_chars$),
-			filter(([barcode, currentMinLength]) => {
-				const currentMinLengthNumber = Number(currentMinLength);
-				if (typeof barcode === 'string') {
-					if (barcode.length >= currentMinLengthNumber) {
+	const [onBarcodeScan, barcode$] = useObservableCallback<
+		string,
+		BarcodeScanEvent,
+		[string, (barcode: string) => void]
+	>(
+		(event$) =>
+			event$.pipe(
+				withLatestFrom(store.barcode_scanning_min_chars$),
+				filter(([event, currentMinLength]) => {
+					const currentMinLengthNumber = Number(currentMinLength);
+					if (event.barcode.length >= currentMinLengthNumber) {
 						return true;
 					}
-					barcodeLogger.warn(t('common.barcode_scanned', { barcode }), {
+					barcodeLogger.warn(t('common.barcode_scanned', { barcode: event.barcode }), {
 						showToast: true,
 						toast: {
 							text2: t('common.barcode_must_be_at_least_characters', {
@@ -59,21 +62,19 @@ export const useBarcodeDetection = (
 							}),
 						},
 						context: {
-							barcode,
+							barcode: event.barcode,
 							minLength: currentMinLengthNumber,
-							actualLength: barcode.length,
+							actualLength: event.barcode.length,
 						},
 					});
-				}
-				return false;
-			}),
-			tap(([barcode]) => {
-				if (typeof barcode === 'string') {
-					callbackRef.current(barcode);
-				}
-			}),
-			map(([barcode]) => barcode)
-		)
+					return false;
+				}),
+				tap(([event]) => {
+					event.callback(event.barcode);
+				}),
+				map(([event]) => event.barcode)
+			),
+		([barcode, eventCallback]) => ({ barcode, callback: eventCallback })
 	);
 
 	/**
@@ -128,7 +129,7 @@ export const useBarcodeDetection = (
 						}
 
 						const barcode = inputStack.join('');
-						onBarcodeScan(barcode);
+						onBarcodeScan(barcode, callback);
 
 						// Reset variables
 						inputStackRef.current = [];
@@ -144,7 +145,7 @@ export const useBarcodeDetection = (
 			// Update lastInputTimeRef
 			lastInputTimeRef.current = currentInputTime;
 		},
-		[avgTimeInputThreshold, prefix, suffix, onBarcodeScan]
+		[avgTimeInputThreshold, prefix, suffix, callback, onBarcodeScan]
 	);
 
 	/**
