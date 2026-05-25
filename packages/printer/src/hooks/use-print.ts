@@ -109,9 +109,7 @@ export function usePrint(options: UsePrintOptions) {
 			}
 
 			const service = getService();
-			if (cloudEnqueueFactory) {
-				service.setCloudEnqueueFactory(cloudEnqueueFactory);
-			}
+			service.setCloudEnqueueFactory(cloudEnqueueFactory);
 
 			if (printerProfile && printerProfile.connectionType !== 'system' && receiptData) {
 				const normalised = mapReceiptData(receiptData as Record<string, any>);

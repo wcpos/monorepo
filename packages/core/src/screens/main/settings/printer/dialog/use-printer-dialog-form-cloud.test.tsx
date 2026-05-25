@@ -21,7 +21,11 @@ jest.mock('@wcpos/printer', () => {
 	}
 	return {
 		PrinterService: class {
-			constructor(private readonly options: MockOptions = {}) {}
+			constructor(private options: MockOptions = {}) {}
+			setCloudEnqueueFactory(factory: MockOptions['cloudEnqueueFactory']) {
+				this.options = { ...this.options, cloudEnqueueFactory: factory };
+			}
+			dispose = jest.fn().mockResolvedValue(undefined);
 			testPrint(profile: MockProfile) {
 				const enqueue = this.options.cloudEnqueueFactory?.(profile);
 				if (!enqueue || !profile.cloudPrinterId) {

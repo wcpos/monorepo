@@ -101,6 +101,8 @@ jest.mock('@wcpos/printer', () => ({
 				contentType: 'application/octet-stream',
 			});
 		}
+
+		dispose = jest.fn().mockResolvedValue(undefined);
 	},
 	resolvePrinter: jest.fn(),
 	usePrinterDiscovery: () => ({

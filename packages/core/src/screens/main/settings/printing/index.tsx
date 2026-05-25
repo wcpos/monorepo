@@ -58,6 +58,12 @@ export function PrintingSettings() {
 
 	useEnsureSystemPrinter(storeDB);
 
+	React.useEffect(() => {
+		return () => {
+			void printerService.dispose();
+		};
+	}, [printerService]);
+
 	// Subscribe to all printer profiles
 	const profiles$ = React.useMemo(() => storeDB.collections.printer_profiles.find().$, [storeDB]);
 	const profileDocs = useObservableState(profiles$, []) as PrinterProfileDocument[];

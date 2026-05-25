@@ -43,6 +43,9 @@ export class PrinterService {
 	 * host app to inject its authenticated transport into the singleton service.
 	 */
 	setCloudEnqueueFactory(factory: PrinterServiceOptions['cloudEnqueueFactory']): void {
+		if (this.options.cloudEnqueueFactory === factory) {
+			return;
+		}
 		this.cloudFactoryVersion += 1;
 		this.options = { ...this.options, cloudEnqueueFactory: factory };
 	}

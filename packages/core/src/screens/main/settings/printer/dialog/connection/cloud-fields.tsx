@@ -35,9 +35,15 @@ export function CloudFields({ form }: { form: UseFormReturn<PrinterFormValues> }
 	React.useEffect(() => {
 		let cancelled = false;
 		async function fetchPrinters() {
-			const res = (await http.get('/settings/cloud-print')) as CloudPrintSettingsResponse;
-			if (!cancelled) {
-				setPrinters(res.data?.printers ?? []);
+			try {
+				const res = (await http.get('/settings/cloud-print')) as CloudPrintSettingsResponse;
+				if (!cancelled) {
+					setPrinters(res.data?.printers ?? []);
+				}
+			} catch {
+				if (!cancelled) {
+					setPrinters([]);
+				}
 			}
 		}
 		void fetchPrinters();

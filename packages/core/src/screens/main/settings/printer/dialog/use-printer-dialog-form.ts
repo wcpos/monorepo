@@ -48,10 +48,7 @@ export function usePrinterDialogForm({
 }: UsePrinterDialogFormArgs) {
 	const t = useT();
 	const { storeDB } = useAppState();
-	const printerService = React.useMemo(
-		() => new PrinterService({ cloudEnqueueFactory }),
-		[cloudEnqueueFactory]
-	);
+	const printerService = React.useMemo(() => new PrinterService(), []);
 	const isEditing = !!printer;
 
 	const [testLoading, setTestLoading] = React.useState(false);
@@ -69,6 +66,16 @@ export function usePrinterDialogForm({
 	});
 
 	const prevVendorRef = React.useRef(form.getValues('vendor'));
+
+	React.useEffect(() => {
+		printerService.setCloudEnqueueFactory(cloudEnqueueFactory);
+	}, [printerService, cloudEnqueueFactory]);
+
+	React.useEffect(() => {
+		return () => {
+			void printerService.dispose();
+		};
+	}, [printerService]);
 
 	// Reset on open — edit / prefill / fresh.
 	React.useEffect(() => {

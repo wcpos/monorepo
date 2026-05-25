@@ -165,14 +165,16 @@ describe('buildPrinterProfileFields', () => {
 		).not.toHaveProperty('cloudPrinterId');
 	});
 
-	it('builds a cloud profile carrying cloudPrinterId', () => {
+	it('omits a stale cloudPrinterId when changing a cloud profile to non-cloud', () => {
 		expect(
 			buildPrinterProfileFields(
 				{
-					name: 'Kitchen (cloud)',
-					connectionType: 'cloud',
+					name: 'Counter',
+					connectionType: 'network',
 					vendor: 'generic',
-					cloudPrinterId: 'reg-7',
+					address: '192.168.1.100',
+					cloudPrinterId: '',
+					port: 9100,
 					language: 'esc-pos',
 					columns: 42,
 					emitEscPrintMode: true,
@@ -180,7 +182,35 @@ describe('buildPrinterProfileFields', () => {
 					autoCut: true,
 					autoOpenDrawer: false,
 					isDefault: false,
-				} as never,
+				},
+				{
+					printer: {
+						connectionType: 'cloud',
+						cloudPrinterId: 'reg-7',
+					},
+				}
+			)
+		).not.toHaveProperty('cloudPrinterId');
+	});
+
+	it('builds a cloud profile carrying cloudPrinterId', () => {
+		expect(
+			buildPrinterProfileFields(
+				{
+					name: 'Kitchen (cloud)',
+					connectionType: 'cloud',
+					vendor: 'generic',
+					address: '',
+					cloudPrinterId: 'reg-7',
+					port: 9100,
+					language: 'esc-pos',
+					columns: 42,
+					emitEscPrintMode: true,
+					fullReceiptRaster: false,
+					autoCut: true,
+					autoOpenDrawer: false,
+					isDefault: false,
+				},
 				{}
 			)
 		).toEqual(expect.objectContaining({ connectionType: 'cloud', cloudPrinterId: 'reg-7' }));

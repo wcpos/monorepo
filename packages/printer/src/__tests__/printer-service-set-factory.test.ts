@@ -41,4 +41,27 @@ describe('PrinterService.setCloudEnqueueFactory', () => {
 			contentType: 'application/octet-stream',
 		});
 	});
+
+	it('clears a previously set factory', async () => {
+		const service = new PrinterService();
+		service.setCloudEnqueueFactory(() => vi.fn().mockResolvedValue(undefined));
+		service.setCloudEnqueueFactory(undefined);
+
+		await expect(service.printRaw(new Uint8Array([0x1b, 0x40]), cloudProfile)).rejects.toThrow(
+			'no cloudEnqueueFactory provided'
+		);
+	});
+
+	it('keeps the cached cloud transport when the same factory is set again', async () => {
+		const enqueue = vi.fn().mockResolvedValue(undefined);
+		const cloudEnqueueFactory = vi.fn(() => enqueue);
+		const service = new PrinterService({ cloudEnqueueFactory });
+
+		await service.printRaw(new Uint8Array([0x1b, 0x40]), cloudProfile);
+		service.setCloudEnqueueFactory(cloudEnqueueFactory);
+		await service.printRaw(new Uint8Array([0x1d, 0x56]), cloudProfile);
+
+		expect(cloudEnqueueFactory).toHaveBeenCalledTimes(1);
+		expect(enqueue).toHaveBeenCalledTimes(2);
+	});
 });
