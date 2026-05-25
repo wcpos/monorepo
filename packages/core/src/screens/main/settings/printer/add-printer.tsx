@@ -3,8 +3,11 @@ import * as React from 'react';
 import type { PrinterProfile } from '@wcpos/printer';
 import { usePrinterDiscovery } from '@wcpos/printer';
 
+import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { BluetoothDevicePicker } from './dialog/connection/bluetooth-device-picker';
+import { CloudFields } from './dialog/connection/cloud-fields';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { UsbDevicePicker } from './dialog/connection/usb-device-picker';
@@ -13,7 +16,7 @@ import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { usePrinterDialogForm, type VendorDefaults } from './dialog/use-printer-dialog-form';
 import {
 	DEFAULT_FORM_VALUES,
-	nativePrinterSchema,
+	nativeOrCloudPrinterSchema,
 	type PrinterFormValues,
 	type VendorOption,
 } from './schema';
@@ -45,6 +48,11 @@ export function PrinterDialog({
 }: PrinterDialogProps) {
 	const t = useT();
 	const { startScan, isScanning: scanning } = usePrinterDiscovery();
+	const cloudHttp = useRestHttpClient();
+	const cloudEnqueueFactory = React.useMemo(
+		() => createCloudEnqueueFactory(cloudHttp),
+		[cloudHttp]
+	);
 	const {
 		form,
 		isEditing,
@@ -59,11 +67,12 @@ export function PrinterDialog({
 		handleSaveAnyway,
 	} = usePrinterDialogForm({
 		open,
-		schema: nativePrinterSchema,
+		schema: nativeOrCloudPrinterSchema,
 		defaultValues: DEFAULT_FORM_VALUES,
 		deriveVendorDefaults,
 		printer,
 		prefill,
+		cloudEnqueueFactory,
 		printerCount,
 		onSave,
 	});
@@ -76,7 +85,7 @@ export function PrinterDialog({
 			{ value: 'epson', label: 'Epson' },
 			{ value: 'star', label: 'Star Micronics' },
 		];
-		if (connectionType === 'network') {
+		if (connectionType === 'network' || connectionType === 'cloud') {
 			base.push({ value: 'generic', label: t('settings.printer_vendor_generic', 'Generic') });
 		}
 		return base;
@@ -84,7 +93,11 @@ export function PrinterDialog({
 
 	// When switching to BT/USB while vendor is 'generic', move it to a supported vendor.
 	React.useEffect(() => {
-		if (connectionType !== 'network' && form.getValues('vendor') === 'generic') {
+		if (
+			connectionType !== 'network' &&
+			connectionType !== 'cloud' &&
+			form.getValues('vendor') === 'generic'
+		) {
 			form.setValue('vendor', 'epson');
 		}
 	}, [connectionType, form]);
@@ -94,6 +107,8 @@ export function PrinterDialog({
 		connectionSection = <BluetoothDevicePicker form={form} />;
 	} else if (connectionType === 'usb') {
 		connectionSection = <UsbDevicePicker form={form} />;
+	} else if (connectionType === 'cloud') {
+		connectionSection = <CloudFields form={form} />;
 	} else {
 		connectionSection = (
 			<NetworkFields

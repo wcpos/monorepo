@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
 import { PrinterService, probeVendor } from '@wcpos/printer';
-import type { PrinterProfile } from '@wcpos/printer';
+import type { PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
 import { useAppState } from '../../../../../contexts/app-state';
@@ -30,6 +30,7 @@ interface UsePrinterDialogFormArgs {
 	deriveVendorDefaults: (vendor: PrinterFormValues['vendor']) => VendorDefaults;
 	printer?: PrinterProfile;
 	prefill?: PrinterDialogPrefill;
+	cloudEnqueueFactory?: PrinterServiceOptions['cloudEnqueueFactory'];
 	printerCount: number;
 	onSave: () => void;
 }
@@ -41,6 +42,7 @@ export function usePrinterDialogForm({
 	deriveVendorDefaults,
 	printer,
 	prefill,
+	cloudEnqueueFactory,
 	printerCount,
 	onSave,
 }: UsePrinterDialogFormArgs) {
@@ -65,6 +67,16 @@ export function usePrinterDialogForm({
 
 	const prevVendorRef = React.useRef(form.getValues('vendor'));
 
+	React.useEffect(() => {
+		printerService.setCloudEnqueueFactory(cloudEnqueueFactory);
+	}, [printerService, cloudEnqueueFactory]);
+
+	React.useEffect(() => {
+		return () => {
+			void printerService.dispose();
+		};
+	}, [printerService]);
+
 	// Reset on open — edit / prefill / fresh.
 	React.useEffect(() => {
 		if (!open) return;
@@ -85,6 +97,7 @@ export function usePrinterDialogForm({
 				autoOpenDrawer: printer.autoOpenDrawer ?? false,
 				isDefault: printer.isDefault ?? false,
 				nativeInterfaceType: printer.nativeInterfaceType,
+				cloudPrinterId: printer.cloudPrinterId ?? '',
 			};
 			prevVendorRef.current = next.vendor;
 			form.reset(next);
@@ -103,6 +116,7 @@ export function usePrinterDialogForm({
 				port: prefill.port ?? vendorDefaults.port,
 				language: vendorDefaults.language,
 				nativeInterfaceType: prefill.nativeInterfaceType,
+				cloudPrinterId: prefill.cloudPrinterId ?? '',
 			};
 			prevVendorRef.current = next.vendor;
 			form.reset(next);
