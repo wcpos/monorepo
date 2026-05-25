@@ -291,6 +291,21 @@ describe('Hook Filters', () => {
 			expect(result.brands).toBeUndefined();
 		});
 
+		it('converts $eq-wrapped taxonomy elemMatch filters to REST params', () => {
+			const result = filterProductParams({
+				categories: { $eq: { $elemMatch: { id: 9 } } },
+				tags: { $eq: { $elemMatch: { id: 14 } } },
+				brands: { $eq: { $elemMatch: { id: 6 } } },
+			});
+
+			expect(result.category).toBe(9);
+			expect(result.tag).toBe(14);
+			expect(result.brand).toBe(6);
+			expect(result.categories).toBeUndefined();
+			expect(result.tags).toBeUndefined();
+			expect(result.brands).toBeUndefined();
+		});
+
 		it('converts same-field OR brand filters inside $and to Store API brand params', () => {
 			const result = filterProductParams({
 				$and: [

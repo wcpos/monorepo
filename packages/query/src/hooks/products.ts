@@ -7,12 +7,21 @@ import {
 
 const joinIds = (ids: (number | string)[]) => ids.join(',');
 
+const unwrapEqSelector = (value: unknown) =>
+	value && typeof value === 'object' && '$eq' in value ? value.$eq : value;
+
 /**
  * Convert RxDB/Mango product selectors into parameters supported by the WCPOS/WooCommerce REST API.
  */
 const filterApiQueryParams = (params: Record<string, any>) => {
 	let orderby = params.orderby;
 	const restParams = removeMangoOperatorKeys({ ...params });
+	const selectorParams = {
+		...params,
+		categories: unwrapEqSelector(params.categories),
+		tags: unwrapEqSelector(params.tags),
+		brands: unwrapEqSelector(params.brands),
+	};
 
 	if (orderby === 'name') {
 		orderby = 'title';
@@ -22,12 +31,12 @@ const filterApiQueryParams = (params: Record<string, any>) => {
 		orderby = 'date';
 	}
 
-	const categoryOrIds = extractSameFieldOrElemMatchIds(params, 'categories');
-	const categoryAndIds = extractSameFieldAndElemMatchIds(params, 'categories');
-	const tagOrIds = extractSameFieldOrElemMatchIds(params, 'tags');
-	const tagAndIds = extractSameFieldAndElemMatchIds(params, 'tags');
-	const brandOrIds = extractSameFieldOrElemMatchIds(params, 'brands');
-	const brandAndIds = extractSameFieldAndElemMatchIds(params, 'brands');
+	const categoryOrIds = extractSameFieldOrElemMatchIds(selectorParams, 'categories');
+	const categoryAndIds = extractSameFieldAndElemMatchIds(selectorParams, 'categories');
+	const tagOrIds = extractSameFieldOrElemMatchIds(selectorParams, 'tags');
+	const tagAndIds = extractSameFieldAndElemMatchIds(selectorParams, 'tags');
+	const brandOrIds = extractSameFieldOrElemMatchIds(selectorParams, 'brands');
+	const brandAndIds = extractSameFieldAndElemMatchIds(selectorParams, 'brands');
 
 	if (categoryOrIds.length > 0) {
 		restParams.category = joinIds(categoryOrIds);
@@ -35,8 +44,8 @@ const filterApiQueryParams = (params: Record<string, any>) => {
 	} else if (categoryAndIds.length > 0) {
 		restParams.category = joinIds(categoryAndIds);
 		restParams.category_operator = 'and';
-	} else if (params.categories) {
-		restParams.category = extractDirectElemMatchId(params, 'categories');
+	} else if (selectorParams.categories) {
+		restParams.category = extractDirectElemMatchId(selectorParams, 'categories');
 	}
 	delete restParams.categories;
 
@@ -46,8 +55,8 @@ const filterApiQueryParams = (params: Record<string, any>) => {
 	} else if (tagAndIds.length > 0) {
 		restParams.tag = joinIds(tagAndIds);
 		restParams.tag_operator = 'and';
-	} else if (params.tags) {
-		restParams.tag = extractDirectElemMatchId(params, 'tags');
+	} else if (selectorParams.tags) {
+		restParams.tag = extractDirectElemMatchId(selectorParams, 'tags');
 	}
 	delete restParams.tags;
 
@@ -57,8 +66,8 @@ const filterApiQueryParams = (params: Record<string, any>) => {
 	} else if (brandAndIds.length > 0) {
 		restParams.brand = joinIds(brandAndIds);
 		restParams.brand_operator = 'and';
-	} else if (params.brands) {
-		restParams.brand = extractDirectElemMatchId(params, 'brands');
+	} else if (selectorParams.brands) {
+		restParams.brand = extractDirectElemMatchId(selectorParams, 'brands');
 	}
 	delete restParams.brands;
 
