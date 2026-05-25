@@ -6,8 +6,6 @@ import * as React from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
-import { getLogger } from '@wcpos/utils/logger';
-
 import { useBarcodeDetection } from './use-barcode-detection';
 
 const minChars$ = new BehaviorSubject(8);
@@ -38,6 +36,19 @@ jest.mock('../../../../contexts/translations', () => ({
 			? `Barcode must be at least ${values?.minLength} characters long`
 			: key,
 }));
+
+jest.mock('@wcpos/utils/logger', () => {
+	const barcodeLogger = { warn: jest.fn() };
+
+	return {
+		getLogger: () => barcodeLogger,
+		__barcodeLogger: barcodeLogger,
+	};
+});
+
+const barcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogger as {
+	warn: jest.Mock;
+};
 
 const dispatchBarcode = (barcode: string) => {
 	for (const key of barcode) {
@@ -77,7 +88,7 @@ describe('useBarcodeDetection', () => {
 		});
 
 		expect(detected).toEqual(['1234']);
-		expect(getLogger(['wcpos', 'barcode', 'detection']).warn).not.toHaveBeenCalled();
+		expect(barcodeLogger.warn).not.toHaveBeenCalled();
 
 		subscription.unsubscribe();
 	});
@@ -99,7 +110,7 @@ describe('useBarcodeDetection', () => {
 
 		expect(detected).toEqual(['1234']);
 		expect(callback).toHaveBeenCalledWith('1234');
-		expect(getLogger(['wcpos', 'barcode', 'detection']).warn).not.toHaveBeenCalled();
+		expect(barcodeLogger.warn).not.toHaveBeenCalled();
 
 		subscription.unsubscribe();
 	});
