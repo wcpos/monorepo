@@ -1,5 +1,5 @@
 import { Observable, of } from 'rxjs';
-import { map, startWith } from 'rxjs/operators';
+import { filter, map, startWith, switchMap } from 'rxjs/operators';
 
 interface QueryHit<T> {
 	document: T;
@@ -32,6 +32,22 @@ function createLoadingEntity<T extends { id?: string | number }>(
 	} as unknown as T & LoadingSelectedEntity;
 }
 
+function resultBelongsToSelectedId<T extends { id?: string | number }>(
+	result: QueryResult<T>,
+	id: string | number
+): boolean {
+	const isSingleHit =
+		result.count === 1 || (result.count === undefined && result.hits.length === 1);
+
+	if (!isSingleHit) {
+		return true;
+	}
+
+	const documentID = result.hits[0]?.document?.id;
+
+	return documentID === undefined || String(documentID) === String(id);
+}
+
 export function createSelectedEntity$<T extends { id?: string | number }>({
 	id,
 	result$,
@@ -50,6 +66,7 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 	}
 
 	return result$.pipe(
+		filter((result) => resultBelongsToSelectedId(result, id)),
 		map((result) => {
 			if (result.count === 1 || (result.count === undefined && result.hits.length === 1)) {
 				return result.hits[0].document;
@@ -62,5 +79,25 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 			return null;
 		}),
 		startWith(createLoadingEntity<T>(id))
+	);
+}
+
+export type SelectedEntityInput<T extends { id?: string | number }> = readonly [
+	id: string | number | null | undefined,
+	result$: Observable<QueryResult<T>> | undefined,
+	guestCustomer?: T,
+];
+
+export function createSelectedEntityFromInputs$<T extends { id?: string | number }>(
+	inputs$: Observable<SelectedEntityInput<T>>
+): Observable<T | null> {
+	return inputs$.pipe(
+		switchMap(([id, result$, guestCustomer]) =>
+			createSelectedEntity$({
+				id,
+				result$,
+				guestCustomer,
+			})
+		)
 	);
 }
