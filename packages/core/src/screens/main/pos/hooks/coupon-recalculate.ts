@@ -11,7 +11,7 @@ import {
 	type CouponLineItem,
 } from './coupon-helpers';
 import { calculateTaxes } from '../../hooks/utils/calculate-taxes';
-import { parsePosData } from './utils';
+import { getLineItemTaxStatus, parsePosData } from './utils';
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
@@ -99,10 +99,19 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 			const qty = item.quantity ?? 1;
 			const posTotal = parsedPosPrice * qty;
 
+			// Non-taxable items (tax_status !== 'taxable') get no tax, matching WC.
+			// For product line items tax_status lives in _woocommerce_pos_data, so
+			// filtering by tax_class alone would wrongly tax a 'none' item that
+			// happens to sit in the standard class — the very bug this guards against.
+			const taxStatus = getLineItemTaxStatus(item);
+
 			// Determine which tax rates apply to this item's tax class
 			const normalizedClass =
 				item.tax_class === '' || item.tax_class == null ? 'standard' : item.tax_class;
-			const itemRates = taxRates.filter((r) => (r.class || 'standard') === normalizedClass);
+			const itemRates =
+				taxStatus === 'taxable'
+					? taxRates.filter((r) => (r.class || 'standard') === normalizedClass)
+					: [];
 
 			// Use calculateTaxes for exact WC-matching decomposition.
 			// This replaces the ratio shortcut which diverged from WC on compound rates.
@@ -261,6 +270,10 @@ export function recalculateCoupons(input: RecalculateInput): RecalculateResult {
 							? resetItems[entry.lineIndex]
 							: resetItems.find((item) => item.product_id === entry.product_id);
 					if (!li) return entry;
+
+					// Non-taxable items carry no embedded tax, so the inclusive
+					// discount is already ex-tax — skip extraction.
+					if (getLineItemTaxStatus(li) !== 'taxable') return entry;
 
 					// Get the applicable tax rates for this item's tax class
 					const itemTaxClass =
