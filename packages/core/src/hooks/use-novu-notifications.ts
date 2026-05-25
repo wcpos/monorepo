@@ -356,23 +356,25 @@ export function useNovuNotifications(): UseNovuNotificationsResult {
 				});
 			});
 
-		// Initial fetch of notifications. Wrapped in an async function so the
-		// loading-state updates happen asynchronously (not synchronously in the
-		// effect body), avoiding a render cascade.
 		const loadInitialNotifications = async () => {
 			setIsLoading(true);
 			try {
 				const notifications = await fetchNotifications();
+				if (!isActive) return;
+
 				novuLogger.info('Novu: Initial notifications loaded', {
 					context: { count: notifications.length },
 				});
 				await syncToRxDB(notifications);
 			} catch (error) {
+				if (!isActive) return;
 				novuLogger.error('Novu: Failed to load initial notifications', {
 					context: { error: error instanceof Error ? error.message : String(error) },
 				});
 			} finally {
-				setIsLoading(false);
+				if (isActive) {
+					setIsLoading(false);
+				}
 			}
 		};
 		loadInitialNotifications();
