@@ -1,7 +1,12 @@
 #!/bin/sh
+set -e
+
+# Keep submodule pointers current before every commit. This intentionally stages
+# the gitlinks so commits cannot accidentally ship stale detached submodule SHAs.
+pnpm submodules:update
 
 # Block docs/ files from being committed
-docs_files=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/')
+docs_files=$(git diff --cached --name-only --diff-filter=ACM | grep '^docs/' || true)
 if [ -n "$docs_files" ]; then
   echo "BLOCKED: docs/ files should not be committed to the public repo:"
   echo "$docs_files"
@@ -12,4 +17,4 @@ if [ -n "$docs_files" ]; then
 fi
 
 # Run lint-staged to auto-fix formatting on staged files
-npx lint-staged
+pnpm exec lint-staged
