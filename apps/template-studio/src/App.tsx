@@ -54,6 +54,10 @@ type SectionKey = 'data' | 'woocommerce' | 'print';
 
 type SectionState = Record<SectionKey, boolean>;
 type ThermalColumnsByPaper = Record<'58mm' | '80mm', ThermalColumns>;
+type WorkingDataState = {
+	baseline: Record<string, unknown>;
+	data: Record<string, unknown>;
+};
 
 const DEFAULT_SECTION_STATE: SectionState = { data: true, woocommerce: true, print: true };
 const DEFAULT_THERMAL_COLUMNS_BY_PAPER: ThermalColumnsByPaper = {
@@ -179,12 +183,25 @@ export function App() {
 		() => pristineReceiptData as unknown as Record<string, unknown>,
 		[pristineReceiptData]
 	);
-	const [workingData, setWorkingData] = React.useState<Record<string, unknown>>(pristineData);
-
-	React.useEffect(() => {
-		// Reset working data whenever Shuffle or a scenario chip changes the fixture baseline.
-		setWorkingData(pristineData);
-	}, [pristineData]);
+	const [workingDataState, setWorkingDataState] = React.useState<WorkingDataState>(() => ({
+		baseline: pristineData,
+		data: pristineData,
+	}));
+	const workingData =
+		workingDataState.baseline === pristineData ? workingDataState.data : pristineData;
+	if (workingDataState.baseline !== pristineData) {
+		setWorkingDataState({ baseline: pristineData, data: pristineData });
+	}
+	const setWorkingData = React.useCallback(
+		(updater: React.SetStateAction<Record<string, unknown>>) => {
+			setWorkingDataState((current) => {
+				const currentData = current.baseline === pristineData ? current.data : pristineData;
+				const data = typeof updater === 'function' ? updater(currentData) : updater;
+				return { baseline: pristineData, data };
+			});
+		},
+		[pristineData]
+	);
 
 	const fixture = React.useMemo(
 		() => ({ ...workingData, id: `random-${randomReceipt.seedHex}` }),
