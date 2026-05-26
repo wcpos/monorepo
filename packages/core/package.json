@@ -80,10 +80,10 @@
 		"victory-native": "^41.20.2"
 	},
 	"dependencies": {
-		"@date-fns/tz": "^1.4.1",
+		"@date-fns/tz": "^1.5.0",
 		"@date-fns/utc": "^2.1.1",
 		"@hookform/error-message": "^2.0.1",
-		"@hookform/resolvers": "^5.2.2",
+		"@hookform/resolvers": "^5.4.0",
 		"@novu/js": "^3.16.0",
 		"@tanstack/react-table": "^8.21.3",
 		"@wcpos/components": "workspace:*",
@@ -92,7 +92,7 @@
 		"@wcpos/printer": "workspace:*",
 		"@wcpos/query": "workspace:*",
 		"@wcpos/utils": "workspace:*",
-		"@widgetbot/react-embed": "^1.10.0",
+		"@widgetbot/react-embed": "^1.11.2",
 		"date-fns": "4.3.0",
 		"html-entities": "2.6.0",
 		"i18next": "^26.2.0",
