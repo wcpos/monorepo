@@ -368,9 +368,6 @@ importers:
       react-native-nitro-modules:
         specifier: 0.35.7
         version: 0.35.7(react-native@0.85.3(@babel/core@7.29.0)(@react-native/jest-preset@0.85.3(@babel/core@7.29.0)(react@19.2.6))(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.2.15)(react@19.2.6))(react@19.2.6)
-      react-test-renderer:
-        specifier: 19.2.6
-        version: 19.2.6(react@19.2.6)
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
