@@ -41,7 +41,7 @@
     "lint-staged": "^16.4.0",
     "eslint": "^9.39.4",
     "prettier-plugin-tailwindcss": "^0.8.0",
-    "expo": "~56.0.3"
+    "expo": "~56.0.5"
   },
   "dependencies": {
     "turbo": "^2.9.14",

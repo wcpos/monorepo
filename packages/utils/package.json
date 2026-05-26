@@ -39,7 +39,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "expo-constants": "~56.0.14",
+    "expo-constants": "~56.0.16",
     "react-native": "*"
   },
   "peerDependenciesMeta": {
@@ -55,6 +55,6 @@
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.24",
     "jest": "^30.4.2",
-    "ts-jest": "^29.4.10"
+    "ts-jest": "^29.4.11"
   }
 }
