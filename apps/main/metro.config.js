@@ -37,6 +37,7 @@ const workspaceSourceRoots = {
 	'@wcpos/database': path.resolve(__dirname, '../../packages/database/src'),
 	'@wcpos/hooks': path.resolve(__dirname, '../../packages/hooks/src'),
 	'@wcpos/printer': path.resolve(__dirname, '../../packages/printer/src'),
+	'@wcpos/receipt-renderer': path.resolve(__dirname, '../../packages/receipt-renderer/src'),
 	'@wcpos/query': path.resolve(__dirname, '../../packages/query/src'),
 	'@wcpos/utils': path.resolve(__dirname, '../../packages/utils/src'),
 };
