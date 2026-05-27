@@ -71,4 +71,5 @@ allowBuilds:
   "unrs-resolver": true
   usb: true
 patchedDependencies:
+  "expo-modules-autolinking@56.0.13": "patches/expo-modules-autolinking@56.0.13.patch"
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
