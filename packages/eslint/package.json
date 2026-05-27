@@ -15,11 +15,11 @@
 		"eslint-config-expo": "^56.0.4",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-prettier": "^5.5.3",
-		"prettier": "^3.6.2",
+		"prettier": "^3.8.3",
 		"prettier-plugin-tailwindcss": "^0.8.0"
 	},
 	"devDependencies": {
-		"eslint": "^9.39.4",
+		"eslint": "^10.4.0",
 		"eslint-config-expo": "^56.0.4",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-prettier": "^5.5.5",
@@ -27,6 +27,7 @@
 		"prettier-plugin-tailwindcss": "^0.8.0"
 	},
 	"dependencies": {
+		"@eslint/compat": "^2.1.0",
 		"eslint-plugin-react-compiler": "19.1.0-rc.2"
 	}
 }
