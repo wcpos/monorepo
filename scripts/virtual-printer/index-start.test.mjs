@@ -46,21 +46,32 @@ test('virtual printer entrypoint starts under ESM', async () => {
   });
 
   const exitPromise = once(child, 'exit');
-  const started = await Promise.race([
-    startedPromise,
-    exitPromise.then(([code, signal]) => {
-      throw new Error(`virtual printer exited before startup (${code ?? signal}):\n${output}`);
-    }),
-    new Promise((_, reject) => {
-      const timeout = setTimeout(
-        () => reject(new Error(`timed out waiting for startup:\n${output}`)),
-        5000
-      );
-      timeout.unref();
-    }),
-  ]);
+  let started = false;
+  try {
+    started = await Promise.race([
+      startedPromise,
+      exitPromise.then(([code, signal]) => {
+        throw new Error(`virtual printer exited before startup (${code ?? signal}):\n${output}`);
+      }),
+      new Promise((_, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error(`timed out waiting for startup:\n${output}`)),
+          5000
+        );
+        timeout.unref();
+      }),
+    ]);
 
-  assert.equal(started, true);
+    assert.equal(started, true);
+  } finally {
+    if (!started) {
+      child.kill('SIGTERM');
+      await exitPromise;
+    }
+  }
+
   child.kill('SIGTERM');
-  await exitPromise;
+  const [code, signal] = await exitPromise;
+  assert.equal(signal, null, `expected graceful shutdown, got signal ${signal}`);
+  assert.equal(code, 0, `expected exit code 0, got ${code}`);
 });
