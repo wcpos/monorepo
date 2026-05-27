@@ -24,7 +24,7 @@ overrides:
 packageExtensionsChecksum: sha256-EMen4+1NnTMb6PkUt5YTKBLEs4BAWQPcwvdmpWcA5oA=
 
 patchedDependencies:
-  react-native-esc-pos-printer@4.5.0: 47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db
+  react-native-esc-pos-printer@4.5.0: f505883fa0dc5f31181adf6cb02c40760d1529f1a0f1445c0d7cfb561c7dc246
 
 importers:
 
@@ -301,7 +301,7 @@ importers:
         version: 1.8.1(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
       react-native-esc-pos-printer:
         specifier: 4.5.0
-        version: 4.5.0(patch_hash=47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
+        version: 4.5.0(patch_hash=f505883fa0dc5f31181adf6cb02c40760d1529f1a0f1445c0d7cfb561c7dc246)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
       react-native-gesture-handler:
         specifier: ~2.31.1
         version: 2.31.2(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
@@ -989,7 +989,7 @@ importers:
         version: 9.3.0
       react-native-esc-pos-printer:
         specifier: '>=4.0.0'
-        version: 4.5.0(patch_hash=47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
+        version: 4.5.0(patch_hash=f505883fa0dc5f31181adf6cb02c40760d1529f1a0f1445c0d7cfb561c7dc246)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
       react-native-star-io10:
         specifier: '>=1.0.0'
         version: 1.12.0(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
@@ -25643,7 +25643,7 @@ snapshots:
 
   react-native-esc-pos-printer-sdk@2.31.1: {}
 
-  react-native-esc-pos-printer@4.5.0(patch_hash=47df347fc3e3e30282363fc9b81c4bad009ce26fdaab81b4dbb8ede3699006db)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3):
+  react-native-esc-pos-printer@4.5.0(patch_hash=f505883fa0dc5f31181adf6cb02c40760d1529f1a0f1445c0d7cfb561c7dc246)(react-native@0.85.3(@babel/core@7.29.7)(@react-native/jest-preset@0.85.3(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3):
     dependencies:
       buffer: 6.0.3
       p-queue: 7.4.1
