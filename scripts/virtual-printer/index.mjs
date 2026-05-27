@@ -2,7 +2,7 @@ import net from 'node:net';
 import http from 'node:http';
 import process from 'node:process';
 
-import { Bonjour } from 'bonjour-service';
+import bonjourService from 'bonjour-service';
 
 import { routeHttpRequest } from './http-router.mjs';
 import { buildMdnsServices } from './mdns-services.mjs';
@@ -19,6 +19,7 @@ const logCleanupError = (label, err) => {
 };
 
 // 1. mDNS advertise (Electron discovery finds this)
+const { Bonjour } = bonjourService;
 const bonjour = new Bonjour();
 const published = buildMdnsServices({ name: NAME, port: RAW_PORT }).map((service) => {
   log(`advertising _${service.type}._tcp "${service.name}" on :${service.port}`);
