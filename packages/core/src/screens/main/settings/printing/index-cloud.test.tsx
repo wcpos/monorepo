@@ -46,6 +46,20 @@ jest.mock('observable-hooks', () => ({
 	useObservableState: (value: unknown, fallback: unknown) => value ?? fallback,
 }));
 
+jest.mock('@wcpos/components/collapsible', () => ({
+	Collapsible: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	CollapsibleTrigger: ({ children }: { children?: React.ReactNode }) => (
+		<button type="button">{children}</button>
+	),
+	CollapsibleContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+}));
+
+jest.mock('@wcpos/components/progress', () => ({
+	Progress: ({ value, className }: { value?: number; className?: string }) => (
+		<div role="progressbar" aria-valuenow={value} className={className} />
+	),
+}));
+
 jest.mock('@wcpos/components/button', () => ({
 	Button: ({
 		children,
@@ -108,6 +122,7 @@ jest.mock('@wcpos/printer', () => ({
 	usePrinterDiscovery: () => ({
 		printers: [],
 		scanCandidates: [],
+		scanProgress: { tested: 0, total: 0 },
 		startScan: jest.fn(),
 		isScanning: false,
 		error: undefined,
