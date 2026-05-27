@@ -37,3 +37,17 @@ index fe5abee0295478ea801099c8c66226adb35c18a6..43831b9a4f7f60216ef543947282351a
      this.queue = new PQueue({ concurrency: 1 });
    }
  
+diff --git a/ios/generated/RNEscPosPrinterSpec/RNEscPosPrinterSpec.h b/ios/generated/RNEscPosPrinterSpec/RNEscPosPrinterSpec.h
+index 6fc3cb0..41f8dd9 100644
+--- a/ios/generated/RNEscPosPrinterSpec/RNEscPosPrinterSpec.h
++++ b/ios/generated/RNEscPosPrinterSpec/RNEscPosPrinterSpec.h
+@@ -39,2 +39,4 @@ namespace JS {
+       struct Builder {
++        // Backwards compat for RCTTypedModuleConstants
++        using ResultT = Constants;
+         struct Input {
+@@ -408,2 +410,4 @@ namespace JS {
+       struct Builder {
++        // Backwards compat for RCTTypedModuleConstants
++        using ResultT = Constants;
+         struct Input {
