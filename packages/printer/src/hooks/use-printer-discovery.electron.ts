@@ -12,6 +12,8 @@ interface UsePrinterDiscoveryResult {
 	printers: DiscoveredPrinter[];
 	isScanning: boolean;
 	scanCandidates: string[];
+	/** Scan progress; always {0,0} on electron (mDNS, no HTTP sweep). */
+	scanProgress: { tested: number; total: number };
 	startScan: () => void;
 	stopScan: () => void;
 	addManualPrinter: (
@@ -182,6 +184,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		printers,
 		isScanning,
 		scanCandidates: [],
+		scanProgress: { tested: 0, total: 0 },
 		startScan,
 		stopScan,
 		addManualPrinter,

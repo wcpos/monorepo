@@ -13,6 +13,8 @@ interface UsePrinterDiscoveryResult {
 	printers: DiscoveredPrinter[];
 	isScanning: boolean;
 	scanCandidates: string[];
+	/** Live HTTP-sweep progress; reset to {0,0} at each scan start and on stop. */
+	scanProgress: { tested: number; total: number };
 	startScan: () => void;
 	stopScan: () => void;
 	addManualPrinter: (
@@ -53,6 +55,10 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	const [printers, setPrinters] = React.useState<DiscoveredPrinter[]>([]);
 	const [isScanning, setIsScanning] = React.useState(false);
 	const [scanCandidates, setScanCandidates] = React.useState<string[]>([]);
+	const [scanProgress, setScanProgress] = React.useState<{ tested: number; total: number }>({
+		tested: 0,
+		total: 0,
+	});
 	const [error, setError] = React.useState<string | null>(null);
 	const abortRef = React.useRef<AbortController | null>(null);
 
@@ -95,10 +101,14 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 			const { buildSweepCandidates, sweepForPrinters } = await import('../discovery/network-sweep');
 			const hosts = buildSweepCandidates();
 			setScanCandidates(hosts);
+			setScanProgress({ tested: 0, total: hosts.length });
 			const discovered = await sweepForPrinters({
 				hosts,
 				probe: probeVendor,
 				signal: controller.signal,
+				onProgress: (tested, total) => {
+					if (abortRef.current === controller) setScanProgress({ tested, total });
+				},
 			});
 			if (abortRef.current !== controller || controller.signal.aborted) return;
 			setPrinters((prev) => mergePrinters(prev, discovered));
@@ -121,6 +131,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	const stopScan = React.useCallback(() => {
 		abortRef.current?.abort();
 		setIsScanning(false);
+		setScanProgress({ tested: 0, total: 0 });
 	}, []);
 
 	const connectUsbDevice = React.useCallback(() => {
@@ -157,6 +168,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		printers,
 		isScanning,
 		scanCandidates,
+		scanProgress,
 		startScan,
 		stopScan,
 		addManualPrinter,
