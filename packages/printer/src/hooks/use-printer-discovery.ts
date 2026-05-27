@@ -13,6 +13,8 @@ interface UsePrinterDiscoveryResult {
 	/** Whether an auto-scan is running */
 	isScanning: boolean;
 	scanCandidates: string[];
+	/** Scan progress; always {0,0} on native (no HTTP sweep). */
+	scanProgress: { tested: number; total: number };
 	/** Start auto-discovery scan */
 	startScan: () => void;
 	/** Stop auto-discovery scan */
@@ -155,6 +157,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		printers,
 		isScanning,
 		scanCandidates: [],
+		scanProgress: { tested: 0, total: 0 },
 		startScan,
 		stopScan,
 		addManualPrinter,

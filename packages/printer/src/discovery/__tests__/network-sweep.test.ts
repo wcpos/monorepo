@@ -102,4 +102,55 @@ describe('sweepForPrinters', () => {
 		controller.abort();
 		await expect(promise).resolves.toBeInstanceOf(Array);
 	});
+
+	it('reports cumulative progress for every probed host', async () => {
+		const probe = async () => null;
+		const seen: [number, number][] = [];
+		await sweepForPrinters({
+			hosts: ['a', 'b', 'c'],
+			probe,
+			onProgress: (tested, total) => seen.push([tested, total]),
+		});
+		expect(seen.sort((a, b) => a[0] - b[0])).toEqual([
+			[1, 3],
+			[2, 3],
+			[3, 3],
+		]);
+	});
+
+	it('does not report progress for probes that never settle before abort', async () => {
+		const controller = new AbortController();
+		const probe = () => new Promise<'epson' | 'star' | null>(() => {}); // never settles
+		const seen: number[] = [];
+		const promise = sweepForPrinters({
+			hosts: ['a', 'b'],
+			probe,
+			concurrency: 2,
+			signal: controller.signal,
+			onProgress: (tested) => seen.push(tested),
+		});
+		controller.abort();
+		await promise;
+		expect(seen).toEqual([]);
+	});
+
+	it('counts a probe that settles before abort but not one still in flight', async () => {
+		const controller = new AbortController();
+		const probe = (host: string) =>
+			host === 'fast' ? Promise.resolve(null) : new Promise<'epson' | 'star' | null>(() => {}); // 'slow' never settles
+		const seen: number[] = [];
+		const promise = sweepForPrinters({
+			hosts: ['fast', 'slow'],
+			probe,
+			concurrency: 2,
+			signal: controller.signal,
+			onProgress: (tested) => seen.push(tested),
+		});
+		// A macrotask fires after all microtasks drain, so 'fast' has settled and
+		// reported by now while 'slow' is still in flight; only then do we abort.
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		controller.abort();
+		await promise;
+		expect(seen).toEqual([1]); // 'fast' counted once; 'slow' never settled, so never counted
+	});
 });

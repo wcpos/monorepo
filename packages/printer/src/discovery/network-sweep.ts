@@ -60,12 +60,16 @@ export interface SweepOptions {
 	probe: ProbeVendorFn;
 	concurrency?: number;
 	signal?: AbortSignal;
+	/** Fires after each host's probe settles, with the cumulative count of completed probes. */
+	onProgress?: (tested: number, total: number) => void;
 }
 
 export async function sweepForPrinters(options: SweepOptions): Promise<DiscoveredPrinter[]> {
-	const { hosts, probe, concurrency = 16, signal } = options;
+	const { hosts, probe, concurrency = 16, signal, onProgress } = options;
 	const queue = new PQueue({ concurrency });
 	const found = new Map<string, DiscoveredPrinter>();
+	const total = hosts.length;
+	let tested = 0;
 
 	// `queue.clear()` drops queued tasks but their add()-promises never settle, so awaiting
 	// Promise.all directly would hang on abort. Race the work against an abort promise instead
@@ -91,7 +95,10 @@ export async function sweepForPrinters(options: SweepOptions): Promise<Discovere
 			queue.add(async () => {
 				if (signal?.aborted) return;
 				const vendor = await probe(host).catch(() => null);
-				if (!vendor || signal?.aborted) return;
+				if (signal?.aborted) return;
+				tested += 1;
+				onProgress?.(tested, total);
+				if (!vendor) return;
 				const id = `${host}:9100`;
 				if (!found.has(id)) {
 					found.set(id, {

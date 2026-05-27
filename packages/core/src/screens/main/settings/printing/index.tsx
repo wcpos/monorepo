@@ -5,7 +5,9 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Button } from '@wcpos/components/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { HStack } from '@wcpos/components/hstack';
+import { Progress } from '@wcpos/components/progress';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
@@ -247,10 +249,43 @@ export function PrintingSettings() {
 				)}
 				{discovery.scanCandidates.length > 0 && (
 					<VStack className="bg-muted/50 gap-1 rounded-md p-3" testID="printing-scan-candidates">
-						<Text className="text-muted-foreground text-xs font-medium">
-							{t('settings.scan_candidates_title', 'Checking common printer addresses:')}
-						</Text>
-						<Text className="text-muted-foreground text-xs">{scanCandidateList}</Text>
+						{discovery.isScanning ? (
+							<VStack className="gap-1.5">
+								<Text className="text-muted-foreground text-xs font-medium">
+									{t(
+										'settings.scan_candidates_progress',
+										'Checking common printer addresses… %s / %s'
+									)
+										.replace('%s', String(discovery.scanProgress.tested))
+										.replace('%s', String(discovery.scanProgress.total))}
+								</Text>
+								<Progress
+									className="h-1"
+									value={
+										discovery.scanProgress.total > 0
+											? (discovery.scanProgress.tested / discovery.scanProgress.total) * 100
+											: 0
+									}
+								/>
+							</VStack>
+						) : (
+							<Collapsible>
+								<CollapsibleTrigger testID="printing-scan-candidates-toggle">
+									<Text className="text-muted-foreground text-xs font-medium">
+										{t(
+											'settings.scan_candidates_done',
+											'Checked %s common printer addresses'
+										).replace(
+											'%s',
+											String(discovery.scanProgress.total || discovery.scanCandidates.length)
+										)}
+									</Text>
+								</CollapsibleTrigger>
+								<CollapsibleContent>
+									<Text className="text-muted-foreground text-xs">{scanCandidateList}</Text>
+								</CollapsibleContent>
+							</Collapsible>
+						)}
 						<Text className="text-muted-foreground text-xs">
 							{t(
 								'settings.scan_candidates_hint',
