@@ -24,7 +24,7 @@ overrides:
 packageExtensionsChecksum: sha256-EMen4+1NnTMb6PkUt5YTKBLEs4BAWQPcwvdmpWcA5oA=
 
 patchedDependencies:
-  react-native-esc-pos-printer@4.5.0: f505883fa0dc5f31181adf6cb02c40760d1529f1a0f1445c0d7cfb561c7dc246
+  react-native-esc-pos-printer@4.5.0: f5c6fa6bddf06b2e5934df4919d7e5e39f09f89e9d5b7e30174e799bfda31faf
 
 importers:
 
