@@ -44,7 +44,7 @@
     "expo": "~56.0.5"
   },
   "dependencies": {
-    "turbo": "^2.9.14",
-    "typescript": "^5.9.3"
+    "turbo": "^2.9.15",
+    "typescript": "^6.0.3"
   }
 }
