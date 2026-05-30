@@ -594,6 +594,11 @@ const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 			// Existing profiles need no change — the new field is optional.
 			return oldDoc;
 		},
+		7(oldDoc) {
+			// v7: added the optional `cloudProvider` field (server-side print provider).
+			// Existing profiles need no change — the new field is optional.
+			return oldDoc;
+		},
 	},
 };
 
