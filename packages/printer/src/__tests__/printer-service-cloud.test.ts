@@ -41,6 +41,7 @@ describe('PrinterService cloud routing', () => {
 
 		expect(cloudEnqueueFactory).toHaveBeenCalledOnce();
 		expect(enqueue).toHaveBeenCalledWith('plugin-printer-7', {
+			kind: 'raw',
 			data: new Uint8Array([0x1b, 0x40]),
 			contentType: 'application/octet-stream',
 		});
