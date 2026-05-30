@@ -215,4 +215,54 @@ describe('buildPrinterProfileFields', () => {
 			)
 		).toEqual(expect.objectContaining({ connectionType: 'cloud', cloudPrinterId: 'reg-7' }));
 	});
+
+	it('persists cloudProvider on a cloud profile', () => {
+		expect(
+			buildPrinterProfileFields(
+				{
+					name: 'Kitchen (cloud)',
+					connectionType: 'cloud',
+					vendor: 'generic',
+					address: '',
+					cloudPrinterId: 'reg-7',
+					cloudProvider: 'epson-sdp',
+					port: 9100,
+					language: 'esc-pos',
+					columns: 42,
+					emitEscPrintMode: true,
+					fullReceiptRaster: false,
+					autoCut: true,
+					autoOpenDrawer: false,
+					isDefault: false,
+				},
+				{}
+			)
+		).toEqual(
+			expect.objectContaining({
+				connectionType: 'cloud',
+				cloudPrinterId: 'reg-7',
+				cloudProvider: 'epson-sdp',
+			})
+		);
+	});
+
+	it('omits cloudProvider from non-cloud profiles', () => {
+		expect(
+			buildPrinterProfileFields({
+				name: 'Counter',
+				connectionType: 'network',
+				vendor: 'generic',
+				address: '192.168.1.100',
+				cloudProvider: 'star-cloudprnt',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: false,
+			})
+		).not.toHaveProperty('cloudProvider');
+	});
 });

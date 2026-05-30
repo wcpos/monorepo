@@ -19,6 +19,8 @@ import type { PrinterFormValues } from '../../schema';
 interface CloudPrinter {
 	id: string;
 	name: string;
+	/** Server-side print provider backing this printer; drives job delivery format. */
+	provider?: 'star-cloudprnt' | 'epson-sdp' | 'printnode';
 }
 
 interface CloudPrintSettingsResponse {
@@ -61,7 +63,12 @@ export function CloudFields({ form }: { form: UseFormReturn<PrinterFormValues> }
 				return (
 					<Select
 						value={selected ? { value: selected.id, label: selected.name } : undefined}
-						onValueChange={(option) => field.onChange(option?.value ?? '')}
+						onValueChange={(option) => {
+							const id = option?.value ?? '';
+							field.onChange(id);
+							const chosen = printers.find((p) => p.id === id);
+							form.setValue('cloudProvider', chosen?.provider);
+						}}
 					>
 						<SelectTrigger testID="cloud-printer-select">
 							<SelectValue

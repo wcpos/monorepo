@@ -55,6 +55,15 @@ export interface PrinterProfile {
 	nativeInterfaceType?: string;
 	/** For `connectionType: 'cloud'`: the WCPOS plugin-side registered cloud printer ID. */
 	cloudPrinterId?: string;
+	/**
+	 * For `connectionType: 'cloud'`: the server-side print provider backing the
+	 * registered cloud printer. Drives how jobs are delivered:
+	 * - `star-cloudprnt` — the printer polls; a raw ESC/POS payload is delivered as-is.
+	 * - `epson-sdp` / `printnode` — raw payloads are rejected/never delivered; the
+	 *   server must render & submit an order-based job instead.
+	 * Absent/unknown profiles fall back to the raw-payload (Star) behaviour.
+	 */
+	cloudProvider?: 'star-cloudprnt' | 'epson-sdp' | 'printnode';
 	printerModel?: string;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns: number;

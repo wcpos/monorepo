@@ -1,6 +1,6 @@
 export const printerProfilesLiteral = {
 	title: 'Printer Profiles schema',
-	version: 6,
+	version: 7,
 	description: 'Local printer profiles for direct thermal printing',
 	type: 'object',
 	primaryKey: 'id',
@@ -41,6 +41,12 @@ export const printerProfilesLiteral = {
 			maxLength: 64,
 			description:
 				'For connectionType "cloud": the WCPOS plugin-side registered cloud printer ID this profile prints to.',
+		},
+		cloudProvider: {
+			type: 'string',
+			enum: ['star-cloudprnt', 'epson-sdp', 'printnode'],
+			description:
+				'For connectionType "cloud": the server-side print provider backing the registered cloud printer. Drives job delivery format (raw payload for Star CloudPRNT vs server-rendered order-based jobs for Epson SDP / PrintNode).',
 		},
 		printerModel: {
 			type: 'string',
