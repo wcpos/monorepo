@@ -6,6 +6,8 @@ export interface PrinterFormValues {
 	vendor: 'epson' | 'star' | 'generic';
 	address: string;
 	cloudPrinterId?: string;
+	/** Server-side provider for the chosen cloud printer; carried from the picker, no UI control. */
+	cloudProvider?: 'star-cloudprnt' | 'epson-sdp' | 'printnode';
 	port: number;
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
 	columns: number;
@@ -52,6 +54,7 @@ const baseShape = {
 	isDefault: z.boolean().default(true),
 	nativeInterfaceType: z.string().optional(),
 	cloudPrinterId: z.string().optional(),
+	cloudProvider: z.enum(['star-cloudprnt', 'epson-sdp', 'printnode']).optional(),
 };
 
 /** Web: Epson/Star; network or (capability-permitting) USB/Bluetooth via WebUSB/Web Bluetooth. */

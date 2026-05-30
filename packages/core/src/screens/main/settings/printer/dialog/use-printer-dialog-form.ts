@@ -98,6 +98,7 @@ export function usePrinterDialogForm({
 				isDefault: printer.isDefault ?? false,
 				nativeInterfaceType: printer.nativeInterfaceType,
 				cloudPrinterId: printer.cloudPrinterId ?? '',
+				cloudProvider: printer.cloudProvider,
 			};
 			prevVendorRef.current = next.vendor;
 			form.reset(next);
@@ -117,6 +118,7 @@ export function usePrinterDialogForm({
 				language: vendorDefaults.language,
 				nativeInterfaceType: prefill.nativeInterfaceType,
 				cloudPrinterId: prefill.cloudPrinterId ?? '',
+				cloudProvider: prefill.cloudProvider,
 			};
 			prevVendorRef.current = next.vendor;
 			form.reset(next);

@@ -7,6 +7,7 @@ export interface PrinterProfileFormData {
 	vendor: PrinterProfile['vendor'];
 	address: string;
 	cloudPrinterId?: string;
+	cloudProvider?: PrinterProfile['cloudProvider'];
 	port: number;
 	language: PrinterProfile['language'];
 	columns: number;
@@ -27,6 +28,7 @@ export type PrinterDialogPrefill = Partial<
 	> & {
 		connectionType: PrinterProfile['connectionType'];
 		cloudPrinterId: string;
+		cloudProvider: PrinterProfile['cloudProvider'];
 	}
 >;
 
@@ -35,11 +37,13 @@ interface PrinterProfileSeed {
 		connectionType: PrinterProfile['connectionType'];
 		nativeInterfaceType?: string;
 		cloudPrinterId?: string;
+		cloudProvider?: PrinterProfile['cloudProvider'];
 	};
 	prefill?: {
 		connectionType?: PrinterDialogPrefill['connectionType'];
 		nativeInterfaceType?: string;
 		cloudPrinterId?: string;
+		cloudProvider?: PrinterProfile['cloudProvider'];
 	};
 }
 
@@ -71,11 +75,18 @@ export function buildPrinterProfileFields(
 		transport.connectionType === 'cloud' && resolvedCloudPrinterId
 			? resolvedCloudPrinterId
 			: undefined;
+	const resolvedCloudProvider =
+		data.cloudProvider || seed.printer?.cloudProvider || seed.prefill?.cloudProvider;
+	const cloudProvider =
+		transport.connectionType === 'cloud' && resolvedCloudProvider
+			? resolvedCloudProvider
+			: undefined;
 
 	return {
 		name: data.name,
 		connectionType: transport.connectionType,
 		...(cloudPrinterId ? { cloudPrinterId } : {}),
+		...(cloudProvider ? { cloudProvider } : {}),
 		vendor: data.vendor,
 		address: data.address || '',
 		port: data.port,
