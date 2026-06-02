@@ -6,7 +6,6 @@ import isEmpty from 'lodash/isEmpty';
 import map from 'lodash/map';
 import replace from 'lodash/replace';
 import some from 'lodash/some';
-import sortBy from 'lodash/sortBy';
 type TaxRate = import('@wcpos/database').TaxRateDocument;
 
 /**
@@ -55,6 +54,59 @@ function postcodeMatcher(postcode: string, patterns: string[]): boolean {
 	});
 }
 
+function compareTaxRates(rate1: TaxRate, rate2: TaxRate): number {
+	const priority1 = rate1.priority ?? 0;
+	const priority2 = rate2.priority ?? 0;
+	if (priority1 !== priority2) {
+		return priority1 < priority2 ? -1 : 1;
+	}
+
+	const country1 = rate1.country ?? '';
+	const country2 = rate2.country ?? '';
+	if (country1 !== country2) {
+		if (country1 === '') {
+			return 1;
+		}
+		if (country2 === '') {
+			return -1;
+		}
+		return country1 > country2 ? 1 : -1;
+	}
+
+	const state1 = rate1.state ?? '';
+	const state2 = rate2.state ?? '';
+	if (state1 !== state2) {
+		if (state1 === '') {
+			return 1;
+		}
+		if (state2 === '') {
+			return -1;
+		}
+		return state1 > state2 ? 1 : -1;
+	}
+
+	const postcodeCount1 = rate1.postcodes?.length ?? 0;
+	const postcodeCount2 = rate2.postcodes?.length ?? 0;
+	if (postcodeCount1 !== postcodeCount2) {
+		return postcodeCount1 < postcodeCount2 ? 1 : -1;
+	}
+
+	const cityCount1 = rate1.cities?.length ?? 0;
+	const cityCount2 = rate2.cities?.length ?? 0;
+	if (cityCount1 !== cityCount2) {
+		return cityCount1 < cityCount2 ? 1 : -1;
+	}
+
+	const id1 = rate1.id ?? 0;
+	const id2 = rate2.id ?? 0;
+
+	if (id1 === id2) {
+		return 0;
+	}
+
+	return id1 < id2 ? -1 : 1;
+}
+
 /**
  * Filter tax rates based on the provided country, state, postcode, and city.
  */
@@ -67,7 +119,7 @@ export function filterTaxRates(
 ): TaxRate[] {
 	const taxRatesByClass = groupBy(taxRates, 'class');
 	const filteredTaxRatesByClass = map(taxRatesByClass, (taxRatesInClass) => {
-		const sortedTaxRates = sortBy(taxRatesInClass, ['priority', 'order', 'id']);
+		const sortedTaxRates = [...taxRatesInClass].sort(compareTaxRates);
 		const cityUpperCase = city.toUpperCase();
 		let foundMatchAtCurrentPriority = false;
 

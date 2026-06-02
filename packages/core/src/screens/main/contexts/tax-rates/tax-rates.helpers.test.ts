@@ -194,7 +194,7 @@ describe('tax-rates.helpers', () => {
 				expect(result.map((r) => r.id)).toContain(3);
 			});
 
-			it('should sort by priority, then order, then id', () => {
+			it('should sort by priority, specificity, then id', () => {
 				const rates = [
 					createTaxRate({ id: 3, country: 'US', priority: 2, order: 1 }),
 					createTaxRate({ id: 1, country: 'US', priority: 1, order: 2 }),
@@ -202,11 +202,37 @@ describe('tax-rates.helpers', () => {
 				];
 				const result = filterTaxRates(rates, 'US');
 
-				// First match at priority 1 (after sorting by order) should be id 2
+				// First match at priority 1 (matching WooCommerce, ignoring stored display order) should be id 1
 				// First match at priority 2 should be id 3
 				expect(result).toHaveLength(2);
-				expect(result[0].id).toBe(2); // priority 1, order 1
+				expect(result[0].id).toBe(1); // priority 1, lower id
 				expect(result[1].id).toBe(3); // priority 2, order 1
+			});
+
+			it('should prefer a country-specific rate over a wildcard rate at the same priority', () => {
+				const rates = [
+					createTaxRate({
+						id: 1,
+						country: '',
+						rate: '0',
+						name: '0% outside EU',
+						priority: 1,
+						order: 1,
+					}),
+					createTaxRate({
+						id: 2,
+						country: 'NL',
+						rate: '21',
+						name: 'NL VAT',
+						priority: 1,
+						order: 2,
+					}),
+				];
+
+				const result = filterTaxRates(rates, 'NL', '', '6717HT', 'Ede');
+
+				expect(result).toHaveLength(1);
+				expect(result[0].id).toBe(2);
 			});
 		});
 
