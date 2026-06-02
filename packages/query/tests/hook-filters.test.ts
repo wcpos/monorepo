@@ -216,6 +216,26 @@ describe('Hook Filters', () => {
 	});
 
 	describe('Products - filterApiQueryParams', () => {
+		it('maps name orderby to title', () => {
+			expect(filterProductParams({ orderby: 'name' }).orderby).toBe('title');
+		});
+
+		it('maps date_created_gmt orderby to date', () => {
+			expect(filterProductParams({ orderby: 'date_created_gmt' }).orderby).toBe('date');
+		});
+
+		it('maps sortable_price orderby to price', () => {
+			expect(filterProductParams({ orderby: 'sortable_price' }).orderby).toBe('price');
+		});
+
+		it('maps total_sales orderby to popularity', () => {
+			expect(filterProductParams({ orderby: 'total_sales' }).orderby).toBe('popularity');
+		});
+
+		it('passes through an already-valid orderby unchanged', () => {
+			expect(filterProductParams({ orderby: 'title' }).orderby).toBe('title');
+		});
+
 		it('converts direct category and tag elemMatch filters to WooCommerce REST params', () => {
 			const result = filterProductParams({
 				categories: { $elemMatch: { id: 9 } },

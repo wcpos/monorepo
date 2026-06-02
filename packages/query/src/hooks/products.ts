@@ -29,6 +29,14 @@ const filterApiQueryParams = (params: Record<string, any>) => {
 		orderby = 'date';
 	}
 
+	if (orderby === 'sortable_price') {
+		orderby = 'price';
+	}
+
+	if (orderby === 'total_sales') {
+		orderby = 'popularity';
+	}
+
 	const categoryOrIds = extractSameFieldOrElemMatchIds(selectorParams, 'categories');
 	const categoryAndIds = extractSameFieldAndElemMatchIds(selectorParams, 'categories');
 	const tagOrIds = extractSameFieldOrElemMatchIds(selectorParams, 'tags');
