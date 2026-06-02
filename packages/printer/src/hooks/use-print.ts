@@ -5,6 +5,7 @@ import { mapReceiptData } from '../encoder/map-receipt-data';
 import { prepareSystemPrintHtml } from '../print-html';
 import { PrinterService } from '../printer-service';
 import { useOptionalRasterize } from '../raster/rasterize-provider';
+import { isOrderBasedCloudProfile } from '../transport/cloud-adapter';
 import { printFromUrl } from './print-from-url';
 
 import type { ReceiptData } from '../encoder/types';
@@ -33,6 +34,10 @@ interface UsePrintOptions {
 	iframeRef?: React.RefObject<HTMLIFrameElement | null>;
 	/** Injected by the host app: builds the cloud queue enqueue fn for a profile. */
 	cloudEnqueueFactory?: PrinterServiceOptions['cloudEnqueueFactory'];
+	/** WooCommerce order id — required for order-based cloud providers (Epson/PrintNode). */
+	orderId?: number;
+	/** Server template id — required for order-based cloud providers (Epson/PrintNode). */
+	templateId?: string;
 	/** Callbacks */
 	onBeforePrint?: () => void | Promise<void>;
 	onAfterPrint?: () => void;
@@ -87,6 +92,8 @@ export function usePrint(options: UsePrintOptions) {
 		templateEngine,
 		iframeRef,
 		cloudEnqueueFactory,
+		orderId,
+		templateId,
 		onBeforePrint,
 		onAfterPrint,
 		onPrintError,
@@ -111,7 +118,20 @@ export function usePrint(options: UsePrintOptions) {
 			const service = getService();
 			service.setCloudEnqueueFactory(cloudEnqueueFactory);
 
-			if (printerProfile && printerProfile.connectionType !== 'system' && receiptData) {
+			// Order-based cloud providers (Epson SDP, PrintNode) must NOT be rendered
+			// client-side — Epson rejects raw payloads and PrintNode never polls. Send
+			// an order job and let the server render + deliver. Branch here, before any
+			// local rendering. Star CloudPRNT and unknown/legacy providers fall through
+			// to the byte-rendering paths below (raw upload, unchanged).
+			if (printerProfile && isOrderBasedCloudProfile(printerProfile)) {
+				if (orderId == null) {
+					throw new Error('Order-based cloud printing requires an order id');
+				}
+				if (!templateId) {
+					throw new Error('Order-based cloud printing requires a template id');
+				}
+				await service.printOrderViaCloud(printerProfile, orderId, templateId);
+			} else if (printerProfile && printerProfile.connectionType !== 'system' && receiptData) {
 				const normalised = mapReceiptData(receiptData as Record<string, any>);
 
 				if (printerProfile.fullReceiptRaster) {
@@ -200,12 +220,14 @@ export function usePrint(options: UsePrintOptions) {
 		onAfterPrint,
 		onBeforePrint,
 		onPrintError,
+		orderId,
 		paperWidth,
 		printerProfile,
 		rasterize,
 		receiptData,
 		receiptUrl,
 		templateEngine,
+		templateId,
 		templateXml,
 	]);
 

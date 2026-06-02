@@ -40,6 +40,7 @@ describe('PrinterService cloud factory replacement', () => {
 
 		expect(firstEnqueue).toHaveBeenCalledTimes(1);
 		expect(nextEnqueue).toHaveBeenCalledWith('reg-7', {
+			kind: 'raw',
 			data: new Uint8Array([2]),
 			contentType: 'application/octet-stream',
 		});

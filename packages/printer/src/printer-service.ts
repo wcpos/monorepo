@@ -6,6 +6,7 @@ import { encodeReceipt } from './encoder/encode-receipt';
 import { formatReceiptData } from './encoder/format-receipt-data';
 import { encodeThermalTemplateForPrint } from './encoder/thermal-print';
 import { encodeThermalTemplate } from './renderer';
+import { CloudAdapter } from './transport/cloud-adapter';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
 
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
@@ -98,7 +99,6 @@ export class PrinterService {
 						'Cloud printing is not configured (no cloudEnqueueFactory provided to PrinterService)'
 					);
 				}
-				const { CloudAdapter } = await import('./transport/cloud-adapter');
 				const enqueue = this.options.cloudEnqueueFactory(profile);
 				if (typeof enqueue !== 'function') {
 					throw new Error(
@@ -176,6 +176,26 @@ export class PrinterService {
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
 			await transport.printRaw(data);
+		});
+	}
+
+	/**
+	 * Enqueue an order-based cloud print job. The client renders nothing; the
+	 * server renders + delivers from the order + template. Used for cloud
+	 * providers (Epson SDP, PrintNode) that reject raw client payloads or never
+	 * poll. See wcpos/woocommerce-pos#1094.
+	 */
+	async printOrderViaCloud(
+		profile: PrinterProfile,
+		orderId: number,
+		templateId: string
+	): Promise<void> {
+		return this.queue.add(async () => {
+			const transport = await this.getTransport(profile);
+			if (!(transport instanceof CloudAdapter)) {
+				throw new Error('Order-based printing requires a cloud printer profile');
+			}
+			await transport.enqueueOrder(orderId, templateId);
 		});
 	}
 

@@ -175,6 +175,11 @@ export function Receipt({ resource }: Props) {
 			selectedTemplateEngine === 'thermal' ? (selectedTemplateContent ?? undefined) : undefined,
 		iframeRef,
 		cloudEnqueueFactory,
+		// Order-based cloud providers (Epson/PrintNode) send these instead of bytes;
+		// the server renders + delivers. templateInfo.id is the server template id
+		// (the same `wcpos_template` id the receipt URL uses as `?template=`).
+		orderId,
+		templateId: templateInfo?.id,
 	});
 
 	/**

@@ -37,6 +37,7 @@ describe('PrinterService.setCloudEnqueueFactory', () => {
 		await service.printRaw(new Uint8Array([0x1b, 0x40]), cloudProfile);
 
 		expect(enqueue).toHaveBeenCalledWith('reg-7', {
+			kind: 'raw',
 			data: new Uint8Array([0x1b, 0x40]),
 			contentType: 'application/octet-stream',
 		});

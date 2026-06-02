@@ -36,6 +36,7 @@ describe('PrinterService cloud round-trip', () => {
 		await service.printRaw(new Uint8Array([1, 2, 3]), cloudProfile);
 
 		expect(enqueue).toHaveBeenCalledWith('reg-9', {
+			kind: 'raw',
 			data: new Uint8Array([1, 2, 3]),
 			contentType: 'application/octet-stream',
 		});
@@ -54,8 +55,40 @@ describe('PrinterService cloud round-trip', () => {
 		await service.printRaw(new Uint8Array([0x1b, 0x40, 0x0a]), starProfile);
 
 		expect(enqueue).toHaveBeenCalledWith('reg-9', {
+			kind: 'raw',
 			data: new Uint8Array([0x1b, 0x40, 0x0a]),
 			contentType: 'application/octet-stream',
 		});
+	});
+
+	it('enqueues an order-based job (no payload) via printOrderViaCloud', async () => {
+		const enqueue = vi.fn().mockResolvedValue(undefined);
+		const service = new PrinterService({ cloudEnqueueFactory: () => enqueue });
+		const epsonProfile: PrinterProfile = {
+			...cloudProfile,
+			vendor: 'epson',
+			cloudProvider: 'epson-sdp',
+		};
+
+		await service.printOrderViaCloud(epsonProfile, 1234, '57');
+
+		expect(enqueue).toHaveBeenCalledWith('reg-9', {
+			kind: 'order',
+			orderId: 1234,
+			templateId: '57',
+		});
+	});
+
+	it('rejects printOrderViaCloud for a non-cloud profile', async () => {
+		const enqueue = vi.fn().mockResolvedValue(undefined);
+		const service = new PrinterService({ cloudEnqueueFactory: () => enqueue });
+		const systemProfile: PrinterProfile = {
+			...cloudProfile,
+			connectionType: 'system',
+		};
+
+		await expect(service.printOrderViaCloud(systemProfile, 1, '2')).rejects.toThrow(
+			'Order-based printing requires a cloud printer profile'
+		);
 	});
 });

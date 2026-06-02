@@ -1,12 +1,47 @@
-import type { PrinterTransport } from '../types';
+import type { PrinterProfile, PrinterTransport } from '../types';
 
-/** A print job destined for the cloud queue. */
-export interface CloudPrintJob {
-	/** Pre-encoded payload bytes (ESC/POS, StarPRNT, raster image, or UTF-8 HTML). */
-	data: Uint8Array;
-	/** MIME type describing the payload, e.g. 'application/octet-stream' or 'text/html'. */
-	contentType: string;
+/**
+ * Whether a profile must be printed as a server-rendered, order-based cloud job
+ * rather than a client-rendered raw byte upload.
+ *
+ * True only for the `epson-sdp` and `printnode` providers: Epson SDP rejects raw
+ * client payloads and PrintNode never polls, so the client must NOT render bytes
+ * for them. Star CloudPRNT and any unknown / missing provider return false and
+ * keep the raw-upload behaviour (Star is the shipped happy path).
+ */
+export function isOrderBasedCloudProfile(profile: PrinterProfile | undefined): boolean {
+	return (
+		profile?.connectionType === 'cloud' &&
+		(profile.cloudProvider === 'epson-sdp' || profile.cloudProvider === 'printnode')
+	);
 }
+
+/**
+ * A print job destined for the cloud queue. Two variants:
+ *
+ * - `raw` — pre-encoded payload bytes the client rendered locally. The printer
+ *   polls and receives them as-is. Used by Star CloudPRNT (and any unknown /
+ *   legacy provider that falls back to Star behaviour).
+ * - `order` — no payload; the server renders & delivers the receipt from the
+ *   order + template. Required by Epson SDP (rejects raw payloads) and PrintNode
+ *   (never polls), which the client must NOT render for. See cloud-print spec
+ *   and wcpos/woocommerce-pos#1094.
+ */
+export type CloudPrintJob =
+	| {
+			kind: 'raw';
+			/** Pre-encoded payload bytes (ESC/POS, StarPRNT, raster image, or UTF-8 HTML). */
+			data: Uint8Array;
+			/** MIME type describing the payload, e.g. 'application/octet-stream' or 'text/html'. */
+			contentType: string;
+	  }
+	| {
+			kind: 'order';
+			/** WooCommerce order id the server should render. */
+			orderId: number;
+			/** Server template id (`wcpos_template` post id or virtual slug) to render with. */
+			templateId: string;
+	  };
 
 /**
  * Enqueues a print job for a cloud printer. Supplied by the host app, which
@@ -32,13 +67,27 @@ export class CloudAdapter implements PrinterTransport {
 	) {}
 
 	async printRaw(data: Uint8Array): Promise<void> {
-		await this.enqueue(this.cloudPrinterId, { data, contentType: 'application/octet-stream' });
+		await this.enqueue(this.cloudPrinterId, {
+			kind: 'raw',
+			data,
+			contentType: 'application/octet-stream',
+		});
 	}
 
 	async printHtml(html: string): Promise<void> {
 		await this.enqueue(this.cloudPrinterId, {
+			kind: 'raw',
 			data: new TextEncoder().encode(html),
 			contentType: 'text/html',
 		});
+	}
+
+	/**
+	 * Enqueue an order-based job. The server renders + delivers from the order +
+	 * template — used for providers (Epson SDP, PrintNode) the client must not
+	 * render bytes for.
+	 */
+	async enqueueOrder(orderId: number, templateId: string): Promise<void> {
+		await this.enqueue(this.cloudPrinterId, { kind: 'order', orderId, templateId });
 	}
 }
