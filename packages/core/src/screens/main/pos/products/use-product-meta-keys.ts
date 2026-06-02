@@ -14,7 +14,10 @@ import { useCollection } from '../../hooks/use-collection';
  */
 export function useProductMetaKeys(): string[] {
 	const { collection } = useCollection('products');
-	const query = React.useMemo(() => collection.find(), [collection]);
+	const query = React.useMemo(
+		() => collection.find({ selector: { meta_data: { $elemMatch: { key: { $exists: true } } } } }),
+		[collection]
+	);
 	const products = useObservableState(query.$, []) as MetaProduct[];
 
 	return React.useMemo(() => collectMetaKeys(products), [products]);

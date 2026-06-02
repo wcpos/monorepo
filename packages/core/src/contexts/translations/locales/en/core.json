@@ -238,6 +238,7 @@
 	"common.regular_price_2": "Regular price",
 	"common.release_notes": "Release Notes",
 	"common.remove_item": "Remove item",
+	"common.remove_2": "Remove {name}",
 	"common.reports": "Reports",
 	"common.restore_default_settings": "Restore Default Settings",
 	"common.retry": "Retry",

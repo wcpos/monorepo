@@ -121,6 +121,8 @@ export function MetaDataKeysField({ value, onChange }: MetaDataKeysFieldProps) {
 							<Pressable
 								onPress={() => removeKey(opt.value)}
 								testID={`meta-key-remove-${opt.value}`}
+								accessibilityRole="button"
+								accessibilityLabel={t('common.remove_2', { name: opt.value })}
 							>
 								<Text className="text-muted-foreground text-sm">✕</Text>
 							</Pressable>
