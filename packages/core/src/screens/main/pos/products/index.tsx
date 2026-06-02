@@ -134,6 +134,8 @@ export function POSProducts({ isColumn = false }) {
 	const { calcTaxes } = useTaxRates();
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 	const viewMode = useObservableEagerState(uiSettings.viewMode$);
+	const sortBy = useObservableEagerState(uiSettings.sortBy$);
+	const sortDirection = useObservableEagerState(uiSettings.sortDirection$);
 	const querySearchInputRef = React.useRef<React.ElementRef<typeof QuerySearchInput>>(null);
 	const [expandedRef, expanded$] = useObservableRef<ExpandedState>({} as ExpandedState);
 	const t = useT();
@@ -181,6 +183,17 @@ export function POSProducts({ isColumn = false }) {
 			query?.where('stock_status').equals('instock').exec();
 		}
 	}, [query, showOutOfStock]);
+
+	/**
+	 * Apply sort changes to the live query. Both the settings control and the
+	 * DataTable column headers write sortBy/sortDirection to uiSettings; reacting
+	 * to those observables here keeps the grid (which has no headers) and the
+	 * table in sync. An effect is required because the query is an imperative
+	 * external store, not derivable state.
+	 */
+	React.useEffect(() => {
+		query?.sort([{ [sortBy]: sortDirection as 'asc' | 'desc' }]).exec();
+	}, [query, sortBy, sortDirection]);
 
 	/**
 	 * Helper to set expanded state directly, bypassing TanStack's updater function
