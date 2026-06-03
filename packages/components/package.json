@@ -143,8 +143,8 @@
     "react-native-keyboard-controller": "1.21.6",
     "react-native-resizable-panels": "^0.0.3",
     "sonner": "^2.0.7",
-    "sonner-native": "^0.25.1",
+    "sonner-native": "^0.26.0",
     "tailwind-merge": "^3.6.0",
-    "uniwind": "npm:uniwind-pro@1.2.0"
+    "uniwind": "npm:uniwind-pro@1.3.0"
   }
 }
