@@ -1,5 +1,7 @@
 import { sanitizeWPCredentialsData } from './wp-credentials';
 
+const migrationCollection = undefined as never;
+
 describe('sanitizeWPCredentialsData', () => {
 	it('drops token_type and unknown fields before wp_credentials documents are persisted', () => {
 		const sanitized = sanitizeWPCredentialsData({
@@ -77,12 +79,15 @@ describe('wp_credentials migration strategy', () => {
 
 		expect(typeof migrateToV3).toBe('function');
 		expect(
-			migrateToV3?.({
-				uuid: 'cred-1',
-				role: 'administrator',
-				token_type: 'Bearer',
-				access_token: 'access-token',
-			})
+			migrateToV3?.(
+				{
+					uuid: 'cred-1',
+					role: 'administrator',
+					token_type: 'Bearer',
+					access_token: 'access-token',
+				},
+				migrationCollection
+			)
 		).toEqual({
 			uuid: 'cred-1',
 			roles: ['administrator'],
@@ -96,13 +101,16 @@ describe('wp_credentials migration strategy', () => {
 
 		expect(typeof migrateToV4).toBe('function');
 		expect(
-			migrateToV4?.({
-				uuid: 'cred-1',
-				roles: ['administrator'],
-				token_type: 'Bearer',
-				access_token: 'access-token',
-				unexpected_server_field: 'do-not-persist',
-			})
+			migrateToV4?.(
+				{
+					uuid: 'cred-1',
+					roles: ['administrator'],
+					token_type: 'Bearer',
+					access_token: 'access-token',
+					unexpected_server_field: 'do-not-persist',
+				},
+				migrationCollection
+			)
 		).toEqual({
 			uuid: 'cred-1',
 			roles: ['administrator'],

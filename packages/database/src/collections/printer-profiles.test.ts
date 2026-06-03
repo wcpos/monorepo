@@ -8,6 +8,8 @@ interface PrinterProfileSchemaShape {
 	};
 }
 
+const migrationCollection = undefined as never;
+
 describe('printer_profiles schema v7 (cloud connection type + provider)', () => {
 	it('declares schema version 7 with a cloud connection type, cloudPrinterId and cloudProvider', async () => {
 		const { storeCollections } = await import('./index');
@@ -31,22 +33,25 @@ describe('printer_profiles schema v7 (cloud connection type + provider)', () => 
 
 		expect(typeof migrateToV6).toBe('function');
 
-		const migrated = migrateToV6?.({
-			id: 'p1',
-			name: 'Front Counter',
-			connectionType: 'network',
-			vendor: 'epson',
-			address: '192.168.1.50',
-			port: 9100,
-			language: 'esc-pos',
-			columns: 42,
-			emitEscPrintMode: true,
-			fullReceiptRaster: false,
-			autoCut: true,
-			autoOpenDrawer: false,
-			isDefault: true,
-			isBuiltIn: false,
-		});
+		const migrated = migrateToV6?.(
+			{
+				id: 'p1',
+				name: 'Front Counter',
+				connectionType: 'network',
+				vendor: 'epson',
+				address: '192.168.1.50',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: true,
+				isBuiltIn: false,
+			},
+			migrationCollection
+		);
 
 		expect(migrated).toMatchObject({ id: 'p1', connectionType: 'network', isDefault: true });
 	});
@@ -57,22 +62,25 @@ describe('printer_profiles schema v7 (cloud connection type + provider)', () => 
 
 		expect(typeof migrateToV7).toBe('function');
 
-		const migrated = migrateToV7?.({
-			id: 'p1',
-			name: 'Front Counter',
-			connectionType: 'network',
-			vendor: 'epson',
-			address: '192.168.1.50',
-			port: 9100,
-			language: 'esc-pos',
-			columns: 42,
-			emitEscPrintMode: true,
-			fullReceiptRaster: false,
-			autoCut: true,
-			autoOpenDrawer: false,
-			isDefault: true,
-			isBuiltIn: false,
-		});
+		const migrated = migrateToV7?.(
+			{
+				id: 'p1',
+				name: 'Front Counter',
+				connectionType: 'network',
+				vendor: 'epson',
+				address: '192.168.1.50',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: true,
+				isBuiltIn: false,
+			},
+			migrationCollection
+		);
 
 		expect(migrated).toMatchObject({ id: 'p1', connectionType: 'network', isDefault: true });
 	});

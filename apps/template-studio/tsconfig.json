@@ -11,6 +11,7 @@
 		"allowImportingTsExtensions": true,
 		"noEmit": true,
 		"baseUrl": ".",
+		"ignoreDeprecations": "6.0",
 		"paths": {
 			"@wcpos/receipt-renderer/render-template": [
 				"../../packages/receipt-renderer/src/render-template.ts"

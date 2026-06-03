@@ -7,7 +7,7 @@ import { ItemContext, RootContext, useItemContext, useRootContext } from './util
 import { useOnEndReached } from './utils/use-on-end-reached';
 
 import type { ReactVirtualizerOptions } from '@tanstack/react-virtual';
-import type { PartialKeys, VirtualItem, Virtualizer } from '@tanstack/virtual-core';
+import type { PartialKeys, VirtualItem } from '@tanstack/virtual-core';
 import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } from './types';
 
 /**
@@ -29,7 +29,7 @@ import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } 
 
 // Web-specific extended context that includes virtualizer data
 interface WebItemContext<T> extends BaseItemContext<T> {
-	rowVirtualizer: Virtualizer<HTMLDivElement, Element>;
+	rowVirtualizer: ReturnType<typeof useVirtualWrapper>;
 	vItem: VirtualItem;
 	horizontal: boolean;
 }
@@ -208,7 +208,9 @@ function List<T>({
 				return (
 					<ItemContext.Provider
 						key={key}
-						value={{ item, index: vItem.index, rowVirtualizer, vItem } as WebItemContext<T>}
+						value={
+							{ item, index: vItem.index, rowVirtualizer, vItem, horizontal } as WebItemContext<T>
+						}
 					>
 						{renderItem({ item, index: vItem.index, target: 'Cell' })}
 					</ItemContext.Provider>

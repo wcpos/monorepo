@@ -2,6 +2,8 @@ import { storeCollections } from './index';
 import { sanitizeProductData } from './products';
 import { productsLiteral } from './schemas/products';
 
+const migrationCollection = undefined as never;
+
 describe('sanitizeProductData', () => {
 	it('normalizes stale product REST payloads for schema migration', () => {
 		const sanitized = sanitizeProductData({
@@ -89,13 +91,16 @@ describe('products migration strategy', () => {
 	});
 
 	it('sanitizes v5 product documents during v6 migration', () => {
-		const migrated = storeCollections.products.migrationStrategies?.[6]?.({
-			uuid: 'product-uuid',
-			id: '1',
-			price: '9.99',
-			meta_data: [{ id: '11', key: '_pos_visible', value: { enabled: true } }],
-			_links: { self: [{ href: 'https://example.test/product/1' }] },
-		} as any);
+		const migrated = storeCollections.products.migrationStrategies?.[6]?.(
+			{
+				uuid: 'product-uuid',
+				id: '1',
+				price: '9.99',
+				meta_data: [{ id: '11', key: '_pos_visible', value: { enabled: true } }],
+				_links: { self: [{ href: 'https://example.test/product/1' }] },
+			} as any,
+			migrationCollection
+		);
 
 		expect(migrated).toMatchObject({
 			uuid: 'product-uuid',
