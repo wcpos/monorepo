@@ -57,7 +57,15 @@ describe('saveOrSharePdf on web', () => {
 	});
 
 	it('decodes base64 data URI payloads before creating the download blob', async () => {
-		jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+		const click = jest.fn();
+		const createElement = jest.spyOn(document, 'createElement');
+		createElement.mockImplementation((tagName: string) => {
+			const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName);
+			if (tagName === 'a') {
+				Object.defineProperty(element, 'click', { value: click });
+			}
+			return element as HTMLElement;
+		});
 		const pdfBody = `data:application/pdf;base64,${btoa('%PDF')}`;
 
 		await saveOrSharePdf(pdfBody, 'receipt-42.pdf');
@@ -67,5 +75,6 @@ describe('saveOrSharePdf on web', () => {
 
 		expect(blob.type).toBe('application/pdf');
 		expect(bytes).toEqual([0x25, 0x50, 0x44, 0x46]);
+		expect(click).toHaveBeenCalledTimes(1);
 	});
 });
