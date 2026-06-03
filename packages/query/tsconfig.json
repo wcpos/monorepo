@@ -11,7 +11,10 @@
 		"forceConsistentCasingInFileNames": true,
 		"resolveJsonModule": true,
 		"noEmit": true,
+		"rootDir": "../..",
 		"isolatedModules": true,
+		"ignoreDeprecations": "6.0",
+		"types": ["jest"],
 		"baseUrl": ".",
 		"paths": {
 			"@wcpos/utils/*": ["../utils/src/*"],
