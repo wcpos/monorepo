@@ -41,6 +41,7 @@ import {
 	ReceiptPreviewViewport,
 } from './components/receipt-preview-viewport';
 import { EmailForm } from './email';
+import { useDownloadReceiptPdf } from './hooks/use-download-receipt-pdf';
 import { useTemplateRenderer } from './hooks/use-template-renderer';
 import { createCloudEnqueueFactory } from '../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../hooks/use-rest-http-client';
@@ -121,6 +122,9 @@ export function Receipt({ resource }: Props) {
 		};
 	}, [selectedTemplate]);
 
+	const { download: downloadReceiptPdf, isDownloading: isDownloadingPdf } = useDownloadReceiptPdf();
+	const canDownloadPdf = !isOffline && !isSyncing && Boolean(orderId && templateInfo?.id);
+
 	const previewPaperWidth = React.useMemo(
 		() =>
 			getReceiptPreviewPaperWidth({
@@ -133,9 +137,10 @@ export function Receipt({ resource }: Props) {
 	// Content size measured from the rendered receipt frame — lets the preview
 	// viewport track the real document instead of locking to fixed paper sizes.
 	const previewKey = String(selectedTemplateId ?? 'legacy-receipt');
-	const [contentSize, setContentSize] = React.useState<{ width: number; height: number } | null>(
-		null
-	);
+	const [contentSize, setContentSize] = React.useState<{
+		width: number;
+		height: number;
+	} | null>(null);
 	const [measuredPreviewKey, setMeasuredPreviewKey] = React.useState(previewKey);
 	if (measuredPreviewKey !== previewKey) {
 		// Template switched — drop the stale measurement until the new frame loads.
@@ -296,6 +301,14 @@ export function Receipt({ resource }: Props) {
 					) : (
 						<ModalAction disabled>{t('receipt.email_receipt')}</ModalAction>
 					)}
+					<ModalAction
+						testID="receipt-download-pdf-button"
+						onPress={() => downloadReceiptPdf({ orderId, templateId: templateInfo?.id })}
+						disabled={!canDownloadPdf}
+						loading={isDownloadingPdf}
+					>
+						{t('receipt.download_pdf')}
+					</ModalAction>
 					<ModalAction
 						testID="receipt-print-button"
 						onPress={() => print()}
