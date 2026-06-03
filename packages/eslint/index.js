@@ -8,6 +8,13 @@ export const config = [
 	eslintPluginPrettierRecommended,
 	...expoConfig,
 	{
+		settings: {
+			react: {
+				version: '19.2.3',
+			},
+		},
+	},
+	{
 		files: ['**/*.{js,jsx,ts,tsx}'],
 		settings: {
 			'import/resolver': {
@@ -105,7 +112,19 @@ export const config = [
 			],
 
 			// prefer named exports over default exports
-			'import/no-default-export': 'error',
+			'import/no-default-export': 'off',
+			'no-restricted-exports': [
+				'error',
+				{
+					restrictDefaultExports: {
+						direct: true,
+						named: true,
+						defaultFrom: true,
+						namedFrom: true,
+						namespaceFrom: true,
+					},
+				},
+			],
 		},
 	},
 
@@ -148,6 +167,7 @@ export const config = [
 			'**/app/**/*.{ts,tsx}', // Same Expo Router convention when linting from repo root
 			'app.config.ts', // Expo config
 			'**/*.config.{ts,js}', // Config files (playwright, etc.)
+			'**/*.d.ts', // Ambient module declarations can mirror third-party default exports
 			'**/*.stories.{ts,tsx}', // Storybook
 			'**/e2e/global-setup.ts', // Playwright global setup
 			'**/tree-dom.tsx', // Expo "use dom" requires default export
@@ -157,6 +177,7 @@ export const config = [
 		],
 		rules: {
 			'import/no-default-export': 'off',
+			'no-restricted-exports': 'off',
 		},
 	},
 ];
