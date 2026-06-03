@@ -843,17 +843,17 @@ importers:
         specifier: 4.2.4
         version: 4.2.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rxjs@7.8.2)
       rxdb:
-        specifier: 17.3.0
-        version: 17.3.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2)
+        specifier: 17.2.0
+        version: 17.2.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2)
       rxdb-old:
         specifier: npm:rxdb@16.21.1
         version: rxdb@16.21.1(rxjs@7.8.2)(socks@2.8.9)
       rxdb-premium:
-        specifier: 17.3.0
-        version: 17.3.0(rxdb@17.3.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
+        specifier: 17.2.0
+        version: 17.2.0(rxdb@17.2.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
       rxdb-premium-old:
         specifier: npm:rxdb-premium@16.21.1
-        version: rxdb-premium@16.21.1(rxdb@17.3.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
+        version: rxdb-premium@16.21.1(rxdb@17.2.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -1018,8 +1018,8 @@ importers:
         specifier: ^4.2.4
         version: 4.2.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rxjs@7.8.2)
       rxdb:
-        specifier: 17.3.0
-        version: 17.3.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2)
+        specifier: 17.2.0
+        version: 17.2.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2)
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -8451,6 +8451,10 @@ packages:
     resolution: {integrity: sha512-DKKrynuQRne0PNpEbzuEdHlYOMksHSUI8Zc9Unei5gTsMNA2/vMpoMz/yKba50pejK56qj98qM0SjYxAKi13gQ==}
     engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
 
+  graphql@16.13.2:
+    resolution: {integrity: sha512-5bJ+nf/UCpAjHM8i06fl7eLyVC9iuNAjm9qzkiu2ZGhM0VscSvS6WDPfAwkdkBuoXGM9FJSbKl6wylMwP9Ktig==}
+    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
+
   graphql@16.14.0:
     resolution: {integrity: sha512-BBvQ/406p+4CZbTpCbVPSxfzrZrbnuWSP1ELYgyS6B+hNeKzgrdB4JczCa5VZUBQrDa9hUngm0KnexY6pJRN5Q==}
     engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
@@ -11211,17 +11215,39 @@ packages:
       rxdb: 17.2.0
       rxjs: '*'
 
-  rxdb-premium@17.3.0:
-    resolution: {integrity: sha512-ooVC4b1KUa8r/BRlOQl5qImr2hGV3fSlHykyDriDG569H1Wp3bQ22VrHXTaOkh5O3Vc5kB5FWyLYSyj20e86zQ==}
-    peerDependencies:
-      rxdb: 17.3.0
-      rxjs: '*'
-
   rxdb@16.21.1:
     resolution: {integrity: sha512-4yFfP9qw6QFFPueR9Dlwi/WYZ4u79AZ8ltLsDCB1PXhAuEj0vRPbaUiKR/U2iXdGb+1tDqj9d4hhrdtSLvR5xA==}
     engines: {node: '>=18'}
     peerDependencies:
       rxjs: ^7.8.0
+
+  rxdb@17.2.0:
+    resolution: {integrity: sha512-reaxpRM7dq/px3BuWEKYNKhrjX/bOtg7b1PmGrCcedQ24B2uveIHXJwebntnjK1379v13lM0+v0rjYyNtZUm7w==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@angular/core': '*'
+      '@preact/signals-core': '*'
+      firebase: ^12.10.0
+      mongodb: ^6.21.0 || ^7.0.0
+      nats: ^2.29.3
+      react: 19.2.3
+      rxjs: ^7.8.2
+      vue: '*'
+    peerDependenciesMeta:
+      '@angular/core':
+        optional: true
+      '@preact/signals-core':
+        optional: true
+      firebase:
+        optional: true
+      mongodb:
+        optional: true
+      nats:
+        optional: true
+      react:
+        optional: true
+      vue:
+        optional: true
 
   rxdb@17.3.0:
     resolution: {integrity: sha512-8Pt7RWnibHVr4Ze213zqnCCGC+T2mNW1hRVQqr8widLAmyPmVVO/+nNgzWhd7tDFCqp899v55Le1w+4AF2I4+A==}
@@ -12706,6 +12732,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.20.0:
+    resolution: {integrity: sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   ws@8.20.1:
     resolution: {integrity: sha512-It4dO0K5v//JtTXuPkfEOaI3uUN87iYPnqo/ZzqCoG3g8uhA66QUMs/SrM0YK7/NAu+r4LMh/9dq2A7k+rHs+w==}
     engines: {node: '>=10.0.0'}
@@ -12836,6 +12874,11 @@ packages:
   yoctocolors-cjs@2.1.3:
     resolution: {integrity: sha512-U/PBtDf35ff0D8X8D0jfdzHYEPFxAI7jJlxZXwCSez5M3190m+QobIfh+sWDWSHMCWWJN2AWamkegn6vr6YBTw==}
     engines: {node: '>=18'}
+
+  z-schema@12.1.1:
+    resolution: {integrity: sha512-7SORj2MsRL/wLPN4DUZcIjLbzO5hRqTAJ5PQt835vCE1SaHicawTh2IYYVdl3+cBSWk3sgeDpuRK6QIA1eYpkA==}
+    engines: {node: '>=22.0.0'}
+    hasBin: true
 
   z-schema@12.2.0:
     resolution: {integrity: sha512-nl7fMiD2pwsrrkqKMByIdTDaM2hBGeA/phn+Aj3z+sSax4pRVB/m1VaiYTgZlFbGTj70yGIr86D+aLJMXo0Jtw==}
@@ -19046,7 +19089,7 @@ snapshots:
       debug: 4.4.3
       minimatch: 10.2.5
       semver: 7.8.1
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
     transitivePeerDependencies:
@@ -22502,11 +22545,17 @@ snapshots:
     dependencies:
       graphql: 16.12.0
 
+  graphql-ws@5.16.2(graphql@16.13.2):
+    dependencies:
+      graphql: 16.13.2
+
   graphql-ws@5.16.2(graphql@16.14.0):
     dependencies:
       graphql: 16.14.0
 
   graphql@16.12.0: {}
+
+  graphql@16.13.2: {}
 
   graphql@16.14.0: {}
 
@@ -24430,7 +24479,7 @@ snapshots:
       proc-log: 6.1.0
       semver: 7.8.1
       tar: 7.5.15
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       undici: 6.25.0
       which: 6.0.1
 
@@ -25639,7 +25688,7 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
-  rxdb-premium@16.21.1(rxdb@17.3.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2):
+  rxdb-premium@16.21.1(rxdb@17.2.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2):
     dependencies:
       '@koa/cors': 5.0.0
       array-push-at-sort-position: 4.0.1
@@ -25647,7 +25696,23 @@ snapshots:
       eth-crypto: 3.1.0
       flexsearch: 0.7.43
       percom: 1.1.3
-      rxdb: 17.3.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2)
+      rxdb: 17.2.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2)
+      rxjs: 7.8.2
+      web-locks: 0.0.8
+      web-worker: 1.5.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  rxdb-premium@17.2.0(rxdb@17.2.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2):
+    dependencies:
+      '@koa/cors': 5.0.0
+      array-push-at-sort-position: 4.0.1
+      async-test-util: 2.5.0
+      eth-crypto: 3.1.0
+      flexsearch: 0.7.43
+      percom: 1.1.3
+      rxdb: 17.2.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2)
       rxjs: 7.8.2
       web-locks: 0.0.8
       web-worker: 1.5.0
@@ -25656,22 +25721,6 @@ snapshots:
       - utf-8-validate
 
   rxdb-premium@17.2.0(rxdb@17.3.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2):
-    dependencies:
-      '@koa/cors': 5.0.0
-      array-push-at-sort-position: 4.0.1
-      async-test-util: 2.5.0
-      eth-crypto: 3.1.0
-      flexsearch: 0.7.43
-      percom: 1.1.3
-      rxdb: 17.3.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2)
-      rxjs: 7.8.2
-      web-locks: 0.0.8
-      web-worker: 1.5.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
-  rxdb-premium@17.3.0(rxdb@17.3.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2))(rxjs@7.8.2):
     dependencies:
       '@koa/cors': 5.0.0
       array-push-at-sort-position: 4.0.1
@@ -25732,6 +25781,42 @@ snapshots:
       - mongodb-client-encryption
       - snappy
       - socks
+      - supports-color
+      - utf-8-validate
+
+  rxdb@17.2.0(mongodb@6.21.0(socks@2.8.9))(nats@2.29.3)(react@19.2.3)(rxjs@7.8.2):
+    dependencies:
+      '@babel/runtime': 7.29.2
+      '@types/simple-peer': 9.11.9
+      '@types/ws': 8.18.1
+      ajv: 8.20.0
+      ajv-formats: 3.0.1(ajv@8.20.0)
+      array-push-at-sort-position: 5.0.0
+      as-typed: 1.3.2
+      broadcast-channel: 7.3.0
+      crypto-js: 4.2.0
+      custom-idle-queue: 5.0.2
+      dexie: 4.0.10
+      event-reduce-js: 6.0.0
+      get-graphql-from-jsonschema: 8.1.0
+      graphql: 16.13.2
+      graphql-ws: 5.16.2(graphql@16.13.2)
+      is-my-json-valid: 2.20.6
+      js-base64: 3.7.8
+      jsonschema-key-compression: 1.7.0
+      mingo: 7.2.1
+      oblivious-set: 2.0.0
+      reconnecting-websocket: 4.4.0
+      rxjs: 7.8.2
+      simple-peer: 9.11.1
+      ws: 8.20.0
+      z-schema: 12.1.1
+    optionalDependencies:
+      mongodb: 6.21.0(socks@2.8.9)
+      nats: 2.29.3
+      react: 19.2.3
+    transitivePeerDependencies:
+      - bufferutil
       - supports-color
       - utf-8-validate
 
@@ -27305,6 +27390,8 @@ snapshots:
 
   ws@8.18.3: {}
 
+  ws@8.20.0: {}
+
   ws@8.20.1: {}
 
   ws@8.21.0: {}
@@ -27396,6 +27483,14 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   yoctocolors-cjs@2.1.3: {}
+
+  z-schema@12.1.1:
+    dependencies:
+      punycode: 2.3.1
+      safe-regex2: 5.1.1
+      validator: 13.15.35
+    optionalDependencies:
+      commander: 14.0.3
 
   z-schema@12.2.0:
     dependencies:
