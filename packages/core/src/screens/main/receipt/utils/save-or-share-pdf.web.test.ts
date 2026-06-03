@@ -3,6 +3,18 @@
  */
 import { saveOrSharePdf } from './save-or-share-pdf.web';
 
+function readBlobAsBytes(blob: Blob): Promise<number[]> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.addEventListener('load', () => {
+			const buffer = reader.result as ArrayBuffer;
+			resolve(Array.from(new Uint8Array(buffer)));
+		});
+		reader.addEventListener('error', () => reject(reader.error));
+		reader.readAsArrayBuffer(blob);
+	});
+}
+
 describe('saveOrSharePdf on web', () => {
 	const originalCreateObjectURL = URL.createObjectURL;
 	const originalRevokeObjectURL = URL.revokeObjectURL;
@@ -42,5 +54,18 @@ describe('saveOrSharePdf on web', () => {
 		expect(click).toHaveBeenCalledTimes(1);
 		expect(removeChild).toHaveBeenCalledWith(anchor);
 		expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:receipt-pdf');
+	});
+
+	it('decodes base64 data URI payloads before creating the download blob', async () => {
+		jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+		const pdfBody = `data:application/pdf;base64,${btoa('%PDF')}`;
+
+		await saveOrSharePdf(pdfBody, 'receipt-42.pdf');
+
+		const blob = (URL.createObjectURL as jest.Mock).mock.calls[0]?.[0] as Blob;
+		const bytes = await readBlobAsBytes(blob);
+
+		expect(blob.type).toBe('application/pdf');
+		expect(bytes).toEqual([0x25, 0x50, 0x44, 0x46]);
 	});
 });
