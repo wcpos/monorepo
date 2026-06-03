@@ -525,6 +525,8 @@
 	"products.downloadable": "Downloadable",
 	"receipt.email_address": "Email Address",
 	"receipt.email_receipt": "Email Receipt",
+	"receipt.download_pdf": "Download PDF",
+	"receipt.pdf_downloaded": "PDF downloaded",
 	"receipt.email_sent": "Email sent",
 	"receipt.print_receipt": "Print Receipt",
 	"receipt.save_email_to_billing_address": "Save email to Billing Address",

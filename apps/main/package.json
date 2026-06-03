@@ -60,6 +60,7 @@
     "expo-localization": "~56.0.6",
     "expo-print": "~56.0.3",
     "expo-router": "~56.2.7",
+    "expo-sharing": "~56.0.15",
     "expo-splash-screen": "~56.0.10",
     "expo-sqlite": "~56.0.4",
     "expo-system-ui": "~56.0.5",
