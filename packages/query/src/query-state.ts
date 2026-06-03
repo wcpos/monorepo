@@ -7,11 +7,12 @@ import pick from 'lodash/pick';
 import set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
 import { BehaviorSubject, from, ReplaySubject, Subject } from 'rxjs';
-import { distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
+import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import { recoverLogsCollectionStorage } from './logs-storage-recovery';
 import { SubscribableBase } from './subscribable-base';
 
 import type {
@@ -284,6 +285,17 @@ export class Query<T extends RxCollection>
 				const startTime = performance.now();
 
 				return rxQuery!.$.pipe(
+					catchError((error) =>
+						from(recoverLogsCollectionStorage(this.collection, error)).pipe(
+							map((recovered) => {
+								if (!recovered) {
+									throw error;
+								}
+
+								return [];
+							})
+						)
+					),
 					map((result) => {
 						const endTime = performance.now();
 						const elapsed = endTime - startTime;
