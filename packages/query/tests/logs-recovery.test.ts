@@ -89,4 +89,27 @@ describe('logs storage recovery', () => {
 		expect(recovered).toBe(false);
 		expect(remove).not.toHaveBeenCalled();
 	});
+
+	it('does not set the session flag when logs collection removal fails', async () => {
+		const removeError = new Error('remove failed');
+		const remove = jest.fn(async () => {
+			throw removeError;
+		});
+		const logsCollection = { name: 'logs', remove };
+		const reload = jest.fn();
+
+		await expect(
+			recoverLogsCollectionStorage(
+				logsCollection,
+				new Error('could not requestRemote: SyntaxError: Expected JSON parse failure'),
+				{
+					reload,
+				}
+			)
+		).rejects.toThrow(removeError);
+
+		expect(remove).toHaveBeenCalledTimes(1);
+		expect(globalThis.sessionStorage.getItem('wcpos_logs_storage_recovery_attempted')).toBeNull();
+		expect(reload).not.toHaveBeenCalled();
+	});
 });

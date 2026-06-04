@@ -74,8 +74,8 @@ export async function recoverLogsCollectionStorage(
 		return false;
 	}
 
-	sessionStorage?.setItem(RECOVERY_SESSION_KEY, '1');
 	await collection.remove();
+	sessionStorage?.setItem(RECOVERY_SESSION_KEY, '1');
 	(options.reload ?? reloadPage)();
 	return true;
 }
