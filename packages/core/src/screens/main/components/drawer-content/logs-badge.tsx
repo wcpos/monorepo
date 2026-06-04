@@ -2,9 +2,11 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
+import { from } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 
 import { Badge } from '@wcpos/components/badge';
-import { useQueryManager } from '@wcpos/query';
+import { recoverLogsCollectionStorage, useQueryManager } from '@wcpos/query';
 
 /**
  * Hook that tracks the count of error-level logs since a given timestamp.
@@ -18,12 +20,26 @@ export function useUnreadErrorCount() {
 	const count = useObservableState(
 		React.useMemo(
 			() =>
-				logsCollection?.count({
-					selector: {
-						level: { $eq: 'error' },
-						timestamp: { $gt: lastViewedTimestamp },
-					},
-				}).$ ?? null,
+				logsCollection
+					?.count({
+						selector: {
+							level: { $eq: 'error' },
+							timestamp: { $gt: lastViewedTimestamp },
+						},
+					})
+					.$.pipe(
+						catchError((error: unknown) =>
+							from(recoverLogsCollectionStorage(logsCollection, error)).pipe(
+								map((recovered) => {
+									if (!recovered) {
+										throw error;
+									}
+
+									return 0;
+								})
+							)
+						)
+					) ?? null,
 			[logsCollection, lastViewedTimestamp]
 		),
 		0
