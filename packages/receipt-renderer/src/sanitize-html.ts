@@ -124,6 +124,8 @@ function parseHtmlForSanitize(html: string): ParsedHtml | null {
 				}
 				// xmldom annotates serialized HTML nodes with the XHTML namespace; the
 				// attribute is inert in a WebView but noisy, so drop it.
+				// codeql[js/unsafe-html] Safe because sanitizeParsedBody() removes dangerous
+				// elements, event handlers, and unsafe URL protocols before serialize() runs.
 				return inner.replace(XHTML_NAMESPACE_ATTR, '');
 			},
 		};
