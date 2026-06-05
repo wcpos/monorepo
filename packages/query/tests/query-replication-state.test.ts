@@ -41,6 +41,18 @@ describe('QueryReplicationState', () => {
 		await expect(replicationState.nextPage()).resolves.toBeUndefined();
 		expect(runSpy).toHaveBeenCalledTimes(1);
 	});
+
+	it('resumes collection sync when sync-state lookup fails', async () => {
+		const syncStateError = new Error('sync state failed');
+		collectionReplication.syncStateManager.getUnsyncedRemoteIDs.mockRejectedValueOnce(syncStateError);
+		replicationState.start();
+
+		await expect(replicationState.sync()).resolves.toBe(0);
+
+		expect(collectionReplication.pause).toHaveBeenCalledTimes(1);
+		expect(collectionReplication.start).toHaveBeenCalledTimes(1);
+		expect(replicationState.subjects.active.getValue()).toBe(false);
+	});
 });
 
 describe('QueryReplicationState greedy progress', () => {

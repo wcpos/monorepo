@@ -154,27 +154,27 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		// pause the collection sync while we are syncing the query
 		this.collectionReplication.pause();
 
-		let include = await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
-		let exclude = await this.collectionReplication.syncStateManager.getSyncedRemoteIDs();
-		// const lastModified = this.collectionReplication.getLocalLastModifiedDate();
-
-		/**
-		 * Hack: if query has include / exclude, we should override above?
-		 * @TODO - query state should init with params object and construct the endpoint id internally
-		 */
-		const endpointIncludes = getParamValueFromEndpoint(this.endpoint, 'include');
-		if (endpointIncludes) {
-			const ids = endpointIncludes.split(',').map((id) => parseInt(id, 10));
-			include = intersection(include, ids);
-		}
-
-		const endpointExcludes = getParamValueFromEndpoint(this.endpoint, 'exclude');
-		if (endpointExcludes) {
-			const ids = endpointExcludes.split(',').map((id) => parseInt(id, 10));
-			exclude = intersection(exclude, ids);
-		}
-
 		try {
+			let include = await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
+			let exclude = await this.collectionReplication.syncStateManager.getSyncedRemoteIDs();
+			// const lastModified = this.collectionReplication.getLocalLastModifiedDate();
+
+			/**
+			 * Hack: if query has include / exclude, we should override above?
+			 * @TODO - query state should init with params object and construct the endpoint id internally
+			 */
+			const endpointIncludes = getParamValueFromEndpoint(this.endpoint, 'include');
+			if (endpointIncludes) {
+				const ids = endpointIncludes.split(',').map((id) => parseInt(id, 10));
+				include = intersection(include, ids);
+			}
+
+			const endpointExcludes = getParamValueFromEndpoint(this.endpoint, 'exclude');
+			if (endpointExcludes) {
+				const ids = endpointExcludes.split(',').map((id) => parseInt(id, 10));
+				exclude = intersection(exclude, ids);
+			}
+
 			let response;
 
 			if (isEmpty(include)) {
