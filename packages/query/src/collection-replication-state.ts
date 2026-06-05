@@ -129,7 +129,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		const createDebouncedCount$ = (
 			collection: {
 				eventBulks$: Observable<unknown>;
-				count: (query: { selector: Record<string, unknown> }) => { exec: () => Promise<number> };
+				count: (query: { selector: Record<string, unknown> }) => {
+					exec: () => Promise<number>;
+				};
 			},
 			selector: Record<string, unknown>
 		) =>
@@ -540,7 +542,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 * This is used by the Query Replication State also
 	 */
-	public async bulkUpsertResponse(response: any) {
+	public async bulkUpsertResponse(response: any): Promise<number> {
 		if (!Array.isArray(response?.data)) {
 			// Server returned 200 but with unexpected data format
 			const wpError = parseWpError(response?.data, 'Invalid response from server');
@@ -556,15 +558,16 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 					wpStatus: wpError.status,
 				},
 			});
-			return;
+			return 0;
 		}
 
 		const documents = response.data.map((doc: any) => this.collection.parseRestResponse(doc));
 		if (documents.length === 0) {
-			return;
+			return 0;
 		}
 
-		await this.syncStateManager.processServerResponse(documents);
+		const result = await this.syncStateManager.processServerResponse(documents);
+		return result?.success?.length ?? 0;
 	}
 
 	start() {

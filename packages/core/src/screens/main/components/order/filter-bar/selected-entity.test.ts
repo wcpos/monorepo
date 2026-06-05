@@ -19,7 +19,10 @@ describe('createSelectedEntity$', () => {
 		const inputs$ = new Subject<
 			[
 				number | undefined,
-				Observable<{ count: number; hits: { document: { id: number; name: string } }[] }>,
+				Observable<{
+					count: number;
+					hits: { document: { id: number; name: string } }[];
+				}>,
 				undefined,
 			]
 		>();
@@ -48,7 +51,10 @@ describe('createSelectedEntity$', () => {
 		const inputs$ = new Subject<
 			[
 				number | undefined,
-				Observable<{ count: number; hits: { document: { id: number; name: string } }[] }>,
+				Observable<{
+					count: number;
+					hits: { document: { id: number; name: string } }[];
+				}>,
 				undefined,
 			]
 		>();
@@ -112,11 +118,26 @@ describe('createSelectedEntity$', () => {
 		]);
 	});
 
-	it('keeps the id fallback when the lookup completes with zero hits', async () => {
+	it('keeps loading instead of emitting an id fallback when a pullable lookup completes with zero hits', async () => {
 		const selected$ = createSelectedEntity$({
 			id: 7,
 			result$: of({
 				count: 0,
+				hits: [],
+			}),
+			fallbackOnEmpty: false,
+		});
+
+		await expect(firstValueFrom(selected$.pipe(take(2), toArray()))).resolves.toEqual([
+			{ id: 7, __isLoading: true, first_name: 'Loading...' },
+			{ id: 7, __isLoading: true, first_name: 'Loading...' },
+		]);
+	});
+
+	it('still allows the id fallback by default when the lookup omits count and returns zero hits', async () => {
+		const selected$ = createSelectedEntity$({
+			id: 7,
+			result$: of({
 				hits: [],
 			}),
 		});
@@ -127,18 +148,27 @@ describe('createSelectedEntity$', () => {
 		]);
 	});
 
-	it('keeps the id fallback when the lookup omits count and returns zero hits', async () => {
-		const selected$ = createSelectedEntity$({
-			id: 7,
-			result$: of({
-				hits: [],
-			}),
-		});
+	it('keeps loading through the inputs helper when fallbackOnEmpty is false', async () => {
+		const inputs$ = new Subject<
+			[
+				number,
+				Observable<{ count: number; hits: { document: { id: number; name: string } }[] }>,
+				undefined,
+				boolean,
+			]
+		>();
+		const selected$ = createSelectedEntityFromInputs$(inputs$);
+		const emissions: unknown[] = [];
+		const subscription = selected$.subscribe((value) => emissions.push(value));
 
-		await expect(firstValueFrom(selected$.pipe(take(2), toArray()))).resolves.toEqual([
+		inputs$.next([7, of({ count: 0, hits: [] }), undefined, false]);
+
+		expect(emissions).toEqual([
 			{ id: 7, __isLoading: true, first_name: 'Loading...' },
-			{ id: 7 },
+			{ id: 7, __isLoading: true, first_name: 'Loading...' },
 		]);
+
+		subscription.unsubscribe();
 	});
 
 	it('returns the guest customer when the selected id is 0', async () => {
@@ -184,7 +214,9 @@ describe('createSelectedEntity$', () => {
 		const wrapper = ({ children }: { children: React.ReactNode }) =>
 			React.createElement(React.Suspense, { fallback: null }, children);
 
-		const { result } = renderHook(() => useObservableSuspense(resource), { wrapper });
+		const { result } = renderHook(() => useObservableSuspense(resource), {
+			wrapper,
+		});
 
 		expect(result.current).toEqual({
 			id: 7,

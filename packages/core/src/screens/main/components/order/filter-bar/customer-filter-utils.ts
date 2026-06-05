@@ -13,6 +13,11 @@ export function normalizeSelectedCustomerID(rawCustomerID: string | number | nul
 	return Number.isFinite(normalizedCustomerID) ? normalizedCustomerID : undefined;
 }
 
+export function isIdOnlyCustomerEntity(entity: CustomerDocument | null | undefined): boolean {
+	if (!entity) return false;
+	return !!entity.id && !extractNameFromJSON(entity);
+}
+
 interface ResolveCustomerPillEntityArgs {
 	customer: CustomerDocument | null | undefined;
 	selectedCustomer: CustomerDocument | null | undefined;
@@ -30,7 +35,7 @@ export function resolveCustomerPillEntity({
 		return null;
 	}
 
-	if (customer && (customer.id === 0 || !!extractNameFromJSON(customer))) {
+	if (customer && (customer.id === 0 || !isIdOnlyCustomerEntity(customer))) {
 		return customer;
 	}
 

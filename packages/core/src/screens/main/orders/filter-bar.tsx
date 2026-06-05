@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
 import { ObservableResource, useObservable, useObservableEagerState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 
 import { HStack } from '@wcpos/components/hstack';
 import { Suspense } from '@wcpos/components/suspense';
@@ -16,7 +16,13 @@ import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { normalizeSelectedCustomerID } from '../components/order/filter-bar/customer-filter-utils';
 import { createSelectedEntityFromInputs$ } from '../components/filter-bar/selected-entity';
+import { pullDocumentSafely } from '../components/filter-bar/pull-document-safely';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
+import { usePullDocument } from '../contexts/use-pull-document';
+import { useCollection } from '../hooks/use-collection';
+
+type CustomerCollection = import('@wcpos/database').CustomerCollection;
+type PullCustomerDocument = (id: number, collection: CustomerCollection) => Promise<unknown>;
 
 /**
  *
@@ -38,6 +44,9 @@ export function FilterBar({
 		query.rxQuery$.pipe(map(() => query.getMetaDataElemMatchValue('_pos_user')))
 	);
 	const { wpCredentials } = useAppState();
+	const pullDocument = usePullDocument();
+	const pullCustomerDocument = pullDocument as PullCustomerDocument;
+	const { collection: customerCollection } = useCollection('customers');
 
 	/**
 	 *
@@ -57,28 +66,51 @@ export function FilterBar({
 	 *
 	 */
 	const cashierQuery = useQuery({
-		queryKeys: ['customers', 'cashier-filter'],
+		queryKeys: ['customers', 'cashier-filter', cashierID ?? 'none'],
 		collectionName: 'customers',
+		initialParams:
+			cashierID !== undefined && cashierID !== null
+				? {
+						selector: { id: toNumber(cashierID as string) },
+					}
+				: undefined,
 	});
 
 	/**
 	 *
 	 */
-	React.useEffect(() => {
-		if (cashierID) {
-			cashierQuery
-				?.where('id')
-				.equals(toNumber(cashierID as string))
-				.exec();
-		}
-	}, [cashierID, cashierQuery]);
-
-	/**
-	 *
-	 */
 	const selectedCustomer$ = useObservable(
-		(inputs$) => createSelectedEntityFromInputs$(inputs$),
-		[customerID as string | number | null | undefined, customerQuery?.result$, guestCustomer]
+		(inputs$) =>
+			createSelectedEntityFromInputs$(
+				inputs$.pipe(
+					map(
+						([id, result$, selectedGuestCustomer]) =>
+							[
+								id,
+								result$?.pipe(
+									tap((result) => {
+										if (id && id !== 0 && result.hits.length === 0) {
+											void pullDocumentSafely(
+												pullCustomerDocument,
+												toNumber(id),
+												customerCollection
+											);
+										}
+									})
+								),
+								selectedGuestCustomer,
+								false,
+							] as const
+					)
+				)
+			),
+		[
+			customerID as string | number | null | undefined,
+			customerQuery?.result$,
+			guestCustomer,
+			pullCustomerDocument,
+			customerCollection,
+		]
 	);
 
 	/**
@@ -93,8 +125,37 @@ export function FilterBar({
 	 *
 	 */
 	const selectedCashier$ = useObservable(
-		(inputs$) => createSelectedEntityFromInputs$(inputs$),
-		[cashierID as string | number | null | undefined, cashierQuery?.result$, undefined]
+		(inputs$) =>
+			createSelectedEntityFromInputs$(
+				inputs$.pipe(
+					map(
+						([id, result$]) =>
+							[
+								id,
+								result$?.pipe(
+									tap((result) => {
+										if (id && result.hits.length === 0) {
+											void pullDocumentSafely(
+												pullCustomerDocument,
+												toNumber(id),
+												customerCollection
+											);
+										}
+									})
+								),
+								undefined,
+								false,
+							] as const
+					)
+				)
+			),
+		[
+			cashierID as string | number | null | undefined,
+			cashierQuery?.result$,
+			undefined,
+			pullCustomerDocument,
+			customerCollection,
+		]
 	);
 
 	/**

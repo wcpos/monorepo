@@ -1,4 +1,8 @@
-import { normalizeSelectedCustomerID, resolveCustomerPillEntity } from './customer-filter-utils';
+import {
+	isIdOnlyCustomerEntity,
+	normalizeSelectedCustomerID,
+	resolveCustomerPillEntity,
+} from './customer-filter-utils';
 
 describe('customer filter utils', () => {
 	describe('normalizeSelectedCustomerID', () => {
@@ -54,6 +58,26 @@ describe('customer filter utils', () => {
 					isActive: true,
 				})
 			).toBe(guestCustomer);
+		});
+	});
+
+	describe('isIdOnlyCustomerEntity', () => {
+		it('only treats customers without any displayable identity as id-only', () => {
+			expect(isIdOnlyCustomerEntity({ id: 7 } as any)).toBe(true);
+			expect(isIdOnlyCustomerEntity({ id: 7, email: 'ada@example.test' } as any)).toBe(false);
+			expect(isIdOnlyCustomerEntity({ id: 7, username: 'ada' } as any)).toBe(false);
+			expect(
+				isIdOnlyCustomerEntity({
+					id: 7,
+					billing: { first_name: 'Ada', last_name: 'Lovelace' },
+				} as any)
+			).toBe(false);
+			expect(
+				isIdOnlyCustomerEntity({
+					id: 7,
+					shipping: { first_name: 'Ada' },
+				} as any)
+			).toBe(false);
 		});
 	});
 });

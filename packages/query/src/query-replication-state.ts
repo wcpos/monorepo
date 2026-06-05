@@ -107,15 +107,15 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	/**
 	 *
 	 */
-	async run({ force }: { force?: boolean } = {}) {
+	async run({ force }: { force?: boolean } = {}): Promise<void> {
 		if (this.isStopped() && force) {
 			this.start();
 		}
 
 		await this.collectionReplication.firstSync;
-		const saved = await this.sync();
+		const progressCount = await this.sync();
 
-		if (this.greedy && saved && (saved as any[]).length > 0) {
+		if (this.greedy && progressCount > 0) {
 			/**
 			 * This is a hack to stop products/variations query from fetching potentially 1000's of documents
 			 * We only want the greedy for 'search' in that case
@@ -124,22 +124,29 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 				return;
 			}
 
-			// Have to be careally careful here, potential infinite loop!!
-			this.run();
+			const nextUnsyncedRemoteIDs =
+				await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
+
+			// Continue while progress is being made. Some exclude-page responses upsert records
+			// outside the previous unsynced set, so the unsynced IDs may not shrink immediately.
+			if (nextUnsyncedRemoteIDs.length > 0) {
+				return this.run();
+			}
 		}
 	}
 
 	/**
 	 *
 	 */
-	async sync() {
+	async sync(): Promise<number> {
 		if (this.isStopped() || this.subjects.active.getValue()) {
-			return;
+			return 0;
 		}
 
 		// If query sync is already completed, we go to the collection sync
 		if (this.syncCompleted) {
-			return this.collectionReplication.sync();
+			await this.collectionReplication.sync();
+			return 0;
 		}
 
 		this.subjects.active.next(true);
@@ -147,27 +154,27 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		// pause the collection sync while we are syncing the query
 		this.collectionReplication.pause();
 
-		let include = await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
-		let exclude = await this.collectionReplication.syncStateManager.getSyncedRemoteIDs();
-		// const lastModified = this.collectionReplication.getLocalLastModifiedDate();
-
-		/**
-		 * Hack: if query has include / exclude, we should override above?
-		 * @TODO - query state should init with params object and construct the endpoint id internally
-		 */
-		const endpointIncludes = getParamValueFromEndpoint(this.endpoint, 'include');
-		if (endpointIncludes) {
-			const ids = endpointIncludes.split(',').map((id) => parseInt(id, 10));
-			include = intersection(include, ids);
-		}
-
-		const endpointExcludes = getParamValueFromEndpoint(this.endpoint, 'exclude');
-		if (endpointExcludes) {
-			const ids = endpointExcludes.split(',').map((id) => parseInt(id, 10));
-			exclude = intersection(exclude, ids);
-		}
-
 		try {
+			let include = await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
+			let exclude = await this.collectionReplication.syncStateManager.getSyncedRemoteIDs();
+			// const lastModified = this.collectionReplication.getLocalLastModifiedDate();
+
+			/**
+			 * Hack: if query has include / exclude, we should override above?
+			 * @TODO - query state should init with params object and construct the endpoint id internally
+			 */
+			const endpointIncludes = getParamValueFromEndpoint(this.endpoint, 'include');
+			if (endpointIncludes) {
+				const ids = endpointIncludes.split(',').map((id) => parseInt(id, 10));
+				include = intersection(include, ids);
+			}
+
+			const endpointExcludes = getParamValueFromEndpoint(this.endpoint, 'exclude');
+			if (endpointExcludes) {
+				const ids = endpointExcludes.split(',').map((id) => parseInt(id, 10));
+				exclude = intersection(exclude, ids);
+			}
+
 			let response;
 
 			if (isEmpty(include)) {
@@ -184,10 +191,10 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 			if (Array.isArray(response?.data) && response.data.length === 0) {
 				this.syncCompleted = true;
-				return;
+				return 0;
 			}
 
-			await this.collectionReplication.bulkUpsertResponse(response);
+			return await this.collectionReplication.bulkUpsertResponse(response);
 		} catch (error: any) {
 			// Check if this is a CanceledError from auth flow - don't show toast
 			if (isAuthCancelError(error)) {
@@ -196,12 +203,12 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 						endpoint: this.endpoint,
 					},
 				});
-				return;
+				return 0;
 			}
 
 			// Check if app is sleeping (in background) - silent return
 			if (error.isSleeping) {
-				return;
+				return 0;
 			}
 
 			// Error is already enriched with wpCode/wpMessage by httpClient
@@ -218,6 +225,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 					wpStatus: error.wpStatus,
 				},
 			});
+			return 0;
 		} finally {
 			this.collectionReplication.start();
 			this.subjects.active.next(false);

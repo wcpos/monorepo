@@ -11,7 +11,7 @@ import { Query } from '@wcpos/query';
 import { useT } from '../../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerSearch } from '../../customer-select';
-import { resolveCustomerPillEntity } from './customer-filter-utils';
+import { isIdOnlyCustomerEntity, resolveCustomerPillEntity } from './customer-filter-utils';
 
 interface CustomerPillProps {
 	query: Query<CustomerCollection>;
@@ -53,10 +53,16 @@ export function CustomerPill({ query, resource, customerID }: CustomerPillProps)
 	}
 
 	const customerEntity = React.useMemo(
-		() => resolveCustomerPillEntity({ customer, selectedCustomer, customerID, isActive }),
+		() =>
+			resolveCustomerPillEntity({
+				customer,
+				selectedCustomer,
+				customerID,
+				isActive,
+			}),
 		[customer, customerID, isActive, selectedCustomer]
 	);
-	const isLoading = isActive && !!isCustomerLoading;
+	const isLoading = isActive && (!!isCustomerLoading || isIdOnlyCustomerEntity(customerEntity));
 
 	/**
 	 *

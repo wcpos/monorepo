@@ -16,6 +16,7 @@ import { Query, useQuery } from '@wcpos/query';
 import { useT } from '../../../../../contexts/translations';
 import { useCustomerNameFormat } from '../../../hooks/use-customer-name-format';
 import { CustomerList } from '../../customer-select';
+import { isIdOnlyCustomerEntity } from './customer-filter-utils';
 
 interface CashierPillProps {
 	query: Query<CustomerCollection>;
@@ -92,7 +93,7 @@ export function CashierPill({ query, resource, cashierID }: CashierPillProps) {
 		cashier = { id: cashierID } as CustomerDocument;
 	}
 	const cashierEntity = isActive ? cashier : null;
-	const isLoading = isActive && !!isCashierLoading;
+	const isLoading = isActive && (!!isCashierLoading || isIdOnlyCustomerEntity(cashierEntity));
 
 	const handleRemove = React.useCallback(() => {
 		query.removeElemMatch('meta_data', { key: '_pos_user' }).exec();
