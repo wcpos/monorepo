@@ -48,8 +48,25 @@ export function sanitizeHtml(html: string, options: SanitizeHtmlOptions = {}): s
 
 const URL_BEARING_ATTRIBUTES = new Set(['href', 'src', 'action', 'formaction', 'xlink:href']);
 
-/** Tags stripped unless explicitly allow-listed via `options.addTags`. */
-const DANGEROUS_TAGS = ['script', 'iframe', 'object', 'embed', 'svg', 'math'];
+/**
+ * Tags stripped unless explicitly allow-listed via `options.addTags`. Mirrors
+ * what DOMPurify's `html` profile drops on the web path: executable/embed nodes
+ * (`script`/`iframe`/`object`/`embed`), document-control and remote-fetch nodes
+ * (`style`/`link`/`meta`/`base`), and `svg`/`math` (re-allowed for barcode SVG
+ * via `addTags`).
+ */
+const DANGEROUS_TAGS = new Set([
+	'script',
+	'iframe',
+	'object',
+	'embed',
+	'style',
+	'link',
+	'meta',
+	'base',
+	'svg',
+	'math',
+]);
 
 const XHTML_NAMESPACE_ATTR = / xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g;
 
@@ -117,10 +134,15 @@ function parseHtmlForSanitize(html: string): ParsedHtml | null {
 
 /**
  * Remove dangerous elements, event-handler attributes, and unsafe-protocol URLs
- * from an already-parsed `<body>`. Implemented with `getElementsByTagName` and
- * `removeChild` (rather than `querySelectorAll`/`Element.remove`) so it works
- * across both the native DOM and the xmldom fallback, which lacks the Selectors
- * API and the modern `ChildNode` methods.
+ * from an already-parsed `<body>`. Implemented with `getElementsByTagName('*')`
+ * and `removeChild` (rather than `querySelectorAll`/`Element.remove`) so it
+ * works across both the native DOM and the xmldom fallback, which lacks the
+ * Selectors API and the modern `ChildNode` methods.
+ *
+ * Tag matching is case-insensitive on the lowercased `tagName`: xmldom preserves
+ * the source casing and its `getElementsByTagName` is case-sensitive, so a
+ * tag-name lookup would miss `<SCRIPT>` / `<Iframe>` that a WebView still
+ * executes. Walking every element and comparing lowercased names closes that gap.
  */
 function sanitizeParsedBody(body: Element, options: SanitizeHtmlOptions): void {
 	const allowedExtraTags = new Set((options.addTags ?? []).map((tag) => tag.toLowerCase()));
@@ -128,9 +150,9 @@ function sanitizeParsedBody(body: Element, options: SanitizeHtmlOptions): void {
 		(options.addAttributes ?? []).map((attr) => attr.toLowerCase())
 	);
 
-	for (const tag of DANGEROUS_TAGS) {
-		if (allowedExtraTags.has(tag)) continue;
-		for (const el of Array.from(body.getElementsByTagName(tag))) {
+	for (const el of Array.from(body.getElementsByTagName('*'))) {
+		const tag = el.tagName.toLowerCase();
+		if (DANGEROUS_TAGS.has(tag) && !allowedExtraTags.has(tag)) {
 			el.parentNode?.removeChild(el);
 		}
 	}

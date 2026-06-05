@@ -407,6 +407,38 @@ describe('@wcpos/receipt-renderer exports', () => {
 		}
 	});
 
+	it('strips mixed-case and document-control tags with no DOM (React Native)', () => {
+		const originalWindow = globalThis.window;
+		const originalDocument = globalThis.document;
+		const originalDOMParser = globalThis.DOMParser;
+
+		try {
+			Reflect.deleteProperty(globalThis, 'window');
+			Reflect.deleteProperty(globalThis, 'document');
+			Reflect.deleteProperty(globalThis, 'DOMParser');
+
+			const html = sanitizeHtml(
+				'<div>ok<SCRIPT>alert(1)</SCRIPT><IfRaMe src="x"></IfRaMe>' +
+					'<style>body{display:none}</style>' +
+					'<link rel="stylesheet" href="http://evil/x.css">' +
+					'<meta http-equiv="refresh" content="0;url=http://evil">' +
+					'<base href="http://evil/"></div>'
+			);
+
+			expect(html).toContain('<div>ok</div>');
+			expect(html.toLowerCase()).not.toContain('<script');
+			expect(html.toLowerCase()).not.toContain('<iframe');
+			expect(html.toLowerCase()).not.toContain('<style');
+			expect(html.toLowerCase()).not.toContain('<link');
+			expect(html.toLowerCase()).not.toContain('<meta');
+			expect(html.toLowerCase()).not.toContain('<base');
+		} finally {
+			globalThis.window = originalWindow;
+			globalThis.document = originalDocument;
+			globalThis.DOMParser = originalDOMParser;
+		}
+	});
+
 	it('renders logicless templates as HTML with no DOM (React Native)', () => {
 		const originalWindow = globalThis.window;
 		const originalDocument = globalThis.document;
