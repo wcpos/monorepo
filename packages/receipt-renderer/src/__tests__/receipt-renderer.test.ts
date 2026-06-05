@@ -372,6 +372,101 @@ describe('@wcpos/receipt-renderer exports', () => {
 		}
 	});
 
+	it('preserves markup and strips unsafe content with no DOM (React Native)', () => {
+		// React Native exposes neither window.document nor a global DOMParser, so
+		// sanitizeHtml must fall back to @xmldom/xmldom rather than escaping the
+		// whole string to text (which made the receipt preview show raw HTML).
+		const originalWindow = globalThis.window;
+		const originalDocument = globalThis.document;
+		const originalDOMParser = globalThis.DOMParser;
+
+		try {
+			Reflect.deleteProperty(globalThis, 'window');
+			Reflect.deleteProperty(globalThis, 'document');
+			Reflect.deleteProperty(globalThis, 'DOMParser');
+
+			const html = sanitizeHtml(
+				'<div style="font-weight: 700"><strong>KITCHEN</strong>' +
+					'<a href="javascript:alert(1)" onclick="alert(2)">Pay</a>' +
+					'<script>alert(3)</script></div>'
+			);
+
+			// Markup is rendered as HTML, not escaped into visible text.
+			expect(html).toContain('<div style="font-weight: 700">');
+			expect(html).toContain('<strong>KITCHEN</strong>');
+			expect(html).not.toContain('&lt;div');
+			// Unsafe content is removed.
+			expect(html).not.toContain('<script');
+			expect(html).not.toContain('javascript:');
+			expect(html).not.toContain('onclick');
+			expect(html).toContain('Pay');
+		} finally {
+			globalThis.window = originalWindow;
+			globalThis.document = originalDocument;
+			globalThis.DOMParser = originalDOMParser;
+		}
+	});
+
+	it('strips mixed-case and document-control tags with no DOM (React Native)', () => {
+		const originalWindow = globalThis.window;
+		const originalDocument = globalThis.document;
+		const originalDOMParser = globalThis.DOMParser;
+
+		try {
+			Reflect.deleteProperty(globalThis, 'window');
+			Reflect.deleteProperty(globalThis, 'document');
+			Reflect.deleteProperty(globalThis, 'DOMParser');
+
+			const html = sanitizeHtml(
+				'<div>ok<SCRIPT>alert(1)</SCRIPT><IfRaMe src="x"></IfRaMe>' +
+					'<style>body{display:none}</style>' +
+					'<link rel="stylesheet" href="http://evil/x.css">' +
+					'<meta http-equiv="refresh" content="0;url=http://evil">' +
+					'<base href="http://evil/"></div>'
+			);
+
+			expect(html).toContain('<div>ok</div>');
+			expect(html.toLowerCase()).not.toContain('<script');
+			expect(html.toLowerCase()).not.toContain('<iframe');
+			expect(html.toLowerCase()).not.toContain('<style');
+			expect(html.toLowerCase()).not.toContain('<link');
+			expect(html.toLowerCase()).not.toContain('<meta');
+			expect(html.toLowerCase()).not.toContain('<base');
+		} finally {
+			globalThis.window = originalWindow;
+			globalThis.document = originalDocument;
+			globalThis.DOMParser = originalDOMParser;
+		}
+	});
+
+	it('renders logicless templates as HTML with no DOM (React Native)', () => {
+		const originalWindow = globalThis.window;
+		const originalDocument = globalThis.document;
+		const originalDOMParser = globalThis.DOMParser;
+
+		try {
+			Reflect.deleteProperty(globalThis, 'window');
+			Reflect.deleteProperty(globalThis, 'document');
+			Reflect.deleteProperty(globalThis, 'DOMParser');
+
+			const html = renderLogiclessTemplate(
+				'<div class="receipt"><h1>{{store.name}}</h1>' +
+					'<img src="x" onerror="alert(1)"><script>alert(1)</script></div>',
+				data
+			);
+
+			expect(html).toContain('<div class="receipt">');
+			expect(html).toContain('<h1>My Test Store</h1>');
+			expect(html).not.toContain('&lt;div');
+			expect(html).not.toContain('<script');
+			expect(html).not.toContain('onerror');
+		} finally {
+			globalThis.window = originalWindow;
+			globalThis.document = originalDocument;
+			globalThis.DOMParser = originalDOMParser;
+		}
+	});
+
 	it('parses thermal XML and renders HTML previews', () => {
 		const ast = parseXml('<receipt paper-width="32"><text>Hello</text></receipt>');
 		const html = renderHtml(ast);
