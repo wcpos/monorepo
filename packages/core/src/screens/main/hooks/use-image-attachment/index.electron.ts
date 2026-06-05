@@ -12,10 +12,17 @@ type RxDocument = import('rxdb').RxDocument;
  * we construct a wcpos-image:// URL. The main process protocol handler downloads
  * and caches images on disk, serving them directly to Chromium without IPC.
  */
+function toBase64UrlUtf8(value: string): string {
+	const bytes = new TextEncoder().encode(value);
+	let binary = '';
+	for (const byte of bytes) {
+		binary += String.fromCharCode(byte);
+	}
+	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 function toImageCacheUrl(url: string): string {
-	// btoa produces standard base64; convert to base64url for safe use in URLs
-	const base64 = btoa(url);
-	return `wcpos-image://cache/${base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`;
+	return `wcpos-image://cache/${toBase64UrlUtf8(url)}`;
 }
 
 export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
