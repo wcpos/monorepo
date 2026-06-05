@@ -1,5 +1,11 @@
-import { DOMParser as XmlDOMParser, XMLSerializer as XmlSerializer } from '@xmldom/xmldom';
 import createDOMPurify from 'dompurify';
+import {
+	type Document as XmlDocument,
+	DOMImplementation as XmlDOMImplementation,
+	DOMParser as XmlDOMParser,
+	type Node as XmlNode,
+	XMLSerializer as XmlSerializer,
+} from '@xmldom/xmldom';
 
 export interface SanitizeHtmlOptions {
 	/** Additional tag names to allow beyond DOMPurify's default HTML profile. */
@@ -68,8 +74,6 @@ const DANGEROUS_TAGS = new Set([
 	'math',
 ]);
 
-const XHTML_NAMESPACE_ATTR = / xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g;
-
 function hasUnsafeProtocol(raw: string): boolean {
 	const normalized = raw.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
 	return (
@@ -112,26 +116,55 @@ function parseHtmlForSanitize(html: string): ParsedHtml | null {
 		const body = doc.getElementsByTagName('body')[0] as unknown as Element | undefined;
 		if (!body) return null;
 
-		const serializer = new XmlSerializer();
-		return {
-			body,
-			serialize: () => {
-				let inner = '';
-				for (const child of Array.from(body.childNodes)) {
-					inner += serializer.serializeToString(
-						child as unknown as Parameters<typeof serializer.serializeToString>[0]
-					);
-				}
-				// xmldom annotates serialized HTML nodes with the XHTML namespace; the
-				// attribute is inert in a WebView but noisy, so drop it.
-				// codeql[js/unsafe-html] Safe because sanitizeParsedBody() removes dangerous
-				// elements, event handlers, and unsafe URL protocols before serialize() runs.
-				return inner.replace(XHTML_NAMESPACE_ATTR, '');
-			},
-		};
+		return { body, serialize: () => serializeXmldomBody(body) };
 	} catch {
 		return null;
 	}
+}
+
+const ELEMENT_NODE = 1;
+const TEXT_NODE = 3;
+const CDATA_SECTION_NODE = 4;
+const COMMENT_NODE = 8;
+
+function serializeXmldomBody(body: Element): string {
+	const output = new XmlDOMImplementation().createDocument(null, 'body', null);
+	const outputBody = output.documentElement;
+	const serializer = new XmlSerializer();
+	if (!outputBody) return '';
+
+	for (const child of Array.from(body.childNodes)) {
+		const cloned = cloneWithoutNamespace(child, output);
+		if (cloned) outputBody.appendChild(cloned);
+	}
+
+	let inner = '';
+	for (const child of Array.from(outputBody.childNodes)) {
+		inner += serializer.serializeToString(
+			child as unknown as Parameters<typeof serializer.serializeToString>[0]
+		);
+	}
+	return inner;
+}
+
+function cloneWithoutNamespace(node: ChildNode, doc: XmlDocument): XmlNode | null {
+	if (node.nodeType === ELEMENT_NODE) {
+		const source = node as unknown as Element;
+		const clone = doc.createElement(source.tagName);
+
+		for (const attr of Array.from(source.attributes ?? [])) {
+			clone.setAttribute(attr.name, attr.value);
+		}
+		for (const child of Array.from(source.childNodes)) {
+			const cloned = cloneWithoutNamespace(child, doc);
+			if (cloned) clone.appendChild(cloned);
+		}
+		return clone;
+	}
+	if (node.nodeType === TEXT_NODE) return doc.createTextNode(node.nodeValue ?? '');
+	if (node.nodeType === CDATA_SECTION_NODE) return doc.createCDATASection(node.nodeValue ?? '');
+	if (node.nodeType === COMMENT_NODE) return doc.createComment(node.nodeValue ?? '');
+	return null;
 }
 
 /**

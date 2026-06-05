@@ -395,6 +395,7 @@ describe('@wcpos/receipt-renderer exports', () => {
 			expect(html).toContain('<div style="font-weight: 700">');
 			expect(html).toContain('<strong>KITCHEN</strong>');
 			expect(html).not.toContain('&lt;div');
+			expect(html).not.toContain('xmlns=');
 			// Unsafe content is removed.
 			expect(html).not.toContain('<script');
 			expect(html).not.toContain('javascript:');
