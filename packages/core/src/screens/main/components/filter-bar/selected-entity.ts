@@ -14,6 +14,7 @@ interface CreateSelectedEntityOptions<T> {
 	id: string | number | null | undefined;
 	result$?: Observable<QueryResult<T>>;
 	guestCustomer?: T;
+	fallbackOnEmpty?: boolean;
 }
 
 interface LoadingSelectedEntity {
@@ -52,6 +53,7 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 	id,
 	result$,
 	guestCustomer,
+	fallbackOnEmpty = true,
 }: CreateSelectedEntityOptions<T>): Observable<T | null> {
 	if (id === 0) {
 		return of((guestCustomer ?? ({ id: 0 } as T)) as T);
@@ -73,7 +75,7 @@ export function createSelectedEntity$<T extends { id?: string | number }>({
 			}
 
 			if (result.count === 0 || (result.count === undefined && result.hits.length === 0)) {
-				return { id } as T;
+				return fallbackOnEmpty ? ({ id } as T) : createLoadingEntity<T>(id);
 			}
 
 			return null;
@@ -86,17 +88,19 @@ export type SelectedEntityInput<T extends { id?: string | number }> = readonly [
 	id: string | number | null | undefined,
 	result$: Observable<QueryResult<T>> | undefined,
 	guestCustomer?: T,
+	fallbackOnEmpty?: boolean,
 ];
 
 export function createSelectedEntityFromInputs$<T extends { id?: string | number }>(
 	inputs$: Observable<SelectedEntityInput<T>>
 ): Observable<T | null> {
 	return inputs$.pipe(
-		switchMap(([id, result$, guestCustomer]) =>
+		switchMap(([id, result$, guestCustomer, fallbackOnEmpty]) =>
 			createSelectedEntity$({
 				id,
 				result$,
 				guestCustomer,
+				fallbackOnEmpty,
 			})
 		)
 	);

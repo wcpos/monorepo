@@ -1,8 +1,13 @@
 import * as React from 'react';
 
 import toNumber from 'lodash/toNumber';
-import { useObservableEagerState } from 'observable-hooks';
-import { distinctUntilChanged, map } from 'rxjs/operators';
+import {
+	ObservableResource,
+	useObservable,
+	useObservableEagerState,
+	useObservableSuspense,
+} from 'observable-hooks';
+import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/button';
 import {
@@ -15,9 +20,13 @@ import type { HierarchicalOption } from '@wcpos/components/lib/use-hierarchy';
 import type { Option } from '@wcpos/components/combobox/types';
 
 import { useT } from '../../../../../contexts/translations';
+import { usePullDocument } from '../../../contexts/use-pull-document';
+import { useCollection } from '../../../hooks/use-collection';
 import { CategoryTreeLoader } from '../category-select';
+import { createSelectedCategoryOptions$ } from './selected-categories';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
+type ProductCategoryCollection = import('@wcpos/database').ProductCategoryCollection;
 
 interface Props {
 	query: Query<ProductCollection>;
@@ -51,12 +60,31 @@ function getCategoryIdsFromQuery(query: Query<ProductCollection>): number[] {
 	return [];
 }
 
+function CategoryPillLabel({
+	resource,
+	fallbackLabel,
+}: {
+	resource: ObservableResource<Option[]>;
+	fallbackLabel: string;
+}) {
+	const selected = useObservableSuspense(resource);
+	const displayText = React.useMemo(() => {
+		if (selected.length === 0) return fallbackLabel;
+		if (selected.length === 1) return selected[0].label;
+		return `${selected[0].label} +${selected.length - 1}`;
+	}, [fallbackLabel, selected]);
+
+	return <ButtonText decodeHtml>{displayText}</ButtonText>;
+}
+
 /**
  *
  */
 export function CategoryPill({ query }: Props) {
 	const t = useT();
 	const [options, setOptions] = React.useState<HierarchicalOption[]>([]);
+	const { collection } = useCollection('products/categories');
+	const pullDocument = usePullDocument();
 
 	const activeCategoryIds$ = React.useMemo(
 		() =>
@@ -68,15 +96,36 @@ export function CategoryPill({ query }: Props) {
 	);
 	const activeCategoryIds = useObservableEagerState(activeCategoryIds$);
 
+	const selectedCategories$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(([ids, categoryCollection, pullSelectedCategory, loadingLabel]) =>
+					createSelectedCategoryOptions$({
+						ids,
+						collection: categoryCollection as ProductCategoryCollection,
+						pullDocument: pullSelectedCategory as (
+							id: number,
+							collection: ProductCategoryCollection
+						) => Promise<unknown>,
+						loadingLabel,
+					})
+				)
+			),
+		[activeCategoryIds, collection, pullDocument, t('common.loading')]
+	);
+	const selectedCategoriesResource = React.useMemo(
+		() => new ObservableResource(selectedCategories$),
+		[selectedCategories$]
+	);
 	const selected = React.useMemo<Option[]>(() => {
 		if (!activeCategoryIds || activeCategoryIds.length === 0) return [];
 		return activeCategoryIds.map((id) => {
 			const opt = options.find((o) => o.value === String(id));
-			return { value: String(id), label: opt?.label ?? String(id) };
+			return { value: String(id), label: opt?.label ?? t('common.loading') };
 		});
-	}, [activeCategoryIds, options]);
+	}, [activeCategoryIds, options, t]);
 
-	const isActive = selected.length > 0;
+	const isActive = activeCategoryIds.length > 0;
 
 	const handleChange = React.useCallback(
 		(newSelection: Option[]) => {
@@ -99,12 +148,6 @@ export function CategoryPill({ query }: Props) {
 		query.removeWhere('categories').exec();
 	}, [query]);
 
-	const displayText = React.useMemo(() => {
-		if (selected.length === 0) return t('common.category');
-		if (selected.length === 1) return selected[0].label;
-		return `${selected[0].label} +${selected.length - 1}`;
-	}, [selected, t]);
-
 	return (
 		<TreeCombobox options={options} multiple value={selected} onValueChange={handleChange}>
 			<TreeComboboxTrigger asChild>
@@ -115,7 +158,12 @@ export function CategoryPill({ query }: Props) {
 					removable={isActive}
 					onRemove={handleRemove}
 				>
-					<ButtonText decodeHtml>{displayText}</ButtonText>
+					<React.Suspense fallback={<ButtonText>{t('common.loading')}</ButtonText>}>
+						<CategoryPillLabel
+							resource={selectedCategoriesResource}
+							fallbackLabel={t('common.category')}
+						/>
+					</React.Suspense>
 				</ButtonPill>
 			</TreeComboboxTrigger>
 			<TreeComboboxContent

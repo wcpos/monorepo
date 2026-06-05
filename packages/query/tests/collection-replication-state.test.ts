@@ -1039,8 +1039,11 @@ describe('CollectionReplicationState', () => {
 
 			(mockLogger.error as jest.Mock).mockClear();
 
-			await replicationState.bulkUpsertResponse({ data: 'not an array' });
+			const progressCount = await replicationState.bulkUpsertResponse({
+				data: 'not an array',
+			});
 
+			expect(progressCount).toBe(0);
 			expect(mockLogger.error).toHaveBeenCalledWith(
 				'Invalid response from server',
 				expect.objectContaining({
@@ -1063,8 +1066,11 @@ describe('CollectionReplicationState', () => {
 			// An empty array should skip processServerResponse
 			const spy = jest.spyOn(replicationState.syncStateManager, 'processServerResponse');
 
-			await replicationState.bulkUpsertResponse({ data: [] });
+			const progressCount = await replicationState.bulkUpsertResponse({
+				data: [],
+			});
 
+			expect(progressCount).toBe(0);
 			expect(spy).not.toHaveBeenCalled();
 
 			spy.mockRestore();
@@ -1081,8 +1087,11 @@ describe('CollectionReplicationState', () => {
 
 			const spy = jest.spyOn(replicationState.syncStateManager, 'processServerResponse');
 
-			await replicationState.bulkUpsertResponse({ data: [{ id: 1, name: 'Test' }] });
+			const progressCount = await replicationState.bulkUpsertResponse({
+				data: [{ id: 1, name: 'Test' }],
+			});
 
+			expect(progressCount).toBe(1);
 			expect(spy).toHaveBeenCalledWith([expect.objectContaining({ id: 1 })]);
 
 			spy.mockRestore();
@@ -1256,7 +1265,9 @@ describe('CollectionReplicationState', () => {
 				data: { id: 10, name: 'New Product' },
 			});
 
-			const result = await replicationState.remoteCreate({ name: 'New Product' });
+			const result = await replicationState.remoteCreate({
+				name: 'New Product',
+			});
 
 			expect(httpClientMock.post).toHaveBeenCalledWith(
 				'products',

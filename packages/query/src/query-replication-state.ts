@@ -107,15 +107,15 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	/**
 	 *
 	 */
-	async run({ force }: { force?: boolean } = {}) {
+	async run({ force }: { force?: boolean } = {}): Promise<void> {
 		if (this.isStopped() && force) {
 			this.start();
 		}
 
 		await this.collectionReplication.firstSync;
-		const saved = await this.sync();
+		const syncResult = await this.sync();
 
-		if (this.greedy && saved && (saved as any[]).length > 0) {
+		if (this.greedy && syncResult.progressCount > 0) {
 			/**
 			 * This is a hack to stop products/variations query from fetching potentially 1000's of documents
 			 * We only want the greedy for 'search' in that case
@@ -124,22 +124,34 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 				return;
 			}
 
-			// Have to be careally careful here, potential infinite loop!!
-			this.run();
+			const nextUnsyncedRemoteIDs =
+				await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
+
+			// Continue while progress is being made. Some exclude-page responses upsert records
+			// outside the previous unsynced set, so the unsynced IDs may not shrink immediately.
+			if (nextUnsyncedRemoteIDs.length > 0) {
+				return this.run();
+			}
 		}
 	}
 
 	/**
 	 *
 	 */
-	async sync() {
+	async sync(): Promise<{
+		progressCount: number;
+		previousUnsyncedRemoteIDs: number[];
+	}> {
+		const noProgress = { progressCount: 0, previousUnsyncedRemoteIDs: [] };
+
 		if (this.isStopped() || this.subjects.active.getValue()) {
-			return;
+			return noProgress;
 		}
 
 		// If query sync is already completed, we go to the collection sync
 		if (this.syncCompleted) {
-			return this.collectionReplication.sync();
+			await this.collectionReplication.sync();
+			return noProgress;
 		}
 
 		this.subjects.active.next(true);
@@ -150,6 +162,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		let include = await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
 		let exclude = await this.collectionReplication.syncStateManager.getSyncedRemoteIDs();
 		// const lastModified = this.collectionReplication.getLocalLastModifiedDate();
+		const previousUnsyncedRemoteIDs = [...include];
 
 		/**
 		 * Hack: if query has include / exclude, we should override above?
@@ -184,10 +197,11 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 			if (Array.isArray(response?.data) && response.data.length === 0) {
 				this.syncCompleted = true;
-				return;
+				return { progressCount: 0, previousUnsyncedRemoteIDs };
 			}
 
-			await this.collectionReplication.bulkUpsertResponse(response);
+			const progressCount = await this.collectionReplication.bulkUpsertResponse(response);
+			return { progressCount, previousUnsyncedRemoteIDs };
 		} catch (error: any) {
 			// Check if this is a CanceledError from auth flow - don't show toast
 			if (isAuthCancelError(error)) {
@@ -196,12 +210,12 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 						endpoint: this.endpoint,
 					},
 				});
-				return;
+				return { progressCount: 0, previousUnsyncedRemoteIDs };
 			}
 
 			// Check if app is sleeping (in background) - silent return
 			if (error.isSleeping) {
-				return;
+				return { progressCount: 0, previousUnsyncedRemoteIDs };
 			}
 
 			// Error is already enriched with wpCode/wpMessage by httpClient
@@ -218,6 +232,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 					wpStatus: error.wpStatus,
 				},
 			});
+			return { progressCount: 0, previousUnsyncedRemoteIDs };
 		} finally {
 			this.collectionReplication.start();
 			this.subjects.active.next(false);
