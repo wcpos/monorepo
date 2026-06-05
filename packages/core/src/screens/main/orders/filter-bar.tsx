@@ -21,6 +21,9 @@ import { useGuestCustomer } from '../hooks/use-guest-customer';
 import { usePullDocument } from '../contexts/use-pull-document';
 import { useCollection } from '../hooks/use-collection';
 
+type CustomerCollection = import('@wcpos/database').CustomerCollection;
+type PullCustomerDocument = (id: number, collection: CustomerCollection) => Promise<unknown>;
+
 /**
  *
  */
@@ -42,6 +45,7 @@ export function FilterBar({
 	);
 	const { wpCredentials } = useAppState();
 	const pullDocument = usePullDocument();
+	const pullCustomerDocument = pullDocument as PullCustomerDocument;
 	const { collection: customerCollection } = useCollection('customers');
 
 	/**
@@ -87,9 +91,9 @@ export function FilterBar({
 									tap((result) => {
 										if (id && id !== 0 && result.hits.length === 0) {
 											void pullDocumentSafely(
-												pullDocument,
+												pullCustomerDocument,
 												toNumber(id),
-												customerCollection as any
+												customerCollection
 											);
 										}
 									})
@@ -104,7 +108,7 @@ export function FilterBar({
 			customerID as string | number | null | undefined,
 			customerQuery?.result$,
 			guestCustomer,
-			pullDocument,
+			pullCustomerDocument,
 			customerCollection,
 		]
 	);
@@ -132,9 +136,9 @@ export function FilterBar({
 									tap((result) => {
 										if (id && result.hits.length === 0) {
 											void pullDocumentSafely(
-												pullDocument,
+												pullCustomerDocument,
 												toNumber(id),
-												customerCollection as any
+												customerCollection
 											);
 										}
 									})
@@ -149,7 +153,7 @@ export function FilterBar({
 			cashierID as string | number | null | undefined,
 			cashierQuery?.result$,
 			undefined,
-			pullDocument,
+			pullCustomerDocument,
 			customerCollection,
 		]
 	);

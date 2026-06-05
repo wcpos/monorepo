@@ -113,9 +113,9 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		}
 
 		await this.collectionReplication.firstSync;
-		const syncResult = await this.sync();
+		const progressCount = await this.sync();
 
-		if (this.greedy && syncResult.progressCount > 0) {
+		if (this.greedy && progressCount > 0) {
 			/**
 			 * This is a hack to stop products/variations query from fetching potentially 1000's of documents
 			 * We only want the greedy for 'search' in that case
@@ -138,20 +138,15 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	/**
 	 *
 	 */
-	async sync(): Promise<{
-		progressCount: number;
-		previousUnsyncedRemoteIDs: number[];
-	}> {
-		const noProgress = { progressCount: 0, previousUnsyncedRemoteIDs: [] };
-
+	async sync(): Promise<number> {
 		if (this.isStopped() || this.subjects.active.getValue()) {
-			return noProgress;
+			return 0;
 		}
 
 		// If query sync is already completed, we go to the collection sync
 		if (this.syncCompleted) {
 			await this.collectionReplication.sync();
-			return noProgress;
+			return 0;
 		}
 
 		this.subjects.active.next(true);
@@ -162,7 +157,6 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		let include = await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
 		let exclude = await this.collectionReplication.syncStateManager.getSyncedRemoteIDs();
 		// const lastModified = this.collectionReplication.getLocalLastModifiedDate();
-		const previousUnsyncedRemoteIDs = [...include];
 
 		/**
 		 * Hack: if query has include / exclude, we should override above?
@@ -197,11 +191,10 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 			if (Array.isArray(response?.data) && response.data.length === 0) {
 				this.syncCompleted = true;
-				return { progressCount: 0, previousUnsyncedRemoteIDs };
+				return 0;
 			}
 
-			const progressCount = await this.collectionReplication.bulkUpsertResponse(response);
-			return { progressCount, previousUnsyncedRemoteIDs };
+			return await this.collectionReplication.bulkUpsertResponse(response);
 		} catch (error: any) {
 			// Check if this is a CanceledError from auth flow - don't show toast
 			if (isAuthCancelError(error)) {
@@ -210,12 +203,12 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 						endpoint: this.endpoint,
 					},
 				});
-				return { progressCount: 0, previousUnsyncedRemoteIDs };
+				return 0;
 			}
 
 			// Check if app is sleeping (in background) - silent return
 			if (error.isSleeping) {
-				return { progressCount: 0, previousUnsyncedRemoteIDs };
+				return 0;
 			}
 
 			// Error is already enriched with wpCode/wpMessage by httpClient
@@ -232,7 +225,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 					wpStatus: error.wpStatus,
 				},
 			});
-			return { progressCount: 0, previousUnsyncedRemoteIDs };
+			return 0;
 		} finally {
 			this.collectionReplication.start();
 			this.subjects.active.next(false);
