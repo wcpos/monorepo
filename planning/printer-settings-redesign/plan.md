@@ -3,9 +3,16 @@
 **Branch:** `worktree-printer-settings-redesign`
 **Spec/glossary:** `packages/printer/CONTEXT.md` (committed)
 **Preview:** `planning/printer-settings-redesign/preview.html` (open in a browser — interactive, switch platform/origin)
-**Status:** decisions locked; **awaiting plan review** before implementation
+**Status:** decisions locked; **revised after review round 1** — addressing all 5 approval conditions
 
 > This folder (`planning/printer-settings-redesign/`) holds the design artifacts for review and is intended to be deleted before the implementation PR merges. The durable glossary lives in `packages/printer/CONTEXT.md`.
+
+### Review round 1 — how each approval condition is addressed
+1. **Synthetic cloud-printer identity + override persistence** → WS2.0 (`cloud:<id>` grammar; `template_printer_overrides` reframed as generic target id; `maxLength` 36→128; schema `version 0→1` passthrough migration preserving existing overrides).
+2. **Shared available-printers source for settings AND receipt printing** → WS2.1 (`useAvailablePrinterProfiles()` consumed by both `settings/printing/index.tsx` and `receipt/hooks/use-resolved-printer.ts`).
+3. **Server encoding mapped onto synthetic profiles before rendering** → WS2.3 (rewritten: encoding lives on the synthesized `PrinterProfile`; `CloudAdapter` unchanged).
+4. **Electron mDNS dependency + standalone validation** → WS4.0 (declare/verify mDNS dep in `apps/electron`) + WS6.4 (per-repo validation).
+5. **Corrected file paths + per-repo validation commands** → WS1 files note (`printer/schema.ts`, not `dialog/schema.ts`) + WS6.4.
 
 Spans three repos:
 - **monorepo-v2** (this) — shared RN UI, web/native transport, client cloud surfacing
@@ -31,7 +38,7 @@ Each repo lands its own PR. The monorepo PR is the lead; ADR ingested to wiki vi
 
 ## WS1 — Unified Add Printer dialog (shared RN, `packages/core`)
 
-Files: `screens/main/settings/printer/add-printer.{web,electron}.tsx`, `add-printer.tsx` (native), `dialog/connection/*`, `dialog/use-printer-dialog-form.ts`, `schema.ts`.
+Files (all under `packages/core/src/screens/main/settings/printer/`): `add-printer.{web,electron}.tsx`, `add-printer.tsx` (native), `dialog/connection/*`, `dialog/use-printer-dialog-form.ts`, and **`schema.ts`** (sibling of `dialog/`, i.e. `printer/schema.ts` — *not* `dialog/schema.ts`).
 
 - [ ] **1.1 Make web connection-first.** `add-printer.web.tsx`: introduce `ConnectionTypeSegmented` (Network/USB/Bluetooth) as the primary control; move the Epson/Star `WebVendorSegmented` *inside* the Network section. USB/BT tabs render only when `isWebUsbSupported()` / `isWebBluetoothSupported()`.
 - [ ] **1.2 Remove the manual Cloud tab everywhere.** `ConnectionTypeSegmented`: drop the `cloud` option and `includeCloud` prop. Delete `dialog/connection/cloud-fields.tsx` and the `cloud` branch from native `add-printer.tsx`. (Cloud now via WS2 auto-surface.)
@@ -46,16 +53,27 @@ Files: `screens/main/settings/printer/add-printer.{web,electron}.tsx`, `add-prin
 
 ## WS2 — Cloud printers auto-surface (client + plugin)
 
-Client (`packages/core`, `packages/printer`):
-- [ ] **2.1 Synthesize cloud printers into the printer list.** Read `/settings/cloud-print`; map each server printer to a synthetic, read-only `PrinterProfile` (`isBuiltIn: true`, `connectionType: 'cloud'`, not persisted in `printer_profiles`). Merge into the Printers section + template routing dropdowns alongside the built-in Print Dialog.
-- [ ] **2.2 Routing keyed by `cloudPrinterId`.** Device-local routing (template → cloud printer) references the server id; survives if the server printer set changes (show "unavailable" if id no longer present).
-- [ ] **2.3 Encoding from server.** Cloud transport (`transport/cloud-adapter.ts`) takes encoding (columns/language/cut/raster) from the server payload for `star-cloudprnt`; order-based providers (`epson-sdp`/`printnode`) defer to server rendering.
-- [ ] **2.4 Empty + error states.** No cloud printers → nothing extra shown. Fetch failure → list still renders local printers; no crash.
+> **Revised after review.** Cloud printers are synthesized at runtime and NOT persisted, but routing IS persisted and print resolution reads only persisted profiles today. The tasks below add an explicit **identity contract** and a **single merged printer source** used by *both* settings and receipt printing, and put encoding on the synthesized profile (not the adapter).
+
+**Verified constraints (code):**
+- `template_printer_overrides.printer_profile_id` is `maxLength: 36`, "References printer_profiles.id" (`packages/database/src/collections/schemas/template-printer-overrides.ts`).
+- `useResolvedPrinter` subscribes **only** to `printer_profiles`; `resolvePrinter` + manual pick look up `allPrinters` by `id` (`packages/core/src/screens/main/receipt/hooks/use-resolved-printer.ts`, `packages/printer/src/resolve-printer.ts`).
+- `CloudAdapter.printRaw(data)` receives **already-rendered bytes**; encoding (language/columns/raster) happens upstream in the render path, before transport (`packages/printer/src/transport/cloud-adapter.ts`).
+
+Client (`packages/core`, `packages/printer`, `packages/database`):
+- [ ] **2.0 Printer target identity contract (do first).** Define a stable id for synthesized cloud printers: **`cloud:${cloudPrinterId}`** (namespaced so it never collides with uuid local ids or the built-in `system` id).
+  - Reframe `template_printer_overrides.printer_profile_id` as a **generic printer target id** (`<uuid>` local | `system` | `cloud:<id>`). Update the field `description`.
+  - **Widen `maxLength` 36 → 128** (cloudPrinterId is 1–64 chars + `cloud:` prefix). Bump `template_printer_overrides` schema `version: 0 → 1` with a **non-destructive passthrough migration** (existing ≤36 values stay valid; no data loss).
+  - Record the id grammar in `packages/printer/CONTEXT.md`.
+- [ ] **2.1 Single merged printer source — `useAvailablePrinterProfiles()`.** New shared hook/selector returning the union of (1) persisted local `printer_profiles`, (2) the built-in system print dialog, (3) synthesized read-only cloud printers (from `/settings/cloud-print`; id `cloud:<id>`, `isBuiltIn: true`, `connectionType: 'cloud'`). Consume it in **both** `settings/printing/index.tsx` (list + routing dropdowns) **and** `receipt/hooks/use-resolved-printer.ts` (so `allPrinters` / `resolvePrinter` see cloud printers). *Without this, cloud printers resolve in Settings but fail at print time — the #2 blocking issue.*
+- [ ] **2.2 Routing references the target id.** Overrides store `cloud:<id>`. If the server no longer lists that printer, the merged source omits it and routing shows the target as "unavailable" (no crash; fall back to auto/system). Existing local overrides preserved by the 2.0 migration.
+- [ ] **2.3 Server encoding mapped onto the synthesized profile (NOT the adapter).** The synthesized `PrinterProfile` carries server-owned `language` / `columns` / `autoCut` / `fullReceiptRaster` (for `star-cloudprnt`) so the **existing render path** (`usePrint` / `PrinterService`) encodes correctly before `CloudAdapter.printRaw()`. `CloudAdapter` is unchanged — it still just ships bytes. Order-based providers (`epson-sdp` / `printnode`) take the `order` job path and need no client encoding. These fields are **not** shown/edited in the device UI.
+- [ ] **2.4 Empty + error states.** No cloud printers → nothing extra shown. `/settings/cloud-print` fetch failure → merged source still returns local + built-in; no crash; log + degrade.
 
 Plugin (`woocommerce-pos`, separate PR):
-- [ ] **2.5 Extend `/settings/cloud-print`** response to include per-printer encoding fields (`columns`, `language`, `autoCut`, `fullReceiptRaster`) for `star-cloudprnt`. Document the contract in `docs/cloud-print-queue-contract.md`.
+- [ ] **2.5 Extend `/settings/cloud-print`** response to include per-printer encoding fields (`columns`, `language`, `autoCut`, `fullReceiptRaster`) for `star-cloudprnt`. Document the contract in the plugin's `cloud-print-queue-contract`.
 
-**Accept:** a server-configured cloud printer appears on every till without manual add, is selectable in routing, and is not deletable on-device. Matches the preview's left panel.
+**Accept:** a server cloud printer (a) appears on every till with no manual add, (b) is selectable in routing, (c) **resolves and prints via `useResolvedPrinter` at receipt time** with server encoding, (d) is not deletable on-device, (e) existing local overrides survive the schema migration, (f) a removed cloud printer degrades to "unavailable" without crashing.
 
 ## WS3 — Web network port/adapter fixes (`packages/printer`)
 
@@ -67,6 +85,7 @@ Plugin (`woocommerce-pos`, separate PR):
 
 ## WS4 — Electron mDNS discovery (`apps/electron` submodule, separate PR)
 
+- [ ] **4.0 mDNS dependency in the standalone repo (do first).** `bonjour-service` is declared **only** in the monorepo root `package.json` (line 39) — **not** in `apps/electron/package.json`. Since WS4 is a separate `wcpos/electron` PR with its own lockfile, the dependency must be added/verified there (or pick an alternative mDNS lib the Electron repo already ships). *(Note: `apps/electron` is not initialized in this worktree, so its current deps could not be inspected — confirm on the submodule repo.)*
 - [ ] **4.1 Register the channel.** `apps/electron/src/preload.ts`: add `printer-discovery` to the `ipc.render.invoke` allow-list. (Immediately stops "Channel printer-discovery is not allowed".)
 - [ ] **4.2 Implement the main handler.** `ipcMain.handle('printer-discovery', …)` using the already-present `bonjour-service` dep; emit discovered printers back over the channel matching `use-printer-discovery.electron.ts`'s expected shape (`start`/`stop` actions, dedup, progress).
 - [ ] **4.3 Honest progress/empty states** in the dialog Network section: Searching… → results pick-list → "No printers found".
@@ -84,9 +103,12 @@ Plugin (`woocommerce-pos`, separate PR):
 ## WS6 — Verification & hygiene (cross-cutting, no hardware)
 
 - [ ] **6.1 Virtual-printer sim** (per `docs/superpowers/plans/2026-05-22-printer-discovery-phase-1-virtual-printer.md`) exercised in tests for network/mDNS/USB/BT flows.
-- [ ] **6.2 Unit tests:** port derivation (WS3.3), cloud synth/merge (WS2.1), tab-set-per-platform (WS1), routing-by-cloudId fallback (WS2.2).
+- [ ] **6.2 Unit tests:** port derivation {Epson,Star}×{https,http} (WS3); `useAvailablePrinterProfiles()` merge of local+system+cloud (WS2.1); **cloud printer resolves at print time via `resolvePrinter`/`useResolvedPrinter`** (WS2.1, the #2 regression guard); `template_printer_overrides` v0→v1 migration preserves existing `printer_profile_id` values and accepts `cloud:<id>` (WS2.0); removed-cloud-printer → "unavailable" fallback (WS2.2); tab-set-per-platform (WS1).
 - [ ] **6.3 Translatability sweep:** every new/changed string uses `t('key','English')`; add keys to `locales/en/core.json`. Produce a list of new keys for the `wcpos/translations` pipeline. No hardcoded UI text.
-- [ ] **6.4 Lint + typecheck:** `pnpm run lint`; `pnpm typecheck --force` (turbo cache is stale in worktrees).
+- [ ] **6.4 Per-repo validation (root scripts do NOT cover the submodule).** Root `lint`/`typecheck`/`test` filter `{./packages/*}` + `{./apps/main}` only — `apps/electron` and the plugin are excluded, so each repo validates itself:
+  - **monorepo:** `pnpm run lint`, `pnpm typecheck --force` (turbo cache is stale in worktrees), package tests (`turbo run test --filter='{./packages/*}'`).
+  - **electron (`wcpos/electron`):** `pnpm run lint`, `pnpm run ts:check`, `pnpm run test` inside the submodule.
+  - **plugin (`woocommerce-pos`):** the PHP lint / unit / static-analysis checks that repo uses.
 
 ---
 
@@ -94,8 +116,8 @@ Plugin (`woocommerce-pos`, separate PR):
 
 1. **WS3** (web ports) + **WS4.1** (allow-list) — small, high-value, independent.
 2. **WS1** (unified dialog) — the structural redesign; everything UI hangs off it.
-3. **WS2** (cloud auto-surface) — client side first against current `/settings/cloud-print`; plugin WS2.5 in parallel.
-4. **WS4.2–4.3** (mDNS handler) — Electron submodule.
+3. **WS2** (cloud auto-surface) — **WS2.0 identity contract + DB migration first** (prerequisite for routing), then WS2.1 merged source, then 2.2–2.4; plugin WS2.5 in parallel.
+4. **WS4** (Electron) — **WS4.0 dependency first**, then 4.1 allow-list (already noted in step 1), then 4.2–4.3 mDNS handler — all in the submodule.
 5. **WS5 / WS6** — honesty + verification throughout.
 
 ## Open follow-ups (not blocking)

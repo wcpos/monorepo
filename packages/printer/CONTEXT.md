@@ -55,6 +55,18 @@ The server-side backend that delivers jobs to a Cloud Printer; drives the job fo
 One of `star-cloudprnt`, `epson-sdp`, `printnode`. `star-cloudprnt` receives raw
 pre-encoded bytes; `epson-sdp` / `printnode` receive server-rendered order jobs.
 
+### Printer target id (routing)
+The stable id a template routing override points at (persisted in
+`template_printer_overrides.printer_profile_id`, which is a *generic target id*, not
+strictly a `printer_profiles` row). Grammar:
+- `<uuid>` — a persisted local [[Printer Profile]]
+- `system` — the [[Built-in printer]] OS print dialog
+- `cloud:<cloudPrinterId>` — a synthesized [[Cloud Printer]] (namespaced so it never
+  collides with local uuids)
+
+If the referenced target is no longer available (e.g. a Cloud Printer removed server-side),
+routing shows it as "unavailable" and falls back to auto/system rather than failing.
+
 ### Discovery (Scan)
 Finding printers on the local environment automatically. Platform-specific: web does an
 HTTP **sweep** of common subnets; Electron uses **mDNS** (currently unimplemented — IPC
