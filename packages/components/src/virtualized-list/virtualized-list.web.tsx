@@ -7,7 +7,7 @@ import { ItemContext, RootContext, useItemContext, useRootContext } from './util
 import { useOnEndReached } from './utils/use-on-end-reached';
 
 import type { ReactVirtualizerOptions } from '@tanstack/react-virtual';
-import type { PartialKeys, VirtualItem, Virtualizer } from '@tanstack/virtual-core';
+import type { PartialKeys, VirtualItem } from '@tanstack/virtual-core';
 import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } from './types';
 
 /**
@@ -27,13 +27,6 @@ import type { ItemContext as BaseItemContext, ItemProps, ListProps, RootProps } 
  * </VirtualizedList.Root>
  */
 
-// Web-specific extended context that includes virtualizer data
-interface WebItemContext<T> extends BaseItemContext<T> {
-	rowVirtualizer: Virtualizer<HTMLDivElement, Element>;
-	vItem: VirtualItem;
-	horizontal: boolean;
-}
-
 /**
  * React Compiler breaks @tanstack/react-virtual
  * https://github.com/TanStack/virtual/issues/736
@@ -46,6 +39,13 @@ type VirtualizerInput = PartialKeys<
 function useVirtualWrapper(options: VirtualizerInput) {
 	'use no memo';
 	return { ...useVirtualizer(options) };
+}
+
+// Web-specific extended context that includes virtualizer data
+interface WebItemContext<T> extends BaseItemContext<T> {
+	rowVirtualizer: ReturnType<typeof useVirtualWrapper>;
+	vItem: VirtualItem;
+	horizontal: boolean;
 }
 
 /**
@@ -204,12 +204,16 @@ function List<T>({
 				// Include extraDataKey in the key to force re-render when extraData changes
 				const baseKey = keyExtractor ? keyExtractor(item, vItem.index) : String(vItem.key);
 				const key = extraDataKey ? `${baseKey}-${extraDataKey}` : baseKey;
+				const itemContext: WebItemContext<T> = {
+					item,
+					index: vItem.index,
+					rowVirtualizer,
+					vItem,
+					horizontal: horizontal ?? false,
+				};
 
 				return (
-					<ItemContext.Provider
-						key={key}
-						value={{ item, index: vItem.index, rowVirtualizer, vItem } as WebItemContext<T>}
-					>
+					<ItemContext.Provider key={key} value={itemContext}>
 						{renderItem({ item, index: vItem.index, target: 'Cell' })}
 					</ItemContext.Provider>
 				);
