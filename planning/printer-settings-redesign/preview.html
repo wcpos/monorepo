@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Printer Settings — Redesign Preview</title>
+<style>
+  :root {
+    --blue: #2563eb;
+    --blue-dark: #1d4ed8;
+    --bg: #ffffff;
+    --muted: #f1f5f9;
+    --muted-2: #f8fafc;
+    --border: #e5e7eb;
+    --text: #0f172a;
+    --text-muted: #64748b;
+    --primary-tint: #eff6ff;
+    --green: #16a34a;
+    --amber: #b45309;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    background: #e9eef4;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    padding: 24px;
+    line-height: 1.45;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--text-muted); font-size: 13px; margin: 0 0 18px; }
+
+  /* ---- Control bar ---- */
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+    background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 16px; margin-bottom: 20px;
+  }
+  .control-group { display: flex; align-items: center; gap: 8px; }
+  .control-group > label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; }
+  .seg { display: inline-flex; background: var(--muted); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg button {
+    border: 0; background: transparent; padding: 6px 14px; border-radius: 6px;
+    font-size: 13px; font-weight: 500; color: var(--text-muted); cursor: pointer; font-family: inherit;
+  }
+  .seg button.active { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: #fff; border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(15,23,42,.06); overflow: hidden;
+  }
+  .panel-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display:flex; align-items:center; justify-content: space-between; }
+  .panel-head h2 { font-size: 14px; margin: 0; }
+  .panel-head .tag { font-size: 11px; color: var(--text-muted); background: var(--muted); padding: 3px 8px; border-radius: 999px; }
+  .panel-body { padding: 18px; }
+
+  /* ---- Settings printing tab ---- */
+  .section-title { display:flex; align-items:center; gap:10px; margin: 4px 0 12px; }
+  .section-title .ico { width:34px; height:34px; border-radius:8px; background: var(--primary-tint); display:grid; place-items:center; color: var(--blue); }
+  .section-title h3 { margin:0; font-size: 15px; }
+  .section-title p { margin:0; font-size: 12px; color: var(--text-muted); }
+
+  .printer-row {
+    display:flex; align-items:center; gap:12px; padding: 12px; border:1px solid var(--border);
+    border-radius: 10px; margin-bottom: 8px; background:#fff;
+  }
+  .printer-row .picon { width:32px; height:32px; border-radius:8px; background:var(--muted); display:grid; place-items:center; color:var(--text-muted); flex:none;}
+  .printer-row .meta { flex:1; min-width:0; }
+  .printer-row .meta .name { font-size: 13px; font-weight: 600; }
+  .printer-row .meta .desc { font-size: 12px; color: var(--text-muted); }
+  .badge { font-size: 10px; font-weight: 700; letter-spacing:.03em; text-transform: uppercase; padding: 3px 7px; border-radius: 5px; }
+  .badge.store { background: #ecfdf5; color: var(--green); }
+  .badge.builtin { background: var(--muted); color: var(--text-muted); }
+  .badge.default { background: var(--primary-tint); color: var(--blue); }
+  .lock { color: var(--text-muted); opacity:.6; }
+
+  .btn { font-family: inherit; font-size: 13px; font-weight: 600; border-radius: 8px; padding: 9px 16px; cursor: pointer; border: 1px solid transparent; display:inline-flex; align-items:center; gap:7px; }
+  .btn.primary { background: var(--blue); color: #fff; }
+  .btn.primary:hover { background: var(--blue-dark); }
+  .btn.outline { background: #fff; color: var(--text); border-color: var(--border); }
+  .btn.outline:hover { background: var(--muted-2); }
+  .btn.sm { padding: 7px 12px; font-size:12px; font-weight: 500; }
+  .row-actions { display:flex; gap: 10px; margin-top: 10px; }
+
+  .divider { height:1px; background:var(--border); margin: 18px 0; }
+
+  .template-row { display:flex; align-items:center; justify-content: space-between; gap:12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .template-row:last-child { border-bottom: 0; }
+  .template-row .t-name { font-size: 13px; font-weight: 600; }
+  .template-row .t-type { font-size: 10px; font-weight:700; color: var(--text-muted); background: var(--muted); padding:2px 7px; border-radius:5px; text-transform: uppercase; }
+  .select {
+    border:1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; background:#fff;
+    min-width: 190px; display:flex; align-items:center; justify-content: space-between; gap: 8px; color: var(--text);
+  }
+  .select .chev { color: var(--text-muted); }
+
+  /* ---- Add printer dialog ---- */
+  .field { margin-bottom: 16px; }
+  .field > label { display:block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .input { width:100%; border:1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; font-family: inherit; color: var(--text); }
+  .input:focus { outline: 2px solid var(--primary-tint); border-color: var(--blue); }
+  .hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  .hint code { background: var(--muted); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+
+  .banner { display:flex; gap:10px; align-items:flex-start; background: var(--muted-2); border:1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 18px; }
+  .banner svg { flex:none; color: var(--text-muted); margin-top:1px; }
+  .banner p { margin:0; font-size: 12px; color: var(--text-muted); }
+
+  .conn-seg { display:flex; background: var(--muted); border-radius: 8px; padding: 4px; gap: 3px; margin-bottom: 16px; }
+  .conn-seg button { flex:1; border:0; background: transparent; padding: 9px; border-radius: 6px; font-size:13px; font-weight:500; color: var(--text-muted); cursor:pointer; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:6px; }
+  .conn-seg button.active { background:#fff; color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight:600; }
+
+  .vendor-seg { display:flex; gap: 8px; margin-bottom: 16px; }
+  .vendor-seg button { flex:1; border:1px solid var(--border); background:#fff; padding: 11px; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-muted); cursor:pointer; font-family:inherit; }
+  .vendor-seg button.active { border-color: var(--blue); color: var(--blue); background: var(--primary-tint); }
+
+  .ip-row { display:flex; gap: 10px; align-items: stretch; }
+  .ip-row .input { flex:1; }
+
+  .adv-head { display:flex; align-items:center; gap:8px; font-size: 14px; font-weight:700; cursor:pointer; margin: 8px 0 14px; user-select:none; }
+  .adv-head .chev { color: var(--text-muted); transition: transform .15s; }
+  .adv-head.collapsed .chev { transform: rotate(-90deg); }
+  .adv-body.hidden { display:none; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .toggle-row { display:flex; align-items:center; gap:12px; margin: 12px 0; }
+  .toggle { width:40px; height:23px; border-radius: 999px; background:#cbd5e1; position:relative; flex:none; cursor:pointer; transition: background .15s; }
+  .toggle.on { background: var(--blue); }
+  .toggle .knob { position:absolute; top:2px; left:2px; width:19px; height:19px; border-radius:50%; background:#fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2);}
+  .toggle.on .knob { left: 19px; }
+  .toggle-row .t-label { font-size: 14px; }
+  .toggle-row .t-sub { font-size: 12px; color: var(--text-muted); }
+
+  .device-list { border:1px dashed var(--border); border-radius: 8px; padding: 14px; text-align:center; color: var(--text-muted); font-size: 13px; }
+  .device-item { display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--border); border-radius:8px; margin-bottom: 8px; text-align:left; }
+  .device-item .radio { width:16px; height:16px; border-radius:50%; border:2px solid var(--border); flex:none; }
+  .device-item.sel .radio { border-color: var(--blue); background: var(--blue); box-shadow: inset 0 0 0 3px #fff; }
+
+  .dialog-foot { display:flex; justify-content: space-between; align-items:center; gap:12px; margin-top: 22px; padding-top: 16px; border-top:1px solid var(--border); }
+  .scan-action { display:flex; align-items:center; gap:8px; }
+
+  .note { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:14px 16px; margin-top: 20px; }
+  .note h4 { margin:0 0 8px; font-size: 13px; color: var(--amber); }
+  .note ul { margin:0; padding-left: 18px; font-size: 12px; color:#78350f; }
+  .note li { margin-bottom: 5px; }
+  .hidden { display:none; }
+  .pill-note { font-size: 11px; color: var(--text-muted); background: var(--muted); border-radius:6px; padding: 6px 10px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+  <h1>Printer Settings — Redesign Preview</h1>
+  <p class="sub">Interactive mockup of the resolved decisions. Switch platform &amp; connection type to see the behaviour. Nothing here is wired to real printers — layout/flow only.</p>
+
+  <div class="controls">
+    <div class="control-group">
+      <label>Platform</label>
+      <div class="seg" id="platform-seg">
+        <button data-p="web" class="active">Web</button>
+        <button data-p="electron">Electron</button>
+        <button data-p="ios">iOS</button>
+        <button data-p="android">Android</button>
+      </div>
+    </div>
+    <div class="control-group" id="origin-group">
+      <label>POS served over</label>
+      <div class="seg" id="origin-seg">
+        <button data-o="https" class="active">HTTPS</button>
+        <button data-o="http">HTTP</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- ============ LEFT: Printing settings tab ============ -->
+    <div class="panel">
+      <div class="panel-head"><h2>Settings ▸ Printing</h2><span class="tag" id="plat-tag">Web</span></div>
+      <div class="panel-body">
+        <div class="section-title">
+          <div class="ico">🖨️</div>
+          <div><h3>Printers</h3><p>Devices receipts can be sent to.</p></div>
+        </div>
+
+        <!-- auto-surfaced + built-in printers -->
+        <div class="printer-row">
+          <div class="picon">☁️</div>
+          <div class="meta">
+            <div class="name">Front Counter Cloud <span class="badge store">From your store</span></div>
+            <div class="desc">Cloud · Star CloudPRNT · managed in WooCommerce POS</div>
+          </div>
+          <span class="lock" title="Managed server-side">🔒</span>
+        </div>
+        <div class="printer-row">
+          <div class="picon">🖨️</div>
+          <div class="meta">
+            <div class="name">Print Dialog <span class="badge builtin">Built-in</span></div>
+            <div class="desc">Auto — opens the system print dialog</div>
+          </div>
+          <span class="lock" title="Built-in">🔒</span>
+        </div>
+        <div class="printer-row" id="user-printer">
+          <div class="picon">🖨️</div>
+          <div class="meta">
+            <div class="name">Receipt Printer <span class="badge default">Default</span></div>
+            <div class="desc" id="user-printer-desc">Network · Epson · 192.168.1.100</div>
+          </div>
+        </div>
+
+        <div class="row-actions">
+          <button class="btn primary" onclick="openDialog()">＋ Add Printer</button>
+        </div>
+        <p class="hint" style="margin-top:10px">Cloud printers configured in your store appear here automatically — like the built-in Print Dialog. You don't add them per device.</p>
+
+        <div class="divider"></div>
+
+        <div class="section-title">
+          <div class="ico">🧾</div>
+          <div><h3>Receipt Templates</h3><p>Choose which printer each template prints to.</p></div>
+        </div>
+        <div class="template-row">
+          <div><div class="t-name">Detailed Receipt</div></div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="t-type">HTML</span>
+            <div class="select">Front Counter Cloud <span class="chev">▾</span></div>
+          </div>
+        </div>
+        <div class="template-row">
+          <div><div class="t-name">Detailed Thermal Receipt (58mm)</div></div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="t-type">ESC/POS 58mm</span>
+            <div class="select">Receipt Printer <span class="chev">▾</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: Add Printer dialog ============ -->
+    <div class="panel" id="dialog-panel">
+      <div class="panel-head"><h2>Add Printer</h2><span class="tag" id="dlg-plat-tag">Web</span></div>
+      <div class="panel-body">
+
+        <div class="banner" id="web-banner">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 5a1.25 1.25 0 110 2.5A1.25 1.25 0 0112 7zm1.5 10h-3v-1h1v-3h-1v-1h2v4h1v1z"/></svg>
+          <p>Web browsers can print directly to Epson and Star Micronics printers over network, USB, or Bluetooth when the browser supports it.</p>
+        </div>
+
+        <div class="field">
+          <label>Printer Name</label>
+          <input class="input" value="Receipt Printer" />
+        </div>
+
+        <!-- connection type -->
+        <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">How is it connected?</label>
+        <div class="conn-seg" id="conn-seg"></div>
+
+        <!-- CONNECTION-SPECIFIC fields ============================== -->
+        <!-- NETWORK section -->
+        <div id="sec-network">
+          <div class="field">
+            <label>Vendor</label>
+            <div class="vendor-seg" id="vendor-seg"></div>
+            <div class="pill-note" id="generic-note hidden"></div>
+          </div>
+          <div class="field">
+            <div style="display:flex; gap:10px; align-items:flex-start;">
+              <div style="flex:1;">
+                <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">IP Address</label>
+                <input class="input" id="ip-input" value="192.168.1.100" />
+              </div>
+              <div id="port-field" style="width:96px;">
+                <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">Port</label>
+                <input class="input" id="port-input" value="8043" />
+              </div>
+            </div>
+            <div class="hint" id="endpoint-hint" style="margin-top:6px;"></div>
+            <div class="hint" id="port-hint"></div>
+            <button class="btn outline" id="inline-scan" style="margin-top:10px;">🔍 Scan Network</button>
+          </div>
+        </div>
+
+        <!-- USB section -->
+        <div id="sec-usb" class="hidden">
+          <div class="field">
+            <button class="btn outline" id="usb-scan">🔌 Scan for USB printers</button>
+          </div>
+          <div class="device-list">No USB printers found yet — connect one and press “Scan”.</div>
+        </div>
+
+        <!-- BLUETOOTH section -->
+        <div id="sec-bluetooth" class="hidden">
+          <div class="field">
+            <button class="btn outline" id="bt-scan">📶 Scan for Bluetooth printers</button>
+          </div>
+          <div class="device-item sel"><div class="radio"></div><div><div style="font-size:13px;font-weight:600;">Star TSP100 (BT)</div><div style="font-size:12px;color:var(--text-muted)">00:12:F3:A1:9C:22</div></div></div>
+          <div class="device-list">Pair a printer in your OS Bluetooth settings, then press “Scan”.</div>
+        </div>
+
+        <!-- SHARED Printer Settings — apply to EVERY connection type ===== -->
+        <div class="adv-head collapsed" id="adv-toggle" style="margin-top:18px"><span class="chev">▾</span> Printer Settings</div>
+        <div class="adv-body hidden" id="adv-body">
+          <p class="pill-note">These describe the physical printer (paper size, encoding, behaviour) — they apply whether it's connected by network, USB, or Bluetooth.</p>
+          <div class="grid2">
+            <div class="field">
+              <label>Printer Language</label>
+              <div class="select">ESC/POS <span class="chev">▾</span></div>
+            </div>
+            <div class="field">
+              <label>Printer text width</label>
+              <div class="select">80mm standard (42 chars) <span class="chev">▾</span></div>
+            </div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+            <div><div class="t-label">Full receipt raster</div><div class="t-sub">Prints the whole receipt as an image for Unicode/RTL compatibility.</div></div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle on" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+            <div class="t-label">Auto-cut paper</div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+            <div class="t-label">Auto-open cash drawer</div>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle on" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+            <div class="t-label">Set as default</div>
+          </div>
+        </div>
+
+        <div class="dialog-foot">
+          <button class="btn outline">Test Print</button>
+          <button class="btn primary">Save</button>
+        </div>
+
+        <div class="note">
+          <h4>What this preview demonstrates</h4>
+          <ul id="note-list"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const state = { platform: 'web', conn: 'network', vendor: 'epson', origin: 'https' };
+
+  // which connection types each platform offers
+  const CONN = {
+    web:      [['network','Network'],['usb','USB'],['bluetooth','Bluetooth']],
+    electron: [['network','Network'],['usb','USB'],['bluetooth','Bluetooth']],
+    ios:      [['network','Network'],['bluetooth','Bluetooth']],
+    android:  [['network','Network'],['usb','USB'],['bluetooth','Bluetooth']],
+  };
+  const VENDORS = {
+    web:      [['epson','Epson'],['star','Star Micronics']],
+    electron: [['epson','Epson'],['star','Star Micronics'],['generic','Generic']],
+    ios:      [['epson','Epson'],['star','Star Micronics'],['generic','Generic']],
+    android:  [['epson','Epson'],['star','Star Micronics'],['generic','Generic']],
+  };
+  const PLAT_LABEL = { web:'Web', electron:'Electron', ios:'iOS', android:'Android' };
+
+  function portFor(platform, vendor, origin) {
+    // Web = vendor HTTP protocol, origin-aware. Desktop/native = raw socket 9100.
+    if (platform === 'web') {
+      if (vendor === 'epson') return origin === 'https' ? '8043' : '8008';
+      if (vendor === 'star')  return origin === 'https' ? '443'  : '80';
+      return '—';
+    }
+    return '9100';
+  }
+  function endpointHint(platform, vendor, ip, origin) {
+    if (platform !== 'web') return `Raw TCP socket → <code>${ip}:9100</code>`;
+    if (vendor === 'epson') { const p = origin==='https'?'8043':'8008'; const sc = origin==='https'?'https':'http'; return `Will print to <code>${sc}://${ip}:${p}/cgi-bin/epos/service.cgi</code> (Epson ePOS-Print)`; }
+    if (vendor === 'star')  { const p = origin==='https'?'443':'80'; const sc = origin==='https'?'https':'http'; return `Will print to <code>${sc}://${ip}:${p}/StarWebPRNT/SendMessage</code> (Star WebPRNT)`; }
+    return '';
+  }
+
+  const NOTES = {
+    web: [
+      'Connection type is the FIRST choice — same as every platform.',
+      '“Scan Network” is an action inside Network, not a sibling of Epson/Star (fixes Problem 2 confusion).',
+      'Port auto-fills correctly on open, origin-aware: try toggling HTTPS/HTTP and Epson/Star above.',
+      'No Cloud tab — the cloud printer auto-surfaces in the list on the left.',
+    ],
+    electron: [
+      'Same skeleton as web; vendor gains a “Generic” option (raw socket can talk to any vendor).',
+      'Port is always 9100 (raw TCP) — vendor-independent on desktop.',
+      'Scan Network here will use mDNS once the IPC channel is registered (currently the “not allowed” bug).',
+      'USB & Bluetooth tabs lead to a real device-scan list (no more dead buttons).',
+    ],
+    ios: [
+      'No USB tab — iOS cannot do USB printing.',
+      'Network uses raw TCP 9100 via the native socket; vendor drives discovery SDK, not the port.',
+      'Cloud auto-surfaces; no manual Cloud tab.',
+    ],
+    android: [
+      'Full set of tabs (Network / USB / Bluetooth).',
+      'Network uses raw TCP 9100; vendor drives discovery SDK.',
+      'Cloud auto-surfaces; no manual Cloud tab.',
+    ],
+  };
+
+  function render() {
+    const { platform, conn, vendor, origin } = state;
+    document.getElementById('plat-tag').textContent = PLAT_LABEL[platform];
+    document.getElementById('dlg-plat-tag').textContent = PLAT_LABEL[platform];
+
+    // origin toggle only meaningful on web
+    document.getElementById('origin-group').style.opacity = platform === 'web' ? '1' : '.35';
+    // web banner only on web
+    document.getElementById('web-banner').classList.toggle('hidden', platform !== 'web');
+
+    // connection segmented
+    const cseg = document.getElementById('conn-seg');
+    cseg.innerHTML = '';
+    CONN[platform].forEach(([val,label]) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      const icons = { network:'🌐 ', usb:'🔌 ', bluetooth:'📶 ' };
+      b.textContent = (icons[val]||'') + label;
+      if (val === conn) b.classList.add('active');
+      b.onclick = () => { state.conn = val; render(); };
+      cseg.appendChild(b);
+    });
+    // if current conn not available on platform, reset
+    if (!CONN[platform].some(([v]) => v === conn)) { state.conn = 'network'; return render(); }
+
+    // section visibility
+    document.getElementById('sec-network').classList.toggle('hidden', conn !== 'network');
+    document.getElementById('sec-usb').classList.toggle('hidden', conn !== 'usb');
+    document.getElementById('sec-bluetooth').classList.toggle('hidden', conn !== 'bluetooth');
+
+    // vendor segmented
+    const vseg = document.getElementById('vendor-seg');
+    vseg.innerHTML = '';
+    VENDORS[platform].forEach(([val,label]) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      if (val === vendor) b.classList.add('active');
+      b.onclick = () => { state.vendor = val; render(); };
+      vseg.appendChild(b);
+    });
+    if (!VENDORS[platform].some(([v]) => v === vendor)) { state.vendor = 'epson'; return render(); }
+
+    // port + endpoint
+    const port = portFor(platform, vendor, origin);
+    document.getElementById('port-input').value = port;
+    // Port is the ONLY network-specific advanced field; everything else is shared.
+    const showPort = conn === 'network' && !(platform==='web' && vendor==='generic');
+    document.getElementById('port-field').style.display = showPort ? '' : 'none';
+    const ip = document.getElementById('ip-input').value || '192.168.1.100';
+    document.getElementById('endpoint-hint').innerHTML = endpointHint(platform, vendor, ip, origin);
+    document.getElementById('port-hint').textContent =
+      platform === 'web'
+        ? `Default for ${vendor === 'star' ? 'Star WebPRNT' : 'Epson ePOS'} on an ${origin.toUpperCase()} page — change only if remapped.`
+        : 'Raw socket port (JetDirect). Default 9100 works for most printers.';
+
+    // left list user printer desc reflects platform
+    document.getElementById('user-printer-desc').textContent =
+      platform === 'web' ? `Network · Epson · 192.168.1.100` : `Network · Epson · 192.168.1.100:9100`;
+
+    // notes
+    const nl = document.getElementById('note-list');
+    nl.innerHTML = '';
+    NOTES[platform].forEach(t => { const li = document.createElement('li'); li.textContent = t; nl.appendChild(li); });
+  }
+
+  document.getElementById('platform-seg').addEventListener('click', e => {
+    if (e.target.tagName !== 'BUTTON') return;
+    document.querySelectorAll('#platform-seg button').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    state.platform = e.target.dataset.p;
+    render();
+  });
+  document.getElementById('origin-seg').addEventListener('click', e => {
+    if (e.target.tagName !== 'BUTTON') return;
+    document.querySelectorAll('#origin-seg button').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    state.origin = e.target.dataset.o;
+    render();
+  });
+  document.getElementById('adv-toggle').addEventListener('click', e => {
+    document.getElementById('adv-toggle').classList.toggle('collapsed');
+    document.getElementById('adv-body').classList.toggle('hidden');
+  });
+  document.getElementById('ip-input').addEventListener('input', render);
+  function openDialog(){ document.getElementById('dialog-panel').scrollIntoView({behavior:'smooth'}); }
+
+  render();
+</script>
+</body>
+</html>
