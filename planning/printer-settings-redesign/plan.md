@@ -36,6 +36,14 @@ Each repo lands its own PR. The monorepo PR is the lead; ADR ingested to wiki vi
 
 ---
 
+## Conventions (apply to every workstream)
+
+- **Reuse the shared component library `@wcpos/components`.** Do NOT hand-roll buttons, inputs, selects, toggles, dialogs, layout. Use the existing primitives — `Button`, `Text`, `Icon`, `IconButton`, `HStack`/`VStack`, `Dialog*`, `Modal*`, `Select*`, `FormField`/`FormInput`/`FormSelect`, `Collapsible*`, `Tabs*`, `Toast`. The Add Printer dialog already composes these (see `add-printer.*.tsx`); extend that composition rather than introducing new styling. If a needed primitive is genuinely missing, add it to `@wcpos/components` (don't inline a one-off).
+- **Match surrounding style** (Tailwind/uniwind classes, naming, file layout). On native files, prefix `hover:`/`group-hover:` with `web:` (they leak on native).
+- **E2E selectors:** add stable `testID`s to interactive elements; never select by localized text (repo e2e policy).
+- **Translatable, not translated:** every user-facing string via `t('key','English default')` + key in `locales/en/core.json`.
+- **No dead settings:** don't ship a toggle/field without a consumer wired up.
+
 ## WS1 — Unified Add Printer dialog (shared RN, `packages/core`)
 
 Files (all under `packages/core/src/screens/main/settings/printer/`): `add-printer.{web,electron}.tsx`, `add-printer.tsx` (native), `dialog/connection/*`, `dialog/use-printer-dialog-form.ts`, and **`schema.ts`** (sibling of `dialog/`, i.e. `printer/schema.ts` — *not* `dialog/schema.ts`).
