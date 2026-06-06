@@ -73,9 +73,10 @@ export function PrinterRow({
 		}
 	}
 
-	// The ⋮ menu holds Set Default (when not default) and Delete (when not built-in).
-	// If both are unavailable (the built-in default printer), omit the menu entirely.
-	const showMenu = !profile.isDefault || !profile.isBuiltIn;
+	// Built-in/server-owned targets are not backed by mutable printer_profiles documents.
+	const canSetDefault = !profile.isDefault && !profile.isBuiltIn;
+	const canDelete = !profile.isBuiltIn;
+	const showMenu = canSetDefault || canDelete;
 
 	return (
 		<>
@@ -118,7 +119,7 @@ export function PrinterRow({
 								<IconButton name="ellipsisVertical" testID={`printer-row-${profile.id}-menu`} />
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end">
-								{!profile.isDefault && (
+								{canSetDefault && (
 									<DropdownMenuItem
 										onPress={() => onSetDefault(profile.id)}
 										testID={`printer-row-${profile.id}-set-default`}
@@ -127,7 +128,7 @@ export function PrinterRow({
 										<Text>{t('settings.set_default', 'Set Default')}</Text>
 									</DropdownMenuItem>
 								)}
-								{!profile.isBuiltIn && (
+								{canDelete && (
 									<DropdownMenuItem
 										variant="destructive"
 										onPress={() => onDelete(profile.id)}

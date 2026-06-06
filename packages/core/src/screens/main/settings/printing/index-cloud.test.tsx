@@ -80,6 +80,41 @@ jest.mock('@wcpos/components/hstack', () => ({
 	HStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
+jest.mock('@wcpos/components/dropdown-menu', () => ({
+	DropdownMenu: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DropdownMenuTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	DropdownMenuItem: ({
+		children,
+		onPress,
+		testID,
+	}: {
+		children?: React.ReactNode;
+		onPress?: () => void;
+		testID?: string;
+	}) => (
+		<button type="button" data-testid={testID} onClick={onPress}>
+			{children}
+		</button>
+	),
+}));
+
+jest.mock('@wcpos/components/icon', () => ({
+	Icon: ({ name }: { name: string }) => <span>{name}</span>,
+}));
+
+jest.mock('@wcpos/components/icon-button', () => ({
+	IconButton: ({ testID }: { testID?: string }) => (
+		<button type="button" data-testid={testID}>
+			Menu
+		</button>
+	),
+}));
+
+jest.mock('@wcpos/components/status-badge', () => ({
+	StatusBadge: ({ label }: { label: string }) => <span>{label}</span>,
+}));
+
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -131,24 +166,6 @@ jest.mock('@wcpos/printer', () => ({
 
 jest.mock('../printer/add-printer', () => ({
 	PrinterDialog: () => null,
-}));
-
-jest.mock('./printer-row', () => ({
-	PrinterRow: ({
-		profile,
-		onTest,
-	}: {
-		profile: PrinterProfile;
-		onTest: (profile: PrinterProfile) => void;
-	}) => (
-		<button
-			type="button"
-			data-testid={`test-printer-${profile.id}`}
-			onClick={() => onTest(profile)}
-		>
-			Test
-		</button>
-	),
 }));
 
 jest.mock('./printers-empty-state', () => ({
@@ -211,7 +228,7 @@ describe('PrintingSettings cloud printers', () => {
 	it('uses the cloud enqueue factory when testing a saved cloud printer', async () => {
 		render(<PrintingSettings />);
 
-		fireEvent.click(screen.getByTestId('test-printer-cloud:reg-7'));
+		fireEvent.click(screen.getByTestId('printer-row-cloud:reg-7-test'));
 
 		await waitFor(() =>
 			expect(enqueue).toHaveBeenCalledWith(
@@ -219,5 +236,11 @@ describe('PrintingSettings cloud printers', () => {
 				expect.objectContaining({ contentType: 'application/octet-stream' })
 			)
 		);
+	});
+
+	it('does not offer a local default action for synthesized cloud printers', () => {
+		render(<PrintingSettings />);
+
+		expect(screen.queryByTestId('printer-row-cloud:reg-7-set-default')).not.toBeInTheDocument();
 	});
 });

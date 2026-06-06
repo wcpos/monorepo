@@ -15,7 +15,9 @@ export interface CloudPrinterPayload {
 	fullReceiptRaster?: boolean;
 }
 
-export type CloudPrintResponse = CloudPrinterPayload[] | { printers?: CloudPrinterPayload[] };
+export type CloudPrintResponse =
+	| CloudPrinterPayload[]
+	| { printers?: CloudPrinterPayload[] | CloudPrinterPayload | null };
 
 const SYSTEM_PRINTER: PrinterProfile = {
 	id: 'system',
@@ -32,11 +34,13 @@ const SYSTEM_PRINTER: PrinterProfile = {
 	isDefault: false,
 	isBuiltIn: true,
 };
+const LEGACY_SYSTEM_PRINTER_ID = '__system__';
 
 function normalizeCloudPayload(payload: CloudPrintResponse | null): CloudPrinterPayload[] {
 	if (!payload) return [];
 	if (Array.isArray(payload)) return payload;
-	return payload.printers ?? [];
+	if (!payload.printers) return [];
+	return Array.isArray(payload.printers) ? payload.printers : [payload.printers];
 }
 
 function synthesizeCloudPrinter(payload: CloudPrinterPayload): PrinterProfile | null {
@@ -67,9 +71,15 @@ export function mergeAvailablePrinterProfiles(
 	localProfiles: PrinterProfile[],
 	cloudPayload: CloudPrintResponse | null
 ): PrinterProfile[] {
-	const profiles = [...localProfiles];
+	const legacySystemProfile = localProfiles.find(
+		(profile) => profile.id === LEGACY_SYSTEM_PRINTER_ID
+	);
+	const profiles = localProfiles.filter((profile) => profile.id !== LEGACY_SYSTEM_PRINTER_ID);
 	if (!profiles.some((profile) => profile.id === SYSTEM_PRINTER.id)) {
-		profiles.push(SYSTEM_PRINTER);
+		profiles.push({
+			...SYSTEM_PRINTER,
+			isDefault: legacySystemProfile?.isDefault ?? SYSTEM_PRINTER.isDefault,
+		});
 	}
 
 	for (const cloudPrinter of normalizeCloudPayload(cloudPayload)) {

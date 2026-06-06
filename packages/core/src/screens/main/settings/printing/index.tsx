@@ -11,7 +11,11 @@ import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
 import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
-import type { TemplateDocument, TemplatePrinterOverrideDocument } from '@wcpos/database';
+import type {
+	PrinterProfileDocument,
+	TemplateDocument,
+	TemplatePrinterOverrideDocument,
+} from '@wcpos/database';
 
 import { PrinterRow } from './printer-row';
 import { PrintersEmptyState } from './printers-empty-state';
@@ -123,7 +127,12 @@ export function PrintingSettings() {
 
 	const handleSetDefault = React.useCallback(
 		async (id: string) => {
-			const allDocs = await storeDB.collections.printer_profiles.find().exec();
+			const allDocs = (await storeDB.collections.printer_profiles
+				.find()
+				.exec()) as PrinterProfileDocument[];
+			if (!allDocs.some((doc) => doc.id === id)) {
+				return;
+			}
 			for (const doc of allDocs) {
 				if (doc.id === id && !doc.isDefault) {
 					await doc.patch({ isDefault: true });

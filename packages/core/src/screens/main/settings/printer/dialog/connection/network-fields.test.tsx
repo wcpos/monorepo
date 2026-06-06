@@ -74,6 +74,7 @@ const makeForm = () =>
 	({
 		control: {},
 		setValue: jest.fn(),
+		resetField: jest.fn(),
 	}) as unknown as React.ComponentProps<typeof NetworkFields>['form'];
 
 const networkPrinter: DiscoveredPrinter = {
@@ -135,7 +136,24 @@ describe('NetworkFields discovery states', () => {
 			shouldValidate: true,
 		});
 		expect(form.setValue).toHaveBeenCalledWith('name', 'Kitchen Epson');
-		expect(form.setValue).toHaveBeenCalledWith('port', 8043);
+		expect(form.setValue).toHaveBeenCalledWith('port', 8043, { shouldValidate: true });
 		expect(form.setValue).toHaveBeenCalledWith('vendor', 'epson');
+	});
+
+	it('clears stale port state when the selected target has no port', () => {
+		const form = makeForm();
+		render(
+			<NetworkFields
+				form={form}
+				probing={false}
+				detectedVendor={null}
+				onScan={jest.fn()}
+				printers={[{ ...networkPrinter, id: 'net-2', port: undefined }]}
+			/>
+		);
+
+		fireEvent.click(screen.getByTestId('add-printer-network-result-net-2'));
+
+		expect(form.resetField).toHaveBeenCalledWith('port');
 	});
 });

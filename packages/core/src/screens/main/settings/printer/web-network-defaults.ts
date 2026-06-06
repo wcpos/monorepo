@@ -35,7 +35,7 @@ export function deriveEndpointHint(
 	}
 	if (vendor === 'star') {
 		const resolvedPort = port === 9100 ? (secure ? 443 : 80) : port;
-		const protocol = secure ? 'https' : 'http';
+		const protocol = resolvedPort === 443 ? 'https' : 'http';
 		return `${protocol}://${ip}:${resolvedPort}/StarWebPRNT/SendMessage`;
 	}
 	return undefined;

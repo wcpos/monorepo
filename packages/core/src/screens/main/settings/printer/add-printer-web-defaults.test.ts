@@ -25,4 +25,10 @@ describe('web printer network defaults', () => {
 			expect(deriveEndpointHint(vendor, '192.168.1.10', port, protocol)).toBe(endpoint);
 		}
 	);
+
+	it('uses https for an explicit Star HTTPS port even on an http origin', () => {
+		expect(deriveEndpointHint('star', '192.168.1.10', 443, 'http:')).toBe(
+			'https://192.168.1.10:443/StarWebPRNT/SendMessage'
+		);
+	});
 });

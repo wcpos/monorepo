@@ -129,8 +129,10 @@ export function NetworkFields({
 								form.setValue('connectionType', 'network');
 								form.setValue('address', printer.address, { shouldValidate: true });
 								form.setValue('name', printer.name);
-								if (printer.port) {
-									form.setValue('port', printer.port);
+								if (printer.port != null) {
+									form.setValue('port', printer.port, { shouldValidate: true });
+								} else {
+									form.resetField('port');
 								}
 								if (printer.vendor) {
 									form.setValue('vendor', printer.vendor);

@@ -21,6 +21,26 @@ export interface VendorDefaults {
 }
 
 type PrinterFormSchema = z.ZodType<PrinterFormValues, any>;
+type PrinterConnectionType = PrinterProfile['connectionType'] | PrinterFormValues['connectionType'];
+
+function normalizeConnectionType(
+	connectionType: PrinterConnectionType | undefined,
+	fallback: PrinterFormValues['connectionType']
+): PrinterFormValues['connectionType'] {
+	return connectionType === 'network' || connectionType === 'bluetooth' || connectionType === 'usb'
+		? connectionType
+		: fallback;
+}
+
+function normalizeVendor(
+	vendor: PrinterProfile['vendor'] | PrinterFormValues['vendor'] | undefined,
+	fallback: PrinterFormValues['vendor']
+): PrinterFormValues['vendor'] {
+	if (vendor !== 'epson' && vendor !== 'star' && vendor !== 'generic') {
+		return fallback;
+	}
+	return fallback === 'generic' || vendor !== 'generic' ? vendor : fallback;
+}
 
 interface UsePrinterDialogFormArgs {
 	open: boolean;
@@ -81,12 +101,14 @@ export function usePrinterDialogForm({
 	React.useEffect(() => {
 		if (!open) return;
 		if (printer) {
+			const resolvedVendor = normalizeVendor(printer.vendor, defaultValues.vendor);
 			const next: PrinterFormValues = {
 				name: printer.name,
-				connectionType: (printer.connectionType === 'system'
-					? 'network'
-					: printer.connectionType) as PrinterFormValues['connectionType'],
-				vendor: printer.vendor ?? 'generic',
+				connectionType: normalizeConnectionType(
+					printer.connectionType,
+					defaultValues.connectionType
+				),
+				vendor: resolvedVendor,
 				address: printer.address ?? '',
 				port: printer.port ?? 9100,
 				language: printer.language ?? 'esc-pos',
@@ -103,14 +125,15 @@ export function usePrinterDialogForm({
 			prevVendorRef.current = next.vendor;
 			form.reset(next);
 		} else if (prefill) {
-			const resolvedVendor = prefill.vendor ?? defaultValues.vendor;
+			const resolvedVendor = normalizeVendor(prefill.vendor, defaultValues.vendor);
 			const vendorDefaults = deriveVendorDefaults(resolvedVendor);
 			const next: PrinterFormValues = {
 				...defaultValues,
 				name: prefill.name || defaultValues.name,
-				connectionType:
-					(prefill.connectionType as PrinterFormValues['connectionType']) ??
-					defaultValues.connectionType,
+				connectionType: normalizeConnectionType(
+					prefill.connectionType,
+					defaultValues.connectionType
+				),
 				vendor: resolvedVendor,
 				address: prefill.address || '',
 				port: prefill.port ?? vendorDefaults.port,

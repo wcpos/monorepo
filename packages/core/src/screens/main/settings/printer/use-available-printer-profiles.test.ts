@@ -62,4 +62,36 @@ describe('mergeAvailablePrinterProfiles', () => {
 
 		expect(profiles.filter((profile) => profile.id === 'system')).toHaveLength(1);
 	});
+
+	it('normalizes the legacy built-in system target into the current system target', () => {
+		const legacySystemPrinter: PrinterProfile = {
+			...localPrinter,
+			id: '__system__',
+			name: 'Print Dialog',
+			connectionType: 'system',
+			isDefault: true,
+			isBuiltIn: true,
+		};
+
+		const profiles = mergeAvailablePrinterProfiles([legacySystemPrinter], []);
+
+		expect(profiles.map((profile) => profile.id)).toEqual(['system']);
+		expect(profiles[0]).toMatchObject({
+			id: 'system',
+			connectionType: 'system',
+			isDefault: true,
+			isBuiltIn: true,
+		});
+	});
+
+	it('normalizes a single cloud printer payload object to an array', () => {
+		const profiles = mergeAvailablePrinterProfiles([localPrinter], {
+			printers: {
+				id: 'reg-8',
+				name: 'Back Bar Cloud',
+			},
+		});
+
+		expect(profiles.map((profile) => profile.id)).toEqual(['local-1', 'system', 'cloud:reg-8']);
+	});
 });
