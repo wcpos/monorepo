@@ -5,9 +5,9 @@ import { map } from 'rxjs/operators';
 
 import type { PrinterProfile, TemplateInfo } from '@wcpos/printer';
 import { detectMismatch, resolvePrinter } from '@wcpos/printer';
-import type { PrinterProfileDocument, TemplatePrinterOverrideDocument } from '@wcpos/database';
+import type { TemplatePrinterOverrideDocument } from '@wcpos/database';
 
-import { toPrinterProfile } from '../../settings/printer/use-default-printer-profile';
+import { useAvailablePrinterProfiles } from '../../settings/printer/use-available-printer-profiles';
 import { useAppState } from '../../../../contexts/app-state';
 
 export type PrinterSelection =
@@ -52,15 +52,7 @@ export function useResolvedPrinter({
 		[pick, template?.id]
 	);
 
-	// Subscribe to all printer profiles
-	const profiles$ = React.useMemo(
-		() =>
-			storeDB.collections.printer_profiles
-				.find()
-				.$.pipe(map((docs) => (docs as PrinterProfileDocument[]).map(toPrinterProfile))),
-		[storeDB]
-	);
-	const allPrinters = useObservableState<PrinterProfile[]>(profiles$, []);
+	const allPrinters = useAvailablePrinterProfiles();
 
 	// Subscribe to all overrides
 	const overrides$ = React.useMemo(

@@ -614,6 +614,13 @@ export type TemplatePrinterOverrideDocument = RxDocument<TemplatePrinterOverride
 export type TemplatePrinterOverrideCollection = RxCollection<TemplatePrinterOverrideDocumentType>;
 const template_printer_overrides: RxCollectionCreator<TemplatePrinterOverrideDocumentType> = {
 	schema: templatePrinterOverrideSchema,
+	migrationStrategies: {
+		1(oldDoc) {
+			// v1: widened printer_profile_id into a generic printer target id.
+			// Existing local printer profile ids and `system` targets need no change.
+			return oldDoc;
+		},
+	},
 };
 
 export type UserCollections = {

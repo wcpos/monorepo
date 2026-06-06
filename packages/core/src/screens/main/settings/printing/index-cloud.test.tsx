@@ -9,7 +9,7 @@ import type { PrinterProfile } from '@wcpos/printer';
 import { PrintingSettings } from './index';
 
 const cloudProfile: PrinterProfile = {
-	id: 'cloud-1',
+	id: 'cloud:reg-7',
 	name: 'Cloud kitchen',
 	connectionType: 'cloud',
 	vendor: 'generic',
@@ -20,7 +20,7 @@ const cloudProfile: PrinterProfile = {
 	autoCut: true,
 	autoOpenDrawer: false,
 	isDefault: false,
-	isBuiltIn: false,
+	isBuiltIn: true,
 	cloudPrinterId: 'reg-7',
 };
 
@@ -167,6 +167,10 @@ jest.mock('./use-ensure-system-printer', () => ({
 	useEnsureSystemPrinter: jest.fn(),
 }));
 
+jest.mock('../printer/use-available-printer-profiles', () => ({
+	useAvailablePrinterProfiles: () => [cloudProfile],
+}));
+
 jest.mock('../../receipt/hooks/use-active-templates', () => ({
 	useActiveTemplates: () => [],
 }));
@@ -207,7 +211,7 @@ describe('PrintingSettings cloud printers', () => {
 	it('uses the cloud enqueue factory when testing a saved cloud printer', async () => {
 		render(<PrintingSettings />);
 
-		fireEvent.click(screen.getByTestId('test-printer-cloud-1'));
+		fireEvent.click(screen.getByTestId('test-printer-cloud:reg-7'));
 
 		await waitFor(() =>
 			expect(enqueue).toHaveBeenCalledWith(

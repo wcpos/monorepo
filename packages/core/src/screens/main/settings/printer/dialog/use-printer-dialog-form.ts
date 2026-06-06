@@ -103,16 +103,15 @@ export function usePrinterDialogForm({
 			prevVendorRef.current = next.vendor;
 			form.reset(next);
 		} else if (prefill) {
-			const vendorDefaults = prefill.vendor
-				? deriveVendorDefaults(prefill.vendor)
-				: { language: defaultValues.language, port: defaultValues.port };
+			const resolvedVendor = prefill.vendor ?? defaultValues.vendor;
+			const vendorDefaults = deriveVendorDefaults(resolvedVendor);
 			const next: PrinterFormValues = {
 				...defaultValues,
 				name: prefill.name || defaultValues.name,
 				connectionType:
 					(prefill.connectionType as PrinterFormValues['connectionType']) ??
 					defaultValues.connectionType,
-				vendor: prefill.vendor ?? defaultValues.vendor,
+				vendor: resolvedVendor,
 				address: prefill.address || '',
 				port: prefill.port ?? vendorDefaults.port,
 				language: vendorDefaults.language,
@@ -127,7 +126,13 @@ export function usePrinterDialogForm({
 				printerCount > 0
 					? `${t('settings.receipt_printer', 'Receipt Printer')} ${printerCount + 1}`
 					: t('settings.receipt_printer', 'Receipt Printer');
-			const next = { ...defaultValues, name: autoName };
+			const vendorDefaults = deriveVendorDefaults(defaultValues.vendor);
+			const next = {
+				...defaultValues,
+				name: autoName,
+				language: vendorDefaults.language,
+				port: vendorDefaults.port,
+			};
 			prevVendorRef.current = next.vendor;
 			form.reset(next);
 		}

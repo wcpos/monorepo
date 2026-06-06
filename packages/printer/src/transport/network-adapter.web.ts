@@ -33,12 +33,7 @@ export class NetworkAdapter implements PrinterTransport {
 				break;
 			case 'star':
 				{
-					// Star WebPRNT runs on the printer's standard HTTPS port (443)
-					// Try HTTPS first since most Star printers default to it
-					const starPort = port === 9100 ? '' : `:${port}`;
-					this.delegate = new StarWebPrntAdapter(
-						`https://${host}${starPort}/StarWebPRNT/SendMessage`
-					);
+					this.delegate = new StarWebPrntAdapter(resolveStarWebPrntUrl(host, port));
 				}
 				break;
 			default:
@@ -61,4 +56,21 @@ export class NetworkAdapter implements PrinterTransport {
 	async disconnect(): Promise<void> {
 		return this.delegate.disconnect?.();
 	}
+}
+
+type OriginProtocol = 'http:' | 'https:';
+
+function getOriginProtocol(): OriginProtocol {
+	return typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https:' : 'http:';
+}
+
+export function resolveStarWebPrntUrl(
+	host: string,
+	port: number = 9100,
+	originProtocol: OriginProtocol = getOriginProtocol()
+): string {
+	const secureOrigin = originProtocol === 'https:';
+	const protocol = secureOrigin ? 'https' : 'http';
+	const resolvedPort = port === 9100 ? (secureOrigin ? 443 : 80) : port;
+	return `${protocol}://${host}:${resolvedPort}/StarWebPRNT/SendMessage`;
 }

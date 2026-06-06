@@ -51,6 +51,16 @@ export function PrinterRow({
 			'settings.connection_built_in',
 			'built-in'
 		)}`;
+	} else if (profile.connectionType === 'cloud') {
+		const provider =
+			profile.cloudProvider === 'star-cloudprnt'
+				? 'Star CloudPRNT'
+				: profile.cloudProvider === 'epson-sdp'
+					? 'Epson Server Direct Print'
+					: profile.cloudProvider === 'printnode'
+						? 'PrintNode'
+						: t('settings.cloud_printer', 'Cloud printer');
+		connectionLabel = `${provider} · ${t('settings.managed_by_wcpos', 'managed by WCPOS')}`;
 	} else {
 		const host = profile.address || '?';
 		const base = profile.port ? `${host}:${profile.port}` : host;

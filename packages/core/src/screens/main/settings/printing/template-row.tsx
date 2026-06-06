@@ -24,6 +24,7 @@ interface TemplateRowProps {
 	selectedLabel: string;
 	autoLabel: string;
 	printers: PrinterProfile[];
+	unavailablePrinterId?: string;
 	onRoutingChange: (templateId: string, printerId: string) => void;
 }
 
@@ -38,6 +39,7 @@ export function TemplateRow({
 	selectedLabel,
 	autoLabel,
 	printers,
+	unavailablePrinterId,
 	onRoutingChange,
 }: TemplateRowProps) {
 	const t = useT();
@@ -64,6 +66,12 @@ export function TemplateRow({
 						<SelectContent>
 							<SelectGroup>
 								<SelectItem value={AUTO_VALUE} label={autoLabel} />
+								{unavailablePrinterId && (
+									<SelectItem
+										value={unavailablePrinterId}
+										label={t('settings.printer_unavailable', 'Unavailable printer')}
+									/>
+								)}
 								{printers.map((printer) => (
 									<SelectItem key={printer.id} value={printer.id} label={printer.name} />
 								))}

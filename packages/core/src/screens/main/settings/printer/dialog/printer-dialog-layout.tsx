@@ -42,7 +42,7 @@ export function PrinterDialogLayout({
 	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent size="lg">
+			<DialogContent size="2xl">
 				<DialogHeader>
 					<DialogTitle>
 						{isEditing

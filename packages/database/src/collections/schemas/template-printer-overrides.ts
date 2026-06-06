@@ -1,7 +1,7 @@
 export const templatePrinterOverridesLiteral = {
 	title: 'Template Printer Overrides schema',
-	version: 0,
-	description: 'Per-device mapping of template IDs to printer profile IDs',
+	version: 1,
+	description: 'Per-device mapping of template IDs to printer target IDs',
 	type: 'object',
 	primaryKey: 'template_id',
 	properties: {
@@ -12,8 +12,9 @@ export const templatePrinterOverridesLiteral = {
 		},
 		printer_profile_id: {
 			type: 'string',
-			maxLength: 36,
-			description: 'References printer_profiles.id',
+			maxLength: 128,
+			description:
+				'Printer target id: local printer profile uuid, system, or cloud:<cloudPrinterId>',
 		},
 	},
 	required: ['template_id', 'printer_profile_id'],
