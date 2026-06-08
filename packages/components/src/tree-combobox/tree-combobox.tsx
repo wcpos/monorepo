@@ -392,7 +392,12 @@ function TreeComboboxContent<T>({
 							/>
 							{ctx.displayItems.length > 0 ? (
 								isNative ? (
-									<View style={{ maxHeight: NATIVE_LIST_MAX_HEIGHT }}>
+									<View
+										style={{
+											height: NATIVE_LIST_MAX_HEIGHT,
+											maxHeight: NATIVE_LIST_MAX_HEIGHT,
+										}}
+									>
 										<VirtualizedListPrimitive.Root className="flex-1">
 											<VirtualizedListPrimitive.List
 												data={ctx.displayItems}

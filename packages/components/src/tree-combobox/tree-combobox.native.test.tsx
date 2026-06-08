@@ -119,7 +119,7 @@ describe('TreeCombobox native content', () => {
 		expect(mockPendingTransitions).toHaveLength(1);
 	});
 
-	it('bounds the native virtualized list without sizing it from estimated item height', () => {
+	it('gives the native virtualized list an explicit viewport height so FlashList does not collapse', () => {
 		const options = Array.from({ length: 20 }, (_, index) => ({
 			value: String(index),
 			label: `Category ${index}`,
@@ -134,8 +134,8 @@ describe('TreeCombobox native content', () => {
 
 		const listRoot = screen.getByTestId('tree-combobox-list-root');
 
+		expect(listRoot.parentElement).toHaveStyle({ height: '236px' });
 		expect(listRoot.parentElement).toHaveStyle({ maxHeight: '236px' });
-		expect(listRoot.parentElement).not.toHaveStyle({ height: '236px' });
 		expect(listRoot).toHaveStyle({ flex: '1' });
 		expect(screen.getByTestId('tree-combobox-list-parent')).toHaveStyle({ height: '100%' });
 	});
