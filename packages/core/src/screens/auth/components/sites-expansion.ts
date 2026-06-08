@@ -8,6 +8,10 @@ export function getNextExpandedSiteUuid(
 		return addedSiteUuid;
 	}
 
+	if (currentExpandedSiteUuid === '') {
+		return '';
+	}
+
 	if (currentExpandedSiteUuid && currentSiteUuids.includes(currentExpandedSiteUuid)) {
 		return currentExpandedSiteUuid;
 	}
