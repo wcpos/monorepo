@@ -39,6 +39,8 @@ interface SitesProps {
 	user: UserDocument;
 }
 
+type SiteWithUuid = SiteDocument & { uuid: string };
+
 export function Sites({ user }: SitesProps) {
 	const t = useT();
 	const sites = useObservableSuspense(
@@ -51,7 +53,11 @@ export function Sites({ user }: SitesProps) {
 		).populateResource('sites')
 	);
 
-	const siteUuids = React.useMemo(() => sites?.map((site) => site.uuid ?? '') ?? [], [sites]);
+	const accordionSites = React.useMemo(
+		() => sites?.filter((site): site is SiteWithUuid => !!site.uuid) ?? [],
+		[sites]
+	);
+	const siteUuids = React.useMemo(() => accordionSites.map((site) => site.uuid), [accordionSites]);
 	const [accordionState, setAccordionState] = React.useState(() =>
 		getNextAccordionState({ siteUuids: [], expandedSiteUuid: undefined }, siteUuids)
 	);
@@ -85,12 +91,15 @@ export function Sites({ user }: SitesProps) {
 			<Accordion
 				type="single"
 				collapsible
-				value={nextAccordionState.expandedSiteUuid}
+				value={accordionState.expandedSiteUuid}
 				onValueChange={(value) =>
-					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }))
+					setAccordionState((current) => ({
+						...current,
+						expandedSiteUuid: value ?? '',
+					}))
 				}
 			>
-				{sites.map((site, index) => (
+				{accordionSites.map((site, index) => (
 					<ErrorBoundary key={site.uuid}>
 						<AccordionSite user={user} site={site} isFirst={index === 0} />
 					</ErrorBoundary>
@@ -113,7 +122,7 @@ function AccordionSite({
 	isFirst,
 }: {
 	user: UserDocument;
-	site: SiteDocument;
+	site: SiteWithUuid;
 	isFirst: boolean;
 }) {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
@@ -139,7 +148,7 @@ function AccordionSite({
 	return (
 		<>
 			{!isFirst && <View className="border-border border-t" />}
-			<AccordionItem value={site.uuid ?? ''} className="border-b-0 px-4">
+			<AccordionItem value={site.uuid} className="border-b-0 px-4">
 				<HStack className="items-center gap-2">
 					<AccordionTrigger headerClassName="flex-1" className="gap-3 py-3" chevronPosition="left">
 						<View className="flex-1 flex-row items-center gap-3">

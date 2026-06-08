@@ -25,7 +25,7 @@ export function getNextExpandedSiteUuid(
 		return currentExpandedSiteUuid;
 	}
 
-	return currentSiteUuids[0] ?? '';
+	return currentSiteUuids[0];
 }
 
 export function getNextAccordionState(
