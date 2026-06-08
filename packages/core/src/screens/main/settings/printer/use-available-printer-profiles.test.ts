@@ -94,4 +94,26 @@ describe('mergeAvailablePrinterProfiles', () => {
 
 		expect(profiles.map((profile) => profile.id)).toEqual(['local-1', 'system', 'cloud:reg-8']);
 	});
+
+	it('normalizes keyed cloud printer payload objects returned by persisted server settings', () => {
+		const profiles = mergeAvailablePrinterProfiles([localPrinter], {
+			printers: {
+				'reg-9': {
+					id: 'reg-9',
+					name: 'Kitchen Cloud',
+				},
+				'reg-10': {
+					id: 'reg-10',
+					name: 'Bar Cloud',
+				},
+			},
+		});
+
+		expect(profiles.map((profile) => profile.id)).toEqual([
+			'local-1',
+			'system',
+			'cloud:reg-9',
+			'cloud:reg-10',
+		]);
+	});
 });

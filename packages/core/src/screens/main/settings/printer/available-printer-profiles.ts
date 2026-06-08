@@ -17,7 +17,13 @@ export interface CloudPrinterPayload {
 
 export type CloudPrintResponse =
 	| CloudPrinterPayload[]
-	| { printers?: CloudPrinterPayload[] | CloudPrinterPayload | null };
+	| {
+			printers?:
+				| CloudPrinterPayload[]
+				| CloudPrinterPayload
+				| Record<string, CloudPrinterPayload>
+				| null;
+	  };
 
 const SYSTEM_PRINTER: PrinterProfile = {
 	id: 'system',
@@ -40,7 +46,13 @@ function normalizeCloudPayload(payload: CloudPrintResponse | null): CloudPrinter
 	if (!payload) return [];
 	if (Array.isArray(payload)) return payload;
 	if (!payload.printers) return [];
-	return Array.isArray(payload.printers) ? payload.printers : [payload.printers];
+	if (Array.isArray(payload.printers)) return payload.printers;
+	const printers = payload.printers;
+	const printerId = printers.cloudPrinterId ?? printers.id ?? printers.printer_id;
+	if (typeof printerId === 'string' && printerId.length > 0) {
+		return [printers];
+	}
+	return Object.values(printers);
 }
 
 function synthesizeCloudPrinter(payload: CloudPrinterPayload): PrinterProfile | null {
