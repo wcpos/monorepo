@@ -37,4 +37,16 @@ describe('taxes migration strategy', () => {
 
 		expect(migrated).toMatchObject({ uuid: '2', country: '' });
 	});
+
+	it('preserves valid ISO country codes during migration', () => {
+		const migrated = storeCollections.taxes.migrationStrategies?.[1]?.({
+			uuid: '3',
+			id: 3,
+			country: 'US',
+			name: 'US Tax',
+			rate: '8.5000',
+		} as any);
+
+		expect(migrated).toMatchObject({ uuid: '3', country: 'US' });
+	});
 });
