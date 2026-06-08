@@ -29,7 +29,7 @@ import { Text } from '@wcpos/components/text';
 import type { SiteDocument, UserDocument } from '@wcpos/database';
 
 import { Site, SiteHeader } from './site';
-import { getNextExpandedSiteUuid } from './sites-expansion';
+import { getNextAccordionState } from './sites-expansion';
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
@@ -52,18 +52,14 @@ export function Sites({ user }: SitesProps) {
 	);
 
 	const siteUuids = React.useMemo(() => sites?.map((site) => site.uuid ?? '') ?? [], [sites]);
-	const [expandedSiteUuid, setExpandedSiteUuid] = React.useState(siteUuids[0] ?? '');
-	const previousSiteUuidsRef = React.useRef(siteUuids);
+	const [accordionState, setAccordionState] = React.useState(() =>
+		getNextAccordionState({ siteUuids: [], expandedSiteUuid: undefined }, siteUuids)
+	);
+	const nextAccordionState = getNextAccordionState(accordionState, siteUuids);
 
-	// External site documents can be added by the connect flow, outside the accordion's
-	// own onValueChange handler, so sync the controlled value when the site list changes.
-	React.useEffect(() => {
-		const previousSiteUuids = previousSiteUuidsRef.current;
-		setExpandedSiteUuid((current) =>
-			getNextExpandedSiteUuid(previousSiteUuids, siteUuids, current)
-		);
-		previousSiteUuidsRef.current = siteUuids;
-	}, [siteUuids]);
+	if (nextAccordionState !== accordionState) {
+		setAccordionState(nextAccordionState);
+	}
 
 	if (!sites || sites.length === 0) {
 		return null;
@@ -89,8 +85,10 @@ export function Sites({ user }: SitesProps) {
 			<Accordion
 				type="single"
 				collapsible
-				value={expandedSiteUuid}
-				onValueChange={(value) => setExpandedSiteUuid(value ?? '')}
+				value={nextAccordionState.expandedSiteUuid}
+				onValueChange={(value) =>
+					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }))
+				}
 			>
 				{sites.map((site, index) => (
 					<ErrorBoundary key={site.uuid}>
