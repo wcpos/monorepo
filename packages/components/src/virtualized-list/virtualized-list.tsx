@@ -65,8 +65,7 @@ function List<T>({
 			<FlashList
 				ref={flashRef}
 				data={data}
-				renderScrollComponent={renderScrollComponent}
-				nestedScrollEnabled={!!renderScrollComponent}
+				{...(renderScrollComponent ? { renderScrollComponent, nestedScrollEnabled: true } : {})}
 				style={{ flex: 1 }}
 				renderItem={({ item, index, ...rest }) => {
 					const key = keyExtractor ? keyExtractor(item, index) : String(index);
