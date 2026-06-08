@@ -1,10 +1,12 @@
 import * as React from 'react';
 
+import { Button } from '@wcpos/components/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { FormField, FormInput } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { Progress } from '@wcpos/components/progress';
 import { Text } from '@wcpos/components/text';
-import { Button } from '@wcpos/components/button';
 import { VStack } from '@wcpos/components/vstack';
 import type { DiscoveredPrinter } from '@wcpos/printer';
 
@@ -23,6 +25,13 @@ interface NetworkFieldsProps {
 	onScan?: () => void;
 	scanning?: boolean;
 	printers?: DiscoveredPrinter[];
+	/** Web only — likely-address scan candidates that were checked. */
+	scanCandidates?: string[];
+	/** Web only — likely-address scan progress. */
+	scanProgress?: {
+		tested: number;
+		total: number;
+	};
 }
 
 export function NetworkFields({
@@ -33,6 +42,8 @@ export function NetworkFields({
 	onScan,
 	scanning,
 	printers = [],
+	scanCandidates = [],
+	scanProgress = { tested: 0, total: 0 },
 }: NetworkFieldsProps) {
 	const t = useT();
 	const detectedVendorLabel =
@@ -109,6 +120,48 @@ export function NetworkFields({
 						<Text>{t('settings.scan_network', 'Scan Network')}</Text>
 					</HStack>
 				</Button>
+			)}
+			{scanCandidates.length > 0 && (
+				<VStack className="bg-muted/50 gap-1 rounded-md p-3" testID="add-printer-scan-candidates">
+					{scanning ? (
+						<VStack className="gap-1.5">
+							<Text className="text-muted-foreground text-xs font-medium">
+								{t(
+									'settings.scan_candidates_progress',
+									'Checking common printer addresses… %s / %s'
+								)
+									.replace('%s', String(scanProgress.tested))
+									.replace('%s', String(scanProgress.total))}
+							</Text>
+							<Progress
+								className="h-1"
+								value={
+									scanProgress.total > 0 ? (scanProgress.tested / scanProgress.total) * 100 : 0
+								}
+							/>
+						</VStack>
+					) : (
+						<Collapsible>
+							<CollapsibleTrigger testID="add-printer-scan-candidates-toggle">
+								<Text className="text-muted-foreground text-xs font-medium">
+									{t(
+										'settings.scan_candidates_done',
+										'Checked %s common printer addresses'
+									).replace('%s', String(scanProgress.total || scanCandidates.length))}
+								</Text>
+							</CollapsibleTrigger>
+							<CollapsibleContent>
+								<Text className="text-muted-foreground text-xs">{scanCandidates.join(', ')}</Text>
+							</CollapsibleContent>
+						</Collapsible>
+					)}
+					<Text className="text-muted-foreground text-xs">
+						{t(
+							'settings.scan_candidates_hint',
+							'If your printer shows a different IP address, add it manually.'
+						)}
+					</Text>
+				</VStack>
 			)}
 			{scanning && (
 				<Text testID="add-printer-network-searching" className="text-muted-foreground text-xs">
