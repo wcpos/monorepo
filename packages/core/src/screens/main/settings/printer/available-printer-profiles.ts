@@ -42,6 +42,10 @@ const SYSTEM_PRINTER: PrinterProfile = {
 };
 const LEGACY_SYSTEM_PRINTER_ID = '__system__';
 
+function isCloudPrinterPayload(value: unknown): value is CloudPrinterPayload {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function normalizeCloudPayload(payload: CloudPrintResponse | null): CloudPrinterPayload[] {
 	if (!payload) return [];
 	if (Array.isArray(payload)) return payload;
@@ -51,6 +55,13 @@ function normalizeCloudPayload(payload: CloudPrintResponse | null): CloudPrinter
 	const printerId = printers.cloudPrinterId ?? printers.id ?? printers.printer_id;
 	if (typeof printerId === 'string' && printerId.length > 0) {
 		return [printers];
+	}
+	const printerEntries = Object.entries(printers);
+	if (printerEntries.every(([, printer]) => isCloudPrinterPayload(printer))) {
+		return printerEntries.map(([key, printer]) => ({
+			...printer,
+			printer_id: printer.printer_id ?? printer.id ?? printer.cloudPrinterId ?? key,
+		}));
 	}
 	return Object.values(printers);
 }

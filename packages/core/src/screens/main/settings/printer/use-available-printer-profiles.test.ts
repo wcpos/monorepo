@@ -99,11 +99,9 @@ describe('mergeAvailablePrinterProfiles', () => {
 		const profiles = mergeAvailablePrinterProfiles([localPrinter], {
 			printers: {
 				'reg-9': {
-					id: 'reg-9',
 					name: 'Kitchen Cloud',
 				},
 				'reg-10': {
-					id: 'reg-10',
 					name: 'Bar Cloud',
 				},
 			},
