@@ -579,7 +579,6 @@
 	"settings.default_customer_is_cashier": "Default Customer is cashier",
 	"settings.description": "Description",
 	"settings.detected_barcode": "Detected Barcode",
-	"settings.discovered_printers": "Discovered printers:",
 	"settings.display_prices_during_cart_and_checkout": "Display prices during cart and checkout",
 	"settings.display_prices_in_the_shop": "Display prices in the shop",
 	"settings.display_tax_totals": "Display tax totals",

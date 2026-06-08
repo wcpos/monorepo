@@ -243,4 +243,11 @@ describe('PrintingSettings cloud printers', () => {
 
 		expect(screen.queryByTestId('printer-row-cloud:reg-7-set-default')).not.toBeInTheDocument();
 	});
+
+	it('does not render network scan controls on the Printing settings screen', () => {
+		render(<PrintingSettings />);
+
+		expect(screen.queryByTestId('printing-scan-network-button')).not.toBeInTheDocument();
+		expect(screen.queryByTestId('printing-scan-candidates')).not.toBeInTheDocument();
+	});
 });

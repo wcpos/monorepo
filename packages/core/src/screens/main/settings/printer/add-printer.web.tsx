@@ -208,6 +208,11 @@ export function PrinterDialog({
 								probing={probing}
 								detectedVendor={detectedVendor}
 								endpointHint={endpointHint}
+								onScan={discovery.startScan}
+								scanning={discovery.isScanning}
+								printers={discovery.printers}
+								scanCandidates={discovery.scanCandidates}
+								scanProgress={discovery.scanProgress}
 							/>
 						</>
 					)}

@@ -11,18 +11,12 @@ import { useT } from '../../../../contexts/translations';
 
 interface PrintersEmptyStateProps {
 	onAddPrinter: () => void;
-	onScanNetwork: () => void;
-	isScanning: boolean;
 }
 
 /**
  * Empty state for the Printers section — shown when no non-built-in printers exist.
  */
-export function PrintersEmptyState({
-	onAddPrinter,
-	onScanNetwork,
-	isScanning,
-}: PrintersEmptyStateProps) {
+export function PrintersEmptyState({ onAddPrinter }: PrintersEmptyStateProps) {
 	const t = useT();
 
 	return (
@@ -43,14 +37,6 @@ export function PrintersEmptyState({
 				<HStack className="gap-2">
 					<Button leftIcon="plus" onPress={onAddPrinter} testID="printing-add-printer-button">
 						<Text>{t('settings.add_printer', 'Add Printer')}</Text>
-					</Button>
-					<Button
-						variant="outline"
-						onPress={onScanNetwork}
-						loading={isScanning}
-						testID="printing-scan-network-button"
-					>
-						<Text>{t('settings.scan_network', 'Scan Network')}</Text>
 					</Button>
 				</HStack>
 			</VStack>

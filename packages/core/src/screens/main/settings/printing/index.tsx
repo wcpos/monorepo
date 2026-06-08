@@ -5,13 +5,11 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Button } from '@wcpos/components/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { HStack } from '@wcpos/components/hstack';
-import { Progress } from '@wcpos/components/progress';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { PrinterService, resolvePrinter, usePrinterDiscovery } from '@wcpos/printer';
+import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
 import type {
 	PrinterProfileDocument,
@@ -53,11 +51,6 @@ export function PrintingSettings() {
 	);
 	const templates = useActiveTemplates();
 	const printers = useAvailablePrinterProfiles();
-	const discovery = usePrinterDiscovery();
-	const scanCandidateList = React.useMemo(
-		() => discovery.scanCandidates.join(', '),
-		[discovery.scanCandidates]
-	);
 
 	useEnsureSystemPrinter(storeDB);
 
@@ -189,12 +182,6 @@ export function PrintingSettings() {
 		setDialogOpen(true);
 	}, []);
 
-	const openDiscoveredPrinter = React.useCallback((printer: DiscoveredPrinter) => {
-		setPrefilledPrinter(printer);
-		setEditingPrinter(undefined);
-		setDialogOpen(true);
-	}, []);
-
 	const nonBuiltInCount = printers.filter((p) => !p.isBuiltIn).length;
 	const hasVisiblePrinterTargets = printers.some((p) => p.connectionType !== 'system');
 
@@ -208,11 +195,7 @@ export function PrintingSettings() {
 					description={t('settings.printers_description', 'Devices receipts can be sent to.')}
 				/>
 				{!hasVisiblePrinterTargets ? (
-					<PrintersEmptyState
-						onAddPrinter={openAddDialog}
-						onScanNetwork={discovery.startScan}
-						isScanning={discovery.isScanning}
-					/>
+					<PrintersEmptyState onAddPrinter={openAddDialog} />
 				) : (
 					<>
 						<View className="border-border overflow-hidden rounded-lg border">
@@ -238,90 +221,8 @@ export function PrintingSettings() {
 							>
 								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
 							</Button>
-							<Button
-								variant="outline"
-								onPress={discovery.startScan}
-								loading={discovery.isScanning}
-								testID="printing-scan-network-button"
-							>
-								<Text>{t('settings.scan_network', 'Scan Network')}</Text>
-							</Button>
 						</HStack>
 					</>
-				)}
-				{discovery.scanCandidates.length > 0 && (
-					<VStack className="bg-muted/50 gap-1 rounded-md p-3" testID="printing-scan-candidates">
-						{discovery.isScanning ? (
-							<VStack className="gap-1.5">
-								<Text className="text-muted-foreground text-xs font-medium">
-									{t(
-										'settings.scan_candidates_progress',
-										'Checking common printer addresses… %s / %s'
-									)
-										.replace('%s', String(discovery.scanProgress.tested))
-										.replace('%s', String(discovery.scanProgress.total))}
-								</Text>
-								<Progress
-									className="h-1"
-									value={
-										discovery.scanProgress.total > 0
-											? (discovery.scanProgress.tested / discovery.scanProgress.total) * 100
-											: 0
-									}
-								/>
-							</VStack>
-						) : (
-							<Collapsible>
-								<CollapsibleTrigger testID="printing-scan-candidates-toggle">
-									<Text className="text-muted-foreground text-xs font-medium">
-										{t(
-											'settings.scan_candidates_done',
-											'Checked %s common printer addresses'
-										).replace(
-											'%s',
-											String(discovery.scanProgress.total || discovery.scanCandidates.length)
-										)}
-									</Text>
-								</CollapsibleTrigger>
-								<CollapsibleContent>
-									<Text className="text-muted-foreground text-xs">{scanCandidateList}</Text>
-								</CollapsibleContent>
-							</Collapsible>
-						)}
-						<Text className="text-muted-foreground text-xs">
-							{t(
-								'settings.scan_candidates_hint',
-								'If your printer shows a different IP address, add it manually.'
-							)}
-						</Text>
-					</VStack>
-				)}
-				{discovery.error && (
-					<Text className="text-muted-foreground text-xs">{discovery.error}</Text>
-				)}
-				{discovery.printers.length > 0 && (
-					<VStack className="gap-1">
-						<Text className="text-muted-foreground text-xs font-medium">
-							{t('settings.discovered_printers', 'Discovered printers:')}
-						</Text>
-						{discovery.printers.map((printer) => (
-							<HStack key={printer.id} className="items-center gap-2">
-								<Text className="text-sm">
-									{printer.name} ({printer.address})
-								</Text>
-								{printer.vendor && printer.vendor !== 'generic' && (
-									<View className="bg-muted rounded px-1.5 py-0.5">
-										<Text className="text-muted-foreground text-xs">
-											{printer.vendor === 'epson' ? 'Epson' : 'Star'}
-										</Text>
-									</View>
-								)}
-								<Button variant="outline" size="sm" onPress={() => openDiscoveredPrinter(printer)}>
-									<Text>{t('common.add', 'Add')}</Text>
-								</Button>
-							</HStack>
-						))}
-					</VStack>
 				)}
 			</VStack>
 
