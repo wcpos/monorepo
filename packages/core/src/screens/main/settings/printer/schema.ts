@@ -2,7 +2,7 @@ import * as z from 'zod';
 
 export interface PrinterFormValues {
 	name: string;
-	connectionType: 'network' | 'bluetooth' | 'usb' | 'cloud';
+	connectionType: 'network' | 'bluetooth' | 'usb';
 	vendor: 'epson' | 'star' | 'generic';
 	address: string;
 	cloudPrinterId?: string;
@@ -85,15 +85,3 @@ export const nativePrinterSchema = z
 		path: ['vendor'],
 		message: 'Bluetooth and USB printers must be Epson or Star',
 	});
-
-/** Cloud: a registered plugin printer chosen by id, no address. */
-export const cloudPrinterSchema = z.object({
-	...baseShape,
-	connectionType: z.literal('cloud').default('cloud'),
-	vendor: z.enum(['epson', 'star', 'generic']).default('generic'),
-	address: z.string().optional().default(''),
-	cloudPrinterId: z.string().min(1, 'Select a cloud printer'),
-});
-
-/** Native app dialog: local native transports or plugin-registered cloud printers. */
-export const nativeOrCloudPrinterSchema = z.union([nativePrinterSchema, cloudPrinterSchema]);

@@ -103,6 +103,7 @@ export function PrinterDialog({
 		isScanning: scanning,
 		connectUsbDevice,
 		connectBluetoothDevice,
+		error: discoveryError,
 	} = usePrinterDiscovery();
 	const {
 		form,
@@ -179,6 +180,7 @@ export function PrinterDialog({
 				detectedVendor={detectedVendor}
 				onScan={startScan}
 				scanning={scanning}
+				printers={printers}
 			/>
 		);
 	}
@@ -200,16 +202,22 @@ export function PrinterDialog({
 								shouldValidate: true,
 							});
 						}}
-						includeCloud={false}
 					/>
 					{connectionSection}
+					{discoveryError && (
+						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
+							{t('settings.printer_discovery_error', 'Printer discovery error: %s').replace(
+								'%s',
+								discoveryError
+							)}
+						</Text>
+					)}
 				</>
 			}
 			advancedSettings={
 				<AdvancedSettings
 					form={form}
 					showVendor
-					showPort={connectionType === 'network'}
 					vendorOptions={vendorOptions}
 					defaultOpen={isEditing}
 					onVendorManualChange={setManualVendor}

@@ -2,12 +2,10 @@ import * as React from 'react';
 
 import type { PrinterProfile } from '@wcpos/printer';
 import { usePrinterDiscovery } from '@wcpos/printer';
+import { Text } from '@wcpos/components/text';
 
-import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
-import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { BluetoothDevicePicker } from './dialog/connection/bluetooth-device-picker';
-import { CloudFields } from './dialog/connection/cloud-fields';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { UsbDevicePicker } from './dialog/connection/usb-device-picker';
@@ -16,7 +14,7 @@ import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { usePrinterDialogForm, type VendorDefaults } from './dialog/use-printer-dialog-form';
 import {
 	DEFAULT_FORM_VALUES,
-	nativeOrCloudPrinterSchema,
+	nativePrinterSchema,
 	type PrinterFormValues,
 	type VendorOption,
 } from './schema';
@@ -47,12 +45,12 @@ export function PrinterDialog({
 	prefill,
 }: PrinterDialogProps) {
 	const t = useT();
-	const { startScan, isScanning: scanning } = usePrinterDiscovery();
-	const cloudHttp = useRestHttpClient();
-	const cloudEnqueueFactory = React.useMemo(
-		() => createCloudEnqueueFactory(cloudHttp),
-		[cloudHttp]
-	);
+	const {
+		printers,
+		startScan,
+		isScanning: scanning,
+		error: discoveryError,
+	} = usePrinterDiscovery();
 	const {
 		form,
 		isEditing,
@@ -67,12 +65,11 @@ export function PrinterDialog({
 		handleSaveAnyway,
 	} = usePrinterDialogForm({
 		open,
-		schema: nativeOrCloudPrinterSchema,
+		schema: nativePrinterSchema,
 		defaultValues: DEFAULT_FORM_VALUES,
 		deriveVendorDefaults,
 		printer,
 		prefill,
-		cloudEnqueueFactory,
 		printerCount,
 		onSave,
 	});
@@ -85,7 +82,7 @@ export function PrinterDialog({
 			{ value: 'epson', label: 'Epson' },
 			{ value: 'star', label: 'Star Micronics' },
 		];
-		if (connectionType === 'network' || connectionType === 'cloud') {
+		if (connectionType === 'network') {
 			base.push({ value: 'generic', label: t('settings.printer_vendor_generic', 'Generic') });
 		}
 		return base;
@@ -93,11 +90,7 @@ export function PrinterDialog({
 
 	// When switching to BT/USB while vendor is 'generic', move it to a supported vendor.
 	React.useEffect(() => {
-		if (
-			connectionType !== 'network' &&
-			connectionType !== 'cloud' &&
-			form.getValues('vendor') === 'generic'
-		) {
+		if (connectionType !== 'network' && form.getValues('vendor') === 'generic') {
 			form.setValue('vendor', 'epson');
 		}
 	}, [connectionType, form]);
@@ -107,8 +100,6 @@ export function PrinterDialog({
 		connectionSection = <BluetoothDevicePicker form={form} />;
 	} else if (connectionType === 'usb') {
 		connectionSection = <UsbDevicePicker form={form} />;
-	} else if (connectionType === 'cloud') {
-		connectionSection = <CloudFields form={form} />;
 	} else {
 		connectionSection = (
 			<NetworkFields
@@ -117,6 +108,7 @@ export function PrinterDialog({
 				detectedVendor={detectedVendor}
 				onScan={startScan}
 				scanning={scanning}
+				printers={printers}
 			/>
 		);
 	}
@@ -134,13 +126,20 @@ export function PrinterDialog({
 						onChange={(v) => form.setValue('connectionType', v)}
 					/>
 					{connectionSection}
+					{discoveryError && (
+						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
+							{t('settings.printer_discovery_error', 'Printer discovery error: %s').replace(
+								'%s',
+								discoveryError
+							)}
+						</Text>
+					)}
 				</>
 			}
 			advancedSettings={
 				<AdvancedSettings
 					form={form}
 					showVendor
-					showPort={connectionType === 'network'}
 					vendorOptions={vendorOptions}
 					defaultOpen={isEditing}
 					onVendorManualChange={setManualVendor}

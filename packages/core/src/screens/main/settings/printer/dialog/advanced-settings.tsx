@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
-import { FormField, FormInput, FormSelect } from '@wcpos/components/form';
+import { FormField, FormSelect } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -19,7 +19,6 @@ import type { UseFormReturn } from 'react-hook-form';
 interface AdvancedSettingsProps {
 	form: UseFormReturn<PrinterFormValues>;
 	showVendor: boolean;
-	showPort: boolean;
 	vendorOptions: VendorOption[];
 	defaultOpen?: boolean;
 	onVendorManualChange?: () => void;
@@ -28,7 +27,6 @@ interface AdvancedSettingsProps {
 export function AdvancedSettings({
 	form,
 	showVendor,
-	showPort,
 	vendorOptions,
 	defaultOpen = false,
 	onVendorManualChange,
@@ -38,52 +36,31 @@ export function AdvancedSettings({
 		<Collapsible defaultOpen={defaultOpen}>
 			<CollapsibleTrigger testID="add-printer-advanced-trigger">
 				<Text className="text-sm font-medium">
-					{t('settings.advanced_settings', 'Advanced Settings')}
+					{t('settings.printer_settings', 'Printer Settings')}
 				</Text>
 			</CollapsibleTrigger>
 			<CollapsibleContent>
 				<VStack className="gap-4 pt-2">
-					{(showVendor || showPort) && (
+					{showVendor && (
 						<HStack className="gap-4">
-							{showVendor && (
-								<FormField
-									control={form.control}
-									name="vendor"
-									render={({ field: { value, onChange, ...rest } }) => (
-										<View className="flex-1">
-											<FormSelect
-												customComponent={(p: any) => (
-													<VendorSelect {...p} options={vendorOptions} />
-												)}
-												label={t('settings.printer_vendor', 'Vendor')}
-												value={value}
-												onChange={(v: string) => {
-													onVendorManualChange?.();
-													onChange(v);
-												}}
-												{...rest}
-											/>
-										</View>
-									)}
-								/>
-							)}
-							{showPort && (
-								<FormField
-									control={form.control}
-									name="port"
-									render={({ field: { value, ...rest } }) => (
-										<View className="flex-1">
-											<FormInput
-												testID="add-printer-port-input"
-												label={t('settings.printer_port', 'Port')}
-												type="numeric"
-												value={value != null ? String(value) : undefined}
-												{...rest}
-											/>
-										</View>
-									)}
-								/>
-							)}
+							<FormField
+								control={form.control}
+								name="vendor"
+								render={({ field: { value, onChange, ...rest } }) => (
+									<View className="flex-1">
+										<FormSelect
+											customComponent={(p: any) => <VendorSelect {...p} options={vendorOptions} />}
+											label={t('settings.printer_vendor', 'Vendor')}
+											value={value}
+											onChange={(v: string) => {
+												onVendorManualChange?.();
+												onChange(v);
+											}}
+											{...rest}
+										/>
+									</View>
+								)}
+							/>
 						</HStack>
 					)}
 					<HStack className="gap-4">

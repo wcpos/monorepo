@@ -69,6 +69,23 @@ const systemPrinter: PrinterProfile = {
 	isBuiltIn: true,
 };
 
+const cloudPrinter: PrinterProfile = {
+	id: 'cloud:reg-7',
+	name: 'Kitchen Cloud',
+	connectionType: 'cloud',
+	vendor: 'star',
+	port: 9100,
+	cloudPrinterId: 'reg-7',
+	cloudProvider: 'star-cloudprnt',
+	language: 'star-line',
+	columns: 42,
+	fullReceiptRaster: false,
+	autoCut: true,
+	autoOpenDrawer: false,
+	isDefault: false,
+	isBuiltIn: true,
+};
+
 const allPrinters = [epsonPrinter, starPrinter58, systemPrinter];
 
 describe('resolvePrinter', () => {
@@ -120,6 +137,16 @@ describe('resolvePrinter', () => {
 				profiles: allPrinters,
 			});
 			expect(result?.id).toBe('printer-1');
+		});
+
+		it('resolves a persisted cloud target id when the cloud printer is available', () => {
+			const overrides = new Map([['tmpl-1', 'cloud:reg-7']]);
+			const result = resolvePrinter({
+				template: thermal80mm,
+				overrides,
+				profiles: [...allPrinters, cloudPrinter],
+			});
+			expect(result).toEqual(expect.objectContaining({ id: 'cloud:reg-7' }));
 		});
 	});
 

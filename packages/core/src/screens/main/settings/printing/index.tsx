@@ -5,13 +5,11 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Button } from '@wcpos/components/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@wcpos/components/collapsible';
 import { HStack } from '@wcpos/components/hstack';
-import { Progress } from '@wcpos/components/progress';
 import { Text } from '@wcpos/components/text';
 import { Toast } from '@wcpos/components/toast';
 import { VStack } from '@wcpos/components/vstack';
-import { PrinterService, resolvePrinter, usePrinterDiscovery } from '@wcpos/printer';
+import { PrinterService, resolvePrinter } from '@wcpos/printer';
 import type { DiscoveredPrinter, PrinterProfile } from '@wcpos/printer';
 import type {
 	PrinterProfileDocument,
@@ -26,7 +24,7 @@ import { TemplateRow } from './template-row';
 import { useEnsureSystemPrinter } from './use-ensure-system-printer';
 import { AUTO_VALUE } from './utils';
 import { PrinterDialog } from '../printer/add-printer';
-import { toPrinterProfile } from '../printer/use-default-printer-profile';
+import { useAvailablePrinterProfiles } from '../printer/use-available-printer-profiles';
 import { createCloudEnqueueFactory } from '../../hooks/use-cloud-enqueue';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 import { useActiveTemplates } from '../../receipt/hooks/use-active-templates';
@@ -52,11 +50,7 @@ export function PrintingSettings() {
 		[cloudEnqueueFactory]
 	);
 	const templates = useActiveTemplates();
-	const discovery = usePrinterDiscovery();
-	const scanCandidateList = React.useMemo(
-		() => discovery.scanCandidates.join(', '),
-		[discovery.scanCandidates]
-	);
+	const printers = useAvailablePrinterProfiles();
 
 	useEnsureSystemPrinter(storeDB);
 
@@ -65,11 +59,6 @@ export function PrintingSettings() {
 			void printerService.dispose();
 		};
 	}, [printerService]);
-
-	// Subscribe to all printer profiles
-	const profiles$ = React.useMemo(() => storeDB.collections.printer_profiles.find().$, [storeDB]);
-	const profileDocs = useObservableState(profiles$, []) as PrinterProfileDocument[];
-	const printers = React.useMemo(() => profileDocs.map(toPrinterProfile), [profileDocs]);
 
 	// Subscribe to all overrides
 	const overrides$ = React.useMemo(
@@ -138,7 +127,12 @@ export function PrintingSettings() {
 
 	const handleSetDefault = React.useCallback(
 		async (id: string) => {
-			const allDocs = await storeDB.collections.printer_profiles.find().exec();
+			const allDocs = (await storeDB.collections.printer_profiles
+				.find()
+				.exec()) as PrinterProfileDocument[];
+			if (!allDocs.some((doc) => doc.id === id)) {
+				return;
+			}
 			for (const doc of allDocs) {
 				if (doc.id === id && !doc.isDefault) {
 					await doc.patch({ isDefault: true });
@@ -188,13 +182,8 @@ export function PrintingSettings() {
 		setDialogOpen(true);
 	}, []);
 
-	const openDiscoveredPrinter = React.useCallback((printer: DiscoveredPrinter) => {
-		setPrefilledPrinter(printer);
-		setEditingPrinter(undefined);
-		setDialogOpen(true);
-	}, []);
-
 	const nonBuiltInCount = printers.filter((p) => !p.isBuiltIn).length;
+	const hasVisiblePrinterTargets = printers.some((p) => p.connectionType !== 'system');
 
 	return (
 		<VStack className="gap-6">
@@ -205,12 +194,8 @@ export function PrintingSettings() {
 					title={t('settings.printers', 'Printers')}
 					description={t('settings.printers_description', 'Devices receipts can be sent to.')}
 				/>
-				{nonBuiltInCount === 0 ? (
-					<PrintersEmptyState
-						onAddPrinter={openAddDialog}
-						onScanNetwork={discovery.startScan}
-						isScanning={discovery.isScanning}
-					/>
+				{!hasVisiblePrinterTargets ? (
+					<PrintersEmptyState onAddPrinter={openAddDialog} />
 				) : (
 					<>
 						<View className="border-border overflow-hidden rounded-lg border">
@@ -236,90 +221,8 @@ export function PrintingSettings() {
 							>
 								<Text>{t('settings.add_printer', 'Add Printer')}</Text>
 							</Button>
-							<Button
-								variant="outline"
-								onPress={discovery.startScan}
-								loading={discovery.isScanning}
-								testID="printing-scan-network-button"
-							>
-								<Text>{t('settings.scan_network', 'Scan Network')}</Text>
-							</Button>
 						</HStack>
 					</>
-				)}
-				{discovery.scanCandidates.length > 0 && (
-					<VStack className="bg-muted/50 gap-1 rounded-md p-3" testID="printing-scan-candidates">
-						{discovery.isScanning ? (
-							<VStack className="gap-1.5">
-								<Text className="text-muted-foreground text-xs font-medium">
-									{t(
-										'settings.scan_candidates_progress',
-										'Checking common printer addresses… %s / %s'
-									)
-										.replace('%s', String(discovery.scanProgress.tested))
-										.replace('%s', String(discovery.scanProgress.total))}
-								</Text>
-								<Progress
-									className="h-1"
-									value={
-										discovery.scanProgress.total > 0
-											? (discovery.scanProgress.tested / discovery.scanProgress.total) * 100
-											: 0
-									}
-								/>
-							</VStack>
-						) : (
-							<Collapsible>
-								<CollapsibleTrigger testID="printing-scan-candidates-toggle">
-									<Text className="text-muted-foreground text-xs font-medium">
-										{t(
-											'settings.scan_candidates_done',
-											'Checked %s common printer addresses'
-										).replace(
-											'%s',
-											String(discovery.scanProgress.total || discovery.scanCandidates.length)
-										)}
-									</Text>
-								</CollapsibleTrigger>
-								<CollapsibleContent>
-									<Text className="text-muted-foreground text-xs">{scanCandidateList}</Text>
-								</CollapsibleContent>
-							</Collapsible>
-						)}
-						<Text className="text-muted-foreground text-xs">
-							{t(
-								'settings.scan_candidates_hint',
-								'If your printer shows a different IP address, add it manually.'
-							)}
-						</Text>
-					</VStack>
-				)}
-				{discovery.error && (
-					<Text className="text-muted-foreground text-xs">{discovery.error}</Text>
-				)}
-				{discovery.printers.length > 0 && (
-					<VStack className="gap-1">
-						<Text className="text-muted-foreground text-xs font-medium">
-							{t('settings.discovered_printers', 'Discovered printers:')}
-						</Text>
-						{discovery.printers.map((printer) => (
-							<HStack key={printer.id} className="items-center gap-2">
-								<Text className="text-sm">
-									{printer.name} ({printer.address})
-								</Text>
-								{printer.vendor && printer.vendor !== 'generic' && (
-									<View className="bg-muted rounded px-1.5 py-0.5">
-										<Text className="text-muted-foreground text-xs">
-											{printer.vendor === 'epson' ? 'Epson' : 'Star'}
-										</Text>
-									</View>
-								)}
-								<Button variant="outline" size="sm" onPress={() => openDiscoveredPrinter(printer)}>
-									<Text>{t('common.add', 'Add')}</Text>
-								</Button>
-							</HStack>
-						))}
-					</VStack>
 				)}
 			</VStack>
 
@@ -346,8 +249,16 @@ export function PrintingSettings() {
 							const selectedPrinter = currentOverride
 								? printers.find((p) => p.id === currentOverride)
 								: null;
-							const currentValue = selectedPrinter ? currentOverride! : AUTO_VALUE;
-							const selectedLabel = selectedPrinter ? selectedPrinter.name : autoLabel;
+							const isUnavailableOverride = Boolean(currentOverride && !selectedPrinter);
+							const currentValue =
+								currentOverride && (selectedPrinter || isUnavailableOverride)
+									? currentOverride
+									: AUTO_VALUE;
+							const selectedLabel = selectedPrinter
+								? selectedPrinter.name
+								: isUnavailableOverride
+									? t('settings.printer_unavailable', 'Unavailable printer')
+									: autoLabel;
 
 							return (
 								<TemplateRow
@@ -358,6 +269,7 @@ export function PrintingSettings() {
 									selectedLabel={selectedLabel}
 									autoLabel={autoLabel}
 									printers={printers}
+									unavailablePrinterId={isUnavailableOverride ? currentOverride : undefined}
 									onRoutingChange={handleRoutingChange}
 								/>
 							);

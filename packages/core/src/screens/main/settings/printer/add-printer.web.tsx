@@ -16,40 +16,19 @@ import {
 } from '@wcpos/printer';
 
 import { AdvancedSettings } from './dialog/advanced-settings';
+import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { WebVendorSegmented } from './dialog/connection/web-vendor-segmented';
 import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
-import { usePrinterDialogForm, type VendorDefaults } from './dialog/use-printer-dialog-form';
+import { usePrinterDialogForm } from './dialog/use-printer-dialog-form';
 import { DEFAULT_FORM_VALUES, type PrinterFormValues, webPrinterSchema } from './schema';
+import { deriveEndpointHint, deriveWebVendorDefaults } from './web-network-defaults';
 import { useT } from '../../../../contexts/translations';
 
 import type { PrinterDialogPrefill } from './profile-config';
 
 const WEB_DEFAULTS: PrinterFormValues = { ...DEFAULT_FORM_VALUES, vendor: 'epson' };
-
-function deriveWebVendorDefaults(vendor: PrinterFormValues['vendor']): VendorDefaults {
-	if (vendor === 'star') return { language: 'star-line', port: 9100 };
-	// Epson: 8043 on a secure origin, 8008 otherwise. 9100 is the "use default" sentinel.
-	const secure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-	return { language: 'esc-pos', port: secure ? 8043 : 8008 };
-}
-
-function deriveEndpointHint(vendor: string, address: string, port: number): string | undefined {
-	const ip = address.trim();
-	if (!ip) return undefined;
-	if (vendor === 'epson') {
-		const secure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-		const resolvedPort = port === 9100 ? (secure ? 8043 : 8008) : port;
-		const protocol = resolvedPort === 8043 || resolvedPort === 443 ? 'https' : 'http';
-		return `${protocol}://${ip}:${resolvedPort}/cgi-bin/epos/service.cgi`;
-	}
-	if (vendor === 'star') {
-		const suffix = port && port !== 9100 ? `:${port}` : '';
-		return `https://${ip}${suffix}/StarWebPRNT/SendMessage`;
-	}
-	return undefined;
-}
 
 interface PrinterDialogProps {
 	open: boolean;
@@ -99,9 +78,20 @@ export function PrinterDialog({
 		name: 'vendor',
 		defaultValue: WEB_DEFAULTS.vendor,
 	});
+	const connectionType = form.watch('connectionType');
 	const address = form.watch('address');
 	const port = form.watch('port');
 	const endpointHint = deriveEndpointHint(vendor, address ?? '', port ?? 9100);
+	const availableTypes = React.useMemo(() => {
+		const types: PrinterFormValues['connectionType'][] = ['network'];
+		if (isWebUsbSupported()) {
+			types.push('usb');
+		}
+		if (isWebBluetoothSupported()) {
+			types.push('bluetooth');
+		}
+		return types;
+	}, []);
 
 	const banner = (
 		<View className="bg-muted flex-row items-start gap-2 rounded-md p-3">
@@ -115,10 +105,10 @@ export function PrinterDialog({
 		</View>
 	);
 
-	const webDeviceSection = (isWebUsbSupported() || isWebBluetoothSupported()) && (
+	const webDeviceSection = connectionType !== 'network' && (
 		<VStack className="gap-2">
 			<HStack className="gap-2">
-				{isWebUsbSupported() && connectUsbDevice && (
+				{connectionType === 'usb' && connectUsbDevice && (
 					<Button
 						testID="add-printer-connect-usb-button"
 						variant="outline"
@@ -128,7 +118,7 @@ export function PrinterDialog({
 						<Text>{t('settings.connect_usb_printer', 'Connect USB printer')}</Text>
 					</Button>
 				)}
-				{isWebBluetoothSupported() && connectBluetoothDevice && (
+				{connectionType === 'bluetooth' && connectBluetoothDevice && (
 					<Button
 						testID="add-printer-connect-bt-button"
 						variant="outline"
@@ -140,7 +130,7 @@ export function PrinterDialog({
 				)}
 			</HStack>
 			{discovery.printers
-				.filter((p) => p.connectionType === 'usb' || p.connectionType === 'bluetooth')
+				.filter((p) => p.connectionType === connectionType)
 				.map((device) => (
 					<Pressable
 						key={device.id}
@@ -184,21 +174,46 @@ export function PrinterDialog({
 			banner={banner}
 			connectionSection={
 				<>
-					<WebVendorSegmented vendor={vendor} onSelect={handleVendorSelect} />
-					<NetworkFields
-						form={form}
-						probing={probing}
-						detectedVendor={detectedVendor}
-						endpointHint={endpointHint}
+					<ConnectionTypeSegmented
+						value={connectionType}
+						availableTypes={availableTypes}
+						onChange={(v) => {
+							form.setValue('connectionType', v, {
+								shouldDirty: true,
+								shouldValidate: true,
+							});
+							form.setValue('address', '', {
+								shouldDirty: true,
+								shouldValidate: true,
+							});
+						}}
 					/>
+					{connectionType === 'network' && (
+						<>
+							<WebVendorSegmented vendor={vendor} onSelect={handleVendorSelect} />
+							<NetworkFields
+								form={form}
+								probing={probing}
+								detectedVendor={detectedVendor}
+								endpointHint={endpointHint}
+							/>
+						</>
+					)}
 					{webDeviceSection}
+					{discovery.error && (
+						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
+							{t('settings.printer_discovery_error', 'Printer discovery error: %s').replace(
+								'%s',
+								discovery.error
+							)}
+						</Text>
+					)}
 				</>
 			}
 			advancedSettings={
 				<AdvancedSettings
 					form={form}
 					showVendor={false}
-					showPort
 					vendorOptions={[]}
 					defaultOpen={isEditing}
 				/>
