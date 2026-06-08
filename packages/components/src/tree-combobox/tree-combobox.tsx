@@ -22,6 +22,14 @@ import type { TreeComboboxContentProps, TreeComboboxProps } from './types';
 
 type ComboboxOption<T = undefined> = { value: string; label: string; item?: T };
 
+const NATIVE_POPOVER_MAX_HEIGHT = 300;
+const NATIVE_POPOVER_VERTICAL_PADDING = 16;
+const NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN = 48;
+const NATIVE_LIST_MAX_HEIGHT =
+	NATIVE_POPOVER_MAX_HEIGHT -
+	NATIVE_POPOVER_VERTICAL_PADDING -
+	NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN;
+
 // --- Context ---
 
 interface TreeComboboxContextType {
@@ -35,6 +43,7 @@ interface TreeComboboxContextType {
 	filterValue: string;
 	onFilterChange: (value: string) => void;
 	searchMode: 'tree' | 'flat';
+	searchResetKey: number;
 }
 
 interface TreeComboboxWidthContextType {
@@ -75,6 +84,7 @@ function TreeCombobox<T = undefined>({
 	cascadeSelection = !!multiple,
 }: TreeComboboxProps<T>) {
 	const [filterValue, setFilterValue] = React.useState('');
+	const [searchResetKey, setSearchResetKey] = React.useState(0);
 	const [triggerWidth, setTriggerWidth] = React.useState<number | undefined>();
 	const [, startTransition] = React.useTransition();
 
@@ -152,7 +162,10 @@ function TreeCombobox<T = undefined>({
 	);
 
 	const handleOpenChange = React.useCallback((open: boolean) => {
-		if (!open) setFilterValue('');
+		if (!open) {
+			setFilterValue('');
+			setSearchResetKey((key) => key + 1);
+		}
 	}, []);
 
 	const contextValue = React.useMemo<TreeComboboxContextType>(
@@ -167,6 +180,7 @@ function TreeCombobox<T = undefined>({
 			filterValue,
 			onFilterChange: handleFilterChange,
 			searchMode,
+			searchResetKey,
 		}),
 		[
 			hierarchy,
@@ -179,6 +193,7 @@ function TreeCombobox<T = undefined>({
 			filterValue,
 			handleFilterChange,
 			searchMode,
+			searchResetKey,
 		]
 	);
 
@@ -228,6 +243,34 @@ function TreeComboboxTrigger({
 
 // --- Content ---
 
+function TreeComboboxSearchInput({
+	onFilterChange,
+	placeholder,
+}: {
+	onFilterChange: (value: string) => void;
+	placeholder: string;
+}) {
+	const [inputValue, setInputValue] = React.useState('');
+
+	const handleChange = React.useCallback(
+		(text: string) => {
+			setInputValue(text);
+			onFilterChange(text);
+		},
+		[onFilterChange]
+	);
+
+	return (
+		<Input
+			autoFocus
+			value={inputValue}
+			onChangeText={handleChange}
+			placeholder={placeholder}
+			className="mb-2"
+		/>
+	);
+}
+
 function TreeComboboxContent<T>({
 	children,
 	portalHost,
@@ -241,8 +284,16 @@ function TreeComboboxContent<T>({
 	const ctx = useTreeComboboxContext();
 	const widthCtx = React.useContext(TreeComboboxWidthContext);
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
+	const isNative = Platform.OS !== 'web';
 
 	useArrowKeyNavigation();
+
+	const contentStyle = React.useMemo(() => {
+		const widthStyle =
+			matchWidth && widthCtx.triggerWidth ? { width: widthCtx.triggerWidth } : undefined;
+		if (!isNative) return widthStyle;
+		return { ...widthStyle, maxHeight: NATIVE_POPOVER_MAX_HEIGHT };
+	}, [isNative, matchWidth, widthCtx.triggerWidth]);
 
 	const renderTreeItem = React.useCallback(
 		({ item: flatItem }: { item: FlatTreeItem<T> }) => {
@@ -327,33 +378,40 @@ function TreeComboboxContent<T>({
 						<PopoverPrimitive.Content
 							align="center"
 							sideOffset={4}
-							style={
-								matchWidth && widthCtx.triggerWidth ? { width: widthCtx.triggerWidth } : undefined
-							}
+							style={contentStyle}
 							className={cn(
 								'border-border bg-popover web:animate-in web:zoom-in-95 web:fade-in-0 web:cursor-auto web:outline-none z-50 max-h-[300px] w-72 rounded-md border p-2 shadow-md',
 								className
 							)}
 						>
 							{children}
-							<Input
-								autoFocus
-								value={ctx.filterValue}
-								onChangeText={ctx.onFilterChange}
+							<TreeComboboxSearchInput
+								key={ctx.searchResetKey}
+								onFilterChange={ctx.onFilterChange}
 								placeholder={searchPlaceholder}
-								className="mb-2"
 							/>
 							{ctx.displayItems.length > 0 ? (
-								<VirtualizedListPrimitive.Root className="flex-1">
-									<VirtualizedListPrimitive.List
-										data={ctx.displayItems}
-										estimatedItemSize={estimatedItemSize}
-										renderItem={renderTreeItem as any}
-										parentProps={{
-											style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
-										}}
-									/>
-								</VirtualizedListPrimitive.Root>
+								isNative ? (
+									<View style={{ maxHeight: NATIVE_LIST_MAX_HEIGHT }}>
+										<VirtualizedListPrimitive.Root className="flex-1">
+											<VirtualizedListPrimitive.List
+												data={ctx.displayItems}
+												estimatedItemSize={estimatedItemSize}
+												renderItem={renderTreeItem as any}
+												parentProps={{ style: { height: '100%' } }}
+											/>
+										</VirtualizedListPrimitive.Root>
+									</View>
+								) : (
+									<VirtualizedListPrimitive.Root className="flex-1">
+										<VirtualizedListPrimitive.List
+											data={ctx.displayItems}
+											estimatedItemSize={estimatedItemSize}
+											renderItem={renderTreeItem as any}
+											parentProps={{ style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 } }}
+										/>
+									</VirtualizedListPrimitive.Root>
+								)
 							) : (
 								ctx.isSearching && (
 									<View className="px-2 py-1.5">
