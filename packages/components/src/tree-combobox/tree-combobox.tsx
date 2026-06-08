@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
 
 import { Platform } from '@wcpos/utils/platform';
 
@@ -25,10 +26,16 @@ type ComboboxOption<T = undefined> = { value: string; label: string; item?: T };
 const NATIVE_POPOVER_MAX_HEIGHT = 300;
 const NATIVE_POPOVER_VERTICAL_PADDING = 16;
 const NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN = 48;
+const NATIVE_LIST_MIN_ITEM_HEIGHT = 36;
 const NATIVE_LIST_MAX_HEIGHT =
 	NATIVE_POPOVER_MAX_HEIGHT -
 	NATIVE_POPOVER_VERTICAL_PADDING -
 	NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN;
+
+function getNativeListHeight(itemCount: number, estimatedItemSize: number) {
+	const itemHeight = Math.max(estimatedItemSize, NATIVE_LIST_MIN_ITEM_HEIGHT);
+	return Math.min(itemCount * itemHeight, NATIVE_LIST_MAX_HEIGHT);
+}
 
 // --- Context ---
 
@@ -132,7 +139,11 @@ function TreeCombobox<T = undefined>({
 	const toOption = React.useCallback(
 		(id: string, fallbackLabel: string): ComboboxOption<T> => {
 			const node = hierarchy.nodeMap.get(id);
-			return { value: id, label: node?.label ?? fallbackLabel, item: node?.item };
+			return {
+				value: id,
+				label: node?.label ?? fallbackLabel,
+				item: node?.item,
+			};
 		},
 		[hierarchy.nodeMap]
 	);
@@ -285,6 +296,7 @@ function TreeComboboxContent<T>({
 	const widthCtx = React.useContext(TreeComboboxWidthContext);
 	const { onOpenChange } = PopoverPrimitive.useRootContext();
 	const isNative = Platform.OS !== 'web';
+	const isAndroid = Platform.OS === 'android';
 
 	useArrowKeyNavigation();
 
@@ -392,13 +404,19 @@ function TreeComboboxContent<T>({
 							/>
 							{ctx.displayItems.length > 0 ? (
 								isNative ? (
-									<View style={{ maxHeight: NATIVE_LIST_MAX_HEIGHT }}>
+									<View
+										style={{
+											height: getNativeListHeight(ctx.displayItems.length, estimatedItemSize),
+											maxHeight: NATIVE_LIST_MAX_HEIGHT,
+										}}
+									>
 										<VirtualizedListPrimitive.Root className="flex-1">
 											<VirtualizedListPrimitive.List
 												data={ctx.displayItems}
 												estimatedItemSize={estimatedItemSize}
 												renderItem={renderTreeItem as any}
 												parentProps={{ style: { height: '100%' } }}
+												renderScrollComponent={isAndroid ? GestureHandlerScrollView : undefined}
 											/>
 										</VirtualizedListPrimitive.Root>
 									</View>
@@ -408,7 +426,9 @@ function TreeComboboxContent<T>({
 											data={ctx.displayItems}
 											estimatedItemSize={estimatedItemSize}
 											renderItem={renderTreeItem as any}
-											parentProps={{ style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 } }}
+											parentProps={{
+												style: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
+											}}
 										/>
 									</VirtualizedListPrimitive.Root>
 								)
