@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
+import { useWatch } from 'react-hook-form';
+
 import { Button } from '@wcpos/components/button';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -39,7 +41,11 @@ function DeviceList({
 	type: 'usb' | 'bluetooth';
 }) {
 	const devices = printers.filter((p) => p.connectionType === type);
-	const selectedAddress = form.watch('address');
+	const selectedAddress = useWatch({
+		control: form.control,
+		name: 'address',
+		defaultValue: DEFAULT_FORM_VALUES.address,
+	});
 
 	if (devices.length === 0) return null;
 
@@ -128,7 +134,11 @@ export function PrinterDialog({
 		onSave,
 	});
 
-	const connectionType = form.watch('connectionType');
+	const connectionType = useWatch({
+		control: form.control,
+		name: 'connectionType',
+		defaultValue: DEFAULT_FORM_VALUES.connectionType,
+	});
 
 	const vendorOptions: VendorOption[] = [
 		{ value: 'epson', label: 'Epson' },

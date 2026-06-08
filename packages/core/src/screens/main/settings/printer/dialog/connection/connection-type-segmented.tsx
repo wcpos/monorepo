@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Platform } from 'react-native';
 
+import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -11,6 +12,10 @@ interface ConnectionTypeSegmentedProps {
 	value: ConnType;
 	onChange: (value: ConnType) => void;
 	availableTypes?: readonly ConnType[];
+}
+
+function isConnectionType(value: string): value is ConnType {
+	return value === 'network' || value === 'bluetooth' || value === 'usb';
 }
 
 export function ConnectionTypeSegmented({
@@ -30,26 +35,28 @@ export function ConnectionTypeSegmented({
 		{ value: 'usb', label: t('settings.connection_usb', 'USB') },
 	];
 	const options = allOptions.filter((option) => enabledTypes.includes(option.value));
+
 	return (
-		<View
-			testID="add-printer-connection-type-segmented"
-			className="bg-muted flex-row gap-1 rounded-md p-1"
+		<Tabs
+			value={value}
+			onValueChange={(next) => {
+				if (isConnectionType(next)) {
+					onChange(next);
+				}
+			}}
 		>
-			{options.map((option) => {
-				const selected = option.value === value;
-				return (
-					<Pressable
+			<TabsList testID="add-printer-connection-type-segmented" className="w-full flex-row">
+				{options.map((option) => (
+					<TabsTrigger
 						key={option.value}
+						value={option.value}
 						testID={`add-printer-connection-type-${option.value}`}
-						onPress={() => onChange(option.value)}
-						className={`flex-1 items-center rounded px-2 py-2 ${selected ? 'bg-background' : ''}`}
+						className="flex-1"
 					>
-						<Text className={`text-sm ${selected ? 'font-medium' : 'text-muted-foreground'}`}>
-							{option.label}
-						</Text>
-					</Pressable>
-				);
-			})}
-		</View>
+						<Text>{option.label}</Text>
+					</TabsTrigger>
+				))}
+			</TabsList>
+		</Tabs>
 	);
 }

@@ -6,32 +6,38 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { WebVendorSegmented } from './web-vendor-segmented';
 
-jest.mock('react-native', () => ({
-	Pressable: ({
-		children,
-		className,
-		accessibilityRole,
-		accessibilityState,
-		onPress,
-		testID,
-	}: any) => (
-		<button
-			type="button"
-			className={className}
-			data-testid={testID}
-			role={accessibilityRole}
-			aria-selected={accessibilityState?.selected ? 'true' : 'false'}
-			onClick={onPress}
-		>
-			{children}
-		</button>
-	),
-	View: ({ children, className, testID, accessibilityRole }: any) => (
-		<div className={className} data-testid={testID} role={accessibilityRole}>
-			{children}
-		</div>
-	),
-}));
+jest.mock('@wcpos/components/tabs', () => {
+	const React = require('react');
+	const TabsContext = React.createContext({
+		value: '',
+		onValueChange: (_value: string) => undefined,
+	});
+	return {
+		Tabs: ({ children, value, onValueChange }: any) => (
+			<TabsContext.Provider value={{ value, onValueChange }}>{children}</TabsContext.Provider>
+		),
+		TabsList: ({ children, testID }: any) => (
+			<div data-testid={testID} role="tablist">
+				{children}
+			</div>
+		),
+		TabsTrigger: ({ children, value, testID }: any) => {
+			const context = React.useContext(TabsContext);
+			const selected = context.value === value;
+			return (
+				<button
+					type="button"
+					data-testid={testID}
+					role="tab"
+					aria-selected={selected ? 'true' : 'false'}
+					onClick={() => context.onValueChange(value)}
+				>
+					{children}
+				</button>
+			);
+		},
+	};
+});
 
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children, className }: any) => <span className={className}>{children}</span>,
@@ -56,20 +62,18 @@ describe('WebVendorSegmented', () => {
 		expect(segmented).toHaveAttribute('role', 'tablist');
 
 		expect(star).toHaveAttribute('aria-selected', 'true');
-		expect(star).toHaveClass('border-primary', 'bg-background', 'shadow-sm');
-		expect(star.firstElementChild).toHaveClass('text-primary', 'font-semibold');
-
 		expect(epson).toHaveAttribute('aria-selected', 'false');
-		expect(epson).toHaveClass('border-transparent');
-		expect(epson.firstElementChild).toHaveClass('text-muted-foreground');
 	});
-	it('moves the active state immediately when a vendor is clicked', () => {
+	it('moves the active state when the controlled vendor value changes', () => {
 		const onSelect = jest.fn();
-		render(<WebVendorSegmented vendor="epson" onSelect={onSelect} />);
+		const { rerender } = render(<WebVendorSegmented vendor="epson" onSelect={onSelect} />);
 
 		fireEvent.click(screen.getByTestId('add-printer-vendor-star'));
 
 		expect(onSelect).toHaveBeenCalledWith('star');
+
+		rerender(<WebVendorSegmented vendor="star" onSelect={onSelect} />);
+
 		expect(screen.getByTestId('add-printer-vendor-star')).toHaveAttribute('aria-selected', 'true');
 		expect(screen.getByTestId('add-printer-vendor-epson')).toHaveAttribute(
 			'aria-selected',

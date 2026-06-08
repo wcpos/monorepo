@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useWatch } from 'react-hook-form';
+
 import type { PrinterProfile } from '@wcpos/printer';
 import { usePrinterDiscovery } from '@wcpos/printer';
 import { Text } from '@wcpos/components/text';
@@ -74,7 +76,11 @@ export function PrinterDialog({
 		onSave,
 	});
 
-	const connectionType = form.watch('connectionType');
+	const connectionType = useWatch({
+		control: form.control,
+		name: 'connectionType',
+		defaultValue: DEFAULT_FORM_VALUES.connectionType,
+	});
 
 	// Bluetooth/USB transport supports Epson + Star only (getTransport throws on generic).
 	const vendorOptions: VendorOption[] = React.useMemo(() => {
