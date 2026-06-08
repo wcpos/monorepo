@@ -29,6 +29,7 @@ import { Text } from '@wcpos/components/text';
 import type { SiteDocument, UserDocument } from '@wcpos/database';
 
 import { Site, SiteHeader } from './site';
+import { getNextAccordionState } from './sites-expansion';
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
@@ -49,6 +50,16 @@ export function Sites({ user }: SitesProps) {
 			}
 		).populateResource('sites')
 	);
+
+	const siteUuids = React.useMemo(() => sites?.map((site) => site.uuid ?? '') ?? [], [sites]);
+	const [accordionState, setAccordionState] = React.useState(() =>
+		getNextAccordionState({ siteUuids: [], expandedSiteUuid: undefined }, siteUuids)
+	);
+	const nextAccordionState = getNextAccordionState(accordionState, siteUuids);
+
+	if (nextAccordionState !== accordionState) {
+		setAccordionState(nextAccordionState);
+	}
 
 	if (!sites || sites.length === 0) {
 		return null;
@@ -71,7 +82,14 @@ export function Sites({ user }: SitesProps) {
 			<Text className="text-muted-foreground px-4 pt-4 text-xs font-semibold tracking-wider uppercase">
 				{t('auth.your_sites', { _tags: 'core' })}
 			</Text>
-			<Accordion type="single" collapsible defaultValue={sites[0].uuid}>
+			<Accordion
+				type="single"
+				collapsible
+				value={nextAccordionState.expandedSiteUuid}
+				onValueChange={(value) =>
+					setAccordionState((current) => ({ ...current, expandedSiteUuid: value ?? '' }))
+				}
+			>
 				{sites.map((site, index) => (
 					<ErrorBoundary key={site.uuid}>
 						<AccordionSite user={user} site={site} isFirst={index === 0} />
