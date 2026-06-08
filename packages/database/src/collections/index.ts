@@ -487,7 +487,19 @@ const taxRateSchema: RxJsonSchema<TaxRateDocumentType> = taxRatesLiteral;
 type TaxRateDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof taxRatesLiteral>;
 export type TaxRateDocument = RxDocument<TaxRateDocumentType>;
 export type TaxRateCollection = RxCollection<TaxRateDocumentType>;
-const taxes: RxCollectionCreator<TaxRateDocumentType> = { schema: taxRateSchema };
+const taxes: RxCollectionCreator<TaxRateDocumentType> = {
+	schema: taxRateSchema,
+	migrationStrategies: {
+		// v1: `country` relaxed from an ISO-code enum to a plain string so
+		// WooCommerce's empty/general country values pass validation. Existing
+		// docs are already valid under the relaxed schema; just carry them over,
+		// normalizing a missing country to ''.
+		1(oldDoc) {
+			oldDoc.country = oldDoc.country || '';
+			return oldDoc;
+		},
+	},
+};
 
 /**
  * Gateways
