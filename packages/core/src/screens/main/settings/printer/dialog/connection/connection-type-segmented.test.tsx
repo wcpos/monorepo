@@ -8,23 +8,40 @@ import { ConnectionTypeSegmented } from './connection-type-segmented';
 
 jest.mock('react-native', () => ({
 	Platform: { OS: 'web' },
-	Pressable: ({
-		children,
-		onPress,
-		testID,
-	}: {
-		children?: React.ReactNode;
-		onPress?: () => void;
-		testID?: string;
-	}) => (
-		<button type="button" data-testid={testID} onClick={onPress}>
-			{children}
-		</button>
-	),
-	View: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
-		<div data-testid={testID}>{children}</div>
-	),
 }));
+
+jest.mock('@wcpos/components/tabs', () => {
+	const React = require('react');
+	const TabsContext = React.createContext({
+		value: '',
+		onValueChange: (_value: string) => undefined,
+	});
+	return {
+		Tabs: ({ children, value, onValueChange }: any) => (
+			<TabsContext.Provider value={{ value, onValueChange }}>{children}</TabsContext.Provider>
+		),
+		TabsList: ({ children, testID }: any) => (
+			<div data-testid={testID} role="tablist">
+				{children}
+			</div>
+		),
+		TabsTrigger: ({ children, value, testID }: any) => {
+			const context = React.useContext(TabsContext);
+			const selected = context.value === value;
+			return (
+				<button
+					type="button"
+					data-testid={testID}
+					role="tab"
+					aria-selected={selected ? 'true' : 'false'}
+					onClick={() => context.onValueChange(value)}
+				>
+					{children}
+				</button>
+			);
+		},
+	};
+});
 
 jest.mock('@wcpos/components/text', () => ({
 	Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,

@@ -78,9 +78,21 @@ export function PrinterDialog({
 		name: 'vendor',
 		defaultValue: WEB_DEFAULTS.vendor,
 	});
-	const connectionType = form.watch('connectionType');
-	const address = form.watch('address');
-	const port = form.watch('port');
+	const connectionType = useWatch({
+		control: form.control,
+		name: 'connectionType',
+		defaultValue: WEB_DEFAULTS.connectionType,
+	});
+	const address = useWatch({
+		control: form.control,
+		name: 'address',
+		defaultValue: WEB_DEFAULTS.address,
+	});
+	const port = useWatch({
+		control: form.control,
+		name: 'port',
+		defaultValue: WEB_DEFAULTS.port,
+	});
 	const endpointHint = deriveEndpointHint(vendor, address ?? '', port ?? 9100);
 	const availableTypes = React.useMemo(() => {
 		const types: PrinterFormValues['connectionType'][] = ['network'];

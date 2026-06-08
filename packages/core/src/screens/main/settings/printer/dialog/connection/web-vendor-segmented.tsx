@@ -1,6 +1,6 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
 
+import { Tabs, TabsList, TabsTrigger } from '@wcpos/components/tabs';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
@@ -19,58 +19,40 @@ function normalizeVendor(vendor: PrinterFormValues['vendor']): WebVendor | undef
 	return vendor === 'epson' || vendor === 'star' ? vendor : undefined;
 }
 
+function isWebVendor(value: string): value is WebVendor {
+	return value === 'epson' || value === 'star';
+}
+
 export function WebVendorSegmented({ vendor, onSelect }: WebVendorSegmentedProps) {
 	const t = useT();
-	const [selectedVendor, setSelectedVendor] = React.useState<WebVendor | undefined>(() =>
-		normalizeVendor(vendor)
-	);
-
-	// Keep the visual selection in sync when the form is reset for edit/prefill/open.
-	// Implemented as the React "adjust state during render" pattern (tracking the
-	// previous vendor prop) rather than an effect, so it never sets state inside
-	// useEffect.
-	const [prevVendor, setPrevVendor] = React.useState(vendor);
-	if (vendor !== prevVendor) {
-		setPrevVendor(vendor);
-		setSelectedVendor(normalizeVendor(vendor));
-	}
 
 	return (
 		<VStack className="gap-1">
 			<Text className="text-sm font-medium">{t('settings.printer_vendor', 'Vendor')}</Text>
-			<View
-				testID="add-printer-vendor-segmented"
-				accessibilityRole="tablist"
-				className="bg-muted flex-row gap-1 rounded-md p-1"
+			<Tabs
+				value={normalizeVendor(vendor) ?? ''}
+				onValueChange={(next) => {
+					if (isWebVendor(next)) {
+						onSelect(next);
+					}
+				}}
 			>
-				{[
-					{ value: 'epson' as const, label: 'Epson' },
-					{ value: 'star' as const, label: 'Star Micronics' },
-				].map((option) => {
-					const selected = option.value === selectedVendor;
-					return (
-						<Pressable
+				<TabsList testID="add-printer-vendor-segmented" className="w-full flex-row">
+					{[
+						{ value: 'epson' as const, label: 'Epson' },
+						{ value: 'star' as const, label: 'Star Micronics' },
+					].map((option) => (
+						<TabsTrigger
 							key={option.value}
+							value={option.value}
 							testID={`add-printer-vendor-${option.value}`}
-							onPress={() => {
-								setSelectedVendor(option.value);
-								onSelect(option.value);
-							}}
-							accessibilityRole="tab"
-							accessibilityState={{ selected }}
-							className={`flex-1 items-center rounded border px-2 py-2 ${
-								selected ? 'border-primary bg-background shadow-sm' : 'border-transparent'
-							}`}
+							className="flex-1"
 						>
-							<Text
-								className={`text-sm ${selected ? 'text-primary font-semibold' : 'text-muted-foreground'}`}
-							>
-								{option.label}
-							</Text>
-						</Pressable>
-					);
-				})}
-			</View>
+							<Text>{option.label}</Text>
+						</TabsTrigger>
+					))}
+				</TabsList>
+			</Tabs>
 		</VStack>
 	);
 }
