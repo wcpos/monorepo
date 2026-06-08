@@ -119,7 +119,7 @@ describe('TreeCombobox native content', () => {
 		expect(mockPendingTransitions).toHaveLength(1);
 	});
 
-	it('gives the native virtualized list a bounded height so long lists scroll inside the popover', () => {
+	it('bounds the native virtualized list without sizing it from estimated item height', () => {
 		const options = Array.from({ length: 20 }, (_, index) => ({
 			value: String(index),
 			label: `Category ${index}`,
@@ -134,8 +134,29 @@ describe('TreeCombobox native content', () => {
 
 		const listRoot = screen.getByTestId('tree-combobox-list-root');
 
-		expect(listRoot.parentElement).toHaveStyle({ height: '236px' });
+		expect(listRoot.parentElement).toHaveStyle({ maxHeight: '236px' });
+		expect(listRoot.parentElement).not.toHaveStyle({ height: '236px' });
 		expect(listRoot).toHaveStyle({ flex: '1' });
 		expect(screen.getByTestId('tree-combobox-list-parent')).toHaveStyle({ height: '100%' });
+	});
+
+	it('does not clip short native lists by treating the item estimate as exact content height', () => {
+		render(
+			<TreeCombobox
+				options={[
+					{ value: '1', label: 'Category 1' },
+					{ value: '2', label: 'Category 2' },
+				]}
+				defaultExpanded="all"
+			>
+				<TreeComboboxTrigger>Open</TreeComboboxTrigger>
+				<TreeComboboxContent searchPlaceholder="Search categories" estimatedItemSize={24} />
+			</TreeCombobox>
+		);
+
+		const listRoot = screen.getByTestId('tree-combobox-list-root');
+
+		expect(listRoot.parentElement).toHaveStyle({ maxHeight: '236px' });
+		expect(listRoot.parentElement).not.toHaveStyle({ height: '48px' });
 	});
 });

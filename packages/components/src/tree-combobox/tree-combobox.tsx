@@ -295,11 +295,6 @@ function TreeComboboxContent<T>({
 		return { ...widthStyle, maxHeight: NATIVE_POPOVER_MAX_HEIGHT };
 	}, [isNative, matchWidth, widthCtx.triggerWidth]);
 
-	const listHeight = React.useMemo(() => {
-		if (!isNative) return undefined;
-		return Math.min(ctx.displayItems.length * estimatedItemSize, NATIVE_LIST_MAX_HEIGHT);
-	}, [ctx.displayItems.length, estimatedItemSize, isNative]);
-
 	const renderTreeItem = React.useCallback(
 		({ item: flatItem }: { item: FlatTreeItem<T> }) => {
 			const structuralHasChildren =
@@ -397,7 +392,7 @@ function TreeComboboxContent<T>({
 							/>
 							{ctx.displayItems.length > 0 ? (
 								isNative ? (
-									<View style={listHeight ? { height: listHeight } : undefined}>
+									<View style={{ maxHeight: NATIVE_LIST_MAX_HEIGHT }}>
 										<VirtualizedListPrimitive.Root className="flex-1">
 											<VirtualizedListPrimitive.List
 												data={ctx.displayItems}
