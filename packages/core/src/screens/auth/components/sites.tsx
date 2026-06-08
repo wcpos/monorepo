@@ -29,6 +29,7 @@ import { Text } from '@wcpos/components/text';
 import type { SiteDocument, UserDocument } from '@wcpos/database';
 
 import { Site, SiteHeader } from './site';
+import { getNextExpandedSiteUuid } from './sites-expansion';
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
 import { useSiteInfo } from '../../../hooks/use-site-info';
@@ -49,6 +50,20 @@ export function Sites({ user }: SitesProps) {
 			}
 		).populateResource('sites')
 	);
+
+	const siteUuids = React.useMemo(() => sites?.map((site) => site.uuid ?? '') ?? [], [sites]);
+	const [expandedSiteUuid, setExpandedSiteUuid] = React.useState(siteUuids[0] ?? '');
+	const previousSiteUuidsRef = React.useRef(siteUuids);
+
+	// External site documents can be added by the connect flow, outside the accordion's
+	// own onValueChange handler, so sync the controlled value when the site list changes.
+	React.useEffect(() => {
+		const previousSiteUuids = previousSiteUuidsRef.current;
+		setExpandedSiteUuid((current) =>
+			getNextExpandedSiteUuid(previousSiteUuids, siteUuids, current)
+		);
+		previousSiteUuidsRef.current = siteUuids;
+	}, [siteUuids]);
 
 	if (!sites || sites.length === 0) {
 		return null;
@@ -71,7 +86,12 @@ export function Sites({ user }: SitesProps) {
 			<Text className="text-muted-foreground px-4 pt-4 text-xs font-semibold tracking-wider uppercase">
 				{t('auth.your_sites', { _tags: 'core' })}
 			</Text>
-			<Accordion type="single" collapsible defaultValue={sites[0].uuid}>
+			<Accordion
+				type="single"
+				collapsible
+				value={expandedSiteUuid}
+				onValueChange={(value) => setExpandedSiteUuid(value ?? '')}
+			>
 				{sites.map((site, index) => (
 					<ErrorBoundary key={site.uuid}>
 						<AccordionSite user={user} site={site} isFirst={index === 0} />
