@@ -55,15 +55,44 @@ jest.mock('observable-hooks', () => ({
 	useObservableState: (value: unknown, fallback: unknown) => value ?? fallback,
 }));
 
-jest.mock('@wcpos/components/collapsible', () => ({
-	Collapsible: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-	CollapsibleTrigger: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => (
-		<button type="button" data-testid={testID}>
-			{children}
-		</button>
-	),
-	CollapsibleContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-}));
+jest.mock('@wcpos/components/collapsible', () => {
+	const React = jest.requireActual<typeof import('react')>('react');
+	type CollapsibleContextValue = {
+		open: boolean;
+		setOpen: React.Dispatch<React.SetStateAction<boolean>>;
+	};
+	const CollapsibleContext = React.createContext<CollapsibleContextValue | null>(null);
+
+	return {
+		Collapsible: ({ children }: { children?: React.ReactNode }) => {
+			const [open, setOpen] = React.useState(false);
+
+			return (
+				<CollapsibleContext.Provider value={{ open, setOpen }}>
+					<div>{children}</div>
+				</CollapsibleContext.Provider>
+			);
+		},
+		CollapsibleTrigger: ({ children, testID }: { children?: React.ReactNode; testID?: string }) => {
+			const context = React.useContext(CollapsibleContext);
+
+			return (
+				<button
+					type="button"
+					data-testid={testID}
+					onClick={() => context?.setOpen((value) => !value)}
+				>
+					{children}
+				</button>
+			);
+		},
+		CollapsibleContent: ({ children }: { children?: React.ReactNode }) => {
+			const context = React.useContext(CollapsibleContext);
+
+			return context?.open ? <div>{children}</div> : null;
+		},
+	};
+});
 
 jest.mock('@wcpos/components/progress', () => ({
 	Progress: ({ value, className }: { value?: number; className?: string }) => (
@@ -224,8 +253,11 @@ describe('PrintingSettings web network scan', () => {
 
 		render(<PrintingSettings />);
 
-		expect(screen.getByTestId('printing-scan-candidates-toggle')).toHaveTextContent('4');
+		const toggle = screen.getByTestId('printing-scan-candidates-toggle');
+		expect(toggle).toHaveTextContent('4');
 		expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+		expect(screen.queryByText(CANDIDATES.join(', '))).not.toBeInTheDocument();
+		fireEvent.click(toggle);
 		expect(screen.getByText(CANDIDATES.join(', '))).toBeInTheDocument();
 	});
 });
