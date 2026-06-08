@@ -8,6 +8,12 @@ import { Text, TextClassContext } from '../text';
 
 import type { SlottableTextProps } from '@rn-primitives/types';
 
+/**
+ * Native Value replaces the @rn-primitives/select re-export so SlottableTextProps
+ * can render through SelectPrimitive.useRootContext while preserving
+ * TextClassContext styling. Keep selected and placeholder behavior in parity
+ * with trigger.web.tsx.
+ */
 function Value({
 	asChild,
 	placeholder,
