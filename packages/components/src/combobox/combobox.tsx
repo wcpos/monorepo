@@ -12,6 +12,11 @@ import { Platform } from '@wcpos/utils/platform';
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 import { getDisplayLabel, isSelectedIn, toggleMultiValue } from '../lib/multi-select';
+import {
+	getNativeListHeight,
+	NATIVE_LIST_MAX_HEIGHT,
+	NATIVE_POPOVER_MAX_HEIGHT,
+} from '../lib/native-popover-sizing';
 import { defaultFilter } from './utils/filter';
 import { cn } from '../lib/utils';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
@@ -29,20 +34,6 @@ import type {
 	ComboboxValueProps,
 	Option,
 } from './types';
-
-const NATIVE_POPOVER_MAX_HEIGHT = 300;
-const NATIVE_POPOVER_VERTICAL_PADDING = 16;
-const NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN = 48;
-const NATIVE_LIST_MIN_ITEM_HEIGHT = 36;
-const NATIVE_LIST_MAX_HEIGHT =
-	NATIVE_POPOVER_MAX_HEIGHT -
-	NATIVE_POPOVER_VERTICAL_PADDING -
-	NATIVE_SEARCH_INPUT_HEIGHT_WITH_MARGIN;
-
-function getNativeListHeight(itemCount: number, estimatedItemSize: number) {
-	const itemHeight = Math.max(estimatedItemSize, NATIVE_LIST_MIN_ITEM_HEIGHT);
-	return Math.min(itemCount * itemHeight, NATIVE_LIST_MAX_HEIGHT);
-}
 
 const ComboboxRootContext = React.createContext<ComboboxRootContextType | null>(null);
 function useComboboxRootContext() {
