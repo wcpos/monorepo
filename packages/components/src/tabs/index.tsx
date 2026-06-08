@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, ScrollView } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 
 import * as Haptics from 'expo-haptics';
 import * as TabsPrimitive from '@rn-primitives/tabs';
@@ -8,22 +8,100 @@ import { withUniwind } from 'uniwind';
 import { HStack } from '../hstack';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../select';
 import { TextClassContext } from '../text';
 
 // Wrap ScrollView with uniwind to support className prop
 const StyledScrollView = withUniwind(ScrollView);
+const StyledView = withUniwind(View);
 
 const Tabs = TabsPrimitive.Root;
+
+type TabsListProps = TabsPrimitive.ListProps & {
+	asSelect?: boolean;
+};
+
+type TabsTriggerProps = TabsPrimitive.TriggerProps & {
+	label?: string;
+};
+
+function getTabsSelectOptions(children: React.ReactNode) {
+	return React.Children.toArray(children)
+		.filter(React.isValidElement)
+		.filter((child) => (child.props as TabsTriggerProps).value)
+		.map((child) => {
+			const props = child.props as TabsTriggerProps;
+			return {
+				value: String(props.value),
+				label: props.label ?? String(props.value),
+				disabled: props.disabled,
+			};
+		});
+}
+
+function TabsListAsSelect({ className, children, ...props }: TabsPrimitive.ListProps) {
+	const { value, onValueChange } = TabsPrimitive.useRootContext();
+	const options = React.useMemo(() => getTabsSelectOptions(children), [children]);
+	const selected = options.find((option) => option.value === value);
+
+	return (
+		<>
+			<StyledView className="w-full sm:hidden">
+				<Select
+					value={selected ? { value: selected.value, label: selected.label } : undefined}
+					onValueChange={(option) => {
+						if (option?.value) {
+							onValueChange(option.value);
+						}
+					}}
+				>
+					<SelectTrigger className="w-full">
+						<SelectValue placeholder={selected?.label ?? options[0]?.label ?? ''} />
+					</SelectTrigger>
+					<SelectContent matchWidth>
+						{options.map((option) => (
+							<SelectItem
+								key={option.value}
+								value={option.value}
+								label={option.label}
+								disabled={option.disabled}
+							/>
+						))}
+					</SelectContent>
+				</Select>
+			</StyledView>
+			<TabsPrimitive.List
+				className={cn(
+					'bg-muted hidden items-center justify-center rounded-md p-1 sm:inline-flex',
+					className
+				)}
+				{...props}
+			>
+				{children}
+			</TabsPrimitive.List>
+		</>
+	);
+}
 
 /**
  *
  */
-function TabsList({ className, ...props }: TabsPrimitive.ListProps) {
+function TabsList({ asSelect, className, children, ...props }: TabsListProps) {
+	if (asSelect) {
+		return (
+			<TabsListAsSelect className={className} {...props}>
+				{children}
+			</TabsListAsSelect>
+		);
+	}
+
 	return (
 		<TabsPrimitive.List
 			className={cn('bg-muted inline-flex items-center justify-center rounded-md p-1', className)}
 			{...props}
-		/>
+		>
+			{children}
+		</TabsPrimitive.List>
 	);
 }
 
@@ -190,7 +268,7 @@ function ScrollableTabsList({ className, children, ...props }: TabsPrimitive.Lis
 /**
  *
  */
-function TabsTrigger({ className, onPress, ...props }: TabsPrimitive.TriggerProps) {
+function TabsTrigger({ className, label: _label, onPress, ...props }: TabsTriggerProps) {
 	const { value } = TabsPrimitive.useRootContext();
 
 	const handlePress = React.useCallback(
