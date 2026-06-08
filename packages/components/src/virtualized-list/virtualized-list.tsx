@@ -31,6 +31,7 @@ function List<T>({
 	extraData,
 	getItemType,
 	ListFooterComponent,
+	renderScrollComponent,
 }: ListProps<T>) {
 	const flashRef = React.useRef<FlashListRef<T>>(null);
 
@@ -64,6 +65,8 @@ function List<T>({
 			<FlashList
 				ref={flashRef}
 				data={data}
+				{...(renderScrollComponent ? { renderScrollComponent, nestedScrollEnabled: true } : {})}
+				style={{ flex: 1 }}
 				renderItem={({ item, index, ...rest }) => {
 					const key = keyExtractor ? keyExtractor(item, index) : String(index);
 					return (

@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useControllableState } from '@rn-primitives/hooks';
 import * as PopoverPrimitive from '@rn-primitives/popover';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { ScrollView as GestureHandlerScrollView } from 'react-native-gesture-handler';
 import { Slot } from '@rn-primitives/slot';
 
 import { Platform } from '@wcpos/utils/platform';
@@ -11,6 +12,11 @@ import { Platform } from '@wcpos/utils/platform';
 import { Input } from '../input';
 import * as VirtualizedListPrimitive from '../virtualized-list';
 import { getDisplayLabel, isSelectedIn, toggleMultiValue } from '../lib/multi-select';
+import {
+	getNativeListHeight,
+	NATIVE_LIST_MAX_HEIGHT,
+	NATIVE_POPOVER_MAX_HEIGHT,
+} from '../lib/native-popover-sizing';
 import { defaultFilter } from './utils/filter';
 import { cn } from '../lib/utils';
 import { useArrowKeyNavigation } from '../lib/use-arrow-key-navigation';
@@ -144,9 +150,18 @@ function ComboboxContent({
 	sideOffset = 4,
 	portalHost,
 	children,
+	style,
 	...props
 }: PopoverPrimitive.ContentProps & { portalHost?: string }) {
 	const context = useComboboxRootContext();
+	const isNative = Platform.OS !== 'web';
+	const contentStyle = React.useMemo(() => {
+		if (!isNative) return style;
+		return {
+			...StyleSheet.flatten(style),
+			maxHeight: NATIVE_POPOVER_MAX_HEIGHT,
+		};
+	}, [isNative, style]);
 
 	// Enable arrow key navigation when combobox is open
 	useArrowKeyNavigation();
@@ -159,6 +174,7 @@ function ComboboxContent({
 						<PopoverPrimitive.Content
 							align={align}
 							sideOffset={sideOffset}
+							style={contentStyle}
 							className={cn(
 								'border-border bg-popover web:data-[side=bottom]:slide-in-from-top-2 web:data-[side=left]:slide-in-from-right-2 web:data-[side=right]:slide-in-from-left-2 web:data-[side=top]:slide-in-from-bottom-2 web:animate-in web:zoom-in-95 web:fade-in-0 web:cursor-auto web:outline-none z-50 max-h-[300px] w-72 rounded-md border p-2 shadow-md',
 								className
@@ -235,9 +251,12 @@ function ComboboxList({
 	estimatedItemSize,
 	shouldFilter = true,
 	filter = defaultFilter,
+	ListEmptyComponent,
 	...restVirtualizedListProps
 }: ComboboxListProps<Option>) {
 	const { filterValue } = useComboboxRootContext();
+	const isNative = Platform.OS !== 'web';
+	const isAndroid = Platform.OS === 'android';
 
 	const filteredData = React.useMemo(() => {
 		if (!shouldFilter || !filterValue) {
@@ -246,6 +265,32 @@ function ComboboxList({
 		const dataToFilter = data ? [...data] : [];
 		return filter(dataToFilter, filterValue);
 	}, [data, filterValue, shouldFilter, filter]);
+
+	if (isNative) {
+		const itemCountForHeight =
+			filteredData.length === 0 && ListEmptyComponent ? 1 : filteredData.length;
+		if (itemCountForHeight === 0) return null;
+		const listHeight = getNativeListHeight(itemCountForHeight, estimatedItemSize);
+		return (
+			<View
+				style={{
+					height: listHeight,
+					maxHeight: NATIVE_LIST_MAX_HEIGHT,
+				}}
+			>
+				<VirtualizedListPrimitive.Root className="flex-1">
+					<VirtualizedListPrimitive.List
+						data={filteredData}
+						estimatedItemSize={estimatedItemSize}
+						parentProps={{ style: { height: '100%' } }}
+						renderScrollComponent={isAndroid ? GestureHandlerScrollView : undefined}
+						ListEmptyComponent={ListEmptyComponent}
+						{...restVirtualizedListProps}
+					/>
+				</VirtualizedListPrimitive.Root>
+			</View>
+		);
+	}
 
 	return (
 		<VirtualizedListPrimitive.Root className="flex-1">

@@ -1,5 +1,7 @@
 /* eslint-disable import/first, @typescript-eslint/no-require-imports */
 const mockPendingTransitions: (() => void)[] = [];
+const mockPlatform = { OS: 'ios' };
+const mockGestureHandlerScrollView = jest.fn();
 
 jest.mock('react', () => {
 	const actual = jest.requireActual('react');
@@ -16,10 +18,14 @@ import { TreeCombobox, TreeComboboxContent, TreeComboboxTrigger } from './tree-c
 jest.mock(
 	'@wcpos/utils/platform',
 	() => ({
-		Platform: { OS: 'ios' },
+		Platform: mockPlatform,
 	}),
 	{ virtual: true }
 );
+
+jest.mock('react-native-gesture-handler', () => ({
+	ScrollView: mockGestureHandlerScrollView,
+}));
 
 jest.mock('react-native-reanimated', () => ({
 	__esModule: true,
@@ -72,8 +78,12 @@ jest.mock('../virtualized-list', () => ({
 			{children}
 		</div>
 	),
-	List: ({ data, renderItem, parentProps }: any) => (
-		<div data-testid="tree-combobox-list-parent" style={parentProps?.style}>
+	List: ({ data, renderItem, parentProps, renderScrollComponent }: any) => (
+		<div
+			data-testid="tree-combobox-list-parent"
+			data-uses-gesture-scroll-view={String(renderScrollComponent === mockGestureHandlerScrollView)}
+			style={parentProps?.style}
+		>
 			{data.map((item: any, index: number) => (
 				<div key={item.value}>{renderItem({ item, index })}</div>
 			))}
@@ -102,6 +112,7 @@ jest.mock('../lib/use-arrow-key-navigation', () => ({
 describe('TreeCombobox native content', () => {
 	beforeEach(() => {
 		mockPendingTransitions.length = 0;
+		mockPlatform.OS = 'ios';
 	});
 
 	it('keeps typed search text immediately visible while tree filtering is deferred', () => {
@@ -119,7 +130,7 @@ describe('TreeCombobox native content', () => {
 		expect(mockPendingTransitions).toHaveLength(1);
 	});
 
-	it('bounds the native virtualized list without sizing it from estimated item height', () => {
+	it('caps the native virtualized list height for long lists', () => {
 		const options = Array.from({ length: 20 }, (_, index) => ({
 			value: String(index),
 			label: `Category ${index}`,
@@ -134,13 +145,29 @@ describe('TreeCombobox native content', () => {
 
 		const listRoot = screen.getByTestId('tree-combobox-list-root');
 
+		expect(listRoot.parentElement).toHaveStyle({ height: '236px' });
 		expect(listRoot.parentElement).toHaveStyle({ maxHeight: '236px' });
-		expect(listRoot.parentElement).not.toHaveStyle({ height: '236px' });
 		expect(listRoot).toHaveStyle({ flex: '1' });
 		expect(screen.getByTestId('tree-combobox-list-parent')).toHaveStyle({ height: '100%' });
 	});
 
-	it('does not clip short native lists by treating the item estimate as exact content height', () => {
+	it('uses the gesture-handler scroll view for Android popover lists', () => {
+		mockPlatform.OS = 'android';
+
+		render(
+			<TreeCombobox options={[{ value: '1', label: 'Category 1' }]} defaultExpanded="all">
+				<TreeComboboxTrigger>Open</TreeComboboxTrigger>
+				<TreeComboboxContent searchPlaceholder="Search categories" estimatedItemSize={36} />
+			</TreeCombobox>
+		);
+
+		expect(screen.getByTestId('tree-combobox-list-parent')).toHaveAttribute(
+			'data-uses-gesture-scroll-view',
+			'true'
+		);
+	});
+
+	it('shrinks the native virtualized list height for short lists', () => {
 		render(
 			<TreeCombobox
 				options={[
@@ -156,7 +183,7 @@ describe('TreeCombobox native content', () => {
 
 		const listRoot = screen.getByTestId('tree-combobox-list-root');
 
+		expect(listRoot.parentElement).toHaveStyle({ height: '72px' });
 		expect(listRoot.parentElement).toHaveStyle({ maxHeight: '236px' });
-		expect(listRoot.parentElement).not.toHaveStyle({ height: '48px' });
 	});
 });

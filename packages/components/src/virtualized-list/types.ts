@@ -67,6 +67,9 @@ type ListProps<T> = {
 
 	/** Footer component */
 	ListFooterComponent?: FlashListProps<T>['ListFooterComponent'];
+
+	/** Optional custom native scroll component passed through to FlashList. */
+	renderScrollComponent?: FlashListProps<T>['renderScrollComponent'];
 };
 
 type ItemProps<T> = ViewProps & {
