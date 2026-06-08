@@ -109,6 +109,7 @@ function SelectMultiValue({
 	...props
 }: SelectValueProps) {
 	const { value } = useMultiSelectContext();
+	const textClass = React.useContext(TextClassContext);
 	const Component = asChild ? Slot : Text;
 
 	const displayText = React.useMemo(() => {
@@ -120,7 +121,7 @@ function SelectMultiValue({
 
 	return (
 		<TextClassContext.Provider
-			value={cn('text-sm', hasValue ? 'text-foreground' : 'text-muted-foreground', className)}
+			value={cn(textClass, 'text-sm', !hasValue && 'text-muted-foreground', className)}
 		>
 			<Component {...props}>{displayText}</Component>
 		</TextClassContext.Provider>

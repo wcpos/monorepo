@@ -50,32 +50,35 @@ export function NetworkFields({
 	return (
 		<VStack className="gap-1">
 			<HStack className="items-start gap-3">
-				<FormField
-					control={form.control}
-					name="address"
-					render={({ field }) => (
-						<FormInput
-							testID="add-printer-ip-input"
-							label={t('settings.printer_address', 'IP Address')}
-							placeholder="192.168.1.100"
-							{...field}
-						/>
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="port"
-					render={({ field: { value, ...rest } }) => (
-						<FormInput
-							testID="add-printer-port-input"
-							label={t('settings.printer_port', 'Port')}
-							type="numeric"
-							value={value != null ? String(value) : undefined}
-							className="w-24"
-							{...rest}
-						/>
-					)}
-				/>
+				<VStack className="min-w-0 flex-1">
+					<FormField
+						control={form.control}
+						name="address"
+						render={({ field }) => (
+							<FormInput
+								testID="add-printer-ip-input"
+								label={t('settings.printer_address', 'IP Address')}
+								placeholder="192.168.1.100"
+								{...field}
+							/>
+						)}
+					/>
+				</VStack>
+				<VStack className="w-24 shrink-0">
+					<FormField
+						control={form.control}
+						name="port"
+						render={({ field: { value, ...rest } }) => (
+							<FormInput
+								testID="add-printer-port-input"
+								label={t('settings.printer_port', 'Port')}
+								type="numeric"
+								value={value != null ? String(value) : undefined}
+								{...rest}
+							/>
+						)}
+					/>
+				</VStack>
 			</HStack>
 			{probing && (
 				<Text className="text-muted-foreground text-xs">
