@@ -39,7 +39,10 @@ function normalizeVendor(
 	if (vendor !== 'epson' && vendor !== 'star' && vendor !== 'generic') {
 		return fallback;
 	}
-	return fallback === 'generic' || vendor !== 'generic' ? vendor : fallback;
+	if (vendor === 'generic' && fallback !== 'generic') {
+		return fallback;
+	}
+	return vendor;
 }
 
 interface UsePrinterDialogFormArgs {
