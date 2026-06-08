@@ -58,11 +58,12 @@ export function SettingsScreen() {
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>
-						<TabsList className="w-full flex-row">
+						<TabsList asSelect className="w-full flex-row">
 							{tabs.map((tab) => (
 								<TabsTrigger
 									key={tab.value}
 									value={tab.value}
+									label={tab.label}
 									testID={`settings-tab-${tab.value}`}
 									className="flex-1"
 								>
