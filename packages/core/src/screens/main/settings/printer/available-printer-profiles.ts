@@ -17,7 +17,13 @@ export interface CloudPrinterPayload {
 
 export type CloudPrintResponse =
 	| CloudPrinterPayload[]
-	| { printers?: CloudPrinterPayload[] | CloudPrinterPayload | null };
+	| {
+			printers?:
+				| CloudPrinterPayload[]
+				| CloudPrinterPayload
+				| Record<string, CloudPrinterPayload>
+				| null;
+	  };
 
 const SYSTEM_PRINTER: PrinterProfile = {
 	id: 'system',
@@ -36,11 +42,28 @@ const SYSTEM_PRINTER: PrinterProfile = {
 };
 const LEGACY_SYSTEM_PRINTER_ID = '__system__';
 
+function isCloudPrinterPayload(value: unknown): value is CloudPrinterPayload {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function normalizeCloudPayload(payload: CloudPrintResponse | null): CloudPrinterPayload[] {
 	if (!payload) return [];
 	if (Array.isArray(payload)) return payload;
 	if (!payload.printers) return [];
-	return Array.isArray(payload.printers) ? payload.printers : [payload.printers];
+	if (Array.isArray(payload.printers)) return payload.printers;
+	const printers = payload.printers;
+	const printerId = printers.cloudPrinterId ?? printers.id ?? printers.printer_id;
+	if (typeof printerId === 'string' && printerId.length > 0) {
+		return [printers];
+	}
+	const printerEntries = Object.entries(printers);
+	if (printerEntries.every(([, printer]) => isCloudPrinterPayload(printer))) {
+		return printerEntries.map(([key, printer]) => ({
+			...printer,
+			printer_id: printer.printer_id ?? printer.id ?? printer.cloudPrinterId ?? key,
+		}));
+	}
+	return Object.values(printers);
 }
 
 function synthesizeCloudPrinter(payload: CloudPrinterPayload): PrinterProfile | null {
