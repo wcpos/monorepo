@@ -33,6 +33,29 @@ describe('templateTypeLabel', () => {
 });
 
 describe('printing settings copy', () => {
+	it('has bundled source translations for every Printing settings key', () => {
+		const files = ['index.tsx', 'printer-row.tsx', 'printers-empty-state.tsx', 'template-row.tsx'];
+		const sourceCatalog = JSON.parse(
+			readFileSync(
+				join(__dirname, '../../../../contexts/translations/locales/en/core.json'),
+				'utf8'
+			)
+		) as Record<string, string>;
+		const keys = new Set<string>();
+
+		for (const file of files) {
+			const source = readFileSync(join(__dirname, file), 'utf8');
+
+			for (const match of source.matchAll(/\bt\(\s*['"]([^'"]+)['"]/g)) {
+				keys.add(match[1]);
+			}
+		}
+
+		const missingKeys = [...keys].filter((key) => !(key in sourceCatalog));
+
+		expect(missingKeys).toEqual([]);
+	});
+
 	it('uses Print Dialog consistently for the built-in system printer', () => {
 		const files = ['index.tsx', 'printer-row.tsx', 'printers-empty-state.tsx'];
 

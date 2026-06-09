@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-env node */
 
 /**
  * Extract translatable strings from the WCPOS monorepo.
@@ -17,7 +18,9 @@ const fs = require('fs').promises;
 const path = require('path');
 const { glob } = require('glob');
 
-const MONOREPO_PATH = process.argv[2] || path.resolve(__dirname, '..');
+const args = process.argv.slice(2);
+const CHECK_MODE = args.includes('--check');
+const MONOREPO_PATH = args.find((arg) => !arg.startsWith('--')) || path.resolve(__dirname, '..');
 const OUTPUT_DIR = path.resolve(MONOREPO_PATH, '.translations');
 
 // Locale files that contain the English strings for each namespace
@@ -26,8 +29,10 @@ const LOCALE_FILES = {
   core: path.resolve(MONOREPO_PATH, 'packages/core/src/contexts/translations/locales/en/core.json'),
 };
 
-// Match t('string') or t("string") with optional second argument
-const T_CALL_REGEX = /\bt\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*?)\1\s*(?:,\s*\{([^}]*)\})?\s*\)/g;
+// Match the first argument from t('string'), t("string"), or t(`string`).
+// The remaining arguments may be a fallback string or an options object; they
+// are irrelevant for source-catalog coverage.
+const T_CALL_REGEX = /\bt\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*?)\1/g;
 const CONTEXT_REGEX = /_context:\s*['"`]([^'"`]+)['"`]/;
 
 /**
@@ -49,14 +54,17 @@ async function extractFromFile(filePath) {
   T_CALL_REGEX.lastIndex = 0;
   while ((match = T_CALL_REGEX.exec(content)) !== null) {
     const sourceString = match[2];
-    const options = match[3] || '';
+    const closeIndex = content.indexOf(')', T_CALL_REGEX.lastIndex);
+    const options = closeIndex === -1 ? '' : content.slice(T_CALL_REGEX.lastIndex, closeIndex);
 
     const contextMatch = options.match(CONTEXT_REGEX);
     const context = contextMatch ? contextMatch[1] : undefined;
     const namespace = getNamespace(filePath);
     const key = context ? `${sourceString}_${context}` : sourceString;
 
-    strings.push({ key, namespace });
+    if (!key.includes('${')) {
+      strings.push({ key, namespace });
+    }
   }
 
   return strings;
@@ -93,6 +101,8 @@ async function main() {
     '**/dist/**',
     '**/build/**',
     '**/web-build/**',
+    'apps/electron/**',
+    'apps/web/**',
     '**/*.d.ts',
     '**/*.test.*',
     '**/*.spec.*',
@@ -124,8 +134,10 @@ async function main() {
 
   // Build output: look up English value for each extracted key
   let warnings = 0;
-  try { await fs.rmdir(OUTPUT_DIR, { recursive: true }); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-  await fs.mkdir(OUTPUT_DIR, { recursive: true });
+  if (!CHECK_MODE) {
+    try { await fs.rmdir(OUTPUT_DIR, { recursive: true }); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+    await fs.mkdir(OUTPUT_DIR, { recursive: true });
+  }
 
   for (const [ns, keys] of Object.entries(byNamespace)) {
     const locale = locales[ns] || {};
@@ -150,14 +162,25 @@ async function main() {
       }
     }
 
-    const outputPath = path.join(OUTPUT_DIR, `${ns}.json`);
-    await fs.writeFile(outputPath, JSON.stringify(output, null, '\t') + '\n');
+    if (!CHECK_MODE) {
+      const outputPath = path.join(OUTPUT_DIR, `${ns}.json`);
+      await fs.writeFile(outputPath, JSON.stringify(output, null, '\t') + '\n');
 
-    console.log(`  ${ns}: ${Object.keys(output).length} strings -> ${outputPath}`);
+      console.log(`  ${ns}: ${Object.keys(output).length} strings -> ${outputPath}`);
+    } else {
+      console.log(`  ${ns}: checked ${keys.size} key(s)`);
+    }
   }
 
   if (warnings > 0) {
     console.warn(`\n${warnings} key(s) missing from English locale files.`);
+    if (CHECK_MODE) {
+      process.exit(1);
+    }
+  }
+
+  if (CHECK_MODE) {
+    console.log('\nTranslation source strings are complete.');
   }
 
   console.log('\nDone.');
