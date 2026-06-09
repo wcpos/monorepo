@@ -113,6 +113,24 @@ describe('SyncStateManager', () => {
 		expect(sync.find((doc) => doc.id === 2)?.status).toBe('SYNCED');
 	});
 
+	it('processes a full audit - treats UTC suffix and bare GMT as the same instant', async () => {
+		await storeDB.collections.products.bulkInsert([
+			{ id: 1, date_modified_gmt: '2026-06-09T16:40:55Z' },
+		]);
+
+		await syncDB.collections.products.bulkInsert([
+			{ id: 1, endpoint: 'products', status: 'SYNCED' },
+		]);
+
+		const serverState = [{ id: 1, date_modified_gmt: '2026-06-09T16:40:55' }];
+
+		await syncStateManager.processFullAudit(serverState);
+
+		const sync = await syncDB.collections.products.find().exec();
+		expect(sync).toHaveLength(1);
+		expect(sync.find((doc) => doc.id === 1)?.status).toBe('SYNCED');
+	});
+
 	it('processes a full audit - ignores records created locally', async () => {
 		await storeDB.collections.products.bulkInsert([
 			{ id: 1, date_modified_gmt: '2024-10-17T17:54:59' },
@@ -150,6 +168,24 @@ describe('SyncStateManager', () => {
 		expect(sync).toHaveLength(2);
 		expect(sync.find((doc) => doc.id === 1)?.status).toBe('PULL_UPDATE');
 		expect(sync.find((doc) => doc.id === 2)?.status).toBe('SYNCED');
+	});
+
+	it('processes modified after - compares UTC suffix and bare GMT by timestamp', async () => {
+		await storeDB.collections.products.bulkInsert([
+			{ id: 1, date_modified_gmt: '2026-06-09T16:40:55Z' },
+		]);
+
+		await syncDB.collections.products.bulkInsert([
+			{ id: 1, endpoint: 'products', status: 'SYNCED' },
+		]);
+
+		const serverState = [{ id: 1, date_modified_gmt: '2026-06-09T16:40:55' }];
+
+		await syncStateManager.processModifiedAfter(serverState);
+
+		const sync = await syncDB.collections.products.find().exec();
+		expect(sync).toHaveLength(1);
+		expect(sync.find((doc) => doc.id === 1)?.status).toBe('SYNCED');
 	});
 
 	it('processes modified after - detects new items', async () => {
@@ -255,5 +291,33 @@ describe('SyncStateManager', () => {
 				}),
 			})
 		);
+	});
+
+	it('processes server response - accepts same instant with UTC suffix locally and bare GMT remotely', async () => {
+		await storeDB.collections.products.insert({
+			uuid: 'product-15',
+			id: 15,
+			name: 'PFM Crown',
+			stock_quantity: 21,
+			date_modified_gmt: '2026-06-09T16:40:55Z',
+		});
+
+		const result = await syncStateManager.processServerResponse([
+			{
+				uuid: 'product-15',
+				id: 15,
+				name: 'PFM Crown',
+				stock_quantity: 22,
+				date_modified_gmt: '2026-06-09T16:40:55',
+			},
+		]);
+
+		expect(result?.success).toHaveLength(1);
+
+		const product = await storeDB.collections.products.findOne({ selector: { id: 15 } }).exec();
+		expect(product?.stock_quantity).toBe(22);
+
+		const sync = await syncDB.collections.products.find().exec();
+		expect(sync.find((doc) => doc.id === 15)?.status).toBe('SYNCED');
 	});
 });

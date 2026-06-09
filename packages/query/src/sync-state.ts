@@ -13,6 +13,23 @@ interface ServerRecord {
 	date_modified_gmt: string;
 }
 
+const TIMEZONE_SUFFIX = /(?:Z|[+-]\d{2}:\d{2})$/i;
+
+function getDateModifiedGmtTimestamp(value: unknown): number {
+	if (typeof value !== 'string' || value === '') {
+		return 0;
+	}
+
+	const normalizedValue = TIMEZONE_SUFFIX.test(value) ? value : `${value}Z`;
+	const timestamp = Date.parse(normalizedValue);
+
+	return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function compareDateModifiedGmt(left: unknown, right: unknown): number {
+	return getDateModifiedGmtTimestamp(left) - getDateModifiedGmtTimestamp(right);
+}
+
 interface SyncStateManagerOptions {
 	collection: RxCollection;
 	syncCollection: SyncCollection;
@@ -139,24 +156,31 @@ export class SyncStateManager {
 					} else {
 						// debugger;
 					}
-				} else if (remoteDoc.date_modified_gmt > localDateModified) {
-					updates.push({
-						id: localId,
-						endpoint: this.endpoint,
-						status: 'PULL_UPDATE',
-					});
-				} else if (remoteDoc.date_modified_gmt < localDateModified) {
-					updates.push({
-						id: localId,
-						endpoint: this.endpoint,
-						status: 'PUSH_UPDATE',
-					});
 				} else {
-					updates.push({
-						id: localId,
-						endpoint: this.endpoint,
-						status: 'SYNCED',
-					});
+					const dateCompare = compareDateModifiedGmt(
+						remoteDoc.date_modified_gmt,
+						localDateModified
+					);
+
+					if (dateCompare > 0) {
+						updates.push({
+							id: localId,
+							endpoint: this.endpoint,
+							status: 'PULL_UPDATE',
+						});
+					} else if (dateCompare < 0) {
+						updates.push({
+							id: localId,
+							endpoint: this.endpoint,
+							status: 'PUSH_UPDATE',
+						});
+					} else {
+						updates.push({
+							id: localId,
+							endpoint: this.endpoint,
+							status: 'SYNCED',
+						});
+					}
 				}
 			}
 
@@ -239,7 +263,10 @@ export class SyncStateManager {
 			const remoteDoc = serverStateMap.get(localId);
 			processedIds.add(localId);
 
-			if (remoteDoc && remoteDoc.date_modified_gmt > (localDoc.date_modified_gmt as string)) {
+			if (
+				remoteDoc &&
+				compareDateModifiedGmt(remoteDoc.date_modified_gmt, localDoc.date_modified_gmt) > 0
+			) {
 				updates.push({
 					id: localId,
 					endpoint: this.endpoint,
@@ -306,7 +333,10 @@ export class SyncStateManager {
 
 		for (const [, localDoc] of localDocs) {
 			const remoteDoc = responseMap.get((localDoc as any)[primaryPath]);
-			if (remoteDoc && remoteDoc.date_modified_gmt < (localDoc as any).date_modified_gmt) {
+			if (
+				remoteDoc &&
+				compareDateModifiedGmt(remoteDoc.date_modified_gmt, (localDoc as any).date_modified_gmt) < 0
+			) {
 				skipped.push(remoteDoc);
 				responseMap.delete((localDoc as any)[primaryPath]);
 			}

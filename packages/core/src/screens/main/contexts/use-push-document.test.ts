@@ -22,7 +22,7 @@ jest.mock('../hooks/use-rest-http-client', () => ({
 
 describe('usePushDocument', () => {
 	beforeEach(() => {
-		jest.clearAllMocks();
+		jest.resetAllMocks();
 	});
 
 	it('sends line item images to the server unchanged', async () => {
@@ -58,19 +58,11 @@ describe('usePushDocument', () => {
 		expect(mockPost).toHaveBeenCalledWith('orders/123', json);
 	});
 
-	it('sends order GMT dates as ISO UTC strings', async () => {
+	it('sends order GMT dates to the server unchanged', async () => {
 		const json = {
 			date_created_gmt: '2026-05-07T15:53:05',
 			date_modified_gmt: '2026-05-07T15:54:05',
-			date_completed_gmt: '2026-05-07T15:53:05+02:00',
-			date_paid_gmt: '2026-05-07T15:55:05Z',
 			line_items: [],
-		};
-		const normalizedJson = {
-			...json,
-			date_created_gmt: '2026-05-07T15:53:05Z',
-			date_modified_gmt: '2026-05-07T15:54:05Z',
-			date_completed_gmt: '2026-05-07T13:53:05.000Z',
 		};
 		const incrementalPatch = jest.fn(async (data: unknown) => data);
 		const latestDoc = {
@@ -86,7 +78,7 @@ describe('usePushDocument', () => {
 			getLatest: () => latestDoc,
 		};
 
-		mockPost.mockResolvedValueOnce({ data: normalizedJson });
+		mockPost.mockResolvedValueOnce({ data: json });
 
 		const { result } = renderHook(() => usePushDocument());
 
@@ -94,8 +86,53 @@ describe('usePushDocument', () => {
 			await result.current(doc as never);
 		});
 
-		expect(mockPost).toHaveBeenCalledWith('orders', normalizedJson);
-		expect(incrementalPatch).toHaveBeenCalledWith(normalizedJson);
+		expect(mockPost).toHaveBeenCalledWith('orders', json);
+		expect(incrementalPatch).toHaveBeenCalledWith(json);
+	});
+
+	it('retries order creation with a UTC suffix for older server date_created_gmt validators', async () => {
+		const json = {
+			date_created_gmt: '2026-05-07T15:53:05',
+			date_modified_gmt: '2026-05-07T15:54:05',
+			line_items: [],
+		};
+		const legacyJson = {
+			...json,
+			date_created_gmt: '2026-05-07T15:53:05Z',
+		};
+		const incrementalPatch = jest.fn(async (data: unknown) => data);
+		const latestDoc = {
+			collection: {
+				name: 'orders',
+				parseRestResponse: jest.fn((data) => data),
+			},
+			toJSON: () => json,
+			incrementalPatch,
+		};
+		const doc = {
+			collection: latestDoc.collection,
+			getLatest: () => latestDoc,
+		};
+		const legacyDateError = {
+			response: {
+				data: {
+					code: 'woocommerce_pos_rest_invalid_date_created_gmt',
+					message: 'date_created_gmt must be a valid ISO 8601 UTC date.',
+				},
+			},
+		};
+
+		mockPost.mockRejectedValueOnce(legacyDateError).mockResolvedValueOnce({ data: legacyJson });
+
+		const { result } = renderHook(() => usePushDocument());
+
+		await act(async () => {
+			await result.current(doc as never);
+		});
+
+		expect(mockPost).toHaveBeenNthCalledWith(1, 'orders', json);
+		expect(mockPost).toHaveBeenNthCalledWith(2, 'orders', legacyJson);
+		expect(incrementalPatch).toHaveBeenCalledWith(legacyJson);
 	});
 
 	it('reconciles local line item images with the server-populated response', async () => {

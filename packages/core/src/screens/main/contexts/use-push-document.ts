@@ -27,6 +27,9 @@ const DELETION_FIELDS: Record<string, string> = {
 	coupon_lines: 'code',
 };
 
+const LEGACY_ORDER_DATE_CREATED_GMT_ERROR = 'woocommerce_pos_rest_invalid_date_created_gmt';
+const TIMEZONE_SUFFIX = /(?:Z|[+-]\d{2}:\d{2})$/i;
+
 /**
  * Strip items with null deletion markers from order JSON before retrying
  * a push that failed because of stale item IDs.
@@ -44,40 +47,16 @@ function stripDeletionMarkers(json: Record<string, any>): Record<string, any> {
 	return cleaned;
 }
 
-const ORDER_GMT_FIELDS = [
-	'date_created_gmt',
-	'date_modified_gmt',
-	'date_completed_gmt',
-	'date_paid_gmt',
-] as const;
-
-const TIMEZONE_OFFSET_SUFFIX = /[+-]\d{2}:\d{2}$/;
-
-function normalizeOrderGmtDateValue(value: string): string {
-	if (value.endsWith('Z')) return value;
-
-	if (TIMEZONE_OFFSET_SUFFIX.test(value)) {
-		const timestamp = Date.parse(value);
-		if (!Number.isNaN(timestamp)) {
-			return new Date(timestamp).toISOString();
-		}
+function withLegacyOrderDateCreatedGmt(json: Record<string, any>): Record<string, any> | undefined {
+	const value = json.date_created_gmt;
+	if (typeof value !== 'string' || value === '' || TIMEZONE_SUFFIX.test(value)) {
+		return undefined;
 	}
 
-	return `${value}Z`;
-}
-
-function normalizeOrderGmtDates(json: Record<string, any>): Record<string, any> {
-	let result = json;
-	for (const field of ORDER_GMT_FIELDS) {
-		const value = result[field];
-		if (typeof value === 'string' && value !== '') {
-			const normalizedValue = normalizeOrderGmtDateValue(value);
-			if (normalizedValue !== value) {
-				result = { ...result, [field]: normalizedValue };
-			}
-		}
-	}
-	return result;
+	return {
+		...json,
+		date_created_gmt: `${value}Z`,
+	};
 }
 
 type AnyRxDocument = import('rxdb').RxDocument<any>;
@@ -223,10 +202,7 @@ export const usePushDocument = () => {
 			}
 
 			// Prepare data from local DB
-			let { json, latestDoc } = await prepareDocumentData(doc);
-			if (collection.name === 'orders') {
-				json = normalizeOrderGmtDates(json);
-			}
+			const { json, latestDoc } = await prepareDocumentData(doc);
 
 			// Add document ID to endpoint if it exists
 			if (latestDoc.id) {
@@ -245,7 +221,24 @@ export const usePushDocument = () => {
 				});
 			} catch (err: any) {
 				const errorCode = extractWpErrorCode(err?.response?.data);
-				if (errorCode === 'woocommerce_rest_invalid_order_item_id') {
+				const legacyOrderDateJson =
+					collection.name === 'orders' && !latestDoc.id
+						? withLegacyOrderDateCreatedGmt(json)
+						: undefined;
+
+				if (errorCode === LEGACY_ORDER_DATE_CREATED_GMT_ERROR && legacyOrderDateJson) {
+					syncLogger.warn(
+						'Legacy order date_created_gmt validator detected, retrying with UTC suffix',
+						{
+							context: { endpoint },
+						}
+					);
+					serverData = await sendToServer(
+						endpoint,
+						legacyOrderDateJson,
+						latestDoc.id as number | string
+					);
+				} else if (errorCode === 'woocommerce_rest_invalid_order_item_id') {
 					syncLogger.warn('Stale deletion markers detected, retrying without them', {
 						context: { documentId: latestDoc.id, endpoint },
 					});
