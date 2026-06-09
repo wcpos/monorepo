@@ -25,6 +25,7 @@ const cloudProfile: PrinterProfile = {
 };
 
 const enqueue = jest.fn().mockResolvedValue(undefined);
+const httpPost = jest.fn().mockResolvedValue({ data: {} });
 
 jest.mock('react-native', () => ({
 	View: ({
@@ -217,25 +218,26 @@ jest.mock('../../hooks/use-cloud-enqueue', () => ({
 }));
 
 jest.mock('../../hooks/use-rest-http-client', () => ({
-	useRestHttpClient: () => ({ post: jest.fn() }),
+	useRestHttpClient: () => ({ post: httpPost }),
 }));
 
 describe('PrintingSettings cloud printers', () => {
 	beforeEach(() => {
 		enqueue.mockClear();
+		httpPost.mockClear();
 	});
 
-	it('uses the cloud enqueue factory when testing a saved cloud printer', async () => {
+	it('uses the server diagnostic endpoint when testing a cloud printer', async () => {
 		render(<PrintingSettings />);
 
 		fireEvent.click(screen.getByTestId('printer-row-cloud:reg-7-test'));
 
 		await waitFor(() =>
-			expect(enqueue).toHaveBeenCalledWith(
-				'reg-7',
-				expect.objectContaining({ contentType: 'application/octet-stream' })
-			)
+			expect(httpPost).toHaveBeenCalledWith('/print-jobs/test', {
+				printer_id: 'reg-7',
+			})
 		);
+		expect(enqueue).not.toHaveBeenCalled();
 	});
 
 	it('does not offer a local default action for synthesized cloud printers', () => {

@@ -148,7 +148,14 @@ export function PrintingSettings() {
 		async (profile: PrinterProfile) => {
 			setTestingPrinterIds((prev) => new Set(prev).add(profile.id));
 			try {
-				await printerService.testPrint(profile);
+				if (profile.connectionType === 'cloud') {
+					if (!profile.cloudPrinterId) {
+						throw new Error('Cloud printer profile is missing a cloudPrinterId');
+					}
+					await cloudHttp.post('/print-jobs/test', { printer_id: profile.cloudPrinterId });
+				} else {
+					await printerService.testPrint(profile);
+				}
 				Toast.show({
 					title: t('settings.test_print_sent', 'Test print sent to %s').replace('%s', profile.name),
 					type: 'success',
@@ -167,7 +174,7 @@ export function PrintingSettings() {
 				});
 			}
 		},
-		[printerService, t]
+		[cloudHttp, printerService, t]
 	);
 
 	const openAddDialog = React.useCallback(() => {
