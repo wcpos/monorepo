@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* eslint-env node */
+/* global __dirname */
 
 /**
  * Extract translatable strings from the WCPOS monorepo.
@@ -16,6 +16,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
+
 const { glob } = require('glob');
 
 const args = process.argv.slice(2);
@@ -26,7 +27,7 @@ const OUTPUT_DIR = path.resolve(MONOREPO_PATH, '.translations');
 // Locale files that contain the English strings for each namespace
 // (electron is a separate repo with its own workflow)
 const LOCALE_FILES = {
-  core: path.resolve(MONOREPO_PATH, 'packages/core/src/contexts/translations/locales/en/core.json'),
+	core: path.resolve(MONOREPO_PATH, 'packages/core/src/contexts/translations/locales/en/core.json'),
 };
 
 // Match the first argument from t('string'), t("string"), or t(`string`).
@@ -35,158 +36,212 @@ const LOCALE_FILES = {
 const T_CALL_REGEX = /\bt\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*?)\1/g;
 const CONTEXT_REGEX = /_context:\s*['"`]([^'"`]+)['"`]/;
 
+function stripComments(content) {
+	let result = '';
+	let quote = null;
+	let escaped = false;
+
+	for (let i = 0; i < content.length; i++) {
+		const char = content[i];
+		const next = content[i + 1];
+
+		if (quote) {
+			result += char;
+			if (escaped) {
+				escaped = false;
+			} else if (char === '\\') {
+				escaped = true;
+			} else if (char === quote) {
+				quote = null;
+			}
+			continue;
+		}
+
+		if (char === '"' || char === "'" || char === '`') {
+			quote = char;
+			result += char;
+			continue;
+		}
+
+		if (char === '/' && next === '/') {
+			while (i < content.length && content[i] !== '\n') {
+				i++;
+			}
+			result += '\n';
+			continue;
+		}
+
+		if (char === '/' && next === '*') {
+			i += 2;
+			while (i < content.length && !(content[i] === '*' && content[i + 1] === '/')) {
+				if (content[i] === '\n') {
+					result += '\n';
+				}
+				i++;
+			}
+			i++;
+			continue;
+		}
+
+		result += char;
+	}
+
+	return result;
+}
+
 /**
  * Determine the i18next namespace from the file path.
  */
 function getNamespace(filePath) {
-  const rel = path.relative(MONOREPO_PATH, filePath);
-  if (rel.startsWith(path.join('apps', 'electron') + path.sep)) {
-    return 'electron';
-  }
-  return 'core';
+	const rel = path.relative(MONOREPO_PATH, filePath);
+	if (rel.startsWith(path.join('apps', 'electron') + path.sep)) {
+		return 'electron';
+	}
+	return 'core';
 }
 
 async function extractFromFile(filePath) {
-  const content = await fs.readFile(filePath, 'utf8');
-  const strings = [];
-  let match;
+	const content = stripComments(await fs.readFile(filePath, 'utf8'));
+	const strings = [];
+	let match;
 
-  T_CALL_REGEX.lastIndex = 0;
-  while ((match = T_CALL_REGEX.exec(content)) !== null) {
-    const sourceString = match[2];
-    const closeIndex = content.indexOf(')', T_CALL_REGEX.lastIndex);
-    const options = closeIndex === -1 ? '' : content.slice(T_CALL_REGEX.lastIndex, closeIndex);
+	T_CALL_REGEX.lastIndex = 0;
+	while ((match = T_CALL_REGEX.exec(content)) !== null) {
+		const sourceString = match[2];
+		const closeIndex = content.indexOf(')', T_CALL_REGEX.lastIndex);
+		const options = closeIndex === -1 ? '' : content.slice(T_CALL_REGEX.lastIndex, closeIndex);
 
-    const contextMatch = options.match(CONTEXT_REGEX);
-    const context = contextMatch ? contextMatch[1] : undefined;
-    const namespace = getNamespace(filePath);
-    const key = context ? `${sourceString}_${context}` : sourceString;
+		const contextMatch = options.match(CONTEXT_REGEX);
+		const context = contextMatch ? contextMatch[1] : undefined;
+		const namespace = getNamespace(filePath);
+		const key = context ? `${sourceString}_${context}` : sourceString;
 
-    if (!key.includes('${')) {
-      strings.push({ key, namespace });
-    }
-  }
+		if (!key.includes('${')) {
+			strings.push({ key, namespace });
+		}
+	}
 
-  return strings;
+	return strings;
 }
 
 async function loadLocale(filePath) {
-  try {
-    const content = await fs.readFile(filePath, 'utf8');
-    return JSON.parse(content);
-  } catch (err) {
-    console.warn(`  Warning: could not load locale file ${filePath}: ${err.message}`);
-    return {};
-  }
+	try {
+		const content = await fs.readFile(filePath, 'utf8');
+		return JSON.parse(content);
+	} catch (err) {
+		console.warn(`  Warning: could not load locale file ${filePath}: ${err.message}`);
+		return {};
+	}
 }
 
 async function main() {
-  console.log(`Extracting strings from: ${MONOREPO_PATH}`);
+	console.log(`Extracting strings from: ${MONOREPO_PATH}`);
 
-  // Load English locale files
-  const locales = {};
-  for (const [ns, localePath] of Object.entries(LOCALE_FILES)) {
-    locales[ns] = await loadLocale(localePath);
-    console.log(`  Loaded ${Object.keys(locales[ns]).length} English strings for "${ns}"`);
-  }
+	// Load English locale files
+	const locales = {};
+	for (const [ns, localePath] of Object.entries(LOCALE_FILES)) {
+		locales[ns] = await loadLocale(localePath);
+		console.log(`  Loaded ${Object.keys(locales[ns]).length} English strings for "${ns}"`);
+	}
 
-  // Find all TypeScript/JavaScript files in apps/ and packages/
-  const patterns = [
-    'apps/**/*.{ts,tsx,js,jsx}',
-    'packages/**/*.{ts,tsx,js,jsx}',
-  ];
+	// Find all TypeScript/JavaScript files in apps/ and packages/
+	const patterns = ['apps/**/*.{ts,tsx,js,jsx}', 'packages/**/*.{ts,tsx,js,jsx}'];
 
-  const ignorePatterns = [
-    '**/node_modules/**',
-    '**/dist/**',
-    '**/build/**',
-    '**/web-build/**',
-    'apps/electron/**',
-    'apps/web/**',
-    '**/*.d.ts',
-    '**/*.test.*',
-    '**/*.spec.*',
-  ];
+	const ignorePatterns = [
+		'**/node_modules/**',
+		'**/dist/**',
+		'**/build/**',
+		'**/web-build/**',
+		'apps/electron/**',
+		'apps/web/**',
+		'**/*.d.ts',
+		'**/*.test.*',
+		'**/*.spec.*',
+	];
 
-  let allFiles = [];
-  for (const pattern of patterns) {
-    const files = await glob(pattern, {
-      cwd: MONOREPO_PATH,
-      ignore: ignorePatterns,
-      absolute: true,
-    });
-    allFiles = allFiles.concat(files);
-  }
+	let allFiles = [];
+	for (const pattern of patterns) {
+		const files = await glob(pattern, {
+			cwd: MONOREPO_PATH,
+			ignore: ignorePatterns,
+			absolute: true,
+		});
+		allFiles = allFiles.concat(files);
+	}
 
-  console.log(`\nFound ${allFiles.length} source files to scan`);
+	console.log(`\nFound ${allFiles.length} source files to scan`);
 
-  // Extract keys from all files
-  const byNamespace = {};
-  for (const file of allFiles) {
-    const strings = await extractFromFile(file);
-    for (const { key, namespace } of strings) {
-      if (!byNamespace[namespace]) {
-        byNamespace[namespace] = new Set();
-      }
-      byNamespace[namespace].add(key);
-    }
-  }
+	// Extract keys from all files
+	const byNamespace = {};
+	for (const file of allFiles) {
+		const strings = await extractFromFile(file);
+		for (const { key, namespace } of strings) {
+			if (!byNamespace[namespace]) {
+				byNamespace[namespace] = new Set();
+			}
+			byNamespace[namespace].add(key);
+		}
+	}
 
-  // Build output: look up English value for each extracted key
-  let warnings = 0;
-  if (!CHECK_MODE) {
-    try { await fs.rmdir(OUTPUT_DIR, { recursive: true }); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-    await fs.mkdir(OUTPUT_DIR, { recursive: true });
-  }
+	// Build output: look up English value for each extracted key
+	let warnings = 0;
+	if (!CHECK_MODE) {
+		try {
+			await fs.rmdir(OUTPUT_DIR, { recursive: true });
+		} catch (e) {
+			if (e.code !== 'ENOENT') throw e;
+		}
+		await fs.mkdir(OUTPUT_DIR, { recursive: true });
+	}
 
-  for (const [ns, keys] of Object.entries(byNamespace)) {
-    const locale = locales[ns] || {};
-    const output = {};
+	for (const [ns, keys] of Object.entries(byNamespace)) {
+		const locale = locales[ns] || {};
+		const output = {};
 
-    const pluralSuffixes = ['_zero', '_one', '_two', '_few', '_many', '_other'];
-    for (const key of [...keys].sort()) {
-      let foundPlural = false;
-      for (const suffix of pluralSuffixes) {
-        const pluralKey = `${key}${suffix}`;
-        if (locale[pluralKey] !== undefined) {
-          output[pluralKey] = locale[pluralKey];
-          foundPlural = true;
-        }
-      }
+		const pluralSuffixes = ['_zero', '_one', '_two', '_few', '_many', '_other'];
+		for (const key of [...keys].sort()) {
+			let foundPlural = false;
+			for (const suffix of pluralSuffixes) {
+				const pluralKey = `${key}${suffix}`;
+				if (locale[pluralKey] !== undefined) {
+					output[pluralKey] = locale[pluralKey];
+					foundPlural = true;
+				}
+			}
 
-      if (locale[key] !== undefined) {
-        output[key] = locale[key];
-      } else if (!foundPlural) {
-        console.warn(`  ⚠ ${ns}: key "${key}" not found in English locale file`);
-        warnings++;
-      }
-    }
+			if (locale[key] !== undefined) {
+				output[key] = locale[key];
+			} else if (!foundPlural) {
+				console.warn(`  ⚠ ${ns}: key "${key}" not found in English locale file`);
+				warnings++;
+			}
+		}
 
-    if (!CHECK_MODE) {
-      const outputPath = path.join(OUTPUT_DIR, `${ns}.json`);
-      await fs.writeFile(outputPath, JSON.stringify(output, null, '\t') + '\n');
+		if (!CHECK_MODE) {
+			const outputPath = path.join(OUTPUT_DIR, `${ns}.json`);
+			await fs.writeFile(outputPath, JSON.stringify(output, null, '\t') + '\n');
 
-      console.log(`  ${ns}: ${Object.keys(output).length} strings -> ${outputPath}`);
-    } else {
-      console.log(`  ${ns}: checked ${keys.size} key(s)`);
-    }
-  }
+			console.log(`  ${ns}: ${Object.keys(output).length} strings -> ${outputPath}`);
+		} else {
+			console.log(`  ${ns}: checked ${keys.size} key(s)`);
+		}
+	}
 
-  if (warnings > 0) {
-    console.warn(`\n${warnings} key(s) missing from English locale files.`);
-    if (CHECK_MODE) {
-      process.exit(1);
-    }
-  }
+	if (warnings > 0) {
+		console.warn(`\n${warnings} key(s) missing from English locale files.`);
+		if (CHECK_MODE) {
+			process.exit(1);
+		}
+	}
 
-  if (CHECK_MODE) {
-    console.log('\nTranslation source strings are complete.');
-  }
+	if (CHECK_MODE) {
+		console.log('\nTranslation source strings are complete.');
+	}
 
-  console.log('\nDone.');
+	console.log('\nDone.');
 }
 
-main().catch(error => {
-  console.error('Fatal error:', error);
-  process.exit(1);
+main().catch((error) => {
+	console.error('Fatal error:', error);
+	process.exit(1);
 });
