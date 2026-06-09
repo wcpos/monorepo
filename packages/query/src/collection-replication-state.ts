@@ -1,7 +1,8 @@
 import { isCancel } from 'axios';
 import isEmpty from 'lodash/isEmpty';
-import { BehaviorSubject, combineLatest, interval, Observable } from 'rxjs';
+import { BehaviorSubject, combineLatest, from, interval, Observable } from 'rxjs';
 import {
+	catchError,
 	debounceTime,
 	distinctUntilChanged,
 	filter,
@@ -15,6 +16,7 @@ import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
 import { DataFetcher } from './data-fetcher';
+import { recoverSyncCollectionStorage } from './logs-storage-recovery';
 import { SubscribableBase } from './subscribable-base';
 import { SyncStateManager } from './sync-state';
 
@@ -212,7 +214,19 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		const remoteCount$ = createDebouncedCount$(this.syncStateManager.syncCollection as any, {
 			endpoint: { $eq: this.endpoint },
 			id: { $exists: true },
-		});
+		}).pipe(
+			catchError((error) =>
+				from(recoverSyncCollectionStorage(this.syncStateManager.syncCollection, error)).pipe(
+					map((recovered) => {
+						if (!recovered) {
+							throw error;
+						}
+
+						return 0;
+					})
+				)
+			)
+		);
 
 		const newLocalCount$ = createDebouncedCount$(this.collection as any, {
 			id: { $exists: false },
