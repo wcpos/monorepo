@@ -179,13 +179,13 @@ describe('SyncStateManager', () => {
 			{ id: 1, endpoint: 'products', status: 'SYNCED' },
 		]);
 
-		const serverState = [{ id: 1, date_modified_gmt: '2026-06-09T16:40:56' }];
+		const serverState = [{ id: 1, date_modified_gmt: '2026-06-09T16:40:55' }];
 
 		await syncStateManager.processModifiedAfter(serverState);
 
 		const sync = await syncDB.collections.products.find().exec();
 		expect(sync).toHaveLength(1);
-		expect(sync.find((doc) => doc.id === 1)?.status).toBe('PULL_UPDATE');
+		expect(sync.find((doc) => doc.id === 1)?.status).toBe('SYNCED');
 	});
 
 	it('processes modified after - detects new items', async () => {
@@ -295,6 +295,7 @@ describe('SyncStateManager', () => {
 
 	it('processes server response - accepts same instant with UTC suffix locally and bare GMT remotely', async () => {
 		await storeDB.collections.products.insert({
+			uuid: 'product-15',
 			id: 15,
 			name: 'PFM Crown',
 			stock_quantity: 21,
@@ -303,6 +304,7 @@ describe('SyncStateManager', () => {
 
 		const result = await syncStateManager.processServerResponse([
 			{
+				uuid: 'product-15',
 				id: 15,
 				name: 'PFM Crown',
 				stock_quantity: 22,

@@ -156,24 +156,31 @@ export class SyncStateManager {
 					} else {
 						// debugger;
 					}
-				} else if (compareDateModifiedGmt(remoteDoc.date_modified_gmt, localDateModified) > 0) {
-					updates.push({
-						id: localId,
-						endpoint: this.endpoint,
-						status: 'PULL_UPDATE',
-					});
-				} else if (compareDateModifiedGmt(remoteDoc.date_modified_gmt, localDateModified) < 0) {
-					updates.push({
-						id: localId,
-						endpoint: this.endpoint,
-						status: 'PUSH_UPDATE',
-					});
 				} else {
-					updates.push({
-						id: localId,
-						endpoint: this.endpoint,
-						status: 'SYNCED',
-					});
+					const dateCompare = compareDateModifiedGmt(
+						remoteDoc.date_modified_gmt,
+						localDateModified
+					);
+
+					if (dateCompare > 0) {
+						updates.push({
+							id: localId,
+							endpoint: this.endpoint,
+							status: 'PULL_UPDATE',
+						});
+					} else if (dateCompare < 0) {
+						updates.push({
+							id: localId,
+							endpoint: this.endpoint,
+							status: 'PUSH_UPDATE',
+						});
+					} else {
+						updates.push({
+							id: localId,
+							endpoint: this.endpoint,
+							status: 'SYNCED',
+						});
+					}
 				}
 			}
 
