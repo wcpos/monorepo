@@ -58,19 +58,11 @@ describe('usePushDocument', () => {
 		expect(mockPost).toHaveBeenCalledWith('orders/123', json);
 	});
 
-	it('sends order GMT dates as ISO UTC strings', async () => {
+	it('sends order GMT dates to the server unchanged', async () => {
 		const json = {
 			date_created_gmt: '2026-05-07T15:53:05',
 			date_modified_gmt: '2026-05-07T15:54:05',
-			date_completed_gmt: '2026-05-07T15:53:05+02:00',
-			date_paid_gmt: '2026-05-07T15:55:05Z',
 			line_items: [],
-		};
-		const normalizedJson = {
-			...json,
-			date_created_gmt: '2026-05-07T15:53:05Z',
-			date_modified_gmt: '2026-05-07T15:54:05Z',
-			date_completed_gmt: '2026-05-07T13:53:05.000Z',
 		};
 		const incrementalPatch = jest.fn(async (data: unknown) => data);
 		const latestDoc = {
@@ -86,7 +78,7 @@ describe('usePushDocument', () => {
 			getLatest: () => latestDoc,
 		};
 
-		mockPost.mockResolvedValueOnce({ data: normalizedJson });
+		mockPost.mockResolvedValueOnce({ data: json });
 
 		const { result } = renderHook(() => usePushDocument());
 
@@ -94,8 +86,8 @@ describe('usePushDocument', () => {
 			await result.current(doc as never);
 		});
 
-		expect(mockPost).toHaveBeenCalledWith('orders', normalizedJson);
-		expect(incrementalPatch).toHaveBeenCalledWith(normalizedJson);
+		expect(mockPost).toHaveBeenCalledWith('orders', json);
+		expect(incrementalPatch).toHaveBeenCalledWith(json);
 	});
 
 	it('reconciles local line item images with the server-populated response', async () => {
