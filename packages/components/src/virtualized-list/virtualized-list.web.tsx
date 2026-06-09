@@ -205,11 +205,16 @@ function List<T>({
 				const baseKey = keyExtractor ? keyExtractor(item, vItem.index) : String(vItem.key);
 				const key = extraDataKey ? `${baseKey}-${extraDataKey}` : baseKey;
 
+				const itemContext = {
+					item,
+					index: vItem.index,
+					rowVirtualizer,
+					vItem,
+					horizontal: horizontal ?? false,
+				} as unknown as WebItemContext<T>;
+
 				return (
-					<ItemContext.Provider
-						key={key}
-						value={{ item, index: vItem.index, rowVirtualizer, vItem } as WebItemContext<T>}
-					>
+					<ItemContext.Provider key={key} value={itemContext}>
 						{renderItem({ item, index: vItem.index, target: 'Cell' })}
 					</ItemContext.Provider>
 				);
