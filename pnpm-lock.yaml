@@ -697,6 +697,9 @@ importers:
       '@wcpos/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@wcpos/order-math':
+        specifier: workspace:*
+        version: link:../order-math
       '@wcpos/printer':
         specifier: workspace:*
         version: link:../printer
