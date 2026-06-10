@@ -30,6 +30,7 @@ jobs:
             src:
               - 'apps/**'
               - 'packages/**'
+              - 'scripts/**'
               - '.github/workflows/test.yml'
               - 'package.json'
               - 'pnpm-lock.yaml'
@@ -59,6 +60,12 @@ jobs:
 
       - name: "\U0001F50D Typecheck"
         run: pnpm typecheck
+
+      - name: "\U0001F9EA Run script tests"
+        run: pnpm test:scripts
+
+      - name: "\U0001F310 Check translation source strings"
+        run: pnpm translations:check
 
   unit-tests:
     name: "\U0001F9EA Unit Tests"
