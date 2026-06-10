@@ -10,3 +10,4 @@ export * from './lines/pos-data';
 export * from './coupons/discount';
 export * from './coupons/helpers';
 export * from './coupons/recalculate';
+export * from './coupons/validate';
