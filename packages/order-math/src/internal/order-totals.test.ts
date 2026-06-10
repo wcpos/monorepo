@@ -1,4 +1,4 @@
-import { calculateOrderTotals } from './calculate-order-totals';
+import { calculateOrderTotals } from './order-totals';
 
 describe('calculateOrderTotals', () => {
 	const mockTaxRates = [
@@ -938,5 +938,45 @@ describe('calculateOrderTotals — deleted items (order 57051)', () => {
 		expect(result.fee_total).toBe('0');
 		expect(result.shipping_total).toBe('0');
 		expect(result.coupon_total).toBe('6.54');
+	});
+});
+
+describe('crash fix (b): unknown tax rate id', () => {
+	it('lazily initializes a bucket instead of throwing', () => {
+		const warnings: unknown[] = [];
+		const result = calculateOrderTotals(
+			{
+				lineItems: [
+					{
+						product_id: 1,
+						subtotal: '10',
+						total: '10',
+						subtotal_tax: '1',
+						total_tax: '1',
+						taxes: [{ id: 999, subtotal: '1', total: '1' }],
+					} as any,
+				],
+				taxRates: [],
+			},
+			(w) => warnings.push(w)
+		);
+		expect(result.tax_lines).toEqual([
+			expect.objectContaining({ rate_id: 999, label: '', rate_percent: 0, tax_total: '1' }),
+		]);
+		expect(warnings).toEqual([{ code: 'unknown_tax_rate_id', rateId: 999 }]);
+	});
+	it('drops a lazily-created bucket when both totals are zero', () => {
+		const result = calculateOrderTotals({
+			lineItems: [
+				{
+					product_id: 1,
+					subtotal: '10',
+					total: '10',
+					taxes: [{ id: 999, subtotal: '0', total: '0' }],
+				} as any,
+			],
+			taxRates: [],
+		});
+		expect(result.tax_lines).toEqual([]);
 	});
 });
