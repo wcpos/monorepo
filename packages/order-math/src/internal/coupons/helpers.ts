@@ -1,0 +1,393 @@
+import isEmpty from 'lodash/isEmpty';
+import round from 'lodash/round';
+
+import { calculateTaxes } from '../money/calculate-taxes';
+import { roundTaxTotal } from '../money/precision';
+import { getLineItemTaxStatus } from '../lines/pos-data';
+
+import type { PerItemDiscount } from './discount';
+
+export interface CouponLineItem {
+	product_id: number;
+	quantity: number;
+	price: number;
+	subtotal: string;
+	total: string;
+	categories: { id: number }[];
+	on_sale: boolean;
+	/** Stable index into the source line-items array for per-line matching */
+	lineIndex?: number;
+}
+
+export interface CouponRestrictions {
+	product_ids: number[];
+	excluded_product_ids: number[];
+	product_categories: number[];
+	excluded_product_categories: number[];
+	exclude_sale_items: boolean;
+}
+
+/**
+ * Determines whether a product is on sale by comparing price to regular_price.
+ * Handles null/undefined/NaN values safely (returns false when data is missing).
+ */
+export function isProductOnSale(
+	product: { price?: string | null; regular_price?: string | null } | null | undefined
+): boolean {
+	if (!product || !product.price || !product.regular_price) return false;
+	const price = parseFloat(product.price);
+	const regularPrice = parseFloat(product.regular_price);
+	if (isNaN(price) || isNaN(regularPrice) || regularPrice <= 0) return false;
+	return price < regularPrice;
+}
+
+/**
+ * Filters line items to those eligible for a given coupon based on its restrictions.
+ * Mirrors the WooCommerce coupon product/category restriction logic.
+ */
+export function getEligibleItems(
+	items: CouponLineItem[],
+	restrictions: CouponRestrictions
+): CouponLineItem[] {
+	return items.filter((item) => {
+		// Product ID inclusion filter
+		if (
+			restrictions.product_ids.length > 0 &&
+			!restrictions.product_ids.includes(item.product_id)
+		) {
+			return false;
+		}
+
+		// Product ID exclusion filter
+		if (restrictions.excluded_product_ids.includes(item.product_id)) {
+			return false;
+		}
+
+		// Category inclusion filter
+		if (restrictions.product_categories.length > 0) {
+			const itemCategoryIds = item.categories.map((c) => c.id);
+			if (!restrictions.product_categories.some((catId) => itemCategoryIds.includes(catId))) {
+				return false;
+			}
+		}
+
+		// Category exclusion filter
+		if (restrictions.excluded_product_categories.length > 0) {
+			const itemCategoryIds = item.categories.map((c) => c.id);
+			if (
+				restrictions.excluded_product_categories.some((catId) => itemCategoryIds.includes(catId))
+			) {
+				return false;
+			}
+		}
+
+		// Exclude sale items
+		if (restrictions.exclude_sale_items && item.on_sale) {
+			return false;
+		}
+
+		return true;
+	});
+}
+
+/**
+ * Build a product categories map enriched with ancestor category IDs.
+ *
+ * WooCommerce's wc_get_product_cat_ids() includes ALL ancestor categories
+ * (via get_ancestors()) when checking coupon category restrictions. The POS
+ * REST API only returns directly-assigned categories on product documents.
+ * This function bridges the gap by walking up the category tree.
+ *
+ * @param productCategories - Map of product_id → directly-assigned categories
+ * @param categoryParentMap - Map of category_id → parent_id (from products/categories collection)
+ * @returns Enriched map with ancestor categories included
+ */
+export function enrichCategoriesWithAncestors(
+	productCategories: Map<number, { id: number }[]>,
+	categoryParentMap: Map<number, number>
+): Map<number, { id: number }[]> {
+	if (categoryParentMap.size === 0) return productCategories;
+
+	const enriched = new Map<number, { id: number }[]>();
+
+	for (const [productId, categories] of productCategories) {
+		const allCategoryIds = new Set<number>();
+
+		for (const cat of categories) {
+			allCategoryIds.add(cat.id);
+			// Walk up the parent chain
+			let parentId = categoryParentMap.get(cat.id);
+			while (parentId && parentId > 0 && !allCategoryIds.has(parentId)) {
+				allCategoryIds.add(parentId);
+				parentId = categoryParentMap.get(parentId);
+			}
+		}
+
+		enriched.set(
+			productId,
+			Array.from(allCategoryIds).map((id) => ({ id }))
+		);
+	}
+
+	return enriched;
+}
+
+/**
+ * Convert tax-inclusive per-item discounts to ex-tax amounts.
+ *
+ * Percent coupon discounts are already ex-tax (calculated from ex-tax prices),
+ * so only fixed_cart and fixed_product discounts need conversion.
+ *
+ * Each item's discount is divided by (1 + effective_tax_rate), where the rate
+ * is derived from the order line item's subtotal_tax / subtotal.
+ */
+export function convertDiscountsToExTax(
+	perItem: PerItemDiscount[],
+	lineItems: { product_id?: number | null; subtotal?: string; subtotal_tax?: string }[],
+	discountType: string,
+	pricesIncludeTax: boolean
+): PerItemDiscount[] {
+	if (!pricesIncludeTax || discountType === 'percent') return perItem;
+
+	return perItem.map((entry) => {
+		if (entry.discount <= 0) return entry;
+		const li =
+			entry.lineIndex != null
+				? lineItems[entry.lineIndex]
+				: lineItems.find((item) => item.product_id === entry.product_id);
+		const subtotal = parseFloat(li?.subtotal || '0');
+		const subtotalTax = parseFloat(li?.subtotal_tax || '0');
+		const rate = subtotal > 0 ? subtotalTax / subtotal : 0;
+		if (rate <= 0) return entry;
+		return { ...entry, discount: round(entry.discount / (1 + rate), 6) };
+	});
+}
+
+/**
+ * Adjusts line item prices by subtracting per-item discounts from a prior coupon.
+ * Used in sequential discount mode so the next coupon sees reduced prices.
+ *
+ * Discounts must be ex-tax (use convertDiscountsToExTax first when pricesIncludeTax).
+ */
+export function applyPerItemDiscountsToLineItems(
+	items: CouponLineItem[],
+	perItem: { product_id: number; discount: number }[]
+): CouponLineItem[] {
+	const nextItems = items.map((item) => ({ ...item }));
+
+	for (const entry of perItem) {
+		const remaining = entry.discount;
+		if (remaining <= 0) continue;
+
+		let left = remaining;
+		for (const item of nextItems) {
+			if (item.product_id !== entry.product_id || item.quantity <= 0) continue;
+
+			const lineTotal = item.price * item.quantity;
+			if (lineTotal <= 0) continue;
+
+			const lineDiscount = Math.min(lineTotal, left);
+			item.price = Math.max(0, item.price - lineDiscount / item.quantity);
+			left -= lineDiscount;
+
+			if (left <= 0) break;
+		}
+	}
+
+	return nextItems;
+}
+
+/**
+ * Apply coupon per-item discounts to order line items.
+ * Reduces each line item's total, total_tax, and per-rate taxes
+ * while keeping subtotal/subtotal_tax unchanged.
+ *
+ * Discounts must be ex-tax (use convertDiscountsToExTax first when pricesIncludeTax).
+ * Line items should have pre-coupon totals before calling this.
+ */
+export function computeDiscountedLineItems<
+	T extends {
+		product_id?: number | null;
+		total?: string;
+		total_tax?: string;
+		taxes?: { id?: number; subtotal?: string; total?: string; [key: string]: any }[];
+		[key: string]: any;
+	},
+>(lineItems: T[], allPerItemDiscounts: PerItemDiscount[][]): T[] {
+	if (allPerItemDiscounts.length === 0) return lineItems;
+
+	// Check whether any discount entry uses lineIndex — if so, prefer per-line
+	// matching over product_id aggregation to preserve per-line precision when
+	// the same product_id appears on multiple lines at different prices.
+	const hasLineIndex = allPerItemDiscounts.some((list) => list.some((e) => e.lineIndex != null));
+
+	if (hasLineIndex) {
+		// Per-line matching: aggregate discounts by lineIndex
+		const discountByLine = new Map<number, number>();
+		for (const perItemDiscounts of allPerItemDiscounts) {
+			for (const entry of perItemDiscounts) {
+				if (entry.lineIndex != null) {
+					discountByLine.set(
+						entry.lineIndex,
+						(discountByLine.get(entry.lineIndex) || 0) + entry.discount
+					);
+				}
+			}
+		}
+
+		if (discountByLine.size === 0) return lineItems;
+
+		return lineItems.map((item, idx) => {
+			const lineDiscount = discountByLine.get(idx);
+			if (!lineDiscount || lineDiscount <= 0) return item;
+
+			const currentTotal = parseFloat(item.total || '0');
+			if (currentTotal <= 0) return item;
+
+			const currentTotalTax = parseFloat(item.total_tax || '0');
+			const newTotal = Math.max(0, currentTotal - lineDiscount);
+			const ratio = currentTotal > 0 ? newTotal / currentTotal : 0;
+			const newTotalTax = currentTotalTax * ratio;
+
+			const taxes = (item.taxes || []).map((tax) => ({
+				...tax,
+				total: String(round(parseFloat(tax.total || '0') * ratio, 6)),
+			}));
+
+			return {
+				...item,
+				total: String(round(newTotal, 6)),
+				total_tax: String(round(newTotalTax, 6)),
+				taxes,
+			} as T;
+		});
+	}
+
+	// Fallback: aggregate by product_id (original behavior for callers without lineIndex)
+	const discountMap = new Map<number, number>();
+	for (const perItemDiscounts of allPerItemDiscounts) {
+		for (const { product_id, discount } of perItemDiscounts) {
+			discountMap.set(product_id, (discountMap.get(product_id) || 0) + discount);
+		}
+	}
+
+	if (discountMap.size === 0) return lineItems;
+
+	// Sum totals per product_id for proportional distribution when multiple
+	// line items share the same product_id
+	const totalByProductId = new Map<number, number>();
+	for (const item of lineItems) {
+		const pid = item.product_id;
+		if (pid == null || !discountMap.has(pid)) continue;
+		totalByProductId.set(pid, (totalByProductId.get(pid) || 0) + parseFloat(item.total || '0'));
+	}
+
+	return lineItems.map((item) => {
+		const pid = item.product_id;
+		if (pid == null || !discountMap.has(pid)) return item;
+
+		const totalDiscountForProduct = discountMap.get(pid)!;
+		if (totalDiscountForProduct <= 0) return item;
+
+		const currentTotal = parseFloat(item.total || '0');
+		if (currentTotal <= 0) return item;
+
+		const currentTotalTax = parseFloat(item.total_tax || '0');
+
+		const productTotal = totalByProductId.get(pid) || currentTotal;
+		const itemDiscount = totalDiscountForProduct * (currentTotal / productTotal);
+		const newTotal = Math.max(0, currentTotal - itemDiscount);
+		const ratio = currentTotal > 0 ? newTotal / currentTotal : 0;
+		const newTotalTax = currentTotalTax * ratio;
+
+		const taxes = (item.taxes || []).map((tax) => ({
+			...tax,
+			total: String(round(parseFloat(tax.total || '0') * ratio, 6)),
+		}));
+
+		return {
+			...item,
+			total: String(round(newTotal, 6)),
+			total_tax: String(round(newTotalTax, 6)),
+			taxes,
+		} as T;
+	});
+}
+
+/**
+ * Calculate the coupon_line discount and discount_tax split.
+ *
+ * Expects ex-tax discount amounts (use convertDiscountsToExTax first).
+ * Tax is calculated per-item using each line item's tax class, then summed.
+ *
+ * When taxRoundAtSubtotal is false (default), each item's tax is rounded to dp
+ * before accumulation — matching WC's set_coupon_discount_amounts() which calls
+ * wc_round_tax_total() per-item.
+ */
+export function calculateCouponDiscountTaxSplit(
+	perItemDiscounts: PerItemDiscount[],
+	lineItems: { product_id?: number | null; tax_class?: string; tax_status?: string }[],
+	taxRates: { id: number; rate: string; compound: boolean; order: number; class?: string }[],
+	options?: {
+		pricesIncludeTax?: boolean;
+		taxRoundAtSubtotal?: boolean;
+		dp?: number;
+	}
+): { discount: string; discount_tax: string } {
+	const pricesIncludeTax = options?.pricesIncludeTax ?? false;
+	const taxRoundAtSubtotal = options?.taxRoundAtSubtotal ?? false;
+	const dp = options?.dp ?? 2;
+
+	let totalDiscount = 0;
+	let totalDiscountTax = 0;
+
+	for (const entry of perItemDiscounts) {
+		if (entry.discount <= 0) continue;
+
+		const lineItem =
+			entry.lineIndex != null
+				? lineItems[entry.lineIndex]
+				: lineItems.find((item) => item.product_id === entry.product_id);
+
+		// WC: skip non-taxable items (tax_status !== 'taxable'). For product line
+		// items tax_status lives in _woocommerce_pos_data, so read it from there
+		// rather than a (non-existent) top-level field.
+		const taxStatus = getLineItemTaxStatus(lineItem);
+		if (taxStatus !== 'taxable') {
+			totalDiscount += entry.discount;
+			continue;
+		}
+
+		const taxClass = isEmpty(lineItem?.tax_class) ? 'standard' : lineItem!.tax_class!;
+		const applicableRates = taxRates.filter((r) => r.class === taxClass);
+
+		if (applicableRates.length > 0) {
+			const taxResult = calculateTaxes({
+				amount: entry.discount,
+				rates: applicableRates as {
+					id: number;
+					rate: string;
+					compound: boolean;
+					order: number;
+				}[],
+				amountIncludesTax: false,
+			});
+
+			// WC rounds per-item tax to dp when not rounding at subtotal level.
+			// Uses HALF_DOWN when prices include tax, HALF_UP otherwise.
+			const perItemTax = taxRoundAtSubtotal
+				? taxResult.total
+				: roundTaxTotal(taxResult.total, dp, pricesIncludeTax);
+
+			totalDiscount += entry.discount;
+			totalDiscountTax += perItemTax;
+		} else {
+			totalDiscount += entry.discount;
+		}
+	}
+
+	return {
+		discount: String(round(totalDiscount, 6)),
+		discount_tax: String(round(totalDiscountTax, 6)),
+	};
+}

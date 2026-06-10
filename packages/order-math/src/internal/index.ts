@@ -7,3 +7,6 @@ export * from './money/precision';
 export * from './money/calculate-taxes';
 export * from './money/sum-taxes';
 export * from './lines/pos-data';
+export * from './coupons/discount';
+export * from './coupons/helpers';
+export * from './coupons/recalculate';
