@@ -18,6 +18,8 @@ import {
 } from '@wcpos/order-math/internal';
 import type { CartLine } from '@wcpos/order-math/internal';
 
+// MIGRATION SHIM: these names moved to @wcpos/order-math; re-exported here so
+// existing './utils' imports keep working until the PR 2 adapter cutover.
 export {
 	sanitizePrice,
 	parsePosData,

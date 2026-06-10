@@ -118,7 +118,7 @@ export const getLineItemTaxStatus = (
 		return topLevel;
 	}
 
-	// parsePosData logs an error when meta_data isn't an array, so guard first.
+	// Guard before calling parsePosData: meta_data must be an array for type safety.
 	const posData = Array.isArray(item?.meta_data) ? parsePosData(item as CartLine) : null;
 	const fromPosData = posData?.tax_status;
 	if (isValid(fromPosData)) {
