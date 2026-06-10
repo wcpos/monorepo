@@ -51,6 +51,8 @@ function parseNumber(value: any): number {
  *
  * @param dp - Price decimal places (default 2)
  * @param pricesIncludeTax - Whether prices include tax (affects rounding mode)
+ * @param onWarning - Optional callback fired when a line references a tax rate id absent
+ *   from taxRates (a bucket is lazily created instead of throwing)
  */
 export function calculateOrderTotals(
 	{
