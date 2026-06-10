@@ -1,5 +1,9 @@
 import { type CouponLineItem, getEligibleItems } from './helpers';
 
+import type { CouponRejection, CouponRejectionCode } from '../../types';
+
+export type { CouponRejectionCode, CouponRejection };
+
 export interface CouponValidationContext {
 	lineItems: CouponLineItem[];
 	appliedCoupons: string[];
@@ -7,24 +11,6 @@ export interface CouponValidationContext {
 	cartSubtotal: number;
 	customerEmail: string;
 	customerId: number | null;
-}
-
-export type CouponRejectionCode =
-	| 'already_applied'
-	| 'expired'
-	| 'usage_limit_reached'
-	| 'usage_limit_reached_for_customer'
-	| 'minimum_spend_not_met'
-	| 'maximum_spend_exceeded'
-	| 'individual_use'
-	| 'individual_use_conflict'
-	| 'email_required'
-	| 'email_not_allowed'
-	| 'not_applicable_to_cart';
-
-export interface CouponRejection {
-	code: CouponRejectionCode;
-	params?: Readonly<Record<string, string | number>>;
 }
 
 export type ValidationResult = { valid: true } | { valid: false; rejection: CouponRejection };
