@@ -1,11 +1,9 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
-import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { HStack } from '@wcpos/components/hstack';
-import { Image } from '@wcpos/components/image';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/popover';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
@@ -14,9 +12,9 @@ import { VariationsPopover } from '../cells/variations-popover';
 import { useT } from '../../../../../contexts/translations';
 import { getVariablePrices } from '../../../components/product/get-variable-prices';
 import { PriceWithTax } from '../../../components/product/price-with-tax';
-import { useImageAttachment } from '../../../hooks/use-image-attachment';
 import { useAddVariation } from '../../hooks/use-add-variation';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { TileImage } from './tile-image';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
@@ -99,9 +97,6 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 	const triggerRef = React.useRef<{ close: () => void } | null>(null);
 
 	const name = useObservableEagerState(product.name$!);
-	const images = useObservableEagerState(product.images$!);
-	const imageURL = get(images, [0, 'src'], undefined);
-	const { uri, error } = useImageAttachment(product, imageURL ?? '');
 	const metaData = useObservableEagerState(product.meta_data$!);
 	const variablePrices = getVariablePrices(
 		metaData as { key?: string; value?: string }[] | undefined
@@ -116,8 +111,6 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 	const barcode = useObservableEagerState(product.barcode$!);
 	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
 	const costOfGoodsSold = useObservableEagerState(product.cost_of_goods_sold$!);
-
-	const imageSource = !uri || error ? { uri: 'https://via.placeholder.com/150' } : { uri };
 
 	const safeTaxStatus = (taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
 	const taxDisplay = gridFields.tax ? ('text' as const) : ('none' as const);
@@ -146,7 +139,7 @@ export function VariableProductTile({ product, gridFields }: VariableProductTile
 			<PopoverTrigger ref={triggerRef as React.RefObject<never>} asChild>
 				<Pressable className="flex-1" testID="variable-product-tile">
 					<View className="aspect-square">
-						<Image source={imageSource} recyclingKey={product.uuid} className="h-full w-full" />
+						<TileImage product={product} />
 						<View className="absolute top-1 right-1 rounded bg-black/50 px-1 py-0.5">
 							<Text className="text-xs text-white">{t('common.variants')}</Text>
 						</View>

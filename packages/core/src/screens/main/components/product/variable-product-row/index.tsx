@@ -12,6 +12,8 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { map } from 'rxjs/operators';
 import { flexRender } from '@tanstack/react-table';
 
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import { TableCell, TableRow } from '@wcpos/components/table';
 
@@ -101,7 +103,11 @@ export function VariableProductRow({
 							) => {
 								return (
 									<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
-										{flexRender(cell.column.columnDef.cell, cell.getContext())}
+										<ErrorBoundary>
+											<Suspense>
+												{flexRender(cell.column.columnDef.cell, cell.getContext())}
+											</Suspense>
+										</ErrorBoundary>
 									</TableCell>
 								);
 							}

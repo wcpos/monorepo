@@ -35,7 +35,6 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 
 	return {
 		uri,
-		isLoading: false,
 		error: null,
 	};
 };

@@ -14,6 +14,8 @@ import {
 	TableHeader,
 	TableRow,
 } from '@wcpos/components/table';
+import { ErrorBoundary } from '@wcpos/components/error-boundary';
+import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import * as VirtualizedList from '@wcpos/components/virtualized-list';
 import type { Query } from '@wcpos/query';
@@ -222,7 +224,9 @@ function defaultRenderItem({ item, index, table }: { item: any; index: number; t
 				{item.getVisibleCells().map((cell: any) => {
 					return (
 						<TableCell key={cell.id} style={getColumnStyle(cell.column.columnDef.meta)}>
-							{flexRender(cell.column.columnDef.cell, cell.getContext())}
+							<ErrorBoundary>
+								<Suspense>{flexRender(cell.column.columnDef.cell, cell.getContext())}</Suspense>
+							</ErrorBoundary>
 						</TableCell>
 					);
 				})}

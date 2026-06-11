@@ -23,6 +23,7 @@ import {
 } from '@wcpos/components/dropdown-menu';
 import { HStack } from '@wcpos/components/hstack';
 import { Icon } from '@wcpos/components/icon';
+import { Suspense } from '@wcpos/components/suspense';
 import { Text } from '@wcpos/components/text';
 import { Platform } from '@wcpos/utils/platform';
 import { clearAllDB } from '@wcpos/database';
@@ -36,6 +37,7 @@ import { useImageAttachment } from '../../hooks/use-image-attachment';
 const uiLogger = getLogger(['wcpos', 'ui', 'menu']);
 
 type StoreDocument = import('@wcpos/database').StoreDocument;
+type WPCredentialsDocument = import('@wcpos/database').WPCredentialsDocument;
 
 interface StoreSubMenuProps {
 	storesResource: ObservableResource<StoreDocument[]>;
@@ -65,16 +67,37 @@ function StoreSubMenu({ storesResource, switchStore, currentStoreID }: StoreSubM
 }
 
 /**
+ * The image attachment hook suspends while the avatar loads, so it lives in
+ * its own component behind a Suspense boundary that falls back to initials.
+ */
+function UserAvatarImage({ wpCredentials }: { wpCredentials: WPCredentialsDocument }) {
+	const avatarUrl = useObservableEagerState(wpCredentials.avatar_url$!);
+	const { uri } = useImageAttachment(wpCredentials, avatarUrl as string);
+
+	return <Avatar source={{ uri }} fallback={getInitials(wpCredentials?.display_name)} />;
+}
+
+function UserAvatar({ wpCredentials }: { wpCredentials: WPCredentialsDocument }) {
+	return (
+		<Suspense
+			fallback={
+				<Avatar source={{ uri: undefined }} fallback={getInitials(wpCredentials?.display_name)} />
+			}
+		>
+			<UserAvatarImage wpCredentials={wpCredentials} />
+		</Suspense>
+	);
+}
+
+/**
  * @TODO - remove hardcoded screensize
  */
 export function UserMenu() {
 	const { wpCredentials, site, store, logout, switchStore } = useAppState();
 	const router = useRouter();
 	const { screenSize } = useTheme();
-	const avatarUrl = useObservableEagerState(wpCredentials?.avatar_url$);
 	const stores = useObservableEagerState(wpCredentials?.stores$);
 	const t = useT();
-	const { uri } = useImageAttachment(wpCredentials, avatarUrl as string);
 
 	/**
 	 *
@@ -109,7 +132,7 @@ export function UserMenu() {
 					className="text-sidebar-foreground web:hover:bg-white/10 rounded-none bg-transparent px-2"
 				>
 					<HStack>
-						<Avatar source={{ uri }} fallback={getInitials(wpCredentials?.display_name)} />
+						<UserAvatar wpCredentials={wpCredentials} />
 						{screenSize !== 'sm' ? (
 							<ButtonText className="text-sidebar-foreground">
 								{wpCredentials?.display_name}
