@@ -14,13 +14,11 @@ const getAvailablePort = async () => {
   return port;
 };
 
-test('virtual printer entrypoint starts under ESM', async () => {
-  const [rawPort, httpPort] = await Promise.all([getAvailablePort(), getAvailablePort()]);
-  const child = spawn(process.execPath, ['scripts/virtual-printer/index.mjs'], {
+const startVirtualPrinter = async (env, expectedOutput) => {
+  const child = spawn(process.execPath, ['index.mjs'], {
     env: {
       ...process.env,
-      VP_RAW_PORT: String(rawPort),
-      VP_HTTP_PORT: String(httpPort),
+      ...env,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -31,7 +29,7 @@ test('virtual printer entrypoint starts under ESM', async () => {
     resolveStarted = resolve;
   });
   const checkStarted = () => {
-    if (output.includes(`HTTP endpoints listening on http://0.0.0.0:${httpPort}`)) {
+    if (output.includes(expectedOutput)) {
       resolveStarted(true);
     }
   };
@@ -74,4 +72,29 @@ test('virtual printer entrypoint starts under ESM', async () => {
   const [code, signal] = await exitPromise;
   assert.equal(signal, null, `expected graceful shutdown, got signal ${signal}`);
   assert.equal(code, 0, `expected exit code 0, got ${code}`);
+};
+
+test('virtual printer entrypoint starts under ESM', async () => {
+  const [rawPort, httpPort] = await Promise.all([getAvailablePort(), getAvailablePort()]);
+
+  await startVirtualPrinter(
+    {
+      VP_RAW_PORT: String(rawPort),
+      VP_HTTP_PORT: String(httpPort),
+    },
+    `both HTTP endpoints listening on http://0.0.0.0:${httpPort}`
+  );
+});
+
+test('virtual printer entrypoint starts in Star WebPRNT mode', async () => {
+  const [rawPort, httpPort] = await Promise.all([getAvailablePort(), getAvailablePort()]);
+
+  await startVirtualPrinter(
+    {
+      VP_VENDOR: 'star',
+      VP_RAW_PORT: String(rawPort),
+      VP_HTTP_PORT: String(httpPort),
+    },
+    `star HTTP endpoints listening on http://0.0.0.0:${httpPort}`
+  );
 });

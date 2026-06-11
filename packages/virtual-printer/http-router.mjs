@@ -31,10 +31,10 @@ const STAR_PRINT_RESPONSE =
  * @param {string} url
  * @returns {{ status: number, body: string }}
  */
-export function routeHttpRequest(method, url) {
+export function routeHttpRequest(method, url, vendor = 'both') {
   const path = (url ?? '').split('?')[0];
-  const isEpson = path === EPSON_EPOS_PATH;
-  const isStar = path === STAR_WEBPRNT_PATH;
+  const isEpson = path === EPSON_EPOS_PATH && vendor !== 'star';
+  const isStar = path === STAR_WEBPRNT_PATH && vendor !== 'epson';
 
   if (!isEpson && !isStar) return { status: 404, body: 'Not found' };
   if (method === 'OPTIONS') return { status: 204, body: '' };
