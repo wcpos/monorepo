@@ -15,6 +15,13 @@ import type { CouponLineItem } from './helpers';
 // Factories
 // ---------------------------------------------------------------------------
 
+/**
+ * Fixed clock for deterministic expiry checks — validateCoupon takes the time
+ * via context.now instead of reading Date.now() (SPEC §4). Expiry fixtures are
+ * built relative to this instant so the pass/fail semantics are unchanged.
+ */
+const FIXED_NOW = Date.UTC(2026, 0, 15);
+
 const createItem = (overrides: Partial<CouponLineItem> = {}): CouponLineItem => ({
 	product_id: 1,
 	quantity: 1,
@@ -34,6 +41,7 @@ const createContext = (
 	cartSubtotal: 100,
 	customerEmail: 'test@example.com',
 	customerId: 42,
+	now: FIXED_NOW,
 	...overrides,
 });
 
@@ -97,7 +105,7 @@ describe('coupon-validation', () => {
 			});
 
 			it('should pass when expiry date is in the future', () => {
-				const future = new Date(Date.now() + 86_400_000).toISOString();
+				const future = new Date(FIXED_NOW + 86_400_000).toISOString();
 				const coupon = createCoupon({ date_expires_gmt: future });
 
 				const result = validateCoupon(coupon, createContext());
@@ -105,7 +113,7 @@ describe('coupon-validation', () => {
 			});
 
 			it('should fail when expiry date is in the past', () => {
-				const past = new Date(Date.now() - 86_400_000).toISOString();
+				const past = new Date(FIXED_NOW - 86_400_000).toISOString();
 				const coupon = createCoupon({ date_expires_gmt: past });
 
 				const result = validateCoupon(coupon, createContext());
@@ -115,7 +123,7 @@ describe('coupon-validation', () => {
 
 			it('should parse bare ISO strings (no Z suffix) as UTC, not local time', () => {
 				// WooCommerce sends date_expires_gmt without Z suffix
-				const futureUtc = new Date(Date.now() + 86_400_000);
+				const futureUtc = new Date(FIXED_NOW + 86_400_000);
 				const bareIso = futureUtc.toISOString().replace('Z', '');
 				const coupon = createCoupon({ date_expires_gmt: bareIso });
 
@@ -124,7 +132,7 @@ describe('coupon-validation', () => {
 			});
 
 			it('should handle date strings with explicit Z suffix', () => {
-				const future = new Date(Date.now() + 86_400_000).toISOString();
+				const future = new Date(FIXED_NOW + 86_400_000).toISOString();
 				expect(future.endsWith('Z')).toBe(true);
 				const coupon = createCoupon({ date_expires_gmt: future });
 
@@ -133,7 +141,7 @@ describe('coupon-validation', () => {
 			});
 
 			it('should handle date strings with timezone offset', () => {
-				const future = new Date(Date.now() + 86_400_000);
+				const future = new Date(FIXED_NOW + 86_400_000);
 				const withOffset = future.toISOString().replace('Z', '+00:00');
 				const coupon = createCoupon({ date_expires_gmt: withOffset });
 
@@ -696,7 +704,7 @@ describe('coupon-validation', () => {
 			});
 
 			it('should return valid: true for a coupon with future expiry and under limits', () => {
-				const future = new Date(Date.now() + 86_400_000).toISOString();
+				const future = new Date(FIXED_NOW + 86_400_000).toISOString();
 				const coupon = createCoupon({
 					date_expires_gmt: future,
 					usage_limit: 100,

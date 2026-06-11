@@ -11,6 +11,8 @@ export interface CouponValidationContext {
 	cartSubtotal: number;
 	customerEmail: string;
 	customerId: number | null;
+	/** Epoch ms — the package's only clock input (SPEC §4: no Date.now() inside the engine). */
+	now: number;
 }
 
 export type ValidationResult = { valid: true } | { valid: false; rejection: CouponRejection };
@@ -42,7 +44,7 @@ export function validateCoupon(coupon: any, context: CouponValidationContext): V
 	// 2. Expiry check — parse as UTC since the field is _gmt
 	if (coupon.date_expires_gmt) {
 		const expiry = parseGmtDate(coupon.date_expires_gmt);
-		if (expiry.getTime() < Date.now()) {
+		if (expiry.getTime() < context.now) {
 			return { valid: false, rejection: { code: 'expired' } };
 		}
 	}
