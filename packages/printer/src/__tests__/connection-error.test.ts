@@ -36,6 +36,7 @@ describe('buildConnectionErrorMessage', () => {
 			enableHint: "ensure ePOS is enabled in the printer's network settings",
 			plainHttpPort: 8008,
 		});
+		expect(message).toContain('then visit https://192.168.1.10:8043 in your browser');
 		expect(message).toContain('set the port to 8008');
 	});
 });

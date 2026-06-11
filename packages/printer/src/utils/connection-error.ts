@@ -17,9 +17,9 @@ export function buildConnectionErrorMessage(opts: {
 	const { vendorLabel, url, enableHint, plainHttpPort } = opts;
 	const base = `Could not connect to ${vendorLabel} printer at ${url}. Check the IP address and ${enableHint}.`;
 
-	let hostname = '';
+	let origin = '';
 	try {
-		hostname = new URL(url).hostname;
+		origin = new URL(url).origin;
 	} catch {
 		return base;
 	}
@@ -35,7 +35,7 @@ export function buildConnectionErrorMessage(opts: {
 
 	return (
 		`${base} HTTPS requires an SSL certificate on the printer — generate a self-signed certificate ` +
-		`in the printer's web configuration, then visit https://${hostname} in your browser and accept ` +
+		`in the printer's web configuration, then visit ${origin} in your browser and accept ` +
 		`the certificate warning. If the printer only supports HTTP, set the port to ${plainHttpPort} instead.`
 	);
 }
