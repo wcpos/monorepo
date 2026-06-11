@@ -13,8 +13,7 @@ import {
 import { calculateTaxes } from '../money/calculate-taxes';
 import { getLineItemTaxStatus, parsePosData } from '../lines/pos-data';
 
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
-type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+import type { CouponLineInput as CouponLine, LineItemInput as LineItem } from '../../types';
 
 export interface RecalculateInput {
 	lineItems: LineItem[];

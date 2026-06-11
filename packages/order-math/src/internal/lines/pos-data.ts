@@ -85,8 +85,10 @@ export function updatePosDataMeta<T extends CartLine>(item: T, newData: any): T 
 
 /**
  * Extract and parse POS metadata from the line item.
+ * Structural parameter (meta_data only) so the engine's structural input
+ * types (LineItemInput etc.) are accepted alongside DB document fragments.
  */
-export const parsePosData = (item: CartLine) => {
+export const parsePosData = (item: { meta_data?: CartLine['meta_data'] }) => {
 	const posDataString = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
 	if (!posDataString) {
 		return null;

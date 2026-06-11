@@ -326,7 +326,11 @@ export function computeDiscountedLineItems<
  */
 export function calculateCouponDiscountTaxSplit(
 	perItemDiscounts: PerItemDiscount[],
-	lineItems: { product_id?: number | null; tax_class?: string; tax_status?: string }[],
+	lineItems: {
+		product_id?: number | null;
+		tax_class?: string | null;
+		tax_status?: string | null;
+	}[],
 	taxRates: { id: number; rate: string; compound: boolean; order: number; class?: string }[],
 	options?: {
 		pricesIncludeTax?: boolean;
