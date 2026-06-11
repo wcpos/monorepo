@@ -1,10 +1,12 @@
 import { getRoundingPrecision, roundHalfUp, roundTaxTotal } from './money/precision';
 
-type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
-type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
-type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
-type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
-type CouponLine = NonNullable<import('@wcpos/database').OrderDocument['coupon_lines']>[number];
+import type {
+	CouponLineInput as CouponLine,
+	FeeLineInput as FeeLine,
+	LineItemInput as LineItem,
+	ShippingLineInput as ShippingLine,
+	TaxRateInput as TaxRateDocument,
+} from '../types';
 
 interface Props {
 	lineItems?: LineItem[];
