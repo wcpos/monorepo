@@ -22,6 +22,37 @@ describe('NetworkAdapter web endpoints', () => {
 	});
 
 	it.each([
+		['star', 80, 'http://192.168.1.20:80/StarWebPRNT/SendMessage'],
+		['epson', 8008, 'http://192.168.1.20:8008/cgi-bin/epos/service.cgi'],
+	] as const)(
+		'annotates plain-HTTP %s requests as local network targets',
+		async (vendor, port, endpoint) => {
+			const adapter = new NetworkAdapter('192.168.1.20', port, vendor);
+
+			await adapter.printRaw(new Uint8Array([0x1b, 0x40]));
+
+			expect(fetch).toHaveBeenCalledWith(
+				expect.stringContaining(endpoint),
+				expect.objectContaining({ targetAddressSpace: 'local' })
+			);
+		}
+	);
+
+	it.each([
+		['star', 443],
+		['epson', 8043],
+	] as const)('does not annotate HTTPS %s requests', async (vendor, port) => {
+		const adapter = new NetworkAdapter('192.168.1.20', port, vendor);
+
+		await adapter.printRaw(new Uint8Array([0x1b, 0x40]));
+
+		const init = vi.mocked(fetch).mock.calls[0][1] as RequestInit & {
+			targetAddressSpace?: string;
+		};
+		expect(init.targetAddressSpace).toBeUndefined();
+	});
+
+	it.each([
 		[8043, 'https://192.168.1.20:8043/cgi-bin/epos/service.cgi'],
 		[8008, 'http://192.168.1.20:8008/cgi-bin/epos/service.cgi'],
 	] as const)('posts Epson jobs to the resolved port %s endpoint', async (port, endpoint) => {

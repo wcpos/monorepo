@@ -1,3 +1,5 @@
+import { withTargetAddressSpace } from '../utils/local-fetch';
+
 import type { PrinterTransport } from '../types';
 
 /**
@@ -11,9 +13,10 @@ import type { PrinterTransport } from '../types';
  * Typical endpoint URL:
  *   https://192.168.1.100/StarWebPRNT/SendMessage
  *
- * If your Star printer uses HTTP instead of HTTPS, the browser may block
- * mixed-content requests. Either access your POS app over HTTP as well,
- * or configure a reverse proxy.
+ * If your Star printer uses HTTP instead of HTTPS, Chromium browsers (142+)
+ * allow the request from a secure page via Local Network Access — the user
+ * must accept a one-time local-network permission prompt. Other browsers
+ * block plain-HTTP requests from HTTPS pages as mixed content.
  */
 export class StarWebPrntAdapter implements PrinterTransport {
 	readonly name = 'star-webprnt';
@@ -41,14 +44,17 @@ export class StarWebPrntAdapter implements PrinterTransport {
 
 		let response: Response;
 		try {
-			response = await fetch(this.url, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'text/xml; charset=utf-8',
-				},
-				body: xml,
-				signal: controller.signal,
-			});
+			response = await fetch(
+				this.url,
+				withTargetAddressSpace(this.url, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'text/xml; charset=utf-8',
+					},
+					body: xml,
+					signal: controller.signal,
+				})
+			);
 		} catch (error) {
 			if (error instanceof DOMException && error.name === 'AbortError') {
 				throw new Error(

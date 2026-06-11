@@ -1,3 +1,5 @@
+import { withTargetAddressSpace } from '../utils/local-fetch';
+
 import type { PrinterTransport } from '../types';
 
 const EPOS_PRINT_NS = 'http://www.epson-pos.com/schemas/2011/03/epos-print';
@@ -76,16 +78,19 @@ export class EpsonEposAdapter implements PrinterTransport {
 
 		let response: Response;
 		try {
-			response = await fetch(url, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'text/xml; charset=utf-8',
-					'If-Modified-Since': 'Thu, 01 Jan 1970 00:00:00 GMT',
-					SOAPAction: '""',
-				},
-				body,
-				signal: controller.signal,
-			});
+			response = await fetch(
+				url,
+				withTargetAddressSpace(url, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'text/xml; charset=utf-8',
+						'If-Modified-Since': 'Thu, 01 Jan 1970 00:00:00 GMT',
+						SOAPAction: '""',
+					},
+					body,
+					signal: controller.signal,
+				})
+			);
 		} catch (error) {
 			if (error instanceof DOMException && error.name === 'AbortError') {
 				throw new Error(
