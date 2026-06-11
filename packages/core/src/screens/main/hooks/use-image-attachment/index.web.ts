@@ -21,15 +21,25 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 			return;
 		}
 
+		// Rows in the variations table are reused across documents, so this hook
+		// instance can switch from one image to another. `active` cancels the
+		// previous load so it can't clobber the current one, and the blob URL is
+		// cleared up front so the previous image never lingers on the new row.
+		let active = true;
+
 		const loadImage = async () => {
 			try {
 				setIsLoading(true);
 				setError(null);
+				setBlobUrl(undefined);
 
 				// First, check if we already have this attachment
 				const existingAttachment = document.getAttachment(imageUrl);
 				if (existingAttachment) {
 					const blob = await existingAttachment.getData();
+					if (!active) {
+						return;
+					}
 					const objectUrl = URL.createObjectURL(blob);
 					setBlobUrl(objectUrl);
 					return;
@@ -61,18 +71,31 @@ export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 					type: blob.type,
 				});
 
+				if (!active) {
+					return;
+				}
+
 				// Create and set the object URL
 				const objectUrl = URL.createObjectURL(blob);
 				setBlobUrl(objectUrl);
 			} catch (err) {
+				if (!active) {
+					return;
+				}
 				setError(err instanceof Error ? err : new Error('Unknown error'));
 				setBlobUrl(undefined);
 			} finally {
-				setIsLoading(false);
+				if (active) {
+					setIsLoading(false);
+				}
 			}
 		};
 
 		loadImage();
+
+		return () => {
+			active = false;
+		};
 	}, [document, imageUrl, get, hasValidSource]);
 
 	// Cleanup object URL when it changes or component unmounts
