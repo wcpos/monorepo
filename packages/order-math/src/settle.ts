@@ -1,5 +1,6 @@
 import { calculateCartLine } from './cart-line';
 import { recalculateCoupons } from './internal/coupons/recalculate';
+import { toCouponConfigs } from './internal/coupons/to-coupon-configs';
 import { validateCoupon } from './internal/coupons/validate';
 import { enrichCategoriesWithAncestors } from './internal/coupons/helpers';
 import { calculateOrderTotals } from './internal/order-totals';
@@ -7,7 +8,6 @@ import { extractFeeLineData, parsePosData } from './internal/lines/pos-data';
 import { isActiveCouponLine, isActiveFeeLine, isActiveLineItem } from './snapshot';
 
 import type { CartConfig } from './config';
-import type { CouponDiscountConfig } from './internal/coupons/discount';
 import type { CouponLineItem } from './internal/coupons/helpers';
 import type { OrderTotals } from './order-totals';
 import type { CartSnapshot } from './snapshot';
@@ -281,20 +281,7 @@ export function settleCart(
 	let postReplayLineItems: LineItemInput[] | undefined;
 	let postReplayCouponLines: CouponLineInput[] | undefined;
 	if (activeCouponLines.length > 0) {
-		const couponConfigs = new Map<string, CouponDiscountConfig>();
-		for (const code of activeCodes) {
-			const coupon = availableCoupons!.get(code)!;
-			couponConfigs.set(code, {
-				discount_type: coupon.discount_type,
-				amount: coupon.amount || '0',
-				limit_usage_to_x_items: coupon.limit_usage_to_x_items ?? null,
-				product_ids: [...(coupon.product_ids ?? [])],
-				excluded_product_ids: [...(coupon.excluded_product_ids ?? [])],
-				product_categories: [...(coupon.product_categories ?? [])],
-				excluded_product_categories: [...(coupon.excluded_product_categories ?? [])],
-				exclude_sale_items: coupon.exclude_sale_items ?? false,
-			});
-		}
+		const couponConfigs = toCouponConfigs(activeCodes, availableCoupons!);
 
 		const replay = recalculateCoupons({
 			lineItems,
