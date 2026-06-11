@@ -5,7 +5,8 @@ const EPSON_HTTP_PORT = 8008;
 const STAR_HTTP_PORT = 80;
 
 const normalizeVendor = (value) => {
-  if (value === 'epson' || value === 'star' || value === 'both') return value;
+  const normalized = (value ?? '').trim().toLowerCase();
+  if (normalized === 'epson' || normalized === 'star' || normalized === 'both') return normalized;
   return DEFAULT_VENDOR;
 };
 

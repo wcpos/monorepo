@@ -34,3 +34,9 @@ test('explicit HTTP port overrides the Star port 80 default', () => {
 test('Epson mode defaults the HTTP server to ePOS port 8008', () => {
   assert.equal(getServerConfig({ VP_VENDOR: 'epson' }).httpPort, 8008);
 });
+
+test('vendor mode is case-insensitive and trims whitespace', () => {
+  assert.equal(getServerConfig({ VP_VENDOR: ' STAR ' }).vendor, 'star');
+  assert.equal(getServerConfig({ VP_VENDOR: 'Epson' }).vendor, 'epson');
+  assert.equal(getServerConfig({ VP_VENDOR: 'BOTH' }).vendor, 'both');
+});

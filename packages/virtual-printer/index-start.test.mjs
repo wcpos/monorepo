@@ -39,7 +39,7 @@ const getAvailablePort = async () => {
   return port;
 };
 
-const startVirtualPrinter = async (env, expectedOutput) => {
+const startVirtualPrinter = async (env, expectedOutput, { keepAlive = false } = {}) => {
   const child = spawn(process.execPath, ['index.mjs'], {
     env: {
       ...process.env,
@@ -69,6 +69,16 @@ const startVirtualPrinter = async (env, expectedOutput) => {
   });
 
   const exitPromise = once(child, 'exit');
+  let cleanedUp = false;
+  const cleanup = async () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    child.kill('SIGTERM');
+    const [code, signal] = await exitPromise;
+    assert.equal(signal, null, `expected graceful shutdown, got signal ${signal}`);
+    assert.equal(code, 0, `expected exit code 0, got ${code}`);
+  };
+
   let started = false;
   try {
     started = await Promise.race([
@@ -88,15 +98,16 @@ const startVirtualPrinter = async (env, expectedOutput) => {
     assert.equal(started, true);
   } finally {
     if (!started) {
-      child.kill('SIGTERM');
-      await exitPromise;
+      await cleanup();
     }
   }
 
-  child.kill('SIGTERM');
-  const [code, signal] = await exitPromise;
-  assert.equal(signal, null, `expected graceful shutdown, got signal ${signal}`);
-  assert.equal(code, 0, `expected exit code 0, got ${code}`);
+  if (keepAlive) {
+    return { child, cleanup };
+  }
+
+  await cleanup();
+  return undefined;
 };
 
 test('virtual printer entrypoint starts under ESM', async () => {
@@ -126,53 +137,21 @@ test('virtual printer entrypoint starts in Star WebPRNT mode', async () => {
 
 test('allows private-network CORS preflight requests', async () => {
   const [rawPort, httpPort] = await Promise.all([getAvailablePort(), getAvailablePort()]);
-  const child = spawn(process.execPath, ['index.mjs'], {
-    env: {
-      ...process.env,
+  const printer = await startVirtualPrinter(
+    {
       VP_VENDOR: 'star',
       VP_RAW_PORT: String(rawPort),
       VP_HTTP_PORT: String(httpPort),
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+    `star HTTP endpoints listening on http://0.0.0.0:${httpPort}`,
+    { keepAlive: true }
+  );
 
-  let output = '';
-  const exitPromise = once(child, 'exit');
   try {
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      output += chunk;
-    });
-    child.stderr.on('data', (chunk) => {
-      output += chunk;
-    });
-
-    await Promise.race([
-      new Promise((resolve) => {
-        child.stdout.on('data', () => {
-          if (output.includes(`star HTTP endpoints listening on http://0.0.0.0:${httpPort}`)) {
-            resolve();
-          }
-        });
-      }),
-      exitPromise.then(([code, signal]) => {
-        throw new Error(`virtual printer exited before startup (${code ?? signal}):\n${output}`);
-      }),
-      new Promise((_, reject) => {
-        const timeout = setTimeout(
-          () => reject(new Error(`timed out waiting for startup:\n${output}`)),
-          5000
-        );
-        timeout.unref();
-      }),
-    ]);
-
     const response = await requestOptions(httpPort, '/StarWebPRNT/SendMessage');
     assert.equal(response.statusCode, 204);
     assert.equal(response.headers['access-control-allow-private-network'], 'true');
   } finally {
-    child.kill('SIGTERM');
-    await exitPromise;
+    await printer.cleanup();
   }
 });
