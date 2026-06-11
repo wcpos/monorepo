@@ -7,11 +7,19 @@ export type HtmlRenderOptions = object;
 // 80mm thermal paper at 203 DPI prints ~576 dots wide; 58mm prints ~384 dots.
 // We pick a budget from the receipt's character width because that is what the
 // AST gives us — anything ≥ 40 chars is treated as 80mm.
+//
+// Mirrored in wcpos/woocommerce-pos includes/Templates/Thermal/Html_Thermal_Emitter.php
+// (server-side thermal→PDF renderer) — keep in sync or PDF/preview parity
+// silently drifts.
 const DOT_BUDGET_WIDE = 576;
 const DOT_BUDGET_NARROW = 384;
 const NARROW_PAPER_THRESHOLD_CHARS = 40;
 const BARCODE_PREVIEW_SCALE = 1.5;
 
+// The wrapper's 13px base font, 16px/12px frame padding, and ch-based widths
+// (Courier's 0.6em character advance) are mirrored in
+// wcpos/woocommerce-pos includes/Templates/Thermal/Html_Thermal_Emitter.php,
+// which re-expresses them for Dompdf (no flexbox, no ch unit) — keep in sync.
 export function renderHtml(ast: ReceiptNode, _options: HtmlRenderOptions = {}): string {
 	const widthChars = safeInteger(ast.paperWidth, 48, 16, 120);
 	const inner = renderNodes(ast.children, widthChars);
