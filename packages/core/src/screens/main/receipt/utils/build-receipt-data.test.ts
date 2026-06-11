@@ -402,4 +402,187 @@ describe('buildReceiptData', () => {
 			{ label: 'SPRING', total: '1.50', total_incl: '1.65', total_excl: '1.50' },
 		]);
 	});
+
+	describe('tax summary and tax section', () => {
+		// Mirrors a UK order with two rates (VAT 20% + Surcharge 2%) applied to
+		// a single 35.00 line — the shape produced by WC REST orders.
+		const orderWithTaxLines = {
+			...mockOrder,
+			total: '42.84',
+			total_tax: '7.84',
+			discount_total: '0.00',
+			line_items: [
+				{
+					id: 3,
+					name: 'Hoodie with Pocket',
+					quantity: 1,
+					price: 35,
+					total: '35.00',
+					total_tax: '7.84',
+					subtotal: '45.00',
+					subtotal_tax: '9.84',
+					sku: 'woo-hoodie-with-pocket',
+					taxes: [
+						{ id: 10, total: '7.00', subtotal: '9.00' },
+						{ id: 7, total: '0.84', subtotal: '1.08' },
+					],
+				},
+			],
+			tax_lines: [
+				{
+					id: 100,
+					rate_code: 'GB-VAT-1',
+					rate_id: 10,
+					label: 'VAT',
+					compound: false,
+					tax_total: '7.00',
+					shipping_tax_total: '0.00',
+					rate_percent: 20,
+				},
+				{
+					id: 101,
+					rate_code: 'GB-SURCHARGE-2',
+					rate_id: 7,
+					label: 'Surcharge',
+					compound: true,
+					tax_total: '0.84',
+					shipping_tax_total: '0.00',
+					rate_percent: 2,
+				},
+			],
+		};
+		const taxStore = { ...inclStore, calc_taxes: 'yes', tax_total_display: 'itemized' };
+
+		it('builds per-rate tax_summary rows from tax_lines with taxable bases', () => {
+			const result = buildReceiptData(orderWithTaxLines, taxStore);
+
+			expect(result.has_tax_summary).toBe(true);
+			expect(result.tax_summary).toEqual([
+				{
+					code: '10',
+					rate: 20,
+					label: 'VAT',
+					compound: false,
+					taxable_amount_excl: 35,
+					tax_amount: 7,
+					taxable_amount_incl: 42,
+				},
+				{
+					code: '7',
+					rate: 2,
+					label: 'Surcharge',
+					compound: true,
+					taxable_amount_excl: 35,
+					tax_amount: 0.84,
+					taxable_amount_incl: 35.84,
+				},
+			]);
+		});
+
+		it('includes shipping tax in tax_amount and shipping lines in taxable bases', () => {
+			const order = {
+				...orderWithTaxLines,
+				shipping_lines: [
+					{
+						method_title: 'Flat Rate',
+						total: '5.00',
+						total_tax: '1.00',
+						taxes: [{ id: 10, total: '1.00', subtotal: '1.00' }],
+					},
+				],
+				tax_lines: [
+					{
+						rate_id: 10,
+						label: 'VAT',
+						compound: false,
+						tax_total: '7.00',
+						shipping_tax_total: '1.00',
+						rate_percent: 20,
+					},
+				],
+			};
+
+			const result = buildReceiptData(order, taxStore);
+
+			expect(result.tax_summary).toHaveLength(1);
+			expect(result.tax_summary[0].tax_amount).toBe(8);
+			expect(result.tax_summary[0].taxable_amount_excl).toBe(40);
+			expect(result.tax_summary[0].taxable_amount_incl).toBe(48);
+		});
+
+		it('skips empty-string tax totals when summing taxable bases', () => {
+			const order = {
+				...orderWithTaxLines,
+				line_items: [
+					{
+						...orderWithTaxLines.line_items[0],
+						taxes: [
+							{ id: 10, total: '7.00', subtotal: '9.00' },
+							{ id: 7, total: '', subtotal: '' },
+						],
+					},
+				],
+			};
+
+			const result = buildReceiptData(order, taxStore);
+			const surcharge = result.tax_summary.find((row) => row.code === '7');
+
+			expect(surcharge?.taxable_amount_excl).toBeNull();
+			expect(surcharge?.taxable_amount_incl).toBeNull();
+		});
+
+		it('emits rate null when rate_percent is missing', () => {
+			const order = {
+				...orderWithTaxLines,
+				tax_lines: [{ rate_id: 10, label: 'VAT', tax_total: '7.00', shipping_tax_total: '0.00' }],
+			};
+
+			const result = buildReceiptData(order, taxStore);
+
+			expect(result.tax_summary[0].rate).toBeNull();
+		});
+
+		it('returns empty tax_summary and has_tax_summary false without tax_lines', () => {
+			const result = buildReceiptData(mockOrder, taxStore);
+
+			expect(result.tax_summary).toEqual([]);
+			expect(result.has_tax_summary).toBe(false);
+		});
+
+		it('builds the tax section from store settings', () => {
+			const result = buildReceiptData(orderWithTaxLines, taxStore);
+
+			expect(result.tax).toEqual({
+				display: 'incl',
+				display_incl: true,
+				display_excl: false,
+				breakdown: 'itemized',
+				breakdown_hidden: false,
+				breakdown_single: false,
+				breakdown_itemized: true,
+			});
+		});
+
+		it('hides the tax breakdown when taxes are disabled', () => {
+			const result = buildReceiptData(orderWithTaxLines, {
+				...exclStore,
+				calc_taxes: 'no',
+				tax_total_display: 'itemized',
+			});
+
+			expect(result.tax.display).toBe('excl');
+			expect(result.tax.breakdown).toBe('hidden');
+			expect(result.tax.breakdown_hidden).toBe(true);
+		});
+
+		it('defaults breakdown to itemized when tax_total_display is invalid', () => {
+			const result = buildReceiptData(orderWithTaxLines, {
+				...inclStore,
+				calc_taxes: 'yes',
+				tax_total_display: 'bogus',
+			});
+
+			expect(result.tax.breakdown).toBe('itemized');
+		});
+	});
 });

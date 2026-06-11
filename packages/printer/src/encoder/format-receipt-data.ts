@@ -19,6 +19,13 @@ const DEFAULT_I18N = {
 	customer_tax_id_label_other: 'Tax ID',
 	subtotal: 'Subtotal',
 	total: 'Total',
+	tax: 'Tax',
+	tax_summary: 'Tax Summary',
+	included_tax: 'Tax included',
+	total_tax: 'Total Tax',
+	tax_amount_short: 'Tax',
+	taxable_excl_short: 'Taxable excl.',
+	taxable_incl_short: 'Taxable incl.',
 	refund_total: 'Refund Total',
 	refunded: 'Refunded',
 	net_total: 'Net Total',
@@ -111,14 +118,26 @@ export function formatReceiptData(data: ReceiptData): Record<string, any> {
 		...data.i18n,
 	};
 
+	// narrowSymbol matches the server's wc_price() output, which always prints
+	// the bare currency symbol ("42,84 £"). The default 'symbol' display falls
+	// back to ISO codes for foreign currencies in many locales (es + GBP →
+	// "42,84 GBP"), making client renders disagree with server-rendered PDFs.
 	const fmt = (value: number): string => {
 		try {
 			return new Intl.NumberFormat(normalizedLocale || 'en-US', {
 				style: 'currency',
 				currency,
+				currencyDisplay: 'narrowSymbol',
 			}).format(value);
 		} catch {
-			return currency ? `${currency} ${value.toFixed(2)}` : value.toFixed(2);
+			try {
+				return new Intl.NumberFormat(normalizedLocale || 'en-US', {
+					style: 'currency',
+					currency,
+				}).format(value);
+			} catch {
+				return currency ? `${currency} ${value.toFixed(2)}` : value.toFixed(2);
+			}
 		}
 	};
 	const perUnit = (total: number | undefined, qty: number): number | undefined => {

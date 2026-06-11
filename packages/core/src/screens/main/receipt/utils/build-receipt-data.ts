@@ -110,6 +110,26 @@ interface ReceiptPresentationHints {
 	locale: string;
 }
 
+interface ReceiptTaxSummaryItem {
+	code: string;
+	rate: number | null;
+	label: string;
+	compound: boolean;
+	taxable_amount_excl: number | null;
+	tax_amount: number;
+	taxable_amount_incl: number | null;
+}
+
+interface ReceiptTaxSection {
+	display: 'incl' | 'excl';
+	display_incl: boolean;
+	display_excl: boolean;
+	breakdown: 'hidden' | 'single' | 'itemized';
+	breakdown_hidden: boolean;
+	breakdown_single: boolean;
+	breakdown_itemized: boolean;
+}
+
 export interface ReceiptData {
 	order: ReceiptOrder;
 	store: ReceiptStore;
@@ -119,6 +139,9 @@ export interface ReceiptData {
 	shipping: ReceiptAdjustment[];
 	discounts: ReceiptAdjustment[];
 	totals: ReceiptTotals;
+	tax: ReceiptTaxSection;
+	tax_summary: ReceiptTaxSummaryItem[];
+	has_tax_summary: boolean;
 	payments: ReceiptPayment[];
 	fiscal: ReceiptFiscal;
 	presentation_hints: ReceiptPresentationHints;
@@ -166,6 +189,94 @@ function mapAdjustment(
 		total: getDisplayValue({ incl, excl, displayTax }).toFixed(dp),
 		total_incl: incl.toFixed(dp),
 		total_excl: excl.toFixed(dp),
+	};
+}
+
+/**
+ * Sum post-discount pre-tax item totals by tax rate id.
+ *
+ * Mirrors `Receipt_Data_Builder::get_taxable_bases_by_rate_id()` — a line
+ * taxed by multiple rates contributes its full net total to each applicable
+ * rate, and compound rates use the pure pre-tax net base.
+ */
+function getTaxableBasesByRateId(order: Record<string, any>): Record<string, number> {
+	const bases: Record<string, number> = {};
+	const itemGroups = [order.line_items, order.fee_lines, order.shipping_lines];
+
+	for (const group of itemGroups) {
+		if (!Array.isArray(group)) continue;
+		for (const item of group) {
+			if (!item || typeof item !== 'object') continue;
+			const taxes = Array.isArray(item.taxes) ? item.taxes : [];
+			const base = toNum(item.total);
+
+			for (const tax of taxes) {
+				if (!tax || typeof tax !== 'object') continue;
+				const rateId = tax.id == null ? '' : String(tax.id);
+				// WooCommerce stores an empty-string total for rates that exist on
+				// the order but don't apply to this line — skip those like the server.
+				if (rateId === '' || tax.total == null || tax.total === '') continue;
+				bases[rateId] = (bases[rateId] ?? 0) + base;
+			}
+		}
+	}
+
+	return bases;
+}
+
+/**
+ * Build the per-rate tax breakdown from the order's tax_lines.
+ * Mirrors `Receipt_Data_Builder::get_tax_summary()`.
+ */
+function buildTaxSummary(order: Record<string, any>): ReceiptTaxSummaryItem[] {
+	const taxLines = Array.isArray(order.tax_lines) ? order.tax_lines : [];
+	if (taxLines.length === 0) return [];
+
+	const taxableBases = getTaxableBasesByRateId(order);
+
+	return taxLines
+		.filter((line: unknown): line is Record<string, any> => !!line && typeof line === 'object')
+		.map((line: Record<string, any>) => {
+			const taxAmount = toNum(line.tax_total) + toNum(line.shipping_tax_total);
+			const rate = toNum(line.rate_percent);
+			const code = line.rate_id == null ? '' : String(line.rate_id);
+			const taxableExcl = code in taxableBases ? taxableBases[code] : null;
+
+			return {
+				code,
+				rate: rate > 0 ? rate : null,
+				label: String(line.label || line.rate_code || ''),
+				compound: !!line.compound,
+				taxable_amount_excl: taxableExcl,
+				tax_amount: taxAmount,
+				taxable_amount_incl: taxableExcl != null ? taxableExcl + taxAmount : null,
+			};
+		});
+}
+
+/**
+ * Build template-facing tax mode signals from store settings.
+ * Mirrors `Receipt_Store_Resolver::build_tax_section()`.
+ */
+function buildTaxSection(
+	store: Record<string, any>,
+	displayTax: 'incl' | 'excl'
+): ReceiptTaxSection {
+	const taxEnabled = store.calc_taxes === 'yes' || store.calc_taxes === true;
+	const rawBreakdown = taxEnabled ? store.tax_total_display : 'hidden';
+	const breakdown =
+		rawBreakdown === 'hidden' || rawBreakdown === 'single' || rawBreakdown === 'itemized'
+			? rawBreakdown
+			: 'itemized';
+
+	return {
+		display: displayTax,
+		display_incl: 'incl' === displayTax,
+		display_excl: 'excl' === displayTax,
+		breakdown,
+		breakdown_hidden: 'hidden' === breakdown,
+		breakdown_single: 'single' === breakdown,
+		breakdown_itemized: 'itemized' === breakdown,
 	};
 }
 
@@ -300,6 +411,8 @@ export function buildReceiptData(
 			)
 	);
 
+	const taxSummary = buildTaxSummary(order);
+
 	const rawStatus = String(order.status ?? '');
 	// `useOrderStatusLabel.getLabel` returns the raw status when the
 	// orderStatuses cache hasn't loaded yet — capitalize that fall-through
@@ -418,6 +531,9 @@ export function buildReceiptData(
 			total_qty: mappedLines.reduce((sum, line) => sum + toNum(line.quantity), 0),
 			line_count: mappedLines.length,
 		},
+		tax: buildTaxSection(store, displayTax),
+		tax_summary: taxSummary,
+		has_tax_summary: taxSummary.length > 0,
 		payments: [
 			{
 				method: order.payment_method_title || order.payment_method || '',

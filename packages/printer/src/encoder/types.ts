@@ -17,6 +17,7 @@ export type {
 	ReceiptDiscount,
 	ReceiptTotals,
 	ReceiptTaxSummaryItem,
+	ReceiptTaxSection,
 	ReceiptPayment,
 	ReceiptRefund,
 	ReceiptRefundLine,

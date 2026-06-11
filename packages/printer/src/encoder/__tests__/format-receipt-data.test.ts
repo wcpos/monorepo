@@ -488,4 +488,42 @@ describe('formatReceiptData', () => {
 		// Display variant still shows formatted currency
 		expect(result.totals.discount_total_incl_display).toBe('$0.00');
 	});
+
+	it('renders foreign currencies with the narrow symbol, matching server wc_price output', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.order.currency = 'GBP';
+		data.presentation_hints.locale = 'es-ES';
+		const result = formatReceiptData(data);
+		// Default 'symbol' display yields "25,00 GBP" in es-ES; the server PDF
+		// renders "25,00 £" via wc_price(), so client output must use the symbol.
+		expect(result.totals.total_incl_display).toContain('£');
+		expect(result.totals.total_incl_display).not.toContain('GBP');
+	});
+
+	it('passes the tax section and has_tax_summary guard through to templates', () => {
+		const data = structuredClone(sampleReceiptData);
+		data.tax = {
+			display: 'incl',
+			display_incl: true,
+			display_excl: false,
+			breakdown: 'itemized',
+			breakdown_hidden: false,
+			breakdown_single: false,
+			breakdown_itemized: true,
+		};
+		data.has_tax_summary = true;
+		const result = formatReceiptData(data);
+		expect(result.tax.display_incl).toBe(true);
+		expect(result.has_tax_summary).toBe(true);
+	});
+
+	it('provides English fallbacks for the tax-block i18n labels', () => {
+		const result = formatReceiptData(sampleReceiptData);
+		expect(result.i18n.tax_summary).toBe('Tax Summary');
+		expect(result.i18n.included_tax).toBe('Tax included');
+		expect(result.i18n.total_tax).toBe('Total Tax');
+		expect(result.i18n.taxable_excl_short).toBe('Taxable excl.');
+		expect(result.i18n.taxable_incl_short).toBe('Taxable incl.');
+		expect(result.i18n.tax_amount_short).toBe('Tax');
+	});
 });
