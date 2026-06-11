@@ -4,13 +4,17 @@ import process from 'node:process';
 
 import bonjourService from 'bonjour-service';
 
+import { getServerConfig } from './server-config.mjs';
 import { routeHttpRequest } from './http-router.mjs';
 import { buildMdnsServices } from './mdns-services.mjs';
 import { summarizeEscPos } from './escpos-summary.mjs';
 
-const NAME = process.env.VP_NAME ?? 'Virtual WCPOS Printer';
-const RAW_PORT = Number(process.env.VP_RAW_PORT ?? 9100);
-const HTTP_PORT = Number(process.env.VP_HTTP_PORT ?? 8008);
+const {
+  name: NAME,
+  vendor: VENDOR,
+  rawPort: RAW_PORT,
+  httpPort: HTTP_PORT,
+} = getServerConfig(process.env);
 const SHUTDOWN_TIMEOUT_MS = 3000;
 
 const log = (...args) => console.log(`[virtual-printer]`, ...args);
@@ -40,10 +44,11 @@ rawServer.listen(RAW_PORT, () => log(`raw print listening on tcp://0.0.0.0:${RAW
 
 // 3. HTTP server for the Epson/Star endpoints (web sweep + web print)
 const httpServer = http.createServer((req, res) => {
-  const { status, body } = routeHttpRequest(req.method ?? 'GET', req.url ?? '/');
+  const { status, body } = routeHttpRequest(req.method ?? 'GET', req.url ?? '/', VENDOR);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
   if (req.method === 'POST') {
     const chunks = [];
     req.on('data', (chunk) => chunks.push(chunk));
@@ -58,7 +63,9 @@ const httpServer = http.createServer((req, res) => {
   res.writeHead(status, { 'Content-Type': 'text/plain' });
   res.end(body);
 });
-httpServer.listen(HTTP_PORT, () => log(`HTTP endpoints listening on http://0.0.0.0:${HTTP_PORT}`));
+httpServer.listen(HTTP_PORT, () =>
+  log(`${VENDOR} HTTP endpoints listening on http://0.0.0.0:${HTTP_PORT}`)
+);
 
 // Graceful shutdown so mDNS de-registers
 const waitForCallback = (label, start) =>

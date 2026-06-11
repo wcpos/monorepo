@@ -43,3 +43,16 @@ test('OPTIONS preflight returns 204', () => {
 test('a query string does not change routing', () => {
   assert.equal(routeHttpRequest('GET', `${EPSON_EPOS_PATH}?x=1`).status, 405);
 });
+
+
+test('Star-only mode exposes WebPRNT and hides Epson ePOS', () => {
+  assert.equal(routeHttpRequest('GET', STAR_WEBPRNT_PATH, 'star').status, 405);
+  assert.equal(routeHttpRequest('POST', STAR_WEBPRNT_PATH, 'star').status, 200);
+  assert.equal(routeHttpRequest('GET', EPSON_EPOS_PATH, 'star').status, 404);
+});
+
+test('Epson-only mode exposes ePOS and hides Star WebPRNT', () => {
+  assert.equal(routeHttpRequest('GET', EPSON_EPOS_PATH, 'epson').status, 405);
+  assert.equal(routeHttpRequest('POST', EPSON_EPOS_PATH, 'epson').status, 200);
+  assert.equal(routeHttpRequest('GET', STAR_WEBPRNT_PATH, 'epson').status, 404);
+});

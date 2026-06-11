@@ -9,7 +9,7 @@
     "build:main": "turbo build --filter=\"...{./apps/main}\"",
     "test": "turbo run test --filter='{./packages/*}' --filter='{./apps/main}'",
     "test:ci": "pnpm jest --ci --passWithNoTests && cd packages/query && npx jest --config jest.config.cjs --ci",
-    "test:scripts": "node --test scripts/*.test.mjs",
+    "test:scripts": "node --test scripts/*.test.mjs && pnpm --filter @wcpos/virtual-printer test",
     "lint": "turbo lint --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}'",
     "lint:fix": "turbo lint:fix --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}'",
     "typecheck": "turbo typecheck --filter='{./packages/*}' --filter='{./apps/main}'",
@@ -30,7 +30,7 @@
     "extract:translations": "node scripts/extract-js-strings.js",
     "translations:check": "node scripts/extract-js-strings.js --check",
     "prepare": "git config core.hooksPath .githooks",
-    "virtual-printer": "node scripts/virtual-printer/index.mjs",
+    "virtual-printer": "pnpm --filter @wcpos/virtual-printer start",
     "submodules:update": "git submodule update --init --remote .wiki apps/electron apps/web && git add .wiki apps/electron apps/web"
   },
   "packageManager": "pnpm@11.1.1",
@@ -38,7 +38,6 @@
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
   },
   "devDependencies": {
-    "bonjour-service": "^1.3.0",
     "glob": "^13.0.6",
     "lint-staged": "^16.4.0",
     "eslint": "^9.39.4",
