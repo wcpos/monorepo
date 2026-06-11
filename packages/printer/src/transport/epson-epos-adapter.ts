@@ -1,3 +1,6 @@
+import { buildConnectionErrorMessage } from '../utils/connection-error';
+import { withTargetAddressSpace } from '../utils/local-fetch';
+
 import type { PrinterTransport } from '../types';
 
 const EPOS_PRINT_NS = 'http://www.epson-pos.com/schemas/2011/03/epos-print';
@@ -76,16 +79,19 @@ export class EpsonEposAdapter implements PrinterTransport {
 
 		let response: Response;
 		try {
-			response = await fetch(url, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'text/xml; charset=utf-8',
-					'If-Modified-Since': 'Thu, 01 Jan 1970 00:00:00 GMT',
-					SOAPAction: '""',
-				},
-				body,
-				signal: controller.signal,
-			});
+			response = await fetch(
+				url,
+				withTargetAddressSpace(url, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'text/xml; charset=utf-8',
+						'If-Modified-Since': 'Thu, 01 Jan 1970 00:00:00 GMT',
+						SOAPAction: '""',
+					},
+					body,
+					signal: controller.signal,
+				})
+			);
 		} catch (error) {
 			if (error instanceof DOMException && error.name === 'AbortError') {
 				throw new Error(
@@ -93,10 +99,12 @@ export class EpsonEposAdapter implements PrinterTransport {
 				);
 			}
 			throw new Error(
-				`Could not connect to Epson printer at ${this.baseUrl}. ` +
-					"Check the IP address and ensure ePOS is enabled in the printer's network settings. " +
-					"If using HTTPS, you may need to accept the printer's self-signed certificate " +
-					`by visiting ${this.baseUrl} in your browser first.`
+				buildConnectionErrorMessage({
+					vendorLabel: 'Epson',
+					url,
+					enableHint: "ensure ePOS is enabled in the printer's network settings",
+					plainHttpPort: 8008,
+				})
 			);
 		} finally {
 			clearTimeout(timeoutId);

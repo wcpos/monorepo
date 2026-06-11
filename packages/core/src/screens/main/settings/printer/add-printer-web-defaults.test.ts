@@ -31,4 +31,18 @@ describe('web printer network defaults', () => {
 			'https://192.168.1.10:443/StarWebPRNT/SendMessage'
 		);
 	});
+
+	// Guard: must match resolveStarWebPrntUrl in
+	// packages/printer/src/transport/network-adapter.web.ts
+	it('keeps http for an explicit Star port 80 even on an https origin', () => {
+		expect(deriveEndpointHint('star', '192.168.1.10', 80, 'https:')).toBe(
+			'http://192.168.1.10:80/StarWebPRNT/SendMessage'
+		);
+	});
+
+	it('keeps http for an explicit Epson port 8008 even on an https origin', () => {
+		expect(deriveEndpointHint('epson', '192.168.1.10', 8008, 'https:')).toBe(
+			'http://192.168.1.10:8008/cgi-bin/epos/service.cgi'
+		);
+	});
 });
