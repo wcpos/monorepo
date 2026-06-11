@@ -186,10 +186,15 @@ export function usePrinterDialogForm({
 	const vendor = form.watch('vendor');
 	React.useEffect(() => {
 		if (vendor !== prevVendorRef.current) {
+			const previousVendor = prevVendorRef.current;
 			prevVendorRef.current = vendor;
+			const previousDefaults = deriveVendorDefaults(previousVendor);
 			const d = deriveVendorDefaults(vendor);
+			const currentPort = form.getValues('port');
 			form.setValue('language', d.language);
-			form.setValue('port', d.port);
+			if (currentPort == null || currentPort === previousDefaults.port) {
+				form.setValue('port', d.port);
+			}
 		}
 	}, [vendor, form, deriveVendorDefaults]);
 

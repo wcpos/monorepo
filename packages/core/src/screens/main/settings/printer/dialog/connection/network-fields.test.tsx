@@ -171,6 +171,13 @@ describe('NetworkFields discovery states', () => {
 		expect(form.setValue).toHaveBeenCalledWith('name', 'Kitchen Epson');
 		expect(form.setValue).toHaveBeenCalledWith('port', 8043, { shouldValidate: true });
 		expect(form.setValue).toHaveBeenCalledWith('vendor', 'epson');
+		expect((form.setValue as jest.Mock).mock.calls).toEqual([
+			['connectionType', 'network'],
+			['address', '192.168.1.50', { shouldValidate: true }],
+			['name', 'Kitchen Epson'],
+			['vendor', 'epson'],
+			['port', 8043, { shouldValidate: true }],
+		]);
 	});
 
 	it('labels scan results with a clear call to action', () => {
