@@ -61,7 +61,9 @@ export class NetworkAdapter implements PrinterTransport {
 type OriginProtocol = 'http:' | 'https:';
 
 function getOriginProtocol(): OriginProtocol {
-	return typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https:' : 'http:';
+	return typeof window !== 'undefined' && window.location.protocol === 'https:'
+		? 'https:'
+		: 'http:';
 }
 
 export function resolveStarWebPrntUrl(
@@ -70,7 +72,12 @@ export function resolveStarWebPrntUrl(
 	originProtocol: OriginProtocol = getOriginProtocol()
 ): string {
 	const secureOrigin = originProtocol === 'https:';
-	const protocol = secureOrigin ? 'https' : 'http';
+	// 9100 is the raw-TCP "use default" sentinel — pick the WebPRNT port matching the origin.
 	const resolvedPort = port === 9100 ? (secureOrigin ? 443 : 80) : port;
+	// The resolved port is the source of truth for the protocol, so an explicit port 80
+	// stays plain HTTP even on an HTTPS origin (mixed content is handled via
+	// targetAddressSpace — see withTargetAddressSpace). Must stay in sync with
+	// deriveEndpointHint in packages/core .../printer/web-network-defaults.ts.
+	const protocol = resolvedPort === 443 ? 'https' : 'http';
 	return `${protocol}://${host}:${resolvedPort}/StarWebPRNT/SendMessage`;
 }

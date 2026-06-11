@@ -6,11 +6,12 @@ describe('NetworkAdapter web endpoints', () => {
 	beforeEach(() => {
 		vi.stubGlobal(
 			'fetch',
-			vi.fn(async () =>
-				new Response(
-					'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><response xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print" success="true" /></s:Body></s:Envelope>',
-					{ status: 200 }
-				)
+			vi.fn(
+				async () =>
+					new Response(
+						'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><response xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print" success="true" /></s:Body></s:Envelope>',
+						{ status: 200 }
+					)
 			)
 		);
 		vi.stubGlobal('btoa', (value: string) => Buffer.from(value, 'binary').toString('base64'));
@@ -40,4 +41,16 @@ describe('NetworkAdapter web endpoints', () => {
 	] as const)('resolves Star WebPRNT URLs on %s origins', (protocol, port, endpoint) => {
 		expect(resolveStarWebPrntUrl('192.168.1.20', port, protocol)).toBe(endpoint);
 	});
+
+	it.each([
+		['https:', 80, 'http://192.168.1.20:80/StarWebPRNT/SendMessage'],
+		['http:', 443, 'https://192.168.1.20:443/StarWebPRNT/SendMessage'],
+		['https:', 9100, 'https://192.168.1.20:443/StarWebPRNT/SendMessage'],
+		['http:', 9100, 'http://192.168.1.20:80/StarWebPRNT/SendMessage'],
+	] as const)(
+		'honors the explicit Star port over the %s origin protocol',
+		(protocol, port, endpoint) => {
+			expect(resolveStarWebPrntUrl('192.168.1.20', port, protocol)).toBe(endpoint);
+		}
+	);
 });
