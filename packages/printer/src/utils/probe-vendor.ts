@@ -1,3 +1,5 @@
+import { withTargetAddressSpace } from './local-fetch';
+
 /**
  * Probe a network host to auto-detect the printer vendor.
  *
@@ -12,11 +14,12 @@ export async function probeVendor(host: string): Promise<'epson' | 'star' | null
 	const probeEpson = async (): Promise<boolean> => {
 		const controller = new AbortController();
 		const id = setTimeout(() => controller.abort(), timeout);
+		const url = `http://${host}:8008/cgi-bin/epos/service.cgi`;
 		try {
-			const response = await fetch(`http://${host}:8008/cgi-bin/epos/service.cgi`, {
-				method: 'GET',
-				signal: controller.signal,
-			});
+			const response = await fetch(
+				url,
+				withTargetAddressSpace(url, { method: 'GET', signal: controller.signal })
+			);
 			return isEndpointPresent(response);
 		} catch {
 			return false;
@@ -41,11 +44,12 @@ export async function probeVendor(host: string): Promise<'epson' | 'star' | null
 
 			const controller2 = new AbortController();
 			const id2 = setTimeout(() => controller2.abort(), timeout);
+			const httpUrl = `http://${host}/StarWebPRNT/SendMessage`;
 			try {
-				const response = await fetch(`http://${host}/StarWebPRNT/SendMessage`, {
-					method: 'GET',
-					signal: controller2.signal,
-				});
+				const response = await fetch(
+					httpUrl,
+					withTargetAddressSpace(httpUrl, { method: 'GET', signal: controller2.signal })
+				);
 				return isEndpointPresent(response);
 			} catch {
 				return false;
