@@ -955,7 +955,9 @@ function emptyReceiptData(): ReceiptData {
 			paid_total: 0,
 			change_total: 0,
 		},
+		tax: mapTaxSection({}, 'incl'),
 		tax_summary: [],
+		has_tax_summary: false,
 		payments: [],
 		fiscal: {},
 		presentation_hints: {

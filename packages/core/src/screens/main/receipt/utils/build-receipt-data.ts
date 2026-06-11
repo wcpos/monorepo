@@ -245,7 +245,9 @@ function buildTaxSummary(order: Record<string, any>): ReceiptTaxSummaryItem[] {
 			return {
 				code,
 				rate: rate > 0 ? rate : null,
-				label: String(line.label || line.rate_code || ''),
+				// WC_Order_Item_Tax::get_label() falls back to "Tax" for unlabeled
+				// rates — mirror that so unsynced local orders don't print blanks.
+				label: String(line.label || line.rate_code || 'Tax'),
 				compound: !!line.compound,
 				taxable_amount_excl: taxableExcl,
 				tax_amount: taxAmount,
