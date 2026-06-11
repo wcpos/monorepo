@@ -610,6 +610,13 @@ function mapTaxSection(value: unknown, displayTax: 'incl' | 'excl'): ReceiptTaxS
 	};
 }
 
+function hasVisibleTaxSummary(
+	taxSummary: ReceiptTaxSummaryItem[],
+	tax: ReceiptTaxSection
+): boolean {
+	return taxSummary.length > 0 && !tax.breakdown_hidden;
+}
+
 function mapPresentationHints(src: Record<string, any>): ReceiptPresentationHints {
 	const locale = toStr(src.locale).replace(/_/g, '-');
 
@@ -693,9 +700,10 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 		printed.datetime = formatPrintedDatetime(storeTimezone);
 	}
 
-	// has_tax_summary is derived from the mapped array rather than trusted from
-	// the input — the guard and the rows can never disagree.
+	// has_tax_summary is derived from the mapped array and the normalized
+	// visibility state rather than trusted from the input.
 	const canonicalTaxSummary = mapTaxSummary((data as Record<string, any>).tax_summary);
+	const canonicalTax = mapTaxSection((data as Record<string, any>).tax, displayTax);
 
 	const result: ReceiptData = {
 		order: {
@@ -745,9 +753,9 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			data.totals && typeof data.totals === 'object' ? (data.totals as Record<string, any>) : {},
 			displayTax
 		),
-		tax: mapTaxSection((data as Record<string, any>).tax, displayTax),
+		tax: canonicalTax,
 		tax_summary: canonicalTaxSummary,
-		has_tax_summary: canonicalTaxSummary.length > 0,
+		has_tax_summary: hasVisibleTaxSummary(canonicalTaxSummary, canonicalTax),
 		payments: toArr(data.payments).map((p) =>
 			mapPayment(p && typeof p === 'object' ? (p as Record<string, any>) : {})
 		),
@@ -828,6 +836,7 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 	} = store;
 
 	const offlineTaxSummary = mapTaxSummary(data.tax_summary);
+	const offlineTax = mapTaxSection(data.tax, displayTax);
 
 	const result: ReceiptData = {
 		order: {
@@ -873,9 +882,9 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 			)
 		),
 		totals: mapTotals(totals, displayTax),
-		tax: mapTaxSection(data.tax, displayTax),
+		tax: offlineTax,
 		tax_summary: offlineTaxSummary,
-		has_tax_summary: offlineTaxSummary.length > 0,
+		has_tax_summary: hasVisibleTaxSummary(offlineTaxSummary, offlineTax),
 		payments: toArr(data.payments).map((p) =>
 			mapPayment(p && typeof p === 'object' ? (p as Record<string, any>) : {})
 		),

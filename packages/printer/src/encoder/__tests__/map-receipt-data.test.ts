@@ -801,6 +801,21 @@ describe('mapReceiptData', () => {
 			expect(result.tax?.breakdown_hidden).toBe(false);
 		});
 
+		it('does not expose tax-summary guard when canonical tax breakdown is hidden', () => {
+			const result = mapReceiptData({
+				...sampleReceiptData,
+				tax: {
+					display: 'incl',
+					breakdown: 'hidden',
+				},
+			} as Record<string, any>);
+
+			expect(result.tax_summary).toHaveLength(1);
+			expect(result.tax?.breakdown_hidden).toBe(true);
+			expect(result.has_tax_summary).toBe(false);
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+		});
+
 		it('maps tax_summary from the offline shape with numeric coercion', () => {
 			const result = mapReceiptData({
 				...offlineReceiptData,
@@ -831,6 +846,28 @@ describe('mapReceiptData', () => {
 			expect(result.has_tax_summary).toBe(true);
 			expect(result.tax?.display).toBe('incl');
 			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+		});
+
+		it('does not expose tax-summary guard when offline tax breakdown is hidden', () => {
+			const result = mapReceiptData({
+				...offlineReceiptData,
+				tax: {
+					display: 'excl',
+					breakdown: 'hidden',
+				},
+				tax_summary: [
+					{
+						code: '10',
+						rate: '20',
+						label: 'VAT',
+						tax_amount: '7',
+					},
+				],
+			});
+
+			expect(result.tax_summary).toHaveLength(1);
+			expect(result.tax?.breakdown_hidden).toBe(true);
+			expect(result.has_tax_summary).toBe(false);
 		});
 
 		it('sets has_tax_summary false when the offline shape has no tax rows', () => {
