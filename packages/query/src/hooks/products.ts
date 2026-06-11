@@ -29,6 +29,10 @@ const filterApiQueryParams = (params: Record<string, any>) => {
 		orderby = 'date';
 	}
 
+	if (orderby === 'date_modified' || orderby === 'date_modified_gmt') {
+		orderby = 'modified';
+	}
+
 	if (orderby === 'sortable_price') {
 		orderby = 'price';
 	}

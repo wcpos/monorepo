@@ -232,9 +232,20 @@ describe('Hook Filters', () => {
 			expect(filterProductParams({ orderby: 'total_sales' }).orderby).toBe('popularity');
 		});
 
+		it('maps date_modified_gmt orderby to modified', () => {
+			expect(filterProductParams({ orderby: 'date_modified_gmt' }).orderby).toBe('modified');
+		});
+
 		it('passes through an already-valid orderby unchanged', () => {
 			expect(filterProductParams({ orderby: 'title' }).orderby).toBe('title');
 		});
+
+		it.each(['sku', 'barcode', 'stock_quantity', 'stock_status', 'menu_order'])(
+			'passes through %s orderby unchanged (WCPOS/WooCommerce supported)',
+			(orderby) => {
+				expect(filterProductParams({ orderby }).orderby).toBe(orderby);
+			}
+		);
 
 		it('converts direct category and tag elemMatch filters to WooCommerce REST params', () => {
 			const result = filterProductParams({
