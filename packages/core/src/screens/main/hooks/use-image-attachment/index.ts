@@ -7,7 +7,6 @@ type RxDocument = import('rxdb').RxDocument;
 export const useImageAttachment = (document: RxDocument, imageUrl: string) => {
 	return {
 		uri: imageUrl,
-		isLoading: false,
 		error: null,
 	};
 };

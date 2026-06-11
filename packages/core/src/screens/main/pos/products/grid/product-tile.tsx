@@ -1,18 +1,16 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
-import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Image } from '@wcpos/components/image';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../contexts/translations';
 import { PriceWithTax } from '../../../components/product/price-with-tax';
-import { useImageAttachment } from '../../../hooks/use-image-attachment';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useAddProduct } from '../../hooks/use-add-product';
+import { TileImage } from './tile-image';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -38,9 +36,6 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 	const { addProduct } = useAddProduct();
 	const { format } = useCurrencyFormat();
 	const name = useObservableEagerState(product.name$!);
-	const images = useObservableEagerState(product.images$!);
-	const imageURL = get(images, [0, 'src'], undefined);
-	const { uri, error } = useImageAttachment(product, imageURL ?? '');
 	const price = useObservableEagerState(product.price$!);
 	const regularPrice = useObservableEagerState(product.regular_price$!);
 	const onSale = useObservableEagerState(product.on_sale$!);
@@ -51,8 +46,6 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 	const barcode = useObservableEagerState(product.barcode$!);
 	const stockQuantity = useObservableEagerState(product.stock_quantity$!);
 	const costOfGoodsSold = useObservableEagerState(product.cost_of_goods_sold$!);
-
-	const imageSource = !uri || error ? { uri: 'https://via.placeholder.com/150' } : { uri };
 
 	const safeTaxStatus = (taxStatus || 'none') as 'taxable' | 'shipping' | 'none';
 	const taxDisplay = gridFields.tax ? ('text' as const) : ('none' as const);
@@ -77,7 +70,7 @@ export function ProductTile({ product, gridFields }: ProductTileProps) {
 			testID="product-tile"
 		>
 			<View className="aspect-square">
-				<Image source={imageSource} recyclingKey={product.uuid} className="h-full w-full" />
+				<TileImage product={product} />
 			</View>
 			{hasAnyField && (
 				<VStack className="p-2" space="xs">
