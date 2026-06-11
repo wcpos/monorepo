@@ -1,3 +1,4 @@
+import { buildConnectionErrorMessage } from '../utils/connection-error';
 import { withTargetAddressSpace } from '../utils/local-fetch';
 
 import type { PrinterTransport } from '../types';
@@ -98,10 +99,12 @@ export class EpsonEposAdapter implements PrinterTransport {
 				);
 			}
 			throw new Error(
-				`Could not connect to Epson printer at ${this.baseUrl}. ` +
-					"Check the IP address and ensure ePOS is enabled in the printer's network settings. " +
-					"If using HTTPS, you may need to accept the printer's self-signed certificate " +
-					`by visiting ${this.baseUrl} in your browser first.`
+				buildConnectionErrorMessage({
+					vendorLabel: 'Epson',
+					url,
+					enableHint: "ensure ePOS is enabled in the printer's network settings",
+					plainHttpPort: 8008,
+				})
 			);
 		} finally {
 			clearTimeout(timeoutId);

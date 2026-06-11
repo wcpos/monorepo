@@ -1,3 +1,4 @@
+import { buildConnectionErrorMessage } from '../utils/connection-error';
 import { withTargetAddressSpace } from '../utils/local-fetch';
 
 import type { PrinterTransport } from '../types';
@@ -62,10 +63,12 @@ export class StarWebPrntAdapter implements PrinterTransport {
 				);
 			}
 			throw new Error(
-				`Could not connect to Star printer at ${this.url}. ` +
-					'Check the IP address and ensure WebPRNT is enabled on the printer. ' +
-					"If using HTTPS, you may need to accept the printer's self-signed certificate " +
-					`by visiting https://${new URL(this.url).hostname} in your browser first.`
+				buildConnectionErrorMessage({
+					vendorLabel: 'Star',
+					url: this.url,
+					enableHint: 'ensure WebPRNT is enabled on the printer',
+					plainHttpPort: 80,
+				})
 			);
 		} finally {
 			clearTimeout(timeoutId);

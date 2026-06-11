@@ -21,6 +21,24 @@ describe('NetworkAdapter web endpoints', () => {
 		vi.unstubAllGlobals();
 	});
 
+	it('surfaces local-network permission guidance when a plain-HTTP Star request fails', async () => {
+		vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+		const adapter = new NetworkAdapter('192.168.1.20', 80, 'star');
+
+		await expect(adapter.printRaw(new Uint8Array([0x1b]))).rejects.toThrow(
+			/permission to access devices on your local network/
+		);
+	});
+
+	it('surfaces certificate guidance when an HTTPS Star request fails', async () => {
+		vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+		const adapter = new NetworkAdapter('192.168.1.20', 443, 'star');
+
+		await expect(adapter.printRaw(new Uint8Array([0x1b]))).rejects.toThrow(
+			/generate a self-signed certificate/
+		);
+	});
+
 	it.each([
 		['star', 80, 'http://192.168.1.20:80/StarWebPRNT/SendMessage'],
 		['epson', 8008, 'http://192.168.1.20:8008/cgi-bin/epos/service.cgi'],
