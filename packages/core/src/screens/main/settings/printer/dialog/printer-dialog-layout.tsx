@@ -26,6 +26,8 @@ interface PrinterDialogLayoutProps {
 	banner?: React.ReactNode;
 	connectionSection: React.ReactNode;
 	advancedSettings: React.ReactNode;
+	/** Test/save failure alert, rendered inside the form body above the footer. */
+	errorSection?: React.ReactNode;
 	footer: React.ReactNode;
 }
 
@@ -37,6 +39,7 @@ export function PrinterDialogLayout({
 	banner,
 	connectionSection,
 	advancedSettings,
+	errorSection,
 	footer,
 }: PrinterDialogLayoutProps) {
 	const t = useT();
@@ -70,6 +73,7 @@ export function PrinterDialogLayout({
 							{connectionSection}
 							{advancedSettings}
 							<PrinterToggleGroup form={form} />
+							{errorSection}
 						</VStack>
 					</Form>
 				</DialogBody>

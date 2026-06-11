@@ -1,6 +1,19 @@
 import { withTargetAddressSpace } from './local-fetch';
 
 /**
+ * A vendor web-print endpoint that answered an HTTP probe.
+ *
+ * `port`/`protocol` describe the endpoint that actually responded, so callers
+ * can configure the printer with a port the browser can genuinely reach —
+ * web printing never uses raw TCP 9100.
+ */
+export interface ProbedEndpoint {
+	vendor: 'epson' | 'star';
+	port: number;
+	protocol: 'http' | 'https';
+}
+
+/**
  * Probe a network host to auto-detect the printer vendor.
  *
  * Sends lightweight HTTP requests to the known Epson ePOS and Star
@@ -9,9 +22,17 @@ import { withTargetAddressSpace } from './local-fetch';
  * Missing paths such as generic web-server 404s are not treated as matches.
  */
 export async function probeVendor(host: string): Promise<'epson' | 'star' | null> {
+	const endpoint = await probeVendorEndpoint(host);
+	return endpoint?.vendor ?? null;
+}
+
+/**
+ * Like {@link probeVendor}, but also reports which web endpoint responded.
+ */
+export async function probeVendorEndpoint(host: string): Promise<ProbedEndpoint | null> {
 	const timeout = 3_000;
 
-	const probeEpson = async (): Promise<boolean> => {
+	const probeEpson = async (): Promise<ProbedEndpoint | null> => {
 		const controller = new AbortController();
 		const id = setTimeout(() => controller.abort(), timeout);
 		const url = `http://${host}:8008/cgi-bin/epos/service.cgi`;
@@ -20,15 +41,15 @@ export async function probeVendor(host: string): Promise<'epson' | 'star' | null
 				url,
 				withTargetAddressSpace(url, { method: 'GET', signal: controller.signal })
 			);
-			return isEndpointPresent(response);
+			return isEndpointPresent(response) ? { vendor: 'epson', port: 8008, protocol: 'http' } : null;
 		} catch {
-			return false;
+			return null;
 		} finally {
 			clearTimeout(id);
 		}
 	};
 
-	const probeStar = async (): Promise<boolean> => {
+	const probeStar = async (): Promise<ProbedEndpoint | null> => {
 		const controller = new AbortController();
 		const id = setTimeout(() => controller.abort(), timeout);
 		try {
@@ -36,26 +57,33 @@ export async function probeVendor(host: string): Promise<'epson' | 'star' | null
 				method: 'GET',
 				signal: controller.signal,
 			});
-			return isEndpointPresent(response);
+			return isEndpointPresent(response) ? { vendor: 'star', port: 443, protocol: 'https' } : null;
 		} catch {
 			// Star printers on HTTPS with self-signed certs will fail in
-			// browsers due to certificate rejection. Try HTTP as fallback.
+			// browsers due to certificate rejection. Try HTTP as fallback —
+			// port 80 is the WebPRNT default; 8008 covers the dev virtual
+			// printer (VP_VENDOR=star VP_HTTP_PORT=8008).
 			clearTimeout(id);
 
-			const controller2 = new AbortController();
-			const id2 = setTimeout(() => controller2.abort(), timeout);
-			const httpUrl = `http://${host}/StarWebPRNT/SendMessage`;
-			try {
-				const response = await fetch(
-					httpUrl,
-					withTargetAddressSpace(httpUrl, { method: 'GET', signal: controller2.signal })
-				);
-				return isEndpointPresent(response);
-			} catch {
-				return false;
-			} finally {
-				clearTimeout(id2);
+			for (const port of [80, 8008]) {
+				const controller2 = new AbortController();
+				const id2 = setTimeout(() => controller2.abort(), timeout);
+				const httpUrl = `http://${host}:${port}/StarWebPRNT/SendMessage`;
+				try {
+					const response = await fetch(
+						httpUrl,
+						withTargetAddressSpace(httpUrl, { method: 'GET', signal: controller2.signal })
+					);
+					if (isEndpointPresent(response)) {
+						return { vendor: 'star', port, protocol: 'http' };
+					}
+				} catch {
+					// keep trying the next HTTP port
+				} finally {
+					clearTimeout(id2);
+				}
 			}
+			return null;
 		} finally {
 			clearTimeout(id);
 		}
@@ -63,9 +91,7 @@ export async function probeVendor(host: string): Promise<'epson' | 'star' | null
 
 	const [epson, star] = await Promise.all([probeEpson(), probeStar()]);
 
-	if (epson) return 'epson';
-	if (star) return 'star';
-	return null;
+	return epson ?? star ?? null;
 }
 
 function isEndpointPresent(response: Response): boolean {

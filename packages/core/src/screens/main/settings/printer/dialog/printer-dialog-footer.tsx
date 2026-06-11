@@ -3,12 +3,12 @@ import * as React from 'react';
 import { Button } from '@wcpos/components/button';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
-import { VStack } from '@wcpos/components/vstack';
 
 import { useT } from '../../../../../contexts/translations';
 
 interface PrinterDialogFooterProps {
-	testError: string | null;
+	/** Offer "Save without testing" after a failed test print. */
+	showSaveAnyway: boolean;
 	testLoading: boolean;
 	saveLoading: boolean;
 	onTestPrint: () => void;
@@ -16,8 +16,12 @@ interface PrinterDialogFooterProps {
 	onSaveAnyway: () => void;
 }
 
+/**
+ * Actions only — test/save failures render inside the dialog body via
+ * TestPrintError, not here.
+ */
 export function PrinterDialogFooter({
-	testError,
+	showSaveAnyway,
 	testLoading,
 	saveLoading,
 	onTestPrint,
@@ -26,30 +30,30 @@ export function PrinterDialogFooter({
 }: PrinterDialogFooterProps) {
 	const t = useT();
 	return (
-		<VStack className="w-full gap-2">
-			{testError && (
-				<VStack className="gap-1">
-					<Text className="text-destructive text-sm">{testError}</Text>
-					<Button variant="ghost" size="sm" className="self-start" onPress={onSaveAnyway}>
-						<Text className="text-muted-foreground text-xs">
-							{t('settings.save_anyway', 'Save without testing')}
-						</Text>
-					</Button>
-				</VStack>
-			)}
-			<HStack className="justify-end gap-2">
+		<HStack className="w-full items-center justify-end gap-2">
+			{showSaveAnyway && (
 				<Button
-					testID="add-printer-test-button"
-					variant="outline"
-					onPress={onTestPrint}
-					loading={testLoading}
+					testID="add-printer-save-anyway-button"
+					variant="ghost"
+					className="mr-auto"
+					onPress={onSaveAnyway}
 				>
-					<Text>{t('settings.test_print', 'Test Print')}</Text>
+					<Text className="text-muted-foreground text-sm">
+						{t('settings.save_anyway', 'Save without testing')}
+					</Text>
 				</Button>
-				<Button testID="add-printer-save-button" onPress={onSave} loading={saveLoading}>
-					<Text>{t('common.save', 'Save')}</Text>
-				</Button>
-			</HStack>
-		</VStack>
+			)}
+			<Button
+				testID="add-printer-test-button"
+				variant="outline"
+				onPress={onTestPrint}
+				loading={testLoading}
+			>
+				<Text>{t('settings.test_print', 'Test Print')}</Text>
+			</Button>
+			<Button testID="add-printer-save-button" onPress={onSave} loading={saveLoading}>
+				<Text>{t('common.save', 'Save')}</Text>
+			</Button>
+		</HStack>
 	);
 }

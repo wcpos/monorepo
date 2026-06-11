@@ -1,4 +1,4 @@
-import { buildConnectionErrorMessage } from '../utils/connection-error';
+import { buildConnectionError } from '../utils/connection-error';
 import { withTargetAddressSpace } from '../utils/local-fetch';
 
 import type { PrinterTransport } from '../types';
@@ -57,19 +57,16 @@ export class StarWebPrntAdapter implements PrinterTransport {
 				})
 			);
 		} catch (error) {
-			if (error instanceof DOMException && error.name === 'AbortError') {
-				throw new Error(
-					`Star WebPRNT request timed out. Check that the printer is reachable at ${this.url}`
-				);
-			}
-			throw new Error(
-				buildConnectionErrorMessage({
-					vendorLabel: 'Star',
-					url: this.url,
-					enableHint: 'ensure WebPRNT is enabled on the printer',
-					plainHttpPort: 80,
-				})
-			);
+			const timedOut = error instanceof DOMException && error.name === 'AbortError';
+			throw buildConnectionError({
+				vendorLabel: 'Star',
+				protocolName: 'WebPRNT',
+				url: this.url,
+				enableHint: 'ensure WebPRNT is enabled on the printer',
+				plainHttpPort: 80,
+				reason: timedOut ? 'timeout' : 'unreachable',
+				cause: error,
+			});
 		} finally {
 			clearTimeout(timeoutId);
 		}

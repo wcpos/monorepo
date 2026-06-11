@@ -1,4 +1,4 @@
-import { buildConnectionErrorMessage } from '../utils/connection-error';
+import { buildConnectionError } from '../utils/connection-error';
 import { withTargetAddressSpace } from '../utils/local-fetch';
 
 import type { PrinterTransport } from '../types';
@@ -93,19 +93,16 @@ export class EpsonEposAdapter implements PrinterTransport {
 				})
 			);
 		} catch (error) {
-			if (error instanceof DOMException && error.name === 'AbortError') {
-				throw new Error(
-					`Epson ePOS request timed out. Check that the printer is reachable at ${this.baseUrl}`
-				);
-			}
-			throw new Error(
-				buildConnectionErrorMessage({
-					vendorLabel: 'Epson',
-					url,
-					enableHint: "ensure ePOS is enabled in the printer's network settings",
-					plainHttpPort: 8008,
-				})
-			);
+			const timedOut = error instanceof DOMException && error.name === 'AbortError';
+			throw buildConnectionError({
+				vendorLabel: 'Epson',
+				protocolName: 'ePOS',
+				url,
+				enableHint: "ensure ePOS is enabled in the printer's network settings",
+				plainHttpPort: 8008,
+				reason: timedOut ? 'timeout' : 'unreachable',
+				cause: error,
+			});
 		} finally {
 			clearTimeout(timeoutId);
 		}

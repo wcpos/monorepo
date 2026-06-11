@@ -5,8 +5,8 @@ import { useForm } from 'react-hook-form';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
-import { PrinterService, probeVendor } from '@wcpos/printer';
-import type { PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
+import { isPrinterConnectionError, PrinterService, probeVendor } from '@wcpos/printer';
+import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
 import { useAppState } from '../../../../../contexts/app-state';
@@ -18,6 +18,19 @@ import type { PrinterFormValues } from '../schema';
 export interface VendorDefaults {
 	language: PrinterFormValues['language'];
 	port: number;
+}
+
+/** A failed test print — message always present, diagnostics when the transport provides them. */
+export interface TestPrintFailure {
+	message: string;
+	diagnostics: ConnectionDiagnostics | null;
+}
+
+function toTestPrintFailure(err: unknown): TestPrintFailure {
+	return {
+		message: err instanceof Error ? err.message : String(err),
+		diagnostics: isPrinterConnectionError(err) ? err.diagnostics : null,
+	};
 }
 
 type PrinterFormSchema = z.ZodType<PrinterFormValues, any>;
@@ -76,7 +89,7 @@ export function usePrinterDialogForm({
 
 	const [testLoading, setTestLoading] = React.useState(false);
 	const [saveLoading, setSaveLoading] = React.useState(false);
-	const [testError, setTestError] = React.useState<string | null>(null);
+	const [testError, setTestError] = React.useState<TestPrintFailure | null>(null);
 	const [probing, setProbing] = React.useState(false);
 	const [detectedVendor, setDetectedVendor] = React.useState<string | null>(null);
 
@@ -260,7 +273,7 @@ export function usePrinterDialogForm({
 				type: 'success',
 			});
 		} catch (err) {
-			setTestError(err instanceof Error ? err.message : String(err));
+			setTestError(toTestPrintFailure(err));
 		} finally {
 			setTestLoading(false);
 		}
@@ -293,7 +306,7 @@ export function usePrinterDialogForm({
 			try {
 				await printerService.testPrint(buildProfile(data));
 			} catch (err) {
-				setTestError(err instanceof Error ? err.message : String(err));
+				setTestError(toTestPrintFailure(err));
 				setSaveLoading(false);
 				return;
 			}

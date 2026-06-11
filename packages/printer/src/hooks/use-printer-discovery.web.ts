@@ -97,14 +97,14 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		setError(null);
 
 		try {
-			const { probeVendor } = await import('../utils/probe-vendor');
+			const { probeVendorEndpoint } = await import('../utils/probe-vendor');
 			const { buildSweepCandidates, sweepForPrinters } = await import('../discovery/network-sweep');
 			const hosts = buildSweepCandidates();
 			setScanCandidates(hosts);
 			setScanProgress({ tested: 0, total: hosts.length });
 			const discovered = await sweepForPrinters({
 				hosts,
-				probe: probeVendor,
+				probe: probeVendorEndpoint,
 				signal: controller.signal,
 				onProgress: (tested, total) => {
 					if (abortRef.current === controller) setScanProgress({ tested, total });
