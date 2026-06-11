@@ -25,6 +25,7 @@ export const SECTIONS: SectionMeta[] = [
 	{ key: 'shipping', label: 'Shipping', path: ['shipping'], kind: 'array' },
 	{ key: 'discounts', label: 'Discounts', path: ['discounts'], kind: 'array' },
 	{ key: 'totals', label: 'Totals', path: ['totals'], kind: 'object' },
+	{ key: 'tax', label: 'Tax Display', path: ['tax'], kind: 'object' },
 	{ key: 'tax_summary', label: 'Tax Summary', path: ['tax_summary'], kind: 'array' },
 	{ key: 'payments', label: 'Payments', path: ['payments'], kind: 'array' },
 	{ key: 'refunds', label: 'Refunds', path: ['refunds'], kind: 'array' },

@@ -344,6 +344,23 @@ export const ReceiptTaxSummaryItemSchema = z.object({
 	taxable_amount_incl: z.number().nullable().describe('Gross amount taxed (incl)'),
 });
 
+/**
+ * Template-facing tax mode signals. Mirrors the PHP contract from
+ * `Receipt_Store_Resolver::build_tax_section()` — templates use the boolean
+ * flags as Mustache section guards (e.g. `{{#tax.display_incl}}`).
+ */
+export const ReceiptTaxSectionSchema = z.object({
+	display: z.enum(['incl', 'excl']).describe('Whether customer-facing prices include tax'),
+	display_incl: z.boolean().describe('Section guard: display === "incl"'),
+	display_excl: z.boolean().describe('Section guard: display === "excl"'),
+	breakdown: z
+		.enum(['hidden', 'single', 'itemized'])
+		.describe('How tax totals are itemized ("hidden" when taxes are disabled)'),
+	breakdown_hidden: z.boolean().describe('Section guard: breakdown === "hidden"'),
+	breakdown_single: z.boolean().describe('Section guard: breakdown === "single"'),
+	breakdown_itemized: z.boolean().describe('Section guard: breakdown === "itemized"'),
+});
+
 export const ReceiptPaymentSchema = z.object({
 	method_id: z.string().describe('Payment method identifier'),
 	method_title: z.string().describe('Payment method display title'),
@@ -647,7 +664,12 @@ export const ReceiptDataSchema = z.object({
 	shipping: z.array(ReceiptShippingSchema),
 	discounts: z.array(ReceiptDiscountSchema),
 	totals: ReceiptTotalsSchema,
+	tax: ReceiptTaxSectionSchema.optional().describe('Template-facing tax mode signals'),
 	tax_summary: z.array(ReceiptTaxSummaryItemSchema),
+	has_tax_summary: z
+		.boolean()
+		.optional()
+		.describe('Section guard: tax_summary is non-empty (Mustache cannot test array length)'),
 	payments: z.array(ReceiptPaymentSchema),
 	refunds: z.array(ReceiptRefundSchema).optional().describe('Refunds applied to this order'),
 	fiscal: ReceiptFiscalSchema,
@@ -670,6 +692,7 @@ export type ReceiptShipping = z.infer<typeof ReceiptShippingSchema>;
 export type ReceiptDiscount = z.infer<typeof ReceiptDiscountSchema>;
 export type ReceiptTotals = z.infer<typeof ReceiptTotalsSchema>;
 export type ReceiptTaxSummaryItem = z.infer<typeof ReceiptTaxSummaryItemSchema>;
+export type ReceiptTaxSection = z.infer<typeof ReceiptTaxSectionSchema>;
 export type ReceiptPayment = z.infer<typeof ReceiptPaymentSchema>;
 export type ReceiptRefundLine = z.infer<typeof ReceiptRefundLineSchema>;
 export type ReceiptRefundFee = z.infer<typeof ReceiptRefundFeeSchema>;

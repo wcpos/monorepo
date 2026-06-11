@@ -24,6 +24,7 @@ import type {
 	ReceiptShipping,
 	ReceiptStoreMeta,
 	ReceiptTaxId,
+	ReceiptTaxSection,
 	ReceiptTaxSummaryItem,
 	ReceiptTotals,
 } from './types';
@@ -562,6 +563,60 @@ function mapFiscal(src: Record<string, any>): ReceiptFiscal {
 	return fiscal;
 }
 
+/** Normalize a tax_summary array from either shape. */
+function mapTaxSummary(value: unknown): ReceiptTaxSummaryItem[] {
+	return toArr(value)
+		.filter((entry): entry is Record<string, any> => !!entry && typeof entry === 'object')
+		.map((entry) => {
+			const item: ReceiptTaxSummaryItem = {
+				code: toStr(entry.code),
+				rate: entry.rate == null ? null : toNum(entry.rate),
+				label: toStr(entry.label),
+				taxable_amount_excl:
+					entry.taxable_amount_excl == null ? null : toNum(entry.taxable_amount_excl),
+				tax_amount: toNum(entry.tax_amount),
+				taxable_amount_incl:
+					entry.taxable_amount_incl == null ? null : toNum(entry.taxable_amount_incl),
+			};
+			if ('compound' in entry) item.compound = !!entry.compound;
+			return item;
+		});
+}
+
+/**
+ * Normalize the template-facing `tax` section, deriving the boolean section
+ * guards from the normalized string values so they can never disagree. When
+ * the source data carries no tax section (offline shape), `display` falls back
+ * to the resolved display-tax side and `breakdown` to WooCommerce's "itemized"
+ * default — templates guard the breakdown table behind `has_tax_summary`, so
+ * an itemized default with no tax lines renders nothing.
+ */
+function mapTaxSection(value: unknown, displayTax: 'incl' | 'excl'): ReceiptTaxSection {
+	const src = value && typeof value === 'object' ? (value as Record<string, any>) : {};
+	const display = src.display === 'incl' || src.display === 'excl' ? src.display : displayTax;
+	const breakdown =
+		src.breakdown === 'hidden' || src.breakdown === 'single' || src.breakdown === 'itemized'
+			? src.breakdown
+			: 'itemized';
+
+	return {
+		display,
+		display_incl: 'incl' === display,
+		display_excl: 'excl' === display,
+		breakdown,
+		breakdown_hidden: 'hidden' === breakdown,
+		breakdown_single: 'single' === breakdown,
+		breakdown_itemized: 'itemized' === breakdown,
+	};
+}
+
+function hasVisibleTaxSummary(
+	taxSummary: ReceiptTaxSummaryItem[],
+	tax: ReceiptTaxSection
+): boolean {
+	return taxSummary.length > 0 && !tax.breakdown_hidden;
+}
+
 function mapPresentationHints(src: Record<string, any>): ReceiptPresentationHints {
 	const locale = toStr(src.locale).replace(/_/g, '-');
 
@@ -645,6 +700,11 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 		printed.datetime = formatPrintedDatetime(storeTimezone);
 	}
 
+	// has_tax_summary is derived from the mapped array and the normalized
+	// visibility state rather than trusted from the input.
+	const canonicalTaxSummary = mapTaxSummary((data as Record<string, any>).tax_summary);
+	const canonicalTax = mapTaxSection((data as Record<string, any>).tax, displayTax);
+
 	const result: ReceiptData = {
 		order: {
 			...base.order,
@@ -693,22 +753,9 @@ function normalizeCanonicalReceiptData(data: Partial<ReceiptData>): ReceiptData 
 			data.totals && typeof data.totals === 'object' ? (data.totals as Record<string, any>) : {},
 			displayTax
 		),
-		tax_summary: toArr(data.tax_summary)
-			.filter((entry): entry is Record<string, any> => !!entry && typeof entry === 'object')
-			.map((entry) => {
-				const item: ReceiptTaxSummaryItem = {
-					code: toStr(entry.code),
-					rate: entry.rate == null ? null : toNum(entry.rate),
-					label: toStr(entry.label),
-					taxable_amount_excl:
-						entry.taxable_amount_excl == null ? null : toNum(entry.taxable_amount_excl),
-					tax_amount: toNum(entry.tax_amount),
-					taxable_amount_incl:
-						entry.taxable_amount_incl == null ? null : toNum(entry.taxable_amount_incl),
-				};
-				if ('compound' in entry) item.compound = !!entry.compound;
-				return item;
-			}),
+		tax: canonicalTax,
+		tax_summary: canonicalTaxSummary,
+		has_tax_summary: hasVisibleTaxSummary(canonicalTaxSummary, canonicalTax),
 		payments: toArr(data.payments).map((p) =>
 			mapPayment(p && typeof p === 'object' ? (p as Record<string, any>) : {})
 		),
@@ -788,6 +835,9 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 		...storePresentationFields
 	} = store;
 
+	const offlineTaxSummary = mapTaxSummary(data.tax_summary);
+	const offlineTax = mapTaxSection(data.tax, displayTax);
+
 	const result: ReceiptData = {
 		order: {
 			id: 0,
@@ -832,7 +882,9 @@ export function mapReceiptData(data: Record<string, any>): ReceiptData {
 			)
 		),
 		totals: mapTotals(totals, displayTax),
-		tax_summary: [] as ReceiptTaxSummaryItem[],
+		tax: offlineTax,
+		tax_summary: offlineTaxSummary,
+		has_tax_summary: hasVisibleTaxSummary(offlineTaxSummary, offlineTax),
 		payments: toArr(data.payments).map((p) =>
 			mapPayment(p && typeof p === 'object' ? (p as Record<string, any>) : {})
 		),
@@ -912,7 +964,9 @@ function emptyReceiptData(): ReceiptData {
 			paid_total: 0,
 			change_total: 0,
 		},
+		tax: mapTaxSection({}, 'incl'),
 		tax_summary: [],
+		has_tax_summary: false,
 		payments: [],
 		fiscal: {},
 		presentation_hints: {

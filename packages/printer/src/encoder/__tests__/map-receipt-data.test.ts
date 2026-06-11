@@ -739,4 +739,142 @@ describe('mapReceiptData', () => {
 			});
 		}
 	});
+
+	describe('tax section and tax summary guards', () => {
+		it('preserves the canonical tax section and derives has_tax_summary', () => {
+			const data = {
+				...sampleReceiptData,
+				tax: {
+					display: 'excl',
+					display_incl: false,
+					display_excl: true,
+					breakdown: 'single',
+					breakdown_hidden: false,
+					breakdown_single: true,
+					breakdown_itemized: false,
+				},
+			};
+
+			const result = mapReceiptData(data as Record<string, any>);
+
+			expect(result.tax?.display).toBe('excl');
+			expect(result.tax?.display_excl).toBe(true);
+			expect(result.tax?.breakdown_single).toBe(true);
+			// sampleReceiptData carries one tax_summary row
+			expect(result.has_tax_summary).toBe(true);
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+		});
+
+		it('derives the tax section from display hints when canonical input lacks it', () => {
+			const result = mapReceiptData(sampleReceiptData as Record<string, any>);
+
+			expect(result.tax).toEqual({
+				display: 'incl',
+				display_incl: true,
+				display_excl: false,
+				breakdown: 'itemized',
+				breakdown_hidden: false,
+				breakdown_single: false,
+				breakdown_itemized: true,
+			});
+		});
+
+		it('re-derives boolean guards from string values so they cannot disagree', () => {
+			const data = {
+				...sampleReceiptData,
+				tax: {
+					display: 'incl',
+					display_incl: false,
+					display_excl: true,
+					breakdown: 'itemized',
+					breakdown_hidden: true,
+					breakdown_single: false,
+					breakdown_itemized: false,
+				},
+			};
+
+			const result = mapReceiptData(data as Record<string, any>);
+
+			expect(result.tax?.display_incl).toBe(true);
+			expect(result.tax?.display_excl).toBe(false);
+			expect(result.tax?.breakdown_itemized).toBe(true);
+			expect(result.tax?.breakdown_hidden).toBe(false);
+		});
+
+		it('does not expose tax-summary guard when canonical tax breakdown is hidden', () => {
+			const result = mapReceiptData({
+				...sampleReceiptData,
+				tax: {
+					display: 'incl',
+					breakdown: 'hidden',
+				},
+			} as Record<string, any>);
+
+			expect(result.tax_summary).toHaveLength(1);
+			expect(result.tax?.breakdown_hidden).toBe(true);
+			expect(result.has_tax_summary).toBe(false);
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+		});
+
+		it('maps tax_summary from the offline shape with numeric coercion', () => {
+			const result = mapReceiptData({
+				...offlineReceiptData,
+				tax_summary: [
+					{
+						code: '10',
+						rate: '20',
+						label: 'VAT',
+						compound: true,
+						taxable_amount_excl: '35',
+						tax_amount: '7',
+						taxable_amount_incl: '42',
+					},
+				],
+			});
+
+			expect(result.tax_summary).toEqual([
+				{
+					code: '10',
+					rate: 20,
+					label: 'VAT',
+					compound: true,
+					taxable_amount_excl: 35,
+					tax_amount: 7,
+					taxable_amount_incl: 42,
+				},
+			]);
+			expect(result.has_tax_summary).toBe(true);
+			expect(result.tax?.display).toBe('incl');
+			expect(ReceiptDataSchema.safeParse(result).success).toBe(true);
+		});
+
+		it('does not expose tax-summary guard when offline tax breakdown is hidden', () => {
+			const result = mapReceiptData({
+				...offlineReceiptData,
+				tax: {
+					display: 'excl',
+					breakdown: 'hidden',
+				},
+				tax_summary: [
+					{
+						code: '10',
+						rate: '20',
+						label: 'VAT',
+						tax_amount: '7',
+					},
+				],
+			});
+
+			expect(result.tax_summary).toHaveLength(1);
+			expect(result.tax?.breakdown_hidden).toBe(true);
+			expect(result.has_tax_summary).toBe(false);
+		});
+
+		it('sets has_tax_summary false when the offline shape has no tax rows', () => {
+			const result = mapReceiptData(offlineReceiptData);
+
+			expect(result.tax_summary).toEqual([]);
+			expect(result.has_tax_summary).toBe(false);
+		});
+	});
 });

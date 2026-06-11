@@ -6,9 +6,12 @@ import { ARRAY_DEFAULTS, SECTIONS } from './field-meta';
 
 describe('field metadata defaults', () => {
 	it('has an editable section for every receipt data top-level field except system-only hints', () => {
+		// has_tax_summary is derived — mapReceiptData re-derives it from the
+		// tax_summary rows at render time, so editing it would be meaningless.
+		const SYSTEM_ONLY_KEYS = ['presentation_hints', 'has_tax_summary'];
 		const sectionKeys = SECTIONS.map((section) => section.key).sort();
 		const receiptDataKeys = Object.keys(ReceiptDataSchema.shape)
-			.filter((key) => key !== 'presentation_hints')
+			.filter((key) => !SYSTEM_ONLY_KEYS.includes(key))
 			.sort();
 
 		expect(sectionKeys).toEqual(receiptDataKeys);
