@@ -26,7 +26,7 @@ async function blockScriptRequests(route: import('@playwright/test').Route) {
 	await route.fallback();
 }
 
-function shouldStubCrossOriginUploads(storeUrl: string, baseURL: string): boolean {
+function shouldStubCrossOriginStoreRequests(storeUrl: string, baseURL: string): boolean {
 	try {
 		const storeOrigin = new URL(storeUrl).origin;
 		const appOrigin = new URL(baseURL).origin;
@@ -34,6 +34,37 @@ function shouldStubCrossOriginUploads(storeUrl: string, baseURL: string): boolea
 	} catch {
 		return false;
 	}
+}
+
+async function stubCrossOriginStoreDiscovery(
+	context: import('@playwright/test').BrowserContext,
+	storeUrl: string
+): Promise<void> {
+	const storeOrigin = new URL(storeUrl).origin;
+	await context.route('**/*', async (route) => {
+		const request = route.request();
+		const url = new URL(request.url());
+		const normalizedPath = url.pathname.replace(/\/+$/, '') || '/';
+		const isDiscoveryHead =
+			request.method() === 'HEAD' &&
+			url.origin === storeOrigin &&
+			(normalizedPath === '/' || normalizedPath === '/wp-json');
+
+		if (!isDiscoveryHead) {
+			await route.fallback();
+			return;
+		}
+
+		await route.fulfill({
+			status: 200,
+			headers: {
+				'Access-Control-Allow-Origin': '*',
+				'Access-Control-Expose-Headers': 'Link, Content-Type',
+				'Content-Type': 'application/json; charset=UTF-8',
+				Link: `<${storeOrigin}/wp-json/>; rel="https://api.w.org/"`,
+			},
+		});
+	});
 }
 
 /**
@@ -89,10 +120,11 @@ async function setupVariant(
 	// Product-image attachment fetches then fail CORS and spam errors. For auth
 	// bootstrap, those uploads are non-critical, so fulfill them with a tiny
 	// image payload to keep bootstrap deterministic across environments.
-	if (shouldStubCrossOriginUploads(storeUrl, baseURL)) {
+	if (shouldStubCrossOriginStoreRequests(storeUrl, baseURL)) {
 		console.log(
-			`[global-setup] Installing uploads stub for cross-origin auth bootstrap (${new URL(storeUrl).origin} -> ${new URL(baseURL).origin})`
+			`[global-setup] Installing cross-origin store stubs for auth bootstrap (${new URL(storeUrl).origin} -> ${new URL(baseURL).origin})`
 		);
+		await stubCrossOriginStoreDiscovery(context, storeUrl);
 		await context.route('**/wp-content/uploads/**', async (route) => {
 			await route.fulfill({
 				status: 200,

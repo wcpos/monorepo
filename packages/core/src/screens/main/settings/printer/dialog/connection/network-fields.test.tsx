@@ -171,6 +171,85 @@ describe('NetworkFields discovery states', () => {
 		expect(form.setValue).toHaveBeenCalledWith('name', 'Kitchen Epson');
 		expect(form.setValue).toHaveBeenCalledWith('port', 8043, { shouldValidate: true });
 		expect(form.setValue).toHaveBeenCalledWith('vendor', 'epson');
+		expect((form.setValue as jest.Mock).mock.calls).toEqual([
+			['connectionType', 'network'],
+			['address', '192.168.1.50', { shouldValidate: true }],
+			['name', 'Kitchen Epson'],
+			['vendor', 'epson'],
+			['port', 8043, { shouldValidate: true }],
+		]);
+	});
+
+	it('labels scan results with a clear call to action', () => {
+		render(
+			<NetworkFields
+				form={makeForm()}
+				probing={false}
+				detectedVendor={null}
+				onScan={jest.fn()}
+				printers={[networkPrinter]}
+			/>
+		);
+
+		expect(screen.getByText('Use this printer')).toBeInTheDocument();
+		expect(screen.getByText('Discovered: 192.168.1.50:8043')).toBeInTheDocument();
+	});
+
+	// Regression: a printer discovered at localhost:9100 used to populate the
+	// Port field with 9100 while the actual request went to the web endpoint.
+	it('normalizes a raw-TCP scan result through resolveResultPort and shows the web endpoint', () => {
+		const form = makeForm();
+		const rawTcpPrinter: DiscoveredPrinter = {
+			id: 'localhost:9100',
+			name: 'Epson printer (localhost)',
+			connectionType: 'network',
+			address: 'localhost',
+			port: 9100,
+			vendor: 'epson',
+		};
+		render(
+			<NetworkFields
+				form={form}
+				probing={false}
+				detectedVendor={null}
+				onScan={jest.fn()}
+				printers={[rawTcpPrinter]}
+				resolveResultPort={() => 8008}
+				resultEndpoint={() => 'http://localhost:8008/cgi-bin/epos/service.cgi'}
+			/>
+		);
+
+		expect(
+			screen.getByTestId('add-printer-network-result-endpoint-localhost:9100')
+		).toHaveTextContent('Web printing will use: http://localhost:8008/cgi-bin/epos/service.cgi');
+		expect(
+			screen.getByTestId('add-printer-network-result-raw-tcp-localhost:9100')
+		).toHaveTextContent('Browsers cannot print to raw TCP port 9100');
+
+		fireEvent.click(screen.getByTestId('add-printer-network-result-localhost:9100'));
+
+		expect(form.setValue).toHaveBeenCalledWith('port', 8008, { shouldValidate: true });
+		expect(form.setValue).not.toHaveBeenCalledWith('port', 9100, expect.anything());
+	});
+
+	it('shows a labeled web print endpoint preview with an explanation', () => {
+		render(
+			<NetworkFields
+				form={makeForm()}
+				probing={false}
+				detectedVendor={null}
+				endpointHint="https://localhost:8043/cgi-bin/epos/service.cgi"
+				endpointExplanation="Using Epson ePOS over HTTPS because this page is secure and port 8043 is selected."
+			/>
+		);
+
+		expect(screen.getByText('Web print endpoint')).toBeInTheDocument();
+		expect(screen.getByTestId('add-printer-endpoint-hint')).toHaveTextContent(
+			'https://localhost:8043/cgi-bin/epos/service.cgi'
+		);
+		expect(screen.getByTestId('add-printer-endpoint-explanation')).toHaveTextContent(
+			'Using Epson ePOS over HTTPS'
+		);
 	});
 
 	it('clears stale port state when the selected target has no port', () => {

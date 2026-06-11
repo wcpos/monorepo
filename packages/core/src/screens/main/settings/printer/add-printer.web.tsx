@@ -9,6 +9,7 @@ import { Icon } from '@wcpos/components/icon';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import {
+	type DiscoveredPrinter,
 	isWebBluetoothSupported,
 	isWebUsbSupported,
 	type PrinterProfile,
@@ -21,9 +22,15 @@ import { NetworkFields } from './dialog/connection/network-fields';
 import { WebVendorSegmented } from './dialog/connection/web-vendor-segmented';
 import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
+import { TestPrintError } from './dialog/test-print-error';
 import { usePrinterDialogForm } from './dialog/use-printer-dialog-form';
 import { DEFAULT_FORM_VALUES, type PrinterFormValues, webPrinterSchema } from './schema';
-import { deriveEndpointHint, deriveWebVendorDefaults } from './web-network-defaults';
+import {
+	deriveEndpointExplanation,
+	deriveEndpointHint,
+	deriveWebVendorDefaults,
+	resolveWebPort,
+} from './web-network-defaults';
 import { useT } from '../../../../contexts/translations';
 
 import type { PrinterDialogPrefill } from './profile-config';
@@ -94,6 +101,20 @@ export function PrinterDialog({
 		defaultValue: WEB_DEFAULTS.port,
 	});
 	const endpointHint = deriveEndpointHint(vendor, address ?? '', port ?? 9100);
+	const endpointExplanation = deriveEndpointExplanation(vendor, address ?? '', port ?? 9100);
+	const resolveResultPort = React.useCallback(
+		(printer: DiscoveredPrinter) =>
+			resolveWebPort(printer.vendor === 'star' ? 'star' : 'epson', printer.port),
+		[]
+	);
+	const resultEndpoint = React.useCallback((printer: DiscoveredPrinter) => {
+		const resultVendor = printer.vendor === 'star' ? 'star' : 'epson';
+		return deriveEndpointHint(
+			resultVendor,
+			printer.address,
+			resolveWebPort(resultVendor, printer.port)
+		);
+	}, []);
 	const availableTypes = React.useMemo(() => {
 		const types: PrinterFormValues['connectionType'][] = ['network'];
 		if (isWebUsbSupported()) {
@@ -208,11 +229,14 @@ export function PrinterDialog({
 								probing={probing}
 								detectedVendor={detectedVendor}
 								endpointHint={endpointHint}
+								endpointExplanation={endpointExplanation}
 								onScan={discovery.startScan}
 								scanning={discovery.isScanning}
 								printers={discovery.printers}
 								scanCandidates={discovery.scanCandidates}
 								scanProgress={discovery.scanProgress}
+								resolveResultPort={resolveResultPort}
+								resultEndpoint={resultEndpoint}
 							/>
 						</>
 					)}
@@ -235,9 +259,10 @@ export function PrinterDialog({
 					defaultOpen={isEditing}
 				/>
 			}
+			errorSection={<TestPrintError error={testError} />}
 			footer={
 				<PrinterDialogFooter
-					testError={testError}
+					showSaveAnyway={!!testError}
 					testLoading={testLoading}
 					saveLoading={saveLoading}
 					onTestPrint={handleTestPrint}

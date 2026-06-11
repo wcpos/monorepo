@@ -1,9 +1,10 @@
 import PQueue from 'p-queue';
 
 import type { DiscoveredPrinter } from '../types';
+import type { ProbedEndpoint } from '../utils/probe-vendor';
 
-/** Signature of probeVendor — injected so the sweep is testable without network. */
-export type ProbeVendorFn = (host: string) => Promise<'epson' | 'star' | null>;
+/** Signature of probeVendorEndpoint — injected so the sweep is testable without network. */
+export type ProbeVendorFn = (host: string) => Promise<ProbedEndpoint | null>;
 
 export interface SweepCandidateOptions {
 	/** First three octets, e.g. "192.168.1" — expands to .1–.254. */
@@ -94,20 +95,22 @@ export async function sweepForPrinters(options: SweepOptions): Promise<Discovere
 		hosts.map((host) =>
 			queue.add(async () => {
 				if (signal?.aborted) return;
-				const vendor = await probe(host).catch(() => null);
+				const endpoint = await probe(host).catch(() => null);
 				if (signal?.aborted) return;
 				tested += 1;
 				onProgress?.(tested, total);
-				if (!vendor) return;
-				const id = `${host}:9100`;
+				if (!endpoint) return;
+				// The probe succeeded over the vendor's web protocol, so report that
+				// port — never raw TCP 9100, which browsers cannot reach.
+				const id = `${host}:${endpoint.port}`;
 				if (!found.has(id)) {
 					found.set(id, {
 						id,
-						name: `${vendor === 'epson' ? 'Epson' : 'Star'} printer (${host})`,
+						name: `${endpoint.vendor === 'epson' ? 'Epson' : 'Star'} printer (${host})`,
 						connectionType: 'network',
 						address: host,
-						port: 9100,
-						vendor,
+						port: endpoint.port,
+						vendor: endpoint.vendor,
 					});
 				}
 			})

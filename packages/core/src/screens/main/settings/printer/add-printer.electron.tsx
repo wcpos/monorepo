@@ -14,6 +14,7 @@ import { ElectronBtPicker } from './dialog/connection/electron-bt-picker';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
+import { TestPrintError } from './dialog/test-print-error';
 import { usePrinterDialogForm, type VendorDefaults } from './dialog/use-printer-dialog-form';
 import {
 	DEFAULT_FORM_VALUES,
@@ -233,9 +234,10 @@ export function PrinterDialog({
 					onVendorManualChange={setManualVendor}
 				/>
 			}
+			errorSection={<TestPrintError error={testError} />}
 			footer={
 				<PrinterDialogFooter
-					testError={testError}
+					showSaveAnyway={!!testError}
 					testLoading={testLoading}
 					saveLoading={saveLoading}
 					onTestPrint={handleTestPrint}

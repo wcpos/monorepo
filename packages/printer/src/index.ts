@@ -61,7 +61,10 @@ export type { RasterizeInput } from './raster/rasterize-provider';
 export { resolvePrinter } from './resolve-printer';
 export type { TemplateInfo, ResolvePrinterOptions } from './resolve-printer';
 export { detectMismatch } from './detect-mismatch';
-export { probeVendor } from './utils/probe-vendor';
+export { probeVendor, probeVendorEndpoint } from './utils/probe-vendor';
+export type { ProbedEndpoint } from './utils/probe-vendor';
+export { isPrinterConnectionError, PrinterConnectionError } from './utils/connection-error';
+export type { ConnectionDiagnostics } from './utils/connection-error';
 export type {
 	PrinterTransport,
 	PrinterProfile,

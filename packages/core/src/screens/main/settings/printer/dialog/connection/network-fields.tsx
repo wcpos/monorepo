@@ -21,6 +21,8 @@ interface NetworkFieldsProps {
 	detectedVendor: string | null;
 	/** Web only — a derived endpoint URL shown read-only under the IP field. */
 	endpointHint?: string;
+	/** Web only — why the derived endpoint uses HTTP or HTTPS. */
+	endpointExplanation?: string;
 	/** Electron + native — show a Scan Network button. */
 	onScan?: () => void;
 	scanning?: boolean;
@@ -32,6 +34,13 @@ interface NetworkFieldsProps {
 		tested: number;
 		total: number;
 	};
+	/**
+	 * Web only — resolve a browser-usable port before applying a scan result,
+	 * so raw TCP 9100 never lands in the editable Port field.
+	 */
+	resolveResultPort?: (printer: DiscoveredPrinter) => number | undefined;
+	/** Web only — the endpoint URL web printing will use for a scan result. */
+	resultEndpoint?: (printer: DiscoveredPrinter) => string | undefined;
 }
 
 export function NetworkFields({
@@ -39,11 +48,14 @@ export function NetworkFields({
 	probing,
 	detectedVendor,
 	endpointHint,
+	endpointExplanation,
 	onScan,
 	scanning,
 	printers = [],
 	scanCandidates = [],
 	scanProgress = { tested: 0, total: 0 },
+	resolveResultPort,
+	resultEndpoint,
 }: NetworkFieldsProps) {
 	const t = useT();
 	const detectedVendorLabel =
@@ -102,9 +114,22 @@ export function NetworkFields({
 				</Text>
 			)}
 			{endpointHint && (
-				<Text testID="add-printer-endpoint-hint" className="text-muted-foreground text-xs">
-					{endpointHint}
-				</Text>
+				<VStack className="bg-muted/50 gap-0.5 rounded-md p-2">
+					<Text className="text-muted-foreground text-xs font-medium">
+						{t('settings.web_print_endpoint', 'Web print endpoint')}
+					</Text>
+					<Text testID="add-printer-endpoint-hint" className="text-xs">
+						{endpointHint}
+					</Text>
+					{endpointExplanation && (
+						<Text
+							testID="add-printer-endpoint-explanation"
+							className="text-muted-foreground text-xs"
+						>
+							{endpointExplanation}
+						</Text>
+					)}
+				</VStack>
 			)}
 			{onScan && (
 				<Button
@@ -175,35 +200,70 @@ export function NetworkFields({
 			)}
 			{networkPrinters.length > 0 && (
 				<VStack testID="add-printer-network-results" className="gap-2 pt-1">
-					{networkPrinters.map((printer) => (
-						<Button
-							key={printer.id}
-							testID={`add-printer-network-result-${printer.id}`}
-							variant="outline"
-							className="items-start justify-start"
-							onPress={() => {
-								form.setValue('connectionType', 'network');
-								form.setValue('address', printer.address, { shouldValidate: true });
-								form.setValue('name', printer.name);
-								if (printer.port != null) {
-									form.setValue('port', printer.port, { shouldValidate: true });
-								} else {
-									form.resetField('port');
-								}
-								if (printer.vendor) {
-									form.setValue('vendor', printer.vendor);
-								}
-							}}
-						>
-							<VStack>
-								<Text className="text-sm">{printer.name}</Text>
-								<Text className="text-muted-foreground text-xs">
-									{printer.address}
-									{printer.port ? `:${printer.port}` : ''}
-								</Text>
-							</VStack>
-						</Button>
-					))}
+					{networkPrinters.map((printer) => {
+						const endpoint = resultEndpoint?.(printer);
+						const discoveredAt = `${printer.address}${printer.port ? `:${printer.port}` : ''}`;
+						return (
+							<Button
+								key={printer.id}
+								testID={`add-printer-network-result-${printer.id}`}
+								variant="outline"
+								className="h-auto items-start justify-start py-2"
+								onPress={() => {
+									form.setValue('connectionType', 'network');
+									form.setValue('address', printer.address, { shouldValidate: true });
+									form.setValue('name', printer.name);
+									if (printer.vendor) {
+										form.setValue('vendor', printer.vendor);
+									}
+									const port = resolveResultPort ? resolveResultPort(printer) : printer.port;
+									if (port != null) {
+										form.setValue('port', port, { shouldValidate: true });
+									} else {
+										form.resetField('port');
+									}
+								}}
+							>
+								<VStack className="flex-1 items-start gap-0.5">
+									<Text className="text-sm font-medium">{printer.name}</Text>
+									<Text className="text-muted-foreground text-xs">
+										{t('settings.printer_discovered_at', 'Discovered: %s').replace(
+											'%s',
+											discoveredAt
+										)}
+									</Text>
+									{endpoint && (
+										<Text
+											testID={`add-printer-network-result-endpoint-${printer.id}`}
+											className="text-muted-foreground text-xs"
+										>
+											{t('settings.web_print_will_use', 'Web printing will use: %s').replace(
+												'%s',
+												endpoint
+											)}
+										</Text>
+									)}
+									{resultEndpoint && printer.port === 9100 && (
+										<Text
+											testID={`add-printer-network-result-raw-tcp-${printer.id}`}
+											className="text-muted-foreground text-xs"
+										>
+											{t(
+												'settings.raw_tcp_not_supported_on_web',
+												'Browsers cannot print to raw TCP port 9100 — the web print endpoint above will be used instead.'
+											)}
+										</Text>
+									)}
+									<HStack className="items-center gap-1 pt-1">
+										<Icon name="circlePlus" size="sm" className="text-primary" />
+										<Text className="text-primary text-xs font-semibold">
+											{t('settings.use_this_printer', 'Use this printer')}
+										</Text>
+									</HStack>
+								</VStack>
+							</Button>
+						);
+					})}
 				</VStack>
 			)}
 		</VStack>

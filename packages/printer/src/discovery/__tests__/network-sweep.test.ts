@@ -46,19 +46,32 @@ describe('buildSweepCandidates', () => {
 	});
 });
 
+const epsonHttp = { vendor: 'epson', port: 8008, protocol: 'http' } as const;
+const starHttps = { vendor: 'star', port: 443, protocol: 'https' } as const;
+
 describe('sweepForPrinters', () => {
-	it('returns a DiscoveredPrinter for each probed host that matches a vendor', async () => {
-		const probe = async (host: string) => (host === 'localhost' ? 'epson' : null);
+	// Regression: results used to claim raw TCP port 9100, which browsers cannot
+	// reach — the discovered port must be the web endpoint that actually answered.
+	it('returns a DiscoveredPrinter with the probed web endpoint port', async () => {
+		const probe = async (host: string) => (host === 'localhost' ? epsonHttp : null);
 		const result = await sweepForPrinters({ hosts: ['localhost', '10.0.0.5'], probe });
 		expect(result).toEqual([
 			{
-				id: 'localhost:9100',
+				id: 'localhost:8008',
 				name: 'Epson printer (localhost)',
 				connectionType: 'network',
 				address: 'localhost',
-				port: 9100,
+				port: 8008,
 				vendor: 'epson',
 			},
+		]);
+	});
+
+	it('reports the Star HTTPS port when that endpoint answered', async () => {
+		const probe = async () => starHttps;
+		const result = await sweepForPrinters({ hosts: ['192.168.1.50'], probe });
+		expect(result).toEqual([
+			expect.objectContaining({ id: '192.168.1.50:443', port: 443, vendor: 'star' }),
 		]);
 	});
 
@@ -75,7 +88,7 @@ describe('sweepForPrinters', () => {
 		let calls = 0;
 		const probe = async () => {
 			calls += 1;
-			return 'star' as const;
+			return starHttps;
 		};
 		const result = await sweepForPrinters({
 			hosts: ['10.0.0.5'],
@@ -89,9 +102,7 @@ describe('sweepForPrinters', () => {
 	it('resolves with an array instead of hanging when aborted mid-flight', async () => {
 		const controller = new AbortController();
 		const probe = (host: string) =>
-			host === 'fast'
-				? Promise.resolve('epson' as const)
-				: new Promise<'epson' | 'star' | null>(() => {}); // 'slow' never settles
+			host === 'fast' ? Promise.resolve(epsonHttp) : new Promise<typeof epsonHttp | null>(() => {}); // 'slow' never settles
 		const promise = sweepForPrinters({
 			hosts: ['fast', 'slow'],
 			probe,
@@ -120,7 +131,7 @@ describe('sweepForPrinters', () => {
 
 	it('does not report progress for probes that never settle before abort', async () => {
 		const controller = new AbortController();
-		const probe = () => new Promise<'epson' | 'star' | null>(() => {}); // never settles
+		const probe = () => new Promise<typeof epsonHttp | null>(() => {}); // never settles
 		const seen: number[] = [];
 		const promise = sweepForPrinters({
 			hosts: ['a', 'b'],
@@ -137,7 +148,7 @@ describe('sweepForPrinters', () => {
 	it('counts a probe that settles before abort but not one still in flight', async () => {
 		const controller = new AbortController();
 		const probe = (host: string) =>
-			host === 'fast' ? Promise.resolve(null) : new Promise<'epson' | 'star' | null>(() => {}); // 'slow' never settles
+			host === 'fast' ? Promise.resolve(null) : new Promise<typeof epsonHttp | null>(() => {}); // 'slow' never settles
 		const seen: number[] = [];
 		const promise = sweepForPrinters({
 			hosts: ['fast', 'slow'],
