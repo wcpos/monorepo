@@ -53,8 +53,25 @@ export const schema = z.object({
 	gridFields: gridFieldsSchema,
 });
 
-/** Sortable product fields, stored as the underlying DB field name. */
-const SORT_FIELD_VALUES = ['name', 'date_created_gmt', 'sortable_price', 'total_sales'] as const;
+/**
+ * Sortable product fields, stored as the underlying DB field name.
+ * Each value must be sortable locally (products RxDB schema) and remotely — the
+ * REST `orderby` mapping lives in @wcpos/query hooks/products, and the server
+ * enum is WooCommerce core plus the WCPOS plugin additions (sku, barcode,
+ * stock_quantity, stock_status).
+ */
+const SORT_FIELD_VALUES = [
+	'name',
+	'sku',
+	'barcode',
+	'sortable_price',
+	'date_created_gmt',
+	'date_modified_gmt',
+	'total_sales',
+	'stock_quantity',
+	'stock_status',
+	'menu_order',
+] as const;
 
 const META_DATA_KEYS_DOCS_URL = 'https://docs.wcpos.com/pos/product-panel/meta-data-keys';
 
@@ -134,59 +151,67 @@ export function UISettingsForm() {
 							</View>
 						)}
 					/>
-					<FormField
-						control={form.control}
-						name="sortBy"
-						render={({ field: { value, onChange } }) => {
-							const sortLabels: Record<string, string> = {
-								name: t('common.name'),
-								date_created_gmt: t('common.date_created'),
-								sortable_price: t('common.price'),
-								total_sales: t('common.popularity'),
-							};
-							return (
-								<View className="gap-1 px-1">
-									<Text>{getUILabel('sortBy')}</Text>
-									<Select
-										value={{ value, label: sortLabels[value] ?? value }}
-										onValueChange={(val) => onChange(val?.value || 'name')}
+					<HStack className="items-end px-1">
+						<FormField
+							control={form.control}
+							name="sortBy"
+							render={({ field: { value, onChange } }) => {
+								const sortLabels: Record<string, string> = {
+									name: t('common.name'),
+									sku: t('common.sku'),
+									barcode: t('common.barcode'),
+									sortable_price: t('common.price'),
+									date_created_gmt: t('common.date_created'),
+									date_modified_gmt: t('common.date_modified'),
+									total_sales: t('common.popularity'),
+									stock_quantity: t('products.stock_quantity'),
+									stock_status: t('common.stock_status'),
+									menu_order: t('common.menu_order'),
+								};
+								return (
+									<View className="flex-1 gap-1">
+										<Text>{getUILabel('sortBy')}</Text>
+										<Select
+											value={{ value, label: sortLabels[value] ?? value }}
+											onValueChange={(val) => onChange(val?.value || 'name')}
+										>
+											<SelectTrigger>
+												<SelectValue placeholder={getUILabel('sortBy')} />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectGroup>
+													{SORT_FIELD_VALUES.map((v) => (
+														<SelectItem key={v} label={sortLabels[v]} value={v} />
+													))}
+												</SelectGroup>
+											</SelectContent>
+										</Select>
+									</View>
+								);
+							}}
+						/>
+						<FormField
+							control={form.control}
+							name="sortDirection"
+							render={({ field: { value, onChange } }) => (
+								<View className="gap-1">
+									<Text>{getUILabel('sortDirection')}</Text>
+									<ToggleGroup
+										type="single"
+										value={value}
+										onValueChange={(val) => onChange(val || value)}
 									>
-										<SelectTrigger>
-											<SelectValue placeholder={getUILabel('sortBy')} />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectGroup>
-												{SORT_FIELD_VALUES.map((v) => (
-													<SelectItem key={v} label={sortLabels[v]} value={v} />
-												))}
-											</SelectGroup>
-										</SelectContent>
-									</Select>
+										<ToggleGroupItem value="asc" testID="sort-direction-asc">
+											<Text>{t('common.ascending')}</Text>
+										</ToggleGroupItem>
+										<ToggleGroupItem value="desc" testID="sort-direction-desc">
+											<Text>{t('common.descending')}</Text>
+										</ToggleGroupItem>
+									</ToggleGroup>
 								</View>
-							);
-						}}
-					/>
-					<FormField
-						control={form.control}
-						name="sortDirection"
-						render={({ field: { value, onChange } }) => (
-							<View className="gap-1 px-1">
-								<Text>{getUILabel('sortDirection')}</Text>
-								<ToggleGroup
-									type="single"
-									value={value}
-									onValueChange={(val) => onChange(val || value)}
-								>
-									<ToggleGroupItem value="asc" testID="sort-direction-asc">
-										<Text>{t('common.ascending')}</Text>
-									</ToggleGroupItem>
-									<ToggleGroupItem value="desc" testID="sort-direction-desc">
-										<Text>{t('common.descending')}</Text>
-									</ToggleGroupItem>
-								</ToggleGroup>
-							</View>
-						)}
-					/>
+							)}
+						/>
+					</HStack>
 					{viewMode === 'grid' ? (
 						<VStack>
 							<FormField
