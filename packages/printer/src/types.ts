@@ -106,3 +106,24 @@ export interface UsePrintResult {
 	/** Whether a print job is currently in progress. */
 	isPrinting: boolean;
 }
+
+/** Stable discovery error codes — the UI maps these to translated strings. */
+export type DiscoveryErrorCode =
+	| 'usb-none-found'
+	| 'bt-none-found'
+	| 'bt-connect-failed'
+	| 'network-none-found'
+	| 'ipc-unavailable'
+	| 'discovery-failed';
+
+export interface DiscoveryError {
+	code: DiscoveryErrorCode;
+	/** Raw detail (e.g. the underlying exception message) for `discovery-failed`. */
+	detail?: string;
+}
+
+/** A Web Bluetooth chooser candidate forwarded from the Electron main process. */
+export interface BluetoothCandidate {
+	id: string;
+	name: string;
+}
