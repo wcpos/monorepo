@@ -12,7 +12,7 @@ import { type DiscoveredPrinter, type PrinterProfile, usePrinterDiscovery } from
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { ElectronBtPicker } from './dialog/connection/electron-bt-picker';
-import { InstalledPrintersSection } from './dialog/connection/installed-printers-section';
+import { OsPrintersSection } from './dialog/connection/os-printers-section';
 import { isWindowsPlatform } from './dialog/connection/is-windows';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { formatDiscoveryError } from './dialog/discovery-error-message';
@@ -119,6 +119,8 @@ export function PrinterDialog({
 		bluetoothCandidates,
 		selectBluetoothCandidate,
 		cancelBluetoothScan,
+		connectSerialDevice,
+		isSerialScanning,
 		error: discoveryError,
 	} = usePrinterDiscovery();
 	const {
@@ -222,15 +224,45 @@ export function PrinterDialog({
 					candidates={bluetoothCandidates ?? []}
 					onSelect={(id) => selectBluetoothCandidate?.(id)}
 				/>
-				<DeviceList form={form} printers={printers} type="bluetooth" />
-				{isWindowsPlatform() && (
-					<InstalledPrintersSection
+				{/* serial: entries are owned by the paired-printers section below; exclude them here */}
+				<DeviceList
+					form={form}
+					printers={printers.filter((p) => !p.address?.startsWith('serial:'))}
+					type="bluetooth"
+				/>
+				{isWindowsPlatform() ? (
+					<OsPrintersSection
 						form={form}
 						printers={printers}
 						onScan={connectUsbDevice}
 						scanning={isUsbScanning}
+						addressPrefix="winspool:"
+						heading={t('settings.installed_printers', 'Installed printers')}
+						hint={t(
+							'settings.installed_printers_hint',
+							'Printers paired in Windows (including Bluetooth printers) appear here as installed printers.'
+						)}
+						emptyText={t('settings.installed_printers_none', 'No installed printers found.')}
+						loadingText={t('settings.installed_printers_loading', 'Loading installed printers…')}
+						testIdPrefix="add-printer-installed-device"
 					/>
-				)}
+				) : connectSerialDevice ? (
+					<OsPrintersSection
+						form={form}
+						printers={printers}
+						onScan={connectSerialDevice}
+						scanning={isSerialScanning}
+						addressPrefix="serial:"
+						heading={t('settings.paired_printers', 'Paired Bluetooth printers')}
+						hint={t(
+							'settings.paired_printers_hint',
+							'Bluetooth Classic printers paired in your system settings appear here.'
+						)}
+						emptyText={t('settings.paired_printers_none', 'No paired printers found.')}
+						loadingText={t('settings.paired_printers_loading', 'Loading paired printers…')}
+						testIdPrefix="add-printer-paired-device"
+					/>
+				) : null}
 			</VStack>
 		);
 	} else {
