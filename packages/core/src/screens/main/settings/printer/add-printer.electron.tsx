@@ -150,6 +150,11 @@ export function PrinterDialog({
 		defaultValue: DEFAULT_FORM_VALUES.connectionType,
 	});
 
+	// The BT tab auto-runs the installed-printers (usb-discovery) scan; its empty result
+	// is reported by the section's own empty state, not the shared error line.
+	const suppressedDiscoveryError =
+		connectionType === 'bluetooth' && discoveryError?.code === 'usb-none-found';
+
 	const vendorOptions: VendorOption[] = [
 		{ value: 'epson', label: 'Epson' },
 		{ value: 'star', label: 'Star Micronics' },
@@ -260,7 +265,7 @@ export function PrinterDialog({
 						}}
 					/>
 					{connectionSection}
-					{discoveryError && (
+					{discoveryError && !suppressedDiscoveryError && (
 						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
 							{formatDiscoveryError(discoveryError, t)}
 						</Text>
