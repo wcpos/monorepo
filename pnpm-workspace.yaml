@@ -49,6 +49,7 @@ packageExtensions:
     "dependencies": { "rxdb": "16.21.1" }
 allowBuilds:
   "@firebase/util": false
+  "@serialport/bindings-cpp": true
   "@shopify/react-native-skia": true
   "@tailwindcss/oxide": true
   "@zowe/secrets-for-zowe-sdk": true
