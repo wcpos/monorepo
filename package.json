@@ -38,14 +38,14 @@
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
   },
   "devDependencies": {
+    "eslint": "^9.39.4",
+    "expo": "~56.0.11",
     "glob": "^13.0.6",
     "lint-staged": "^16.4.0",
-    "eslint": "^9.39.4",
-    "prettier-plugin-tailwindcss": "^0.8.0",
-    "expo": "~56.0.8"
+    "prettier-plugin-tailwindcss": "^0.8.0"
   },
   "dependencies": {
-    "turbo": "^2.9.14",
+    "turbo": "^2.9.18",
     "typescript": "^5.9.3"
   }
 }
