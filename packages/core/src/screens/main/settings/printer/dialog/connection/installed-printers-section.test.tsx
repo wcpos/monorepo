@@ -16,16 +16,20 @@ jest.mock('react-native', () => ({
 		children,
 		onPress,
 		testID,
+		className,
 	}: {
 		children?: React.ReactNode;
 		onPress?: () => void;
 		testID?: string;
+		className?: string;
 	}) => (
-		<button type="button" data-testid={testID} onClick={onPress}>
+		<button type="button" data-testid={testID} data-classname={className} onClick={onPress}>
 			{children}
 		</button>
 	),
-	View: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	View: ({ children, className }: { children?: React.ReactNode; className?: string }) => (
+		<div data-classname={className}>{children}</div>
+	),
 }));
 
 jest.mock('@wcpos/components/text', () => ({
@@ -40,9 +44,16 @@ jest.mock('../../../../../../contexts/translations', () => ({
 	useT: () => (_key: string, fallback: string) => fallback,
 }));
 
+jest.mock('react-hook-form', () => ({
+	useWatch: () => '',
+}));
+
 function makeForm(): { form: UseFormReturn<PrinterFormValues>; setValue: jest.Mock } {
 	const setValue = jest.fn();
-	return { form: { setValue } as unknown as UseFormReturn<PrinterFormValues>, setValue };
+	return {
+		form: { setValue, control: {} } as unknown as UseFormReturn<PrinterFormValues>,
+		setValue,
+	};
 }
 
 const printers: DiscoveredPrinter[] = [
@@ -83,5 +94,18 @@ describe('InstalledPrintersSection', () => {
 	it('shows the empty message when nothing is installed', () => {
 		render(<InstalledPrintersSection form={makeForm().form} printers={[]} onScan={jest.fn()} />);
 		expect(screen.getByText('No installed printers found.')).toBeInTheDocument();
+	});
+
+	it('shows loading text when scanning and does not show empty message', () => {
+		render(
+			<InstalledPrintersSection
+				form={makeForm().form}
+				printers={[]}
+				onScan={jest.fn()}
+				scanning={true}
+			/>
+		);
+		expect(screen.getByText('Loading installed printers…')).toBeInTheDocument();
+		expect(screen.queryByText('No installed printers found.')).not.toBeInTheDocument();
 	});
 });

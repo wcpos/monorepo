@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { useWatch } from 'react-hook-form';
 
 import { Button } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type DiscoveredPrinter, type PrinterProfile, usePrinterDiscovery } from '@wcpos/printer';
@@ -11,7 +12,10 @@ import { type DiscoveredPrinter, type PrinterProfile, usePrinterDiscovery } from
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { ElectronBtPicker } from './dialog/connection/electron-bt-picker';
+import { InstalledPrintersSection } from './dialog/connection/installed-printers-section';
+import { isWindowsPlatform } from './dialog/connection/is-windows';
 import { NetworkFields } from './dialog/connection/network-fields';
+import { formatDiscoveryError } from './dialog/discovery-error-message';
 import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { TestPrintError } from './dialog/test-print-error';
@@ -109,7 +113,12 @@ export function PrinterDialog({
 		startScan,
 		isScanning: scanning,
 		connectUsbDevice,
+		isUsbScanning,
 		connectBluetoothDevice,
+		isBluetoothScanning,
+		bluetoothCandidates,
+		selectBluetoothCandidate,
+		cancelBluetoothScan,
 		error: discoveryError,
 	} = usePrinterDiscovery();
 	const {
@@ -158,6 +167,8 @@ export function PrinterDialog({
 						size="sm"
 						className="self-start"
 						onPress={connectUsbDevice}
+						loading={!!isUsbScanning}
+						disabled={!!isUsbScanning}
 					>
 						<Text>{t('settings.scan_for_printers', 'Scan for printers')}</Text>
 					</Button>
@@ -169,18 +180,52 @@ export function PrinterDialog({
 		connectionSection = (
 			<VStack className="gap-2">
 				{connectBluetoothDevice && (
-					<Button
-						testID="add-printer-electron-bt-scan-button"
-						variant="outline"
-						size="sm"
-						className="self-start"
-						onPress={connectBluetoothDevice}
-					>
-						<Text>{t('settings.scan_for_printers', 'Scan for printers')}</Text>
-					</Button>
+					<HStack className="gap-2">
+						<Button
+							testID="add-printer-electron-bt-scan-button"
+							variant="outline"
+							size="sm"
+							className="self-start"
+							onPress={connectBluetoothDevice}
+							loading={!!isBluetoothScanning}
+							disabled={!!isBluetoothScanning}
+						>
+							<Text>
+								{isBluetoothScanning
+									? t('settings.scanning', 'Scanning…')
+									: t('settings.scan_for_printers', 'Scan for printers')}
+							</Text>
+						</Button>
+						{isBluetoothScanning && cancelBluetoothScan && (
+							<Button
+								testID="add-printer-electron-bt-cancel-button"
+								variant="ghost"
+								size="sm"
+								onPress={cancelBluetoothScan}
+							>
+								<Text>{t('common.cancel', 'Cancel')}</Text>
+							</Button>
+						)}
+					</HStack>
 				)}
-				<ElectronBtPicker />
+				{isBluetoothScanning && (
+					<Text testID="add-printer-bt-searching" className="text-muted-foreground text-xs">
+						{t('settings.bt_searching', 'Searching for Bluetooth printers…')}
+					</Text>
+				)}
+				<ElectronBtPicker
+					candidates={bluetoothCandidates ?? []}
+					onSelect={(id) => selectBluetoothCandidate?.(id)}
+				/>
 				<DeviceList form={form} printers={printers} type="bluetooth" />
+				{isWindowsPlatform() && (
+					<InstalledPrintersSection
+						form={form}
+						printers={printers}
+						onScan={connectUsbDevice}
+						scanning={isUsbScanning}
+					/>
+				)}
 			</VStack>
 		);
 	} else {
@@ -217,10 +262,7 @@ export function PrinterDialog({
 					{connectionSection}
 					{discoveryError && (
 						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
-							{t('settings.printer_discovery_error', 'Printer discovery error: %s').replace(
-								'%s',
-								discoveryError
-							)}
+							{formatDiscoveryError(discoveryError, t)}
 						</Text>
 					)}
 				</>

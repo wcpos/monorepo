@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { Pressable, View } from 'react-native';
 
+import { useWatch } from 'react-hook-form';
+
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import type { DiscoveredPrinter } from '@wcpos/printer';
@@ -29,6 +31,7 @@ export function InstalledPrintersSection({
 	scanning?: boolean;
 }) {
 	const t = useT();
+	const selectedAddress = useWatch({ control: form.control, name: 'address' });
 	const installed = printers.filter((p) => p.address?.startsWith('winspool:'));
 
 	// useEffect required: imperative one-shot kick of the installed-printers IPC scan
@@ -59,20 +62,29 @@ export function InstalledPrintersSection({
 					{t('settings.installed_printers_none', 'No installed printers found.')}
 				</Text>
 			)}
-			{installed.map((p) => (
-				<Pressable
-					key={p.id}
-					testID={`add-printer-installed-device-${p.id}`}
-					onPress={() => {
-						form.setValue('address', p.address ?? '');
-						form.setValue('name', p.name);
-					}}
-					className="border-border flex-row items-center gap-2 rounded-md border p-2"
-				>
-					<View className="bg-primary h-2 w-2 rounded-full" />
-					<Text className="text-sm">{p.name}</Text>
-				</Pressable>
-			))}
+			{installed.map((p) => {
+				const selected = p.address === selectedAddress;
+				return (
+					<Pressable
+						key={p.id}
+						testID={`add-printer-installed-device-${p.id}`}
+						onPress={() => {
+							form.setValue('address', p.address ?? '');
+							form.setValue('name', p.name);
+						}}
+						className={`flex-row items-center gap-2 rounded-md border p-2 ${
+							selected ? 'border-primary bg-primary/5' : 'border-border'
+						}`}
+					>
+						<View
+							className={`h-4 w-4 rounded-full border-2 ${
+								selected ? 'border-primary bg-primary' : 'border-border'
+							}`}
+						/>
+						<Text className="text-sm">{p.name}</Text>
+					</Pressable>
+				);
+			})}
 		</VStack>
 	);
 }
