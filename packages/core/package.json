@@ -76,7 +76,7 @@
 		"react-native-reanimated": "~4.3.1",
 		"react-native-safe-area-context": "~5.7.0",
 		"react-native-screens": "4.25.2",
-		"react-native-svg": "15.15.5",
+		"react-native-svg": "15.15.4",
 		"victory-native": "^41.20.2"
 	},
 	"dependencies": {
@@ -126,7 +126,7 @@
 		"react-native-reanimated": "~4.3.1",
 		"react-native-safe-area-context": "~5.7.0",
 		"react-native-screens": "4.25.2",
-		"react-native-svg": "15.15.5",
+		"react-native-svg": "15.15.4",
 		"ts-jest": "^29.4.11",
 		"victory-native": "^41.26.0"
 	}
