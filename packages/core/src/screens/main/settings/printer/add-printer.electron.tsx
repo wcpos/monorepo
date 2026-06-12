@@ -13,6 +13,7 @@ import { AdvancedSettings } from './dialog/advanced-settings';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { ElectronBtPicker } from './dialog/connection/electron-bt-picker';
 import { OsPrintersSection } from './dialog/connection/os-printers-section';
+import { UsbPrintersSection } from './dialog/connection/usb-printers-section';
 import { isWindowsPlatform } from './dialog/connection/is-windows';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { formatDiscoveryError } from './dialog/discovery-error-message';
@@ -167,22 +168,9 @@ export function PrinterDialog({
 	let connectionSection: React.ReactNode;
 	if (connectionType === 'usb') {
 		connectionSection = (
-			<VStack className="gap-2">
-				{connectUsbDevice && (
-					<Button
-						testID="add-printer-electron-usb-scan-button"
-						variant="outline"
-						size="sm"
-						className="self-start"
-						onPress={connectUsbDevice}
-						loading={!!isUsbScanning}
-						disabled={!!isUsbScanning}
-					>
-						<Text>{t('settings.scan_for_printers', 'Scan for printers')}</Text>
-					</Button>
-				)}
+			<UsbPrintersSection onScan={connectUsbDevice} scanning={isUsbScanning}>
 				<DeviceList form={form} printers={printers} type="usb" />
-			</VStack>
+			</UsbPrintersSection>
 		);
 	} else if (connectionType === 'bluetooth') {
 		connectionSection = (
