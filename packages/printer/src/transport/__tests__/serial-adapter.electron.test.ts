@@ -49,6 +49,14 @@ describe('SerialElectronAdapter', () => {
 		});
 	});
 
+	it('printRaw clears its timeout after ipc resolves', async () => {
+		const adapter = new SerialElectronAdapter('serial:/dev/cu.TM-P20');
+
+		await adapter.printRaw(new Uint8Array([0x41]));
+
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
 	it('printRaw rejects after 30s timeout when ipc never resolves', async () => {
 		// Install a never-resolving invoke
 		installIpc(() => new Promise(() => undefined));

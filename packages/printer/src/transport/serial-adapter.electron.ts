@@ -25,15 +25,20 @@ export class SerialElectronAdapter implements PrinterTransport {
 
 	async printRaw(data: Uint8Array): Promise<void> {
 		const ipc = getIpc();
-		await Promise.race([
-			ipc.invoke('print-raw-serial', { device: this.deviceKey, data: Array.from(data) }),
-			new Promise<never>((_, reject) =>
-				setTimeout(
-					() => reject(new Error(`Serial print timed out after ${PRINT_TIMEOUT_MS}ms`)),
-					PRINT_TIMEOUT_MS
-				)
-			),
-		]);
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		try {
+			await Promise.race([
+				ipc.invoke('print-raw-serial', { device: this.deviceKey, data: Array.from(data) }),
+				new Promise<never>((_, reject) => {
+					timeoutId = setTimeout(
+						() => reject(new Error(`Serial print timed out after ${PRINT_TIMEOUT_MS}ms`)),
+						PRINT_TIMEOUT_MS
+					);
+				}),
+			]);
+		} finally {
+			if (timeoutId !== undefined) clearTimeout(timeoutId);
+		}
 	}
 
 	async printHtml(_html: string): Promise<void> {
