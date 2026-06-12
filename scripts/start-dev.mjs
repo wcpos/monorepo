@@ -34,17 +34,17 @@ const run = (cmd, args) => {
   }
 };
 
-// 1. Kill anything holding the Metro port (graceful, then hard).
-const pids = run('lsof', ['-ti', `:${PORT}`]).split('\n').filter(Boolean);
+// 1. Kill any Metro listener holding the port (graceful, then hard).
+const metroListenerPids = () => run('lsof', ['-t', `-iTCP:${PORT}`, '-sTCP:LISTEN']).split('\n').filter(Boolean);
+const pids = metroListenerPids();
 if (pids.length > 0) {
   console.log(`[start-dev] killing stale Metro on port ${PORT} (pid ${pids.join(', ')})`);
   run('kill', pids);
-  const stillAlive = () => run('lsof', ['-ti', `:${PORT}`]).split('\n').filter(Boolean);
   const deadline = Date.now() + 3000;
-  while (stillAlive().length > 0 && Date.now() < deadline) {
+  while (metroListenerPids().length > 0 && Date.now() < deadline) {
     execFileSync('sleep', ['0.2']);
   }
-  const survivors = stillAlive();
+  const survivors = metroListenerPids();
   if (survivors.length > 0) {
     console.log(`[start-dev] force-killing pid ${survivors.join(', ')}`);
     run('kill', ['-9', ...survivors]);
