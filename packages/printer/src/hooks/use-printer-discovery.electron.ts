@@ -220,7 +220,9 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 			{
 				onScanningChange: (scanning) => {
 					setIsBluetoothScanning(scanning);
-					if (!scanning) setBluetoothCandidates([]);
+					// Clear on every transition: a late IPC push after session end could have
+					// repopulated candidates, and a new session must not show the old list.
+					setBluetoothCandidates([]);
 				},
 				onError: setError,
 				onConnected: (device) => {

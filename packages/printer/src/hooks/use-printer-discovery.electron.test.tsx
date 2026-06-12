@@ -1,7 +1,10 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BT_DISCOVERY_TIMEOUT_MS } from '../discovery/bluetooth-scan-session';
+import {
+	BT_CONNECT_TIMEOUT_MS,
+	BT_DISCOVERY_TIMEOUT_MS,
+} from '../discovery/bluetooth-scan-session';
 import { usePrinterDiscovery } from './use-printer-discovery.electron';
 
 import type { BluetoothCandidate } from '../types';
@@ -89,7 +92,7 @@ describe('usePrinterDiscovery (electron)', () => {
 
 		const candidates: BluetoothCandidate[] = [{ id: 'a', name: 'Printer A' }];
 		act(() => {
-			listeners.get('bluetooth-devices')?.(...[candidates]);
+			listeners.get('bluetooth-devices')?.(candidates);
 		});
 
 		expect(result.current.bluetoothCandidates).toEqual(candidates);
@@ -147,7 +150,7 @@ describe('usePrinterDiscovery (electron)', () => {
 
 		// Push some candidates first.
 		act(() => {
-			listeners.get('bluetooth-devices')?.(...[[{ id: 'x', name: 'X' }]]);
+			listeners.get('bluetooth-devices')?.([{ id: 'x', name: 'X' }]);
 		});
 
 		act(() => {
@@ -196,5 +199,70 @@ describe('usePrinterDiscovery (electron)', () => {
 
 		expect(result.current.isUsbScanning).toBe(false);
 		expect(result.current.error).toEqual({ code: 'usb-none-found' });
+	});
+
+	// 7. select → connect-timeout path
+	it('select then connect timeout sets bt-connect-failed error and clears scanning', () => {
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		act(() => {
+			result.current.connectBluetoothDevice?.();
+		});
+		expect(result.current.isBluetoothScanning).toBe(true);
+
+		act(() => {
+			result.current.selectBluetoothCandidate?.('dev-1');
+		});
+
+		act(() => {
+			vi.advanceTimersByTime(BT_CONNECT_TIMEOUT_MS);
+		});
+
+		expect(result.current.error).toEqual({ code: 'bt-connect-failed' });
+		expect(result.current.isBluetoothScanning).toBe(false);
+	});
+
+	// 8. connectBluetoothDevice with no ipcRenderer → ipc-unavailable error, no chooser started
+	it('connectBluetoothDevice with no ipcRenderer sets ipc-unavailable and does not start chooser', () => {
+		removeIpc();
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		act(() => {
+			result.current.connectBluetoothDevice?.();
+		});
+
+		expect(result.current.error).toEqual({ code: 'ipc-unavailable' });
+		expect(connectMock).not.toHaveBeenCalled();
+	});
+
+	// 9. cancelBluetoothScan during discovery → ipc.send with '', scanning false, error null;
+	//    then connectBluetoothDevice again works (library connect called a second time)
+	it('cancelBluetoothScan ends session; connectBluetoothDevice can start a new session afterward', () => {
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		act(() => {
+			result.current.connectBluetoothDevice?.();
+		});
+		expect(result.current.isBluetoothScanning).toBe(true);
+		expect(connectMock).toHaveBeenCalledTimes(1);
+
+		act(() => {
+			result.current.cancelBluetoothScan?.();
+		});
+
+		const ipc = (window as unknown as Record<string, unknown>).ipcRenderer as {
+			send: ReturnType<typeof vi.fn>;
+		};
+		expect(ipc.send).toHaveBeenCalledWith('bluetooth-device-selected', '');
+		expect(result.current.isBluetoothScanning).toBe(false);
+		expect(result.current.error).toBeNull();
+
+		// Start a new session — library connect must be called a second time.
+		act(() => {
+			result.current.connectBluetoothDevice?.();
+		});
+
+		expect(connectMock).toHaveBeenCalledTimes(2);
+		expect(result.current.isBluetoothScanning).toBe(true);
 	});
 });
