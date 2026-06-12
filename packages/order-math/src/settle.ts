@@ -245,10 +245,22 @@ export function settleCart(
 	// 3. Validation stage — each candidate validated, in order, against the cart
 	// minus candidates. First failure short-circuits.
 	if (options?.validate && candidateCodes.length > 0) {
-		const candidateSet = new Set(candidateCodes);
-		const appliedCouponLines = activeCouponLines.filter(
-			(cl) => !candidateSet.has(cl.code.toLowerCase())
-		);
+		const candidateCounts = new Map<string, number>();
+		for (const code of candidateCodes) {
+			candidateCounts.set(code, (candidateCounts.get(code) ?? 0) + 1);
+		}
+		const appliedCouponLines = [...activeCouponLines]
+			.reverse()
+			.filter((cl) => {
+				const code = cl.code.toLowerCase();
+				const count = candidateCounts.get(code) ?? 0;
+				if (count === 0) {
+					return true;
+				}
+				candidateCounts.set(code, count - 1);
+				return false;
+			})
+			.reverse();
 		const activeLineItems = lineItems.filter((item) => isActiveLineItem(item));
 		const context = buildValidationContext({
 			snapshot,

@@ -457,6 +457,29 @@ describe('settleCart', () => {
 			expect(result.ok).toBe(true);
 		});
 
+		it('rejects a duplicate candidate while preserving the existing coupon line', () => {
+			const context = makeCouponContext([makeCouponInput({ code: 'save10' })]);
+			const result = settleCart(
+				{
+					...snapshot,
+					coupon_lines: [makeCouponLine('save10'), makeCouponLine('save10')],
+				},
+				config,
+				{
+					coupons: context,
+					validate: { codes: ['save10'], now: FIXED_NOW },
+				}
+			);
+
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+			expect(result.error).toEqual({
+				code: 'invalid_coupon',
+				couponCode: 'save10',
+				rejection: { code: 'already_applied' },
+			});
+		});
+
 		it('rejects an expired candidate with a typed rejection', () => {
 			const context = makeCouponContext([
 				makeCouponInput({
