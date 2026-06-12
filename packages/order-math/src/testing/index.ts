@@ -8,6 +8,7 @@ import type { CartSnapshot } from '../snapshot';
 import type {
 	CouponContext,
 	CouponInput,
+	CouponLineInput,
 	FeeLineInput,
 	LineItemInput,
 	ShippingLineInput,
@@ -126,5 +127,15 @@ export function makeShippingLine(
 			},
 		],
 		...rest,
+	};
+}
+
+export function makeCouponLine(overrides: Partial<CouponLineInput> = {}): CouponLineInput {
+	return {
+		code: 'test-coupon',
+		discount: '0',
+		discount_tax: '0',
+		meta_data: [{ key: '_woocommerce_pos_uuid', value: 'test-coupon-uuid-1' }],
+		...overrides,
 	};
 }

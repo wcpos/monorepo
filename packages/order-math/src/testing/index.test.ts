@@ -1,6 +1,7 @@
 import {
 	makeCartConfig,
 	makeCouponContext,
+	makeCouponLine,
 	makeFeeLine,
 	makeLineItem,
 	makeShippingLine,
@@ -132,5 +133,31 @@ describe('makeShippingLine', () => {
 		const shipping = makeShippingLine({ method_id: 'free_shipping', total: '0' });
 		expect(shipping.method_id).toBe('free_shipping');
 		expect(shipping.total).toBe('0');
+	});
+});
+
+describe('makeCouponLine', () => {
+	it('has sensible defaults', () => {
+		const coupon = makeCouponLine();
+		expect(coupon.code).toBe('test-coupon');
+		expect(coupon.discount).toBe('0');
+		expect(coupon.discount_tax).toBe('0');
+	});
+
+	it('includes UUID metadata by default', () => {
+		const coupon = makeCouponLine();
+		const uuidMeta = coupon.meta_data?.find((m) => m.key === '_woocommerce_pos_uuid');
+		expect(uuidMeta?.value).toBe('test-coupon-uuid-1');
+	});
+
+	it('merges top-level overrides', () => {
+		const coupon = makeCouponLine({ code: 'xmas10', discount: '25.50' });
+		expect(coupon.code).toBe('xmas10');
+		expect(coupon.discount).toBe('25.50');
+	});
+
+	it('allows null code as tombstone', () => {
+		const coupon = makeCouponLine({ code: null });
+		expect(coupon.code).toBeNull();
 	});
 });
