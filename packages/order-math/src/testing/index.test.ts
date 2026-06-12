@@ -84,6 +84,18 @@ describe('makeLineItem', () => {
 		expect(parsed.tax_status).toBe('taxable'); // default preserved
 	});
 
+	it('preserves generated posData when custom metadata is provided', () => {
+		const item = makeLineItem({
+			posData: { price: '20' },
+			meta_data: [{ key: 'custom', value: 'meta' }],
+		});
+		const posDataMeta = item.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
+		const parsed = JSON.parse(posDataMeta?.value ?? '{}');
+
+		expect(parsed.price).toBe('20');
+		expect(item.meta_data).toContainEqual({ key: 'custom', value: 'meta' });
+	});
+
 	it('merges top-level overrides', () => {
 		const item = makeLineItem({ product_id: 42, quantity: 3, subtotal: '30', total: '30' });
 		expect(item.product_id).toBe(42);
@@ -107,6 +119,18 @@ describe('makeFeeLine', () => {
 		expect(parsed.percent).toBe(true);
 	});
 
+	it('preserves generated fee posData when custom metadata is provided', () => {
+		const fee = makeFeeLine({
+			posData: { amount: 10 },
+			meta_data: [{ key: 'custom', value: 'fee' }],
+		});
+		const posDataMeta = fee.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
+		const parsed = JSON.parse(posDataMeta?.value ?? '{}');
+
+		expect(parsed.amount).toBe(10);
+		expect(fee.meta_data).toContainEqual({ key: 'custom', value: 'fee' });
+	});
+
 	it('merges top-level overrides', () => {
 		const fee = makeFeeLine({ name: 'Surcharge', total: '15' });
 		expect(fee.name).toBe('Surcharge');
@@ -127,6 +151,18 @@ describe('makeShippingLine', () => {
 		const posDataMeta = shipping.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
 		const parsed = JSON.parse(posDataMeta?.value ?? '{}');
 		expect(parsed.amount).toBe(12);
+	});
+
+	it('preserves generated shipping posData when custom metadata is provided', () => {
+		const shipping = makeShippingLine({
+			posData: { amount: 12 },
+			meta_data: [{ key: 'custom', value: 'shipping' }],
+		});
+		const posDataMeta = shipping.meta_data?.find((m) => m.key === '_woocommerce_pos_data');
+		const parsed = JSON.parse(posDataMeta?.value ?? '{}');
+
+		expect(parsed.amount).toBe(12);
+		expect(shipping.meta_data).toContainEqual({ key: 'custom', value: 'shipping' });
 	});
 
 	it('merges top-level overrides', () => {

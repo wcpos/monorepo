@@ -1,4 +1,4 @@
-import { enrichCategoriesWithAncestors } from './coupon-helpers';
+import { enrichCategoriesWithAncestors } from '@wcpos/order-math/internal';
 
 /**
  * Build an ancestor-enriched product categories map from RxDB collections.

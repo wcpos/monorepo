@@ -272,7 +272,8 @@ export function settleCart(
 		});
 
 		for (let i = 0; i < candidateCodes.length; i++) {
-			const coupon = availableCoupons!.get(candidateCodes[i])!;
+			const code = candidateCodes[i];
+			const coupon = availableCoupons!.get(code)!;
 			const result = validateCoupon(coupon, context);
 			if (!result.valid) {
 				return {
@@ -284,6 +285,10 @@ export function settleCart(
 					},
 					warnings,
 				};
+			}
+			context.appliedCoupons.push(code);
+			if (coupon.individual_use) {
+				context.appliedCouponsWithIndividualUse.push(code);
 			}
 		}
 	}

@@ -480,6 +480,25 @@ describe('settleCart', () => {
 			});
 		});
 
+		it('validates later candidates against earlier accepted candidates', () => {
+			const context = makeCouponContext([
+				makeCouponInput({ code: 'solo', individual_use: true }),
+				makeCouponInput({ code: 'second' }),
+			]);
+
+			const result = settleCart(snapshot, config, {
+				coupons: context,
+				validate: { codes: ['solo', 'second'], now: FIXED_NOW },
+			});
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+			expect(result.error).toEqual({
+				code: 'invalid_coupon',
+				couponCode: 'second',
+				rejection: { code: 'individual_use_conflict', params: { code: 'solo' } },
+			});
+		});
+
 		it('rejects an expired candidate with a typed rejection', () => {
 			const context = makeCouponContext([
 				makeCouponInput({

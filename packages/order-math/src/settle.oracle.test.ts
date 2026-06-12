@@ -125,10 +125,11 @@ function legacyConvergedState(
 	}
 
 	// (3) Totals over the converged state — the legacy loop's final patch.
+	const shippingLines = [...(snapshot.shipping_lines ?? [])];
 	const totals = calculateOrderTotals({
 		lineItems,
 		feeLines,
-		shippingLines: [...(snapshot.shipping_lines ?? [])],
+		shippingLines,
 		couponLines,
 		taxRates: [...config.allRates],
 		taxRoundAtSubtotal: config.taxRoundAtSubtotal,
@@ -136,7 +137,7 @@ function legacyConvergedState(
 		pricesIncludeTax: config.pricesIncludeTax,
 	});
 
-	return { lineItems, feeLines, couponLines, totals, passes };
+	return { lineItems, feeLines, shippingLines, couponLines, totals, passes };
 }
 
 // ===== assertion helpers =====
@@ -196,6 +197,8 @@ function expectSettleMatchesLegacy(
 	expect(result.patch.line_items ?? snapshot.line_items).toEqual(oracle.lineItems);
 	expect(result.patch.coupon_lines ?? snapshot.coupon_lines).toEqual(oracle.couponLines);
 	expect(result.patch.fee_lines ?? snapshot.fee_lines).toEqual(oracle.feeLines);
+	const patch = result.patch as typeof result.patch & { shipping_lines?: ShippingLineInput[] };
+	expect(patch.shipping_lines ?? snapshot.shipping_lines ?? []).toEqual(oracle.shippingLines);
 
 	return oracle;
 }
