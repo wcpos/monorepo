@@ -42,6 +42,9 @@ overrides:
   # force them to 30 so the jest-30 workspace packages get a consistent test environment.
   "jest-environment-jsdom": "^30.4.1"
   "jest-environment-node": "^30.4.1"
+  # concurrently@9.2.1 (apps/electron devDep) pins shell-quote 1.8.3 exactly — force the
+  # patched release (GHSA-w7jw-789q-3m8p, critical).
+  "shell-quote": ">=1.8.4"
 packageExtensions:
   "rxdb-premium-old@16.21.1":
     "dependencies": { "rxdb": "16.21.1" }
