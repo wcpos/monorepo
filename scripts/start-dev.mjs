@@ -34,17 +34,23 @@ const run = (cmd, args) => {
   }
 };
 
+const isMetroProcess = (pid) => {
+  const command = run('ps', ['-p', pid, '-o', 'command=']).toLowerCase();
+  return /\b(expo|metro|react-native)\b|node_modules\/metro/.test(command);
+};
+
 // 1. Kill any Metro listener holding the port (graceful, then hard).
-const metroListenerPids = () => run('lsof', ['-t', `-iTCP:${PORT}`, '-sTCP:LISTEN']).split('\n').filter(Boolean);
-const pids = metroListenerPids();
+const candidateListenerPids = () => run('lsof', ['-t', `-iTCP:${PORT}`, '-sTCP:LISTEN']).split('\n').filter(Boolean);
+const confirmedMetroPids = () => candidateListenerPids().filter(isMetroProcess);
+const pids = confirmedMetroPids();
 if (pids.length > 0) {
-  console.log(`[start-dev] killing stale Metro on port ${PORT} (pid ${pids.join(', ')})`);
+  console.log(`[start-dev] killing stale Metro-like process on port ${PORT} (pid ${pids.join(', ')})`);
   run('kill', pids);
   const deadline = Date.now() + 3000;
-  while (metroListenerPids().length > 0 && Date.now() < deadline) {
+  while (confirmedMetroPids().length > 0 && Date.now() < deadline) {
     execFileSync('sleep', ['0.2']);
   }
-  const survivors = metroListenerPids();
+  const survivors = confirmedMetroPids();
   if (survivors.length > 0) {
     console.log(`[start-dev] force-killing pid ${survivors.join(', ')}`);
     run('kill', ['-9', ...survivors]);
