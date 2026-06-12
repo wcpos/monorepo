@@ -235,6 +235,83 @@ describe('usePrinterDiscovery (electron)', () => {
 		expect(connectMock).not.toHaveBeenCalled();
 	});
 
+	// 10. connectSerialDevice: success → printers list updated, isSerialScanning false
+	it('connectSerialDevice invokes serial-discovery and adds paired serial printers', async () => {
+		installIpc((channel: string) => {
+			if (channel === 'serial-discovery') {
+				return Promise.resolve([{ id: 'serial:/dev/cu.TM-P20', name: 'TM P20' }]);
+			}
+			return Promise.resolve([]);
+		});
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		await act(async () => {
+			result.current.connectSerialDevice?.();
+		});
+
+		expect(result.current.isSerialScanning).toBe(false);
+		expect(result.current.printers).toHaveLength(1);
+		expect(result.current.printers[0]).toEqual({
+			id: 'serial:/dev/cu.TM-P20',
+			name: 'TM P20',
+			connectionType: 'bluetooth',
+			address: 'serial:/dev/cu.TM-P20',
+			vendor: 'generic',
+		});
+		expect(result.current.error).toBeNull();
+	});
+
+	// 11. connectSerialDevice: empty result → no error, isSerialScanning false
+	it('connectSerialDevice with empty result sets no error (UI owns empty state)', async () => {
+		installIpc((channel: string) => {
+			if (channel === 'serial-discovery') {
+				return Promise.resolve([]);
+			}
+			return Promise.resolve([]);
+		});
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		await act(async () => {
+			result.current.connectSerialDevice?.();
+		});
+
+		expect(result.current.isSerialScanning).toBe(false);
+		expect(result.current.error).toBeNull();
+	});
+
+	// 12. connectSerialDevice: invoke rejection → error discovery-failed
+	it('connectSerialDevice invoke rejection sets discovery-failed error', async () => {
+		installIpc((channel: string) => {
+			if (channel === 'serial-discovery') {
+				return Promise.reject(new Error('serial port unavailable'));
+			}
+			return Promise.resolve([]);
+		});
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		await act(async () => {
+			result.current.connectSerialDevice?.();
+		});
+
+		expect(result.current.isSerialScanning).toBe(false);
+		expect(result.current.error).toEqual({
+			code: 'discovery-failed',
+			detail: 'serial port unavailable',
+		});
+	});
+
+	// 13. connectSerialDevice: no ipcRenderer → ipc-unavailable error
+	it('connectSerialDevice with no ipcRenderer sets ipc-unavailable', async () => {
+		removeIpc();
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		act(() => {
+			result.current.connectSerialDevice?.();
+		});
+
+		expect(result.current.error).toEqual({ code: 'ipc-unavailable' });
+	});
+
 	// 9. cancelBluetoothScan during discovery → ipc.send with '', scanning false, error null;
 	//    then connectBluetoothDevice again works (library connect called a second time)
 	it('cancelBluetoothScan ends session; connectBluetoothDevice can start a new session afterward', () => {

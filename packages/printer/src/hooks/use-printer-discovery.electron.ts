@@ -41,6 +41,10 @@ interface UsePrinterDiscoveryResult {
 	selectBluetoothCandidate?: (id: string) => void;
 	/** End the active chooser session. */
 	cancelBluetoothScan?: () => void;
+	/** Electron — list OS-paired Bluetooth Classic printers via serial device paths. */
+	connectSerialDevice?: () => void;
+	/** True while the serial-discovery IPC round trip is pending. */
+	isSerialScanning?: boolean;
 	error: DiscoveryError | null;
 }
 
@@ -82,6 +86,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	const [isScanning, setIsScanning] = React.useState(false);
 	const [isUsbScanning, setIsUsbScanning] = React.useState(false);
 	const [isBluetoothScanning, setIsBluetoothScanning] = React.useState(false);
+	const [isSerialScanning, setIsSerialScanning] = React.useState(false);
 	const [bluetoothCandidates, setBluetoothCandidates] = React.useState<BluetoothCandidate[]>([]);
 	const [error, setError] = React.useState<DiscoveryError | null>(null);
 	const sessionRef = React.useRef<BluetoothScanSession | null>(null);
@@ -201,6 +206,42 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		}
 	}, []);
 
+	const connectSerialDevice = React.useCallback(async () => {
+		const ipc = getIpcRenderer();
+		if (!ipc) {
+			setError({ code: 'ipc-unavailable' });
+			return;
+		}
+		setError(null);
+		setIsSerialScanning(true);
+		try {
+			const devices = (await ipc.invoke('serial-discovery', {})) as {
+				id: string;
+				name: string;
+			}[];
+			setPrinters((prev) =>
+				mergePrinters(
+					prev,
+					devices.map((d) => ({
+						id: d.id,
+						name: d.name,
+						connectionType: 'bluetooth' as const,
+						address: d.id,
+						vendor: 'generic' as const,
+					}))
+				)
+			);
+			// No error on empty result — the paired-printers section renders its own empty state.
+		} catch (err) {
+			setError({
+				code: 'discovery-failed',
+				detail: err instanceof Error ? err.message : String(err),
+			});
+		} finally {
+			setIsSerialScanning(false);
+		}
+	}, []);
+
 	const connectBluetoothDevice = React.useCallback(() => {
 		if (sessionRef.current?.isActive()) return;
 		const ipc = getIpcRenderer();
@@ -272,6 +313,8 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		bluetoothCandidates,
 		selectBluetoothCandidate,
 		cancelBluetoothScan,
+		connectSerialDevice,
+		isSerialScanning,
 		error,
 	};
 }

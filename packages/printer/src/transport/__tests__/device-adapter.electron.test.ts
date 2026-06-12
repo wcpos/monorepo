@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createDeviceTransport } from '../device-adapter.electron';
+import { SerialElectronAdapter } from '../serial-adapter.electron';
 import { UsbElectronAdapter } from '../usb-adapter.electron';
 
 import type { PrinterProfile } from '../../types';
@@ -38,5 +39,14 @@ describe('createDeviceTransport (electron)', () => {
 				address: '',
 			} as PrinterProfile)
 		).rejects.toThrow('missing its device key');
+	});
+
+	it('routes serial: bluetooth profiles to the serial adapter (OS-paired Bluetooth Classic)', async () => {
+		const transport = await createDeviceTransport({
+			...baseProfile,
+			connectionType: 'bluetooth',
+			address: 'serial:/dev/cu.TM-P20',
+		} as PrinterProfile);
+		expect(transport).toBeInstanceOf(SerialElectronAdapter);
 	});
 });

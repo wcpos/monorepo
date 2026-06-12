@@ -37,6 +37,10 @@ interface UsePrinterDiscoveryResult {
 	bluetoothCandidates?: { id: string; name: string }[];
 	selectBluetoothCandidate?: (id: string) => void;
 	cancelBluetoothScan?: () => void;
+	/** Electron — list OS-paired Bluetooth Classic printers via serial device paths. */
+	connectSerialDevice?: () => void;
+	/** True while the serial-discovery IPC round trip is pending. */
+	isSerialScanning?: boolean;
 	/** Structured error if scanning fails */
 	error: DiscoveryError | null;
 }
