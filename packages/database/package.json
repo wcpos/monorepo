@@ -42,7 +42,7 @@
     "@faker-js/faker": "^10.4.0",
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.24",
-    "expo-sqlite": "~56.0.4",
+    "expo-sqlite": "~56.0.5",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11"
   }

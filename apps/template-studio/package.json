@@ -13,19 +13,19 @@
 		"check:gallery-previews": "tsx --tsconfig tsconfig.json scripts/generate-gallery-previews.ts --check"
 	},
 	"dependencies": {
-		"@codemirror/autocomplete": "^6.20.2",
+		"@codemirror/autocomplete": "^6.20.3",
 		"@codemirror/commands": "^6.10.3",
 		"@codemirror/lang-html": "^6.4.11",
 		"@codemirror/lang-php": "^6.0.2",
 		"@codemirror/language": "^6.12.3",
 		"@codemirror/search": "^6.7.0",
 		"@codemirror/state": "^6.6.0",
-		"@codemirror/view": "^6.43.0",
+		"@codemirror/view": "^6.43.1",
 		"@vitejs/plugin-react": "6.0.2",
 		"@wcpos/printer": "workspace:*",
 		"@wcpos/receipt-renderer": "workspace:*",
-		"react": "19.2.3",
-		"react-dom": "19.2.3",
+		"react": "19.2.7",
+		"react-dom": "19.2.7",
 		"typescript": "^5.9.3",
 		"vite": "8.0.16",
 		"zod": "^4.4.3"
@@ -33,11 +33,11 @@
 	"devDependencies": {
 		"@testing-library/jest-dom": "6.9.1",
 		"@testing-library/react": "16.3.2",
-		"@types/react": "^19.2.15",
+		"@types/react": "^19.2.17",
 		"@types/react-dom": "^19.2.3",
 		"jsdom": "^26.1.0",
 		"playwright": "1.60.0",
-		"tsx": "^4.22.3",
-		"vitest": "^4.1.7"
+		"tsx": "^4.22.4",
+		"vitest": "^4.1.8"
 	}
 }

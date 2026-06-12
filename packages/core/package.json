@@ -76,7 +76,7 @@
 		"react-native-reanimated": "~4.3.1",
 		"react-native-safe-area-context": "~5.7.0",
 		"react-native-screens": "4.25.2",
-		"react-native-svg": "15.15.4",
+		"react-native-svg": "15.15.5",
 		"victory-native": "^41.20.2"
 	},
 	"dependencies": {
@@ -84,7 +84,7 @@
 		"@date-fns/utc": "^2.1.1",
 		"@hookform/error-message": "^2.0.1",
 		"@hookform/resolvers": "^5.4.0",
-		"@novu/js": "^3.16.0",
+		"@novu/js": "^3.17.0",
 		"@tanstack/react-table": "^8.21.3",
 		"@wcpos/components": "workspace:*",
 		"@wcpos/database": "workspace:*",
@@ -92,10 +92,10 @@
 		"@wcpos/printer": "workspace:*",
 		"@wcpos/query": "workspace:*",
 		"@wcpos/utils": "workspace:*",
-		"@widgetbot/react-embed": "^1.11.2",
+		"@widgetbot/react-embed": "^1.11.3",
 		"date-fns": "4.3.0",
 		"html-entities": "2.6.0",
-		"i18next": "^26.2.0",
+		"i18next": "^26.3.1",
 		"lodash": "^4.18.1",
 		"mustache": "^4.2.0",
 		"observable-hooks": "4.2.4",
@@ -105,7 +105,7 @@
 		"react-thermal-printer": "0.22.0",
 		"react-to-print": "^3.3.0",
 		"rxjs": "7.8.2",
-		"semver": "^7.8.1",
+		"semver": "^7.8.4",
 		"use-deep-compare-effect": "^1.8.1",
 		"uuid": "14.0.0",
 		"zod": "^4.4.3"
@@ -117,8 +117,8 @@
 		"@types/jest": "^30.0.0",
 		"@types/lodash": "^4.17.24",
 		"@types/mustache": "^4.2.6",
-		"@types/react": "^19.2.15",
-		"expo-router": "~56.2.7",
+		"@types/react": "^19.2.17",
+		"expo-router": "~56.2.10",
 		"jest": "^30.4.2",
 		"react-native": "0.85.3",
 		"react-native-device-info": "^15.0.2",
@@ -126,8 +126,8 @@
 		"react-native-reanimated": "~4.3.1",
 		"react-native-safe-area-context": "~5.7.0",
 		"react-native-screens": "4.25.2",
-		"react-native-svg": "15.15.4",
+		"react-native-svg": "15.15.5",
 		"ts-jest": "^29.4.11",
-		"victory-native": "^41.20.3"
+		"victory-native": "^41.26.0"
 	}
 }
