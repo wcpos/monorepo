@@ -235,6 +235,28 @@ describe('usePrinterDiscovery (electron)', () => {
 		expect(connectMock).not.toHaveBeenCalled();
 	});
 
+	it('a synchronous chooser failure surfaces discovery-failed and clears scanning', () => {
+		connectMock.mockImplementationOnce(() => {
+			throw new Error('Web Bluetooth API globally disabled');
+		});
+		const { result } = renderHook(() => usePrinterDiscovery());
+
+		act(() => {
+			result.current.connectBluetoothDevice?.();
+		});
+
+		expect(result.current.isBluetoothScanning).toBe(false);
+		expect(result.current.error).toEqual({
+			code: 'discovery-failed',
+			detail: 'Web Bluetooth API globally disabled',
+		});
+		// The session is not wedged — a retry starts a fresh chooser.
+		act(() => {
+			result.current.connectBluetoothDevice?.();
+		});
+		expect(result.current.isBluetoothScanning).toBe(true);
+	});
+
 	// 10. connectSerialDevice: success → printers list updated, isSerialScanning false
 	it('connectSerialDevice invokes serial-discovery and adds paired serial printers', async () => {
 		installIpc((channel: string) => {

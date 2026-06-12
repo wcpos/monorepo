@@ -123,6 +123,35 @@ describe('createBluetoothScanSession', () => {
 		expect(s.onError).not.toHaveBeenCalledWith({ code: 'bt-none-found' });
 	});
 
+	it('a synchronous startChooser throw ends the session with discovery-failed', () => {
+		const sendSelection = vi.fn();
+		const onScanningChange = vi.fn();
+		const onError = vi.fn();
+		const onConnected = vi.fn();
+		const session = createBluetoothScanSession(
+			{
+				sendSelection,
+				startChooser: () => {
+					throw new Error('Web Bluetooth is not available');
+				},
+			},
+			{ onScanningChange, onError, onConnected }
+		);
+		session.start();
+		expect(onScanningChange).toHaveBeenLastCalledWith(false);
+		expect(onError).toHaveBeenLastCalledWith({
+			code: 'discovery-failed',
+			detail: 'Web Bluetooth is not available',
+		});
+		expect(session.isActive()).toBe(false);
+		// No discovery timer was armed — advancing time must not produce bt-none-found.
+		vi.advanceTimersByTime(BT_DISCOVERY_TIMEOUT_MS);
+		expect(onError).not.toHaveBeenCalledWith({ code: 'bt-none-found' });
+		// The machine is reusable after the failure.
+		session.start();
+		expect(session.isActive()).toBe(false); // throws again, ends again
+	});
+
 	it('select() when idle does nothing', () => {
 		const s = setup();
 		s.session.select('dev-1');

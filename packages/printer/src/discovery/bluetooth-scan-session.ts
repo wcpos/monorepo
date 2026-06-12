@@ -75,20 +75,32 @@ export function createBluetoothScanSession(
 		callbacks.onError(null);
 		callbacks.onScanningChange(true);
 
-		deps.startChooser((device) => {
-			// Stale closure from a finished session — ignore.
-			if (gen !== generation) return;
-			if (phase === 'idle') return;
+		try {
+			deps.startChooser((device) => {
+				// Stale closure from a finished session — ignore.
+				if (gen !== generation) return;
+				if (phase === 'idle') return;
 
-			// Still in 'discovering' (auto-reconnect fired before an explicit select):
-			// the main-process chooser is still pending — dismiss it.
-			if (phase === 'discovering') {
-				deps.sendSelection('');
-			}
+				// Still in 'discovering' (auto-reconnect fired before an explicit select):
+				// the main-process chooser is still pending — dismiss it.
+				if (phase === 'discovering') {
+					deps.sendSelection('');
+				}
 
+				finish();
+				callbacks.onConnected(device);
+			});
+		} catch (err) {
+			// Web Bluetooth can be unavailable (no navigator.bluetooth, disabled by policy)
+			// and the connector constructor throws synchronously — without this the session
+			// would stay 'discovering' forever with the scan button disabled.
 			finish();
-			callbacks.onConnected(device);
-		});
+			callbacks.onError({
+				code: 'discovery-failed',
+				detail: err instanceof Error ? err.message : String(err),
+			});
+			return;
+		}
 
 		// Bail before arming the discovery timer if the startChooser callback already
 		// fired synchronously and ended the session.
