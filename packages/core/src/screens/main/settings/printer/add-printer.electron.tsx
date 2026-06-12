@@ -152,8 +152,9 @@ export function PrinterDialog({
 		defaultValue: DEFAULT_FORM_VALUES.connectionType,
 	});
 
-	// The BT tab auto-runs the installed-printers (usb-discovery) scan; its empty result
-	// is reported by the section's own empty state, not the shared error line.
+	// On Windows the BT tab auto-runs the installed-printers (usb-discovery) scan; its empty
+	// result is reported by the section's own empty state, not the shared error line. (The
+	// macOS/Linux serial auto-scan sets no error on empty by hook design.)
 	const suppressedDiscoveryError =
 		connectionType === 'bluetooth' && discoveryError?.code === 'usb-none-found';
 
