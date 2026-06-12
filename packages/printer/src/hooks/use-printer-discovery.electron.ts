@@ -3,10 +3,14 @@ import * as React from 'react';
 
 import WebBluetoothReceiptPrinter from '@point-of-sale/webbluetooth-receipt-printer';
 
+import {
+	type BluetoothScanSession,
+	createBluetoothScanSession,
+} from '../discovery/bluetooth-scan-session';
 import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
 import { saveWebDevice } from '../transport/web-device-store';
 
-import type { DiscoveredPrinter } from '../types';
+import type { BluetoothCandidate, DiscoveredPrinter, DiscoveryError } from '../types';
 
 interface UsePrinterDiscoveryResult {
 	printers: DiscoveredPrinter[];
@@ -23,19 +27,33 @@ interface UsePrinterDiscoveryResult {
 		vendor?: 'epson' | 'star' | 'generic'
 	) => void;
 	removeDiscoveredPrinter: (id: string) => void;
-	/** Electron/Web — discover or choose a USB printer and add it. */
+	/** Electron — list installed/USB printers via the main process. */
 	connectUsbDevice?: () => void;
-	/** Electron/Web — open the Bluetooth chooser and add the chosen printer. */
+	/** True while the usb-discovery IPC round trip is pending. */
+	isUsbScanning?: boolean;
+	/** Electron — open a managed Web Bluetooth chooser session. */
 	connectBluetoothDevice?: () => void;
-	error: string | null;
+	/** True while a Bluetooth chooser session is active. */
+	isBluetoothScanning?: boolean;
+	/** Chooser candidates forwarded from the main process during a session. */
+	bluetoothCandidates?: BluetoothCandidate[];
+	/** Pick a chooser candidate by id. */
+	selectBluetoothCandidate?: (id: string) => void;
+	/** End the active chooser session. */
+	cancelBluetoothScan?: () => void;
+	error: DiscoveryError | null;
 }
 
-function getIpcRenderer(): { invoke: (channel: string, data: unknown) => Promise<unknown> } | null {
+interface ElectronIpc {
+	invoke: (channel: string, data: unknown) => Promise<unknown>;
+	send: (channel: string, args: unknown) => void;
+	on: (channel: string, cb: (...args: unknown[]) => void) => () => void;
+}
+
+function getIpcRenderer(): ElectronIpc | null {
 	const w = window as {
-		ipcRenderer?: { invoke: (channel: string, data: unknown) => Promise<unknown> };
-		electronAPI?: {
-			ipcRenderer?: { invoke: (channel: string, data: unknown) => Promise<unknown> };
-		};
+		ipcRenderer?: ElectronIpc;
+		electronAPI?: { ipcRenderer?: ElectronIpc };
 	};
 	return w.ipcRenderer ?? w.electronAPI?.ipcRenderer ?? null;
 }
@@ -56,12 +74,33 @@ function mergePrinters(
 }
 
 /**
- * Electron-specific printer discovery using mDNS via the main process.
+ * Electron-specific printer discovery: mDNS via the main process, installed/USB printers
+ * via usb-discovery, and a managed Web Bluetooth chooser session (BLE only).
  */
 export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	const [printers, setPrinters] = React.useState<DiscoveredPrinter[]>([]);
 	const [isScanning, setIsScanning] = React.useState(false);
-	const [error, setError] = React.useState<string | null>(null);
+	const [isUsbScanning, setIsUsbScanning] = React.useState(false);
+	const [isBluetoothScanning, setIsBluetoothScanning] = React.useState(false);
+	const [bluetoothCandidates, setBluetoothCandidates] = React.useState<BluetoothCandidate[]>([]);
+	const [error, setError] = React.useState<DiscoveryError | null>(null);
+	const sessionRef = React.useRef<BluetoothScanSession | null>(null);
+
+	// useEffect required: subscribes to an external IPC event source (chooser candidates
+	// pushed by the main process) and must tear down both the subscription and any
+	// in-flight chooser session on unmount — not derivable from render.
+	React.useEffect(() => {
+		const ipc = getIpcRenderer();
+		if (!ipc?.on) return;
+		const unsubscribe = ipc.on('bluetooth-devices', (...args) => {
+			setBluetoothCandidates((args[0] as BluetoothCandidate[]) ?? []);
+		});
+		return () => {
+			unsubscribe();
+			// End any chooser session on unmount so the main process isn't left pending.
+			sessionRef.current?.cancel();
+		};
+	}, []);
 
 	const addManualPrinter = React.useCallback(
 		(
@@ -93,7 +132,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	const startScan = React.useCallback(async () => {
 		const ipc = getIpcRenderer();
 		if (!ipc) {
-			setError('IPC not available');
+			setError({ code: 'ipc-unavailable' });
 			return;
 		}
 
@@ -117,7 +156,10 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 				return merged;
 			});
 		} catch (err) {
-			setError(err instanceof Error ? err.message : String(err));
+			setError({
+				code: 'discovery-failed',
+				detail: err instanceof Error ? err.message : String(err),
+			});
 		} finally {
 			setIsScanning(false);
 		}
@@ -126,10 +168,11 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	const connectUsbDevice = React.useCallback(async () => {
 		const ipc = getIpcRenderer();
 		if (!ipc) {
-			setError('IPC not available');
+			setError({ code: 'ipc-unavailable' });
 			return;
 		}
 		setError(null);
+		setIsUsbScanning(true);
 		try {
 			const devices = (await ipc.invoke('usb-discovery', {})) as {
 				id: string;
@@ -147,25 +190,56 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 					}))
 				)
 			);
-			if (devices.length === 0) setError('No USB printers found.');
+			if (devices.length === 0) setError({ code: 'usb-none-found' });
 		} catch (err) {
-			setError(err instanceof Error ? err.message : String(err));
+			setError({
+				code: 'discovery-failed',
+				detail: err instanceof Error ? err.message : String(err),
+			});
+		} finally {
+			setIsUsbScanning(false);
 		}
 	}, []);
 
 	const connectBluetoothDevice = React.useCallback(() => {
-		setError(null);
-		try {
-			const printer = new WebBluetoothReceiptPrinter();
-			printer.addEventListener('connected', (device) => {
-				const discovered = mapWebDeviceToDiscoveredPrinter(device);
-				saveWebDevice(discovered.address, device);
-				setPrinters((prev) => mergePrinters(prev, [discovered]));
-			});
-			printer.connect(); // synchronous within the click gesture → select-bluetooth-device in main
-		} catch (err) {
-			setError(err instanceof Error ? err.message : String(err));
+		if (sessionRef.current?.isActive()) return;
+		const ipc = getIpcRenderer();
+		if (!ipc) {
+			setError({ code: 'ipc-unavailable' });
+			return;
 		}
+		const session = createBluetoothScanSession(
+			{
+				sendSelection: (deviceId) => ipc.send('bluetooth-device-selected', deviceId),
+				startChooser: (onConnected) => {
+					const printer = new WebBluetoothReceiptPrinter();
+					printer.addEventListener('connected', onConnected);
+					printer.connect(); // synchronous within the click gesture → select-bluetooth-device in main
+				},
+			},
+			{
+				onScanningChange: (scanning) => {
+					setIsBluetoothScanning(scanning);
+					if (!scanning) setBluetoothCandidates([]);
+				},
+				onError: setError,
+				onConnected: (device) => {
+					const discovered = mapWebDeviceToDiscoveredPrinter(device);
+					saveWebDevice(discovered.address, device);
+					setPrinters((prev) => mergePrinters(prev, [discovered]));
+				},
+			}
+		);
+		sessionRef.current = session;
+		session.start();
+	}, []);
+
+	const selectBluetoothCandidate = React.useCallback((deviceId: string) => {
+		sessionRef.current?.select(deviceId);
+	}, []);
+
+	const cancelBluetoothScan = React.useCallback(() => {
+		sessionRef.current?.cancel();
 	}, []);
 
 	const stopScan = React.useCallback(async () => {
@@ -190,7 +264,12 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		addManualPrinter,
 		removeDiscoveredPrinter,
 		connectUsbDevice,
+		isUsbScanning,
 		connectBluetoothDevice,
+		isBluetoothScanning,
+		bluetoothCandidates,
+		selectBluetoothCandidate,
+		cancelBluetoothScan,
 		error,
 	};
 }

@@ -116,9 +116,10 @@ export type DiscoveryErrorCode =
 	| 'ipc-unavailable'
 	| 'discovery-failed';
 
+/** Structured error from a printer discovery operation. */
 export interface DiscoveryError {
 	code: DiscoveryErrorCode;
-	/** Raw detail (e.g. the underlying exception message) for `discovery-failed`. */
+	/** Optional extra context when available — most useful for 'discovery-failed' (underlying exception message). */
 	detail?: string;
 }
 

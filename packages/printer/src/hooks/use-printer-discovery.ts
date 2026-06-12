@@ -5,7 +5,7 @@ import {
 	formatDiscoveryFailureMessage,
 } from '../discovery/discovery-errors';
 
-import type { DiscoveredPrinter } from '../types';
+import type { DiscoveredPrinter, DiscoveryError } from '../types';
 
 interface UsePrinterDiscoveryResult {
 	/** Currently discovered/added printers */
@@ -32,8 +32,13 @@ interface UsePrinterDiscoveryResult {
 	connectUsbDevice?: () => void;
 	/** Web only — open the browser Bluetooth chooser and add the chosen printer. */
 	connectBluetoothDevice?: () => void;
-	/** Error message if scanning fails */
-	error: string | null;
+	isUsbScanning?: boolean;
+	isBluetoothScanning?: boolean;
+	bluetoothCandidates?: { id: string; name: string }[];
+	selectBluetoothCandidate?: (id: string) => void;
+	cancelBluetoothScan?: () => void;
+	/** Structured error if scanning fails */
+	error: DiscoveryError | null;
 }
 
 /**
@@ -63,7 +68,7 @@ function mergePrinters(
 export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	const [printers, setPrinters] = React.useState<DiscoveredPrinter[]>([]);
 	const [isScanning, setIsScanning] = React.useState(false);
-	const [error, setError] = React.useState<string | null>(null);
+	const [error, setError] = React.useState<DiscoveryError | null>(null);
 
 	const addManualPrinter = React.useCallback(
 		(
@@ -136,13 +141,15 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 
 			const failureMessage = formatDiscoveryFailureMessage(failures);
 			if (!foundAny && failureMessage) {
-				setError(failureMessage);
+				setError({ code: 'discovery-failed', detail: failureMessage });
 			} else if (!sdkAvailable) {
-				setError(
-					'No printer SDKs available. Install react-native-esc-pos-printer or react-native-star-io10 for automatic discovery.'
-				);
+				setError({
+					code: 'discovery-failed',
+					detail:
+						'No printer SDKs available. Install react-native-esc-pos-printer or react-native-star-io10 for automatic discovery.',
+				});
 			} else if (!foundAny) {
-				setError('No printers found on the network.');
+				setError({ code: 'network-none-found' });
 			}
 		} finally {
 			setIsScanning(false);
