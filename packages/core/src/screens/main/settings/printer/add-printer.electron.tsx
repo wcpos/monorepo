@@ -187,50 +187,6 @@ export function PrinterDialog({
 	} else if (connectionType === 'bluetooth') {
 		connectionSection = (
 			<VStack className="gap-2">
-				{connectBluetoothDevice && (
-					<HStack className="gap-2">
-						<Button
-							testID="add-printer-electron-bt-scan-button"
-							variant="outline"
-							size="sm"
-							className="self-start"
-							onPress={connectBluetoothDevice}
-							loading={!!isBluetoothScanning}
-							disabled={!!isBluetoothScanning}
-						>
-							<Text>
-								{isBluetoothScanning
-									? t('settings.scanning', 'Scanning…')
-									: t('settings.scan_for_printers', 'Scan for printers')}
-							</Text>
-						</Button>
-						{isBluetoothScanning && cancelBluetoothScan && (
-							<Button
-								testID="add-printer-electron-bt-cancel-button"
-								variant="ghost"
-								size="sm"
-								onPress={cancelBluetoothScan}
-							>
-								<Text>{t('common.cancel', 'Cancel')}</Text>
-							</Button>
-						)}
-					</HStack>
-				)}
-				{isBluetoothScanning && (
-					<Text testID="add-printer-bt-searching" className="text-muted-foreground text-xs">
-						{t('settings.bt_searching', 'Searching for Bluetooth printers…')}
-					</Text>
-				)}
-				<ElectronBtPicker
-					candidates={bluetoothCandidates ?? []}
-					onSelect={(id) => selectBluetoothCandidate?.(id)}
-				/>
-				{/* serial: entries are owned by the paired-printers section below; exclude them here */}
-				<DeviceList
-					form={form}
-					printers={printers.filter((p) => !p.address?.startsWith('serial:'))}
-					type="bluetooth"
-				/>
 				{isWindowsPlatform() ? (
 					<OsPrintersSection
 						form={form}
@@ -264,6 +220,56 @@ export function PrinterDialog({
 						testIdPrefix="add-printer-paired-device"
 					/>
 				) : null}
+				{connectBluetoothDevice && (
+					<HStack className="gap-2">
+						<Button
+							testID="add-printer-electron-bt-scan-button"
+							variant="outline"
+							size="sm"
+							className="self-start"
+							onPress={connectBluetoothDevice}
+							loading={!!isBluetoothScanning}
+							disabled={!!isBluetoothScanning}
+						>
+							<Text>
+								{isBluetoothScanning
+									? t('settings.scanning', 'Scanning…')
+									: t('settings.scan_for_printers', 'Scan for printers')}
+							</Text>
+						</Button>
+						{isBluetoothScanning && cancelBluetoothScan && (
+							<Button
+								testID="add-printer-electron-bt-cancel-button"
+								variant="ghost"
+								size="sm"
+								onPress={cancelBluetoothScan}
+							>
+								<Text>{t('common.cancel', 'Cancel')}</Text>
+							</Button>
+						)}
+					</HStack>
+				)}
+				<Text testID="add-printer-bt-scan-hint" className="text-muted-foreground text-xs">
+					{t(
+						'settings.bt_scan_hint',
+						'Finds nearby Bluetooth LE printers (e.g. Epson TM-P or Star L series). Bluetooth Classic printers pair in your system settings instead.'
+					)}
+				</Text>
+				{isBluetoothScanning && (
+					<Text testID="add-printer-bt-searching" className="text-muted-foreground text-xs">
+						{t('settings.bt_searching', 'Searching for Bluetooth printers…')}
+					</Text>
+				)}
+				<ElectronBtPicker
+					candidates={bluetoothCandidates ?? []}
+					onSelect={(id) => selectBluetoothCandidate?.(id)}
+				/>
+				{/* serial: entries are owned by the paired-printers section above; exclude them here */}
+				<DeviceList
+					form={form}
+					printers={printers.filter((p) => !p.address?.startsWith('serial:'))}
+					type="bluetooth"
+				/>
 			</VStack>
 		);
 	} else {

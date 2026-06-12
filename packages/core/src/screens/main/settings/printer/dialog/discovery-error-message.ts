@@ -8,7 +8,7 @@ export function formatDiscoveryError(error: DiscoveryError, t: Translate): strin
 		case 'bt-none-found':
 			return t(
 				'settings.bt_none_found',
-				'No Bluetooth (BLE) printers found. Make sure the printer is powered on and in pairing mode. Bluetooth Classic printers cannot be discovered by this scan.'
+				'No Bluetooth (BLE) printers found. Make sure the printer is powered on and in pairing mode. Bluetooth Classic printers cannot be discovered by this scan — if your printer is paired with this computer, it appears under Paired or Installed printers.'
 			);
 		case 'bt-connect-failed':
 			return t('settings.bt_connect_failed', 'Could not connect to the selected Bluetooth device.');

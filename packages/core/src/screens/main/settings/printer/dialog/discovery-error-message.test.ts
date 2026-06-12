@@ -9,6 +9,11 @@ describe('formatDiscoveryError', () => {
 		expect(msg).toMatch(/Bluetooth Classic/);
 	});
 
+	it('bt-none-found → mentions paired with this computer', () => {
+		const msg = formatDiscoveryError({ code: 'bt-none-found' }, t);
+		expect(msg).toMatch(/paired with this computer/);
+	});
+
 	it('bt-connect-failed → mentions Could not connect', () => {
 		const msg = formatDiscoveryError({ code: 'bt-connect-failed' }, t);
 		expect(msg).toMatch(/Could not connect/);
