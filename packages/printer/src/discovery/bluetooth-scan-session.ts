@@ -80,8 +80,8 @@ export function createBluetoothScanSession(
 			if (gen !== generation) return;
 			if (phase === 'idle') return;
 
-			// Fix 3: if we're still in 'discovering' (auto-reconnect fired before an
-			// explicit select), the main-process chooser is still pending — dismiss it.
+			// Still in 'discovering' (auto-reconnect fired before an explicit select):
+			// the main-process chooser is still pending — dismiss it.
 			if (phase === 'discovering') {
 				deps.sendSelection('');
 			}
@@ -90,13 +90,13 @@ export function createBluetoothScanSession(
 			callbacks.onConnected(device);
 		});
 
-		// Fix 2: bail before arming the discovery timer if the startChooser callback
-		// already fired synchronously and ended the session.
+		// Bail before arming the discovery timer if the startChooser callback already
+		// fired synchronously and ended the session.
 		if (gen !== generation || phase !== 'discovering') return;
 
 		timer = setTimeout(() => {
-			// Fix 1: guard with generation so a restarted session's new timer is not
-			// pre-empted by this stale one.
+			// Generation guard: a restarted session's new timer must not be pre-empted
+			// by this stale one.
 			if (gen !== generation) return;
 			if (phase !== 'discovering') return;
 			deps.sendSelection('');
