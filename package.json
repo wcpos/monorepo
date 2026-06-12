@@ -2,6 +2,7 @@
   "private": true,
   "name": "@wcpos/monorepo",
   "scripts": {
+    "start": "node scripts/start-dev.mjs",
     "dev": "turbo dev",
     "dev:main": "turbo dev --filter=\"{./apps/main}...\"",
     "dev:electron": "turbo dev --filter=\"{./apps/electron}...\"",
