@@ -35,6 +35,10 @@ type Phase = 'idle' | 'discovering' | 'connecting';
  * own (the connector library swallows requestDevice rejections), so this machine is the
  * single source of truth: discovery timeout ends an empty chooser, connect timeout ends
  * a selection the library never confirmed, cancel ends it on user request or unmount.
+ *
+ * A per-session `generation` counter is used to invalidate timers and closures from
+ * ended sessions — `phase` alone cannot distinguish WHICH session a stale closure
+ * belongs to after a restart.
  */
 export function createBluetoothScanSession(
 	deps: BluetoothScanSessionDeps,
@@ -45,6 +49,9 @@ export function createBluetoothScanSession(
 
 	let phase: Phase = 'idle';
 	let timer: ReturnType<typeof setTimeout> | null = null;
+	// Incremented on each start() and on finish() so stale closures/timers from a
+	// previous session are always invalidated before they can act.
+	let generation = 0;
 
 	const clearTimer = () => {
 		if (timer) clearTimeout(timer);
@@ -53,6 +60,8 @@ export function createBluetoothScanSession(
 
 	const finish = () => {
 		clearTimer();
+		// Invalidate all outstanding closures/timers that captured an earlier generation.
+		generation++;
 		phase = 'idle';
 		callbacks.onScanningChange(false);
 	};
@@ -60,14 +69,35 @@ export function createBluetoothScanSession(
 	const start = () => {
 		if (phase !== 'idle') return;
 		phase = 'discovering';
+		// Capture the generation for this session so timers and the onConnected closure
+		// can verify they still belong to the current run.
+		const gen = ++generation;
 		callbacks.onError(null);
 		callbacks.onScanningChange(true);
+
 		deps.startChooser((device) => {
+			// Stale closure from a finished session — ignore.
+			if (gen !== generation) return;
 			if (phase === 'idle') return;
+
+			// Fix 3: if we're still in 'discovering' (auto-reconnect fired before an
+			// explicit select), the main-process chooser is still pending — dismiss it.
+			if (phase === 'discovering') {
+				deps.sendSelection('');
+			}
+
 			finish();
 			callbacks.onConnected(device);
 		});
+
+		// Fix 2: bail before arming the discovery timer if the startChooser callback
+		// already fired synchronously and ended the session.
+		if (gen !== generation || phase !== 'discovering') return;
+
 		timer = setTimeout(() => {
+			// Fix 1: guard with generation so a restarted session's new timer is not
+			// pre-empted by this stale one.
+			if (gen !== generation) return;
 			if (phase !== 'discovering') return;
 			deps.sendSelection('');
 			finish();
@@ -80,7 +110,11 @@ export function createBluetoothScanSession(
 		clearTimer();
 		phase = 'connecting';
 		deps.sendSelection(deviceId);
+		// Capture the current generation at arm time; select() is part of the same
+		// session as the preceding start(), so no need to increment here.
+		const gen = generation;
 		timer = setTimeout(() => {
+			if (gen !== generation) return;
 			if (phase !== 'connecting') return;
 			finish();
 			callbacks.onError({ code: 'bt-connect-failed' });
