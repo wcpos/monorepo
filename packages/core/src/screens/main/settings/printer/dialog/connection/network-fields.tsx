@@ -195,7 +195,10 @@ export function NetworkFields({
 			)}
 			{!scanning && networkPrinters.length === 0 && onScan && (
 				<Text testID="add-printer-network-none-found" className="text-muted-foreground text-xs">
-					{t('settings.no_printers_found', 'No printers found')}
+					{t(
+						'settings.no_printers_found',
+						'Not all printers can be detected automatically. Enter the IP address above to add one manually.'
+					)}
 				</Text>
 			)}
 			{networkPrinters.length > 0 && (
