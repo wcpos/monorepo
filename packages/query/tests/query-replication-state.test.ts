@@ -44,7 +44,9 @@ describe('QueryReplicationState', () => {
 
 	it('resumes collection sync when sync-state lookup fails', async () => {
 		const syncStateError = new Error('sync state failed');
-		collectionReplication.syncStateManager.getUnsyncedRemoteIDs.mockRejectedValueOnce(syncStateError);
+		collectionReplication.syncStateManager.getUnsyncedRemoteIDs.mockRejectedValueOnce(
+			syncStateError
+		);
 		replicationState.start();
 
 		await expect(replicationState.sync()).resolves.toBe(0);
@@ -119,17 +121,50 @@ describe('QueryReplicationState greedy progress', () => {
 
 	it('keeps rerunning after progress even when unsynced ids do not shrink immediately', async () => {
 		const { httpClient, replicationState } = createGreedyState({
-			unsyncedRemoteIDs: [
-				[1, 2, 3],
-				[1, 2, 3],
-				[1, 2, 3],
-				[],
-			],
+			unsyncedRemoteIDs: [[1, 2, 3], [1, 2, 3], [1, 2, 3], []],
 			bulkProgress: [1, 1],
 		});
 
 		await replicationState.run({ force: true });
 
+		expect(httpClient.post).toHaveBeenCalledTimes(2);
+		await replicationState.cancel();
+	});
+
+	it('stops a greedy query when the unsynced backlog never clears', async () => {
+		// Models an endpoint that ignores include/exclude (the templates endpoint):
+		// it re-returns the full set every fetch, so bulkUpsertResponse always reports
+		// progress, while one id can never be cleared from the unsynced set. Without an
+		// iteration budget the greedy loop would recurse forever and starve the event
+		// loop (the symptom seen on device). This test must settle, not time out.
+		const collectionReplication = {
+			firstSync: Promise.resolve(),
+			sync: jest.fn(),
+			pause: jest.fn(),
+			start: jest.fn(),
+			bulkUpsertResponse: jest.fn(async () => 2), // always "made progress"
+			syncStateManager: {
+				getUnsyncedRemoteIDs: jest.fn(async () => [3]), // never clears
+				getSyncedRemoteIDs: jest.fn(async () => [1, 2]),
+			},
+		};
+		const httpClient = {
+			get: jest.fn(),
+			post: jest.fn(async () => ({ data: [{ id: 1 }, { id: 2 }] })),
+		};
+		const replicationState = new QueryReplicationState({
+			collection: {} as any,
+			httpClient,
+			collectionReplication: collectionReplication as any,
+			endpoint: 'templates',
+			greedy: true,
+		});
+		replicationState.cancelSub('polling');
+
+		await replicationState.run({ force: true });
+
+		// Backlog is [3] (size 1) after the first fetch, so the budget allows exactly
+		// one more pass before stopping — bounded, not infinite.
 		expect(httpClient.post).toHaveBeenCalledTimes(2);
 		await replicationState.cancel();
 	});
