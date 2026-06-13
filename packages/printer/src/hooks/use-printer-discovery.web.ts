@@ -7,7 +7,7 @@ import WebUSBReceiptPrinter from '@point-of-sale/webusb-receipt-printer';
 import { mapWebDeviceToDiscoveredPrinter } from '../discovery/map-web-device';
 import { saveWebDevice } from '../transport/web-device-store';
 
-import type { DiscoveredPrinter } from '../types';
+import type { DiscoveredPrinter, DiscoveryError } from '../types';
 
 interface UsePrinterDiscoveryResult {
 	printers: DiscoveredPrinter[];
@@ -28,7 +28,16 @@ interface UsePrinterDiscoveryResult {
 	connectUsbDevice?: () => void;
 	/** Web only — open the browser Bluetooth chooser and add the chosen printer. */
 	connectBluetoothDevice?: () => void;
-	error: string | null;
+	isUsbScanning?: boolean;
+	isBluetoothScanning?: boolean;
+	bluetoothCandidates?: { id: string; name: string }[];
+	selectBluetoothCandidate?: (id: string) => void;
+	cancelBluetoothScan?: () => void;
+	/** Electron — list OS-paired Bluetooth Classic printers via serial device paths. */
+	connectSerialDevice?: () => void;
+	/** True while the serial-discovery IPC round trip is pending. */
+	isSerialScanning?: boolean;
+	error: DiscoveryError | null;
 }
 
 function mergePrinters(
@@ -59,7 +68,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		tested: 0,
 		total: 0,
 	});
-	const [error, setError] = React.useState<string | null>(null);
+	const [error, setError] = React.useState<DiscoveryError | null>(null);
 	const abortRef = React.useRef<AbortController | null>(null);
 
 	const addManualPrinter = React.useCallback(
@@ -113,13 +122,14 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 			if (abortRef.current !== controller || controller.signal.aborted) return;
 			setPrinters((prev) => mergePrinters(prev, discovered));
 			if (discovered.length === 0) {
-				setError(
-					'No network printers found. Make sure the printer is on the same network, or enter its IP address manually.'
-				);
+				setError({ code: 'network-none-found' });
 			}
 		} catch (err) {
 			if (abortRef.current !== controller || controller.signal.aborted) return;
-			setError(err instanceof Error ? err.message : String(err));
+			setError({
+				code: 'discovery-failed',
+				detail: err instanceof Error ? err.message : String(err),
+			});
 		} finally {
 			if (abortRef.current === controller) {
 				abortRef.current = null;
@@ -145,7 +155,10 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 			});
 			printer.connect(); // runs synchronously in the click gesture
 		} catch (err) {
-			setError(err instanceof Error ? err.message : String(err));
+			setError({
+				code: 'discovery-failed',
+				detail: err instanceof Error ? err.message : String(err),
+			});
 		}
 	}, []);
 
@@ -160,7 +173,10 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 			});
 			printer.connect(); // runs synchronously in the click gesture
 		} catch (err) {
-			setError(err instanceof Error ? err.message : String(err));
+			setError({
+				code: 'discovery-failed',
+				detail: err instanceof Error ? err.message : String(err),
+			});
 		}
 	}, []);
 

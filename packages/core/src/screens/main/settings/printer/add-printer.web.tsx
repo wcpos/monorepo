@@ -17,6 +17,7 @@ import {
 } from '@wcpos/printer';
 
 import { AdvancedSettings } from './dialog/advanced-settings';
+import { formatDiscoveryError } from './dialog/discovery-error-message';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
 import { WebVendorSegmented } from './dialog/connection/web-vendor-segmented';
@@ -243,10 +244,7 @@ export function PrinterDialog({
 					{webDeviceSection}
 					{discovery.error && (
 						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
-							{t('settings.printer_discovery_error', 'Printer discovery error: %s').replace(
-								'%s',
-								discovery.error
-							)}
+							{formatDiscoveryError(discovery.error, t)}
 						</Text>
 					)}
 				</>
