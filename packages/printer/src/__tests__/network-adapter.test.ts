@@ -26,7 +26,18 @@ describe('NetworkAdapter', () => {
 		connectCallback = undefined;
 
 		writeMock.mockImplementation((_payload, _encoding, callback) => callback?.(null));
-		endMock.mockImplementation((callback) => callback?.());
+		// Mirror react-native-tcp-socket's real Socket.end(data, encoding): it has
+		// NO completion-callback parameter. When `data` is truthy it is written as a
+		// chunk, and a non-string/non-buffer chunk throws — exactly how a Node-style
+		// end(callback) crashes on a device with "Invalid data, chunk must be a
+		// string or buffer, not function".
+		endMock.mockImplementation((data?: unknown) => {
+			if (data === undefined || data === null) return;
+			const isWritableChunk = typeof data === 'string' || data instanceof Uint8Array;
+			if (!isWritableChunk) {
+				throw new Error(`Invalid data, chunk must be a string or buffer, not ${typeof data}`);
+			}
+		});
 		destroyMock.mockClear();
 		onMock.mockClear();
 		createConnectionMock.mockImplementation((_options, callback) => {
@@ -63,5 +74,24 @@ describe('NetworkAdapter', () => {
 			expect.any(Function)
 		);
 		expect(endMock).toHaveBeenCalled();
+	});
+
+	it('half-closes via end() with no data and resolves (regression: crash after the test page printed)', async () => {
+		const adapter = new NetworkAdapter('192.168.1.147', 9100);
+		const printPromise = adapter.printRaw(new Uint8Array([0x1b, 0x40]));
+
+		// Driving the connect callback must not throw. Passing the settle callback
+		// to end() (the old bug) makes the realistic end mock throw the device's
+		// "Invalid data, chunk must be a string or buffer, not function" error here.
+		expect(() => connectCallback?.()).not.toThrow();
+		await expect(printPromise).resolves.toBeUndefined();
+
+		// end() must never be handed a function as its first argument.
+		expect(endMock).toHaveBeenCalled();
+		for (const call of endMock.mock.calls) {
+			expect(typeof call[0]).not.toBe('function');
+		}
+		// settle() still tears the socket down.
+		expect(destroyMock).toHaveBeenCalled();
 	});
 });
