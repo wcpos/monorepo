@@ -22,11 +22,13 @@ export function useActiveTemplates(): TemplateDocument[] {
 	const { license } = useAppInfo();
 	const isPro = !!license?.isPro;
 
-	// Trigger template replication from the server — greedy ensures all pages are fetched
+	// Trigger template replication from the server. Not greedy: the templates
+	// endpoint returns the full set in a single response (posts_per_page=-1) and
+	// ignores include/exclude, so greedy pagination is unnecessary and would loop
+	// forever re-fetching the same set. A single sync pass per poll is enough.
 	useQuery({
 		queryKeys: ['templates'],
 		collectionName: 'templates',
-		greedy: true,
 		initialParams: {
 			selector: { type: 'receipt' },
 		},
