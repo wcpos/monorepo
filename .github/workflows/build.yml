@@ -79,18 +79,27 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          eas build --non-interactive --wait --platform=android --profile=production-apk --json --no-paginate > apk-build.json
-          apk_url="$(jq -r '.[0].artifacts.applicationArchiveUrl // .[0].artifacts.buildUrl // empty' apk-build.json)"
+          eas build --non-interactive --wait --platform=android --profile=production-apk --json > apk-build.json
+          apk_url="$(jq -r '.[0].artifacts.applicationArchiveUrl // empty' apk-build.json)"
           if [ -z "$apk_url" ]; then
             echo "::error::Could not resolve APK artifact URL from EAS output"; cat apk-build.json; exit 1
           fi
           version="$(node -p "require('./package.json').version")"
+          tag="v${version}"
           apk="WCPOS-${version}.apk"
-          echo "Downloading APK for v${version} from ${apk_url}"
+          echo "Downloading APK for ${tag} from ${apk_url}"
           curl -fSL "$apk_url" -o "$apk"
           file "$apk" || true
-          if ! gh release view "v${version}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "v${version}" --repo "$GITHUB_REPOSITORY" --title "WCPOS App v${version}" --notes "WCPOS App v${version}"
+          # Require the release to already exist — never create one here, so a dispatch
+          # from a commit that doesn't match this version cannot publish a bogus release.
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release ${tag} does not exist. Create the app release before attaching an APK (apk=attach/only)."; exit 1
           fi
-          gh release upload "v${version}" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
-          echo "Uploaded ${apk} to release v${version}"
+          gh release upload "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
+          # Ensure the sideload/signing caveat is in the release body so downloaders see it (idempotent).
+          note="> **Sideload APK:** \`${apk}\` is a universal Android build signed with the EAS upload key, **not** Google's Play app-signing key. It cannot update over (or be updated by) a Play Store install — it is a separate install track."
+          body="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')"
+          if ! printf '%s' "$body" | grep -q "Sideload APK:"; then
+            printf '%s\n\n%s\n' "$body" "$note" | gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file -
+          fi
+          echo "Uploaded ${apk} to release ${tag}"
