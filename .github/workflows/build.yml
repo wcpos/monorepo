@@ -25,10 +25,21 @@ on:
         description: Auto submit to the store? (production only)
         type: boolean
         required: false
+      apk:
+        description: Sideloadable Android APK -> monorepo release (no/attach/only)
+        type: choice
+        required: true
+        default: 'no'
+        options:
+          - 'no'
+          - attach
+          - only
 
 jobs:
   main:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: 🏗 Setup repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -47,11 +58,39 @@ jobs:
         run: pnpm run -w build:main
 
       - name: 🚀 Build main
-        if: ${{ github.event.inputs.submit == 'false' || github.event.inputs.profile != 'production' }}
+        if: ${{ (github.event.inputs.submit == 'false' || github.event.inputs.profile != 'production') && github.event.inputs.apk != 'only' }}
         working-directory: apps/main
         run: eas build --non-interactive --wait --platform=${{ github.event.inputs.platform }} --profile=${{ github.event.inputs.profile }}
 
       - name: 🚀 Build & submit main
-        if: ${{ github.event.inputs.submit == 'true' && github.event.inputs.profile == 'production' }}
+        if: ${{ github.event.inputs.submit == 'true' && github.event.inputs.profile == 'production' && github.event.inputs.apk != 'only' }}
         working-directory: apps/main
         run: eas build --non-interactive --wait --auto-submit --platform=${{ github.event.inputs.platform }} --profile=${{ github.event.inputs.profile }}
+
+      # Sideloadable Android APK: build a universal, installable .apk (production-apk
+      # profile) and attach it to the monorepo release for the current app version so
+      # customers without Play Store access can install manually.
+      # NOTE: signed with the EAS upload key, NOT Google's Play app-signing key, so it
+      # cannot update over a Play install (different signature) — a separate install track.
+      - name: 🤖 Build & upload sideload APK
+        if: ${{ github.event.inputs.apk == 'attach' || github.event.inputs.apk == 'only' }}
+        working-directory: apps/main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          eas build --non-interactive --wait --platform=android --profile=production-apk --json --no-paginate > apk-build.json
+          apk_url="$(jq -r '.[0].artifacts.applicationArchiveUrl // .[0].artifacts.buildUrl // empty' apk-build.json)"
+          if [ -z "$apk_url" ]; then
+            echo "::error::Could not resolve APK artifact URL from EAS output"; cat apk-build.json; exit 1
+          fi
+          version="$(node -p "require('./package.json').version")"
+          apk="WCPOS-${version}.apk"
+          echo "Downloading APK for v${version} from ${apk_url}"
+          curl -fSL "$apk_url" -o "$apk"
+          file "$apk" || true
+          if ! gh release view "v${version}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "v${version}" --repo "$GITHUB_REPOSITORY" --title "WCPOS App v${version}" --notes "WCPOS App v${version}"
+          fi
+          gh release upload "v${version}" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "Uploaded ${apk} to release v${version}"

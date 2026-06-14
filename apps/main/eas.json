@@ -36,6 +36,14 @@
       },
       "autoIncrement": true
     },
+    "production-apk": {
+      "extends": "production",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "autoIncrement": false
+    },
     "adhoc": {
       "extends": "monorepo",
       "distribution": "internal"
