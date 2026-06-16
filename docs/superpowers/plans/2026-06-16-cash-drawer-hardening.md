@@ -19,6 +19,8 @@
 5. **PR E — language/emulation guard + test-print drawer check**: warn when Star vendor/language settings are likely mismatched and optionally fire drawer on Test Print when `autoOpenDrawer` is enabled.
 6. **Hardware verification issue/notes**: keep real Star SDK fallback and Sunmi/iMin SDK support as separate hardware-backed follow-ups unless failures are reproduced.
 
+**Sequencing & risk:** Land **PR A first** — PRs B, C, and E read `profile.drawerConnector`, which only exists after PR A (or ship PR B sending only `autoOpenDrawer` to decouple). **PR D is the highest-risk item** — it changes network print-completion timing for *every* job, not just drawer kicks; only do it if an actual tail-drop is reproduced, and verify on real hardware (a printer that holds the socket open can hang the promise — the mock cannot catch that).
+
 ---
 
 ## PR A: Drawer connector selection
@@ -45,6 +47,7 @@
 - Modify: `packages/core/src/screens/main/settings/printer/dialog/use-printer-dialog-form.ts`
 - Modify: `packages/core/src/screens/main/settings/printer/dialog/advanced-settings.tsx`
 - Create: `packages/core/src/screens/main/settings/printer/dialog/drawer-connector-field.tsx`
+- Create: `packages/core/src/screens/main/settings/printer/components/drawer-connector-select.tsx`
 
 ### Data model
 
@@ -153,7 +156,6 @@ it('emits ESC/POS pin 5 for auto-open drawerConnector pin5', () => {
 	});
 	expect(includesSequence(bytes, [0x1b, 0x70, 0x01])).toBe(true);
 });
-
 ```
 
 Run:
@@ -192,10 +194,10 @@ pulseDrawer(encoder, options.drawerConnector);
 Change the `drawer` case inside the node walker from `encoder.pulse()` to:
 
 ```ts
-pulseDrawer(encoder, node.connector ?? options.drawerConnector);
+pulseDrawer(encoder, node.connector);
 ```
 
-Generated templates such as `DEFAULT_THERMAL_TEMPLATE` and drawer-only fallback XML contain a bare `<drawer />`, so bare drawer nodes must fall back to the profile-level render option. Keep explicit `connector` attributes higher priority than the option. If the drawer case is in a helper, pass `options.drawerConnector` through the existing render context; do not create a global mutable variable.
+If the drawer case is in a helper, pass `pulseDrawer` or `options.drawerConnector` through the existing render context; do not create a global mutable variable.
 
 - [ ] **Step 7: Run renderer tests**
 
@@ -256,23 +258,13 @@ it('passes drawerConnector to drawer-only open', async () => {
 });
 ```
 
-Add to `packages/printer/src/encoder/__tests__/drawer-auto-open.test.ts` so generated templates with bare `<drawer />` use the profile connector too:
-
-```ts
-it('uses drawerConnector for generated bare drawer nodes', () => {
-	const bytes = encodeReceipt(sampleReceiptData, { openDrawer: true, drawerConnector: 'pin5' });
-	expect(includesSequence(bytes, [0x1b, 0x70, 0x01])).toBe(true);
-});
-```
-
 Run:
 
 ```bash
 cd packages/printer && ../../node_modules/.bin/vitest run src/__tests__/printer-service.test.ts -t drawerConnector
-cd packages/printer && ../../node_modules/.bin/vitest run src/encoder/__tests__/drawer-auto-open.test.ts -t drawerConnector
 ```
 
-Expected: fail because `PrinterProfile`, `EncodeReceiptOptions`, and service options do not include/pass `drawerConnector`.
+Expected: fail because `PrinterProfile` and service options do not include/pass `drawerConnector`.
 
 - [ ] **Step 2: Add profile type**
 
@@ -384,10 +376,12 @@ drawerConnector: {
 In `packages/database/src/collections/index.ts`, add migration strategy 8 to preserve existing documents and backfill:
 
 ```ts
-8: (oldDoc) => ({
-	...oldDoc,
-	drawerConnector: oldDoc.drawerConnector === 'pin5' ? 'pin5' : 'pin2',
-}),
+8(oldDoc) {
+	return {
+		...oldDoc,
+		drawerConnector: oldDoc.drawerConnector === 'pin5' ? 'pin5' : 'pin2',
+	};
+},
 ```
 
 - [ ] **Step 3: Update core form types and defaults**
@@ -442,57 +436,13 @@ Create `packages/core/src/screens/main/settings/printer/dialog/drawer-connector-
 import * as React from 'react';
 
 import { FormField, FormSelect } from '@wcpos/components/form';
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/components/select';
-import type { SelectSingleRootProps } from '@wcpos/components/select';
-import { Text } from '@wcpos/components/text';
 import { View } from 'react-native';
 
 import { useT } from '../../../../../contexts/translations';
+import { DrawerConnectorSelect } from '../components/drawer-connector-select';
 
 import type { PrinterFormValues } from '../schema';
 import type { UseFormReturn } from 'react-hook-form';
-
-function DrawerConnectorSelect({ value, ...props }: SelectSingleRootProps) {
-	const t = useT();
-
-	const options = React.useMemo(
-		() => [
-			{ value: 'pin2', label: t('settings.cash_drawer_pin2', 'Pin 2 / Drawer 1') },
-			{ value: 'pin5', label: t('settings.cash_drawer_pin5', 'Pin 5 / Drawer 2') },
-		],
-		[t]
-	);
-
-	const selectedLabel =
-		options.find((option) => option.value === value?.value)?.label ??
-		value?.label ??
-		value?.value ??
-		'';
-
-	return (
-		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
-			<SelectTrigger>
-				<SelectValue placeholder={t('settings.cash_drawer_connector', 'Cash drawer connector')} />
-			</SelectTrigger>
-			<SelectContent matchWidth>
-				<SelectGroup>
-					{options.map((option) => (
-						<SelectItem key={option.value} label={option.label} value={option.value}>
-							<Text>{option.label}</Text>
-						</SelectItem>
-					))}
-				</SelectGroup>
-			</SelectContent>
-		</Select>
-	);
-}
 
 export function DrawerConnectorField({ form }: { form: UseFormReturn<PrinterFormValues> }) {
 	const t = useT();
@@ -519,8 +469,7 @@ export function DrawerConnectorField({ form }: { form: UseFormReturn<PrinterForm
 }
 ```
 
-`FormSelect` must receive `DrawerConnectorSelect` through `customComponent`; do not pass an `options` prop directly.
-
+`FormSelect` takes a `customComponent`, **not** an `options` prop. Create `packages/core/src/screens/main/settings/printer/components/drawer-connector-select.tsx` modeled exactly on the existing `LanguageSelect` (`components/language-select.tsx`): accept `SelectSingleRootProps`, define the option list internally (`pin2` → "Pin 2 / Drawer 1", `pin5` → "Pin 5 / Drawer 2"), and render the same `Select` / `SelectTrigger` / `SelectContent` / `SelectGroup` / `SelectItem` primitives.
 
 - [ ] **Step 6: Render connector field in advanced settings**
 
@@ -561,7 +510,7 @@ git commit -m "Add printer drawer connector setting"
 
 - Modify: `packages/printer/src/transport/cloud-adapter.ts`
 - Modify: `packages/printer/src/printer-service.ts`
-- Modify: `packages/printer/src/hooks/use-print.ts`
+- Reference only — no edit needed: `packages/printer/src/hooks/use-print.ts` (`printOrderViaCloud` already receives the full `PrinterProfile`, so the drawer fields flow through without touching this file).
 - Modify: `packages/printer/src/__tests__/cloud-adapter.test.ts`
 - Modify: `packages/printer/src/__tests__/printer-service-cloud-roundtrip.test.ts`
 - Modify: `packages/core/src/screens/main/hooks/use-cloud-enqueue.ts`
@@ -659,6 +608,8 @@ await transport.enqueueOrder(orderId, templateId, {
 	drawerConnector: profile.drawerConnector,
 });
 ```
+
+> Also add a round-trip assertion to `printer-service-cloud-roundtrip.test.ts` (already listed in Files): call `service.printOrderViaCloud(profileWithDrawerSettings, …)` against a fake `CloudAdapter` and assert the captured enqueue job carries `autoOpenDrawer`/`drawerConnector`. This proves the full chain (profile → `printOrderViaCloud` → `enqueueOrder` → `enqueue`); the per-hop tests don't cover it end to end.
 
 - [ ] **Step 4: Update REST payload test first**
 
@@ -817,7 +768,7 @@ const bytes =
 await transport.printRaw(bytes, { cutPaper: false });
 ```
 
-Preserve the existing `{ cutPaper: false }` option for every drawer-only path. Star WebPRNT network printing defaults to cutting unless this option is passed, so the regression test must continue to assert it.
+> Keep `{ cutPaper: false }` on `printRaw` (preserved from #603). The Star fallback still renders the `<receipt><drawer /></receipt>` template, and the Star WebPRNT adapter defaults `cutPaper ?? true`, so dropping the option re-adds a paper cut on a no-sale open. (The ESC/POS real-time path carries no cut regardless, and native adapters ignore the option.)
 
 - [ ] **Step 3: Add Star regression test**
 
@@ -868,13 +819,13 @@ git commit -m "Use realtime drawer kick for ESC/POS no-sale opens"
 ### Files
 
 - Modify: `packages/printer/src/transport/network-adapter.ts`
-- Modify: `packages/printer/src/__tests__/network-adapter.test.ts`
+- Modify: `packages/printer/src/__tests__/network-adapter.test.ts` or create it if absent
 
 ### Task D1: Resolve network print after socket close, not immediately after write callback
 
 - [ ] **Step 1: Write failing test with fake TCP socket**
 
-Update the existing `packages/printer/src/__tests__/network-adapter.test.ts`; do not replace the file. Keep the current Buffer-less write and `end(callback)` crash regressions, and append the close/drain coverage below:
+Create `packages/printer/src/__tests__/network-adapter.test.ts`:
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
@@ -1120,18 +1071,6 @@ drawerConnector: profile.drawerConnector,
 ```
 
 If diagnostic uses `encodeReceipt`, pass equivalent `EncodeReceiptOptions` fields.
-
-In `packages/core/src/screens/main/settings/printing/index.tsx`, extend the cloud test-print request so cloud profiles follow the same drawer setting:
-
-```ts
-await cloudHttp.post('/print-jobs/test', {
-	printer_id: profile.cloudPrinterId,
-	auto_open_drawer: profile.autoOpenDrawer,
-	drawer_connector: profile.drawerConnector,
-});
-```
-
-Update `packages/core/src/screens/main/settings/printing/index-cloud.test.tsx` to expect those payload fields.
 
 - [ ] **Step 3: Run tests and commit PR E**
 
