@@ -13,6 +13,8 @@ export interface RasterEncodeOptions {
 	columns: number;
 	printerModel?: string;
 	emitEscPrintMode: boolean;
+	/** Forwarded to renderEscpos so profile.autoOpenDrawer works in raster mode. */
+	openDrawer?: boolean;
 }
 
 interface ReceiptRasterizerProps {

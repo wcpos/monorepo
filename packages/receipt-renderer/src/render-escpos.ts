@@ -27,6 +27,17 @@ export interface EscposRenderOptions {
 	 * escape hatch for printers that misbehave when both are sent.
 	 */
 	emitEscPrintMode?: boolean;
+	/**
+	 * Emit a cash-drawer kick pulse at the end of the receipt. Lets the printer
+	 * profile's "auto-open cash drawer" setting work for custom thermal templates
+	 * and the full-receipt raster path, which otherwise have no way to honour it.
+	 * Default `false`.
+	 *
+	 * An explicit `<drawer/>` in the template is always respected and is never
+	 * duplicated by this flag — when the template already opens the drawer, this
+	 * appends nothing.
+	 */
+	openDrawer?: boolean;
 	imageMode?: ThermalImageMode;
 	imageAssets?: ThermalImageAssets;
 	imageAlgorithm?: ThermalImageAlgorithm;
@@ -153,6 +164,13 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		barcodeImages: options.barcodeImages ?? {},
 	};
 
+	// Trailing cut/feed/drawer are emitted last (and are the only nodes the raster
+	// path re-emits). Splitting them out lets us slot an auto-open drawer pulse in
+	// *before* the cut — matching the built-in template's drawer-then-cut order,
+	// which some printers require to honour the kick.
+	const trailingControls = collectTrailingControls(ast.children);
+	const wantsDrawerPulse = options.openDrawer === true;
+
 	if (options.fullReceiptRasterImage) {
 		const image = options.fullReceiptRasterImage;
 		writeImage(encoder, image.image, {
@@ -161,13 +179,46 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 			algorithm: image.algorithm ?? context.imageAlgorithm,
 			threshold: image.threshold ?? context.imageThreshold,
 		});
-		writePostRasterCommands(encoder, ast.children, context);
+		// The image replaces the body, so only a *trailing* <drawer/> would ever
+		// fire here. Dedupe against that, not the whole AST, otherwise a non-trailing
+		// drawer would suppress the pulse yet never be emitted — drawer never opens.
+		if (wantsDrawerPulse && !nodesContainDrawer(trailingControls)) encoder.pulse();
+		walkNodes(encoder, trailingControls, context);
 		return normalizeEscposBytes(encodeReceiptPrinterBytesSafely(encoder), resolvedLanguage);
 	}
 
-	walkNodes(encoder, ast.children, context);
+	const body = ast.children.slice(0, ast.children.length - trailingControls.length);
+	walkNodes(encoder, body, context);
+	// Skip the auto pulse if the template opens the drawer itself anywhere — a node
+	// in the body fired inline during walkNodes, a trailing one fires just below.
+	if (wantsDrawerPulse && !astContainsDrawer(ast)) encoder.pulse();
+	walkNodes(encoder, trailingControls, context);
 
 	return normalizeEscposBytes(encoder.encode(), resolvedLanguage);
+}
+
+/** Trailing run of cut/feed/drawer control nodes, in document order. */
+function collectTrailingControls(nodes: readonly ThermalNode[]): ThermalNode[] {
+	const trailingControls: ThermalNode[] = [];
+	for (let index = nodes.length - 1; index >= 0; index--) {
+		const node = nodes[index];
+		if (!node || !isThermalControlNode(node)) break;
+		trailingControls.unshift(node);
+	}
+	return trailingControls;
+}
+
+/** True when any node in the list is a `<drawer/>` (non-recursive — controls are flat). */
+function nodesContainDrawer(nodes: readonly ThermalNode[]): boolean {
+	return nodes.some((node) => node.type === 'drawer');
+}
+
+/** True when the AST already contains a `<drawer/>` node anywhere in the tree. */
+function astContainsDrawer(node: ReceiptNode | ThermalNode): boolean {
+	if (node.type === 'drawer') return true;
+	const children = (node as { children?: readonly ThermalNode[] }).children;
+	if (!children) return false;
+	return children.some((child) => astContainsDrawer(child));
 }
 
 function normalizeEscposBytes(
@@ -179,23 +230,6 @@ function normalizeEscposBytes(
 	if (resetIndex > 0) return bytes.slice(resetIndex);
 	if (resetIndex === -1) return Uint8Array.from([0x1b, 0x40, ...bytes]);
 	return bytes;
-}
-
-function writePostRasterCommands(
-	encoder: ReceiptPrinterEncoder,
-	nodes: readonly ThermalNode[],
-	context: RenderContext
-): void {
-	const trailingControls: ThermalNode[] = [];
-	for (let index = nodes.length - 1; index >= 0; index--) {
-		const node = nodes[index];
-		if (!node || !isThermalControlNode(node)) break;
-		trailingControls.unshift(node);
-	}
-
-	for (const node of trailingControls) {
-		walkNode(encoder, node, context);
-	}
 }
 
 function isThermalControlNode(node: ThermalNode): boolean {
