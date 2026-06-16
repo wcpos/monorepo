@@ -753,5 +753,7 @@
 	"upgrade.unlock_end_of_day_reports_by": "Unlock End of Day Reports by upgrading to WCPOS Pro",
 	"upgrade.view_demo": "View Demo",
 	"settings.drawer_connector": "Cash drawer connector",
-	"settings.select_drawer_connector": "Select drawer connector"
+	"settings.select_drawer_connector": "Select drawer connector",
+	"settings.drawer_pin2": "Pin 2 / Drawer 1",
+	"settings.drawer_pin5": "Pin 5 / Drawer 2"
 }

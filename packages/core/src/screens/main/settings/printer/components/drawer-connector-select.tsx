@@ -18,10 +18,10 @@ export function DrawerConnectorSelect({ value, ...props }: SelectSingleRootProps
 
 	const options = React.useMemo(
 		() => [
-			{ value: 'pin2', label: 'Pin 2 / Drawer 1' },
-			{ value: 'pin5', label: 'Pin 5 / Drawer 2' },
+			{ value: 'pin2', label: t('settings.drawer_pin2', 'Pin 2 / Drawer 1') },
+			{ value: 'pin5', label: t('settings.drawer_pin5', 'Pin 5 / Drawer 2') },
 		],
-		[]
+		[t]
 	);
 
 	const selectedLabel =

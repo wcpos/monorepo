@@ -43,17 +43,14 @@ describe('renderEscpos openDrawer option', () => {
 		const bytes = encodeThermalTemplate(TEMPLATE_NO_DRAWER, {}, { openDrawer: true });
 		expect(countPulses(bytes)).toBe(1);
 	});
-
 	it('appends nothing when openDrawer is false', () => {
 		const bytes = encodeThermalTemplate(TEMPLATE_NO_DRAWER, {}, { openDrawer: false });
 		expect(countPulses(bytes)).toBe(0);
 	});
-
 	it('does not duplicate an explicit <drawer/> when openDrawer is also true', () => {
 		const bytes = encodeThermalTemplate(TEMPLATE_WITH_DRAWER, {}, { openDrawer: true });
 		expect(countPulses(bytes)).toBe(1);
 	});
-
 	it('opens the drawer before the cut, matching the built-in template order', () => {
 		const bytes = encodeThermalTemplate(TEMPLATE_NO_DRAWER, {}, { openDrawer: true });
 		const pulseIndex = sequenceIndex(bytes, PULSE);
@@ -62,7 +59,6 @@ describe('renderEscpos openDrawer option', () => {
 		expect(cutIndex).toBeGreaterThanOrEqual(0);
 		expect(pulseIndex).toBeLessThan(cutIndex);
 	});
-
 	it('honours openDrawer in the full-receipt raster branch', () => {
 		const bytes = encodeThermalTemplate(
 			TEMPLATE_NO_DRAWER,
@@ -80,7 +76,6 @@ describe('renderEscpos openDrawer option', () => {
 		);
 		expect(countPulses(bytes)).toBe(1);
 	});
-
 	it('still opens the drawer in raster mode when the template has a non-trailing <drawer/>', () => {
 		// The raster path only re-emits *trailing* control nodes, so a mid-template
 		// <drawer/> is dropped. With openDrawer on we must still emit exactly one pulse.
@@ -102,6 +97,26 @@ describe('renderEscpos openDrawer option', () => {
 		expect(countPulses(bytes)).toBe(1);
 	});
 
+	it('preserves explicit pin 5 connector for non-trailing drawer in raster mode', () => {
+		const template =
+			'<receipt paper-width="32"><drawer connector="pin5" /><text>Thanks</text><cut /></receipt>';
+		const bytes = encodeThermalTemplate(
+			template,
+			{},
+			{
+				openDrawer: true,
+				drawerConnector: 'pin2',
+				fullReceiptRasterImage: {
+					image: opaqueBlackImageData(32, 16),
+					width: 32,
+					height: 16,
+					algorithm: 'threshold',
+					threshold: 128,
+				},
+			}
+		);
+		expect(includesSequence(bytes, PIN5_PULSE)).toBe(true);
+	});
 	it('does not double-kick in raster mode when the template has a trailing <drawer/>', () => {
 		const bytes = encodeThermalTemplate(
 			TEMPLATE_WITH_DRAWER,
@@ -119,7 +134,6 @@ describe('renderEscpos openDrawer option', () => {
 		);
 		expect(countPulses(bytes)).toBe(1);
 	});
-
 	it('uses pin 5 for an explicit drawer connector attribute', () => {
 		const bytes = encodeThermalTemplate(
 			'<receipt paper-width="32"><drawer connector="pin5" /></receipt>',
@@ -127,7 +141,6 @@ describe('renderEscpos openDrawer option', () => {
 		);
 		expect(includesSequence(bytes, PIN5_PULSE)).toBe(true);
 	});
-
 	it('uses pin 5 for the auto-open drawer connector option', () => {
 		const bytes = encodeThermalTemplate(
 			TEMPLATE_NO_DRAWER,

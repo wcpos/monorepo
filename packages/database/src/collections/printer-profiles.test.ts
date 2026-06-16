@@ -24,7 +24,6 @@ describe('printer_profiles schema cloud connection type + provider', () => {
 			'printnode',
 		]);
 	});
-
 	it('provides a v6 migration that preserves existing profile data', async () => {
 		const { storeCollections } = await import('./index');
 		const migrateToV6 = storeCollections.printer_profiles.migrationStrategies?.[6];
@@ -50,7 +49,6 @@ describe('printer_profiles schema cloud connection type + provider', () => {
 
 		expect(migrated).toMatchObject({ id: 'p1', connectionType: 'network', isDefault: true });
 	});
-
 	it('provides a v7 migration that preserves existing profile data', async () => {
 		const { storeCollections } = await import('./index');
 		const migrateToV7 = storeCollections.printer_profiles.migrationStrategies?.[7];
@@ -89,6 +87,32 @@ describe('printer_profiles schema v8 (drawer connector)', () => {
 		expect(schema.properties.drawerConnector?.default).toBe('pin2');
 	});
 
+	it('provides a v8 migration that preserves existing pin5 connector', async () => {
+		const { storeCollections } = await import('./index');
+		const migrateToV8 = storeCollections.printer_profiles.migrationStrategies?.[8];
+
+		expect(typeof migrateToV8).toBe('function');
+
+		const migrated = migrateToV8?.({
+			id: 'p1',
+			name: 'Front Counter',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '192.168.1.50',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 42,
+			emitEscPrintMode: true,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			drawerConnector: 'pin5',
+			isDefault: true,
+			isBuiltIn: false,
+		});
+
+		expect(migrated).toMatchObject({ drawerConnector: 'pin5' });
+	});
 	it('provides a v8 migration that defaults unknown drawer connectors to pin2', async () => {
 		const { storeCollections } = await import('./index');
 		const migrateToV8 = storeCollections.printer_profiles.migrationStrategies?.[8];

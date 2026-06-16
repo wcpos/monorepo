@@ -188,7 +188,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		// fire here. Dedupe against that, not the whole AST, otherwise a non-trailing
 		// drawer would suppress the pulse yet never be emitted — drawer never opens.
 		if (wantsDrawerPulse && !nodesContainDrawer(trailingControls)) {
-			pulseDrawer(encoder, options.drawerConnector);
+			pulseDrawer(encoder, firstDrawerConnector(ast) ?? context.drawerConnector);
 		}
 		walkNodes(encoder, trailingControls, context);
 		return normalizeEscposBytes(encodeReceiptPrinterBytesSafely(encoder), resolvedLanguage);
@@ -198,7 +198,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 	walkNodes(encoder, body, context);
 	// Skip the auto pulse if the template opens the drawer itself anywhere — a node
 	// in the body fired inline during walkNodes, a trailing one fires just below.
-	if (wantsDrawerPulse && !astContainsDrawer(ast)) pulseDrawer(encoder, options.drawerConnector);
+	if (wantsDrawerPulse && !astContainsDrawer(ast)) pulseDrawer(encoder, context.drawerConnector);
 	walkNodes(encoder, trailingControls, context);
 
 	return normalizeEscposBytes(encoder.encode(), resolvedLanguage);
@@ -218,6 +218,18 @@ function collectTrailingControls(nodes: readonly ThermalNode[]): ThermalNode[] {
 /** True when any node in the list is a `<drawer/>` (non-recursive — controls are flat). */
 function nodesContainDrawer(nodes: readonly ThermalNode[]): boolean {
 	return nodes.some((node) => node.type === 'drawer');
+}
+
+/** First explicit drawer connector in the AST, if any. */
+function firstDrawerConnector(node: ReceiptNode | ThermalNode): DrawerConnector | undefined {
+	if (node.type === 'drawer') return node.connector;
+	const children = (node as { children?: readonly ThermalNode[] }).children;
+	if (!children) return undefined;
+	for (const child of children) {
+		const connector = firstDrawerConnector(child);
+		if (connector) return connector;
+	}
+	return undefined;
 }
 
 /** True when the AST already contains a `<drawer/>` node anywhere in the tree. */
