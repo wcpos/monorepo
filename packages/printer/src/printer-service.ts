@@ -20,6 +20,12 @@ function transportKey(profile: PrinterProfile, cloudFactoryVersion: number): str
 	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}:${profile.nativeInterfaceType ?? ''}:${profile.cloudPrinterId ?? ''}:${factoryVersion}`;
 }
 
+function encodeEscposRealtimeDrawerKick(profile: PrinterProfile): Uint8Array | null {
+	if (profile.language !== 'esc-pos') return null;
+	const connector = profile.drawerConnector === 'pin5' ? 1 : 0;
+	return Uint8Array.from([0x10, 0x14, 0x01, connector, 0x03]);
+}
+
 export interface PrinterServiceOptions {
 	/**
 	 * Builds the enqueue function for a `connectionType: 'cloud'` profile.
@@ -193,17 +199,19 @@ export class PrinterService {
 
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
-			const bytes = encodeThermalTemplate(
-				'<receipt><drawer /></receipt>',
-				{},
-				{
-					language: profile.language,
-					columns: profile.columns,
-					printerModel: profile.printerModel,
-					emitEscPrintMode: profile.emitEscPrintMode ?? true,
-					drawerConnector: profile.drawerConnector,
-				}
-			);
+			const bytes =
+				encodeEscposRealtimeDrawerKick(profile) ??
+				encodeThermalTemplate(
+					'<receipt><drawer /></receipt>',
+					{},
+					{
+						language: profile.language,
+						columns: profile.columns,
+						printerModel: profile.printerModel,
+						emitEscPrintMode: profile.emitEscPrintMode ?? true,
+						drawerConnector: profile.drawerConnector,
+					}
+				);
 			await transport.printRaw(bytes, { cutPaper: false });
 		});
 	}
