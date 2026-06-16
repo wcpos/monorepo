@@ -37,6 +37,7 @@ const SYSTEM_PRINTER: PrinterProfile = {
 	fullReceiptRaster: false,
 	autoCut: true,
 	autoOpenDrawer: false,
+	drawerConnector: 'pin2',
 	isDefault: false,
 	isBuiltIn: true,
 };
@@ -83,6 +84,7 @@ function synthesizeCloudPrinter(payload: CloudPrinterPayload): PrinterProfile | 
 		fullReceiptRaster: payload.fullReceiptRaster ?? false,
 		autoCut: payload.autoCut ?? true,
 		autoOpenDrawer: false,
+		drawerConnector: 'pin2',
 		isDefault: false,
 		isBuiltIn: true,
 		cloudPrinterId,

@@ -139,6 +139,7 @@ export function usePrinterDialogForm({
 				fullReceiptRaster: printer.fullReceiptRaster ?? false,
 				autoCut: printer.autoCut ?? true,
 				autoOpenDrawer: printer.autoOpenDrawer ?? false,
+				drawerConnector: printer.drawerConnector ?? 'pin2',
 				isDefault: printer.isDefault ?? false,
 				nativeInterfaceType: printer.nativeInterfaceType,
 				cloudPrinterId: printer.cloudPrinterId ?? '',

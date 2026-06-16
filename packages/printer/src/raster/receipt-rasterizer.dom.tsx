@@ -7,6 +7,7 @@ import { encodeThermalTemplate } from '../renderer';
 import { rasterizeReceiptElement, stripThermalControlNodesForRaster } from './rasterize-element';
 
 import type { DOMProps } from 'expo/dom';
+import type { DrawerConnector } from '../types';
 
 export interface RasterEncodeOptions {
 	language: 'esc-pos' | 'star-prnt' | 'star-line';
@@ -15,6 +16,8 @@ export interface RasterEncodeOptions {
 	emitEscPrintMode: boolean;
 	/** Forwarded to renderEscpos so profile.autoOpenDrawer works in raster mode. */
 	openDrawer?: boolean;
+	/** Forwarded to renderEscpos so profile.drawerConnector works in raster mode. */
+	drawerConnector?: DrawerConnector;
 }
 
 interface ReceiptRasterizerProps {

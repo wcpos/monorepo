@@ -8,6 +8,7 @@ import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
 import { FullReceiptRasterField } from './full-receipt-raster-field';
+import { DrawerConnectorField } from './drawer-connector-field';
 import { LanguageSelect } from '../components/language-select';
 import { PaperWidthSelect } from '../components/paper-width-select';
 import { VendorSelect } from '../components/vendor-select';
@@ -96,6 +97,7 @@ export function AdvancedSettings({
 						/>
 					</HStack>
 					<FullReceiptRasterField form={form} />
+					<DrawerConnectorField form={form} />
 				</VStack>
 			</CollapsibleContent>
 		</Collapsible>

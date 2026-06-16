@@ -15,6 +15,7 @@ export interface PrinterProfileFormData {
 	fullReceiptRaster: boolean;
 	autoCut: boolean;
 	autoOpenDrawer: boolean;
+	drawerConnector?: PrinterProfile['drawerConnector'];
 	isDefault: boolean;
 }
 
@@ -99,6 +100,7 @@ export function buildPrinterProfileFields(
 		fullReceiptRaster: data.fullReceiptRaster,
 		autoCut: data.autoCut,
 		autoOpenDrawer: data.autoOpenDrawer,
+		drawerConnector: data.drawerConnector ?? 'pin2',
 		isDefault: data.isDefault,
 	};
 }

@@ -4,6 +4,7 @@ import iconv from 'iconv-lite';
 
 import type {
 	ColNode,
+	DrawerConnector,
 	ReceiptNode,
 	ThermalBarcodeImages,
 	ThermalBarcodeMode,
@@ -38,6 +39,8 @@ export interface EscposRenderOptions {
 	 * appends nothing.
 	 */
 	openDrawer?: boolean;
+	/** Cash-drawer connector used for auto-open pulses and drawer nodes without an explicit connector. */
+	drawerConnector?: DrawerConnector;
 	imageMode?: ThermalImageMode;
 	imageAssets?: ThermalImageAssets;
 	imageAlgorithm?: ThermalImageAlgorithm;
@@ -72,6 +75,7 @@ interface RenderContext {
 	imageThreshold: number;
 	barcodeMode: ThermalBarcodeMode;
 	barcodeImages: ThermalBarcodeImages;
+	drawerConnector: DrawerConnector;
 }
 
 export interface ThermalRowDiagnostic {
@@ -162,6 +166,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		imageThreshold: options.imageThreshold ?? 128,
 		barcodeMode: options.barcodeMode ?? 'image',
 		barcodeImages: options.barcodeImages ?? {},
+		drawerConnector: options.drawerConnector ?? 'pin2',
 	};
 
 	// Trailing cut/feed/drawer are emitted last (and are the only nodes the raster
@@ -182,7 +187,9 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 		// The image replaces the body, so only a *trailing* <drawer/> would ever
 		// fire here. Dedupe against that, not the whole AST, otherwise a non-trailing
 		// drawer would suppress the pulse yet never be emitted — drawer never opens.
-		if (wantsDrawerPulse && !nodesContainDrawer(trailingControls)) encoder.pulse();
+		if (wantsDrawerPulse && !nodesContainDrawer(trailingControls)) {
+			pulseDrawer(encoder, firstDrawerConnector(ast) ?? context.drawerConnector);
+		}
 		walkNodes(encoder, trailingControls, context);
 		return normalizeEscposBytes(encodeReceiptPrinterBytesSafely(encoder), resolvedLanguage);
 	}
@@ -191,7 +198,7 @@ export function renderEscpos(ast: ReceiptNode, options: EscposRenderOptions = {}
 	walkNodes(encoder, body, context);
 	// Skip the auto pulse if the template opens the drawer itself anywhere — a node
 	// in the body fired inline during walkNodes, a trailing one fires just below.
-	if (wantsDrawerPulse && !astContainsDrawer(ast)) encoder.pulse();
+	if (wantsDrawerPulse && !astContainsDrawer(ast)) pulseDrawer(encoder, context.drawerConnector);
 	walkNodes(encoder, trailingControls, context);
 
 	return normalizeEscposBytes(encoder.encode(), resolvedLanguage);
@@ -211,6 +218,18 @@ function collectTrailingControls(nodes: readonly ThermalNode[]): ThermalNode[] {
 /** True when any node in the list is a `<drawer/>` (non-recursive — controls are flat). */
 function nodesContainDrawer(nodes: readonly ThermalNode[]): boolean {
 	return nodes.some((node) => node.type === 'drawer');
+}
+
+/** First explicit drawer connector in the AST, if any. */
+function firstDrawerConnector(node: ReceiptNode | ThermalNode): DrawerConnector | undefined {
+	if (node.type === 'drawer') return node.connector;
+	const children = (node as { children?: readonly ThermalNode[] }).children;
+	if (!children) return undefined;
+	for (const child of children) {
+		const connector = firstDrawerConnector(child);
+		if (connector) return connector;
+	}
+	return undefined;
 }
 
 /** True when the AST already contains a `<drawer/>` node anywhere in the tree. */
@@ -234,6 +253,10 @@ function normalizeEscposBytes(
 
 function isThermalControlNode(node: ThermalNode): boolean {
 	return node.type === 'cut' || node.type === 'feed' || node.type === 'drawer';
+}
+
+function pulseDrawer(encoder: ReceiptPrinterEncoder, connector: DrawerConnector = 'pin2'): void {
+	encoder.pulse(connector === 'pin5' ? 1 : 0);
 }
 
 /**
@@ -493,7 +516,7 @@ function walkNode(encoder: ReceiptPrinterEncoder, node: ThermalNode, context: Re
 			writeNewline(encoder, context, node.lines);
 			break;
 		case 'drawer':
-			encoder.pulse();
+			pulseDrawer(encoder, node.connector ?? context.drawerConnector);
 			break;
 		case 'receipt':
 			walkNodes(encoder, node.children, context);
