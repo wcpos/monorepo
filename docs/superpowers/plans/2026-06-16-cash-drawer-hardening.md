@@ -431,6 +431,16 @@ Create `packages/core/src/screens/main/settings/printer/dialog/drawer-connector-
 import * as React from 'react';
 
 import { FormField, FormSelect } from '@wcpos/components/form';
+import {
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@wcpos/components/select';
+import type { SelectSingleRootProps } from '@wcpos/components/select';
+import { Text } from '@wcpos/components/text';
 import { View } from 'react-native';
 
 import { useT } from '../../../../../contexts/translations';
@@ -438,22 +448,43 @@ import { useT } from '../../../../../contexts/translations';
 import type { PrinterFormValues } from '../schema';
 import type { UseFormReturn } from 'react-hook-form';
 
-function DrawerConnectorSelect({ value, onChange }: { value?: string; onChange: (value: string) => void }) {
+function DrawerConnectorSelect({ value, ...props }: SelectSingleRootProps) {
 	const t = useT();
+
+	const options = React.useMemo(
+		() => [
+			{ value: 'pin2', label: t('settings.cash_drawer_pin2', 'Pin 2 / Drawer 1') },
+			{ value: 'pin5', label: t('settings.cash_drawer_pin5', 'Pin 5 / Drawer 2') },
+		],
+		[t]
+	);
+
+	const selectedLabel =
+		options.find((option) => option.value === value?.value)?.label ??
+		value?.label ??
+		value?.value ??
+		'';
+
 	return (
-		<FormSelect
-			label={t('settings.cash_drawer_connector', 'Cash drawer connector')}
-			value={value ?? 'pin2'}
-			onChange={onChange}
-			options={[
-				{ value: 'pin2', label: t('settings.cash_drawer_pin2', 'Pin 2 / Drawer 1') },
-				{ value: 'pin5', label: t('settings.cash_drawer_pin5', 'Pin 5 / Drawer 2') },
-			]}
-		/>
+		<Select value={value ? { ...value, label: selectedLabel } : undefined} {...props}>
+			<SelectTrigger>
+				<SelectValue placeholder={t('settings.cash_drawer_connector', 'Cash drawer connector')} />
+			</SelectTrigger>
+			<SelectContent matchWidth>
+				<SelectGroup>
+					{options.map((option) => (
+						<SelectItem key={option.value} label={option.label} value={option.value}>
+							<Text>{option.label}</Text>
+						</SelectItem>
+					))}
+				</SelectGroup>
+			</SelectContent>
+		</Select>
 	);
 }
 
 export function DrawerConnectorField({ form }: { form: UseFormReturn<PrinterFormValues> }) {
+	const t = useT();
 	const autoOpenDrawer = form.watch('autoOpenDrawer');
 	if (!autoOpenDrawer) return null;
 
@@ -463,7 +494,13 @@ export function DrawerConnectorField({ form }: { form: UseFormReturn<PrinterForm
 			name="drawerConnector"
 			render={({ field: { value, onChange, ...rest } }) => (
 				<View testID="add-printer-drawer-connector-field">
-					<DrawerConnectorSelect value={value} onChange={onChange} {...rest} />
+					<FormSelect
+						customComponent={DrawerConnectorSelect}
+						label={t('settings.cash_drawer_connector', 'Cash drawer connector')}
+						value={value}
+						onChange={onChange}
+						{...rest}
+					/>
 				</View>
 			)}
 		/>
@@ -471,7 +508,8 @@ export function DrawerConnectorField({ form }: { form: UseFormReturn<PrinterForm
 }
 ```
 
-If `FormSelect` in this repo does not accept an `options` prop directly, follow the existing `LanguageSelect`/`PaperWidthSelect` pattern by creating a custom component with the same option list and passing it as `customComponent`.
+`FormSelect` must receive `DrawerConnectorSelect` through `customComponent`; do not pass an `options` prop directly.
+
 
 - [ ] **Step 6: Render connector field in advanced settings**
 
