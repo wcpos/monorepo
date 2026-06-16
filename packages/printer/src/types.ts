@@ -1,3 +1,7 @@
+import type { DrawerConnector } from '@wcpos/receipt-renderer';
+
+export type { DrawerConnector };
+
 export interface PrintRawOptions {
 	/** Whether transports that add their own cutter command should include it. */
 	cutPaper?: boolean;
@@ -82,6 +86,8 @@ export interface PrinterProfile {
 	fullReceiptRaster: boolean;
 	autoCut: boolean;
 	autoOpenDrawer: boolean;
+	/** Cash-drawer connector used for drawer kick pulses. Defaults to pin2 (drawer 1). */
+	drawerConnector?: DrawerConnector;
 	isDefault: boolean;
 	isBuiltIn: boolean;
 }

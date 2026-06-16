@@ -149,6 +149,7 @@ export class PrinterService {
 				columns: profile.columns,
 				printerModel: profile.printerModel,
 				emitEscPrintMode: profile.emitEscPrintMode ?? true,
+				drawerConnector: profile.drawerConnector,
 			};
 
 			let bytes: Uint8Array;
@@ -200,6 +201,7 @@ export class PrinterService {
 					columns: profile.columns,
 					printerModel: profile.printerModel,
 					emitEscPrintMode: profile.emitEscPrintMode ?? true,
+					drawerConnector: profile.drawerConnector,
 				}
 			);
 			await transport.printRaw(bytes, { cutPaper: false });
@@ -250,6 +252,7 @@ export class PrinterService {
 					printerModel: profile.printerModel,
 					emitEscPrintMode: profile.emitEscPrintMode ?? true,
 					openDrawer: profile.autoOpenDrawer,
+					drawerConnector: profile.drawerConnector,
 				},
 			});
 			await transport.printRaw(bytes);

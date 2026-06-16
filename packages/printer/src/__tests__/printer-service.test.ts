@@ -234,6 +234,43 @@ describe('PrinterService', () => {
 		expect(transport.printRaw).toHaveBeenCalledWith(bytes, { cutPaper: false });
 	});
 
+	it('passes drawerConnector to drawer-only open', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		const profile = {
+			id: 'printer-1',
+			name: 'Test Printer',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '127.0.0.1',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 48,
+			drawerConnector: 'pin5',
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			isDefault: true,
+			isBuiltIn: false,
+		} as PrinterProfile;
+
+		await service.openDrawer(profile);
+
+		expect(transport.printRaw).toHaveBeenCalledTimes(1);
+		const [bytes] = vi.mocked(transport.printRaw).mock.calls[0];
+		const raw = [...bytes];
+		const pin5PulseIndex = raw.findIndex(
+			(byte, index) => byte === 0x1b && raw[index + 1] === 0x70 && raw[index + 2] === 0x01
+		);
+		expect(pin5PulseIndex).toBeGreaterThanOrEqual(0);
+	});
+
 	it('rejects order-based cloud providers before opening a drawer', async () => {
 		const service = new PrinterService();
 		const getTransport = vi.fn();
