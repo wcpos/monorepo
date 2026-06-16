@@ -1,7 +1,7 @@
 import { EpsonEposAdapter } from './epson-epos-adapter';
 import { StarWebPrntAdapter } from './star-webprnt-adapter';
 
-import type { PrinterTransport } from '../types';
+import type { PrinterTransport, PrintRawOptions } from '../types';
 
 /**
  * Web network adapter — delegates to vendor-specific HTTP adapters.
@@ -45,8 +45,8 @@ export class NetworkAdapter implements PrinterTransport {
 		}
 	}
 
-	async printRaw(data: Uint8Array): Promise<void> {
-		return this.delegate.printRaw(data);
+	async printRaw(data: Uint8Array, options?: PrintRawOptions): Promise<void> {
+		return this.delegate.printRaw(data, options);
 	}
 
 	async printHtml(html: string): Promise<void> {

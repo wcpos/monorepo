@@ -196,7 +196,7 @@ export class PrinterService {
 					emitEscPrintMode: profile.emitEscPrintMode ?? true,
 				}
 			);
-			await transport.printRaw(bytes);
+			await transport.printRaw(bytes, { cutPaper: false });
 		});
 	}
 

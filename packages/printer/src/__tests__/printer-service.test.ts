@@ -231,6 +231,7 @@ describe('PrinterService', () => {
 		const raw = [...bytes];
 		const pulseIndex = raw.findIndex((byte, index) => byte === 0x1b && raw[index + 1] === 0x70);
 		expect(pulseIndex).toBeGreaterThanOrEqual(0);
+		expect(transport.printRaw).toHaveBeenCalledWith(bytes, { cutPaper: false });
 	});
 
 	it('routes Epson bluetooth profiles through the native adapter', async () => {

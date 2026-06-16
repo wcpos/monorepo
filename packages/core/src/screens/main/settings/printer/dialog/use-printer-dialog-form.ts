@@ -290,9 +290,15 @@ export function usePrinterDialogForm({
 		}
 	}, [form, buildProfile, printerService, t]);
 
-	const currentFormValues = form.watch();
+	const cloudPrinterId = form.watch('cloudPrinterId');
+	const cloudProvider = form.watch('cloudProvider');
 	const canOpenDrawer = React.useMemo(() => {
-		const profile = buildProfile(currentFormValues);
+		const profile = buildProfile({
+			...form.getValues(),
+			connectionType,
+			cloudPrinterId,
+			cloudProvider,
+		});
 		if (isOrderBasedCloudProfile(profile)) {
 			return false;
 		}
@@ -302,7 +308,7 @@ export function usePrinterDialogForm({
 			profile.connectionType === 'usb' ||
 			profile.connectionType === 'cloud'
 		);
-	}, [currentFormValues, buildProfile]);
+	}, [connectionType, cloudPrinterId, cloudProvider, form, buildProfile]);
 
 	const handleOpenDrawer = React.useCallback(async () => {
 		const data = form.getValues();
