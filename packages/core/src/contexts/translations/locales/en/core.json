@@ -751,5 +751,7 @@
 	"upgrade.manage_and_apply_coupons_by": "Manage and apply coupons by upgrading to WCPOS Pro",
 	"upgrade.re-open_and_print_receipts_for_older": "Re-open and print receipts for older orders by upgrading to WCPOS Pro",
 	"upgrade.unlock_end_of_day_reports_by": "Unlock End of Day Reports by upgrading to WCPOS Pro",
-	"upgrade.view_demo": "View Demo"
+	"upgrade.view_demo": "View Demo",
+	"settings.drawer_connector": "Cash drawer connector",
+	"settings.select_drawer_connector": "Select drawer connector"
 }
