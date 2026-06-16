@@ -154,7 +154,10 @@ export class PrinterService {
 			let bytes: Uint8Array;
 			if (templateXml) {
 				const templateData = formatReceiptData(receiptData);
-				bytes = encodeThermalTemplate(templateXml, templateData, encoderOptions);
+				bytes = encodeThermalTemplate(templateXml, templateData, {
+					...encoderOptions,
+					openDrawer: profile.autoOpenDrawer,
+				});
 			} else {
 				const encodeOpts: EncodeReceiptOptions = {
 					...encoderOptions,
@@ -222,6 +225,7 @@ export class PrinterService {
 					columns: profile.columns,
 					printerModel: profile.printerModel,
 					emitEscPrintMode: profile.emitEscPrintMode ?? true,
+					openDrawer: profile.autoOpenDrawer,
 				},
 			});
 			await transport.printRaw(bytes);

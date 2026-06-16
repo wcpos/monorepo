@@ -165,6 +165,40 @@ describe('PrinterService', () => {
 		expect(transport.printRaw).toHaveBeenNthCalledWith(2, new Uint8Array([2]));
 	});
 
+	it('forwards autoOpenDrawer to encodeThermalTemplateForPrint so the setting works for thermal templates', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		const profile: PrinterProfile = {
+			id: 'printer-1',
+			name: 'Test Printer',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '127.0.0.1',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: true,
+			isDefault: true,
+			isBuiltIn: false,
+		};
+
+		await service.printThermalTemplateForPrint(sampleReceiptData, profile, '<receipt />', 576);
+
+		expect(encodeThermalTemplateForPrintMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				encodeOptions: expect.objectContaining({ openDrawer: true }),
+			})
+		);
+	});
+
 	it('routes Epson bluetooth profiles through the native adapter', async () => {
 		const service = new PrinterService();
 		const profile: PrinterProfile = {
