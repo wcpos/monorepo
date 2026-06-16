@@ -154,10 +154,6 @@ it('emits ESC/POS pin 5 for auto-open drawerConnector pin5', () => {
 	expect(includesSequence(bytes, [0x1b, 0x70, 0x01])).toBe(true);
 });
 
-it('uses drawerConnector for generated bare drawer nodes', () => {
-	const bytes = encodeReceipt(sampleReceiptData, { openDrawer: true, drawerConnector: 'pin5' });
-	expect(includesSequence(bytes, [0x1b, 0x70, 0x01])).toBe(true);
-});
 ```
 
 Run:
@@ -260,13 +256,23 @@ it('passes drawerConnector to drawer-only open', async () => {
 });
 ```
 
+Add to `packages/printer/src/encoder/__tests__/drawer-auto-open.test.ts` so generated templates with bare `<drawer />` use the profile connector too:
+
+```ts
+it('uses drawerConnector for generated bare drawer nodes', () => {
+	const bytes = encodeReceipt(sampleReceiptData, { openDrawer: true, drawerConnector: 'pin5' });
+	expect(includesSequence(bytes, [0x1b, 0x70, 0x01])).toBe(true);
+});
+```
+
 Run:
 
 ```bash
 cd packages/printer && ../../node_modules/.bin/vitest run src/__tests__/printer-service.test.ts -t drawerConnector
+cd packages/printer && ../../node_modules/.bin/vitest run src/encoder/__tests__/drawer-auto-open.test.ts -t drawerConnector
 ```
 
-Expected: fail because `PrinterProfile` and service options do not include/pass `drawerConnector`.
+Expected: fail because `PrinterProfile`, `EncodeReceiptOptions`, and service options do not include/pass `drawerConnector`.
 
 - [ ] **Step 2: Add profile type**
 
