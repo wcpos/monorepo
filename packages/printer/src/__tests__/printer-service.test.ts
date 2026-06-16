@@ -199,6 +199,40 @@ describe('PrinterService', () => {
 		);
 	});
 
+	it('opens a cash drawer by sending only an ESC/POS drawer pulse', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		const profile: PrinterProfile = {
+			id: 'printer-1',
+			name: 'Test Printer',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '127.0.0.1',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			isDefault: true,
+			isBuiltIn: false,
+		};
+
+		await service.openDrawer(profile);
+
+		expect(transport.printRaw).toHaveBeenCalledTimes(1);
+		const [bytes] = vi.mocked(transport.printRaw).mock.calls[0];
+		const raw = [...bytes];
+		const pulseIndex = raw.findIndex((byte, index) => byte === 0x1b && raw[index + 1] === 0x70);
+		expect(pulseIndex).toBeGreaterThanOrEqual(0);
+	});
+
 	it('routes Epson bluetooth profiles through the native adapter', async () => {
 		const service = new PrinterService();
 		const profile: PrinterProfile = {

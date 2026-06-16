@@ -182,6 +182,24 @@ export class PrinterService {
 		});
 	}
 
+	/** Fire just the cash-drawer kick — no receipt. Used by the "Open drawer" button. */
+	async openDrawer(profile: PrinterProfile): Promise<void> {
+		return this.queue.add(async () => {
+			const transport = await this.getTransport(profile);
+			const bytes = encodeThermalTemplate(
+				'<receipt><drawer /></receipt>',
+				{},
+				{
+					language: profile.language,
+					columns: profile.columns,
+					printerModel: profile.printerModel,
+					emitEscPrintMode: profile.emitEscPrintMode ?? true,
+				}
+			);
+			await transport.printRaw(bytes);
+		});
+	}
+
 	/**
 	 * Enqueue an order-based cloud print job. The client renders nothing; the
 	 * server renders + delivers from the order + template. Used for cloud

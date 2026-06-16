@@ -128,11 +128,14 @@ export function PrinterDialog({
 		form,
 		isEditing,
 		testLoading,
+		drawerLoading,
 		saveLoading,
 		testError,
 		probing,
 		detectedVendor,
+		canOpenDrawer,
 		setManualVendor,
+		handleOpenDrawer,
 		handleTestPrint,
 		handleSave,
 		handleSaveAnyway,
@@ -312,8 +315,11 @@ export function PrinterDialog({
 			footer={
 				<PrinterDialogFooter
 					showSaveAnyway={!!testError}
+					showOpenDrawer={canOpenDrawer}
 					testLoading={testLoading}
+					drawerLoading={drawerLoading}
 					saveLoading={saveLoading}
+					onOpenDrawer={handleOpenDrawer}
 					onTestPrint={handleTestPrint}
 					onSave={form.handleSubmit(handleSave)}
 					onSaveAnyway={handleSaveAnyway}
