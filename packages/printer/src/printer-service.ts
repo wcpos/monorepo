@@ -224,7 +224,10 @@ export class PrinterService {
 			if (!(transport instanceof CloudAdapter)) {
 				throw new Error('Order-based printing requires a cloud printer profile');
 			}
-			await transport.enqueueOrder(orderId, templateId);
+			await transport.enqueueOrder(orderId, templateId, {
+				autoOpenDrawer: profile.autoOpenDrawer,
+				drawerConnector: profile.drawerConnector,
+			});
 		});
 	}
 
