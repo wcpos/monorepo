@@ -44,6 +44,24 @@ describe('CloudAdapter', () => {
 		});
 	});
 
+	it('enqueues an order-based job with drawer settings', async () => {
+		const enqueue = vi.fn().mockResolvedValue(undefined);
+		const adapter = new CloudAdapter('printer-123', enqueue);
+
+		await adapter.enqueueOrder(4567, '88', {
+			autoOpenDrawer: true,
+			drawerConnector: 'pin5',
+		});
+
+		expect(enqueue).toHaveBeenCalledWith('printer-123', {
+			kind: 'order',
+			orderId: 4567,
+			templateId: '88',
+			autoOpenDrawer: true,
+			drawerConnector: 'pin5',
+		});
+	});
+
 	it('propagates enqueue failures', async () => {
 		const enqueue = vi.fn().mockRejectedValue(new Error('queue offline'));
 		const adapter = new CloudAdapter('printer-123', enqueue);

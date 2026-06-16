@@ -41,7 +41,16 @@ export type CloudPrintJob =
 			orderId: number;
 			/** Server template id (`wcpos_template` post id or virtual slug) to render with. */
 			templateId: string;
+			/** Whether the server-rendered order receipt should kick the cash drawer. */
+			autoOpenDrawer?: boolean;
+			/** Cash-drawer connector used for drawer kick pulses. */
+			drawerConnector?: PrinterProfile['drawerConnector'];
 	  };
+
+export interface CloudOrderDrawerOptions {
+	autoOpenDrawer?: boolean;
+	drawerConnector?: PrinterProfile['drawerConnector'];
+}
 
 /**
  * Enqueues a print job for a cloud printer. Supplied by the host app, which
@@ -87,7 +96,18 @@ export class CloudAdapter implements PrinterTransport {
 	 * template — used for providers (Epson SDP, PrintNode) the client must not
 	 * render bytes for.
 	 */
-	async enqueueOrder(orderId: number, templateId: string): Promise<void> {
-		await this.enqueue(this.cloudPrinterId, { kind: 'order', orderId, templateId });
+	async enqueueOrder(
+		orderId: number,
+		templateId: string,
+		options: CloudOrderDrawerOptions = {}
+	): Promise<void> {
+		const job: CloudPrintJob = { kind: 'order', orderId, templateId };
+		if (options.autoOpenDrawer !== undefined) {
+			job.autoOpenDrawer = options.autoOpenDrawer;
+		}
+		if (options.drawerConnector) {
+			job.drawerConnector = options.drawerConnector;
+		}
+		await this.enqueue(this.cloudPrinterId, job);
 	}
 }
