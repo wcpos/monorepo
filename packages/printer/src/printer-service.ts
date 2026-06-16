@@ -295,6 +295,8 @@ export class PrinterService {
 					columns: profile.columns,
 					printerModel: profile.printerModel,
 					emitEscPrintMode: profile.emitEscPrintMode ?? true,
+					openDrawer: profile.autoOpenDrawer,
+					drawerConnector: profile.drawerConnector,
 				}
 			);
 			await transport.printRaw(bytes);
