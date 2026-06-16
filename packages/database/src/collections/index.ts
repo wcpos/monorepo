@@ -611,6 +611,11 @@ const printer_profiles: RxCollectionCreator<PrinterProfileDocumentType> = {
 			// Existing profiles need no change — the new field is optional.
 			return oldDoc;
 		},
+		8(oldDoc) {
+			// v8: added drawerConnector. Preserve valid pin5, default everything else to pin2.
+			oldDoc.drawerConnector = oldDoc.drawerConnector === 'pin5' ? 'pin5' : 'pin2';
+			return oldDoc;
+		},
 	},
 };
 

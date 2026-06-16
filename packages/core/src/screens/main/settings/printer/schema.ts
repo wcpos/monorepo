@@ -1,5 +1,7 @@
 import * as z from 'zod';
 
+import type { DrawerConnector } from '@wcpos/printer';
+
 export interface PrinterFormValues {
 	name: string;
 	connectionType: 'network' | 'bluetooth' | 'usb';
@@ -15,6 +17,7 @@ export interface PrinterFormValues {
 	fullReceiptRaster: boolean;
 	autoCut: boolean;
 	autoOpenDrawer: boolean;
+	drawerConnector: DrawerConnector;
 	isDefault: boolean;
 	/** Star native interface hint (BLE vs Classic) — carried from the device picker, no UI control. */
 	nativeInterfaceType?: string;
@@ -39,6 +42,7 @@ export const DEFAULT_FORM_VALUES: PrinterFormValues = {
 	fullReceiptRaster: false,
 	autoCut: true,
 	autoOpenDrawer: false,
+	drawerConnector: 'pin2',
 	isDefault: true,
 };
 
@@ -51,6 +55,7 @@ const baseShape = {
 	fullReceiptRaster: z.boolean().default(false),
 	autoCut: z.boolean().default(true),
 	autoOpenDrawer: z.boolean().default(false),
+	drawerConnector: z.enum(['pin2', 'pin5']).default('pin2'),
 	isDefault: z.boolean().default(true),
 	nativeInterfaceType: z.string().optional(),
 	cloudPrinterId: z.string().optional(),

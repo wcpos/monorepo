@@ -1,6 +1,6 @@
 export const printerProfilesLiteral = {
 	title: 'Printer Profiles schema',
-	version: 7,
+	version: 8,
 	description: 'Local printer profiles for direct thermal printing',
 	type: 'object',
 	primaryKey: 'id',
@@ -76,6 +76,12 @@ export const printerProfilesLiteral = {
 		autoOpenDrawer: {
 			type: 'boolean',
 			default: false,
+		},
+		drawerConnector: {
+			type: 'string',
+			enum: ['pin2', 'pin5'],
+			default: 'pin2',
+			description: 'Cash-drawer connector: pin2 (drawer 1) or pin5 (drawer 2).',
 		},
 		fullReceiptRaster: {
 			type: 'boolean',

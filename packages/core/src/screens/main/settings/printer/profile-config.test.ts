@@ -105,6 +105,43 @@ describe('buildPrinterProfileFields', () => {
 		);
 	});
 
+	it('defaults drawerConnector to pin2', () => {
+		expect(
+			buildPrinterProfileFields({
+				name: 'Counter',
+				vendor: 'generic',
+				address: '192.168.1.100',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: false,
+				isDefault: true,
+			})
+		).toEqual(expect.objectContaining({ drawerConnector: 'pin2' }));
+	});
+
+	it('preserves selected pin5 drawerConnector', () => {
+		expect(
+			buildPrinterProfileFields({
+				name: 'Counter',
+				vendor: 'generic',
+				address: '192.168.1.100',
+				port: 9100,
+				language: 'esc-pos',
+				columns: 42,
+				emitEscPrintMode: true,
+				fullReceiptRaster: false,
+				autoCut: true,
+				autoOpenDrawer: true,
+				drawerConnector: 'pin5',
+				isDefault: true,
+			})
+		).toEqual(expect.objectContaining({ drawerConnector: 'pin5' }));
+	});
+
 	it('takes connectionType from form data over prefill', () => {
 		expect(
 			buildPrinterProfileFields(
