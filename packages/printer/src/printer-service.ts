@@ -6,7 +6,7 @@ import { encodeReceipt } from './encoder/encode-receipt';
 import { formatReceiptData } from './encoder/format-receipt-data';
 import { encodeThermalTemplateForPrint } from './encoder/thermal-print';
 import { encodeThermalTemplate } from './renderer';
-import { CloudAdapter } from './transport/cloud-adapter';
+import { CloudAdapter, isOrderBasedCloudProfile } from './transport/cloud-adapter';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
 
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
@@ -179,6 +179,30 @@ export class PrinterService {
 		return this.queue.add(async () => {
 			const transport = await this.getTransport(profile);
 			await transport.printRaw(data);
+		});
+	}
+
+	/** Fire just the cash-drawer kick — no receipt. Used by the "Open drawer" button. */
+	async openDrawer(profile: PrinterProfile): Promise<void> {
+		if (isOrderBasedCloudProfile(profile)) {
+			throw new Error(
+				'Open drawer is not supported for order-based cloud printers (Epson SDP, PrintNode).'
+			);
+		}
+
+		return this.queue.add(async () => {
+			const transport = await this.getTransport(profile);
+			const bytes = encodeThermalTemplate(
+				'<receipt><drawer /></receipt>',
+				{},
+				{
+					language: profile.language,
+					columns: profile.columns,
+					printerModel: profile.printerModel,
+					emitEscPrintMode: profile.emitEscPrintMode ?? true,
+				}
+			);
+			await transport.printRaw(bytes, { cutPaper: false });
 		});
 	}
 

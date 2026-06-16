@@ -1,3 +1,8 @@
+export interface PrintRawOptions {
+	/** Whether transports that add their own cutter command should include it. */
+	cutPaper?: boolean;
+}
+
 /**
  * Transport adapter — sends bytes to a physical printer.
  */
@@ -9,7 +14,7 @@ export interface PrinterTransport {
 	 * Send raw bytes (ESC/POS, StarPRNT, etc.) to the printer.
 	 * Resolves when the printer acknowledges receipt or the data is sent.
 	 */
-	printRaw(data: Uint8Array): Promise<void>;
+	printRaw(data: Uint8Array, options?: PrintRawOptions): Promise<void>;
 
 	/**
 	 * Print HTML content via system print dialog.
