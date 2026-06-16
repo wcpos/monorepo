@@ -153,6 +153,11 @@ it('emits ESC/POS pin 5 for auto-open drawerConnector pin5', () => {
 	});
 	expect(includesSequence(bytes, [0x1b, 0x70, 0x01])).toBe(true);
 });
+
+it('uses drawerConnector for generated bare drawer nodes', () => {
+	const bytes = encodeReceipt(sampleReceiptData, { openDrawer: true, drawerConnector: 'pin5' });
+	expect(includesSequence(bytes, [0x1b, 0x70, 0x01])).toBe(true);
+});
 ```
 
 Run:
@@ -191,10 +196,10 @@ pulseDrawer(encoder, options.drawerConnector);
 Change the `drawer` case inside the node walker from `encoder.pulse()` to:
 
 ```ts
-pulseDrawer(encoder, node.connector);
+pulseDrawer(encoder, node.connector ?? options.drawerConnector);
 ```
 
-If the drawer case is in a helper, pass `pulseDrawer` or `options.drawerConnector` through the existing render context; do not create a global mutable variable.
+Generated templates such as `DEFAULT_THERMAL_TEMPLATE` and drawer-only fallback XML contain a bare `<drawer />`, so bare drawer nodes must fall back to the profile-level render option. Keep explicit `connector` attributes higher priority than the option. If the drawer case is in a helper, pass `options.drawerConnector` through the existing render context; do not create a global mutable variable.
 
 - [ ] **Step 7: Run renderer tests**
 
@@ -803,8 +808,10 @@ const bytes =
 		emitEscPrintMode: profile.emitEscPrintMode ?? true,
 		drawerConnector: profile.drawerConnector,
 	});
-await transport.printRaw(bytes);
+await transport.printRaw(bytes, { cutPaper: false });
 ```
+
+Preserve the existing `{ cutPaper: false }` option for every drawer-only path. Star WebPRNT network printing defaults to cutting unless this option is passed, so the regression test must continue to assert it.
 
 - [ ] **Step 3: Add Star regression test**
 
@@ -855,13 +862,13 @@ git commit -m "Use realtime drawer kick for ESC/POS no-sale opens"
 ### Files
 
 - Modify: `packages/printer/src/transport/network-adapter.ts`
-- Modify: `packages/printer/src/__tests__/network-adapter.test.ts` or create it if absent
+- Modify: `packages/printer/src/__tests__/network-adapter.test.ts`
 
 ### Task D1: Resolve network print after socket close, not immediately after write callback
 
 - [ ] **Step 1: Write failing test with fake TCP socket**
 
-Create `packages/printer/src/__tests__/network-adapter.test.ts`:
+Update the existing `packages/printer/src/__tests__/network-adapter.test.ts`; do not replace the file. Keep the current Buffer-less write and `end(callback)` crash regressions, and append the close/drain coverage below:
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
@@ -1107,6 +1114,18 @@ drawerConnector: profile.drawerConnector,
 ```
 
 If diagnostic uses `encodeReceipt`, pass equivalent `EncodeReceiptOptions` fields.
+
+In `packages/core/src/screens/main/settings/printing/index.tsx`, extend the cloud test-print request so cloud profiles follow the same drawer setting:
+
+```ts
+await cloudHttp.post('/print-jobs/test', {
+	printer_id: profile.cloudPrinterId,
+	auto_open_drawer: profile.autoOpenDrawer,
+	drawer_connector: profile.drawerConnector,
+});
+```
+
+Update `packages/core/src/screens/main/settings/printing/index-cloud.test.tsx` to expect those payload fields.
 
 - [ ] **Step 3: Run tests and commit PR E**
 
