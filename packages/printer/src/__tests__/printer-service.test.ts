@@ -234,6 +234,34 @@ describe('PrinterService', () => {
 		expect(transport.printRaw).toHaveBeenCalledWith(bytes, { cutPaper: false });
 	});
 
+	it('rejects order-based cloud providers before opening a drawer', async () => {
+		const service = new PrinterService();
+		const getTransport = vi.fn();
+		(service as any).getTransport = getTransport;
+
+		const profile: PrinterProfile = {
+			id: 'cloud-1',
+			name: 'Cloud Printer',
+			connectionType: 'cloud',
+			vendor: 'epson',
+			port: 0,
+			cloudPrinterId: 'cloud-printer-1',
+			cloudProvider: 'epson-sdp',
+			language: 'esc-pos',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			isDefault: false,
+			isBuiltIn: false,
+		};
+
+		await expect(service.openDrawer(profile)).rejects.toThrow(
+			'Open drawer is not supported for order-based cloud printers'
+		);
+		expect(getTransport).not.toHaveBeenCalled();
+	});
+
 	it('routes Epson bluetooth profiles through the native adapter', async () => {
 		const service = new PrinterService();
 		const profile: PrinterProfile = {
