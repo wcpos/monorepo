@@ -19,7 +19,12 @@ function sequenceIndex(bytes: Uint8Array, sequence: number[]): number {
 	return -1;
 }
 
+function includesSequence(bytes: Uint8Array, sequence: number[]): boolean {
+	return sequenceIndex(bytes, sequence) !== -1;
+}
+
 const PULSE = [0x1b, 0x70]; // ESC p — cash-drawer kick
+const PIN5_PULSE = [0x1b, 0x70, 0x01]; // ESC p 1 — drawer connector pin 5
 const CUT = [0x1d, 0x56]; // GS V — paper cut
 
 function opaqueBlackImageData(width: number, height: number): ImageData {
@@ -113,5 +118,25 @@ describe('renderEscpos openDrawer option', () => {
 			}
 		);
 		expect(countPulses(bytes)).toBe(1);
+	});
+
+	it('uses pin 5 for an explicit drawer connector attribute', () => {
+		const bytes = encodeThermalTemplate(
+			'<receipt paper-width="32"><drawer connector="pin5" /></receipt>',
+			{}
+		);
+		expect(includesSequence(bytes, PIN5_PULSE)).toBe(true);
+	});
+
+	it('uses pin 5 for the auto-open drawer connector option', () => {
+		const bytes = encodeThermalTemplate(
+			TEMPLATE_NO_DRAWER,
+			{},
+			{
+				openDrawer: true,
+				drawerConnector: 'pin5',
+			}
+		);
+		expect(includesSequence(bytes, PIN5_PULSE)).toBe(true);
 	});
 });

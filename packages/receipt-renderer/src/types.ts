@@ -5,6 +5,7 @@
 export type ThermalImageAlgorithm = 'threshold' | 'bayer' | 'floydsteinberg' | 'atkinson';
 export type ThermalImageMode = 'column' | 'raster';
 export type ThermalBarcodeMode = 'image' | 'native';
+export type DrawerConnector = 'pin2' | 'pin5';
 
 export interface ThermalPixelBuffer {
 	width: number;
@@ -134,4 +135,5 @@ export interface FeedNode {
 
 export interface DrawerNode {
 	type: 'drawer';
+	connector?: DrawerConnector;
 }
