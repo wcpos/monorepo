@@ -353,7 +353,7 @@ export function usePrinterDialogForm({
 			setSaveLoading(true);
 			setTestError(null);
 			try {
-				await printerService.testPrint(buildProfile(data));
+				await printerService.testPrint(buildProfile(data), { openDrawer: false });
 			} catch (err) {
 				setTestError(toTestPrintFailure(err));
 				setSaveLoading(false);

@@ -591,6 +591,7 @@
 	"settings.choose_a_theme_for_the_app": "Choose a theme for the app. Custom themes provide different color schemes.",
 	"settings.cloud_printer": "Cloud printer",
 	"settings.cash_drawer_opened": "Cash drawer opened",
+	"settings.cash_drawer_emulation_warning": "Cash drawer kicks depend on printer language/emulation. If the drawer does not open, match this language to the printer emulation mode.",
 	"settings.connect_bt_printer": "Connect Bluetooth printer",
 	"settings.connect_usb_printer": "Connect USB printer",
 	"settings.connection_bluetooth": "Bluetooth",

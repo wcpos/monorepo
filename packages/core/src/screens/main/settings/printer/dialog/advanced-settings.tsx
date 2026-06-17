@@ -7,6 +7,7 @@ import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 
+import { DrawerEmulationWarning } from './drawer-emulation-warning';
 import { FullReceiptRasterField } from './full-receipt-raster-field';
 import { DrawerConnectorField } from './drawer-connector-field';
 import { LanguageSelect } from '../components/language-select';
@@ -33,6 +34,9 @@ export function AdvancedSettings({
 	onVendorManualChange,
 }: AdvancedSettingsProps) {
 	const t = useT();
+	const vendor = form.watch('vendor');
+	const language = form.watch('language');
+
 	return (
 		<Collapsible defaultOpen={defaultOpen}>
 			<CollapsibleTrigger testID="add-printer-advanced-trigger">
@@ -96,6 +100,7 @@ export function AdvancedSettings({
 							)}
 						/>
 					</HStack>
+					<DrawerEmulationWarning vendor={vendor} language={language} />
 					<FullReceiptRasterField form={form} />
 					<DrawerConnectorField form={form} />
 				</VStack>

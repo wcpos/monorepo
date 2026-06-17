@@ -36,6 +36,11 @@ export interface PrinterServiceOptions {
 	cloudEnqueueFactory?: (profile: PrinterProfile) => CloudEnqueueFn;
 }
 
+export interface TestPrintOptions {
+	/** Override whether the diagnostic print should include a cash drawer pulse. */
+	openDrawer?: boolean;
+}
+
 export class PrinterService {
 	private queue = new PQueue({ concurrency: 1 });
 	private transports = new Map<string, PrinterTransport>();
@@ -284,7 +289,7 @@ export class PrinterService {
 	 * Send a test print to verify connectivity.
 	 * System profiles get an HTML test page via the system print dialog.
 	 */
-	async testPrint(profile: PrinterProfile): Promise<void> {
+	async testPrint(profile: PrinterProfile, options: TestPrintOptions = {}): Promise<void> {
 		if (profile.connectionType === 'system') {
 			const html = `<html><body style="font-family:monospace;text-align:center;padding:2em">
         <h2>WCPOS</h2><p>Test Print</p>
@@ -306,6 +311,8 @@ export class PrinterService {
 					columns: profile.columns,
 					printerModel: profile.printerModel,
 					emitEscPrintMode: profile.emitEscPrintMode ?? true,
+					openDrawer: options.openDrawer ?? profile.autoOpenDrawer,
+					drawerConnector: profile.drawerConnector,
 				}
 			);
 			await transport.printRaw(bytes);
