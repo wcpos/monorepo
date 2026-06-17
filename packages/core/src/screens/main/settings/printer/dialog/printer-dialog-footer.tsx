@@ -9,8 +9,11 @@ import { useT } from '../../../../../contexts/translations';
 interface PrinterDialogFooterProps {
 	/** Offer "Save without testing" after a failed test print. */
 	showSaveAnyway: boolean;
+	showOpenDrawer: boolean;
 	testLoading: boolean;
+	drawerLoading: boolean;
 	saveLoading: boolean;
+	onOpenDrawer: () => void;
 	onTestPrint: () => void;
 	onSave: () => void;
 	onSaveAnyway: () => void;
@@ -22,8 +25,11 @@ interface PrinterDialogFooterProps {
  */
 export function PrinterDialogFooter({
 	showSaveAnyway,
+	showOpenDrawer,
 	testLoading,
+	drawerLoading,
 	saveLoading,
+	onOpenDrawer,
 	onTestPrint,
 	onSave,
 	onSaveAnyway,
@@ -41,6 +47,16 @@ export function PrinterDialogFooter({
 					<Text className="text-muted-foreground text-sm">
 						{t('settings.save_anyway', 'Save without testing')}
 					</Text>
+				</Button>
+			)}
+			{showOpenDrawer && (
+				<Button
+					testID="add-printer-open-drawer-button"
+					variant="outline"
+					onPress={onOpenDrawer}
+					loading={drawerLoading}
+				>
+					<Text>{t('settings.open_drawer', 'Open drawer')}</Text>
 				</Button>
 			)}
 			<Button

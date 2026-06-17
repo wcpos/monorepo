@@ -44,7 +44,15 @@ export class NetworkAdapter implements PrinterTransport {
 						if (err) {
 							settle(err);
 						} else {
-							(client as any).end((endErr?: Error) => settle(endErr));
+							// react-native-tcp-socket's end(data, encoding) is NOT Node's
+							// end([data][, callback]) — it has no completion-callback parameter
+							// and treats its first argument as data to send. Passing a function
+							// makes it try to write that function as a chunk and throw
+							// "Invalid data, chunk must be a string or buffer, not function".
+							// The write callback above already confirms the bytes were flushed,
+							// so half-close gracefully (FIN) and resolve.
+							client!.end();
+							settle();
 						}
 					}) as any);
 				});

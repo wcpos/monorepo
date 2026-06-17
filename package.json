@@ -2,6 +2,7 @@
   "private": true,
   "name": "@wcpos/monorepo",
   "scripts": {
+    "start": "node scripts/start-dev.mjs",
     "dev": "turbo dev",
     "dev:main": "turbo dev --filter=\"{./apps/main}...\"",
     "dev:electron": "turbo dev --filter=\"{./apps/electron}...\"",
@@ -9,7 +10,7 @@
     "build:main": "turbo build --filter=\"...{./apps/main}\"",
     "test": "turbo run test --filter='{./packages/*}' --filter='{./apps/main}'",
     "test:ci": "pnpm jest --ci --passWithNoTests && cd packages/query && npx jest --config jest.config.cjs --ci",
-    "test:scripts": "node --test scripts/*.test.mjs && pnpm --filter @wcpos/virtual-printer test",
+    "test:scripts": "node scripts/check-dep-duplicates.mjs && node scripts/check-expo-alignment.mjs && node --test scripts/*.test.mjs && pnpm --filter @wcpos/virtual-printer test",
     "lint": "turbo lint --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}'",
     "lint:fix": "turbo lint:fix --continue --concurrency=1 --filter='{./packages/*}' --filter='{./apps/main}'",
     "typecheck": "turbo typecheck --filter='{./packages/*}' --filter='{./apps/main}'",
@@ -38,14 +39,14 @@
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
   },
   "devDependencies": {
+    "eslint": "^9.39.4",
+    "expo": "~56.0.11",
     "glob": "^13.0.6",
     "lint-staged": "^16.4.0",
-    "eslint": "^9.39.4",
-    "prettier-plugin-tailwindcss": "^0.8.0",
-    "expo": "~56.0.8"
+    "prettier-plugin-tailwindcss": "^0.8.0"
   },
   "dependencies": {
-    "turbo": "^2.9.14",
+    "turbo": "^2.9.18",
     "typescript": "^5.9.3"
   }
 }

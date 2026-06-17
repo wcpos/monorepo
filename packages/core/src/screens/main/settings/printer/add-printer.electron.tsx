@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { useWatch } from 'react-hook-form';
 
 import { Button } from '@wcpos/components/button';
+import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
 import { type DiscoveredPrinter, type PrinterProfile, usePrinterDiscovery } from '@wcpos/printer';
@@ -11,7 +12,11 @@ import { type DiscoveredPrinter, type PrinterProfile, usePrinterDiscovery } from
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { ElectronBtPicker } from './dialog/connection/electron-bt-picker';
+import { OsPrintersSection } from './dialog/connection/os-printers-section';
+import { UsbPrintersSection } from './dialog/connection/usb-printers-section';
+import { isWindowsPlatform } from './dialog/connection/is-windows';
 import { NetworkFields } from './dialog/connection/network-fields';
+import { formatDiscoveryError } from './dialog/discovery-error-message';
 import { PrinterDialogFooter } from './dialog/printer-dialog-footer';
 import { PrinterDialogLayout } from './dialog/printer-dialog-layout';
 import { TestPrintError } from './dialog/test-print-error';
@@ -109,18 +114,28 @@ export function PrinterDialog({
 		startScan,
 		isScanning: scanning,
 		connectUsbDevice,
+		isUsbScanning,
 		connectBluetoothDevice,
+		isBluetoothScanning,
+		bluetoothCandidates,
+		selectBluetoothCandidate,
+		cancelBluetoothScan,
+		connectSerialDevice,
+		isSerialScanning,
 		error: discoveryError,
 	} = usePrinterDiscovery();
 	const {
 		form,
 		isEditing,
 		testLoading,
+		drawerLoading,
 		saveLoading,
 		testError,
 		probing,
 		detectedVendor,
+		canOpenDrawer,
 		setManualVendor,
+		handleOpenDrawer,
 		handleTestPrint,
 		handleSave,
 		handleSaveAnyway,
@@ -141,6 +156,12 @@ export function PrinterDialog({
 		defaultValue: DEFAULT_FORM_VALUES.connectionType,
 	});
 
+	// On Windows the BT tab auto-runs the installed-printers (usb-discovery) scan; its empty
+	// result is reported by the section's own empty state, not the shared error line. (The
+	// macOS/Linux serial auto-scan sets no error on empty by hook design.)
+	const suppressedDiscoveryError =
+		connectionType === 'bluetooth' && discoveryError?.code === 'usb-none-found';
+
 	const vendorOptions: VendorOption[] = [
 		{ value: 'epson', label: 'Epson' },
 		{ value: 'star', label: 'Star Micronics' },
@@ -150,37 +171,96 @@ export function PrinterDialog({
 	let connectionSection: React.ReactNode;
 	if (connectionType === 'usb') {
 		connectionSection = (
-			<VStack className="gap-2">
-				{connectUsbDevice && (
-					<Button
-						testID="add-printer-electron-usb-scan-button"
-						variant="outline"
-						size="sm"
-						className="self-start"
-						onPress={connectUsbDevice}
-					>
-						<Text>{t('settings.scan_for_printers', 'Scan for printers')}</Text>
-					</Button>
-				)}
+			<UsbPrintersSection onScan={connectUsbDevice} scanning={isUsbScanning}>
 				<DeviceList form={form} printers={printers} type="usb" />
-			</VStack>
+			</UsbPrintersSection>
 		);
 	} else if (connectionType === 'bluetooth') {
 		connectionSection = (
 			<VStack className="gap-2">
+				{isWindowsPlatform() ? (
+					<OsPrintersSection
+						form={form}
+						printers={printers}
+						onScan={connectUsbDevice}
+						scanning={isUsbScanning}
+						addressPrefix="winspool:"
+						heading={t('settings.installed_printers', 'Installed printers')}
+						hint={t(
+							'settings.installed_printers_hint',
+							'Printers paired in Windows (including Bluetooth printers) appear here as installed printers.'
+						)}
+						emptyText={t('settings.installed_printers_none', 'No installed printers found.')}
+						loadingText={t('settings.installed_printers_loading', 'Loading installed printers…')}
+						testIdPrefix="add-printer-installed-device"
+					/>
+				) : connectSerialDevice ? (
+					<OsPrintersSection
+						form={form}
+						printers={printers}
+						onScan={connectSerialDevice}
+						scanning={isSerialScanning}
+						addressPrefix="serial:"
+						heading={t('settings.paired_printers', 'Paired Bluetooth printers')}
+						hint={t(
+							'settings.paired_printers_hint',
+							'Bluetooth Classic printers paired in your system settings appear here.'
+						)}
+						emptyText={t('settings.paired_printers_none', 'No paired printers found.')}
+						loadingText={t('settings.paired_printers_loading', 'Loading paired printers…')}
+						testIdPrefix="add-printer-paired-device"
+					/>
+				) : null}
 				{connectBluetoothDevice && (
-					<Button
-						testID="add-printer-electron-bt-scan-button"
-						variant="outline"
-						size="sm"
-						className="self-start"
-						onPress={connectBluetoothDevice}
-					>
-						<Text>{t('settings.scan_for_printers', 'Scan for printers')}</Text>
-					</Button>
+					<HStack className="gap-2">
+						<Button
+							testID="add-printer-electron-bt-scan-button"
+							variant="outline"
+							size="sm"
+							className="self-start"
+							onPress={connectBluetoothDevice}
+							loading={!!isBluetoothScanning}
+							disabled={!!isBluetoothScanning}
+						>
+							<Text>
+								{isBluetoothScanning
+									? t('settings.scanning', 'Scanning…')
+									: t('settings.scan_for_printers', 'Scan for printers')}
+							</Text>
+						</Button>
+						{isBluetoothScanning && cancelBluetoothScan && (
+							<Button
+								testID="add-printer-electron-bt-cancel-button"
+								variant="ghost"
+								size="sm"
+								onPress={cancelBluetoothScan}
+							>
+								<Text>{t('common.cancel', 'Cancel')}</Text>
+							</Button>
+						)}
+					</HStack>
 				)}
-				<ElectronBtPicker />
-				<DeviceList form={form} printers={printers} type="bluetooth" />
+				<Text testID="add-printer-bt-scan-hint" className="text-muted-foreground text-xs">
+					{t(
+						'settings.bt_scan_hint',
+						'Finds nearby Bluetooth LE printers (e.g. Epson TM-P or Star L series). Bluetooth Classic printers pair in your system settings instead.'
+					)}
+				</Text>
+				{isBluetoothScanning && (
+					<Text testID="add-printer-bt-searching" className="text-muted-foreground text-xs">
+						{t('settings.bt_searching', 'Searching for Bluetooth printers…')}
+					</Text>
+				)}
+				<ElectronBtPicker
+					candidates={bluetoothCandidates ?? []}
+					onSelect={(id) => selectBluetoothCandidate?.(id)}
+				/>
+				{/* serial: entries are owned by the paired-printers section above; exclude them here */}
+				<DeviceList
+					form={form}
+					printers={printers.filter((p) => !p.address?.startsWith('serial:'))}
+					type="bluetooth"
+				/>
 			</VStack>
 		);
 	} else {
@@ -215,12 +295,9 @@ export function PrinterDialog({
 						}}
 					/>
 					{connectionSection}
-					{discoveryError && (
+					{discoveryError && !suppressedDiscoveryError && (
 						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
-							{t('settings.printer_discovery_error', 'Printer discovery error: %s').replace(
-								'%s',
-								discoveryError
-							)}
+							{formatDiscoveryError(discoveryError, t)}
 						</Text>
 					)}
 				</>
@@ -238,8 +315,11 @@ export function PrinterDialog({
 			footer={
 				<PrinterDialogFooter
 					showSaveAnyway={!!testError}
+					showOpenDrawer={canOpenDrawer}
 					testLoading={testLoading}
+					drawerLoading={drawerLoading}
 					saveLoading={saveLoading}
+					onOpenDrawer={handleOpenDrawer}
 					onTestPrint={handleTestPrint}
 					onSave={form.handleSubmit(handleSave)}
 					onSaveAnyway={handleSaveAnyway}

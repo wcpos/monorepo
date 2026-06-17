@@ -37,11 +37,17 @@ overrides:
   "react-native-safe-area-context": "~5.7.0"
   "@electron/node-gyp": "10.2.0-electron.2"
   "tar": "^7.5.11"
-  "react-native-nitro-modules": "0.35.7"
+  "react-native-nitro-modules": "0.35.9"
   # jest-expo 56 pulls jest-environment-* 29 (nested jest-mock 29 lacks clearMocksOnScope);
   # force them to 30 so the jest-30 workspace packages get a consistent test environment.
   "jest-environment-jsdom": "^30.4.1"
   "jest-environment-node": "^30.4.1"
+  # concurrently@9.2.1 (apps/electron devDep) pins shell-quote 1.8.3 exactly — force the
+  # patched release (GHSA-w7jw-789q-3m8p, critical).
+  "shell-quote": ">=1.8.4"
+  # external-editor@3.1.0 pins vulnerable tmp 0.0.33 — force the patched current release
+  # (GHSA-ph9p-34f9-6g65, high).
+  "external-editor@3.1.0>tmp": "0.2.7"
 packageExtensions:
   "rxdb-premium-old@16.21.1":
     "dependencies": { "rxdb": "16.21.1" }
@@ -49,6 +55,7 @@ packageExtensions:
     "dependencies": { "rxdb": "16.21.1" }
 allowBuilds:
   "@firebase/util": false
+  "@serialport/bindings-cpp": true
   "@shopify/react-native-skia": true
   "@tailwindcss/oxide": true
   "@zowe/secrets-for-zowe-sdk": true

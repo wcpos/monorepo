@@ -34,6 +34,29 @@ describe('createCloudEnqueueFactory', () => {
 			printer_id: 'reg-7',
 			order_id: 4567,
 			template_id: '88',
+			auto_open_drawer: false,
+		});
+	});
+
+	it('POSTs drawer settings for an order-based job', async () => {
+		const post = jest.fn().mockResolvedValue({ data: {} });
+		const factory = createCloudEnqueueFactory({ post });
+		const enqueue = factory({ cloudPrinterId: 'reg-7' } as never);
+
+		await enqueue('reg-7', {
+			kind: 'order',
+			orderId: 123,
+			templateId: 'receipt',
+			autoOpenDrawer: true,
+			drawerConnector: 'pin5',
+		});
+
+		expect(post).toHaveBeenCalledWith('/print-jobs', {
+			printer_id: 'reg-7',
+			order_id: 123,
+			template_id: 'receipt',
+			auto_open_drawer: true,
+			drawer_connector: 'pin5',
 		});
 	});
 });

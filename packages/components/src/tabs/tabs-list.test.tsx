@@ -38,9 +38,13 @@ jest.mock('expo-haptics', () => ({
 	impactAsync: jest.fn(),
 }));
 
-jest.mock('uniwind', () => ({
-	withUniwind: (Component: React.ComponentType<any>) => Component,
-}));
+jest.mock(
+	'uniwind',
+	() => ({
+		withUniwind: (Component: React.ComponentType<any>) => Component,
+	}),
+	{ virtual: true }
+);
 
 jest.mock('../hstack', () => ({
 	HStack: ({ children, className }: any) => <div className={className}>{children}</div>,

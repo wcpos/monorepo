@@ -146,7 +146,7 @@ describe('NetworkFields discovery states', () => {
 		);
 
 		expect(screen.getByTestId('add-printer-network-none-found')).toHaveTextContent(
-			'No printers found'
+			'Enter the IP address above to add one manually'
 		);
 	});
 

@@ -23,11 +23,14 @@ export function createCloudEnqueueFactory(http: RestClient) {
 			if (job.kind === 'order') {
 				// Order-based job (Epson SDP / PrintNode): no payload — the server
 				// renders + delivers from the order + template.
-				await http.post('/print-jobs', {
+				const payload = {
 					printer_id: printerId,
 					order_id: job.orderId,
 					template_id: job.templateId,
-				});
+					auto_open_drawer: job.autoOpenDrawer === true,
+					...(job.drawerConnector ? { drawer_connector: job.drawerConnector } : {}),
+				};
+				await http.post('/print-jobs', payload);
 				return;
 			}
 

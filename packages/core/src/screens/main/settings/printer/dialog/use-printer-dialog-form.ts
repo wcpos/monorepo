@@ -5,7 +5,12 @@ import { useForm } from 'react-hook-form';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Toast } from '@wcpos/components/toast';
-import { isPrinterConnectionError, PrinterService, probeVendor } from '@wcpos/printer';
+import {
+	isOrderBasedCloudProfile,
+	isPrinterConnectionError,
+	PrinterService,
+	probeVendor,
+} from '@wcpos/printer';
 import type { ConnectionDiagnostics, PrinterProfile, PrinterServiceOptions } from '@wcpos/printer';
 
 import { buildPrinterProfileFields, type PrinterDialogPrefill } from '../profile-config';
@@ -88,6 +93,7 @@ export function usePrinterDialogForm({
 	const isEditing = !!printer;
 
 	const [testLoading, setTestLoading] = React.useState(false);
+	const [drawerLoading, setDrawerLoading] = React.useState(false);
 	const [saveLoading, setSaveLoading] = React.useState(false);
 	const [testError, setTestError] = React.useState<TestPrintFailure | null>(null);
 	const [probing, setProbing] = React.useState(false);
@@ -133,6 +139,7 @@ export function usePrinterDialogForm({
 				fullReceiptRaster: printer.fullReceiptRaster ?? false,
 				autoCut: printer.autoCut ?? true,
 				autoOpenDrawer: printer.autoOpenDrawer ?? false,
+				drawerConnector: printer.drawerConnector ?? 'pin2',
 				isDefault: printer.isDefault ?? false,
 				nativeInterfaceType: printer.nativeInterfaceType,
 				cloudPrinterId: printer.cloudPrinterId ?? '',
@@ -284,6 +291,43 @@ export function usePrinterDialogForm({
 		}
 	}, [form, buildProfile, printerService, t]);
 
+	const cloudPrinterId = form.watch('cloudPrinterId');
+	const cloudProvider = form.watch('cloudProvider');
+	const canOpenDrawer = React.useMemo(() => {
+		const profile = buildProfile({
+			...form.getValues(),
+			connectionType,
+			cloudPrinterId,
+			cloudProvider,
+		});
+		if (isOrderBasedCloudProfile(profile)) {
+			return false;
+		}
+		return (
+			profile.connectionType === 'network' ||
+			profile.connectionType === 'bluetooth' ||
+			profile.connectionType === 'usb' ||
+			profile.connectionType === 'cloud'
+		);
+	}, [connectionType, cloudPrinterId, cloudProvider, form, buildProfile]);
+
+	const handleOpenDrawer = React.useCallback(async () => {
+		const data = form.getValues();
+		setDrawerLoading(true);
+		setTestError(null);
+		try {
+			await printerService.openDrawer(buildProfile(data));
+			Toast.show({
+				title: t('settings.cash_drawer_opened', 'Cash drawer opened'),
+				type: 'success',
+			});
+		} catch (err) {
+			setTestError(toTestPrintFailure(err));
+		} finally {
+			setDrawerLoading(false);
+		}
+	}, [form, buildProfile, printerService, t]);
+
 	const persistProfile = React.useCallback(
 		async (data: PrinterFormValues) => {
 			const collection = storeDB.collections.printer_profiles;
@@ -309,7 +353,7 @@ export function usePrinterDialogForm({
 			setSaveLoading(true);
 			setTestError(null);
 			try {
-				await printerService.testPrint(buildProfile(data));
+				await printerService.testPrint(buildProfile(data), { openDrawer: false });
 			} catch (err) {
 				setTestError(toTestPrintFailure(err));
 				setSaveLoading(false);
@@ -344,11 +388,14 @@ export function usePrinterDialogForm({
 		form,
 		isEditing,
 		testLoading,
+		drawerLoading,
 		saveLoading,
 		testError,
 		probing,
 		detectedVendor,
+		canOpenDrawer,
 		setManualVendor,
+		handleOpenDrawer,
 		handleTestPrint,
 		handleSave,
 		handleSaveAnyway,

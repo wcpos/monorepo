@@ -6,7 +6,7 @@ import { encodeReceipt } from './encoder/encode-receipt';
 import { formatReceiptData } from './encoder/format-receipt-data';
 import { encodeThermalTemplateForPrint } from './encoder/thermal-print';
 import { encodeThermalTemplate } from './renderer';
-import { CloudAdapter } from './transport/cloud-adapter';
+import { CloudAdapter, isOrderBasedCloudProfile } from './transport/cloud-adapter';
 import { SystemPrintAdapter } from './transport/system-print-adapter';
 
 import type { EncodeReceiptOptions } from './encoder/encode-receipt';
@@ -20,6 +20,12 @@ function transportKey(profile: PrinterProfile, cloudFactoryVersion: number): str
 	return `${profile.id}:${profile.connectionType}:${profile.address ?? ''}:${profile.port}:${profile.vendor}:${profile.nativeInterfaceType ?? ''}:${profile.cloudPrinterId ?? ''}:${factoryVersion}`;
 }
 
+function encodeEscposRealtimeDrawerKick(profile: PrinterProfile): Uint8Array | null {
+	if (profile.language !== 'esc-pos') return null;
+	const connector = profile.drawerConnector === 'pin5' ? 1 : 0;
+	return Uint8Array.from([0x10, 0x14, 0x01, connector, 0x03]);
+}
+
 export interface PrinterServiceOptions {
 	/**
 	 * Builds the enqueue function for a `connectionType: 'cloud'` profile.
@@ -28,6 +34,11 @@ export interface PrinterServiceOptions {
 	 * printing to a cloud profile throws.
 	 */
 	cloudEnqueueFactory?: (profile: PrinterProfile) => CloudEnqueueFn;
+}
+
+export interface TestPrintOptions {
+	/** Override whether the diagnostic print should include a cash drawer pulse. */
+	openDrawer?: boolean;
 }
 
 export class PrinterService {
@@ -149,12 +160,16 @@ export class PrinterService {
 				columns: profile.columns,
 				printerModel: profile.printerModel,
 				emitEscPrintMode: profile.emitEscPrintMode ?? true,
+				drawerConnector: profile.drawerConnector,
 			};
 
 			let bytes: Uint8Array;
 			if (templateXml) {
 				const templateData = formatReceiptData(receiptData);
-				bytes = encodeThermalTemplate(templateXml, templateData, encoderOptions);
+				bytes = encodeThermalTemplate(templateXml, templateData, {
+					...encoderOptions,
+					openDrawer: profile.autoOpenDrawer,
+				});
 			} else {
 				const encodeOpts: EncodeReceiptOptions = {
 					...encoderOptions,
@@ -179,6 +194,33 @@ export class PrinterService {
 		});
 	}
 
+	/** Fire just the cash-drawer kick — no receipt. Used by the "Open drawer" button. */
+	async openDrawer(profile: PrinterProfile): Promise<void> {
+		if (isOrderBasedCloudProfile(profile)) {
+			throw new Error(
+				'Open drawer is not supported for order-based cloud printers (Epson SDP, PrintNode).'
+			);
+		}
+
+		return this.queue.add(async () => {
+			const transport = await this.getTransport(profile);
+			const bytes =
+				encodeEscposRealtimeDrawerKick(profile) ??
+				encodeThermalTemplate(
+					'<receipt><drawer /></receipt>',
+					{},
+					{
+						language: profile.language,
+						columns: profile.columns,
+						printerModel: profile.printerModel,
+						emitEscPrintMode: profile.emitEscPrintMode ?? true,
+						drawerConnector: profile.drawerConnector,
+					}
+				);
+			await transport.printRaw(bytes, { cutPaper: false });
+		});
+	}
+
 	/**
 	 * Enqueue an order-based cloud print job. The client renders nothing; the
 	 * server renders + delivers from the order + template. Used for cloud
@@ -195,7 +237,10 @@ export class PrinterService {
 			if (!(transport instanceof CloudAdapter)) {
 				throw new Error('Order-based printing requires a cloud printer profile');
 			}
-			await transport.enqueueOrder(orderId, templateId);
+			await transport.enqueueOrder(orderId, templateId, {
+				autoOpenDrawer: profile.autoOpenDrawer,
+				drawerConnector: profile.drawerConnector,
+			});
 		});
 	}
 
@@ -222,6 +267,8 @@ export class PrinterService {
 					columns: profile.columns,
 					printerModel: profile.printerModel,
 					emitEscPrintMode: profile.emitEscPrintMode ?? true,
+					openDrawer: profile.autoOpenDrawer,
+					drawerConnector: profile.drawerConnector,
 				},
 			});
 			await transport.printRaw(bytes);
@@ -242,7 +289,7 @@ export class PrinterService {
 	 * Send a test print to verify connectivity.
 	 * System profiles get an HTML test page via the system print dialog.
 	 */
-	async testPrint(profile: PrinterProfile): Promise<void> {
+	async testPrint(profile: PrinterProfile, options: TestPrintOptions = {}): Promise<void> {
 		if (profile.connectionType === 'system') {
 			const html = `<html><body style="font-family:monospace;text-align:center;padding:2em">
         <h2>WCPOS</h2><p>Test Print</p>
@@ -264,6 +311,8 @@ export class PrinterService {
 					columns: profile.columns,
 					printerModel: profile.printerModel,
 					emitEscPrintMode: profile.emitEscPrintMode ?? true,
+					openDrawer: options.openDrawer ?? profile.autoOpenDrawer,
+					drawerConnector: profile.drawerConnector,
 				}
 			);
 			await transport.printRaw(bytes);

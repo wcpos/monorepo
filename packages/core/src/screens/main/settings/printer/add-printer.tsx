@@ -7,6 +7,7 @@ import { usePrinterDiscovery } from '@wcpos/printer';
 import { Text } from '@wcpos/components/text';
 
 import { AdvancedSettings } from './dialog/advanced-settings';
+import { formatDiscoveryError } from './dialog/discovery-error-message';
 import { BluetoothDevicePicker } from './dialog/connection/bluetooth-device-picker';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
 import { NetworkFields } from './dialog/connection/network-fields';
@@ -58,11 +59,14 @@ export function PrinterDialog({
 		form,
 		isEditing,
 		testLoading,
+		drawerLoading,
 		saveLoading,
 		testError,
 		probing,
 		detectedVendor,
+		canOpenDrawer,
 		setManualVendor,
+		handleOpenDrawer,
 		handleTestPrint,
 		handleSave,
 		handleSaveAnyway,
@@ -135,10 +139,7 @@ export function PrinterDialog({
 					{connectionSection}
 					{discoveryError && (
 						<Text testID="add-printer-discovery-error" className="text-muted-foreground text-xs">
-							{t('settings.printer_discovery_error', 'Printer discovery error: %s').replace(
-								'%s',
-								discoveryError
-							)}
+							{formatDiscoveryError(discoveryError, t)}
 						</Text>
 					)}
 				</>
@@ -156,8 +157,11 @@ export function PrinterDialog({
 			footer={
 				<PrinterDialogFooter
 					showSaveAnyway={!!testError}
+					showOpenDrawer={canOpenDrawer}
 					testLoading={testLoading}
+					drawerLoading={drawerLoading}
 					saveLoading={saveLoading}
+					onOpenDrawer={handleOpenDrawer}
 					onTestPrint={handleTestPrint}
 					onSave={form.handleSubmit(handleSave)}
 					onSaveAnyway={handleSaveAnyway}

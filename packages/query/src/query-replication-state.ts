@@ -113,26 +113,62 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		}
 
 		await this.collectionReplication.firstSync;
+		await this.syncGreedy();
+	}
+
+	/**
+	 * Runs a sync pass and, for greedy queries, keeps paginating until the unsynced
+	 * backlog is cleared.
+	 *
+	 * The recursion is bounded by `iterationBudget`. A correctly paginating endpoint
+	 * clears at least one record from the unsynced backlog on every fetch, so it can
+	 * never need more passes than the backlog size measured after the first fetch.
+	 * If the budget is exhausted while records are still unsynced, the endpoint is
+	 * returning a set we cannot satisfy — e.g. it ignores the include/exclude params
+	 * (the templates endpoint does) and re-returns the full set every time, which
+	 * keeps `progressCount` non-zero forever. In that case we stop instead of looping.
+	 */
+	private async syncGreedy(iterationBudget?: number): Promise<void> {
 		const progressCount = await this.sync();
 
-		if (this.greedy && progressCount > 0) {
-			/**
-			 * This is a hack to stop products/variations query from fetching potentially 1000's of documents
-			 * We only want the greedy for 'search' in that case
-			 */
-			if (this.endpoint.startsWith('products/variations') && !this.endpoint.includes('search')) {
-				return;
-			}
-
-			const nextUnsyncedRemoteIDs =
-				await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
-
-			// Continue while progress is being made. Some exclude-page responses upsert records
-			// outside the previous unsynced set, so the unsynced IDs may not shrink immediately.
-			if (nextUnsyncedRemoteIDs.length > 0) {
-				return this.run();
-			}
+		if (!this.greedy || progressCount <= 0) {
+			return;
 		}
+
+		/**
+		 * This is a hack to stop products/variations query from fetching potentially 1000's of documents
+		 * We only want the greedy for 'search' in that case
+		 */
+		if (this.endpoint.startsWith('products/variations') && !this.endpoint.includes('search')) {
+			return;
+		}
+
+		const nextUnsyncedRemoteIDs =
+			await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
+
+		if (nextUnsyncedRemoteIDs.length === 0) {
+			return;
+		}
+
+		// Bound the greedy pagination loop (see method doc). On the first pass the
+		// budget is seeded from the remaining backlog size.
+		const budget = iterationBudget ?? nextUnsyncedRemoteIDs.length;
+		if (budget <= 0) {
+			syncLogger.warn(
+				'Greedy sync stopped before the unsynced backlog cleared; the endpoint may be ignoring include/exclude',
+				{
+					context: {
+						endpoint: this.endpoint,
+						unsyncedRemaining: nextUnsyncedRemoteIDs.length,
+					},
+				}
+			);
+			return;
+		}
+
+		// Continue while progress is being made. Some exclude-page responses upsert records
+		// outside the previous unsynced set, so the unsynced IDs may not shrink immediately.
+		return this.syncGreedy(budget - 1);
 	}
 
 	/**

@@ -76,6 +76,29 @@ describe('PrinterService cloud round-trip', () => {
 			kind: 'order',
 			orderId: 1234,
 			templateId: '57',
+			autoOpenDrawer: false,
+		});
+	});
+
+	it('carries drawer settings on order-based cloud jobs', async () => {
+		const enqueue = vi.fn().mockResolvedValue(undefined);
+		const service = new PrinterService({ cloudEnqueueFactory: () => enqueue });
+		const profileWithDrawerSettings: PrinterProfile = {
+			...cloudProfile,
+			vendor: 'epson',
+			cloudProvider: 'epson-sdp',
+			autoOpenDrawer: true,
+			drawerConnector: 'pin5',
+		};
+
+		await service.printOrderViaCloud(profileWithDrawerSettings, 1234, '57');
+
+		expect(enqueue).toHaveBeenCalledWith('reg-9', {
+			kind: 'order',
+			orderId: 1234,
+			templateId: '57',
+			autoOpenDrawer: true,
+			drawerConnector: 'pin5',
 		});
 	});
 

@@ -1,6 +1,6 @@
 import { DOMParser as XmlDOMParser } from '@xmldom/xmldom';
 
-import type { ColNode, ReceiptNode, RowNode, ThermalNode } from './types.js';
+import type { ColNode, DrawerConnector, ReceiptNode, RowNode, ThermalNode } from './types.js';
 
 /**
  * Parse a thermal XML template string into an AST.
@@ -145,7 +145,10 @@ function parseChildren(parent: Element): ThermalNode[] {
 				nodes.push({ type: 'feed', lines: intAttr(el, 'lines', 1) });
 				break;
 			case 'drawer':
-				nodes.push({ type: 'drawer' });
+				nodes.push({
+					type: 'drawer',
+					...(drawerConnectorAttr(el) ? { connector: drawerConnectorAttr(el) } : {}),
+				});
 				break;
 			default:
 				nodes.push(...parseChildren(el));
@@ -153,6 +156,11 @@ function parseChildren(parent: Element): ThermalNode[] {
 	}
 
 	return nodes;
+}
+
+function drawerConnectorAttr(el: Element): DrawerConnector | undefined {
+	const connector = el.getAttribute('connector')?.trim();
+	return connector === 'pin2' || connector === 'pin5' ? connector : undefined;
 }
 
 function isQrBarcodeType(type: string): boolean {

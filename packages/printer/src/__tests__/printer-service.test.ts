@@ -165,6 +165,240 @@ describe('PrinterService', () => {
 		expect(transport.printRaw).toHaveBeenNthCalledWith(2, new Uint8Array([2]));
 	});
 
+	it('forwards autoOpenDrawer to encodeThermalTemplateForPrint so the setting works for thermal templates', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		const profile: PrinterProfile = {
+			id: 'printer-1',
+			name: 'Test Printer',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '127.0.0.1',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: true,
+			isDefault: true,
+			isBuiltIn: false,
+		};
+
+		await service.printThermalTemplateForPrint(sampleReceiptData, profile, '<receipt />', 576);
+
+		expect(encodeThermalTemplateForPrintMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				encodeOptions: expect.objectContaining({ openDrawer: true }),
+			})
+		);
+	});
+
+	it('uses ESC/POS real-time kick for drawer-only opens', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		const profile: PrinterProfile = {
+			id: 'printer-1',
+			name: 'Test Printer',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '127.0.0.1',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 48,
+			drawerConnector: 'pin5',
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			isDefault: true,
+			isBuiltIn: false,
+		};
+
+		await service.openDrawer(profile);
+
+		expect(transport.printRaw).toHaveBeenCalledWith(
+			Uint8Array.from([0x10, 0x14, 0x01, 0x01, 0x03]),
+			{ cutPaper: false }
+		);
+	});
+
+	it('uses ESC/POS real-time pin2 kick by default for drawer-only opens', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		const profile: PrinterProfile = {
+			id: 'printer-1',
+			name: 'Test Printer',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '127.0.0.1',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			isDefault: true,
+			isBuiltIn: false,
+		};
+
+		await service.openDrawer(profile);
+
+		expect(transport.printRaw).toHaveBeenCalledWith(
+			Uint8Array.from([0x10, 0x14, 0x01, 0x00, 0x03]),
+			{ cutPaper: false }
+		);
+	});
+
+	it('preserves Star drawer-only opens through the language encoder pulse path', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		const profile = {
+			id: 'printer-1',
+			name: 'Test Printer',
+			connectionType: 'network',
+			vendor: 'star',
+			address: '127.0.0.1',
+			port: 9100,
+			language: 'star-line',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			isDefault: true,
+			isBuiltIn: false,
+		} as PrinterProfile;
+
+		await service.openDrawer(profile);
+
+		expect(transport.printRaw).toHaveBeenCalledTimes(1);
+		const [bytes] = vi.mocked(transport.printRaw).mock.calls[0];
+		const raw = [...bytes];
+		const starPulseIndex = raw.findIndex((byte, index) => byte === 0x1b && raw[index + 1] === 0x07);
+		expect(starPulseIndex).toBeGreaterThanOrEqual(0);
+		expect(transport.printRaw).toHaveBeenCalledWith(bytes, { cutPaper: false });
+	});
+
+	it('testPrint includes a drawer pulse when autoOpenDrawer is enabled', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		const profile: PrinterProfile = {
+			id: 'printer-1',
+			name: 'Test Printer',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '127.0.0.1',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: true,
+			drawerConnector: 'pin2',
+			isDefault: true,
+			isBuiltIn: false,
+		};
+
+		await service.testPrint(profile);
+
+		expect(transport.printRaw).toHaveBeenCalledTimes(1);
+		const [bytes] = vi.mocked(transport.printRaw).mock.calls[0];
+		const raw = [...bytes];
+		const pulseIndex = raw.findIndex((byte, index) => byte === 0x1b && raw[index + 1] === 0x70);
+		expect(pulseIndex).toBeGreaterThanOrEqual(0);
+	});
+
+	it('testPrint can suppress the drawer pulse for save validation', async () => {
+		const service = new PrinterService();
+		const transport: PrinterTransport = {
+			name: 'test',
+			printRaw: vi.fn().mockResolvedValue(undefined),
+			printHtml: vi.fn().mockResolvedValue(undefined),
+		};
+		(service as any).getTransport = vi.fn().mockResolvedValue(transport);
+
+		const profile: PrinterProfile = {
+			id: 'printer-1',
+			name: 'Test Printer',
+			connectionType: 'network',
+			vendor: 'epson',
+			address: '127.0.0.1',
+			port: 9100,
+			language: 'esc-pos',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: true,
+			drawerConnector: 'pin2',
+			isDefault: true,
+			isBuiltIn: false,
+		};
+
+		await service.testPrint(profile, { openDrawer: false });
+
+		expect(transport.printRaw).toHaveBeenCalledTimes(1);
+		const [bytes] = vi.mocked(transport.printRaw).mock.calls[0];
+		const raw = [...bytes];
+		const pulseIndex = raw.findIndex((byte, index) => byte === 0x1b && raw[index + 1] === 0x70);
+		expect(pulseIndex).toBe(-1);
+	});
+
+	it('rejects order-based cloud providers before opening a drawer', async () => {
+		const service = new PrinterService();
+		const getTransport = vi.fn();
+		(service as any).getTransport = getTransport;
+
+		const profile: PrinterProfile = {
+			id: 'cloud-1',
+			name: 'Cloud Printer',
+			connectionType: 'cloud',
+			vendor: 'epson',
+			port: 0,
+			cloudPrinterId: 'cloud-printer-1',
+			cloudProvider: 'epson-sdp',
+			language: 'esc-pos',
+			columns: 48,
+			fullReceiptRaster: false,
+			autoCut: true,
+			autoOpenDrawer: false,
+			isDefault: false,
+			isBuiltIn: false,
+		};
+
+		await expect(service.openDrawer(profile)).rejects.toThrow(
+			'Open drawer is not supported for order-based cloud printers'
+		);
+		expect(getTransport).not.toHaveBeenCalled();
+	});
+
 	it('routes Epson bluetooth profiles through the native adapter', async () => {
 		const service = new PrinterService();
 		const profile: PrinterProfile = {

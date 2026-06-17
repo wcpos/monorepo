@@ -2,6 +2,7 @@ import { encodeThermalTemplate } from '../renderer';
 import { DEFAULT_THERMAL_TEMPLATE } from './default-thermal-template';
 
 import type { ReceiptData } from './types';
+import type { DrawerConnector } from '../types';
 
 export interface EncodeReceiptOptions {
 	/** Printer model key from receipt-printer-encoder's database */
@@ -21,6 +22,8 @@ export interface EncodeReceiptOptions {
 	cut?: boolean;
 	/** Send cash drawer kick pulse. Default: false */
 	openDrawer?: boolean;
+	/** Cash-drawer connector used when openDrawer is true. Default: pin2 */
+	drawerConnector?: DrawerConnector;
 	/** Decimal places for monetary formatting. Default: 2 */
 	decimals?: number;
 }
@@ -38,6 +41,7 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		emitEscPrintMode = true,
 		cut = true,
 		openDrawer = false,
+		drawerConnector = 'pin2',
 		decimals: dp = 2,
 	} = options;
 
@@ -119,5 +123,6 @@ export function encodeReceipt(data: ReceiptData, options: EncodeReceiptOptions =
 		columns,
 		enableCp932,
 		emitEscPrintMode,
+		drawerConnector,
 	});
 }

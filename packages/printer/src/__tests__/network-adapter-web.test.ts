@@ -102,4 +102,14 @@ describe('NetworkAdapter web endpoints', () => {
 			expect(resolveStarWebPrntUrl('192.168.1.20', port, protocol)).toBe(endpoint);
 		}
 	);
+
+	it('can send Star WebPRNT raw data without a cutter command', async () => {
+		const adapter = new NetworkAdapter('192.168.1.20', 80, 'star');
+
+		await adapter.printRaw(new Uint8Array([0x1b, 0x70]), { cutPaper: false });
+
+		const init = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+		expect(String(init.body)).toContain('<rawData>');
+		expect(String(init.body)).not.toContain('<cutpaper');
+	});
 });

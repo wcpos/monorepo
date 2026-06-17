@@ -154,6 +154,8 @@ export function usePrint(options: UsePrintOptions) {
 							columns: printerProfile.columns,
 							printerModel: printerProfile.printerModel,
 							emitEscPrintMode: printerProfile.emitEscPrintMode ?? true,
+							openDrawer: printerProfile.autoOpenDrawer,
+							drawerConnector: printerProfile.drawerConnector,
 						},
 					});
 					await service.printRaw(bytes, printerProfile);

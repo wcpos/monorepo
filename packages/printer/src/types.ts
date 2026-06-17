@@ -1,3 +1,12 @@
+import type { DrawerConnector } from '@wcpos/receipt-renderer';
+
+export type { DrawerConnector };
+
+export interface PrintRawOptions {
+	/** Whether transports that add their own cutter command should include it. */
+	cutPaper?: boolean;
+}
+
 /**
  * Transport adapter — sends bytes to a physical printer.
  */
@@ -9,7 +18,7 @@ export interface PrinterTransport {
 	 * Send raw bytes (ESC/POS, StarPRNT, etc.) to the printer.
 	 * Resolves when the printer acknowledges receipt or the data is sent.
 	 */
-	printRaw(data: Uint8Array): Promise<void>;
+	printRaw(data: Uint8Array, options?: PrintRawOptions): Promise<void>;
 
 	/**
 	 * Print HTML content via system print dialog.
@@ -77,6 +86,8 @@ export interface PrinterProfile {
 	fullReceiptRaster: boolean;
 	autoCut: boolean;
 	autoOpenDrawer: boolean;
+	/** Cash-drawer connector used for drawer kick pulses. Defaults to pin2 (drawer 1). */
+	drawerConnector?: DrawerConnector;
 	isDefault: boolean;
 	isBuiltIn: boolean;
 }
@@ -105,4 +116,26 @@ export interface UsePrintResult {
 	print: () => Promise<void>;
 	/** Whether a print job is currently in progress. */
 	isPrinting: boolean;
+}
+
+/** Stable discovery error codes — the UI maps these to translated strings. */
+export type DiscoveryErrorCode =
+	| 'usb-none-found'
+	| 'bt-none-found'
+	| 'bt-connect-failed'
+	| 'network-none-found'
+	| 'ipc-unavailable'
+	| 'discovery-failed';
+
+/** Structured error from a printer discovery operation. */
+export interface DiscoveryError {
+	code: DiscoveryErrorCode;
+	/** Optional extra context when available — most useful for 'discovery-failed' (underlying exception message). */
+	detail?: string;
+}
+
+/** A Web Bluetooth chooser candidate forwarded from the Electron main process. */
+export interface BluetoothCandidate {
+	id: string;
+	name: string;
 }

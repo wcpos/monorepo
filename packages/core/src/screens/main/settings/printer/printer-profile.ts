@@ -20,6 +20,7 @@ export function toPrinterProfile(doc: PrinterProfileDocument): PrinterProfile {
 		fullReceiptRaster: doc.fullReceiptRaster ?? false,
 		autoCut: doc.autoCut ?? true,
 		autoOpenDrawer: doc.autoOpenDrawer ?? false,
+		drawerConnector: doc.drawerConnector ?? 'pin2',
 		isDefault: doc.isDefault ?? false,
 		isBuiltIn: doc.isBuiltIn ?? false,
 	};

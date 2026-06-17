@@ -1,7 +1,7 @@
 import { buildConnectionError } from '../utils/connection-error';
 import { withTargetAddressSpace } from '../utils/local-fetch';
 
-import type { PrinterTransport } from '../types';
+import type { PrinterTransport, PrintRawOptions } from '../types';
 
 /**
  * Star WebPRNT adapter for web browsers.
@@ -24,8 +24,9 @@ export class StarWebPrntAdapter implements PrinterTransport {
 
 	constructor(private url: string) {}
 
-	async printRaw(data: Uint8Array): Promise<void> {
+	async printRaw(data: Uint8Array, options: PrintRawOptions = {}): Promise<void> {
 		const base64 = uint8ArrayToBase64(data);
+		const cutPaper = options.cutPaper ?? true;
 
 		const xml = [
 			'<?xml version="1.0" encoding="utf-8"?>',
@@ -34,11 +35,13 @@ export class StarWebPrntAdapter implements PrinterTransport {
 			'    <Request>',
 			'      <initialize />',
 			`      <rawData>${base64}</rawData>`,
-			'      <cutpaper feed="true" />',
+			cutPaper ? '      <cutpaper feed="true" />' : '',
 			'    </Request>',
 			'  </SendMessage>',
 			'</StarWebPrint>',
-		].join('\n');
+		]
+			.filter(Boolean)
+			.join('\n');
 
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 30_000);
