@@ -19,7 +19,6 @@ describe('Calculate Taxes', () => {
 			{ id: 2, total: 2 },
 		];
 
-		// @ts-ignore
 		expect(sumItemizedTaxes({ taxes: [taxes1, taxes2] })).toEqual([
 			{ id: 1, total: 2.665 },
 			{ id: 2, total: 4 },

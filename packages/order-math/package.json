@@ -1,0 +1,29 @@
+{
+	"name": "@wcpos/order-math",
+	"version": "0.1.0",
+	"description": "Pure WooCommerce-parity order/cart math for WCPOS. No React, no RxDB, no IO.",
+	"license": "MIT",
+	"main": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./testing": "./src/testing/index.ts",
+		"./internal": "./src/internal/index.ts"
+	},
+	"files": ["src/**"],
+	"scripts": {
+		"test": "jest",
+		"lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+		"lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"lodash": "^4.18.1"
+	},
+	"devDependencies": {
+		"@types/jest": "^30.0.0",
+		"@types/lodash": "^4.17.24",
+		"@wcpos/database": "workspace:*",
+		"jest": "^30.4.2",
+		"ts-jest": "^29.4.11"
+	}
+}

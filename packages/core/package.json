@@ -89,6 +89,7 @@
 		"@wcpos/components": "workspace:*",
 		"@wcpos/database": "workspace:*",
 		"@wcpos/hooks": "workspace:*",
+		"@wcpos/order-math": "workspace:*",
 		"@wcpos/printer": "workspace:*",
 		"@wcpos/query": "workspace:*",
 		"@wcpos/utils": "workspace:*",
