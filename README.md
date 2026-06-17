@@ -1,6 +1,6 @@
 <div align="center">
   <h1>Monorepo for <a href="https://wcpos.com">WooCommerce POS</a></h1>
-  <p>React Native cross-platform applications for taking WooCommerce orders at the Point of Sale.</p>
+  <p>React Native + Expo cross-platform applications for taking WooCommerce orders at the Point of Sale.</p>
   <p>
     <a href="https://wcpos.expo.app/">
       <img src="https://github.com/wcpos/monorepo/actions/workflows/deploy.yml/badge.svg" alt="Web App" />
@@ -8,81 +8,146 @@
     <a href="https://github.com/wcpos/electron/releases">
       <img src="https://github.com/wcpos/electron/actions/workflows/tag-and-release.yml/badge.svg" alt="Desktop App" />
     </a>
-    <a href="https://github.com/wcpos/managed-expo">
-      <img src="https://github.com/wcpos/monorepo/actions/workflows/build.yml/badge.svg" alt="Native Apps" />
+    <a href="https://github.com/wcpos/monorepo/actions/workflows/test.yml">
+      <img src="https://github.com/wcpos/monorepo/actions/workflows/test.yml/badge.svg" alt="Tests" />
+    </a>
+    <a href="https://opensource.org/licenses/MIT">
+      <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
     </a>
     <a href="https://wcpos.com/discord">
       <img src="https://img.shields.io/discord/711884517081612298?color=%237289DA&label=WCPOS&logo=discord&logoColor=white" alt="Discord Chat" />
     </a>
   </p>
   <p>
-    <a href="https://github.com/wcpos/monorepo#-structure"><b>About</b></a>
+    <a href="#-about"><b>About</b></a>
     &ensp;&mdash;&ensp;
-    <a href="https://github.com/wcpos/monorepo#-structure"><b>Structure</b></a>
+    <a href="#-structure"><b>Structure</b></a>
     &ensp;&mdash;&ensp;
-    <a href="https://github.com/wcpos/monorepo#-workflows"><b>Workflows</b></a>
+    <a href="#-architecture"><b>Architecture</b></a>
     &ensp;&mdash;&ensp;
-    <a href="https://github.com/wcpos/monorepo#-how-to-use-it"><b>How to use it</b></a>
+    <a href="#-development"><b>Development</b></a>
+    &ensp;&mdash;&ensp;
+    <a href="#-workflows"><b>Workflows</b></a>
   </p>
 </div>
 
 ## 💡 About
 
-The goal of this project is to develop a <u>free</u> and <u>extensible</u> Point of Sale application with first-class support for collecting payment via cryptocurrency.
+The goal of this project is a <u>free</u> and <u>extensible</u> Point of Sale application, with a payment-method-agnostic design (including first-class support for cryptocurrency).
 
-Currently the application requires [WooCommerce](https://woocommerce.com) to provide the backend database, but it should not necessarily be limited to WooCommerce.
+This monorepo contains all the code for the **client applications** — a single React Native + Expo codebase that ships to web, desktop and mobile. It currently uses [WooCommerce](https://woocommerce.com) as its backend, so to run it against a store you also need the [WooCommerce POS plugin for WordPress](https://github.com/wcpos/woocommerce-pos), which provides the REST API and authentication.
 
-This monorepo contains all the code necessary to build the client applications. To use with WooCommerce you will need to also install the [WooCommerce POS plugin for WordPress](https://github.com/wcpos/woocommerce-pos).
+| Target | Built from | Distributed as |
+| --- | --- | --- |
+| 🌐 Web | `apps/main` | [wcpos.expo.app](https://wcpos.expo.app) (EAS Hosting) |
+| 🖥 Desktop | `apps/electron` (wraps the `apps/main` web build) | Windows / macOS / Linux installers |
+| 📱 Mobile | `apps/main` | iOS & Android (EAS Build) |
+| 🧩 In-WordPress | `apps/web` | JS bundle on jsDelivr, loaded by the WP plugin |
 
 ## 📁 Structure
 
-- [`apps`](./apps) - Apps that only use packages and aren't aware of other apps.
-- [`packages`](./packages) - Node packages that may use external and/or local packages.
+The repo is a [pnpm](https://pnpm.io) workspace orchestrated with [Turborepo](https://turbo.build/). Code is split into `apps/*` (deployable applications) and `packages/*` (shared libraries).
 
 ### Apps
 
-- [`apps/managed`](https://github.com/wcpos/managed-expo) - Expo managed app builds for Web, iOS and Android.
-- [`apps/electron`](https://github.com/wcpos/electron) - Builds app for Windows, MacOS and Linux.
+| Path | Package | Description |
+| --- | --- | --- |
+| [`apps/main`](./apps/main) | `@wcpos/main` | The Expo app (expo-router) — the source of truth for web, iOS and Android. |
+| [`apps/electron`](https://github.com/wcpos/electron) | `@wcpos/app-electron` | Electron desktop wrapper for Windows/macOS/Linux. *(git submodule)* |
+| [`apps/web`](https://github.com/wcpos/web-bundle) | `@wcpos/web-bundle` | Builds the web JS bundle shipped via jsDelivr for the WordPress plugin. *(git submodule)* |
+| [`apps/template-studio`](./apps/template-studio) | `@wcpos/template-studio` | A Vite harness for previewing and print-testing receipt templates. |
 
 ### Packages
 
-- [`packages/core`](https://github.com/wcpos/core) - Core screens and navigation.
-- [`packages/components`](https://github.com/wcpos/components) - Shared UI components, see [playground](https://wcpos.github.io/components/).
-- [`packages/form`](https://github.com/wcpos/react-native-jsonschema-form) - React Native JSONSchema Form, see [playground](https://wcpos.github.io/react-native-jsonschema-form/).
-- [`packages/database`](https://github.com/wcpos/database) - Local database (IndexedDB for Web and Desktop, SQLite for Native).
-- [`packages/themes`](https://github.com/wcpos/themes) - Theme library.
-- [`packages/hooks`](https://github.com/wcpos/hooks) - Shared hooks.
-- [`packages/utils`](https://github.com/wcpos/utils) - Shared utils.
-- [`packages/babel`](./packages/babel) - Babel configuration for Expo.
-- [`packages/eslint`](./packages/eslint) - ESLint configuration for Expo.
-- [`packages/tsconfig`](./packages/tsconfig) - TypeScript configuration.
+| Path | Package | Description |
+| --- | --- | --- |
+| [`packages/core`](./packages/core) | `@wcpos/core` | Core POS screens and navigation. |
+| [`packages/components`](./packages/components) | `@wcpos/components` | Shared UI components (Tailwind/uniwind, FontAwesome icons). |
+| [`packages/database`](./packages/database) | `@wcpos/database` | Local-first data layer built on RxDB. |
+| [`packages/query`](./packages/query) | `@wcpos/query` | Querying and WooCommerce sync/replication. |
+| [`packages/hooks`](./packages/hooks) | `@wcpos/hooks` | Shared React hooks. |
+| [`packages/utils`](./packages/utils) | `@wcpos/utils` | Shared utilities. |
+| [`packages/printer`](./packages/printer) | `@wcpos/printer` | ESC/POS printer encoding and transport. |
+| [`packages/receipt-renderer`](./packages/receipt-renderer) | `@wcpos/receipt-renderer` | Receipt rendering (HTML + thermal templates). |
+| [`packages/virtual-printer`](./packages/virtual-printer) | `@wcpos/virtual-printer` | Dev tool: a virtual TCP printer for testing. |
+| [`packages/eslint`](./packages/eslint) | `@wcpos/eslint-config` | Shared ESLint configuration. |
+
+> Submodules: `apps/electron`, `apps/web` and `.wiki` (the [WCPOS wiki](https://github.com/wcpos/wiki)). `pnpm install` initialises them automatically; refresh them with `pnpm submodules:update`.
+
+## 🏗 Architecture
+
+One Expo codebase renders the POS everywhere; the difference between platforms is mostly the **data layer**, which adapts RxDB to each platform's best storage engine:
+
+| Platform | Storage engine |
+| --- | --- |
+| Web | OPFS (Origin Private File System), in a worker — migrating from IndexedDB |
+| Desktop (Electron) | SQLite in the main process, reached over IPC |
+| Native (iOS/Android) | SQLite via `expo-sqlite` |
+
+Querying and replication against the WooCommerce REST API live in `@wcpos/query`; printing (ESC/POS encoding, transports and receipt rendering) lives in `@wcpos/printer` and `@wcpos/receipt-renderer`. See the [Client Architecture](https://github.com/wcpos/wiki/blob/main/architecture/client.md) wiki page for a deeper dive.
+
+## 👩‍💻 Development
+
+**Prerequisites**
+
+- [Node.js](https://nodejs.org) 22+ and [pnpm](https://pnpm.io) (pinned via `packageManager`)
+- For native builds: the [Expo / React Native](https://docs.expo.dev/get-started/set-up-your-environment/) toolchain (Xcode, Android Studio)
+- Access tokens for the licensed dependencies **RxDB Premium** and **Uniwind Pro** (CI injects these as secrets)
+
+**Setup**
+
+```bash
+git clone --recursive https://github.com/wcpos/monorepo.git
+cd monorepo
+pnpm install          # also initialises submodules
+```
+
+**Run the app**
+
+```bash
+pnpm start            # clean Metro dev server for apps/main (web + native clients)
+pnpm dev:electron     # the desktop app (Expo dev server + Electron)
+
+# native dev clients
+pnpm --filter @wcpos/main ios
+pnpm --filter @wcpos/main android
+```
+
+**Useful scripts**
+
+| Script | Description |
+| --- | --- |
+| `pnpm start` | Clean-state Metro launcher for `apps/main` |
+| `pnpm dev` / `pnpm dev:main` / `pnpm dev:electron` | Turborepo dev tasks |
+| `pnpm build` / `pnpm build:main` | Production builds |
+| `pnpm test` | Run package + app unit tests |
+| `pnpm lint` / `pnpm lint:fix` | Lint via Turborepo |
+| `pnpm typecheck` | Type-check all workspaces |
+| `pnpm extract:translations` | Extract source strings for translation |
+| `pnpm submodules:update` | Pull latest `.wiki` / `apps/electron` / `apps/web` |
 
 ## 👷 Workflows
 
-Clone the monorepo repository, using the `recursive` flag will also clone the submodules.
+CI/CD lives in [`.github/workflows/`](./.github/workflows):
 
-```sh
-> git clone --recursive https://github.com/wcpos/monorepo.git
-```
+- **[`deploy.yml`](./.github/workflows/deploy.yml)** — exports the `apps/main` web build and deploys it to EAS Hosting ([wcpos.expo.app](https://wcpos.expo.app)); PRs get preview deployments. Runs sharded Playwright E2E against the deployment.
+- **[`build.yml`](./.github/workflows/build.yml)** — EAS Build for native iOS/Android apps (manually dispatched), with optional store submission.
+- **[`test.yml`](./.github/workflows/test.yml)** — lint, type-check and unit tests with a coverage ratchet, gating every PR.
+- **[`publish-web-bundle.yml`](./.github/workflows/publish-web-bundle.yml)** — builds `apps/web` and publishes the bundle to the [`web-bundle`](https://github.com/wcpos/web-bundle) repo for jsDelivr.
+- **[`bump-submodules.yml`](./.github/workflows/bump-submodules.yml)** — daily auto-bump of the submodules.
 
-Next install the Javascript dependencies using yarn:
+## 📚 Documentation
 
-```sh
-> yarn install
-```
+- Architecture, product and operations docs live in the [WCPOS wiki](https://github.com/wcpos/wiki) (vendored at `.wiki/`).
+- User-facing documentation is at [docs.wcpos.com](https://docs.wcpos.com).
 
-To start the web, iOS and Android development build, use:
+## 🔗 Links
 
-```sh
-> yarn managed start
-```
+- 🌐 Website — [wcpos.com](https://wcpos.com)
+- 🖥 Desktop client — [github.com/wcpos/electron](https://github.com/wcpos/electron)
+- 🔌 WordPress plugin — [github.com/wcpos/woocommerce-pos](https://github.com/wcpos/woocommerce-pos)
+- 💬 Discord — [wcpos.com/discord](https://wcpos.com/discord)
 
-To start the electron (desktop) development build, use:
+## 📄 License
 
-```
-> yarn electron start
-```
-
-## 🚀 How to use it
-
-Coming soon.
+Packages in this monorepo are released under the [MIT License](https://opensource.org/licenses/MIT) (see each package's `package.json`).
