@@ -7,6 +7,7 @@ import { VStack } from '@wcpos/components/vstack';
 import { usePrinterDiscovery } from '@wcpos/printer';
 
 import { useT } from '../../../../../../contexts/translations';
+import { isUsbLikeDevice } from './discovered-printer-filters';
 
 import type { UseFormReturn } from 'react-hook-form';
 import type { PrinterFormValues } from '../../schema';
@@ -14,7 +15,7 @@ import type { PrinterFormValues } from '../../schema';
 export function UsbDevicePicker({ form }: { form: UseFormReturn<PrinterFormValues> }) {
 	const t = useT();
 	const { printers, startScan, isScanning } = usePrinterDiscovery();
-	const devices = printers.filter((p) => p.connectionType === 'usb');
+	const devices = printers.filter(isUsbLikeDevice);
 	const selectedAddress = form.watch('address');
 
 	return (

@@ -56,7 +56,7 @@ const winspoolPrinters: DiscoveredPrinter[] = [
 	{
 		id: 'w1',
 		name: 'EPSON TM-T20III',
-		connectionType: 'usb',
+		connectionType: 'system',
 		address: 'winspool:EPSON TM-T20III',
 		vendor: 'generic',
 	},
@@ -87,7 +87,7 @@ const serialPrinters: DiscoveredPrinter[] = [
 ];
 
 const winspoolProps = {
-	addressPrefix: 'winspool:',
+	targetKind: 'winspool' as const,
 	heading: 'Installed printers',
 	hint: 'Printers paired in Windows (including Bluetooth printers) appear here as installed printers.',
 	emptyText: 'No installed printers found.',
@@ -96,7 +96,7 @@ const winspoolProps = {
 };
 
 const serialProps = {
-	addressPrefix: 'serial:',
+	targetKind: 'serial' as const,
 	heading: 'Paired Bluetooth printers',
 	hint: 'Bluetooth Classic printers paired in your system settings appear here.',
 	emptyText: 'No paired printers found.',

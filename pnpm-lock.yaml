@@ -60,6 +60,9 @@ importers:
       '@sentry/electron':
         specifier: ^7.13.0
         version: 7.13.0
+      '@wcpos/printer':
+        specifier: workspace:*
+        version: link:../../packages/printer
       axios:
         specifier: ^1.17.0
         version: 1.17.0
