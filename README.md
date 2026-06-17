@@ -11,9 +11,6 @@
     <a href="https://github.com/wcpos/monorepo/actions/workflows/test.yml">
       <img src="https://github.com/wcpos/monorepo/actions/workflows/test.yml/badge.svg" alt="Tests" />
     </a>
-    <a href="https://opensource.org/licenses/MIT">
-      <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
-    </a>
     <a href="https://wcpos.com/discord">
       <img src="https://img.shields.io/discord/711884517081612298?color=%237289DA&label=WCPOS&logo=discord&logoColor=white" alt="Discord Chat" />
     </a>
@@ -81,7 +78,7 @@ One Expo codebase renders the POS everywhere; the difference between platforms i
 | Platform | Storage engine |
 | --- | --- |
 | Web | OPFS (Origin Private File System), in a worker — migrating from IndexedDB |
-| Desktop (Electron) | SQLite in the main process, reached over IPC |
+| Desktop (Electron) | Filesystem-node storage in the main process, reached over IPC; legacy SQLite-over-IPC is used for migrations |
 | Native (iOS/Android) | SQLite via `expo-sqlite` |
 
 Querying and replication against the WooCommerce REST API live in `@wcpos/query`; printing (ESC/POS encoding, transports and receipt rendering) lives in `@wcpos/printer` and `@wcpos/receipt-renderer`. See the [Client Architecture](https://github.com/wcpos/wiki/blob/main/architecture/client.md) wiki page for a deeper dive.
@@ -150,4 +147,4 @@ CI/CD lives in [`.github/workflows/`](./.github/workflows):
 
 ## 📄 License
 
-Packages in this monorepo are released under the [MIT License](https://opensource.org/licenses/MIT) (see each package's `package.json`).
+License metadata is declared in individual package manifests. Packages that currently declare a license use [MIT](https://opensource.org/licenses/MIT); this repo does not yet include a root `LICENSE` file, and some workspace manifests omit a license field.
