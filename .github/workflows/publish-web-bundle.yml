@@ -1,0 +1,109 @@
+name: Publish Web Bundle
+
+# Builds the web bundle from a monorepo ref and publishes it to a web-bundle
+# branch for jsDelivr, e.g. the `next` development lane (cdn.jsdelivr.net/gh/
+# wcpos/web-bundle@next/build). Stable bundle tags (@1.9, @1.10, …) are still cut
+# during a release; this is the dev-lane publisher so the in-development bundle
+# can be tested locally / on staging via the plugin's WCPOS_WEB_BUNDLE_REF.
+#
+# Manual only — run it when you want to refresh the dev bundle.
+
+on:
+  workflow_dispatch:
+    inputs:
+      monorepo_ref:
+        description: Monorepo branch/ref to build the bundle from
+        required: true
+        default: next
+      bundle_branch:
+        description: web-bundle branch to publish to
+        required: true
+        default: next
+
+concurrency:
+  group: publish-web-bundle-${{ github.event.inputs.bundle_branch }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: 🌐 Build & publish web bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔑 Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v2
+        with:
+          app-id: ${{ secrets.WCPOS_BOT_APP_ID }}
+          private-key: ${{ secrets.WCPOS_BOT_PRIVATE_KEY }}
+          owner: wcpos
+          repositories: |
+            monorepo
+            web-bundle
+
+      - name: 📥 Check out monorepo (with submodules)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.inputs.monorepo_ref }}
+          submodules: true
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: 🏗 Setup monorepo
+        uses: ./.github/actions/setup-monorepo
+        with:
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          rxdb-license-key: ${{ secrets.RXDB_LICENSE_KEY }}
+          uniwind-auth-token: ${{ secrets.UNIWIND_AUTH_TOKEN }}
+
+      - name: 🔨 Build web bundle
+        run: pnpm web build
+
+      - name: 🚀 Publish to web-bundle@${{ github.event.inputs.bundle_branch }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: ${{ github.event.inputs.bundle_branch }}
+          MONOREPO_REF: ${{ github.event.inputs.monorepo_ref }}
+        run: |
+          set -euo pipefail
+          BUILD_DIR="$GITHUB_WORKSPACE/apps/web/build"
+          test -f "$BUILD_DIR/metadata.json" || { echo "::error::build output missing ($BUILD_DIR/metadata.json)"; exit 1; }
+
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Publish via a fresh clone of web-bundle on the target branch, decoupled
+          # from the apps/web submodule (so a deps re-check during the build can't
+          # reset the submodule out from under us).
+          WB="$RUNNER_TEMP/web-bundle"
+          rm -rf "$WB"
+          git clone --depth 1 --branch "$BRANCH" \
+            "https://x-access-token:${GH_TOKEN}@github.com/wcpos/web-bundle.git" "$WB"
+
+          # Mirror the freshly built bundle into build/ (replace contents so removed
+          # / renamed hashed chunks are dropped).
+          rm -rf "$WB/build"
+          mkdir -p "$WB/build"
+          cp -R "$BUILD_DIR/." "$WB/build/"
+
+          cd "$WB"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No bundle changes to publish."
+            exit 0
+          fi
+          git commit -m "chore(release): build web bundle (@${BRANCH} from monorepo ${MONOREPO_REF})"
+          git push origin "$BRANCH"
+
+      - name: 🧹 Purge jsDelivr
+        env:
+          BRANCH: ${{ github.event.inputs.bundle_branch }}
+        run: |
+          set -e
+          for f in metadata.json index.html; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://purge.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/${f}" || echo "000")
+            echo "purge @${BRANCH}/build/${f} -> HTTP ${code}"
+          done
+          echo "Bundle ref: https://cdn.jsdelivr.net/gh/wcpos/web-bundle@${BRANCH}/build/metadata.json"
