@@ -1,20 +1,6 @@
+import { ipcPrintRaw, PRINT_TIMEOUT_MS } from './ipc-print.electron';
+
 import type { PrinterTransport } from '../types';
-
-interface ElectronIpc {
-	invoke: (channel: string, args: unknown) => Promise<unknown>;
-}
-
-function getIpc(): ElectronIpc {
-	const w = window as {
-		ipcRenderer?: ElectronIpc;
-		electronAPI?: { ipcRenderer?: ElectronIpc };
-	};
-	const ipc = w.ipcRenderer ?? w.electronAPI?.ipcRenderer;
-	if (!ipc) throw new Error('Electron ipcRenderer not available');
-	return ipc;
-}
-
-const PRINT_TIMEOUT_MS = 30_000;
 
 /** Electron USB adapter — sends raw bytes to the main process, which writes to the USB endpoint. */
 export class UsbElectronAdapter implements PrinterTransport {
@@ -23,16 +9,11 @@ export class UsbElectronAdapter implements PrinterTransport {
 	constructor(private deviceKey: string) {}
 
 	async printRaw(data: Uint8Array): Promise<void> {
-		const ipc = getIpc();
-		await Promise.race([
-			ipc.invoke('print-raw-usb', { device: this.deviceKey, data: Array.from(data) }),
-			new Promise<never>((_, reject) =>
-				setTimeout(
-					() => reject(new Error(`USB print timed out after ${PRINT_TIMEOUT_MS}ms`)),
-					PRINT_TIMEOUT_MS
-				)
-			),
-		]);
+		await ipcPrintRaw(
+			'print-raw-usb',
+			{ device: this.deviceKey, data },
+			`USB print timed out after ${PRINT_TIMEOUT_MS}ms`
+		);
 	}
 
 	async printHtml(_html: string): Promise<void> {
