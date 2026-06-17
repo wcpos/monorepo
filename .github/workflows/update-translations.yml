@@ -5,7 +5,7 @@ on:
     types: [translation-release]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   update:
