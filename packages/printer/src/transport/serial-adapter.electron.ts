@@ -1,13 +1,11 @@
+import type { TypedIpcRenderer } from '@wcpos/printer/ipc-channels';
+
 import type { PrinterTransport } from '../types';
 
-interface ElectronIpc {
-	invoke: (channel: string, args: unknown) => Promise<unknown>;
-}
-
-function getIpc(): ElectronIpc {
+function getIpc(): TypedIpcRenderer {
 	const w = window as {
-		ipcRenderer?: ElectronIpc;
-		electronAPI?: { ipcRenderer?: ElectronIpc };
+		ipcRenderer?: TypedIpcRenderer;
+		electronAPI?: { ipcRenderer?: TypedIpcRenderer };
 	};
 	const ipc = w.ipcRenderer ?? w.electronAPI?.ipcRenderer;
 	if (!ipc) throw new Error('Electron ipcRenderer not available');
