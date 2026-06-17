@@ -17,18 +17,20 @@ Spins up the Electron app from an isolated worktree with logs in a visible Termi
 
 Run each step sequentially. Do NOT skip steps. Do NOT use `run_in_background`.
 
-### 1. Fetch latest main
+### 1. Fetch latest from the target lane
+
+Lane: `next` = in-development electron work (default); `main` = stable / 1.9.x electron fixes. If unsure which lane the task is, ask the user first, then use it as `<lane>` below.
 
 Fetch only — do NOT pull or merge into the current branch:
 
 ```bash
-git fetch origin main
+git fetch origin <lane>
 ```
 
 ### 2. Create worktree
 
 ```bash
-git worktree add .worktrees/electron-dev origin/main -b electron-dev-session
+git worktree add .worktrees/electron-dev origin/<lane> -b electron-dev-session
 ```
 
 If the branch already exists, check for uncommitted work before removing:
@@ -39,12 +41,12 @@ if git -C .worktrees/electron-dev status --porcelain 2>/dev/null | grep -q .; th
   echo "ERROR: .worktrees/electron-dev has uncommitted changes. Stash or commit them first." && exit 1
 fi
 # Check if the branch has commits not merged into main
-if git log origin/main..electron-dev-session --oneline 2>/dev/null | grep -q .; then
+if git log origin/<lane>..electron-dev-session --oneline 2>/dev/null | grep -q .; then
   echo "ERROR: electron-dev-session has unmerged commits. Merge or back them up first." && exit 1
 fi
 git worktree remove .worktrees/electron-dev 2>/dev/null
 git branch -d electron-dev-session 2>/dev/null
-git worktree add .worktrees/electron-dev origin/main -b electron-dev-session
+git worktree add .worktrees/electron-dev origin/<lane> -b electron-dev-session
 ```
 
 ### 3. Init electron submodule and pull latest
@@ -53,7 +55,7 @@ First init the submodule (checks out whatever commit the monorepo pointer refere
 
 ```bash
 cd <worktree-path> && git submodule update --init apps/electron
-cd <worktree-path>/apps/electron && git checkout main && git pull origin main
+cd <worktree-path>/apps/electron && git checkout <lane> && git pull origin <lane>
 ```
 
 ### 4. Install dependencies
