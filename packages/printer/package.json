@@ -9,10 +9,12 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./encoder": "./src/encoder/index.ts",
-		"./encoder/render-preview": "./src/encoder/render-preview.ts"
+		"./encoder/render-preview": "./src/encoder/render-preview.ts",
+		"./ipc-channels": "./src/ipc/channels.cts"
 	},
 	"files": [
-		"src/**"
+		"src/**",
+		"ipc-channels.d.ts"
 	],
 	"dependencies": {
 		"@point-of-sale/receipt-printer-encoder": "^3.0.3",
