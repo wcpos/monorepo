@@ -1,6 +1,7 @@
 import {
 	isRecoverableLogsStorageError,
 	recoverLogsCollectionStorage,
+	recoverSyncCollectionStorage,
 } from '../src/logs-storage-recovery';
 
 describe('logs storage recovery', () => {
@@ -60,6 +61,27 @@ describe('logs storage recovery', () => {
 		expect(recovered).toBe(true);
 		expect(remove).toHaveBeenCalledTimes(1);
 		expect(globalThis.sessionStorage.getItem('wcpos_logs_storage_recovery_attempted')).toBe('1');
+		expect(reload).toHaveBeenCalledTimes(1);
+	});
+
+	it('removes a corrupted sync metadata collection and reloads once', async () => {
+		const remove = jest.fn(async () => undefined);
+		const syncCollection = { name: 'templates', remove };
+		const reload = jest.fn();
+
+		const recovered = await recoverSyncCollectionStorage(
+			syncCollection,
+			new Error(
+				'could not requestRemote: {"methodName":"count","error":{"name":"SyntaxError","message":"Unexpected token \'c\', ... is not valid JSON"}}'
+			),
+			{ reload }
+		);
+
+		expect(recovered).toBe(true);
+		expect(remove).toHaveBeenCalledTimes(1);
+		expect(
+			globalThis.sessionStorage.getItem('wcpos_sync_storage_recovery_attempted_templates')
+		).toBe('1');
 		expect(reload).toHaveBeenCalledTimes(1);
 	});
 

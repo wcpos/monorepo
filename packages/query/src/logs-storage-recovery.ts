@@ -1,4 +1,5 @@
 const RECOVERY_SESSION_KEY = 'wcpos_logs_storage_recovery_attempted';
+const SYNC_RECOVERY_SESSION_KEY_PREFIX = 'wcpos_sync_storage_recovery_attempted_';
 
 type RemovableCollection = {
 	name?: string;
@@ -76,6 +77,36 @@ export async function recoverLogsCollectionStorage(
 
 	await collection.remove();
 	sessionStorage?.setItem(RECOVERY_SESSION_KEY, '1');
+	(options.reload ?? reloadPage)();
+	return true;
+}
+
+/**
+ * Resets local sync metadata for a synced collection and reloads the app once.
+ * Sync collections contain server reconciliation state only; dropping them lets
+ * the next page load rebuild metadata from the authoritative remote endpoint.
+ */
+export async function recoverSyncCollectionStorage(
+	collection: RemovableCollection | undefined,
+	error: unknown,
+	options: RecoveryOptions = {}
+): Promise<boolean> {
+	if (!collection?.name || typeof collection.remove !== 'function') {
+		return false;
+	}
+
+	if (!isRecoverableLogsStorageError(error)) {
+		return false;
+	}
+
+	const sessionKey = `${SYNC_RECOVERY_SESSION_KEY_PREFIX}${collection.name}`;
+	const sessionStorage = getSessionStorage();
+	if (sessionStorage?.getItem(sessionKey) === '1') {
+		return false;
+	}
+
+	await collection.remove();
+	sessionStorage?.setItem(sessionKey, '1');
 	(options.reload ?? reloadPage)();
 	return true;
 }
