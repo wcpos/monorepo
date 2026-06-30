@@ -55,9 +55,7 @@ interface ErrorBoundaryPropsWithFallback {
 }
 
 type ErrorBoundaryProps =
-	| ErrorBoundaryPropsWithFallback
-	| ErrorBoundaryPropsWithComponent
-	| ErrorBoundaryPropsWithRender;
+	ErrorBoundaryPropsWithFallback | ErrorBoundaryPropsWithComponent | ErrorBoundaryPropsWithRender;
 
 type ErrorBoundaryState = { error: Error | null };
 

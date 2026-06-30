@@ -92,7 +92,9 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		 */
 		(this.localDB as any).onClose.push(() => {
 			void this.cancel().catch((error) =>
-				queryLogger.error('Manager cancel on db close failed', { context: { error } })
+				queryLogger.error('Manager cancel on db close failed', {
+					context: { error },
+				})
 			);
 		});
 	}
@@ -116,11 +118,11 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 		// If instance exists but dependencies have changed, cancel the existing instance
 		if (Manager.instance) {
-			void Manager.instance
-				.cancel()
-				.catch((error) =>
-					queryLogger.error('Previous Manager instance cancel failed', { context: { error } })
-				);
+			void Manager.instance.cancel().catch((error) =>
+				queryLogger.error('Previous Manager instance cancel failed', {
+					context: { error },
+				})
+			);
 		}
 
 		// Create a new instance
@@ -325,7 +327,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			queryLogger.error(`Collection with name: ${collectionName} not found.`, {
 				showToast: true,
 				saveToDb: true,
-				context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, collectionName },
+				context: {
+					errorCode: ERROR_CODES.INVALID_CONFIGURATION,
+					collectionName,
+				},
 			});
 		}
 		return (this.localDB as any).collections[collectionName];
@@ -448,7 +453,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		// This can happen during collection swap - replication will be set up on next query registration
 		if (!collectionReplication) {
 			queryLogger.debug('Skipping replication setup - collection replication not ready', {
-				context: { queryId: queryState.id, collection: (collection as any).name },
+				context: {
+					queryId: queryState.id,
+					collection: (collection as any).name,
+				},
 			});
 			return;
 		}
@@ -512,7 +520,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				const activeQueryReplication = this.activeQueryReplications.get(queryState.id);
 				if (!activeQueryReplication) {
 					queryLogger.debug('Skipping query nextPage - no active replication', {
-						context: { queryId: queryState.id, collection: (collection as any).name },
+						context: {
+							queryId: queryState.id,
+							collection: (collection as any).name,
+						},
 					});
 					return;
 				}
@@ -582,8 +593,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		return this.replicationStates.get(endpoint) as
-			| CollectionReplicationState<RxCollection>
-			| undefined;
+			CollectionReplicationState<RxCollection> | undefined;
 	}
 
 	/**
@@ -634,8 +644,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		return this.replicationStates.get(queryEndpoint) as
-			| QueryReplicationState<RxCollection>
-			| undefined;
+			QueryReplicationState<RxCollection> | undefined;
 	}
 
 	/**
@@ -663,7 +672,11 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			allQueries.push(`${key}: ${(q.collection as any)?.name}`);
 		});
 		queryLogger.debug('ensureReplicationsForCollection: all queryStates', {
-			context: { collectionName, count: allQueries.length, queries: allQueries },
+			context: {
+				collectionName,
+				count: allQueries.length,
+				queries: allQueries,
+			},
 		});
 
 		if (!syncCollection) {

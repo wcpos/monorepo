@@ -12,8 +12,7 @@ import type { FormItemProps } from './common';
  * Multi-select: value is Option[], passed through directly.
  */
 type FormComboboxProps = (
-	| (FormItemProps<string> & { multiple?: false })
-	| (FormItemProps<Option[]> & { multiple: true })
+	(FormItemProps<string> & { multiple?: false }) | (FormItemProps<Option[]> & { multiple: true })
 ) &
 	Omit<Partial<React.ComponentProps<typeof Combobox>>, 'value' | 'onValueChange' | 'multiple'>;
 

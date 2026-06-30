@@ -227,7 +227,10 @@ export class Query<T extends RxCollection>
 			queryLogger.error('loadMore() called but infiniteScroll is not enabled', {
 				showToast: true,
 				saveToDb: true,
-				context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, queryId: this.id },
+				context: {
+					errorCode: ERROR_CODES.INVALID_CONFIGURATION,
+					queryId: this.id,
+				},
 			});
 			return;
 		}
@@ -518,7 +521,11 @@ export class Query<T extends RxCollection>
 		}
 
 		queryLogger.debug('Search started', {
-			context: { id: this.id, collection: (this.collection as any).name, searchTerm },
+			context: {
+				id: this.id,
+				collection: (this.collection as any).name,
+				searchTerm,
+			},
 		});
 
 		this.resetPagination();
@@ -761,7 +768,10 @@ export class Query<T extends RxCollection>
 		// If $and array is empty, create a new selector without it
 		if ((newSelector as any).$and.length === 0) {
 			const { $and, ...remainingSelector } = newSelector as any;
-			const newMangoQuery = { ...currentMangoQuery, selector: remainingSelector };
+			const newMangoQuery = {
+				...currentMangoQuery,
+				selector: remainingSelector,
+			};
 			const newRxQuery = (this.collection as any).find(newMangoQuery);
 			this.updateQuery(newRxQuery);
 			return this;
@@ -782,8 +792,7 @@ export class Query<T extends RxCollection>
 	 */
 	public getSelector(path: string): MangoQuerySelector<any> | undefined {
 		const selector = get(this.currentRxQuery, ['mangoQuery', 'selector', path]) as
-			| MangoQuerySelector<any>
-			| undefined;
+			MangoQuerySelector<any> | undefined;
 
 		if (
 			selector &&
