@@ -32,8 +32,7 @@ export type TreeComboboxMultiProps<T = undefined> = TreeComboboxBaseProps<T> & {
 };
 
 export type TreeComboboxProps<T = undefined> =
-	| TreeComboboxSingleProps<T>
-	| TreeComboboxMultiProps<T>;
+	TreeComboboxSingleProps<T> | TreeComboboxMultiProps<T>;
 
 // --- Content props ---
 

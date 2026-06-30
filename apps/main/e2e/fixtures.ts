@@ -11,6 +11,7 @@ import {
 
 import { restoreOPFS } from './opfs-helpers';
 import { restoreLocalStorage, type SavedAuthState } from './indexeddb-helpers';
+import { isRouteTeardownError } from './route-errors';
 
 import type { StoreVariant, WcposTestOptions } from '../playwright.config';
 
@@ -28,14 +29,7 @@ const APP_PACKAGE_VERSION = JSON.parse(
 	fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
 ).version;
 const VERSION_STUBBED_CONTEXTS = new WeakSet<BrowserContext>();
-
-export function isRouteTeardownError(error: unknown): boolean {
-	if (!(error instanceof Error)) {
-		return false;
-	}
-
-	return error.message.includes('Target page, context or browser has been closed');
-}
+export { isRouteTeardownError } from './route-errors';
 
 /**
  * Get the store URL from the project config, with env var override.
@@ -595,7 +589,12 @@ export const authenticatedTest = base.extend<{ posPage: Page }>({
 			await authenticateWithStore(page, testInfo);
 		}
 
-		// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
-		await use(page);
+		try {
+			// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture API, not a React hook
+			await use(page);
+		} finally {
+			await page.unrouteAll({ behavior: 'ignoreErrors' }).catch(() => {});
+			await page.context().unrouteAll({ behavior: 'ignoreErrors' }).catch(() => {});
+		}
 	},
 });

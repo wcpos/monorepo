@@ -58,13 +58,7 @@ interface ExtendedSiteData extends WpJsonResponse {
 }
 
 export type SiteConnectStatus =
-	| 'idle'
-	| 'discovering-url'
-	| 'discovering-api'
-	| 'testing-auth'
-	| 'saving'
-	| 'success'
-	| 'error';
+	'idle' | 'discovering-url' | 'discovering-api' | 'testing-auth' | 'saving' | 'success' | 'error';
 
 export interface SiteConnectProgress {
 	step: number;
