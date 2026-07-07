@@ -8,6 +8,13 @@ export const config = [
 	eslintPluginPrettierRecommended,
 	...expoConfig,
 	{
+		settings: {
+			react: {
+				version: '19.2.3',
+			},
+		},
+	},
+	{
 		files: ['**/*.{js,jsx,ts,tsx}'],
 		settings: {
 			'import/resolver': {
@@ -105,7 +112,7 @@ export const config = [
 			],
 
 			// prefer named exports over default exports
-			'import/no-default-export': 'error',
+			'no-restricted-exports': ['error', { restrictedNamedExports: ['default'] }],
 		},
 	},
 
@@ -156,7 +163,7 @@ export const config = [
 			'**/reports/chart/chart.tsx', // Dynamic import via WithSkiaWeb requires default export
 		],
 		rules: {
-			'import/no-default-export': 'off',
+			'no-restricted-exports': 'off',
 		},
 	},
 ];
