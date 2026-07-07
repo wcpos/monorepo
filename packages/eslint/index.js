@@ -1,4 +1,3 @@
-import { fixupConfigRules } from '@eslint/compat';
 import expoConfig from 'eslint-config-expo/flat.js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import reactCompiler from 'eslint-plugin-react-compiler';
@@ -7,14 +6,7 @@ export const config = [
 	// Global ignores - git submodules manage their own linting
 	{ ignores: ['apps/electron/**', 'apps/web/**'] },
 	eslintPluginPrettierRecommended,
-	...fixupConfigRules(expoConfig),
-	{
-		settings: {
-			react: {
-				version: '19.2.3',
-			},
-		},
-	},
+	...expoConfig,
 	{
 		files: ['**/*.{js,jsx,ts,tsx}'],
 		settings: {
@@ -113,7 +105,7 @@ export const config = [
 			],
 
 			// prefer named exports over default exports
-			'no-restricted-exports': ['error', { restrictedNamedExports: ['default'] }],
+			'import/no-default-export': 'error',
 		},
 	},
 
@@ -164,7 +156,7 @@ export const config = [
 			'**/reports/chart/chart.tsx', // Dynamic import via WithSkiaWeb requires default export
 		],
 		rules: {
-			'no-restricted-exports': 'off',
+			'import/no-default-export': 'off',
 		},
 	},
 ];
