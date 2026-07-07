@@ -19,10 +19,7 @@ export type CloudPrintResponse =
 	| CloudPrinterPayload[]
 	| {
 			printers?:
-				| CloudPrinterPayload[]
-				| CloudPrinterPayload
-				| Record<string, CloudPrinterPayload>
-				| null;
+				CloudPrinterPayload[] | CloudPrinterPayload | Record<string, CloudPrinterPayload> | null;
 	  };
 
 const SYSTEM_PRINTER: PrinterProfile = {

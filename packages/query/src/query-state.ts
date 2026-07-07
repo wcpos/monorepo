@@ -782,8 +782,7 @@ export class Query<T extends RxCollection>
 	 */
 	public getSelector(path: string): MangoQuerySelector<any> | undefined {
 		const selector = get(this.currentRxQuery, ['mangoQuery', 'selector', path]) as
-			| MangoQuerySelector<any>
-			| undefined;
+			MangoQuerySelector<any> | undefined;
 
 		if (
 			selector &&

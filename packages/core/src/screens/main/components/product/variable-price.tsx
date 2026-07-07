@@ -24,15 +24,11 @@ export function VariableProductPrice({
 }: CellContext<{ document: ProductDocument }, 'price' | 'regular_price' | 'sale_price'>) {
 	const product = row.original.document;
 	const taxStatus = useObservableState(product.tax_status$!, product.tax_status) as
-		| 'none'
-		| 'taxable'
-		| 'shipping'
-		| undefined;
+		'none' | 'taxable' | 'shipping' | undefined;
 	const taxClass = useObservableState(product.tax_class$!, product.tax_class) as string | undefined;
 
 	const metaData = useObservableState(product.meta_data$!, product.meta_data) as
-		| { key?: string; value?: string }[]
-		| undefined;
+		{ key?: string; value?: string }[] | undefined;
 	const variablePrices = getVariablePrices(metaData);
 	const key = column.id as PriceKey;
 

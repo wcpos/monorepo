@@ -20,11 +20,7 @@ import { convertLocalDateToUTCString } from '../../../../hooks/use-local-date';
 const mutationLogger = getLogger(['wcpos', 'mutations', 'local']);
 
 type Document =
-	| OrderDocument
-	| ProductDocument
-	| CustomerDocument
-	| ProductVariationDocument
-	| CouponDocument;
+	OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument | CouponDocument;
 
 // Generic interface for LocalPatchProps, where T extends Document.
 interface LocalPatchProps<T extends Document> {
