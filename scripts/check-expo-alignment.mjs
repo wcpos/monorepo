@@ -22,6 +22,7 @@ import { parseImporters } from './check-dep-duplicates.mjs';
 // Map of dependency name -> reason.
 export const ALLOWED_EXPO_MISMATCHES = new Map([
   // example: ['react-native-svg', 'pinned ahead of SDK for fix XYZ'],
+  ['eslint-config-expo', 'dev-only ESLint config is intentionally updated with the lint toolchain'],
 ]);
 
 /**

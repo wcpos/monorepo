@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 // to resolve to more than one version across workspace packages.
 export const ALLOWED_DUPLICATES = new Map([
   // example: ['jest', 'apps/main needs jest-expo (jest 29); packages use jest 30'],
+  ['expo-constants', 'Expo 56 packages resolve compatible patch versions across app and peer ranges'],
 ]);
 
 /**
