@@ -48,6 +48,8 @@ overrides:
   # external-editor@3.1.0 pins vulnerable tmp 0.0.33 — force the patched current release
   # (GHSA-ph9p-34f9-6g65, high).
   "external-editor@3.1.0>tmp": "0.2.7"
+  # rxdb@17.3.0 pins vulnerable ws 8.20.1 (GHSA-96hv-2xvq-fx4p, high).
+  "rxdb@17.3.0>ws": "8.21.0"
 packageExtensions:
   "rxdb-premium-old@16.21.1":
     "dependencies": { "rxdb": "16.21.1" }
