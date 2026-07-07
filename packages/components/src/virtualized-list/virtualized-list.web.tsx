@@ -37,7 +37,6 @@ type VirtualizerInput = PartialKeys<
 >;
 
 function useVirtualWrapper(options: VirtualizerInput) {
-	'use no memo';
 	return { ...useVirtualizer(options) };
 }
 
@@ -211,14 +210,6 @@ function List<T>({
 					vItem,
 					horizontal: horizontal ?? false,
 				};
-
-				const itemContext = {
-					item,
-					index: vItem.index,
-					rowVirtualizer,
-					vItem,
-					horizontal: horizontal ?? false,
-				} as unknown as WebItemContext<T>;
 
 				return (
 					<ItemContext.Provider key={key} value={itemContext}>
