@@ -45,7 +45,6 @@ type VirtualizerInput = PartialKeys<
 >;
 
 function useVirtualWrapper(options: VirtualizerInput) {
-	'use no memo';
 	return { ...useVirtualizer(options) };
 }
 
