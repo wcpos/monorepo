@@ -1,3 +1,4 @@
+import { fixupConfigRules } from '@eslint/compat';
 import expoConfig from 'eslint-config-expo/flat.js';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import reactCompiler from 'eslint-plugin-react-compiler';
@@ -6,7 +7,7 @@ export const config = [
 	// Global ignores - git submodules manage their own linting
 	{ ignores: ['apps/electron/**', 'apps/web/**'] },
 	eslintPluginPrettierRecommended,
-	...expoConfig,
+	...fixupConfigRules(expoConfig),
 	{
 		settings: {
 			react: {

@@ -19,6 +19,7 @@
 		"prettier-plugin-tailwindcss": "^0.8.0"
 	},
 	"devDependencies": {
+		"@eslint/compat": "2.1.0",
 		"eslint": "^10.6.0",
 		"eslint-config-expo": "^57.0.0",
 		"eslint-config-prettier": "^10.1.8",
