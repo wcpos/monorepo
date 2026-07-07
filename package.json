@@ -39,7 +39,7 @@
     "!(*.worker).{js,jsx,ts,tsx}": "eslint --fix"
   },
   "devDependencies": {
-    "eslint": "^9.39.4",
+    "eslint": "^10.6.0",
     "expo": "~56.0.11",
     "glob": "^13.0.6",
     "lint-staged": "^17.0.8",

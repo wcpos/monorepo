@@ -78,4 +78,5 @@ allowBuilds:
   "unrs-resolver": true
   usb: true
 patchedDependencies:
+  eslint-plugin-react@7.37.5: patches/eslint-plugin-react@7.37.5.patch
   "react-native-esc-pos-printer@4.5.0": "patches/react-native-esc-pos-printer@4.5.0.patch"
