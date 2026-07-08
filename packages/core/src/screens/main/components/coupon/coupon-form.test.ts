@@ -79,6 +79,16 @@ describe('couponFormSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
+	it('should accept 0 as the clearing value for every usage limit field', () => {
+		const result = couponFormSchema.safeParse({
+			code: 'TEST',
+			usage_limit: 0,
+			usage_limit_per_user: 0,
+			limit_usage_to_x_items: 0,
+		});
+		expect(result.success).toBe(true);
+	});
+
 	it('should accept usage_limit_per_user and limit_usage_to_x_items as number or null', () => {
 		expect(
 			couponFormSchema.safeParse({

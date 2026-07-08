@@ -12,6 +12,7 @@ import { couponFormSchema } from './coupon-schema';
 import { DatePickerInput } from './date-picker-input';
 import { DiscountTypeSelect } from './discount-type-select';
 import { StatusSelect } from './status-select';
+import { fromUsageLimit, toUsageLimit } from './usage-limit';
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../form-errors';
@@ -24,15 +25,6 @@ interface CouponFormProps {
 	onClose: () => void;
 	onSubmit: (data: z.infer<typeof couponFormSchema>) => void;
 	loading: boolean;
-}
-
-/**
- * WooCommerce treats a blank usage limit as "no limit" (null), not zero.
- * Strip non-digits and map an empty field to null so we never persist a 0 limit.
- */
-function toUsageLimit(text: string | number | undefined | null): number | null {
-	const cleaned = String(text ?? '').replace(/[^0-9]/g, '');
-	return cleaned === '' ? null : parseInt(cleaned, 10);
 }
 
 export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps) {
@@ -183,7 +175,7 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 									label={t('coupons.usage_limit')}
 									keyboardType="number-pad"
 									{...field}
-									value={field.value == null ? '' : String(field.value)}
+									value={fromUsageLimit(field.value)}
 									onChange={(text) => field.onChange(toUsageLimit(text))}
 								/>
 							</View>
@@ -198,7 +190,7 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 									label={t('coupons.usage_limit_per_user')}
 									keyboardType="number-pad"
 									{...field}
-									value={field.value == null ? '' : String(field.value)}
+									value={fromUsageLimit(field.value)}
 									onChange={(text) => field.onChange(toUsageLimit(text))}
 								/>
 							</View>
@@ -215,7 +207,7 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 									label={t('coupons.limit_usage_to_x_items')}
 									keyboardType="number-pad"
 									{...field}
-									value={field.value == null ? '' : String(field.value)}
+									value={fromUsageLimit(field.value)}
 									onChange={(text) => field.onChange(toUsageLimit(text))}
 								/>
 							</View>
