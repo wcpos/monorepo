@@ -26,6 +26,15 @@ interface CouponFormProps {
 	loading: boolean;
 }
 
+/**
+ * WooCommerce treats a blank usage limit as "no limit" (null), not zero.
+ * Strip non-digits and map an empty field to null so we never persist a 0 limit.
+ */
+function toUsageLimit(text: string | number | undefined | null): number | null {
+	const cleaned = String(text ?? '').replace(/[^0-9]/g, '');
+	return cleaned === '' ? null : parseInt(cleaned, 10);
+}
+
 export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps) {
 	const t = useT();
 
@@ -163,6 +172,56 @@ export function CouponForm({ form, onClose, onSubmit, loading }: CouponFormProps
 						name="free_shipping"
 						render={({ field }) => <FormSwitch label={t('coupons.free_shipping')} {...field} />}
 					/>
+				</HStack>
+				<HStack className="w-full gap-4">
+					<FormField
+						control={form.control}
+						name="usage_limit"
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormInput
+									label={t('coupons.usage_limit')}
+									keyboardType="number-pad"
+									{...field}
+									value={field.value == null ? '' : String(field.value)}
+									onChange={(text) => field.onChange(toUsageLimit(text))}
+								/>
+							</View>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="usage_limit_per_user"
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormInput
+									label={t('coupons.usage_limit_per_user')}
+									keyboardType="number-pad"
+									{...field}
+									value={field.value == null ? '' : String(field.value)}
+									onChange={(text) => field.onChange(toUsageLimit(text))}
+								/>
+							</View>
+						)}
+					/>
+				</HStack>
+				<HStack className="w-full gap-4">
+					<FormField
+						control={form.control}
+						name="limit_usage_to_x_items"
+						render={({ field }) => (
+							<View className="flex-1">
+								<FormInput
+									label={t('coupons.limit_usage_to_x_items')}
+									keyboardType="number-pad"
+									{...field}
+									value={field.value == null ? '' : String(field.value)}
+									onChange={(text) => field.onChange(toUsageLimit(text))}
+								/>
+							</View>
+						)}
+					/>
+					<View className="flex-1" />
 				</HStack>
 				<MetaDataForm />
 				<HStack className="justify-end">
