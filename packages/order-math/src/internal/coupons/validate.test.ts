@@ -7,13 +7,20 @@
  * can give instant feedback before sending the order to the server. Every
  * validation rule has its own describe block with pass/fail edge cases.
  */
-import { type CouponValidationContext, validateCoupon } from './coupon-validation';
+import { type CouponValidationContext, validateCoupon } from './validate';
 
-import type { CouponLineItem } from './coupon-helpers';
+import type { CouponLineItem } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Factories
 // ---------------------------------------------------------------------------
+
+/**
+ * Fixed clock for deterministic expiry checks — validateCoupon takes the time
+ * via context.now instead of reading Date.now() (SPEC §4). Expiry fixtures are
+ * built relative to this instant so the pass/fail semantics are unchanged.
+ */
+const FIXED_NOW = Date.UTC(2026, 0, 15);
 
 const createItem = (overrides: Partial<CouponLineItem> = {}): CouponLineItem => ({
 	product_id: 1,
@@ -34,6 +41,7 @@ const createContext = (
 	cartSubtotal: 100,
 	customerEmail: 'test@example.com',
 	customerId: 42,
+	now: FIXED_NOW,
 	...overrides,
 });
 
@@ -74,7 +82,7 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon has already been applied.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'already_applied' } });
 			});
 
 			it('should pass when a different coupon is applied', () => {
@@ -97,7 +105,7 @@ describe('coupon-validation', () => {
 			});
 
 			it('should pass when expiry date is in the future', () => {
-				const future = new Date(Date.now() + 86_400_000).toISOString();
+				const future = new Date(FIXED_NOW + 86_400_000).toISOString();
 				const coupon = createCoupon({ date_expires_gmt: future });
 
 				const result = validateCoupon(coupon, createContext());
@@ -105,17 +113,17 @@ describe('coupon-validation', () => {
 			});
 
 			it('should fail when expiry date is in the past', () => {
-				const past = new Date(Date.now() - 86_400_000).toISOString();
+				const past = new Date(FIXED_NOW - 86_400_000).toISOString();
 				const coupon = createCoupon({ date_expires_gmt: past });
 
 				const result = validateCoupon(coupon, createContext());
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon has expired.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'expired' } });
 			});
 
 			it('should parse bare ISO strings (no Z suffix) as UTC, not local time', () => {
 				// WooCommerce sends date_expires_gmt without Z suffix
-				const futureUtc = new Date(Date.now() + 86_400_000);
+				const futureUtc = new Date(FIXED_NOW + 86_400_000);
 				const bareIso = futureUtc.toISOString().replace('Z', '');
 				const coupon = createCoupon({ date_expires_gmt: bareIso });
 
@@ -124,7 +132,7 @@ describe('coupon-validation', () => {
 			});
 
 			it('should handle date strings with explicit Z suffix', () => {
-				const future = new Date(Date.now() + 86_400_000).toISOString();
+				const future = new Date(FIXED_NOW + 86_400_000).toISOString();
 				expect(future.endsWith('Z')).toBe(true);
 				const coupon = createCoupon({ date_expires_gmt: future });
 
@@ -133,7 +141,7 @@ describe('coupon-validation', () => {
 			});
 
 			it('should handle date strings with timezone offset', () => {
-				const future = new Date(Date.now() + 86_400_000);
+				const future = new Date(FIXED_NOW + 86_400_000);
 				const withOffset = future.toISOString().replace('Z', '+00:00');
 				const coupon = createCoupon({ date_expires_gmt: withOffset });
 
@@ -168,14 +176,14 @@ describe('coupon-validation', () => {
 				const coupon = createCoupon({ usage_limit: 10, usage_count: 10 });
 				const result = validateCoupon(coupon, createContext());
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('Coupon usage limit has been reached.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'usage_limit_reached' } });
 			});
 
 			it('should fail when usage count exceeds the limit', () => {
 				const coupon = createCoupon({ usage_limit: 5, usage_count: 8 });
 				const result = validateCoupon(coupon, createContext());
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('Coupon usage limit has been reached.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'usage_limit_reached' } });
 			});
 		});
 
@@ -215,7 +223,10 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('Coupon usage limit has been reached for this customer.');
+				expect(result).toEqual({
+					valid: false,
+					rejection: { code: 'usage_limit_reached_for_customer' },
+				});
 			});
 
 			it('should skip the check when there is no customer on the order', () => {
@@ -239,7 +250,10 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('Coupon usage limit has been reached for this customer.');
+				expect(result).toEqual({
+					valid: false,
+					rejection: { code: 'usage_limit_reached_for_customer' },
+				});
 			});
 		});
 
@@ -275,7 +289,10 @@ describe('coupon-validation', () => {
 				const coupon = createCoupon({ minimum_amount: '50' });
 				const result = validateCoupon(coupon, createContext({ cartSubtotal: 30 }));
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('Minimum spend of 50 not met.');
+				expect(result).toEqual({
+					valid: false,
+					rejection: { code: 'minimum_spend_not_met', params: { amount: '50' } },
+				});
 			});
 		});
 
@@ -311,7 +328,10 @@ describe('coupon-validation', () => {
 				const coupon = createCoupon({ maximum_amount: '200' });
 				const result = validateCoupon(coupon, createContext({ cartSubtotal: 250 }));
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('Maximum spend of 200 exceeded.');
+				expect(result).toEqual({
+					valid: false,
+					rejection: { code: 'maximum_spend_exceeded', params: { amount: '200' } },
+				});
 			});
 		});
 
@@ -341,7 +361,10 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon cannot be used with other coupons.');
+				expect(result).toEqual({
+					valid: false,
+					rejection: { code: 'individual_use', params: { code: 'SOLO' } },
+				});
 			});
 
 			it('should fail when an already-applied coupon has individual_use (reverse check)', () => {
@@ -353,8 +376,10 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toContain('SOLO');
-				expect(result.error).toContain('cannot be used with other coupons');
+				expect(result).toEqual({
+					valid: false,
+					rejection: { code: 'individual_use_conflict', params: { code: 'SOLO' } },
+				});
 			});
 
 			it('should pass when appliedCouponsWithIndividualUse is empty', () => {
@@ -432,7 +457,7 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon is not valid for your email address.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'email_not_allowed' } });
 			});
 
 			it('should fail when wildcard domain does not match', () => {
@@ -441,7 +466,7 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon is not valid for your email address.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'email_not_allowed' } });
 			});
 
 			it('should reject email-restricted coupon when no customer email is on the order', () => {
@@ -451,7 +476,7 @@ describe('coupon-validation', () => {
 				// Without an email we cannot validate against restrictions, so reject
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon requires an email address.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'email_required' } });
 			});
 		});
 
@@ -493,7 +518,7 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon is not applicable to items in your cart.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'not_applicable_to_cart' } });
 			});
 
 			it('should pass when some items are on sale but others are not', () => {
@@ -525,7 +550,7 @@ describe('coupon-validation', () => {
 				// when ANY sale item is in the cart (unlike percent/fixed_product which just skip sale items)
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon is not applicable to items in your cart.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'not_applicable_to_cart' } });
 			});
 
 			it('should ACCEPT fixed_product coupon when some items are on sale and exclude_sale_items is true', () => {
@@ -591,7 +616,7 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon is not applicable to items in your cart.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'not_applicable_to_cart' } });
 			});
 
 			it('should fail when all items are in excluded_product_ids', () => {
@@ -602,7 +627,7 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon is not applicable to items in your cart.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'not_applicable_to_cart' } });
 			});
 
 			it('should pass when some items are excluded but others are eligible', () => {
@@ -633,7 +658,7 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon is not applicable to items in your cart.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'not_applicable_to_cart' } });
 			});
 
 			it('should fail when all items belong to excluded categories', () => {
@@ -647,7 +672,7 @@ describe('coupon-validation', () => {
 
 				const result = validateCoupon(coupon, context);
 				expect(result.valid).toBe(false);
-				expect(result.error).toBe('This coupon is not applicable to items in your cart.');
+				expect(result).toEqual({ valid: false, rejection: { code: 'not_applicable_to_cart' } });
 			});
 
 			it('should pass when some items are in excluded categories but others are not', () => {
@@ -668,16 +693,18 @@ describe('coupon-validation', () => {
 		// Valid coupon (happy path)
 		// ---------------------------------------------------------------
 		describe('valid coupon', () => {
-			it('should return valid: true with no error for a fully valid coupon', () => {
+			it('should return valid: true with no rejection for a fully valid coupon', () => {
 				const coupon = createCoupon();
 				const result = validateCoupon(coupon, createContext());
 
 				expect(result).toEqual({ valid: true });
-				expect(result.error).toBeUndefined();
+				if (!result.valid) {
+					throw new Error('Expected valid coupon');
+				}
 			});
 
 			it('should return valid: true for a coupon with future expiry and under limits', () => {
-				const future = new Date(Date.now() + 86_400_000).toISOString();
+				const future = new Date(FIXED_NOW + 86_400_000).toISOString();
 				const coupon = createCoupon({
 					date_expires_gmt: future,
 					usage_limit: 100,

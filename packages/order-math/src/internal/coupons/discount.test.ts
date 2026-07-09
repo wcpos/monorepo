@@ -9,10 +9,10 @@
  * - fixed_cart: fixed amount distributed proportionally
  * - fixed_product: fixed amount per unit of eligible items
  */
-import { calculateCouponDiscount } from './coupon-discount';
+import { calculateCouponDiscount } from './discount';
 
-import type { CouponDiscountConfig } from './coupon-discount';
-import type { CouponLineItem } from './coupon-helpers';
+import type { CouponDiscountConfig } from './discount';
+import type { CouponLineItem } from './helpers';
 
 // Helper to create a line item with sensible defaults
 const createItem = (overrides: Partial<CouponLineItem> = {}): CouponLineItem => ({
