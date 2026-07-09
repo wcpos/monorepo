@@ -4,6 +4,8 @@ import { Text } from '@wcpos/components/text';
 
 import type { CellContext } from '@tanstack/react-table';
 
+import { NO_USAGE_LIMIT } from '../../components/coupon/usage-limit';
+
 type CouponDocument = import('@wcpos/database').CouponDocument;
 
 export function Usage({ row }: CellContext<{ document: CouponDocument }, 'usage_count'>) {
@@ -15,7 +17,7 @@ export function Usage({ row }: CellContext<{ document: CouponDocument }, 'usage_
 	// and coupon-validation.ts treats `usage_limit > 0` as the only real limit. Only render
 	// "count / limit" for a positive limit; this also covers the offline/optimistic window
 	// before the server echoes the cleared value back as null.
-	const hasLimit = usageLimit != null && usageLimit > 0;
+	const hasLimit = usageLimit != null && usageLimit > NO_USAGE_LIMIT;
 	const display = hasLimit ? `${usageCount} / ${usageLimit}` : String(usageCount ?? 0);
 
 	return <Text className="text-center">{display}</Text>;
