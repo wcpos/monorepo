@@ -1,11 +1,17 @@
 /**
- * Usage-limit fields (`usage_limit`, `usage_limit_per_user`, `limit_usage_to_x_items`) are
- * "no limit" when unset, which WooCommerce stores as null.
+ * Usage-limit fields (`usage_limit`, `usage_limit_per_user`, `limit_usage_to_x_items`) mean
+ * "no limit" when unset. Two WooCommerce coupon REST behaviours — both verified against WC
+ * core (Version2 coupons controller + WC_Coupon) — dictate that we clear with 0, not null:
  *
- * We cannot submit null to clear a limit: WC_REST_Coupons_Controller skips every writable
- * property that arrives as null, so a full-document POST built from a cleared field would
- * leave the previous limit in place. Sending 0 clears it instead — WC_Coupon::set_usage_limit()
- * maps any value below 1 back to null, and the server echoes null in the response.
+ *   1. `prepare_object_for_database()` skips any writable property that arrives as `null`
+ *      (`if ( ! is_null( $value ) )`). So POSTing `usage_limit: null` in the full-document
+ *      push from `usePushDocument` leaves an existing limit untouched — null cannot clear.
+ *   2. The setters run the value through `absint()` (0 for a blank field), so 0 is a real
+ *      write that clears the limit. `get_formatted_item_data()` then coerces 0 back to `null`
+ *      for all three fields in the response, so the server always echoes `null` for "no limit".
+ *
+ * Net: submit 0 to clear. It is written and clears the limit, and the server echoes `null`,
+ * which the usage column renders as "no limit".
  */
 export const NO_USAGE_LIMIT = 0;
 
