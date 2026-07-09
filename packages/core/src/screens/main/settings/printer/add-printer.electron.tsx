@@ -11,6 +11,11 @@ import { type DiscoveredPrinter, type PrinterProfile, usePrinterDiscovery } from
 
 import { AdvancedSettings } from './dialog/advanced-settings';
 import { ConnectionTypeSegmented } from './dialog/connection/connection-type-segmented';
+import {
+	isBluetoothPickerPrinter,
+	isSerialBackedBluetooth,
+	isUsbLikeDevice,
+} from './dialog/connection/discovered-printer-filters';
 import { ElectronBtPicker } from './dialog/connection/electron-bt-picker';
 import { OsPrintersSection } from './dialog/connection/os-printers-section';
 import { UsbPrintersSection } from './dialog/connection/usb-printers-section';
@@ -46,7 +51,7 @@ function DeviceList({
 	printers: DiscoveredPrinter[];
 	type: 'usb' | 'bluetooth';
 }) {
-	const devices = printers.filter((p) => p.connectionType === type);
+	const devices = printers.filter(type === 'usb' ? isUsbLikeDevice : isBluetoothPickerPrinter);
 	const selectedAddress = useWatch({
 		control: form.control,
 		name: 'address',
@@ -184,7 +189,7 @@ export function PrinterDialog({
 						printers={printers}
 						onScan={connectUsbDevice}
 						scanning={isUsbScanning}
-						addressPrefix="winspool:"
+						targetKind="winspool"
 						heading={t('settings.installed_printers', 'Installed printers')}
 						hint={t(
 							'settings.installed_printers_hint',
@@ -200,7 +205,7 @@ export function PrinterDialog({
 						printers={printers}
 						onScan={connectSerialDevice}
 						scanning={isSerialScanning}
-						addressPrefix="serial:"
+						targetKind="serial"
 						heading={t('settings.paired_printers', 'Paired Bluetooth printers')}
 						hint={t(
 							'settings.paired_printers_hint',
@@ -258,7 +263,7 @@ export function PrinterDialog({
 				{/* serial: entries are owned by the paired-printers section above; exclude them here */}
 				<DeviceList
 					form={form}
-					printers={printers.filter((p) => !p.address?.startsWith('serial:'))}
+					printers={printers.filter((p) => !isSerialBackedBluetooth(p))}
 					type="bluetooth"
 				/>
 			</VStack>

@@ -179,22 +179,8 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		setError(null);
 		setIsUsbScanning(true);
 		try {
-			const devices = (await ipc.invoke('usb-discovery', {})) as {
-				id: string;
-				name: string;
-			}[];
-			setPrinters((prev) =>
-				mergePrinters(
-					prev,
-					devices.map((d) => ({
-						id: d.id,
-						name: d.name,
-						connectionType: 'usb' as const,
-						address: d.id,
-						vendor: 'generic' as const,
-					}))
-				)
-			);
+			const devices = (await ipc.invoke('usb-discovery', {})) as DiscoveredPrinter[];
+			setPrinters((prev) => mergePrinters(prev, devices));
 			if (devices.length === 0) setError({ code: 'usb-none-found' });
 		} catch (err) {
 			setError({
@@ -215,22 +201,8 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		setError(null);
 		setIsSerialScanning(true);
 		try {
-			const devices = (await ipc.invoke('serial-discovery', {})) as {
-				id: string;
-				name: string;
-			}[];
-			setPrinters((prev) =>
-				mergePrinters(
-					prev,
-					devices.map((d) => ({
-						id: d.id,
-						name: d.name,
-						connectionType: 'bluetooth' as const,
-						address: d.id,
-						vendor: 'generic' as const,
-					}))
-				)
-			);
+			const devices = (await ipc.invoke('serial-discovery', {})) as DiscoveredPrinter[];
+			setPrinters((prev) => mergePrinters(prev, devices));
 			// No error on empty result — the paired-printers section renders its own empty state.
 		} catch (err) {
 			setError({
