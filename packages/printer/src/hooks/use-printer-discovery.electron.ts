@@ -3,6 +3,8 @@ import * as React from 'react';
 
 import WebBluetoothReceiptPrinter from '@point-of-sale/webbluetooth-receipt-printer';
 
+import type { TypedIpcRenderer } from '@wcpos/printer/ipc-channels';
+
 import {
 	type BluetoothScanSession,
 	createBluetoothScanSession,
@@ -48,16 +50,10 @@ interface UsePrinterDiscoveryResult {
 	error: DiscoveryError | null;
 }
 
-interface ElectronIpc {
-	invoke: (channel: string, data: unknown) => Promise<unknown>;
-	send: (channel: string, args: unknown) => void;
-	on: (channel: string, cb: (...args: unknown[]) => void) => () => void;
-}
-
-function getIpcRenderer(): ElectronIpc | null {
+function getIpcRenderer(): TypedIpcRenderer | null {
 	const w = window as {
-		ipcRenderer?: ElectronIpc;
-		electronAPI?: { ipcRenderer?: ElectronIpc };
+		ipcRenderer?: TypedIpcRenderer;
+		electronAPI?: { ipcRenderer?: TypedIpcRenderer };
 	};
 	return w.ipcRenderer ?? w.electronAPI?.ipcRenderer ?? null;
 }
@@ -97,8 +93,8 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 	React.useEffect(() => {
 		const ipc = getIpcRenderer();
 		if (!ipc?.on) return;
-		const unsubscribe = ipc.on('bluetooth-devices', (...args) => {
-			setBluetoothCandidates((args[0] as BluetoothCandidate[]) ?? []);
+		const unsubscribe = ipc.on('bluetooth-devices', (candidates) => {
+			setBluetoothCandidates(candidates ?? []);
 		});
 		return () => {
 			unsubscribe();
@@ -145,9 +141,9 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		setError(null);
 
 		try {
-			const result = (await ipc.invoke('printer-discovery', {
+			const result = await ipc.invoke('printer-discovery', {
 				action: 'start',
-			})) as DiscoveredPrinter[];
+			});
 			setPrinters((prev) => {
 				// Keep manually-added printers (id format: "address:port")
 				// Discovered printers use prefixed ids like "mdns-host" or "epson-addr"
@@ -179,7 +175,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		setError(null);
 		setIsUsbScanning(true);
 		try {
-			const devices = (await ipc.invoke('usb-discovery', {})) as DiscoveredPrinter[];
+			const devices = await ipc.invoke('usb-discovery', {});
 			setPrinters((prev) => mergePrinters(prev, devices));
 			if (devices.length === 0) setError({ code: 'usb-none-found' });
 		} catch (err) {
@@ -201,7 +197,7 @@ export function usePrinterDiscovery(): UsePrinterDiscoveryResult {
 		setError(null);
 		setIsSerialScanning(true);
 		try {
-			const devices = (await ipc.invoke('serial-discovery', {})) as DiscoveredPrinter[];
+			const devices = await ipc.invoke('serial-discovery', {});
 			setPrinters((prev) => mergePrinters(prev, devices));
 			// No error on empty result — the paired-printers section renders its own empty state.
 		} catch (err) {
