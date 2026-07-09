@@ -9,7 +9,15 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./encoder": "./src/encoder/index.ts",
-		"./encoder/render-preview": "./src/encoder/render-preview.ts"
+		"./encoder/render-preview": "./src/encoder/render-preview.ts",
+		"./transport/device-key": "./src/transport/device-key.ts"
+	},
+	"typesVersions": {
+		"*": {
+			"transport/device-key": [
+				"src/transport/device-key.ts"
+			]
+		}
 	},
 	"files": [
 		"src/**"

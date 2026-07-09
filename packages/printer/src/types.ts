@@ -37,12 +37,13 @@ export interface PrinterTransport {
 }
 
 /**
- * Discovered printer from network/BLE/USB scan.
+ * Discovered printer from platform discovery. Electron may report system-backed
+ * spooler queues; cloud printers are synthesized elsewhere, not scanned.
  */
 export interface DiscoveredPrinter {
 	id: string;
 	name: string;
-	connectionType: 'network' | 'bluetooth' | 'usb';
+	connectionType: 'network' | 'bluetooth' | 'usb' | 'system';
 	address: string;
 	port?: number;
 	vendor?: 'epson' | 'star' | 'generic';

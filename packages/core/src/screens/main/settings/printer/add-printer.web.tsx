@@ -173,6 +173,8 @@ export function PrinterDialog({
 						key={device.id}
 						testID={`add-printer-web-device-${device.id}`}
 						onPress={() => {
+							// OS spooler queues are Electron-only; the web form never offers 'system'.
+							if (device.connectionType === 'system') return;
 							form.setValue('connectionType', device.connectionType, { shouldValidate: true });
 							form.setValue('address', device.address ?? '', { shouldValidate: true });
 							form.setValue('name', device.name);
