@@ -10,10 +10,10 @@
  * - Non-sequential (default): each coupon applies to the original POS price
  * - Sequential: each coupon applies to the already-discounted price
  */
-import { recalculateCoupons } from './coupon-recalculate';
+import { recalculateCoupons } from './recalculate';
 
-import type { RecalculateInput, RecalculateResult } from './coupon-recalculate';
-import type { CouponDiscountConfig } from './coupon-discount';
+import type { RecalculateInput, RecalculateResult } from './recalculate';
+import type { CouponDiscountConfig } from './discount';
 
 // ---------------------------------------------------------------------------
 // Helpers

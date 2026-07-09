@@ -7,10 +7,10 @@
  * coupon in sequence and verifying the combined discount. In non-sequential mode
  * (WooCommerce default), each coupon calculates against the ORIGINAL item prices.
  */
-import { calculateCouponDiscount } from './coupon-discount';
+import { calculateCouponDiscount } from './discount';
 
-import type { CouponDiscountConfig } from './coupon-discount';
-import type { CouponLineItem } from './coupon-helpers';
+import type { CouponDiscountConfig } from './discount';
+import type { CouponLineItem } from './helpers';
 
 const createItem = (overrides: Partial<CouponLineItem> = {}): CouponLineItem => ({
 	product_id: 1,

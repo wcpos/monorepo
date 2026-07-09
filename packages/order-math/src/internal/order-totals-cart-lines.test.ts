@@ -1,4 +1,4 @@
-import { calculateOrderTotals } from './calculate-order-totals';
+import { calculateOrderTotals } from './order-totals';
 
 /**
  * Regression test: when coupon replay adjusts line items, computing totals

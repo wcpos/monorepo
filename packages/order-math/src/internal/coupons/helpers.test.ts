@@ -15,7 +15,7 @@ import {
 	enrichCategoriesWithAncestors,
 	getEligibleItems,
 	isProductOnSale,
-} from './coupon-helpers';
+} from './helpers';
 
 // Factory for building test line items
 const createItem = (overrides: Partial<CouponLineItem> = {}): CouponLineItem => ({

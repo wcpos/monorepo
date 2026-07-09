@@ -1,18 +1,6 @@
-import type { TypedIpcRenderer } from '@wcpos/printer/ipc-channels';
+import { ipcPrintRaw, PRINT_TIMEOUT_MS } from './ipc-print.electron';
 
 import type { PrinterTransport } from '../types';
-
-type ElectronWindow = Window & {
-	ipcRenderer?: TypedIpcRenderer;
-};
-
-function getIpc(): TypedIpcRenderer {
-	const ipc = (window as ElectronWindow).ipcRenderer;
-	if (!ipc) throw new Error('Electron ipcRenderer not available');
-	return ipc;
-}
-
-const PRINT_TIMEOUT_MS = 30_000;
 
 /**
  * Electron network adapter.
@@ -28,22 +16,15 @@ export class NetworkAdapter implements PrinterTransport {
 	) {}
 
 	async printRaw(data: Uint8Array): Promise<void> {
-		const ipc = getIpc();
-		// Send as regular array — Uint8Array doesn't serialize across IPC cleanly
-		const result = Promise.race([
-			ipc.invoke('print-raw-tcp', {
+		await ipcPrintRaw(
+			'print-raw-tcp',
+			{
 				host: this.host,
 				port: this.port,
-				data: Array.from(data),
-			}),
-			new Promise<never>((_, reject) =>
-				setTimeout(
-					() => reject(new Error(`Print timed out after ${PRINT_TIMEOUT_MS}ms`)),
-					PRINT_TIMEOUT_MS
-				)
-			),
-		]);
-		await result;
+				data,
+			},
+			`Print timed out after ${PRINT_TIMEOUT_MS}ms`
+		);
 	}
 
 	async printHtml(_html: string): Promise<void> {

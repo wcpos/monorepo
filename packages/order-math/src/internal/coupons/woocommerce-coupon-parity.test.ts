@@ -20,11 +20,11 @@
  * - fixed_cart distributes proportionally across eligible items
  * - Discount can never exceed the item price (no negative totals)
  */
-import { calculateCouponDiscount } from './coupon-discount';
-import { applyPerItemDiscountsToLineItems } from './coupon-helpers';
+import { calculateCouponDiscount } from './discount';
+import { applyPerItemDiscountsToLineItems } from './helpers';
 
-import type { CouponDiscountConfig } from './coupon-discount';
-import type { CouponLineItem } from './coupon-helpers';
+import type { CouponDiscountConfig } from './discount';
+import type { CouponLineItem } from './helpers';
 
 const item = (product_id: number, price: number, quantity: number): CouponLineItem => ({
 	product_id,

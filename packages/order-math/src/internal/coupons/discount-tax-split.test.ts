@@ -7,9 +7,9 @@
  * The function always receives ex-tax discount amounts. When prices include tax,
  * the caller is responsible for converting to ex-tax first via convertDiscountsToExTax.
  */
-import { calculateCouponDiscountTaxSplit } from './coupon-helpers';
+import { calculateCouponDiscountTaxSplit } from './helpers';
 
-import type { PerItemDiscount } from './coupon-discount';
+import type { PerItemDiscount } from './discount';
 
 // Standard 10% tax rate (non-compound)
 const standardRate10 = {
