@@ -2,9 +2,9 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/text';
 
-import type { CellContext } from '@tanstack/react-table';
-
 import { NO_USAGE_LIMIT } from '../../components/coupon/usage-limit';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type CouponDocument = import('@wcpos/database').CouponDocument;
 
