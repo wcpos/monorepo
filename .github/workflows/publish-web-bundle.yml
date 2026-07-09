@@ -43,11 +43,16 @@ jobs:
             monorepo
             web-bundle
 
-      - name: 📥 Check out monorepo (with submodules)
+      - name: 📥 Check out monorepo
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.inputs.monorepo_ref }}
-          submodules: true
+          # submodules: false — recursive checkout hard-fails on the private .wiki
+          # submodule, which the app token can't read. The repo preinstall runs
+          # `git submodule update --init || true`, initializing the public
+          # apps/web + apps/electron submodules and skipping .wiki, exactly like
+          # the Deploy workflow.
+          submodules: false
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
