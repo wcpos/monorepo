@@ -28,6 +28,8 @@ const APP_PACKAGE_VERSION = JSON.parse(
 	fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
 ).version;
 const VERSION_STUBBED_CONTEXTS = new WeakSet<BrowserContext>();
+const AUTH_ENTRY_ATTEMPTS = 3;
+const AUTH_ENTRY_RETRY_DELAY_MS = 15_000;
 
 export function isRouteTeardownError(error: unknown): boolean {
 	if (!(error instanceof Error)) {
@@ -35,6 +37,28 @@ export function isRouteTeardownError(error: unknown): boolean {
 	}
 
 	return error.message.includes('Target page, context or browser has been closed');
+}
+
+export async function waitForAuthEntry(page: Page): Promise<void> {
+	for (let attempt = 1; attempt <= AUTH_ENTRY_ATTEMPTS; attempt++) {
+		await page.goto('/', { waitUntil: 'commit' });
+		try {
+			await page.getByTestId('enter-demo-store-button').waitFor({
+				state: 'visible',
+				timeout: 60_000,
+			});
+			return;
+		} catch (error) {
+			if (attempt === AUTH_ENTRY_ATTEMPTS) {
+				throw error;
+			}
+
+			console.log(
+				`[auth] Deployment shell unavailable (attempt ${attempt}/${AUTH_ENTRY_ATTEMPTS}), retrying...`
+			);
+			await page.waitForTimeout(AUTH_ENTRY_RETRY_DELAY_MS * attempt);
+		}
+	}
 }
 
 /**
@@ -184,10 +208,7 @@ export async function authenticateWithStore(page: Page, testInfo: TestInfo) {
 	});
 
 	console.log('[auth] Navigating to /');
-	await page.goto('/', { waitUntil: 'commit' });
-	await expect(page.getByTestId('enter-demo-store-button')).toBeVisible({
-		timeout: 60_000,
-	});
+	await waitForAuthEntry(page);
 	console.log('[auth] Enter Demo Store button visible');
 
 	// Type the store URL and connect
