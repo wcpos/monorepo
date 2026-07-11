@@ -24,35 +24,66 @@
  * collections (the web app's createDatabase recipe) open identically.
  */
 
-import type { RxDatabase } from 'rxdb';
-import { recordMutationQueueSchema, recordMutationQueueMigrationStrategies, MUTATION_QUEUE_COLLECTION } from '@woo-rxdb-lab/sync-core';
-import { orderSchema, orderMigrationStrategies } from './order-schema';
-import { productSchema, productMigrationStrategies } from './product-schema';
-import { variationSchema, variationMigrationStrategies } from './variation-schema';
+import {
+	MUTATION_QUEUE_COLLECTION,
+	recordMutationQueueMigrationStrategies,
+	recordMutationQueueSchema,
+} from '@wcpos/sync-core';
+
+import { orderMigrationStrategies, orderSchema } from './order-schema';
+import { productMigrationStrategies, productSchema } from './product-schema';
+import { variationMigrationStrategies, variationSchema } from './variation-schema';
 import { customerSchema } from './customer-schema';
 import { taxRateSchema } from './tax-rate-schema';
-import { categorySchema, brandSchema, tagSchema, couponSchema } from './reference-collection-schema';
+import {
+	brandSchema,
+	categorySchema,
+	couponSchema,
+	tagSchema,
+} from './reference-collection-schema';
 import { existenceManifestSchema } from '../local-coverage/existence-manifest-schema';
-import { syncCheckpointSchema, syncCheckpointMigrationStrategies } from './sync-checkpoint-schema';
-import { schedulerTaskStateSchema, schedulerTaskStateMigrationStrategies } from '../scheduler/scheduler-task-state-schema';
-import { coverageRecordSchema, coverageRecordMigrationStrategies, coverageLaneSchema, coverageLaneMigrationStrategies } from '../local-coverage/coverage-schema';
-import { coverageCompactionLeaseSchema, coverageCompactionLeaseMigrationStrategies } from '../local-coverage/coverage-compaction-lease-schema';
-import { coverageCompactionFailureSchema, coverageCompactionFailureMigrationStrategies } from '../local-coverage/coverage-compaction-failure-schema';
-import { queryTotalCacheSchema, queryTotalCacheMigrationStrategies } from '../scheduler/query-total-cache-schema';
-import { queryTotalRequestStateSchema, queryTotalRequestStateMigrationStrategies } from '../scheduler/query-total-request-state-schema';
+import { syncCheckpointMigrationStrategies, syncCheckpointSchema } from './sync-checkpoint-schema';
+import {
+	schedulerTaskStateMigrationStrategies,
+	schedulerTaskStateSchema,
+} from '../scheduler/scheduler-task-state-schema';
+import {
+	coverageLaneMigrationStrategies,
+	coverageLaneSchema,
+	coverageRecordMigrationStrategies,
+	coverageRecordSchema,
+} from '../local-coverage/coverage-schema';
+import {
+	coverageCompactionLeaseMigrationStrategies,
+	coverageCompactionLeaseSchema,
+} from '../local-coverage/coverage-compaction-lease-schema';
+import {
+	coverageCompactionFailureMigrationStrategies,
+	coverageCompactionFailureSchema,
+} from '../local-coverage/coverage-compaction-failure-schema';
+import {
+	queryTotalCacheMigrationStrategies,
+	queryTotalCacheSchema,
+} from '../scheduler/query-total-cache-schema';
+import {
+	queryTotalRequestStateMigrationStrategies,
+	queryTotalRequestStateSchema,
+} from '../scheduler/query-total-request-state-schema';
 import { changeSignalStateSchema } from '../change-signal/change-signal-state-schema';
+
+import type { RxDatabase } from 'rxdb';
 
 /** The syncable collections a host can reset through the public handle. */
 export const SYNC_COLLECTION_NAMES = [
-  'orders',
-  'products',
-  'variations',
-  'customers',
-  'taxRates',
-  'categories',
-  'brands',
-  'tags',
-  'coupons',
+	'orders',
+	'products',
+	'variations',
+	'customers',
+	'taxRates',
+	'categories',
+	'brands',
+	'tags',
+	'coupons',
 ] as const;
 
 export type SyncCollectionName = (typeof SYNC_COLLECTION_NAMES)[number];
@@ -70,39 +101,39 @@ export const MUTATION_QUEUE_RXDB_COLLECTION = 'recordMutations';
 export const ENGINE_KV_COLLECTION = 'engineKv';
 
 export type EngineKvDocument = {
-  id: string;
-  value: string;
+	id: string;
+	value: string;
 };
 
 export const engineKvSchema = {
-  title: 'Sync engine internal key-value store',
-  version: 0,
-  primaryKey: 'id',
-  type: 'object',
-  properties: {
-    id: { type: 'string', maxLength: 256 },
-    value: { type: 'string' },
-  },
-  required: ['id', 'value'],
+	title: 'Sync engine internal key-value store',
+	version: 0,
+	primaryKey: 'id',
+	type: 'object',
+	properties: {
+		id: { type: 'string', maxLength: 256 },
+		value: { type: 'string' },
+	},
+	required: ['id', 'value'],
 } as const;
 
 export type CollectionCreator = { schema: unknown; migrationStrategies?: unknown };
 
 const SYNC_COLLECTION_CREATORS: Record<SyncCollectionName, CollectionCreator> = {
-  orders: { schema: orderSchema, migrationStrategies: orderMigrationStrategies },
-  products: { schema: productSchema, migrationStrategies: productMigrationStrategies },
-  variations: { schema: variationSchema, migrationStrategies: variationMigrationStrategies },
-  customers: { schema: customerSchema },
-  taxRates: { schema: taxRateSchema },
-  categories: { schema: categorySchema },
-  brands: { schema: brandSchema },
-  tags: { schema: tagSchema },
-  coupons: { schema: couponSchema },
+	orders: { schema: orderSchema, migrationStrategies: orderMigrationStrategies },
+	products: { schema: productSchema, migrationStrategies: productMigrationStrategies },
+	variations: { schema: variationSchema, migrationStrategies: variationMigrationStrategies },
+	customers: { schema: customerSchema },
+	taxRates: { schema: taxRateSchema },
+	categories: { schema: categorySchema },
+	brands: { schema: brandSchema },
+	tags: { schema: tagSchema },
+	coupons: { schema: couponSchema },
 };
 
 /** Deliberate `/testing` seam for hosts that open schema-canary databases. */
 export function engineSyncCollectionCreators(): Record<SyncCollectionName, CollectionCreator> {
-  return { ...SYNC_COLLECTION_CREATORS };
+	return { ...SYNC_COLLECTION_CREATORS };
 }
 
 /**
@@ -114,49 +145,82 @@ export function engineSyncCollectionCreators(): Record<SyncCollectionName, Colle
  * recipe byte-for-byte so an adopted host opens its existing data unchanged.
  */
 const SCHEDULER_TIER_CREATORS: Record<string, CollectionCreator> = {
-  schedulerTaskStates: { schema: schedulerTaskStateSchema, migrationStrategies: schedulerTaskStateMigrationStrategies },
-  coverageRecords: { schema: coverageRecordSchema, migrationStrategies: coverageRecordMigrationStrategies },
-  coverageLanes: { schema: coverageLaneSchema, migrationStrategies: coverageLaneMigrationStrategies },
-  coverageCompactionLeases: { schema: coverageCompactionLeaseSchema, migrationStrategies: coverageCompactionLeaseMigrationStrategies },
-  coverageCompactionFailures: { schema: coverageCompactionFailureSchema, migrationStrategies: coverageCompactionFailureMigrationStrategies },
-  queryTotalCacheEntries: { schema: queryTotalCacheSchema, migrationStrategies: queryTotalCacheMigrationStrategies },
-  queryTotalRequestStates: { schema: queryTotalRequestStateSchema, migrationStrategies: queryTotalRequestStateMigrationStrategies },
-  existenceManifest: { schema: existenceManifestSchema },
-  existenceManifestCustomers: { schema: existenceManifestSchema },
-  existenceManifestOrders: { schema: existenceManifestSchema },
-  // The custom-pull checkpoint/epoch store (slice 5e): the orders scheduler
-  // fetcher's checkpoint seam — mirrors the web createDatabase recipe.
-  syncCheckpoints: { schema: syncCheckpointSchema, migrationStrategies: syncCheckpointMigrationStrategies },
+	schedulerTaskStates: {
+		schema: schedulerTaskStateSchema,
+		migrationStrategies: schedulerTaskStateMigrationStrategies,
+	},
+	coverageRecords: {
+		schema: coverageRecordSchema,
+		migrationStrategies: coverageRecordMigrationStrategies,
+	},
+	coverageLanes: {
+		schema: coverageLaneSchema,
+		migrationStrategies: coverageLaneMigrationStrategies,
+	},
+	coverageCompactionLeases: {
+		schema: coverageCompactionLeaseSchema,
+		migrationStrategies: coverageCompactionLeaseMigrationStrategies,
+	},
+	coverageCompactionFailures: {
+		schema: coverageCompactionFailureSchema,
+		migrationStrategies: coverageCompactionFailureMigrationStrategies,
+	},
+	queryTotalCacheEntries: {
+		schema: queryTotalCacheSchema,
+		migrationStrategies: queryTotalCacheMigrationStrategies,
+	},
+	queryTotalRequestStates: {
+		schema: queryTotalRequestStateSchema,
+		migrationStrategies: queryTotalRequestStateMigrationStrategies,
+	},
+	existenceManifest: { schema: existenceManifestSchema },
+	existenceManifestCustomers: { schema: existenceManifestSchema },
+	existenceManifestOrders: { schema: existenceManifestSchema },
+	// The custom-pull checkpoint/epoch store (slice 5e): the orders scheduler
+	// fetcher's checkpoint seam — mirrors the web createDatabase recipe.
+	syncCheckpoints: {
+		schema: syncCheckpointSchema,
+		migrationStrategies: syncCheckpointMigrationStrategies,
+	},
 };
 
 /** The full addCollections() argument for one engine scope database. */
 export function engineCollectionCreators(): Record<string, CollectionCreator> {
-  return {
-    ...SYNC_COLLECTION_CREATORS,
-    ...SCHEDULER_TIER_CREATORS,
-    [MUTATION_QUEUE_RXDB_COLLECTION]: { schema: recordMutationQueueSchema, migrationStrategies: recordMutationQueueMigrationStrategies },
-    [ENGINE_KV_COLLECTION]: { schema: engineKvSchema },
-    // Compatibility-only: existing web scope databases persisted the hybrid
-    // cursor here before facade adoption. createRxdbSyncEngine copies its one
-    // row into engineKv before ready resolves.
-    changeSignalStates: { schema: changeSignalStateSchema },
-  };
+	return {
+		...SYNC_COLLECTION_CREATORS,
+		...SCHEDULER_TIER_CREATORS,
+		[MUTATION_QUEUE_RXDB_COLLECTION]: {
+			schema: recordMutationQueueSchema,
+			migrationStrategies: recordMutationQueueMigrationStrategies,
+		},
+		[ENGINE_KV_COLLECTION]: { schema: engineKvSchema },
+		// Compatibility-only: existing web scope databases persisted the hybrid
+		// cursor here before facade adoption. createRxdbSyncEngine copies its one
+		// row into engineKv before ready resolves.
+		changeSignalStates: { schema: changeSignalStateSchema },
+	};
 }
 
 export function isResettableCollection(name: string): name is ResettableCollectionName {
-  return name === MUTATION_QUEUE_COLLECTION || (SYNC_COLLECTION_NAMES as readonly string[]).includes(name);
+	return (
+		name === MUTATION_QUEUE_COLLECTION ||
+		(SYNC_COLLECTION_NAMES as readonly string[]).includes(name)
+	);
 }
 
 /** Maps a public reset name to the RxDB collection it drops and recreates. */
 export function rxdbCollectionNameFor(name: ResettableCollectionName): string {
-  return name === MUTATION_QUEUE_COLLECTION ? MUTATION_QUEUE_RXDB_COLLECTION : name;
+	return name === MUTATION_QUEUE_COLLECTION ? MUTATION_QUEUE_RXDB_COLLECTION : name;
 }
 
 /** The creator used to recreate one collection after a reset drop. */
 export function creatorFor(name: ResettableCollectionName): CollectionCreator {
-  return name === MUTATION_QUEUE_COLLECTION
-    ? { schema: recordMutationQueueSchema, migrationStrategies: recordMutationQueueMigrationStrategies }
-    : SYNC_COLLECTION_CREATORS[name];
+	return name === MUTATION_QUEUE_COLLECTION
+		? {
+				schema: recordMutationQueueSchema,
+				migrationStrategies: recordMutationQueueMigrationStrategies,
+			}
+		: SYNC_COLLECTION_CREATORS[name];
 }
 
 /**
@@ -166,12 +230,15 @@ export function creatorFor(name: ResettableCollectionName): CollectionCreator {
  * reset go stale (the same contract as the web host's scope database —
  * apps/web/src/db/createScopeLabDatabase.ts).
  */
-export async function resetEngineCollection(db: RxDatabase, name: ResettableCollectionName): Promise<void> {
-  const rxdbName = rxdbCollectionNameFor(name);
-  const live = db.collections[rxdbName];
-  if (!live) {
-    throw new Error(`Collection "${rxdbName}" is not open on engine database ${db.name}`);
-  }
-  await live.remove();
-  await db.addCollections({ [rxdbName]: creatorFor(name) as never });
+export async function resetEngineCollection(
+	db: RxDatabase,
+	name: ResettableCollectionName
+): Promise<void> {
+	const rxdbName = rxdbCollectionNameFor(name);
+	const live = db.collections[rxdbName];
+	if (!live) {
+		throw new Error(`Collection "${rxdbName}" is not open on engine database ${db.name}`);
+	}
+	await live.remove();
+	await db.addCollections({ [rxdbName]: creatorFor(name) as never });
 }

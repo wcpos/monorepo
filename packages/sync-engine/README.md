@@ -1,4 +1,7 @@
-# `@woo-rxdb-lab/sync-engine-rxdb`
+# `@wcpos/sync-engine`
+
+PORTED-FROM: woo-rxdb-replication-lab@c081086
+
 
 The RxDB binding for the sync engine facade.
 
@@ -17,8 +20,8 @@ Production (`monorepo-v2`) layout is the convention here:
 
 Consumers have exactly two supported doors:
 
-- `@woo-rxdb-lab/sync-engine-rxdb` for the runtime facade and public types;
-- `@woo-rxdb-lab/sync-engine-rxdb/testing` for test-only builders, repositories, schemas, and scenario helpers.
+- `@wcpos/sync-engine` for the runtime facade and public types;
+- `@wcpos/sync-engine/testing` for test-only builders, repositories, schemas, and scenario helpers.
 
 Everything behind those entry points is package-private. Internal paths may not be imported by another package. Moving an internal file must not change either door's exported names.
 

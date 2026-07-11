@@ -1,8 +1,8 @@
 import {
-  reconcileBucketPlan,
-  type LocalManifestEntry,
-  type ReconcileAction,
-  type ServerDigestEntry,
+	type LocalManifestEntry,
+	type ReconcileAction,
+	reconcileBucketPlan,
+	type ServerDigestEntry,
 } from '../reconcile-bucket-plan';
 
 /**
@@ -20,59 +20,65 @@ import {
  */
 
 export type ReconcileSummary = {
-  buckets: number;
-  pruned: number;
-  pulled: number;
-  repulled: number;
-  skippedDirty: number;
+	buckets: number;
+	pruned: number;
+	pulled: number;
+	repulled: number;
+	skippedDirty: number;
 };
 
 export async function runExistenceReconcile(input: {
-  /** The bucket indices to walk (the wiring derives these from the max wooId / bucket size). */
-  buckets: readonly number[];
-  bucketSize: number;
-  readLocalBucket: (lo: number, hi: number) => Promise<LocalManifestEntry[]>;
-  fetchServerBucket: (bucket: number, bucketSize: number) => Promise<ServerDigestEntry[]>;
-  executePrune: (actions: ReconcileAction[]) => Promise<void>;
-  /** Handles both pull (missing) and repull (changed) — both are a targeted server fetch. */
-  enqueuePull: (actions: ReconcileAction[]) => Promise<void>;
-  /** Stops the walk between buckets on teardown/scope-switch (no partial bucket left half-applied). */
-  isAborted?: () => boolean;
+	/** The bucket indices to walk (the wiring derives these from the max wooId / bucket size). */
+	buckets: readonly number[];
+	bucketSize: number;
+	readLocalBucket: (lo: number, hi: number) => Promise<LocalManifestEntry[]>;
+	fetchServerBucket: (bucket: number, bucketSize: number) => Promise<ServerDigestEntry[]>;
+	executePrune: (actions: ReconcileAction[]) => Promise<void>;
+	/** Handles both pull (missing) and repull (changed) — both are a targeted server fetch. */
+	enqueuePull: (actions: ReconcileAction[]) => Promise<void>;
+	/** Stops the walk between buckets on teardown/scope-switch (no partial bucket left half-applied). */
+	isAborted?: () => boolean;
 }): Promise<ReconcileSummary> {
-  const summary: ReconcileSummary = { buckets: 0, pruned: 0, pulled: 0, repulled: 0, skippedDirty: 0 };
+	const summary: ReconcileSummary = {
+		buckets: 0,
+		pruned: 0,
+		pulled: 0,
+		repulled: 0,
+		skippedDirty: 0,
+	};
 
-  for (const bucket of input.buckets) {
-    if (input.isAborted?.()) {
-      break;
-    }
-    const lo = bucket * input.bucketSize;
-    const hi = lo + input.bucketSize;
+	for (const bucket of input.buckets) {
+		if (input.isAborted?.()) {
+			break;
+		}
+		const lo = bucket * input.bucketSize;
+		const hi = lo + input.bucketSize;
 
-    const [local, server] = await Promise.all([
-      input.readLocalBucket(lo, hi),
-      input.fetchServerBucket(bucket, input.bucketSize),
-    ]);
-    // Re-check AFTER the in-flight reads: a scope-switch/teardown that flipped `isAborted` while they
-    // were pending must NOT let this bucket's prune/pull mutate the DB post-teardown (codex P2).
-    if (input.isAborted?.()) {
-      break;
-    }
-    const plan = reconcileBucketPlan(local, server);
+		const [local, server] = await Promise.all([
+			input.readLocalBucket(lo, hi),
+			input.fetchServerBucket(bucket, input.bucketSize),
+		]);
+		// Re-check AFTER the in-flight reads: a scope-switch/teardown that flipped `isAborted` while they
+		// were pending must NOT let this bucket's prune/pull mutate the DB post-teardown (codex P2).
+		if (input.isAborted?.()) {
+			break;
+		}
+		const plan = reconcileBucketPlan(local, server);
 
-    if (plan.prune.length > 0) {
-      await input.executePrune(plan.prune);
-    }
-    const toPull = [...plan.pull, ...plan.repull];
-    if (toPull.length > 0) {
-      await input.enqueuePull(toPull);
-    }
+		if (plan.prune.length > 0) {
+			await input.executePrune(plan.prune);
+		}
+		const toPull = [...plan.pull, ...plan.repull];
+		if (toPull.length > 0) {
+			await input.enqueuePull(toPull);
+		}
 
-    summary.buckets += 1;
-    summary.pruned += plan.prune.length;
-    summary.pulled += plan.pull.length;
-    summary.repulled += plan.repull.length;
-    summary.skippedDirty += plan.skippedDirty.length;
-  }
+		summary.buckets += 1;
+		summary.pruned += plan.prune.length;
+		summary.pulled += plan.pull.length;
+		summary.repulled += plan.repull.length;
+		summary.skippedDirty += plan.skippedDirty.length;
+	}
 
-  return summary;
+	return summary;
 }

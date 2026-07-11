@@ -19,7 +19,12 @@
 
 export type BarcodeResolveFetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
-export const barcodeResolveProfiles = ['good-local', 'slow-php', 'slow-db', 'large-payload'] as const;
+export const barcodeResolveProfiles = [
+	'good-local',
+	'slow-php',
+	'slow-db',
+	'large-payload',
+] as const;
 export type BarcodeResolveProfile = (typeof barcodeResolveProfiles)[number];
 
 // --- Local barcode index --------------------------------------------------------
@@ -31,9 +36,9 @@ export const BARCODE_PAYLOAD_FIELDS = ['sku', 'barcode', 'global_unique_id'] as 
 export type BarcodeIndexEntry = { docId: string };
 
 export type BarcodeIndexResult = {
-  index: Map<string, BarcodeIndexEntry>;
-  /** One note per cross-document collision (last write wins). */
-  diagnostics: string[];
+	index: Map<string, BarcodeIndexEntry>;
+	/** One note per cross-document collision (last write wins). */
+	diagnostics: string[];
 };
 
 /**
@@ -49,27 +54,27 @@ export type BarcodeIndexResult = {
  * the hardcoded default.
  */
 function buildBarcodeIndexFromFields(
-  docs: Array<{ id: string; payload: Record<string, unknown> }>,
-  fields: readonly string[],
+	docs: { id: string; payload: Record<string, unknown> }[],
+	fields: readonly string[]
 ): BarcodeIndexResult {
-  const index = new Map<string, BarcodeIndexEntry>();
-  const diagnostics: string[] = [];
-  for (const doc of docs) {
-    for (const field of fields) {
-      const raw = doc.payload[field];
-      if (typeof raw !== 'string') continue;
-      const code = raw.trim();
-      if (code === '') continue;
-      const existing = index.get(code);
-      if (existing && existing.docId !== doc.id) {
-        diagnostics.push(
-          `code "${code}" already mapped to ${existing.docId}; overwritten by ${doc.id} (${field}) — last write wins`,
-        );
-      }
-      index.set(code, { docId: doc.id });
-    }
-  }
-  return { index, diagnostics };
+	const index = new Map<string, BarcodeIndexEntry>();
+	const diagnostics: string[] = [];
+	for (const doc of docs) {
+		for (const field of fields) {
+			const raw = doc.payload[field];
+			if (typeof raw !== 'string') continue;
+			const code = raw.trim();
+			if (code === '') continue;
+			const existing = index.get(code);
+			if (existing && existing.docId !== doc.id) {
+				diagnostics.push(
+					`code "${code}" already mapped to ${existing.docId}; overwritten by ${doc.id} (${field}) — last write wins`
+				);
+			}
+			index.set(code, { docId: doc.id });
+		}
+	}
+	return { index, diagnostics };
 }
 
 /**
@@ -80,28 +85,28 @@ function buildBarcodeIndexFromFields(
  * resolves).
  */
 export function buildLocalBarcodeIndex(
-  docs: Array<{ id: string; payload: Record<string, unknown> }>,
+	docs: { id: string; payload: Record<string, unknown> }[]
 ): BarcodeIndexResult {
-  return buildBarcodeIndexFromFields(docs, BARCODE_PAYLOAD_FIELDS);
+	return buildBarcodeIndexFromFields(docs, BARCODE_PAYLOAD_FIELDS);
 }
 
 // --- Config-driven re-derivation (ADR 0006, products specialization) ----------
 
 export type RebuildBarcodeIndexResult = BarcodeIndexResult & {
-  /**
-   * True when the index was re-derived locally from already-synced docs — the
-   * needed active field(s) were present in the payloads, so NO server
-   * round-trip was required.
-   */
-  rederived: boolean;
-  /**
-   * True when local re-derivation was NOT possible because a needed active
-   * field is absent from the synced payloads — the host must mark the
-   * collection stale and re-fetch (the fallback the config signal prescribes).
-   */
-  staleCollection: boolean;
-  /** The active fields the rebuild actually indexed by (echoed for diagnostics). */
-  activeFields: string[];
+	/**
+	 * True when the index was re-derived locally from already-synced docs — the
+	 * needed active field(s) were present in the payloads, so NO server
+	 * round-trip was required.
+	 */
+	rederived: boolean;
+	/**
+	 * True when local re-derivation was NOT possible because a needed active
+	 * field is absent from the synced payloads — the host must mark the
+	 * collection stale and re-fetch (the fallback the config signal prescribes).
+	 */
+	staleCollection: boolean;
+	/** The active fields the rebuild actually indexed by (echoed for diagnostics). */
+	activeFields: string[];
 };
 
 /**
@@ -122,125 +127,125 @@ export type RebuildBarcodeIndexResult = BarcodeIndexResult & {
  * stale.
  */
 export function rebuildBarcodeIndexForConfig(input: {
-  docs: Array<{ id: string; payload: Record<string, unknown> }>;
-  /** The active barcode field list from the config source (payload field names). */
-  activeFields: readonly string[];
+	docs: { id: string; payload: Record<string, unknown> }[];
+	/** The active barcode field list from the config source (payload field names). */
+	activeFields: readonly string[];
 }): RebuildBarcodeIndexResult {
-  const activeFields = [...input.activeFields];
+	const activeFields = [...input.activeFields];
 
-  // A field is "available locally" if at least one synced doc carries a string
-  // value for it. A field that NO synced doc carries was never synced — the
-  // mapping change cannot be honored offline, so the collection is stale.
-  const fieldAvailable = (field: string): boolean =>
-    input.docs.some((doc) => typeof doc.payload[field] === 'string');
+	// A field is "available locally" if at least one synced doc carries a string
+	// value for it. A field that NO synced doc carries was never synced — the
+	// mapping change cannot be honored offline, so the collection is stale.
+	const fieldAvailable = (field: string): boolean =>
+		input.docs.some((doc) => typeof doc.payload[field] === 'string');
 
-  const missingField =
-    activeFields.length === 0 ||
-    input.docs.length === 0 ||
-    activeFields.some((field) => !fieldAvailable(field));
+	const missingField =
+		activeFields.length === 0 ||
+		input.docs.length === 0 ||
+		activeFields.some((field) => !fieldAvailable(field));
 
-  if (missingField) {
-    return {
-      index: new Map(),
-      diagnostics: [],
-      rederived: false,
-      staleCollection: true,
-      activeFields,
-    };
-  }
+	if (missingField) {
+		return {
+			index: new Map(),
+			diagnostics: [],
+			rederived: false,
+			staleCollection: true,
+			activeFields,
+		};
+	}
 
-  const { index, diagnostics } = buildBarcodeIndexFromFields(input.docs, activeFields);
-  return { index, diagnostics, rederived: true, staleCollection: false, activeFields };
+	const { index, diagnostics } = buildBarcodeIndexFromFields(input.docs, activeFields);
+	return { index, diagnostics, rederived: true, staleCollection: false, activeFields };
 }
 
 // --- Resolve endpoint shapes ------------------------------------------------------
 
 export type ResolveBarcodeMatch = {
-  id: number;
-  type: 'product' | 'variation';
-  /** Present for variations (0 for parent products). */
-  parent_id?: number;
-  payload: Record<string, unknown>;
+	id: number;
+	type: 'product' | 'variation';
+	/** Present for variations (0 for parent products). */
+	parent_id?: number;
+	payload: Record<string, unknown>;
 };
 
 export type ResolveBarcodeAmbiguous = { id: number; type: 'product' | 'variation' };
 
 export type ResolveBarcodeMeta = {
-  duration_ms?: number;
-  server_profile?: string;
-  candidates?: number;
+	duration_ms?: number;
+	server_profile?: string;
+	candidates?: number;
 };
 
 export type ResolveBarcodeResponse = {
-  code: string;
-  found: boolean;
-  match: ResolveBarcodeMatch | null;
-  ambiguous: ResolveBarcodeAmbiguous[];
-  meta?: ResolveBarcodeMeta;
+	code: string;
+	found: boolean;
+	match: ResolveBarcodeMatch | null;
+	ambiguous: ResolveBarcodeAmbiguous[];
+	meta?: ResolveBarcodeMeta;
 };
 
 // --- resolveScan ----------------------------------------------------------------------
 
 export type ScanEventType =
-  | 'local-hit'
-  | 'searching-online'
-  | 'resolved-online'
-  | 'not-found'
-  | 'ambiguous'
-  | 'error';
+	| 'local-hit'
+	| 'searching-online'
+	| 'resolved-online'
+	| 'not-found'
+	| 'ambiguous'
+	| 'error';
 
 /** atMs is milliseconds since scan start, read from the injected clock. */
 export type ScanEvent = { type: ScanEventType; atMs: number };
 
 export type ScanTimings = {
-  /** Scan start -> first cashier-visible feedback (local-hit or searching-online). */
-  scanToFeedbackMs: number;
-  /** Scan start -> terminal outcome (hit, resolved, not-found, or error). */
-  scanToResolutionMs: number;
+	/** Scan start -> first cashier-visible feedback (local-hit or searching-online). */
+	scanToFeedbackMs: number;
+	/** Scan start -> terminal outcome (hit, resolved, not-found, or error). */
+	scanToResolutionMs: number;
 };
 
 export type ScanResult =
-  | { outcome: 'local'; code: string; docId: string; timings: ScanTimings; events: ScanEvent[] }
-  | {
-      outcome: 'online';
-      code: string;
-      match: ResolveBarcodeMatch;
-      ambiguous: ResolveBarcodeAmbiguous[];
-      serverMeta: ResolveBarcodeMeta | null;
-      timings: ScanTimings;
-      events: ScanEvent[];
-    }
-  | {
-      outcome: 'not-found';
-      code: string;
-      serverMeta: ResolveBarcodeMeta | null;
-      timings: ScanTimings;
-      events: ScanEvent[];
-    }
-  | { outcome: 'error'; code: string; message: string; timings: ScanTimings; events: ScanEvent[] };
+	| { outcome: 'local'; code: string; docId: string; timings: ScanTimings; events: ScanEvent[] }
+	| {
+			outcome: 'online';
+			code: string;
+			match: ResolveBarcodeMatch;
+			ambiguous: ResolveBarcodeAmbiguous[];
+			serverMeta: ResolveBarcodeMeta | null;
+			timings: ScanTimings;
+			events: ScanEvent[];
+	  }
+	| {
+			outcome: 'not-found';
+			code: string;
+			serverMeta: ResolveBarcodeMeta | null;
+			timings: ScanTimings;
+			events: ScanEvent[];
+	  }
+	| { outcome: 'error'; code: string; message: string; timings: ScanTimings; events: ScanEvent[] };
 
 export type ResolveScanInput = {
-  code: string;
-  index: Map<string, BarcodeIndexEntry>;
-  syncBaseUrl: string;
-  fetcher: BarcodeResolveFetcher;
-  /** Millisecond clock (e.g. () => performance.now()). Timings are relative to scan start. */
-  now: () => number;
-  /** benchmark_profile is only appended when set and not 'good-local'. */
-  profile?: BarcodeResolveProfile;
-  onEvent: (event: ScanEvent) => void;
+	code: string;
+	index: Map<string, BarcodeIndexEntry>;
+	syncBaseUrl: string;
+	fetcher: BarcodeResolveFetcher;
+	/** Millisecond clock (e.g. () => performance.now()). Timings are relative to scan start. */
+	now: () => number;
+	/** benchmark_profile is only appended when set and not 'good-local'. */
+	profile?: BarcodeResolveProfile;
+	onEvent: (event: ScanEvent) => void;
 };
 
 export function buildResolveBarcodeUrl(input: {
-  syncBaseUrl: string;
-  code: string;
-  profile?: BarcodeResolveProfile;
+	syncBaseUrl: string;
+	code: string;
+	profile?: BarcodeResolveProfile;
 }): string {
-  const params = new URLSearchParams({ code: input.code });
-  if (input.profile && input.profile !== 'good-local') {
-    params.set('benchmark_profile', input.profile);
-  }
-  return `${input.syncBaseUrl.replace(/\/$/, '')}/resolve/barcode?${params.toString()}`;
+	const params = new URLSearchParams({ code: input.code });
+	if (input.profile && input.profile !== 'good-local') {
+		params.set('benchmark_profile', input.profile);
+	}
+	return `${input.syncBaseUrl.replace(/\/$/, '')}/resolve/barcode?${params.toString()}`;
 }
 
 /**
@@ -253,110 +258,114 @@ export function buildResolveBarcodeUrl(input: {
  * leading-zero normalization is future work.
  */
 export async function resolveScan(input: ResolveScanInput): Promise<ScanResult> {
-  const startMs = input.now();
-  const events: ScanEvent[] = [];
-  const emit = (type: ScanEventType): ScanEvent => {
-    const event: ScanEvent = { type, atMs: input.now() - startMs };
-    events.push(event);
-    input.onEvent(event);
-    return event;
-  };
+	const startMs = input.now();
+	const events: ScanEvent[] = [];
+	const emit = (type: ScanEventType): ScanEvent => {
+		const event: ScanEvent = { type, atMs: input.now() - startMs };
+		events.push(event);
+		input.onEvent(event);
+		return event;
+	};
 
-  const code = input.code.trim();
-  if (code === '') {
-    const terminal = emit('error');
-    return {
-      outcome: 'error',
-      code,
-      message: 'empty barcode: nothing to resolve',
-      timings: { scanToFeedbackMs: terminal.atMs, scanToResolutionMs: terminal.atMs },
-      events,
-    };
-  }
+	const code = input.code.trim();
+	if (code === '') {
+		const terminal = emit('error');
+		return {
+			outcome: 'error',
+			code,
+			message: 'empty barcode: nothing to resolve',
+			timings: { scanToFeedbackMs: terminal.atMs, scanToResolutionMs: terminal.atMs },
+			events,
+		};
+	}
 
-  const hit = input.index.get(code);
-  if (hit) {
-    const terminal = emit('local-hit');
-    return {
-      outcome: 'local',
-      code,
-      docId: hit.docId,
-      timings: { scanToFeedbackMs: terminal.atMs, scanToResolutionMs: terminal.atMs },
-      events,
-    };
-  }
+	const hit = input.index.get(code);
+	if (hit) {
+		const terminal = emit('local-hit');
+		return {
+			outcome: 'local',
+			code,
+			docId: hit.docId,
+			timings: { scanToFeedbackMs: terminal.atMs, scanToResolutionMs: terminal.atMs },
+			events,
+		};
+	}
 
-  // Contract: the cashier sees "searching online" before any network await.
-  const feedback = emit('searching-online');
-  const scanToFeedbackMs = feedback.atMs;
-  const url = buildResolveBarcodeUrl({ syncBaseUrl: input.syncBaseUrl, code, profile: input.profile });
+	// Contract: the cashier sees "searching online" before any network await.
+	const feedback = emit('searching-online');
+	const scanToFeedbackMs = feedback.atMs;
+	const url = buildResolveBarcodeUrl({
+		syncBaseUrl: input.syncBaseUrl,
+		code,
+		profile: input.profile,
+	});
 
-  let body: ResolveBarcodeResponse;
-  try {
-    const response = await input.fetcher(url);
-    const text = await response.text();
-    if (!response.ok) {
-      const terminal = emit('error');
-      return {
-        outcome: 'error',
-        code,
-        message: `resolve/barcode failed: ${response.status} ${text.slice(0, 200)}`,
-        timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
-        events,
-      };
-    }
-    body = JSON.parse(text) as ResolveBarcodeResponse;
-  } catch (error) {
-    const terminal = emit('error');
-    return {
-      outcome: 'error',
-      code,
-      message: `resolve/barcode request failed: ${error instanceof Error ? error.message : String(error)}`,
-      timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
-      events,
-    };
-  }
+	let body: ResolveBarcodeResponse;
+	try {
+		const response = await input.fetcher(url);
+		const text = await response.text();
+		if (!response.ok) {
+			const terminal = emit('error');
+			return {
+				outcome: 'error',
+				code,
+				message: `resolve/barcode failed: ${response.status} ${text.slice(0, 200)}`,
+				timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
+				events,
+			};
+		}
+		body = JSON.parse(text) as ResolveBarcodeResponse;
+	} catch (error) {
+		const terminal = emit('error');
+		return {
+			outcome: 'error',
+			code,
+			message: `resolve/barcode request failed: ${error instanceof Error ? error.message : String(error)}`,
+			timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
+			events,
+		};
+	}
 
-  const serverMeta = body.meta ?? null;
+	const serverMeta = body.meta ?? null;
 
-  if (body.found) {
-    if (!body.match) {
-      const terminal = emit('error');
-      return {
-        outcome: 'error',
-        code,
-        message: 'resolve/barcode returned found=true without a match',
-        timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
-        events,
-      };
-    }
-    const terminal = emit('resolved-online');
-    const ambiguous = Array.isArray(body.ambiguous) ? body.ambiguous : [];
-    if (ambiguous.length > 0) {
-      emit('ambiguous');
-    }
-    return {
-      outcome: 'online',
-      code,
-      match: body.match,
-      ambiguous,
-      serverMeta,
-      timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
-      events,
-    };
-  }
+	if (body.found) {
+		if (!body.match) {
+			const terminal = emit('error');
+			return {
+				outcome: 'error',
+				code,
+				message: 'resolve/barcode returned found=true without a match',
+				timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
+				events,
+			};
+		}
+		const terminal = emit('resolved-online');
+		const ambiguous = Array.isArray(body.ambiguous) ? body.ambiguous : [];
+		if (ambiguous.length > 0) {
+			emit('ambiguous');
+		}
+		return {
+			outcome: 'online',
+			code,
+			match: body.match,
+			ambiguous,
+			serverMeta,
+			timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
+			events,
+		};
+	}
 
-  const terminal = emit('not-found');
-  return {
-    outcome: 'not-found',
-    code,
-    serverMeta,
-    timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
-    events,
-  };
+	const terminal = emit('not-found');
+	return {
+		outcome: 'not-found',
+		code,
+		serverMeta,
+		timings: { scanToFeedbackMs, scanToResolutionMs: terminal.atMs },
+		events,
+	};
 }
 
 // The bench instrument (runner, scenario prefetch, profile parsing, summary
 // stats, markdown rendering) lives in ./bench/barcodeResolveBench — import it
-// from '@woo-rxdb-lab/sync-core/bench'. This module keeps only the engine:
+// from the woo-rxdb-replication-lab repo. This module keeps only the engine:
 // the local index and the awaited scan flow.

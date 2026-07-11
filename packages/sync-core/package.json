@@ -1,21 +1,22 @@
 {
-  "name": "@woo-rxdb-lab/sync-core",
+  "name": "@wcpos/sync-core",
   "private": true,
   "type": "module",
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./bench": "./src/bench/index.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
-    "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --root ../.. packages/sync-core/src",
+    "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@woo-rxdb-lab/shared": "workspace:*"
+    "ajv": "^8.20.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "vitest": "^4.1.6"
+  }
 }

@@ -35,31 +35,35 @@ export type AuthOutcome = 'authorized' | 'refresh-required' | 'forbidden';
  * errors on its own terms.
  */
 export function classifyAuthStatus(status: number): AuthOutcome {
-  if (status === 401) {
-    return 'refresh-required';
-  }
-  if (status === 403) {
-    return 'forbidden';
-  }
-  return 'authorized';
+	if (status === 401) {
+		return 'refresh-required';
+	}
+	if (status === 403) {
+		return 'forbidden';
+	}
+	return 'authorized';
 }
 
 /** A 403 — a permission error, surfaced without ever refreshing (row 14). */
 export class AuthForbiddenError extends Error {
-  readonly status = 403;
-  constructor(message = 'Request forbidden (403): a permission error, not a stale token — not refreshing') {
-    super(message);
-    this.name = 'AuthForbiddenError';
-  }
+	readonly status = 403;
+	constructor(
+		message = 'Request forbidden (403): a permission error, not a stale token — not refreshing'
+	) {
+		super(message);
+		this.name = 'AuthForbiddenError';
+	}
 }
 
 /** A 401 that persisted after the bounded refresh attempts — surfaced instead of looping. */
 export class AuthRefreshExhaustedError extends Error {
-  readonly status = 401;
-  constructor(message = 'Request still unauthorized (401) after refreshing — giving up rather than looping') {
-    super(message);
-    this.name = 'AuthRefreshExhaustedError';
-  }
+	readonly status = 401;
+	constructor(
+		message = 'Request still unauthorized (401) after refreshing — giving up rather than looping'
+	) {
+		super(message);
+		this.name = 'AuthRefreshExhaustedError';
+	}
 }
 
 /**
@@ -71,50 +75,50 @@ export class AuthRefreshExhaustedError extends Error {
  * call starts a fresh refresh rather than replaying a stale outcome.
  */
 export type RefreshGate = {
-  /** The number of successful refreshes so far — captured before an attempt to detect a peer refresh. */
-  generation(): number;
-  /** Refresh (single-flight), resolving to the generation produced by this refresh. */
-  refresh(): Promise<number>;
+	/** The number of successful refreshes so far — captured before an attempt to detect a peer refresh. */
+	generation(): number;
+	/** Refresh (single-flight), resolving to the generation produced by this refresh. */
+	refresh(): Promise<number>;
 };
 
 export function createRefreshGate(refreshToken: () => Promise<void>): RefreshGate {
-  let generation = 0;
-  let inFlight: Promise<number> | null = null;
-  return {
-    generation: () => generation,
-    refresh: () => {
-      if (inFlight) {
-        return inFlight;
-      }
-      const started = refreshToken()
-        .then(() => {
-          generation += 1;
-          return generation;
-        })
-        .finally(() => {
-          if (inFlight === started) {
-            inFlight = null;
-          }
-        });
-      inFlight = started;
-      return started;
-    },
-  };
+	let generation = 0;
+	let inFlight: Promise<number> | null = null;
+	return {
+		generation: () => generation,
+		refresh: () => {
+			if (inFlight) {
+				return inFlight;
+			}
+			const started = refreshToken()
+				.then(() => {
+					generation += 1;
+					return generation;
+				})
+				.finally(() => {
+					if (inFlight === started) {
+						inFlight = null;
+					}
+				});
+			inFlight = started;
+			return started;
+		},
+	};
 }
 
 /** A request attempt: the raw result plus the HTTP status the session classifies. */
 export type AuthAttempt<R> = { status: number; result: R };
 
 export type AuthSession = {
-  /**
-   * Run an authenticated request. `perform` executes the request (with whatever
-   * token the host currently holds) and returns its status + result. On a 401 the
-   * session refreshes (single-flight, shared across concurrent `run` calls; skipped
-   * when a peer lane already refreshed since this attempt began) and retries, up to
-   * `maxRefreshAttempts`; on a 403 it throws `AuthForbiddenError` without refreshing;
-   * otherwise it returns the attempt.
-   */
-  run<R>(perform: () => Promise<AuthAttempt<R>>): Promise<AuthAttempt<R>>;
+	/**
+	 * Run an authenticated request. `perform` executes the request (with whatever
+	 * token the host currently holds) and returns its status + result. On a 401 the
+	 * session refreshes (single-flight, shared across concurrent `run` calls; skipped
+	 * when a peer lane already refreshed since this attempt began) and retries, up to
+	 * `maxRefreshAttempts`; on a 403 it throws `AuthForbiddenError` without refreshing;
+	 * otherwise it returns the attempt.
+	 */
+	run<R>(perform: () => Promise<AuthAttempt<R>>): Promise<AuthAttempt<R>>;
 };
 
 /**
@@ -123,44 +127,44 @@ export type AuthSession = {
  * token refresh.
  */
 export function createAuthSession(input: {
-  refreshToken: () => Promise<void>;
-  /** Max refreshes THIS lane drives before a persistent 401 surfaces as `AuthRefreshExhaustedError`. Default 1. */
-  maxRefreshAttempts?: number;
+	refreshToken: () => Promise<void>;
+	/** Max refreshes THIS lane drives before a persistent 401 surfaces as `AuthRefreshExhaustedError`. Default 1. */
+	maxRefreshAttempts?: number;
 }): AuthSession {
-  const maxRefreshAttempts = input.maxRefreshAttempts ?? 1;
-  const gate = createRefreshGate(input.refreshToken);
+	const maxRefreshAttempts = input.maxRefreshAttempts ?? 1;
+	const gate = createRefreshGate(input.refreshToken);
 
-  return {
-    async run<R>(perform: () => Promise<AuthAttempt<R>>): Promise<AuthAttempt<R>> {
-      // ONE budget for refresh EVENTS — whether this lane drove the refresh or
-      // merely benefited from a peer's. A lane always gets to retry with the newest
-      // token before giving up, but a refresh that already failed to clear the 401
-      // is never re-driven per-lane: N staggered lanes converge on `AuthRefreshExhaustedError`
-      // after the single shared refresh, instead of each starting its own.
-      let refreshesConsumed = 0;
-      for (;;) {
-        const attemptGeneration = gate.generation();
-        const attempt = await perform();
-        const outcome = classifyAuthStatus(attempt.status);
-        if (outcome === 'authorized') {
-          return attempt;
-        }
-        if (outcome === 'forbidden') {
-          throw new AuthForbiddenError();
-        }
-        // refresh-required (401).
-        if (refreshesConsumed >= maxRefreshAttempts) {
-          throw new AuthRefreshExhaustedError();
-        }
-        refreshesConsumed += 1;
-        if (gate.generation() > attemptGeneration) {
-          // A peer lane already refreshed AFTER this attempt began — retry with the
-          // fresh token WITHOUT starting our own refresh (the staggered-stampede
-          // guard), but still count it so a persistent 401 gives up promptly.
-          continue;
-        }
-        await gate.refresh();
-      }
-    },
-  };
+	return {
+		async run<R>(perform: () => Promise<AuthAttempt<R>>): Promise<AuthAttempt<R>> {
+			// ONE budget for refresh EVENTS — whether this lane drove the refresh or
+			// merely benefited from a peer's. A lane always gets to retry with the newest
+			// token before giving up, but a refresh that already failed to clear the 401
+			// is never re-driven per-lane: N staggered lanes converge on `AuthRefreshExhaustedError`
+			// after the single shared refresh, instead of each starting its own.
+			let refreshesConsumed = 0;
+			for (;;) {
+				const attemptGeneration = gate.generation();
+				const attempt = await perform();
+				const outcome = classifyAuthStatus(attempt.status);
+				if (outcome === 'authorized') {
+					return attempt;
+				}
+				if (outcome === 'forbidden') {
+					throw new AuthForbiddenError();
+				}
+				// refresh-required (401).
+				if (refreshesConsumed >= maxRefreshAttempts) {
+					throw new AuthRefreshExhaustedError();
+				}
+				refreshesConsumed += 1;
+				if (gate.generation() > attemptGeneration) {
+					// A peer lane already refreshed AFTER this attempt began — retry with the
+					// fresh token WITHOUT starting our own refresh (the staggered-stampede
+					// guard), but still count it so a persistent 401 gives up promptly.
+					continue;
+				}
+				await gate.refresh();
+			}
+		},
+	};
 }

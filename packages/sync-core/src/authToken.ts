@@ -14,22 +14,22 @@ export type AuthTransport = 'header' | 'query';
 
 /** The mutable token slot a refresh writes through; every request reads it. */
 export type AuthTokenStore = {
-  get(): string | null;
-  set(token: string | null): void;
-  clear(): void;
+	get(): string | null;
+	set(token: string | null): void;
+	clear(): void;
 };
 
 export function createAuthTokenStore(initial: string | null = null): AuthTokenStore {
-  let token = initial;
-  return {
-    get: () => token,
-    set: (next) => {
-      token = next;
-    },
-    clear: () => {
-      token = null;
-    },
-  };
+	let token = initial;
+	return {
+		get: () => token,
+		set: (next) => {
+			token = next;
+		},
+		clear: () => {
+			token = null;
+		},
+	};
 }
 
 /**
@@ -38,7 +38,7 @@ export function createAuthTokenStore(initial: string | null = null): AuthTokenSt
  * back to the query param only when the header will not survive the host.
  */
 export function chooseAuthTransport(authorizationHeaderSurvives: boolean): AuthTransport {
-  return authorizationHeaderSurvives ? 'header' : 'query';
+	return authorizationHeaderSurvives ? 'header' : 'query';
 }
 
 /** A request to authorize — the url plus any headers already set. */
@@ -48,43 +48,43 @@ export type AuthorizedRequest = { url: string; headers: Record<string, string> }
 
 /** Split a url into `{ base, fragment }` around the first `#`. */
 function splitFragment(url: string): { base: string; fragment: string } {
-  const hashIndex = url.indexOf('#');
-  return hashIndex === -1
-    ? { base: url, fragment: '' }
-    : { base: url.slice(0, hashIndex), fragment: url.slice(hashIndex) };
+	const hashIndex = url.indexOf('#');
+	return hashIndex === -1
+		? { base: url, fragment: '' }
+		: { base: url.slice(0, hashIndex), fragment: url.slice(hashIndex) };
 }
 
 /** Copy `headers` dropping any case-variant `authorization` key (so the token is single-sourced). */
 function withoutAuthorizationHeader(headers: Record<string, string>): Record<string, string> {
-  const cleaned: Record<string, string> = {};
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() !== 'authorization') {
-      cleaned[key] = value;
-    }
-  }
-  return cleaned;
+	const cleaned: Record<string, string> = {};
+	for (const [key, value] of Object.entries(headers)) {
+		if (key.toLowerCase() !== 'authorization') {
+			cleaned[key] = value;
+		}
+	}
+	return cleaned;
 }
 
 /** Drop any existing case-variant `authorization` query param (before any `#fragment`). */
 function withoutAuthorizationParam(url: string): string {
-  const { base, fragment } = splitFragment(url);
-  const queryIndex = base.indexOf('?');
-  if (queryIndex === -1) {
-    return url;
-  }
-  const path = base.slice(0, queryIndex);
-  const kept = base
-    .slice(queryIndex + 1)
-    .split('&')
-    .filter((pair) => pair !== '' && pair.split('=')[0].toLowerCase() !== 'authorization');
-  return kept.length > 0 ? `${path}?${kept.join('&')}${fragment}` : `${path}${fragment}`;
+	const { base, fragment } = splitFragment(url);
+	const queryIndex = base.indexOf('?');
+	if (queryIndex === -1) {
+		return url;
+	}
+	const path = base.slice(0, queryIndex);
+	const kept = base
+		.slice(queryIndex + 1)
+		.split('&')
+		.filter((pair) => pair !== '' && pair.split('=')[0].toLowerCase() !== 'authorization');
+	return kept.length > 0 ? `${path}?${kept.join('&')}${fragment}` : `${path}${fragment}`;
 }
 
 /** Append `key=value` (value URL-encoded) to a url, before any `#fragment`. */
 function appendQueryParam(url: string, key: string, value: string): string {
-  const { base, fragment } = splitFragment(url);
-  const separator = base.includes('?') ? '&' : '?';
-  return `${base}${separator}${key}=${encodeURIComponent(value)}${fragment}`;
+	const { base, fragment } = splitFragment(url);
+	const separator = base.includes('?') ? '&' : '?';
+	return `${base}${separator}${key}=${encodeURIComponent(value)}${fragment}`;
 }
 
 /**
@@ -106,15 +106,15 @@ function appendQueryParam(url: string, key: string, value: string): string {
  * bare token would fail to authenticate on the header-stripping hosts this exists for.
  */
 export function attachAuthToken(
-  request: AuthorizableRequest,
-  token: string,
-  transport: AuthTransport,
+	request: AuthorizableRequest,
+	token: string,
+	transport: AuthTransport
 ): AuthorizedRequest {
-  const bearer = `Bearer ${token}`;
-  const headers = withoutAuthorizationHeader({ ...(request.headers ?? {}) });
-  const url = withoutAuthorizationParam(request.url);
-  if (transport === 'header') {
-    return { url, headers: { ...headers, Authorization: bearer } };
-  }
-  return { url: appendQueryParam(url, 'authorization', bearer), headers };
+	const bearer = `Bearer ${token}`;
+	const headers = withoutAuthorizationHeader({ ...(request.headers ?? {}) });
+	const url = withoutAuthorizationParam(request.url);
+	if (transport === 'header') {
+		return { url, headers: { ...headers, Authorization: bearer } };
+	}
+	return { url: appendQueryParam(url, 'authorization', bearer), headers };
 }

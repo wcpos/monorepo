@@ -1,4 +1,4 @@
-import type { OrderDocument } from '@woo-rxdb-lab/shared';
+import type { OrderDocument } from '@wcpos/sync-core';
 
 /**
  * Resolve an order pull tombstone — which speaks Woo order ids (the server `deletes`
@@ -9,11 +9,11 @@ import type { OrderDocument } from '@woo-rxdb-lab/shared';
  * delete. Mirrors productStorageIdsForWooDeletes.
  */
 export function orderStorageIdsForWooDeletes(
-  docs: Pick<OrderDocument, 'id' | 'wooOrderId'>[],
-  wooOrderIds: number[],
+	docs: Pick<OrderDocument, 'id' | 'wooOrderId'>[],
+	wooOrderIds: number[]
 ): string[] {
-  const wanted = new Set(wooOrderIds);
-  return docs
-    .filter((doc) => doc.wooOrderId !== null && wanted.has(doc.wooOrderId))
-    .map((doc) => doc.id);
+	const wanted = new Set(wooOrderIds);
+	return docs
+		.filter((doc) => doc.wooOrderId !== null && wanted.has(doc.wooOrderId))
+		.map((doc) => doc.id);
 }

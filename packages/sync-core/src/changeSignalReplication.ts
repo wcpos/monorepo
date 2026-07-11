@@ -33,32 +33,32 @@
 
 import type { ConfigFingerprintBaseline } from './configChangeSignal';
 import type {
-  BarcodeConfigCollection,
-  BaselineDigests,
-  HybridChange,
-  HybridCollection,
-  HybridPollOutcome,
-  HybridRepairTarget,
-  SequenceCursor,
+	BarcodeConfigCollection,
+	BaselineDigests,
+	HybridChange,
+	HybridCollection,
+	HybridPollOutcome,
+	HybridRepairTarget,
+	SequenceCursor,
 } from './hybridChangeSignal';
 
 export type ReplicationActions = {
-  /** changed/missing ids to fetch, grouped + deduped by collection (deletes excluded). */
-  targetedPulls: Array<{ collection: HybridCollection; ids: number[] }>;
-  /** tombstones (delete/trash-type changes + idsToPull status 'deleted') → local delete, NOT a fetch. */
-  deletes: Array<{ collection: HybridCollection; ids: number[] }>;
-  /** staleCollections that reported configBarcodeFields → try local re-derive first. */
-  reDeriveBarcode: Array<{ collection: BarcodeConfigCollection; activeFields: string[] }>;
-  /** staleCollections WITHOUT configBarcodeFields → must re-fetch the whole collection. */
-  reFetchCollections: BarcodeConfigCollection[];
-  /** escalatedIds — surface/alert, NEVER auto-loop a pull. */
-  escalations: HybridRepairTarget[];
-  /** What the host persists: exactly what the engine advanced this poll. */
-  nextState: {
-    cursor: SequenceCursor;
-    baselineDigests: BaselineDigests;
-    configBaseline?: ConfigFingerprintBaseline;
-  };
+	/** changed/missing ids to fetch, grouped + deduped by collection (deletes excluded). */
+	targetedPulls: { collection: HybridCollection; ids: number[] }[];
+	/** tombstones (delete/trash-type changes + idsToPull status 'deleted') → local delete, NOT a fetch. */
+	deletes: { collection: HybridCollection; ids: number[] }[];
+	/** staleCollections that reported configBarcodeFields → try local re-derive first. */
+	reDeriveBarcode: { collection: BarcodeConfigCollection; activeFields: string[] }[];
+	/** staleCollections WITHOUT configBarcodeFields → must re-fetch the whole collection. */
+	reFetchCollections: BarcodeConfigCollection[];
+	/** escalatedIds — surface/alert, NEVER auto-loop a pull. */
+	escalations: HybridRepairTarget[];
+	/** What the host persists: exactly what the engine advanced this poll. */
+	nextState: {
+		cursor: SequenceCursor;
+		baselineDigests: BaselineDigests;
+		configBaseline?: ConfigFingerprintBaseline;
+	};
 };
 
 /**
@@ -75,12 +75,12 @@ export type ReplicationActions = {
  * `restore` are explicitly excluded.
  */
 function isDeleteChange(change: HybridChange): boolean {
-  const type = change.type.toLowerCase();
-  const verb = type.includes('.') ? type.slice(type.lastIndexOf('.') + 1) : type;
-  if (verb.startsWith('un') || verb.includes('restore')) {
-    return false;
-  }
-  return verb.includes('delete') || verb.includes('trash');
+	const type = change.type.toLowerCase();
+	const verb = type.includes('.') ? type.slice(type.lastIndexOf('.') + 1) : type;
+	if (verb.startsWith('un') || verb.includes('restore')) {
+		return false;
+	}
+	return verb.includes('delete') || verb.includes('trash');
 }
 
 /**
@@ -89,91 +89,91 @@ function isDeleteChange(change: HybridChange): boolean {
  * first added, so a host sees a deterministic plan.
  */
 class CollectionIdGroups {
-  private readonly order: HybridCollection[] = [];
-  private readonly byCollection = new Map<HybridCollection, Set<number>>();
+	private readonly order: HybridCollection[] = [];
+	private readonly byCollection = new Map<HybridCollection, Set<number>>();
 
-  add(collection: HybridCollection, id: number): void {
-    let ids = this.byCollection.get(collection);
-    if (ids === undefined) {
-      ids = new Set<number>();
-      this.byCollection.set(collection, ids);
-      this.order.push(collection);
-    }
-    ids.add(id);
-  }
+	add(collection: HybridCollection, id: number): void {
+		let ids = this.byCollection.get(collection);
+		if (ids === undefined) {
+			ids = new Set<number>();
+			this.byCollection.set(collection, ids);
+			this.order.push(collection);
+		}
+		ids.add(id);
+	}
 
-  has(collection: HybridCollection, id: number): boolean {
-    return this.byCollection.get(collection)?.has(id) ?? false;
-  }
+	has(collection: HybridCollection, id: number): boolean {
+		return this.byCollection.get(collection)?.has(id) ?? false;
+	}
 
-  toArray(): Array<{ collection: HybridCollection; ids: number[] }> {
-    return this.order.map((collection) => ({
-      collection,
-      ids: [...(this.byCollection.get(collection) ?? new Set<number>())],
-    }));
-  }
+	toArray(): { collection: HybridCollection; ids: number[] }[] {
+		return this.order.map((collection) => ({
+			collection,
+			ids: [...(this.byCollection.get(collection) ?? new Set<number>())],
+		}));
+	}
 }
 
 export function planReplicationActions(outcome: HybridPollOutcome): ReplicationActions {
-  const pulls = new CollectionIdGroups();
-  const deletes = new CollectionIdGroups();
+	const pulls = new CollectionIdGroups();
+	const deletes = new CollectionIdGroups();
 
-  // First pass — collect deletes so a delete always WINS over a pull for the
-  // same (collection, id): a tombstone'd record must not be re-fetched.
-  for (const change of outcome.changes) {
-    if (isDeleteChange(change)) {
-      deletes.add(change.collection, change.id);
-    }
-  }
-  for (const target of outcome.idsToPull) {
-    if (target.status === 'deleted') {
-      deletes.add(target.collection, target.id);
-    }
-  }
+	// First pass — collect deletes so a delete always WINS over a pull for the
+	// same (collection, id): a tombstone'd record must not be re-fetched.
+	for (const change of outcome.changes) {
+		if (isDeleteChange(change)) {
+			deletes.add(change.collection, change.id);
+		}
+	}
+	for (const target of outcome.idsToPull) {
+		if (target.status === 'deleted') {
+			deletes.add(target.collection, target.id);
+		}
+	}
 
-  // Second pass — non-delete ids become targeted pulls, but skip any id already
-  // tombstoned in the same collection.
-  const addPull = (collection: HybridCollection, id: number): void => {
-    if (!deletes.has(collection, id)) {
-      pulls.add(collection, id);
-    }
-  };
-  for (const change of outcome.changes) {
-    if (!isDeleteChange(change)) {
-      addPull(change.collection, change.id);
-    }
-  }
-  for (const target of outcome.idsToPull) {
-    if (target.status !== 'deleted') {
-      addPull(target.collection, target.id);
-    }
-  }
+	// Second pass — non-delete ids become targeted pulls, but skip any id already
+	// tombstoned in the same collection.
+	const addPull = (collection: HybridCollection, id: number): void => {
+		if (!deletes.has(collection, id)) {
+			pulls.add(collection, id);
+		}
+	};
+	for (const change of outcome.changes) {
+		if (!isDeleteChange(change)) {
+			addPull(change.collection, change.id);
+		}
+	}
+	for (const target of outcome.idsToPull) {
+		if (target.status !== 'deleted') {
+			addPull(target.collection, target.id);
+		}
+	}
 
-  // Config tier — split stale collections by whether a re-derivable barcode
-  // field list was reported for them.
-  const reDeriveBarcode: Array<{ collection: BarcodeConfigCollection; activeFields: string[] }> = [];
-  const reFetchCollections: BarcodeConfigCollection[] = [];
-  for (const collection of outcome.staleCollections ?? []) {
-    const activeFields = outcome.configBarcodeFields?.[collection];
-    if (activeFields !== undefined && activeFields.length > 0) {
-      reDeriveBarcode.push({ collection, activeFields: [...activeFields] });
-    } else {
-      reFetchCollections.push(collection);
-    }
-  }
+	// Config tier — split stale collections by whether a re-derivable barcode
+	// field list was reported for them.
+	const reDeriveBarcode: { collection: BarcodeConfigCollection; activeFields: string[] }[] = [];
+	const reFetchCollections: BarcodeConfigCollection[] = [];
+	for (const collection of outcome.staleCollections ?? []) {
+		const activeFields = outcome.configBarcodeFields?.[collection];
+		if (activeFields !== undefined && activeFields.length > 0) {
+			reDeriveBarcode.push({ collection, activeFields: [...activeFields] });
+		} else {
+			reFetchCollections.push(collection);
+		}
+	}
 
-  const nextState: ReplicationActions['nextState'] = {
-    cursor: outcome.cursor,
-    baselineDigests: outcome.baselineDigests,
-    ...(outcome.configBaseline !== undefined ? { configBaseline: outcome.configBaseline } : {}),
-  };
+	const nextState: ReplicationActions['nextState'] = {
+		cursor: outcome.cursor,
+		baselineDigests: outcome.baselineDigests,
+		...(outcome.configBaseline !== undefined ? { configBaseline: outcome.configBaseline } : {}),
+	};
 
-  return {
-    targetedPulls: pulls.toArray(),
-    deletes: deletes.toArray(),
-    reDeriveBarcode,
-    reFetchCollections,
-    escalations: outcome.escalatedIds,
-    nextState,
-  };
+	return {
+		targetedPulls: pulls.toArray(),
+		deletes: deletes.toArray(),
+		reDeriveBarcode,
+		reFetchCollections,
+		escalations: outcome.escalatedIds,
+		nextState,
+	};
 }

@@ -1,30 +1,34 @@
 import { chunk } from '../scheduler/chunk';
-import { existenceManifestDocument, type ExistenceManifestDocument } from './existence-manifest-schema';
+import {
+	existenceManifestDocument,
+	type ExistenceManifestDocument,
+} from './existence-manifest-schema';
 import { upsertManifestRows } from './rx-existence-manifest-repository';
 
 /** Structural collection slices the primes read — LabDatabase and engine scope dbs both satisfy them. */
 type CountFindCollection<TDoc> = {
-  count(): { exec(): Promise<number> };
-  find(): { exec(): Promise<TDoc[]> };
+	count(): { exec(): Promise<number> };
+	find(): { exec(): Promise<TDoc[]> };
 };
 type PrimeManifestCollection = {
-  bulkUpsert(docs: ExistenceManifestDocument[]): Promise<unknown>;
-  bulkRemove(ids: string[]): Promise<unknown>;
-  count(): { exec(): Promise<number> };
-  find(query?: unknown): { exec(): Promise<Array<{ toJSON(): ExistenceManifestDocument; wooId: number }>> };
+	bulkUpsert(docs: ExistenceManifestDocument[]): Promise<unknown>;
+	bulkRemove(ids: string[]): Promise<unknown>;
+	count(): { exec(): Promise<number> };
+	find(query?: unknown): {
+		exec(): Promise<{ toJSON(): ExistenceManifestDocument; wooId: number }[]>;
+	};
 };
 
 /** Structural: the collections the boot primes touch. */
 export type ExistenceManifestPrimeDatabase = {
-  existenceManifest: PrimeManifestCollection;
-  existenceManifestCustomers: PrimeManifestCollection;
-  existenceManifestOrders: PrimeManifestCollection;
-  products: CountFindCollection<{ wooProductId?: number | null }>;
-  variations: CountFindCollection<{ wooId?: number | null }>;
-  customers: CountFindCollection<{ wooCustomerId?: number | null }>;
-  orders: CountFindCollection<{ toJSON(): unknown }>;
+	existenceManifest: PrimeManifestCollection;
+	existenceManifestCustomers: PrimeManifestCollection;
+	existenceManifestOrders: PrimeManifestCollection;
+	products: CountFindCollection<{ wooProductId?: number | null }>;
+	variations: CountFindCollection<{ wooId?: number | null }>;
+	customers: CountFindCollection<{ wooCustomerId?: number | null }>;
+	orders: CountFindCollection<{ toJSON(): unknown }>;
 };
-
 
 /**
  * Leg-3 prime pass (ADR 0014 increment 4c-client). Records synced BEFORE Leg 3 shipped carry no
@@ -35,62 +39,65 @@ export type ExistenceManifestPrimeDatabase = {
  * NOT re-read the catalog once the manifest is primed.
  */
 
-export type DigestFetch = (ids: number[]) => Promise<Array<{ id: number; digest: string }>>;
+export type DigestFetch = (ids: number[]) => Promise<{ id: number; digest: string }[]>;
 
 /**
  * Pure core: given the local product/variation id sets, the manifest ids already present, and injected
  * fetch/upsert, backfill manifest rows for the MISSING ids in chunks. Returns the number of rows primed.
  */
 export async function runManifestPrimePass(input: {
-  productWooIds: readonly number[];
-  variationWooIds: readonly number[];
-  existingManifestWooIds: ReadonlySet<number>;
-  fetchDigests: DigestFetch;
-  upsert: (rows: ExistenceManifestDocument[]) => Promise<void>;
-  chunkSize?: number;
+	productWooIds: readonly number[];
+	variationWooIds: readonly number[];
+	existingManifestWooIds: ReadonlySet<number>;
+	fetchDigests: DigestFetch;
+	upsert: (rows: ExistenceManifestDocument[]) => Promise<void>;
+	chunkSize?: number;
 }): Promise<number> {
-  // wp_posts ids never collide across products/variations, so a single lane map is unambiguous; the
-  // objectType a returned id gets comes from whichever local set it belongs to.
-  const laneOf = new Map<number, 'product' | 'variation'>();
-  for (const id of input.productWooIds) {
-    laneOf.set(id, 'product');
-  }
-  for (const id of input.variationWooIds) {
-    if (!laneOf.has(id)) {
-      laneOf.set(id, 'variation');
-    }
-  }
+	// wp_posts ids never collide across products/variations, so a single lane map is unambiguous; the
+	// objectType a returned id gets comes from whichever local set it belongs to.
+	const laneOf = new Map<number, 'product' | 'variation'>();
+	for (const id of input.productWooIds) {
+		laneOf.set(id, 'product');
+	}
+	for (const id of input.variationWooIds) {
+		if (!laneOf.has(id)) {
+			laneOf.set(id, 'variation');
+		}
+	}
 
-  const missing: number[] = [];
-  for (const id of laneOf.keys()) {
-    if (!input.existingManifestWooIds.has(id)) {
-      missing.push(id);
-    }
-  }
-  if (missing.length === 0) {
-    return 0;
-  }
+	const missing: number[] = [];
+	for (const id of laneOf.keys()) {
+		if (!input.existingManifestWooIds.has(id)) {
+			missing.push(id);
+		}
+	}
+	if (missing.length === 0) {
+		return 0;
+	}
 
-  let primed = 0;
-  for (const batch of chunk(missing, input.chunkSize ?? 100)) {
-    const digests = await input.fetchDigests(batch);
-    const rows: ExistenceManifestDocument[] = [];
-    for (const { id, digest } of digests) {
-      const objectType = laneOf.get(id);
-      if (!objectType || typeof digest !== 'string' || digest === '') {
-        continue; // an id we didn't ask about, or a record with no stored digest yet
-      }
-      rows.push(existenceManifestDocument({ wooId: id, objectType, digest }));
-    }
-    if (rows.length > 0) {
-      await input.upsert(rows);
-      primed += rows.length;
-    }
-  }
-  return primed;
+	let primed = 0;
+	for (const batch of chunk(missing, input.chunkSize ?? 100)) {
+		const digests = await input.fetchDigests(batch);
+		const rows: ExistenceManifestDocument[] = [];
+		for (const { id, digest } of digests) {
+			const objectType = laneOf.get(id);
+			if (!objectType || typeof digest !== 'string' || digest === '') {
+				continue; // an id we didn't ask about, or a record with no stored digest yet
+			}
+			rows.push(existenceManifestDocument({ wooId: id, objectType, digest }));
+		}
+		if (rows.length > 0) {
+			await input.upsert(rows);
+			primed += rows.length;
+		}
+	}
+	return primed;
 }
 
-type PrimeFetcher = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+type PrimeFetcher = (
+	url: string,
+	init?: RequestInit
+) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 
 /**
  * Wiring: read the local id sets + existing manifest ids, gate on a cheap count, and run the prime pass
@@ -103,48 +110,48 @@ type PrimeFetcher = (url: string, init?: RequestInit) => Promise<{ ok: boolean; 
  * follow-up. Correctness never depends on the gate — the pass only ever primes server ids missing locally.
  */
 export async function primeExistenceManifest(
-  db: ExistenceManifestPrimeDatabase,
-  input: { fetcher: PrimeFetcher; syncBaseUrl: string; chunkSize?: number },
+	db: ExistenceManifestPrimeDatabase,
+	input: { fetcher: PrimeFetcher; syncBaseUrl: string; chunkSize?: number }
 ): Promise<number> {
-  const [manifestCount, productCount, variationCount] = await Promise.all([
-    db.existenceManifest.count().exec(),
-    db.products.count().exec(),
-    db.variations.count().exec(),
-  ]);
-  if (manifestCount >= productCount + variationCount) {
-    return 0;
-  }
+	const [manifestCount, productCount, variationCount] = await Promise.all([
+		db.existenceManifest.count().exec(),
+		db.products.count().exec(),
+		db.variations.count().exec(),
+	]);
+	if (manifestCount >= productCount + variationCount) {
+		return 0;
+	}
 
-  const [manifestDocs, productDocs, variationDocs] = await Promise.all([
-    db.existenceManifest.find().exec(),
-    db.products.find().exec(),
-    db.variations.find().exec(),
-  ]);
-  const existingManifestWooIds = new Set<number>(manifestDocs.map((doc) => doc.wooId));
-  const productWooIds = productDocs
-    .map((doc) => doc.wooProductId)
-    .filter((id): id is number => typeof id === 'number' && id > 0);
-  const variationWooIds = variationDocs
-    .map((doc) => doc.wooId)
-    .filter((id): id is number => typeof id === 'number' && id > 0);
+	const [manifestDocs, productDocs, variationDocs] = await Promise.all([
+		db.existenceManifest.find().exec(),
+		db.products.find().exec(),
+		db.variations.find().exec(),
+	]);
+	const existingManifestWooIds = new Set<number>(manifestDocs.map((doc) => doc.wooId));
+	const productWooIds = productDocs
+		.map((doc) => doc.wooProductId)
+		.filter((id): id is number => typeof id === 'number' && id > 0);
+	const variationWooIds = variationDocs
+		.map((doc) => doc.wooId)
+		.filter((id): id is number => typeof id === 'number' && id > 0);
 
-  const fetchDigests: DigestFetch = async (ids) => {
-    const response = await input.fetcher(`${input.syncBaseUrl}/digests?include=${ids.join(',')}`);
-    if (!response.ok) {
-      throw new Error(`digests prime fetch failed: ${response.status}`);
-    }
-    const body = (await response.json()) as { digests?: Array<{ id: number; digest: string }> };
-    return body.digests ?? [];
-  };
+	const fetchDigests: DigestFetch = async (ids) => {
+		const response = await input.fetcher(`${input.syncBaseUrl}/digests?include=${ids.join(',')}`);
+		if (!response.ok) {
+			throw new Error(`digests prime fetch failed: ${response.status}`);
+		}
+		const body = (await response.json()) as { digests?: { id: number; digest: string }[] };
+		return body.digests ?? [];
+	};
 
-  return runManifestPrimePass({
-    productWooIds,
-    variationWooIds,
-    existingManifestWooIds,
-    fetchDigests,
-    upsert: (rows) => upsertManifestRows(db.existenceManifest, rows),
-    chunkSize: input.chunkSize,
-  });
+	return runManifestPrimePass({
+		productWooIds,
+		variationWooIds,
+		existingManifestWooIds,
+		fetchDigests,
+		upsert: (rows) => upsertManifestRows(db.existenceManifest, rows),
+		chunkSize: input.chunkSize,
+	});
 }
 
 /**
@@ -154,34 +161,34 @@ export async function primeExistenceManifest(
  * asked about, so a stray server id never seeds a row.
  */
 export async function runSingleLanePrimePass(input: {
-  wooIds: readonly number[];
-  objectType: 'product' | 'variation' | 'customer' | 'order';
-  existingManifestWooIds: ReadonlySet<number>;
-  fetchDigests: DigestFetch;
-  upsert: (rows: ExistenceManifestDocument[]) => Promise<void>;
-  chunkSize?: number;
+	wooIds: readonly number[];
+	objectType: 'product' | 'variation' | 'customer' | 'order';
+	existingManifestWooIds: ReadonlySet<number>;
+	fetchDigests: DigestFetch;
+	upsert: (rows: ExistenceManifestDocument[]) => Promise<void>;
+	chunkSize?: number;
 }): Promise<number> {
-  const missing = [...new Set(input.wooIds)].filter((id) => !input.existingManifestWooIds.has(id));
-  if (missing.length === 0) {
-    return 0;
-  }
-  let primed = 0;
-  for (const batch of chunk(missing, input.chunkSize ?? 100)) {
-    const batchSet = new Set(batch);
-    const digests = await input.fetchDigests(batch);
-    const rows: ExistenceManifestDocument[] = [];
-    for (const { id, digest } of digests) {
-      if (!batchSet.has(id) || typeof digest !== 'string' || digest === '') {
-        continue;
-      }
-      rows.push(existenceManifestDocument({ wooId: id, objectType: input.objectType, digest }));
-    }
-    if (rows.length > 0) {
-      await input.upsert(rows);
-      primed += rows.length;
-    }
-  }
-  return primed;
+	const missing = [...new Set(input.wooIds)].filter((id) => !input.existingManifestWooIds.has(id));
+	if (missing.length === 0) {
+		return 0;
+	}
+	let primed = 0;
+	for (const batch of chunk(missing, input.chunkSize ?? 100)) {
+		const batchSet = new Set(batch);
+		const digests = await input.fetchDigests(batch);
+		const rows: ExistenceManifestDocument[] = [];
+		for (const { id, digest } of digests) {
+			if (!batchSet.has(id) || typeof digest !== 'string' || digest === '') {
+				continue;
+			}
+			rows.push(existenceManifestDocument({ wooId: id, objectType: input.objectType, digest }));
+		}
+		if (rows.length > 0) {
+			await input.upsert(rows);
+			primed += rows.length;
+		}
+	}
+	return primed;
 }
 
 /**
@@ -190,43 +197,45 @@ export async function runSingleLanePrimePass(input: {
  * collection + id-space (wp_users) — never touches the product manifest. Count-gated like the product prime.
  */
 export async function primeExistenceManifestCustomers(
-  db: ExistenceManifestPrimeDatabase,
-  input: { fetcher: PrimeFetcher; syncBaseUrl: string; chunkSize?: number },
+	db: ExistenceManifestPrimeDatabase,
+	input: { fetcher: PrimeFetcher; syncBaseUrl: string; chunkSize?: number }
 ): Promise<number> {
-  const [manifestCount, customerCount] = await Promise.all([
-    db.existenceManifestCustomers.count().exec(),
-    db.customers.count().exec(),
-  ]);
-  if (manifestCount >= customerCount) {
-    return 0;
-  }
+	const [manifestCount, customerCount] = await Promise.all([
+		db.existenceManifestCustomers.count().exec(),
+		db.customers.count().exec(),
+	]);
+	if (manifestCount >= customerCount) {
+		return 0;
+	}
 
-  const [manifestDocs, customerDocs] = await Promise.all([
-    db.existenceManifestCustomers.find().exec(),
-    db.customers.find().exec(),
-  ]);
-  const existingManifestWooIds = new Set<number>(manifestDocs.map((doc) => doc.wooId));
-  const customerWooIds = customerDocs
-    .map((doc) => doc.wooCustomerId)
-    .filter((id): id is number => typeof id === 'number' && id > 0);
+	const [manifestDocs, customerDocs] = await Promise.all([
+		db.existenceManifestCustomers.find().exec(),
+		db.customers.find().exec(),
+	]);
+	const existingManifestWooIds = new Set<number>(manifestDocs.map((doc) => doc.wooId));
+	const customerWooIds = customerDocs
+		.map((doc) => doc.wooCustomerId)
+		.filter((id): id is number => typeof id === 'number' && id > 0);
 
-  const fetchDigests: DigestFetch = async (ids) => {
-    const response = await input.fetcher(`${input.syncBaseUrl}/digests?include=${ids.join(',')}&collection=customers`);
-    if (!response.ok) {
-      throw new Error(`customer digests prime fetch failed: ${response.status}`);
-    }
-    const body = (await response.json()) as { digests?: Array<{ id: number; digest: string }> };
-    return body.digests ?? [];
-  };
+	const fetchDigests: DigestFetch = async (ids) => {
+		const response = await input.fetcher(
+			`${input.syncBaseUrl}/digests?include=${ids.join(',')}&collection=customers`
+		);
+		if (!response.ok) {
+			throw new Error(`customer digests prime fetch failed: ${response.status}`);
+		}
+		const body = (await response.json()) as { digests?: { id: number; digest: string }[] };
+		return body.digests ?? [];
+	};
 
-  return runSingleLanePrimePass({
-    wooIds: customerWooIds,
-    objectType: 'customer',
-    existingManifestWooIds,
-    fetchDigests,
-    upsert: (rows) => upsertManifestRows(db.existenceManifestCustomers, rows),
-    chunkSize: input.chunkSize,
-  });
+	return runSingleLanePrimePass({
+		wooIds: customerWooIds,
+		objectType: 'customer',
+		existingManifestWooIds,
+		fetchDigests,
+		upsert: (rows) => upsertManifestRows(db.existenceManifestCustomers, rows),
+		chunkSize: input.chunkSize,
+	});
 }
 
 /**
@@ -235,41 +244,43 @@ export async function primeExistenceManifestCustomers(
  * + id-space (HPOS/CPT order ids). Count-gated like the customer prime.
  */
 export async function primeExistenceManifestOrders(
-  db: ExistenceManifestPrimeDatabase,
-  input: { fetcher: PrimeFetcher; syncBaseUrl: string; chunkSize?: number },
+	db: ExistenceManifestPrimeDatabase,
+	input: { fetcher: PrimeFetcher; syncBaseUrl: string; chunkSize?: number }
 ): Promise<number> {
-  const [manifestCount, orderCount] = await Promise.all([
-    db.existenceManifestOrders.count().exec(),
-    db.orders.count().exec(),
-  ]);
-  if (manifestCount >= orderCount) {
-    return 0;
-  }
+	const [manifestCount, orderCount] = await Promise.all([
+		db.existenceManifestOrders.count().exec(),
+		db.orders.count().exec(),
+	]);
+	if (manifestCount >= orderCount) {
+		return 0;
+	}
 
-  const [manifestDocs, orderDocs] = await Promise.all([
-    db.existenceManifestOrders.find().exec(),
-    db.orders.find().exec(),
-  ]);
-  const existingManifestWooIds = new Set<number>(manifestDocs.map((doc) => doc.wooId));
-  const orderWooIds = orderDocs
-    .map((doc) => (doc.toJSON() as { wooOrderId?: number | null }).wooOrderId)
-    .filter((id): id is number => typeof id === 'number' && id > 0);
+	const [manifestDocs, orderDocs] = await Promise.all([
+		db.existenceManifestOrders.find().exec(),
+		db.orders.find().exec(),
+	]);
+	const existingManifestWooIds = new Set<number>(manifestDocs.map((doc) => doc.wooId));
+	const orderWooIds = orderDocs
+		.map((doc) => (doc.toJSON() as { wooOrderId?: number | null }).wooOrderId)
+		.filter((id): id is number => typeof id === 'number' && id > 0);
 
-  const fetchDigests: DigestFetch = async (ids) => {
-    const response = await input.fetcher(`${input.syncBaseUrl}/digests?include=${ids.join(',')}&collection=orders`);
-    if (!response.ok) {
-      throw new Error(`order digests prime fetch failed: ${response.status}`);
-    }
-    const body = (await response.json()) as { digests?: Array<{ id: number; digest: string }> };
-    return body.digests ?? [];
-  };
+	const fetchDigests: DigestFetch = async (ids) => {
+		const response = await input.fetcher(
+			`${input.syncBaseUrl}/digests?include=${ids.join(',')}&collection=orders`
+		);
+		if (!response.ok) {
+			throw new Error(`order digests prime fetch failed: ${response.status}`);
+		}
+		const body = (await response.json()) as { digests?: { id: number; digest: string }[] };
+		return body.digests ?? [];
+	};
 
-  return runSingleLanePrimePass({
-    wooIds: orderWooIds,
-    objectType: 'order',
-    existingManifestWooIds,
-    fetchDigests,
-    upsert: (rows) => upsertManifestRows(db.existenceManifestOrders, rows),
-    chunkSize: input.chunkSize,
-  });
+	return runSingleLanePrimePass({
+		wooIds: orderWooIds,
+		objectType: 'order',
+		existingManifestWooIds,
+		fetchDigests,
+		upsert: (rows) => upsertManifestRows(db.existenceManifestOrders, rows),
+		chunkSize: input.chunkSize,
+	});
 }

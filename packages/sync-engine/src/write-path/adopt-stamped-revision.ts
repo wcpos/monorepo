@@ -8,15 +8,15 @@
  * servers; the write path's grace comparer bridges those until retirement.
  */
 export function adoptStampedRevision<T extends Record<string, unknown>>(
-  payload: T,
-  synthesize: () => string,
+	payload: T,
+	synthesize: () => string
 ): { revision: string; payload: T } {
-  const stamped = (payload as { _rxdb_revision?: unknown })._rxdb_revision;
-  // Strip unconditionally: even an invalid stamp (wrong type / empty) is
-  // transport metadata and must never reach the stored payload.
-  const { _rxdb_revision: _stamp, ...rest } = payload as Record<string, unknown>;
-  if (typeof stamped === 'string' && stamped !== '') {
-    return { revision: stamped, payload: rest as T };
-  }
-  return { revision: synthesize(), payload: rest as T };
+	const stamped = (payload as { _rxdb_revision?: unknown })._rxdb_revision;
+	// Strip unconditionally: even an invalid stamp (wrong type / empty) is
+	// transport metadata and must never reach the stored payload.
+	const { _rxdb_revision: _stamp, ...rest } = payload as Record<string, unknown>;
+	if (typeof stamped === 'string' && stamped !== '') {
+		return { revision: stamped, payload: rest as T };
+	}
+	return { revision: synthesize(), payload: rest as T };
 }

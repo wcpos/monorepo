@@ -1,5 +1,5 @@
 {
-  "name": "@woo-rxdb-lab/sync-engine-rxdb",
+  "name": "@wcpos/sync-engine",
   "private": true,
   "type": "module",
   "main": "src/index.ts",
@@ -9,16 +9,16 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
-    "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --root ../.. packages/sync-engine-rxdb/src",
+    "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@woo-rxdb-lab/shared": "workspace:*",
-    "@woo-rxdb-lab/sync-core": "workspace:*",
+    "@wcpos/sync-core": "workspace:*",
     "rxdb": "17.2.0"
   },
   "devDependencies": {
-    "rxdb-premium": "17.2.0"
+    "rxdb-premium": "17.2.0",
+    "vitest": "^4.1.6"
   }
 }

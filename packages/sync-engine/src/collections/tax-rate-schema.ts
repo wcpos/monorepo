@@ -1,16 +1,16 @@
 export type WooTaxRatePayload = Record<string, unknown> & {
-  id?: number;
+	id?: number;
 };
 
 export type LocalTaxRateDocument = {
-  id: string;
-  wooTaxRateId: number | null;
-  payload: WooTaxRatePayload;
-  sync: {
-    revision: string;
-    partial: boolean;
-    source: 'woo-rest';
-  };
+	id: string;
+	wooTaxRateId: number | null;
+	payload: WooTaxRatePayload;
+	sync: {
+		revision: string;
+		partial: boolean;
+		source: 'woo-rest';
+	};
 };
 
 /**
@@ -22,19 +22,19 @@ export type LocalTaxRateDocument = {
  * This is NOT scaffolding awaiting a flip.
  */
 export function taxRateDocumentId(taxRateId: number): string {
-  return `woo-tax-rate:${taxRateId}`;
+	return `woo-tax-rate:${taxRateId}`;
 }
 
 export const taxRateSchema = {
-  title: 'Woo tax-rate document schema',
-  version: 0,
-  primaryKey: 'id',
-  type: 'object',
-  properties: {
-    id: { type: 'string', maxLength: 128 },
-    wooTaxRateId: { type: ['number', 'null'] },
-    payload: { type: 'object', additionalProperties: true },
-    sync: { type: 'object', additionalProperties: true },
-  },
-  required: ['id', 'wooTaxRateId', 'payload', 'sync'],
+	title: 'Woo tax-rate document schema',
+	version: 0,
+	primaryKey: 'id',
+	type: 'object',
+	properties: {
+		id: { type: 'string', maxLength: 128 },
+		wooTaxRateId: { type: ['number', 'null'] },
+		payload: { type: 'object', additionalProperties: true },
+		sync: { type: 'object', additionalProperties: true },
+	},
+	required: ['id', 'wooTaxRateId', 'payload', 'sync'],
 } as const;

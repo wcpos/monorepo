@@ -5,37 +5,43 @@
  * parser, the customer:default born-local sentinel, and the search-lane queryKey grammar.
  */
 
-import type { SchedulerFetcher } from './replication-scheduler';
-import type { FetchTask } from './replication-policy';
-import { type LocalCustomerDocument, type WooCustomerPayload } from '../collections/customer-schema';
-import { customerDocumentId } from '@woo-rxdb-lab/shared';
+import { customerDocumentId } from '@wcpos/sync-core';
+
+import {
+	type LocalCustomerDocument,
+	type WooCustomerPayload,
+} from '../collections/customer-schema';
 import { materializeTargeted } from '../materialization/record-materialization';
 import {
-  createTargetedSearchCollectionFetcher,
-  type CollectionSchedulerCoverageRepository,
-  type CollectionSchedulerInput,
-  type CollectionTarget,
+	type CollectionSchedulerCoverageRepository,
+	type CollectionSchedulerInput,
+	type CollectionTarget,
+	createTargetedSearchCollectionFetcher,
 } from './rx-scheduler-collection-fetcher';
+
+import type { FetchTask } from './replication-policy';
+import type { SchedulerFetcher } from './replication-scheduler';
 
 export type CustomerSchedulerCoverageRepository = CollectionSchedulerCoverageRepository;
 export type CustomerSchedulerFetcherInput = CollectionSchedulerInput<LocalCustomerDocument>;
 
 function customerTargetFromDocumentId(id: string): CollectionTarget {
-  if (id === 'customer:default') {
-    return { documentId: id, wooId: null };
-  }
-  const match = /^woo-customer:(\d+)$/.exec(id);
-  if (!match) throw new Error(`Targeted customer scheduler task id is not a Woo customer document id: ${id}`);
-  const wooCustomerId = Number(match[1]);
-  return { documentId: customerDocumentId(wooCustomerId), wooId: wooCustomerId };
+	if (id === 'customer:default') {
+		return { documentId: id, wooId: null };
+	}
+	const match = /^woo-customer:(\d+)$/.exec(id);
+	if (!match)
+		throw new Error(`Targeted customer scheduler task id is not a Woo customer document id: ${id}`);
+	const wooCustomerId = Number(match[1]);
+	return { documentId: customerDocumentId(wooCustomerId), wooId: wooCustomerId };
 }
 
 function revisionFromCustomer(payload: WooCustomerPayload): string {
-  return String(payload.date_modified_gmt ?? payload.date_modified ?? '');
+	return String(payload.date_modified_gmt ?? payload.date_modified ?? '');
 }
 
 function customerDocumentFromWooPayload(payload: WooCustomerPayload): LocalCustomerDocument {
-  return materializeTargeted('customers', payload).storedDocument as LocalCustomerDocument;
+	return materializeTargeted('customers', payload).storedDocument as LocalCustomerDocument;
 }
 
 /**
@@ -45,39 +51,41 @@ function customerDocumentFromWooPayload(payload: WooCustomerPayload): LocalCusto
  * its literal storage id.
  */
 function customerCoverageRecordId(document: LocalCustomerDocument): string {
-  return document.wooCustomerId === null ? document.id : customerDocumentId(document.wooCustomerId);
+	return document.wooCustomerId === null ? document.id : customerDocumentId(document.wooCustomerId);
 }
 
 function defaultCustomerDocument(target: CollectionTarget): LocalCustomerDocument {
-  return {
-    id: target.documentId,
-    wooCustomerId: null,
-    payload: {},
-    sync: { revision: '', partial: true, source: 'woo-rest' },
-    local: { dirty: false, pendingMutationIds: [] },
-  };
+	return {
+		id: target.documentId,
+		wooCustomerId: null,
+		payload: {},
+		sync: { revision: '', partial: true, source: 'woo-rest' },
+		local: { dirty: false, pendingMutationIds: [] },
+	};
 }
 
 function parseCustomerSearchQuery(task: FetchTask): { search: string; queryLimit: number } | null {
-  const match = /^customers:search=([^:]*):limit=(\d+)$/.exec(task.queryKey);
-  if (!match) return null;
-  return { search: decodeURIComponent(match[1] ?? ''), queryLimit: Number(match[2]) };
+	const match = /^customers:search=([^:]*):limit=(\d+)$/.exec(task.queryKey);
+	if (!match) return null;
+	return { search: decodeURIComponent(match[1] ?? ''), queryLimit: Number(match[2]) };
 }
 
-export function createCustomerSchedulerFetcher(input: CustomerSchedulerFetcherInput): SchedulerFetcher {
-  return createTargetedSearchCollectionFetcher<LocalCustomerDocument, WooCustomerPayload>(
-    {
-      collection: 'customers',
-      endpoint: 'customers',
-      label: 'Customer',
-      restLabel: 'customer',
-      documentFromPayload: customerDocumentFromWooPayload,
-      coverageRecordId: customerCoverageRecordId,
-      payloadWooId: (payload) => Number(payload.id),
-      targetFromId: customerTargetFromDocumentId,
-      defaultDocument: defaultCustomerDocument,
-      parseSearchQuery: parseCustomerSearchQuery,
-    },
-    input,
-  );
+export function createCustomerSchedulerFetcher(
+	input: CustomerSchedulerFetcherInput
+): SchedulerFetcher {
+	return createTargetedSearchCollectionFetcher<LocalCustomerDocument, WooCustomerPayload>(
+		{
+			collection: 'customers',
+			endpoint: 'customers',
+			label: 'Customer',
+			restLabel: 'customer',
+			documentFromPayload: customerDocumentFromWooPayload,
+			coverageRecordId: customerCoverageRecordId,
+			payloadWooId: (payload) => Number(payload.id),
+			targetFromId: customerTargetFromDocumentId,
+			defaultDocument: defaultCustomerDocument,
+			parseSearchQuery: parseCustomerSearchQuery,
+		},
+		input
+	);
 }

@@ -25,21 +25,21 @@
  * unchanged).
  */
 
-import type { RxDatabase } from 'rxdb';
-import type { SyncObserver } from '@woo-rxdb-lab/shared';
 import {
-  drainMutationQueue,
-  pushEndpointResolver,
-  pushRecordMutation,
-  reconcileCreateAck,
-  type Fetcher,
-  type StoreScopeManager,
-} from '@woo-rxdb-lab/sync-core';
-import { writeFacetFor, type WriteAck } from '../collections/collection-descriptors';
+	drainMutationQueue,
+	pushEndpointResolver,
+	pushRecordMutation,
+	reconcileCreateAck,
+} from '@wcpos/sync-core';
+import type { Fetcher, StoreScopeManager, SyncObserver } from '@wcpos/sync-core';
+
+import { type WriteAck, writeFacetFor } from '../collections/collection-descriptors';
 import { queueFor, requeueBornTwiceSnapshot } from './write-intents';
-import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
 import { orderDocumentFromWooPayload } from '../scheduler/rx-scheduler-order-fetcher';
 import { EngineOrderRepository } from './engine-order-repository';
+
+import type { EngineSourceFetcher } from '../change-signal/change-signal-source';
+import type { RxDatabase } from 'rxdb';
 
 /**
  * One targeted, read-only fetch of an order's CURRENT server revision (the
@@ -49,299 +49,367 @@ import { EngineOrderRepository } from './engine-order-repository';
  * server no longer returns the record; throws on a transport/HTTP failure.
  */
 export async function fetchOrderServerRevision(input: {
-  fetch: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
-  wpJsonRoot: string;
-  wooOrderId: number;
+	fetch: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+	wpJsonRoot: string;
+	wooOrderId: number;
 }): Promise<string | null> {
-  const response = await input.fetch(`${input.wpJsonRoot}/wc-rxdb-sync/v1/orders?include=${input.wooOrderId}&per_page=1&orderby=include`);
-  if (!response.ok) throw new Error(`revision refresh failed: HTTP ${response.status}`);
-  const [payload] = await response.json() as Array<Record<string, unknown>>;
-  if (!payload) return null;
-  return orderDocumentFromWooPayload(payload as never).sync.revision || null;
+	const response = await input.fetch(
+		`${input.wpJsonRoot}/wc-rxdb-sync/v1/orders?include=${input.wooOrderId}&per_page=1&orderby=include`
+	);
+	if (!response.ok) throw new Error(`revision refresh failed: HTTP ${response.status}`);
+	const [payload] = (await response.json()) as Record<string, unknown>[];
+	if (!payload) return null;
+	return orderDocumentFromWooPayload(payload as never).sync.revision || null;
 }
 
 export type WriteOutcomeEvent =
-  | { type: 'write-acknowledged'; collection: string; recordId: string; mutationId: string; currentRevision: string | null }
-  | { type: 'write-ack-rematerialized'; collection: string; recordId: string; mutationId: string; currentRevision: string | null }
-  | { type: 'write-conflict'; collection: string; recordId: string; mutationId: string; currentRevision: string | null }
-  | { type: 'write-rejected'; collection: string; recordId: string; mutationId: string };
+	| {
+			type: 'write-acknowledged';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			currentRevision: string | null;
+	  }
+	| {
+			type: 'write-ack-rematerialized';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			currentRevision: string | null;
+	  }
+	| {
+			type: 'write-conflict';
+			collection: string;
+			recordId: string;
+			mutationId: string;
+			currentRevision: string | null;
+	  }
+	| { type: 'write-rejected'; collection: string; recordId: string; mutationId: string };
 
 export type WriteDrainReport = {
-  lane: 'write-drain';
-  status: 'ran' | 'skipped' | 'error';
-  reason?: string;
-  error?: string;
-  pushed?: number;
-  conflicts?: number;
-  deferred?: number;
-  failed?: number;
-  rejected?: number;
+	lane: 'write-drain';
+	status: 'ran' | 'skipped' | 'error';
+	reason?: string;
+	error?: string;
+	pushed?: number;
+	conflicts?: number;
+	deferred?: number;
+	failed?: number;
+	rejected?: number;
 };
 
 export type WriteDrainLaneDeps = {
-  manager: StoreScopeManager;
-  databaseFor: (scopeId: string) => RxDatabase | null;
-  fetcher: EngineSourceFetcher;
-  /** The wp-json ROOT — the push resolver builds /wc-rxdb-sync/v1/push/{collection} from it. */
-  wpJsonRoot: string;
-  connectivity: () => 'online' | 'offline' | 'degraded';
-  diagnostics: SyncObserver;
-  emitWriteEvent: (event: WriteOutcomeEvent) => void;
-  now?: () => number;
+	manager: StoreScopeManager;
+	databaseFor: (scopeId: string) => RxDatabase | null;
+	fetcher: EngineSourceFetcher;
+	/** The wp-json ROOT — the push resolver builds /wc-rxdb-sync/v1/push/{collection} from it. */
+	wpJsonRoot: string;
+	connectivity: () => 'online' | 'offline' | 'degraded';
+	diagnostics: SyncObserver;
+	emitWriteEvent: (event: WriteOutcomeEvent) => void;
+	now?: () => number;
 };
 
 export type WriteDrainLane = {
-  tick(signal?: AbortSignal): Promise<WriteDrainReport>;
-  /** Pending mutation count of the ACTIVE scope, cached from the last tick/enqueue. */
-  lastKnownQueueDepth(): number | null;
-  noteQueueDepth(depth: number): void;
-  lastError(): string | null;
+	tick(signal?: AbortSignal): Promise<WriteDrainReport>;
+	/** Pending mutation count of the ACTIVE scope, cached from the last tick/enqueue. */
+	lastKnownQueueDepth(): number | null;
+	noteQueueDepth(depth: number): void;
+	lastError(): string | null;
 };
 
 export function createWriteDrainLane(deps: WriteDrainLaneDeps): WriteDrainLane {
-  let chain: Promise<unknown> = Promise.resolve();
-  let lastError: string | null = null;
-  let queueDepth: number | null = null;
+	let chain: Promise<unknown> = Promise.resolve();
+	let lastError: string | null = null;
+	let queueDepth: number | null = null;
 
-  async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
-    if (signal?.aborted) {
-      return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };
-    }
-    if (deps.connectivity() === 'offline') {
-      return { lane: 'write-drain', status: 'skipped', reason: 'offline' };
-    }
-    if (deps.manager.activeScope === null) {
-      return { lane: 'write-drain', status: 'skipped', reason: 'no active scope' };
-    }
-    try {
-      return await deps.manager.runGuarded(async (bound) => {
-        const database = deps.databaseFor(bound.scopeId);
-        if (!database) {
-          return { lane: 'write-drain' as const, status: 'skipped' as const, reason: 'scope database not open' };
-        }
-        const queue = queueFor(database);
-        const resolveEndpoint = pushEndpointResolver(deps.wpJsonRoot);
-        // A switch/reset mid-drain must read as CANCELLATION, not failure —
-        // without a signal the drain would classify the aborted push as a
-        // retryable error and bump the backoff. The controller mirrors the
-        // scope lifecycle for exactly this tick.
-        const tickAbort = new AbortController();
-        const abortTick = () => tickAbort.abort();
-        // Abort listeners do not replay: a caller that aborted while runTick
-        // awaited runGuarded must abort the tick NOW, not never.
-        if (bound.signal.aborted || signal?.aborted) {
-          abortTick();
-        } else {
-          bound.signal.addEventListener('abort', abortTick, { once: true });
-          signal?.addEventListener('abort', abortTick, { once: true });
-        }
-        // Per-request signal combining happens HERE, below bindFetch, with a
-        // manual controller: AbortSignal.any is unavailable on RN/Expo fetch
-        // polyfills (the StoreScopeManager contract — a bound fetcher must
-        // never receive init.signal, which would force AbortSignal.any inside
-        // scopedFetch). scopedFetch hands the TICKET signal down as
-        // init.signal; merge it with this tick's controller and forward ONE
-        // composite to the raw transport.
-        const tickFetcher: Fetcher = async (url, init) => {
-          const ticketSignal = init?.signal;
-          const combined = new AbortController();
-          const abort = () => combined.abort();
-          if (ticketSignal?.aborted || tickAbort.signal.aborted) {
-            abort();
-          } else {
-            ticketSignal?.addEventListener('abort', abort, { once: true });
-            tickAbort.signal.addEventListener('abort', abort, { once: true });
-          }
-          try {
-            return await (deps.fetcher as Fetcher)(url, { ...init, signal: combined.signal });
-          } finally {
-            ticketSignal?.removeEventListener('abort', abort);
-            tickAbort.signal.removeEventListener('abort', abort);
-          }
-        };
-        const boundFetch = bound.bindFetch(tickFetcher);
-        // Ack events fire only AFTER the drain durably removed the mutation:
-        // an ack whose queue-remove failed stays queued and re-pushes (the
-        // server dedupes on mutationId) — eventing it early would announce an
-        // acknowledgement the queue does not yet agree with.
-        const ackCandidates: WriteOutcomeEvent[] = [];
-        let report: WriteDrainReport = { lane: 'write-drain', status: 'ran' };
-        const wrote = await bound.guardWrite(async () => {
-          const result = await drainMutationQueue({
-            queue,
-            signal: tickAbort.signal,
-            currentRevision: async (mutation) => {
-              const doc = await database.collections[mutation.collectionName]?.findOne(mutation.recordId).exec();
-              const row = doc?.toJSON() as { sync?: { revision?: string } } | undefined;
-              return row?.sync?.revision;
-            },
-            refreshRevision: async (mutation) => {
-              if (mutation.collectionName !== 'orders') return null;
-              const doc = await database.collections.orders?.findOne(mutation.recordId).exec();
-              const row = doc?.toJSON() as { wooOrderId?: number | null } | undefined;
-              if (typeof row?.wooOrderId !== 'number') return null;
-              const revision = await fetchOrderServerRevision({ fetch: boundFetch, wpJsonRoot: deps.wpJsonRoot, wooOrderId: row.wooOrderId });
-              if (!revision) return null;
-              await doc?.incrementalModify((data: Record<string, unknown>) => ({
-                ...data,
-                sync: { ...((data.sync ?? {}) as object), revision },
-              }));
-              return revision;
-            },
-            push: (mutation) =>
-              pushRecordMutation({
-                mutation,
-                resolveEndpoint,
-                fetcher: (url, init) => {
-                  // Absorb the adapter's signal — tickFetcher already merged
-                  // it; forwarding would force AbortSignal.any in scopedFetch.
-                  const { signal: _absorbed, ...rest } = (init ?? {}) as { signal?: AbortSignal } & Record<string, unknown>;
-                  return boundFetch(url, rest as never);
-                },
-                signal: tickAbort.signal,
-                observe: deps.diagnostics,
-              }),
-            applyAck: async (mutation, pushResult, signal) => {
-              const facet = writeFacetFor(mutation.collectionName);
-              if (!facet) {
-                // Enqueue guards against this; a foreign row (older build) must
-                // not silently ack — leave it queued and surface loudly.
-                throw new Error(`No write facet for collection "${mutation.collectionName}" — mutation left queued`);
-              }
-              if (mutation.operation === 'delete') {
-                await facet.onDeleteAck(database, { mutationId: mutation.mutationId, recordId: mutation.recordId }, signal);
-              } else {
-                const { recordId, remoteId } = reconcileCreateAck(mutation, pushResult.document);
-                const resident = await database.collections[mutation.collectionName]?.findOne(recordId).exec();
-                if (!resident) {
-                  if (mutation.collectionName !== 'orders' || !pushResult.document) {
-                    throw new Error(`Cannot reconcile ${mutation.collectionName}/${recordId}: ack target is not resident and no materializable server document was returned`);
-                  }
-                  await new EngineOrderRepository(database.collections as never).upsertMany([
-                    orderDocumentFromWooPayload(pushResult.document as never),
-                  ]);
-                  ackCandidates.push({
-                    type: 'write-ack-rematerialized',
-                    collection: mutation.collectionName,
-                    recordId,
-                    mutationId: mutation.mutationId,
-                    currentRevision: pushResult.currentRevision,
-                  });
-                }
-                const ack: WriteAck = {
-                  mutation: { mutationId: mutation.mutationId, operation: mutation.operation, recordId: mutation.recordId },
-                  recordId,
-                  remoteId,
-                  currentRevision: pushResult.currentRevision,
-                };
-                await facet.reconcile(database, ack, signal);
-                // BORN-TWICE honest reconcile (gate2 #516 item 1): a create the
-                // server answered 200 (not 201) matched an EXISTING document —
-                // the pushed payload was DISCARDED by the born-twice guard.
-                // Acking clean would silently lose the edit; re-land it as a
-                // follow-up update (see requeueBornTwiceSnapshot's docblock for
-                // the outcome-code comparison design and the successor layering).
-                if (mutation.operation === 'create' && pushResult.httpStatus === 200) {
-                  await requeueBornTwiceSnapshot({
-                    db: database,
-                    mutation,
-                    ackRevision: pushResult.currentRevision,
-                    mintUuid: () => globalThis.crypto.randomUUID(),
-                    now: () => new Date(deps.now !== undefined ? deps.now() : Date.now()).toISOString(),
-                    observe: deps.diagnostics,
-                  });
-                }
-              }
-              ackCandidates.push({
-                type: 'write-acknowledged',
-                collection: mutation.collectionName,
-                recordId: mutation.recordId,
-                mutationId: mutation.mutationId,
-                currentRevision: pushResult.currentRevision,
-              });
-            },
-            observe: deps.diagnostics,
-            ...(deps.now !== undefined ? { now: deps.now } : {}),
-          });
-          const stillPending = new Set((await queue.pending()).map((m) => m.mutationId));
-          for (const ack of ackCandidates) {
-            if (!stillPending.has(ack.mutationId)) {
-              deps.emitWriteEvent(ack);
-            }
-          }
-          for (const conflict of result.conflicts) {
-            deps.emitWriteEvent({
-              type: 'write-conflict',
-              collection: conflict.mutation.collectionName,
-              recordId: conflict.mutation.recordId,
-              mutationId: conflict.mutation.mutationId,
-              currentRevision: conflict.currentRevision,
-            });
-          }
-          for (const dead of result.rejected) {
-            // Dead-letter cleanup (#507 D): the rejected mutation will never
-            // push, so drop it from the record's pendingMutationIds (+ dirty
-            // when empty) — the pull-apply guard frees the record and the next
-            // pull restores server truth. The queue row itself persists as
-            // status 'rejected' for the conflicts() surface.
-            const doc = await database.collections[dead.collectionName]?.findOne(dead.recordId).exec() as { incrementalModify(fn: (data: Record<string, unknown>) => Record<string, unknown>): Promise<unknown> } | null;
-            if (doc) await doc.incrementalModify((data) => {
-              const local = (data.local ?? {}) as { pendingMutationIds?: string[] };
-              const pendingMutationIds = (local.pendingMutationIds ?? []).filter((id) => id !== dead.mutationId);
-              return { ...data, local: { ...local, pendingMutationIds, dirty: pendingMutationIds.length > 0 } };
-            });
-            deps.emitWriteEvent({
-              type: 'write-rejected',
-              collection: dead.collectionName,
-              recordId: dead.recordId,
-              mutationId: dead.mutationId,
-            });
-          }
-          queueDepth = stillPending.size;
-          report = {
-            lane: 'write-drain',
-            status: 'ran',
-            pushed: result.pushed,
-            conflicts: result.conflicts.length,
-            deferred: result.deferred,
-            failed: result.failed,
-            rejected: result.rejected.length,
-          };
-        }).finally(() => {
-          bound.signal.removeEventListener('abort', abortTick);
-          signal?.removeEventListener('abort', abortTick);
-        });
-        if (wrote === 'dropped') {
-          report = { lane: 'write-drain', status: 'skipped', reason: 'scope moved mid-tick (writes dropped)' };
-        }
-        lastError = null;
-        return report;
-      });
-    } catch (error) {
-      if (signal?.aborted) {
-        lastError = null;
-        return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      lastError = message;
-      deps.diagnostics({ type: 'queue.write.tick.error', level: 'error', message });
-      return { lane: 'write-drain', status: 'error', error: message };
-    }
-  }
+	async function runTick(signal?: AbortSignal): Promise<WriteDrainReport> {
+		if (signal?.aborted) {
+			return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };
+		}
+		if (deps.connectivity() === 'offline') {
+			return { lane: 'write-drain', status: 'skipped', reason: 'offline' };
+		}
+		if (deps.manager.activeScope === null) {
+			return { lane: 'write-drain', status: 'skipped', reason: 'no active scope' };
+		}
+		try {
+			return await deps.manager.runGuarded(async (bound) => {
+				const database = deps.databaseFor(bound.scopeId);
+				if (!database) {
+					return {
+						lane: 'write-drain' as const,
+						status: 'skipped' as const,
+						reason: 'scope database not open',
+					};
+				}
+				const queue = queueFor(database);
+				const resolveEndpoint = pushEndpointResolver(deps.wpJsonRoot);
+				// A switch/reset mid-drain must read as CANCELLATION, not failure —
+				// without a signal the drain would classify the aborted push as a
+				// retryable error and bump the backoff. The controller mirrors the
+				// scope lifecycle for exactly this tick.
+				const tickAbort = new AbortController();
+				const abortTick = () => tickAbort.abort();
+				// Abort listeners do not replay: a caller that aborted while runTick
+				// awaited runGuarded must abort the tick NOW, not never.
+				if (bound.signal.aborted || signal?.aborted) {
+					abortTick();
+				} else {
+					bound.signal.addEventListener('abort', abortTick, { once: true });
+					signal?.addEventListener('abort', abortTick, { once: true });
+				}
+				// Per-request signal combining happens HERE, below bindFetch, with a
+				// manual controller: AbortSignal.any is unavailable on RN/Expo fetch
+				// polyfills (the StoreScopeManager contract — a bound fetcher must
+				// never receive init.signal, which would force AbortSignal.any inside
+				// scopedFetch). scopedFetch hands the TICKET signal down as
+				// init.signal; merge it with this tick's controller and forward ONE
+				// composite to the raw transport.
+				const tickFetcher: Fetcher = async (url, init) => {
+					const ticketSignal = init?.signal;
+					const combined = new AbortController();
+					const abort = () => combined.abort();
+					if (ticketSignal?.aborted || tickAbort.signal.aborted) {
+						abort();
+					} else {
+						ticketSignal?.addEventListener('abort', abort, { once: true });
+						tickAbort.signal.addEventListener('abort', abort, { once: true });
+					}
+					try {
+						return await (deps.fetcher as Fetcher)(url, { ...init, signal: combined.signal });
+					} finally {
+						ticketSignal?.removeEventListener('abort', abort);
+						tickAbort.signal.removeEventListener('abort', abort);
+					}
+				};
+				const boundFetch = bound.bindFetch(tickFetcher);
+				// Ack events fire only AFTER the drain durably removed the mutation:
+				// an ack whose queue-remove failed stays queued and re-pushes (the
+				// server dedupes on mutationId) — eventing it early would announce an
+				// acknowledgement the queue does not yet agree with.
+				const ackCandidates: WriteOutcomeEvent[] = [];
+				let report: WriteDrainReport = { lane: 'write-drain', status: 'ran' };
+				const wrote = await bound
+					.guardWrite(async () => {
+						const result = await drainMutationQueue({
+							queue,
+							signal: tickAbort.signal,
+							currentRevision: async (mutation) => {
+								const doc = await database.collections[mutation.collectionName]
+									?.findOne(mutation.recordId)
+									.exec();
+								const row = doc?.toJSON() as { sync?: { revision?: string } } | undefined;
+								return row?.sync?.revision;
+							},
+							refreshRevision: async (mutation) => {
+								if (mutation.collectionName !== 'orders') return null;
+								const doc = await database.collections.orders?.findOne(mutation.recordId).exec();
+								const row = doc?.toJSON() as { wooOrderId?: number | null } | undefined;
+								if (typeof row?.wooOrderId !== 'number') return null;
+								const revision = await fetchOrderServerRevision({
+									fetch: boundFetch,
+									wpJsonRoot: deps.wpJsonRoot,
+									wooOrderId: row.wooOrderId,
+								});
+								if (!revision) return null;
+								await doc?.incrementalModify((data: Record<string, unknown>) => ({
+									...data,
+									sync: { ...((data.sync ?? {}) as object), revision },
+								}));
+								return revision;
+							},
+							push: (mutation) =>
+								pushRecordMutation({
+									mutation,
+									resolveEndpoint,
+									fetcher: (url, init) => {
+										// Absorb the adapter's signal — tickFetcher already merged
+										// it; forwarding would force AbortSignal.any in scopedFetch.
+										const { signal: _absorbed, ...rest } = (init ?? {}) as {
+											signal?: AbortSignal;
+										} & Record<string, unknown>;
+										return boundFetch(url, rest as never);
+									},
+									signal: tickAbort.signal,
+									observe: deps.diagnostics,
+								}),
+							applyAck: async (mutation, pushResult, signal) => {
+								const facet = writeFacetFor(mutation.collectionName);
+								if (!facet) {
+									// Enqueue guards against this; a foreign row (older build) must
+									// not silently ack — leave it queued and surface loudly.
+									throw new Error(
+										`No write facet for collection "${mutation.collectionName}" — mutation left queued`
+									);
+								}
+								if (mutation.operation === 'delete') {
+									await facet.onDeleteAck(
+										database,
+										{ mutationId: mutation.mutationId, recordId: mutation.recordId },
+										signal
+									);
+								} else {
+									const { recordId, remoteId } = reconcileCreateAck(mutation, pushResult.document);
+									const resident = await database.collections[mutation.collectionName]
+										?.findOne(recordId)
+										.exec();
+									if (!resident) {
+										if (mutation.collectionName !== 'orders' || !pushResult.document) {
+											throw new Error(
+												`Cannot reconcile ${mutation.collectionName}/${recordId}: ack target is not resident and no materializable server document was returned`
+											);
+										}
+										await new EngineOrderRepository(database.collections as never).upsertMany([
+											orderDocumentFromWooPayload(pushResult.document as never),
+										]);
+										ackCandidates.push({
+											type: 'write-ack-rematerialized',
+											collection: mutation.collectionName,
+											recordId,
+											mutationId: mutation.mutationId,
+											currentRevision: pushResult.currentRevision,
+										});
+									}
+									const ack: WriteAck = {
+										mutation: {
+											mutationId: mutation.mutationId,
+											operation: mutation.operation,
+											recordId: mutation.recordId,
+										},
+										recordId,
+										remoteId,
+										currentRevision: pushResult.currentRevision,
+									};
+									await facet.reconcile(database, ack, signal);
+									// BORN-TWICE honest reconcile (gate2 #516 item 1): a create the
+									// server answered 200 (not 201) matched an EXISTING document —
+									// the pushed payload was DISCARDED by the born-twice guard.
+									// Acking clean would silently lose the edit; re-land it as a
+									// follow-up update (see requeueBornTwiceSnapshot's docblock for
+									// the outcome-code comparison design and the successor layering).
+									if (mutation.operation === 'create' && pushResult.httpStatus === 200) {
+										await requeueBornTwiceSnapshot({
+											db: database,
+											mutation,
+											ackRevision: pushResult.currentRevision,
+											mintUuid: () => globalThis.crypto.randomUUID(),
+											now: () =>
+												new Date(deps.now !== undefined ? deps.now() : Date.now()).toISOString(),
+											observe: deps.diagnostics,
+										});
+									}
+								}
+								ackCandidates.push({
+									type: 'write-acknowledged',
+									collection: mutation.collectionName,
+									recordId: mutation.recordId,
+									mutationId: mutation.mutationId,
+									currentRevision: pushResult.currentRevision,
+								});
+							},
+							observe: deps.diagnostics,
+							...(deps.now !== undefined ? { now: deps.now } : {}),
+						});
+						const stillPending = new Set((await queue.pending()).map((m) => m.mutationId));
+						for (const ack of ackCandidates) {
+							if (!stillPending.has(ack.mutationId)) {
+								deps.emitWriteEvent(ack);
+							}
+						}
+						for (const conflict of result.conflicts) {
+							deps.emitWriteEvent({
+								type: 'write-conflict',
+								collection: conflict.mutation.collectionName,
+								recordId: conflict.mutation.recordId,
+								mutationId: conflict.mutation.mutationId,
+								currentRevision: conflict.currentRevision,
+							});
+						}
+						for (const dead of result.rejected) {
+							// Dead-letter cleanup (#507 D): the rejected mutation will never
+							// push, so drop it from the record's pendingMutationIds (+ dirty
+							// when empty) — the pull-apply guard frees the record and the next
+							// pull restores server truth. The queue row itself persists as
+							// status 'rejected' for the conflicts() surface.
+							const doc = (await database.collections[dead.collectionName]
+								?.findOne(dead.recordId)
+								.exec()) as {
+								incrementalModify(
+									fn: (data: Record<string, unknown>) => Record<string, unknown>
+								): Promise<unknown>;
+							} | null;
+							if (doc)
+								await doc.incrementalModify((data) => {
+									const local = (data.local ?? {}) as { pendingMutationIds?: string[] };
+									const pendingMutationIds = (local.pendingMutationIds ?? []).filter(
+										(id) => id !== dead.mutationId
+									);
+									return {
+										...data,
+										local: { ...local, pendingMutationIds, dirty: pendingMutationIds.length > 0 },
+									};
+								});
+							deps.emitWriteEvent({
+								type: 'write-rejected',
+								collection: dead.collectionName,
+								recordId: dead.recordId,
+								mutationId: dead.mutationId,
+							});
+						}
+						queueDepth = stillPending.size;
+						report = {
+							lane: 'write-drain',
+							status: 'ran',
+							pushed: result.pushed,
+							conflicts: result.conflicts.length,
+							deferred: result.deferred,
+							failed: result.failed,
+							rejected: result.rejected.length,
+						};
+					})
+					.finally(() => {
+						bound.signal.removeEventListener('abort', abortTick);
+						signal?.removeEventListener('abort', abortTick);
+					});
+				if (wrote === 'dropped') {
+					report = {
+						lane: 'write-drain',
+						status: 'skipped',
+						reason: 'scope moved mid-tick (writes dropped)',
+					};
+				}
+				lastError = null;
+				return report;
+			});
+		} catch (error) {
+			if (signal?.aborted) {
+				lastError = null;
+				return { lane: 'write-drain', status: 'skipped', reason: 'aborted' };
+			}
+			const message = error instanceof Error ? error.message : String(error);
+			lastError = message;
+			deps.diagnostics({ type: 'queue.write.tick.error', level: 'error', message });
+			return { lane: 'write-drain', status: 'error', error: message };
+		}
+	}
 
-  return {
-    tick: (signal) => {
-      const run = chain.then(() => runTick(signal), () => runTick(signal));
-      chain = run.then(
-        () => undefined,
-        () => undefined,
-      );
-      return run;
-    },
-    lastKnownQueueDepth: () => queueDepth,
-    noteQueueDepth: (depth) => {
-      queueDepth = depth;
-    },
-    lastError: () => lastError,
-  };
+	return {
+		tick: (signal) => {
+			const run = chain.then(
+				() => runTick(signal),
+				() => runTick(signal)
+			);
+			chain = run.then(
+				() => undefined,
+				() => undefined
+			);
+			return run;
+		},
+		lastKnownQueueDepth: () => queueDepth,
+		noteQueueDepth: (depth) => {
+			queueDepth = depth;
+		},
+		lastError: () => lastError,
+	};
 }

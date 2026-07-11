@@ -9,22 +9,22 @@
  * round-trip and this schema stays a plain string blob.
  */
 export type ChangeSignalStateDocument = {
-  id: string;
-  state: string;
-  updatedAt: string;
+	id: string;
+	state: string;
+	updatedAt: string;
 };
 
 export const CHANGE_SIGNAL_STATE_ID = 'change-signal:web';
 
 export const changeSignalStateSchema = {
-  title: 'Woo/RxDB change-signal engine state schema',
-  version: 0,
-  primaryKey: 'id',
-  type: 'object',
-  properties: {
-    id: { type: 'string', maxLength: 64 },
-    state: { type: 'string' },
-    updatedAt: { type: 'string' },
-  },
-  required: ['id', 'state', 'updatedAt'],
+	title: 'Woo/RxDB change-signal engine state schema',
+	version: 0,
+	primaryKey: 'id',
+	type: 'object',
+	properties: {
+		id: { type: 'string', maxLength: 64 },
+		state: { type: 'string' },
+		updatedAt: { type: 'string' },
+	},
+	required: ['id', 'state', 'updatedAt'],
 } as const;

@@ -24,23 +24,28 @@
  * specifics, this module only owns the scope-safety mechanic.
  */
 
-import { ScopeStaleError, type Fetcher, type ScopeBound, type StoreScopeManager } from './storeScopeManager';
+import {
+	type Fetcher,
+	type ScopeBound,
+	ScopeStaleError,
+	type StoreScopeManager,
+} from './storeScopeManager';
 
 export type ScopeGuardedOperationResult = {
-  /**
-   * - 'applied':  produced and committed under a still-current ticket
-   * - 'dropped':  the guarded commit arrived after the scope moved on — counted
-   *               + evented by the manager, never persisted
-   * - 'stale':    a response landed after the epoch moved (ScopeStaleError from
-   *               the scoped fetch) — the commit was never attempted
-   * - 'aborted':  an in-flight request was aborted, or a request refused to
-   *               start because the captured ticket had already moved on
-   * - 'error':    any other failure (HTTP error, produce/commit throw, ...)
-   */
-  status: 'applied' | 'dropped' | 'aborted' | 'stale' | 'error';
-  /** Records the guarded commit applied; 0 unless 'applied'. */
-  applied: number;
-  detail?: string;
+	/**
+	 * - 'applied':  produced and committed under a still-current ticket
+	 * - 'dropped':  the guarded commit arrived after the scope moved on — counted
+	 *               + evented by the manager, never persisted
+	 * - 'stale':    a response landed after the epoch moved (ScopeStaleError from
+	 *               the scoped fetch) — the commit was never attempted
+	 * - 'aborted':  an in-flight request was aborted, or a request refused to
+	 *               start because the captured ticket had already moved on
+	 * - 'error':    any other failure (HTTP error, produce/commit throw, ...)
+	 */
+	status: 'applied' | 'dropped' | 'aborted' | 'stale' | 'error';
+	/** Records the guarded commit applied; 0 unless 'applied'. */
+	applied: number;
+	detail?: string;
 };
 
 /**
@@ -58,46 +63,50 @@ export type ScopeGuardedOperationResult = {
  * what every fetch and the commit are guarded against.
  */
 export async function runScopeGuardedOperation<T = void>(input: {
-  manager: StoreScopeManager;
-  /** The enclosing operation's bound (the change-signal binding). Omit to capture at call time. */
-  bound?: ScopeBound;
-  /** Raw host fetcher; bound.bindFetch (pre-check + scoped fetch) is applied HERE. Omit for write-only operations. */
-  fetcher?: Fetcher;
-  /**
-   * Gather the payload to write, through the bound scoped fetcher passed in.
-   * Runs AFTER capture, so a switch landing during it (or during an await
-   * before its first request) drops the operation. Omit for write-only
-   * operations.
-   */
-  produce?: (scopedFetch: Fetcher, guardWrite: ScopeBound['guardWrite']) => Promise<T>;
-  /** Write the gathered payload under one guardWrite; return the count applied. */
-  commit: (produced: T) => Promise<number>;
+	manager: StoreScopeManager;
+	/** The enclosing operation's bound (the change-signal binding). Omit to capture at call time. */
+	bound?: ScopeBound;
+	/** Raw host fetcher; bound.bindFetch (pre-check + scoped fetch) is applied HERE. Omit for write-only operations. */
+	fetcher?: Fetcher;
+	/**
+	 * Gather the payload to write, through the bound scoped fetcher passed in.
+	 * Runs AFTER capture, so a switch landing during it (or during an await
+	 * before its first request) drops the operation. Omit for write-only
+	 * operations.
+	 */
+	produce?: (scopedFetch: Fetcher, guardWrite: ScopeBound['guardWrite']) => Promise<T>;
+	/** Write the gathered payload under one guardWrite; return the count applied. */
+	commit: (produced: T) => Promise<number>;
 }): Promise<ScopeGuardedOperationResult> {
-  const operation = async (bound: ScopeBound): Promise<ScopeGuardedOperationResult> => {
-    // Built only when a fetcher is supplied; a produce that fetches without one
-    // is a wiring mistake, surfaced loudly rather than silently swallowed.
-    const scopedFetch: Fetcher = input.fetcher
-      ? bound.bindFetch(input.fetcher)
-      : () => {
-          throw new Error('runScopeGuardedOperation: produce attempted a fetch but no fetcher was supplied');
-        };
-    const produced = input.produce ? await input.produce(scopedFetch, bound.guardWrite.bind(bound)) : (undefined as T);
-    let applied = 0;
-    const writeResult = await bound.guardWrite(async () => {
-      applied = await input.commit(produced);
-    });
-    if (writeResult === 'dropped') {
-      return { status: 'dropped', applied: 0 };
-    }
-    return { status: 'applied', applied };
-  };
+	const operation = async (bound: ScopeBound): Promise<ScopeGuardedOperationResult> => {
+		// Built only when a fetcher is supplied; a produce that fetches without one
+		// is a wiring mistake, surfaced loudly rather than silently swallowed.
+		const scopedFetch: Fetcher = input.fetcher
+			? bound.bindFetch(input.fetcher)
+			: () => {
+					throw new Error(
+						'runScopeGuardedOperation: produce attempted a fetch but no fetcher was supplied'
+					);
+				};
+		const produced = input.produce
+			? await input.produce(scopedFetch, bound.guardWrite.bind(bound))
+			: (undefined as T);
+		let applied = 0;
+		const writeResult = await bound.guardWrite(async () => {
+			applied = await input.commit(produced);
+		});
+		if (writeResult === 'dropped') {
+			return { status: 'dropped', applied: 0 };
+		}
+		return { status: 'applied', applied };
+	};
 
-  try {
-    return input.bound ? await operation(input.bound) : await input.manager.runGuarded(operation);
-  } catch (error) {
-    const { category, detail } = classifyScopeError(error);
-    return { status: category, applied: 0, detail };
-  }
+	try {
+		return input.bound ? await operation(input.bound) : await input.manager.runGuarded(operation);
+	} catch (error) {
+		const { category, detail } = classifyScopeError(error);
+		return { status: category, applied: 0, detail };
+	}
 }
 
 /**
@@ -110,18 +119,18 @@ export async function runScopeGuardedOperation<T = void>(input: {
  * write that never landed.
  */
 export async function applyScopeGuardedWrite(input: {
-  /** The enclosing operation's bound — the write is guarded by ITS capture. */
-  bound: ScopeBound;
-  /** Names the write in the thrown drop message (diagnostics/telemetry). */
-  label: string;
-  write: () => Promise<void>;
+	/** The enclosing operation's bound — the write is guarded by ITS capture. */
+	bound: ScopeBound;
+	/** Names the write in the thrown drop message (diagnostics/telemetry). */
+	label: string;
+	write: () => Promise<void>;
 }): Promise<void> {
-  const outcome = await input.bound.guardWrite(input.write);
-  if (outcome === 'dropped') {
-    const dropped = new Error(`scope switched before ${input.label} could apply`);
-    dropped.name = 'AbortError';
-    throw dropped;
-  }
+	const outcome = await input.bound.guardWrite(input.write);
+	if (outcome === 'dropped') {
+		const dropped = new Error(`scope switched before ${input.label} could apply`);
+		dropped.name = 'AbortError';
+		throw dropped;
+	}
 }
 
 /**
@@ -134,13 +143,20 @@ export async function applyScopeGuardedWrite(input: {
  * result shape (pull adds hasMore, push checks conflict first) and adds only
  * what is specific to it.
  */
-export function classifyScopeError(error: unknown): { category: 'stale' | 'aborted' | 'error'; detail: string } {
-  const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  if (error instanceof ScopeStaleError) {
-    return { category: 'stale', detail };
-  }
-  if (typeof error === 'object' && error !== null && (error as { name?: string }).name === 'AbortError') {
-    return { category: 'aborted', detail };
-  }
-  return { category: 'error', detail };
+export function classifyScopeError(error: unknown): {
+	category: 'stale' | 'aborted' | 'error';
+	detail: string;
+} {
+	const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+	if (error instanceof ScopeStaleError) {
+		return { category: 'stale', detail };
+	}
+	if (
+		typeof error === 'object' &&
+		error !== null &&
+		(error as { name?: string }).name === 'AbortError'
+	) {
+		return { category: 'aborted', detail };
+	}
+	return { category: 'error', detail };
 }

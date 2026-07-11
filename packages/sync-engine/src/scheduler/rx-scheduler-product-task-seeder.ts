@@ -14,40 +14,43 @@
  * the tick — the lane already exists; this seeder is the entry point.
  */
 
-import type { SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seeder';
-import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
 
+import type { SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seeder';
+import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
+
 const PRODUCT_TARGETED_LANE: TargetedLaneDescriptor = {
-  collection: 'products',
-  idLabel: 'product',
-  keyPrefix: 'products',
-  requirementPrefix: 'products',
-  documentId: (id) => `woo-product:${id}`,
-  defaultPriority: 900,
-  defaultBatchSize: 100,
-  defaultCompletedDedupeForMs: 30_000,
+	collection: 'products',
+	idLabel: 'product',
+	keyPrefix: 'products',
+	requirementPrefix: 'products',
+	documentId: (id) => `woo-product:${id}`,
+	defaultPriority: 900,
+	defaultBatchSize: 100,
+	defaultCompletedDedupeForMs: 30_000,
 };
 
 export type SeedTargetedProductSchedulerTaskInput = {
-  productIds: number[];
-  priority?: number;
-  batchSize?: number;
-  completedDedupeForMs?: number;
-  nowMs?: number;
-  getRepository: SchedulerScopeResolver;
+	productIds: number[];
+	priority?: number;
+	batchSize?: number;
+	completedDedupeForMs?: number;
+	nowMs?: number;
+	getRepository: SchedulerScopeResolver;
 };
 
-export async function seedTargetedProductSchedulerTask(input: SeedTargetedProductSchedulerTaskInput): Promise<SeedPersistedSchedulerTasksResult> {
-  return seedTargetedLane(PRODUCT_TARGETED_LANE, {
-    ids: input.productIds,
-    priority: input.priority,
-    batchSize: input.batchSize,
-    completedDedupeForMs: input.completedDedupeForMs,
-    nowMs: input.nowMs,
-    getRepository: input.getRepository,
-    // This seeder IS the change-signal targeted product entry point, so an in-flight pull
-    // re-seeded by a newer mutation must re-run rather than drop the change (#318).
-    coalesceInFlight: true,
-  });
+export async function seedTargetedProductSchedulerTask(
+	input: SeedTargetedProductSchedulerTaskInput
+): Promise<SeedPersistedSchedulerTasksResult> {
+	return seedTargetedLane(PRODUCT_TARGETED_LANE, {
+		ids: input.productIds,
+		priority: input.priority,
+		batchSize: input.batchSize,
+		completedDedupeForMs: input.completedDedupeForMs,
+		nowMs: input.nowMs,
+		getRepository: input.getRepository,
+		// This seeder IS the change-signal targeted product entry point, so an in-flight pull
+		// re-seeded by a newer mutation must re-run rather than drop the change (#318).
+		coalesceInFlight: true,
+	});
 }

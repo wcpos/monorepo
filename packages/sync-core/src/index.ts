@@ -1,6 +1,4 @@
-// ENGINE surface only. Bench instruments (barcode-resolve bench runner,
-// responsiveness workloads/suite) live in './bench' — import them from
-// '@woo-rxdb-lab/sync-core/bench'.
+// ENGINE surface only. Bench instruments remain in the woo-rxdb-replication-lab repo.
 export * from './applyReplicationActions';
 export * from './authSession';
 export * from './authToken';
@@ -20,3 +18,7 @@ export * from './scopeGuardedOperation';
 export * from './scopeGuardedPull';
 export * from './storeScopeIdentity';
 export * from './storeScopeManager';
+export * from './categoryLoggerObserver';
+export * from './protocol';
+export * from './recordIdentity';
+export * from './telemetry';

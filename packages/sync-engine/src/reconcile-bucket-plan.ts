@@ -25,11 +25,11 @@
 export type ObjectType = 'product' | 'variation' | 'customer' | 'order';
 
 export type LocalManifestEntry = {
-  wooId: number;
-  digest: string;
-  objectType: ObjectType;
-  /** Pending local writes not yet pushed — protected from prune AND repull. */
-  dirty?: boolean;
+	wooId: number;
+	digest: string;
+	objectType: ObjectType;
+	/** Pending local writes not yet pushed — protected from prune AND repull. */
+	dirty?: boolean;
 };
 
 export type ServerDigestEntry = { id: number; digest: string; objectType: ObjectType };
@@ -38,58 +38,58 @@ export type ServerDigestEntry = { id: number; digest: string; objectType: Object
 export type ReconcileAction = { wooId: number; objectType: ObjectType };
 
 export type ReconcilePlan = {
-  /** Local, absent from the server's authoritative set, not dirty → stale; remove the record + its manifest row. */
-  prune: ReconcileAction[];
-  /** On the server, absent locally → missing; pull it (lane from the SERVER entry). */
-  pull: ReconcileAction[];
-  /** Present both sides but the digest differs → changed (incl. hook-bypass); re-pull. */
-  repull: ReconcileAction[];
-  /** Dirty local records an action WOULD have touched (prune/repull), suppressed by the dirty guard. */
-  skippedDirty: ReconcileAction[];
+	/** Local, absent from the server's authoritative set, not dirty → stale; remove the record + its manifest row. */
+	prune: ReconcileAction[];
+	/** On the server, absent locally → missing; pull it (lane from the SERVER entry). */
+	pull: ReconcileAction[];
+	/** Present both sides but the digest differs → changed (incl. hook-bypass); re-pull. */
+	repull: ReconcileAction[];
+	/** Dirty local records an action WOULD have touched (prune/repull), suppressed by the dirty guard. */
+	skippedDirty: ReconcileAction[];
 };
 
 export function reconcileBucketPlan(
-  local: readonly LocalManifestEntry[],
-  server: readonly ServerDigestEntry[],
+	local: readonly LocalManifestEntry[],
+	server: readonly ServerDigestEntry[]
 ): ReconcilePlan {
-  const serverById = new Map<number, ServerDigestEntry>();
-  for (const entry of server) {
-    serverById.set(entry.id, entry);
-  }
+	const serverById = new Map<number, ServerDigestEntry>();
+	for (const entry of server) {
+		serverById.set(entry.id, entry);
+	}
 
-  const localIds = new Set<number>();
-  const prune: ReconcileAction[] = [];
-  const repull: ReconcileAction[] = [];
-  const skippedDirty: ReconcileAction[] = [];
+	const localIds = new Set<number>();
+	const prune: ReconcileAction[] = [];
+	const repull: ReconcileAction[] = [];
+	const skippedDirty: ReconcileAction[] = [];
 
-  for (const entry of local) {
-    localIds.add(entry.wooId);
-    const action: ReconcileAction = { wooId: entry.wooId, objectType: entry.objectType };
-    const serverEntry = serverById.get(entry.wooId);
-    const wouldAct = serverEntry === undefined || serverEntry.digest !== entry.digest;
+	for (const entry of local) {
+		localIds.add(entry.wooId);
+		const action: ReconcileAction = { wooId: entry.wooId, objectType: entry.objectType };
+		const serverEntry = serverById.get(entry.wooId);
+		const wouldAct = serverEntry === undefined || serverEntry.digest !== entry.digest;
 
-    if (entry.dirty) {
-      // Pending local writes — the write path owns this record; never prune or repull it.
-      if (wouldAct) {
-        skippedDirty.push(action);
-      }
-      continue;
-    }
+		if (entry.dirty) {
+			// Pending local writes — the write path owns this record; never prune or repull it.
+			if (wouldAct) {
+				skippedDirty.push(action);
+			}
+			continue;
+		}
 
-    if (serverEntry === undefined) {
-      prune.push(action); // gone from the server's set → stale
-    } else if (serverEntry.digest !== entry.digest) {
-      repull.push(action); // changed out-of-band
-    }
-    // else: digests match → in sync, no action
-  }
+		if (serverEntry === undefined) {
+			prune.push(action); // gone from the server's set → stale
+		} else if (serverEntry.digest !== entry.digest) {
+			repull.push(action); // changed out-of-band
+		}
+		// else: digests match → in sync, no action
+	}
 
-  const pull: ReconcileAction[] = [];
-  for (const entry of server) {
-    if (!localIds.has(entry.id)) {
-      pull.push({ wooId: entry.id, objectType: entry.objectType }); // lane from the server — no local row exists
-    }
-  }
+	const pull: ReconcileAction[] = [];
+	for (const entry of server) {
+		if (!localIds.has(entry.id)) {
+			pull.push({ wooId: entry.id, objectType: entry.objectType }); // lane from the server — no local row exists
+		}
+	}
 
-  return { prune, pull, repull, skippedDirty };
+	return { prune, pull, repull, skippedDirty };
 }

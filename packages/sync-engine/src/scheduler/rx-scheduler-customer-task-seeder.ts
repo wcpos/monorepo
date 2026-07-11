@@ -14,43 +14,45 @@
  * change-signal entry point, exactly like products.
  */
 
-import { customerDocumentId } from '@woo-rxdb-lab/shared';
-import type { SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seeder';
-import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
+import { customerDocumentId } from '@wcpos/sync-core';
+
 import { seedTargetedLane, type TargetedLaneDescriptor } from './rx-targeted-lane-seeder';
 
+import type { SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seeder';
+import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
+
 const CUSTOMER_TARGETED_LANE: TargetedLaneDescriptor = {
-  collection: 'customers',
-  idLabel: 'customer',
-  keyPrefix: 'customers',
-  requirementPrefix: 'customers',
-  documentId: (id) => customerDocumentId(id),
-  defaultPriority: 900,
-  defaultBatchSize: 100,
-  defaultCompletedDedupeForMs: 30_000,
+	collection: 'customers',
+	idLabel: 'customer',
+	keyPrefix: 'customers',
+	requirementPrefix: 'customers',
+	documentId: (id) => customerDocumentId(id),
+	defaultPriority: 900,
+	defaultBatchSize: 100,
+	defaultCompletedDedupeForMs: 30_000,
 };
 
 export type SeedTargetedCustomerSchedulerTaskInput = {
-  customerIds: number[];
-  priority?: number;
-  batchSize?: number;
-  completedDedupeForMs?: number;
-  nowMs?: number;
-  getRepository: SchedulerScopeResolver;
+	customerIds: number[];
+	priority?: number;
+	batchSize?: number;
+	completedDedupeForMs?: number;
+	nowMs?: number;
+	getRepository: SchedulerScopeResolver;
 };
 
 export async function seedTargetedCustomerSchedulerTask(
-  input: SeedTargetedCustomerSchedulerTaskInput,
+	input: SeedTargetedCustomerSchedulerTaskInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
-  return seedTargetedLane(CUSTOMER_TARGETED_LANE, {
-    ids: input.customerIds,
-    priority: input.priority,
-    batchSize: input.batchSize,
-    completedDedupeForMs: input.completedDedupeForMs,
-    nowMs: input.nowMs,
-    getRepository: input.getRepository,
-    // This seeder IS the change-signal targeted customer entry point, so an in-flight pull
-    // re-seeded by a newer mutation must re-run rather than drop the change (#318).
-    coalesceInFlight: true,
-  });
+	return seedTargetedLane(CUSTOMER_TARGETED_LANE, {
+		ids: input.customerIds,
+		priority: input.priority,
+		batchSize: input.batchSize,
+		completedDedupeForMs: input.completedDedupeForMs,
+		nowMs: input.nowMs,
+		getRepository: input.getRepository,
+		// This seeder IS the change-signal targeted customer entry point, so an in-flight pull
+		// re-seeded by a newer mutation must re-run rather than drop the change (#318).
+		coalesceInFlight: true,
+	});
 }

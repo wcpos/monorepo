@@ -21,12 +21,23 @@
  * rxSchedulerTaskRunner.ts.
  */
 
+import { REFERENCE_COLLECTIONS, type ReferenceCollection } from '@wcpos/sync-core';
+
 import { WOO_REST_MAX_PER_PAGE } from './order-browser-scheduler-descriptor';
-import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
-import { seedPersistedSchedulerTasks, type SeedPersistedSchedulerTasksResult } from './rx-scheduler-task-seeder';
+import {
+	seedPersistedSchedulerTasks,
+	type SeedPersistedSchedulerTasksResult,
+} from './rx-scheduler-task-seeder';
 import { RxSchedulerTaskStateRepository } from './rx-scheduler-task-state-repository';
-import { BRAND_REFERENCE_CONFIG, CATEGORY_REFERENCE_CONFIG, COUPON_REFERENCE_CONFIG, TAG_REFERENCE_CONFIG, type ReferenceCollectionConfig } from './rx-scheduler-reference-fetcher';
-import { REFERENCE_COLLECTIONS, type ReferenceCollection } from '@woo-rxdb-lab/sync-core';
+import {
+	BRAND_REFERENCE_CONFIG,
+	CATEGORY_REFERENCE_CONFIG,
+	COUPON_REFERENCE_CONFIG,
+	type ReferenceCollectionConfig,
+	TAG_REFERENCE_CONFIG,
+} from './rx-scheduler-reference-fetcher';
+
+import type { SchedulerScopeResolver } from './scheduler-scope-resolver';
 import type { FetchTask } from './replication-policy';
 
 /** Canonical Tier-0 priority for the required greedy startup subset (tax rates). */
@@ -48,15 +59,15 @@ const COUPON_PRIORITY = 920;
  */
 /** The greedy `taxRates:all` lane — Tier 0; the POS cannot sell without tax rates. */
 export function taxRatesLaneTask(): FetchTask {
-  return {
-    id: 'taxRates:all:greedy',
-    requirementId: 'taxRates.all',
-    collection: 'taxRates',
-    queryKey: 'taxRates:all',
-    limit: WOO_REST_MAX_PER_PAGE,
-    priority: TAX_RATES_PRIORITY,
-    mode: 'greedy',
-  };
+	return {
+		id: 'taxRates:all:greedy',
+		requirementId: 'taxRates.all',
+		collection: 'taxRates',
+		queryKey: 'taxRates:all',
+		limit: WOO_REST_MAX_PER_PAGE,
+		priority: TAX_RATES_PRIORITY,
+		mode: 'greedy',
+	};
 }
 
 /**
@@ -64,11 +75,14 @@ export function taxRatesLaneTask(): FetchTask {
  * priority. One map drives BOTH boot seeding and the change-signal per-collection
  * re-seed, so a new reference collection is a map entry, not another copy.
  */
-const REFERENCE_LANE_CONFIGS: Record<ReferenceCollection, { config: ReferenceCollectionConfig; priority: number }> = {
-  categories: { config: CATEGORY_REFERENCE_CONFIG, priority: CATEGORY_PRIORITY },
-  brands: { config: BRAND_REFERENCE_CONFIG, priority: BRAND_PRIORITY },
-  tags: { config: TAG_REFERENCE_CONFIG, priority: TAG_PRIORITY },
-  coupons: { config: COUPON_REFERENCE_CONFIG, priority: COUPON_PRIORITY },
+const REFERENCE_LANE_CONFIGS: Record<
+	ReferenceCollection,
+	{ config: ReferenceCollectionConfig; priority: number }
+> = {
+	categories: { config: CATEGORY_REFERENCE_CONFIG, priority: CATEGORY_PRIORITY },
+	brands: { config: BRAND_REFERENCE_CONFIG, priority: BRAND_PRIORITY },
+	tags: { config: TAG_REFERENCE_CONFIG, priority: TAG_PRIORITY },
+	coupons: { config: COUPON_REFERENCE_CONFIG, priority: COUPON_PRIORITY },
 };
 
 /**
@@ -78,16 +92,16 @@ const REFERENCE_LANE_CONFIGS: Record<ReferenceCollection, { config: ReferenceCol
  * change-signal tick to re-seed ONLY the changed collection (never the other reference lanes).
  */
 export function referenceLaneTaskFor(collection: ReferenceCollection): FetchTask {
-  const { config, priority } = REFERENCE_LANE_CONFIGS[collection];
-  return {
-    id: `${config.queryKey}:greedy`,
-    requirementId: `${collection}.all`,
-    collection: config.collection,
-    queryKey: config.queryKey,
-    limit: WOO_REST_MAX_PER_PAGE,
-    priority,
-    mode: 'greedy',
-  };
+	const { config, priority } = REFERENCE_LANE_CONFIGS[collection];
+	return {
+		id: `${config.queryKey}:greedy`,
+		requirementId: `${collection}.all`,
+		collection: config.collection,
+		queryKey: config.queryKey,
+		limit: WOO_REST_MAX_PER_PAGE,
+		priority,
+		mode: 'greedy',
+	};
 }
 
 /**
@@ -97,20 +111,20 @@ export function referenceLaneTaskFor(collection: ReferenceCollection): FetchTask
  * re-seed → re-pull → set-difference prune.
  */
 export function referenceLaneTasks(): FetchTask[] {
-  return REFERENCE_COLLECTIONS.map(referenceLaneTaskFor);
+	return REFERENCE_COLLECTIONS.map(referenceLaneTaskFor);
 }
 
 export function posBootstrapTasks(): FetchTask[] {
-  return [taxRatesLaneTask(), ...referenceLaneTasks()];
+	return [taxRatesLaneTask(), ...referenceLaneTasks()];
 }
 
 export type SeedPosBootstrapLanesInput = {
-  /** Change-signal seeds disable completed-dedupe; boot seeding wants a fresh pull. */
-  completedDedupeForMs?: number;
-  nowMs?: number;
-  getRepository: SchedulerScopeResolver;
-  /** Opt into in-flight coalescing (#318) — set only by the change-signal refresh lanes. */
-  coalesceInFlight?: boolean;
+	/** Change-signal seeds disable completed-dedupe; boot seeding wants a fresh pull. */
+	completedDedupeForMs?: number;
+	nowMs?: number;
+	getRepository: SchedulerScopeResolver;
+	/** Opt into in-flight coalescing (#318) — set only by the change-signal refresh lanes. */
+	coalesceInFlight?: boolean;
 };
 
 /**
@@ -118,22 +132,25 @@ export type SeedPosBootstrapLanesInput = {
  * existing scheduler tick drains them — and, with the C3 priority-drain fix,
  * drains them ahead of any lower-priority backlog work.
  */
-async function seedTasks(tasks: FetchTask[], input: SeedPosBootstrapLanesInput): Promise<SeedPersistedSchedulerTasksResult> {
-  const repository = await input.getRepository();
-  const schedulerRepository = new RxSchedulerTaskStateRepository(repository.getDatabase());
-  return seedPersistedSchedulerTasks({
-    repository: schedulerRepository,
-    tasks,
-    nowMs: input.nowMs ?? Date.now(),
-    completedDedupeForMs: input.completedDedupeForMs ?? 0,
-    coalesceInFlight: input.coalesceInFlight ?? false,
-  });
+async function seedTasks(
+	tasks: FetchTask[],
+	input: SeedPosBootstrapLanesInput
+): Promise<SeedPersistedSchedulerTasksResult> {
+	const repository = await input.getRepository();
+	const schedulerRepository = new RxSchedulerTaskStateRepository(repository.getDatabase());
+	return seedPersistedSchedulerTasks({
+		repository: schedulerRepository,
+		tasks,
+		nowMs: input.nowMs ?? Date.now(),
+		completedDedupeForMs: input.completedDedupeForMs ?? 0,
+		coalesceInFlight: input.coalesceInFlight ?? false,
+	});
 }
 
 export async function seedPosBootstrapLanes(
-  input: SeedPosBootstrapLanesInput,
+	input: SeedPosBootstrapLanesInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
-  return seedTasks(posBootstrapTasks(), input);
+	return seedTasks(posBootstrapTasks(), input);
 }
 
 /**
@@ -142,10 +159,10 @@ export async function seedPosBootstrapLanes(
  * brands too (CodeRabbit review).
  */
 export async function seedTaxRatesLane(
-  input: SeedPosBootstrapLanesInput,
+	input: SeedPosBootstrapLanesInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
-  // Change-signal refresh → opt into in-flight coalescing (#318).
-  return seedTasks([taxRatesLaneTask()], { ...input, coalesceInFlight: true });
+	// Change-signal refresh → opt into in-flight coalescing (#318).
+	return seedTasks([taxRatesLaneTask()], { ...input, coalesceInFlight: true });
 }
 
 /**
@@ -156,9 +173,9 @@ export async function seedTaxRatesLane(
  * set is cheap.
  */
 export async function seedReferenceLanes(
-  input: SeedPosBootstrapLanesInput,
+	input: SeedPosBootstrapLanesInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
-  return seedTasks(referenceLaneTasks(), input);
+	return seedTasks(referenceLaneTasks(), input);
 }
 
 /**
@@ -169,9 +186,9 @@ export async function seedReferenceLanes(
  * create/update/delete all reconcile through this single refresh.
  */
 export async function seedReferenceCollectionLane(
-  collection: ReferenceCollection,
-  input: SeedPosBootstrapLanesInput,
+	collection: ReferenceCollection,
+	input: SeedPosBootstrapLanesInput
 ): Promise<SeedPersistedSchedulerTasksResult> {
-  // Change-signal refresh → opt into in-flight coalescing (#318).
-  return seedTasks([referenceLaneTaskFor(collection)], { ...input, coalesceInFlight: true });
+	// Change-signal refresh → opt into in-flight coalescing (#318).
+	return seedTasks([referenceLaneTaskFor(collection)], { ...input, coalesceInFlight: true });
 }

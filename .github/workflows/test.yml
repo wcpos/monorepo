@@ -120,6 +120,23 @@ jobs:
             exit 1
           fi
 
+      - name: "\U0001F9EA Run vitest packages"
+        run: |
+          # sync-core and sync-engine arrived from the sync lab on vitest and
+          # stay on vitest (ADR: converting ~1000 proven tests to Jest during
+          # the port risks semantic drift). This workflow bypasses turbo, so
+          # they must be run explicitly here.
+          failed=0
+          for pkg in sync-core sync-engine; do
+            echo "::group::Testing @wcpos/$pkg"
+            pnpm --filter @wcpos/$pkg test || failed=1
+            echo "::endgroup::"
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::One or more vitest package suites failed"
+            exit 1
+          fi
+
       - name: "\U0001F4CA Generate test failure summary"
         if: always()
         run: |

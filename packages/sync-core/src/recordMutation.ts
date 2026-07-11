@@ -1,10 +1,9 @@
 import {
-  type MetaDataEntry,
-  type RecordIdOrigin,
-  type WooRecordPayload,
-  identifyRecord,
-  mirrorRecordUuid,
-} from '@woo-rxdb-lab/shared';
+	identifyRecord,
+	mirrorRecordUuid,
+	type RecordIdOrigin,
+	type WooRecordPayload,
+} from './recordIdentity';
 
 /**
  * The generic write-path foundation (P1-1): ONE collection-agnostic write-intent
@@ -30,28 +29,28 @@ import {
 export type MutationOperation = 'create' | 'update' | 'delete';
 
 export type RecordMutation = {
-  /** Idempotency key — a fresh uuid per enqueue; the server dedupes retries on it. */
-  mutationId: string;
-  /** Collection key ('orders' | 'products' | …) — routes to the per-collection endpoint. */
-  collectionName: string;
-  operation: MutationOperation;
-  /** The record's stable uuid PK — never re-keyed. */
-  recordId: string;
-  /** Provenance of `recordId` at enqueue: `minted` ⇒ born-local, awaiting the server create-ack. */
-  origin: RecordIdOrigin;
-  /** The body sent to the server. Create/update carry `_woocommerce_pos_uuid` mirrored in `meta_data`; delete carries the id only. */
-  payload: Record<string, unknown>;
-  /** Optimistic-concurrency anchor for an update; `null` for a create. */
-  baseRevision: string | null;
-  /** ISO timestamp — drives FIFO drain order. */
-  queuedAt: string;
+	/** Idempotency key — a fresh uuid per enqueue; the server dedupes retries on it. */
+	mutationId: string;
+	/** Collection key ('orders' | 'products' | …) — routes to the per-collection endpoint. */
+	collectionName: string;
+	operation: MutationOperation;
+	/** The record's stable uuid PK — never re-keyed. */
+	recordId: string;
+	/** Provenance of `recordId` at enqueue: `minted` ⇒ born-local, awaiting the server create-ack. */
+	origin: RecordIdOrigin;
+	/** The body sent to the server. Create/update carry `_woocommerce_pos_uuid` mirrored in `meta_data`; delete carries the id only. */
+	payload: Record<string, unknown>;
+	/** Optimistic-concurrency anchor for an update; `null` for a create. */
+	baseRevision: string | null;
+	/** ISO timestamp — drives FIFO drain order. */
+	queuedAt: string;
 };
 
 export type BuildMutationDeps = {
-  /** Fresh uuid v4 — for `mutationId`, and (via `identifyRecord`) a born-local `recordId`. */
-  mintUuid: () => string;
-  /** Current time as an ISO string. */
-  now: () => string;
+	/** Fresh uuid v4 — for `mutationId`, and (via `identifyRecord`) a born-local `recordId`. */
+	mintUuid: () => string;
+	/** Current time as an ISO string. */
+	now: () => string;
 };
 
 /**
@@ -64,22 +63,23 @@ export type BuildMutationDeps = {
  * server persists this record's own identity (`awaitingRemoteCreateUUID`).
  */
 export function buildCreateMutation<T extends WooRecordPayload>(
-  input: { collectionName: string; payload: T; currentId?: string | null },
-  deps: BuildMutationDeps,
+	input: { collectionName: string; payload: T; currentId?: string | null },
+	deps: BuildMutationDeps
 ): RecordMutation {
-  const explicitId = typeof input.currentId === 'string' && input.currentId.length > 0 ? input.currentId : null;
-  const recordId = explicitId ?? deps.mintUuid();
-  const origin: RecordIdOrigin = explicitId ? 'existing' : 'minted';
-  return {
-    mutationId: deps.mintUuid(),
-    collectionName: input.collectionName,
-    operation: 'create',
-    recordId,
-    origin,
-    payload: { ...input.payload, meta_data: mirrorRecordUuid(input.payload.meta_data, recordId) },
-    baseRevision: null,
-    queuedAt: deps.now(),
-  };
+	const explicitId =
+		typeof input.currentId === 'string' && input.currentId.length > 0 ? input.currentId : null;
+	const recordId = explicitId ?? deps.mintUuid();
+	const origin: RecordIdOrigin = explicitId ? 'existing' : 'minted';
+	return {
+		mutationId: deps.mintUuid(),
+		collectionName: input.collectionName,
+		operation: 'create',
+		recordId,
+		origin,
+		payload: { ...input.payload, meta_data: mirrorRecordUuid(input.payload.meta_data, recordId) },
+		baseRevision: null,
+		queuedAt: deps.now(),
+	};
 }
 
 /**
@@ -89,24 +89,24 @@ export function buildCreateMutation<T extends WooRecordPayload>(
  * payload's `meta_data` is mirrored to the id so a sparse edit still carries it.
  */
 export function buildUpdateMutation<T extends WooRecordPayload>(
-  input: { collectionName: string; recordId: string; payload: T; baseRevision: string | null },
-  deps: BuildMutationDeps,
+	input: { collectionName: string; recordId: string; payload: T; baseRevision: string | null },
+	deps: BuildMutationDeps
 ): RecordMutation {
-  const identified = identifyRecord(input.payload, {
-    currentId: input.recordId,
-    mintUuid: deps.mintUuid,
-    mintOnMissing: false,
-  });
-  return {
-    mutationId: deps.mintUuid(),
-    collectionName: input.collectionName,
-    operation: 'update',
-    recordId: input.recordId,
-    origin: identified.origin,
-    payload: identified.payload,
-    baseRevision: input.baseRevision,
-    queuedAt: deps.now(),
-  };
+	const identified = identifyRecord(input.payload, {
+		currentId: input.recordId,
+		mintUuid: deps.mintUuid,
+		mintOnMissing: false,
+	});
+	return {
+		mutationId: deps.mintUuid(),
+		collectionName: input.collectionName,
+		operation: 'update',
+		recordId: input.recordId,
+		origin: identified.origin,
+		payload: identified.payload,
+		baseRevision: input.baseRevision,
+		queuedAt: deps.now(),
+	};
 }
 
 /**
@@ -120,19 +120,19 @@ export function buildUpdateMutation<T extends WooRecordPayload>(
  * the drain, silently dropping the delete.
  */
 export function buildDeleteMutation(
-  input: { collectionName: string; recordId: string; baseRevision: string },
-  deps: BuildMutationDeps,
+	input: { collectionName: string; recordId: string; baseRevision: string },
+	deps: BuildMutationDeps
 ): RecordMutation {
-  return {
-    mutationId: deps.mintUuid(),
-    collectionName: input.collectionName,
-    operation: 'delete',
-    recordId: input.recordId,
-    origin: 'existing',
-    payload: { id: input.recordId },
-    baseRevision: input.baseRevision,
-    queuedAt: deps.now(),
-  };
+	return {
+		mutationId: deps.mintUuid(),
+		collectionName: input.collectionName,
+		operation: 'delete',
+		recordId: input.recordId,
+		origin: 'existing',
+		payload: { id: input.recordId },
+		baseRevision: input.baseRevision,
+		queuedAt: deps.now(),
+	};
 }
 
 /**
@@ -143,8 +143,7 @@ export function buildDeleteMutation(
  * the operation, NOT the id origin.
  */
 export function isAwaitingRemoteCreate(mutation: RecordMutation): boolean {
-  return mutation.operation === 'create';
+	return mutation.operation === 'create';
 }
 
 /** Re-export for consumers shaping payloads. */
-export type { MetaDataEntry };

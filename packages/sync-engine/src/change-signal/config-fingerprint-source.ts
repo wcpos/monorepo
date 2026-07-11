@@ -6,33 +6,40 @@
  * #430); one endpoint request, one snake_case→camelCase projection.
  */
 import type {
-  ConfigFingerprintSnapshot,
-  ConfigFingerprintSource,
-  BarcodeConfigCollection,
-} from '@woo-rxdb-lab/sync-core';
+	BarcodeConfigCollection,
+	ConfigFingerprintSnapshot,
+	ConfigFingerprintSource,
+} from '@wcpos/sync-core';
 
 /** Fetcher contract — same shape the rest of the bench uses. */
-export type ConfigSourceFetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+export type ConfigSourceFetcher = (
+	url: string,
+	init?: { signal?: AbortSignal }
+) => Promise<Response>;
 
 export type CreateConfigFingerprintLiveSourceInput = {
-  /** e.g. http://wcpos.local/wp-json/wc-rxdb-sync/v1 (no trailing slash). */
-  syncBaseUrl: string;
-  /** Already-authenticated fetcher (Basic-auth header injected upstream). */
-  fetcher: ConfigSourceFetcher;
+	/** e.g. http://wcpos.local/wp-json/wc-rxdb-sync/v1 (no trailing slash). */
+	syncBaseUrl: string;
+	/** Already-authenticated fetcher (Basic-auth header injected upstream). */
+	fetcher: ConfigSourceFetcher;
 };
 
 /** The raw envelope the PHP endpoint emits. */
 export type ConfigFingerprintEnvelope = {
-  candidate?: string;
-  fingerprints: Record<string, string>;
-  barcode_fields?: Record<string, string[]>;
-  meta?: { duration_ms?: number; supported?: boolean };
+	candidate?: string;
+	fingerprints: Record<string, string>;
+	barcode_fields?: Record<string, string[]>;
+	meta?: { duration_ms?: number; supported?: boolean };
 };
 
-const BARCODE_CONFIG_COLLECTIONS: readonly BarcodeConfigCollection[] = ['products', 'variations', 'tax_rates'];
+const BARCODE_CONFIG_COLLECTIONS: readonly BarcodeConfigCollection[] = [
+	'products',
+	'variations',
+	'tax_rates',
+];
 
 function isBarcodeConfigCollection(value: string): value is BarcodeConfigCollection {
-  return (BARCODE_CONFIG_COLLECTIONS as readonly string[]).includes(value);
+	return (BARCODE_CONFIG_COLLECTIONS as readonly string[]).includes(value);
 }
 
 /**
@@ -43,28 +50,30 @@ function isBarcodeConfigCollection(value: string): value is BarcodeConfigCollect
  * when the endpoint did not report it.
  */
 export function mapConfigFingerprintEnvelope(
-  envelope: ConfigFingerprintEnvelope,
+	envelope: ConfigFingerprintEnvelope
 ): ConfigFingerprintSnapshot {
-  const fingerprints = {} as Record<BarcodeConfigCollection, string>;
-  for (const [collection, fingerprint] of Object.entries(envelope.fingerprints ?? {})) {
-    if (isBarcodeConfigCollection(collection) && typeof fingerprint === 'string') {
-      fingerprints[collection] = fingerprint;
-    }
-  }
+	const fingerprints = {} as Record<BarcodeConfigCollection, string>;
+	for (const [collection, fingerprint] of Object.entries(envelope.fingerprints ?? {})) {
+		if (isBarcodeConfigCollection(collection) && typeof fingerprint === 'string') {
+			fingerprints[collection] = fingerprint;
+		}
+	}
 
-  const snapshot: ConfigFingerprintSnapshot = { fingerprints };
+	const snapshot: ConfigFingerprintSnapshot = { fingerprints };
 
-  if (envelope.barcode_fields) {
-    const barcodeFields = {} as Record<BarcodeConfigCollection, string[]>;
-    for (const [collection, fields] of Object.entries(envelope.barcode_fields)) {
-      if (isBarcodeConfigCollection(collection) && Array.isArray(fields)) {
-        barcodeFields[collection] = fields.filter((field): field is string => typeof field === 'string');
-      }
-    }
-    snapshot.barcodeFields = barcodeFields;
-  }
+	if (envelope.barcode_fields) {
+		const barcodeFields = {} as Record<BarcodeConfigCollection, string[]>;
+		for (const [collection, fields] of Object.entries(envelope.barcode_fields)) {
+			if (isBarcodeConfigCollection(collection) && Array.isArray(fields)) {
+				barcodeFields[collection] = fields.filter(
+					(field): field is string => typeof field === 'string'
+				);
+			}
+		}
+		snapshot.barcodeFields = barcodeFields;
+	}
 
-  return snapshot;
+	return snapshot;
 }
 
 /**
@@ -72,17 +81,17 @@ export function mapConfigFingerprintEnvelope(
  * Pure mapping: no engine logic, no policy, no retries — request + project.
  */
 export function createConfigFingerprintLiveSource(
-  input: CreateConfigFingerprintLiveSourceInput,
+	input: CreateConfigFingerprintLiveSourceInput
 ): ConfigFingerprintSource {
-  return {
-    async pollConfigFingerprints() {
-      const url = `${input.syncBaseUrl}/changes/config-fingerprint`;
-      const response = await input.fetcher(url);
-      const body = await response.text();
-      if (!response.ok) {
-        throw new Error(`changes/config-fingerprint failed: ${response.status}`);
-      }
-      return mapConfigFingerprintEnvelope(JSON.parse(body) as ConfigFingerprintEnvelope);
-    },
-  };
+	return {
+		async pollConfigFingerprints() {
+			const url = `${input.syncBaseUrl}/changes/config-fingerprint`;
+			const response = await input.fetcher(url);
+			const body = await response.text();
+			if (!response.ok) {
+				throw new Error(`changes/config-fingerprint failed: ${response.status}`);
+			}
+			return mapConfigFingerprintEnvelope(JSON.parse(body) as ConfigFingerprintEnvelope);
+		},
+	};
 }
