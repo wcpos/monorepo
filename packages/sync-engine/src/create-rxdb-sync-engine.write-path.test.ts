@@ -15,6 +15,7 @@ import type { StoreScopeIdentity, SyncEvent, SyncObserver } from '@wcpos/sync-co
 import {
 	createRxdbSyncEngine,
 	type EngineEvent,
+	type EngineFetcher,
 	type RxdbSyncEngine,
 } from './create-rxdb-sync-engine';
 import { queueFor, requeueBornTwiceSnapshot } from './write-path/write-intents';
@@ -26,6 +27,7 @@ setPremiumFlag();
 
 const SITE = 'https://write.example.test';
 const UUID_A = '22222222-2222-4222-8222-222222222222';
+const UUID_MINT = '33333333-3333-4333-8333-333333333333';
 
 let uniqueScope = 0;
 function freshIdentity(): StoreScopeIdentity {
@@ -34,10 +36,11 @@ function freshIdentity(): StoreScopeIdentity {
 }
 
 function engineWith(input: {
-	fetch: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+	fetch: (url: string, init?: RequestInit) => Promise<Response>;
 	identity?: StoreScopeIdentity;
 	storage?: RxStorage<unknown, unknown>;
 	connectivity?: () => 'online' | 'offline' | 'degraded';
+	uuid?: () => string;
 	now?: () => number;
 	diagnostics?: SyncObserver;
 	mode?: 'auto' | 'manual';
@@ -49,6 +52,7 @@ function engineWith(input: {
 			storage: input.storage ?? memoryEngineStorage(),
 			fetcher: input.fetch,
 			...(input.connectivity ? { connectivity: input.connectivity } : {}),
+			...(input.uuid ? { uuid: input.uuid } : {}),
 			...(input.now ? { now: input.now } : {}),
 			...(input.diagnostics ? { diagnostics: input.diagnostics } : {}),
 			mode: input.mode ?? 'manual',
@@ -140,7 +144,7 @@ function routedFetch(
 	orderTruth: () => Record<string, unknown>
 ) {
 	const state = { orderPulls: [] as number[][], failOrdersPull: false, emptyOrdersPull: false };
-	const fetch = async (url: string, init?: { signal?: AbortSignal }): Promise<Response> => {
+	const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
 		if (url.includes('/push/')) return server.fetch(url, init as never);
 		const u = new URL(url);
 		if (!u.pathname.endsWith('/orders')) throw new Error(`routedFetch: unexpected ${u.pathname}`);
@@ -157,6 +161,60 @@ function routedFetch(
 }
 
 describe('write() + sync("write-drain") through the public handle', () => {
+	it('uses the host UUID generator for queued mutation identity', async () => {
+		const server = createFakeWriteServer();
+		const engine = engineWith({
+			fetch: (url, init) => server.fetch(url, init as never),
+			uuid: () => UUID_MINT,
+		});
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A);
+			const receipt = await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+
+			expect(receipt.mutationId).toBe(UUID_MINT);
+		} finally {
+			await engine.dispose();
+		}
+	});
+
+	it('exposes and forwards the full RequestInit for queued writes', async () => {
+		const server = createFakeWriteServer();
+		const writeRequests: RequestInit[] = [];
+		const fetcher: EngineFetcher = async (url, init) => {
+			if (url.includes('/push/')) writeRequests.push(init ?? {});
+			return server.fetch(url, init as never);
+		};
+		const engine = engineWith({ fetch: fetcher });
+		try {
+			await engine.ready;
+			await insertBornLocalOrder(engine, UUID_A);
+			await engine.write({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+				payload: { status: 'pos-open' },
+			});
+			await engine.sync('write-drain');
+
+			expect(writeRequests).toHaveLength(1);
+			expect(writeRequests[0]?.method).toBe('POST');
+			expect(new Headers(writeRequests[0]?.headers).get('content-type')).toBe('application/json');
+			expect(JSON.parse(String(writeRequests[0]?.body))).toMatchObject({
+				collection: 'orders',
+				operation: 'create',
+				recordId: UUID_A,
+			});
+		} finally {
+			await engine.dispose();
+		}
+	});
+
 	it('continues writing and draining after resetCollection mutations replaces the RxCollection', async () => {
 		const server = createFakeWriteServer();
 		const engine = engineWith({ fetch: (url, init) => server.fetch(url, init as never) });
@@ -380,7 +438,7 @@ describe('write() + sync("write-drain") through the public handle', () => {
 		let failures = 1;
 		// One raw 500 (transient server error) before the fake server answers —
 		// the drain must back off durably, then land the re-push.
-		const flakyFetch = async (url: string, init?: { signal?: AbortSignal }): Promise<Response> => {
+		const flakyFetch = async (url: string, init?: RequestInit): Promise<Response> => {
 			if (failures > 0) {
 				failures -= 1;
 				return new Response('upstream boom', { status: 500 });
@@ -486,7 +544,7 @@ describe('#507 offline write flows through the public handle', () => {
 			gateOpen = resolve;
 		});
 		let holds = 0;
-		const fetch = async (url: string, init?: { signal?: AbortSignal }): Promise<Response> => {
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
 			if (url.includes('/push/') && holds === 0) {
 				holds += 1;
 				await gated; // hold the CREATE push in flight
@@ -998,7 +1056,7 @@ describe('#507 offline write flows through the public handle', () => {
 			gateOpen = resolve;
 		});
 		let holds = 0;
-		const fetch = async (url: string, init?: { signal?: AbortSignal }): Promise<Response> => {
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
 			if (url.includes('/push/') && holds === 0) {
 				holds += 1;
 				await gated; // hold the CREATE push in flight (claimed)
@@ -1203,7 +1261,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 		// The FIRST push is applied server-side but the response is "lost" (the
 		// classic flaky-network lost ack).
 		let dropResponses = 1;
-		const fetch = async (url: string, init?: { signal?: AbortSignal }): Promise<Response> => {
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
 			const response = await server.fetch(url, init as never);
 			if (url.includes('/push/') && dropResponses > 0) {
 				dropResponses -= 1;
@@ -1276,7 +1334,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 		const events: SyncEvent[] = [];
 		const server = createFakeWriteServer({ firstId: 900_110_000 });
 		let dropResponses = 1;
-		const fetch = async (url: string, init?: { signal?: AbortSignal }): Promise<Response> => {
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
 			const response = await server.fetch(url, init as never);
 			if (url.includes('/push/') && dropResponses > 0) {
 				dropResponses -= 1;
@@ -1567,7 +1625,7 @@ describe('gate2 #516 — coalescing survives replay, reordering, and its own con
 
 		let gate: ((value: void) => void) | null = null;
 		let failNext = false;
-		const fetch = async (url: string, init?: { signal?: AbortSignal }): Promise<Response> => {
+		const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
 			if (url.includes('/push/') && failNext) {
 				failNext = false;
 				// Hold the push open until the test enqueues U2, then fail it (network).

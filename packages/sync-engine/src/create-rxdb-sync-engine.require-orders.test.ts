@@ -131,9 +131,7 @@ function scriptedGreedyOrderProxy(batchCount: number) {
 	return { state, fetch };
 }
 
-function engineWith(
-	fetch: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>
-): RxdbSyncEngine {
+function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response>): RxdbSyncEngine {
 	return createRxdbSyncEngine(
 		{
 			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
@@ -825,7 +823,7 @@ describe('require() for orders (slice 5f — the durable path)', () => {
 		const engine = engineWith(async (url, init) => {
 			const include = new URL(url).searchParams.get('include');
 			if (include === '1') {
-				firstSignal = init?.signal;
+				firstSignal = init?.signal ?? undefined;
 				return new Promise<Response>((_resolve, reject) => {
 					init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), {
 						once: true,

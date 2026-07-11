@@ -31,7 +31,7 @@ function freshIdentity(): StoreScopeIdentity {
 
 function scriptedOrderProxy() {
 	const state = { pulls: 0, sawSignal: false };
-	const fetch = async (url: string, init?: { signal?: AbortSignal }): Promise<Response> => {
+	const fetch = async (url: string, init?: RequestInit): Promise<Response> => {
 		if (init?.signal) state.sawSignal = true; // the composite MUST still reach the transport
 		const u = new URL(url);
 		if (u.pathname.endsWith('/orders')) {
@@ -57,9 +57,7 @@ function scriptedOrderProxy() {
 	return { state, fetch };
 }
 
-function engineWith(
-	fetch: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>
-): RxdbSyncEngine {
+function engineWith(fetch: (url: string, init?: RequestInit) => Promise<Response>): RxdbSyncEngine {
 	return createRxdbSyncEngine(
 		{
 			site: { syncBaseUrl: SYNC_BASE, wpJsonRoot: `${SITE}/wp-json` },
@@ -132,7 +130,7 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 
 	it('the write drain pushes with a caller signal, on a runtime without AbortSignal.any', async () => {
 		let pushes = 0;
-		const engine = engineWith(async (url: string, init?: { signal?: AbortSignal }) => {
+		const engine = engineWith(async (url: string, init?: RequestInit) => {
 			const u = new URL(url);
 			if (u.pathname.includes('/push/')) {
 				pushes += 1;
@@ -183,7 +181,7 @@ describe('engine drains without AbortSignal.any (Hermes/RN emulation)', () => {
 	it('a caller abort mid-flight still cancels the request through the manual composite', async () => {
 		let sawAbort = false;
 		const engine = engineWith(
-			(url: string, init?: { signal?: AbortSignal }) =>
+			(url: string, init?: RequestInit) =>
 				new Promise<Response>((_resolve, reject) => {
 					init?.signal?.addEventListener('abort', () => {
 						sawAbort = true;

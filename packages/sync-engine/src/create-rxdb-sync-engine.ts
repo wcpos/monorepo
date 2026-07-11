@@ -55,6 +55,7 @@ import {
 	scopeDatabaseName,
 	scopeKeyFor,
 	StoreScopeManager,
+	webCryptoUuid,
 } from '@wcpos/sync-core';
 import type {
 	QueuedMutation,
@@ -160,7 +161,7 @@ export type { StoreScopeIdentity } from '@wcpos/sync-core';
 export type EngineConnectivity = 'online' | 'offline' | 'degraded';
 
 /** RAW transport, never pre-scoped — the engine binds scope tickets inside. */
-export type EngineFetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+export type EngineFetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 /** Host-provided checkpoint persistence. Async-first so a collection-backed
  * store fits; a synchronous store (localStorage) wraps trivially. */
@@ -184,6 +185,8 @@ export type RxdbSyncEnginePorts = {
 	 * volatile database gets a volatile cursor for free. */
 	checkpoints?: EngineStringStore;
 	connectivity?: () => EngineConnectivity;
+	/** Default: Web Crypto. Native hosts inject their UUID v4 generator. */
+	uuid?: () => string;
 	/** THE telemetry port (ADR 0020): structured SyncEvents, observed and never
 	 * awaited; a throwing observer is swallowed. */
 	diagnostics?: SyncObserver;
@@ -435,6 +438,7 @@ export function createRxdbSyncEngine(
 		}
 	};
 	const fetcher: EngineFetcher = ports.fetcher ?? ((url, init) => globalThis.fetch(url, init));
+	const uuid = ports.uuid ?? webCryptoUuid;
 	const initialSiteKey = canonicalSiteKey(initialScope.site);
 
 	const identityByScopeId = new Map<string, StoreScopeIdentity>();
@@ -1025,7 +1029,7 @@ export function createRxdbSyncEngine(
 			}
 		},
 		diagnostics,
-		ownerId: () => (maintenanceOwnerId ??= `engine-${globalThis.crypto.randomUUID()}`),
+		ownerId: () => (maintenanceOwnerId ??= `engine-${uuid()}`),
 		...(ports.queryTotal !== undefined ? { queryTotal: ports.queryTotal } : {}),
 		emitEvent: (event: QueryTotalCacheEvent) => emitEngineEvent(event),
 		...(ports.now !== undefined ? { now: ports.now } : {}),
@@ -1242,7 +1246,7 @@ export function createRxdbSyncEngine(
 					result = await enqueueWriteIntent({
 						db: database,
 						intent,
-						mintUuid: () => globalThis.crypto.randomUUID(),
+						mintUuid: uuid,
 						now: () => new Date(ports.now !== undefined ? ports.now() : Date.now()).toISOString(),
 						observe: diagnostics,
 					});

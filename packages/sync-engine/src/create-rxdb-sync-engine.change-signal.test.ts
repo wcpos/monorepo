@@ -124,7 +124,7 @@ function freshIdentity(): StoreScopeIdentity {
 
 function engineWith(input: {
 	storage: RxStorage<unknown, unknown>;
-	fetch: (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+	fetch: (url: string, init?: RequestInit) => Promise<Response>;
 	identity: StoreScopeIdentity;
 	connectivity?: () => 'online' | 'offline' | 'degraded';
 }): RxdbSyncEngine {
@@ -330,8 +330,8 @@ describe('sync("change-signal") through the public handle', () => {
 		const started = new Promise<void>((resolve) => {
 			markStarted = resolve;
 		});
-		const fetch = async (_url: string, init?: { signal?: AbortSignal }): Promise<Response> => {
-			requestSignal = init?.signal;
+		const fetch = async (_url: string, init?: RequestInit): Promise<Response> => {
+			requestSignal = init?.signal ?? undefined;
 			markStarted();
 			return new Promise((_resolve, reject) =>
 				init?.signal?.addEventListener(
