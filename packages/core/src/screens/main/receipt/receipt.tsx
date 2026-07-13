@@ -148,8 +148,13 @@ export function Receipt({ resource }: Props) {
 		size: { width: number; height: number };
 	} | null>(null);
 	const contentSize = measuredContent?.key === previewKey ? measuredContent.size : null;
+	const activePreviewKey = React.useRef(previewKey);
+	React.useLayoutEffect(() => {
+		activePreviewKey.current = previewKey;
+	}, [previewKey]);
 	const handleContentSizeChange = React.useCallback(
 		(event: { nativeEvent: { contentSize: { width: number; height: number } } }) => {
+			if (activePreviewKey.current !== previewKey) return;
 			const { width, height } = event.nativeEvent.contentSize;
 			if (width <= 0 || height <= 0) return;
 			setMeasuredContent((prev) =>

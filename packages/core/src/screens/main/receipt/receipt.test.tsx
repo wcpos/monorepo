@@ -235,6 +235,9 @@ describe('Receipt preview content size', () => {
 		const template8Handler = capturedContentSizeHandlers.at(-1)!;
 		act(() => template8Handler({ nativeEvent: { contentSize: { width: 794, height: 1123 } } }));
 		expect(viewportContentSize()).toEqual({ width: 794, height: 1123 });
+
+		act(() => template7Handler({ nativeEvent: { contentSize: { width: 398, height: 814 } } }));
+		expect(viewportContentSize()).toEqual({ width: 794, height: 1123 });
 	});
 });
 
