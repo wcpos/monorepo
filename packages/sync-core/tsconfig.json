@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@wcpos/sync-core": [
+        "../sync-core/src/index.ts"
+      ],
+      "@wcpos/sync-core/*": [
+        "../sync-core/src/*"
+      ],
+      "@wcpos/sync-engine": [
+        "./src/index.ts"
+      ],
+      "@wcpos/sync-engine/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
