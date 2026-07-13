@@ -32,15 +32,31 @@ describe('buildPrintableReceiptHtml', () => {
 		expect(html).toContain('<main class="invoice">Hello</main>');
 	});
 
-	it('wraps 80mm thermal output with physical page size and no A4 width rule', () => {
+	it('defers 80mm thermal output to the printer roll paper via size: auto', () => {
 		const html = buildPrintableReceiptHtml({
 			bodyHtml: '<div class="receipt">Thermal</div>',
 			paperWidth: '80mm',
 		});
 
-		expect(html).toContain('@page { size: 80mm; margin: 0; }');
+		// Must be `size: auto` — NOT `80mm` (a valid but square 80mm×80mm page) and
+		// NOT `80mm auto` (invalid `<length> auto`, silently ignored → Letter/A4).
+		// Both broken forms render the receipt tiny.
+		expect(html).toContain('@page { size: auto; margin: 0; }');
+		expect(html).not.toContain('@page { size: 80mm; margin: 0; }');
+		expect(html).not.toContain('@page { size: 80mm auto; margin: 0; }');
 		expect(html).not.toContain('body > * { width: 210mm; }');
 		expect(html).toContain('<div class="receipt">Thermal</div>');
+	});
+
+	it('defers 58mm thermal output to the printer roll paper via size: auto', () => {
+		const html = buildPrintableReceiptHtml({
+			bodyHtml: '<div class="receipt">Narrow</div>',
+			paperWidth: '58mm',
+		});
+
+		expect(html).toContain('@page { size: auto; margin: 0; }');
+		expect(html).not.toContain('@page { size: 58mm; margin: 0; }');
+		expect(html).not.toContain('@page { size: 58mm auto; margin: 0; }');
 	});
 
 	it('keeps print mechanics outside user template content', () => {
@@ -71,7 +87,7 @@ describe('prepareSystemPrintHtml', () => {
 			paperWidth: '80mm',
 		});
 
-		expect(html).toContain('@page { size: 80mm; margin: 0; }');
+		expect(html).toContain('@page { size: auto; margin: 0; }');
 		expect(html).toContain('<style>.x{color:red}</style>');
 		expect(html).toContain('<div>From iframe</div>');
 	});
