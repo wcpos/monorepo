@@ -3,7 +3,7 @@
  */
 import * as React from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { BehaviorSubject } from 'rxjs';
 
 import { Receipt } from './receipt';
@@ -83,12 +83,32 @@ jest.mock('@wcpos/components/vstack', () => ({
 	VStack: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
 }));
 
+type ContentSizeEvent = { nativeEvent: { contentSize: { width: number; height: number } } };
+const capturedContentSizeHandlers: ((event: ContentSizeEvent) => void)[] = [];
+
 jest.mock('@wcpos/components/webview', () => ({
-	WebView: () => <iframe title="receipt-preview-frame" />,
+	WebView: ({
+		onContentSizeChange,
+	}: {
+		onContentSizeChange?: (event: ContentSizeEvent) => void;
+	}) => {
+		if (onContentSizeChange) capturedContentSizeHandlers.push(onContentSizeChange);
+		return <iframe title="receipt-preview-frame" />;
+	},
 }));
 
 jest.mock('./components/receipt-preview-viewport', () => ({
-	ReceiptPreviewViewport: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+	ReceiptPreviewViewport: ({
+		children,
+		contentSize,
+	}: {
+		children?: React.ReactNode;
+		contentSize?: { width: number; height: number } | null;
+	}) => (
+		<div data-testid="preview-viewport" data-content-size={JSON.stringify(contentSize ?? null)}>
+			{children}
+		</div>
+	),
 	getReceiptPreviewPaperWidth: () => 80,
 }));
 
@@ -179,6 +199,44 @@ jest.mock('observable-hooks', () => ({
 jest.mock('rxdb', () => ({
 	isRxDocument: () => true,
 }));
+
+describe('Receipt preview content size', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		capturedContentSizeHandlers.length = 0;
+		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
+	});
+
+	const viewportContentSize = () =>
+		JSON.parse(screen.getByTestId('preview-viewport').getAttribute('data-content-size') ?? 'null');
+
+	it('drops the previous template measurement on switch, even if it arrives late', () => {
+		const { rerender } = render(<Receipt resource={{} as never} />);
+
+		// Template 7's frame reports its size — the viewport tracks it.
+		const template7Handler = capturedContentSizeHandlers.at(-1)!;
+		act(() => template7Handler({ nativeEvent: { contentSize: { width: 398, height: 814 } } }));
+		expect(viewportContentSize()).toEqual({ width: 398, height: 814 });
+
+		// Switch to template 8 — the old measurement must not size the new preview.
+		mockUseTemplateRenderer.mockReturnValue({
+			...defaultTemplateRenderer,
+			templates: [...defaultTemplateRenderer.templates, { id: 8, output_type: 'html' }],
+			selectedTemplateId: 8,
+		});
+		rerender(<Receipt resource={{} as never} />);
+		expect(viewportContentSize()).toBeNull();
+
+		// A late measurement from template 7's unmounting frame must be ignored.
+		act(() => template7Handler({ nativeEvent: { contentSize: { width: 398, height: 814 } } }));
+		expect(viewportContentSize()).toBeNull();
+
+		// Template 8's own frame measurement is applied.
+		const template8Handler = capturedContentSizeHandlers.at(-1)!;
+		act(() => template8Handler({ nativeEvent: { contentSize: { width: 794, height: 1123 } } }));
+		expect(viewportContentSize()).toEqual({ width: 794, height: 1123 });
+	});
+});
 
 describe('Receipt PDF download action', () => {
 	beforeEach(() => {
