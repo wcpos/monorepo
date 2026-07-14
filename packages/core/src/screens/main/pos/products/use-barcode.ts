@@ -1,7 +1,7 @@
 import { useObservableEagerState, useSubscription } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
-import { resolveScan } from '@wcpos/sync-core';
+import { type BarcodeResolveFetcher, resolveScan } from '@wcpos/sync-core';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -13,6 +13,45 @@ import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 
 const barcodeLogger = getLogger(['wcpos', 'barcode', 'pos']);
+const BARCODE_LOOKUP_TIMEOUT_MS = 10_000;
+const AMBIGUOUS_HYDRATION_LIMIT = 10;
+
+function withBarcodeLookupDeadline(fetcher: BarcodeResolveFetcher): BarcodeResolveFetcher {
+	return async (url, init) => {
+		const controller = new AbortController();
+		const callerSignal = init?.signal;
+		let rejectCancellation: (error: Error) => void = () => undefined;
+		const cancellation = new Promise<never>((_resolve, reject) => {
+			rejectCancellation = reject;
+		});
+		const abortFromCaller = () => {
+			controller.abort();
+			rejectCancellation(new Error('barcode online lookup aborted'));
+		};
+		const timeout = setTimeout(() => {
+			controller.abort();
+			rejectCancellation(
+				new Error(`barcode online lookup timed out after ${BARCODE_LOOKUP_TIMEOUT_MS}ms`)
+			);
+		}, BARCODE_LOOKUP_TIMEOUT_MS);
+
+		if (callerSignal?.aborted) {
+			abortFromCaller();
+		} else {
+			callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+		}
+
+		try {
+			return await Promise.race([
+				fetcher(url, { ...init, signal: controller.signal }),
+				cancellation,
+			]);
+		} finally {
+			clearTimeout(timeout);
+			callerSignal?.removeEventListener('abort', abortFromCaller);
+		}
+	};
+}
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -89,7 +128,7 @@ export const useBarcode = (
 				code: barcodeStr,
 				index: new Map(),
 				syncBaseUrl,
-				fetcher,
+				fetcher: withBarcodeLookupDeadline(fetcher),
 				now: Date.now,
 				onEvent: (event) => {
 					if (event.type === 'searching-online') {
@@ -118,7 +157,74 @@ export const useBarcode = (
 
 			if (resolution.outcome === 'online') {
 				if (resolution.ambiguous.length > 0) {
-					showAmbiguousResults(resolution.ambiguous.length + 1);
+					const candidates = [resolution.match, ...resolution.ambiguous];
+					const hydrationCandidates = candidates.slice(0, AMBIGUOUS_HYDRATION_LIMIT);
+					if (candidates.length > AMBIGUOUS_HYDRATION_LIMIT) {
+						barcodeLogger.debug(
+							`Barcode ambiguity hydration capped at ${AMBIGUOUS_HYDRATION_LIMIT} candidates`,
+							{
+								context: {
+									barcode: barcodeStr,
+									candidatesCount: candidates.length,
+									hydratedCandidatesCount: hydrationCandidates.length,
+								},
+							}
+						);
+					}
+
+					const productIds = [
+						...new Set(
+							hydrationCandidates
+								.filter((candidate) => candidate.type === 'product')
+								.map((candidate) => candidate.id)
+						),
+					];
+					const variationIds = [
+						...new Set(
+							hydrationCandidates
+								.filter((candidate) => candidate.type === 'variation')
+								.map((candidate) => candidate.id)
+						),
+					];
+					const handles = [];
+					try {
+						if (productIds.length > 0) {
+							handles.push(
+								manager.engine.require({
+									id: `barcode:${barcodeStr}:ambiguous:products`,
+									collection: 'products',
+									kind: 'targeted-records',
+									wooIds: productIds,
+									forceRefresh: true,
+								})
+							);
+						}
+						if (variationIds.length > 0) {
+							handles.push(
+								manager.engine.require({
+									id: `barcode:${barcodeStr}:ambiguous:variations`,
+									collection: 'variations',
+									kind: 'targeted-records',
+									wooIds: variationIds,
+									forceRefresh: true,
+								})
+							);
+						}
+						await Promise.all(handles.map((handle) => handle.ready));
+					} catch (error) {
+						showOnlineFailure(
+							t('common.barcode_online_lookup_failed'),
+							ERROR_CODES.CONNECTION_REFUSED,
+							error instanceof Error ? error.message : String(error)
+						);
+						return;
+					} finally {
+						for (const handle of handles) {
+							handle.release();
+						}
+					}
+
+					showAmbiguousResults(candidates.length);
 					return;
 				}
 
@@ -140,6 +246,7 @@ export const useBarcode = (
 							collection: match.type === 'variation' ? 'variations' : 'products',
 							kind: 'targeted-records',
 							wooIds: [match.id],
+							forceRefresh: true,
 						})
 					);
 					if (match.type === 'variation') {
@@ -149,6 +256,7 @@ export const useBarcode = (
 								collection: 'products',
 								kind: 'targeted-records',
 								wooIds: [match.parent_id!],
+								forceRefresh: true,
 							})
 						);
 					}

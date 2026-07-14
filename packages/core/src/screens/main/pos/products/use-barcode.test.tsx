@@ -16,6 +16,7 @@ let mockSubscriptionCallback: ((barcode: unknown) => Promise<void> | void) | und
 
 jest.mock('@wcpos/utils/logger', () => {
 	const barcodeLogger = {
+		debug: jest.fn(),
 		info: jest.fn(),
 		error: jest.fn(),
 		warn: jest.fn(),
@@ -74,6 +75,7 @@ jest.mock('../hooks/use-add-variation', () => ({
 }));
 
 const mockBarcodeLogger = jest.requireMock('@wcpos/utils/logger').__barcodeLogger as {
+	debug: jest.Mock;
 	info: jest.Mock;
 	error: jest.Mock;
 	warn: jest.Mock;
@@ -152,6 +154,7 @@ describe('useBarcode online escalation', () => {
 			searchInput.setSearch,
 			searchInput.onSearch,
 			mockBarcodeLogger.info,
+			mockBarcodeLogger.debug,
 			mockBarcodeLogger.error,
 			mockBarcodeLogger.warn,
 			mockBarcodeLogger.success,
@@ -191,7 +194,7 @@ describe('useBarcode online escalation', () => {
 		await act(async () => scanPromise);
 	});
 
-	it('requires an online product, re-queries locally, and adds it', async () => {
+	it('force-refreshes a resident product with a stale barcode before re-querying locally', async () => {
 		const product = productDocument();
 		mockBarcodeSearch.mockResolvedValueOnce([]).mockResolvedValueOnce([product]);
 		mockFetcher.mockResolvedValue(
@@ -206,6 +209,7 @@ describe('useBarcode online escalation', () => {
 			collection: 'products',
 			kind: 'targeted-records',
 			wooIds: [41],
+			forceRefresh: true,
 		});
 		expect(mockBarcodeSearch).toHaveBeenCalledTimes(2);
 		expect(mockAddProduct).toHaveBeenCalledWith(product);
@@ -231,12 +235,14 @@ describe('useBarcode online escalation', () => {
 			collection: 'variations',
 			kind: 'targeted-records',
 			wooIds: [51],
+			forceRefresh: true,
 		});
 		expect(mockEngineRequire).toHaveBeenNthCalledWith(2, {
 			id: 'barcode:ABC:product:41',
 			collection: 'products',
 			kind: 'targeted-records',
 			wooIds: [41],
+			forceRefresh: true,
 		});
 		expect(mockAddVariation).toHaveBeenCalledWith(variation, parent, [
 			{ attr_id: 7, display_key: 'Colour', display_value: 'Black' },
@@ -265,8 +271,13 @@ describe('useBarcode online escalation', () => {
 		);
 	});
 
-	it('routes a server ambiguity to the existing counted search-box path', async () => {
+	it('hydrates non-resident ambiguous products and variations before opening search', async () => {
 		mockBarcodeSearch.mockResolvedValue([]);
+		const hydrationResolvers: (() => void)[] = [];
+		mockEngineRequire.mockImplementation(() => ({
+			ready: new Promise<void>((resolve) => hydrationResolvers.push(resolve)),
+			release: jest.fn(),
+		}));
 		mockFetcher.mockResolvedValue(
 			onlineResponse({
 				match: { id: 1, type: 'product' },
@@ -278,9 +289,30 @@ describe('useBarcode online escalation', () => {
 		);
 		renderBarcodeHook();
 
-		await act(async () => scan());
+		let scanPromise: Promise<void> | undefined;
+		await act(async () => {
+			scanPromise = scan();
+			await Promise.resolve();
+		});
 
-		expect(mockEngineRequire).not.toHaveBeenCalled();
+		expect(mockEngineRequire).toHaveBeenNthCalledWith(1, {
+			id: 'barcode:ABC:ambiguous:products',
+			collection: 'products',
+			kind: 'targeted-records',
+			wooIds: [1, 2],
+			forceRefresh: true,
+		});
+		expect(mockEngineRequire).toHaveBeenNthCalledWith(2, {
+			id: 'barcode:ABC:ambiguous:variations',
+			collection: 'variations',
+			kind: 'targeted-records',
+			wooIds: [3],
+			forceRefresh: true,
+		});
+		expect(productQuery.search).not.toHaveBeenCalled();
+		for (const resolve of hydrationResolvers) resolve();
+		await act(async () => scanPromise);
+
 		expect(productQuery.search).toHaveBeenCalledWith('ABC');
 		expect(searchInput.setSearch).toHaveBeenCalledWith('ABC');
 		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
@@ -289,6 +321,109 @@ describe('useBarcode online escalation', () => {
 				toast: { text2: 'common.product_found_locally:{"count":3}' },
 			})
 		);
+		for (const result of mockEngineRequire.mock.results) {
+			expect(result.value.release).toHaveBeenCalledTimes(1);
+		}
+	});
+
+	it('caps ambiguous hydration at ten candidates and logs the truncation', async () => {
+		mockBarcodeSearch.mockResolvedValue([]);
+		mockFetcher.mockResolvedValue(
+			onlineResponse({
+				match: { id: 1, type: 'product' },
+				ambiguous: Array.from({ length: 11 }, (_, index) => ({
+					id: index + 2,
+					type: index % 2 === 0 ? ('variation' as const) : ('product' as const),
+				})),
+			})
+		);
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(mockEngineRequire).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({ collection: 'products', wooIds: [1, 3, 5, 7, 9] })
+		);
+		expect(mockEngineRequire).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({ collection: 'variations', wooIds: [2, 4, 6, 8, 10] })
+		);
+		expect(mockBarcodeLogger.debug).toHaveBeenCalledWith(
+			expect.stringContaining('capped'),
+			expect.objectContaining({
+				context: expect.objectContaining({ candidatesCount: 12, hydratedCandidatesCount: 10 }),
+			})
+		);
+	});
+
+	it('opens search when best-effort ambiguous hydration fails', async () => {
+		mockBarcodeSearch.mockResolvedValue([]);
+		mockFetcher.mockResolvedValue(
+			onlineResponse({
+				match: { id: 1, type: 'product' },
+				ambiguous: [{ id: 2, type: 'variation' }],
+			})
+		);
+		mockEngineRequire
+			.mockImplementationOnce(() => ({
+				ready: Promise.reject(new Error('offline')),
+				release: jest.fn(),
+			}))
+			.mockImplementationOnce(() => ({ ready: Promise.resolve(), release: jest.fn() }));
+		renderBarcodeHook();
+
+		await act(async () => scan());
+
+		expect(productQuery.search).toHaveBeenCalledWith('ABC');
+		expect(searchInput.setSearch).toHaveBeenCalledWith('ABC');
+		expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({ toast: { text2: 'common.barcode_online_lookup_failed' } })
+		);
+		for (const result of mockEngineRequire.mock.results) {
+			expect(result.value.release).toHaveBeenCalledTimes(1);
+		}
+	});
+
+	it('aborts a stalled online lookup at the ten-second deadline and shows failure', async () => {
+		jest.useFakeTimers();
+		try {
+			mockBarcodeSearch.mockResolvedValue([]);
+			let fetchSignal: AbortSignal | null | undefined;
+			mockFetcher.mockImplementation((_url: string, init?: RequestInit) => {
+				fetchSignal = init?.signal;
+				return new Promise<Response>(() => undefined);
+			});
+			renderBarcodeHook();
+
+			let scanPromise: Promise<void> | undefined;
+			await act(async () => {
+				scanPromise = scan();
+				await Promise.resolve();
+			});
+
+			await act(async () => {
+				jest.advanceTimersByTime(9_999);
+				await Promise.resolve();
+			});
+			expect(mockBarcodeLogger.error).not.toHaveBeenCalled();
+
+			await act(async () => {
+				jest.advanceTimersByTime(1);
+				await scanPromise;
+			});
+
+			expect(fetchSignal?.aborted).toBe(true);
+			expect(mockBarcodeLogger.error).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({ toast: { text2: 'common.barcode_online_lookup_failed' } })
+			);
+			expect(productQuery.search).toHaveBeenCalledWith('ABC');
+			expect(searchInput.setSearch).toHaveBeenCalledWith('ABC');
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 
 	it.each([
