@@ -136,7 +136,7 @@ export function useRelationalCollectionBinding(state: QueryStateOf<'products'>) 
 		const child = manager.registerQuery({
 			queryKeys: ['query-binding', 'relational', 'variations', key],
 			collectionName: 'variations',
-			initialParams: { selector: {}, sort: [{ id: 'asc' }], limit: stable.limit },
+			initialParams: { selector: {}, sort: [{ id: 'asc' }] },
 		});
 		const lookup = manager.registerQuery({
 			queryKeys: ['query-binding', 'relational', 'lookup', key],

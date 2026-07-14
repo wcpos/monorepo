@@ -278,6 +278,40 @@ describe('query bindings', () => {
 		);
 	});
 
+	it('windows relational products after considering every matching variation', async () => {
+		await engineDB.collections.products.bulkInsert([
+			engineProduct({ uuid: 'zulu-shirt', id: 10, name: 'Zulu Shirt' }),
+			engineProduct({ uuid: 'alpha-shirt', id: 20, name: 'Alpha Shirt' }),
+		]);
+		await engineDB.collections.variations.bulkInsert([
+			engineVariation({
+				uuid: 'first-match',
+				id: 11,
+				parent_id: 10,
+				name: 'Shared Match One',
+			}),
+			engineVariation({
+				uuid: 'second-match',
+				id: 21,
+				parent_id: 20,
+				name: 'Shared Match Two',
+			}),
+		]);
+		const state: QueryStateOf<'products'> = {
+			search: 'shared match',
+			filters: { categories: [], tags: [], brands: [] },
+			sort: { field: 'name', direction: 'asc' },
+			limit: 1,
+		};
+		const { result } = renderHook(() => useRelationalCollectionBinding(state), {
+			wrapper: Provider,
+		});
+
+		await waitFor(() =>
+			expect(current(result.current.resource)?.hits.map((hit) => hit.id)).toEqual(['alpha-shirt'])
+		);
+	});
+
 	it('debounces search-select input and bounds its resident results', async () => {
 		jest.useFakeTimers();
 		await engineDB.collections.categories.bulkInsert([
