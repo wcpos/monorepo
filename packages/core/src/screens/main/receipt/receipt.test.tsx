@@ -15,6 +15,7 @@ const mockUseDownloadReceiptPdf = jest.fn(() => ({
 	download: mockDownload,
 	isDownloading: false,
 }));
+let mockSuspenseValue: unknown;
 
 const mockOrder = {
 	id$: new BehaviorSubject(42),
@@ -171,23 +172,33 @@ jest.mock('expo-router/react-navigation', () => ({
 }));
 
 jest.mock('observable-hooks', () => ({
-	useObservableSuspense: () => mockOrder,
+	useObservableSuspense: () => mockSuspenseValue,
 	useObservableEagerState: (subject: BehaviorSubject<unknown>) => subject?.getValue?.(),
 	useObservableState: (_source: unknown, initialValue: unknown) => initialValue,
 }));
 
 jest.mock('rxdb', () => ({
-	isRxDocument: () => true,
+	isRxDocument: (value: unknown) => value === mockOrder,
 }));
 
 describe('Receipt PDF download action', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockSuspenseValue = mockOrder;
 		mockUseTemplateRenderer.mockReturnValue(defaultTemplateRenderer);
 		mockUseDownloadReceiptPdf.mockReturnValue({
 			download: mockDownload,
 			isDownloading: false,
 		});
+	});
+
+	it('renders not-found before accessing document observables when the resource emits null', () => {
+		mockSuspenseValue = null;
+
+		render(<Receipt resource={{} as never} />);
+
+		expect(screen.getByText('common.no_order_found')).toBeTruthy();
+		expect(mockUseTemplateRenderer).not.toHaveBeenCalled();
 	});
 
 	it('downloads the selected server PDF receipt template', () => {

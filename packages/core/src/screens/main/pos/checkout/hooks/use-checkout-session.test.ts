@@ -9,13 +9,13 @@ const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockReplace = jest.fn();
 const mockHttp = { get: mockGet, post: mockPost };
-const mockPullDocument = jest.fn();
 const mockStockAdjustment = jest.fn();
+const mockEngineRequire = jest.fn();
 
 jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('../../../../../contexts/translations', () => ({ useT: () => (key: string) => key }));
-jest.mock('../../../contexts/use-pull-document', () => ({
-	usePullDocument: () => mockPullDocument,
+jest.mock('@wcpos/query', () => ({
+	useQueryManager: () => ({ engine: { require: mockEngineRequire } }),
 }));
 jest.mock('../../../contexts/ui-settings', () => ({
 	useUISettings: () => ({ uiSettings: { autoShowReceipt: false } }),
@@ -46,6 +46,7 @@ describe('useCheckoutSession', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		jest.useRealTimers();
+		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
 	});
 
 	it('uses contract mode whenever supports_checkout is true, even for non-wcpos providers', async () => {
@@ -154,7 +155,14 @@ describe('useCheckoutSession', () => {
 			expect.stringContaining('payment-gateways/stripe_terminal_for_woocommerce/bootstrap'),
 			expect.anything()
 		);
-		expect(mockPullDocument).toHaveBeenCalled();
+		expect(mockEngineRequire).toHaveBeenCalledWith({
+			id: 'checkout:order-refresh:42',
+			collection: 'orders',
+			kind: 'targeted-records',
+			wooIds: [42],
+			forceRefresh: true,
+		});
+		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
 		expect(mockReplace).toHaveBeenCalled();
 		jest.useRealTimers();
 	});

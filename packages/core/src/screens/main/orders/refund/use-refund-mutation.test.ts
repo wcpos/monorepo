@@ -10,6 +10,7 @@ import {
 } from './use-refund-mutation';
 
 const mockPost = jest.fn();
+const mockEngineRequire = jest.fn();
 const mockPullDocument = jest.fn();
 
 jest.mock('uuid', () => ({
@@ -20,6 +21,10 @@ jest.mock('../../hooks/use-rest-http-client', () => ({
 	useRestHttpClient: () => ({
 		post: mockPost,
 	}),
+}));
+
+jest.mock('@wcpos/query', () => ({
+	useQueryManager: () => ({ engine: { require: mockEngineRequire } }),
 }));
 
 jest.mock('../../contexts/use-pull-document', () => ({
@@ -100,6 +105,7 @@ describe('useRefundMutation', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockPost.mockResolvedValue({ data: { refund_id: 123 } });
+		mockEngineRequire.mockReturnValue({ ready: Promise.resolve(), release: jest.fn() });
 	});
 
 	it('posts the stable refund payload with an idempotency header and refreshes the order', async () => {
@@ -133,32 +139,45 @@ describe('useRefundMutation', () => {
 				},
 			})
 		);
-		expect(mockPullDocument).toHaveBeenCalledWith(77, order.collection);
+		expect(mockEngineRequire).toHaveBeenCalledWith({
+			id: 'refund:order-refresh:77',
+			collection: 'orders',
+			kind: 'targeted-records',
+			wooIds: [77],
+			forceRefresh: true,
+		});
+		expect(mockEngineRequire.mock.results[0]?.value.release).toHaveBeenCalledTimes(1);
 	});
 
-	it('returns a successful refund response even when the local refresh fails', async () => {
+	it('rejects when the engine refresh fails so the existing error toast path can report it', async () => {
 		const order = {
 			id: 77,
 			collection: {},
 		};
-		mockPullDocument.mockRejectedValueOnce(new Error('refresh_failed'));
+		const release = jest.fn();
+		mockEngineRequire.mockReturnValueOnce({
+			get ready() {
+				return Promise.reject(new Error('refresh_failed'));
+			},
+			release,
+		});
 
 		const { result } = renderHook(() => useRefundMutation());
 
-		let response: unknown;
 		await act(async () => {
-			response = await result.current({
-				order: order as never,
-				amount: '10.00',
-				reason: 'Counter refund',
-				lineItems: [],
-				refundDestination: 'cash',
-			});
+			await expect(
+				result.current({
+					order: order as never,
+					amount: '10.00',
+					reason: 'Counter refund',
+					lineItems: [],
+					refundDestination: 'cash',
+				})
+			).rejects.toThrow('refresh_failed');
 		});
 
-		expect(response).toEqual({ refund_id: 123 });
 		expect(mockPost).toHaveBeenCalledTimes(1);
-		expect(mockPullDocument).toHaveBeenCalledWith(77, order.collection);
+		expect(release).toHaveBeenCalledTimes(1);
 	});
 
 	it('fails fast when attempting to refund an order without a persisted id', async () => {
@@ -180,6 +199,7 @@ describe('useRefundMutation', () => {
 		).rejects.toThrow('refund_requires_persisted_order');
 
 		expect(mockPost).not.toHaveBeenCalled();
+		expect(mockEngineRequire).not.toHaveBeenCalled();
 		expect(mockPullDocument).not.toHaveBeenCalled();
 	});
 });

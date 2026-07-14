@@ -2,13 +2,10 @@ import * as React from 'react';
 
 import { v4 as uuidv4 } from 'uuid';
 
-import { getLogger } from '@wcpos/utils/logger';
+import { useQueryManager } from '@wcpos/query';
 
-import { usePullDocument } from '../../contexts/use-pull-document';
 import { RefundDestination } from '../../hooks/payment-gateway-contract';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
-
-const refundMutationLogger = getLogger(['wcpos', 'mutations', 'refund']);
 
 interface RefundLineItem {
 	id?: number;
@@ -70,7 +67,7 @@ export function createRefundIdempotencyKey(orderId: number) {
  */
 export function useRefundMutation() {
 	const http = useRestHttpClient();
-	const pullDocument = usePullDocument();
+	const manager = useQueryManager();
 
 	return React.useCallback(
 		async ({ order, amount, reason, lineItems, refundDestination }: RefundMutationArgs) => {
@@ -91,21 +88,21 @@ export function useRefundMutation() {
 				},
 			});
 
+			const handle = manager.engine.require({
+				id: `refund:order-refresh:${order.id}`,
+				collection: 'orders',
+				kind: 'targeted-records',
+				wooIds: [order.id],
+				forceRefresh: true,
+			});
 			try {
-				await pullDocument(order.id, order.collection as never);
-			} catch (error) {
-				refundMutationLogger.error('refund_refresh_failed', {
-					showToast: false,
-					saveToDb: true,
-					context: {
-						orderId: order.id,
-						error: error instanceof Error ? error.message : String(error),
-					},
-				});
+				await handle.ready;
+			} finally {
+				handle.release();
 			}
 
 			return response?.data;
 		},
-		[http, pullDocument]
+		[http, manager]
 	);
 }

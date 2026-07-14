@@ -7,6 +7,7 @@ import { map } from 'rxjs/operators';
 
 import { ErrorBoundary } from '@wcpos/components/error-boundary';
 import { WebView } from '@wcpos/components/webview';
+import { useQueryManager } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -40,6 +41,7 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 	const { uiSettings } = useUISettings('pos-cart');
 	const t = useT();
 	const httpClient = useRestHttpClient('orders');
+	const manager = useQueryManager();
 	const paymentReceivedRef = React.useRef(false);
 	const fallbackTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 	const loadCountRef = React.useRef(0);
@@ -64,6 +66,24 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 		url.searchParams.append('token', jwt);
 		return url.toString();
 	}, [paymentURL, jwt]);
+
+	const refreshOrder = React.useCallback(async () => {
+		if (!order.id) {
+			throw new Error('payment_refresh_requires_persisted_order');
+		}
+		const handle = manager.engine.require({
+			id: `checkout:order-refresh:${order.id}`,
+			collection: 'orders',
+			kind: 'targeted-records',
+			wooIds: [order.id],
+			forceRefresh: true,
+		});
+		try {
+			await handle.ready;
+		} finally {
+			handle.release();
+		}
+	}, [manager, order.id]);
 
 	/**
 	 *
@@ -90,61 +110,32 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 					);
 					stockAdjustment(reducedStockItems);
 
-					const latest = order.getLatest();
-					const existingLinks = latest.links;
-					const parsedData = (
-						latest.collection as unknown as {
-							parseRestResponse: (data: unknown) => Record<string, unknown>;
+					orderLogger.success(
+						t('pos_checkout.payment_completed_for_order', {
+							orderNumber: payload.number || order.number,
+						}),
+						{
+							showToast: true,
+							saveToDb: true,
+							context: {
+								total: payload.total,
+								paymentMethod: payload.payment_method,
+								paymentMethodTitle: payload.payment_method_title,
+								transactionId: payload.transaction_id,
+								status: payload.status,
+							},
 						}
-					).parseRestResponse(payload);
+					);
+					await refreshOrder();
 
-					// Preserve existing links that the payment response didn't include.
-					// The server may not return receipt/payment links in the payment response,
-					// but parseRestResponse defaults missing arrays to [], which would wipe them.
-					if (parsedData.links && existingLinks) {
-						const parsedLinks = parsedData.links as Record<string, { href?: string }[]>;
-						const existingLinksRecord = existingLinks as Record<
-							string,
-							{ href?: string }[] | undefined
-						>;
-						for (const key of Object.keys(existingLinksRecord)) {
-							if (
-								(existingLinksRecord[key]?.length ?? 0) > 0 &&
-								(!parsedLinks[key] || parsedLinks[key].length === 0)
-							) {
-								parsedLinks[key] = existingLinksRecord[key]!;
-							}
-						}
-					}
-
-					const success = await latest.incrementalPatch(parsedData);
-					if (success) {
-						orderLogger.success(
-							t('pos_checkout.payment_completed_for_order', {
-								orderNumber: payload.number || order.number,
-							}),
-							{
-								showToast: true,
-								saveToDb: true,
-								context: {
-									total: payload.total,
-									paymentMethod: payload.payment_method,
-									paymentMethodTitle: payload.payment_method_title,
-									transactionId: payload.transaction_id,
-									status: payload.status,
-								},
-							}
-						);
-
-						if (uiSettings.autoShowReceipt) {
-							router.replace({
-								pathname: `(modals)/cart/receipt/${order.uuid}`,
-							});
-						} else {
-							router.replace({
-								pathname: `cart`,
-							});
-						}
+					if (uiSettings.autoShowReceipt) {
+						router.replace({
+							pathname: `(modals)/cart/receipt/${order.uuid}`,
+						});
+					} else {
+						router.replace({
+							pathname: `cart`,
+						});
 					}
 				} catch (err) {
 					const errorMessage = err instanceof Error ? err.message : 'Payment processing error';
@@ -161,7 +152,16 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 				}
 			}
 		},
-		[router, order, stockAdjustment, uiSettings.autoShowReceipt, setLoading, orderLogger, t]
+		[
+			router,
+			order,
+			stockAdjustment,
+			uiSettings.autoShowReceipt,
+			setLoading,
+			orderLogger,
+			t,
+			refreshOrder,
+		]
 	);
 
 	/**
@@ -217,56 +217,30 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 					);
 					stockAdjustment(reducedStockItems);
 
-					const latest = order.getLatest();
-					const existingLinks = latest.links;
-					const parsedData = (
-						latest.collection as unknown as {
-							parseRestResponse: (data: unknown) => Record<string, unknown>;
+					orderLogger.success(
+						t('pos_checkout.payment_completed_for_order', {
+							orderNumber: (serverOrder.number as string | number) || order.number,
+						}),
+						{
+							showToast: true,
+							saveToDb: true,
+							context: {
+								total: serverOrder.total,
+								paymentMethod: serverOrder.payment_method,
+								paymentMethodTitle: serverOrder.payment_method_title,
+								status: serverStatus,
+								source: 'fallback-fetch',
+							},
 						}
-					).parseRestResponse(serverOrder);
+					);
+					await refreshOrder();
 
-					if (parsedData.links && existingLinks) {
-						const parsedLinks = parsedData.links as Record<string, { href?: string }[]>;
-						const existingLinksRecord = existingLinks as Record<
-							string,
-							{ href?: string }[] | undefined
-						>;
-						for (const key of Object.keys(existingLinksRecord)) {
-							if (
-								(existingLinksRecord[key]?.length ?? 0) > 0 &&
-								(!parsedLinks[key] || parsedLinks[key].length === 0)
-							) {
-								parsedLinks[key] = existingLinksRecord[key]!;
-							}
-						}
-					}
-
-					const success = await latest.incrementalPatch(parsedData);
-					if (success) {
-						orderLogger.success(
-							t('pos_checkout.payment_completed_for_order', {
-								orderNumber: (serverOrder.number as string | number) || order.number,
-							}),
-							{
-								showToast: true,
-								saveToDb: true,
-								context: {
-									total: serverOrder.total,
-									paymentMethod: serverOrder.payment_method,
-									paymentMethodTitle: serverOrder.payment_method_title,
-									status: serverStatus,
-									source: 'fallback-fetch',
-								},
-							}
-						);
-
-						if (uiSettings.autoShowReceipt) {
-							router.replace({
-								pathname: `(modals)/cart/receipt/${order.uuid}`,
-							});
-						} else {
-							router.replace({ pathname: `cart` });
-						}
+					if (uiSettings.autoShowReceipt) {
+						router.replace({
+							pathname: `(modals)/cart/receipt/${order.uuid}`,
+						});
+					} else {
+						router.replace({ pathname: `cart` });
 					}
 				} catch (err) {
 					// Best-effort safety net only. Order completion is authoritatively
@@ -294,6 +268,7 @@ export function PaymentWebview({ order, setLoading, ...props }: PaymentWebviewPr
 			setLoading,
 			orderLogger,
 			t,
+			refreshOrder,
 		]
 	);
 

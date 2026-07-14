@@ -1,23 +1,11 @@
-import React from 'react';
-
 import { useLocalSearchParams } from 'expo-router';
-import { ObservableResource } from 'observable-hooks';
 
 import { Checkout } from './checkout';
-import { useCollection } from '../../hooks/use-collection';
+import { useEngineDocument } from '../../hooks/use-engine-document';
 
 export function CheckoutScreen() {
 	const { orderId } = useLocalSearchParams<{ orderId: string }>();
-	const { collection } = useCollection('orders');
-	const query = collection.findOneFix(orderId);
-
-	const resource = React.useMemo(
-		() =>
-			new ObservableResource(query.$) as ObservableResource<
-				import('@wcpos/database').OrderDocument
-			>,
-		[query]
-	);
+	const resource = useEngineDocument<import('@wcpos/database').OrderDocument>('orders', orderId);
 
 	return <Checkout resource={resource} />;
 }

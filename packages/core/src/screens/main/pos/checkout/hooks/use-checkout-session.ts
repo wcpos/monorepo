@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useRouter } from 'expo-router';
 
+import { useQueryManager } from '@wcpos/query';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -10,7 +11,6 @@ import {
 	PaymentGatewayContract,
 	supportsCheckoutContract,
 } from '../../../hooks/payment-gateway-contract';
-import { usePullDocument } from '../../../contexts/use-pull-document';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
 import { usePaymentGateways } from '../../../hooks/use-payment-gateways';
@@ -51,7 +51,7 @@ export function createCheckoutIdempotencyKey(
 
 export function useCheckoutSession(order: OrderDocument) {
 	const http = useRestHttpClient();
-	const pullDocument = usePullDocument();
+	const manager = useQueryManager();
 	const { stockAdjustment } = useStockAdjustment();
 	const { uiSettings } = useUISettings('pos-cart');
 	const router = useRouter();
@@ -80,7 +80,22 @@ export function useCheckoutSession(order: OrderDocument) {
 	}, [gatewayId, order.id]);
 
 	const completeOrderFlow = React.useCallback(async () => {
-		await pullDocument(order.id!, order.collection as never);
+		if (!order.id) {
+			throw new Error('checkout_refresh_requires_persisted_order');
+		}
+		const handle = manager.engine.require({
+			id: `checkout:order-refresh:${order.id}`,
+			collection: 'orders',
+			kind: 'targeted-records',
+			wooIds: [order.id],
+			forceRefresh: true,
+		});
+		try {
+			await handle.ready;
+		} finally {
+			handle.release();
+		}
+
 		const latest = order.getLatest();
 		const reducedStockItems = (latest.line_items || []).filter((item) =>
 			(item.meta_data as { key: string }[] | undefined)?.some(
@@ -94,7 +109,7 @@ export function useCheckoutSession(order: OrderDocument) {
 		} else {
 			router.replace({ pathname: `cart` });
 		}
-	}, [order, pullDocument, router, stockAdjustment, uiSettings.autoShowReceipt]);
+	}, [manager, order, router, stockAdjustment, uiSettings.autoShowReceipt]);
 
 	const startCheckout = React.useCallback(async () => {
 		if (!order.id || !gatewayResolved) return;

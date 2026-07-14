@@ -35,6 +35,26 @@ interface Props {
  */
 export function Checkout({ resource }: Props) {
 	const order = useObservableSuspense(resource);
+	const t = useT();
+
+	if (!isRxDocument(order)) {
+		return (
+			<Modal>
+				<ModalContent size="lg">
+					<ModalHeader>
+						<ModalTitle>
+							<Text>{t('common.no_order_found')}</Text>
+						</ModalTitle>
+					</ModalHeader>
+				</ModalContent>
+			</Modal>
+		);
+	}
+
+	return <CheckoutDocument order={order} />;
+}
+
+function CheckoutDocument({ order }: { order: import('@wcpos/database').OrderDocument }) {
 	const orderNumber = useObservableEagerState(order.number$!);
 	const t = useT();
 	const webViewRef = React.useRef<WebViewHandle>(null);
@@ -61,23 +81,6 @@ export function Checkout({ resource }: Props) {
 			webViewRef.current.postMessage({ action: 'wcpos-process-payment' });
 		}
 	}, [mode, startCheckout]);
-
-	/**
-	 *
-	 */
-	if (!isRxDocument(order)) {
-		return (
-			<Modal>
-				<ModalContent size="lg">
-					<ModalHeader>
-						<ModalTitle>
-							<Text>{t('common.no_order_found')}</Text>
-						</ModalTitle>
-					</ModalHeader>
-				</ModalContent>
-			</Modal>
-		);
-	}
 
 	/**
 	 *
