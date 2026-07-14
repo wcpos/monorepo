@@ -23,6 +23,7 @@ export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const manager = useQueryManager();
 	const { localPatch } = useLocalMutation();
+	const appendChains = React.useRef(new Map<string, Promise<void>>());
 
 	/**
 	 *
@@ -79,14 +80,31 @@ export const useAddItemToOrder = () => {
 
 			if ((order as unknown as { isNew?: boolean }).isNew) {
 				return saveNewOrder(type, data);
-			} else {
+			}
+
+			const recordId = documentRecordId(order);
+			if (!recordId) throw new Error('Order is missing its uuid');
+			const previous = appendChains.current.get(recordId) ?? Promise.resolve();
+			const append = previous.then(async () => {
+				const latest = order.getLatest();
 				return localPatch({
-					document: order,
+					document: latest,
 					data: {
-						[type]: [...((order[type] as CartLine[] | undefined) ?? []), data],
+						[type]: [...((latest[type] as CartLine[] | undefined) ?? []), data],
 					} as never,
 				});
-			}
+			});
+			const tail = append.then(
+				() => undefined,
+				() => undefined
+			);
+			appendChains.current.set(recordId, tail);
+			void tail.then(() => {
+				if (appendChains.current.get(recordId) === tail) {
+					appendChains.current.delete(recordId);
+				}
+			});
+			return append;
 		},
 		[currentOrder, localPatch, saveNewOrder]
 	);

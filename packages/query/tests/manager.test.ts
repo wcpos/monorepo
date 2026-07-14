@@ -32,7 +32,13 @@ describe('Manager', () => {
 
 	beforeEach(async () => {
 		localDB = await createStoreDatabase();
-		engineDB = await createEngineDatabase(['products', 'variations', 'orders', 'customers']);
+		engineDB = await createEngineDatabase([
+			'products',
+			'variations',
+			'orders',
+			'customers',
+			'categories',
+		]);
 		engine = createFakeEngine(engineDB);
 		manager = Manager.getInstance(localDB, engine, 'en', httpClientMock);
 	});
@@ -527,6 +533,53 @@ describe('Manager', () => {
 				priority: 1000,
 			});
 			expect(engine.syncCalls).toContain('scheduler-drain');
+		});
+
+		it('re-seeds a reset reference collection before draining records back into it', async () => {
+			let referenceSeeded = false;
+			engine.sync = jest.fn(async (lane) => {
+				engine.syncCalls.push(lane);
+				if (lane === 'reference-seed') referenceSeeded = true;
+				if (lane === 'scheduler-drain' && referenceSeeded) {
+					await engineDB.collections.categories.insert({
+						id: 'woo-category:7',
+						wooId: 7,
+						payload: { id: 7, name: 'Refilled' },
+						sync: { revision: 'rev-7', partial: false, source: 'woo-rest' },
+						local: { dirty: false, pendingMutationIds: [] },
+					});
+				}
+				return { lane: (lane ?? 'all') as never, status: 'ran' as const };
+			});
+			const refill = manager.prepareCollectionResetRefill(['products/categories']);
+
+			await engine.scope.resetCollection('categories');
+			await refill();
+
+			expect(engine.syncCalls).toEqual(['reference-seed', 'scheduler-drain']);
+			await expect(engineDB.collections.categories.count().exec()).resolves.toBe(1);
+		});
+
+		it('re-seeds the product browse window and force-refreshes captured active demand', async () => {
+			const query = manager.registerQuery({
+				queryKeys: ['reset-targeted-product'],
+				collectionName: 'products',
+				initialParams: { selector: { id: 17 } },
+			});
+			if (!query) throw new Error('targeted product query was not registered');
+			const refill = manager.prepareCollectionResetRefill(['products']);
+
+			await manager.onCollectionReset(engineDB.collections.products);
+			await refill();
+
+			expect(engine.requireCalls.at(-1)).toMatchObject({
+				collection: 'products',
+				kind: 'targeted-records',
+				wooIds: [17],
+				forceRefresh: true,
+				priority: 1000,
+			});
+			expect(engine.syncCalls).toEqual(['product-browse-window-seed', 'scheduler-drain']);
 		});
 
 		it('retries an identical search declaration after its requirement rejects', async () => {

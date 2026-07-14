@@ -101,7 +101,10 @@ describe('useLocalMutation', () => {
 				return stored;
 			}
 		);
-		mockFindOneExec.mockResolvedValue({ ...stored, incrementalModify });
+		mockFindOneExec.mockResolvedValue({
+			incrementalModify,
+			toJSON: () => JSON.parse(JSON.stringify(stored)),
+		});
 		const document = {
 			uuid: 'order-uuid',
 			id: 42,
@@ -154,7 +157,10 @@ describe('useLocalMutation', () => {
 				return stored;
 			}
 		);
-		mockFindOneExec.mockResolvedValue({ ...stored, incrementalModify });
+		mockFindOneExec.mockResolvedValue({
+			incrementalModify,
+			toJSON: () => JSON.parse(JSON.stringify(stored)),
+		});
 		const document = {
 			uuid: 'order-uuid',
 			id: null,
@@ -177,6 +183,47 @@ describe('useLocalMutation', () => {
 			payload: expect.objectContaining({
 				line_items: [{ product_id: 7 }],
 			}),
+		});
+	});
+
+	it('restores the resident snapshot when the write intent cannot be enqueued', async () => {
+		const stored: Record<string, unknown> = {
+			id: 'order-uuid',
+			wooOrderId: 42,
+			status: 'pending',
+			payload: { id: 42, status: 'pending' },
+			sync: { revision: 'rev-1' },
+			local: { dirty: false, pendingMutationIds: [] },
+		};
+		const incrementalModify = jest.fn(
+			async (modifier: (old: Record<string, unknown>) => Record<string, unknown>) => {
+				Object.assign(stored, modifier(stored));
+				return stored;
+			}
+		);
+		mockFindOneExec.mockResolvedValue({
+			incrementalModify,
+			toJSON: () => JSON.parse(JSON.stringify(stored)),
+		});
+		mockWrite.mockRejectedValue(new Error('queue unavailable'));
+		const document = {
+			uuid: 'order-uuid',
+			id: 42,
+			collection: { name: 'orders' },
+			getLatest: () => document,
+		};
+
+		const { result } = renderHook(() => useLocalMutation());
+		await act(() =>
+			result.current.localPatch({
+				document: document as never,
+				data: { status: 'processing' } as never,
+			})
+		);
+
+		expect(stored).toMatchObject({
+			status: 'pending',
+			payload: { id: 42, status: 'pending' },
 		});
 	});
 });

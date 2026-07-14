@@ -283,6 +283,11 @@ export const useLocalMutation = () => {
 					const recordId = documentRecordId(document);
 					if (!recordId) throw new Error(`Missing uuid for ${engineCollection} mutation`);
 					const syncChanges = syncableChanges(changes);
+					const resident = await findEngineResident(manager, engineCollection, recordId);
+					if (!resident) {
+						throw new Error(`Engine resident "${recordId}" is missing from "${engineCollection}"`);
+					}
+					const previousResident = cloneDeep(resident.toJSON());
 					await patchEngineResident({
 						manager,
 						collection: engineCollection,
@@ -290,15 +295,20 @@ export const useLocalMutation = () => {
 						changes: syncChanges,
 					});
 					if (Object.keys(syncChanges).length > 0) {
-						await manager.engine.write({
-							collection: engineCollection,
-							// Creation funnels insert the resident and enqueue the create first.
-							// Later local edits are updates; the write plane folds create + update
-							// into the pending create, or queues behind an in-flight create.
-							operation: 'update',
-							recordId,
-							payload: syncChanges,
-						});
+						try {
+							await manager.engine.write({
+								collection: engineCollection,
+								// Creation funnels insert the resident and enqueue the create first.
+								// Later local edits are updates; the write plane folds create + update
+								// into the pending create, or queues behind an in-flight create.
+								operation: 'update',
+								recordId,
+								payload: syncChanges,
+							});
+						} catch (error) {
+							await resident.incrementalModify(() => previousResident);
+							throw error;
+						}
 					}
 					return { changes, document: document.getLatest() };
 				}

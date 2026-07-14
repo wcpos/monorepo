@@ -41,8 +41,8 @@ function isWriteableCollection(name: string): name is WriteableCollection {
 
 /**
  * Create/update funnel for writeable Woo records. Resident changes are optimistic; engine.write
- * owns durable queue bookkeeping and later acknowledgements/conflicts. There is deliberately no
- * rollback: a rejected remote outcome remains visible through the engine conflict surface.
+ * owns durable queue bookkeeping and later acknowledgements/conflicts. A rejected remote outcome
+ * remains visible through the engine conflict surface; failure before durable enqueue is rolled back.
  */
 export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const manager = useQueryManager();
@@ -120,12 +120,17 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 					payload,
 				});
 				const residentPayload = resident.get('payload') as Record<string, unknown>;
-				await manager.engine.write({
-					collection: collectionName,
-					operation: 'create',
-					recordId,
-					payload: residentPayload,
-				});
+				try {
+					await manager.engine.write({
+						collection: collectionName,
+						operation: 'create',
+						recordId,
+						payload: residentPayload,
+					});
+				} catch (error) {
+					await resident.remove();
+					throw error;
+				}
 				const document = wrapEngineDocument(
 					collectionName as LegacyCollectionName,
 					resident as never

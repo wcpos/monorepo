@@ -40,6 +40,10 @@ export interface CollectionResetResult {
  * engine's `needs-confirmation` value is preserved and returned to the caller unchanged. */
 export const useCollectionReset = (key: CollectionKey) => {
 	const manager = useQueryManager();
+	const collectionNames = React.useMemo<CollectionKey[]>(
+		() => (key === 'products' ? ['variations', 'products'] : [key]),
+		[key]
+	);
 
 	const resetOne = React.useCallback(
 		async (collectionName: CollectionKey): Promise<CollectionResetResult> => {
@@ -65,8 +69,6 @@ export const useCollectionReset = (key: CollectionKey) => {
 	);
 
 	const clear = React.useCallback(async (): Promise<CollectionResetResult[]> => {
-		const collectionNames: CollectionKey[] =
-			key === 'products' ? ['variations', 'products'] : [key];
 		const results: CollectionResetResult[] = [];
 		for (const collectionName of collectionNames) {
 			const result = await resetOne(collectionName);
@@ -74,10 +76,11 @@ export const useCollectionReset = (key: CollectionKey) => {
 			if (result.outcome === 'needs-confirmation') break;
 		}
 		return results;
-	}, [key, resetOne]);
+	}, [collectionNames, resetOne]);
 
 	const clearAndSync = React.useCallback(async (): Promise<void> => {
 		logger.debug('clearAndSync: starting', { context: { key } });
+		const refill = manager.prepareCollectionResetRefill(collectionNames);
 		const results = await clear();
 		const pendingConfirmation = results.find((result) => result.outcome === 'needs-confirmation');
 		if (pendingConfirmation) {
@@ -86,9 +89,9 @@ export const useCollectionReset = (key: CollectionKey) => {
 			});
 			return;
 		}
-		await manager.engine.sync('scheduler-drain');
+		await refill();
 		logger.debug('clearAndSync: complete', { context: { key } });
-	}, [clear, key, manager]);
+	}, [clear, collectionNames, key, manager]);
 
 	return { clear, clearAndSync };
 };

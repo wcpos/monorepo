@@ -54,6 +54,28 @@ function selectorWithSearch(rxQuery: RxQuery | undefined): Record<string, unknow
 	return selector;
 }
 
+function refreshRequirementsForQuery(
+	query: Query<RxCollection>,
+	id: string
+): {
+	requirements: EngineRequirement[];
+	search: boolean;
+} {
+	const mango = cloneDeep(query.currentRxQuery?.mangoQuery ?? {});
+	const selector = selectorWithSearch(query.currentRxQuery);
+	return {
+		requirements: requirementsForQuery({
+			id,
+			collectionName: query.collectionName ?? '',
+			selector,
+			limit: mango.limit,
+			forceRefresh: true,
+			priority: 1000,
+		}),
+		search: typeof selector.search === 'string' && selector.search.length > 0,
+	};
+}
+
 function isFullyRepresentedOrderSelector(selector: Record<string, unknown>): boolean {
 	return Object.entries(selector).every(([field, value]) => {
 		if (field === 'search') return typeof value === 'string';
@@ -507,6 +529,59 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	}
 
 	/**
+	 * Capture refill work before a reset cancels the collection's active queries.
+	 * The returned callback re-seeds the engine-owned baseline lanes, force-refreshes
+	 * the captured targeted/query demand, then drains the durable scheduler queue.
+	 */
+	prepareCollectionResetRefill(collectionNames: string[]): () => Promise<void> {
+		const resetCollections = new Set(collectionNames);
+		const resetEngineCollections = new Set(
+			collectionNames
+				.filter(isMappedCollection)
+				.map((collectionName) => engineCollectionNameFor(collectionName))
+		);
+		const requirements: EngineRequirement[] = [];
+		this.queryStates.forEach((query) => {
+			if (query.collectionName && resetCollections.has(query.collectionName)) {
+				requirements.push(
+					...refreshRequirementsForQuery(query, `${query.id}:collection-reset`).requirements
+				);
+			}
+		});
+		if (resetEngineCollections.has('taxRates')) {
+			requirements.push({
+				id: 'taxRates:collection-reset',
+				collection: 'taxRates',
+				kind: 'refresh',
+				forceRefresh: true,
+				priority: 1000,
+			});
+		}
+
+		const seedReferences = (['categories', 'brands', 'tags', 'coupons'] as const).some(
+			(collection) => resetEngineCollections.has(collection)
+		);
+		const seedProductBrowseWindow = resetEngineCollections.has('products');
+
+		return async () => {
+			if (seedReferences) await this.engine.sync('reference-seed');
+			if (seedProductBrowseWindow) await this.engine.sync('product-browse-window-seed');
+
+			const handles = declareRequirements(this.engine, requirements);
+			await Promise.all(
+				handles.map((handle) =>
+					handle.ready.then(
+						() => undefined,
+						() => undefined
+					)
+				)
+			);
+			for (const handle of handles) handle.release();
+			await this.engine.sync('scheduler-drain');
+		};
+	}
+
+	/**
 	 * Tasks to perform when a new query state is registered. Instead of the old
 	 * replication states, declare the query's engine requirements (the demand
 	 * plane) and re-declare them when the query params or pagination change.
@@ -783,22 +858,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		if (!query || !demand || !query.collectionName) {
 			return;
 		}
-		const mango = cloneDeep(query.currentRxQuery?.mangoQuery ?? {});
-		const selector = (mango.selector ?? {}) as Record<string, unknown>;
-		const search =
-			query.currentRxQuery?.other?.search?.searchTerm ??
-			query.currentRxQuery?.other?.relationalSearch?.searchTerm;
-		if (search) {
-			selector.search = search;
-		}
-		const requirements = requirementsForQuery({
-			id: `${queryId}:sync`,
-			collectionName: query.collectionName,
-			selector,
-			limit: mango.limit,
-			forceRefresh: true,
-			priority: 1000,
-		});
+		const { requirements, search } = refreshRequirementsForQuery(query, `${queryId}:sync`);
 		const handles = declareRequirements(this.engine, requirements);
 		const ready = Promise.all(handles.map((handle) => handle.ready)).then(
 			() => undefined,
