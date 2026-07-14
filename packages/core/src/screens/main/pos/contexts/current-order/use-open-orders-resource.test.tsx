@@ -145,4 +145,20 @@ describe('useOpenOrdersResource', () => {
 		unmount();
 		expect(releaseRequirement).toHaveBeenCalledTimes(1);
 	});
+
+	it('releases its engine database subscriber across repeated mounts', () => {
+		for (let mount = 0; mount < 2; mount += 1) {
+			const { unmount } = renderHook(() => useOpenOrdersResource(7, 2));
+			expect(databaseSubscribers.size).toBe(1);
+
+			unmount();
+			expect(databaseSubscribers.size).toBe(0);
+		}
+	});
+
+	it('resolves to no resident open orders when the engine database is unavailable', () => {
+		const { result } = renderHook(() => useOpenOrdersResource(7, 2));
+
+		expect(result.current.read()).toEqual([]);
+	});
 });

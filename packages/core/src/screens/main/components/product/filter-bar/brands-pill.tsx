@@ -51,7 +51,9 @@ export function BrandsPill({ query, resource, selectedID }: Props) {
 					leftIcon="folder"
 					variant={isActive ? undefined : 'muted'}
 					removable={isActive}
-					onRemove={() => query.where('brands').removeElemMatch('brands', { id: brand?.id }).exec()}
+					onRemove={() =>
+						query.where('brands').removeElemMatch('brands', { id: selectedID }).exec()
+					}
 				>
 					<ButtonText decodeHtml>
 						{isActive ? brand?.name || t('common.id_2', { id: selectedID }) : t('common.brand')}

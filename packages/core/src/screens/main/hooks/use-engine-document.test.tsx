@@ -270,4 +270,23 @@ describe('useEngineDocument', () => {
 		expect(secondDatabase.collections.products.findOne).toHaveBeenCalledWith('product-uuid');
 		expect(current(result.current)?.name).toBe('New scope');
 	});
+
+	it.each([
+		['single-document', () => useEngineDocument<Record<string, unknown>>('products', 'missing')],
+		[
+			'multi-document',
+			() => useEngineDocumentsByWooId<Record<string, unknown>>('products/categories', [42]),
+		],
+	] as const)('releases the %s db$ subscriber across repeated mounts', (_name, useResource) => {
+		for (let mount = 0; mount < 2; mount += 1) {
+			const { unmount } = renderHook(() => {
+				useResource();
+				return null;
+			});
+			expect(databaseSubscribers.size).toBe(1);
+
+			unmount();
+			expect(databaseSubscribers.size).toBe(0);
+		}
+	});
 });

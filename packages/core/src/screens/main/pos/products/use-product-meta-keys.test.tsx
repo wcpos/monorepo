@@ -80,4 +80,14 @@ describe('useProductMetaKeys engine scan', () => {
 		act(() => emitDatabase(databaseWith(secondProducts$)));
 		expect(result.current).toEqual(['origin']);
 	});
+
+	it('releases its db$ subscriber across repeated mounts', () => {
+		for (let mount = 0; mount < 2; mount += 1) {
+			const { unmount } = renderHook(() => useProductMetaKeys());
+			expect(databaseSubscribers.size).toBe(1);
+
+			unmount();
+			expect(databaseSubscribers.size).toBe(0);
+		}
+	});
 });

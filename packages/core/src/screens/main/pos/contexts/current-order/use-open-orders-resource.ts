@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { NEVER, Observable, of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 
 import { useQueryManager } from '@wcpos/query';
@@ -44,13 +44,13 @@ export function useOpenOrdersResource(
 ): ObservableResource<OpenOrderHit[]> {
 	const manager = useQueryManager();
 	const resource = React.useMemo(() => {
-		const openOrders$ = new Observable<EngineDatabase | null>((subscriber) =>
-			manager.engine.db$((database) =>
+		const openOrders$ = new Observable<EngineDatabase | null>((subscriber) => {
+			return manager.engine.db$((database) =>
 				subscriber.next(database as unknown as EngineDatabase | null)
-			)
-		).pipe(
+			);
+		}).pipe(
 			switchMap((database) => {
-				if (!database) return NEVER;
+				if (!database) return of([] as EngineRxDocument[]);
 				const collection = database.collections[engineCollectionNameFor('orders')] as unknown as
 					| EngineOrderCollection
 					| undefined;

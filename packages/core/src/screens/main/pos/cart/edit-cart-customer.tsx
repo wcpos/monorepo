@@ -12,6 +12,8 @@ import { Form } from '@wcpos/components/form';
 import { HStack } from '@wcpos/components/hstack';
 import { Text } from '@wcpos/components/text';
 import { VStack } from '@wcpos/components/vstack';
+import { useQueryManager } from '@wcpos/query';
+import { wrapEngineDocument } from '@wcpos/query/engine-adapter/document-proxy';
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
@@ -23,10 +25,25 @@ import { ShippingAddressForm, shippingAddressSchema } from '../../components/shi
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import { useCustomerNameFormat } from '../../hooks/use-customer-name-format';
-import { useEngineDocumentByWooId } from '../../hooks/use-engine-document';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const cartLogger = getLogger(['wcpos', 'pos', 'cart', 'customer']);
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
+type EngineRxDocument = Parameters<typeof wrapEngineDocument>[1];
+type QueryManager = ReturnType<typeof useQueryManager>;
+
+async function findCustomerByWooId(
+	manager: QueryManager,
+	wooCustomerId: number
+): Promise<CustomerDocument | null> {
+	const scope = manager.engine.active() ?? (await manager.engine.ready);
+	const collection = scope.database.collections.customers;
+	if (!collection) return null;
+	const document = await collection.findOne({ selector: { wooCustomerId } }).exec();
+	return document
+		? wrapEngineDocument<CustomerDocument>('customers', document as unknown as EngineRxDocument)
+		: null;
+}
 
 /**
  *
@@ -57,12 +74,8 @@ export function EditCartCustomerForm() {
 	);
 	const { localPatch } = useLocalMutation();
 	const { patch } = useMutation({ collectionName: 'customers' });
+	const manager = useQueryManager();
 	const { onOpenChange } = useRootContext();
-	const customerResource = useEngineDocumentByWooId<import('@wcpos/database').CustomerDocument>(
-		'customers',
-		Number(customerID ?? 0)
-	);
-	const customer = useObservableEagerState(customerResource.valueRef$$)?.current;
 	const { format } = useCustomerNameFormat();
 	const [loading, setLoading] = React.useState(false);
 
@@ -96,20 +109,22 @@ export function EditCartCustomerForm() {
 	 * We need to get the customer document and patch it with the new address
 	 */
 	const handleSaveToOrderAndToCustomer = async (data: FormValues) => {
+		const wooCustomerId = Number(customerID ?? 0);
 		await handleSaveToOrder(data);
-		if (!customer) {
-			cartLogger.error(t('common.no_customer_found'), {
-				showToast: true,
-				saveToDb: true,
-				context: {
-					errorCode: ERROR_CODES.RECORD_NOT_FOUND,
-					customerId: customerID,
-				},
-			});
-			return;
-		}
 		setLoading(true);
 		try {
+			const customer = await findCustomerByWooId(manager, wooCustomerId);
+			if (!customer) {
+				cartLogger.error(t('common.no_customer_found'), {
+					showToast: true,
+					saveToDb: true,
+					context: {
+						errorCode: ERROR_CODES.RECORD_NOT_FOUND,
+						customerId: wooCustomerId,
+					},
+				});
+				return;
+			}
 			const savedDoc = await patch({
 				document: customer,
 				data: {
@@ -136,7 +151,7 @@ export function EditCartCustomerForm() {
 				saveToDb: true,
 				context: {
 					errorCode: ERROR_CODES.TRANSACTION_FAILED,
-					customerId: customerID,
+					customerId: wooCustomerId,
 					error: errorMessage,
 				},
 			});
