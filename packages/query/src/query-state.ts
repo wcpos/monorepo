@@ -6,15 +6,23 @@ import isEqual from 'lodash/isEqual';
 import pick from 'lodash/pick';
 import set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
-import { BehaviorSubject, from, ReplaySubject, Subject } from 'rxjs';
+import { BehaviorSubject, from, Observable, ReplaySubject, Subject } from 'rxjs';
 import { catchError, distinctUntilChanged, map, startWith, switchMap } from 'rxjs/operators';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
 
+import {
+	type EngineDocument,
+	isMappedCollection,
+	type LegacyCollectionName,
+} from './engine-adapter/collection-map';
+import { wrapEngineDocument } from './engine-adapter/document-proxy';
+import { type AdapterDatabase, executeAdapterQuery } from './engine-adapter/execute-query';
 import { recoverLogsCollectionStorage } from './logs-storage-recovery';
 import { SubscribableBase } from './subscribable-base';
 
+import type { LegacyMangoSelector } from './engine-adapter/translate-selector';
 import type {
 	MangoQuery,
 	MangoQuerySelector,
@@ -46,6 +54,14 @@ export interface QueryHooks {
 export interface QueryConfig<T> {
 	id: string;
 	collection: T;
+	/**
+	 * Legacy collection name (the `CENSUS-selector-corpus` key: `products`,
+	 * `orders`, `taxes`, `products/categories`, …). When it is a mapped engine
+	 * collection, reads route through the engine-adapter (executeAdapterQuery +
+	 * wrapEngineDocument). When absent or unmapped (`logs`, `templates`) the
+	 * query reads the local RxDB collection directly.
+	 */
+	collectionName?: string;
 	initialParams?: QueryParams;
 	// hooks?: QueryHooks;
 	endpoint?: string;
@@ -120,6 +136,10 @@ export class Query<T extends RxCollection>
 {
 	public readonly id: string;
 	public readonly collection: T;
+	/** Legacy collection name driving the engine-adapter map (undefined for logs). */
+	public readonly collectionName?: string;
+	/** True when reads route through the engine-adapter rather than a local RxDB collection. */
+	public readonly isEngineBacked: boolean;
 	public readonly primaryKey: string;
 	public readonly searchInstancePromise: Promise<any>;
 	public readonly locale: string;
@@ -163,6 +183,7 @@ export class Query<T extends RxCollection>
 	constructor({
 		id,
 		collection,
+		collectionName,
 		initialParams = {},
 		endpoint,
 		greedy = false,
@@ -174,7 +195,12 @@ export class Query<T extends RxCollection>
 		super();
 		this.id = id;
 		this.collection = collection;
-		this.primaryKey = (collection as any).schema.primaryPath;
+		this.collectionName = collectionName;
+		this.isEngineBacked = !!collectionName && isMappedCollection(collectionName);
+		// Engine-backed reads always key on the legacy uuid identity (the engine
+		// document's primary `id` holds the uuid); local paths (logs/templates)
+		// use the collection's own primary path.
+		this.primaryKey = this.isEngineBacked ? 'uuid' : (collection as any).schema.primaryPath;
 		this.searchInstancePromise = (collection as any).initSearch(locale);
 		this.locale = locale;
 		this.endpoint = endpoint; // @FIXME - this is used in the replication state but not in this class
@@ -277,9 +303,99 @@ export class Query<T extends RxCollection>
 	}
 
 	/**
+	 * Build the legacy-shaped {@link QueryResult} envelope shared by the engine
+	 * and local read paths. `documents` are already legacy-shaped (engine proxies
+	 * for the adapter path, RxDocuments for the local path); `hitId` extracts the
+	 * legacy primary (uuid) so hits key identically to the pre-swap contract.
+	 */
+	private buildResult(
+		rxQuery: RxQuery | undefined,
+		documents: any[],
+		count: number,
+		elapsed: number
+	): QueryResult<T> {
+		const search = get(rxQuery, ['other', 'search']);
+		const relationalSearch = get(rxQuery, ['other', 'relationalSearch']);
+
+		if (relationalSearch) {
+			return {
+				elapsed,
+				searchActive: true,
+				searchTerm: relationalSearch?.searchTerm,
+				count,
+				hits: documents.map((doc: any) => ({
+					id: doc[this.primaryKey],
+					document: doc,
+					childrenSearchCount: relationalSearch?.countsByParent?.[doc?.id] || 0,
+					parentSearchTerm: relationalSearch?.searchTerm,
+				})),
+			} as unknown as QueryResult<T>;
+		}
+
+		if (search) {
+			return {
+				elapsed,
+				searchActive: true,
+				searchTerm: search.searchTerm,
+				count,
+				hits: documents.map((doc: any) => ({
+					id: doc[this.primaryKey],
+					document: doc,
+				})),
+			} as unknown as QueryResult<T>;
+		}
+
+		return {
+			elapsed,
+			searchActive: false,
+			count,
+			hits: documents.map((doc: any) => ({
+				id: doc[this.primaryKey],
+				document: doc,
+			})),
+		} as unknown as QueryResult<T>;
+	}
+
+	/**
+	 * Engine-adapter read path (ADR 0023 increment 1b): the fluent builder keeps
+	 * producing legacy Mango selectors; `executeAdapterQuery` translates them and
+	 * runs them against the engine database, and each hit is wrapped with the
+	 * legacy read contract via `wrapEngineDocument`.
+	 */
+	private get _engineFind$(): Observable<QueryResult<T>> {
+		const database = (this.collection as any).database as AdapterDatabase;
+		const legacyCollection = this.collectionName as LegacyCollectionName;
+		return this.rxQuery$.pipe(
+			switchMap((rxQuery) => {
+				const startTime = performance.now();
+				const mango = rxQuery?.mangoQuery ?? {};
+				return executeAdapterQuery({
+					database,
+					collection: legacyCollection,
+					selector: (mango.selector ?? {}) as LegacyMangoSelector,
+					sort: mango.sort as MangoQuerySortPart<EngineDocument>[] | undefined,
+					skip: mango.skip,
+					limit: mango.limit,
+				}).pipe(
+					map((adapterResult) => {
+						const elapsed = performance.now() - startTime;
+						const documents = adapterResult.hits.map((hit) =>
+							wrapEngineDocument(legacyCollection, hit)
+						);
+						return this.buildResult(rxQuery, documents, adapterResult.count, elapsed);
+					})
+				);
+			})
+		);
+	}
+
+	/**
 	 * Re-subscribe to the new RxQuery
 	 */
-	get _find$() {
+	get _find$(): Observable<QueryResult<T>> {
+		if (this.isEngineBacked) {
+			return this._engineFind$;
+		}
 		return this.rxQuery$.pipe(
 			switchMap((rxQuery) => {
 				const startTime = performance.now();

@@ -1,26 +1,25 @@
 import cloneDeep from 'lodash/cloneDeep';
-import forEach from 'lodash/forEach';
+import { BehaviorSubject as RxBehaviorSubject } from 'rxjs';
 
 import { getLogger } from '@wcpos/utils/logger';
 import { ERROR_CODES } from '@wcpos/utils/logger/error-codes';
+import type { RequirementHandle, RxdbSyncEngine } from '@wcpos/sync-engine';
 
-import { CollectionReplicationState } from './collection-replication-state';
-import { allHooks } from './hooks';
-import { QueryReplicationState } from './query-replication-state';
+import { CollectionReplicationState } from './data-fetcher';
+import { engineCollectionNameFor, isMappedCollection } from './engine-adapter/collection-map';
 import { Query } from './query-state';
 import { Registry } from './registry';
 import { RelationalQuery } from './relational-query-state';
+import { declareRequirements, requirementsForQuery } from './requirement-bridge';
 import { SubscribableBase } from './subscribable-base';
-import { buildEndpointWithParams } from './utils';
+import { syncTemplates } from './templates';
 
 import type { QueryParams } from './query-state';
+import type { BehaviorSubject } from 'rxjs';
 import type { RxCollection, RxDatabase } from 'rxdb';
 
 const queryLogger = getLogger(['wcpos', 'query', 'manager']);
 
-/**
- *
- */
 export interface RegisterQueryConfig {
 	queryKeys: (string | number | object)[];
 	collectionName: string;
@@ -32,64 +31,46 @@ export interface RegisterQueryConfig {
 }
 
 /**
- *
+ * Per-query demand-plane bookkeeping (ADR 0027). `handles` are the live engine
+ * requirement handles this surface declared; `active$` reflects whether any of
+ * them (or a `sync()` promise) are in flight — the honest 1b projection of the
+ * old per-query `active$` until `events()` gains start/finish (ticket #537).
+ */
+interface QueryDemand {
+	handles: RequirementHandle[];
+	active$: BehaviorSubject<boolean>;
+	inFlight: number;
+}
+
+/**
+ * The Manager holds an ENGINE, not an http client / fast-local db (ADR 0023
+ * increment 1b). `localDB` survives ONLY for the local-only `logs` collection
+ * (and the dedicated `templates` fetch target); every fluent read is served from
+ * the engine database through the engine-adapter. `httpClient` is a TRANSITIONAL
+ * field kept solely for the `use-mutation` / `use-stock-adjustment` remnant
+ * (`@deprecated` increment-3).
  */
 export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	public readonly queryStates: Registry<string, Query<RxCollection>>;
-	public readonly replicationStates: Registry<
-		string,
-		CollectionReplicationState<RxCollection> | QueryReplicationState<RxCollection>
-	>;
+	/** Transitional per-endpoint replication remnant (Core mutation callers). */
+	public readonly replicationStates: Registry<string, CollectionReplicationState>;
 
-	/**
-	 * Each queryKey should have one collection replication and one query replication
-	 */
-	public readonly activeCollectionReplications: Registry<
-		string,
-		CollectionReplicationState<RxCollection>
-	>;
-	public readonly activeQueryReplications: Registry<string, QueryReplicationState<RxCollection>>;
+	/** Live engine requirement handles per query id (the demand plane). */
+	private readonly demandByQuery = new Map<string, QueryDemand>();
 
-	/**
-	 * Enforce singleton pattern
-	 */
-	// private static instanceCount = 0;
-	// private instanceId: number;
 	private static instance: Manager<any>;
 
 	private constructor(
 		public localDB: TDatabase,
-		public fastLocalDB: any,
-		public httpClient: any,
-		public locale: string
+		public engine: RxdbSyncEngine,
+		public locale: string,
+		/** @deprecated increment-3 — transitional wc/v3 seam for Core mutations. */
+		public httpClient?: any
 	) {
 		super();
-		// Manager.instanceCount++;
-		// this.instanceId = Manager.instanceCount;
-		// console.log(`Manager instance created with ID: ${this.instanceId}`, {
-		// 	localDB,
-		// 	httpClient,
-		// 	locale,
-		// });
-
 		this.queryStates = new Registry();
 		this.replicationStates = new Registry();
-		this.activeCollectionReplications = new Registry();
-		this.activeQueryReplications = new Registry();
 
-		/**
-		 * Collection reset handling:
-		 * - Cleanup is handled via collection.onRemove (see registerCollectionReplication)
-		 * - Re-registration is handled by React hooks (useQuery, useRelationalQuery) subscribing to reset$
-		 *
-		 * Note: We previously considered subscribing to reset$ here, but it's redundant because:
-		 * 1. collection.onRemove fires first and calls onCollectionReset() for cleanup
-		 * 2. React hooks subscribe to reset$ to re-register queries when collections are recreated
-		 */
-
-		/**
-		 * Subscribe to localDB to detect if db is destroyed
-		 */
 		(this.localDB as any).onClose.push(() => {
 			void this.cancel().catch((error) =>
 				queryLogger.error('Manager cancel on db close failed', { context: { error } })
@@ -99,22 +80,19 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 	public static getInstance<TDatabase extends RxDatabase>(
 		localDB: TDatabase,
-		fastLocalDB: any,
-		httpClient: any,
-		locale: string = 'en'
+		engine: RxdbSyncEngine,
+		locale: string = 'en',
+		httpClient?: any
 	) {
-		// Check if instance exists and dependencies are the same
 		if (
 			Manager.instance &&
 			Manager.instance.localDB === localDB &&
-			Manager.instance.fastLocalDB === fastLocalDB &&
-			// Manager.instance.httpClient === httpClient && // @TODO - look into this
+			Manager.instance.engine === engine &&
 			Manager.instance.locale === locale
 		) {
 			return Manager.instance as Manager<TDatabase>;
 		}
 
-		// If instance exists but dependencies have changed, cancel the existing instance
 		if (Manager.instance) {
 			void Manager.instance
 				.cancel()
@@ -123,8 +101,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				);
 		}
 
-		// Create a new instance
-		Manager.instance = new Manager(localDB, fastLocalDB, httpClient, locale);
+		Manager.instance = new Manager(localDB, engine, locale, httpClient);
 		return Manager.instance as Manager<TDatabase>;
 	}
 
@@ -146,6 +123,36 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		return this.queryStates.has(key);
 	}
 
+	/**
+	 * Resolve the RxDB collection that backs a fluent query:
+	 *  - engine-mapped collections (products, orders, taxes, …) → the engine
+	 *    database collection (reads route through the adapter),
+	 *  - `logs` / `templates` → the local database collection (direct read path).
+	 */
+	getCollection(collectionName: string) {
+		if (isMappedCollection(collectionName)) {
+			const active = this.engine.active();
+			const collection = active?.database.collections[engineCollectionNameFor(collectionName)];
+			if (!collection) {
+				queryLogger.error(`Engine collection for "${collectionName}" not available.`, {
+					showToast: false,
+					saveToDb: false,
+					context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, collectionName },
+				});
+			}
+			return collection;
+		}
+		const local = (this.localDB as any).collections[collectionName];
+		if (!local) {
+			queryLogger.error(`Collection with name: ${collectionName} not found.`, {
+				showToast: true,
+				saveToDb: true,
+				context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, collectionName },
+			});
+		}
+		return local;
+	}
+
 	registerQuery({
 		queryKeys,
 		collectionName,
@@ -165,56 +172,31 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			const isSameCollection = existingCollection === currentCollection;
 			const isCollectionDestroyed = (existingCollection as any)?.destroyed;
 
-			queryLogger.debug('registerQuery: query already exists', {
-				context: {
-					key,
-					collectionName,
-					isSameCollection,
-					isCollectionDestroyed,
-				},
-			});
-
-			// If the existing query's collection is destroyed or different, we need a new query
 			if (isCollectionDestroyed || !isSameCollection) {
-				queryLogger.debug(
-					'registerQuery: existing query has stale collection, removing and re-creating',
-					{
-						context: { key, collectionName },
-					}
-				);
 				void this.deregisterQuery(key).catch((error) =>
 					queryLogger.error('Failed to deregister stale query', {
 						context: { key, collectionName, error },
 					})
 				);
-				// Fall through to create new query
 			} else {
 				return existingQuery;
 			}
 		}
 
 		const collection = this.getCollection(collectionName);
-
 		if (!collection) {
 			queryLogger.error('registerQuery: collection not found, cannot register', {
 				showToast: false,
 				saveToDb: false,
-				context: {
-					key,
-					collectionName,
-					availableCollections: Object.keys((this.localDB as any).collections),
-				},
+				context: { key, collectionName },
 			});
 			return undefined;
 		}
 
-		queryLogger.debug('Registering new query', {
-			context: { key, collectionName, endpoint, greedy, infiniteScroll },
-		});
-
 		const queryState = new Query<typeof collection>({
 			id: key,
 			collection,
+			collectionName,
 			initialParams,
 			endpoint,
 			greedy,
@@ -252,57 +234,32 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			const isSameCollection = existingCollection === currentCollection;
 			const isCollectionDestroyed = (existingCollection as any)?.destroyed;
 
-			queryLogger.debug('registerRelationalQuery: query already exists', {
-				context: {
-					key,
-					collectionName,
-					isSameCollection,
-					isCollectionDestroyed,
-				},
-			});
-
-			// If the existing query's collection is destroyed or different, we need a new query
 			if (isCollectionDestroyed || !isSameCollection) {
-				queryLogger.debug(
-					'registerRelationalQuery: existing query has stale collection, removing and re-creating',
-					{
-						context: { key, collectionName },
-					}
-				);
 				void this.deregisterQuery(key).catch((error) =>
 					queryLogger.error('Failed to deregister stale relational query', {
 						context: { key, collectionName, error },
 					})
 				);
-				// Fall through to create new query
 			} else {
 				return existingQuery;
 			}
 		}
 
 		const collection = this.getCollection(collectionName);
-
 		if (!collection) {
 			queryLogger.error('registerRelationalQuery: collection not found, cannot register', {
 				showToast: false,
 				saveToDb: false,
-				context: {
-					key,
-					collectionName,
-					availableCollections: Object.keys((this.localDB as any).collections),
-				},
+				context: { key, collectionName },
 			});
 			return undefined;
 		}
-
-		queryLogger.debug('Registering new relational query', {
-			context: { key, collectionName, endpoint, greedy, infiniteScroll },
-		});
 
 		const queryState = new RelationalQuery<typeof collection>(
 			{
 				id: key,
 				collection,
+				collectionName,
 				initialParams,
 				endpoint,
 				greedy,
@@ -318,23 +275,6 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		this.onNewQueryState(queryState);
 
 		return this.queryStates.get(key);
-	}
-
-	getCollection(collectionName: string) {
-		if (!(this.localDB as any).collections[collectionName]) {
-			queryLogger.error(`Collection with name: ${collectionName} not found.`, {
-				showToast: true,
-				saveToDb: true,
-				context: { errorCode: ERROR_CODES.INVALID_CONFIGURATION, collectionName },
-			});
-		}
-		return (this.localDB as any).collections[collectionName];
-	}
-
-	getSyncCollection(collectionName: string) {
-		// Note: sync collection might not exist during collection swap
-		// The caller should handle undefined gracefully
-		return this.fastLocalDB.collections[collectionName];
 	}
 
 	getQuery(queryKeys: (string | number | object)[]) {
@@ -355,175 +295,180 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	async deregisterQuery(key: string): Promise<void> {
 		const query = this.queryStates.get(key);
 		if (query) {
-			queryLogger.debug('Deregistering query', {
-				context: { key, collection: (query.collection as any).name },
-			});
-
 			this.queryStates.delete(key);
-			this.activeCollectionReplications.delete(key);
-			this.activeQueryReplications.delete(key);
-
+			this.releaseDemand(key);
 			await query.cancel();
 		}
 	}
 
 	/**
-	 * Called when a collection is reset/removed.
-	 * Deregisters and cancels all queries and replications for the collection.
-	 * Returns a Promise that resolves when all cancellations are complete.
-	 *
-	 * IMPORTANT: Uses reference equality (===) to only clean up queries/replications
-	 * that reference THIS specific collection instance, not newer collections with
-	 * the same name. This prevents race conditions during collection swap.
+	 * Called when a collection is reset/removed. Deregisters and cancels every
+	 * query bound (by reference) to THIS collection instance.
 	 */
 	async onCollectionReset(collection: RxCollection): Promise<void> {
-		// Count affected items for logging (by reference, not name)
-		let queryCount = 0;
-		let replicationCount = 0;
-		const collectionDestroyed = (collection as any)?.destroyed;
-
-		// Get the current collection from the database for comparison
-		const collectionName = (collection as any).name as string;
-		const currentCollection = (this.localDB as any).collections[collectionName];
-		const isSameAsCurrent = collection === currentCollection;
-
-		this.queryStates.forEach((q) => {
-			if (q.collection === collection) queryCount++;
-		});
-		this.replicationStates.forEach((r) => {
-			if ((r as any).collection === collection) replicationCount++;
-		});
-
-		// Capture stack trace for debugging
-		const stackTrace = new Error().stack;
-
-		queryLogger.debug('Collection reset - cancelling operations', {
-			context: {
-				collection: collectionName,
-				queries: queryCount,
-				replications: replicationCount,
-				collectionDestroyed,
-				isSameAsCurrent,
-				stack: stackTrace?.split('\n').slice(2, 6).join(' | '),
-			},
-		});
-
 		const cancelPromises: Promise<void>[] = [];
-
-		// Cancel all replication states for THIS collection (by reference)
-		this.replicationStates.forEach((replication, endpoint) => {
-			if ((replication as any).collection === collection) {
-				cancelPromises.push(this.deregisterReplication(endpoint));
-			}
-		});
-
-		// Cancel all query states for THIS collection (by reference)
 		this.queryStates.forEach((query, key) => {
 			if (query.collection === collection) {
 				cancelPromises.push(this.deregisterQuery(key));
 			}
 		});
-
 		await Promise.all(cancelPromises);
-
-		queryLogger.debug('Collection reset complete', {
-			context: { collection: collectionName },
-		});
 	}
 
 	/**
-	 * Tasks to perform when a new query state is registered
-	 * - register a new collection replication state
-	 * - start the collection replication
-	 * - subscribe to the query params and register a new query replication state
+	 * Tasks to perform when a new query state is registered. Instead of the old
+	 * replication states, declare the query's engine requirements (the demand
+	 * plane) and re-declare them when the query params or pagination change.
 	 */
 	onNewQueryState(queryState: Query<RxCollection>) {
-		const { collection, endpoint } = queryState;
-		const collectionReplication = this.registerCollectionReplication({
-			collection,
-			endpoint: endpoint ?? '',
-		});
-
-		// Guard: if sync collection isn't ready yet, skip replication setup
-		// This can happen during collection swap - replication will be set up on next query registration
-		if (!collectionReplication) {
-			queryLogger.debug('Skipping replication setup - collection replication not ready', {
-				context: { queryId: queryState.id, collection: (collection as any).name },
-			});
+		// Dedicated templates path (ADR 0025 carve-out): a direct fetch into the
+		// local collection — NOT the demand plane and NOT the old machine.
+		if (queryState.collectionName === 'templates') {
+			void syncTemplates((this.localDB as any).collections.templates, this.httpClient);
 			return;
 		}
 
-		this.activeCollectionReplications.set(queryState.id, collectionReplication);
-		collectionReplication.start();
+		if (!queryState.isEngineBacked) {
+			return; // logs and other local-only collections declare no remote demand.
+		}
 
-		/**
-		 * Add internal subscriptions to the query state
-		 * @TODO - should this be part of the events system?
-		 */
+		const demand: QueryDemand = {
+			handles: [],
+			active$: new RxBehaviorSubject<boolean>(false),
+			inFlight: 0,
+		};
+		this.demandByQuery.set(queryState.id, demand);
+
 		queryState.addSub(
-			'query-replication',
-			/**
-			 * Subscribe to query params and register a new replication state for the query
-			 */
+			'query-requirements',
 			queryState.rxQuery$.subscribe((rxQuery) => {
-				const params = cloneDeep(rxQuery?.mangoQuery || {});
-				// we need to get the search term from the rxQuery, because it's not part of the mango query params
-				// we'll add it to the select object just in case the hook needs it
-				if (rxQuery?.other.search || rxQuery?.other.relationalSearch) {
-					(params as any).selector = params.selector || {};
-					(params as any).selector.search =
-						rxQuery.other.search?.searchTerm || rxQuery.other.relationalSearch?.searchTerm;
-				}
-				// @NOTE - this.getApiQueryParams converts { selector: { id: { $in: [1, 2, 3] } } } to { include: [1, 2, 3] }
-				let apiQueryParams = this.getApiQueryParams(params);
-				const hooks = (allHooks as Record<string, any>)[(queryState.collection as any).name] || {};
-				if (hooks?.filterApiQueryParams) {
-					apiQueryParams = hooks.filterApiQueryParams(apiQueryParams, params);
-				}
-				const queryEndpoint = buildEndpointWithParams(endpoint ?? '', apiQueryParams);
-				const queryReplication = this.registerQueryReplication({
-					collectionReplication: collectionReplication!,
-					collection,
-					queryEndpoint,
-					greedy: queryState.greedy,
-				});
-				if (!queryReplication) {
-					return;
-				}
-
-				const currentReplication = this.activeQueryReplications.get(queryState.id);
-				if (currentReplication === queryReplication) {
-					return;
-				}
-
-				// if we're replacing an existing query replication, maybe pause it
-				if (this.activeQueryReplications.has(queryState.id)) {
-					this.maybePauseQueryReplications(queryState);
-				}
-				this.activeQueryReplications.set(queryState.id, queryReplication);
-
-				queryReplication.start();
+				this.declareQueryRequirements(queryState, rxQuery);
 			})
 		);
 
 		queryState.addSub(
 			'query-pagination',
 			queryState.loadMore$.subscribe(() => {
-				const activeQueryReplication = this.activeQueryReplications.get(queryState.id);
-				if (!activeQueryReplication) {
-					queryLogger.debug('Skipping query nextPage - no active replication', {
-						context: { queryId: queryState.id, collection: (collection as any).name },
-					});
-					return;
-				}
-
-				activeQueryReplication.nextPage();
+				this.declareQueryRequirements(queryState, queryState.currentRxQuery);
 			})
 		);
 	}
 
+	private declareQueryRequirements(queryState: Query<RxCollection>, rxQuery: any): void {
+		const demand = this.demandByQuery.get(queryState.id);
+		if (!demand || !queryState.collectionName) {
+			return;
+		}
+		const mango = cloneDeep(rxQuery?.mangoQuery ?? {});
+		const selector = (mango.selector ?? {}) as Record<string, unknown>;
+		const search =
+			rxQuery?.other?.search?.searchTerm ?? rxQuery?.other?.relationalSearch?.searchTerm;
+		if (search) {
+			selector.search = search;
+		}
+
+		// Release the previous generation before declaring the new one.
+		for (const handle of demand.handles) {
+			handle.release();
+		}
+
+		const requirements = requirementsForQuery({
+			id: queryState.id,
+			collectionName: queryState.collectionName,
+			selector,
+			limit: mango.limit,
+		});
+		demand.handles = declareRequirements(this.engine, requirements);
+		this.trackInFlight(
+			demand,
+			demand.handles.map((handle) => handle.ready)
+		);
+	}
+
+	private trackInFlight(demand: QueryDemand, promises: Promise<unknown>[]): void {
+		if (promises.length === 0) {
+			return;
+		}
+		demand.inFlight += promises.length;
+		demand.active$.next(true);
+		for (const promise of promises) {
+			void promise.then(
+				() => this.settleInFlight(demand),
+				() => this.settleInFlight(demand)
+			);
+		}
+	}
+
+	private settleInFlight(demand: QueryDemand): void {
+		demand.inFlight = Math.max(0, demand.inFlight - 1);
+		if (demand.inFlight === 0) {
+			demand.active$.next(false);
+		}
+	}
+
+	private releaseDemand(queryId: string): void {
+		const demand = this.demandByQuery.get(queryId);
+		if (!demand) {
+			return;
+		}
+		for (const handle of demand.handles) {
+			handle.release();
+		}
+		demand.active$.complete();
+		this.demandByQuery.delete(queryId);
+	}
+
 	/**
-	 * There is one replication state per collection
+	 * The `use-replication-state` projection surfaces (best-effort 1b semantics).
+	 * `active$` reflects in-flight demand THIS surface initiated.
+	 */
+	replicationActive$(queryId: string): BehaviorSubject<boolean> | undefined {
+		return this.demandByQuery.get(queryId)?.active$;
+	}
+
+	/**
+	 * `sync()` for a bound query: force a re-declaration of its requirement
+	 * (forceRefresh) then drain — never a bare scheduler drain (completed tasks
+	 * no-op). The full lane-lifecycle projection lands at increment 5 (ticket #537).
+	 */
+	async syncQuery(queryId: string): Promise<void> {
+		const query = this.queryStates.get(queryId);
+		const demand = this.demandByQuery.get(queryId);
+		if (!query || !demand || !query.collectionName) {
+			return;
+		}
+		const mango = cloneDeep(query.currentRxQuery?.mangoQuery ?? {});
+		const selector = (mango.selector ?? {}) as Record<string, unknown>;
+		const requirements = requirementsForQuery({
+			id: `${queryId}:sync`,
+			collectionName: query.collectionName,
+			selector,
+			limit: mango.limit,
+			forceRefresh: true,
+			priority: 1000,
+		});
+		const handles = declareRequirements(this.engine, requirements);
+		const ready = Promise.all(handles.map((handle) => handle.ready)).then(
+			() => undefined,
+			() => undefined
+		);
+		this.trackInFlight(demand, [ready]);
+		await ready;
+		for (const handle of handles) {
+			handle.release();
+		}
+		try {
+			await this.engine.sync('scheduler-drain');
+		} catch {
+			// periodic-class drain failure self-heals next tick.
+		}
+	}
+
+	/**
+	 * TRANSITIONAL — `@deprecated` increment-3. Returns the per-endpoint mutation
+	 * remnant `use-mutation` / `use-stock-adjustment` call directly. No polling
+	 * machine backs it: `remotePatch` / `remoteCreate` funnel to wc/v3, and
+	 * `sync({include})` maps to the engine's targeted-records demand.
 	 */
 	registerCollectionReplication({
 		collection,
@@ -531,116 +476,26 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	}: {
 		collection: RxCollection;
 		endpoint: string;
-	}): CollectionReplicationState<RxCollection> | undefined {
-		const existingReplication = this.replicationStates.get(endpoint);
-		const colName = (collection as any).name as string;
-		const syncCollection = this.getSyncCollection(colName);
-
-		// Guard: don't create replication if sync collection doesn't exist yet
-		// This can happen during collection swap when reset$ emits before all collections are ready
-		if (!syncCollection) {
-			queryLogger.debug('Skipping replication registration - sync collection not ready', {
-				context: { collection: colName, endpoint },
-			});
-			return undefined;
+	}): CollectionReplicationState {
+		const existing = this.replicationStates.get(endpoint);
+		if (existing && (existing.collection as any) === collection) {
+			return existing;
 		}
-
-		// Check if existing replication is stale (collection destroyed or different instance)
-		const isExistingStale =
-			existingReplication instanceof CollectionReplicationState &&
-			((existingReplication as any).collection?.destroyed ||
-				(existingReplication as any).collection !== collection);
-
-		if (isExistingStale) {
-			queryLogger.debug('Existing replication is stale, creating new one', {
-				context: {
-					endpoint,
-					collection: colName,
-					existingCollectionDestroyed: (existingReplication as any).collection?.destroyed,
-					isSameCollection: (existingReplication as any).collection === collection,
-				},
-			});
-			// Don't await cancel - let it clean up in background
-			existingReplication.cancel();
+		if (existing) {
+			void existing.cancel();
 			this.replicationStates.delete(endpoint);
 		}
-
-		if (!this.replicationStates.has(endpoint)) {
-			const collectionReplication = new CollectionReplicationState({
-				httpClient: this.httpClient,
-				collection,
-				syncCollection,
-				endpoint,
-			});
-
-			// Register cleanup when THIS specific collection is removed
-			// Uses reference equality so it only cleans up queries for THIS collection,
-			// not newer collections with the same name
-			(collection as any).onRemove.push(() => this.onCollectionReset(collection));
-
-			this.replicationStates.set(endpoint, collectionReplication);
-		}
-
-		return this.replicationStates.get(endpoint) as
-			| CollectionReplicationState<RxCollection>
-			| undefined;
+		const replication = new CollectionReplicationState({
+			httpClient: this.httpClient,
+			collection,
+			endpoint,
+			engine: this.engine,
+		});
+		(collection as any).onRemove?.push(() => this.onCollectionReset(collection));
+		this.replicationStates.set(endpoint, replication);
+		return replication;
 	}
 
-	/**
-	 * There is one replication state per query endpoint
-	 */
-	registerQueryReplication({
-		queryEndpoint,
-		collectionReplication,
-		collection,
-		greedy,
-	}: {
-		queryEndpoint: string;
-		collectionReplication: CollectionReplicationState<RxCollection>;
-		collection: RxCollection;
-		greedy?: boolean;
-	}): QueryReplicationState<RxCollection> | undefined {
-		const existingReplication = this.replicationStates.get(queryEndpoint);
-
-		// Check if existing replication is stale (collection destroyed or different instance)
-		const isExistingStale =
-			existingReplication instanceof QueryReplicationState &&
-			((existingReplication.collection as any)?.destroyed ||
-				existingReplication.collection !== collection);
-
-		if (isExistingStale) {
-			queryLogger.debug('Existing query replication is stale, creating new one', {
-				context: {
-					queryEndpoint,
-					collection: (collection as any).name,
-					existingCollectionDestroyed: (existingReplication.collection as any)?.destroyed,
-					isSameCollection: existingReplication.collection === collection,
-				},
-			});
-			existingReplication.cancel();
-			this.replicationStates.delete(queryEndpoint);
-		}
-
-		if (!this.replicationStates.has(queryEndpoint)) {
-			const queryReplication = new QueryReplicationState({
-				httpClient: this.httpClient,
-				collectionReplication,
-				collection,
-				endpoint: queryEndpoint,
-				greedy,
-			});
-
-			this.replicationStates.set(queryEndpoint, queryReplication);
-		}
-
-		return this.replicationStates.get(queryEndpoint) as
-			| QueryReplicationState<RxCollection>
-			| undefined;
-	}
-
-	/**
-	 * Deregister and cancel a replication state.
-	 */
 	async deregisterReplication(endpoint: string): Promise<void> {
 		const replicationState = this.replicationStates.get(endpoint);
 		if (replicationState) {
@@ -650,164 +505,36 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	}
 
 	/**
-	 * Ensure replications are set up for all queries for a given collection.
-	 * Call this after a collection swap to set up replications that were skipped
-	 * because the sync collection wasn't ready yet.
-	 */
-	ensureReplicationsForCollection(collectionName: string): void {
-		const syncCollection = this.getSyncCollection(collectionName);
-
-		// Log all queries in queryStates for debugging
-		const allQueries: string[] = [];
-		this.queryStates.forEach((q, key) => {
-			allQueries.push(`${key}: ${(q.collection as any)?.name}`);
-		});
-		queryLogger.debug('ensureReplicationsForCollection: all queryStates', {
-			context: { collectionName, count: allQueries.length, queries: allQueries },
-		});
-
-		if (!syncCollection) {
-			queryLogger.warn('ensureReplicationsForCollection: sync collection still not ready', {
-				context: { collectionName },
-			});
-			return;
-		}
-
-		// Find all queries for this collection that don't have replications
-		let foundQueries = 0;
-		this.queryStates.forEach((queryState, queryKey) => {
-			if ((queryState.collection as any).name !== collectionName) {
-				return;
-			}
-			foundQueries++;
-
-			// Check if this query already has a replication
-			if (this.activeCollectionReplications.has(queryKey)) {
-				queryLogger.debug('ensureReplicationsForCollection: query already has replication', {
-					context: { queryKey, collectionName },
-				});
-				return;
-			}
-
-			// Set up replication for this query
-			queryLogger.debug('ensureReplicationsForCollection: setting up replication', {
-				context: { queryKey, collectionName },
-			});
-
-			// Call onNewQueryState to set up the replication
-			this.onNewQueryState(queryState);
-		});
-
-		queryLogger.debug('ensureReplicationsForCollection: done', {
-			context: { collectionName, foundQueries },
-		});
-	}
-
-	/**
-	 * Get the query params that are used for the API
-	 * - @NOTE - the api query params have a different format than the query params
-	 * - eg: sort is `orderby` and `order`, and selectors are top level params
-	 * - allow hooks to modify the query params
-	 */
-	getApiQueryParams(queryParams: QueryParams = {}) {
-		const sort = queryParams?.sort?.[0];
-		const params: Record<string, any> = {
-			orderby: sort ? Object.keys(sort)[0].replace(/^sortable_/, '') : undefined,
-			order: sort ? Object.values(sort)[0] : undefined,
-			per_page: 10,
-		};
-
-		// convert id to include
-		const selectorId = (queryParams?.selector as any)?.id;
-		if (selectorId) {
-			if (selectorId.$in) {
-				params.include = selectorId.$in;
-			} else if (typeof selectorId === 'number' || typeof selectorId === 'string') {
-				params.include = selectorId;
-			}
-			delete (queryParams.selector as any).id;
-		}
-
-		// pass all other mango query params to the API, except uuid
-		if (queryParams?.selector) {
-			forEach(queryParams.selector, (value, key) => {
-				if (key !== 'uuid') {
-					params[key] = value;
-				}
-			});
-		}
-
-		// dates are always GMT
-		params.dates_are_gmt = 'true';
-
-		return params;
-	}
-
-	/**
-	 * When a useQuery is unmounted, we check if we need to pause the query replications
-	 * - if there are no more useQuery components for a query, we pause the query replications
-	 * - when a new useQuery component is mounted, we resume the query replications
-	 * - collection replications are not paused
+	 * On useQuery unmount: release the query's demand handles so the engine can
+	 * demote/abort in-flight foreground work for a surface no one is watching.
 	 */
 	maybePauseQueryReplications(query: Query<RxCollection>) {
-		const activeQueryReplication = this.activeQueryReplications.get(query?.id);
-		if (!activeQueryReplication || !activeQueryReplication.endpoint) {
+		const demand = query && this.demandByQuery.get(query.id);
+		if (!demand) {
 			return;
 		}
-		const activeQueryReplications = this.getActiveQueryReplicationStatesByEndpoint(
-			activeQueryReplication.endpoint
-		);
-		if (activeQueryReplications.length === 1) {
-			activeQueryReplication.pause();
+		for (const handle of demand.handles) {
+			handle.release();
 		}
+		demand.handles = [];
 	}
 
-	getActiveQueryReplicationStatesByEndpoint(endpoint: string) {
-		const matchingStates: QueryReplicationState<RxCollection>[] = [];
-		this.activeQueryReplications.forEach((state) => {
-			if (state.endpoint === endpoint) {
-				matchingStates.push(state);
-			}
-		});
-		return matchingStates;
-	}
-
-	/**
-	 * Cancel
-	 *
-	 * Make sure we clean up subscriptions:
-	 * - things we subscribe to in this class, also
-	 * - complete the observables accessible from this class
-	 * - cancel all queries and replications
-	 *
-	 * @returns Promise that resolves when all cleanup is complete
-	 */
 	async cancel(): Promise<void> {
-		queryLogger.debug('Manager cancelling', {
-			context: {
-				queries: (this.queryStates as any).map?.size,
-				replications: (this.replicationStates as any).map?.size,
-			},
-		});
-
-		// Cancel base class first (aborts controller, unsubscribes)
 		await super.cancel();
 
-		// Cancel all queries in parallel
 		const queryPromises: Promise<void>[] = [];
 		this.queryStates.forEach((query) => {
 			queryPromises.push(query.cancel());
 		});
+		for (const queryId of [...this.demandByQuery.keys()]) {
+			this.releaseDemand(queryId);
+		}
 
-		// Cancel all replications in parallel
 		const replicationPromises: Promise<void>[] = [];
 		this.replicationStates.forEach((replication) => {
 			replicationPromises.push(replication.cancel());
 		});
 
-		// Wait for all to complete
 		await Promise.all([...queryPromises, ...replicationPromises]);
-
-		queryLogger.debug('Manager cancelled');
 	}
 }

@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { View } from 'react-native';
 
 import { Stack } from 'expo-router';
@@ -20,6 +21,7 @@ import { QueryProvider } from '@wcpos/query';
 import { setDatabase } from '@wcpos/utils/logger';
 
 import { useNavigationBackground } from '../../components/use-navigation-background';
+import { createAppSyncEngine } from '../../lib/create-app-engine';
 
 export const unstable_settings = {
 	// Ensure that reloading on `/modal` keeps a back button present.
@@ -28,7 +30,7 @@ export const unstable_settings = {
 
 function AppStack() {
 	const screenBackgroundColor = useNavigationBackground();
-	const { storeDB, fastStoreDB } = useAppState();
+	const { storeDB, site, wpCredentials, store } = useAppState();
 	const { locale } = useLocale();
 
 	/**
@@ -36,8 +38,33 @@ function AppStack() {
 	 */
 	const http = useRestHttpClient();
 
+	/**
+	 * The sync engine every fluent read is served from (ADR 0023 increment 1b).
+	 * Bound to the site; store/cashier are scopes within it. Memoized on the
+	 * site + scope identity — store switching via `scope.switch()` is a
+	 * follow-up (increment-3).
+	 */
+	const wpApiUrl = useObservableEagerState(site.wp_api_url$) as string;
+	const storeID = useObservableEagerState(store.id$) as number;
+	const cashierID = useObservableEagerState(wpCredentials.id$) as number;
+	const useJwtAsParam = useObservableEagerState(site.use_jwt_as_param$) as boolean;
+
+	// The credentials DOCUMENT is a stable identity; the engine reads the JWT
+	// fresh at request time via getLatest() inside the lib module, so token
+	// refreshes never recreate the engine and no ref is touched in render.
+	const engine = React.useMemo(
+		() =>
+			createAppSyncEngine({
+				wpApiUrl,
+				credentials: wpCredentials,
+				useJwtAsParam,
+				scope: { site: wpApiUrl, storeId: storeID, cashierId: cashierID },
+			}),
+		[wpApiUrl, storeID, cashierID, useJwtAsParam, wpCredentials]
+	);
+
 	return (
-		<QueryProvider localDB={storeDB} fastLocalDB={fastStoreDB} http={http} locale={locale}>
+		<QueryProvider localDB={storeDB} engine={engine} http={http} locale={locale}>
 			<UISettingsProvider>
 				<View className="bg-background flex-1">
 					<Stack

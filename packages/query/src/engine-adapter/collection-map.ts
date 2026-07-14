@@ -642,6 +642,14 @@ export const collectionMap = {
 	},
 } as const satisfies Record<LegacyCollectionName, CollectionMapEntry>;
 
+export const LEGACY_COLLECTION_NAMES = Object.keys(collectionMap) as LegacyCollectionName[];
+
+/** True when a legacy collection name is served by the engine adapter (everything
+ * except the local-only `logs` and the dedicated `templates` path). */
+export function isMappedCollection(name: string): name is LegacyCollectionName {
+	return Object.prototype.hasOwnProperty.call(collectionMap, name);
+}
+
 export function resolveLegacyField(
 	collection: LegacyCollectionName,
 	legacy: string
@@ -655,6 +663,12 @@ export function resolveLegacyField(
 			fallback: true,
 		}
 	);
+}
+
+/** The engine RxDB collection name backing a legacy collection (`taxes` →
+ * `taxRates`, `products/categories` → `categories`, …). */
+export function engineCollectionNameFor(collection: LegacyCollectionName): EngineCollectionName {
+	return collectionMap[collection].engineCollection;
 }
 
 export function legacyFieldForEnginePath(
